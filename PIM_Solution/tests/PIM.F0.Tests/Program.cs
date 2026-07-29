@@ -14,6 +14,7 @@ RequireFile("002_CreateOperationsAndOrganization.sql");
 RequireFile("003_CreateOperationalProcedures.sql");
 RequireFile("004_CreateProcedureSkeleton.sql");
 RequireFile("005_CreateOutputContract.sql");
+RequireFile("006_CreateCanonicalValidationAndPim.sql");
 
 AssertContains("001_CreateSchemas.sql", "dbo.SchemaMigration");
 AssertContains("001_CreateSchemas.sql", "CREATE SCHEMA raw");
@@ -37,6 +38,12 @@ AssertContains("005_CreateOutputContract.sql", "val.FieldRequirement");
 AssertContains("005_CreateOutputContract.sql", "val.SyncFieldRequirementsFromExportProfiles");
 AssertContains("005_CreateOutputContract.sql", "WEB_B2C_PRODUCTS");
 AssertContains("005_CreateOutputContract.sql", "ERP_L1");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "canon.Product");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "canon.ProductAttribute");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.ProductIssue");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.RunValidation");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.Promote");
+AssertContains("006_CreateCanonicalValidationAndPim.sql", "pim.Product");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--create-database");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "EnsureDatabaseAsync");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--show-migrations");
@@ -55,9 +62,9 @@ if (Directory.Exists(migrationsDirectory))
     .ToArray();
   var numbered = migrationNames.Where(name => Regex.IsMatch(name!, "^\\d{3}_.+\\.sql$", RegexOptions.CultureInvariant)).ToArray();
 
-  if (numbered.Length != 5)
+  if (numbered.Length != 6)
   {
-    failures.Add($"Pričakovanih je pet oštevilčenih migracij F0–F1, najdenih je {numbered.Length}.");
+    failures.Add($"Pričakovanih je šest oštevilčenih migracij F0–F2, najdenih je {numbered.Length}.");
   }
 }
 

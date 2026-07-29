@@ -8,3 +8,4 @@
 | 2026-01-01 | (primer) codex | postavitev projekta | pass | a1b2c3d |
 | 2026-07-29 | Hermes | F0: repo, MSSQL migracije, ops in konfiguracija | pass | ni commita |
 | 2026-07-29 | Hermes | F1: izhodni kontrakt in generirani validacijski zahtevki | pass | commit F1 |
+| 2026-07-29 | Hermes | F2: kanonični model, validacija in promocija | pass | commit F2 |

@@ -8,41 +8,56 @@ Vzpostavljeni so rešitev .NET 8, migrator, `dbo.SchemaMigration`, sheme, `ops.*
 
 ## F1 — izhodni kontrakt: definicija »poln«
 
-Status: zaključeno; čaka na ločen commit F1.
+Status: zaključeno in verzionirano v commitu `eb2bf98`.
+
+Vzpostavljena sta izvozna profila ERP L1 in WEB B2C ter generiranje `val.FieldRequirement` iz aktivnih izvoznih stolpcev.
+
+## F2 — enotni obrazec in pravilnik
+
+Status: zaključeno; čaka na ločen commit F2.
 
 ### Meja izvedbe
-Izvedena bo izključno F1 iz avtoritativne specifikacije. Ne začne se F2 ali katera koli kasnejša faza. Ni zajema virov, kanoničnih tabel, poslovne validacije, promocije v katalog ali CSV datoteke.
+
+Izvedena bo izključno F2 iz avtoritativne specifikacije. Ne bodo dodani workerji, zajem iz SAOP/NW/BT, `raw.*`, `map.*`, CSV izvoz, intranetne strani ali pisanje v zunanje sisteme. Vnos testnega izdelka je dovoljen izključno za dokazovanje F2 v razvojni bazi.
 
 ### Koraki
 
-1. Napisati test, ki zahteva dva izvozna profila in preverja, da je vsak zahtevek validacije ustvarjen iz izvoznega stolpca, ne iz samostojnega ročnega seznama.
+1. Napisati kontraktne teste za kanonični model, ločeni proceduri validacije/promocije in idempotentni dokaz z ročnim testnim izdelkom.
 
-2. Dodati novo oštevilčeno MSSQL migracijo za:
-   - `out.ExportProfile` in `out.ExportColumn`;
-   - `val.ValidationProfile` in `val.FieldRequirement`;
-   - integritetne omejitve, aktivnost, vrstni red in enoličnost;
-   - sledljive povezave med izvoznim stolpcem in generiranim validacijskim zahtevkom.
+2. Dodati novo oštevilčeno MSSQL migracijo, ki ustvari vir-agnostične tabele `canon.*`:
+   - `canon.Product` s skalarnimi polji iz DEL 3.5;
+   - `canon.ProductText`, `canon.ProductAttribute` (EAV), `canon.ProductCategory`, `canon.ProductMedia`, `canon.ProductPrice` in `canon.ProductCommercial`;
+   - enolične ključe, tuje ključe do `dbo.OrganizationConfig`, omejitve in indekse za idempotentne postopke.
 
-3. V register zapisati minimalni izhodni kontrakt:
-   - PRODUCTS CSV za B2C / svetila.si;
-   - obvezne ERP L1 in WEB_B2C zahteve iz DEL 5;
-   - obvezne B2C stolpce: slovenski spletni naziv, EAN, kategorije, slika, B2C cena z DDV, proizvajalec in ključni atributi.
+3. Dodati potrjeni katalog `pim.Product*`, ločen od `canon.*`, z identiteto izdelka in kopijo potrjenih podatkov, potrebnih za dokaz promocije.
 
-4. Dodati idempotentno proceduro, ki izključno iz aktivnih izvoznih stolpcev generira oziroma uskladi `val.FieldRequirement`. Ne sme imeti zabetoniranega seznama poslovnih polj.
+4. Dodati `val.ProductIssue` in razširiti kanonični izdelek s statusom validacije ter completeness po aktivnih validacijskih profilih.
 
-5. Razširiti migratorjevo preverjanje in SQL-test, da dokazujeta profile, stolpce, generirane zahteve in ponovni zagon brez podvojitev.
+5. Dodati dve ločeni idempotentni proceduri:
+   - `val.RunValidation`: bere samo `val.FieldRequirement` in `canon.*`, za vsak profil ponovno izračuna napake, status in completeness; ne piše v `pim.*`;
+   - `val.Promote`: promovira samo izdelke brez aktivnih napak oziroma statusom `VALID` iz `canon.*` v `pim.*`; ne izvaja validacije.
 
-6. Preveriti F1 na razvojni bazi `PIM`:
+6. Uvesti razreševanje vseh F1 `FieldCode` vrednosti proti kanoničnim skalarnim, besedilnim, EAV, kategorijskim, medijskim in cenovnim podatkom. Postopek ostane podatkovno gnan: novo zahtevo določa `val.FieldRequirement`, ne nova veja poslovne logike.
+
+7. Dodati F2 SQL-dokaz in migratorjevo `--verify` preverjanje za:
+   - obstoj in hash nove migracije;
+   - kanonične, validacijske in PIM objekte;
+   - dokaz manjkajočega zahtevanega polja → `val.ProductIssue`;
+   - popoln testni izdelek → `VALID` in ena idempotentna promocija v `pim.*`.
+
+8. Preveriti na razvojni bazi `PIM`:
    - prvi zagon nove migracije;
    - drugi zagon brez podvojitev;
-   - `--verify` in ciljni SQL-test;
+   - `--verify`, F2 SQL-dokaz in determinističen testni scenarij;
    - build, kontraktni testi, `npm test`, lint, pregled skrivnosti in `git diff --check`.
 
-7. Posodobiti `TEST_REPORT.md` in `PROGRESS.md`, pregledati spremembe, ustvariti ločen commit F1 v slovenščini ter se ustaviti pred F2.
+9. Posodobiti `TEST_REPORT_F2.md` in `PROGRESS.md`, pregledati izključno F2 spremembe, ustvariti ločen slovenski commit F2 in se ustaviti pred F3.
 
-### Merila uspeha F1
+### Merila uspeha F2
 
-- Iz šifranta je razvidno, kaj pomeni »poln« izdelek za B2C.
-- ERP L1 in WEB_B2C zahteve izhajajo iz izvoznega profila; ne obstaja ločeno ročno vzdrževan seznam.
-- Ponovni zagon je idempotenten in dokazljiv na MSSQL.
-- Nobena skrivnost ni v repoju in `PIM_test` ostane nespremenjen.
+- Kanonični model je brez odvisnosti od SAOP, Nowodvorski ali Braytron imen in struktur.
+- EAV omogoča dodajanje atributa kot podatek, ne spremembo sheme.
+- Validacija bere iste F1 šifrante kot izvoz ter označi manjkajoča polja v `val.ProductIssue`.
+- Promocija je ločena od validacije in v `pim.*` sprejme samo veljavne izdelke.
+- Ponovni zagon validacije in promocije ne ustvari podvojenih napak ali katalogskih zapisov.
+- Nobena skrivnost ni v repoju, `PIM_test` ostane nespremenjen, F3 ni začeta.
