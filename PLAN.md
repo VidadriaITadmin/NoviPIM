@@ -1,45 +1,48 @@
-# PLAN — F0: temelji PIM sistema
+# PLAN — izvedene in naslednje faze PIM sistema
 
-## Meja izvedbe
-Izvedena bo izključno faza F0 iz `_SPEC/PIM_Hermes_Navodila_Gradnja_Od_Nic.md`. F1–F9 se ne bodo začele.
+## F0 — temelji
 
-Ciljni imenik je `PIM_Solution/`; `PIM_test/` ostane nespremenjen.
+Status: zaključeno in verzionirano v commitu `ce7feac`.
 
-## Koraki
+Vzpostavljeni so rešitev .NET 8, migrator, `dbo.SchemaMigration`, sheme, `ops.*`, `dbo.OrganizationConfig`, varna okoljska konfiguracija, testni skelet in dokaz dvakratnega zagona migracij proti razvojni bazi `PIM`.
 
-1. Ustvarim samostojno rešitev .NET 8 v `PIM_Solution/` s predpisano strukturo:
-   `src/`, `workers/`, `sql/migrations/`, `sql/registry-seed/`, `deploy/`, `tests/`, `_SPEC/`, `docs/`.
-   Dodam samo skeletne .NET 8 projekte, potrebne za preverljiv zagon, brez poslovne logike in brez virov.
+## F1 — izhodni kontrakt: definicija »poln«
 
-2. Zgradim migracijski okvir za MSSQL:
-   - oštevilčene idempotentne SQL migracije;
-   - `dbo.SchemaMigration` z vsebinskim hashom in časom uporabe;
-   - zagonski PowerShell skript, ki migracije serializira, preveri hash že uporabljenih migracij in uporabi manjkajoče po vrstnem redu v transakciji;
-   - nastanek shem `raw`, `map`, `canon`, `val`, `pim`, `out`, `ops`, `dbo`, `sec`.
+Status: zaključeno; čaka na ločen commit F1.
 
-3. Z eno ali več oštevilčenimi migracijami ustvarim samo F0 podatkovne objekte:
-   - `ops.PipelineRun`, `ops.PipelineStepLog`, `ops.DeadLetterQueue`, `ops.ErrorLog`, `ops.Heartbeat`;
-   - `dbo.OrganizationConfig` ter začetne vrstice DEMO, IQLighting, Vidadria in Ediito;
-   - podporne indekse in omejitve za varno ponovno izvajanje;
-   - pomožni proceduri za centralno napako in karanteno.
+### Meja izvedbe
+Izvedena bo izključno F1 iz avtoritativne specifikacije. Ne začne se F2 ali katera koli kasnejša faza. Ni zajema virov, kanoničnih tabel, poslovne validacije, promocije v katalog ali CSV datoteke.
 
-4. Dodam vzorec enotnega proceduralnega skeleta (`XACT_ABORT`, predpogoji, TRY/TRANSACTION/CATCH, centralni zapis napake in ponovni `THROW`) ter avtomatiziran SQL-test za njegovo delovanje.
+### Koraki
 
-5. Dodam konfiguracijo brez skrivnosti:
-   - sledena `appsettings.Development.json` in `appsettings.Production.json` s praznimi oziroma referenčnimi vrednostmi;
-   - ignorirane lokalne konfiguracije in sledeni primer;
-   - jasen neuspeh zagona migracij, če ni podan zunanji connection string.
+1. Napisati test, ki zahteva dva izvozna profila in preverja, da je vsak zahtevek validacije ustvarjen iz izvoznega stolpca, ne iz samostojnega ročnega seznama.
 
-6. Preverim F0:
-   - statične/preizkusne teste .NET in `npm test`/`npm run lint` iz nadrejenega repozitorija;
-   - če dobim razvojni MSSQL connection string, dejanski zagon iz nič in še en idempotentni zagon;
-   - preverbo shem, tabel, začetnih organizacij in pomožnih procedur;
-   - `git diff --check` in pregled, da ni skrivnosti.
+2. Dodati novo oštevilčeno MSSQL migracijo za:
+   - `out.ExportProfile` in `out.ExportColumn`;
+   - `val.ValidationProfile` in `val.FieldRequirement`;
+   - integritetne omejitve, aktivnost, vrstni red in enoličnost;
+   - sledljive povezave med izvoznim stolpcem in generiranim validacijskim zahtevkom.
 
-7. Po uspehu zapišem `TEST_REPORT` in vrstico v `PROGRESS.md`. Nato se ustavim in čakam na ukaz `nadaljuj` za F1.
+3. V register zapisati minimalni izhodni kontrakt:
+   - PRODUCTS CSV za B2C / svetila.si;
+   - obvezne ERP L1 in WEB_B2C zahteve iz DEL 5;
+   - obvezne B2C stolpce: slovenski spletni naziv, EAN, kategorije, slika, B2C cena z DDV, proizvajalec in ključni atributi.
 
-## Potrebni podatki za polni DoD
-Za dejanski dokaz postavitve baze 2× potrebujem razvojni MSSQL connection string (lahko ga podate kot začasno okoljsko spremenljivko; ne bo zapisan v repo). V trenutnem okolju ni nameščen `sqlcmd` niti ni dosegljiv lokalni MSSQL strežnik.
+4. Dodati idempotentno proceduro, ki izključno iz aktivnih izvoznih stolpcev generira oziroma uskladi `val.FieldRequirement`. Ne sme imeti zabetoniranega seznama poslovnih polj.
 
-## Ne bo izvedeno v F0
-Ni zajemanja virov, nobenih SAOP/FTP/HTTP dostopov, transformacij, kanoničnih tabel, validacije, PIM-kataloga, izvoza, UI-ja ali IIS objave. To so kasnejše faze.
+5. Razširiti migratorjevo preverjanje in SQL-test, da dokazujeta profile, stolpce, generirane zahteve in ponovni zagon brez podvojitev.
+
+6. Preveriti F1 na razvojni bazi `PIM`:
+   - prvi zagon nove migracije;
+   - drugi zagon brez podvojitev;
+   - `--verify` in ciljni SQL-test;
+   - build, kontraktni testi, `npm test`, lint, pregled skrivnosti in `git diff --check`.
+
+7. Posodobiti `TEST_REPORT.md` in `PROGRESS.md`, pregledati spremembe, ustvariti ločen commit F1 v slovenščini ter se ustaviti pred F2.
+
+### Merila uspeha F1
+
+- Iz šifranta je razvidno, kaj pomeni »poln« izdelek za B2C.
+- ERP L1 in WEB_B2C zahteve izhajajo iz izvoznega profila; ne obstaja ločeno ročno vzdrževan seznam.
+- Ponovni zagon je idempotenten in dokazljiv na MSSQL.
+- Nobena skrivnost ni v repoju in `PIM_test` ostane nespremenjen.

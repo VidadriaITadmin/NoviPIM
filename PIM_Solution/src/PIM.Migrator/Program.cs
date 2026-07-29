@@ -15,6 +15,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 var verifyOnly = args.Contains("--verify", StringComparer.OrdinalIgnoreCase);
 var createDatabase = args.Contains("--create-database", StringComparer.OrdinalIgnoreCase);
 var showMigrations = args.Contains("--show-migrations", StringComparer.OrdinalIgnoreCase);
+var showOutputContract = args.Contains("--show-output-contract", StringComparer.OrdinalIgnoreCase);
 var migrationsDirectory = ResolveMigrationsDirectory(args);
 
 if (!Directory.Exists(migrationsDirectory))
@@ -57,10 +58,17 @@ if (showMigrations)
   return 0;
 }
 
+if (showOutputContract)
+{
+  await ShowOutputContractAsync(connection);
+  return 0;
+}
+
 if (verifyOnly)
 {
   await VerifyF0Async(connection, migrations);
-  Console.WriteLine("Preverjanje F0 baze je uspešno.");
+  await VerifyF1Async(connection);
+  Console.WriteLine("Preverjanje F0–F1 baze je uspešno.");
   return 0;
 }
 
@@ -256,6 +264,32 @@ static async Task VerifyF0Async(SqlConnection connection, IReadOnlyCollection<Mi
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM dbo.OrganizationConfig;", null, 4, "OrganizationConfig mora vsebovati štiri začetne organizacije.");
 }
 
+static async Task ShowOutputContractAsync(SqlConnection connection)
+{
+  const string sql = """
+    SELECT validationProfile.ProfileCode,
+           COUNT(DISTINCT exportColumn.ExportColumnId) AS ActiveExportColumns,
+           COUNT(DISTINCT fieldRequirement.FieldRequirementId) AS ActiveGeneratedRequirements
+    FROM val.ValidationProfile validationProfile
+    LEFT JOIN out.ExportColumn exportColumn
+      ON exportColumn.ExportProfileId = validationProfile.ExportProfileId
+     AND exportColumn.IsActive = 1
+    LEFT JOIN val.FieldRequirement fieldRequirement
+      ON fieldRequirement.ValidationProfileId = validationProfile.ValidationProfileId
+     AND fieldRequirement.IsActive = 1
+    WHERE validationProfile.IsActive = 1
+    GROUP BY validationProfile.ProfileCode
+    ORDER BY validationProfile.ProfileCode;
+    """;
+  await using var command = new SqlCommand(sql, connection);
+  await using var reader = await command.ExecuteReaderAsync();
+  Console.WriteLine("ValidationProfile | ActiveExportColumns | ActiveGeneratedRequirements");
+  while (await reader.ReadAsync())
+  {
+    Console.WriteLine($"{reader.GetString(0)} | {reader.GetInt32(1)} | {reader.GetInt32(2)}");
+  }
+}
+
 static async Task ShowMigrationsAsync(SqlConnection connection)
 {
   const string sql = """
@@ -270,6 +304,37 @@ static async Task ShowMigrationsAsync(SqlConnection connection)
   {
     Console.WriteLine($"{reader.GetString(0)} | {reader.GetString(1)} | {reader.GetDateTime(2):O}");
   }
+}
+
+static async Task VerifyF1Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "out.ExportProfile", "out.ExportColumn", "val.ValidationProfile", "val.FieldRequirement", "val.SyncFieldRequirementsFromExportProfiles"
+  };
+  foreach (var expectedObject in expectedObjects)
+  {
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@value);", expectedObject, 1, $"Manjka F1 objekt {expectedObject}.");
+  }
+
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM val.ValidationProfile WHERE ProfileCode IN (N'ERP_L1', N'WEB_B2C') AND IsActive = 1;", null, 2, "Manjkajo aktivni validacijski profili ERP_L1 oziroma WEB_B2C.");
+  await AssertCountAsync(connection, """
+    SELECT COUNT(*)
+    FROM out.ExportColumn exportColumn
+    INNER JOIN val.ValidationProfile validationProfile ON validationProfile.ExportProfileId = exportColumn.ExportProfileId
+    WHERE exportColumn.IsActive = 1
+      AND exportColumn.IsRequired = 1
+      AND NOT EXISTS
+      (
+        SELECT 1
+        FROM val.FieldRequirement requirement
+        WHERE requirement.ValidationProfileId = validationProfile.ValidationProfileId
+          AND requirement.SourceExportColumnId = exportColumn.ExportColumnId
+          AND requirement.FieldCode = exportColumn.CanonicalFieldCode
+          AND requirement.IsRequired = 1
+          AND requirement.IsActive = 1
+      );
+    """, null, 0, "Aktiven obvezen izvozni stolpec nima skladnega generiranega validacijskega zahtevka.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)

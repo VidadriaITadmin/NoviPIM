@@ -13,6 +13,7 @@ RequireFile("001_CreateSchemas.sql");
 RequireFile("002_CreateOperationsAndOrganization.sql");
 RequireFile("003_CreateOperationalProcedures.sql");
 RequireFile("004_CreateProcedureSkeleton.sql");
+RequireFile("005_CreateOutputContract.sql");
 
 AssertContains("001_CreateSchemas.sql", "dbo.SchemaMigration");
 AssertContains("001_CreateSchemas.sql", "CREATE SCHEMA raw");
@@ -29,10 +30,22 @@ AssertContains("003_CreateOperationalProcedures.sql", "ops.EnqueueDeadLetter");
 AssertContains("004_CreateProcedureSkeleton.sql", "SET XACT_ABORT ON");
 AssertContains("004_CreateProcedureSkeleton.sql", "BEGIN TRANSACTION");
 AssertContains("004_CreateProcedureSkeleton.sql", "ops.LogError");
+AssertContains("005_CreateOutputContract.sql", "out.ExportProfile");
+AssertContains("005_CreateOutputContract.sql", "out.ExportColumn");
+AssertContains("005_CreateOutputContract.sql", "val.ValidationProfile");
+AssertContains("005_CreateOutputContract.sql", "val.FieldRequirement");
+AssertContains("005_CreateOutputContract.sql", "val.SyncFieldRequirementsFromExportProfiles");
+AssertContains("005_CreateOutputContract.sql", "WEB_B2C_PRODUCTS");
+AssertContains("005_CreateOutputContract.sql", "ERP_L1");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--create-database");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "EnsureDatabaseAsync");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--show-migrations");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "ShowMigrationsAsync");
+AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "VerifyF1Async");
+AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "out.ExportProfile");
+AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "val.FieldRequirement");
+AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--show-output-contract");
+AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "ShowOutputContractAsync");
 
 if (Directory.Exists(migrationsDirectory))
 {
@@ -42,9 +55,9 @@ if (Directory.Exists(migrationsDirectory))
     .ToArray();
   var numbered = migrationNames.Where(name => Regex.IsMatch(name!, "^\\d{3}_.+\\.sql$", RegexOptions.CultureInvariant)).ToArray();
 
-  if (numbered.Length != 4)
+  if (numbered.Length != 5)
   {
-    failures.Add($"Pričakovane so natanko štiri F0 oštevilčene migracije, najdenih je {numbered.Length}.");
+    failures.Add($"Pričakovanih je pet oštevilčenih migracij F0–F1, najdenih je {numbered.Length}.");
   }
 }
 
@@ -59,7 +72,7 @@ if (failures.Count > 0)
   return 1;
 }
 
-Console.WriteLine("F0 migracijski kontrakt je izpolnjen.");
+Console.WriteLine("F0–F1 migracijski kontrakt je izpolnjen.");
 return 0;
 
 void RequireFile(string name)
