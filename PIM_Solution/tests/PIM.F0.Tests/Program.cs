@@ -18,6 +18,7 @@ RequireFile("006_CreateCanonicalValidationAndPim.sql");
 RequireFile("007_CreateSaopPipeline.sql");
 RequireFile("008_AllowCorePromotion.sql");
 RequireFile("009_FixSaopXmlParsingAndErpEligibility.sql");
+RequireFile("010_CreateIntranetF4.sql");
 
 AssertContains("001_CreateSchemas.sql", "dbo.SchemaMigration");
 AssertContains("001_CreateSchemas.sql", "CREATE SCHEMA raw");
@@ -53,6 +54,8 @@ AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "map.ProcessRawInbo
 AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.Supplier");
 AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.DiscountGroup");
 AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.Manufacturer");
+AssertContains("010_CreateIntranetF4.sql", "sec.NavigationItem");
+AssertContains("010_CreateIntranetF4.sql", "intranet.GetDashboard");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--create-database");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "EnsureDatabaseAsync");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--show-migrations");
@@ -71,9 +74,9 @@ if (Directory.Exists(migrationsDirectory))
     .ToArray();
   var numbered = migrationNames.Where(name => Regex.IsMatch(name!, "^\\d{3}_.+\\.sql$", RegexOptions.CultureInvariant)).ToArray();
 
-  if (numbered.Length != 9)
+  if (numbered.Length != 10)
   {
-    failures.Add($"Pričakovanih je devet oštevilčenih migracij F0–F3, najdenih je {numbered.Length}.");
+    failures.Add($"Pričakovanih je deset oštevilčenih migracij F0–F4, najdenih je {numbered.Length}.");
   }
 }
 
@@ -88,7 +91,7 @@ if (failures.Count > 0)
   return 1;
 }
 
-Console.WriteLine("F0–F3 migracijski kontrakt je izpolnjen.");
+Console.WriteLine("F0–F4 migracijski kontrakt je izpolnjen.");
 return 0;
 
 void RequireFile(string name)
