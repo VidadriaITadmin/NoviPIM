@@ -1,0 +1,6 @@
+@page "/teki-obdelave"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+<h1>Teki obdelave</h1>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> } else { <table class="table"><thead><tr><th>Postopek</th><th>Vir</th><th>Status</th><th>Prebrano</th><th>Uspešno</th><th>Neuspešno</th><th>Začetek</th></tr></thead><tbody>@foreach (var row in Rows) { <tr><td>@row.Pipeline</td><td>@row.SourceCode</td><td>@row.Status</td><td>@row.RowsRead</td><td>@row.RowsSucceeded</td><td>@row.RowsFailed</td><td>@row.StartedUtc.ToLocalTime()</td></tr> }</tbody></table> }
+@code { IReadOnlyList<PIM.Intranet.Services.PipelineRunRow>? Rows; protected override async Task OnInitializedAsync() => Rows = await Data.GetPipelineRunsAsync(2); }

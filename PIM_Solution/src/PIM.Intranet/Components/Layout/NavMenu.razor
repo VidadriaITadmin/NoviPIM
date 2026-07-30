@@ -1,6 +1,9 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">PIM.Intranet</a>
+        <a class="navbar-brand" href="/nadzorna-plosca">PIM</a>
     </div>
 </div>
 
@@ -8,22 +11,23 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+        @foreach (var group in Navigation.GroupBy(item => item.GroupName))
+        {
+            <div class="px-3 pt-2 text-secondary small">@group.Key</div>
+            @foreach (var item in group)
+            {
+                <div class="nav-item px-3"><NavLink class="nav-link" href="@item.Route">@item.Name</NavLink></div>
+            }
+        }
     </nav>
 </div>
+
+@code {
+    IReadOnlyList<PIM.Intranet.Services.NavigationEntry> Navigation = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        Navigation = await Data.GetNavigationAsync(state.User.Claims.Where(claim => claim.Type == System.Security.Claims.ClaimTypes.Role).Select(claim => claim.Value));
+    }
+}

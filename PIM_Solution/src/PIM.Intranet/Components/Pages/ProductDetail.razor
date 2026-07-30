@@ -1,0 +1,6 @@
+@page "/izdelki/{ProductId:long}"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+<h1>Izdelek</h1>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> } else if (Rows.Count == 0) { <p>Izdelek ne obstaja ali ni v izbrani organizaciji.</p> } else { <p><strong>Artikel:</strong> @Rows[0].ItemId<br /><strong>EAN:</strong> @Rows[0].Ean</p><h2>Validacija</h2><table class="table"><thead><tr><th>Profil</th><th>Status</th><th>Popolnost</th></tr></thead><tbody>@foreach (var row in Rows) { <tr><td>@row.ProfileCode</td><td>@row.ProfileStatus</td><td>@row.ProfileCompleteness %</td></tr> }</tbody></table> }
+@code { [Parameter] public long ProductId { get; set; } IReadOnlyList<PIM.Intranet.Services.ProductDetailRow>? Rows; protected override async Task OnParametersSetAsync() => Rows = await Data.GetProductDetailAsync(2, ProductId); }

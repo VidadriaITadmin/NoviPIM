@@ -1,0 +1,6 @@
+@page "/karantena"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+<h1>Karantena</h1>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> } else if (Rows.Count == 0) { <p>Ni karantenskih zapisov.</p> } else { <table class="table"><thead><tr><th>Vir</th><th>Entiteta</th><th>Stran</th><th>Razlog</th><th>Prejeto</th></tr></thead><tbody>@foreach (var row in Rows) { <tr><td>@row.SourceCode</td><td>@row.EntityType</td><td>@row.PageNumber</td><td>@row.FailureReason</td><td>@row.ReceivedUtc.ToLocalTime()</td></tr> }</tbody></table> }
+@code { IReadOnlyList<PIM.Intranet.Services.QuarantineRow>? Rows; protected override async Task OnInitializedAsync() => Rows = await Data.GetQuarantineAsync(2); }

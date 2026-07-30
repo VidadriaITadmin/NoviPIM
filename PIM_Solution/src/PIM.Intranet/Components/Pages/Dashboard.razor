@@ -1,0 +1,25 @@
+@page "/nadzorna-plosca"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Nadzorna plošča</PageTitle>
+<h1>Nadzorna plošča</h1>
+@if (Metrics is null)
+{
+  <p>Nalaganje podatkov …</p>
+}
+else
+{
+  <div class="row g-3">
+    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>Kanonični izdelki</strong><span>@Metrics.CanonProductCount</span></a></div>
+    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>ERP veljavni</strong><span>@Metrics.ErpValidCount</span></a></div>
+    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>Promovirani izdelki</strong><span>@Metrics.PimProductCount</span></a></div>
+    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/napake-validacije"><strong>Splet B2C neveljavni</strong><span>@Metrics.WebInvalidCount</span></a></div>
+    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/karantena"><strong>Karantena</strong><span>@Metrics.QuarantineCount</span></a></div>
+  </div>
+}
+
+@code {
+  PIM.Intranet.Services.DashboardMetrics? Metrics;
+  protected override async Task OnInitializedAsync() => Metrics = await Data.GetDashboardAsync(2);
+}

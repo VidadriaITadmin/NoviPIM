@@ -24,6 +24,7 @@ builder.Services.AddAuthorization(options =>
     .Build();
 });
 builder.Services.AddScoped<LocalUserAuthenticationService>();
+builder.Services.AddScoped<IntranetDataService>();
 
 var app = builder.Build();
 

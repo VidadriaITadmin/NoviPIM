@@ -1,0 +1,6 @@
+@page "/izdelki"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+<h1>Izdelki</h1>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> } else { <table class="table"><thead><tr><th>Artikel</th><th>EAN</th><th>Status</th><th>Popolnost</th></tr></thead><tbody>@foreach (var row in Rows) { <tr><td><a href="/izdelki/@row.ProductId">@row.ItemId</a></td><td>@row.Ean</td><td>@row.Status</td><td>@row.Completeness %</td></tr> }</tbody></table> }
+@code { IReadOnlyList<PIM.Intranet.Services.ProductRow>? Rows; protected override async Task OnInitializedAsync() => Rows = await Data.GetProductsAsync(2); }

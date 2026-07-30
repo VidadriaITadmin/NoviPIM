@@ -1,0 +1,6 @@
+@page "/napake-validacije"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+<h1>Napake validacije</h1>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> } else { <table class="table"><thead><tr><th>Artikel</th><th>Profil</th><th>Koda</th><th>Sporočilo</th></tr></thead><tbody>@foreach (var row in Rows) { <tr><td><a href="/izdelki/@row.ProductId">@row.ItemId</a></td><td>@row.ProfileCode</td><td>@row.IssueCode</td><td>@row.Message</td></tr> }</tbody></table> }
+@code { IReadOnlyList<PIM.Intranet.Services.ValidationIssueRow>? Rows; protected override async Task OnInitializedAsync() => Rows = await Data.GetValidationIssuesAsync(2); }
