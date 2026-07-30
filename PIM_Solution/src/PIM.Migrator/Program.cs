@@ -1,14 +1,15 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 
 const string connectionStringVariable = "PIM_CONNECTION_STRING";
-var connectionString = Environment.GetEnvironmentVariable(connectionStringVariable);
+var connectionString = ReadConnectionString(connectionStringVariable, "Pim");
 
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.Error.WriteLine($"Manjka okoljska spremenljivka {connectionStringVariable}. Connection string ni zapisan v repozitorij.");
+  Console.Error.WriteLine($"Manjka {connectionStringVariable} oziroma ConnectionStrings:Pim v appsettings.Local.json. Connection string ni zapisan v repozitorij.");
   return 2;
 }
 
@@ -68,7 +69,9 @@ if (verifyOnly)
 {
   await VerifyF0Async(connection, migrations);
   await VerifyF1Async(connection);
-  Console.WriteLine("Preverjanje F0–F1 baze je uspešno.");
+  await VerifyF2Async(connection);
+  await VerifyF3Async(connection);
+  Console.WriteLine("Preverjanje F0–F3 baze je uspešno.");
   return 0;
 }
 
@@ -140,6 +143,30 @@ static string ResolveMigrationsDirectory(string[] arguments)
   }
 
   return Path.Combine(Directory.GetCurrentDirectory(), "sql", "migrations");
+}
+
+static string? ReadConnectionString(string environmentVariable, string localSettingName)
+{
+  var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
+  if (!string.IsNullOrWhiteSpace(environmentValue))
+  {
+    return environmentValue;
+  }
+
+  var localPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Local.json");
+  if (!File.Exists(localPath))
+  {
+    return null;
+  }
+
+  using var document = JsonDocument.Parse(File.ReadAllText(localPath));
+  if (!document.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
+    || !connectionStrings.TryGetProperty(localSettingName, out var setting))
+  {
+    return null;
+  }
+
+  return setting.GetString();
 }
 
 static async Task EnsureMigrationLedgerAsync(SqlConnection connection)
@@ -335,6 +362,36 @@ static async Task VerifyF1Async(SqlConnection connection)
           AND requirement.IsActive = 1
       );
     """, null, 0, "Aktiven obvezen izvozni stolpec nima skladnega generiranega validacijskega zahtevka.");
+}
+
+static async Task VerifyF2Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "canon.Product", "canon.ProductText", "canon.ProductAttribute", "canon.ProductCategory", "canon.ProductMedia",
+    "canon.ProductPrice", "canon.ProductCommercial", "canon.FieldValue", "val.ProductIssue",
+    "val.ProductValidationState", "val.RunValidation", "val.Promote", "pim.Product"
+  };
+  foreach (var expectedObject in expectedObjects)
+  {
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@value);", expectedObject, 1, $"Manjka F2 objekt {expectedObject}.");
+  }
+}
+
+static async Task VerifyF3Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "raw.Inbox", "map.SourceConnector", "map.FieldMapping", "map.Watermark", "map.PipelineStep",
+    "map.ProcessRawInbox", "map.RunSaopProducts", "out.ExportProductsCsv"
+  };
+  foreach (var expectedObject in expectedObjects)
+  {
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@value);", expectedObject, 1, $"Manjka F3 objekt {expectedObject}.");
+  }
+
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.SourceConnector WHERE SourceCode=N'SAOP_IQLIGHTING' AND OrganizationId=2 AND IsActive=1;", null, 1, "Manjka aktivni SAOP konektor za IQLighting.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.PipelineStep WHERE PipelineCode=N'SAOP_PRODUCTS' AND IsActive=1;", null, 3, "SAOP pipeline mora imeti tri aktivne korake.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)

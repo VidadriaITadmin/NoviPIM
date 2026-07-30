@@ -15,6 +15,9 @@ RequireFile("003_CreateOperationalProcedures.sql");
 RequireFile("004_CreateProcedureSkeleton.sql");
 RequireFile("005_CreateOutputContract.sql");
 RequireFile("006_CreateCanonicalValidationAndPim.sql");
+RequireFile("007_CreateSaopPipeline.sql");
+RequireFile("008_AllowCorePromotion.sql");
+RequireFile("009_FixSaopXmlParsingAndErpEligibility.sql");
 
 AssertContains("001_CreateSchemas.sql", "dbo.SchemaMigration");
 AssertContains("001_CreateSchemas.sql", "CREATE SCHEMA raw");
@@ -44,6 +47,12 @@ AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.ProductIssue");
 AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.RunValidation");
 AssertContains("006_CreateCanonicalValidationAndPim.sql", "val.Promote");
 AssertContains("006_CreateCanonicalValidationAndPim.sql", "pim.Product");
+AssertContains("008_AllowCorePromotion.sql", "val.Promote");
+AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "map.StripXmlDeclaration");
+AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "map.ProcessRawInbox");
+AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.Supplier");
+AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.DiscountGroup");
+AssertContains("009_FixSaopXmlParsingAndErpEligibility.sql", "Product.Manufacturer");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--create-database");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "EnsureDatabaseAsync");
 AssertFileContains(Path.Combine(solutionRoot, "src", "PIM.Migrator", "Program.cs"), "--show-migrations");
@@ -62,9 +71,9 @@ if (Directory.Exists(migrationsDirectory))
     .ToArray();
   var numbered = migrationNames.Where(name => Regex.IsMatch(name!, "^\\d{3}_.+\\.sql$", RegexOptions.CultureInvariant)).ToArray();
 
-  if (numbered.Length != 6)
+  if (numbered.Length != 9)
   {
-    failures.Add($"Pričakovanih je šest oštevilčenih migracij F0–F2, najdenih je {numbered.Length}.");
+    failures.Add($"Pričakovanih je devet oštevilčenih migracij F0–F3, najdenih je {numbered.Length}.");
   }
 }
 
@@ -79,7 +88,7 @@ if (failures.Count > 0)
   return 1;
 }
 
-Console.WriteLine("F0–F1 migracijski kontrakt je izpolnjen.");
+Console.WriteLine("F0–F3 migracijski kontrakt je izpolnjen.");
 return 0;
 
 void RequireFile(string name)

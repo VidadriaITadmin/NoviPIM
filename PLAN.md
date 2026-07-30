@@ -61,3 +61,56 @@ Izvedena bo izključno F2 iz avtoritativne specifikacije. Ne bodo dodani workerj
 - Promocija je ločena od validacije in v `pim.*` sprejme samo veljavne izdelke.
 - Ponovni zagon validacije in promocije ne ustvari podvojenih napak ali katalogskih zapisov.
 - Nobena skrivnost ni v repoju, `PIM_test` ostane nespremenjen, F3 ni začeta.
+
+## F3 — prva navpična rezina SAOP → PRODUCTS CSV
+
+Status: zaključeno in dokazano na razvojni MSSQL instanci; sledi ločen commit F3.
+
+### Meja izvedbe
+
+Izvedena bo prva SAOP pot za organizacijo IQLighting (2). Worker bo samo zajel odgovor SAOP in ga zapisal v nabiralnik; vsa preslikava, validacija, promocija in izvoz bodo v MSSQL. NW XML, B2B, zaloge, intranet in write-back niso del F3.
+
+### Predpogoji, ki jih mora zagotoviti uporabnik
+
+- dosegljiv neprodukcijski SAOP iCenter API osnovni URL;
+- način prijave in poverilnice oziroma drug varen način dostopa za GET;
+- dovoljen dostop za `ItemGeneralData`, `Prices`, `Descriptions`, `Currencies` in `PriceLists` organizacije 2;
+- potrditev razvojnega vzorca podatkov oziroma dovolj velik obseg za približno 500 izdelkov.
+
+Poverilnice bodo uporabljene izključno prek okoljske spremenljivke ali lokalne, ignorirane konfiguracije; ne bodo zapisane v repo.
+
+### Izvedbeni dodatek F3 — skupni MSSQL in lokalna konfiguracija
+
+Pred migracijami F3 se na dosegljivem neprodukcijskem MSSQL strežniku na vratih 1433 preveri instanca in stanje baz. Ustvari oziroma uskladi se SQL-prijava `pim_hermes`; v `PIM_test` dobi samo pravico branja, v `PIM` pa članstvo `db_owner`. Če `PIM` na tem strežniku še ne obstaja, jo migrator idempotentno ustvari in nato uporabi vse migracije od F0 do F3; obstoječa baza se ne prepisuje ali obnavlja.
+
+Oba povezovalna niza se shranita izključno v `PIM_Solution/appsettings.Local.json`, ki je že izključen iz Git-a. Migrator, F3 worker, integracijski test in izvoz fixture bodo najprej prebrali lokalno konfiguracijo, okoljske spremenljivke pa bodo ostale podprte kot prednostni način za CI/produkcijo. Niti gesla niti celotna povezovalna niza ne bodo vključeni v poročila, commit ali sledene datoteke.
+
+Pred zaključkom se preveri: povezava prijave do obeh baz, dejanska pravica `db_datareader` v `PIM_test`, `db_owner` v `PIM`, prvi in drugi zagon migracij proti `PIM`, migracijska sled/hash, `--verify`, F3 integracija proti realni bazi in lokalna uporaba konfiguracije brez ročnega izvoza spremenljivk.
+
+### Koraki
+
+1. Dodati teste in oštevilčeno migracijo za `raw.*` nabiralnik, `map.SourceConnector`, `map.FieldMapping`, vodne žige in registrsko orkestracijo korakov.
+2. Napisati tanek .NET 8 `KatalogWorker`, ki za pet dovoljenih SAOP entitet izvaja straničenje/delto in surove odgovore zapisuje v nabiralnik, z `ops.PipelineRun` ter heartbeatom.
+3. Dodati parametrirano, šifrantno gnano MSSQL sortirnico iz nabiralnika v `canon.*`, z EAV, hashom in karanteno za pokvarjene vrstice.
+4. Orkestrirati korake zajem → sortiranje → validacija → promocija ter izdelati PRODUCTS CSV iz aktivnega profila za org 2/B2C.
+5. Preveriti razvojni in IIS self-contained `win-x64` objavni artefakt, testno pot približno 500 izdelkov, števce pipeline teka in dejanski CSV.
+6. Posodobiti poročilo in napredek, nato ustvariti ločen commit F3 in se ustaviti pred F4.
+
+### Merila uspeha F3
+
+- En dokumentiran `ops.PipelineRun` dokazuje zajeto, veljavno in izvoženo število izdelkov.
+- Worker ne izvaja transformacij; spremembe preslikav so vrstice registrov.
+- PRODUCTS CSV vsebuje podatke iz `pim.*` in pravila iz F1 izvoznega profila.
+- Enaka vertikalna pot je preverjena v `dotnet run` in IIS objavnem artefaktu.
+
+### Meja NW XML
+
+NW XML ni del F3. V F5 bo izključno konfiguracija skupnega mehanizma: `raw.LandingRecord` s `SourceCode = NW_XML`, `EntityType = Attribute | Classification | Media`, XPath vrstice v `map.FieldMapping`, merge po EAN in unmapped nabiralnik; brez NW parserja in brez NW tabel.
+
+### Sprejeta omejitev razvojnega dokaza
+
+Za F3 fixture dokaz je uporabnik potrdil trenutno razpoložljivi veljavni vzorec 25 artiklov, 70 cen in enega opisa. Worker in registri morajo vseeno obdelovati vse konfigurirane strani in pet endpointov; večji neokrnjeni vzorec oziroma živi SAOP bo naknadna operativna preveritev na uporabnikovem stroju s FortiClient VPN. B2C ostane resničen in zato pravilno nepopoln brez kategorije, slike in zahtevanega atributa; F3 dokaže tudi CSV mehaniko s praznimi spletnimi stolpci. Veljaven spletno-pripravljen B2C CSV je F5 DoD po združitvi SAOP in NW po EAN.
+
+### Prihodnji NW XML kontrakt
+
+NW XML ne dobi ločenega parserja ali ločenih tabel. Ob njegovi uvedbi se celotni nespremenjeni XML z `SourceCode='NW_XML'` shrani v skupni generični nabiralnik `raw.LandingRecord`; `EntityType` je `Attribute`, `Classification` ali `Media`. Preslikave XPath v `canon.*` so konfiguracijske vrstice `map.FieldMapping`, ujemanje s SAOP poteka po EAN, neznana polja pa se zadržijo v unmapped nabiralniku. F3 NW transporta, parserja ali podatkov ne uvaja.
