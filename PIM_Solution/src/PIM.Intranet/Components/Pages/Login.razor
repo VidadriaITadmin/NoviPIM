@@ -1,0 +1,29 @@
+@page "/prijava"
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Prijava</PageTitle>
+
+<h1>Prijava</h1>
+@if (Napaka)
+{
+  <p class="alert alert-danger">Prijava ni uspela.</p>
+}
+<form method="post" action="/prijava">
+  <AntiforgeryToken />
+  <div class="mb-3">
+    <label for="uporabniskoIme" class="form-label">Uporabniško ime</label>
+    <input id="uporabniskoIme" name="uporabniskoIme" class="form-control" autocomplete="username" required />
+  </div>
+  <div class="mb-3">
+    <label for="geslo" class="form-label">Geslo</label>
+    <input id="geslo" name="geslo" type="password" class="form-control" autocomplete="current-password" required />
+  </div>
+  <button type="submit" class="btn btn-primary">Prijava</button>
+</form>
+
+@code {
+  [SupplyParameterFromQuery(Name = "napaka")]
+  public string? NapakaParam { get; set; }
+  bool Napaka => NapakaParam == "1";
+}
