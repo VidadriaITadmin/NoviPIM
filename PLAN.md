@@ -1,5 +1,20 @@
 # PLAN — izvedene in naslednje faze PIM sistema
 
+## F8 — SAOP outbox in echo
+
+Status: fixture in izolirani PIM MSSQL dokaz zaključena 2026-07-31; ustavljeno
+pred F9. Živi SAOP write je blokiran brez potrjene neprodukcijske pogodbe in
+izrecnega dovoljenja.
+
+Izvedeni so generični `out.OutboxMessage`/`out.OutboxAttempt`, konfiguracijska
+policy lastništva in integracijski profil s privzetim `ManualApproval`, atomske
+procedure za enqueue/claim/lease/attempt/approve/cancel/retry/echo, determinističen
+`PIM.Outbound`, POST/PATCH dispatcher z redakcijo in omejenim retryjem, echo
+anti-loop ter slovenski `/outbound` monitor. Migracija 021 je bila na razvojni
+bazi `PIM` uporabljena in idempotentno ponovno preverjena. Izolirana organizacija
+9808 je z lokalnim HTTP fixture strežnikom dokazala dedup, Retry, Dead, Sent,
+Verified in Drift ter bila po testu odstranjena. F9 ni začeta.
+
 ## F6 — zaloge
 
 Status: zaključeno in dokazano 2026-07-31; ustavljeno pred F7/F8.
