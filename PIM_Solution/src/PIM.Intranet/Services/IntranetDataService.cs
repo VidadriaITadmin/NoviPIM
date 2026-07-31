@@ -12,6 +12,9 @@ public sealed record QuarantineRow(string SourceCode, string EntityType, int Pag
 public sealed record StockRow(long PositionId, string? ItemId, string? Ean, decimal Quantity, DateTime? AvailabilityDate,
   decimal? IncomingQuantity, string SourceCode, DateTime SnapshotUtc, string MatchKey, string? ProviderKind,
   string Endpoint, int FreshnessMinutes, long? ProductId);
+public sealed record CustomerRow(long CustomerId, string CustomerKey, string Name, string? CustomerKind, string? CustomerType, string? MagentoGroupKey, bool WebEnabled, bool PackagingDiscountEnabled, bool ValueDiscountEnabled, bool B2bPlusEnabled);
+public sealed record CustomerDetailRow(long CustomerId, string CustomerKey, string Name, string? PayerCode, string? PayerName, string? PriceListCode, string? DiscountPriceListCode, string? CustomerTypeCode, string? CustomerKind, bool PackagingDiscountEnabled, bool ValueDiscountEnabled, bool B2bPlusEnabled, DateTime? B2bPlusValidFrom, DateTime? B2bPlusValidTo, bool WebEnabled, string? MagentoGroupKey);
+public sealed record ShippingRuleRow(string RuleCode, decimal? OrderThreshold, decimal? PackageLengthMeters, decimal ShippingNet, bool IsFree, int Priority);
 
 public sealed class IntranetDataService(IConfiguration configuration)
 {
@@ -107,5 +110,61 @@ public sealed class IntranetDataService(IConfiguration configuration)
       reader.GetDecimal(3), reader.IsDBNull(4)?null:reader.GetDateTime(4), reader.IsDBNull(5)?null:reader.GetDecimal(5), reader.GetString(6), reader.GetDateTime(7),
       reader.GetString(8), reader.IsDBNull(9)?null:reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.IsDBNull(12)?null:reader.GetInt64(12)));
     return rows;
+  }
+
+  public async Task<IReadOnlyList<CustomerRow>> GetCustomersAsync(int organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("EXEC intranet.GetCustomers @OrganizationId;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<CustomerRow>();
+    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.IsDBNull(3)?null:reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.IsDBNull(5)?null:reader.GetString(5),!reader.IsDBNull(6)&&reader.GetBoolean(6),!reader.IsDBNull(7)&&reader.GetBoolean(7),!reader.IsDBNull(8)&&reader.GetBoolean(8),!reader.IsDBNull(9)&&reader.GetBoolean(9)));
+    return rows;
+  }
+
+  public async Task<CustomerDetailRow?> GetCustomerDetailAsync(int organizationId, long customerId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("EXEC intranet.GetCustomerDetail @OrganizationId,@CustomerId;", connection); command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@CustomerId",customerId);
+    await using var reader=await command.ExecuteReaderAsync(cancellationToken);if(!await reader.ReadAsync(cancellationToken))return null;
+    return new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.IsDBNull(3)?null:reader.GetString(3),reader.IsDBNull(4)?null:reader.GetString(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.IsDBNull(6)?null:reader.GetString(6),reader.IsDBNull(7)?null:reader.GetString(7),reader.IsDBNull(8)?null:reader.GetString(8),reader.GetBoolean(9),reader.GetBoolean(10),reader.GetBoolean(11),reader.IsDBNull(12)?null:reader.GetDateTime(12),reader.IsDBNull(13)?null:reader.GetDateTime(13),reader.GetBoolean(14),reader.IsDBNull(15)?null:reader.GetString(15));
+  }
+
+  public async Task SaveCustomerWebProfileAsync(int organizationId, CustomerDetailRow row, string changedBy, CancellationToken cancellationToken = default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand("EXEC b2b.SaveCustomerWebProfile @OrganizationId,@CustomerId,@CustomerTypeCode,@CustomerKind,@PackagingDiscountEnabled,@ValueDiscountEnabled,@B2bPlusEnabled,@B2bPlusValidFrom,@B2bPlusValidTo,@WebEnabled,@ChangedBy;",connection);
+    command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@CustomerId",row.CustomerId);command.Parameters.AddWithValue("@CustomerTypeCode",(object?)row.CustomerTypeCode??DBNull.Value);command.Parameters.AddWithValue("@CustomerKind",(object?)row.CustomerKind??DBNull.Value);command.Parameters.AddWithValue("@PackagingDiscountEnabled",row.PackagingDiscountEnabled);command.Parameters.AddWithValue("@ValueDiscountEnabled",row.ValueDiscountEnabled);command.Parameters.AddWithValue("@B2bPlusEnabled",row.B2bPlusEnabled);command.Parameters.AddWithValue("@B2bPlusValidFrom",(object?)row.B2bPlusValidFrom?.Date??DBNull.Value);command.Parameters.AddWithValue("@B2bPlusValidTo",(object?)row.B2bPlusValidTo?.Date??DBNull.Value);command.Parameters.AddWithValue("@WebEnabled",row.WebEnabled);command.Parameters.AddWithValue("@ChangedBy",changedBy);
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  public async Task<IReadOnlyList<ShippingRuleRow>> GetShippingRulesAsync(CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetDiscountRules;",connection);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<ShippingRuleRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetString(0),reader.IsDBNull(1)?null:reader.GetDecimal(1),reader.IsDBNull(2)?null:reader.GetDecimal(2),reader.GetDecimal(3),reader.GetBoolean(4),reader.GetInt32(5)));return rows;
+  }
+
+  public async Task SaveShippingRuleAsync(int organizationId, ShippingRuleRow row, string changedBy, CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC b2b.SaveDiscountRule @OrganizationId,@RuleCode,@OrderThreshold,@PackageLengthMeters,@ShippingNet,@IsFree,@Priority,@ChangedBy;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@RuleCode",row.RuleCode);command.Parameters.AddWithValue("@OrderThreshold",(object?)row.OrderThreshold??DBNull.Value);command.Parameters.AddWithValue("@PackageLengthMeters",(object?)row.PackageLengthMeters??DBNull.Value);command.Parameters.AddWithValue("@ShippingNet",row.ShippingNet);command.Parameters.AddWithValue("@IsFree",row.IsFree);command.Parameters.AddWithValue("@Priority",row.Priority);command.Parameters.AddWithValue("@ChangedBy",changedBy);await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  public async Task SaveCustomerTypeMappingAsync(int organizationId,string typeCode,string? groupKey,string changedBy,CancellationToken cancellationToken=default)
+  {
+    await ExecuteCommercialAsync("EXEC b2b.SaveCustomerTypeMapping @OrganizationId,@CustomerTypeCode,@MagentoGroupKey,@ChangedBy;",organizationId,changedBy,command=>{command.Parameters.AddWithValue("@CustomerTypeCode",typeCode);command.Parameters.AddWithValue("@MagentoGroupKey",(object?)groupKey??DBNull.Value);},cancellationToken);
+  }
+  public async Task SaveCustomerValueTierAsync(int organizationId,long customerId,int tierNumber,decimal threshold,decimal percent,string changedBy,CancellationToken cancellationToken=default)
+  {
+    await ExecuteCommercialAsync("EXEC b2b.SaveCustomerValueTier @OrganizationId,@CustomerId,@TierNumber,@ThresholdGrossExVat,@PercentValue,@ChangedBy;",organizationId,changedBy,command=>{command.Parameters.AddWithValue("@CustomerId",customerId);command.Parameters.AddWithValue("@TierNumber",tierNumber);command.Parameters.AddWithValue("@ThresholdGrossExVat",threshold);command.Parameters.AddWithValue("@PercentValue",percent);},cancellationToken);
+  }
+  public async Task SaveValueTierAsync(int organizationId,int tierNumber,decimal threshold,decimal percent,string changedBy,CancellationToken cancellationToken=default)
+  {
+    await ExecuteCommercialAsync("EXEC b2b.SaveValueDiscountTier @OrganizationId,@TierNumber,@ThresholdGrossExVat,@PercentValue,@ChangedBy;",organizationId,changedBy,command=>{command.Parameters.AddWithValue("@TierNumber",tierNumber);command.Parameters.AddWithValue("@ThresholdGrossExVat",threshold);command.Parameters.AddWithValue("@PercentValue",percent);},cancellationToken);
+  }
+  public async Task SaveGroupOverrideAsync(int organizationId,string targetKind,long? customerId,string? typeCode,string itemGroup,decimal percent,DateTime? validFrom,DateTime? validTo,string changedBy,CancellationToken cancellationToken=default)
+  {
+    await ExecuteCommercialAsync("EXEC b2b.SaveGroupDiscountOverride @OrganizationId,@TargetKind,@CustomerId,@CustomerTypeCode,@ItemGroupCode,@PercentValue,@ValidFrom,@ValidTo,@ChangedBy;",organizationId,changedBy,command=>{command.Parameters.AddWithValue("@TargetKind",targetKind);command.Parameters.AddWithValue("@CustomerId",(object?)customerId??DBNull.Value);command.Parameters.AddWithValue("@CustomerTypeCode",(object?)typeCode??DBNull.Value);command.Parameters.AddWithValue("@ItemGroupCode",itemGroup);command.Parameters.AddWithValue("@PercentValue",percent);command.Parameters.AddWithValue("@ValidFrom",(object?)validFrom?.Date??DBNull.Value);command.Parameters.AddWithValue("@ValidTo",(object?)validTo?.Date??DBNull.Value);},cancellationToken);
+  }
+  async Task ExecuteCommercialAsync(string sql,int organizationId,string changedBy,Action<SqlCommand> configure,CancellationToken cancellationToken)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@ChangedBy",changedBy);configure(command);await command.ExecuteNonQueryAsync(cancellationToken);
   }
 }

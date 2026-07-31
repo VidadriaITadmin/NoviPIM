@@ -1,0 +1,20 @@
+@page "/stranke"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Stranke</PageTitle>
+<h1>Stranke</h1>
+<label>Vrsta stranke <select class="form-select" @bind="Kind"><option value="">Vse</option><option value="CUSTOMER">Kupec</option><option value="SUPPLIER">Dobavitelj</option><option value="BOTH">Kupec in dobavitelj</option></select></label>
+@if (Rows is null) { <p>Nalaganje podatkov …</p> }
+else if (!Filtered.Any()) { <p>Ni strank za izbrani filter.</p> }
+else
+{
+  <table class="table"><thead><tr><th>Šifra</th><th>Naziv</th><th>Vrsta stranke</th><th>Tip stranke</th><th>Skupina Magento</th><th>Splet</th></tr></thead><tbody>
+  @foreach (var row in Filtered) { <tr><td><a href="/stranke/@row.CustomerId">@row.CustomerKey</a></td><td>@row.Name</td><td>@row.CustomerKind</td><td>@row.CustomerType</td><td>@row.MagentoGroupKey</td><td>@(row.WebEnabled ? "Da" : "Ne")</td></tr> }
+  </tbody></table>
+}
+@code {
+  IReadOnlyList<PIM.Intranet.Services.CustomerRow>? Rows; string Kind="";
+  IEnumerable<PIM.Intranet.Services.CustomerRow> Filtered => (Rows??[]).Where(x=>string.IsNullOrEmpty(Kind)||x.CustomerKind==Kind);
+  protected override async Task OnInitializedAsync()=>Rows=await Data.GetCustomersAsync(2);
+}

@@ -1,0 +1,22 @@
+@page "/pravila-popustov"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Pravila popustov</PageTitle><h1>Pravila popustov</h1>
+<p>S-stopnje: S1 3 %, S2 5 %, S3 10 %, S4 15 %. Vrednosti so šifranti PIM.</p>
+<h2>Skupina Magento po tipu stranke</h2><div class="row"><div class="col"><label>Šifra tipa <input class="form-control" @bind="TypeCode" /></label></div><div class="col"><label>Ključ skupine Magento <input class="form-control" @bind="GroupKey" /></label></div><div class="col align-self-end"><button class="btn btn-primary" @onclick="SaveType">Shrani preslikavo</button></div></div>
+<h2>Vrednostni pragovi</h2><div class="row"><div class="col"><label>Stopnja <input type="number" class="form-control" @bind="TierNumber" /></label></div><div class="col"><label>Prag bruto brez DDV <input type="number" class="form-control" @bind="TierThreshold" /></label></div><div class="col"><label>Popust % <input type="number" class="form-control" @bind="TierPercent" /></label></div><div class="col align-self-end"><button class="btn btn-primary" @onclick="SaveTier">Shrani prag</button></div></div>
+<h2>Poštnina</h2>
+@if(Rows is null){<p>Nalaganje pravil …</p>}else{<table class="table"><thead><tr><th>Pravilo</th><th>Prag</th><th>Dolžina paketa</th><th>Neto poštnina</th><th>Brezplačno</th><th></th></tr></thead><tbody>@foreach(var row in Rows){<tr><td>@row.RuleCode</td><td>@row.OrderThreshold</td><td>@row.PackageLengthMeters</td><td>@row.ShippingNet</td><td>@(row.IsFree?"Da":"Ne")</td><td><button class="btn btn-sm btn-primary" @onclick="()=>Save(row)">Shrani pravilo</button></td></tr>}</tbody></table>}
+<h2>Override skupinskih popustov</h2><p>Prioriteta: stranka, nato tip stranke, nato uvoženi SAOP popust. Veljavnost se upošteva po datumih.</p><div class="row"><div class="col"><label>Cilj <select class="form-select" @bind="TargetKind"><option value="TYPE">Tip stranke</option><option value="CUSTOMER">Stranka</option></select></label></div><div class="col"><label>Šifra tipa <input class="form-control" @bind="OverrideType" /></label></div><div class="col"><label>ID stranke <input type="number" class="form-control" @bind="OverrideCustomer" /></label></div><div class="col"><label>Skupina artiklov <input class="form-control" @bind="ItemGroup" /></label></div><div class="col"><label>Popust % <input type="number" class="form-control" @bind="OverridePercent" /></label></div><div class="col align-self-end"><button class="btn btn-primary" @onclick="SaveOverride">Dodaj override</button></div></div>
+@if(!string.IsNullOrEmpty(Message)){<p class="alert alert-info">@Message</p>}
+@code{
+  IReadOnlyList<PIM.Intranet.Services.ShippingRuleRow>? Rows;string? Message;string TypeCode="",GroupKey="",TargetKind="TYPE",OverrideType="",ItemGroup="";int TierNumber=1;decimal TierThreshold=800,TierPercent=1,OverridePercent;long? OverrideCustomer;
+  protected override async Task OnInitializedAsync()=>Rows=await Data.GetShippingRulesAsync();
+  async Task Save(PIM.Intranet.Services.ShippingRuleRow row){var auth=await Authentication.GetAuthenticationStateAsync();await Data.SaveShippingRuleAsync(2,row,auth.User.Identity?.Name??"neznan");Message="Pravilo je shranjeno in revizijsko zabeleženo.";}
+  async Task<string> Actor(){var auth=await Authentication.GetAuthenticationStateAsync();return auth.User.Identity?.Name??"neznan";}
+  async Task SaveType(){await Data.SaveCustomerTypeMappingAsync(2,TypeCode,GroupKey,await Actor());Message="Preslikava je shranjena in revizijsko zabeležena.";}
+  async Task SaveTier(){await Data.SaveValueTierAsync(2,TierNumber,TierThreshold,TierPercent,await Actor());Message="Vrednostni prag je shranjen in revizijsko zabeležen.";}
+  async Task SaveOverride(){await Data.SaveGroupOverrideAsync(2,TargetKind,TargetKind=="CUSTOMER"?OverrideCustomer:null,TargetKind=="TYPE"?OverrideType:null,ItemGroup,OverridePercent,null,null,await Actor());Message="Override je dodan in revizijsko zabeležen.";}
+}
