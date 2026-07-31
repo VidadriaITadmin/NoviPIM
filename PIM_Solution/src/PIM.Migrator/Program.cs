@@ -72,7 +72,8 @@ if (verifyOnly)
   await VerifyF2Async(connection);
   await VerifyF3Async(connection);
   await VerifyF6Async(connection);
-  Console.WriteLine("Preverjanje F0–F6 baze je uspešno.");
+  await VerifyF7Async(connection);
+  Console.WriteLine("Preverjanje F0–F7 baze je uspešno.");
   return 0;
 }
 
@@ -409,6 +410,25 @@ static async Task VerifyF6Async(SqlConnection connection)
   }
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'stock.Position') AND name=N'IX_stock_Position_Identity';", null, 1, "Manjka F6 indeks identitete.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.StockIdentityRule ruleValue INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=ruleValue.SourceConnectorId WHERE connector.OrganizationId=2 AND connector.SourceCode IN (N'NW_STOCK',N'BT_STOCK') AND ruleValue.IsActive=1;", null, 2, "Manjkajo aktivna F6 identitetna pravila v konfiguraciji.");
+}
+
+static async Task VerifyF7Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "b2b.Customer", "pim.CustomerTypeCatalog", "pim.CustomerWebProfile", "pim.PackagingDiscountCatalog",
+    "pim.ValueDiscountTier", "pim.ShippingRuleCatalog", "b2b.GroupDiscountOverride", "b2b.AuditLog",
+    "b2b.LandingRecord", "map.B2bFieldMapping", "b2b.MappingRejection", "b2b.ApplyLandingRecord",
+    "b2b.ReplayLandingRecord", "out.ExportB2bCustomersCsv", "out.ExportB2bProductsCsv"
+  };
+  foreach (var expectedObject in expectedObjects)
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F7 objekt {expectedObject}.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.CustomerTypeCatalog WHERE IsActive=1;", null, 18, "F7 mora imeti 18 aktivnih tipov strank.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.PackagingDiscountCatalog WHERE IsActive=1 AND DiscountCode IN(N'S1',N'S2',N'S3',N'S4');", null, 4, "Manjkajo F7 S-stopnje.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.ValueDiscountTier WHERE IsActive=1;", null, 3, "F7 mora imeti tri vrednostne pragove.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.ShippingRuleCatalog WHERE IsActive=1;", null, 4, "Manjkajo poštninska pravila F7.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM out.ExportProfile WHERE ProfileCode IN(N'CUSTOMERS_B2B',N'PRODUCTS_B2B') AND IsActive=1;", null, 2, "Manjkata aktivna B2B izvozna profila.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sec.Role WHERE RoleCode IN(N'ADMIN',N'CATALOG_EDITOR',N'COMMERCIAL');", null, 3, "Manjkajo eksplicitne F7 vloge.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
