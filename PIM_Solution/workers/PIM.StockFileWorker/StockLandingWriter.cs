@@ -32,9 +32,16 @@ public sealed class StockLandingWriter(string connectionString)
         row.Values.TryGetValue(identityRule.SourceKeyField,out var sourceItemId);
         row.Values.TryGetValue(fields.EanField,out var ean); row.Values.TryGetValue(fields.QuantityField,out var quantity);
         row.Values.TryGetValue(fields.AvailabilityDateField,out var date); row.Values.TryGetValue(fields.IncomingQuantityField,out var incoming);
-        var landingId=await InsertLandingAsync(connection,transaction,runId,organizationId,connectorId,row.RecordOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture),snapshotUtc,endpoint,payloadHash,ean,sourceItemId,result.Position?.NormalizedItemId,quantity,date,incoming,cancellationToken);
-        await ExecuteAsync(connection,transaction,"EXEC stock.ApplyLandingRecord @LandingRecordId,@DateFormat;",cancellationToken,("@LandingRecordId",landingId),("@DateFormat",dateFormat));
+        var canonicalDate=result.Position?.AvailabilityDate?.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture)??date;
+        var landingId=await InsertLandingAsync(connection,transaction,runId,organizationId,connectorId,row.RecordOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture),snapshotUtc,endpoint,payloadHash,ean,sourceItemId,result.Position?.NormalizedItemId,quantity,canonicalDate,incoming,cancellationToken);
+        await ExecuteAsync(connection,transaction,"EXEC stock.ApplyLandingRecord @LandingRecordId,@DateFormat;",cancellationToken,("@LandingRecordId",landingId),("@DateFormat","yyyy-MM-dd"));
         if(result.Position is null)quarantined++;else applied++;
+      }
+      await using (var counts = new SqlCommand("SELECT SUM(CASE WHEN Status=N'Applied' THEN 1 ELSE 0 END),SUM(CASE WHEN Status=N'Quarantined' THEN 1 ELSE 0 END) FROM stock.LandingRecord WHERE SyncRunId=@RunId;",connection,transaction))
+      {
+        counts.Parameters.AddWithValue("@RunId",runId);
+        await using var reader=await counts.ExecuteReaderAsync(cancellationToken);await reader.ReadAsync(cancellationToken);
+        applied=reader.IsDBNull(0)?0:reader.GetInt32(0);quarantined=reader.IsDBNull(1)?0:reader.GetInt32(1);
       }
       await ExecuteAsync(connection,transaction,"UPDATE stock.Snapshot SET IsActive=0 WHERE OrganizationId=@OrganizationId AND SourceConnectorId=@ConnectorId; UPDATE stock.Snapshot SET IsActive=1 WHERE SyncRunId=@RunId; UPDATE stock.SyncRun SET Status=N'Completed',CompletedUtc=SYSUTCDATETIME(),RecordsApplied=@Applied,RecordsQuarantined=@Quarantined WHERE SyncRunId=@RunId;",cancellationToken,("@OrganizationId",organizationId),("@ConnectorId",connectorId),("@RunId",runId),("@Applied",applied),("@Quarantined",quarantined));
       await transaction.CommitAsync(cancellationToken);
