@@ -6,7 +6,7 @@ foreach (var expected in new[]
 {
   "CREATE TABLE ops.ScheduleProfile", "CREATE TABLE ops.IntegrationHealth",
   "CREATE TABLE ops.Alert", "CREATE TABLE ops.AlertDelivery", "CREATE TABLE ops.DeploymentRun",
-  "CREATE OR ALTER PROCEDURE ops.BeginRun", "sp_getapplock", "CREATE OR ALTER PROCEDURE ops.Heartbeat",
+  "CREATE OR ALTER PROCEDURE ops.BeginRun", "sp_getapplock", "CREATE OR ALTER PROCEDURE ops.RecordHeartbeat",
   "CREATE OR ALTER PROCEDURE ops.CompleteRun", "CREATE OR ALTER PROCEDURE ops.RunWatchdog",
   "CREATE OR ALTER PROCEDURE ops.ClaimAlertDelivery", "CREATE OR ALTER PROCEDURE ops.CompleteAlertDelivery",
   "CREATE OR ALTER PROCEDURE intranet.GetSystemIntegrations",

@@ -44,7 +44,7 @@ public sealed class OperationsRun : IAsyncDisposable
 
   public async Task HeartbeatAsync(DateTime? watermarkUtc = null, CancellationToken cancellationToken = default)
   {
-    await using var command = new SqlCommand("ops.Heartbeat", connection) { CommandType = CommandType.StoredProcedure };
+    await using var command = new SqlCommand("ops.RecordHeartbeat", connection) { CommandType = CommandType.StoredProcedure };
     AddRunParameters(command);
     command.Parameters.Add("@WatermarkUtc", SqlDbType.DateTime2).Value = (object?)watermarkUtc ?? DBNull.Value;
     await command.ExecuteNonQueryAsync(cancellationToken);

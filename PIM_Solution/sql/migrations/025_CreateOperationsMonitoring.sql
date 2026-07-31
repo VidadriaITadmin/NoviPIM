@@ -154,7 +154,7 @@ BEGIN
   WHEN NOT MATCHED THEN INSERT(OrganizationId,Pipeline,RunId,WorkerId,Status,LastHeartbeatUtc) VALUES(@OrganizationId,@Pipeline,@RunId,@WorkerId,N''Running'',SYSUTCDATETIME());
 END;');
 
-EXEC(N'CREATE OR ALTER PROCEDURE ops.Heartbeat @OrganizationId int,@Pipeline nvarchar(100),@RunId uniqueidentifier,@WatermarkUtc datetime2(3)=NULL
+EXEC(N'CREATE OR ALTER PROCEDURE ops.RecordHeartbeat @OrganizationId int,@Pipeline nvarchar(100),@RunId uniqueidentifier,@WatermarkUtc datetime2(3)=NULL
 AS
 BEGIN
   SET NOCOUNT ON;
@@ -257,7 +257,7 @@ END;');
 
 EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetSystemIntegrations @OrganizationId int
 AS
-  SELECT profile.OrganizationId,organization.OrganizationCode,profile.Provider,profile.Pipeline,profile.IsEnabled,health.Status,health.LastHeartbeatUtc,health.LastSuccessfulRunUtc,health.LastFailedRunUtc,health.WatermarkUtc,profile.NextScheduledUtc,
+  SELECT profile.OrganizationId,organization.Name AS OrganizationCode,profile.Provider,profile.Pipeline,profile.IsEnabled,health.Status,health.LastHeartbeatUtc,health.LastSuccessfulRunUtc,health.LastFailedRunUtc,health.WatermarkUtc,profile.NextScheduledUtc,
     (SELECT COUNT(*) FROM ops.Alert alert WHERE alert.OrganizationId=profile.OrganizationId AND alert.Pipeline=profile.Pipeline AND alert.ResolvedUtc IS NULL) OpenAlerts,
     (SELECT COUNT(*) FROM out.OutboxMessage message WHERE message.OrganizationId=profile.OrganizationId AND message.Status=N''Dead'') OutboxDeadCount,
     (SELECT COUNT(*) FROM out.OutboxMessage message WHERE message.OrganizationId=profile.OrganizationId AND message.Status=N''Drift'') OutboxDriftCount

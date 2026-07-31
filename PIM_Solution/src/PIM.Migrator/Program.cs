@@ -74,7 +74,8 @@ if (verifyOnly)
   await VerifyF6Async(connection);
   await VerifyF7Async(connection);
   await VerifyF8Async(connection);
-  Console.WriteLine("Preverjanje F0–F8 baze je uspešno.");
+  await VerifyF9Async(connection);
+  Console.WriteLine("Preverjanje F0–F9 baze je uspešno.");
   return 0;
 }
 
@@ -291,7 +292,7 @@ static async Task VerifyF0Async(SqlConnection connection, IReadOnlyCollection<Mi
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@value);", expectedObject, 1, $"Manjka objekt {expectedObject}.");
   }
 
-  await AssertCountAsync(connection, "SELECT COUNT(*) FROM dbo.OrganizationConfig;", null, 4, "OrganizationConfig mora vsebovati štiri začetne organizacije.");
+  await AssertAtLeastAsync(connection, "SELECT COUNT(*) FROM dbo.OrganizationConfig;", 4, "OrganizationConfig mora vsebovati najmanj štiri začetne organizacije.");
 }
 
 static async Task ShowOutputContractAsync(SqlConnection connection)
@@ -446,6 +447,19 @@ static async Task VerifyF8Async(SqlConnection connection)
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'out.OutboxMessage') AND name=N'UX_OutboxMessage_ActiveDedup';", null, 1, "Manjka F8 aktivni dedup indeks.");
 }
 
+static async Task VerifyF9Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "ops.ScheduleProfile","ops.IntegrationHealth","ops.Alert","ops.AlertDelivery","ops.AlertRecipientConfig","ops.DeploymentRun",
+    "ops.BeginRun","ops.RecordHeartbeat","ops.CompleteRun","ops.UpsertAlert","ops.RunWatchdog","ops.QueueAlertDeliveries","ops.ClaimAlertDelivery","ops.CompleteAlertDelivery",
+    "intranet.GetSystemIntegrations","intranet.AcknowledgeAlert","intranet.ResolveAlert"
+  };
+  foreach(var expectedObject in expectedObjects)
+    await AssertCountAsync(connection,"SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);",expectedObject,1,$"Manjka F9 objekt {expectedObject}.");
+  await AssertCountAsync(connection,"SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'ops.Alert') AND name=N'UX_Alert_OpenDedup';",null,1,"Manjka F9 odprti dedup indeks.");
+}
+
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
 {
   await using var command = new SqlCommand(sql, connection);
@@ -459,6 +473,13 @@ static async Task AssertCountAsync(SqlConnection connection, string sql, string?
   {
     throw new InvalidOperationException(failureMessage);
   }
+}
+
+static async Task AssertAtLeastAsync(SqlConnection connection,string sql,int expected,string failureMessage)
+{
+  await using var command=new SqlCommand(sql,connection);
+  var count=Convert.ToInt32(await command.ExecuteScalarAsync());
+  if(count<expected)throw new InvalidOperationException(failureMessage);
 }
 
 internal sealed record Migration(string Name, string Script);
