@@ -58,6 +58,7 @@ app.MapPost("/odjava", async (HttpContext context) =>
   await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
   return Results.Redirect("/prijava");
 });
+app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymous();
 
 app.MapRazorComponents<App>()
   .AddInteractiveServerRenderMode();
