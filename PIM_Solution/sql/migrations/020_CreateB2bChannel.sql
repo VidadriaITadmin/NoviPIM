@@ -145,10 +145,23 @@ IF OBJECT_ID(N'map.B2bFieldMapping', N'U') IS NULL
 BEGIN
   CREATE TABLE map.B2bFieldMapping(B2bFieldMappingId int IDENTITY NOT NULL CONSTRAINT PK_B2bFieldMapping PRIMARY KEY,SourceCode nvarchar(100) NOT NULL,EntityType nvarchar(100) NOT NULL,SourceField nvarchar(200) NOT NULL,TargetField nvarchar(200) NOT NULL,IsRequired bit NOT NULL CONSTRAINT DF_B2bFieldMapping_Required DEFAULT(0),IsActive bit NOT NULL CONSTRAINT DF_B2bFieldMapping_Active DEFAULT(1),CONSTRAINT UQ_B2bFieldMapping UNIQUE(SourceCode,EntityType,SourceField));
 END;
+IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'map.B2bFieldMapping') AND name=N'UX_B2bFieldMapping_Target')
+  CREATE UNIQUE INDEX UX_B2bFieldMapping_Target ON map.B2bFieldMapping(SourceCode,EntityType,TargetField) WHERE IsActive=1;
 IF OBJECT_ID(N'b2b.MappingRejection', N'U') IS NULL
 BEGIN
   CREATE TABLE b2b.MappingRejection(MappingRejectionId bigint IDENTITY NOT NULL CONSTRAINT PK_b2b_MappingRejection PRIMARY KEY,LandingRecordId bigint NOT NULL,SourceField nvarchar(200) NULL,ReasonCode nvarchar(100) NOT NULL,ReasonDetail nvarchar(1000) NULL,RejectedUtc datetime2(3) NOT NULL CONSTRAINT DF_b2b_MappingRejection_Utc DEFAULT SYSUTCDATETIME(),CONSTRAINT UQ_b2b_MappingRejection UNIQUE(LandingRecordId,SourceField,ReasonCode),CONSTRAINT FK_b2b_MappingRejection_Landing FOREIGN KEY(LandingRecordId) REFERENCES b2b.LandingRecord(LandingRecordId));
 END;
+EXEC(N'CREATE OR ALTER TRIGGER b2b.TR_LandingRecord_ImmutableSource ON b2b.LandingRecord AFTER UPDATE AS
+BEGIN
+  SET NOCOUNT ON;
+  IF EXISTS
+  (
+    SELECT 1 FROM inserted i JOIN deleted d ON d.LandingRecordId=i.LandingRecordId
+    WHERE i.OrganizationId<>d.OrganizationId OR i.SourceCode<>d.SourceCode OR i.EntityType<>d.EntityType
+       OR i.SourceRecordKey<>d.SourceRecordKey OR i.PayloadJson<>d.PayloadJson OR i.PayloadHash<>d.PayloadHash
+       OR i.ReceivedUtc<>d.ReceivedUtc
+  ) THROW 52010,N''Izvorni landing zapis je nespremenljiv.'',1;
+END');
 MERGE map.B2bFieldMapping target USING(VALUES
  (N'SAOP',N'Customers',N'CustomerCode',N'Customer.Key',1),(N'SAOP',N'Customers',N'CustomerName',N'Customer.Name',1),(N'SAOP',N'Customers',N'CustomerPayerCode',N'Customer.PayerCode',0),(N'SAOP',N'Customers',N'CustomerPayerName',N'Customer.PayerName',0),(N'SAOP',N'Customers',N'PriceList',N'Customer.PriceList',0),(N'SAOP',N'Customers',N'DiscountPriceList',N'Customer.DiscountPriceList',0),
  (N'SAOP',N'CustomerItemGroupDiscounts',N'CustomerCode',N'GroupDiscount.CustomerKey',1),(N'SAOP',N'CustomerItemGroupDiscounts',N'ItemGroupCode',N'GroupDiscount.ItemGroup',1),(N'SAOP',N'CustomerItemGroupDiscounts',N'DiscountPercent',N'GroupDiscount.Percent',1)
@@ -172,15 +185,29 @@ MERGE sec.NavigationItemRole target USING(SELECT i.NavigationItemId,r.RoleId FRO
 
 EXEC(N'CREATE OR ALTER PROCEDURE b2b.ApplyLandingRecord @LandingRecordId bigint AS
 BEGIN SET NOCOUNT ON; SET XACT_ABORT ON;
- DECLARE @payload nvarchar(max),@entity nvarchar(100),@org int;
- SELECT @payload=PayloadJson,@entity=EntityType,@org=OrganizationId FROM b2b.LandingRecord WHERE LandingRecordId=@LandingRecordId;
+ DECLARE @payload nvarchar(max),@entity nvarchar(100),@source nvarchar(100),@org int;
+ SELECT @payload=PayloadJson,@entity=EntityType,@source=SourceCode,@org=OrganizationId FROM b2b.LandingRecord WHERE LandingRecordId=@LandingRecordId;
+ IF @payload IS NULL THROW 52011,N''Landing zapis ne obstaja.'',1;
  IF ISJSON(@payload)<>1 BEGIN INSERT b2b.MappingRejection(LandingRecordId,ReasonCode,ReasonDetail) VALUES(@LandingRecordId,N''InvalidJson'',N''Neveljaven JSON.''); UPDATE b2b.LandingRecord SET Status=N''Rejected'',ProcessedUtc=SYSUTCDATETIME() WHERE LandingRecordId=@LandingRecordId; RETURN; END;
+ CREATE TABLE #Mapped(TargetField nvarchar(200) NOT NULL PRIMARY KEY,Value nvarchar(max) NULL);
+ INSERT #Mapped(TargetField,Value)
+ SELECT m.TargetField,j.value FROM OPENJSON(@payload) j JOIN map.B2bFieldMapping m ON m.SourceCode=@source AND m.EntityType=@entity AND m.SourceField=j.[key] AND m.IsActive=1;
+ INSERT b2b.MappingRejection(LandingRecordId,SourceField,ReasonCode,ReasonDetail)
+ SELECT @LandingRecordId,j.[key],N''UnmappedField'',N''Polje nima aktivne preslikave.'' FROM OPENJSON(@payload) j
+ WHERE NOT EXISTS(SELECT 1 FROM map.B2bFieldMapping m WHERE m.SourceCode=@source AND m.EntityType=@entity AND m.SourceField=j.[key] AND m.IsActive=1);
+ INSERT b2b.MappingRejection(LandingRecordId,SourceField,ReasonCode,ReasonDetail)
+ SELECT @LandingRecordId,m.SourceField,N''MissingRequiredField'',N''Obvezno polje manjka ali je prazno.'' FROM map.B2bFieldMapping m
+ LEFT JOIN OPENJSON(@payload) j ON j.[key]=m.SourceField
+ WHERE m.SourceCode=@source AND m.EntityType=@entity AND m.IsActive=1 AND m.IsRequired=1 AND NULLIF(LTRIM(RTRIM(j.value)),N'''') IS NULL;
+ IF EXISTS(SELECT 1 FROM b2b.MappingRejection WHERE LandingRecordId=@LandingRecordId)
+ BEGIN UPDATE b2b.LandingRecord SET Status=N''Rejected'',ProcessedUtc=SYSUTCDATETIME() WHERE LandingRecordId=@LandingRecordId; RETURN; END;
  IF @entity=N''Customers'' BEGIN
-  DECLARE @key nvarchar(100)=JSON_VALUE(@payload,N''$.CustomerCode''),@name nvarchar(300)=JSON_VALUE(@payload,N''$.CustomerName'');
-  IF NULLIF(@key,N'''') IS NULL OR NULLIF(@name,N'''') IS NULL BEGIN INSERT b2b.MappingRejection(LandingRecordId,ReasonCode) VALUES(@LandingRecordId,N''MissingRequiredField''); UPDATE b2b.LandingRecord SET Status=N''Rejected'',ProcessedUtc=SYSUTCDATETIME() WHERE LandingRecordId=@LandingRecordId; RETURN; END;
-  MERGE b2b.Customer t USING(SELECT @org OrganizationId,@key CustomerKey) s ON t.OrganizationId=s.OrganizationId AND t.CustomerKey=s.CustomerKey WHEN MATCHED THEN UPDATE SET Name=@name,PayerCode=JSON_VALUE(@payload,N''$.CustomerPayerCode''),PayerName=JSON_VALUE(@payload,N''$.CustomerPayerName''),PriceListCode=JSON_VALUE(@payload,N''$.PriceList''),DiscountPriceListCode=JSON_VALUE(@payload,N''$.DiscountPriceList''),UpdatedUtc=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(OrganizationId,CustomerKey,Name,PayerCode,PayerName,PriceListCode,DiscountPriceListCode) VALUES(@org,@key,@name,JSON_VALUE(@payload,N''$.CustomerPayerCode''),JSON_VALUE(@payload,N''$.CustomerPayerName''),JSON_VALUE(@payload,N''$.PriceList''),JSON_VALUE(@payload,N''$.DiscountPriceList''));
+  DECLARE @key nvarchar(100)=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.Key''),@name nvarchar(300)=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.Name'');
+  IF NULLIF(@key,N'''') IS NULL OR NULLIF(@name,N'''') IS NULL THROW 52012,N''Konfiguracija Customers nima obveznih ciljnih polj.'',1;
+  MERGE b2b.Customer t USING(SELECT @org OrganizationId,@key CustomerKey) s ON t.OrganizationId=s.OrganizationId AND t.CustomerKey=s.CustomerKey
+  WHEN MATCHED THEN UPDATE SET Name=@name,PayerCode=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PayerCode''),PayerName=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PayerName''),PriceListCode=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PriceList''),DiscountPriceListCode=(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.DiscountPriceList''),UpdatedUtc=SYSUTCDATETIME()
+  WHEN NOT MATCHED THEN INSERT(OrganizationId,CustomerKey,Name,PayerCode,PayerName,PriceListCode,DiscountPriceListCode) VALUES(@org,@key,@name,(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PayerCode''),(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PayerName''),(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.PriceList''),(SELECT Value FROM #Mapped WHERE TargetField=N''Customer.DiscountPriceList''));
  END;
- INSERT b2b.MappingRejection(LandingRecordId,SourceField,ReasonCode,ReasonDetail) SELECT @LandingRecordId,j.[key],N''UnmappedField'',j.[key] FROM OPENJSON(@payload) j WHERE NOT EXISTS(SELECT 1 FROM map.B2bFieldMapping m WHERE m.SourceCode=N''SAOP'' AND m.EntityType=@entity AND m.SourceField=j.[key] AND m.IsActive=1);
  UPDATE b2b.LandingRecord SET Status=N''Applied'',ProcessedUtc=SYSUTCDATETIME() WHERE LandingRecordId=@LandingRecordId;
 END');
 EXEC(N'CREATE OR ALTER PROCEDURE b2b.ReplayLandingRecord @LandingRecordId bigint AS BEGIN SET NOCOUNT ON; DELETE FROM b2b.MappingRejection WHERE LandingRecordId=@LandingRecordId; UPDATE b2b.LandingRecord SET Status=N''Pending'',ProcessedUtc=NULL WHERE LandingRecordId=@LandingRecordId; EXEC b2b.ApplyLandingRecord @LandingRecordId; END');
@@ -188,5 +215,6 @@ EXEC(N'CREATE OR ALTER PROCEDURE b2b.SaveCustomerWebProfile @OrganizationId int,
 EXEC(N'CREATE OR ALTER PROCEDURE b2b.SaveDiscountRule @OrganizationId int,@RuleCode nvarchar(40),@OrderThreshold decimal(19,4)=NULL,@PackageLengthMeters decimal(9,3)=NULL,@ShippingNet decimal(19,4),@IsFree bit,@Priority int,@ChangedBy nvarchar(200) AS BEGIN SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN; DECLARE @old nvarchar(max)=(SELECT * FROM pim.ShippingRuleCatalog WHERE RuleCode=@RuleCode FOR JSON PATH,WITHOUT_ARRAY_WRAPPER); MERGE pim.ShippingRuleCatalog t USING(SELECT @RuleCode RuleCode) s ON t.RuleCode=s.RuleCode WHEN MATCHED THEN UPDATE SET OrderThreshold=@OrderThreshold,PackageLengthMeters=@PackageLengthMeters,ShippingNet=@ShippingNet,IsFree=@IsFree,Priority=@Priority,UpdatedUtc=SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT(RuleCode,OrderThreshold,PackageLengthMeters,ShippingNet,IsFree,Priority) VALUES(@RuleCode,@OrderThreshold,@PackageLengthMeters,@ShippingNet,@IsFree,@Priority); INSERT b2b.AuditLog(OrganizationId,EntityType,EntityKey,ActionCode,OldValueJson,NewValueJson,ChangedBy) SELECT @OrganizationId,N''ShippingRule'',@RuleCode,N''UPSERT'',@old,(SELECT * FROM pim.ShippingRuleCatalog WHERE RuleCode=@RuleCode FOR JSON PATH,WITHOUT_ARRAY_WRAPPER),@ChangedBy; COMMIT; END');
 EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetCustomers @OrganizationId int AS BEGIN SET NOCOUNT ON; SELECT c.CustomerId,c.CustomerKey,c.Name,p.CustomerKind,t.Name CustomerType,g.MagentoGroupKey,p.WebEnabled,p.PackagingDiscountEnabled,p.ValueDiscountEnabled,p.B2bPlusEnabled FROM b2b.Customer c LEFT JOIN pim.CustomerWebProfile p ON p.CustomerId=c.CustomerId LEFT JOIN pim.CustomerTypeCatalog t ON t.CustomerTypeCode=p.CustomerTypeCode LEFT JOIN pim.CustomerTypeMagentoGroup g ON g.CustomerTypeCode=p.CustomerTypeCode WHERE c.OrganizationId=@OrganizationId ORDER BY c.Name; END');
 EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetCustomerDetail @OrganizationId int,@CustomerId bigint AS BEGIN SET NOCOUNT ON; SELECT c.CustomerId,c.CustomerKey,c.Name,c.PayerCode,c.PayerName,c.PriceListCode,c.DiscountPriceListCode,p.CustomerTypeCode,p.CustomerKind,p.PackagingDiscountEnabled,p.ValueDiscountEnabled,p.B2bPlusEnabled,p.B2bPlusValidFrom,p.B2bPlusValidTo,p.WebEnabled,g.MagentoGroupKey FROM b2b.Customer c LEFT JOIN pim.CustomerWebProfile p ON p.CustomerId=c.CustomerId LEFT JOIN pim.CustomerTypeMagentoGroup g ON g.CustomerTypeCode=p.CustomerTypeCode WHERE c.OrganizationId=@OrganizationId AND c.CustomerId=@CustomerId; SELECT TierNumber,ThresholdGrossExVat,PercentValue FROM pim.CustomerValueDiscountTier WHERE CustomerId=@CustomerId ORDER BY TierNumber; END');
+EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetDiscountRules AS BEGIN SET NOCOUNT ON; SELECT RuleCode,OrderThreshold,PackageLengthMeters,ShippingNet,IsFree,Priority FROM pim.ShippingRuleCatalog WHERE IsActive=1 ORDER BY Priority; END');
 EXEC(N'CREATE OR ALTER PROCEDURE out.ExportB2bCustomersCsv @OrganizationId int AS BEGIN SET NOCOUNT ON; SELECT c.CustomerKey,g.MagentoGroupKey,p.CustomerTypeCode,p.PackagingDiscountEnabled,p.ValueDiscountEnabled,p.B2bPlusEnabled,p.B2bPlusValidFrom,p.B2bPlusValidTo,c.PriceListCode,c.DiscountPriceListCode,c.PayerCode,c.PayerName,COALESCE(t1.ThresholdGrossExVat,d1.ThresholdGrossExVat) Tier1Threshold,COALESCE(t1.PercentValue,d1.PercentValue) Tier1Percent,COALESCE(t2.ThresholdGrossExVat,d2.ThresholdGrossExVat) Tier2Threshold,COALESCE(t2.PercentValue,d2.PercentValue) Tier2Percent,COALESCE(t3.ThresholdGrossExVat,d3.ThresholdGrossExVat) Tier3Threshold,COALESCE(t3.PercentValue,d3.PercentValue) Tier3Percent,CONVERT(decimal(9,4),2) B2bWebPercent FROM b2b.Customer c JOIN pim.CustomerWebProfile p ON p.CustomerId=c.CustomerId LEFT JOIN pim.CustomerTypeMagentoGroup g ON g.CustomerTypeCode=p.CustomerTypeCode LEFT JOIN pim.CustomerValueDiscountTier t1 ON t1.CustomerId=c.CustomerId AND t1.TierNumber=1 LEFT JOIN pim.CustomerValueDiscountTier t2 ON t2.CustomerId=c.CustomerId AND t2.TierNumber=2 LEFT JOIN pim.CustomerValueDiscountTier t3 ON t3.CustomerId=c.CustomerId AND t3.TierNumber=3 JOIN pim.ValueDiscountTier d1 ON d1.TierNumber=1 JOIN pim.ValueDiscountTier d2 ON d2.TierNumber=2 JOIN pim.ValueDiscountTier d3 ON d3.TierNumber=3 WHERE c.OrganizationId=@OrganizationId AND p.WebEnabled=1 ORDER BY c.CustomerKey; END');
 EXEC(N'CREATE OR ALTER PROCEDURE out.ExportB2bProductsCsv @OrganizationId int AS BEGIN SET NOCOUNT ON; SELECT p.ItemID,g.MagentoGroupKey,pc.Pak2,pd.DiscountCode,dc.PercentValue,pd.PromotionGateState FROM pim.Product p JOIN pim.ProductCommercial pc ON pc.PimProductId=p.PimProductId LEFT JOIN pim.ProductPackagingDiscount pd ON pd.PimProductId=p.PimProductId LEFT JOIN pim.PackagingDiscountCatalog dc ON dc.DiscountCode=pd.DiscountCode CROSS JOIN pim.CustomerTypeMagentoGroup g WHERE p.OrganizationId=@OrganizationId AND g.IsActive=1 AND g.MagentoGroupKey IS NOT NULL ORDER BY p.ItemID,g.MagentoGroupKey; END');

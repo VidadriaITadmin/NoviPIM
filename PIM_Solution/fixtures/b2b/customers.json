@@ -1,0 +1,7 @@
+{
+  "entityType": "Customers",
+  "records": [
+    { "CustomerCode": "C-100", "CustomerName": "Fixture trgovec", "PriceList": "B2B-A", "CustomerPayerCode": "P-1" },
+    { "CustomerCode": "C-200", "CustomerName": "Fixture inštalater", "DiscountPriceList": "R-2" }
+  ]
+}
