@@ -104,6 +104,16 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     await cleanup.ExecuteNonQueryAsync();
   }
 
+  await using (var seedProduct = new SqlCommand("""
+    INSERT canon.Product(OrganizationId,ItemID,BusinessHash)
+    VALUES(@OrganizationId,@ItemID,CONVERT(char(64),HASHBYTES('SHA2_256',@ItemID),2));
+    """, connection))
+  {
+    seedProduct.Parameters.AddWithValue("@OrganizationId", organizationId);
+    seedProduct.Parameters.AddWithValue("@ItemID", testItemId);
+    await seedProduct.ExecuteNonQueryAsync();
+  }
+
   var runId = Guid.NewGuid();
   await using (var startRun = new SqlCommand("""
     INSERT ops.PipelineRun (RunId, Pipeline, OrganizationId, SourceCode, Status)
@@ -155,7 +165,7 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     assertProduct.Parameters.AddWithValue("@OrganizationId", organizationId);
     assertProduct.Parameters.AddWithValue("@ItemID", testItemId);
     await using var reader = await assertProduct.ExecuteReaderAsync();
-    if (!await reader.ReadAsync()) throw new InvalidOperationException("Testni canon.Product ni bil ustvarjen.");
+    if (!await reader.ReadAsync()) throw new InvalidOperationException("Testni canon.Product ni bil obogaten.");
     var supplier = reader.IsDBNull(0) ? null : reader.GetString(0);
     var discountGroup = reader.IsDBNull(1) ? null : reader.GetString(1);
     var manufacturer = reader.IsDBNull(2) ? null : reader.GetString(2);
