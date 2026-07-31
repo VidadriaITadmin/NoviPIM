@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Data.SqlClient;
 using PIM.B2b;
 
 var customerColumns = Columns(
@@ -89,9 +93,155 @@ finally
 
 Console.WriteLine("F7 integration: več strank in izdelkov, komponente pravil, Unknown ter dostava PASS.");
 
+var connectionString = ReadPimConnectionString()
+  ?? throw new InvalidOperationException("Manjka razvojna povezava Pim; F7 MSSQL integracije ni dovoljeno preskočiti.");
+await using (var connection = new SqlConnection(connectionString))
+{
+  await connection.OpenAsync();
+  await ExecuteAsync(connection, File.ReadAllText(Path.Combine(FindSolutionRoot(), "tests", "sql", "Verify-F7.sql")));
+  await VerifyMssqlPipelineAndExportsAsync(connection);
+  Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM dbo.OrganizationConfig WHERE OrganizationId=9707;"), "Dokazna organizacija ni odstranjena.");
+  Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.Product WHERE OrganizationId=9707;"), "Dokazni PIM izdelki niso odstranjeni.");
+  Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM b2b.Customer WHERE OrganizationId=9707;"), "Dokazne B2B stranke niso odstranjene.");
+}
+Console.WriteLine("F7 MSSQL integration: landing, profil, revizija, B2B izvozi in čiščenje PASS.");
+
 static ExportColumnDefinition[] Columns(params (string Code, string Name, string Field, bool Required)[] definitions)
   => definitions.Select((definition, index) => new ExportColumnDefinition(definition.Code, definition.Name, definition.Field, (index + 1) * 10, definition.Required, true)).ToArray();
 static void Contains(string actual, string expected, string message) { if (!actual.Contains(expected, StringComparison.Ordinal)) throw new InvalidOperationException($"{message}: manjka {expected}"); }
 static void NotContains(string actual, string unexpected, string message) { if (actual.Contains(unexpected, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException(message); }
 static void Equal<T>(T expected, T actual, string message) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException(message); }
 static async Task ThrowsAsync<T>(Func<Task> action, string message) where T : Exception { try { await action(); } catch (T) { return; } throw new InvalidOperationException(message); }
+
+static string? ReadPimConnectionString()
+{
+  var environmentValue = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
+  if (!string.IsNullOrWhiteSpace(environmentValue)) return environmentValue;
+  var root = FindSolutionRoot();
+  var localPath = Path.Combine(root, "appsettings.Local.json");
+  if (!File.Exists(localPath)) return null;
+  using var document = JsonDocument.Parse(File.ReadAllText(localPath));
+  return document.RootElement.TryGetProperty("ConnectionStrings", out var strings)
+    && strings.TryGetProperty("Pim", out var setting) ? setting.GetString() : null;
+}
+
+static async Task VerifyMssqlPipelineAndExportsAsync(SqlConnection connection)
+{
+  const int organizationId = 9707;
+  const string customerType = "INSTALLER";
+  const string groupKey = "F7_PROOF_INSTALLERS";
+  var suffix = Guid.NewGuid().ToString("N");
+  var customerKey = "F7-PROOF-" + suffix;
+  var productItemId = "F7-PRODUCT-" + suffix;
+  string? originalGroupKey = null;
+  var organizationCreated = false;
+  try
+  {
+    originalGroupKey = await NullableStringAsync(connection, "SELECT MagentoGroupKey FROM pim.CustomerTypeMagentoGroup WHERE CustomerTypeCode=@CustomerType;", ("@CustomerType", customerType));
+    await ExecuteAsync(connection, "INSERT dbo.OrganizationConfig(OrganizationId,Name,SaopPrefix,IsActive) VALUES(@OrganizationId,@Name,@Prefix,1);",
+      ("@OrganizationId", organizationId), ("@Name", "F7 proof " + suffix), ("@Prefix", "F7" + suffix[..12]));
+    organizationCreated = true;
+
+    var payload = JsonSerializer.Serialize(new { CustomerCode = customerKey, CustomerName = "F7 dokazna stranka", PriceList = "F7", DiscountPriceList = "F7D" });
+    var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    var landingId = await ScalarAsync<long>(connection, """
+      INSERT b2b.LandingRecord(OrganizationId,SourceCode,EntityType,SourceRecordKey,PayloadJson,PayloadHash)
+      OUTPUT INSERTED.LandingRecordId
+      VALUES(@OrganizationId,N'SAOP',N'Customers',@SourceRecordKey,@Payload,@PayloadHash);
+      """
+      , ("@OrganizationId", organizationId), ("@SourceRecordKey", customerKey), ("@Payload", payload), ("@PayloadHash", hash));
+    await ExecuteAsync(connection, "EXEC b2b.ApplyLandingRecord @LandingRecordId=@LandingRecordId;", ("@LandingRecordId", landingId));
+    Equal("Applied", await ScalarAsync<string>(connection, "SELECT Status FROM b2b.LandingRecord WHERE LandingRecordId=@LandingRecordId;", ("@LandingRecordId", landingId)), "Generični B2B landing zapis ni uporabljen.");
+    var customerId = await ScalarAsync<long>(connection, "SELECT CustomerId FROM b2b.Customer WHERE OrganizationId=@OrganizationId AND CustomerKey=@CustomerKey;", ("@OrganizationId", organizationId), ("@CustomerKey", customerKey));
+
+    await ExecuteAsync(connection, """
+      EXEC b2b.SaveCustomerWebProfile @OrganizationId=@OrganizationId,@CustomerId=@CustomerId,@CustomerTypeCode=N'INSTALLER',@CustomerKind=N'CUSTOMER',
+        @PackagingDiscountEnabled=1,@ValueDiscountEnabled=1,@B2bPlusEnabled=0,@WebEnabled=1,@ChangedBy=N'F7 integration proof';
+      EXEC b2b.SaveCustomerValueTier @OrganizationId=@OrganizationId,@CustomerId=@CustomerId,@TierNumber=1,@ThresholdGrossExVat=801,@PercentValue=1.1,@ChangedBy=N'F7 integration proof';
+      EXEC b2b.SaveCustomerValueTier @OrganizationId=@OrganizationId,@CustomerId=@CustomerId,@TierNumber=2,@ThresholdGrossExVat=1501,@PercentValue=2.1,@ChangedBy=N'F7 integration proof';
+      EXEC b2b.SaveCustomerValueTier @OrganizationId=@OrganizationId,@CustomerId=@CustomerId,@TierNumber=3,@ThresholdGrossExVat=3001,@PercentValue=3.1,@ChangedBy=N'F7 integration proof';
+      EXEC b2b.SaveCustomerTypeMapping @OrganizationId=@OrganizationId,@CustomerTypeCode=N'INSTALLER',@MagentoGroupKey=@GroupKey,@ChangedBy=N'F7 integration proof';
+      """
+      , ("@OrganizationId", organizationId), ("@CustomerId", customerId), ("@GroupKey", groupKey));
+    Equal(1, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.CustomerWebProfile WHERE CustomerId=@CustomerId AND WebEnabled=1;", ("@CustomerId", customerId)), "Profil stranke ni shranjen.");
+    Equal(5, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM b2b.AuditLog WHERE OrganizationId=@OrganizationId AND ChangedBy=N'F7 integration proof';", ("@OrganizationId", organizationId)), "Shranjevanje profila, pragov in skupine ni revidirano.");
+
+    await ExecuteAsync(connection, """
+      INSERT pim.Product(OrganizationId,ItemID,EAN,Name,Manufacturer) VALUES(@OrganizationId,@ItemID,N'9707000000001',N'F7 dokaz',N'F7');
+      DECLARE @PimProductId bigint=SCOPE_IDENTITY();
+      INSERT pim.ProductCommercial(PimProductId,Pak2) VALUES(@PimProductId,5);
+      INSERT pim.ProductPackagingDiscount(PimProductId,DiscountCode,PromotionGateState) VALUES(@PimProductId,N'S2',N'Regular');
+      """
+      , ("@OrganizationId", organizationId), ("@ItemID", productItemId));
+
+    Equal(18, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.CustomerTypeCatalog WHERE IsActive=1;"), "Ni 18 aktivnih tipov strank.");
+    Equal(4, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.PackagingDiscountCatalog WHERE IsActive=1;"), "Ni štirih aktivnih S-stopenj.");
+    Equal(3, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.ValueDiscountTier WHERE IsActive=1;"), "Ni treh aktivnih vrednostnih pragov.");
+    Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.CustomerTypeMagentoGroup WHERE MagentoGroupKey=N'UNASSIGNED';"), "Izmišljena Magento skupina UNASSIGNED obstaja.");
+    await AssertExportContainsAsync(connection, "EXEC out.ExportB2bCustomersCsv @OrganizationId=@OrganizationId;", customerKey, ("@OrganizationId", organizationId));
+    await AssertExportContainsAsync(connection, "EXEC out.ExportB2bProductsCsv @OrganizationId=@OrganizationId;", productItemId, ("@OrganizationId", organizationId));
+    await AssertExportContainsAsync(connection, "EXEC out.ExportB2bShippingCsv;", "B2B_PLUS");
+  }
+  finally
+  {
+    if (originalGroupKey is not null || organizationCreated)
+      await ExecuteAsync(connection, "UPDATE pim.CustomerTypeMagentoGroup SET MagentoGroupKey=@GroupKey WHERE CustomerTypeCode=N'INSTALLER';", ("@GroupKey", (object?)originalGroupKey ?? DBNull.Value));
+    if (organizationCreated)
+    {
+      await ExecuteAsync(connection, """
+        DELETE pd FROM pim.ProductPackagingDiscount pd INNER JOIN pim.Product p ON p.PimProductId=pd.PimProductId WHERE p.OrganizationId=@OrganizationId;
+        DELETE pc FROM pim.ProductCommercial pc INNER JOIN pim.Product p ON p.PimProductId=pc.PimProductId WHERE p.OrganizationId=@OrganizationId;
+        DELETE FROM pim.Product WHERE OrganizationId=@OrganizationId;
+        DELETE FROM pim.CustomerValueDiscountTier WHERE CustomerId IN(SELECT CustomerId FROM b2b.Customer WHERE OrganizationId=@OrganizationId);
+        DELETE FROM pim.CustomerWebProfile WHERE CustomerId IN(SELECT CustomerId FROM b2b.Customer WHERE OrganizationId=@OrganizationId);
+        DELETE FROM b2b.AuditLog WHERE OrganizationId=@OrganizationId;
+        DELETE FROM b2b.MappingRejection WHERE LandingRecordId IN(SELECT LandingRecordId FROM b2b.LandingRecord WHERE OrganizationId=@OrganizationId);
+        DELETE FROM b2b.LandingRecord WHERE OrganizationId=@OrganizationId;
+        DELETE FROM b2b.Customer WHERE OrganizationId=@OrganizationId;
+        DELETE FROM dbo.OrganizationConfig WHERE OrganizationId=@OrganizationId;
+        """
+        , ("@OrganizationId", organizationId));
+    }
+  }
+}
+
+static async Task AssertExportContainsAsync(SqlConnection connection, string sql, string expected, params (string Name, object Value)[] parameters)
+{
+  await using var command = Command(connection, sql, parameters);
+  await using var reader = await command.ExecuteReaderAsync();
+  while (await reader.ReadAsync())
+    if (Enumerable.Range(0, reader.FieldCount).Any(index => !reader.IsDBNull(index) && reader.GetValue(index).ToString()!.Contains(expected, StringComparison.Ordinal))) return;
+  throw new InvalidOperationException($"Izvoz ne vsebuje {expected}.");
+}
+static SqlCommand Command(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
+{
+  var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+  foreach (var parameter in parameters) command.Parameters.AddWithValue(parameter.Name, parameter.Value);
+  return command;
+}
+static async Task ExecuteAsync(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
+{
+  await using var command = Command(connection, sql, parameters);
+  await command.ExecuteNonQueryAsync();
+}
+static async Task<T> ScalarAsync<T>(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
+{
+  await using var command = Command(connection, sql, parameters);
+  return (T)(await command.ExecuteScalarAsync() ?? throw new InvalidOperationException("Poizvedba ni vrnila vrednosti."));
+}
+static async Task<string?> NullableStringAsync(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
+{
+  await using var command = Command(connection, sql, parameters);
+  var result = await command.ExecuteScalarAsync();
+  return result is null or DBNull ? null : (string)result;
+}
+static string FindSolutionRoot()
+{
+  var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+  while (directory is not null)
+  {
+    if (File.Exists(Path.Combine(directory.FullName, "PIM.sln"))) return directory.FullName;
+    directory = directory.Parent;
+  }
+  throw new InvalidOperationException("PIM.sln ni najden.");
+}
