@@ -27,6 +27,9 @@ foreach (var expected in new[]
   "CREATE OR ALTER PROCEDURE b2b.SaveDiscountRule",
   "CREATE OR ALTER PROCEDURE intranet.GetCustomers",
   "CREATE OR ALTER PROCEDURE intranet.GetCustomerDetail",
+  "CREATE OR ALTER PROCEDURE intranet.GetCustomerTypes",
+  "CREATE OR ALTER PROCEDURE intranet.GetValueDiscountTiers",
+  "CREATE OR ALTER PROCEDURE intranet.GetGroupDiscountOverrides",
   "CREATE OR ALTER PROCEDURE out.ExportB2bCustomersCsv",
   "CREATE OR ALTER PROCEDURE out.ExportB2bProductsCsv"
 }) Contains(migration, expected, $"Manjka pogodbeni objekt: {expected}.");
@@ -53,6 +56,19 @@ Contains(migration, "Unknown", "Promocijski gate mora privzeto ostati Unknown.")
 Contains(migration, "IX_b2b_Customer_OrganizationCustomer", "Manjka indeks identitete stranke.");
 Contains(migration, "UX_b2b_LandingRecord_SourcePayloadHash", "Manjka immutable/dedup landing ključ.");
 if (migration.Contains("PIM_test", StringComparison.OrdinalIgnoreCase)) failures.Add("Migracija F7 ne sme pisati v PIM_test.");
+
+var service = Read("src/PIM.Intranet/Services/IntranetDataService.cs");
+var customersPage = Read("src/PIM.Intranet/Components/Pages/Customers.razor");
+var detailPage = Read("src/PIM.Intranet/Components/Pages/CustomerDetail.razor");
+var rulesPage = Read("src/PIM.Intranet/Components/Pages/DiscountRules.razor");
+foreach (var procedure in new[] { "b2b.SaveCustomerWebProfile", "b2b.SaveCustomerValueTier", "b2b.SaveCustomerTypeMapping", "b2b.SaveValueDiscountTier", "b2b.SaveDiscountRule", "b2b.SaveGroupDiscountOverride" })
+  Contains(service, procedure, $"Intranetni servis ne kliče procedure {procedure}.");
+foreach (var page in new[] { customersPage, detailPage, rulesPage })
+  Contains(page, "ADMIN,CATALOG_EDITOR,COMMERCIAL", "B2B stran nima eksplicitnih vlog Admin/Urednik kataloga/Komerciala.");
+Contains(detailPage, "samo za branje", "Plačnik in ceniki niso označeni samo za branje.");
+Contains(rulesPage, "OverrideFrom", "Override nima začetka veljavnosti.");
+Contains(rulesPage, "OverrideTo", "Override nima konca veljavnosti.");
+if ((customersPage + detailPage + rulesPage + service).Contains("pošlji v ERP", StringComparison.OrdinalIgnoreCase)) failures.Add("F7 ne sme vsebovati dejanja F8 za pošiljanje v ERP.");
 
 if (failures.Count > 0)
 {

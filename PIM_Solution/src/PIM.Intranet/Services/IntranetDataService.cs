@@ -14,7 +14,18 @@ public sealed record StockRow(long PositionId, string? ItemId, string? Ean, deci
   string Endpoint, int FreshnessMinutes, long? ProductId);
 public sealed record CustomerRow(long CustomerId, string CustomerKey, string Name, string? CustomerKind, string? CustomerType, string? MagentoGroupKey, bool WebEnabled, bool PackagingDiscountEnabled, bool ValueDiscountEnabled, bool B2bPlusEnabled);
 public sealed record CustomerDetailRow(long CustomerId, string CustomerKey, string Name, string? PayerCode, string? PayerName, string? PriceListCode, string? DiscountPriceListCode, string? CustomerTypeCode, string? CustomerKind, bool PackagingDiscountEnabled, bool ValueDiscountEnabled, bool B2bPlusEnabled, DateTime? B2bPlusValidFrom, DateTime? B2bPlusValidTo, bool WebEnabled, string? MagentoGroupKey);
-public sealed record ShippingRuleRow(string RuleCode, decimal? OrderThreshold, decimal? PackageLengthMeters, decimal ShippingNet, bool IsFree, int Priority);
+public sealed record CustomerTypeRow(string CustomerTypeCode, string Name, string? MagentoGroupKey);
+public sealed record ValueTierRow(byte TierNumber, decimal ThresholdGrossExVat, decimal PercentValue);
+public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string? CustomerKey, string? CustomerTypeCode, string ItemGroupCode, decimal PercentValue, DateTime? ValidFrom, DateTime? ValidTo);
+public sealed class ShippingRuleRow
+{
+  public required string RuleCode { get; init; }
+  public decimal? OrderThreshold { get; set; }
+  public decimal? PackageLengthMeters { get; set; }
+  public decimal ShippingNet { get; set; }
+  public bool IsFree { get; set; }
+  public int Priority { get; set; }
+}
 
 public sealed class IntranetDataService(IConfiguration configuration)
 {
@@ -139,7 +150,22 @@ public sealed class IntranetDataService(IConfiguration configuration)
 
   public async Task<IReadOnlyList<ShippingRuleRow>> GetShippingRulesAsync(CancellationToken cancellationToken=default)
   {
-    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetDiscountRules;",connection);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<ShippingRuleRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetString(0),reader.IsDBNull(1)?null:reader.GetDecimal(1),reader.IsDBNull(2)?null:reader.GetDecimal(2),reader.GetDecimal(3),reader.GetBoolean(4),reader.GetInt32(5)));return rows;
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetDiscountRules;",connection);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<ShippingRuleRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(){RuleCode=reader.GetString(0),OrderThreshold=reader.IsDBNull(1)?null:reader.GetDecimal(1),PackageLengthMeters=reader.IsDBNull(2)?null:reader.GetDecimal(2),ShippingNet=reader.GetDecimal(3),IsFree=reader.GetBoolean(4),Priority=reader.GetInt32(5)});return rows;
+  }
+
+  public async Task<IReadOnlyList<CustomerTypeRow>> GetCustomerTypesAsync(CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetCustomerTypes;",connection);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<CustomerTypeRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetString(0),reader.GetString(1),reader.IsDBNull(2)?null:reader.GetString(2)));return rows;
+  }
+
+  public async Task<IReadOnlyList<ValueTierRow>> GetValueTiersAsync(CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetValueDiscountTiers;",connection);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<ValueTierRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetByte(0),reader.GetDecimal(1),reader.GetDecimal(2)));return rows;
+  }
+
+  public async Task<IReadOnlyList<GroupOverrideRow>> GetGroupOverridesAsync(int organizationId,CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand("EXEC intranet.GetGroupDiscountOverrides @OrganizationId;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<GroupOverrideRow>();while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.IsDBNull(2)?null:reader.GetString(2),reader.IsDBNull(3)?null:reader.GetString(3),reader.GetString(4),reader.GetDecimal(5),reader.IsDBNull(6)?null:reader.GetDateTime(6),reader.IsDBNull(7)?null:reader.GetDateTime(7)));return rows;
   }
 
   public async Task SaveShippingRuleAsync(int organizationId, ShippingRuleRow row, string changedBy, CancellationToken cancellationToken=default)

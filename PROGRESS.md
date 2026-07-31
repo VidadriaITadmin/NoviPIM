@@ -15,3 +15,4 @@
 | 2026-07-31 | Codex | F5: sanacija blokad neodvisnega pregleda z atomsko karanteno, validacijo in deduplikacijo | pass — RED contract+realna integracija; 017 dvakrat; F5 contract/behavior/review/integration; F3 contract/behavior/integration; build 0/0; npm test/lint | b7f598e + 2ca5f51 |
 | 2026-07-31 | Codex | F6: vir-agnostičen tok zalog NW/BT/SAOP, MSSQL, STOCK CSV in intranet | pass — strogi RED/GREEN; 018 dvakrat in verify; NW 2697, BT 1361; F3/F5 regresija; build/publish/npm/lint | bd851fd..fb6c4be |
 | 2026-07-31 | Hermes | F6 korekcija: identiteta je prebrana iz `map.StockIdentityRule` | pass — RED kontrakt, forward 019 dvakrat, `--verify`, realna fixture integracija NW 2697/BT 1361, F3/F5/F6 regresija | sledi commit |
+| 2026-07-31 | Codex | F7 Task 4: konfigurirani B2B CSV izvozi strank, izdelkov in pravil dostave | pass — F7 contract/behavior/mapping/integration, build 0/0, npm test/lint | ta commit |
