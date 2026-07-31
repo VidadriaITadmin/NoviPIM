@@ -92,8 +92,14 @@ return 0;
 string FindRoot()
 {
   var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-  while (current is not null && !Directory.Exists(Path.Combine(current.FullName, "sql", "migrations"))) current = current.Parent;
-  return current?.FullName ?? throw new InvalidOperationException("PIM_Solution ni najden.");
+  while (current is not null)
+  {
+    if (Directory.Exists(Path.Combine(current.FullName, "sql", "migrations"))) return current.FullName;
+    var solution = Path.Combine(current.FullName, "PIM_Solution");
+    if (Directory.Exists(Path.Combine(solution, "sql", "migrations"))) return solution;
+    current = current.Parent;
+  }
+  throw new InvalidOperationException("PIM_Solution ni najden.");
 }
 string Read(string path)
 {
