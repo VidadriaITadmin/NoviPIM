@@ -100,6 +100,26 @@ BEGIN
   );
 END;
 
+IF OBJECT_ID(N'ops.AlertRecipientConfig', N'U') IS NULL
+BEGIN
+  CREATE TABLE ops.AlertRecipientConfig
+  (
+    AlertRecipientConfigId bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_AlertRecipientConfig PRIMARY KEY,
+    OrganizationId int NOT NULL,
+    RoleName nvarchar(100) NOT NULL,
+    Channel nvarchar(20) NOT NULL,
+    RecipientKey nvarchar(300) NOT NULL,
+    MinimumSeverity nvarchar(20) NOT NULL CONSTRAINT DF_AlertRecipient_Severity DEFAULT N'Critical',
+    IsEnabled bit NOT NULL CONSTRAINT DF_AlertRecipient_IsEnabled DEFAULT (0),
+    UpdatedUtc datetime2(3) NOT NULL CONSTRAINT DF_AlertRecipient_UpdatedUtc DEFAULT SYSUTCDATETIME(),
+    UpdatedBy nvarchar(200) NOT NULL,
+    CONSTRAINT FK_AlertRecipient_Organization FOREIGN KEY (OrganizationId) REFERENCES dbo.OrganizationConfig(OrganizationId),
+    CONSTRAINT UQ_AlertRecipient UNIQUE (OrganizationId,RoleName,Channel,RecipientKey),
+    CONSTRAINT CK_AlertRecipient_Channel CHECK (Channel IN (N'Webhook',N'Email')),
+    CONSTRAINT CK_AlertRecipient_Severity CHECK (MinimumSeverity IN (N'Info',N'Warning',N'Critical'))
+  );
+END;
+
 IF OBJECT_ID(N'ops.DeploymentRun', N'U') IS NULL
 BEGIN
   CREATE TABLE ops.DeploymentRun
@@ -209,6 +229,18 @@ BEGIN
   ;WITH candidate AS (SELECT TOP(1) * FROM ops.AlertDelivery WITH(UPDLOCK,READPAST,ROWLOCK) WHERE Status IN(N''Pending'',N''Retry'') AND (NextAttemptUtc IS NULL OR NextAttemptUtc<=SYSUTCDATETIME()) AND (LeaseUntilUtc IS NULL OR LeaseUntilUtc<SYSUTCDATETIME()) ORDER BY AlertDeliveryId)
   UPDATE candidate SET Status=N''Sending'',AttemptCount=AttemptCount+1,LeaseOwner=@WorkerId,LeaseUntilUtc=DATEADD(second,@LeaseSeconds,SYSUTCDATETIME()),UpdatedUtc=SYSUTCDATETIME()
   OUTPUT inserted.*; COMMIT;
+END;');
+
+EXEC(N'CREATE OR ALTER PROCEDURE ops.QueueAlertDeliveries
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT ops.AlertDelivery(AlertId,Channel,RecipientKey,NextAttemptUtc)
+  SELECT alert.AlertId,recipient.Channel,recipient.RecipientKey,SYSUTCDATETIME()
+  FROM ops.Alert alert INNER JOIN ops.AlertRecipientConfig recipient ON recipient.OrganizationId=alert.OrganizationId AND recipient.IsEnabled=1
+  WHERE alert.ResolvedUtc IS NULL
+    AND CASE alert.Severity WHEN N''Critical'' THEN 3 WHEN N''Warning'' THEN 2 ELSE 1 END >= CASE recipient.MinimumSeverity WHEN N''Critical'' THEN 3 WHEN N''Warning'' THEN 2 ELSE 1 END
+    AND NOT EXISTS (SELECT 1 FROM ops.AlertDelivery delivery WHERE delivery.AlertId=alert.AlertId AND delivery.Channel=recipient.Channel AND delivery.RecipientKey=recipient.RecipientKey);
 END;');
 
 EXEC(N'CREATE OR ALTER PROCEDURE ops.CompleteAlertDelivery @AlertDeliveryId bigint,@WorkerId nvarchar(200),@Succeeded bit,@PermanentFailure bit,@BaseRetrySeconds int=30,@MaxAttempts int=5,@ErrorRedacted nvarchar(2000)=NULL
