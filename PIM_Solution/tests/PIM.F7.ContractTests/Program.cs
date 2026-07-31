@@ -40,10 +40,10 @@ foreach (var type in new[]
   "TRGOVEC – neaktiven", "PROJEKTANT", "NEAKTIVEN", "JAVNI SEKTOR"
 }) Contains(migration, type, $"Manjka tip stranke: {type}.");
 
-foreach (var seed in new[] { "N'S1', 3", "N'S2', 5", "N'S3', 10", "N'S4', 15", "800, 1", "1500, 2", "3000, 3", "150, 4.10", "300, 10.00" })
+foreach (var seed in new[] { "N'S1', 3", "N'S2', 5", "N'S3', 10", "N'S4', 15", "800, 1", "1500, 2", "3000, 3", "N'STANDARD_PAID',150,NULL,4.10", "N'OVERSIZE',300,2.000,10.00" })
   Contains(migration, seed, $"Manjka začetno pravilo: {seed}.");
 
-foreach (var permission in new[] { "CatalogEditor", "Commercial", "Admin" })
+foreach (var permission in new[] { "CATALOG_EDITOR", "COMMERCIAL", "ADMIN" })
   Contains(migration, permission, $"Manjka eksplicitna pravica {permission}.");
 
 Contains(migration, "CUSTOMERS_B2B", "Manjka CUSTOMERS B2B profil.");
