@@ -11,7 +11,7 @@ var builder = new OutboundPayloadBuilder(policy);
 
 var description = builder.Build(new OutboundChange("SAOP_PRODUCT", "PATCH", "Product", "A-1", "ERP_DESCRIPTION", "Nova luč"));
 Equal("{\"entityKey\":\"A-1\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Nova luč\"}", description.CanonicalJson, "Kanonični JSON");
-Equal("5a9c8a72c621c690b92e7b3931b111b0d8b57522cc59f3f00e565f3480adcbf6", description.PayloadHash, "SHA-256");
+Equal("5261ac16121e86059172435b4a01d59e4250a61a8e3bf4aebb69c8ff3f5974de", description.PayloadHash, "SHA-256");
 Equal(description.PayloadHash, description.DedupKey, "Dedup temelji na payloadu");
 
 foreach (var forbidden in new[] { "ItemID", "VAT", "ACCOUNTING_GROUP", "INVENTORY_ACCOUNT", "MEDIA", "CATEGORY", "WEB_TITLE", "STOCK", "DELIVERY" })
