@@ -17,6 +17,9 @@ public sealed record CustomerDetailRow(long CustomerId, string CustomerKey, stri
 public sealed record CustomerTypeRow(string CustomerTypeCode, string Name, string? MagentoGroupKey);
 public sealed record ValueTierRow(byte TierNumber, decimal ThresholdGrossExVat, decimal PercentValue);
 public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string? CustomerKey, string? CustomerTypeCode, string ItemGroupCode, decimal PercentValue, DateTime? ValidFrom, DateTime? ValidTo);
+public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string Operation, string EntityType, string EntityKey,
+  string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
+  int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc);
 public sealed class ShippingRuleRow
 {
   public required string RuleCode { get; init; }
@@ -192,5 +195,26 @@ public sealed class IntranetDataService(IConfiguration configuration)
   async Task ExecuteCommercialAsync(string sql,int organizationId,string changedBy,Action<SqlCommand> configure,CancellationToken cancellationToken)
   {
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@ChangedBy",changedBy);configure(command);await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  public async Task<IReadOnlyList<OutboundRow>> GetOutboundAsync(int organizationId, CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand("EXEC intranet.GetOutboundMessages @OrganizationId;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);
+    await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<OutboundRow>();
+    while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetInt32(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetDateTime(13)));
+    return rows;
+  }
+
+  public Task ApproveOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.ApproveMessage",messageId,actor,cancellationToken);
+  public Task CancelOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.CancelMessage",messageId,actor,cancellationToken);
+  public Task RetryOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.RetryMessage",messageId,actor,cancellationToken);
+
+  async Task ExecuteOutboundActionAsync(string procedure,long messageId,string actor,CancellationToken cancellationToken)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand($"EXEC {procedure} @OutboxMessageId,@Actor;",connection);
+    command.Parameters.AddWithValue("@OutboxMessageId",messageId);command.Parameters.AddWithValue("@Actor",actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
   }
 }
