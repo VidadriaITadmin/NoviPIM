@@ -39,6 +39,10 @@ Contains(migration, "SYSUTCDATETIME()", "Prehodi ne uporabljajo UTC časa.");
 Contains(migration, "ManualApproval", "Privzeti profil ne zahteva ročne odobritve.");
 Contains(migration, "POST", "Pogodba ne omejuje operacije POST.");
 Contains(migration, "PATCH", "Pogodba ne omejuje operacije PATCH.");
+var migrator = Read("src/PIM.Migrator/Program.cs");
+Contains(migrator, "VerifyF8Async(connection)", "--verify ne preverja F8 podatkovnega kontrakta.");
+Contains(migrator, "out.OutboxMessage", "Migrator ne preveri tabele F8 OutboxMessage.");
+Contains(migrator, "intranet.GetOutboundMessages", "Migrator ne preveri intranetnega pregleda F8.");
 if (migration.Contains("PIM_test", StringComparison.OrdinalIgnoreCase)) failures.Add("F8 ne sme dostopati do PIM_test.");
 
 if (failures.Count > 0)
