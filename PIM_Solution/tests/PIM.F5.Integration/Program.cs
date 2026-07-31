@@ -40,6 +40,8 @@ Equal("F5 svetila", await ProductValueAsync(connection, "canon.ProductCategory",
 Equal("//example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
 Equal("F5-203", await ProductValueAsync(connection, "canon.ProductAttribute", "Value"), "EAN atribut ni obogaten.");
 
+await VerifyReviewRemediationAsync(connection);
+
 await ExecuteAsync(connection, "EXEC val.RunValidation @OrganizationId=@OrganizationId;", ("@OrganizationId", organizationId));
 Equal("VALID", await ScalarAsync<string>(connection, """
   SELECT validationState.Status FROM val.ProductValidationState validationState
@@ -97,6 +99,11 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE inbox FROM raw.Inbox inbox
     INNER JOIN ops.PipelineRun run ON run.RunId=inbox.RunId WHERE run.Pipeline=N'F5_INTEGRATION';
     DELETE FROM ops.PipelineRun WHERE Pipeline=N'F5_INTEGRATION';
+    DELETE FROM map.FieldMapping WHERE SourceConnectorId IN
+      (SELECT SourceConnectorId FROM map.SourceConnector WHERE SourceCode=N'F5_FUTURE_CONFIG' AND OrganizationId=@OrganizationId);
+    DELETE FROM map.EntityMapping WHERE SourceConnectorId IN
+      (SELECT SourceConnectorId FROM map.SourceConnector WHERE SourceCode=N'F5_FUTURE_CONFIG' AND OrganizationId=@OrganizationId);
+    DELETE FROM map.SourceConnector WHERE SourceCode=N'F5_FUTURE_CONFIG' AND OrganizationId=@OrganizationId;
     DELETE fieldMapping FROM map.FieldMapping fieldMapping
     INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=fieldMapping.SourceConnectorId
     WHERE connector.SourceCode=@SourceCode AND connector.OrganizationId=@OrganizationId
@@ -118,6 +125,99 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID;
     """, ("@OrganizationId", organizationId), ("@ItemID", itemId), ("@SourceCode", sourceCode));
+}
+async Task VerifyReviewRemediationAsync(SqlConnection sqlConnection)
+{
+  const string futureSource = "F5_FUTURE_CONFIG";
+  await ExecuteAsync(sqlConnection, """
+    INSERT map.SourceConnector(SourceCode,OrganizationId,ConnectorType,IsActive)
+    VALUES(@SourceCode,@OrganizationId,N'FILE_XML',1);
+    DECLARE @ConnectorId int=SCOPE_IDENTITY();
+    INSERT map.EntityMapping(SourceConnectorId,EntityType,RecordXPath,IsActive)
+    VALUES(@ConnectorId,N'FutureProduct',N'/feed/product',1);
+    INSERT map.FieldMapping(SourceConnectorId,EntityType,SourceElement,TargetFieldCode,IsRequired,IsActive,MappingVersion)
+    VALUES
+      (@ConnectorId,N'FutureProduct',N'item/text()',N'Product.ItemID',1,1,1),
+      (@ConnectorId,N'FutureProduct',N'ean/text()',N'Product.EAN',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'title/text()',N'ProductText.WEB_TITLE.sl',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'alt-title/text()',N'ProductText.WEB_TITLE.sl',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'note/text()',N'Future.Note',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'price-list/text()',N'ProductPrice.PriceList',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'net/text()',N'ProductPrice.Net',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'vat/text()',N'ProductPrice.VatRate',0,1,1),
+      (@ConnectorId,N'FutureProduct',N'valid-from/text()',N'ProductPrice.ValidFrom',0,1,1);
+    """, ("@SourceCode", futureSource), ("@OrganizationId", organizationId));
+
+  var requiredRun = Guid.NewGuid();
+  await InsertFutureInboxAsync(sqlConnection, requiredRun, futureSource,
+    "<feed><product><ean>9999900000005</ean><note>required-null-retained</note></product></feed>");
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(requiredRun, organizationId, futureSource);
+  await AssertRejectedAsync(sqlConnection, requiredRun, "required-null-retained", "Obvezna");
+
+  var unmatchedRun = Guid.NewGuid();
+  await InsertFutureInboxAsync(sqlConnection, unmatchedRun, futureSource,
+    "<feed><product><item>F5-DOES-NOT-EXIST</item><ean>F5-NO-EAN</ean><note>unmatched-retained</note></product></feed>");
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(unmatchedRun, organizationId, futureSource);
+  await AssertRejectedAsync(sqlConnection, unmatchedRun, "unmatched-retained", "ne obstaja");
+  Equal(0, await ScalarAsync<int>(sqlConnection,
+    "SELECT COUNT(*) FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=N'F5-DOES-NOT-EXIST';",
+    ("@OrganizationId", organizationId)), "Neujemajoči zapis je ustvaril produkt.");
+
+  var invalidRun = Guid.NewGuid();
+  await InsertFutureInboxAsync(sqlConnection, invalidRun, futureSource,
+    $"""
+      <feed><product><item>{itemId}</item><ean>{ean}</ean><title>NE SME OSTATI</title>
+      <price-list>B2C</price-list><net>ni-cena</net><vat>101x</vat><valid-from>ni-datum</valid-from>
+      <note>invalid-price-retained</note></product></feed>
+      """);
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(invalidRun, organizationId, futureSource);
+  await AssertRejectedAsync(sqlConnection, invalidRun, "invalid-price-retained", "Neveljavna");
+  Equal("F5 testno svetilo", await ScalarAsync<string>(sqlConnection, """
+    SELECT Value FROM canon.ProductText text
+    INNER JOIN canon.Product product ON product.ProductId=text.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID
+      AND text.TextType=N'WEB_TITLE' AND text.Lang=N'sl';
+    """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "Zavrnjeni inbox je bil delno uporabljen.");
+
+  var duplicateRun = Guid.NewGuid();
+  await InsertFutureInboxAsync(sqlConnection, duplicateRun, futureSource,
+    $"""
+      <feed><product><item>{itemId}</item><ean>{ean}</ean>
+      <title>Naslov A</title><alt-title>Naslov B</alt-title><note>duplicate-source-retained</note></product></feed>
+      """);
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(duplicateRun, organizationId, futureSource);
+  Equal("Processed", await ScalarAsync<string>(sqlConnection,
+    "SELECT Status FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", duplicateRun)),
+    "Podvojene ciljne preslikave so zrušile generični MERGE.");
+  Equal("Naslov B", await ScalarAsync<string>(sqlConnection, """
+    SELECT Value FROM canon.ProductText text
+    INNER JOIN canon.Product product ON product.ProductId=text.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID
+      AND text.TextType=N'WEB_TITLE' AND text.Lang=N'sl';
+    """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "Deduplikacija ni deterministična.");
+  Console.WriteLine("F5 review integration: required NULL, unmatched, invalid price/VAT/date, atomicity, dedupe in config-only source PASS.");
+}
+async Task InsertFutureInboxAsync(SqlConnection sqlConnection, Guid id, string source, string payload)
+{
+  await ExecuteAsync(sqlConnection, """
+    INSERT ops.PipelineRun(RunId,Pipeline,OrganizationId,SourceCode,Status)
+    VALUES(@RunId,N'F5_INTEGRATION',@OrganizationId,@SourceCode,N'Running');
+    INSERT raw.Inbox(RunId,OrganizationId,SourceCode,EntityType,PageNumber,PayloadXml,PayloadHash,Status)
+    VALUES(@RunId,@OrganizationId,@SourceCode,N'FutureProduct',1,@Payload,@Hash,N'Pending');
+    """, ("@RunId", id), ("@OrganizationId", organizationId), ("@SourceCode", source),
+    ("@Payload", payload), ("@Hash", Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(payload)))));
+}
+async Task AssertRejectedAsync(SqlConnection sqlConnection, Guid runId, string retainedValue, string reasonFragment)
+{
+  Equal("Quarantined", await ScalarAsync<string>(sqlConnection,
+    "SELECT Status FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)), "Inbox ni v karanteni.");
+  Equal(1, await ScalarAsync<int>(sqlConnection, """
+    SELECT COUNT(*) FROM map.UnmappedValue rejected
+    INNER JOIN map.ExtractedValue value ON value.ExtractedValueId=rejected.ExtractedValueId
+    INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId
+    WHERE inbox.RunId=@RunId AND value.Value=@Value AND rejected.Reason LIKE N'%' + @Reason + N'%';
+    """, ("@RunId", runId), ("@Value", retainedValue), ("@Reason", reasonFragment)),
+    "Zavrnjena generična vrednost ali razlog nista ohranjena.");
 }
 async Task SeedUnsupportedMappingAsync(SqlConnection sqlConnection)
 {

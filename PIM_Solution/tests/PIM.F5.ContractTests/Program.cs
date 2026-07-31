@@ -1,6 +1,7 @@
 var root = Environment.GetEnvironmentVariable("PIM_SOLUTION_ROOT") ?? FindRoot();
 var failures = new List<string>();
 var migration = Read("sql/migrations/016_CreateGenericXmlMappingPipeline.sql");
+var remediation = Read("sql/migrations/017_HardenGenericXmlMappingPipeline.sql");
 
 Require("src/PIM.XmlMapping/XPathMappingExtractor.cs");
 Require("src/PIM.XmlMapping/SqlMappingPipeline.cs");
@@ -17,6 +18,14 @@ Contains(migration, "CREATE OR ALTER PROCEDURE map.ProcessRawInbox", "Manjka gen
 Contains(migration, "ProductCategory.CategoryPath", "Apply ne podpira kategorije.");
 Contains(migration, "ProductMedia.Url", "Apply ne podpira medija.");
 Contains(migration, "ProductAttribute.", "Apply ne podpira atributa.");
+Contains(remediation, "BEGIN TRANSACTION", "017 ne zagotavlja atomske obdelave inboxa.");
+Contains(remediation, "GROUP BY", "017 ne grupira podvojenih ciljnih vrednosti pred MERGE.");
+Contains(remediation, "IsRequired", "017 ne preverja obveznih preslikav.");
+Contains(remediation, "TRY_CONVERT(decimal(19,4)", "017 ne preverja neto cene.");
+Contains(remediation, "TRY_CONVERT(decimal(5,2)", "017 ne preverja DDV.");
+Contains(remediation, "TRY_CONVERT(datetime2(3)", "017 ne preverja datuma veljavnosti.");
+Contains(remediation, "Izdelek za konfigurirani identifikator ne obstaja", "017 ne zavrne neujemajočega izdelka.");
+Contains(remediation, "map.UnmappedValue", "017 ne ohrani zavrnjenih generičnih vrednosti.");
 if (migration.Contains(".nodes(", StringComparison.OrdinalIgnoreCase)
   || migration.Contains("sp_executesql", StringComparison.OrdinalIgnoreCase))
 {
