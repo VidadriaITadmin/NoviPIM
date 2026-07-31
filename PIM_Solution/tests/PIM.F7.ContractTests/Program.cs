@@ -1,6 +1,16 @@
 var root = FindRoot();
 var failures = new List<string>();
 var migration = Read("sql/migrations/020_CreateB2bChannel.sql");
+var migrator = Read("src/PIM.Migrator/Program.cs");
+
+Contains(migrator, "Directory.GetFiles(migrationsDirectory, \"*.sql\")", "Migrator ne odkriva oštevilčenih SQL migracij.");
+Contains(migrator, "OrderBy(migration => migration.Name, StringComparer.Ordinal)", "Migrator migracij ne razvršča deterministično po imenu.");
+Contains(migrator, "await VerifyF7Async(connection)", "Migratorjev --verify ne preverja F7.");
+Contains(migrator, "Manjka {connectionStringVariable}", "Migrator nima varnega odziva za manjkajoč PIM_CONNECTION_STRING.");
+if (!Directory.GetFiles(Path.Combine(root, "sql", "migrations"), "*.sql")
+  .Select(Path.GetFileName)
+  .Contains("020_CreateB2bChannel.sql", StringComparer.Ordinal))
+  failures.Add("Migratorjev nabor migracij ne vsebuje 020_CreateB2bChannel.sql.");
 
 foreach (var expected in new[]
 {
