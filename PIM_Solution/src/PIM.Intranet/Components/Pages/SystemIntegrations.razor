@@ -1,0 +1,37 @@
+@page "/system/integracije"
+@attribute [Authorize(Roles = "ADMIN")]
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Integracije sistema</PageTitle>
+<h1>Integracije sistema</h1>
+<p>Pregled urnikov, zdravja izvajanj, vodnih žigov in odhodne pošte.</p>
+@if (View is null)
+{
+  <p>Nalaganje …</p>
+}
+else
+{
+  <table class="table table-sm">
+    <thead><tr><th>Organizacija</th><th>Ponudnik</th><th>Pipeline</th><th>Omogočeno</th><th>Stanje</th><th>Zadnji srčni utrip</th><th>Zadnji uspeh</th><th>Zadnja napaka</th><th>Vodni žig</th><th>Odprta opozorila</th><th>Mrtva</th><th>Odkloni</th><th>Naslednje izvajanje</th></tr></thead>
+    <tbody>@foreach(var row in View.Integrations){<tr><td>@row.OrganizationCode</td><td>@row.Provider</td><td>@row.Pipeline</td><td>@(row.IsEnabled?"Da":"Ne")</td><td>@row.Status</td><td>@Local(row.LastHeartbeatUtc)</td><td>@Local(row.LastSuccessfulRunUtc)</td><td>@Local(row.LastFailedRunUtc)</td><td>@Local(row.WatermarkUtc)</td><td>@row.OpenAlerts</td><td>@row.OutboxDeadCount</td><td>@row.OutboxDriftCount</td><td>@Local(row.NextScheduledUtc)</td></tr>}</tbody>
+  </table>
+  <h2>Opozorila</h2>
+  <table class="table table-sm">
+    <thead><tr><th>Resnost</th><th>Pipeline</th><th>Naslov</th><th>Redigiran povzetek</th><th>Pojavitve</th><th>Zadnja pojavitev</th><th>Potrdil</th><th>Razrešil</th><th>Dejanja</th></tr></thead>
+    <tbody>@foreach(var alert in View.Alerts){<tr><td>@alert.Severity</td><td>@alert.Pipeline</td><td>@alert.Title</td><td>@alert.PayloadSummaryRedacted</td><td>@alert.OccurrenceCount</td><td>@Local(alert.LastSeenUtc)</td><td>@alert.AcknowledgedBy</td><td>@alert.ResolvedBy</td><td>@if(alert.ResolvedUtc is null){@if(alert.AcknowledgedUtc is null){<button class="btn btn-sm btn-warning" @onclick="()=>Acknowledge(alert.AlertId)">Potrdi</button>}<button class="btn btn-sm btn-success" @onclick="()=>Resolve(alert.AlertId)">Razreši</button>}</td></tr>}</tbody>
+  </table>
+}
+@if(Message is not null){<p class="alert alert-info">@Message</p>}
+
+@code {
+  const int OrganizationId=2;
+  PIM.Intranet.Services.SystemIntegrationView? View;
+  string? Message;
+  protected override async Task OnInitializedAsync()=>await Reload();
+  async Task Reload()=>View=await Data.GetSystemIntegrationsAsync(OrganizationId);
+  async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}
+  async Task Acknowledge(long id){await Data.AcknowledgeAlertAsync(OrganizationId,id,await Actor());Message="Opozorilo je potrjeno in auditirano.";await Reload();}
+  async Task Resolve(long id){await Data.ResolveAlertAsync(OrganizationId,id,await Actor());Message="Opozorilo je razrešeno in auditirano.";await Reload();}
+  static string Local(DateTime? value)=>value?.ToLocalTime().ToString("g")??"—";
+}

@@ -20,6 +20,13 @@ public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string
 public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string Operation, string EntityType, string EntityKey,
   string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
   int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc);
+public sealed record SystemIntegrationRow(int OrganizationId, string OrganizationCode, string Provider, string Pipeline, bool IsEnabled,
+  string? Status, DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc, DateTime? WatermarkUtc,
+  DateTime? NextScheduledUtc, int OpenAlerts, int OutboxDeadCount, int OutboxDriftCount);
+public sealed record SystemAlertRow(long AlertId, string Pipeline, string AlertKind, string Severity, string Title,
+  string PayloadSummaryRedacted, int OccurrenceCount, DateTime FirstSeenUtc, DateTime LastSeenUtc,
+  DateTime? AcknowledgedUtc, string? AcknowledgedBy, DateTime? ResolvedUtc, string? ResolvedBy);
+public sealed record SystemIntegrationView(IReadOnlyList<SystemIntegrationRow> Integrations, IReadOnlyList<SystemAlertRow> Alerts);
 public sealed class ShippingRuleRow
 {
   public required string RuleCode { get; init; }
@@ -215,6 +222,28 @@ public sealed class IntranetDataService(IConfiguration configuration)
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
     await using var command=new SqlCommand($"EXEC {procedure} @OutboxMessageId,@Actor;",connection);
     command.Parameters.AddWithValue("@OutboxMessageId",messageId);command.Parameters.AddWithValue("@Actor",actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  public async Task<SystemIntegrationView> GetSystemIntegrationsAsync(int organizationId,CancellationToken cancellationToken=default)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand("intranet.GetSystemIntegrations",connection){CommandType=System.Data.CommandType.StoredProcedure};command.Parameters.AddWithValue("@OrganizationId",organizationId);
+    await using var reader=await command.ExecuteReaderAsync(cancellationToken);var integrations=new List<SystemIntegrationRow>();
+    while(await reader.ReadAsync(cancellationToken))integrations.Add(new(reader.GetInt32(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetBoolean(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.IsDBNull(6)?null:reader.GetDateTime(6),reader.IsDBNull(7)?null:reader.GetDateTime(7),reader.IsDBNull(8)?null:reader.GetDateTime(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetDateTime(10),reader.GetInt32(11),reader.GetInt32(12),reader.GetInt32(13)));
+    await reader.NextResultAsync(cancellationToken);var alerts=new List<SystemAlertRow>();
+    while(await reader.ReadAsync(cancellationToken))alerts.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetInt32(6),reader.GetDateTime(7),reader.GetDateTime(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetString(10),reader.IsDBNull(11)?null:reader.GetDateTime(11),reader.IsDBNull(12)?null:reader.GetString(12)));
+    return new(integrations,alerts);
+  }
+
+  public Task AcknowledgeAlertAsync(int organizationId,long alertId,string actor,CancellationToken cancellationToken=default) => ExecuteAlertActionAsync("intranet.AcknowledgeAlert",organizationId,alertId,actor,cancellationToken);
+  public Task ResolveAlertAsync(int organizationId,long alertId,string actor,CancellationToken cancellationToken=default) => ExecuteAlertActionAsync("intranet.ResolveAlert",organizationId,alertId,actor,cancellationToken);
+
+  async Task ExecuteAlertActionAsync(string procedure,int organizationId,long alertId,string actor,CancellationToken cancellationToken)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand(procedure,connection){CommandType=System.Data.CommandType.StoredProcedure};
+    command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@AlertId",alertId);command.Parameters.AddWithValue("@Actor",actor);
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
 }
