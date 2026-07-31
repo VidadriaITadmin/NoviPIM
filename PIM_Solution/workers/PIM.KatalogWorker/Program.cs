@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
+using PIM.XmlMapping;
 
 var modeText = Environment.GetEnvironmentVariable("PIM_SAOP_MODE") ?? "Disabled";
 if (!Enum.TryParse<SaopSourceMode>(modeText, true, out var mode))
@@ -42,6 +43,7 @@ await using (var connection = new SqlConnection(connectionString))
 }
 
 await new RawInboxWriter(connectionString).WriteAsync(pages, runId, 2, "SAOP_IQLIGHTING");
+await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, 2, "SAOP_IQLIGHTING");
 await using (var connection = new SqlConnection(connectionString))
 {
   await connection.OpenAsync();
