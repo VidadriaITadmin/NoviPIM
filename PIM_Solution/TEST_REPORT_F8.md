@@ -4,44 +4,57 @@ Datum: 2026-07-31
 
 ## Rezultat
 
-F8 je izveden in preverjen z lokalnim HTTP fixture strežnikom ter izoliranimi
-vrsticami organizacije `9808` v razvojni bazi `PIM`. Test je v `finally`
-odstranil sporočila, poskuse, policy, profil in organizacijo. Migracija 021 in
-forward popravek 022 sta bila uporabljena, ponovni zagon ju je idempotentno
-preskočil. SHA-256 datotek sta `021_CreateOutboundOutbox.sql`
-`2c1b44f818f927dca97d86a8e5ef7a265c5486cd2061b00a6a24f7f7465616bf` in
-`022_StabilizeOutboundScheduling.sql`
-`5ab33e212bd1f787bb744177c715e747e950bd24f2178f2a5e99a675a4985591`.
+F8 je lokalno/MSSQL preverjen in utrjen. Forward-only migraciji
+`023_HardenOutboundIntegrityAndLeases.sql` in `024_MatchEchoByExpectedHash.sql`
+sta uporabljeni v razvojni bazi `PIM`; ponovni zagon migratorja je njun ledger
+in celoten F0–F8 kontrakt preveril. SHA-256 sta:
 
-Dokazani so aktivni dedup, atomski claim/lease, `Retry`, `Dead`, `Sent`,
-`Verified`, `Drift`, redakcija odziva, prepovedana polja, ročni gate in
-anti-loop. HTTP testi so izvedli samo `PATCH` proti `127.0.0.1`; dispatcher
-dovoljuje samo `POST` in `PATCH`. Status 2xx pomeni `Sent`, nikoli neposredno
-`Verified`.
+- `023_HardenOutboundIntegrityAndLeases.sql` —
+  `be50aa2bd6d61aac65fd91893576a9ad9c5bed300b2f5590186db4969fbb0c6f`
+- `024_MatchEchoByExpectedHash.sql` —
+  `1613b7d747a22bc81da6bb9e452e9fa2ce924f8630f249204c3240811619d74c`
 
-## Ukazi in izidi
+`out.EnqueueMessage` je zdaj dejanska strežniška meja: sprejme le dovoljeno
+pogodbo spremembe, iz payload-a izpelje `EntityKey` in `FieldSummary`, preveri
+aktivno PIM ownership policy ter kanonično shrani payload in strežniško izračuna
+`PayloadHash`, `ExpectedEchoHash` in `DedupKey`. Ne morejo jih več podtakniti
+klicateljevi parametri. Testi so dokazali zavrnitev `VAT`, dodatnega JSON polja
+in nedovoljene `ExactValue` vrednosti.
 
-- `dotnet run --project src/PIM.Migrator/PIM.Migrator.csproj` — PASS; 021
-  uporabljena, drugi zagon jo je preskočil.
+Lease je vezan na konfigurirani HTTP timeout z 30-sekundno rezervo, ne na
+fiksnih 60 sekund. `ClaimMessage` v isti transakciji zapre en potekli `Sending`
+poskus kot `Retry` oziroma `Dead`, nato ga lahko varno ponovno prevzame. Veljavni
+worker lahko zaključi odgovor, ki prispe po poteku lease-a, dokler ga drug worker
+še ni ponovno prevzel; po reclaimu stari worker ne more zaključiti novega poskusa.
+Dva sočasna workerja ne dobita istega sporočila. Echo najprej poišče `Sent`
+sporočilo z ujemajočim pričakovanim hashem, zato echo novejše spremembe ne označi
+starejše spremembe kot `Drift`.
+
+## Dokaz in ukazi
+
+- Strogi RED: `PIM.F8.HardeningTests` je pred 023 padel, ker stari
+  `EnqueueMessage` še zahteva klicateljev `@EntityKey`; pred 024 je padel z
+  dokazom, da echo novejšega hasha označi starejše sporočilo kot `Drift`.
+- `dotnet run --project src/PIM.Migrator/PIM.Migrator.csproj` — PASS; 023 in
+  024 uporabljeni, drugi zagon ju je preskočil.
 - `dotnet run --project src/PIM.Migrator/PIM.Migrator.csproj -- --verify` —
-  PASS; ledger hash in F0–F8 objekti, vključno z outbox in intranetnim pogledom.
-- vsi `tests/PIM.F3.*` do `tests/PIM.F8.*` z `dotnet run --no-build` — PASS.
+  PASS; ledger in F0–F8 podatkovni kontrakt.
+- F8 contract, behavior, dispatcher, echo in intranet testi — PASS.
 - `dotnet run --project tests/PIM.F8.Integration/PIM.F8.Integration.csproj` —
-  PASS; izolirana org. 9808, lokalni fixture, čiščenje PASS.
+  PASS; izolirana org. `9808`, dedup/retry/dead/sent/verified/drift, čiščenje in
+  dva `PATCH` klica izključno na lokalni `127.0.0.1` fixture.
+- `dotnet run --project tests/PIM.F8.HardeningTests/PIM.F8.HardeningTests.csproj`
+  — PASS; izolirana org. `9813`, adversarial enqueue, pozni completion, crash,
+  atomic reclaim, closure poskusa, concurrent recovery in izbira echo hasha.
 - `dotnet build PIM.sln --no-restore` — PASS, 0 opozoril, 0 napak.
-- `npm test --prefix ..` — PASS, 1 datoteka in 1 test.
-- `npm run lint --prefix ..` — PASS; obstoječi skript je placeholder
-  `(lint se doda kasneje)` in ne izvaja dejanskega linterja.
 - `git diff --check` — PASS.
 
-Regresijski F6 test je izvedel svojo obstoječo read-only capability poizvedbo
-do `PIM_test`; ni izvedel zapisovanja. Obstoječa nesledena mapa `PIM_test` ter
-vse druge uporabniško navedene nesledene poti niso bile spremenjene, staged ali
-commitirane.
+Oba MSSQL testa v `finally` odstranita izključno svoje vrstice, profile, policy
+in organizacije. `PIM_test` ni bil dostopan ali spremenjen.
 
 ## Blokada živega SAOP
 
-Živi SAOP write ni bil izveden in ni označen kot uspešen. Ostaja `BLOCKED`, ker
-niso podani potrjena neprodukcijska endpoint/payload pogodba, varen testni
-izdelek, poverilnice in izrecno dovoljenje za zunanjo spremembo. Privzeti profil
-je onemogočen in uporablja `ManualApproval`.
+Živi SAOP write ni bil izveden in ni označen kot uspešen. Ostaja **BLOCKED** za
+ročno testiranje: manjkajo potrjen neprodukcijski endpoint/payload kontrakt,
+varen testni izdelek, poverilnice in izrecno dovoljenje za zunanjo spremembo.
+Privzeti integracijski profil ostaja onemogočen z `ManualApproval`.

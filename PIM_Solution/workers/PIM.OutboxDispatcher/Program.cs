@@ -11,9 +11,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
-await using var claim = new SqlCommand("EXEC out.ClaimMessage @WorkerId,@LeaseSeconds;", connection);
+await using var claim = new SqlCommand("EXEC out.ClaimMessage @WorkerId;", connection);
 claim.Parameters.AddWithValue("@WorkerId", workerId);
-claim.Parameters.AddWithValue("@LeaseSeconds", 60);
 await using var reader = await claim.ExecuteReaderAsync();
 if (!await reader.ReadAsync()) return;
 var messageId = reader.GetInt64(reader.GetOrdinal("OutboxMessageId"));

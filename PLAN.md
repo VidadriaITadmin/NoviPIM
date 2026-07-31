@@ -10,11 +10,13 @@ Izvedeni so generični `out.OutboxMessage`/`out.OutboxAttempt`, konfiguracijska
 policy lastništva in integracijski profil s privzetim `ManualApproval`, atomske
 procedure za enqueue/claim/lease/attempt/approve/cancel/retry/echo, determinističen
 `PIM.Outbound`, POST/PATCH dispatcher z redakcijo in omejenim retryjem, echo
-anti-loop ter slovenski `/outbound` monitor. Migracija 021 in forward popravek
-022 sta bila na razvojni bazi `PIM` uporabljena in idempotentno ponovno preverjena.
-Izolirana organizacija
-9808 je z lokalnim HTTP fixture strežnikom dokazala dedup, Retry, Dead, Sent,
-Verified in Drift ter bila po testu odstranjena. F9 ni začeta.
+anti-loop ter slovenski `/outbound` monitor. Forward migraciji 023 in 024 utrdita
+strežniško ownership/hash/dedup mejo, timeout-vezan lease z atomic reclaimom in
+izbiro echo po pričakovanem hashu. Migracije 021–024 so bile na razvojni bazi
+`PIM` uporabljene in idempotentno ponovno preverjene. Izolirani organizaciji
+9808 in 9813 sta z lokalnim HTTP fixture strežnikom oziroma MSSQL hardening
+testom dokazali dedup, Retry, Dead, Sent, Verified, Drift, adversarial zavrnitve,
+crash recovery in sočasni reclaim ter bili po testu odstranjeni. F9 ni začeta.
 
 ## F6 — zaloge
 

@@ -39,7 +39,8 @@ try
   Equal(first,duplicate,"Aktivni dedup mora vrniti isto sporočilo.");
   await DispatchAndComplete(first,"worker-verified");
   Equal("Sent",await Status(first),"2xx ostane Sent");
-  await Sql("DECLARE @Observed datetime2(3)=SYSUTCDATETIME(); EXEC out.VerifyEcho @Org,N'Product',N'A-1',@Hash,@Observed;",("@Org",organizationId),("@Hash",hash));
+  var expectedEcho=await PayloadHash(first);
+  await Sql("DECLARE @Observed datetime2(3)=SYSUTCDATETIME(); EXEC out.VerifyEcho @Org,N'Product',N'A-1',@Hash,@Observed;",("@Org",organizationId),("@Hash",expectedEcho));
   Equal("Verified",await Status(first),"Ujemajoči echo");
 
   var retry=await Enqueue("A-2",payload.Replace("A-1","A-2"),Hash(payload.Replace("A-1","A-2")));await ClaimAndFail(retry,"worker-retry",false);
@@ -68,8 +69,8 @@ return 0;
 
 async Task<long> Enqueue(string key,string payload,string hash)
 {
-  await using var command=new SqlCommand("DECLARE @Id bigint; EXEC out.EnqueueMessage @Org,N'SAOP_PRODUCT',N'UPDATE',N'Product',@Key,N'ERP_DESCRIPTION',@Payload,@Hash,@Hash,@Hash,N'F8_TEST',@Id OUTPUT; SELECT @Id;",connection);
-  command.Parameters.AddWithValue("@Org",organizationId);command.Parameters.AddWithValue("@Key",key);command.Parameters.AddWithValue("@Payload",payload);command.Parameters.AddWithValue("@Hash",hash);return Convert.ToInt64(await command.ExecuteScalarAsync());
+  await using var command=new SqlCommand("DECLARE @Id bigint; EXEC out.EnqueueMessage @OrganizationId=@Org,@TargetKind=N'SAOP_PRODUCT',@Operation=N'UPDATE',@EntityType=N'Product',@PayloadJson=@Payload,@Actor=N'F8_TEST',@OutboxMessageId=@Id OUTPUT; SELECT @Id;",connection);
+  command.Parameters.AddWithValue("@Org",organizationId);command.Parameters.AddWithValue("@Payload",payload);return Convert.ToInt64(await command.ExecuteScalarAsync());
 }
 async Task DispatchAndComplete(long expected,string worker)
 {
@@ -79,10 +80,11 @@ async Task DispatchAndComplete(long expected,string worker)
 async Task ClaimAndFail(long expected,string worker,bool permanent) { var claimed=await Claim(worker);Equal(expected,claimed.Id,"Claim napake");await Complete(claimed.Id,worker,false,permanent,503,"fixture unavailable",null,"fixture 503"); }
 async Task<(long Id,string Payload,string Endpoint,string Operation)> Claim(string worker)
 {
-  await using var command=new SqlCommand("EXEC out.ClaimMessage @WorkerId,@LeaseSeconds;",connection);command.Parameters.AddWithValue("@WorkerId",worker);command.Parameters.AddWithValue("@LeaseSeconds",60);await using var reader=await command.ExecuteReaderAsync();if(!await reader.ReadAsync())throw new InvalidOperationException("Ni claim sporočila.");var row=(reader.GetInt64(reader.GetOrdinal("OutboxMessageId")),reader.GetString(reader.GetOrdinal("PayloadJson")),reader.GetString(reader.GetOrdinal("EndpointTemplate")),reader.GetString(reader.GetOrdinal("HttpOperation")));await reader.CloseAsync();return row;
+  await using var command=new SqlCommand("EXEC out.ClaimMessage @WorkerId;",connection);command.Parameters.AddWithValue("@WorkerId",worker);await using var reader=await command.ExecuteReaderAsync();if(!await reader.ReadAsync())throw new InvalidOperationException("Ni claim sporočila.");var row=(reader.GetInt64(reader.GetOrdinal("OutboxMessageId")),reader.GetString(reader.GetOrdinal("PayloadJson")),reader.GetString(reader.GetOrdinal("EndpointTemplate")),reader.GetString(reader.GetOrdinal("HttpOperation")));await reader.CloseAsync();return row;
 }
 async Task Complete(long id,string worker,bool success,bool permanent,int code,string body,string? correlation,string? failure) => await Sql("EXEC out.CompleteAttempt @Id,@Worker,@Success,@Permanent,@Code,@Body,@Correlation,@Failure;",("@Id",id),("@Worker",worker),("@Success",success),("@Permanent",permanent),("@Code",code),("@Body",body),("@Correlation",(object?)correlation??DBNull.Value),("@Failure",(object?)failure??DBNull.Value));
 async Task<string> Status(long id) { await using var command=new SqlCommand("SELECT Status FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToString(await command.ExecuteScalarAsync())!; }
+async Task<string> PayloadHash(long id) { await using var command=new SqlCommand("SELECT PayloadHash FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToString(await command.ExecuteScalarAsync())!; }
 async Task Sql(string sql,params (string Name,object Value)[] parameters) { await using var command=new SqlCommand(sql,connection);foreach(var parameter in parameters)command.Parameters.AddWithValue(parameter.Name,parameter.Value);await command.ExecuteNonQueryAsync(); }
 static string Hash(string value)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 static void Equal<T>(T expected,T actual,string message) { if(!EqualityComparer<T>.Default.Equals(expected,actual))throw new InvalidOperationException($"{message}: {expected} != {actual}"); }

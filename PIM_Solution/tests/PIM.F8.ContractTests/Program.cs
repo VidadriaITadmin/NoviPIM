@@ -1,6 +1,7 @@
 var root = FindRoot();
 var failures = new List<string>();
 var migration = Read("sql/migrations/021_CreateOutboundOutbox.sql");
+var hardening = Read("sql/migrations/023_HardenOutboundIntegrityAndLeases.sql");
 
 foreach (var expected in new[]
 {
@@ -39,6 +40,14 @@ Contains(migration, "SYSUTCDATETIME()", "Prehodi ne uporabljajo UTC časa.");
 Contains(migration, "ManualApproval", "Privzeti profil ne zahteva ročne odobritve.");
 Contains(migration, "POST", "Pogodba ne omejuje operacije POST.");
 Contains(migration, "PATCH", "Pogodba ne omejuje operacije PATCH.");
+Contains(hardening, "OPENJSON(@PayloadJson)", "F8 write boundary ne razčleni payload-a na strežniku.");
+Contains(hardening, "HASHBYTES(''SHA2_256''", "F8 write boundary ne izračuna strežniškega hasha.");
+Contains(hardening, "policy.Owner=N''PIM''", "F8 write boundary ne zahteva PIM lastništva.");
+Contains(hardening, "Lease je potekel", "F8 ne zapre poteklega poskusa.");
+Contains(hardening, "TimeoutSeconds+30", "F8 lease ni vezan na konfiguriran HTTP timeout z varnostno rezervo.");
+var echoHardening = Read("sql/migrations/024_MatchEchoByExpectedHash.sql");
+Contains(echoHardening, "ExpectedEchoHash=@InboundHash", "F8 echo ne izbere sporočila po pričakovanem hashu.");
+Contains(echoHardening, "ORDER BY SentUtc DESC", "F8 echo ob driftu ne obravnava najnovejše spremembe.");
 var migrator = Read("src/PIM.Migrator/Program.cs");
 Contains(migrator, "VerifyF8Async(connection)", "--verify ne preverja F8 podatkovnega kontrakta.");
 Contains(migrator, "out.OutboxMessage", "Migrator ne preveri tabele F8 OutboxMessage.");
