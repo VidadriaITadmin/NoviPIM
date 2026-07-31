@@ -54,6 +54,17 @@ Equal(64, fixture.PayloadHash.Length, "SHA-256");
 Equal(before, File.GetLastWriteTimeUtc(fixturePath), "Fixture vir ostane read-only.");
 Console.WriteLine("F7 mapping: konfiguracijski landing, replay in zavrnitve PASS.");
 
-static string FindRoot() { var d=new DirectoryInfo(Directory.GetCurrentDirectory()); while(d is not null&&!File.Exists(Path.Combine(d.FullName,"PIM.sln")))d=d.Parent; return d?.FullName??throw new InvalidOperationException(); }
+static string FindRoot()
+{
+  var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+  while (directory is not null)
+  {
+    if (File.Exists(Path.Combine(directory.FullName, "PIM.sln"))) return directory.FullName;
+    var solution = Path.Combine(directory.FullName, "PIM_Solution");
+    if (File.Exists(Path.Combine(solution, "PIM.sln"))) return solution;
+    directory = directory.Parent;
+  }
+  throw new InvalidOperationException("PIM_Solution ni najden.");
+}
 static void Equal<T>(T expected,T actual,string message) { if(!EqualityComparer<T>.Default.Equals(expected,actual))throw new InvalidOperationException($"{message}: pričakovano {expected}, dejansko {actual}."); }
 static void Throws<T>(Action action,string message) where T : Exception { try { action(); } catch(T) { return; } throw new InvalidOperationException(message); }
