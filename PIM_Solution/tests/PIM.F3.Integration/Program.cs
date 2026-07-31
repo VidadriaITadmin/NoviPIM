@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
+using PIM.XmlMapping;
 
 var connectionString = LocalConfiguration.GetConnectionString("PIM_CONNECTION_STRING", "Pim");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -45,14 +46,14 @@ await using (var reader = await endToEnd.ExecuteReaderAsync())
   Console.WriteLine($"F3 integracijski tok je uspešen; CSV vrstic={csvRows}.");
 }
 
-await VerifySaopXmlDeclarationAndErpEligibilityAsync(connection);
+await VerifySaopXmlDeclarationAndErpEligibilityAsync(connection, connectionString);
 Console.WriteLine("F3 popravek XML deklaracije in ERP upravičenosti je preverjen.");
 
 await VerifyRawInboxRequeueAsync(connection, connectionString);
 Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverjena.");
 return 0;
 
-static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection connection)
+static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection connection, string connectionString)
 {
   const string testItemId = "F3-FIX-TEST-SUPPLIER-DISCOUNT";
   const string sourceCode = "SAOP_IQLIGHTING";
@@ -91,6 +92,8 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID;
+    DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN (SELECT ExtractedValueId FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999));
+    DELETE FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999);
     DELETE FROM raw.Inbox WHERE OrganizationId = @OrganizationId AND SourceCode = @SourceCode AND EntityType = N'ItemGeneralData' AND PageNumber = 999;
     DELETE FROM ops.PipelineRun WHERE Pipeline = N'SAOP_PRODUCTS_FIX_TEST';
     """, connection))
@@ -126,13 +129,7 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     await insertInbox.ExecuteNonQueryAsync();
   }
 
-  await using (var process = new SqlCommand("EXEC map.ProcessRawInbox @RunId=@RunId, @OrganizationId=@OrganizationId, @SourceCode=@SourceCode;", connection))
-  {
-    process.Parameters.AddWithValue("@RunId", runId);
-    process.Parameters.AddWithValue("@OrganizationId", organizationId);
-    process.Parameters.AddWithValue("@SourceCode", sourceCode);
-    await process.ExecuteNonQueryAsync();
-  }
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
 
   await using (var assertStatus = new SqlCommand("""
     SELECT Status, FailureReason FROM raw.Inbox
@@ -177,6 +174,8 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID;
+    DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN (SELECT ExtractedValueId FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999));
+    DELETE FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999);
     DELETE FROM raw.Inbox WHERE OrganizationId = @OrganizationId AND SourceCode = @SourceCode AND EntityType = N'ItemGeneralData' AND PageNumber = 999;
     DELETE FROM ops.PipelineRun WHERE RunId = @RunId;
     """, connection))
