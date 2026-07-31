@@ -183,11 +183,11 @@ BEGIN
 END');
 
 MERGE sec.NavigationItem AS target
-USING (SELECT g.NavigationGroupId,N''STOCKS'' ItemCode,N''Zaloge'' Name,N''/zaloge'' Route,60 SortOrder FROM sec.NavigationGroup g WHERE g.GroupCode=N''PIM'') source
+USING (SELECT g.NavigationGroupId,N'STOCKS' ItemCode,N'Zaloge' Name,N'/zaloge' Route,60 SortOrder FROM sec.NavigationGroup g WHERE g.GroupCode=N'PIM') source
 ON target.ItemCode=source.ItemCode
 WHEN MATCHED THEN UPDATE SET Name=source.Name,Route=source.Route,SortOrder=source.SortOrder,IsActive=1
 WHEN NOT MATCHED THEN INSERT(NavigationGroupId,ItemCode,Name,Route,SortOrder) VALUES(source.NavigationGroupId,source.ItemCode,source.Name,source.Route,source.SortOrder);
 MERGE sec.NavigationItemRole target
-USING (SELECT i.NavigationItemId,r.RoleId FROM sec.NavigationItem i CROSS JOIN sec.Role r WHERE i.ItemCode=N''STOCKS'') source
+USING (SELECT i.NavigationItemId,r.RoleId FROM sec.NavigationItem i CROSS JOIN sec.Role r WHERE i.ItemCode=N'STOCKS') source
 ON target.NavigationItemId=source.NavigationItemId AND target.RoleId=source.RoleId
 WHEN NOT MATCHED THEN INSERT(NavigationItemId,RoleId) VALUES(source.NavigationItemId,source.RoleId);

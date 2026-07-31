@@ -1,0 +1,35 @@
+@page "/zaloge"
+@attribute [Authorize]
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Zaloge</PageTitle>
+<h1>Zaloge</h1>
+@if (Rows is null)
+{
+  <p>Nalaganje podatkov …</p>
+}
+else if (Rows.Count == 0)
+{
+  <p>Ni aktivnih zalogovnih posnetkov.</p>
+}
+else
+{
+  <table class="table">
+    <thead><tr><th>Artikel / EAN</th><th>Količina</th><th>Pričakovana dobava</th><th>Prihodna količina</th><th>Vir</th><th>Ponudnik / endpoint</th><th>Čas posnetka</th><th>Svežina</th><th>Ujemanje</th></tr></thead>
+    <tbody>
+    @foreach (var row in Rows)
+    {
+      <tr>
+        <td>@if (row.ProductId is not null) { <a href="/izdelki/@row.ProductId">@row.ItemId</a> } else { @row.ItemId }<br />@row.Ean</td>
+        <td>@row.Quantity</td><td>@row.AvailabilityDate?.ToString("d")</td><td>@row.IncomingQuantity</td><td>@row.SourceCode</td>
+        <td>@row.ProviderKind<br /><small>@row.Endpoint</small></td><td>@row.SnapshotUtc.ToLocalTime()</td><td>@row.FreshnessMinutes min</td><td>@row.MatchKey</td>
+      </tr>
+    }
+    </tbody>
+  </table>
+}
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows;
+  protected override async Task OnInitializedAsync() => Rows = await Data.GetStocksAsync(2);
+}

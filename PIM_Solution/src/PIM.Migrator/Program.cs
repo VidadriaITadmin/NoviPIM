@@ -71,7 +71,8 @@ if (verifyOnly)
   await VerifyF1Async(connection);
   await VerifyF2Async(connection);
   await VerifyF3Async(connection);
-  Console.WriteLine("Preverjanje F0–F3 baze je uspešno.");
+  await VerifyF6Async(connection);
+  Console.WriteLine("Preverjanje F0–F6 baze je uspešno.");
   return 0;
 }
 
@@ -272,7 +273,7 @@ static async Task VerifyF0Async(SqlConnection connection, IReadOnlyCollection<Mi
     }
   }
 
-  var expectedSchemas = new[] { "raw", "map", "canon", "val", "pim", "out", "ops", "dbo", "sec" };
+  var expectedSchemas = new[] { "raw", "map", "canon", "val", "pim", "out", "ops", "dbo", "sec", "stock" };
   foreach (var schema in expectedSchemas)
   {
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.schemas WHERE name = @value;", schema, 1, $"Manjka shema {schema}.");
@@ -392,6 +393,21 @@ static async Task VerifyF3Async(SqlConnection connection)
 
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.SourceConnector WHERE SourceCode=N'SAOP_IQLIGHTING' AND OrganizationId=2 AND IsActive=1;", null, 1, "Manjka aktivni SAOP konektor za IQLighting.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.PipelineStep WHERE PipelineCode=N'SAOP_PRODUCTS' AND IsActive=1;", null, 3, "SAOP pipeline mora imeti tri aktivne korake.");
+}
+
+static async Task VerifyF6Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "stock.SaopProviderProfile", "map.StockIdentityRule", "stock.LandingRecord", "stock.Snapshot",
+    "stock.Position", "stock.UnmatchedPosition", "stock.SyncRun", "stock.ApplyLandingRecord",
+    "intranet.GetStocks", "out.ExportStockCsv"
+  };
+  foreach (var expectedObject in expectedObjects)
+  {
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F6 objekt {expectedObject}.");
+  }
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'stock.Position') AND name=N'IX_stock_Position_Identity';", null, 1, "Manjka F6 indeks identitete.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
