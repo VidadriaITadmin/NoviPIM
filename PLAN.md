@@ -1,5 +1,19 @@
 # PLAN — izvedene in naslednje faze PIM sistema
 
+## F9 — nadzor, obveščanje, razporejanje in deploy
+
+Status: zaključeno in dokazano 2026-07-31; ustavljeno pred F10.
+
+Implementirani so podatkovni kontrakt migracije 025, skupni session lease in
+heartbeat wrapper, watchdog z dedupliciranimi stale/watermark/Dead/Drift alarmi,
+auditirana dostava s privzeto izključenimi kanali, Admin-only slovenski pregled
+`/system/integracije` ter ponovljive Windows/IIS skripte z dry-run/WhatIf,
+ohranitvijo lokalne konfiguracije, app-offline zamenjavo, backupom, rollbackom in
+health preverjanjem. Migracija je bila v PIM izvedena idempotentno in preverjena;
+izolirani MSSQL dokaz je zelen. Dejanska Windows/IIS izvedba je blokirana, ker
+trenutno okolje nima `pwsh` in ni Windows gostitelj. Živi SAOP write ter resnična
+e-pošta/webhook niso bili izvedeni. F10 ni začeta.
+
 ## F8 — SAOP outbox in echo
 
 Status: fixture in izolirani PIM MSSQL dokaz zaključena 2026-07-31; ustavljeno

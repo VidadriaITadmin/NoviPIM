@@ -10,7 +10,7 @@ Skrivnosti nikoli ne sodijo v Git, argumente ukazne vrstice ali zapisnike. Na ci
 
 ## SQL provisioning
 
-Ustvarite izključno bazo `PIM`, loginom dodelite najmanjše pravice in migracije izvedite z `deploy/Apply-Migrations.ps1` oziroma `PIM.Migrator`. Najprej backup, nato dvakrat idempotentna migracija in `--verify`. Worker račun potrebuje izvajanje postopkov `ops.*` ter potrebne pipeline postopke, intranet račun pa `intranet.*`; ne dodeljujte `db_owner`. Nikoli ne ciljajte `PIM_test`.
+Ustvarite izključno bazo `PIM`, loginom dodelite najmanjše pravice in migracije izvedite s sledeno aplikacijo `PIM.Migrator` (na primer `dotnet run --project .\src\PIM.Migrator --` ter nato isti ukaz z `--verify`; povezavo poda zaščitena spremenljivka `PIM_CONNECTION_STRING` ali lokalna konfiguracija). Najprej naredite backup, nato migrator zaženite dvakrat idempotentno in enkrat z `--verify`. Worker račun potrebuje izvajanje postopkov `ops.*` ter potrebne pipeline postopke, intranet račun pa `intranet.*`; ne dodeljujte `db_owner`. Nikoli ne ciljajte `PIM_test`.
 
 ## Workerji, opravila in računi
 
