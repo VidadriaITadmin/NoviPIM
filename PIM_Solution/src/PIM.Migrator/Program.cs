@@ -73,7 +73,8 @@ if (verifyOnly)
   await VerifyF3Async(connection);
   await VerifyF6Async(connection);
   await VerifyF7Async(connection);
-  Console.WriteLine("Preverjanje F0–F7 baze je uspešno.");
+  await VerifyF8Async(connection);
+  Console.WriteLine("Preverjanje F0–F8 baze je uspešno.");
   return 0;
 }
 
@@ -429,6 +430,20 @@ static async Task VerifyF7Async(SqlConnection connection)
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.ShippingRuleCatalog WHERE IsActive=1;", null, 4, "Manjkajo poštninska pravila F7.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM out.ExportProfile WHERE ProfileCode IN(N'CUSTOMERS_B2B',N'PRODUCTS_B2B') AND IsActive=1;", null, 2, "Manjkata aktivna B2B izvozna profila.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sec.Role WHERE RoleCode IN(N'ADMIN',N'CATALOG_EDITOR',N'COMMERCIAL');", null, 3, "Manjkajo eksplicitne F7 vloge.");
+}
+
+static async Task VerifyF8Async(SqlConnection connection)
+{
+  var expectedObjects = new[]
+  {
+    "out.OutboxMessage", "out.OutboxAttempt", "out.OwnershipPolicy", "dbo.IntegrationProfile",
+    "out.EnqueueMessage", "out.ApproveMessage", "out.CancelMessage", "out.RetryMessage",
+    "out.ClaimMessage", "out.CompleteAttempt", "out.VerifyEcho",
+    "intranet.GetOutboundMessages", "intranet.GetOutboundMessage"
+  };
+  foreach (var expectedObject in expectedObjects)
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F8 objekt {expectedObject}.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'out.OutboxMessage') AND name=N'UX_OutboxMessage_ActiveDedup';", null, 1, "Manjka F8 aktivni dedup indeks.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)

@@ -6,10 +6,12 @@ Datum: 2026-07-31
 
 F8 je izveden in preverjen z lokalnim HTTP fixture strežnikom ter izoliranimi
 vrsticami organizacije `9808` v razvojni bazi `PIM`. Test je v `finally`
-odstranil sporočila, poskuse, policy, profil in organizacijo. Migracija 021 je
-bila uporabljena, ponovni zagon jo je idempotentno preskočil. SHA-256 datoteke
-`021_CreateOutboundOutbox.sql` je
-`2c1b44f818f927dca97d86a8e5ef7a265c5486cd2061b00a6a24f7f7465616bf`.
+odstranil sporočila, poskuse, policy, profil in organizacijo. Migracija 021 in
+forward popravek 022 sta bila uporabljena, ponovni zagon ju je idempotentno
+preskočil. SHA-256 datotek sta `021_CreateOutboundOutbox.sql`
+`2c1b44f818f927dca97d86a8e5ef7a265c5486cd2061b00a6a24f7f7465616bf` in
+`022_StabilizeOutboundScheduling.sql`
+`5ab33e212bd1f787bb744177c715e747e950bd24f2178f2a5e99a675a4985591`.
 
 Dokazani so aktivni dedup, atomski claim/lease, `Retry`, `Dead`, `Sent`,
 `Verified`, `Drift`, redakcija odziva, prepovedana polja, ročni gate in
@@ -21,6 +23,8 @@ dovoljuje samo `POST` in `PATCH`. Status 2xx pomeni `Sent`, nikoli neposredno
 
 - `dotnet run --project src/PIM.Migrator/PIM.Migrator.csproj` — PASS; 021
   uporabljena, drugi zagon jo je preskočil.
+- `dotnet run --project src/PIM.Migrator/PIM.Migrator.csproj -- --verify` —
+  PASS; ledger hash in F0–F8 objekti, vključno z outbox in intranetnim pogledom.
 - vsi `tests/PIM.F3.*` do `tests/PIM.F8.*` z `dotnet run --no-build` — PASS.
 - `dotnet run --project tests/PIM.F8.Integration/PIM.F8.Integration.csproj` —
   PASS; izolirana org. 9808, lokalni fixture, čiščenje PASS.
