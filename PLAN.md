@@ -1,5 +1,18 @@
 # PLAN — izvedene in naslednje faze PIM sistema
 
+## F6 — zaloge
+
+Status: zaključeno in dokazano 2026-07-31; ustavljeno pred F7/F8.
+
+Izvedeni so ločena `stock.*` domena, konfiguracijska pravila
+`map.StockIdentityRule`, immutable landing/snapshot/position/unmatched/sync
+model, generična normalizacija, tanka NW CSV in BT XML transporta,
+konfiguracijski SAOP provider registry, realna MSSQL persistenca, STOCK CSV ter
+avtorizirana slovenska intranetna stran. Migracija 018 je bila proti `PIM`
+uspešno izvedena dvakrat in preverjena. Živi SAOP ni bil klican brez potrjene
+konfiguracije. `PIM_test` ni bil spremenjen; read-only preverjanje pravic je
+pokazalo, da lokalna prijava poleg SELECT trenutno ima tudi INSERT.
+
 ## F0 — temelji
 
 Status: zaključeno in verzionirano v commitu `ce7feac`.

@@ -13,3 +13,4 @@
 | 2026-07-30 | Hermes | F3: SAOP fixture iz PIM_test, raw nabiralnik, preslikava, validacija, promocija in PRODUCTS CSV | pass — migracije dvakrat, `--verify`, realna integracija (CSV 17 vrstic), build, testi in win-x64 publish | sledi commit F3 |
 | 2026-07-31 | Codex | F5: generični C# XPath extractor, staging in source-agnostic SQL apply | pass — migracija 016 dvakrat, F5 EAN/B2C/pim/CSV, F3 regresija, build, npm test/lint | 4fc64a4 + dokazni commit |
 | 2026-07-31 | Codex | F5: sanacija blokad neodvisnega pregleda z atomsko karanteno, validacijo in deduplikacijo | pass — RED contract+realna integracija; 017 dvakrat; F5 contract/behavior/review/integration; F3 contract/behavior/integration; build 0/0; npm test/lint | b7f598e + 2ca5f51 |
+| 2026-07-31 | Codex | F6: vir-agnostičen tok zalog NW/BT/SAOP, MSSQL, STOCK CSV in intranet | pass — strogi RED/GREEN; 018 dvakrat in verify; NW 2697, BT 1361; F3/F5 regresija; build/publish/npm/lint | bd851fd..fb6c4be |
