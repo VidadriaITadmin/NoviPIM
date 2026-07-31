@@ -128,3 +128,11 @@ Za F3 fixture dokaz je uporabnik potrdil trenutno razpoložljivi veljavni vzorec
 ### Prihodnji NW XML kontrakt
 
 NW XML ne dobi ločenega parserja ali ločenih tabel. Ob njegovi uvedbi se celotni nespremenjeni XML z `SourceCode='NW_XML'` shrani v skupni generični nabiralnik `raw.LandingRecord`; `EntityType` je `Attribute`, `Classification` ali `Media`. Preslikave XPath v `canon.*` so konfiguracijske vrstice `map.FieldMapping`, ujemanje s SAOP poteka po EAN, neznana polja pa se zadržijo v unmapped nabiralniku. F3 NW transporta, parserja ali podatkov ne uvaja.
+
+## F7 — B2B kanal
+
+Status: fixture izvedba zaključena in preverjena 2026-07-31; MSSQL PIM in živi SAOP sta blokirana brez `PIM_CONNECTION_STRING` oziroma potrjene žive konfiguracije. Ustavljeno pred F8.
+
+Izvedeni so ločen `b2b.*` model, 18 poslovnih tipov strank z urejljivo Magento preslikavo, ročni spletni profili, S1–S4/PAK2, vrednostni in skupinski override popusti, dostavne politike, audit, konfiguracijski Customers/CustomerItemGroupDiscounts landing z replayem ter konfigurirani CUSTOMERS, PRODUCTS in SHIPPING CSV izvozi. Slovenski intranet uporablja prave auditirane procedure in eksplicitne vloge ADMIN, CATALOG_EDITOR ter COMMERCIAL.
+
+Fixture/replay dokazuje parser in preslikavo; resnični SAOP GET ni bil izveden ali zatrjevan. Migrator prepozna 020 in varno zavrne zagon brez skrivnosti, vendar migracija 020, ponovni zagon in `--verify` na MSSQL PIM niso bili izvedeni, ker `PIM_CONNECTION_STRING` ni prisoten. `PIM_test` ni bil dostopan. F7 se ustavi pred F8 write-backom.
