@@ -1,0 +1,85 @@
+var root = FindRoot();
+var failures = new List<string>();
+var migration = Read("sql/migrations/020_CreateB2bChannel.sql");
+
+foreach (var expected in new[]
+{
+  "CREATE SCHEMA b2b",
+  "CREATE TABLE b2b.Customer",
+  "CREATE TABLE pim.CustomerTypeCatalog",
+  "CREATE TABLE pim.CustomerTypeMagentoGroup",
+  "CREATE TABLE pim.CustomerWebProfile",
+  "CREATE TABLE pim.PackagingDiscountCatalog",
+  "CREATE TABLE pim.ProductPackagingDiscount",
+  "CREATE TABLE pim.ValueDiscountTier",
+  "CREATE TABLE pim.CustomerValueDiscountTier",
+  "CREATE TABLE pim.ShippingRuleCatalog",
+  "CREATE TABLE b2b.GroupDiscount",
+  "CREATE TABLE b2b.GroupDiscountOverride",
+  "CREATE TABLE b2b.CustomerPackagingDiscountOverride",
+  "CREATE TABLE b2b.AuditLog",
+  "CREATE TABLE b2b.LandingRecord",
+  "CREATE TABLE map.B2bFieldMapping",
+  "CREATE TABLE b2b.MappingRejection",
+  "CREATE OR ALTER PROCEDURE b2b.ApplyLandingRecord",
+  "CREATE OR ALTER PROCEDURE b2b.ReplayLandingRecord",
+  "CREATE OR ALTER PROCEDURE b2b.SaveCustomerWebProfile",
+  "CREATE OR ALTER PROCEDURE b2b.SaveDiscountRule",
+  "CREATE OR ALTER PROCEDURE intranet.GetCustomers",
+  "CREATE OR ALTER PROCEDURE intranet.GetCustomerDetail",
+  "CREATE OR ALTER PROCEDURE out.ExportB2bCustomersCsv",
+  "CREATE OR ALTER PROCEDURE out.ExportB2bProductsCsv"
+}) Contains(migration, expected, $"Manjka pogodbeni objekt: {expected}.");
+
+foreach (var type in new[]
+{
+  "INŠTALATER", "MAX INŠTALATER", "MIZAR", "TRGOVEC – TRANZIT",
+  "KONČNI KUPEC – B2B", "TRGOVEC", "INŠTALATER MAX", "TRGOVEC – PE",
+  "NADALJNJA PRODAJA", "TRGOVEC – PE – NEAKTIVEN", "KONČNI KUPEC – B2B – PE",
+  "INŠTALATER – PE", "INŠTALATER – TRANZIT", "TRGOVEC – TRANZIT – NEAKTIVEN",
+  "TRGOVEC – neaktiven", "PROJEKTANT", "NEAKTIVEN", "JAVNI SEKTOR"
+}) Contains(migration, type, $"Manjka tip stranke: {type}.");
+
+foreach (var seed in new[] { "N'S1', 3", "N'S2', 5", "N'S3', 10", "N'S4', 15", "800, 1", "1500, 2", "3000, 3", "150, 4.10", "300, 10.00" })
+  Contains(migration, seed, $"Manjka začetno pravilo: {seed}.");
+
+foreach (var permission in new[] { "CatalogEditor", "Commercial", "Admin" })
+  Contains(migration, permission, $"Manjka eksplicitna pravica {permission}.");
+
+Contains(migration, "CUSTOMERS_B2B", "Manjka CUSTOMERS B2B profil.");
+Contains(migration, "PRODUCTS_B2B", "Manjka PRODUCTS B2B profil.");
+Contains(migration, "PromotionGateState", "Manjka eksplicitno stanje promocijskega vira.");
+Contains(migration, "Unknown", "Promocijski gate mora privzeto ostati Unknown.");
+Contains(migration, "IX_b2b_Customer_OrganizationCustomer", "Manjka indeks identitete stranke.");
+Contains(migration, "UX_b2b_LandingRecord_SourcePayloadHash", "Manjka immutable/dedup landing ključ.");
+if (migration.Contains("PIM_test", StringComparison.OrdinalIgnoreCase)) failures.Add("Migracija F7 ne sme pisati v PIM_test.");
+
+if (failures.Count > 0)
+{
+  Console.Error.WriteLine("F7 contract RED:");
+  failures.ForEach(failure => Console.Error.WriteLine("- " + failure));
+  return 1;
+}
+Console.WriteLine("F7 contract: B2B podatkovni in izvozni kontrakt PASS.");
+return 0;
+
+string FindRoot()
+{
+  var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+  while (current is not null && !Directory.Exists(Path.Combine(current.FullName, "sql", "migrations"))) current = current.Parent;
+  return current?.FullName ?? throw new InvalidOperationException("PIM_Solution ni najden.");
+}
+string Read(string path)
+{
+  var fullPath = Path.Combine(root, path);
+  if (!File.Exists(fullPath))
+  {
+    failures.Add("Manjka " + path);
+    return "";
+  }
+  return File.ReadAllText(fullPath);
+}
+void Contains(string text, string expected, string failure)
+{
+  if (!text.Contains(expected, StringComparison.OrdinalIgnoreCase)) failures.Add(failure);
+}
