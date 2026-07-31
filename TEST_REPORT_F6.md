@@ -25,11 +25,15 @@ Datum: 2026-07-31
 ## MSSQL PIM
 
 Uporabljena je bila izolirana migracijska mapa samo s forward migracijo
-`018_CreateStockPipeline.sql`; obstoječe untracked 012–014 niso bile uporabljene,
-spremenjene ali staged.
+`018_CreateStockPipeline.sql`; obstoječe untracked 012–014 niso bile
+spremenjene ali staged. Po ugotovitvi, da je bila identiteta še podana klicu
+workerja, je bila dodana ločena forward migracija
+`019_ConfigureStockIdentityRules.sql`: NW/BT pravili sta zdaj podatkovni
+vrstici `map.StockIdentityRule`, worker pa ju bere po `SourceConnectorId`.
 
-- prvi tek: `Uporabljena migracija: 018_CreateStockPipeline.sql`;
-- drugi tek: `Preskočena že uporabljena migracija: 018_CreateStockPipeline.sql`;
+- prvi tek 018: `Uporabljena migracija: 018_CreateStockPipeline.sql`;
+- prvi tek 019 proti PIM: `Uporabljena migracija: 019_ConfigureStockIdentityRules.sql`;
+- drugi tek: `Preskočena že uporabljena migracija: 019_ConfigureStockIdentityRules.sql`;
 - `--verify`: `Preverjanje F0–F6 baze je uspešno.`;
 - fixture SQL writer: NW `2697 applied / 0 quarantined`, BT
   `1361 applied / 0 quarantined`;

@@ -1,6 +1,7 @@
 var root = FindRoot();
 var failures = new List<string>();
 var migration = Read("sql/migrations/018_CreateStockPipeline.sql");
+var identityConfiguration = Read("sql/migrations/019_ConfigureStockIdentityRules.sql");
 
 foreach (var expected in new[]
 {
@@ -18,6 +19,9 @@ foreach (var expected in new[]
 Contains(migration, "OrganizationId, SourceConnectorId, SourceRecordKey, SnapshotUtc",
   "Immutable identiteta landing zapisa ni eksplicitna.");
 Contains(migration, "IX_stock_Position_Identity", "Manjka iskalni indeks ItemID/EAN.");
+Contains(identityConfiguration, "MERGE map.StockIdentityRule", "Manjka konfigurirana identitetna pravila za stock vire.");
+var writer = Read("workers/PIM.StockFileWorker/StockLandingWriter.cs");
+Contains(writer, "LoadIdentityRuleAsync", "Worker mora identitetno pravilo prebrati iz map.StockIdentityRule.");
 if (migration.Contains("val.", StringComparison.OrdinalIgnoreCase))
 {
   failures.Add("Zalogovni tok ne sme biti odvisen od val.*.");

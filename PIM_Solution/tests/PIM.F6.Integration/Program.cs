@@ -34,8 +34,8 @@ else
   var bt=await new BtXmlTransport().ReadFixtureAsync(Path.Combine(root,"fixtures/stocks/bt/Braytron_stocks.xml"));
   var snapshot=DateTime.UtcNow;
   var writer=new StockLandingWriter(pim);
-  var nwRun=await writer.PersistAsync(2,"NW_STOCK","FILE","fixture://nw/NOWODVORSKI.csv",snapshot,nw.PayloadHash,nw.Records,new("SourceItemId","NW.",null,null,"ItemID"),"dd/MM/yyyy");
-  var btRun=await writer.PersistAsync(2,"BT_STOCK","FILE","fixture://bt/Braytron_stocks.xml",snapshot,bt.PayloadHash,bt.Records,new("SourceItemId","BA.","-",".","ItemID"),"yyyy-MM-dd");
+  var nwRun=await writer.PersistAsync(2,"NW_STOCK","FILE","fixture://nw/NOWODVORSKI.csv",snapshot,nw.PayloadHash,nw.Records,"dd/MM/yyyy");
+  var btRun=await writer.PersistAsync(2,"BT_STOCK","FILE","fixture://bt/Braytron_stocks.xml",snapshot,bt.PayloadHash,bt.Records,"yyyy-MM-dd");
   if(nwRun.Applied+nwRun.Quarantined!=2697||btRun.Applied+btRun.Quarantined!=1361)throw new InvalidOperationException("DB števec fixture vrstic ni popoln.");
   await using var connection=new SqlConnection(pim);await connection.OpenAsync();
   await using var command=new SqlCommand("EXEC intranet.GetStocks @OrganizationId=2;",connection);

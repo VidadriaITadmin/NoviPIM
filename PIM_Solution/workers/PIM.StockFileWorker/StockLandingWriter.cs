@@ -7,8 +7,8 @@ public sealed class StockLandingWriter(string connectionString)
 {
   public async Task<(Guid RunId, int Applied, int Quarantined)> PersistAsync(
     int organizationId, string sourceCode, string connectorType, string endpoint, DateTime snapshotUtc,
-    string payloadHash, IReadOnlyList<ExtractedStockRow> records, StockIdentityRule identityRule,
-    string dateFormat, StockFieldContract? fields = null, CancellationToken cancellationToken = default)
+    string payloadHash, IReadOnlyList<ExtractedStockRow> records, string dateFormat,
+    StockFieldContract? fields = null, CancellationToken cancellationToken = default)
   {
     fields ??= new();
     await using var connection = new SqlConnection(connectionString);
@@ -18,6 +18,7 @@ public sealed class StockLandingWriter(string connectionString)
     try
     {
       var connectorId = await EnsureConnectorAsync(connection, transaction, organizationId, sourceCode, connectorType, cancellationToken);
+      var identityRule = await LoadIdentityRuleAsync(connection, transaction, connectorId, cancellationToken);
       await ExecuteAsync(connection, transaction, """
         INSERT stock.SyncRun(SyncRunId,OrganizationId,SourceConnectorId,Status,Endpoint,StartedUtc,FetchedUtc,RecordsRead)
         VALUES(@RunId,@OrganizationId,@ConnectorId,N'Running',@Endpoint,@SnapshotUtc,@SnapshotUtc,@Count);
@@ -48,6 +49,15 @@ public sealed class StockLandingWriter(string connectionString)
       return(runId,applied,quarantined);
     }
     catch { await transaction.RollbackAsync(cancellationToken); throw; }
+  }
+
+  static async Task<StockIdentityRule> LoadIdentityRuleAsync(SqlConnection c,SqlTransaction t,int connectorId,CancellationToken ct)
+  {
+    await using var cmd=new SqlCommand("SELECT TOP(1) SourceKeyField,Prefix,ReplaceOld,ReplaceNew,MatchPriority FROM map.StockIdentityRule WHERE SourceConnectorId=@ConnectorId AND IsActive=1 ORDER BY StockIdentityRuleId;",c,t);
+    cmd.Parameters.AddWithValue("@ConnectorId",connectorId);
+    await using var reader=await cmd.ExecuteReaderAsync(ct);
+    if(!await reader.ReadAsync(ct)) throw new InvalidOperationException("Aktivno identitetno pravilo za stock konektor ni konfigurirano.");
+    return new(reader.GetString(0),reader.GetString(1),reader.IsDBNull(2)?null:reader.GetString(2),reader.IsDBNull(3)?null:reader.GetString(3),reader.GetString(4));
   }
 
   static async Task<int> EnsureConnectorAsync(SqlConnection c,SqlTransaction t,int org,string code,string type,CancellationToken ct)

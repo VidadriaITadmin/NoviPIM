@@ -408,6 +408,7 @@ static async Task VerifyF6Async(SqlConnection connection)
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F6 objekt {expectedObject}.");
   }
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'stock.Position') AND name=N'IX_stock_Position_Identity';", null, 1, "Manjka F6 indeks identitete.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM map.StockIdentityRule ruleValue INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=ruleValue.SourceConnectorId WHERE connector.OrganizationId=2 AND connector.SourceCode IN (N'NW_STOCK',N'BT_STOCK') AND ruleValue.IsActive=1;", null, 2, "Manjkajo aktivna F6 identitetna pravila v konfiguraciji.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
