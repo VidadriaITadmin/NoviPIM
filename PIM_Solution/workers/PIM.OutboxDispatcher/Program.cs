@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PIM.OutboxDispatcher;
+using PIM.Operations;
 
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -16,6 +17,7 @@ claim.Parameters.AddWithValue("@WorkerId", workerId);
 await using var reader = await claim.ExecuteReaderAsync();
 if (!await reader.ReadAsync()) return;
 var messageId = reader.GetInt64(reader.GetOrdinal("OutboxMessageId"));
+var organizationId = reader.GetInt32(reader.GetOrdinal("OrganizationId"));
 var payload = reader.GetString(reader.GetOrdinal("PayloadJson"));
 var endpointTemplate = reader.GetString(reader.GetOrdinal("EndpointTemplate"));
 var operation = reader.GetString(reader.GetOrdinal("HttpOperation"));
@@ -23,6 +25,7 @@ var timeout = reader.GetInt32(reader.GetOrdinal("TimeoutSeconds"));
 var attempt = reader.GetInt32(reader.GetOrdinal("AttemptCount"));
 var maxAttempts = reader.GetInt32(reader.GetOrdinal("MaxAttempts"));
 await reader.CloseAsync();
+await using var operationsRun = await OperationsRun.BeginAsync(connectionString, organizationId, "OUTBOUND", workerId);
 
 DispatchResult result;
 try
@@ -46,3 +49,4 @@ complete.Parameters.AddWithValue("@ResponseBodyRedacted", result.RedactedBody);
 complete.Parameters.AddWithValue("@ResponseCorrelationId", (object?)result.CorrelationId ?? DBNull.Value);
 complete.Parameters.AddWithValue("@FailureReason", result.Outcome == DispatchOutcome.Sent ? DBNull.Value : $"HTTP dispatch: {result.Outcome}");
 await complete.ExecuteNonQueryAsync();
+await operationsRun.CompleteAsync(result.Outcome == DispatchOutcome.Sent, result.Outcome == DispatchOutcome.Sent ? null : "Odhodna dostava ni uspela.");

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.XmlMapping;
+using PIM.Operations;
 
 var sourceCode = Environment.GetEnvironmentVariable("PIM_XML_SOURCE_CODE");
 var root = Environment.GetEnvironmentVariable("PIM_XML_ROOT");
@@ -17,6 +18,7 @@ if (string.IsNullOrWhiteSpace(sourceCode) || string.IsNullOrWhiteSpace(root)
 }
 
 var files = Directory.GetFiles(root, "*.xml").OrderBy(path => path, StringComparer.Ordinal).ToArray();
+await using var operationsRun = await OperationsRun.BeginAsync(connectionString, organizationId, "GENERIC_XML", $"{Environment.MachineName}:{Environment.ProcessId}");
 var runId = Guid.NewGuid();
 await using (var connection = new SqlConnection(connectionString))
 {
@@ -35,6 +37,7 @@ await using (var connection = new SqlConnection(connectionString))
 }
 await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
 Console.WriteLine($"Generični XML zajem je končan; datotek={files.Length}, RunId={runId}.");
+await operationsRun.CompleteAsync(true);
 return 0;
 
 static string? ReadConnectionString()

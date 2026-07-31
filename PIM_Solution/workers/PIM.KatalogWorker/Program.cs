@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
+using PIM.Operations;
 using PIM.XmlMapping;
 
 var modeText = Environment.GetEnvironmentVariable("PIM_SAOP_MODE") ?? "Disabled";
@@ -31,6 +32,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 var runId = Guid.NewGuid();
+await using var operationsRun = await OperationsRun.BeginAsync(connectionString, 2, "SAOP_PRODUCTS", $"{Environment.MachineName}:{Environment.ProcessId}");
 await using (var connection = new SqlConnection(connectionString))
 {
   await connection.OpenAsync();
@@ -66,5 +68,7 @@ else
 {
   Console.WriteLine($"Zajetih strani: {pages.Count}.");
 }
+
+await operationsRun.CompleteAsync(true);
 
 return 0;
