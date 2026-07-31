@@ -118,9 +118,8 @@ BEGIN
     CONSTRAINT CK_OutboxAttempt_Outcome CHECK (Outcome IN (N'Sending', N'Sent', N'Retry', N'Dead'))
   );
 END;
-GO
 
-CREATE OR ALTER PROCEDURE out.EnqueueMessage
+EXEC(N'CREATE OR ALTER PROCEDURE out.EnqueueMessage
   @OrganizationId int, @TargetKind nvarchar(100), @Operation nvarchar(100),
   @EntityType nvarchar(100), @EntityKey nvarchar(450), @FieldSummary nvarchar(1000),
   @PayloadJson nvarchar(max), @PayloadHash char(64), @ExpectedEchoHash char(64),
@@ -128,61 +127,57 @@ CREATE OR ALTER PROCEDURE out.EnqueueMessage
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON;
-  IF ISJSON(@PayloadJson) <> 1 THROW 51000, 'PayloadJson ni veljaven JSON.', 1;
+  IF ISJSON(@PayloadJson) <> 1 THROW 51000, ''PayloadJson ni veljaven JSON.'', 1;
   DECLARE @Status nvarchar(30);
-  SELECT @Status = CASE WHEN ApprovalMode = N'Automatic' THEN N'Pending' ELSE N'PendingApproval' END
+  SELECT @Status = CASE WHEN ApprovalMode = N''Automatic'' THEN N''Pending'' ELSE N''PendingApproval'' END
   FROM dbo.IntegrationProfile WHERE OrganizationId=@OrganizationId AND TargetKind=@TargetKind AND IsEnabled=1;
-  IF @Status IS NULL THROW 51001, 'Integracijski profil ni omogočen.', 1;
+  IF @Status IS NULL THROW 51001, ''Integracijski profil ni omogočen.'', 1;
   BEGIN TRY
     INSERT out.OutboxMessage(OrganizationId,TargetKind,Operation,EntityType,EntityKey,FieldSummary,PayloadJson,PayloadHash,ExpectedEchoHash,DedupKey,Status,NextAttemptUtc,CreatedBy)
-    VALUES(@OrganizationId,@TargetKind,@Operation,@EntityType,@EntityKey,@FieldSummary,@PayloadJson,@PayloadHash,@ExpectedEchoHash,@DedupKey,@Status,CASE WHEN @Status=N'Pending' THEN SYSUTCDATETIME() END,@Actor);
+    VALUES(@OrganizationId,@TargetKind,@Operation,@EntityType,@EntityKey,@FieldSummary,@PayloadJson,@PayloadHash,@ExpectedEchoHash,@DedupKey,@Status,CASE WHEN @Status=N''Pending'' THEN SYSUTCDATETIME() END,@Actor);
     SET @OutboxMessageId=SCOPE_IDENTITY();
   END TRY
   BEGIN CATCH
     IF ERROR_NUMBER() IN (2601,2627)
     BEGIN
-      SELECT @OutboxMessageId=OutboxMessageId FROM out.OutboxMessage WHERE OrganizationId=@OrganizationId AND DedupKey=@DedupKey AND Status IN (N'PendingApproval',N'Pending',N'Sending',N'Sent',N'Error',N'Retry');
+      SELECT @OutboxMessageId=OutboxMessageId FROM out.OutboxMessage WHERE OrganizationId=@OrganizationId AND DedupKey=@DedupKey AND Status IN (N''PendingApproval'',N''Pending'',N''Sending'',N''Sent'',N''Error'',N''Retry'');
       RETURN;
     END;
     THROW;
   END CATCH;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.ApproveMessage @OutboxMessageId bigint, @Actor nvarchar(200)
+EXEC(N'CREATE OR ALTER PROCEDURE out.ApproveMessage @OutboxMessageId bigint, @Actor nvarchar(200)
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN;
-  UPDATE out.OutboxMessage SET Status=N'Pending',ApprovedUtc=SYSUTCDATETIME(),ApprovedBy=@Actor,NextAttemptUtc=SYSUTCDATETIME(),UpdatedUtc=SYSUTCDATETIME()
-  WHERE OutboxMessageId=@OutboxMessageId AND Status=N'PendingApproval';
-  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51002, 'Sporočila ni mogoče odobriti.', 1; END;
+  UPDATE out.OutboxMessage SET Status=N''Pending'',ApprovedUtc=SYSUTCDATETIME(),ApprovedBy=@Actor,NextAttemptUtc=SYSUTCDATETIME(),UpdatedUtc=SYSUTCDATETIME()
+  WHERE OutboxMessageId=@OutboxMessageId AND Status=N''PendingApproval'';
+  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51002, ''Sporočila ni mogoče odobriti.'', 1; END;
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.CancelMessage @OutboxMessageId bigint, @Actor nvarchar(200)
+EXEC(N'CREATE OR ALTER PROCEDURE out.CancelMessage @OutboxMessageId bigint, @Actor nvarchar(200)
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN;
-  UPDATE out.OutboxMessage SET Status=N'Cancelled',LastError=N'Preklical: '+@Actor,NextAttemptUtc=NULL,UpdatedUtc=SYSUTCDATETIME()
-  WHERE OutboxMessageId=@OutboxMessageId AND Status IN(N'PendingApproval',N'Pending',N'Error',N'Retry');
-  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51003, 'Sporočila ni mogoče preklicati.', 1; END;
+  UPDATE out.OutboxMessage SET Status=N''Cancelled'',LastError=N''Preklical: ''+@Actor,NextAttemptUtc=NULL,UpdatedUtc=SYSUTCDATETIME()
+  WHERE OutboxMessageId=@OutboxMessageId AND Status IN(N''PendingApproval'',N''Pending'',N''Error'',N''Retry'');
+  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51003, ''Sporočila ni mogoče preklicati.'', 1; END;
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.RetryMessage @OutboxMessageId bigint, @Actor nvarchar(200)
+EXEC(N'CREATE OR ALTER PROCEDURE out.RetryMessage @OutboxMessageId bigint, @Actor nvarchar(200)
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN;
-  UPDATE out.OutboxMessage SET Status=N'Retry',LastError=N'Ročni ponovni poskus: '+@Actor,NextAttemptUtc=SYSUTCDATETIME(),LeaseOwner=NULL,LeaseUntilUtc=NULL,UpdatedUtc=SYSUTCDATETIME()
-  WHERE OutboxMessageId=@OutboxMessageId AND Status IN(N'Error',N'Dead');
-  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51004, 'Ponovni poskus ni dovoljen.', 1; END;
+  UPDATE out.OutboxMessage SET Status=N''Retry'',LastError=N''Ročni ponovni poskus: ''+@Actor,NextAttemptUtc=SYSUTCDATETIME(),LeaseOwner=NULL,LeaseUntilUtc=NULL,UpdatedUtc=SYSUTCDATETIME()
+  WHERE OutboxMessageId=@OutboxMessageId AND Status IN(N''Error'',N''Dead'');
+  IF @@ROWCOUNT<>1 BEGIN ROLLBACK; THROW 51004, ''Ponovni poskus ni dovoljen.'', 1; END;
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.ClaimMessage @WorkerId nvarchar(200), @LeaseSeconds int=60
+EXEC(N'CREATE OR ALTER PROCEDURE out.ClaimMessage @WorkerId nvarchar(200), @LeaseSeconds int=60
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN;
@@ -191,11 +186,11 @@ BEGIN
   (
     SELECT TOP(1) message.* FROM out.OutboxMessage message WITH (UPDLOCK, READPAST, ROWLOCK)
     INNER JOIN dbo.IntegrationProfile profile ON profile.OrganizationId=message.OrganizationId AND profile.TargetKind=message.TargetKind AND profile.IsEnabled=1
-    WHERE message.Status IN(N'Pending',N'Retry') AND (message.NextAttemptUtc IS NULL OR message.NextAttemptUtc<=SYSUTCDATETIME())
+    WHERE message.Status IN(N''Pending'',N''Retry'') AND (message.NextAttemptUtc IS NULL OR message.NextAttemptUtc<=SYSUTCDATETIME())
       AND (message.LeaseUntilUtc IS NULL OR message.LeaseUntilUtc<SYSUTCDATETIME())
     ORDER BY message.OutboxMessageId
   )
-  UPDATE candidate SET Status=N'Sending',AttemptCount=AttemptCount+1,LeaseOwner=@WorkerId,LeaseUntilUtc=DATEADD(second,@LeaseSeconds,SYSUTCDATETIME()),UpdatedUtc=SYSUTCDATETIME()
+  UPDATE candidate SET Status=N''Sending'',AttemptCount=AttemptCount+1,LeaseOwner=@WorkerId,LeaseUntilUtc=DATEADD(second,@LeaseSeconds,SYSUTCDATETIME()),UpdatedUtc=SYSUTCDATETIME()
   OUTPUT inserted.OutboxMessageId INTO @Claimed;
   INSERT out.OutboxAttempt(OutboxMessageId,AttemptNumber,WorkerId)
   SELECT message.OutboxMessageId,message.AttemptCount,@WorkerId FROM out.OutboxMessage message INNER JOIN @Claimed claimed ON claimed.OutboxMessageId=message.OutboxMessageId;
@@ -203,10 +198,9 @@ BEGIN
   FROM out.OutboxMessage message INNER JOIN @Claimed claimed ON claimed.OutboxMessageId=message.OutboxMessageId
   INNER JOIN dbo.IntegrationProfile profile ON profile.OrganizationId=message.OrganizationId AND profile.TargetKind=message.TargetKind;
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.CompleteAttempt
+EXEC(N'CREATE OR ALTER PROCEDURE out.CompleteAttempt
   @OutboxMessageId bigint,@WorkerId nvarchar(200),@Succeeded bit,@PermanentFailure bit,
   @ResponseStatusCode int=NULL,@ResponseBodyRedacted nvarchar(4000)=NULL,@ResponseCorrelationId nvarchar(200)=NULL,@FailureReason nvarchar(2000)=NULL
 AS
@@ -215,46 +209,42 @@ BEGIN
   DECLARE @Attempt int,@MaxAttempts int,@BaseRetrySeconds int,@Status nvarchar(30);
   SELECT @Attempt=message.AttemptCount,@MaxAttempts=profile.MaxAttempts,@BaseRetrySeconds=profile.BaseRetrySeconds
   FROM out.OutboxMessage message WITH(UPDLOCK,ROWLOCK) INNER JOIN dbo.IntegrationProfile profile ON profile.OrganizationId=message.OrganizationId AND profile.TargetKind=message.TargetKind
-  WHERE message.OutboxMessageId=@OutboxMessageId AND message.Status=N'Sending' AND message.LeaseOwner=@WorkerId AND message.LeaseUntilUtc>=SYSUTCDATETIME();
-  IF @Attempt IS NULL BEGIN ROLLBACK; THROW 51005, 'Lease ni veljaven.', 1; END;
-  SET @Status=CASE WHEN @Succeeded=1 THEN N'Sent' WHEN @PermanentFailure=1 OR @Attempt>=@MaxAttempts THEN N'Dead' ELSE N'Retry' END;
-  UPDATE out.OutboxMessage SET Status=@Status,SentUtc=CASE WHEN @Status=N'Sent' THEN SYSUTCDATETIME() ELSE SentUtc END,
-    NextAttemptUtc=CASE WHEN @Status=N'Retry' THEN DATEADD(second,@BaseRetrySeconds*CONVERT(int,POWER(CONVERT(float,2),@Attempt-1)),SYSUTCDATETIME()) END,
+  WHERE message.OutboxMessageId=@OutboxMessageId AND message.Status=N''Sending'' AND message.LeaseOwner=@WorkerId AND message.LeaseUntilUtc>=SYSUTCDATETIME();
+  IF @Attempt IS NULL BEGIN ROLLBACK; THROW 51005, ''Lease ni veljaven.'', 1; END;
+  SET @Status=CASE WHEN @Succeeded=1 THEN N''Sent'' WHEN @PermanentFailure=1 OR @Attempt>=@MaxAttempts THEN N''Dead'' ELSE N''Retry'' END;
+  UPDATE out.OutboxMessage SET Status=@Status,SentUtc=CASE WHEN @Status=N''Sent'' THEN SYSUTCDATETIME() ELSE SentUtc END,
+    NextAttemptUtc=CASE WHEN @Status=N''Retry'' THEN DATEADD(second,@BaseRetrySeconds*CONVERT(int,POWER(CONVERT(float,2),@Attempt-1)),SYSUTCDATETIME()) END,
     LeaseOwner=NULL,LeaseUntilUtc=NULL,LastError=@FailureReason,ResponseStatusCode=@ResponseStatusCode,ResponseBodyRedacted=@ResponseBodyRedacted,ResponseCorrelationId=@ResponseCorrelationId,UpdatedUtc=SYSUTCDATETIME()
   WHERE OutboxMessageId=@OutboxMessageId;
   UPDATE out.OutboxAttempt SET Outcome=@Status,CompletedUtc=SYSUTCDATETIME(),ResponseStatusCode=@ResponseStatusCode,ResponseBodyRedacted=@ResponseBodyRedacted,ResponseCorrelationId=@ResponseCorrelationId,FailureReason=@FailureReason
-  WHERE OutboxMessageId=@OutboxMessageId AND AttemptNumber=@Attempt AND WorkerId=@WorkerId AND Outcome=N'Sending';
+  WHERE OutboxMessageId=@OutboxMessageId AND AttemptNumber=@Attempt AND WorkerId=@WorkerId AND Outcome=N''Sending'';
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE out.VerifyEcho @OrganizationId int,@EntityType nvarchar(100),@EntityKey nvarchar(450),@InboundHash char(64),@ObservedUtc datetime2(3)
+EXEC(N'CREATE OR ALTER PROCEDURE out.VerifyEcho @OrganizationId int,@EntityType nvarchar(100),@EntityKey nvarchar(450),@InboundHash char(64),@ObservedUtc datetime2(3)
 AS
 BEGIN
   SET NOCOUNT ON; SET XACT_ABORT ON; BEGIN TRAN;
   DECLARE @MessageId bigint,@Expected char(64),@SentUtc datetime2(3);
   SELECT TOP(1) @MessageId=OutboxMessageId,@Expected=ExpectedEchoHash,@SentUtc=SentUtc FROM out.OutboxMessage WITH(UPDLOCK,ROWLOCK)
-  WHERE OrganizationId=@OrganizationId AND EntityType=@EntityType AND EntityKey=@EntityKey AND Status=N'Sent' ORDER BY SentUtc;
+  WHERE OrganizationId=@OrganizationId AND EntityType=@EntityType AND EntityKey=@EntityKey AND Status=N''Sent'' ORDER BY SentUtc;
   IF @MessageId IS NOT NULL AND @ObservedUtc>=@SentUtc
-    UPDATE out.OutboxMessage SET Status=CASE WHEN @InboundHash=@Expected THEN N'Verified' ELSE N'Drift' END,
+    UPDATE out.OutboxMessage SET Status=CASE WHEN @InboundHash=@Expected THEN N''Verified'' ELSE N''Drift'' END,
       VerifiedUtc=CASE WHEN @InboundHash=@Expected THEN SYSUTCDATETIME() END,
-      DriftDetail=CASE WHEN @InboundHash<>@Expected THEN N'Prejeti echo se ne ujema s pričakovanim hashom.' END,UpdatedUtc=SYSUTCDATETIME()
+      DriftDetail=CASE WHEN @InboundHash<>@Expected THEN N''Prejeti echo se ne ujema s pričakovanim hashom.'' END,UpdatedUtc=SYSUTCDATETIME()
     WHERE OutboxMessageId=@MessageId;
   COMMIT;
-END;
-GO
+END;');
 
-CREATE OR ALTER PROCEDURE intranet.GetOutboundMessages @OrganizationId int
+EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetOutboundMessages @OrganizationId int
 AS
   SELECT OutboxMessageId,TargetKind,Operation,EntityType,EntityKey,FieldSummary,DedupKey,Status,AttemptCount,NextAttemptUtc,ResponseStatusCode,ResponseCorrelationId,DriftDetail,CreatedUtc
-  FROM out.OutboxMessage WHERE OrganizationId=@OrganizationId ORDER BY CreatedUtc DESC;
-GO
+  FROM out.OutboxMessage WHERE OrganizationId=@OrganizationId ORDER BY CreatedUtc DESC;');
 
-CREATE OR ALTER PROCEDURE intranet.GetOutboundMessage @OrganizationId int,@OutboxMessageId bigint
+EXEC(N'CREATE OR ALTER PROCEDURE intranet.GetOutboundMessage @OrganizationId int,@OutboxMessageId bigint
 AS
 BEGIN
   SELECT * FROM out.OutboxMessage WHERE OrganizationId=@OrganizationId AND OutboxMessageId=@OutboxMessageId;
   SELECT AttemptNumber,WorkerId,StartedUtc,CompletedUtc,Outcome,ResponseStatusCode,ResponseBodyRedacted,ResponseCorrelationId,FailureReason
   FROM out.OutboxAttempt WHERE OutboxMessageId=@OutboxMessageId ORDER BY AttemptNumber DESC;
-END;
-GO
+END;');
