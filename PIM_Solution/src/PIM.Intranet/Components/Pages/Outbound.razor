@@ -2,49 +2,7 @@
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
-
-<PageTitle>Odhodna pošta</PageTitle>
-<h1>Odhodna pošta ERP</h1>
-<p>Pošiljanje izvaja samo dispatcher. Odobritev sporočilo uvrsti v čakalno vrsto in ne kliče ERP neposredno.</p>
-@if (Rows is null)
-{
-  <p>Nalaganje …</p>
-}
-else if (Rows.Count == 0)
-{
-  <p>Ni odhodnih sporočil.</p>
-}
-else
-{
-  <table class="table table-sm">
-    <thead><tr><th>Cilj</th><th>Operacija</th><th>Entiteta</th><th>Polja</th><th>Dedup ključ</th><th>Stanje</th><th>Poskusi</th><th>Naslednji poskus</th><th>Odziv</th><th>Odklon</th><th>Dejanja</th></tr></thead>
-    <tbody>
-    @foreach (var row in Rows)
-    {
-      <tr>
-        <td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td>
-        <td><small>@row.DedupKey</small></td><td>@row.Status</td><td>@row.AttemptCount</td><td>@row.NextAttemptUtc?.ToLocalTime()</td>
-        <td>@row.ResponseStatusCode @row.ResponseCorrelationId</td><td>@row.DriftDetail</td>
-        <td>
-          @if (row.Status == "PendingApproval") { <button class="btn btn-sm btn-success" @onclick="()=>Approve(row.OutboxMessageId)">Odobri</button> }
-          @if (row.Status is "PendingApproval" or "Pending" or "Error" or "Retry") { <button class="btn btn-sm btn-secondary" @onclick="()=>Cancel(row.OutboxMessageId)">Prekliči</button> }
-          @if (row.Status is "Error" or "Dead") { <button class="btn btn-sm btn-warning" @onclick="()=>Retry(row.OutboxMessageId)">Ponovi</button> }
-        </td>
-      </tr>
-    }
-    </tbody>
-  </table>
-}
-@if (!string.IsNullOrWhiteSpace(Message)) { <p class="alert alert-info">@Message</p> }
-
-@code {
-  const int OrganizationId = 2;
-  IReadOnlyList<PIM.Intranet.Services.OutboundRow>? Rows;
-  string? Message;
-  protected override async Task OnInitializedAsync() => await Reload();
-  async Task<string> Actor() { var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan"; }
-  async Task Reload() => Rows=await Data.GetOutboundAsync(OrganizationId);
-  async Task Approve(long id) { await Data.ApproveOutboundAsync(id,await Actor());Message="Sporočilo je odobreno.";await Reload(); }
-  async Task Cancel(long id) { await Data.CancelOutboundAsync(id,await Actor());Message="Sporočilo je preklicano.";await Reload(); }
-  async Task Retry(long id) { await Data.RetryOutboundAsync(id,await Actor());Message="Sporočilo je pripravljeno za ponovni poskus.";await Reload(); }
-}
+<PageTitle>Izvozi</PageTitle><div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev sporočilo samo uvrsti v čakalno vrsto.</p></div></div><div class="page-tabs"><a class="page-tab" href="teki-obdelave">Uvozi</a><span class="page-tab active">Vsi izvozi</span></div>
+<section class="ui-card toolbar"><label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" class="search-input" placeholder="Poišči cilj, entiteto ali ključ …" @bind="Search" @bind:event="oninput"/><label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach(var status in Statuses){<option>@status</option>}</select><span class="result-count">@Filtered.Count rezultatov</span></section>
+@if(Loading){<div class="ui-card loading-state">Nalaganje izvozov …</div>}else if(Error is not null){<div class="ui-card error-state" role="alert">@Error</div>}else if(Filtered.Count==0){<div class="ui-card empty-state">Ni izvozov za izbrane filtre.</div>}else{<section class="ui-card data-card"><table class="data-table"><caption>Odhodna sporočila aktivne organizacije</caption><thead><tr><th>Cilj</th><th>Operacija</th><th>Entiteta</th><th>Polja</th><th>Status</th><th>Poskusi</th><th>Naslednji poskus</th><th>Odziv</th><th>Odklon</th><th>Dejanja</th></tr></thead><tbody>@foreach(var row in PageRows){<tr><td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td><td><span class="status-chip @Chip(row.Status)">@row.Status</span></td><td>@row.AttemptCount</td><td>@(row.NextAttemptUtc?.ToLocalTime().ToString("g")??"—")</td><td>@row.ResponseStatusCode @row.ResponseCorrelationId</td><td>@(row.DriftDetail??"—")</td><td><div class="table-actions">@if(row.Status=="PendingApproval"){<button class="small-action good-action" disabled="@ActionBusy" @onclick="()=>Approve(row.OutboxMessageId)">Odobri</button>}@if(row.Status is "PendingApproval" or "Pending" or "Error" or "Retry"){<button class="small-action" disabled="@ActionBusy" @onclick="()=>Cancel(row.OutboxMessageId)">Prekliči</button>}@if(row.Status is "Error" or "Dead"){<button class="small-action warn-action" disabled="@ActionBusy" @onclick="()=>Retry(row.OutboxMessageId)">Ponovi</button>}</div></td></tr>}</tbody></table><nav class="pagination" aria-label="Strani naloženih izvozov"><button disabled="@(Page==0)" @onclick="()=>Page--">Prejšnja</button><span>Stran @(Page+1) od @PageCount</span><button disabled="@(Page+1>=PageCount)" @onclick="()=>Page++">Naslednja</button></nav></section>}@if(Message is not null){<p class="alert alert-success" role="status">@Message</p>}
+@code{int? OrganizationId;IReadOnlyList<PIM.Intranet.Services.OutboundRow>? Rows;bool Loading=true,ActionBusy;string? Message,Error;string Search="",StatusFilter="";int Page;const int PageSize=10;IReadOnlyList<PIM.Intranet.Services.OutboundRow> Filtered=>(Rows??[]).Where(x=>(StatusFilter==""||x.Status==StatusFilter)&&(Search==""||x.TargetKind.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityType.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityKey.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList();IEnumerable<PIM.Intranet.Services.OutboundRow> PageRows=>Filtered.Skip(Page*PageSize).Take(PageSize);IEnumerable<string> Statuses=>(Rows??[]).Select(x=>x.Status).Distinct().Order();int PageCount=>Math.Max(1,(int)Math.Ceiling(Filtered.Count/(decimal)PageSize));protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}OrganizationId=org.OrganizationId;await Reload();}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value);}async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}async Task Act(Func<string,Task> action,string success){ActionBusy=true;Error=null;Message=null;try{await action(await Actor());Message=success;await Reload();}catch{Error="Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena.";}finally{ActionBusy=false;}}Task Approve(long id)=>Act(actor=>Data.ApproveOutboundAsync(id,actor),"Sporočilo je odobreno.");Task Cancel(long id)=>Act(actor=>Data.CancelOutboundAsync(id,actor),"Sporočilo je preklicano.");Task Retry(long id)=>Act(actor=>Data.RetryOutboundAsync(id,actor),"Sporočilo je pripravljeno za ponovni poskus.");static string Chip(string value)=>value is "Succeeded" or "Sent" or "Completed"?"good":value is "Error" or "Dead" or "Drift" or "Cancelled"?"bad":"warn";}

@@ -3,23 +3,126 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Nadzorna plošča</PageTitle>
-<h1>Nadzorna plošča</h1>
-@if (Metrics is null)
+<div class="page-heading"><span>Nadzorna plošča</span><h1>Nadzorna plošča</h1><p>Pregled ključnega stanja PIM sistema.</p></div>
+@if (Error is not null)
 {
-  <p>Nalaganje podatkov …</p>
+  <div class="ui-card error-state">@Error</div>
+}
+else if (Metrics is null)
+{
+  <p class="loading-state">Nalaganje podatkov …</p>
 }
 else
 {
-  <div class="row g-3">
-    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>Kanonični izdelki</strong><span>@Metrics.CanonProductCount</span></a></div>
-    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>ERP veljavni</strong><span>@Metrics.ErpValidCount</span></a></div>
-    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/izdelki"><strong>Promovirani izdelki</strong><span>@Metrics.PimProductCount</span></a></div>
-    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/napake-validacije"><strong>Splet B2C neveljavni</strong><span>@Metrics.WebInvalidCount</span></a></div>
-    <div class="col-md-4"><a class="card card-body text-decoration-none" href="/karantena"><strong>Karantena</strong><span>@Metrics.QuarantineCount</span></a></div>
+  <div class="metric-grid">
+    <a class="metric-card blue" href="izdelki"><span class="metric-icon icon-products" aria-hidden="true"></span><span>Skupaj izdelkov</span><strong>@Metrics.CanonProductCount.ToString("N0")</strong><small>Kanonični izdelki</small></a>
+    <a class="metric-card green" href="izdelki"><span class="metric-icon icon-check" aria-hidden="true"></span><span>ERP veljavni</span><strong>@Metrics.ErpValidCount.ToString("N0")</strong><small>@ErpPercent % vseh izdelkov</small></a>
+    <a class="metric-card orange" href="izdelki"><span class="metric-icon icon-published" aria-hidden="true"></span><span>Objavljeni izdelki</span><strong>@Metrics.PimProductCount.ToString("N0")</strong><small>Promovirani v PIM</small></a>
+    <a class="metric-card red" href="napake-validacije"><span class="metric-icon icon-warning" aria-hidden="true"></span><span>Z napakami</span><strong>@Metrics.WebInvalidCount.ToString("N0")</strong><small>Neveljavni za splet</small></a>
+    <a class="metric-card amber" href="karantena"><span class="metric-icon icon-lock" aria-hidden="true"></span><span>V karanteni</span><strong>@Metrics.QuarantineCount.ToString("N0")</strong><small>Zapisi za pregled</small></a>
+  </div>
+
+  <div class="dashboard-grid">
+    <section class="dashboard-panel tasks-panel">
+      <div class="panel-title"><h2>Moja opravila</h2><span class="count-badge">@OpenTaskCount</span></div>
+      <a class="list-row" href="napake-validacije"><span class="row-icon danger icon-warning"></span><span>Izdelki z validacijskimi napakami</span><strong>@Metrics.WebInvalidCount</strong><i></i></a>
+      <a class="list-row" href="karantena"><span class="row-icon warning icon-lock"></span><span>Zapisi v karanteni</span><strong>@Metrics.QuarantineCount</strong><i></i></a>
+      <div class="unavailable-note">Druga osebna opravila niso v podatkovnem modelu.</div>
+    </section>
+
+    <section class="dashboard-panel quality-panel">
+      <div class="panel-title"><h2>Kakovost po profilih</h2><a href="napake-validacije">Poglej vse</a></div>
+      @if (Quality is null) { <p class="panel-state">Podatki o profilih niso na voljo.</p> }
+      else if (Quality.Profiles.Count == 0) { <p class="panel-state">Ni podatkov o profilih kakovosti.</p> }
+      else
+      {
+        @foreach (var profile in Quality.Profiles.Take(4))
+        {
+          var completeness = ProfileCompleteness(profile);
+          <a class="quality-row" href="napake-validacije"><strong>@profile.ProfileCode</strong><span class="progress"><i class="@(completeness < 75 ? "warn" : null)" style="width:@completeness%"></i></span><span>@completeness %</span><i></i></a>
+        }
+      }
+      <div class="info-note">Popolnost je izračunana iz dejanskih rezultatov profilov.</div>
+    </section>
+
+    <section class="dashboard-panel processes-panel">
+      <div class="panel-title"><h2>Zadnji procesi / Status integracij</h2><a href="teki-obdelave">Poglej vse</a></div>
+      @if (Runs is null) { <p class="panel-state">Zadnji procesi niso na voljo.</p> }
+      else if (Runs.Count == 0) { <p class="panel-state">Ni zabeleženih procesov.</p> }
+      else
+      {
+        <div class="process-head"><span>Proces / Integracija</span><span>Zadnji zagon</span><span>Status</span></div>
+        @foreach (var run in Runs.OrderByDescending(row => row.StartedUtc).Take(5))
+        {
+          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToLocalTime().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)">@run.Status</strong></a>
+        }
+      }
+    </section>
+
+    <section class="dashboard-panel alerts-panel">
+      <div class="panel-title"><h2>Opozorila in prioritete</h2></div>
+      @if (Integrations is null) { <p class="panel-state">Opozorila integracij niso na voljo.</p> }
+      else if (!OpenAlerts.Any()) { <p class="panel-state good-state">Ni odprtih opozoril integracij.</p> }
+      else
+      {
+        @foreach (var alert in OpenAlerts.Take(5))
+        {
+          <a class="alert-row" href="system/integracije"><span class="row-icon danger icon-warning"></span><span><strong>@alert.Title</strong><small>@alert.Pipeline · @alert.OccurrenceCount pojavov</small></span><i></i></a>
+        }
+      }
+      <a class="panel-link" href="system/integracije">Vsa opozorila</a>
+    </section>
+
+    <section class="dashboard-panel integration-panel">
+      <div class="panel-title"><h2>Stanje integracij</h2><a href="system/integracije">Podrobnosti</a></div>
+      @if (Integrations is null) { <p class="panel-state">Stanje integracij ni na voljo.</p> }
+      else if (Integrations.Integrations.Count == 0) { <p class="panel-state">Ni nastavljenih integracij.</p> }
+      else
+      {
+        @foreach (var integration in Integrations.Integrations.Take(5))
+        {
+          <a class="integration-row" href="system/integracije"><span>@integration.Provider</span><small>@integration.Pipeline</small><strong class="status @StatusClass(integration.Status)">@(integration.Status ?? (integration.IsEnabled ? "Brez statusa" : "Onemogočeno"))</strong></a>
+        }
+      }
+    </section>
+
+    <section class="dashboard-panel quick-panel">
+      <div class="panel-title"><h2>Hitri dostopi</h2></div>
+      <div class="quick-links">
+        <a href="izdelki"><span class="quick-icon blue icon-products"></span><strong>Vsi izdelki</strong></a>
+        <a href="napake-validacije"><span class="quick-icon red icon-warning"></span><strong>Z napakami</strong></a>
+        <a href="karantena"><span class="quick-icon amber icon-lock"></span><strong>Karantena</strong></a>
+        <a href="teki-obdelave"><span class="quick-icon green icon-process"></span><strong>Procesi</strong></a>
+        <a href="outbound"><span class="quick-icon green icon-export"></span><strong>Izvozi</strong></a>
+        <a href="system/integracije"><span class="quick-icon purple icon-settings"></span><strong>Integracije</strong></a>
+      </div>
+    </section>
   </div>
 }
 
 @code {
   PIM.Intranet.Services.DashboardMetrics? Metrics;
-  protected override async Task OnInitializedAsync() => Metrics = await Data.GetDashboardAsync(2);
+  PIM.Intranet.Services.QualityView? Quality;
+  IReadOnlyList<PIM.Intranet.Services.PipelineRunRow>? Runs;
+  PIM.Intranet.Services.SystemIntegrationView? Integrations;
+  string? Error;
+  decimal ErpPercent => Metrics?.CanonProductCount > 0 ? Math.Round(100m * Metrics.ErpValidCount / Metrics.CanonProductCount) : 0;
+  long OpenTaskCount => (Metrics?.WebInvalidCount ?? 0) + (Metrics?.QuarantineCount ?? 0);
+  IEnumerable<PIM.Intranet.Services.SystemAlertRow> OpenAlerts => Integrations is null ? [] : Integrations.Alerts.Where(row => row.ResolvedUtc is null).OrderByDescending(row => row.LastSeenUtc);
+  static decimal ProfileCompleteness(PIM.Intranet.Services.QualityProfileRow profile) => Math.Clamp(Math.Round(profile.AverageCompleteness ?? (profile.ProductCount > 0 ? 100m * profile.ValidCount / profile.ProductCount : 0)), 0, 100);
+  static string StatusClass(string? status) => status?.ToUpperInvariant() switch { "SUCCEEDED" or "OK" or "HEALTHY" => "good", "FAILED" or "ERROR" or "UNHEALTHY" => "bad", _ => "warn" };
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var org = await Data.GetCurrentOrganizationAsync();
+      if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Metrics = await Data.GetDashboardAsync(org.OrganizationId);
+      try { Quality = await Data.GetValidationIssuesAsync(org.OrganizationId); } catch { Quality = null; }
+      try { Runs = await Data.GetPipelineRunsAsync(org.OrganizationId); } catch { Runs = null; }
+      try { Integrations = await Data.GetSystemIntegrationsAsync(org.OrganizationId); } catch { Integrations = null; }
+    }
+    catch { Error = "Nadzorne plošče trenutno ni mogoče naložiti."; }
+  }
 }

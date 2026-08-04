@@ -3,12 +3,20 @@ using Microsoft.Data.SqlClient;
 namespace PIM.Intranet.Services;
 
 public sealed record NavigationEntry(string GroupName, string Name, string Route, int GroupOrder, int ItemOrder);
+public sealed record OrganizationContext(int OrganizationId, string Name);
 public sealed record DashboardMetrics(long CanonProductCount, long PimProductCount, long ErpValidCount, long WebInvalidCount, long QuarantineCount);
 public sealed record ProductRow(long ProductId, string ItemId, string? Ean, string Status, decimal Completeness);
-public sealed record ValidationIssueRow(long ProductId, string ItemId, string ProfileCode, string IssueCode, string Message);
+public sealed record ProductPage(IReadOnlyList<ProductRow> Rows, long TotalCount, int Skip, int Take);
+public sealed record ValidationIssueRow(long ProductIssueId, long ProductId, string ItemId, string ProfileCode, string IssueCode, string Message, DateTime LastDetectedUtc);
+public sealed record QualityProfileRow(string ProfileCode, long ProductCount, long ValidCount, long InvalidCount, decimal? AverageCompleteness);
+public sealed record FrequentIssueRow(string IssueCode, string Message, long OccurrenceCount);
+public sealed record QualityView(IReadOnlyList<ValidationIssueRow> Issues, IReadOnlyList<QualityProfileRow> Profiles, IReadOnlyList<FrequentIssueRow> FrequentIssues);
 public sealed record PipelineRunRow(Guid RunId, string Pipeline, string? SourceCode, string Status, long RowsRead, long RowsSucceeded, long RowsFailed, DateTime StartedUtc, DateTime? EndedUtc);
-public sealed record ProductDetailRow(string ItemId, string? Ean, string? ProfileCode, string? ProfileStatus, decimal? ProfileCompleteness);
-public sealed record QuarantineRow(string SourceCode, string EntityType, int PageNumber, string? FailureReason, DateTime ReceivedUtc);
+public sealed record ProductDetailHeader(long ProductId, string ItemId, string? Ean, string Status, decimal Completeness, bool IsActive, bool WebPublish, string? Uom, string? ItemGroup, string? Department, string? Manufacturer, string? Supplier, DateTime? LastValidatedUtc);
+public sealed record ProductProfileRow(string ProfileCode, string Status, decimal Completeness, DateTime ValidatedUtc);
+public sealed record ProductIssueRow(long ProductIssueId, string ProfileCode, string IssueCode, string Message, DateTime FirstDetectedUtc, DateTime LastDetectedUtc);
+public sealed record ProductDetailView(ProductDetailHeader Header, IReadOnlyList<ProductProfileRow> Profiles, IReadOnlyList<ProductIssueRow> Issues);
+public sealed record QuarantineRow(long InboxId, Guid RunId, string SourceCode, string EntityType, int PageNumber, string? FailureReason, DateTime ReceivedUtc);
 public sealed record StockRow(long PositionId, string? ItemId, string? Ean, decimal Quantity, DateTime? AvailabilityDate,
   decimal? IncomingQuantity, string SourceCode, DateTime SnapshotUtc, string MatchKey, string? ProviderKind,
   string Endpoint, int FreshnessMinutes, long? ProductId);
@@ -42,22 +50,32 @@ public sealed class IntranetDataService(IConfiguration configuration)
   string ConnectionString => configuration.GetConnectionString("Pim")
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
+  public async Task<OrganizationContext?> GetCurrentOrganizationAsync(CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("SELECT TOP (1) OrganizationId, Name FROM dbo.OrganizationConfig WHERE IsActive = 1 ORDER BY OrganizationId;", connection);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    return await reader.ReadAsync(cancellationToken) ? new(reader.GetInt32(0), reader.GetString(1)) : null;
+  }
+
   public async Task<IReadOnlyList<NavigationEntry>> GetNavigationAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default)
   {
     var roleList = roles.Distinct(StringComparer.Ordinal).ToArray();
     if (roleList.Length == 0) return [];
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("""
+    var parameterNames = roleList.Select((_, index) => $"@Role{index}").ToArray();
+    await using var command = new SqlCommand($"""
       SELECT DISTINCT navigationGroup.Name, navigationItem.Name, navigationItem.Route, navigationGroup.SortOrder, navigationItem.SortOrder
       FROM sec.NavigationItem navigationItem
       INNER JOIN sec.NavigationGroup navigationGroup ON navigationGroup.NavigationGroupId = navigationItem.NavigationGroupId
       INNER JOIN sec.NavigationItemRole itemRole ON itemRole.NavigationItemId = navigationItem.NavigationItemId
       INNER JOIN sec.Role roleValue ON roleValue.RoleId = itemRole.RoleId
-      WHERE navigationGroup.IsActive = 1 AND navigationItem.IsActive = 1 AND roleValue.RoleCode IN (@Role0, @Role1, @Role2)
+      WHERE navigationGroup.IsActive = 1 AND navigationItem.IsActive = 1 AND roleValue.RoleCode IN ({string.Join(", ", parameterNames)})
       ORDER BY navigationGroup.SortOrder, navigationItem.SortOrder;
       """, connection);
-    for (var index = 0; index < 3; index++) command.Parameters.AddWithValue($"@Role{index}", index < roleList.Length ? roleList[index] : string.Empty);
+    for (var index = 0; index < roleList.Length; index++) command.Parameters.AddWithValue(parameterNames[index], roleList[index]);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = new List<NavigationEntry>();
     while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3), reader.GetInt32(4)));
@@ -72,26 +90,39 @@ public sealed class IntranetDataService(IConfiguration configuration)
     command.Parameters.AddWithValue("@OrganizationId", organizationId);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("Nadzorna plošča ni vrnila podatkov.");
-    return new(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), reader.GetInt64(3), reader.GetInt64(4));
+    return new(
+      Convert.ToInt64(reader.GetValue(reader.GetOrdinal("CanonProductCount"))),
+      Convert.ToInt64(reader.GetValue(reader.GetOrdinal("PimProductCount"))),
+      Convert.ToInt64(reader.GetValue(reader.GetOrdinal("ErpValidCount"))),
+      Convert.ToInt64(reader.GetValue(reader.GetOrdinal("WebInvalidCount"))),
+      Convert.ToInt64(reader.GetValue(reader.GetOrdinal("QuarantineCount"))));
   }
 
-  public async Task<IReadOnlyList<ProductRow>> GetProductsAsync(int organizationId, CancellationToken cancellationToken = default)
+  public async Task<ProductPage> GetProductsAsync(int organizationId, int skip = 0, int take = 50, string? search = null, string? status = null, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("EXEC intranet.GetProducts @OrganizationId, @Skip=0, @Take=100;", connection);
+    await using var command = new SqlCommand("EXEC intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status;", connection);
     command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    command.Parameters.AddWithValue("@Skip", skip); command.Parameters.AddWithValue("@Take", take);
+    command.Parameters.AddWithValue("@Search", (object?)search ?? DBNull.Value); command.Parameters.AddWithValue("@Status", (object?)status ?? DBNull.Value);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<ProductRow>();
-    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3), reader.GetDecimal(4)));
-    return rows;
+    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(reader.GetOrdinal("ProductId")), reader.GetString(reader.GetOrdinal("ItemId")), GetNullableString(reader, "Ean"), reader.GetString(reader.GetOrdinal("Status")), reader.GetDecimal(reader.GetOrdinal("Completeness"))));
+    long totalCount = 0;
+    if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken)) totalCount = Convert.ToInt64(reader["TotalCount"]);
+    return new(rows, totalCount, skip, take);
   }
 
-  public async Task<IReadOnlyList<ValidationIssueRow>> GetValidationIssuesAsync(int organizationId, CancellationToken cancellationToken = default)
+  public async Task<QualityView> GetValidationIssuesAsync(int organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC intranet.GetValidationIssues @OrganizationId;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<ValidationIssueRow>();
-    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5)));
-    return rows;
+    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(reader.GetOrdinal("ProductIssueId")), reader.GetInt64(reader.GetOrdinal("ProductId")), reader.GetString(reader.GetOrdinal("ItemId")), reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("IssueCode")), reader.GetString(reader.GetOrdinal("Message")), reader.GetDateTime(reader.GetOrdinal("LastDetectedUtc"))));
+    var profiles = new List<QualityProfileRow>();
+    if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) profiles.Add(new(reader.GetString(reader.GetOrdinal("ProfileCode")), Convert.ToInt64(reader["ProductCount"]), Convert.ToInt64(reader["ValidCount"]), Convert.ToInt64(reader["InvalidCount"]), reader.IsDBNull(reader.GetOrdinal("AverageCompleteness")) ? null : reader.GetDecimal(reader.GetOrdinal("AverageCompleteness"))));
+    var frequent = new List<FrequentIssueRow>();
+    if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) frequent.Add(new(reader.GetString(reader.GetOrdinal("IssueCode")), reader.GetString(reader.GetOrdinal("Message")), Convert.ToInt64(reader["OccurrenceCount"])));
+    return new(rows, profiles, frequent);
   }
 
   public async Task<IReadOnlyList<PipelineRunRow>> GetPipelineRunsAsync(int organizationId, CancellationToken cancellationToken = default)
@@ -103,14 +134,19 @@ public sealed class IntranetDataService(IConfiguration configuration)
     return rows;
   }
 
-  public async Task<IReadOnlyList<ProductDetailRow>> GetProductDetailAsync(int organizationId, long productId, CancellationToken cancellationToken = default)
+  public async Task<ProductDetailView?> GetProductDetailAsync(int organizationId, long productId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC intranet.GetProductDetail @OrganizationId, @ProductId;", connection);
     command.Parameters.AddWithValue("@OrganizationId", organizationId); command.Parameters.AddWithValue("@ProductId", productId);
-    await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<ProductDetailRow>();
-    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2), reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetDecimal(7)));
-    return rows;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return null;
+    var header = new ProductDetailHeader(reader.GetInt64(reader.GetOrdinal("ProductId")), reader.GetString(reader.GetOrdinal("ItemId")), GetNullableString(reader,"Ean"), reader.GetString(reader.GetOrdinal("Status")), reader.GetDecimal(reader.GetOrdinal("Completeness")), reader.GetBoolean(reader.GetOrdinal("IsActive")), reader.GetBoolean(reader.GetOrdinal("WebPublish")), GetNullableString(reader,"Uom"), GetNullableString(reader,"ItemGroup"), GetNullableString(reader,"Department"), GetNullableString(reader,"Manufacturer"), GetNullableString(reader,"Supplier"), GetNullableDateTime(reader,"LastValidatedUtc"));
+    var profiles = new List<ProductProfileRow>();
+    if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) profiles.Add(new(reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("Status")), reader.GetDecimal(reader.GetOrdinal("Completeness")), reader.GetDateTime(reader.GetOrdinal("ValidatedUtc"))));
+    var issues = new List<ProductIssueRow>();
+    if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) issues.Add(new(reader.GetInt64(reader.GetOrdinal("ProductIssueId")), reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("IssueCode")), reader.GetString(reader.GetOrdinal("Message")), reader.GetDateTime(reader.GetOrdinal("FirstDetectedUtc")), reader.GetDateTime(reader.GetOrdinal("LastDetectedUtc"))));
+    return new(header, profiles, issues);
   }
 
   public async Task<IReadOnlyList<QuarantineRow>> GetQuarantineAsync(int organizationId, CancellationToken cancellationToken = default)
@@ -118,18 +154,32 @@ public sealed class IntranetDataService(IConfiguration configuration)
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC intranet.GetRawQuarantine @OrganizationId;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<QuarantineRow>();
-    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetDateTime(6)));
+    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(reader.GetOrdinal("InboxId")), reader.GetGuid(reader.GetOrdinal("RunId")), reader.GetString(reader.GetOrdinal("SourceCode")), reader.GetString(reader.GetOrdinal("EntityType")), reader.GetInt32(reader.GetOrdinal("PageNumber")), GetNullableString(reader,"FailureReason"), reader.GetDateTime(reader.GetOrdinal("ReceivedUtc"))));
     return rows;
   }
+
+  static string? GetNullableString(SqlDataReader reader, string name) { var ordinal = reader.GetOrdinal(name); return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal); }
+  static DateTime? GetNullableDateTime(SqlDataReader reader, string name) { var ordinal = reader.GetOrdinal(name); return reader.IsDBNull(ordinal) ? null : reader.GetDateTime(ordinal); }
 
   public async Task<IReadOnlyList<StockRow>> GetStocksAsync(int organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC intranet.GetStocks @OrganizationId;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<StockRow>();
-    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(0), reader.IsDBNull(1)?null:reader.GetString(1), reader.IsDBNull(2)?null:reader.GetString(2),
-      reader.GetDecimal(3), reader.IsDBNull(4)?null:reader.GetDateTime(4), reader.IsDBNull(5)?null:reader.GetDecimal(5), reader.GetString(6), reader.GetDateTime(7),
-      reader.GetString(8), reader.IsDBNull(9)?null:reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.IsDBNull(12)?null:reader.GetInt64(12)));
+    while (await reader.ReadAsync(cancellationToken)) rows.Add(new(
+      reader.GetInt64(reader.GetOrdinal("PositionId")),
+      GetNullableString(reader, "NormalizedItemId"),
+      GetNullableString(reader, "Ean"),
+      reader.GetDecimal(reader.GetOrdinal("Quantity")),
+      GetNullableDateTime(reader, "AvailabilityDate"),
+      reader.IsDBNull(reader.GetOrdinal("IncomingQuantity")) ? null : reader.GetDecimal(reader.GetOrdinal("IncomingQuantity")),
+      reader.GetString(reader.GetOrdinal("SourceCode")),
+      reader.GetDateTime(reader.GetOrdinal("SnapshotUtc")),
+      reader.GetString(reader.GetOrdinal("MatchKey")),
+      GetNullableString(reader, "ProviderKind"),
+      reader.GetString(reader.GetOrdinal("Endpoint")),
+      reader.GetInt32(reader.GetOrdinal("FreshnessMinutes")),
+      reader.IsDBNull(reader.GetOrdinal("MatchedProductId")) ? null : reader.GetInt64(reader.GetOrdinal("MatchedProductId"))));
     return rows;
   }
 

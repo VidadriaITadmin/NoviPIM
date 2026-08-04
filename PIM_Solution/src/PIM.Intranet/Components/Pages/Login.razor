@@ -1,26 +1,33 @@
 @page "/prijava"
 @attribute [AllowAnonymous]
-@inject NavigationManager Navigation
+@layout PIM.Intranet.Components.Layout.EmptyLayout
 
 <PageTitle>Prijava</PageTitle>
 
-<h1>Prijava</h1>
-@if (Napaka)
-{
-  <p class="alert alert-danger">Prijava ni uspela.</p>
-}
-<form method="post" action="/prijava">
-  <AntiforgeryToken />
-  <div class="mb-3">
-    <label for="uporabniskoIme" class="form-label">Uporabniško ime</label>
-    <input id="uporabniskoIme" name="uporabniskoIme" class="form-control" autocomplete="username" required />
-  </div>
-  <div class="mb-3">
-    <label for="geslo" class="form-label">Geslo</label>
-    <input id="geslo" name="geslo" type="password" class="form-control" autocomplete="current-password" required />
-  </div>
-  <button type="submit" class="btn btn-primary">Prijava</button>
-</form>
+<main class="login-screen">
+  <section class="login-card" aria-labelledby="login-title">
+    <div id="login-title" class="login-brand"><span>PIM</span> Intranet</div>
+    <p class="login-subtitle">Prijavite se z računom iz baze</p>
+    @if (Napaka)
+    {
+      <p class="login-alert" role="alert">Uporabniško ime ali geslo ni pravilno.</p>
+    }
+    <form method="post" action="auth/prijava">
+      <AntiforgeryToken />
+      <div class="login-field">
+        <label for="uporabniskoIme">Uporabniško ime</label>
+        <input id="uporabniskoIme" name="uporabniskoIme" placeholder="npr. admin" autocomplete="username" required />
+      </div>
+      <div class="login-field">
+        <label for="geslo">Geslo</label>
+        <input id="geslo" name="geslo" type="password" autocomplete="current-password" required />
+      </div>
+      <label class="remember-me"><input name="zapomniMe" type="checkbox" /> <span>Zapomni si me (do 14 dni na tem računalniku)</span></label>
+      <button type="submit" class="login-submit">Prijava</button>
+    </form>
+    <p class="login-note">Geslo se preveri varno; brez kljukice velja seja do zaprtja brskalnika.</p>
+  </section>
+</main>
 
 @code {
   [SupplyParameterFromQuery(Name = "napaka")]

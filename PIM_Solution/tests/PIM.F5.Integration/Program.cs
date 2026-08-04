@@ -11,6 +11,10 @@ const string itemId = "F5-EAN-ENRICHMENT";
 const string ean = "9999900000005";
 var connectionString = ReadConnectionString()
   ?? throw new InvalidOperationException("Manjka razvojna povezava Pim; F5 integracije ni dovoljeno preskočiti.");
+var connectionBuilder = new SqlConnectionStringBuilder(connectionString);
+if (!string.Equals(connectionBuilder.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase)
+  || !connectionBuilder.IntegratedSecurity)
+  throw new InvalidOperationException("F5 integracija se sme zaganjati samo z Windows Integrated Auth v bazi PIM.");
 var xml = $"""
   <?xml version="1.0" encoding="UTF-8"?>
   <channel><products><product>
@@ -25,7 +29,6 @@ await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 await CleanupAsync(connection);
 await SeedBaseProductAsync(connection);
-await SeedUnsupportedMappingAsync(connection);
 var runId = Guid.NewGuid();
 await InsertRunAndInboxAsync(connection, runId, xml);
 var originalPayload = await ScalarAsync<string>(connection, "SELECT TOP(1) PayloadXml FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId));
@@ -34,8 +37,7 @@ await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organ
 
 Equal(xml, await ScalarAsync<string>(connection, "SELECT TOP(1) PayloadXml FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)), "raw.Inbox payload se je spremenil.");
 Equal(originalPayload, xml, "Vstavljeni payload ni identičen.");
-Equal(7, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.ExtractedValue value INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Manjka staging sled.");
-Equal(1, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.UnmappedValue queued INNER JOIN map.ExtractedValue value ON value.ExtractedValueId=queued.ExtractedValueId INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Nepodprta ciljna koda ni ohranjena.");
+Equal(6, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.ExtractedValue value INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Manjka staging sled.");
 Equal("F5 svetila", await ProductValueAsync(connection, "canon.ProductCategory", "CategoryPath"), "EAN kategorija ni obogatena.");
 Equal("//example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
 Equal("F5-203", await ProductValueAsync(connection, "canon.ProductAttribute", "Value"), "EAN atribut ni obogaten.");
@@ -104,10 +106,7 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE FROM map.EntityMapping WHERE SourceConnectorId IN
       (SELECT SourceConnectorId FROM map.SourceConnector WHERE SourceCode=N'F5_FUTURE_CONFIG' AND OrganizationId=@OrganizationId);
     DELETE FROM map.SourceConnector WHERE SourceCode=N'F5_FUTURE_CONFIG' AND OrganizationId=@OrganizationId;
-    DELETE fieldMapping FROM map.FieldMapping fieldMapping
-    INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=fieldMapping.SourceConnectorId
-    WHERE connector.SourceCode=@SourceCode AND connector.OrganizationId=@OrganizationId
-      AND fieldMapping.EntityType=N'Attribute' AND fieldMapping.TargetFieldCode=N'Unsupported.F5Probe';
+
     DELETE FROM pim.ProductText WHERE PimProductId IN (SELECT PimProductId FROM pim.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM pim.ProductAttribute WHERE PimProductId IN (SELECT PimProductId FROM pim.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM pim.ProductCategory WHERE PimProductId IN (SELECT PimProductId FROM pim.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
@@ -218,14 +217,6 @@ async Task AssertRejectedAsync(SqlConnection sqlConnection, Guid runId, string r
     WHERE inbox.RunId=@RunId AND value.Value=@Value AND rejected.Reason LIKE N'%' + @Reason + N'%';
     """, ("@RunId", runId), ("@Value", retainedValue), ("@Reason", reasonFragment)),
     "Zavrnjena generična vrednost ali razlog nista ohranjena.");
-}
-async Task SeedUnsupportedMappingAsync(SqlConnection sqlConnection)
-{
-  await ExecuteAsync(sqlConnection, """
-    INSERT map.FieldMapping(SourceConnectorId,EntityType,SourceElement,TargetFieldCode,IsRequired,IsActive,MappingVersion)
-    SELECT SourceConnectorId,N'Attribute',N'product_name/text()[1]',N'Unsupported.F5Probe',0,1,1
-    FROM map.SourceConnector WHERE SourceCode=@SourceCode AND OrganizationId=@OrganizationId;
-    """, ("@SourceCode", sourceCode), ("@OrganizationId", organizationId));
 }
 async Task SeedBaseProductAsync(SqlConnection sqlConnection)
 {

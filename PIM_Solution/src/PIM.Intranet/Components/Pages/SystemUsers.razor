@@ -1,0 +1,52 @@
+@page "/system/uporabniki"
+@attribute [Authorize(Roles = "ADMIN")]
+@inject PIM.Intranet.Services.IntranetUserAdministrationService Users
+
+<PageTitle>Uporabniki</PageTitle>
+<div class="page-header"><div><h1>Uporabniki</h1><p>Domenski uporabnik se preveri v domeni AD. Njegovo geslo se ne shrani v PIM.</p></div></div>
+
+<section class="ui-card panel">
+  <h2>Dodaj domenskega uporabnika</h2>
+  <div class="form-grid">
+    <label class="form-field" for="domainIdentity">Domenski uporabnik<input id="domainIdentity" class="form-input" @bind="DomainIdentity" placeholder="AD\uporabnik" /></label>
+    <label class="form-field" for="roleCode">Vloga<select id="roleCode" class="filter-select" @bind="RoleCode"><option value="VIEWER">Pregledovalec</option><option value="CATALOG_EDITOR">Urednik kataloga</option><option value="COMMERCIAL">Urednik komerciale</option><option value="ADMIN">Skrbnik</option></select></label>
+    <div class="form-action"><button class="secondary-button" @onclick="Find" disabled="@Busy">Najdi v AD</button></div>
+    <div class="form-action"><button class="primary-button" @onclick="Add" disabled="@(Busy || Found is null)">Dodaj domenskega uporabnika</button></div>
+  </div>
+  @if (Found is not null) { <p class="message-state success-message" role="status">Najden: <strong>@Found.DisplayName</strong> (@Found.DomainIdentity).</p> }
+  @if (Message is not null) { <p class="message-state @(MessageOk ? "success-message" : "error-message")" role="alert">@Message</p> }
+</section>
+
+<section class="ui-card data-card section-gap">
+  @if (Rows is null) { <div class="loading-state">Nalaganje uporabnikov …</div> }
+  else { <table class="data-table"><caption>Obstoječi uporabniki</caption><thead><tr><th>Uporabnik</th><th>Ime</th><th>Vir</th><th>Vloge</th><th>Aktiven</th></tr></thead><tbody>@foreach(var user in Rows){<tr><td>@(user.DomainIdentity ?? user.UserName)</td><td>@user.DisplayName</td><td>@(user.AuthSource == "DOMAIN" ? "AD" : "Lokalno")</td><td>@user.Roles</td><td><span class="status-chip @(user.IsEnabled ? "good" : null)">@(user.IsEnabled ? "Da" : "Ne")</span></td></tr>}</tbody></table> }
+</section>
+
+@code {
+  string DomainIdentity = "";
+  string RoleCode = "VIEWER";
+  bool Busy;
+  bool MessageOk;
+  string? Message;
+  PIM.Intranet.Services.ActiveDirectoryUser? Found;
+  IReadOnlyList<PIM.Intranet.Services.IntranetUserRow>? Rows;
+
+  protected override async Task OnInitializedAsync() => await Reload();
+  async Task Reload() => Rows = await Users.GetUsersAsync();
+  void Find()
+  {
+    Found = null;
+    Message = null;
+    var result = Users.FindDomainUser(DomainIdentity);
+    if (result.Success) Found = result.User;
+    else { Message = result.Error; MessageOk = false; }
+  }
+  async Task Add()
+  {
+    Busy = true;
+    Message = null;
+    try { await Users.AddDomainUserAsync(DomainIdentity, RoleCode); Message = $"Domenski uporabnik {Found!.DomainIdentity} je dodan."; MessageOk = true; Found = null; DomainIdentity = ""; await Reload(); }
+    catch (Exception exception) { Message = exception.Message; MessageOk = false; }
+    finally { Busy = false; }
+  }
+}

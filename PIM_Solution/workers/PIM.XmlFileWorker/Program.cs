@@ -36,6 +36,12 @@ await using (var connection = new SqlConnection(connectionString))
   }
 }
 await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
+// Zaključi lasten zapis v ops.PipelineRun (enako kot PIM.KatalogWorker), da run ne ostane v stanju Running.
+await using (var connection = new SqlConnection(connectionString))
+{
+  await connection.OpenAsync();
+  await FinishRunAsync(connection, runId);
+}
 Console.WriteLine($"Generični XML zajem je končan; datotek={files.Length}, RunId={runId}.");
 await operationsRun.CompleteAsync(true);
 return 0;
@@ -73,6 +79,19 @@ static async Task InsertRunAsync(SqlConnection connection, Guid runId, int organ
   command.Parameters.AddWithValue("@RunId", runId);
   command.Parameters.AddWithValue("@OrganizationId", organizationId);
   command.Parameters.AddWithValue("@SourceCode", sourceCode);
+  await command.ExecuteNonQueryAsync();
+}
+static async Task FinishRunAsync(SqlConnection connection, Guid runId)
+{
+  // RowsRead = vse zajete vrstice; RowsSucceeded = tiste, ki niso končale v karanteni.
+  await using var command = new SqlCommand("""
+    UPDATE ops.PipelineRun
+    SET Status = N'Succeeded', EndedUtc = SYSUTCDATETIME(),
+        RowsRead = (SELECT COUNT(*) FROM raw.Inbox WHERE RunId = @RunId),
+        RowsSucceeded = (SELECT COUNT(*) FROM raw.Inbox WHERE RunId = @RunId AND Status <> N'Quarantined')
+    WHERE RunId = @RunId;
+    """, connection);
+  command.Parameters.AddWithValue("@RunId", runId);
   await command.ExecuteNonQueryAsync();
 }
 static async Task InsertInboxAsync(SqlConnection connection, Guid runId, int organizationId, string sourceCode, string entityType, int page, string payload)

@@ -7,3 +7,10 @@ build/
 .DS_Store
 coverage/
 .vitest/
+
+# IDE / scratch / lokalni delovni imeniki (ne sodijo v repo)
+.vs/
+**/.vs/
+.tmp-debug/
+.hermes/
+/PIM_test/

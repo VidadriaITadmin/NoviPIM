@@ -1,35 +1,10 @@
 @page "/zaloge"
 @attribute [Authorize]
 @inject PIM.Intranet.Services.IntranetDataService Data
-
-<PageTitle>Zaloge</PageTitle>
-<h1>Zaloge</h1>
-@if (Rows is null)
-{
-  <p>Nalaganje podatkov …</p>
-}
-else if (Rows.Count == 0)
-{
-  <p>Ni aktivnih zalogovnih posnetkov.</p>
-}
-else
-{
-  <table class="table">
-    <thead><tr><th>Artikel / EAN</th><th>Količina</th><th>Pričakovana dobava</th><th>Prihodna količina</th><th>Vir</th><th>Ponudnik / endpoint</th><th>Čas posnetka</th><th>Svežina</th><th>Ujemanje</th></tr></thead>
-    <tbody>
-    @foreach (var row in Rows)
-    {
-      <tr>
-        <td>@if (row.ProductId is not null) { <a href="/izdelki/@row.ProductId">@row.ItemId</a> } else { @row.ItemId }<br />@row.Ean</td>
-        <td>@row.Quantity</td><td>@row.AvailabilityDate?.ToString("d")</td><td>@row.IncomingQuantity</td><td>@row.SourceCode</td>
-        <td>@row.ProviderKind<br /><small>@row.Endpoint</small></td><td>@row.SnapshotUtc.ToLocalTime()</td><td>@row.FreshnessMinutes min</td><td>@row.MatchKey</td>
-      </tr>
-    }
-    </tbody>
-  </table>
-}
-
-@code {
-  IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows;
-  protected override async Task OnInitializedAsync() => Rows = await Data.GetStocksAsync(2);
-}
+<PageTitle>Zaloga</PageTitle>
+<div class="page-header"><div><h1>Zaloga</h1><p>Trenutno stanje zalog in dobavljivosti izdelkov.</p></div></div>
+<div class="page-tabs"><span class="page-tab active">Pregled zaloge</span></div>
+@if (Rows is not null) { <div class="kpi-grid"><section class="ui-card kpi"><span>Na zalogi</span><strong>@Rows.Count(x=>x.Quantity>0).ToString("N0")</strong></section><section class="ui-card kpi"><span>Brez zaloge</span><strong>@Rows.Count(x=>x.Quantity<=0).ToString("N0")</strong></section><section class="ui-card kpi"><span>Zastareli podatki</span><strong>@Rows.Count(IsStale).ToString("N0")</strong></section><section class="ui-card kpi"><span>Neujemajoči zapisi</span><strong>@Rows.Count(x=>x.ProductId is null).ToString("N0")</strong></section></div> }
+<section class="ui-card toolbar"><label class="visually-hidden" for="stock-search">Išči zalogo</label><input id="stock-search" class="search-input" placeholder="Poišči po artiklu, EAN ali viru …" @bind="Search" @bind:event="oninput"/><label class="visually-hidden" for="stock-availability">Razpoložljivost</label><select id="stock-availability" class="filter-select" @bind="Availability"><option value="">Vsa razpoložljivost</option><option value="yes">Na zalogi</option><option value="no">Brez zaloge</option></select><span class="result-count">@Filtered.Count rezultatov</span></section>
+<section class="ui-card data-card">@if(Loading){<div class="loading-state">Nalaganje zalog …</div>}else if(Error is not null){<div class="error-state">@Error</div>}else if(Filtered.Count==0){<div class="empty-state">Ni zalogovnih zapisov za izbrane filtre.</div>}else{<table class="data-table"><caption>Trenutno stanje zalog in dobavljivosti izdelkov</caption><thead><tr><th>Artikel / EAN</th><th>Količina</th><th>Prihod</th><th>Vir</th><th>Posodobljeno</th><th>Status</th></tr></thead><tbody>@foreach(var row in Filtered){<tr><td>@if(row.ProductId is not null){<a href="izdelki/@row.ProductId">@(row.ItemId??row.Ean??row.MatchKey)</a>}else{@(row.ItemId??row.Ean??row.MatchKey)}</td><td>@row.Quantity.ToString("N2")</td><td>@(row.IncomingQuantity?.ToString("N2")??"—")</td><td>@row.SourceCode</td><td>@row.SnapshotUtc.ToLocalTime().ToString("g")</td><td><span class="status-chip @(row.Quantity>0?"good":"bad")">@(row.Quantity>0?"Na zalogi":"Brez zaloge")</span></td></tr>}</tbody></table>}</section>
+@code { IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows;bool Loading=true;string? Error;string Search="";string Availability="";IReadOnlyList<PIM.Intranet.Services.StockRow> Filtered=>Rows?.Where(x=>(Availability==""||(Availability=="yes"?x.Quantity>0:x.Quantity<=0))&&(Search==""||(x.ItemId?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)||(x.Ean?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)||x.SourceCode.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList()??[];static bool IsStale(PIM.Intranet.Services.StockRow x)=>DateTime.UtcNow-x.SnapshotUtc>TimeSpan.FromMinutes(x.FreshnessMinutes);protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetStocksAsync(org.OrganizationId);}catch{Error="Zalog trenutno ni mogoče naložiti.";}finally{Loading=false;}} }

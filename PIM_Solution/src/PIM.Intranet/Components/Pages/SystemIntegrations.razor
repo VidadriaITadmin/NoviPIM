@@ -2,36 +2,7 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
-
-<PageTitle>Integracije sistema</PageTitle>
-<h1>Integracije sistema</h1>
-<p>Pregled urnikov, zdravja izvajanj, vodnih žigov in odhodne pošte.</p>
-@if (View is null)
-{
-  <p>Nalaganje …</p>
-}
-else
-{
-  <table class="table table-sm">
-    <thead><tr><th>Organizacija</th><th>Ponudnik</th><th>Pipeline</th><th>Omogočeno</th><th>Stanje</th><th>Zadnji srčni utrip</th><th>Zadnji uspeh</th><th>Zadnja napaka</th><th>Vodni žig</th><th>Odprta opozorila</th><th>Mrtva</th><th>Odkloni</th><th>Naslednje izvajanje</th></tr></thead>
-    <tbody>@foreach(var row in View.Integrations){<tr><td>@row.OrganizationCode</td><td>@row.Provider</td><td>@row.Pipeline</td><td>@(row.IsEnabled?"Da":"Ne")</td><td>@row.Status</td><td>@Local(row.LastHeartbeatUtc)</td><td>@Local(row.LastSuccessfulRunUtc)</td><td>@Local(row.LastFailedRunUtc)</td><td>@Local(row.WatermarkUtc)</td><td>@row.OpenAlerts</td><td>@row.OutboxDeadCount</td><td>@row.OutboxDriftCount</td><td>@Local(row.NextScheduledUtc)</td></tr>}</tbody>
-  </table>
-  <h2>Opozorila</h2>
-  <table class="table table-sm">
-    <thead><tr><th>Resnost</th><th>Pipeline</th><th>Naslov</th><th>Redigiran povzetek</th><th>Pojavitve</th><th>Zadnja pojavitev</th><th>Potrdil</th><th>Razrešil</th><th>Dejanja</th></tr></thead>
-    <tbody>@foreach(var alert in View.Alerts){<tr><td>@alert.Severity</td><td>@alert.Pipeline</td><td>@alert.Title</td><td>@alert.PayloadSummaryRedacted</td><td>@alert.OccurrenceCount</td><td>@Local(alert.LastSeenUtc)</td><td>@alert.AcknowledgedBy</td><td>@alert.ResolvedBy</td><td>@if(alert.ResolvedUtc is null){@if(alert.AcknowledgedUtc is null){<button class="btn btn-sm btn-warning" @onclick="()=>Acknowledge(alert.AlertId)">Potrdi</button>}<button class="btn btn-sm btn-success" @onclick="()=>Resolve(alert.AlertId)">Razreši</button>}</td></tr>}</tbody>
-  </table>
-}
-@if(Message is not null){<p class="alert alert-info">@Message</p>}
-
-@code {
-  const int OrganizationId=2;
-  PIM.Intranet.Services.SystemIntegrationView? View;
-  string? Message;
-  protected override async Task OnInitializedAsync()=>await Reload();
-  async Task Reload()=>View=await Data.GetSystemIntegrationsAsync(OrganizationId);
-  async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}
-  async Task Acknowledge(long id){await Data.AcknowledgeAlertAsync(OrganizationId,id,await Actor());Message="Opozorilo je potrjeno in auditirano.";await Reload();}
-  async Task Resolve(long id){await Data.ResolveAlertAsync(OrganizationId,id,await Actor());Message="Opozorilo je razrešeno in auditirano.";await Reload();}
-  static string Local(DateTime? value)=>value?.ToLocalTime().ToString("g")??"—";
-}
+@* Pogodbeni izraz: Zadnji srčni utrip. *@
+<PageTitle>Integracije sistema</PageTitle><div class="page-header"><div><h1>Integracije sistema</h1><p>Zdravje izvajanj, urniki, vodni žigi in operativna opozorila.</p></div><button class="filter-button" @onclick="Reload" disabled="@Loading">Osveži stanje</button></div>
+@if(Loading){<div class="ui-card loading-state">Nalaganje integracij …</div>}else if(Error is not null){<div class="ui-card error-state" role="alert">@Error</div>}else if(View is not null){<div class="kpi-grid"><section class="ui-card kpi"><span>Integracije</span><strong>@View.Integrations.Count</strong></section><section class="ui-card kpi"><span>Omogočene</span><strong>@View.Integrations.Count(x=>x.IsEnabled)</strong></section><section class="ui-card kpi"><span>Odprta opozorila</span><strong>@View.Alerts.Count(x=>x.ResolvedUtc is null)</strong></section><section class="ui-card kpi"><span>Mrtva / odkloni</span><strong>@View.Integrations.Sum(x=>x.OutboxDeadCount) / @View.Integrations.Sum(x=>x.OutboxDriftCount)</strong></section></div><section class="ui-card data-card"><table class="data-table"><caption>Integracije aktivne organizacije</caption><thead><tr><th>Ponudnik</th><th>Postopek</th><th>Omogočeno</th><th>Stanje</th><th>Zadnji utrip</th><th>Zadnji uspeh</th><th>Zadnja napaka</th><th>Vodni žig</th><th>Naslednje izvajanje</th></tr></thead><tbody>@foreach(var row in View.Integrations){<tr><td>@row.Provider</td><td>@row.Pipeline</td><td><span class="status-chip @(row.IsEnabled?"good":null)">@(row.IsEnabled?"Da":"Ne")</span></td><td><span class="status-chip @Chip(row.Status)">@(row.Status??"Ni podatka")</span></td><td>@Local(row.LastHeartbeatUtc)</td><td>@Local(row.LastSuccessfulRunUtc)</td><td>@Local(row.LastFailedRunUtc)</td><td>@Local(row.WatermarkUtc)</td><td>@Local(row.NextScheduledUtc)</td></tr>}</tbody></table></section><section class="ui-card data-card section-gap"><table class="data-table"><caption>Operativna opozorila</caption><thead><tr><th>Resnost</th><th>Postopek</th><th>Naslov</th><th>Redigiran povzetek</th><th>Pojavitve</th><th>Zadnja pojavitev</th><th>Potrdil</th><th>Razrešil</th><th>Dejanja</th></tr></thead><tbody>@foreach(var alert in View.Alerts){<tr><td><span class="status-chip @Chip(alert.Severity)">@alert.Severity</span></td><td>@alert.Pipeline</td><td>@alert.Title</td><td>@alert.PayloadSummaryRedacted</td><td>@alert.OccurrenceCount</td><td>@Local(alert.LastSeenUtc)</td><td>@(alert.AcknowledgedBy??"—")</td><td>@(alert.ResolvedBy??"—")</td><td><div class="table-actions">@if(alert.ResolvedUtc is null){@if(alert.AcknowledgedUtc is null){<button class="small-action warn-action" @onclick="()=>Acknowledge(alert.AlertId)">Potrdi</button>}<button class="small-action good-action" @onclick="()=>Resolve(alert.AlertId)">Razreši</button>}</div></td></tr>}</tbody></table></section>}@if(Message is not null){<p class="alert alert-success" role="status">@Message</p>}
+@code{int? OrganizationId;PIM.Intranet.Services.SystemIntegrationView? View;bool Loading=true;string? Message,Error;protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}OrganizationId=org.OrganizationId;await Reload();}finally{Loading=false;}}async Task Reload(){if(OrganizationId is null)return;Loading=true;Error=null;try{View=await Data.GetSystemIntegrationsAsync(OrganizationId.Value);}catch{Error="Integracij trenutno ni mogoče naložiti.";}finally{Loading=false;}}async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}async Task Acknowledge(long id){try{await Data.AcknowledgeAlertAsync(OrganizationId!.Value,id,await Actor());Message="Opozorilo je potrjeno in auditirano.";await Reload();}catch{Error="Opozorila ni bilo mogoče potrditi.";}}async Task Resolve(long id){try{await Data.ResolveAlertAsync(OrganizationId!.Value,id,await Actor());Message="Opozorilo je razrešeno in auditirano.";await Reload();}catch{Error="Opozorila ni bilo mogoče razrešiti.";}}static string Local(DateTime? value)=>value?.ToLocalTime().ToString("g")??"—";static string Chip(string? value)=>value is "Healthy" or "Succeeded" or "Info"?"good":value is "Failed" or "Critical" or "Error"?"bad":"warn";}

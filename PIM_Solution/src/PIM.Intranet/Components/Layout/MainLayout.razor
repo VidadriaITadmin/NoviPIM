@@ -1,20 +1,39 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject PIM.Intranet.Services.IntranetDataService Data
 
-    <main>
-        <div class="top-row px-4">
-            <form method="post" action="/odjava"><AntiforgeryToken /><button type="submit" class="btn btn-link">Odjava</button></form>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+<div class="app-shell">
+  <aside id="primary-navigation" class="app-sidebar @(MenuOpen ? "open" : null)"><NavMenu /></aside>
+  <main class="app-main">
+    <header class="app-topbar">
+      <button class="menu-glyph" type="button" aria-label="Preklopi glavno navigacijo" aria-controls="primary-navigation" aria-expanded="@MenuOpen" @onclick="()=>MenuOpen=!MenuOpen"><span aria-hidden="true">☰</span></button>
+      <a class="global-search" href="izdelki"><span class="search-icon" aria-hidden="true"></span><span>Poišči izdelke, EAN, nazive …</span></a>
+      <div class="topbar-spacer"></div>
+      <div class="top-context"><small>Organizacija</small><strong>@(Organization?.Name ?? "Ni na voljo")</strong></div>
+      <button class="top-context top-control" type="button" disabled title="Podatek o prodajnem kanalu ni v podatkovnem modelu"><small>Kanal</small><strong>Ni na voljo</strong></button>
+      <button class="top-context top-control" type="button" disabled title="Izbira jezika še ni podprta"><small>Jezik</small><strong>Slovenščina</strong></button>
+      <button class="notification-button" type="button" disabled aria-label="Obvestila niso na voljo" title="Obvestila v glavi še niso podprta"><span aria-hidden="true"></span></button>
+      <div class="signed-user"><span>@Initials</span><strong>@DisplayName</strong></div>
+      <form method="post" action="odjava"><AntiforgeryToken /><button type="submit" class="logout-button">Odjava</button></form>
+    </header>
+    <article class="app-content">@Body</article>
+  </main>
 </div>
+
+@code {
+  PIM.Intranet.Services.OrganizationContext? Organization;
+  string DisplayName = "Uporabnik";
+  string Initials = "U";
+  bool MenuOpen;
+  protected override async Task OnInitializedAsync()
+  {
+    var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+    DisplayName = user.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? user.Identity?.Name ?? "Uporabnik";
+    Initials = string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    Organization = await Data.GetCurrentOrganizationAsync();
+  }
+}
 
 <div id="blazor-error-ui">
     Prišlo je do nepričakovane napake.

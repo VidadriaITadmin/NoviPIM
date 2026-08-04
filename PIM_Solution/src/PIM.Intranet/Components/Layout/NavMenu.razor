@@ -1,26 +1,17 @@
 ﻿@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject PIM.Intranet.Services.IntranetDataService Data
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/nadzorna-plosca">PIM</a>
-    </div>
-</div>
-
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
-        @foreach (var group in Navigation.GroupBy(item => item.GroupName))
-        {
-            <div class="px-3 pt-2 text-secondary small">@group.Key</div>
-            @foreach (var item in group)
-            {
-                <div class="nav-item px-3"><NavLink class="nav-link" href="@item.Route">@item.Name</NavLink></div>
-            }
-        }
-    </nav>
-</div>
+<a class="pim-mark" href="nadzorna-plosca" aria-label="PIM nadzorna plošča">P</a>
+<nav class="app-navigation">
+  @foreach (var group in Navigation.GroupBy(item => item.GroupName))
+  {
+    <div class="navigation-group">@group.Key</div>
+    @foreach (var item in group)
+    {
+      <NavLink class="navigation-link" href="@RelativeRoute(item.Route)"><span class="navigation-icon @IconClass(item.Route)" aria-hidden="true"></span><span>@item.Name</span></NavLink>
+    }
+  }
+</nav>
 
 @code {
     IReadOnlyList<PIM.Intranet.Services.NavigationEntry> Navigation = [];
@@ -30,4 +21,13 @@
         var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         Navigation = await Data.GetNavigationAsync(state.User.Claims.Where(claim => claim.Type == System.Security.Claims.ClaimTypes.Role).Select(claim => claim.Value));
     }
+
+    static string RelativeRoute(string route) => route.TrimStart('/');
+
+    static string IconClass(string route) => route switch
+    {
+      "/nadzorna-plosca" => "icon-dashboard", "/izdelki" => "icon-products", "/zaloge" => "icon-stock", "/napake-validacije" => "icon-quality",
+      "/karantena" => "icon-alert", "/teki-obdelave" => "icon-import", "/outbound" => "icon-export", "/stranke" => "icon-users",
+      "/pravila-popustov" => "icon-rules", "/system/integracije" => "icon-settings", "/system/uporabniki" => "icon-users", _ => "icon-link"
+    };
 }

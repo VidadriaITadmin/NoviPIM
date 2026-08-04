@@ -75,7 +75,8 @@ if (verifyOnly)
   await VerifyF7Async(connection);
   await VerifyF8Async(connection);
   await VerifyF9Async(connection);
-  Console.WriteLine("Preverjanje F0–F9 baze je uspešno.");
+  await VerifyF10Async(connection);
+  Console.WriteLine("Preverjanje F0–F10 baze je uspešno.");
   return 0;
 }
 
@@ -458,6 +459,14 @@ static async Task VerifyF9Async(SqlConnection connection)
   foreach(var expectedObject in expectedObjects)
     await AssertCountAsync(connection,"SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);",expectedObject,1,$"Manjka F9 objekt {expectedObject}.");
   await AssertCountAsync(connection,"SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'ops.Alert') AND name=N'UX_Alert_OpenDedup';",null,1,"Manjka F9 odprti dedup indeks.");
+}
+
+static async Task VerifyF10Async(SqlConnection connection)
+{
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'sec.LocalUser') AND name IN(N'AuthSource',N'DomainIdentity');", null, 2, "Manjkajo F10 stolpci za vir prijave.");
+  foreach (var expectedObject in new[] { "sec.CreateLocalUser", "sec.CreateDomainUser" })
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F10 postopek {expectedObject}.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sec.NavigationItem itemValue INNER JOIN sec.NavigationItemRole itemRole ON itemRole.NavigationItemId=itemValue.NavigationItemId INNER JOIN sec.Role roleValue ON roleValue.RoleId=itemRole.RoleId WHERE itemValue.ItemCode=N'USERS' AND itemValue.Route=N'/system/uporabniki' AND roleValue.RoleCode=N'ADMIN';", null, 1, "Manjka administratorska F10 navigacija uporabnikov.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
