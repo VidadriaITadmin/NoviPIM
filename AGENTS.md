@@ -99,6 +99,12 @@ Brez vprašanja smeš:
 
 1. **Brisanje** — datotek, map, tabel, stolpcev, podatkov, vej. Vsak `rm`,
    `DROP`, `DELETE`, `TRUNCATE`, `git branch -D`.
+
+   **Izjema:** test sme v razvojni bazi `PIM` brez vprašanja pobrisati vrstice,
+   **ki jih je ustvaril sam**, kot del svojega `setup`/`cleanup`. Brisanje mora
+   biti omejeno z ozkim pogojem na testne podatke (npr. `OrganizationId` +
+   `ItemID` testnega izdelka), nikoli `DELETE` brez `WHERE` in nikoli nad
+   podatki, ki jih test ni ustvaril. `DROP` in `TRUNCATE` ostaneta prepovedana.
 2. **Prepis dela, ki ni tvoje** — `git reset --hard`, `git checkout --`,
    `git clean`, prepis tuje necommitane spremembe.
 3. **Karkoli izven** `C:\Users\David\Namizje\PIM\NoviPIM`.
@@ -198,3 +204,10 @@ Ko je napaka odkrita šele v QA, sem dodaj eno vrstico.
   ta repozitorij, `C:\ai\*`). Zdaj velja samo ta datoteka.
 - 2026-08-12: build je padel z `MSB3027`, ker je tekel intranet in držal
   `PIM.Intranet.exe`. Zaklep ni napaka v kodi — najprej ustavi proces.
+- 2026-08-12: `PIM.ChangeTracking.Integration` je v konstruktorju vrgel izjemo,
+  če ni bilo `PIM_CONNECTION_STRING`. Pri agentu, ki jo je imel nastavljeno v
+  seji, je bil PASS; v čisti lupini je padel 6/6 in bil poročan kot »6/6 PASS«.
+  Integracijski test se ob manjkajoči povezavi **preskoči**, ne pade.
+- 2026-08-12: po uvedbi sledljivosti je F5 cleanup padel na FK 547, ker
+  `pim.ProductFieldHistory` kaže na `canon.Product`. Cleanup mora najprej
+  pobrisati zgodovino in osirotele batche, šele nato testne izdelke.
