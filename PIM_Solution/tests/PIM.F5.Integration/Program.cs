@@ -96,6 +96,14 @@ static string? ReadConnectionString()
 async Task CleanupAsync(SqlConnection sqlConnection)
 {
   await ExecuteAsync(sqlConnection, """
+    DELETE history
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE batch
+    FROM pim.ProductChangeBatch batch
+    WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
+
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN
     (
       SELECT value.ExtractedValueId FROM map.ExtractedValue value
