@@ -71,9 +71,22 @@ Assert(tablist.Value.Contains("role=\"tablist\"", StringComparison.Ordinal), "Sk
 Assert(Regex.IsMatch(tablist.Value, "aria-label=\"[^\"]+\""), "Sklop zavihkov mora imeti aria-label.");
 
 var tabs = Regex.Matches(markup, "<button[^>]*role=\"tab\"[^>]*>");
-Assert(tabs.Count == 3, "Stran ima tri podatkovno podprte zavihke; dodatnih zavihkov brez podatkovnega vira ni dovoljeno ustvariti.");
 var panels = Regex.Matches(markup, "<section[^>]*role=\"tabpanel\"[^>]*>");
-Assert(panels.Count == 3, "Vsak zavihek mora imeti svoj panel role=\"tabpanel\".");
+Assert(tabs.Count >= 3, "Stran mora ohraniti vsaj tri zavihke; obstoječih se ne odstranjuje. Najdenih: " + tabs.Count);
+Assert(panels.Count == tabs.Count,
+  "Vsak zavihek mora imeti natanko en pripadajoč panel role=\"tabpanel\". Zavihkov: " + tabs.Count + ", panelov: " + panels.Count);
+
+// Pravilo ni "natanko toliko zavihkov", ampak "noben zavihek brez podatkovnega
+// vira". Zato vsak panel dokazano prikazuje podatke iz modela, ne statične vsebine.
+foreach (Match panel in panels)
+{
+  var bodyStart = panel.Index + panel.Length;
+  var bodyEnd = markup.IndexOf("</section>", bodyStart, StringComparison.Ordinal);
+  Assert(bodyEnd > bodyStart, "Panel ni pravilno zaprt: " + panel.Value);
+  var body = markup.Substring(bodyStart, bodyEnd - bodyStart);
+  Assert(body.Contains("Detail.", StringComparison.Ordinal),
+    "Panel mora prikazovati podatke iz modela (Detail.*), ne statične vsebine: " + panel.Value);
+}
 foreach (Match tab in tabs)
 {
   Assert(tab.Value.Contains("type=\"button\"", StringComparison.Ordinal), "Zavihek mora biti izrecni gumb type=\"button\": " + tab.Value);
@@ -93,13 +106,27 @@ Assert(Regex.IsMatch(markup, "role=\"tab\"[^>]*>[^<]*Detail\\.Profiles\\.Count")
 Assert(Regex.IsMatch(markup, "role=\"tab\"[^>]*>[^<]*Detail\\.Issues\\.Count"), "Števec težav mora izhajati iz dejanskega Detail.Issues.Count.");
 
 // 7. Tabele morajo ostati berljive, opisane in se na ozkih zaslonih vodoravno pomikati.
+// Pravila se ne vežejo na fiksno število tabel, ampak na razmerje: vsaka
+// podatkovna tabela mora imeti svoj pomični ovoj, vsaka tabela svoj napis in
+// vsaka celica glave svoj scope. Tako nova tabela ne podre testa, izpuščen
+// ovoj ali napis pa ga.
 var scrolls = Regex.Matches(markup, "<div class=\"table-scroll\"[^>]*>");
-Assert(scrolls.Count == 2, "Obe podatkovni tabeli (profili, težave) morata biti v ovoju <div class=\"table-scroll\">.");
+var dataTables = Regex.Matches(markup, "<table class=\"data-table\"[^>]*>");
+Assert(scrolls.Count == dataTables.Count,
+  "Vsaka podatkovna tabela mora biti v ovoju <div class=\"table-scroll\">. Tabel: " + dataTables.Count + ", ovojev: " + scrolls.Count);
 foreach (Match scroll in scrolls)
   foreach (var attribute in new[] { "role=\"region\"", "tabindex=\"0\"", "aria-label=" })
     Assert(scroll.Value.Contains(attribute, StringComparison.Ordinal), "Pomični ovoj tabele nima " + attribute + ": " + scroll.Value);
-Assert(Regex.Matches(markup, "<caption>").Count == 3, "Vsaka tabela mora ohraniti napis <caption>.");
-Assert(Regex.Matches(markup, "<th scope=\"col\">").Count == 8, "Tabeli profilov in težav morata ohraniti obstoječe stolpce z scope=\"col\".");
+
+var allTables = Regex.Matches(markup, "<table[^>]*>");
+Assert(Regex.Matches(markup, "<caption>").Count == allTables.Count,
+  "Vsaka tabela mora ohraniti napis <caption>. Tabel: " + allTables.Count + ", napisov: " + Regex.Matches(markup, "<caption>").Count);
+
+// \b prepreci, da bi se "<th" ujel tudi z "<thead>".
+var glaveBrezScope = Regex.Matches(markup, "<th\\b(?![^>]*scope=)[^>]*>");
+Assert(glaveBrezScope.Count == 0,
+  "Vsaka celica glave <th> mora imeti scope. Brez scope: " + (glaveBrezScope.Count > 0 ? glaveBrezScope[0].Value : ""));
+Assert(Regex.Matches(markup, "<th scope=\"col\">").Count >= 8, "Obstoječih stolpcev s scope=\"col\" se ne odstranjuje.");
 Assert(Regex.Matches(markup, "<th scope=\"row\">").Count >= 8, "Vrstice pregleda morajo biti glave vrstic z scope=\"row\".");
 Assert(Regex.IsMatch(css, "\\.table-scroll\\s*\\{[^}]*overflow-x:\\s*auto"), "Ovoj tabele mora imeti overflow-x: auto.");
 Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
@@ -114,7 +141,11 @@ Assert(Regex.Matches(markup, "<span class=\"visually-hidden\">Status: </span>").
 // 9. Asinhrona in prazna stanja se morajo sporočiti tehnologijam za dostopnost.
 Assert(Regex.IsMatch(markup, "class=\"ui-card loading-state\"[^>]*role=\"status\""), "Stanje nalaganja mora biti razglašeno kot role=\"status\".");
 Assert(Regex.IsMatch(markup, "class=\"ui-card error-state\"[^>]*role=\"alert\""), "Stanje napake mora biti razglašeno kot role=\"alert\".");
-Assert(Regex.Matches(markup, "empty-state").Count == 3, "Neobstoječ izdelek, prazni profili in prazne težave morajo ohraniti svoje prazno stanje.");
+// Vsaka podatkovna tabela potrebuje svoje prazno stanje, poleg tega še
+// neobstoječ izdelek. Vezano na število tabel, ne na fiksno številko.
+var praznaStanja = Regex.Matches(markup, "empty-state").Count;
+Assert(praznaStanja >= dataTables.Count + 1,
+  "Vsaka podatkovna tabela in neobstoječ izdelek morajo ohraniti prazno stanje. Tabel: " + dataTables.Count + ", praznih stanj: " + praznaStanja);
 
 // 10. Viden fokus tipkovnice na vseh interaktivnih in pomičnih elementih strani.
 foreach (var selector in new[] { ".breadcrumb a", ".page-tab", ".tab-panel", ".table-scroll" })
@@ -133,9 +164,11 @@ foreach (Match call in Regex.Matches(markup, "Data\\.(\\w+)"))
 // 12. Varovalka: obstoječe ravnanje ostane nedotaknjeno — zavihki samo preklapljajo prikaz.
 foreach (var behavior in new[] { "OnParametersSetAsync", "GetProductDetailAsync(org.OrganizationId,ProductId)" })
   Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstoječe ravnanje strani je spremenjeno; manjka: " + behavior);
-var allowedTabs = new[] { "overview", "profiles", "issues" };
+// "history" dodan 2026-08-12 s sledljivostjo sprememb (migracije 028-038).
+var allowedTabs = new[] { "overview", "profiles", "issues", "history" };
 var handlers = Regex.Matches(markup, "@onclick='\\(\\)=>Tab=\"(\\w+)\"'");
-Assert(handlers.Count == 3, "Zavihki morajo ostati preprost preklop prikaza brez novih dejanj.");
+Assert(handlers.Count == tabs.Count,
+  "Vsak zavihek mora imeti natanko en preklop prikaza. Zavihkov: " + tabs.Count + ", preklopov: " + handlers.Count);
 foreach (Match handler in handlers)
   Assert(allowedTabs.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Nov zavihek ni v obsegu naloge: " + handler.Value);
 Assert(Regex.Matches(markup, "@onclick").Count == handlers.Count, "Novo dejanje ni v obsegu naloge; dovoljen je samo preklop zavihka.");
@@ -145,9 +178,12 @@ foreach (var forbidden in new[] { "<form", "@onsubmit", "@bind", "method=\"post\
   Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Predstavitveni sklop ne sme uvesti " + forbidden + ".");
 
 // 14. Varovalka: referenčna slika ni podatkovna pogodba — polj in dejanj brez vira ni dovoljeno prikazati.
+// "Zgodovina" je bila s tega seznama umaknjena 2026-08-12: dobila je pravi
+// podatkovni vir (Detail.History, migracije 028-038). Ostale postavke ostajajo
+// prepovedane, dokler nimajo svojega vira.
 foreach (var fabricated in new[] { "Shrani", "Uredi", "Izbriši", "Revalidiraj", "Naziv", "Kratki naziv", "Tip izdelka", "Dimenzije",
   "Teža", "Višina", "Širina", "Globina", "Država porekla", "HS koda", "Slika", "Mediji", "Kategorije", "Atributi", "Cene", "Zaloga",
-  "Zgodovina", "Komerciala", "Napake in opozorila" })
+  "Komerciala", "Napake in opozorila" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati nepodprte vsebine: " + fabricated + ".");
 
 Console.WriteLine("F10 product detail UX contract PASS.");
