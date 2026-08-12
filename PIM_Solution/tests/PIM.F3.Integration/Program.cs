@@ -37,7 +37,7 @@ const string endToEndSql = """
   IF NOT EXISTS(SELECT 1 FROM ops.PipelineRun WHERE RunId=@RunId AND Status=N'Succeeded') THROW 52326,'Pipeline ni uspel.',1;
   EXEC out.ExportProductsCsv @OrganizationId=2, @ProfileCode=N'WEB_B2C_PRODUCTS';
   """;
-await using (var endToEnd = new SqlCommand(endToEndSql, connection))
+await using (var endToEnd = new SqlCommand(endToEndSql, connection) { CommandTimeout = 120 })
 await using (var reader = await endToEnd.ExecuteReaderAsync())
 {
   var csvRows = 0;

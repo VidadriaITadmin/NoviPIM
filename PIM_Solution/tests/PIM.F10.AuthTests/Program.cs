@@ -49,6 +49,10 @@ Assert(loginPost.Contains("ValidateRequestAsync", StringComparison.Ordinal), "Pr
 Assert(loginPost.Contains("IsPersistent", StringComparison.Ordinal), "Prijavna POST pot mora upoštevati zapomnitev seje.");
 
 var intranetDataText = File.ReadAllText(intranetData);
+var mainLayoutText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Layout", "MainLayout.razor"));
+var mainLayoutCss = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Layout", "MainLayout.razor.css"));
+Assert(!mainLayoutText.Contains("☰", StringComparison.Ordinal), "Glavna navigacija ne sme uporabljati Unicode ikone menija.");
+Assert(mainLayoutText.Contains("menu-glyph-icon", StringComparison.Ordinal) && mainLayoutCss.Contains(".menu-glyph-icon", StringComparison.Ordinal), "Glavna navigacija mora uporabljati nadzorovano CSS ikono menija.");
 foreach (var column in new[] { "CanonProductCount", "PimProductCount", "ErpValidCount", "WebInvalidCount", "QuarantineCount", "PositionId", "FreshnessMinutes", "MatchedProductId" })
   Assert(intranetDataText.Contains($"reader.GetOrdinal(\"{column}\")", StringComparison.Ordinal), "Preslikava mora uporabljati ime stolpca: " + column);
 foreach (var column in new[] { "NormalizedItemId", "Ean", "ProviderKind" })

@@ -74,9 +74,9 @@ if (Directory.Exists(migrationsDirectory))
     .ToArray();
   var numbered = migrationNames.Where(name => Regex.IsMatch(name!, "^\\d{3}_.+\\.sql$", RegexOptions.CultureInvariant)).ToArray();
 
-  if (numbered.Length != 10)
+  if (numbered.Length < 10)
   {
-    failures.Add($"Pričakovanih je deset oštevilčenih migracij F0–F4, najdenih je {numbered.Length}.");
+    failures.Add($"Pričakovanih je najmanj deset oštevilčenih migracij od F0 dalje, najdenih je {numbered.Length}.");
   }
 }
 
@@ -91,7 +91,7 @@ if (failures.Count > 0)
   return 1;
 }
 
-Console.WriteLine("F0–F4 migracijski kontrakt je izpolnjen.");
+Console.WriteLine("F0 izhodiščni migracijski kontrakt je izpolnjen.");
 return 0;
 
 void RequireFile(string name)

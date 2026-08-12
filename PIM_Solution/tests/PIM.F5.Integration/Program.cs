@@ -37,7 +37,15 @@ await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organ
 
 Equal(xml, await ScalarAsync<string>(connection, "SELECT TOP(1) PayloadXml FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)), "raw.Inbox payload se je spremenil.");
 Equal(originalPayload, xml, "Vstavljeni payload ni identičen.");
-Equal(6, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.ExtractedValue value INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Manjka staging sled.");
+var configuredFieldMappings = await ScalarAsync<int>(connection, """
+  SELECT COUNT(*)
+  FROM map.FieldMapping mapping
+  INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=mapping.SourceConnectorId
+  INNER JOIN map.EntityMapping entityMapping ON entityMapping.SourceConnectorId=mapping.SourceConnectorId AND entityMapping.EntityType=mapping.EntityType
+  WHERE connector.SourceCode=@SourceCode AND connector.OrganizationId=@OrganizationId
+    AND connector.IsActive=1 AND entityMapping.IsActive=1 AND mapping.IsActive=1;
+  """, ("@SourceCode", sourceCode), ("@OrganizationId", organizationId));
+Equal(configuredFieldMappings, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.ExtractedValue value INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Staging sled ne ustreza aktivni konfiguraciji polj.");
 Equal("F5 svetila", await ProductValueAsync(connection, "canon.ProductCategory", "CategoryPath"), "EAN kategorija ni obogatena.");
 Equal("//example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
 Equal("F5-203", await ProductValueAsync(connection, "canon.ProductAttribute", "Value"), "EAN atribut ni obogaten.");
@@ -73,6 +81,7 @@ if (definition.Contains(".nodes(", StringComparison.OrdinalIgnoreCase)
   throw new InvalidOperationException("SQL apply še vedno izvaja dinamični XPath.");
 }
 Console.WriteLine("F5 integration: EAN enrichment category/media/attribute, B2C validation, pim in CSV PASS.");
+await CleanupAsync(connection);
 return 0;
 
 static string? ReadConnectionString()
