@@ -9,7 +9,10 @@ public static class StockCsvGenerator
 {
   public static async Task WriteAsync(string path, IEnumerable<StockExportRow> rows, CancellationToken cancellationToken = default)
   {
-    await using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
+    await using var writer = new StreamWriter(path, false, new UTF8Encoding(false))
+    {
+      NewLine = "\n"
+    };
     await writer.WriteLineAsync("ProductKey,EAN,Quantity,AvailabilityDate,IncomingQuantity,Source,Provider,SnapshotUtc");
     foreach (var row in rows)
     {

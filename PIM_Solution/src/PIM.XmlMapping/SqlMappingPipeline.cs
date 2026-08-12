@@ -17,32 +17,56 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
   {
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync(cancellationToken);
-    var inboxes = await ReadInboxesAsync(connection, runId, organizationId, sourceCode, cancellationToken);
-
-    foreach (var inbox in inboxes)
+    await SetChangeContextAsync(connection, runId, sourceCode, cancellationToken);
+    try
     {
-      try
-      {
-        var values = extractor.Extract(inbox.PayloadXml, inbox.RecordXPath, inbox.Mappings);
-        await WriteValuesAsync(connection, inbox.InboxId, values, cancellationToken);
-      }
-      catch (XmlException exception)
-      {
-        await QuarantineAsync(connection, inbox.InboxId, exception.Message, cancellationToken);
-      }
-      catch (XPathException exception)
-      {
-        await QuarantineAsync(connection, inbox.InboxId, exception.Message, cancellationToken);
-      }
-    }
+      var inboxes = await ReadInboxesAsync(connection, runId, organizationId, sourceCode, cancellationToken);
 
-    await using var apply = new SqlCommand(
-      "EXEC map.ProcessRawInbox @RunId,@OrganizationId,@SourceCode;",
-      connection);
-    apply.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
-    apply.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-    apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
-    await apply.ExecuteNonQueryAsync(cancellationToken);
+      foreach (var inbox in inboxes)
+      {
+        try
+        {
+          var values = extractor.Extract(inbox.PayloadXml, inbox.RecordXPath, inbox.Mappings);
+          await WriteValuesAsync(connection, inbox.InboxId, values, cancellationToken);
+        }
+        catch (XmlException exception)
+        {
+          await QuarantineAsync(connection, inbox.InboxId, exception.Message, cancellationToken);
+        }
+        catch (XPathException exception)
+        {
+          await QuarantineAsync(connection, inbox.InboxId, exception.Message, cancellationToken);
+        }
+      }
+
+      await using var apply = new SqlCommand(
+        "EXEC map.ProcessRawInbox @RunId,@OrganizationId,@SourceCode;",
+        connection);
+      apply.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+      apply.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+      apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+      await apply.ExecuteNonQueryAsync(cancellationToken);
+    }
+    finally
+    {
+      await ClearChangeContextAsync(connection, cancellationToken);
+    }
+  }
+
+  private static async Task SetChangeContextAsync(SqlConnection connection, Guid runId, string sourceCode, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand("pim.SetChangeContext", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@ChangeSource", SqlDbType.NVarChar, 32).Value = "XML_FEED";
+    command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 128).Value = $"PIM.XmlMapping:{sourceCode}";
+    command.Parameters.Add("@BatchId", SqlDbType.UniqueIdentifier).Value = runId;
+    command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = $"Raw mapping run {runId}";
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  private static async Task ClearChangeContextAsync(SqlConnection connection, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand("pim.ClearChangeContext", connection) { CommandType = CommandType.StoredProcedure };
+    await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
   private static async Task<IReadOnlyList<InboxMapping>> ReadInboxesAsync(
