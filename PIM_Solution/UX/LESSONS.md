@@ -6,6 +6,7 @@
 - Različnega fonta, generiranega sloga ali alternativne kompozicije ne uvajamo brez potrditve.
 - Vizualni primeri niso podatkovni fixtureji: prikazani podatki v aplikaciji morajo izhajati iz PIM baze.
 - Implementator in pregledovalec sta ločena: Codex spremeni kodo, Claude neodvisno pregleda razliko in primerja s potrjeno referenco.
+- Namizni menijski gumb mora ostati viden, kot ga kažejo potrjene slike, in mora biti izveden z nadzorovano CSS/SVG grafiko; Unicode znaki niso stabilen ikonografski sistem.
 
 ## Odprta vprašanja za implementacijo
 
