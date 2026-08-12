@@ -1,16 +1,26 @@
-node_modules/
-dist/
-build/
-.env
-.env.*
-*.log
-.DS_Store
-coverage/
-.vitest/
-
-# IDE / scratch / lokalni delovni imeniki (ne sodijo v repo)
+# .NET build artefakti
+bin/
+obj/
+**/bin/
+**/obj/
+*.user
 .vs/
 **/.vs/
+
+# lokalne nastavitve in skrivnosti
+.env
+.env.*
+appsettings.Local.json
+**/appsettings.Local.json
+*.pfx
+
+# logi in delovni imeniki
+*.log
 .tmp-debug/
 .hermes/
+
+# referencni stari sistem (ni del tega repozitorija)
 /PIM_test/
+
+# razno
+.DS_Store

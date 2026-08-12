@@ -1,27 +1,32 @@
-# Projekt: NoviPIM
+# NoviPIM
 
-## Kaj gradimo
-Kratek opis aplikacije in za koga je.
+**Vsa pravila so v [`AGENTS.md`](AGENTS.md). Preberi jih pred prvo spremembo.**
+Ta datoteka je samo kazalo — pravil ne podvaja, da si ne moreta nasprotovati.
 
-## Arhitektura
-- Frontend: (npr. React + Vite)
-- Backend: (npr. Node / FastAPI)
-- Ključne mape: src/ (koda), tests/ (testi), docs/ (dokumentacija)
+## Na hitro
 
-## Ukazi
-- `npm run dev` — razvojni strežnik
-- `npm test` — testi (MORAJO miniti pred vsakim commitom)
-- `npm run lint` — preverjanje sloga
+- Delovni repozitorij: `C:\Users\David\Namizje\PIM\NoviPIM` — edini. Koda je v `PIM_Solution\`.
+- Stack: .NET 9, Blazor Server, MS SQL. **Ni Node, ni React.**
+- Edini dokaz, da nekaj dela:
 
-## Standardi kode
-- Jezik komentarjev: slovenščina
-- Zamik: 2 presledka
-- Imena testnih datotek: *.test.js
-- Brez wildcard importov
+```powershell
+dotnet build PIM_Solution\PIM.sln
+dotnet test PIM_Solution\PIM.sln --no-restore
+```
 
-## Pravila (obvezno)
-- Pred vsakim commitom poženi `npm test`; če pade, ga popravi, preden nadaljuješ
-- Za vsako novo funkcijo dodaj test
-- Ne spreminjaj datotek v docs/ brez izrecne zahteve
-- Skrivnosti (.env, ključi) se ne berejo in ne commitajo
-- Po zaključeni nalogi dopiši vrstico v PROGRESS.md (datum, kaj, ali testi minejo)
+  `npm test` ni dokaz ničesar — glej `AGENTS.md` §3.
+
+## Kje je kaj
+
+| Datoteka | Za kaj |
+|---|---|
+| `AGENTS.md` | pravila, ozemlja, kaj smeš brez vprašanja |
+| `TASKBOARD.md` | kdo kaj dela zdaj in kaj je narejeno |
+| `STATUS.md` | kje je sistem trenutno |
+| `docs\HERMES.md` | navodila za koordinatorja |
+| `docs\` | baza, workerji, intranet, izvozi, namestitev, E2E |
+
+## Svoboda
+
+Delaj sam do konca. Vprašaj samo pri brisanju, prepisu tujega dela, produkciji,
+zunanjih klicih, `git push` in merge v `master` — zaprt seznam je v `AGENTS.md` §4.
