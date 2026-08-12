@@ -1,0 +1,23 @@
+/* Izoliran slog strani /system/integracije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+
+/* Dve podatkovni kartici zapored: razmik nosi slog, ne dodatni razred v označbi. */
+.data-card + .data-card { margin-top: 16px; }
+
+/* Gosti tabeli z devetimi stolpci; na ozkih zaslonih se pomikata, namesto da bi se stiskali. */
+.table-scroll { overflow-x: auto; }
+.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Redigiran povzetek in naslov opozorila sta lahko dolga; celice ostanejo poravnane na vrh. */
+.data-table td { vertical-align: top; }
+
+/* Prazna celica dejanj ni sporočilo; pomišljaj ostane vizualno podrejen. */
+.no-action { color: #64748b; }
+
+/* Viden fokus tipkovnice: skupni slog gumbov obris odstrani, zato ga tu vrnemo. */
+.filter-button:focus-visible,
+.small-action:focus-visible,
+.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table { min-width: 900px; }
+}

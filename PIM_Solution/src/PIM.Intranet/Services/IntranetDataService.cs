@@ -15,7 +15,8 @@ public sealed record PipelineRunRow(Guid RunId, string Pipeline, string? SourceC
 public sealed record ProductDetailHeader(long ProductId, string ItemId, string? Ean, string Status, decimal Completeness, bool IsActive, bool WebPublish, string? Uom, string? ItemGroup, string? Department, string? Manufacturer, string? Supplier, DateTime? LastValidatedUtc);
 public sealed record ProductProfileRow(string ProfileCode, string Status, decimal Completeness, DateTime ValidatedUtc);
 public sealed record ProductIssueRow(long ProductIssueId, string ProfileCode, string IssueCode, string Message, DateTime FirstDetectedUtc, DateTime LastDetectedUtc);
-public sealed record ProductDetailView(ProductDetailHeader Header, IReadOnlyList<ProductProfileRow> Profiles, IReadOnlyList<ProductIssueRow> Issues);
+public sealed record ProductHistoryRow(long ChangeId, long ChangeBatchId, string FieldKey, string Owner, string? OldValue, string? NewValue, DateTime ChangedAtUtc, string ChangeSource, string ChangedBy, string? Note, DateTime? SentToSaopAtUtc);
+public sealed record ProductDetailView(ProductDetailHeader Header, IReadOnlyList<ProductProfileRow> Profiles, IReadOnlyList<ProductIssueRow> Issues, IReadOnlyList<ProductHistoryRow> History);
 public sealed record QuarantineRow(long InboxId, Guid RunId, string SourceCode, string EntityType, int PageNumber, string? FailureReason, DateTime ReceivedUtc);
 public sealed record StockRow(long PositionId, string? ItemId, string? Ean, decimal Quantity, DateTime? AvailabilityDate,
   decimal? IncomingQuantity, string SourceCode, DateTime SnapshotUtc, string MatchKey, string? ProviderKind,
@@ -146,7 +147,10 @@ public sealed class IntranetDataService(IConfiguration configuration)
     if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) profiles.Add(new(reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("Status")), reader.GetDecimal(reader.GetOrdinal("Completeness")), reader.GetDateTime(reader.GetOrdinal("ValidatedUtc"))));
     var issues = new List<ProductIssueRow>();
     if (await reader.NextResultAsync(cancellationToken)) while (await reader.ReadAsync(cancellationToken)) issues.Add(new(reader.GetInt64(reader.GetOrdinal("ProductIssueId")), reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("IssueCode")), reader.GetString(reader.GetOrdinal("Message")), reader.GetDateTime(reader.GetOrdinal("FirstDetectedUtc")), reader.GetDateTime(reader.GetOrdinal("LastDetectedUtc"))));
-    return new(header, profiles, issues);
+    await reader.NextResultAsync(cancellationToken);
+    var history = new List<ProductHistoryRow>();
+    while (await reader.ReadAsync(cancellationToken)) history.Add(new(reader.GetInt64(reader.GetOrdinal("ChangeId")), reader.GetInt64(reader.GetOrdinal("ChangeBatchId")), reader.GetString(reader.GetOrdinal("FieldKey")), reader.GetString(reader.GetOrdinal("Owner")), GetNullableString(reader, "OldValue"), GetNullableString(reader, "NewValue"), reader.GetDateTime(reader.GetOrdinal("ChangedAtUtc")), reader.GetString(reader.GetOrdinal("ChangeSource")), reader.GetString(reader.GetOrdinal("ChangedBy")), GetNullableString(reader, "Note"), GetNullableDateTime(reader, "SentToSaopAtUtc")));
+    return new(header, profiles, issues, history);
   }
 
   public async Task<IReadOnlyList<QuarantineRow>> GetQuarantineAsync(int organizationId, CancellationToken cancellationToken = default)

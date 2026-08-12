@@ -1,0 +1,24 @@
+/* Izoliran slog strani /teki-obdelave. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar { flex-wrap: wrap; row-gap: 10px; }
+.result-count { font-variant-numeric: tabular-nums; }
+
+/* Ime vira je naslov kartice, zato ne sme prevzeti privzete velikosti in odmikov <h2>. */
+.source-name { font-size: 15px; font-weight: 650; margin: 0; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll { overflow-x: auto; }
+.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.page-position { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible,
+.search-input:focus-visible,
+.filter-select:focus-visible,
+.pagination button:focus-visible,
+.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+/* Osem stolpcev in trije stolpci kartic virov se na telefonu ne smejo stisniti. */
+@media (max-width: 900px) {
+  .data-table { min-width: 880px; }
+  .source-grid { grid-template-columns: 1fr; }
+}

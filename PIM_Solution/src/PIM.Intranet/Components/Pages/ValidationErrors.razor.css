@@ -1,0 +1,23 @@
+/* Izoliran slog strani /napake-validacije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar { flex-wrap: wrap; row-gap: 10px; }
+.result-count { font-variant-numeric: tabular-nums; }
+.kpi strong { font-variant-numeric: tabular-nums; }
+
+/* Kartici pregleda sta gosti, a berljivi; na ozkih zaslonih se tabeli pomikata, namesto da bi se stiskali. */
+.table-scroll { overflow-x: auto; }
+.progress-value { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.issue-count { font-variant-numeric: tabular-nums; text-align: right; }
+.no-value { color: #8593a8; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible,
+.search-input:focus-visible,
+.filter-select:focus-visible,
+.table-scroll:focus-visible,
+.data-table a:focus-visible,
+.kpi a:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .quality-grid { grid-template-columns: 1fr; }
+  .data-table { min-width: 560px; }
+}

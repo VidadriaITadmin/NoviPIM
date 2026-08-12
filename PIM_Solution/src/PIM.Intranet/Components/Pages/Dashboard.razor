@@ -6,14 +6,16 @@
 <div class="page-heading"><span>Nadzorna plošča</span><h1>Nadzorna plošča</h1><p>Pregled ključnega stanja PIM sistema.</p></div>
 @if (Error is not null)
 {
-  <div class="ui-card error-state">@Error</div>
+  <div class="ui-card error-state" role="alert">@Error</div>
 }
 else if (Metrics is null)
 {
-  <p class="loading-state">Nalaganje podatkov …</p>
+  <p class="loading-state" role="status">Nalaganje podatkov …</p>
 }
 else
 {
+  <section class="dashboard-summary" aria-labelledby="povzetek-naslov">
+  <h2 id="povzetek-naslov" class="visually-hidden">Povzetek stanja</h2>
   <div class="metric-grid">
     <a class="metric-card blue" href="izdelki"><span class="metric-icon icon-products" aria-hidden="true"></span><span>Skupaj izdelkov</span><strong>@Metrics.CanonProductCount.ToString("N0")</strong><small>Kanonični izdelki</small></a>
     <a class="metric-card green" href="izdelki"><span class="metric-icon icon-check" aria-hidden="true"></span><span>ERP veljavni</span><strong>@Metrics.ErpValidCount.ToString("N0")</strong><small>@ErpPercent % vseh izdelkov</small></a>
@@ -21,17 +23,18 @@ else
     <a class="metric-card red" href="napake-validacije"><span class="metric-icon icon-warning" aria-hidden="true"></span><span>Z napakami</span><strong>@Metrics.WebInvalidCount.ToString("N0")</strong><small>Neveljavni za splet</small></a>
     <a class="metric-card amber" href="karantena"><span class="metric-icon icon-lock" aria-hidden="true"></span><span>V karanteni</span><strong>@Metrics.QuarantineCount.ToString("N0")</strong><small>Zapisi za pregled</small></a>
   </div>
+  </section>
 
   <div class="dashboard-grid">
-    <section class="dashboard-panel tasks-panel">
-      <div class="panel-title"><h2>Moja opravila</h2><span class="count-badge">@OpenTaskCount</span></div>
-      <a class="list-row" href="napake-validacije"><span class="row-icon danger icon-warning"></span><span>Izdelki z validacijskimi napakami</span><strong>@Metrics.WebInvalidCount</strong><i></i></a>
-      <a class="list-row" href="karantena"><span class="row-icon warning icon-lock"></span><span>Zapisi v karanteni</span><strong>@Metrics.QuarantineCount</strong><i></i></a>
+    <section class="dashboard-panel tasks-panel" aria-labelledby="opravila-naslov">
+      <div class="panel-title"><h2 id="opravila-naslov">Moja opravila</h2><span class="count-badge">@OpenTaskCount</span></div>
+      <a class="list-row" href="napake-validacije"><span class="row-icon danger icon-warning" aria-hidden="true"></span><span>Izdelki z validacijskimi napakami</span><strong>@Metrics.WebInvalidCount</strong><i></i></a>
+      <a class="list-row" href="karantena"><span class="row-icon warning icon-lock" aria-hidden="true"></span><span>Zapisi v karanteni</span><strong>@Metrics.QuarantineCount</strong><i></i></a>
       <div class="unavailable-note">Druga osebna opravila niso v podatkovnem modelu.</div>
     </section>
 
-    <section class="dashboard-panel quality-panel">
-      <div class="panel-title"><h2>Kakovost po profilih</h2><a href="napake-validacije">Poglej vse</a></div>
+    <section class="dashboard-panel quality-panel" aria-labelledby="kakovost-naslov">
+      <div class="panel-title"><h2 id="kakovost-naslov">Kakovost po profilih</h2><a href="napake-validacije">Poglej vse</a></div>
       @if (Quality is null) { <p class="panel-state">Podatki o profilih niso na voljo.</p> }
       else if (Quality.Profiles.Count == 0) { <p class="panel-state">Ni podatkov o profilih kakovosti.</p> }
       else
@@ -39,14 +42,14 @@ else
         @foreach (var profile in Quality.Profiles.Take(4))
         {
           var completeness = ProfileCompleteness(profile);
-          <a class="quality-row" href="napake-validacije"><strong>@profile.ProfileCode</strong><span class="progress"><i class="@(completeness < 75 ? "warn" : null)" style="width:@completeness%"></i></span><span>@completeness %</span><i></i></a>
+          <a class="quality-row" href="napake-validacije"><strong>@profile.ProfileCode</strong><span class="progress" role="progressbar" aria-valuenow="@completeness" aria-valuemin="0" aria-valuemax="100" aria-label="Popolnost profila @profile.ProfileCode"><i class="@(completeness < 75 ? "warn" : null)" style="width:@completeness%"></i></span><span>@completeness %</span><i></i></a>
         }
       }
       <div class="info-note">Popolnost je izračunana iz dejanskih rezultatov profilov.</div>
     </section>
 
-    <section class="dashboard-panel processes-panel">
-      <div class="panel-title"><h2>Zadnji procesi / Status integracij</h2><a href="teki-obdelave">Poglej vse</a></div>
+    <section class="dashboard-panel processes-panel" aria-labelledby="procesi-naslov">
+      <div class="panel-title"><h2 id="procesi-naslov">Zadnji procesi / Status integracij</h2><a href="teki-obdelave">Poglej vse</a></div>
       @if (Runs is null) { <p class="panel-state">Zadnji procesi niso na voljo.</p> }
       else if (Runs.Count == 0) { <p class="panel-state">Ni zabeleženih procesov.</p> }
       else
@@ -54,47 +57,47 @@ else
         <div class="process-head"><span>Proces / Integracija</span><span>Zadnji zagon</span><span>Status</span></div>
         @foreach (var run in Runs.OrderByDescending(row => row.StartedUtc).Take(5))
         {
-          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToLocalTime().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)">@run.Status</strong></a>
+          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToLocalTime().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
         }
       }
     </section>
 
-    <section class="dashboard-panel alerts-panel">
-      <div class="panel-title"><h2>Opozorila in prioritete</h2></div>
+    <section class="dashboard-panel alerts-panel" aria-labelledby="opozorila-naslov">
+      <div class="panel-title"><h2 id="opozorila-naslov">Opozorila in prioritete</h2></div>
       @if (Integrations is null) { <p class="panel-state">Opozorila integracij niso na voljo.</p> }
       else if (!OpenAlerts.Any()) { <p class="panel-state good-state">Ni odprtih opozoril integracij.</p> }
       else
       {
         @foreach (var alert in OpenAlerts.Take(5))
         {
-          <a class="alert-row" href="system/integracije"><span class="row-icon danger icon-warning"></span><span><strong>@alert.Title</strong><small>@alert.Pipeline · @alert.OccurrenceCount pojavov</small></span><i></i></a>
+          <a class="alert-row" href="system/integracije"><span class="row-icon danger icon-warning" aria-hidden="true"></span><span><strong>@alert.Title</strong><small>@alert.Pipeline · @alert.OccurrenceCount pojavov</small></span><i></i></a>
         }
       }
       <a class="panel-link" href="system/integracije">Vsa opozorila</a>
     </section>
 
-    <section class="dashboard-panel integration-panel">
-      <div class="panel-title"><h2>Stanje integracij</h2><a href="system/integracije">Podrobnosti</a></div>
+    <section class="dashboard-panel integration-panel" aria-labelledby="integracije-naslov">
+      <div class="panel-title"><h2 id="integracije-naslov">Stanje integracij</h2><a href="system/integracije">Podrobnosti</a></div>
       @if (Integrations is null) { <p class="panel-state">Stanje integracij ni na voljo.</p> }
       else if (Integrations.Integrations.Count == 0) { <p class="panel-state">Ni nastavljenih integracij.</p> }
       else
       {
         @foreach (var integration in Integrations.Integrations.Take(5))
         {
-          <a class="integration-row" href="system/integracije"><span>@integration.Provider</span><small>@integration.Pipeline</small><strong class="status @StatusClass(integration.Status)">@(integration.Status ?? (integration.IsEnabled ? "Brez statusa" : "Onemogočeno"))</strong></a>
+          <a class="integration-row" href="system/integracije"><span>@integration.Provider</span><small>@integration.Pipeline</small><strong class="status @StatusClass(integration.Status)"><span class="visually-hidden">Status: </span>@(integration.Status ?? (integration.IsEnabled ? "Brez statusa" : "Onemogočeno"))</strong></a>
         }
       }
     </section>
 
-    <section class="dashboard-panel quick-panel">
-      <div class="panel-title"><h2>Hitri dostopi</h2></div>
+    <section class="dashboard-panel quick-panel" aria-labelledby="hitri-dostopi-naslov">
+      <div class="panel-title"><h2 id="hitri-dostopi-naslov">Hitri dostopi</h2></div>
       <div class="quick-links">
-        <a href="izdelki"><span class="quick-icon blue icon-products"></span><strong>Vsi izdelki</strong></a>
-        <a href="napake-validacije"><span class="quick-icon red icon-warning"></span><strong>Z napakami</strong></a>
-        <a href="karantena"><span class="quick-icon amber icon-lock"></span><strong>Karantena</strong></a>
-        <a href="teki-obdelave"><span class="quick-icon green icon-process"></span><strong>Procesi</strong></a>
-        <a href="outbound"><span class="quick-icon green icon-export"></span><strong>Izvozi</strong></a>
-        <a href="system/integracije"><span class="quick-icon purple icon-settings"></span><strong>Integracije</strong></a>
+        <a href="izdelki"><span class="quick-icon blue icon-products" aria-hidden="true"></span><strong>Vsi izdelki</strong></a>
+        <a href="napake-validacije"><span class="quick-icon red icon-warning" aria-hidden="true"></span><strong>Z napakami</strong></a>
+        <a href="karantena"><span class="quick-icon amber icon-lock" aria-hidden="true"></span><strong>Karantena</strong></a>
+        <a href="teki-obdelave"><span class="quick-icon green icon-process" aria-hidden="true"></span><strong>Procesi</strong></a>
+        <a href="outbound"><span class="quick-icon green icon-export" aria-hidden="true"></span><strong>Izvozi</strong></a>
+        <a href="system/integracije"><span class="quick-icon purple icon-settings" aria-hidden="true"></span><strong>Integracije</strong></a>
       </div>
     </section>
   </div>

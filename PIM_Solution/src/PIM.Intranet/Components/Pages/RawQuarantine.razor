@@ -1,6 +1,24 @@
 @page "/karantena"
 @attribute [Authorize]
 @inject PIM.Intranet.Services.IntranetDataService Data
-<PageTitle>Karantena</PageTitle><div class="page-header"><div><h1>Karantena</h1><p>Zapisi, izločeni med podatkovno obdelavo.</p></div></div><div class="page-tabs"><a class="page-tab" href="napake-validacije">Napake</a><span class="page-tab active">Karantena</span></div>
-<section class="ui-card toolbar"><label class="visually-hidden" for="quarantine-search">Poišči karantenski zapis</label><input id="quarantine-search" class="search-input" placeholder="Poišči po viru, entiteti ali razlogu …" @bind="Search" @bind:event="oninput"/><span class="result-count">@Filtered.Count rezultatov</span></section><section class="ui-card data-card">@if(Loading){<div class="loading-state">Nalaganje karantene …</div>}else if(Error is not null){<div class="error-state">@Error</div>}else if(Filtered.Count==0){<div class="empty-state">Ni karantenskih zapisov za izbrani filter.</div>}else{<table class="data-table"><caption>Karantenski zapisi podatkovne obdelave</caption><thead><tr><th>Vir</th><th>Entiteta</th><th>Stran</th><th>Razlog izločitve</th><th>Prejeto</th></tr></thead><tbody>@foreach(var row in Filtered){<tr><td>@row.SourceCode</td><td>@row.EntityType</td><td>@row.PageNumber</td><td>@(row.FailureReason??"Razlog ni podan")</td><td>@row.ReceivedUtc.ToLocalTime().ToString("g")</td></tr>}</tbody></table>}</section>
-@code {IReadOnlyList<PIM.Intranet.Services.QuarantineRow>? Rows;bool Loading=true;string? Error;string Search="";IReadOnlyList<PIM.Intranet.Services.QuarantineRow> Filtered=>Rows?.Where(x=>Search==""||x.SourceCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityType.Contains(Search,StringComparison.OrdinalIgnoreCase)||(x.FailureReason?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetQuarantineAsync(org.OrganizationId);}catch{Error="Karantene trenutno ni mogoče naložiti.";}finally{Loading=false;}}}
+<PageTitle>Karantena</PageTitle>
+<div class="page-header"><div><h1>Karantena</h1><p>Zapisi, izločeni med podatkovno obdelavo.</p></div></div>
+<nav class="page-tabs" aria-label="Pogledi kakovosti"><a class="page-tab" href="napake-validacije">Pregled kakovosti</a><span class="page-tab active" aria-current="page">Karantena</span></nav>
+<section class="ui-card toolbar" role="search" aria-labelledby="quarantine-filter-title">
+  <h2 id="quarantine-filter-title" class="visually-hidden">Iskanje karantenskih zapisov</h2>
+  <label class="visually-hidden" for="quarantine-search">Poišči karantenski zapis</label><input id="quarantine-search" type="search" class="search-input" placeholder="Poišči po viru, entiteti ali razlogu …" @bind="Search" @bind:event="oninput" />
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+<section class="ui-card data-card" aria-label="Karantenski zapisi podatkovne obdelave">
+@if (Loading) { <div class="loading-state" role="status">Nalaganje karantene …</div> }
+else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
+else if (Filtered.Count == 0) { <div class="empty-state">Ni karantenskih zapisov za izbrani filter.</div> }
+else {
+  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela karantenskih zapisov">
+    <table class="data-table"><caption>Karantenski zapisi podatkovne obdelave</caption><thead><tr><th scope="col">Vir</th><th scope="col">Entiteta</th><th scope="col">Stran</th><th scope="col">Razlog izločitve</th><th scope="col">Prejeto</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td>@row.SourceCode</td><td>@row.EntityType</td><td>@row.PageNumber</td><td>@(row.FailureReason??"Razlog ni podan")</td><td>@row.ReceivedUtc.ToLocalTime().ToString("g")</td></tr> }</tbody></table>
+  </div> }
+</section>
+@code {IReadOnlyList<PIM.Intranet.Services.QuarantineRow>? Rows;bool Loading=true;string? Error;string Search="";IReadOnlyList<PIM.Intranet.Services.QuarantineRow> Filtered=>Rows?.Where(x=>Search==""||x.SourceCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityType.Contains(Search,StringComparison.OrdinalIgnoreCase)||(x.FailureReason?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetQuarantineAsync(org.OrganizationId);}catch{Error="Karantene trenutno ni mogoče naložiti.";}finally{Loading=false;}}
+  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Filtered.Count} rezultatov";
+}

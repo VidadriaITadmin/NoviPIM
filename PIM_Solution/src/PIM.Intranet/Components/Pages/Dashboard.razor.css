@@ -51,6 +51,8 @@
 .quick-icon.blue { background-color: #246bff; }.quick-icon.red { background-color: #ef4444; }.quick-icon.amber { background-color: #eaa300; }.quick-icon.green { background-color: #22a957; }.quick-icon.purple { background-color: #9333ea; }
 .panel-state { color: #718096; font-size: 12px; padding: 24px 8px; text-align: center; }
 .good-state { color: #19833e; }
+/* Viden fokus tipkovnice na vseh interaktivnih elementih plošče. */
+.metric-card:focus-visible, .list-row:focus-visible, .quality-row:focus-visible, .process-row:focus-visible, .alert-row:focus-visible, .integration-row:focus-visible, .quick-links a:focus-visible, .panel-title a:focus-visible, .panel-link:focus-visible { border-radius: 7px; outline: 2px solid #1264e8; outline-offset: 2px; }
 .icon-products { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m12 2 9 5-9 5-9-5 9-5Zm9 5v10l-9 5-9-5V7m9 5v10' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
 .icon-check { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 13 4 4L19 7' fill='none' stroke='black' stroke-width='2.5'/%3E%3C/svg%3E"); }
 .icon-published, .icon-export { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v13m-5-5 5 5 5-5M4 20h16' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }

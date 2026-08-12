@@ -3,12 +3,54 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Kakovost</PageTitle>
 <div class="page-header"><div><h1>Kakovost</h1><p>Živ pregled validacijskega stanja in odprtih težav.</p></div></div>
-<div class="page-tabs"><button class="page-tab @(Tab=="overview"?"active":null)" @onclick='()=>Tab="overview"'>Pregled</button><button class="page-tab @(Tab=="issues"?"active":null)" @onclick='()=>Tab="issues"'>Težave</button><a class="page-tab" href="karantena">Karantena</a></div>
-@if(Loading){<div class="ui-card loading-state">Nalaganje kakovosti …</div>}else if(Error is not null){<div class="ui-card error-state">@Error</div>}else if(View is not null && Tab=="overview"){
-  <div class="kpi-grid"><section class="ui-card kpi"><span>Odprte težave</span><strong>@View.Issues.Count.ToString("N0")</strong></section><section class="ui-card kpi"><span>Prizadeti izdelki</span><strong>@View.Issues.Select(x=>x.ProductId).Distinct().Count().ToString("N0")</strong></section><section class="ui-card kpi"><span>Merjeni profili</span><strong>@View.Profiles.Count.ToString("N0")</strong></section><section class="ui-card kpi"><span>Karantena</span><strong><a href="karantena">Odpri pregled</a></strong></section></div>
-  <div class="quality-grid"><section class="ui-card data-card"><table class="data-table"><caption>Kakovost po validacijskih profilih</caption><thead><tr><th>Profil</th><th>Izdelki</th><th>Veljavni</th><th>Neveljavni</th><th>Povprečna popolnost</th></tr></thead><tbody>@foreach(var row in View.Profiles){<tr><td>@row.ProfileCode</td><td>@row.ProductCount</td><td>@row.ValidCount</td><td>@row.InvalidCount</td><td>@(row.AverageCompleteness is null?"Ni podatka":$"{row.AverageCompleteness:0.#} %")</td></tr>}</tbody></table></section><section class="ui-card data-card"><table class="data-table"><caption>Najpogostejše odprte težave</caption><thead><tr><th>Koda</th><th>Sporočilo</th><th>Pojavitve</th></tr></thead><tbody>@foreach(var row in View.FrequentIssues){<tr><td>@row.IssueCode</td><td>@row.Message</td><td>@row.OccurrenceCount</td></tr>}</tbody></table></section></div>
-}else if(View is not null){
-  <section class="ui-card toolbar"><label class="visually-hidden" for="issue-search">Poišči težavo</label><input id="issue-search" class="search-input" placeholder="Poišči po izdelku, kodi ali sporočilu …" @bind="Search" @bind:event="oninput"/><label class="visually-hidden" for="issue-profile">Profil</label><select id="issue-profile" class="filter-select" @bind="Profile"><option value="">Vsi profili</option>@foreach(var p in Profiles){<option>@p</option>}</select><span class="result-count">@Filtered.Count rezultatov</span></section>
-  <section class="ui-card data-card">@if(Filtered.Count==0){<div class="empty-state">Ni odprtih težav za izbrane filtre.</div>}else{<table class="data-table"><caption>Odprte validacijske težave</caption><thead><tr><th>Izdelek</th><th>Profil</th><th>Koda</th><th>Sporočilo</th><th>Zadnji pojav</th></tr></thead><tbody>@foreach(var row in Filtered){<tr><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@row.ProfileCode</td><td>@row.IssueCode</td><td>@row.Message</td><td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td></tr>}</tbody></table>}</section>
+<nav class="page-tabs" aria-label="Pogledi kakovosti"><button type="button" class="page-tab @(Tab=="overview"?"active":null)" aria-current="@(Tab=="overview"?"page":null)" @onclick="ShowOverview">Pregled kakovosti</button><button type="button" class="page-tab @(Tab=="issues"?"active":null)" aria-current="@(Tab=="issues"?"page":null)" @onclick="ShowIssues">Napake</button><a class="page-tab" href="karantena">Karantena</a></nav>
+@if (Loading) { <div class="ui-card loading-state" role="status">Nalaganje kakovosti …</div> }
+else if (Error is not null) { <div class="ui-card error-state" role="alert">@Error</div> }
+else if (View is not null && Tab == "overview") {
+  <section class="kpi-grid" aria-labelledby="quality-kpi-title">
+    <h2 id="quality-kpi-title" class="visually-hidden">Povzetek stanja kakovosti</h2>
+    <div class="ui-card kpi"><span>Odprte težave</span><strong>@View.Issues.Count.ToString("N0")</strong></div>
+    <div class="ui-card kpi"><span>Prizadeti izdelki</span><strong>@View.Issues.Select(x=>x.ProductId).Distinct().Count().ToString("N0")</strong></div>
+    <div class="ui-card kpi"><span>Merjeni profili</span><strong>@View.Profiles.Count.ToString("N0")</strong></div>
+    <div class="ui-card kpi"><span>Karantena</span><strong><a href="karantena">Odpri pregled</a></strong></div>
+  </section>
+  <div class="quality-grid">
+    <section class="ui-card data-card" aria-label="Kakovost po validacijskih profilih">
+    @if (View.Profiles.Count == 0) { <div class="empty-state">Merjenih validacijskih profilov ni.</div> }
+    else {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela kakovosti po profilih">
+        <table class="data-table"><caption>Kakovost po validacijskih profilih</caption><thead><tr><th scope="col">Profil</th><th scope="col">Izdelki</th><th scope="col">Veljavni</th><th scope="col">Neveljavni</th><th scope="col">Povprečna popolnost</th></tr></thead><tbody>@foreach (var row in View.Profiles) { <tr><td>@row.ProfileCode</td><td>@row.ProductCount</td><td>@row.ValidCount</td><td>@row.InvalidCount</td><td>@if (row.AverageCompleteness is null) { <span class="no-value">Ni podatka</span> } else { <div class="progress-line"><span class="progress-track" role="progressbar" aria-label="Povprečna popolnost profila @row.ProfileCode" aria-valuenow="@Number(row.AverageCompleteness.Value)" aria-valuemin="0" aria-valuemax="100"><i class="@(row.AverageCompleteness.Value < 75 ? "warn" : null)" aria-hidden="true" style="width:@Percent(row.AverageCompleteness.Value)"></i></span><span class="progress-value">@row.AverageCompleteness.Value.ToString("0.#") %</span></div> }</td></tr> }</tbody></table>
+      </div> }
+    </section>
+    <section class="ui-card data-card" aria-label="Najpogostejše odprte težave">
+    @if (View.FrequentIssues.Count == 0) { <div class="empty-state">Ponavljajočih se težav ni.</div> }
+    else {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela najpogostejših težav">
+        <table class="data-table"><caption>Najpogostejše odprte težave</caption><thead><tr><th scope="col">Koda</th><th scope="col">Sporočilo</th><th scope="col">Pojavitve</th></tr></thead><tbody>@foreach (var row in View.FrequentIssues) { <tr><td>@row.IssueCode</td><td>@row.Message</td><td class="issue-count">@row.OccurrenceCount.ToString("N0")</td></tr> }</tbody></table>
+      </div> }
+    </section>
+  </div>
 }
-@code {PIM.Intranet.Services.QualityView? View;bool Loading=true;string? Error;string Search="";string Profile="";string Tab="overview";IEnumerable<string> Profiles=>View is null?Enumerable.Empty<string>():View.Issues.Select(x=>x.ProfileCode).Distinct().Order();IReadOnlyList<PIM.Intranet.Services.ValidationIssueRow> Filtered=>View?.Issues.Where(x=>(Profile==""||x.ProfileCode==Profile)&&(Search==""||x.ItemId.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.IssueCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.Message.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}View=await Data.GetValidationIssuesAsync(org.OrganizationId);}catch{Error="Podatkov o kakovosti trenutno ni mogoče naložiti.";}finally{Loading=false;}}}
+else if (View is not null) {
+  <section class="ui-card toolbar" role="search" aria-labelledby="issues-filter-title">
+    <h2 id="issues-filter-title" class="visually-hidden">Iskanje odprtih težav</h2>
+    <label class="visually-hidden" for="issue-search">Poišči težavo</label><input id="issue-search" type="search" class="search-input" placeholder="Poišči po izdelku, kodi ali sporočilu …" @bind="Search" @bind:event="oninput" />
+    <label class="visually-hidden" for="issue-profile">Profil</label><select id="issue-profile" class="filter-select" @bind="Profile"><option value="">Vsi profili</option>@foreach (var p in Profiles) { <option>@p</option> }</select>
+    <span class="result-count" role="status" aria-live="polite">@Filtered.Count rezultatov</span>
+  </section>
+  <section class="ui-card data-card" aria-label="Odprte validacijske težave">
+  @if (Filtered.Count == 0) { <div class="empty-state">Ni odprtih težav za izbrane filtre.</div> }
+  else {
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odprtih težav">
+      <table class="data-table"><caption>Odprte validacijske težave</caption><thead><tr><th scope="col">Izdelek</th><th scope="col">Profil</th><th scope="col">Koda</th><th scope="col">Sporočilo</th><th scope="col">Zadnji pojav</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@row.ProfileCode</td><td>@row.IssueCode</td><td>@row.Message</td><td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td></tr> }</tbody></table>
+    </div> }
+  </section>
+}
+@code {PIM.Intranet.Services.QualityView? View;bool Loading=true;string? Error;string Search="";string Profile="";string Tab="overview";IEnumerable<string> Profiles=>View is null?Enumerable.Empty<string>():View.Issues.Select(x=>x.ProfileCode).Distinct().Order();IReadOnlyList<PIM.Intranet.Services.ValidationIssueRow> Filtered=>View?.Issues.Where(x=>(Profile==""||x.ProfileCode==Profile)&&(Search==""||x.ItemId.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.IssueCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.Message.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}View=await Data.GetValidationIssuesAsync(org.OrganizationId);}catch{Error="Podatkov o kakovosti trenutno ni mogoče naložiti.";}finally{Loading=false;}}
+  // Zavihka preklapljata samo predstavitveno stanje; podatki so naloženi enkrat ob inicializaciji.
+  void ShowOverview() => Tab = "overview";
+  void ShowIssues() => Tab = "issues";
+  static string Percent(decimal value) => $"{Math.Clamp(value,0,100).ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
+  // aria-valuenow mora biti številka s piko ne glede na območne nastavitve strežnika.
+  static string Number(decimal value) => Math.Clamp(value,0,100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

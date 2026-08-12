@@ -2,7 +2,12 @@
 .app-sidebar { background: linear-gradient(160deg, #1c242e, #111820); color: #dce4f0; flex: 0 0 200px; min-height: 100vh; position: relative; }
 .app-main { flex: 1; min-width: 0; }
 .app-topbar { align-items: center; background: #fff; border-bottom: 1px solid #e2e7ee; display: flex; gap: 12px; height: 66px; padding: 0 26px; }
-.menu-glyph { background: transparent; border: 0; color: #34445d; cursor: pointer; display: none; font-size: 20px; }
+.menu-glyph { align-items: center; background: transparent; border: 0; color: #34445d; cursor: pointer; display: inline-flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.menu-glyph-icon, .menu-glyph-icon::before, .menu-glyph-icon::after { background: currentColor; border-radius: 2px; display: block; height: 2px; position: relative; width: 17px; }
+.menu-glyph-icon::before, .menu-glyph-icon::after { content: ""; left: 0; position: absolute; }
+.menu-glyph-icon::before { top: -6px; }
+.menu-glyph-icon::after { top: 6px; }
+.menu-glyph:focus-visible { border-radius: 5px; box-shadow: 0 0 0 3px rgba(23, 100, 232, .18); outline: none; }
 .global-search { align-items: center; border: 1px solid #dbe2eb; border-radius: 6px; color: #718096; display: flex; font-size: 13px; gap: 10px; height: 38px; max-width: 350px; padding: 0 13px; text-decoration: none; width: 100%; }
 .search-icon { border: 1.6px solid #718096; border-radius: 50%; height: 11px; position: relative; width: 11px; }
 .search-icon::after { background: #718096; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
@@ -25,7 +30,6 @@
 @media (max-width: 760px) {
   .app-sidebar { display: none; left: 0; position: fixed; top: 0; width: 220px; z-index: 100; }
   .app-sidebar.open { display: block; }
-  .menu-glyph { display: inline-block; }
   .app-topbar { padding: 0 14px; }
   .top-context, .signed-user strong, .logout-button { display: none; }
   .global-search { max-width: none; }

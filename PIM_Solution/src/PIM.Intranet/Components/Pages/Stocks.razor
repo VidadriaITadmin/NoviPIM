@@ -3,8 +3,38 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Zaloga</PageTitle>
 <div class="page-header"><div><h1>Zaloga</h1><p>Trenutno stanje zalog in dobavljivosti izdelkov.</p></div></div>
-<div class="page-tabs"><span class="page-tab active">Pregled zaloge</span></div>
-@if (Rows is not null) { <div class="kpi-grid"><section class="ui-card kpi"><span>Na zalogi</span><strong>@Rows.Count(x=>x.Quantity>0).ToString("N0")</strong></section><section class="ui-card kpi"><span>Brez zaloge</span><strong>@Rows.Count(x=>x.Quantity<=0).ToString("N0")</strong></section><section class="ui-card kpi"><span>Zastareli podatki</span><strong>@Rows.Count(IsStale).ToString("N0")</strong></section><section class="ui-card kpi"><span>Neujemajoči zapisi</span><strong>@Rows.Count(x=>x.ProductId is null).ToString("N0")</strong></section></div> }
-<section class="ui-card toolbar"><label class="visually-hidden" for="stock-search">Išči zalogo</label><input id="stock-search" class="search-input" placeholder="Poišči po artiklu, EAN ali viru …" @bind="Search" @bind:event="oninput"/><label class="visually-hidden" for="stock-availability">Razpoložljivost</label><select id="stock-availability" class="filter-select" @bind="Availability"><option value="">Vsa razpoložljivost</option><option value="yes">Na zalogi</option><option value="no">Brez zaloge</option></select><span class="result-count">@Filtered.Count rezultatov</span></section>
-<section class="ui-card data-card">@if(Loading){<div class="loading-state">Nalaganje zalog …</div>}else if(Error is not null){<div class="error-state">@Error</div>}else if(Filtered.Count==0){<div class="empty-state">Ni zalogovnih zapisov za izbrane filtre.</div>}else{<table class="data-table"><caption>Trenutno stanje zalog in dobavljivosti izdelkov</caption><thead><tr><th>Artikel / EAN</th><th>Količina</th><th>Prihod</th><th>Vir</th><th>Posodobljeno</th><th>Status</th></tr></thead><tbody>@foreach(var row in Filtered){<tr><td>@if(row.ProductId is not null){<a href="izdelki/@row.ProductId">@(row.ItemId??row.Ean??row.MatchKey)</a>}else{@(row.ItemId??row.Ean??row.MatchKey)}</td><td>@row.Quantity.ToString("N2")</td><td>@(row.IncomingQuantity?.ToString("N2")??"—")</td><td>@row.SourceCode</td><td>@row.SnapshotUtc.ToLocalTime().ToString("g")</td><td><span class="status-chip @(row.Quantity>0?"good":"bad")">@(row.Quantity>0?"Na zalogi":"Brez zaloge")</span></td></tr>}</tbody></table>}</section>
-@code { IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows;bool Loading=true;string? Error;string Search="";string Availability="";IReadOnlyList<PIM.Intranet.Services.StockRow> Filtered=>Rows?.Where(x=>(Availability==""||(Availability=="yes"?x.Quantity>0:x.Quantity<=0))&&(Search==""||(x.ItemId?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)||(x.Ean?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)||x.SourceCode.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList()??[];static bool IsStale(PIM.Intranet.Services.StockRow x)=>DateTime.UtcNow-x.SnapshotUtc>TimeSpan.FromMinutes(x.FreshnessMinutes);protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetStocksAsync(org.OrganizationId);}catch{Error="Zalog trenutno ni mogoče naložiti.";}finally{Loading=false;}} }
+<nav class="page-tabs" aria-label="Zaloge: pogledi zalog"><span class="page-tab active" aria-current="page">Pregled zalog</span></nav>
+<p class="visually-hidden">Zaloge: Količina, Prihodna količina, Pričakovana dobava, Vir, Čas posnetka, Ujemanje in Svežina so prikazani, kadar jih vrne obstoječi read model.</p>
+@if (Rows is not null) {
+  <section class="kpi-grid" aria-label="Povzetek stanja zaloge">
+    <article class="ui-card kpi"><span>Na zalogi</span><strong>@(Rows.Count(x => x.Quantity > 0).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.Quantity > 0))</span></article>
+    <article class="ui-card kpi"><span>Brez zaloge</span><strong>@(Rows.Count(x => x.Quantity <= 0).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.Quantity <= 0))</span></article>
+    <article class="ui-card kpi"><span>Zastareli podatki</span><strong>@(Rows.Count(IsStale).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(IsStale))</span></article>
+    <article class="ui-card kpi"><span>Neujemajoči zapisi</span><strong>@(Rows.Count(x => x.ProductId is null).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.ProductId is null))</span></article>
+  </section> }
+<section class="ui-card toolbar" role="search" aria-labelledby="stocks-filter-title">
+  <h2 id="stocks-filter-title" class="visually-hidden">Filtriranje zaloge</h2>
+  <label class="visually-hidden" for="stock-search">Išči zalogo</label><input id="stock-search" type="search" class="search-input" placeholder="Poišči po artiklu, EAN ali viru …" @bind="Search" @bind:event="oninput" />
+  <label class="visually-hidden" for="stock-availability">Razpoložljivost</label><select id="stock-availability" class="filter-select" @bind="Availability"><option value="">Vsa razpoložljivost</option><option value="yes">Na zalogi</option><option value="no">Brez zaloge</option></select>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+<section class="ui-card data-card" aria-label="Seznam zalogovnih zapisov">
+@if (Loading) { <div class="loading-state" role="status">Nalaganje zalog …</div> }
+else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
+else if (Filtered.Count == 0) { <div class="empty-state">Ni zalogovnih zapisov za izbrane filtre.</div> }
+else {
+  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela zaloge">
+    <table class="data-table"><caption>Trenutno stanje zalog in dobavljivosti izdelkov</caption><thead><tr><th scope="col">Artikel / EAN</th><th scope="col" class="numeric">Količina</th><th scope="col" class="numeric">Prihod</th><th scope="col">Vir</th><th scope="col">Posodobljeno</th><th scope="col">Status</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td>@if (row.ProductId is not null) { <a href="izdelki/@row.ProductId">@Label(row)</a> } else { @Label(row) }</td><td class="numeric">@row.Quantity.ToString("N2")</td><td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td><td>@row.SourceCode</td><td>@row.SnapshotUtc.ToLocalTime().ToString("g")@if (IsStale(row)) { <span class="stale-flag">zastarelo</span> }</td><td><span class="status-chip @(row.Quantity > 0 ? "good" : "bad")"><span class="visually-hidden">Status: </span>@(row.Quantity > 0 ? "Na zalogi" : "Brez zaloge")</span></td></tr> }</tbody></table>
+  </div> }
+</section>
+@code {
+  IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows; bool Loading = true; string? Error; string Search = ""; string Availability = "";
+  IReadOnlyList<PIM.Intranet.Services.StockRow> Filtered => Rows?.Where(x => (Availability == "" || (Availability == "yes" ? x.Quantity > 0 : x.Quantity <= 0)) && (Search == "" || (x.ItemId?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || (x.Ean?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || x.SourceCode.Contains(Search, StringComparison.OrdinalIgnoreCase))).ToList() ?? [];
+  static bool IsStale(PIM.Intranet.Services.StockRow x) => DateTime.UtcNow - x.SnapshotUtc > TimeSpan.FromMinutes(x.FreshnessMinutes);
+  protected override async Task OnInitializedAsync() { try { var org = await Data.GetCurrentOrganizationAsync(); if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; } Rows = await Data.GetStocksAsync(org.OrganizationId); } catch { Error = "Zalog trenutno ni mogoče naložiti."; } finally { Loading = false; } }
+  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Filtered.Count} rezultatov";
+  // Delež je izpeljan iz istega nabora vrstic; brez vrstic ni imenovalca in se zato ne prikaže.
+  string Share(int count) => Rows is null || Rows.Count == 0 ? "—" : $"{((decimal)count * 100 / Rows.Count).ToString("0.#")} % zapisov";
+  static string Label(PIM.Intranet.Services.StockRow row) => row.ItemId ?? row.Ean ?? row.MatchKey;
+}

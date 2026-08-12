@@ -7,7 +7,7 @@
   <aside id="primary-navigation" class="app-sidebar @(MenuOpen ? "open" : null)"><NavMenu /></aside>
   <main class="app-main">
     <header class="app-topbar">
-      <button class="menu-glyph" type="button" aria-label="Preklopi glavno navigacijo" aria-controls="primary-navigation" aria-expanded="@MenuOpen" @onclick="()=>MenuOpen=!MenuOpen"><span aria-hidden="true">☰</span></button>
+      <button class="menu-glyph" type="button" aria-label="Preklopi glavno navigacijo" aria-controls="primary-navigation" aria-expanded="@MenuOpen" @onclick="()=>MenuOpen=!MenuOpen"><span class="menu-glyph-icon" aria-hidden="true"></span></button>
       <a class="global-search" href="izdelki"><span class="search-icon" aria-hidden="true"></span><span>Poišči izdelke, EAN, nazive …</span></a>
       <div class="topbar-spacer"></div>
       <div class="top-context"><small>Organizacija</small><strong>@(Organization?.Name ?? "Ni na voljo")</strong></div>
@@ -38,5 +38,5 @@
 <div id="blazor-error-ui">
     Prišlo je do nepričakovane napake.
     <a href="" class="reload">Ponovno naloži</a>
-    <a class="dismiss">🗙</a>
+    <a class="dismiss" aria-label="Zapri sporočilo">×</a>
 </div>
