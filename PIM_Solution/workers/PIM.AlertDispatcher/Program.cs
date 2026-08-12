@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using PIM.AlertDispatcher;
+using PIM.Operations;
 
 var enabled = bool.TryParse(Environment.GetEnvironmentVariable("PIM_ALERT_DELIVERY_ENABLED"), out var parsed) && parsed;
 var endpointText = Environment.GetEnvironmentVariable("PIM_ALERT_WEBHOOK_URL");
@@ -24,11 +25,16 @@ if (string.IsNullOrWhiteSpace(connectionString))
 var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+await using var operationsRun = await OperationsRun.BeginAsync(connectionString, 2, "ALERT_DISPATCH", workerId);
 await using var claim = new SqlCommand("ops.ClaimAlertDelivery", connection) { CommandType = CommandType.StoredProcedure };
 claim.Parameters.Add("@WorkerId", SqlDbType.NVarChar, 200).Value = workerId;
 claim.Parameters.Add("@LeaseSeconds", SqlDbType.Int).Value = 60;
 await using var reader = await claim.ExecuteReaderAsync();
-if (!await reader.ReadAsync()) return 0;
+if (!await reader.ReadAsync())
+{
+  await operationsRun.CompleteAsync(true);
+  return 0;
+}
 var deliveryId = reader.GetInt64(reader.GetOrdinal("AlertDeliveryId"));
 var alertId = reader.GetInt64(reader.GetOrdinal("AlertId"));
 var channel = reader.GetString(reader.GetOrdinal("Channel"));
@@ -58,4 +64,5 @@ complete.Parameters.Add("@Succeeded", SqlDbType.Bit).Value = outcome == AlertSen
 complete.Parameters.Add("@PermanentFailure", SqlDbType.Bit).Value = outcome == AlertSendOutcome.Dead;
 complete.Parameters.Add("@ErrorRedacted", SqlDbType.NVarChar, 2000).Value = outcome == AlertSendOutcome.Delivered ? DBNull.Value : "Dostava opozorila ni uspela.";
 await complete.ExecuteNonQueryAsync();
+await operationsRun.CompleteAsync(outcome == AlertSendOutcome.Delivered, outcome == AlertSendOutcome.Delivered ? null : "Dostava opozorila ni uspela.");
 return outcome == AlertSendOutcome.Delivered ? 0 : 1;
