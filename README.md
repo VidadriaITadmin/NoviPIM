@@ -43,7 +43,7 @@ Intranet teče na `http://127.0.0.1:5199`.
 
 | Pot | Kaj |
 |---|---|
-| `..\PIM_test` | star referenčni sistem, **samo branje** |
+| `..\PIM_test` | star referenčni sistem, **samo branje**. Ima svoj `CLAUDE.md` in `_SPEC\`, ki za NoviPIM **ne veljata**. |
 | `..\_arhiv` | zastarelo, ni vir resnice |
 | `..\Dokumentacija` | PDF-ji in ročne beležke |
 | `..\Backups` | varnostne kopije |

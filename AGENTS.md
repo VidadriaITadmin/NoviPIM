@@ -16,11 +16,17 @@ Zadnja sprememba: 2026-08-12.
 | **Delovni repozitorij (edini)** | `C:\Users\David\Namizje\PIM\NoviPIM` |
 | Koda | `PIM_Solution\` |
 | Razvojna baza | SQL Server, baza **`PIM`** (lokalna) |
-| Referenčni stari sistem, **samo branje** | `..\PIM_test` |
+| Referenčni stari sistem, **samo branje** | `..\PIM_test` (edini; glej opozorilo spodaj) |
 | Arhiv (nikoli ne beri kot pravilo) | `..\_arhiv\` |
 | Ročne beležke človeka | `..\Dokumentacija\` |
 
 Vse poti v tem dokumentu so relativne na koren repozitorija.
+
+> **Opozorilo o `..\PIM_test`.** To je star, ločen sistem s **svojim `CLAUDE.md`
+> in svojim `_SPEC\`**, ki opisujeta popolnoma drugačno strukturo (`src\`,
+> `windows_services\`, `sql\`, `deploy\`). Ta pravila **ne veljajo** za NoviPIM.
+> V `PIM_test` gledaš samo, kako je bilo nekaj rešeno v starem sistemu. Ničesar
+> od tam ne kopiraj kot pravilo in vanj ne piši.
 
 ## 2. Kaj je ta projekt (dejansko stanje)
 

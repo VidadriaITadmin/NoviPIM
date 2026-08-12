@@ -53,4 +53,6 @@ dotnet publish .\workers\PIM.XmlFileWorker\PIM.XmlFileWorker.csproj -c Release -
 
 ## Monitoring
 
-Vsak pomemben tek se dokazuje v `ops.PipelineRun`, zaključek pa se vidi prek heartbeat/health in watchdoga. Alarm delivery ostane izklopljen, dokler lokalni fixture ne dokaže cilja in deduplikacije. Ob napaki preveri `ops.ErrorLog`, `ops.Alert`, `ops.DeadLetterQueue` in specifično karanteno; ne briši sledi, dokler incident ni raziskan.
+`PIM.Watchdog` uporablja lokalni profil `WATCHDOG` v `ops.ScheduleProfile` in ob uspehu zapiše `ops.IntegrationHealth=Healthy`. `PIM.AlertDispatcher` uporablja `ALERT_DISPATCH` samo po izrecnem `PIM_ALERT_DELIVERY_ENABLED=true`; brez tega flaga se ustavi pred povezavo oziroma omrežnim klicem. Profila ne ustvarita Scheduled Taska in sama po sebi ne omogočita nobene dostave.
+
+Fixture-only workerjev (`SaopStockWorker`, `StockFileWorker`, `B2bWorker`) sistem ne označuje lažno kot živih DB workerjev; dobijo heartbeat šele, ko imajo dejansko povezavo in potrjen lokalni execution contract. Ob napaki preveri `ops.ErrorLog`, `ops.Alert`, `ops.DeadLetterQueue` in specifično karanteno; ne briši sledi, dokler incident ni raziskan.

@@ -14,22 +14,18 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## TODO (čaka)
 
-- **[BAZA]** Odpraviti ponovljiv SQL timeout v F3 in F5 integracijskem ciklu, ko
-  teče celoten paket. Samostojni zagon obeh uspe, v celotnem paketu pade.
-  DoD: `dotnet test PIM_Solution\PIM.sln --no-restore` vrne 0 dvakrat zapored;
-  vzrok je zapisan v `docs\TEST_REPORT_E2E.md`; timeout ni skrit z večanjem
-  časovne omejitve brez pojasnila vzroka.
-- **[BAZA/INTRANET]** S5/S6: varna razveljavitev polja in paketa prek namenske
-  poslovne shranjevalne poti, s preverjanjem konflikta in lastništva SAOP.
-  Neposredni SQL update ostane namenoma blokiran.
+_(prazno)_
 
 ## DELAM (v teku)
 
-<!-- - [OZEMLJE] opis — kdo: <agent> — začeto: <datum> -->
-
-_(prazno)_
+- **[BAZA/WORKERJI]** Popraviti lažno zeleno `PIM.ChangeTracking.Integration`,
+  odpraviti F3/F5 SQL timeout v celotnem paketu in zapreti regresijski paket —
+  kdo: Hermes — začeto: 2026-08-12. DoD: ChangeTracking test vrne 0 brez sejne
+  spremenljivke in izvede 6 primerov z lokalno povezavo; celoten `dotnet test`
+  vrne 0 dvakrat zapored; vzrok timeouta je dokumentiran.
 
 ## KONČANO
+
 
 - **[INFRASTRUKTURA]** Reorganizacija map in poenotenje pravil — kdo: Claude Opus 5 —
   2026-08-12 — dokaz: `AGENTS.md` je edini pravilnik; nasprotujoči si dokumenti

@@ -24,3 +24,7 @@ appsettings.Local.json
 
 # razno
 .DS_Store
+
+# artefakt preusmeritve "> NUL" v POSIX lupini (NUL tam ni naprava, ampak datoteka)
+NUL
+**/NUL
