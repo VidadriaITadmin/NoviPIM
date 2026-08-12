@@ -43,18 +43,26 @@ PIM za ~200.000 artiklov štirih podjetij.
 ## 3. Ukazi, ki edini štejejo kot dokaz
 
 ```powershell
-# build celotne rešitve
-dotnet build PIM_Solution\PIM.sln
+# EDINI merodajni testni zagon (build + vseh 43 testnih projektov)
+scripts\run_tests.ps1
 
-# vsi testi
-dotnet test PIM_Solution\PIM.sln --no-restore
-
-# en ciljni testni projekt (tako delaj med razvojem)
-dotnet test PIM_Solution\tests\PIM.F3.Integration --no-restore
+# samo ciljni projekti med razvojem
+scripts\run_tests.ps1 -Filter F3
 
 # migracije proti razvojni bazi PIM
 dotnet run --project PIM_Solution\src\PIM.Migrator -- --verify
 ```
+
+### Zakaj `dotnet test` ni dovolj
+
+`dotnet test PIM_Solution\PIM.sln` zažene **samo projekte s test-sdk**. Tak je v
+tej rešitvi **en sam** (`PIM.ChangeTracking.Integration`). Preostalih 42 testnih
+projektov so konzolne aplikacije (`OutputType Exe`), ki jih `dotnet test` samo
+prevede in **nikoli ne požene**. Zato je vračal 0, tudi če ni izvedel skoraj
+ničesar. Uporabljaj `scripts\run_tests.ps1`, ki požene vse.
+
+Konzolni testi računajo relativne poti od **trenutne mape**, zato jih je treba
+zagnati iz njihove lastne mape. Skripta to naredi sama.
 
 Zeleno pomeni: **izhodna koda 0**. Karkoli drugega je rdeče.
 
@@ -209,5 +217,17 @@ Ko je napaka odkrita šele v QA, sem dodaj eno vrstico.
   seji, je bil PASS; v čisti lupini je padel 6/6 in bil poročan kot »6/6 PASS«.
   Integracijski test se ob manjkajoči povezavi **preskoči**, ne pade.
 - 2026-08-12: po uvedbi sledljivosti je F5 cleanup padel na FK 547, ker
-  `pim.ProductFieldHistory` kaže na `canon.Product`. Cleanup mora najprej
-  pobrisati zgodovino in osirotele batche, šele nato testne izdelke.
+  `pim.ProductFieldHistory` kaže na `canon.Product`. Pravi vzrok: brisanje
+  `canon.ProductText/Attribute/Media` **sproži triggerje**, ki ustvarijo novo
+  zgodovino, zato mora cleanup zgodovino pobrisati **še enkrat po** podtabelah.
+  Prejšnje poročilo je to napačno označilo za »SQL timeout«.
+- 2026-08-12: `dotnet test PIM_Solution\PIM.sln` je izvajal **1 projekt od 43**
+  in vračal 0. Ostalih 42 so konzolne aplikacije, ki jih `dotnet test` samo
+  prevede. Prvi polni zagon prek `scripts\run_tests.ps1` je razkril 7 padlih
+  projektov, med njimi pravo logično napako v `PIM.F10.ProductDetailUxTests`.
+  **Edini merodajni ukaz je `scripts\run_tests.ps1`.**
+- 2026-08-12: konzolni testi računajo poti do `workers\` relativno na **trenutno
+  mapo**, `appsettings.Local.json` pa iščejo prav tako relativno — ti dve
+  izhodišči si nasprotujeta, zato so integracijski testi »preskakovali« ali
+  vračali izhod 2, čeprav je bila povezava nastavljena. Rešitev: povezavo podaj
+  prek `PIM_CONNECTION_STRING`, ki od delovne mape ni odvisna. To dela zaganjalnik.
