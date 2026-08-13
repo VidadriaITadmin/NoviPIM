@@ -11,8 +11,12 @@ Izvajaj po vrstnem redu. Vsak korak označi PASS/FAIL/SKIP z dokazom. `SKIP` je 
 
 ```powershell
 $env:PIM_CONNECTION_STRING = '<lokalno-nastavljen-povezovalni-niz>'
-$env:PIM_MIGRATIONS_PATH = 'C:\PIM\Source\NoviPIM\PIM_Solution\sql\migrations'
+$env:PIM_MIGRATIONS_PATH = 'C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\sql\migrations'
 ```
+
+> Pot je bila prej `C:\PIM\Source\NoviPIM\...`. To je kazalo na staro kopijo
+> repozitorija, ki je zdaj v `..\_arhiv\`. Na tem računalniku je delovni
+> repozitorij `C:\Users\David\Namizje\PIM\NoviPIM`.
 
 ## 1. Baza in zgradba
 
@@ -22,22 +26,28 @@ $env:PIM_MIGRATIONS_PATH = 'C:\PIM\Source\NoviPIM\PIM_Solution\sql\migrations'
    - PASS: `Preverjanje F0–F10 baze je uspešno.`
 3. Migrator brez `--verify`, nato še enkrat brez `--verify`.
    - PASS: drugi zagon ne uporabi nove migracije.
-4. `npm test` v korenu `NoviPIM`.
-   - PASS: Vitest brez neuspeha.
 
 STOP ob failu migracije ali builda.
 
+> Korak `npm test` je odstranjen. Node scaffold je arhiviran, ker je poganjal en
+> izmišljen test (`2+3=5`) in vedno uspel — dajal je lažno zeleno.
+
 ## 2. Unit, behavior in pogodbeni testi
 
-Zaženi vse testne projekte enega za drugim:
+Iz **korena repozitorija** (ne iz `PIM_Solution`):
 
 ```powershell
-Get-ChildItem .\tests\*\*.csproj | ForEach-Object {
-  Write-Host "=== $($_.FullName) ==="
-  dotnet run --project $_.FullName --no-restore
-  if ($LASTEXITCODE -ne 0) { throw "Test failed: $($_.FullName)" }
-}
+scripts\run_tests.ps1
 ```
+
+PASS: `REZULTAT: VSE OK`, izhod 0, **0 preskočenih**. Preskočen projekt ni
+dokaz — pomeni, da povezava do baze ni bila na voljo.
+
+> Prej je bila tu ročna zanka `Get-ChildItem .\tests\*\*.csproj | dotnet run`.
+> Ta ne deluje: konzolni testi računajo poti do `workers\` relativno na trenutno
+> mapo, zato padejo, če jih ne zaženeš iz njihove lastne mape. Zaganjalnik to
+> uredi in poleg tega poda `PIM_CONNECTION_STRING`, ki ga testi iz svoje mape
+> sicer ne najdejo.
 
 Pričakuj posebej:
 - F3/F5: konfiguracijsko vodeno mapiranje, karantena, validacija/promocija in CSV.
