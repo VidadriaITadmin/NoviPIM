@@ -12,6 +12,7 @@ obj/
 .env.*
 appsettings.Local.json
 **/appsettings.Local.json
+**/appsettings.Local.json.zastarelo
 *.pfx
 
 # logi in delovni imeniki

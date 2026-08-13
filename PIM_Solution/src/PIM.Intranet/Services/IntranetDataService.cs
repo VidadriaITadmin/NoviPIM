@@ -48,7 +48,7 @@ public sealed class ShippingRuleRow
 
 public sealed class IntranetDataService(IConfiguration configuration)
 {
-  string ConnectionString => configuration.GetConnectionString("Pim")
+  string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
   public async Task<OrganizationContext?> GetCurrentOrganizationAsync(CancellationToken cancellationToken = default)

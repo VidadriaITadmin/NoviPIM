@@ -17,6 +17,8 @@ Posodobljeno: 2026-08-13
 
 ## Trenutno dokazano
 
+- Lokalna intranet konfiguracija je poenotena: edina veljavna datoteka je korenska appsettings.Local.json; PIM.Intranet da prednost PIM_CONNECTION_STRING, nato uporabi ConnectionStrings:Pim iz korenske datoteke. Podrejeni lokalni datoteki sta preimenovani v .zastarelo in ignorirani. Dokaz: /health 200 ter prijavni SQL POST 302 brez SqlException 26, oba brez nastavljene okoljske povezave; polni paket 42/0/0 in Codex VERDICT: PASS.
+
 - Lokalni intranet je dosegljiv na `http://127.0.0.1:5199/prijava`; `/health`, prijava, CSS in pot pod `/PIM` so vrnili HTTP 200.
 - `PIM.Migrator --verify` proti razvojni bazi `PIM` je uspešen za F0–F10.
 - Celoten build `PIM.sln` je uspešen z 0 opozorili in 0 napakami.

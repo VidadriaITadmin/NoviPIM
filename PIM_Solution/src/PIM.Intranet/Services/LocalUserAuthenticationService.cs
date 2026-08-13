@@ -9,7 +9,7 @@ public sealed class LocalUserAuthenticationService(IConfiguration configuration,
   public async Task<AuthenticatedLocalUser?> AuthenticateAsync(string? userName, string? password, CancellationToken cancellationToken = default)
   {
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password)) return null;
-    var connectionString = configuration.GetConnectionString("Pim");
+    var connectionString = ConnectionStringResolver.Resolve(configuration);
     if (string.IsNullOrWhiteSpace(connectionString)) return null;
 
     await using var connection = new SqlConnection(connectionString);

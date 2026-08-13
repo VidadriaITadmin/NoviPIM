@@ -6,7 +6,7 @@ public sealed record IntranetUserRow(string UserName, string DisplayName, string
 
 public sealed class IntranetUserAdministrationService(IConfiguration configuration, ActiveDirectoryService activeDirectory)
 {
-  string ConnectionString => configuration.GetConnectionString("Pim") ?? throw new InvalidOperationException("Manjka ConnectionStrings:Pim.");
+  string ConnectionString => ConnectionStringResolver.Resolve(configuration) ?? throw new InvalidOperationException("Manjka ConnectionStrings:Pim.");
 
   public ActiveDirectoryLookupResult FindDomainUser(string identity) => activeDirectory.Lookup(identity);
 

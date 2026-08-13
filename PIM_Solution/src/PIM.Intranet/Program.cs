@@ -6,7 +6,8 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseStaticWebAssets();
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
+var repositoryRootLocalSettingsPath = Path.Combine(builder.Environment.ContentRootPath, "..", "..", "..", "appsettings.Local.json");
+builder.Configuration.AddJsonFile(repositoryRootLocalSettingsPath, optional: true, reloadOnChange: false);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
