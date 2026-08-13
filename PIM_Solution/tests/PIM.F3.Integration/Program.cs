@@ -83,6 +83,7 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     """;
 
   await using (var cleanup = new SqlCommand("""
+    DECLARE @TestChangeBatches TABLE(ChangeBatchId bigint PRIMARY KEY);
     DELETE FROM val.ProductIssue WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM val.ProductValidationState WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductText WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
@@ -91,6 +92,19 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     DELETE FROM canon.ProductMedia WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
+    INSERT @TestChangeBatches(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE history
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE batch
+    FROM pim.ProductChangeBatch batch
+    INNER JOIN @TestChangeBatches testBatch ON testBatch.ChangeBatchId=batch.ChangeBatchId
+    WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
     DELETE FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID;
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN (SELECT ExtractedValueId FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999));
     DELETE FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999);
@@ -175,6 +189,7 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
   }
 
   await using (var cleanup = new SqlCommand("""
+    DECLARE @TestChangeBatches TABLE(ChangeBatchId bigint PRIMARY KEY);
     DELETE FROM val.ProductIssue WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM val.ProductValidationState WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductText WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
@@ -183,6 +198,19 @@ static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection c
     DELETE FROM canon.ProductMedia WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID);
+    INSERT @TestChangeBatches(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE history
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE batch
+    FROM pim.ProductChangeBatch batch
+    INNER JOIN @TestChangeBatches testBatch ON testBatch.ChangeBatchId=batch.ChangeBatchId
+    WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
     DELETE FROM canon.Product WHERE OrganizationId = @OrganizationId AND ItemID = @ItemID;
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN (SELECT ExtractedValueId FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999));
     DELETE FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode AND EntityType=N'ItemGeneralData' AND PageNumber=999);

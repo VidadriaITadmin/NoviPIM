@@ -96,12 +96,19 @@ static string? ReadConnectionString()
 async Task CleanupAsync(SqlConnection sqlConnection)
 {
   await ExecuteAsync(sqlConnection, """
+    DECLARE @TestChangeBatches TABLE(ChangeBatchId bigint PRIMARY KEY);
+    INSERT @TestChangeBatches(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
     DELETE history
     FROM pim.ProductFieldHistory history
     INNER JOIN canon.Product product ON product.ProductId=history.ProductId
     WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
     DELETE batch
     FROM pim.ProductChangeBatch batch
+    INNER JOIN @TestChangeBatches testBatch ON testBatch.ChangeBatchId=batch.ChangeBatchId
     WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
 
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN
@@ -139,6 +146,20 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE FROM canon.ProductMedia WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
+    INSERT @TestChangeBatches(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID
+      AND NOT EXISTS(SELECT 1 FROM @TestChangeBatches testBatch WHERE testBatch.ChangeBatchId=history.ChangeBatchId);
+    DELETE history
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+    DELETE batch
+    FROM pim.ProductChangeBatch batch
+    INNER JOIN @TestChangeBatches testBatch ON testBatch.ChangeBatchId=batch.ChangeBatchId
+    WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
     DELETE FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID;
     """, ("@OrganizationId", organizationId), ("@ItemID", itemId), ("@SourceCode", sourceCode));
 }

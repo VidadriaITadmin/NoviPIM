@@ -28,14 +28,29 @@ Okolje: lokalni Windows, SQL Server `DESKTOP-2CGGQIC\MSSQLSERVER3`, razvojna baz
 4. Outbound in Stocks UI ohranjata pogodbeni števili stolpcev ter zahtevane slovenske/dostopne oznake, brez novih read modelov ali lažnih podatkov.
 5. `.gitignore` izključi `appsettings.Local.json` v korenu in podmapah.
 
-## Ponovljiv odprt problem
+## Odpravljen problem FK 547 v F3/F5 cleanupu
 
-Celotni zaporedni paket 42 testnih projektov se zaključi z `40 PASS / 2 FAIL`:
+Prejšnje poročilo je vzrok napačno označilo kot SQL timeout. Ponovitev z dejanskima
+izvršljivima integracijama je pokazala `SqlException 547` v cleanupu obeh tokov:
+`pim.ProductFieldHistory.ProductId` ima FK na `canon.Product.ProductId`.
 
-- `PIM.F3.Integration`: občasni SQL command timeout pri end-to-end izvoznem ukazu; samostojni ponovni zagon je uspešen (`CSV vrstic=17`).
-- `PIM.F5.Integration`: občasni SQL timeout pri `val.RunValidation`; samostojni ponovni zagon je lahko uspešen, vendar se timeout ponovi tudi ob kasnejšem zagonu.
+Cleanup je najprej pobrisal obstoječo zgodovino, nato pa z `DELETE` nad
+`canon.ProductText`, `canon.ProductAttribute` in `canon.ProductMedia` sprožil
+triggerje sledljivosti. Ti so za isti ozko določeni testni izdelek ustvarili nove
+zgodovinske vrstice. Poznejši `DELETE canon.Product` je zato padel na FK 547.
 
-Po timeoutu ni bilo aktivne SQL blokade ali odprte transakcije v `PIM`, vendar so testi lahko pustili `F5_INTEGRATION` teke v stanju `Running`. To je stabilnostna napaka testnega cleanup/validation cikla in je treba jo odpraviti pred trditvijo, da celotni regresijski paket vedno prehaja. Nisem ročno brisal sledljivih testnih vrstic, ker so zaščitene s tujimi ključi in bi to prikrilo problem.
+F3 in F5 zdaj po brisanju sledenih kanoničnih podtabel še enkrat pobrišeta samo
+zgodovino izdelka z lastnima pogojema `OrganizationId` + `ItemID` in nato samo
+prazne batche, ki pripadajo temu testu. Ni `DROP`, `TRUNCATE` ali neomejenega
+brisanja. S tem cleanup ne posega v zgodovino drugih izdelkov niti v batche z
+drugo zgodovino.
+
+Dokaz po popravku, 2026-08-12:
+
+- `dotnet run --project PIM_Solution/tests/PIM.F3.Integration --no-restore` → 0;
+- `dotnet run --project PIM_Solution/tests/PIM.F5.Integration --no-restore` → 0;
+- `dotnet test PIM_Solution/PIM.sln --no-restore` → 0, dvakrat zapored;
+- `dotnet build PIM_Solution/PIM.sln --no-restore` → 0 (0 warnings, 0 errors).
 
 ## Zunanje meje
 
