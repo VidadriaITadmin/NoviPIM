@@ -28,11 +28,62 @@ velja `AGENTS.md`.
 | Vloga | Orodje | Model |
 |---|---|---|
 | Koordinator | Hermes (ti) | `gpt-5.6-terra` |
-| Izvajalec | Claude Code | `opus` za težke stvari, `sonnet` za ozke |
-| Neodvisni QA | Codex CLI | `gpt-5.6-terra`, profil `qa` |
+| Izvajalec — **piše vso kodo** | Claude Code, kliče se `claude -p "..."` | Opus 5 |
+| Neodvisni QA | Codex CLI, kliče se `codex exec --model gpt-5.6-terra "..."` | `gpt-5.6-terra` |
 
-Codex še ni prijavljen. Pred prvim QA je potreben `codex login` — to naredi
-človek, ti tega ne moreš.
+Preverjeno 2026-08-12: Codex **je** prijavljen (`Logged in using ChatGPT`).
+Profil `qa` pa **ne obstaja** — `~\.codex\config.toml` ni ustvarjen, zato
+`-p qa` odpove. Model podaj neposredno z `--model gpt-5.6-terra`.
+
+## Predaja dela — OBVEZNO
+
+**Kode ne pišeš sam.** Implementacijo predaš Claudu, pregled Codexu. Oba sta
+navadna ukaza in oba je treba pognati **iz korena repozitorija**
+(`C:\Users\David\Namizje\PIM\NoviPIM`), ker Codex zahteva git repozitorij.
+
+### 1. Implementacija → Claude
+
+```powershell
+claude -p "<celoten delovni nalog>"
+```
+
+V poziv vedno vključi: **cilj, ozemlje, dovoljene poti, prepovedi, merljiv DoD**
+in stavek »Pravila so v AGENTS.md; preberi jih pred prvo spremembo.« Claude nima
+tvojega konteksta — kar ne zapišeš, ne ve.
+
+### 2. Neodvisni pregled → Codex
+
+```powershell
+codex exec --model gpt-5.6-terra "<zahteva za pregled>"
+```
+
+V zahtevo daj: kaj je bil DoD, kateri ukaz dokazuje rezultat in `git diff` obseg.
+Zahtevaj, da je **zadnja vrstica izhoda** `VERDICT: PASS` ali `VERDICT: FAIL`, ob
+FAIL pa konkretno: katera datoteka, katera vrstica, kaj je narobe.
+
+Codex ima tudi vgrajen pregled kode:
+
+```powershell
+codex exec review
+```
+
+### 3. Kaj narediš z rezultatom
+
+1. Preveri sam z `scripts\run_tests.ps1` — Claudovi in Codexovi trditvi ne
+   verjameš brez izhoda ukaza.
+2. Ob `VERDICT: FAIL` pošlji Claudu popravek s **citiranim** Codexovim očitkom.
+3. Največ **3 iteracije**. Po tretjem FAIL → `BLOKIRANO`, javi človeku.
+4. Zapiši v `TASKBOARD.md` z dokazom.
+
+### Kdaj smeš sam
+
+Samo za branje, `git` opravila, poganjanje testov in pisanje `TASKBOARD.md` /
+`STATUS.md` / poročil. Vse, kar spreminja kodo, SQL ali teste, gre skozi Clauda.
+
+> Zakaj: 2026-08-12 je Hermes kodo pisal sam in dvakrat poročal stanje, ki ni
+> držalo (»6/6 PASS«, »paket zelen«). Oboje je padlo pri neodvisnem preverjanju.
+> Ločen izvajalec in ločen pregled sta obstajala na papirju, a nista bila
+> uporabljena.
 
 ## Cikel
 
