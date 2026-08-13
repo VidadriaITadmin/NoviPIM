@@ -22,7 +22,12 @@ _(prazno)_
 
 ## KONČANO
 
-- **[TESTI]** Pravi testni zaganjalnik `scripts\run_tests.ps1` in popravek UX
+- **[DOKUMENTACIJA]** Preizkus protokola predaje: `docs\\PREIZKUS-PREDAJE.md`
+  je ustvaril Claude; kdo: Hermes (koordinacija), Claude (izvedba), Codex (QA)
+  — 2026-08-13 — dokaz: `wc -l` → 1, `grep -c '[^[:space:]]'` → 1;
+  `codex exec --model gpt-5.6-terra` → `VERDICT: PASS`.
+
+- **[TESTI]** Pravi testni zaganjalnik `scripts\\run_tests.ps1` in popravek UX
   pogodbe kartice izdelka — kdo: Claude Opus 5 — 2026-08-12 — dokaz:
   `scripts\run_tests.ps1` → **42 uspeli, 0 preskočenih, 0 padlih**, izhod 0.
   Razlog: `dotnet test PIM_Solution\PIM.sln` je izvajal **1 projekt od 43** in

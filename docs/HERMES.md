@@ -44,12 +44,23 @@ navadna ukaza in oba je treba pognati **iz korena repozitorija**
 ### 1. Implementacija → Claude
 
 ```powershell
-claude -p "<celoten delovni nalog>"
+claude -p "<celoten delovni nalog>" `
+  --allowedTools 'Read,Write,Edit,Bash(git status *),Bash(git diff *)' `
+  --max-turns 8 `
+  --output-format json
 ```
 
 V poziv vedno vključi: **cilj, ozemlje, dovoljene poti, prepovedi, merljiv DoD**
 in stavek »Pravila so v AGENTS.md; preberi jih pred prvo spremembo.« Claude nima
 tvojega konteksta — kar ne zapišeš, ne ve.
+
+Trije prekati niso okras (preizkušeno 2026-08-13):
+
+- `--allowedTools` zoži izvajalca na to, kar naloga res potrebuje. Za SQL ali
+  build nalogo dodaj `Bash(dotnet *)`, za teste `Bash(powershell *)`.
+- `--max-turns` prepreči, da bi se izvajalec zavrtel v zanki.
+- `--output-format json` vrne strojno berljiv izid z `exit_code` in `subtype`,
+  da ti ni treba ugibati iz besedila, ali je uspelo.
 
 ### 2. Neodvisni pregled → Codex
 

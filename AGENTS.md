@@ -231,3 +231,11 @@ Ko je napaka odkrita šele v QA, sem dodaj eno vrstico.
   izhodišči si nasprotujeta, zato so integracijski testi »preskakovali« ali
   vračali izhod 2, čeprav je bila povezava nastavljena. Rešitev: povezavo podaj
   prek `PIM_CONNECTION_STRING`, ki od delovne mape ni odvisna. To dela zaganjalnik.
+- 2026-08-13: `git diff` **ne pokaže nove nesledene datoteke**. DoD, ki se opira
+  nanj, je zato lažno zelen. Za dokaz o novi datoteki uporabi
+  `git ls-files --others --exclude-standard -- <pot>`.
+- 2026-08-13: dovoljenja iz `.claude\settings.json` se **tiho ignorirajo**, če
+  delovni prostor ni potrjen kot zaupan (`hasTrustDialogAccepted` v
+  `~\.claude.json`). Opozorilo se izpiše kot »Ignoring N permissions.allow
+  entries«. Če agent kljub nastavljenim pravilom sprašuje za vsako stvar,
+  preveri najprej to.
