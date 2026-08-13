@@ -38,6 +38,8 @@ foreach (var value in new[] { "VerifyF10Async", "sec.CreateLocalUser", "sec.Crea
 var programText = File.ReadAllText(intranetProgram);
 var loginText = File.ReadAllText(loginPage);
 Assert(programText.Contains("UseStaticWebAssets()", StringComparison.Ordinal), "Intranet mora v produkciji streči generiran CSS paket Razor komponent.");
+Assert(programText.Contains("LocalSettingsLocator.FindRepositoryRootLocalSettingsPath", StringComparison.Ordinal), "Iskanje korenske lokalne nastavitve mora biti depth-independent, ne fiksna relativna pot.");
+Assert(!programText.Contains("\"..\", \"..\", \"..\"", StringComparison.Ordinal), "Pot do korenske nastavitve ne sme biti krhka fiksna relativna pot treh nivojev navzgor.");
 Assert(programText.Contains("MapPost(\"/auth/prijava\"", StringComparison.Ordinal), "Prijavna POST pot mora biti ločena od Razor poti /prijava.");
 Assert(loginText.Contains("action=\"auth/prijava\"", StringComparison.Ordinal), "Prijavni obrazec mora oddati na base-path relativno auth pot.");
 Assert(loginText.Contains("name=\"zapomniMe\"", StringComparison.Ordinal), "Prijavni obrazec mora ponuditi funkcionalno izbiro za zapomnitev seje.");

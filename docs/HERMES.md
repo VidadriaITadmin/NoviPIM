@@ -45,8 +45,9 @@ navadna ukaza in oba je treba pognati **iz korena repozitorija**
 
 ```powershell
 claude -p "<celoten delovni nalog>" `
-  --allowedTools 'Read,Write,Edit,Bash(git status *),Bash(git diff *)' `
-  --max-turns 8 `
+  --permission-mode acceptEdits `
+  --allowedTools 'Read,Write,Edit,Bash(git *),Bash(dotnet *),Bash(powershell *)' `
+  --max-turns 40 `
   --output-format json
 ```
 
@@ -54,7 +55,16 @@ V poziv vedno vključi: **cilj, ozemlje, dovoljene poti, prepovedi, merljiv DoD*
 in stavek »Pravila so v AGENTS.md; preberi jih pred prvo spremembo.« Claude nima
 tvojega konteksta — kar ne zapišeš, ne ve.
 
-Trije prekati niso okras (preizkušeno 2026-08-13):
+**`--permission-mode acceptEdits` je obvezen.** `claude -p` teče neinteraktivno —
+nikogar ni, ki bi potrdil poziv za dovoljenje. Brez tega prekata se izvajalec
+ustavi ob prvem dejanju, ki zahteva odobritev, in vrne `BLOKIRANO`, čeprav z
+nalogo ni nič narobe. Nevarna dejanja ostanejo zavrnjena prek `.claude\settings.json`.
+
+**`--max-turns` naj bo velikodušen.** Pri spremembi kode z buildom in testi je
+8 do 12 korakov premalo; uporabi vsaj 40. Prenizka vrednost se konča z blokado
+sredi dela, ne z napako, ki bi ti povedala vzrok.
+
+Ostali prekati (preizkušeno 2026-08-13):
 
 - `--allowedTools` zoži izvajalca na to, kar naloga res potrebuje. Za SQL ali
   build nalogo dodaj `Bash(dotnet *)`, za teste `Bash(powershell *)`.
