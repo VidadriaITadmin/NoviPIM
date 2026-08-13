@@ -61,3 +61,98 @@ Niso bile izvedene in ostajajo SKIP:
 - IIS deploy in Scheduled Tasks (sistemske spremembe niso bile izvedene).
 
 Za natančen prenos na laptop uporabi `docs/LAPTOP_INSTALL.md`; za korak-po-korak E2E izvedbo uporabi `docs/END_TO_END_TEST.md`.
+
+## E2E zagon 2026-08-13 (koraki 1-5)
+
+Okolje: lokalni Windows, razvojna baza `PIM`; zunanji endpointi in produkcijska
+dostava niso bili uporabljeni. Povezovalni niz ni izpisan. Izvedel: Hermes.
+
+### 1 — baza in zgradba — PASS
+
+- `dotnet build PIM_Solution/PIM.sln --nologo -v:minimal` → izhod 0; `0 Warning(s)`,
+  `0 Error(s)`.
+- Prvi `dotnet run --project PIM_Solution/src/PIM.Migrator -- --verify` je vrnil
+  izhod 2, ker predpisani `PIM_MIGRATIONS_PATH` še ni bil nastavljen in je
+  migrator iskal neobstoječo pot `...\NoviPIM\sql\migrations`. To ni napaka
+  kode ali migracije.
+- Ponovitev z `PIM_MIGRATIONS_PATH=...\PIM_Solution\sql\migrations` → izhod 0:
+  `Preverjanje F0–F10 baze je uspešno.`
+- Dva zaporedna zagona migratorja brez `--verify` z isto nastavitvijo → oba
+  izhod 0 in `Migracije so uspešno uporabljene.` Drugi zagon ni uporabil nove
+  migracije: vse `001`–`039` so bile izpisane kot že uporabljene.
+
+### 2 — vsi testi — PASS
+
+- Iz korena repozitorija: `scripts\run_tests.ps1` → izhod 0;
+  `REZULTAT: VSE OK`.
+- Povzetek zaganjalnika: `uspeli: 42`, `preskoceni: 0`, `padli: 0`.
+- Zaganjalnik je povezavo do lokalne razvojne baze varno prevzel iz
+  `appsettings.Local.json`; vrednost ni bila izpisana.
+
+### 3 — fixture pipeline — PASS
+
+- F3: `dotnet run --project PIM_Solution/tests/PIM.F3.Integration --no-build`
+  → izhod 0; SAOP katalog, XML deklaracija/ERP upravičenost in varna ponovna
+  vrstitev karantene so uspešni; CSV ima `17` vrstic.
+- F5: `dotnet run --project PIM_Solution/tests/PIM.F5.Integration --no-build`
+  → izhod 0; EAN obogatitev kategorije, medija in atributa, B2C validacija,
+  promocija v `pim` in CSV so uspešni. Testni izhod ne izpiše števca ali
+  RunId-ja; zato ni naveden noben izmišljen števec in dokaz ostaja izhod 0.
+- F6: iz projektne mape z lokalno `PIM_CONNECTION_STRING`:
+  `dotnet run --project PIM.F6.Integration.csproj --no-build` → izhod 0;
+  `NW=2697/0 applied/quarantine`, `BT=1361/0`, intranet read model je vrnil
+  realno vrstico. Test ne izpisuje RunId-ja.
+- F7: iz projektne mape z lokalno `PIM_CONNECTION_STRING`:
+  `dotnet run --project PIM.F7.Integration.csproj --no-build` → izhod 0;
+  lokalno ustvarjeni in preverjeni so `customers.csv`, `products.csv` in
+  `shipping.csv`; MSSQL landing, profil, revizija, B2B izvozi in cleanup so
+  uspešni. Test ne izpisuje RunId-ja.
+
+### 4 — outbox meja — PASS / SKIP
+
+- F8: iz projektne mape z lokalno `PIM_CONNECTION_STRING`:
+  `dotnet run --project PIM.F8.Integration.csproj --no-build` → izhod 0;
+  izolirana organizacija `9808`, dedup, retry, dead, sent, verified in drift
+  so uspešni. HTTP fixture uporablja le dinamični `127.0.0.1` listener in dva
+  lokalna PATCH klica; noben zunanji endpoint ni bil klican.
+- F8 lease recovery: `dotnet run --project PIM.F8.HardeningTests.csproj --no-build`
+  → izhod 0; uspešni so potekli lease, crash reclaim in sočasna recovery.
+- Živ SAOP write-back — **SKIP**: ni potrjenega testnega endpointa/pogodbe,
+  testnega artikla, skrivnosti in izrecne odobritve. Živega klica ni bilo.
+
+### 5 — intranet smoke — PASS
+
+- Končni kontrolirani PowerShell zagon:
+  `$env:ASPNETCORE_URLS = 'http://127.0.0.1:5088'`; nato
+  `$p = Start-Process dotnet -ArgumentList 'run','--project','PIM_Solution\src\PIM.Intranet','--no-build','--no-launch-profile' -PassThru`;
+  `Invoke-WebRequest http://127.0.0.1:5088/health -UseBasicParsing` → HTTP
+  `200`, telo `{"stanje":"zdravo"}`; na koncu `$p | Stop-Process`.
+- Proces je bil v `finally` ustavljen (`INTRANET_STOPPED=True`), zato ni ostal
+  živ intranet proces.
+- Opomba o izvedbi: brez `--no-launch-profile` je `launchSettings.json`
+  preusmeril proces na `localhost:5091`; s pravilnim parametrom je zahtevan
+  5088 endpoint uspešen.
+
+### 6 — IIS smoke — SKIP
+
+Izven obsega: zahteva laptop, skrbniške pravice in sistemske nastavitve IIS.
+Ni bil izveden noben publish, IIS poseg ali Scheduled Task.
+
+### Za ročno preverjanje (človek)
+
+- `/nadzorna-plosca`: preveri podatkovne KPI; FAIL so statične ali izmišljene številke.
+- `/izdelki`: preveri strežniško iskanje, status, paginacijo in obstoječo kartico; FAIL je nedelujoče iskanje ali prazna kartica za obstoječ izdelek.
+- `/zaloge`: preveri količino, prihod, vir in posodobitev/status; FAIL so izmišljena skladišča/rezervacije ali manjkajoč realni podatek.
+- `/napake-validacije`: preveri resnično prazno, napako in podatkovno stanje; FAIL je lažno ali neberljivo stanje.
+- `/karantena`: preveri resnično prazno, napako in podatkovno stanje; FAIL je lažno ali neberljivo stanje.
+- `/teki-obdelave`: preveri realne pipeline teke; FAIL so placeholderji namesto dejanskih tekov.
+- `/outbound`: samo odobri, prekliči ali ponovi testno outbox sporočilo; FAIL je možnost zagona živega dispatcherja ali zunanji klic.
+- `/system/integracije` kot ADMIN: potrdi/razreši testni alarm ter preveri audit akterja in UTC čas; FAIL je manjkajoč ali napačen audit.
+- Po prijavi preveri odjavo, VIEWER/ADMIN navigacijo, tipkovnični fokus in konzolo brskalnika; FAIL so 404 CSS/JS ali nedostopen fokus.
+
+### Meje in nepreverjeno
+
+Avtomatizirano so preverjeni koraki 1–5. Niso preverjeni ročni brskalniški
+koraki, IIS/laptop objava, živ SAOP write-back, FTP/Magento/HTTP dostava,
+webhooki in e-pošta. Zato ta zagon ni dokaz produkcijske pripravljenosti.
+VERDICT: PASS

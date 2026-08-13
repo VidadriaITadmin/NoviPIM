@@ -20,7 +20,19 @@ _(prazno)_
 
 _(prazno)_
 
+## BLOKIRANO
+
+_(prazno)_
+
 ## KONČANO
+
+- **[DOKUMENTACIJA]** E2E protokol koraki 1–5 — kdo: Hermes, Codex (neodvisni
+  QA) — 2026-08-13 — dokaz: `dotnet build PIM_Solution/PIM.sln` → 0 (0
+  warnings, 0 errors); migrator `--verify` → 0; dva zagona migratorja brez
+  `--verify` → 0 in drugi brez nove migracije; `scripts\run_tests.ps1` →
+  `REZULTAT: VSE OK`, 42 uspešnih, 0 preskočenih, 0 padlih; F3/F5/F6/F7 in F8
+  fixture testi → 0; intranet `/health` na 5088 → HTTP 200, `stanje=zdravo`,
+  proces ustavljen; `codex exec --model gpt-5.6-terra` → `VERDICT: PASS`.
 
 - **[DOKUMENTACIJA]** Preizkus protokola predaje: `docs\\PREIZKUS-PREDAJE.md`
   je ustvaril Claude; kdo: Hermes (koordinacija), Claude (izvedba), Codex (QA)

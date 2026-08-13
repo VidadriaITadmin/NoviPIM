@@ -1,6 +1,19 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-12
+Posodobljeno: 2026-08-13
+
+## Aktivno preverjanje E2E
+
+- **Stanje: KONČANO.** Hermes je sam izvedel korake 1–5 iz
+  `.hermes/naloge/2026-08-13-e2e-koraki-1-5.md`; nalog ni spreminjal kode,
+  SQL-a ali testov.
+- **Dokaz:** build 0 opozoril/0 napak; migrator `--verify` 0 in dva
+  idempotentna zagona brez nove migracije; `scripts\run_tests.ps1` →
+  `REZULTAT: VSE OK`, 42/0/0; F3/F5/F6/F7/F8 fixture dokazi in Kestrel health
+  na 5088 so uspešni. Podrobnosti: `docs/TEST_REPORT_E2E.md`.
+- **QA:** Codex je po pregledu dejanskega diffa in izvornih testov vrnil
+  `VERDICT: PASS`.
+- **Uporabnik:** ničesar ni treba storiti.
 
 ## Trenutno dokazano
 
