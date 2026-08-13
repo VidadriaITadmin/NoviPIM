@@ -18,14 +18,30 @@ _(prazno)_
 
 ## DELAM (v teku)
 
-- **[BAZA/WORKERJI]** Popraviti lažno zeleno `PIM.ChangeTracking.Integration`,
-  odpraviti F3/F5 SQL timeout v celotnem paketu in zapreti regresijski paket —
-  kdo: Hermes — začeto: 2026-08-12. DoD: ChangeTracking test vrne 0 brez sejne
-  spremenljivke in izvede 6 primerov z lokalno povezavo; celoten `dotnet test`
-  vrne 0 dvakrat zapored; vzrok timeouta je dokumentiran.
+_(prazno)_
 
 ## KONČANO
 
+- **[TESTI]** Pravi testni zaganjalnik `scripts\run_tests.ps1` in popravek UX
+  pogodbe kartice izdelka — kdo: Claude Opus 5 — 2026-08-12 — dokaz:
+  `scripts\run_tests.ps1` → **42 uspeli, 0 preskočenih, 0 padlih**, izhod 0.
+  Razlog: `dotnet test PIM_Solution\PIM.sln` je izvajal **1 projekt od 43** in
+  vračal 0, ker so ostali konzolne aplikacije, ki jih samo prevede. Prvi polni
+  zagon je razkril 7 padlih projektov; šest jih je padlo zaradi nedosegljive
+  baze (zaganjalnik zdaj poda `PIM_CONNECTION_STRING`, ker testi
+  `appsettings.Local.json` iz svoje mape ne najdejo), sedmi je bila prava
+  napaka v `PIM.F10.ProductDetailUxTests`.
+
+- **[BAZA/WORKERJI]** Odpravljen FK 547 v F3/F5 cleanupu in zaprt regresijski
+  paket — kdo: Hermes — 2026-08-12 — vzrok: triggerji sledljivosti so po prvem
+  cleanupu ustvarili novo `pim.ProductFieldHistory` za testni produkt; cleanup
+  drugič ozko odstrani zgodovino in prazne pripadajoče batche. Dokaz:
+  `dotnet run --project PIM_Solution/tests/PIM.F3.Integration --no-restore` = 0;
+  `dotnet run --project PIM_Solution/tests/PIM.F5.Integration --no-restore` = 0;
+  `dotnet build PIM_Solution/PIM.sln --no-restore` = 0 (0 warnings, 0 errors).
+  Opomba: prvotni zapis se je skliceval tudi na `dotnet test PIM.sln` = 0
+  dvakrat zapored. To drži, a ni dokaz — ta ukaz izvaja 1 projekt od 43.
+  Veljaven dokaz je naknadni polni zagon `scripts\run_tests.ps1`.
 
 - **[INFRASTRUKTURA]** Reorganizacija map in poenotenje pravil — kdo: Claude Opus 5 —
   2026-08-12 — dokaz: `AGENTS.md` je edini pravilnik; nasprotujoči si dokumenti
