@@ -2,6 +2,12 @@
 
 Posodobljeno: 2026-08-13
 
+## BAZA naloga — karantena NW XML po izdelku
+
+- **Stanje: BLOKIRANO.** Claude je z zahtevanima `--permission-mode acceptEdits` in `--max-turns 40` pripravil `PIM_Solution/sql/migrations/040_QuarantineGenericXmlPerRecord.sql`; XML ne vstavi `canon.Product`, lookup vsebuje `OrganizationId`, zapis se obdeluje po `RecordOrdinal`, neujemanja pa so po trenutnem nalogu tiho preskočena in `raw.Inbox` konča `Processed`. Codexov neodvisni statični pregled je vrnil `VERDICT: PASS`.
+- **Blokada dokazov:** `scripts/run_tests.ps1` → izhod 1, 41 uspešnih / 0 preskočenih / 1 padel. `PIM.F5.Integration` na `PIM_Solution/tests/PIM.F5.Integration/Program.cs:192` še zahteva `Quarantined` za neujemajoči zapis, trenutni nalog pa zahteva `Processed` in tiho preskakovanje. Testa ne spreminjamo, da bi šel skozi. Znotraj Hermesove seje tudi ni varno dostopne povezave za ponovitev NW XML E2E meritev.
+- **Uporabnik:** potrebna je odločitev, ali trenutna specifikacija velja in se v ločenem/izrecno odobrenem koraku posodobi F5 integracijski test, ali se specifikacija vrne na karantensko semantiko.
+
 ## Aktivno preverjanje E2E
 
 - **Stanje: KONČANO.** Hermes je sam izvedel korake 1–5 iz

@@ -244,17 +244,28 @@ async Task InsertFutureInboxAsync(SqlConnection sqlConnection, Guid id, string s
     """, ("@RunId", id), ("@OrganizationId", organizationId), ("@SourceCode", source),
     ("@Payload", payload), ("@Hash", Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(payload)))));
 }
+// Pogodba spremenjena 2026-08-13 z odločitvijo uporabnika, uveljavljena v migraciji 040:
+// dobaviteljev XML normalno vsebuje izdelke, ki jih ne vodimo, zato neujemajoč ali
+// nepopoln zapis NI napaka. Zapis se preskoči, paket pa se dokonča kot Processed;
+// karantena ostane samo za sistemske izjeme, ujete v CATCH.
+// Nameni testa ostajajo isti trije — paket je zaključen, razlog je zabeležen in
+// zavrnjena vrednost je ohranjena — spremenil se je le mehanizem.
 async Task AssertRejectedAsync(SqlConnection sqlConnection, Guid runId, string retainedValue, string reasonFragment)
 {
-  Equal("Quarantined", await ScalarAsync<string>(sqlConnection,
-    "SELECT Status FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)), "Inbox ni v karanteni.");
+  Equal("Processed", await ScalarAsync<string>(sqlConnection,
+    "SELECT Status FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)),
+    "Paket se mora dokončati kot Processed, ne v karanteni.");
   Equal(1, await ScalarAsync<int>(sqlConnection, """
-    SELECT COUNT(*) FROM map.UnmappedValue rejected
-    INNER JOIN map.ExtractedValue value ON value.ExtractedValueId=rejected.ExtractedValueId
+    SELECT COUNT(*) FROM raw.Inbox
+    WHERE RunId=@RunId AND FailureReason LIKE N'%' + @Reason + N'%';
+    """, ("@RunId", runId), ("@Reason", reasonFragment)),
+    "Razlog preskoka ni zabeležen v povzetku FailureReason.");
+  Equal(1, await ScalarAsync<int>(sqlConnection, """
+    SELECT COUNT(*) FROM map.ExtractedValue value
     INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId
-    WHERE inbox.RunId=@RunId AND value.Value=@Value AND rejected.Reason LIKE N'%' + @Reason + N'%';
-    """, ("@RunId", runId), ("@Value", retainedValue), ("@Reason", reasonFragment)),
-    "Zavrnjena generična vrednost ali razlog nista ohranjena.");
+    WHERE inbox.RunId=@RunId AND value.Value=@Value;
+    """, ("@RunId", runId), ("@Value", retainedValue)),
+    "Zavrnjena vrednost ni ohranjena v map.ExtractedValue.");
 }
 async Task SeedBaseProductAsync(SqlConnection sqlConnection)
 {

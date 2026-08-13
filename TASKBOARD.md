@@ -22,7 +22,7 @@ _(prazno)_
 
 ## BLOKIRANO
 
-_(prazno)_
+- **[BAZA]** Karantena NW XML po posameznem izdelku — kdo: Hermes (koordinacija in dokaz), Claude (implementacija), Codex (neodvisni QA) — 2026-08-13 — blokada: trenutni delovni nalog zahteva tiho preskakovanje neujemajočih/manjkajočih zapisov (brez `ops.DeadLetterQueue`, `raw.Inbox=Processed`), toda `scripts/run_tests.ps1` → izhod 1: 41 uspeli, 0 preskočenih, 1 padel (`PIM.F5.Integration`). Test na `PIM_Solution/tests/PIM.F5.Integration/Program.cs:192` še izrecno zahteva `Quarantined`, kar je v neposrednem nasprotju s trenutnim nalogom. Testa ne spreminjamo, da bi šel skozi. Codex statični pregled trenutne migracije → `VERDICT: PASS`; E2E ponovni NW XML uvoz in pred/po meritve niso dokazani v Hermesovi seji, ker ni `PIM_CONNECTION_STRING` in lokalne konfiguracije ne beremo.
 
 ## KONČANO
 
