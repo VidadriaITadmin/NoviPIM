@@ -91,6 +91,22 @@ codex exec review
 Samo za branje, `git` opravila, poganjanje testov in pisanje `TASKBOARD.md` /
 `STATUS.md` / poročil. Vse, kar spreminja kodo, SQL ali teste, gre skozi Clauda.
 
+**Odločilno vprašanje: ali naloga spremeni kodo, SQL ali test?**
+
+- **Ne** → naredi sam. Zaganjanje ukazov, zbiranje dokazov in pisanje poročila
+  so tvoje delo. Predaja tu ni varnejša, ampak samo doda načine, kako lahko
+  spodleti.
+- **Da** → predaj Claudu.
+
+Če naloga traja dlje (polni testni paket, migrator, E2E), je **ne** stlači v en
+sam klic `claude -p`. Dolgi zagoni presežejo `--max-turns` in časovno omejitev,
+izvajalec pa vrne prazen rezultat, čeprav ni nič narobe s samo nalogo.
+
+> Zakaj: 2026-08-13 je bil E2E nalog napisan tako, da je zahteval predajo,
+> čeprav ni spreminjal nobene kode. Claude je dvakrat dosegel `--max-turns`,
+> tretjič pa potekel po 600 s (izhod 124). Naloga je bila `BLOKIRANO` po treh
+> iteracijah, ne da bi karkoli od nje bilo dejansko izvedeno.
+
 > Zakaj: 2026-08-12 je Hermes kodo pisal sam in dvakrat poročal stanje, ki ni
 > držalo (»6/6 PASS«, »paket zelen«). Oboje je padlo pri neodvisnem preverjanju.
 > Ločen izvajalec in ločen pregled sta obstajala na papirju, a nista bila

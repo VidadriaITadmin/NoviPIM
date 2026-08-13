@@ -24,6 +24,9 @@ $env:PIM_MIGRATIONS_PATH = 'C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\sql\
    - PASS: 0 errors; zapiši tudi opozorila.
 2. `dotnet run --project .\src\PIM.Migrator\PIM.Migrator.csproj -- --verify`
    - PASS: `Preverjanje F0–F10 baze je uspešno.`
+   - Če vrne izhod **2** z neobstoječo potjo `...\NoviPIM\sql\migrations`, ni
+     nastavljen `PIM_MIGRATIONS_PATH`. Privzeta pot migratorja je napačna —
+     migracije so v `PIM_Solution\sql\migrations`. To ni napaka migracije.
 3. Migrator brez `--verify`, nato še enkrat brez `--verify`.
    - PASS: drugi zagon ne uporabi nove migracije.
 
@@ -83,8 +86,12 @@ Prvo okno:
 
 ```powershell
 $env:ASPNETCORE_URLS = 'http://127.0.0.1:5088'
-dotnet run --project .\src\PIM.Intranet\PIM.Intranet.csproj
+dotnet run --project .\src\PIM.Intranet\PIM.Intranet.csproj --no-launch-profile
 ```
+
+> `--no-launch-profile` je obvezen. Brez njega `launchSettings.json` povozi
+> `ASPNETCORE_URLS` in aplikacija posluša na `localhost:5091`, zahtevek na 5088
+> pa odpove — kar je videti kot okvara, čeprav intranet normalno teče.
 
 Drugo okno:
 
