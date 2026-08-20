@@ -207,7 +207,15 @@ Ko je napaka odkrita šele v QA, sem dodaj eno vrstico.
 
 - 2026-08-12: v repozitoriju je bil Node scaffold, zaradi katerega so agenti
   poročali `npm test PASS` kot dokaz kakovosti .NET sistema. Scaffold je
-  arhiviran; edini dokaz je `dotnet test`.
+  arhiviran; edini dokaz je `scripts\run_tests.ps1`.
+- 2026-08-20: **isti scaffold se je vrnil.** Arhiviranje ga ni preprečilo, ker ga
+  je `.github\workflows\ci.yml` še vedno zahteval — CI je poganjal `npm ci` in
+  `npm test` in **ni prevedel niti ene .NET vrstice**. Zelen CI je torej pomenil
+  samo, da `sestej(2, 3) === 5`. Zdaj je scaffold izbrisan, CI prevaja
+  `PIM_Solution\PIM.sln` z `-warnaserror`, en korak pa izrecno pade, če se
+  `package.json`, `package-lock.json` ali `node_modules` vrnejo. Nauk: dokler
+  avtomatika nekaj zahteva, bo to nekdo znova ustvaril — ni dovolj odstraniti
+  datoteko, odstraniti je treba razlog.
 - 2026-08-12: obstajali so trije nasprotujoči si sklopi pravil (nadrejena mapa,
   ta repozitorij, `C:\ai\*`). Zdaj velja samo ta datoteka.
 - 2026-08-12: build je padel z `MSB3027`, ker je tekel intranet in držal

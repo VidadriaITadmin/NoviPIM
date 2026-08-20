@@ -31,6 +31,19 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   a jo kliče samo test — worker sam v bazo ne piše ničesar.
 - **[WORKERJI]** Odločitev o `PIM.SaopStockWorker`, `PIM.FoundationWorker` in ostanku
   `PIM.NwXmlWorker` (samo `bin\`/`obj\`, projekta ni v `PIM.sln`).
+- **[TESTI]** Pet projektov brez baze pade namesto da bi se preskočilo. Izmerjeno
+  2026-08-20 z odmaknjenim `appsettings.Local.json` in praznim
+  `PIM_CONNECTION_STRING`: `scripts\run_tests.ps1` → izhod 1, 38 uspeli,
+  1 preskočen, **5 padli**. `PIM.F3.Integration` in xUnit se korektno preskočita
+  (izhod 0), `PIM.F2.Integration`, `PIM.F5.Integration`, `PIM.F8.HardeningTests`,
+  `PIM.F8.Integration` in `PIM.F9.Integration` pa končajo z izhodom 2
+  „MSSQL BLOCKED". Posledica: na računalniku brez razvojne baze je paket videti
+  pokvarjen, čeprav ni, in CI ne more poganjati testov — zato zdaj samo prevaja.
+  Vzorec za popravek je `PIM.F3.Integration/Program.cs:5-10`.
+- **[IZVOZ]** `PIM.F7.MagentoExportTests` ni v `PIM.sln`. `dotnet build PIM.sln` ga
+  torej ne prevede, `scripts\run_tests.ps1` pa ga poganja z `--no-build` — poroča
+  lahko zeleno iz zastarelih binarnih datotek. Njegov `bin\` vsebuje samo
+  `PIM.B2b.dll`, zato tudi ne pokriva `MagentoExportCommand.cs` v workerju.
 
 ## DELAM (v teku)
 
@@ -50,6 +63,20 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[INFRASTRUKTURA]** Node scaffold izbrisan in CI prevezan na .NET — kdo:
+  Claude Opus 5, na izrecno zahtevo uporabnika — 2026-08-20. Odstranjeni:
+  `package.json`, `package-lock.json`, `node_modules\` (26 MB), `src\index.js`
+  (`sestej(a,b)`), `tests\index.test.js` (`sestej(2,3) === 5`). Nič od tega ni
+  bilo sledeno v Gitu. `PIM_Solution\src\` in 46 testnih projektov nedotaknjeni.
+  **Zakaj se je scaffold vrnil, čeprav je bil 2026-08-12 že arhiviran:**
+  `.github\workflows\ci.yml` ga je še vedno zahteval — poganjal je `npm ci` in
+  `npm test` in ni prevedel niti ene .NET vrstice. CI zdaj na `windows-latest`
+  prevede `PIM_Solution\PIM.sln` z `-warnaserror` in pade, če se scaffold vrne.
+  Dokaz: `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0 opozoril, 0 napak,
+  53 projektov; `scripts\run_tests.ps1` → 44 uspeli, 0 preskočenih, 0 padlih.
+  **Nepreverjeno:** delovni tok GitHub Actions na tem računalniku ni bil zagnan
+  (brez `git push`), zato je preverjena vsebina ukazov, ne pa sam zagon v CI.
 
 - **[WORKERJI]** Mejnik se ne premakne za zajem brez preslikave; padec enega podjetja
   ne ustavi ostalih — kdo: Claude Opus 5 (izvedba), Codex (neodvisni QA) — 2026-08-20.
