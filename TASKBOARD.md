@@ -40,16 +40,10 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   „MSSQL BLOCKED". Posledica: na računalniku brez razvojne baze je paket videti
   pokvarjen, čeprav ni, in CI ne more poganjati testov — zato zdaj samo prevaja.
   Vzorec za popravek je `PIM.F3.Integration/Program.cs:5-10`.
-- **[IZVOZ]** Magento CSV izvoz — dve potrjeni napaki, zaradi katerih ukaz ne dela.
-  Vrnjeno iz KONČANO 2026-08-20; podrobnosti in dokazi so v preklicani vrstici
-  spodaj. Na kratko: `MagentoExportCommand.cs:55` bere `prb2c.VatRate`, ki v
-  podpoizvedbi ne obstaja (SQL se ne prevede), in `:143` primerja vlogo medija z
-  `MAIN`, čeprav je v bazi `PRIMARY`/`Primary`. Popravek mora spremljati test, ki
-  ukaz dejansko izvede.
-- **[IZVOZ]** `PIM.F7.MagentoExportTests` ni v `PIM.sln`. `dotnet build PIM.sln` ga
-  torej ne prevede, `scripts\run_tests.ps1` pa ga poganja z `--no-build` — poroča
-  lahko zeleno iz zastarelih binarnih datotek. Njegov `bin\` vsebuje samo
-  `PIM.B2b.dll`, zato tudi ne pokriva `MagentoExportCommand.cs` v workerju.
+- **[IZVOZ]** `PIM.B2bWorker\MagentoExportRunner.cs` je mrtva koda — nanj se ne
+  sklicuje nič (`grep` po celotni rešitvi vrne samo definicijo). Je druga, vzporedna
+  izvedba istega izvoza; priklopljen je `MagentoExportCommand`. Potrebna je odločitev,
+  ali se izbriše — brisanje je na zaprtem seznamu `AGENTS.md` §4.1.
 
 ## DELAM (v teku)
 
@@ -57,6 +51,19 @@ _(prazno)_
 
 
 ## BLOKIRANO
+
+- **[IZVOZ]** 162 atributnih stolpcev Magento predloge (stolpci 54–215) je v izvozu
+  praznih — blokirano 2026-08-20, **potrebna je tvoja odločitev**. Mehanizem dela in
+  je dokazan: `PIM.F7.MagentoExportTests` posadi atribut s kodo `Grlo ANG` in ta
+  pristane v svojem stolpcu. Manjka konfiguracija, ne koda: da se stolpec napolni,
+  mora v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.<glava>`
+  (na primer `ProductAttribute.Grlo ANG`). Danes je edina obstoječa koda atributa v
+  bazi `CategoryRequired` (`canon.ProductAttribute`: 2 vrstici), zato se ne ujema
+  nobeden od 162 stolpcev.
+  **Vprašanje:** katera SAOP oziroma NW lastnost pripada kateremu stolpcu predloge?
+  Tega ne smem ugibati. Če je odgovor v `docs/Mapiranje_SAOP_NoviPIM.xlsx`, povej —
+  preslikave bom zapisal kot vrstice registra, ne kot kodo.
+  Do takrat izvoz te stolpce izpiše prazne; napačnih vrednosti ne izvozi.
 
 _(prazno)_
 
@@ -152,6 +159,49 @@ _(prazno)_
   >
   > Naloga se vrne v TODO za področje IZVOZ; popravek mora spremljati test, ki
   > dejansko izvede `--export-magento` proti razvojni bazi.
+
+- **[DOMENA/IZVOZ]** Magento CSV izvoz — obe napaki odpravljeni in prvič dokazano
+  izveden proti bazi — kdo: Claude Opus 5 (izvedba), Codex (neodvisni QA) —
+  2026-08-20. To nadomešča preklicano vrstico zgoraj.
+  1. `prb2c` podpoizvedba zdaj izbere `VatRate`, ki ga zunanji `COALESCE` bere.
+     Brez tega se SQL ni prevedel in ukaz ni zajel niti ene vrstice.
+  2. Vloga glavne slike se ugotavlja z `IsPrimaryMediaRole`: `PRIMARY` in `MAIN`,
+     neobčutljivo na velikost črk, ker migracije pišejo `PRIMARY`, v
+     `canon.ProductMedia` pa so tudi vrstice `Primary`. Vrstni red medijev je
+     zdaj `SortOrder` in ne `Role` — prej bi ob več glavnih slikah izbral
+     abecedno prvo vlogo namesto najnižjega `SortOrder`.
+  3. **Vzrok, da tega ni ujel noben test:** obstajali sta dve vzporedni definiciji
+     glav — `MagentoCsvContract` (215/19, testirana, a jo uporablja samo mrtvi
+     `MagentoExportRunner`) in `MagentoProductSchema`/`MagentoCustomerSchema`
+     (uporablja ju pravi ukaz, netestirani). Bili sta znakovno enaki, a nevezani.
+     Zdaj sta shemi izpeljani iz pogodbe — en sam vir resnice.
+  4. `PIM.F7.MagentoExportTests` je dodan v `PIM.sln` in dobi referenco na
+     `PIM.B2bWorker`; prej je pokrival samo `PIM.B2b` in ga `dotnet build PIM.sln`
+     sploh ni prevajal.
+  Dokaz RED→GREEN, oba popravka posebej: z odstranjenim `VatRate` test pade;
+  z vlogo vrnjeno na `role == "MAIN"` test pade; z obema popravkoma gre skozi.
+  Test zdaj dejansko izvede `MagentoExportCommand.ExecuteAsync` proti bazi:
+  **18 izdelkov, 0 strank**, glavna slika za `ACB.A3660001N` pravilno napolnjena,
+  ostale slike brez podvojene glavne; 215 in 19 stolpcev preverjenih z RFC 4180
+  razčlenjevalnikom, ne z `Split(',')`. Test si sam doda dva medija in ju za sabo
+  pobriše. `scripts\run_tests.ps1` → **44 uspeli, 0 preskočenih, 0 padlih**;
+  `dotnet build PIM.sln -warnaserror` → 0 opozoril, 0 napak.
+  5. **Sedem nadaljnjih napak iz osmih Codexovih krogov**, vse potrjene proti shemi
+     in vse dokazane z RED→GREEN: prihodnja cena (`ValidFrom` v prihodnosti) se je
+     izvozila namesto tekoče; izklopljen prag stranke (`IsActive=0`) je povozil
+     privzetega; potekel in prihodnji skupinski rabat sta se izvozila; `B2B+` se je
+     izvozil kot `1` tudi s poteklim oknom; izklopljen katalog pakirnih popustov
+     (`IsActive=0`) se je še vedno izvozil; stolpca `Kategorije vid ANG/SLO` sta
+     ostajala prazna, čeprav so poti v `pim.ProductCategory` obstajale; par datotek
+     je bilo mogoče objaviti na pol.
+  6. Par datotek je zdaj nedeljiv: enolična začasna imena, ključavnica na izhodni
+     mapi, povratek na prejšnji par ob vsaki napaki in oznaka `magento-export.complete`,
+     ki porabniku pove, kdaj je par popoln.
+  **Nepreverjeno:** izvoz na razvojnih podatkih vrne 18 izdelkov in 1 stranko, pri
+  čemer si stranko ustvari test sam — `pim.CustomerWebProfile` v razvojni bazi nima
+  nobene vrstice z `WebEnabled=1`. Popolna atomarnost proti bralcu, ki oznako
+  ignorira, ni mogoča z dvema preimenovanjema; dokončna rešitev je odvisna od načina
+  dostave na splet, ki še ni določen.
 
 - **[WORKERJI + BAZA]** Živ SAOP zajem: pravi HTTP odjemalec, vseh 16 končnih točk,
   štiri podjetja, in odprava treh zapor, zaradi katerih worker sploh ni mogel teči —

@@ -53,6 +53,7 @@ Equal(2, fixture.Records.Count, "Fixture records");
 Equal(64, fixture.PayloadHash.Length, "SHA-256");
 Equal(before, File.GetLastWriteTimeUtc(fixturePath), "Fixture vir ostane read-only.");
 Console.WriteLine("F7 mapping: konfiguracijski landing, replay in zavrnitve PASS.");
+await MagentoExportTests.RunAllAsync();
 
 static string FindRoot()
 {

@@ -156,6 +156,73 @@ To je skladno z `deploy/PRODUCTION_ROADMAP.md:117` (»Dostava izvozov na splet
 in `PRODUCTION_ROADMAP.md:167-170`: izvozni task in način dostave sta zadnji
 manjkajoči operativni člen.
 
+### 3.1 Lokalni Magento CSV izvoz
+
+`PIM.B2bWorker` podpira read-only ukaz `--export-magento --organization-id <int>
+--output-dir <dir>`. Bere izključno `PIM_CONNECTION_STRING` in lokalno ustvari
+`magento-products.csv` (215 glav po predlogi) ter `magento-customers.csv` (19
+glav po predlogi). Datoteki sta UTF-8 brez BOM z vrsticami LF; manjkajoča polja
+ostanejo prazna. FTP, HTTP in Magento dostava niso del ukaza.
+
+Zagon:
+
+```powershell
+$env:PIM_CONNECTION_STRING = (Get-Content .\appsettings.Local.json -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+dotnet run --project PIM_Solution\workers\PIM.B2bWorker -- `
+  --export-magento --organization-id 2 --output-dir C:\temp\magento
+```
+
+**Glave so ena sama definicija.** `MagentoCsvContract` v `PIM.B2b` je vir resnice;
+`MagentoProductSchema` in `MagentoCustomerSchema` v workerju sta izpeljana iz nje.
+Do 2026-08-20 sta bila to dva neodvisna seznama — znakovno enaka, a nevezana, zato
+je pogodbeni test preverjal en seznam, izvozni ukaz pa uporabljal drugega. Če
+dodajaš stolpec, ga dodaj v pogodbo in dopolni `MagentoProductSchema.GetCanonicalCode`.
+
+**Glavna slika.** Kanonični sloj piše vlogo `PRIMARY` (migracije 012, 013, 016, 017,
+040, 042 vstavljajo `Role=N'PRIMARY', SortOrder=1`); v `canon.ProductMedia` obstajajo
+tudi starejše vrstice z zapisom `Primary`. Izvoz vlogo primerja neobčutljivo na
+velikost črk in sprejme tudi `MAIN`. Glavna slika je tista z najnižjim `SortOrder`,
+vse ostale gredo v `Ostale slike`, ločene z `|`, brez podvojene glavne.
+
+**Cene in rabati so omejeni na veljavne.** Cena se izbere med tistimi z
+`ValidFrom <= zdaj` — brez tega bi `ORDER BY ValidFrom DESC` izbral vnaprej pripravljeno
+ceno in bi se ta pojavila v Magentu, preden začne veljati. Prag stranke velja samo, če je
+`pim.CustomerValueDiscountTier.IsActive = 1`; izklopljen prag se vrne na privzeti iz
+`pim.ValueDiscountTier`. Skupinski rabat mora ustrezati oknu `ValidFrom`/`ValidTo`.
+
+**Atributni stolpci (54–215) so nastavitev, ne koda.** Kanonična koda atributa je kar glava
+iz predloge: stolpec `Grlo ANG` se napolni iz atributa s kodo `Grlo ANG`. Da to deluje, mora
+v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.Grlo ANG`.
+**Danes ni nastavljena nobena taka preslikava**, zato je vseh 162 atributnih stolpcev v
+izvozu praznih — edina obstoječa koda v bazi je `CategoryRequired`. Mehanizem sam je dokazan
+s testom; manjka poslovna odločitev, katera SAOP/NW lastnost pripada kateremu stolpcu
+(glej `TASKBOARD.md`, razdelek BLOKIRANO).
+
+**Par datotek je nedeljiv.** Obe datoteki se najprej zapišeta ob stran (`.tmp`), prejšnji par
+se odmakne v `.prej`, šele nato se datoteki prestavita na končni imeni. Če karkoli od tega
+pade, se prejšnji par vrne v celoti — nikoli ne nastane nov izvoz izdelkov ob stari datoteki
+strank. Varnostni kopiji `.prej` se pobrišeta samo po popolnoma uspešni zamenjavi; če ostaneta
+na disku, sta zadnja veljavna kopija izvoza. Imena so enolična za posamezen zagon, sama
+zamenjava pa teče pod ključavnico `.magento-export.lock`, zato dva sočasna zagona v isto mapo
+ne moreta objaviti pomešanega para — drugi pade z jasnim sporočilom.
+
+**Porabnik bere šele ob oznaki `magento-export.complete`.** Dve preimenovanji na datotečnem
+sistemu nista ena atomarna operacija: bralec, ki bi mapo pogledal med njima, bi lahko videl nov
+izvoz izdelkov ob stari datoteki strank. Zato oznaka pred zamenjavo izgine in nastane šele, ko
+sta obe datoteki na mestu; vsebuje ID zagona, čas UTC ter število izdelkov in strank. Če
+zamenjava pade in se prejšnji par vrne, se vrne tudi oznaka — velja spet za vrnjeni par.
+
+> **Meja, ki ostane.** Popolna atomarnost proti bralcu, ki oznako ignorira, ni mogoča z dvema
+> preimenovanjema. Dokončna rešitev (zamenjava cele mape ali manifest) je odvisna od načina
+> dostave na splet, ta pa še ni določen — glej `deploy/PRODUCTION_ROADMAP.md`.
+
+**Kaj je dokazano.** `PIM.F7.MagentoExportTests` ukaz dejansko izvede proti razvojni
+bazi `PIM`: preveri, da se poizvedba prevede in vrne vrstice, da imata datoteki 215
+oziroma 19 stolpcev (razčlenjeno po RFC 4180), in da se medij z vlogo `PRIMARY`
+pojavi v stolpcu `Glavna slika`. Zadnja meritev: 18 izdelkov. Pot za stranke je
+izvedena, a na razvojnih podatkih ni dokazana — `pim.CustomerWebProfile` nima
+vrstice z `WebEnabled=1`, zato je strank 0.
+
 ---
 
 ## 4. B) Odhodna sporočila (outbox)
