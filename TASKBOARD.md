@@ -40,6 +40,12 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   „MSSQL BLOCKED". Posledica: na računalniku brez razvojne baze je paket videti
   pokvarjen, čeprav ni, in CI ne more poganjati testov — zato zdaj samo prevaja.
   Vzorec za popravek je `PIM.F3.Integration/Program.cs:5-10`.
+- **[IZVOZ]** Magento CSV izvoz — dve potrjeni napaki, zaradi katerih ukaz ne dela.
+  Vrnjeno iz KONČANO 2026-08-20; podrobnosti in dokazi so v preklicani vrstici
+  spodaj. Na kratko: `MagentoExportCommand.cs:55` bere `prb2c.VatRate`, ki v
+  podpoizvedbi ne obstaja (SQL se ne prevede), in `:143` primerja vlogo medija z
+  `MAIN`, čeprav je v bazi `PRIMARY`/`Primary`. Popravek mora spremljati test, ki
+  ukaz dejansko izvede.
 - **[IZVOZ]** `PIM.F7.MagentoExportTests` ni v `PIM.sln`. `dotnet build PIM.sln` ga
   torej ne prevede, `scripts\run_tests.ps1` pa ga poganja z `--no-build` — poroča
   lahko zeleno iz zastarelih binarnih datotek. Njegov `bin\` vsebuje samo
@@ -125,6 +131,27 @@ _(prazno)_
   PASS; `dotnet build PIM_Solution\workers\PIM.B2bWorker\PIM.B2bWorker.csproj
   --no-restore` → 0 napak; `scripts\run_tests.ps1 -Filter F7` → 4 F7 testi
   PASS, F7 integracija in xUnit pa nedosegljiva razvojna baza.
+
+  > **PREKLICANO 2026-08-20 — ta naloga NI končana.** Navedeni dokaz ne dokazuje
+  > tega ukaza. `PIM.F7.MagentoExportTests` pokriva samo `MagentoCsvContract` v
+  > `PIM.B2b` (v njegovem `bin\` je zgolj `PIM.B2b.dll`) in ni v `PIM.sln`, zato ga
+  > `dotnet build PIM.sln` sploh ne prevede, `run_tests.ps1` pa ga poganja z
+  > `--no-build` — lahko poroča zeleno iz zastarelih binarnih datotek.
+  > Sam ukaz `--export-magento` ni bil nikoli izveden. Codex je v neodvisnem
+  > pregledu našel dve napaki, obe potrjeni proti kodi, migracijam in bazi:
+  >
+  > 1. **Ukaz sploh ne more teči.** `MagentoExportCommand.cs:55` bere
+  >    `prb2c.VatRate`, podpoizvedba `prb2c` pa izbere samo `PimProductId`, `Net`
+  >    in `rn` — SQL se ne prevede („Invalid column name"). Pri `prb2b` je
+  >    `VatRate` prisoten, pri `prb2c` je izpadel.
+  > 2. **Glavna slika ne bi bila nikoli izpolnjena.** `MagentoExportCommand.cs:143`
+  >    primerja vlogo z `MAIN`, migracije 012/013/016/017/040/042 pa dosledno
+  >    vstavljajo `PRIMARY`; v `canon.ProductMedia` je dejansko `Primary`.
+  >    Vsaka slika bi torej pristala v `Product.OtherImages`, obvezni Magento
+  >    stolpec za glavno sliko pa bi ostal prazen.
+  >
+  > Naloga se vrne v TODO za področje IZVOZ; popravek mora spremljati test, ki
+  > dejansko izvede `--export-magento` proti razvojni bazi.
 
 - **[WORKERJI + BAZA]** Živ SAOP zajem: pravi HTTP odjemalec, vseh 16 končnih točk,
   štiri podjetja, in odprava treh zapor, zaradi katerih worker sploh ni mogel teči —
