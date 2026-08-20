@@ -6,17 +6,24 @@ Workerji v razvoju uporabljajo samo fixture/replay vsebino, lokalne datoteke in 
 
 ## Workerji
 
-| Worker | Vhod | Izhod | Lokalni dokaz |
-|---|---|---|---|
-| `PIM.KatalogWorker` | SAOP katalog fixture | `raw.Inbox` → catalog pipeline | F3 integration |
-| `PIM.XmlFileWorker` | XML datoteke, npr. NW | `raw.Inbox` → `map` → `canon` | F5 integration |
-| `PIM.StockFileWorker` | NW CSV / Braytron XML | `stock.LandingRecord`, snapshot, position | F6 FileWorkerTests + F6 integration |
-| `PIM.SaopStockWorker` | SAOP stock provider | stock pipeline | F6 SaopProviderTests; live ni omogočen |
-| `PIM.B2bWorker` | B2B fixture podatki | `pim` B2B modeli / CSV podatki | F7 integration |
-| `PIM.OutboxDispatcher` | `out.OutboxMessage` | HTTP samo do eksplicitnega profila | F8 local HTTP fixture |
-| `PIM.Watchdog` | `ops` zdravstveno stanje | alarmi v `ops.Alert` | F9 tests |
-| `PIM.AlertDispatcher` | alert queue | dostava alarma | F9 local fixture; dostava privzeto izklopljena |
-| `PIM.FoundationWorker` | skupne osnove | operativne pomožne poti | build/pogodbeni testi |
+Stolpec »Piše v bazo« loči workerje od lupin. Prej je ta tabela naštevala vhod in izhod tudi
+za programe, ki nimajo nobene povezave do baze — podatke v njihovih tabelah so zapisali
+integracijski testi, ne workerji. Stanje 13. 8. 2026:
+
+| Worker | Piše v bazo | Vhod | Izhod | Lokalni dokaz |
+|---|---|---|---|---|
+| `PIM.KatalogWorker` | **da** | SAOP API (Live) ali fixture | `raw.Inbox` → `map` → `canon` | F3 integration; glej [`ZAJEM-SAOP.md`](ZAJEM-SAOP.md) |
+| `PIM.XmlFileWorker` | **da** | XML datoteke, npr. NW | `raw.Inbox` → `map` → `canon` | F5 integration |
+| `PIM.Watchdog` | **da** (le `ops`) | `ops` zdravstveno stanje | `ops.IntegrationHealth`, `ops.Alert` | F9 tests |
+| `PIM.OutboxDispatcher` | **da** (le `out`) | `out.OutboxMessage` | HTTP samo do eksplicitnega profila | F8 local HTTP fixture |
+| `PIM.AlertDispatcher` | **da** (le `ops`) | alert queue | dostava alarma | F9 local fixture; dostava privzeto izklopljena |
+| `PIM.StockFileWorker` | **ne** | NW CSV / Braytron XML | prebere datoteko in izpiše število zapisov | `StockLandingWriter` obstaja in je dokazan, a ga kliče samo F6 integration |
+| `PIM.B2bWorker` | **ne** | — | en `Console.WriteLine` | `B2bLandingWriter` kliče samo F7 MappingTests |
+| `PIM.SaopStockWorker` | **ne** | — | en `Console.WriteLine` | F6 SaopProviderTests |
+| `PIM.FoundationWorker` | **ne** | — | prazen `BackgroundService` skelet | build |
+
+`PIM.NwXmlWorker` v `workers\` ima samo `bin\` in `obj\`; projekta ni v `PIM.sln` in izvorne
+kode ni. Ni worker, je ostanek.
 
 ## Standardni dokaz pred namestitvijo
 

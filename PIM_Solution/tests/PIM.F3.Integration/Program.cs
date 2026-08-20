@@ -51,6 +51,223 @@ Console.WriteLine("F3 popravek XML deklaracije in ERP upravičenosti je preverje
 
 await VerifyRawInboxRequeueAsync(connection, connectionString);
 Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverjena.");
+
+// ---------------------------------------------------------------------------
+// Mejnik se ne sme premakniti za entiteto brez aktivne preslikave.
+//
+// Zakaj je to pomembno: zajem dela za vseh 16 SAOP končnih točk, preslikava v canon pa je
+// nastavljena samo za tri. SqlMappingPipeline.ReadInboxesAsync veže raw.Inbox z INNER JOIN na
+// map.EntityMapping in map.FieldMapping, zato zapisi nepreslikanih entitet ostanejo Pending.
+// Če bi zajem kljub temu premaknil mejnik, bi bilo to obdobje ob pozneje dodani preslikavi
+// trajno preskočeno — delta zajem ga ne bi več prinesel.
+{
+  const string sourceCode = "SAOP_IQLIGHTING";
+  const int organizationId = 2;
+  const string probeEntityType = "F3_WATERMARK_GUARD_TEST";
+
+  await using var guardConnection = new SqlConnection(connectionString);
+  await guardConnection.OpenAsync();
+
+  int sourceConnectorId;
+  await using (var lookup = new SqlCommand(
+    "SELECT SourceConnectorId FROM map.SourceConnector WHERE SourceCode=@SourceCode AND OrganizationId=@OrganizationId AND IsActive=1;",
+    guardConnection))
+  {
+    lookup.Parameters.AddWithValue("@SourceCode", sourceCode);
+    lookup.Parameters.AddWithValue("@OrganizationId", organizationId);
+    var value = await lookup.ExecuteScalarAsync();
+    if (value is null or DBNull) throw new InvalidOperationException("Manjka konektor SAOP_IQLIGHTING za organizacijo 2.");
+    sourceConnectorId = Convert.ToInt32(value);
+  }
+
+  // 1. Preslikana entiteta — mejnik se sme premakniti.
+  if (!await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "ItemGeneralData", default))
+    throw new InvalidOperationException("ItemGeneralData ima nastavljeno preslikavo, a je bila prepoznana kot nepreslikana.");
+
+  // 2. Nepreslikana entiteta — mejnik mora ostati na mestu.
+  if (await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "GetItemsPlanningData", default))
+    throw new InvalidOperationException("GetItemsPlanningData nima preslikave, a je bila prepoznana kot preslikana.");
+
+  // 3. Polovično nastavljena preslikava (entiteta brez polj) šteje kot NEpreslikana — enako, kot
+  //    jo obravnava INNER JOIN v SqlMappingPipeline. Vrstico testa vstavimo in jo sami odstranimo.
+  await using (var insertProbe = new SqlCommand(
+    "INSERT map.EntityMapping (SourceConnectorId, EntityType, RecordXPath, IsActive) VALUES (@SourceConnectorId, @EntityType, N'/x/y', 1);",
+    guardConnection))
+  {
+    insertProbe.Parameters.AddWithValue("@SourceConnectorId", sourceConnectorId);
+    insertProbe.Parameters.AddWithValue("@EntityType", probeEntityType);
+    await insertProbe.ExecuteNonQueryAsync();
+  }
+
+  try
+  {
+    if (await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, probeEntityType, default))
+      throw new InvalidOperationException("Entiteta z map.EntityMapping, a brez map.FieldMapping, je bila napačno prepoznana kot preslikana.");
+  }
+  finally
+  {
+    await using var cleanup = new SqlCommand(
+      "DELETE FROM map.EntityMapping WHERE SourceConnectorId=@SourceConnectorId AND EntityType=@EntityType;",
+      guardConnection);
+    cleanup.Parameters.AddWithValue("@SourceConnectorId", sourceConnectorId);
+    cleanup.Parameters.AddWithValue("@EntityType", probeEntityType);
+    await cleanup.ExecuteNonQueryAsync();
+  }
+
+  Console.WriteLine("F3 zaščita mejnika pri entiteti brez preslikave je preverjena.");
+}
+
+// ---------------------------------------------------------------------------
+// Isto pravilo, dokazano skozi cel zajem in ne le na posamezni metodi: zaženemo
+// SaopIngestRunner proti lažnemu HTTP odgovoru (brez živega SAOP) za dve entiteti hkrati —
+// eno preslikano in eno nepreslikano — in preverimo, kaj se je zgodilo z map.Watermark.
+//
+// Ta test pade, če kdo odstrani varovalko v RunEndpointAsync; prejšnji dve preverjata samo
+// gradnika, ta preverja, da sta res povezana.
+{
+  const string sourceCode = "SAOP_IQLIGHTING";
+  const int organizationId = 2;
+  const string unmappedEntityType = "F3_UNMAPPED_PROBE";
+
+  var settings = new SaopSettings
+  {
+    BaseUrl = "http://saop.test.local/",
+    Username = "test",
+    Password = "test",
+    PageSize = 10,
+    MaxPagesPerEndpoint = 2,
+    RetryMaxExtraAttempts = 0,
+    RetryBaseDelayMilliseconds = 0,
+    DelayAfterSuccessMilliseconds = 0,
+    AcceptUntrustedCertificate = false,
+    LookbackDays = 0
+  };
+
+  // Prva stran vsake končne točke nosi en zapis, druga je prazna in s tem konča paginacijo.
+  // Števec mora biti vezan na stran iz zahtevka, ne skupen — sicer bi prva končna točka
+  // porabila obe strani in druga bi dobila 0 zapisov.
+  var handler = new StubHandler(request =>
+  {
+    var query = request.RequestUri!.Query;
+    var isFirstPage = query.Contains("page=1", StringComparison.OrdinalIgnoreCase);
+    var xml = isFirstPage
+      ? "<ArrayOfItem><Item><ItemID>F3-PROBE-1</ItemID></Item></ArrayOfItem>"
+      : "<ArrayOfItem />";
+    return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+    {
+      Content = new StringContent(xml, System.Text.Encoding.UTF8, "application/xml")
+    };
+  });
+
+  var mappedEndpoint = SaopEndpoints.Find(SaopEndpoints.GetItemsGeneralData)!;
+  var unmappedEndpoint = new SaopEndpoint(
+    unmappedEntityType, "api/Item/GetProbe", SaopEndpointKind.Paged, SupportsWatermark: true)
+  {
+    EntityType = unmappedEntityType
+  };
+
+  int probeConnectorId;
+  await using (var idConnection = new SqlConnection(connectionString))
+  {
+    await idConnection.OpenAsync();
+    await using var lookup = new SqlCommand(
+      "SELECT SourceConnectorId FROM map.SourceConnector WHERE SourceCode=@SourceCode AND OrganizationId=@OrganizationId AND IsActive=1;",
+      idConnection);
+    lookup.Parameters.AddWithValue("@SourceCode", sourceCode);
+    lookup.Parameters.AddWithValue("@OrganizationId", organizationId);
+    probeConnectorId = Convert.ToInt32(await lookup.ExecuteScalarAsync());
+  }
+
+  static async Task<string?> ReadWatermarkValueAsync(string cs, int connectorId, string entityType)
+  {
+    await using var connection = new SqlConnection(cs);
+    await connection.OpenAsync();
+    await using var command = new SqlCommand(
+      "SELECT WatermarkValue FROM map.Watermark WHERE SourceConnectorId=@SourceConnectorId AND EntityType=@EntityType;",
+      connection);
+    command.Parameters.AddWithValue("@SourceConnectorId", connectorId);
+    command.Parameters.AddWithValue("@EntityType", entityType);
+    var value = await command.ExecuteScalarAsync();
+    return value is null or DBNull ? null : Convert.ToString(value);
+  }
+
+  var mappedBefore = await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData");
+
+  var runner = new SaopIngestRunner(connectionString, settings, handler);
+  var summary = await runner.RunAsync(
+    new SaopOrganization(organizationId, "IQLighting", sourceCode),
+    [mappedEndpoint, unmappedEndpoint],
+    fullSync: true);
+
+  try
+  {
+    var mappedResult = summary.Endpoints.Single(endpoint => endpoint.EndpointKey == mappedEndpoint.Key);
+    var unmappedResult = summary.Endpoints.Single(endpoint => endpoint.EndpointKey == unmappedEndpoint.Key);
+
+    if (!mappedResult.Succeeded) throw new InvalidOperationException($"Preslikana končna točka ni uspela: {mappedResult.Error}");
+    if (!unmappedResult.Succeeded) throw new InvalidOperationException($"Nepreslikana končna točka bi morala uspeti pri zajemu: {unmappedResult.Error}");
+
+    if (!mappedResult.WatermarkAdvanced)
+      throw new InvalidOperationException("Preslikani končni točki mejnik ni bil premaknjen, čeprav bi moral biti.");
+    if (unmappedResult.WatermarkAdvanced)
+      throw new InvalidOperationException("Nepreslikani končni točki je bil mejnik premaknjen — to je prav tista tiha izguba podatkov, ki jo varovalka preprečuje.");
+    if (!unmappedResult.AwaitingMapping)
+      throw new InvalidOperationException("Nepreslikana končna točka ni bila označena kot 'čaka na preslikavo'.");
+    if (summary.AwaitingMappingCount != 1)
+      throw new InvalidOperationException($"Pričakovana ena končna točka brez preslikave, dobil {summary.AwaitingMappingCount}.");
+
+    // Dokaz v bazi, ne le v objektu: za nepreslikano entiteto mejnika sploh ni.
+    if (await ReadWatermarkValueAsync(connectionString, probeConnectorId, unmappedEntityType) is not null)
+      throw new InvalidOperationException("map.Watermark je dobil vrstico za nepreslikano entiteto.");
+
+    // Preslikana entiteta pa se je premaknila.
+    var mappedAfter = await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData");
+    if (mappedAfter is null) throw new InvalidOperationException("Preslikana entiteta ni dobila mejnika.");
+    if (mappedAfter == mappedBefore) throw new InvalidOperationException("Mejnik preslikane entitete se ni premaknil.");
+
+    // In zajeti zapis nepreslikane entitete res leži v raw.Inbox — podatek ni izgubljen, le čaka.
+    await using var inboxConnection = new SqlConnection(connectionString);
+    await inboxConnection.OpenAsync();
+    await using var inboxCount = new SqlCommand(
+      "SELECT COUNT(*) FROM raw.Inbox WHERE RunId=@RunId AND EntityType=@EntityType AND Status=N'Pending';",
+      inboxConnection);
+    inboxCount.Parameters.AddWithValue("@RunId", summary.RunId);
+    inboxCount.Parameters.AddWithValue("@EntityType", unmappedEntityType);
+    if (Convert.ToInt32(await inboxCount.ExecuteScalarAsync()) < 1)
+      throw new InvalidOperationException("Zajeti zapis nepreslikane entitete ni pristal v raw.Inbox.");
+  }
+  finally
+  {
+    // Test počisti izključno vrstice, ki jih je ustvaril sam, in vrne mejnik preslikane
+    // entitete na prejšnjo vrednost — ta je skupno stanje in ga test ne sme pustiti premaknjenega.
+    await using var cleanup = new SqlConnection(connectionString);
+    await cleanup.OpenAsync();
+    await using (var cleanupCommand = new SqlCommand("""
+      DELETE FROM raw.Inbox WHERE RunId=@RunId;
+      DELETE FROM map.Watermark WHERE SourceConnectorId=@SourceConnectorId AND EntityType=@EntityType;
+      DELETE FROM ops.PipelineRun WHERE RunId=@RunId;
+      """, cleanup))
+    {
+      cleanupCommand.Parameters.AddWithValue("@RunId", summary.RunId);
+      cleanupCommand.Parameters.AddWithValue("@SourceConnectorId", probeConnectorId);
+      cleanupCommand.Parameters.AddWithValue("@EntityType", unmappedEntityType);
+      await cleanupCommand.ExecuteNonQueryAsync();
+    }
+
+    await using var restore = mappedBefore is null
+      ? new SqlCommand(
+          "DELETE FROM map.Watermark WHERE SourceConnectorId=@SourceConnectorId AND EntityType=N'ItemGeneralData';",
+          cleanup)
+      : new SqlCommand(
+          "UPDATE map.Watermark SET WatermarkValue=@WatermarkValue WHERE SourceConnectorId=@SourceConnectorId AND EntityType=N'ItemGeneralData';",
+          cleanup);
+    restore.Parameters.AddWithValue("@SourceConnectorId", probeConnectorId);
+    if (mappedBefore is not null) restore.Parameters.AddWithValue("@WatermarkValue", mappedBefore);
+    await restore.ExecuteNonQueryAsync();
+  }
+
+  Console.WriteLine("F3 celoten zajem: mejnik nepreslikane entitete ostane nespremenjen.");
+}
 return 0;
 
 static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection connection, string connectionString)
@@ -356,4 +573,11 @@ static async Task VerifyRawInboxRequeueAsync(SqlConnection connection, string co
   if (kept.RunId != oldRunIdB) throw new InvalidOperationException("Že uspešno obdelan zapis je bil premaknjen na nov RunId.");
 
   await DeleteRowsAsync(keepPayload, [oldRunIdB, newRunIdB]);
+}
+
+sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+{
+  protected override Task<HttpResponseMessage> SendAsync(
+    HttpRequestMessage request, CancellationToken cancellationToken) =>
+    Task.FromResult(respond(request));
 }

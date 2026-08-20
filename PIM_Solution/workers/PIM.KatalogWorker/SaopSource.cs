@@ -72,6 +72,12 @@ internal sealed class FixtureSaopSource(string fixtureRoot) : ISaopSource
   }
 }
 
+/// <summary>
+/// Prvotni živi bralec: en klic na končno točko, brez avtentikacije in brez paginacije.
+/// Za resničen zajem ga je nadomestil <see cref="SaopApiClient"/> — ta bere vse strani,
+/// pošlje Basic auth in glavo OrganisationId. Ta razred ostaja, ker je del pogodbe, ki jo
+/// preverjata F3 ContractTests in BehaviorTests; nova živa pot v Program.cs ga ne uporablja.
+/// </summary>
 internal sealed class LiveSaopSource(HttpClient httpClient, Uri baseUrl) : ISaopSource
 {
   public async Task<IReadOnlyList<RawPage>> ReadAsync(CancellationToken cancellationToken = default)

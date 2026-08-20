@@ -9,6 +9,12 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
 {
   private readonly XPathMappingExtractor extractor = extractor ?? new XPathMappingExtractor();
 
+  /// <summary>Meja za en klic apply postopka; prek PIM_MAPPING_TIMEOUT_SECONDS, privzeto 900.</summary>
+  private static int ApplyCommandTimeoutSeconds =>
+    int.TryParse(Environment.GetEnvironmentVariable("PIM_MAPPING_TIMEOUT_SECONDS"), out var parsed) && parsed > 0
+      ? parsed
+      : 900;
+
   public async Task ExtractAndApplyAsync(
     Guid runId,
     int organizationId,
@@ -39,9 +45,16 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
         }
       }
 
+      // map.ProcessRawInbox gre čez zapise s kurzorjem in na vsakem izvede pet MERGE stavkov.
+      // Ena zajeta stran nosi do tisoč zapisov, zato en klic redno preseže privzetih 30 sekund;
+      // to ni znak blokade, ampak obseg dela. Meja ostane nastavljiva, da se ne izgubi zaznava
+      // pravega zastoja.
       await using var apply = new SqlCommand(
         "EXEC map.ProcessRawInbox @RunId,@OrganizationId,@SourceCode;",
-        connection);
+        connection)
+      {
+        CommandTimeout = ApplyCommandTimeoutSeconds
+      };
       apply.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
       apply.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
       apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;

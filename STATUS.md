@@ -21,6 +21,38 @@ Posodobljeno: 2026-08-13
   `VERDICT: PASS`.
 - **Uporabnik:** ničesar ni treba storiti.
 
+## Zajem iz SAOP — stanje 2026-08-13
+
+- **Živ zajem je pripravljen, a še ni bil izveden.** Na tem računalniku ni SAOP
+  poverilnic; koda in konfiguracijsko mesto sta pripravljena, vpiše jih uporabnik.
+  Navodila: `docs/ZAJEM-SAOP.md`.
+- **Worker do danes sploh ni mogel teči.** `ops.BeginRun` je vrgel 51100, ker za
+  `SAOP_PRODUCTS` ni bilo razporeda. Zadnji uspešen SAOP zajem je 30. 7. 2026.
+- **Od migracije 017 SAOP ni mogel ustvariti novega artikla.** Zdaj sme, ker ima
+  konektor `CanCreateProducts`; dobaviteljski viri ostajajo brez te pravice.
+- **Preslikava je ozko grlo:** izmerjenih 8 artiklov/s (5.303 v 649 s). Za 200.000
+  artiklov je to okrog 7 ur, zato prvi živi zajem teci z `--only-ingest`.
+- Pokritost: zajem dela za vseh 16 končnih točk, preslikava v `canon` za tri.
+- **Zajem brez preslikave ne premakne mejnika** (2026-08-20). Preostalih 13 končnih
+  točk se sme zajemati, ne da bi se podatek izgubil: zapisi ostanejo `Pending` v
+  `raw.Inbox`, mejnik pa počaka, zato jih bo prvi zagon po dodani preslikavi zajel
+  znova. Worker to izpiše kot `BREZ PRESLIKAVE`. Prej se je mejnik premaknil in bi
+  bilo tisto obdobje trajno preskočeno.
+- **Padec enega podjetja ne ustavi ostalih** (2026-08-20). `ops.BeginRun` je zdaj
+  znotraj obravnave napak, zato podjetje brez razporeda (51100) ne ubije zajema za
+  preostala tri.
+
+## Stanje razvojne baze na tem računalniku
+
+- Baza `PIM` na `localhost\MSSQLSERVER3` (računalnik `DESKTOP-TONVQHJ`) je od
+  2026-08-20 na migraciji **043**. Pred tem je imela samo do `027`: migracije
+  `028`–`043` so bile opravljene na drugem računalniku in tu nikoli uporabljene,
+  zato je 7 integracijskih testnih projektov padalo s `Class:20` (povezava).
+  Dokaz po popravku: migrator 1. zagon uporabi 16 migracij, 2. zagon nobene,
+  `--verify` izhod 0, `scripts\run_tests.ps1` → 44 uspeli, 0 preskočenih, 0 padlih.
+- Zaradi tega velja pravilo: **trditev „migracija je uporabljena" ni prenosljiva med
+  računalniki.** Preveri `dbo.SchemaMigration`, ne dokumentacije.
+
 ## Trenutno dokazano
 
 - Lokalna intranet konfiguracija je poenotena: edina veljavna datoteka je korenska appsettings.Local.json; PIM.Intranet da prednost PIM_CONNECTION_STRING, nato uporabi ConnectionStrings:Pim iz korenske datoteke. Podrejeni lokalni datoteki sta preimenovani v .zastarelo in ignorirani. Dokaz: /health 200 ter prijavni SQL POST 302 brez SqlException 26, oba brez nastavljene okoljske povezave; polni paket 42/0/0 in Codex VERDICT: PASS.
