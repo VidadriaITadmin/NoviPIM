@@ -74,6 +74,31 @@ _(prazno)_
 
 ## KONČANO
 
+- **[IZVOZ]** Magento predloga se je preselila iz C# v register `out.ExportProfile` /
+  `out.ExportColumn` — kdo: Claude Opus 5 — 2026-08-21, migracija
+  `045_MagentoExportProfileRows.sql`.
+  Prej sta obliko izvoza določala seznam 215 nizov v `MagentoCsvContract` in `switch`
+  `MagentoProductSchema.GetCanonicalCode`; nov spletni kanal ali samo premaknjen stolpec
+  sta bila zato nova različica programa. Zdaj sta profila `MAGENTO_PRODUCTS` (215 vrstic)
+  in `MAGENTO_CUSTOMERS` (19 vrstic) vrstice v bazi, `ExportProfileRegistry` pa ju prebere.
+  Nov kanal = profil + vrstice; premik stolpca = `UPDATE SortOrder`; drug vir =
+  `UPDATE CanonicalFieldCode`; stolpec ven = `UPDATE IsActive = 0`.
+  V kodi ostanejo poizvedbe, ki kanonične vrednosti proizvedejo — register pove, kam
+  gredo, ne kako nastanejo. Nov kanonični podatek je torej še vedno koda.
+  **Dokaz, da to ni le trditev:** nov test posadi profil `F7_KANAL_PROBE`, ki ga program
+  nikjer ne pozna, in prek istega zapisovalnika dobi datoteko z njegovimi glavami, njegovim
+  vrstnim redom in preskočenim izklopljenim stolpcem; za sabo profil pobriše. Drugi nov
+  test primerja 215 glav iz registra s predlogo znak za znak, vključno s končnim presledkom
+  v glavi 73. **Negativni preizkus:** z ročno izklopljenim `COL033` `PIM.F7.MagentoExportTests`
+  pade (`Program.cs:125`), po vrnitvi `IsActive = 1` spet uspe — izvoz res visi na registru.
+  **Kar je register naredil vidno in ni popravljeno:** glava `Frekvenca` je v predlogi
+  dvakrat (stolpca 58 in 122), zato oba dobita `Attr.Frekvenca` in isto vrednost. Doslej je
+  bilo to skrito v izrazu `"Attr." + glava`. Popravek je en `UPDATE`, ko bo znano, kaj sodi
+  v drugega — ugibati ne smem.
+  Dokaz: migrator uporabi `045`, 2. zagon nobene, `--verify` izhod 0;
+  `scripts\run_tests.ps1` → **44 uspeli, 0 preskočenih, 0 padlih**;
+  `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0 opozoril, 0 napak.
+
 - **[BAZA]** Hitrost `map.ProcessRawInbox`: ugnezdeni kurzor zamenjan z množično obdelavo —
   kdo: Claude Opus 5 — 2026-08-21, migracija `044_BulkProcessRawInbox.sql`.
   **Merjeno pred in po, z istim merilom in istimi podatki**

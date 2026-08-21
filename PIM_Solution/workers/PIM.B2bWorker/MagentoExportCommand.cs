@@ -9,11 +9,15 @@ namespace PIM.B2bWorker;
 
 public static class MagentoExportCommand
 {
-    public static Task WriteProductCsvAsync(string path, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken ct = default)
-        => CustomerCsvGenerator.WriteAsync(path, MagentoProductSchema.BuildColumns(), rows, ct);
+    // Oblika datoteke (kateri stolpci, v kakšnem vrstnem redu, s katero glavo in iz katere
+    // kanonične vrednosti) pride od klicatelja, ki jo prebere iz registra out.ExportColumn.
+    // Prej jo je sestavljal switch v MagentoProductSchema; zato je bil nov spletni kanal
+    // sprememba programa in ne vrstica v bazi.
+    public static Task WriteProductCsvAsync(string path, IReadOnlyList<ExportColumnDefinition> columns, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken ct = default)
+        => CustomerCsvGenerator.WriteAsync(path, columns, rows, ct);
 
-    public static Task WriteCustomerCsvAsync(string path, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken ct = default)
-        => CustomerCsvGenerator.WriteAsync(path, MagentoCustomerSchema.BuildColumns(), rows, ct);
+    public static Task WriteCustomerCsvAsync(string path, IReadOnlyList<ExportColumnDefinition> columns, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken ct = default)
+        => CustomerCsvGenerator.WriteAsync(path, columns, rows, ct);
 
     public static async Task ExecuteAsync(int organizationId, string outputDir, string connectionString, CancellationToken ct = default)
     {
@@ -31,6 +35,11 @@ public static class MagentoExportCommand
         // ju zapisemo ob stran, sele nato prestavimo na koncni imeni. Ce pade poizvedba za
         // stranke ali pisanje druge datoteke, v izhodni mapi ne nastane nov magento-products.csv
         // poleg stare ali manjkajoce magento-customers.csv - torej ni polovicnega izvoza.
+        // Obliko preberemo pred podatki: manjkajoč ali izklopljen profil je napaka
+        // konfiguracije in mora pasti, preden se karkoli zapiše v izhodno mapo.
+        var productColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode, ct);
+        var customerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode, ct);
+
         var productRows = await LoadProductRowsAsync(connection, organizationId, ct);
         var customerRows = await LoadCustomerRowsAsync(connection, organizationId, ct);
 
@@ -60,8 +69,8 @@ public static class MagentoExportCommand
 
         try
         {
-            await WriteProductCsvAsync(productTempPath, productRows, ct);
-            await WriteCustomerCsvAsync(customerTempPath, customerRows, ct);
+            await WriteProductCsvAsync(productTempPath, productColumns, productRows, ct);
+            await WriteCustomerCsvAsync(customerTempPath, customerColumns, customerRows, ct);
 
             // Vse premikanje datotek je znotraj ENEGA try: tudi odmik prejsnjega para.
             // Ce bi bil odmik zunaj, bi neuspesen odmik datoteke strank (na primer ker je

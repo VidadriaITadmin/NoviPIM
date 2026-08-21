@@ -172,11 +172,38 @@ dotnet run --project PIM_Solution\workers\PIM.B2bWorker -- `
   --export-magento --organization-id 2 --output-dir C:\temp\magento
 ```
 
-**Glave so ena sama definicija.** `MagentoCsvContract` v `PIM.B2b` je vir resnice;
-`MagentoProductSchema` in `MagentoCustomerSchema` v workerju sta izpeljana iz nje.
-Do 2026-08-20 sta bila to dva neodvisna seznama — znakovno enaka, a nevezana, zato
-je pogodbeni test preverjal en seznam, izvozni ukaz pa uporabljal drugega. Če
-dodajaš stolpec, ga dodaj v pogodbo in dopolni `MagentoProductSchema.GetCanonicalCode`.
+**Oblika datoteke je od 2026-08-21 v registru, ne v kodi** (migracija
+`045_MagentoExportProfileRows.sql`). Profila `MAGENTO_PRODUCTS` (215 vrstic) in
+`MAGENTO_CUSTOMERS` (19 vrstic) živita v `out.ExportProfile` / `out.ExportColumn`;
+`ExportProfileRegistry.LoadColumnsAsync` ju prebere in `MagentoExportCommand` dobi
+stolpce od zunaj. Prej je bil vrstni red seznam nizov, preslikava stolpec→kanonična
+koda pa `switch` v `MagentoProductSchema` — nov kanal je bil zato nova različica
+programa.
+
+Od zdaj velja:
+
+| Kaj hočeš | Kaj narediš |
+|---|---|
+| nov spletni kanal | nova vrstica `out.ExportProfile` + njene `out.ExportColumn` |
+| premakniti stolpec | `UPDATE SortOrder` |
+| drug vir za stolpec | `UPDATE CanonicalFieldCode` |
+| stolpec ven iz izvoza | `UPDATE IsActive = 0` |
+
+Nič od tega ni sprememba kode. V kodi ostanejo poizvedbe, ki kanonične vrednosti
+*proizvedejo* (`Product.ItemID`, `Product.PriceB2C`, `Attr.<koda>`); register pove,
+kam gredo, ne kako nastanejo. Nov kanonični podatek je torej še vedno koda.
+
+`MagentoCsvContract` v `PIM.B2b` ostaja kot **predloga Magenta** — zunanja pogodba, s
+katero `PIM.F7.MagentoExportTests` preveri, da se register in predloga nista razšla
+(glave se primerjajo znak za znak, vključno s končnim presledkom v glavi 73).
+
+Prazna `CanonicalFieldCode` pomeni »stolpec obstaja, vir zanj ni določen«: izvoz ga
+izpiše praznega in si vrednosti ne izmisli.
+
+**Kar register pokaže in ni popravljeno:** glava `Frekvenca` se v predlogi pojavi
+dvakrat (stolpca 58 in 122), zato oba dobita `Attr.Frekvenca` in isto vrednost. Doslej
+je bilo to skrito v izrazu `"Attr." + glava`; zdaj sta to dve vrstici in popravek je en
+`UPDATE`, ko bo znano, kaj sodi v drugega.
 
 **Glavna slika.** Kanonični sloj piše vlogo `PRIMARY` (migracije 012, 013, 016, 017,
 040, 042 vstavljajo `Role=N'PRIMARY', SortOrder=1`); v `canon.ProductMedia` obstajajo
@@ -190,8 +217,9 @@ ceno in bi se ta pojavila v Magentu, preden začne veljati. Prag stranke velja s
 `pim.CustomerValueDiscountTier.IsActive = 1`; izklopljen prag se vrne na privzeti iz
 `pim.ValueDiscountTier`. Skupinski rabat mora ustrezati oknu `ValidFrom`/`ValidTo`.
 
-**Atributni stolpci (54–215) so nastavitev, ne koda.** Kanonična koda atributa je kar glava
-iz predloge: stolpec `Grlo ANG` se napolni iz atributa s kodo `Grlo ANG`. Da to deluje, mora
+**Atributni stolpci (54–215) so nastavitev, ne koda.** Kanonična koda atributa je zapisana
+v `out.ExportColumn.CanonicalFieldCode` in je posejana kot glava iz predloge: stolpec
+`Grlo ANG` ima kodo `Attr.Grlo ANG` in se napolni iz atributa s kodo `Grlo ANG`. Da to deluje, mora
 v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.Grlo ANG`.
 **Danes ni nastavljena nobena taka preslikava**, zato je vseh 162 atributnih stolpcev v
 izvozu praznih — edina obstoječa koda v bazi je `CategoryRequired`. Mehanizem sam je dokazan
@@ -554,9 +582,10 @@ vrstico ali chat; na vsakem cilju se nastavijo ročno
    devetih polj (razdelek 3.1) — tiha, ne glasna napaka.
 3. **B2B profili niso pokriti z `val.FieldRequirement`**, ker za njih ni
    validacijskega profila (razdelek 2.2).
-4. **Trije od petih izvozov imajo stolpce zapisane v proceduri**, ne v
+4. **Trije od petih SQL izvozov imajo stolpce zapisane v proceduri**, ne v
    `out.ExportColumn`, zato pri njih »nov stolpec = vrstica konfiguracije« ne
-   drži (nasprotno od cilja v `PRODUCTION_ROADMAP.md:207`).
+   drži (nasprotno od cilja v `PRODUCTION_ROADMAP.md:207`). Za Magento CSV to od
+   migracije `045` ne velja več — ta bere `out.ExportColumn`.
 5. **`out.ExportB2bShippingCsv` ne pozna organizacije** — pravila dostave so
    globalna za vse štiri organizacije.
 6. **`B2bWebPercent = 2` je konstanta** na dveh mestih (`020:227` in

@@ -1,4 +1,5 @@
 using System.Text;
+using PIM.B2b;
 using PIM.B2bWorker;
 
 public static class MagentoExportTests
@@ -29,6 +30,25 @@ public static class MagentoExportTests
         Equal("B2B+", MagentoCustomerSchema.Headers[16], "17. stolpec strank (B2B+).");
         Equal("Popust NW", MagentoCustomerSchema.Headers[18], "19. stolpec strank (NW discount).");
 
+        // Od migracije 045 obliko izvoza pove register out.ExportColumn, ne koda. Ta test
+        // baze nima, zato si obliko sestavi sam iz iste predloge in preveri, kar je njegovo:
+        // da zapisovalnik postavi vrednosti na mesto po SortOrder, izpiše 215 oziroma 19 polj,
+        // pusti nekonfigurirane stolpce prazne in pravilno ubeži vejico in narekovaj.
+        // Da se register in predloga nista razšla, dokazuje PIM.F7.MagentoExportTests proti bazi.
+        var productColumns = TemplateColumns(MagentoProductSchema.Headers, new Dictionary<int, string>
+        {
+            [0] = "Product.ItemID",
+            [1] = "Product.EAN",
+            [5] = "Product.Manufacturer",
+            [32] = "Product.Pak2",
+        });
+        var customerColumns = TemplateColumns(MagentoCustomerSchema.Headers, new Dictionary<int, string>
+        {
+            [0] = "Customer.Key",
+            [1] = "Customer.Name",
+            [5] = "Customer.MagentoGroup",
+        });
+
         var dir = Path.Combine(Path.GetTempPath(), "f7-magento-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
@@ -41,7 +61,7 @@ public static class MagentoExportTests
                 ["Product.Manufacturer"] = "Nowodvorski",
             };
             var productPath = Path.Combine(dir, "magento-products.csv");
-            await MagentoExportCommand.WriteProductCsvAsync(productPath, [productRow]);
+            await MagentoExportCommand.WriteProductCsvAsync(productPath, productColumns, [productRow]);
 
             var bytes = await File.ReadAllBytesAsync(productPath);
             if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
@@ -63,9 +83,9 @@ public static class MagentoExportTests
             Equal("4030096006084", dataFields[1], "EAN vrednost.");
             Equal("5", dataFields[32], "PAK2 vrednost.");
             Equal("Nowodvorski", dataFields[5], "Manufacturer vrednost.");
-            Equal("", dataFields[6], "Dobavitelj je prazen (ni v shemi).");
-            Equal("", dataFields[8], "Merska enota je prazna (ni v pim.Product).");
-            Equal("", dataFields[53], "Grlo ANG je prazen (ni v podatkih).");
+            Equal("", dataFields[6], "Dobavitelj je prazen (stolpec brez kanonične kode).");
+            Equal("", dataFields[8], "Merska enota je prazna (stolpec brez kanonične kode).");
+            Equal("", dataFields[53], "Grlo ANG je prazen (stolpec brez kanonične kode).");
 
             var escapeRow = new Dictionary<string, string?>
             {
@@ -73,7 +93,7 @@ public static class MagentoExportTests
                 ["Product.EAN"] = "test\"quote",
             };
             var escapePath = Path.Combine(dir, "escape.csv");
-            await MagentoExportCommand.WriteProductCsvAsync(escapePath, [escapeRow]);
+            await MagentoExportCommand.WriteProductCsvAsync(escapePath, productColumns, [escapeRow]);
             var escapeLines = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(escapePath))
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var escapeData = ParseCsv(escapeLines[1]);
@@ -87,7 +107,7 @@ public static class MagentoExportTests
                 ["Customer.MagentoGroup"] = "b2b_instalater",
             };
             var custPath = Path.Combine(dir, "magento-customers.csv");
-            await MagentoExportCommand.WriteCustomerCsvAsync(custPath, [custRow]);
+            await MagentoExportCommand.WriteCustomerCsvAsync(custPath, customerColumns, [custRow]);
 
             var custBytes = await File.ReadAllBytesAsync(custPath);
             if (custBytes.Length >= 3 && custBytes[0] == 0xEF && custBytes[1] == 0xBB && custBytes[2] == 0xBF)
@@ -104,7 +124,7 @@ public static class MagentoExportTests
             Equal(19, custData.Length, "Customer data ima 19 polj.");
             Equal("C-001", custData[0], "Customer key.");
             Equal("Test stranka, d.o.o.", custData[1], "Ime z vejico je pravilno escapirano.");
-            Equal("", custData[2], "E-pošta je prazna (ni v shemi).");
+            Equal("", custData[2], "E-pošta je prazna (stolpec brez kanonične kode).");
             Equal("b2b_instalater", custData[5], "Magento skupina.");
         }
         finally
@@ -156,6 +176,11 @@ public static class MagentoExportTests
         }
         return [.. fields];
     }
+
+    /// <summary>Stolpci iz predloge; kanonično kodo dobijo samo tisti, ki jih ta test postavlja.</summary>
+    private static ExportColumnDefinition[] TemplateColumns(IReadOnlyList<string> headers, IReadOnlyDictionary<int, string> codes)
+        => [.. headers.Select((header, index) => new ExportColumnDefinition(
+            $"C{index + 1:D3}", header, codes.TryGetValue(index, out var code) ? code : "", index + 1, false, true))];
 
     private static void Equal<T>(T expected, T actual, string message)
     {

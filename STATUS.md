@@ -48,13 +48,24 @@ Posodobljeno: 2026-08-21
 ## Stanje razvojne baze na tem računalniku
 
 - Baza `PIM` na `localhost\MSSQLSERVER3` (računalnik `DESKTOP-TONVQHJ`) je od
-  2026-08-21 na migraciji **044**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
+  2026-08-21 na migraciji **045**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
   `028`–`043` so bile opravljene na drugem računalniku in tu nikoli uporabljene,
   zato je 7 integracijskih testnih projektov padalo s `Class:20` (povezava).
   Dokaz po popravku: migrator 1. zagon uporabi 16 migracij, 2. zagon nobene,
   `--verify` izhod 0, `scripts\run_tests.ps1` → 44 uspeli, 0 preskočenih, 0 padlih.
 - Zaradi tega velja pravilo: **trditev „migracija je uporabljena" ni prenosljiva med
   računalniki.** Preveri `dbo.SchemaMigration`, ne dokumentacije.
+
+## Izvozi
+
+- **Oblika Magento izvoza je od 2026-08-21 v registru** (`out.ExportProfile` /
+  `out.ExportColumn`, migracija `045`). Profila `MAGENTO_PRODUCTS` in `MAGENTO_CUSTOMERS`
+  sta vrstici v bazi; nov spletni kanal ne zahteva več spremembe programa. Preslikava
+  stolpec→kanonična koda ni več `switch` v `MagentoProductSchema`.
+- Kar ostaja koda: poizvedbe, ki kanonične vrednosti proizvedejo. Nov *podatek* je še
+  vedno koda, nov *kanal* ni.
+- 162 atributnih stolpcev je še vedno praznih — to ni koda, ampak manjkajoča odločitev,
+  katera SAOP/NW lastnost pripada kateremu stolpcu (`TASKBOARD.md`, BLOKIRANO).
 
 ## Trenutno dokazano
 

@@ -38,7 +38,7 @@ Tok: `raw.Inbox` → `map.ExtractedValue` → `canon.*` → `val.*` → `pim.*` 
 
 ## Migracije
 
-Trenutni paket zajema migracije 001–044. Migrator sledi `dbo.SchemaMigration` in preveri hash vsake že uporabljene datoteke. Nameščenih migracij se ne ureja; popravek je vedno nova številka.
+Trenutni paket zajema migracije 001–045. Migrator sledi `dbo.SchemaMigration` in preveri hash vsake že uporabljene datoteke. Nameščenih migracij se ne ureja; popravek je vedno nova številka.
 
 ### Varni postopek
 

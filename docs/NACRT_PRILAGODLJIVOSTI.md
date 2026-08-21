@@ -19,7 +19,7 @@ Tretja vrstica je hkrati tista, ki povzroča **8 artiklov/s** (~7 ur za 200.000)
 
 ## Vrstni red
 
-Potrjeno 2026-08-21: **A3 → B4 → C7.** A3 je končan; naslednji je B4. A3 odklene 200.000 artiklov, B4 naredi
+Potrjeno 2026-08-21: **A3 → B4 → C7.** A3 in B4 sta končana; naslednji je C7. A3 odklene 200.000 artiklov, B4 naredi
 izvoze prilagodljive brez kode, C7 zapre tri resnične manjke odhodne poti.
 
 ## A — ZAJEM
@@ -38,9 +38,12 @@ izvoze prilagodljive brez kode, C7 zapre tri resnične manjke odhodne poti.
 
 ## B — IZVOZ
 
-4. Magento shema se preseli iz C# v `out.ExportProfile` / `out.ExportColumn`
-   (nov profil `MAGENTO_PRODUCTS`, `MAGENTO_CUSTOMERS`). Nov spletni kanal je
-   nato profil + vrstice.
+4. **[KONČANO 2026-08-21]** Magento shema se je preselila iz C# v
+   `out.ExportProfile` / `out.ExportColumn` — migracija
+   `045_MagentoExportProfileRows.sql`, profila `MAGENTO_PRODUCTS` (215 vrstic) in
+   `MAGENTO_CUSTOMERS` (19 vrstic). Nov spletni kanal je zdaj profil + vrstice;
+   dokazano s testom, ki posadi profil, ki ga program ne pozna. Podrobnosti:
+   `TASKBOARD.md`, razdelek 3.1 v `EXPORTS.md`.
 5. Atributi in kategorije se napolnijo, ko steče NW/BT XML zajem — ne prej.
    (To je isti manjko, ki je danes na tabli pod BLOKIRANO: 162 atributnih
    stolpcev je praznih, ker v `map.FieldMapping` ni vrstic

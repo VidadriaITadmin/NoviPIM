@@ -15,16 +15,15 @@ Equal("Šifra stranke", MagentoCsvContract.CustomerHeaders[0], "Prva glava stran
 Equal("Popust NW", MagentoCsvContract.CustomerHeaders[^1], "Zadnja glava strank.");
 Equal("Enota višine stropne kapice ", MagentoCsvContract.ProductHeaders[72], "Končni presledek predloge je ohranjen.");
 
-// Shema, ki jo uporablja izvozni ukaz, mora biti ista pogodba. Prej sta bila to dva
-// neodvisna seznama 215 nizov; pogodbeni test je preverjal enega, ukaz pa uporabljal drugega.
+// Predloga, s katero se primerja register, mora biti ista pogodba.
 Equal(true, MagentoProductSchema.Headers.SequenceEqual(MagentoCsvContract.ProductHeaders),
   "MagentoProductSchema mora uporabljati iste glave kot pogodba.");
 Equal(true, MagentoCustomerSchema.Headers.SequenceEqual(MagentoCsvContract.CustomerHeaders),
   "MagentoCustomerSchema mora uporabljati iste glave kot pogodba.");
-Equal(215, MagentoProductSchema.BuildColumns().Length, "Ukaz mora zapisati 215 stolpcev izdelkov.");
-Equal(19, MagentoCustomerSchema.BuildColumns().Length, "Ukaz mora zapisati 19 stolpcev strank.");
-Equal("Product.MainImage", MagentoProductSchema.GetCanonicalCode(37), "Stolpec 38 je glavna slika.");
-Equal("Product.OtherImages", MagentoProductSchema.GetCanonicalCode(38), "Stolpec 39 so ostale slike.");
+
+// Koliko stolpcev ima izvoz in katera kanonicna vrednost gre v katerega, od migracije 045
+// ni vec v kodi, ampak v out.ExportProfile / out.ExportColumn. Te trditve so zato v
+// razdelku 5, ki tece proti bazi — tu jih ni kje preveriti.
 
 // ---------------------------------------------------------------------------
 // 2. Vloga glavne slike.
@@ -109,6 +108,111 @@ const string galleryUrl = "https://test.local/f7-gallery.jpg";
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+
+// ---------------------------------------------------------------------------
+// 5a. Register izvoznih stolpcev je resnica o obliki datoteke.
+//
+// Prej je bila oblika switch v MagentoProductSchema in seznam v MagentoCustomerSchema.
+// Zdaj so to vrstice; nov spletni kanal je nov profil in ne nova razlicica programa.
+// Ta razdelek dokazuje troje: da register sploh obstaja, da se glave znak za znak ujemajo
+// s predlogo Magenta (vkljucno s koncnim presledkom v glavi 73) in da so kljucne
+// kanonicne kode na pravem mestu.
+// ---------------------------------------------------------------------------
+
+var registryProductColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode);
+var registryCustomerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode);
+
+Equal(215, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 215 aktivnih stolpcev.");
+Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
+Equal(true, registryProductColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
+  "Glave v registru se morajo znak za znak ujemati s predlogo izdelkov.");
+Equal(true, registryCustomerColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.CustomerHeaders),
+  "Glave v registru se morajo znak za znak ujemati s predlogo strank.");
+Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 215)),
+  "SortOrder izdelkov mora biti zvezen 1..215.");
+Equal(true, registryCustomerColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 19)),
+  "SortOrder strank mora biti zvezen 1..19.");
+
+Equal("Product.ItemID", registryProductColumns[0].CanonicalFieldCode, "Stolpec 1 je sifra artikla.");
+Equal("Product.Pak2", registryProductColumns[32].CanonicalFieldCode, "Stolpec 33 je PAK2.");
+Equal("Product.MainImage", registryProductColumns[37].CanonicalFieldCode, "Stolpec 38 je glavna slika.");
+Equal("Product.OtherImages", registryProductColumns[38].CanonicalFieldCode, "Stolpec 39 so ostale slike.");
+Equal("Attr.Grlo ANG", registryProductColumns[53].CanonicalFieldCode, "Stolpec 54 je prvi atribut.");
+Equal("", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 (Dobavitelj) nima dolocenega vira.");
+Equal("Customer.Key", registryCustomerColumns[0].CanonicalFieldCode, "Stolpec 1 strank je sifra.");
+Equal("Customer.MagentoGroup", registryCustomerColumns[5].CanonicalFieldCode, "Stolpec 6 strank je skupina.");
+Equal("Customer.NwDiscount", registryCustomerColumns[18].CanonicalFieldCode, "Stolpec 19 strank je popust NW.");
+
+// Neznan profil ne sme tiho vrniti prazne datoteke.
+await Throws<ExportContractException>(
+  () => ExportProfileRegistry.LoadColumnsAsync(connection, "NE_OBSTAJA_MAGENTO"),
+  "Neznan izvozni profil mora pasti z ExportContractException.");
+
+// ---------------------------------------------------------------------------
+// 5b. Nov kanal je profil in njegove vrstice, ne nova razlicica programa.
+//
+// To je celotna trditev migracije 045, zato jo je treba pokazati, ne razglasiti:
+// test posadi profil, ki ga koda ne pozna, in prek istega zapisovalnika dobi datoteko z
+// njegovimi glavami, njegovim vrstnim redom in preskocenim izkljucenim stolpcem. Nikjer
+// v programu ne obstaja beseda F7_KANAL_PROBE razen v tem testu.
+// ---------------------------------------------------------------------------
+
+{
+  const string probeProfileCode = "F7_KANAL_PROBE";
+  var probeDirectory = Path.Combine(Path.GetTempPath(), "f7-kanal-" + Guid.NewGuid().ToString("N"));
+  Directory.CreateDirectory(probeDirectory);
+  try
+  {
+    await using (var seedProfile = new SqlCommand("""
+      INSERT out.ExportProfile(ProfileCode, Name, ChannelCode, EntityType, IsActive)
+      VALUES(@ProfileCode, N'F7 preizkus novega kanala', N'F7_TEST', N'PRODUCTS', 1);
+      DECLARE @ProfileId int = SCOPE_IDENTITY();
+      INSERT out.ExportColumn(ExportProfileId, ColumnCode, OutputColumnName, CanonicalFieldCode, SortOrder, IsRequired, IsActive)
+      VALUES
+        (@ProfileId, N'A', N'sku',        N'Product.ItemID',       1, 0, 1),
+        (@ProfileId, N'B', N'proizvod',   N'Product.Manufacturer', 2, 0, 1),
+        (@ProfileId, N'C', N'crtna koda', N'Product.EAN',          3, 0, 1),
+        (@ProfileId, N'D', N'izkljucen',  N'Product.Pak2',         4, 0, 0);
+      """, connection))
+    {
+      seedProfile.Parameters.AddWithValue("@ProfileCode", probeProfileCode);
+      await seedProfile.ExecuteNonQueryAsync();
+    }
+
+    var probeColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, probeProfileCode);
+    Equal(3, probeColumns.Count, "Stolpec z IsActive = 0 ne sme priti v izvoz.");
+
+    var probePath = Path.Combine(probeDirectory, "kanal.csv");
+    await MagentoExportCommand.WriteProductCsvAsync(probePath, probeColumns, new[]
+    {
+      new Dictionary<string, string?>(StringComparer.Ordinal)
+      {
+        ["Product.ItemID"] = "SKU-9",
+        ["Product.Manufacturer"] = "Nowodvorski",
+        ["Product.EAN"] = "1234567890123",
+        ["Product.Pak2"] = "5",
+      }
+    });
+
+    var probeLines = (await File.ReadAllTextAsync(probePath, Encoding.UTF8))
+      .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+    Equal(2, probeLines.Length, "Nov kanal mora dati glavo in eno vrstico.");
+    Equal("sku,proizvod,crtna koda", probeLines[0], "Glava novega kanala pride iz vrstic registra.");
+    Equal("SKU-9,Nowodvorski,1234567890123", probeLines[1], "Vrednosti gredo na mesto po SortOrder iz registra.");
+  }
+  finally
+  {
+    // Test brise izkljucno profil, ki ga je sam posadil.
+    await using var probeCleanup = new SqlCommand("""
+      DELETE FROM out.ExportColumn
+      WHERE ExportProfileId IN (SELECT ExportProfileId FROM out.ExportProfile WHERE ProfileCode = @ProfileCode);
+      DELETE FROM out.ExportProfile WHERE ProfileCode = @ProfileCode;
+      """, connection);
+    probeCleanup.Parameters.AddWithValue("@ProfileCode", probeProfileCode);
+    await probeCleanup.ExecuteNonQueryAsync();
+    Directory.Delete(probeDirectory, true);
+  }
+}
 
 // Vzamemo obstojec promoviran izdelek in mu zacasno dodamo dva medija. Novega izdelka
 // ne ustvarjamo - manj posega v skupno stanje, in test brise samo svoji dve vrstici.
