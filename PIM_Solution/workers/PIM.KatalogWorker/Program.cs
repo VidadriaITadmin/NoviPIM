@@ -26,9 +26,9 @@ if (arguments.ShowHelp)
   return 0;
 }
 
-// Live gre po svoji poti: paginacija, več organizacij in delta zajem. Fixture ostane
-// enostaven bralec posnetih strani, ker je dokaz za F3 vezan nanj.
-if (mode == SaopSourceMode.Live)
+// --map-run ne kliče SAOP, zato ne potrebuje niti načina Live niti poverilnic: podatek je
+// že v raw.Inbox in gre samo skozi preslikavo.
+if (arguments.MapRunId is not null || mode == SaopSourceMode.Live)
 {
   return await RunLiveAsync(arguments);
 }
@@ -106,7 +106,7 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
   }
 
   var settings = SaopWorkerConfiguration.Read();
-  if (!settings.HasCredentials)
+  if (!settings.HasCredentials && arguments.MapRunId is null)
   {
     Console.Error.WriteLine(
       "Manjkajo SAOP poverilnice. Dopolni sekcijo \"Saop\" v korenski appsettings.Local.json "
@@ -135,6 +135,33 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     return 2;
   }
 
+  // --map-run: preslikaj že zajet zagon. Brez klica na SAOP in brez poverilnic — podatek je
+  // že v raw.Inbox. Potrebno je zato, ker --only-ingest pusti vrstice Pending in bi jih sicer
+  // bilo treba pobrati še enkrat; delta zajem jih po premaknjenem mejniku ne bi več prinesel.
+  if (arguments.MapRunId is { } mapRunId)
+  {
+    Console.WriteLine($"Preslikava že zajetega zagona {mapRunId}; klica na SAOP ni.");
+    var mapped = 0;
+    foreach (var organization in organizations)
+    {
+      var pending = await CountPendingAsync(connection, mapRunId, organization.Id, organization.SourceCode);
+      if (pending == 0)
+      {
+        Console.WriteLine($"[{organization.Id}] {organization.Name}: v tem zagonu ni nepreslikanih vrstic.");
+        continue;
+      }
+
+      Console.WriteLine($"[{organization.Id}] {organization.Name}: {pending} nepreslikanih vrstic.");
+      await new SqlMappingPipeline(connection).ExtractAndApplyAsync(mapRunId, organization.Id, organization.SourceCode);
+      var left = await CountPendingAsync(connection, mapRunId, organization.Id, organization.SourceCode);
+      Console.WriteLine($"[{organization.Id}] {organization.Name}: obdelano {pending - left}, ostalo Pending {left}.");
+      mapped += pending - left;
+    }
+
+    Console.WriteLine($"SKUPAJ preslikanih vrstic raw.Inbox: {mapped}.");
+    return 0;
+  }
+
   Console.WriteLine(
     $"Živ SAOP zajem: podjetij={organizations.Length}, končnih točk={endpoints.Count}, "
     + $"{(arguments.FullSync ? "poln zajem" : "delta zajem")}{(arguments.SkipMapping ? ", brez preslikave" : "")}.");
@@ -154,7 +181,8 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     workAsync: async (organization, operationsRun) =>
     {
       var summary = await runner.RunAsync(
-        organization, endpoints, arguments.FullSync, () => operationsRun.HeartbeatAsync());
+        organization, endpoints, arguments.FullSync, () => operationsRun.HeartbeatAsync(),
+        skipMapping: arguments.SkipMapping);
       if (!arguments.SkipMapping)
       {
         await new SqlMappingPipeline(connection)
@@ -163,11 +191,22 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
 
       Console.WriteLine(
         $"  SKUPAJ strani={summary.TotalPages} zapisov={summary.TotalRecords} RunId={summary.RunId}");
+      var backlog = summary.Endpoints.Where(endpoint => endpoint.PendingBacklog > 0).ToArray();
+      if (backlog.Length > 0)
+      {
+        Console.WriteLine(
+          "  OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: "
+          + string.Join(", ", backlog.Select(endpoint => $"{endpoint.EndpointKey}={endpoint.PendingBacklog}"))
+          + ". Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba:"
+          + " SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';");
+      }
+
       if (summary.AwaitingMappingCount > 0)
       {
         Console.WriteLine(
-          $"  OPOZORILO: {summary.AwaitingMappingCount} končnih točk je zajetih brez preslikave. "
-          + "Njihovi mejniki niso premaknjeni, zato jih bo naslednji zagon zajel znova.");
+          $"  OPOZORILO: pri {summary.AwaitingMappingCount} končnih točkah mejnik stoji. "
+          + "Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; "
+          + "če ga hočeš preslikati brez ponovnega klica, uporabi --map-run " + summary.RunId + ".");
       }
 
       return summary.AllSucceeded;
@@ -180,12 +219,27 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
   return failed ? 1 : 0;
 }
 
+static async Task<int> CountPendingAsync(string connectionString, Guid runId, int organizationId, string sourceCode)
+{
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  await using var command = new SqlCommand(
+    "SELECT COUNT(*) FROM raw.Inbox WHERE RunId=@RunId AND OrganizationId=@OrganizationId "
+    + "AND SourceCode=@SourceCode AND Status=N'Pending';",
+    connection);
+  command.Parameters.AddWithValue("@RunId", runId);
+  command.Parameters.AddWithValue("@OrganizationId", organizationId);
+  command.Parameters.AddWithValue("@SourceCode", sourceCode);
+  return Convert.ToInt32(await command.ExecuteScalarAsync());
+}
+
 internal sealed record WorkerArguments(
   IReadOnlyList<string> EndpointKeys,
   IReadOnlyList<int> OrganizationIds,
   bool FullSync,
   bool SkipMapping,
-  bool ShowHelp)
+  bool ShowHelp,
+  Guid? MapRunId = null)
 {
   public static WorkerArguments Parse(string[] args)
   {
@@ -199,6 +253,7 @@ internal sealed record WorkerArguments(
     var organizations = new List<int>();
     var full = false;
     var skipMapping = false;
+    Guid? mapRunId = null;
 
     for (var index = 0; index < args.Length; index++)
     {
@@ -233,13 +288,31 @@ internal sealed record WorkerArguments(
         case "--only-ingest":
           skipMapping = true;
           break;
+        case "--map-run":
+          // Preslikaj že zajet zagon, brez novega klica na SAOP. Potrebno, ker --only-ingest
+          // pusti vrstice Pending: brez tega bi bilo treba iste podatke pobrati še enkrat.
+          if (index + 1 >= args.Length)
+          {
+            throw new ArgumentException($"Argument '{arg}' zahteva vrednost (RunId iz ops.PipelineRun).");
+          }
+          if (!Guid.TryParse(args[++index], out var parsedRunId))
+          {
+            throw new ArgumentException($"Neveljaven RunId: '{args[index]}'. Pričakovan je GUID.");
+          }
+          mapRunId = parsedRunId;
+          break;
         default:
           throw new ArgumentException(
             $"Neznan argument: '{arg}'. Zaženite z --help za seznam veljavnih argumentov.");
       }
     }
 
-    return new WorkerArguments(endpoints, organizations, full, skipMapping, false);
+    if (mapRunId is not null && skipMapping)
+    {
+      throw new ArgumentException("--map-run in --only-ingest se izključujeta: prvi preslika, drugi preslikavo preskoči.");
+    }
+
+    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId);
   }
 
   private static IEnumerable<string> Split(string value) =>
@@ -257,6 +330,8 @@ internal sealed record WorkerArguments(
         --organizations 2,3   zajemi samo našteta podjetja (privzeto vsa aktivna)
         --full                prezri mejnik in poberi vse (privzeto delta)
         --only-ingest         samo zapiši v raw.Inbox, brez preslikave v canon
+                              (mejnik se v tem primeru NE premakne)
+        --map-run <RunId>     preslikaj že zajet zagon iz raw.Inbox, brez klica na SAOP
         --help                ta izpis
 
       Znane končne točke:

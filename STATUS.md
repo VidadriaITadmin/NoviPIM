@@ -67,6 +67,20 @@ Posodobljeno: 2026-08-21
 - 162 atributnih stolpcev je še vedno praznih — to ni koda, ampak manjkajoča odločitev,
   katera SAOP/NW lastnost pripada kateremu stolpcu (`TASKBOARD.md`, BLOKIRANO).
 
+## Živ zajem iz SAOP — prvič izveden 2026-08-21
+
+- **Prvi živi klic je uspel.** `GetItemsGeneralData` za podjetje 2 je vrnil 183 artiklov
+  (delta, ne cel katalog — mejnik je bil postavljen ob prejšnjih zagonih). Poln zajem z
+  `--full` še ni bil izveden.
+- **Izmerjeno:** 168 obogatenih, 15 (8,2 %) zavrnjenih v celoti, ker manjka
+  `Product.DiscountGroup`. 148 novih artiklov; skupaj 6.299. EAN 789 → 906,
+  `ItemGroup` 0 → 168, `Department` 0 → 162.
+- **Popravljena napaka, ki jo je razkril ta zajem:** `--only-ingest` je premaknil mejnik,
+  čeprav ni ničesar preslikal; ob ponovnem zajemu iste vsebine je dedup po hashu pomenil,
+  da preslikava nima česa obdelati. 183 artiklov je ostalo za mejnikom. Zdaj mejnik stoji
+  tudi v teh dveh primerih in izpis pove razlog. Nov `--map-run <RunId>` preslika že zajet
+  zagon brez klica na SAOP.
+
 ## Odhodna pot (outbox)
 
 - **Napake so od 2026-08-21 razvrščene** (`ErrorClass`, migracija `046`). Poslovna

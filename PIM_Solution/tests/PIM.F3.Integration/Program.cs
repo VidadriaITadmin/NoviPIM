@@ -146,12 +146,15 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
   // Prva stran vsake končne točke nosi en zapis, druga je prazna in s tem konča paginacijo.
   // Števec mora biti vezan na stran iz zahtevka, ne skupen — sicer bi prva končna točka
   // porabila obe strani in druga bi dobila 0 zapisov.
+  // Faza je v vsebini odgovora, ker raw.Inbox podvojene strani prepozna po hashu. Brez tega
+  // bi drugi podzagon dobil dedup in ne bi mogli ločiti treh različnih razlogov za mejnik.
+  var phase = "A";
   var handler = new StubHandler(request =>
   {
     var query = request.RequestUri!.Query;
     var isFirstPage = query.Contains("page=1", StringComparison.OrdinalIgnoreCase);
     var xml = isFirstPage
-      ? "<ArrayOfItem><Item><ItemID>F3-PROBE-1</ItemID></Item></ArrayOfItem>"
+      ? $"<ArrayOfItem><Item><ItemID>F3-PROBE-{phase}</ItemID></Item></ArrayOfItem>"
       : "<ArrayOfItem />";
     return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
     {
@@ -194,13 +197,47 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
   var mappedBefore = await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData");
 
   var runner = new SaopIngestRunner(connectionString, settings, handler);
+  var organization = new SaopOrganization(organizationId, "IQLighting", sourceCode);
+
+  // Podzagon 1 — --only-ingest. Preslikave ne požene nihče, zato se mejnik ne sme premakniti,
+  // čeprav preslikava za to entiteto obstaja. Do 2026-08-21 se je: 183 artiklov je ostalo
+  // Pending, mejnik pa je šel čez njih in delta zajem jih ne bi več prinesel.
+  phase = "A";
+  var onlyIngest = await runner.RunAsync(
+    organization, [mappedEndpoint], fullSync: true, skipMapping: true);
+
+  // Podzagon 2 — običajen zajem z novo vsebino. Mejnik se sme in mora premakniti.
+  phase = "B";
   var summary = await runner.RunAsync(
     new SaopOrganization(organizationId, "IQLighting", sourceCode),
     [mappedEndpoint, unmappedEndpoint],
     fullSync: true);
 
+  // Podzagon 3 — ista vsebina še enkrat. raw.Inbox je po hashu ne vstavi znova, zato ta zagon
+  // nima česa preslikati; mejnik mora stati, sicer bi šel čez podatek, ki morda še ni obdelan.
+  var repeated = await runner.RunAsync(
+    organization, [mappedEndpoint], fullSync: true);
+
   try
   {
+    var onlyIngestResult = onlyIngest.Endpoints.Single();
+    if (!onlyIngestResult.Succeeded)
+      throw new InvalidOperationException($"--only-ingest zajem ni uspel: {onlyIngestResult.Error}");
+    if (onlyIngestResult.WatermarkAdvanced)
+      throw new InvalidOperationException("--only-ingest je premaknil mejnik, čeprav ni ničesar preslikal — tiha izguba podatkov.");
+    if (onlyIngestResult.WatermarkHold is null || !onlyIngestResult.WatermarkHold.Contains("only-ingest", StringComparison.Ordinal))
+      throw new InvalidOperationException($"Razlog za zadržan mejnik ni naveden ali ni pravi: {onlyIngestResult.WatermarkHold}");
+
+    var repeatedResult = repeated.Endpoints.Single();
+    if (!repeatedResult.Succeeded)
+      throw new InvalidOperationException($"Ponovljeni zajem ni uspel: {repeatedResult.Error}");
+    if (repeatedResult.Records <= 0)
+      throw new InvalidOperationException("Ponovljeni zajem bi moral prebrati zapise iz SAOP, sicer primer ni to, kar mislimo.");
+    if (repeatedResult.WatermarkAdvanced)
+      throw new InvalidOperationException("Zajem, katerega strani so bile podvojene, je premaknil mejnik — podatek bi ostal za mejnikom.");
+    if (repeatedResult.WatermarkHold is null || !repeatedResult.WatermarkHold.Contains("dedup", StringComparison.Ordinal))
+      throw new InvalidOperationException($"Razlog za zadržan mejnik ni naveden ali ni pravi: {repeatedResult.WatermarkHold}");
+
     var mappedResult = summary.Endpoints.Single(endpoint => endpoint.EndpointKey == mappedEndpoint.Key);
     var unmappedResult = summary.Endpoints.Single(endpoint => endpoint.EndpointKey == unmappedEndpoint.Key);
 
@@ -243,12 +280,14 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
     await using var cleanup = new SqlConnection(connectionString);
     await cleanup.OpenAsync();
     await using (var cleanupCommand = new SqlCommand("""
-      DELETE FROM raw.Inbox WHERE RunId=@RunId;
+      DELETE FROM raw.Inbox WHERE RunId IN(@RunId,@OnlyIngestRunId,@RepeatedRunId);
       DELETE FROM map.Watermark WHERE SourceConnectorId=@SourceConnectorId AND EntityType=@EntityType;
-      DELETE FROM ops.PipelineRun WHERE RunId=@RunId;
+      DELETE FROM ops.PipelineRun WHERE RunId IN(@RunId,@OnlyIngestRunId,@RepeatedRunId);
       """, cleanup))
     {
       cleanupCommand.Parameters.AddWithValue("@RunId", summary.RunId);
+      cleanupCommand.Parameters.AddWithValue("@OnlyIngestRunId", onlyIngest.RunId);
+      cleanupCommand.Parameters.AddWithValue("@RepeatedRunId", repeated.RunId);
       cleanupCommand.Parameters.AddWithValue("@SourceConnectorId", probeConnectorId);
       cleanupCommand.Parameters.AddWithValue("@EntityType", unmappedEntityType);
       await cleanupCommand.ExecuteNonQueryAsync();
@@ -266,7 +305,7 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
     await restore.ExecuteNonQueryAsync();
   }
 
-  Console.WriteLine("F3 celoten zajem: mejnik nepreslikane entitete ostane nespremenjen.");
+  Console.WriteLine("F3 celoten zajem: mejnik stoji pri nepreslikani entiteti, pri --only-ingest in pri podvojenih straneh.");
 }
 // ---------------------------------------------------------------------------
 // Množična obdelava (migracija 044): ena stran, dva zapisa iste šifre.

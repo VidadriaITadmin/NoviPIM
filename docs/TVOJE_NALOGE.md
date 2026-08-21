@@ -1,6 +1,6 @@
 # Tvoje naloge — po vrsti, z razlogom in koraki
 
-Zadnja sprememba: 2026-08-21. Stanje sistema: migracija `046`, `scripts\run_tests.ps1`
+Zadnja sprememba: 2026-08-21 (po prvem živem zajemu). Stanje sistema: migracija `046`, `scripts\run_tests.ps1`
 → 44 uspeli, 0 padlih, veja `feature/baza-a3-mnozicna-obdelava`.
 
 To je edini seznam stvari, **ki jih ne morem narediti jaz**. Vse ostalo delam sam.
@@ -80,14 +80,73 @@ FROM map.UnmappedValue GROUP BY Reason ORDER BY Kolikokrat DESC;
 Uspeh je `Status = Succeeded` in število artiklov, ki je bistveno večje od današnjih 6.141.
 Če kaj pade, je razpredelnica simptomov v `docs\ZAJEM-SAOP.md`, razdelek 5.
 
-**Kaj naredim jaz potem.**
-- Izmerim, koliko zapisov je izpadlo zaradi `Obvezna preslikana vrednost manjka.` To je
-  edini način, da ugotovimo, ali sta `DiscountGroup1ID` in `AccountingBookGroupID` upravičeno
-  označena kot obvezna. Danes je to ugibanje — migracija `042` ju je pustila pri miru prav
-  zato, ker mere ni bilo.
-- Iz pravih odgovorov napišem preslikave za tistih 6 končnih točk, katerih oblike XML danes
-  ne poznamo (v posnetkih ni bilo vsebine).
-- Preverim, ali so EAN-i enolični. To je neposredno povezano z nalogo 9.
+**IZVEDENO 2026-08-21 — prvi živi klic je uspel.** `GetItemsGeneralData` je vrnil 183
+artiklov, od tega jih je 168 obogatenih in 148 novih. EAN 789 → 906, `ItemGroup` 0 → 168.
+
+**Kar je ostalo od te naloge: poženi še poln zajem.** 183 je bila delta, ne katalog —
+mejnik je bil postavljen ob prejšnjih zagonih, zato je SAOP vrnil samo spremenjeno. Za vse:
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --endpoints GetItemsGeneralData --organizations 2 --full
+```
+
+Pri ~200.000 artiklih pričakuj ~200 strani. Zdaj je to smiselno, ker preslikava od migracije
+`044` teče ~1,5 minute namesto ~6 ur.
+
+**Kaj sem jaz naredil po tvojem zagonu.**
+- Našel in popravil napako, ki jo je sprožilo moje navodilo: `--only-ingest` je premaknil
+  mejnik, čeprav ni ničesar preslikal. 183 artiklov je zato ostalo `Pending` za mejnikom.
+  Popravljeno; tvojih 183 artiklov sem rešil z novim `--map-run`. Podrobno v nalogi 1a.
+- Izmeril, koliko zapisov izpade zaradi obveznih polj — glej **nalogo 1b**. To je meritev,
+  ki je migraciji `042` manjkala.
+- Ostaja: preslikave za 6 končnih točk, katerih oblike XML ne poznamo, in preveritev, ali so
+  EAN-i enolični (povezano z `out.SaopItemAssignment`).
+
+---
+
+### 1a. Nič ti ni treba narediti — samo da veš, kaj se je zgodilo
+
+Tvoje prvo zaporedje ukazov je razkrilo pravo napako. `--only-ingest` po definiciji ničesar
+ne preslika, mejnik pa je vseeno premaknil. Ker si nato isti zajem pognal še enkrat s
+preslikavo, je SAOP vrnil enako vsebino, `raw.Inbox` jo je prepoznal po hashu in je ni
+vstavil znova — zato preslikava ni imela česa obdelati, mejnik pa je bil že naprej.
+Rezultat: 183 artiklov v `raw.Inbox` s statusom `Pending`, za mejnikom, ki jih delta zajem
+ne bi več prinesel.
+
+To je isti razred napake, kot ga je 2026-08-20 našel Codex (mejnik gre čez podatek, ki ga ni
+mogoče uporabiti), samo z drugim sprožilcem. Zdaj mejnik stoji tudi pri `--only-ingest` in
+takrat, ko so bile vse strani podvojene; izpis vedno pove, zakaj stoji.
+
+Tvojih 183 artiklov ni izgubljenih — preslikal sem jih z novim ukazom:
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --map-run <RunId> --organizations 2
+```
+
+---
+
+### 1b. Ali `DiscountGroup1ID` res sme ustaviti cel artikel? — **rabim tvoj odgovor**
+
+**Zakaj.** Zdaj je prva prava meritev. Od 183 artiklov jih je bilo **15 (8,2 %) zavrnjenih v
+celoti** — ne delno, ampak brez naziva, brez EAN, brez šifre. V vseh 15 primerih manjka
+`Product.DiscountGroup` (`SalesData/DiscountGroup1ID`).
+
+Pri 200.000 artiklih bi enak delež pomenil okrog **16.000 artiklov, ki jih v PIM sploh ne
+bi bilo** — in nikjer ne bi pisalo, da manjkajo, razen kot številka preskočenih.
+
+Migracija `042` je ta polja pustila obvezna z izrecnim zapisom, da je to »verjetno preostro,
+a mere še ni«. Zdaj je mera tu.
+
+**Moje priporočilo:** `DiscountGroup1ID` in `AccountingBookGroupID` naj **ne** bosta obvezna.
+Artikel brez skupine popusta je nepopoln artikel, ne pa neobstoječ artikel; nepopolnost že
+lovi validacija (`ValidationStatus`), ki je za to narejena.
+
+**Koraki.** Odgovori z eno besedo:
+
+- **»ne obvezna«** → napišem migracijo, ki jima postavi `IsRequired = 0`, in ponovim zajem,
+  da se vidi, koliko artiklov je pridobljenih;
+- **»naj ostaneta obvezna«** → to zapišem kot namerno pravilo, da vprašanje ne bo vsak mesec
+  znova, in poskrbim, da so zavrnjeni zapisi vidni, ne samo prešteti.
 
 ---
 
@@ -108,15 +167,46 @@ podatkov: nič ni treba prevesti in ponovno namestiti.
 
 **Koraki.**
 
-1. Odpri `docs\Mapiranje_SAOP_NoviPIM.xlsx`, list `Za-izpolniti`.
-2. Za vsak stolpec, ki ga hočeš napolniti, vpiši, od kod pride vrednost. Ne rabiš vseh 162
-   naenkrat — **začni s tistimi desetimi, ki jih splet res potrebuje.** Deset pravilnih je
-   več vredno kot 162 ugibanih.
-3. Za vsakega povej troje: ime stolpca v predlogi, vir (SAOP končna točka in polje, ali
-   pot v dobaviteljevem XML) in podjetje, če se razlikuje.
-4. Če ti je lažje, mi to napiši kar v pogovor v obliki
-   `Grlo ANG ← SAOP ItemsCustomProperties/PropertyName=Grlo` — oblika ni pomembna,
-   nedvoumnost je.
+> Popravek 2026-08-21: prej je tu pisalo »odpri list `Za-izpolniti`«. To je bilo napačno —
+> tisti list ima sedem splošnih vprašanj (in nanje si **že odgovoril**), ne pa mesta za
+> preslikavo stolpec → vir. Takega lista v delovnem zvezku sploh ni bilo.
+
+1. Odpri `docs\Magento_stolpci_ZA-POTRDITEV.csv` (Excel ga odpre neposredno; ločilo je `;`).
+   V njem je vseh 162 stolpcev, za vsakega pa **moj predlog vira**, ki sem ga izpeljal iz
+   dobaviteljevega XML (`fixtures\nw\products_en_US.xml`), in stopnja zanesljivosti:
+
+   | Zanesljivost | Koliko | Kaj rabim od tebe |
+   |---|---|---|
+   | `gotovo` | 93 | samo »da« — pripišem brez dodatnega vprašanja |
+   | `negotovo` | 11 | povej, ali je predlog pravi |
+   | `vprasanje` | 14 | so `SLO` polovice parov ANG/SLO — glej spodaj |
+   | `ni vira` | 44 | v NW XML tega atributa ni; povej, od kod pride, ali pa »ne rabimo« |
+
+2. Trije odgovori, ki odklenejo največ (brez njih 14 + 44 stolpcev ostane praznih):
+
+   - **A — od kod pridejo `SLO` vrednosti?** Predloga ima pare `Uporaba ANG` / `Uporaba SLO`.
+     Fixture datoteka je samo angleška (`products_en_US.xml`). Ali Nowodvorski ponuja tudi
+     slovenski XML (npr. `products_sl_SI.xml`)? Če ga, mi povej naslov — potem sta oba
+     stolpca en zajem več in nič ročnega dela. Če ga ne, je edina pot šifrant prevodov
+     vrednosti (npr. `Living room` → `Dnevna soba`), ki ga moraš enkrat napolniti ti.
+   - **B — 44 stolpcev brez vira** (baterija, senzorika, solar, vrtenje motorja, hrup,
+     zatemnljivost, IK stopnja …) v Nowodvorski XML ne obstaja. Ti atributi so videti kot
+     drug dobavitelj — Braytron XML jih ima v obliki `<attribute><slug>…</slug><value>…`.
+     Povej, ali naj mapiram Braytron, ali pa naj stolpce označim kot namerno prazne.
+   - **C — katerih deset stolpcev splet res potrebuje najprej?** Vrstni red dela.
+
+3. Odgovor lahko vpišeš v zadnji stolpec CSV-ja ali mi ga napišeš kar v pogovor v obliki
+   `Grlo ANG ← NW attribute_light_source` — oblika ni pomembna, nedvoumnost je.
+
+Dve stvari, ki sem ju našel med pripravo predloga in ju **nisem** popravil sam:
+
+- Stolpca 58 in 122 (`Frekvenca`, naloga 4): stolpci 113–215 so urejeni po abecedi
+  angleških imen atributov in tam par `122 Frekvenca` + `123 Enota frekvence` sledi vzorcu
+  vrednost+enota. Stolpec 58 tega para nima. Zato je moja domneva, da je **58 podvojitev**,
+  a to je še vedno tvoja odločitev.
+- Edina obstoječa preslikava atributa danes pelje `attribute_symbol` v kodo
+  `CategoryRequired`, ki ne ustreza nobenemu od 215 stolpcev. Videti je, da bi morala peljati
+  v stolpec 66 `Simbol atributa`. Potrdi in popravim.
 
 **Kako veš, da je uspelo.** Ko vrstice zapišem, poženeš izvoz in stolpec ni več prazen:
 

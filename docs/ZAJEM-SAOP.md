@@ -72,8 +72,60 @@ Vsi argumenti:
 | `--endpoints A,B,C` | samo naštete končne točke (privzeto vseh 16) |
 | `--organizations 2,3` | samo našteta podjetja (privzeto vsa aktivna) |
 | `--full` | prezri mejnik in poberi vse (privzeto se pobere le spremenjeno) |
-| `--only-ingest` | samo v `raw.Inbox`, brez preslikave v katalog |
+| `--only-ingest` | samo v `raw.Inbox`, brez preslikave v katalog; **mejnik se ne premakne** |
+| `--map-run <RunId>` | preslikaj že zajet zagon iz `raw.Inbox`, brez klica na SAOP |
 | `--help` | izpiše seznam vseh znanih končnih točk |
+
+---
+
+## 3.1 Delta in poln zajem — zakaj prvi zagon prinese malo
+
+Privzeto je **delta zajem**: worker prebere `map.Watermark` za tisto entiteto, odšteje
+`LookbackDays` (privzeto 7) in od SAOP zahteva samo zapise, spremenjene po tem datumu.
+
+Zato prvi zagon **ne** prinese celotnega kataloga. Izmerjeno 2026-08-21 na živem SAOP:
+`GetItemsGeneralData` je vrnil **183 artiklov**, ker je bil mejnik za `ItemGeneralData`
+postavljen ob prejšnjih zagonih — 183 je toliko, kolikor se jih je od takrat spremenilo.
+
+Za ves katalog je potreben `--full`, ki mejnik prezre:
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --endpoints GetItemsGeneralData --organizations 2 --full
+```
+
+Pri ~200.000 artiklih in `PageSize` 1.000 pričakuj ~200 strani. Zgornja meja je
+`MaxPagesPerEndpoint` (privzeto 1.000), torej milijon zapisov na končno točko.
+
+**Pozor na branje izpisa.** `Currencies` je šifrant valut, ne artikli. Izpis
+`Currencies: strani=1 zapisov=181` pomeni 181 valut, ne 181 izdelkov.
+
+## 3.2 Mejnik se premakne samo, kadar je bil podatek res uporabljen
+
+Od 2026-08-21 mejnik stoji v štirih primerih; izpis vedno pove, v katerem:
+
+| Zakaj mejnik stoji | Kaj to pomeni |
+|---|---|
+| za entiteto ni aktivne preslikave | zajeti podatek nima poti v katalog |
+| zagon je bil `--only-ingest` | preslikave ni pognal nihče |
+| SAOP je vrnil isto vsebino kot prej | `raw.Inbox` je strani prepoznal po hashu in jih ni vstavil znova, zato ta zagon nima česa preslikati |
+| zajem je padel ali ni bilo cenika | obdobje je treba poskusiti znova |
+
+Vsakič velja isto: **podatek ni izgubljen, samo čaka**, naslednji zagon isto obdobje
+zajame znova.
+
+Če v `raw.Inbox` ležijo nepreslikane vrstice iz prejšnjih zagonov, worker to izpiše kot
+opozorilo. Preslikaš jih brez novega klica na SAOP:
+
+```sql
+SELECT DISTINCT RunId, EntityType, COUNT(*) AS Vrstic
+FROM raw.Inbox WHERE Status = N'Pending' GROUP BY RunId, EntityType;
+```
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --map-run <RunId> --organizations 2
+```
+
+`--map-run` ne potrebuje niti poverilnic niti `PIM_SAOP_MODE=Live` — podatek je že v bazi.
 
 ---
 
@@ -256,6 +308,22 @@ za sabo pobriše vse svoje vrstice.
 
 Zato `--only-ingest` **ni več nujen** zaradi hitrosti. Ostaja uporaben, kadar hočeš najprej
 videti surov odgovor, preden ga spustiš v katalog.
+
+**Izmerjeno na živem SAOP 2026-08-21** (prvi živi klic na tem računalniku, 183 artiklov
+podjetja 2):
+
+- 168 zapisov je bilo obogatenih, **15 (8,2 %) pa zavrnjenih v celoti** z razlogom
+  `Obvezna preslikana vrednost manjka.`;
+- v vseh 15 primerih manjka `Product.DiscountGroup` (`SalesData/DiscountGroup1ID`);
+  `Product.AccountingGroup` manjka pri 4, `Manufacturer`, `Supplier` in `UoM` pri po enem —
+  vsi so podmnožica istih 15 zapisov;
+- posledica: nastalo je 148 novih artiklov, EAN 789 → 906, `ItemGroup` 0 → 168,
+  `Department` 0 → 162.
+
+To je meritev, ki je migraciji `042` manjkala. Zapis se zavrne **v celoti** — skupaj z
+nazivom, EAN in šifro — ker mu manjka skupina popusta. Pri 200.000 artiklih bi to pri
+enakem deležu pomenilo okrog 16.000 artiklov, ki jih v PIM sploh ne bi bilo.
+Odločitev, ali `DiscountGroup1ID` ostane obvezen, je v `docs\TVOJE_NALOGE.md`.
 
 **Ni še izmerjeno:**
 

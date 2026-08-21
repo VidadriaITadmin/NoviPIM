@@ -78,6 +78,38 @@ _(prazno)_
 
 ## KONČANO
 
+- **[WORKERJI]** Mejnik se ne premakne pri `--only-ingest` in pri podvojenih straneh; nov
+  `--map-run` — kdo: Claude Opus 5 — 2026-08-21. **Napako je razkril prvi živi zajem in
+  sprožilo jo je moje navodilo** v `docs/TVOJE_NALOGE.md`, ki je predlagalo `--only-ingest`.
+  Kaj se je zgodilo: `--only-ingest` po definiciji ničesar ne preslika, mejnik pa je vseeno
+  premaknil. Ponovni zagon s preslikavo je od SAOP dobil enako vsebino, `raw.Inbox` jo je
+  prepoznal po hashu in je ni vstavil znova, zato preslikava ni imela česa obdelati —
+  mejnik pa je bil že naprej. Rezultat: 183 artiklov `Pending` za mejnikom, ki jih delta
+  zajem ne bi več prinesel. Isti razred napake kot 2026-08-20 (Codex), drug sprožilec.
+  Popravljeno: mejnik zdaj stoji tudi (1) pri `--only-ingest` in (2) kadar je SAOP vrnil
+  zapise, a ni pristala nobena nova vrstica te entitete. Izpis vedno pove razlog
+  (`WatermarkHold`). Nepreslikane vrstice iz prejšnjih zagonov so opozorilo, ne zapora —
+  sicer bi bil zajem odvisen od nepovezanih ostankov v skupni bazi.
+  Nov `--map-run <RunId>` preslika že zajet zagon brez klica na SAOP; ne potrebuje niti
+  poverilnic niti `PIM_SAOP_MODE=Live`.
+  Dokaz RED→GREEN: z izklopljeno varovalko `PIM.F3.Integration` pade, z varovalko
+  `scripts\run_tests.ps1 -Filter F3` → 4 uspeli, 0 padlih. Test zdaj v enem bloku pokrije
+  tri razloge za zadržan mejnik (brez preslikave, `--only-ingest`, podvojene strani) in za
+  sabo pobriše vse tri zagone.
+  Popravek v praksi: `--map-run E4980729…` je obdelal vrstico 501 — 168 uspelo, 15
+  preskočenih, 148 novih artiklov. Polni paket: **44 uspeli, 0 preskočenih, 0 padlih**.
+
+- **[MERITEV]** Prvi živi SAOP zajem na tem računalniku — 2026-08-21, podjetje 2.
+  `GetItemsGeneralData` (delta) je vrnil 183 artiklov; 168 obogatenih, **15 (8,2 %)
+  zavrnjenih v celoti** z razlogom `Obvezna preslikana vrednost manjka.` V vseh 15 primerih
+  manjka `Product.DiscountGroup` (`SalesData/DiscountGroup1ID`); `AccountingGroup` manjka
+  pri 4, `Manufacturer`, `Supplier` in `UoM` pri po enem — vsi so podmnožica istih 15.
+  Stanje po zajemu: 6.299 artiklov, EAN 789 → 906, `ItemGroup` 0 → 168, `Department` 0 → 162.
+  **To je meritev, ki je migraciji `042` manjkala.** Pri 200.000 artiklih bi enak delež
+  pomenil okrog 16.000 artiklov, ki jih v PIM sploh ne bi bilo. Odločitev, ali
+  `DiscountGroup1ID` ostane obvezen, je naloga 1b v `docs/TVOJE_NALOGE.md`; moje priporočilo
+  je, da ne ostane — nepopolnost že lovi validacija.
+
 - **[ODHODNA POT]** Trije resnični manjki odhodne poti: razred napake, nadomeščeno
   sporočilo in uskladitev nove šifre — kdo: Claude Opus 5 — 2026-08-21, migracija
   `046_OutboundErrorClassSupersededAssignment.sql`.

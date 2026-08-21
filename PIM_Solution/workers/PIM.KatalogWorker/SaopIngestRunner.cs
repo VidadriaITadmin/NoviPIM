@@ -19,11 +19,13 @@ public sealed record EndpointResult(
   int Pages,
   int Records,
   string? Error,
-  bool WatermarkAdvanced = true)
+  bool WatermarkAdvanced = true,
+  string? WatermarkHold = null,
+  int PendingBacklog = 0)
 {
   public bool Succeeded => Error is null;
 
-  /// <summary>Zajem je uspel, a preslikave ni — podatek leži v raw.Inbox in mejnik čaka.</summary>
+  /// <summary>Zajem je uspel, a mejnik ni šel naprej — podatek leži v raw.Inbox in čaka.</summary>
   public bool AwaitingMapping => Succeeded && !WatermarkAdvanced;
 }
 
@@ -59,7 +61,8 @@ public sealed class SaopIngestRunner(
     IReadOnlyList<SaopEndpoint> endpoints,
     bool fullSync,
     Func<Task>? heartbeatAsync = null,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default,
+    bool skipMapping = false)
   {
     var runId = Guid.NewGuid();
     var startedUtc = DateTime.UtcNow;
@@ -86,15 +89,14 @@ public sealed class SaopIngestRunner(
     {
       cancellationToken.ThrowIfCancellationRequested();
       var result = await RunEndpointAsync(
-        connection, client, endpoint, organization, sourceConnectorId, runId, startedUtc, fullSync, priceListIds, cancellationToken);
+        connection, client, endpoint, organization, sourceConnectorId, runId, startedUtc, fullSync, skipMapping, priceListIds, cancellationToken);
       results.Add(result);
       Console.WriteLine(result switch
       {
         { Succeeded: false } => $"  {endpoint.Key}: NAPAKA — {result.Error}",
         { AwaitingMapping: true } =>
-          $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records} — BREZ PRESLIKAVE "
-          + $"(map.EntityMapping/map.FieldMapping za entiteto {endpoint.EntityType} ni aktivne); "
-          + "zapisi ostanejo v raw.Inbox, mejnik NI premaknjen",
+          $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records} — MEJNIK STOJI "
+          + $"({result.WatermarkHold}); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova",
         _ => $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records}"
       });
 
@@ -119,6 +121,7 @@ public sealed class SaopIngestRunner(
     Guid runId,
     DateTime startedUtc,
     bool fullSync,
+    bool skipMapping,
     IReadOnlyList<string> priceListIds,
     CancellationToken cancellationToken)
   {
@@ -179,11 +182,37 @@ public sealed class SaopIngestRunner(
       // ne premakne, dokler zajetega podatka ni mogoče uporabiti.
       if (!await HasActiveMappingAsync(connection, sourceConnectorId, endpoint.EntityType, cancellationToken))
       {
-        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false);
+        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
+          WatermarkHold: $"za entiteto {endpoint.EntityType} ni aktivne preslikave v map.EntityMapping/map.FieldMapping");
+      }
+
+      // Zajem brez preslikave po definiciji ničesar ne preslika. Če bi mejnik kljub temu
+      // premaknili, bi bilo zajeto obdobje trajno preskočeno — natanko tista tiha izguba, ki jo
+      // prepoveduje pravilo zgoraj, samo z drugim sprožilcem. Izmerjeno 2026-08-21 na živem
+      // zajemu: --only-ingest je premaknil mejnik, 183 artiklov pa je ostalo Pending.
+      if (skipMapping)
+      {
+        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
+          WatermarkHold: "zagon je bil --only-ingest, torej ni bilo kaj preslikati");
+      }
+
+      // Drugi sprožilec iste izgube: če je SAOP vrnil isto vsebino kot prej, jo raw.Inbox
+      // prepozna po (podjetje, vir, entiteta, stran, hash) in je ne vstavi znova. Ta zagon
+      // potem nima svoje vrstice, preslikava nima kaj obdelati, mejnik pa bi vseeno šel
+      // naprej — in podatek, ki leži Pending iz prejšnjega zagona, bi ostal za mejnikom.
+      // Izmerjeno 2026-08-21: prav to se je zgodilo s 183 artikli.
+      var landed = await CountRunRowsAsync(connection, organization, endpoint.EntityType, runId, cancellationToken);
+      var backlog = await CountUnmappedBacklogAsync(
+        connection, organization, endpoint.EntityType, runId, cancellationToken);
+      if (records > 0 && landed == 0)
+      {
+        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
+          WatermarkHold: $"SAOP je vrnil {records} zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati",
+          PendingBacklog: backlog);
       }
 
       await UpdateWatermarkAsync(connection, sourceConnectorId, endpoint.EntityType, startedUtc, cancellationToken);
-      return new EndpointResult(endpoint.Key, pages, records, null);
+      return new EndpointResult(endpoint.Key, pages, records, null, PendingBacklog: backlog);
     }
     catch (Exception exception) when (exception is not OperationCanceledException)
     {
@@ -278,6 +307,48 @@ public sealed class SaopIngestRunner(
   /// Poizvedba namenoma ponovi ta pogoj namesto da bi preverjala samo eno od tabel — sicer bi
   /// se merili dve različni stvari in mejnik bi se premaknil pri polovično nastavljeni preslikavi.
   /// </summary>
+  /// <summary>Koliko vrstic te entitete je ta zagon dejansko zapisal v raw.Inbox.</summary>
+  internal static async Task<int> CountRunRowsAsync(
+    SqlConnection connection,
+    SaopOrganization organization,
+    string entityType,
+    Guid runId,
+    CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand(
+      "SELECT COUNT(*) FROM raw.Inbox WHERE RunId=@RunId AND OrganizationId=@OrganizationId "
+      + "AND SourceCode=@SourceCode AND EntityType=@EntityType;",
+      connection);
+    command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organization.Id;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = organization.SourceCode;
+    command.Parameters.Add("@EntityType", SqlDbType.NVarChar, 100).Value = entityType;
+    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+  }
+
+  /// <summary>
+  /// Koliko vrstic te entitete je še vedno <c>Pending</c> iz <em>prejšnjih</em> zagonov.
+  /// To ne zadržuje mejnika — sicer bi bil zajem odvisen od nepovezanih ostankov v skupni
+  /// bazi — je pa opozorilo: nekje leži podatek, ki ni bil nikoli preslikan.
+  /// </summary>
+  internal static async Task<int> CountUnmappedBacklogAsync(
+    SqlConnection connection,
+    SaopOrganization organization,
+    string entityType,
+    Guid runId,
+    CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand(
+      "SELECT COUNT(*) FROM raw.Inbox WHERE OrganizationId=@OrganizationId AND SourceCode=@SourceCode "
+      + "AND EntityType=@EntityType AND Status=N'Pending' AND RunId<>@RunId;",
+      connection);
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organization.Id;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = organization.SourceCode;
+    command.Parameters.Add("@EntityType", SqlDbType.NVarChar, 100).Value = entityType;
+    command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+  }
+
   internal static async Task<bool> HasActiveMappingAsync(
     SqlConnection connection,
     int sourceConnectorId,
