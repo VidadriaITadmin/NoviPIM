@@ -82,6 +82,14 @@ Posodobljeno: 2026-08-21
 
 ## Katalog po prvem polnem zajemu (2026-08-21)
 
+- **196.515 artiklov**: IQLighting 111.063, Ediito 39.130, Vidadria 28.897, DEMO 17.425.
+  IQLighting je bil 2026-08-21 dopolnjen z vsemi 16 končnimi točkami (27 minut, 571.909
+  zapisov); cene zanj 144.816 (prej 798), besedila 110.313.
+- **Nič ni bilo zavrnjeno** ob preslikavi — posledica migracije 047, ki je obveznost polj
+  prestavila iz zajema v validacijo. Prej bi izpadlo 8,2 % zapisov.
+- Validacija IQLighting: `ERP_L1_SLO` 89.360 VALID / 8.147 INVALID; `SHARED_CORE`
+  49.081 / 48.426 (EAN); `ERP_L1_EU`, `COMMERCIAL_L2` in spletna profila 0 %.
+
 - **195.756 artiklov** v štirih podjetjih: IQLighting 110.304, Ediito 39.130,
   Vidadria 28.897, DEMO 17.425. Cene 156.114, besedila 195.723.
 - **Preslikane so 3 od 16 končnih točk.** Ostalo je zajeto in leži v `raw.Inbox` kot

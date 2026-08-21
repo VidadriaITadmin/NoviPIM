@@ -78,6 +78,31 @@ _(prazno)_
 
 ## KONČANO
 
+- **[WORKERJI]** IQLighting dopolnjen: vseh 16 končnih točk, oba popravka potrjena v živo —
+  2026-08-21. Prejšnji zagon je umrl po **eni** končni točki v 100 minutah; ta je opravil
+  **vseh 16 v 27 minutah** (571.909 zapisov, 131 strani, `Succeeded`, 0 padlih).
+  **Kaj je s tem dokazano:**
+  1. *Znak življenja po strani.* `GetItemsGeneralData` je trajal 1.256 s — 21 minut v enem
+     klicu končne točke, kar je 84× več od okna zastalosti (900 s). Zagon je preživel.
+  2. *Mejnik po preslikavi.* Mejniki `ItemGeneralData`, `Descriptions` in `Prices` so bili
+     zapisani ob 13:19, torej **po** preslikavi, ne ob 12:21 ob koncu zajema. Za 11
+     nepreslikanih entitet mejnik ni šel nikamor. Natanko pravilo iz migracije 044/046.
+  3. *`PageSize` 5.000.* `ItemGeneralData` v **23 straneh namesto 112**; cena klica je
+     ostala ~55 s, torej 5× manj klicev na SAOP za isti podatek.
+  4. *Odločitev iz migracije 047.* **Nič ni bilo zavrnjeno** — 0 novih vrstic v
+     `map.UnmappedValue`. Pri starem pravilu bi 8,2 % zapisov izpadlo v celoti; zdaj
+     8.092 artiklov brez skupine popusta **obstaja in je označenih**, namesto da jih ne bi bilo.
+  **Katalog:** 196.515 artiklov skupaj; IQLighting 111.063 (EAN 53.163, skupina 102.562),
+  besedila 110.313, **cene 144.816** (prej 798).
+  **Validacija IQLighting** (97.507 aktivnih artiklov): `ERP_L1_SLO` 89.360 VALID / 8.147
+  INVALID; `SHARED_CORE` 49.081 / 48.426 (pade na EAN pri 48.423 artiklih);
+  `ERP_L1_EU`, `ERP_L1_THIRD`, `COMMERCIAL_L2` in oba spletna profila 0 % — manjkajo
+  `canon.ProductCommercial`, spletni nazivi, kategorije in slike.
+  Najpogostejši manjki v `ERP_L1_SLO`: `Product.DiscountGroup` 8.092, `AccountingGroup` 7.403,
+  `UoM` 7.042, `Manufacturer` 4.008, `Supplier` 3.981.
+  **Odprto po tem zajemu:** 64 strani v `raw.Inbox` iz 11 entitet brez preslikave;
+  `val.Promote` da za IQLighting samo 786 artiklov, ker uporablja stari profil `ERP_L1`.
+
 - **[WORKERJI]** Prvi polni zajem vseh štirih podjetij + dve napaki, ki ju je razkril — kdo:
   Claude Opus 5 — 2026-08-21. **195.756 artiklov** (prej 6.141): IQLighting 110.304,
   Ediito 39.130, Vidadria 28.897, DEMO 17.425.
