@@ -150,7 +150,7 @@ Dve meji varujeta SAOP pred preobremenitvijo; obe sta v `appsettings.Local.json`
 
 | Nastavitev | Vrednost | Kaj pomeni |
 |---|---|---|
-| `PageSize` | 1000 | največ 1.000 zapisov na stran |
+| `PageSize` | **5000** | največ 5.000 zapisov na stran — glej razdelek 3.5, zakaj več pomeni **manj** obremenitve |
 | `MaxPagesPerEndpoint` | 1000 | največ 1.000 strani na končno točko |
 | `DelayAfterSuccessMilliseconds` | 250 | premor po vsakem uspešnem klicu, znotraj podjetja |
 
@@ -225,6 +225,7 @@ vrne. Iz tega sledi troje:
 1. **Manjše strani so strogo slabše.** Štirikrat več klicev je štirikrat več časa.
 2. **Večje strani so strogo boljše** — in hkrati **manj obremenijo SAOP**, ker je klicev manj.
    Pri 5.000 na stran je poln zajem IQLighting 23 klicev namesto 112: **~20 minut namesto ~95**.
+   `PageSize` je zato od 21. 8. 2026 nastavljen na **5.000**.
 3. Počasna je **ena sama končna točka**, ne podjetje. Na istem podjetju in v isti minuti:
    `GetItemsDescriptions` 0,78 s/stran, `GetPrices` 2,16 s/stran, `GetItemsGeneralData` 50 s/stran.
 

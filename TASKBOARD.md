@@ -108,7 +108,12 @@ _(prazno)_
   5.000 zapisov v 1 klicu = **51,6 s**.
   Iz tega: manjše strani so strogo slabše, večje strogo boljše — pri `PageSize` 5.000 je poln
   zajem IQLighting 23 klicev namesto 112, torej **~20 minut namesto ~95**, in hkrati 5×
-  manj zahtevkov na SAOP. Odločitev o `PageSize` je na uporabniku (naloga v `TVOJE_NALOGE.md`).
+  manj zahtevkov na SAOP. **`PageSize` je na uporabnikovo odločitev 2026-08-21 postavljen na
+  5.000** (`appsettings.Local.json` in vzorec v Gitu).
+  Ob tem pobrisanih 32 strani `raw.Inbox`, ki so nastale kot ostanek teh meritev — na
+  izrecno zahtevo uporabnika, po točnih `RunId` sedmih merilnih zagonov, vse v stanju
+  `Pending` in brez vezanih izluščenih vrednosti. Po brisanju: 0 ostankov, v podjetju 2
+  ostanejo 3 čakajoče strani iz rednega zajema.
   Počasna je **ena končna točka, ne podjetje**: na istem podjetju in v isti minuti je
   `GetItemsDescriptions` 0,78 s/stran, `GetPrices` 2,16 s/stran, `GetItemsGeneralData` 50 s/stran.
   **Vzporedne končne točke: varne, a skoraj brez učinka.** Tri hkrati proti zaporedno:
