@@ -78,6 +78,39 @@ _(prazno)_
 
 ## KONČANO
 
+- **[BAZA/VALIDACIJA]** Validacijski model iz preglednic naročnika: profili, stopnja resnosti
+  in obseg blokade — kdo: Claude Opus 5 — 2026-08-21, migracija
+  `047_ValidationProfilesSeverityAndScope.sql`. Podrobno: [`docs/VALIDACIJA.md`](docs/VALIDACIJA.md).
+  Sedem profilov kot vrstice: `SHARED_CORE`, `ERP_L1_SLO`, `ERP_L1_EU`, `ERP_L1_THIRD`,
+  `COMMERCIAL_L2`, `WEB_svetila_si`, `WEB_videlektro`; 47 zahtev, od tega 41 aktivnih in
+  9 (v štirih vrsticah) zapisanih z `IsActive = 0`, ker kanoničnega polja še ni.
+  Shema je dobila troje, česar prej ni znala izraziti: `Severity` (`ERROR`/`WARNING`),
+  `BlocksErp`/`BlocksWeb`/`Scope` na profilu ter profile brez izvoznega profila
+  (`ExportProfileId` sme biti `NULL`; enoličnost 1:1 zdaj drži filtriran unikaten indeks,
+  ker bi `UNIQUE` dovolil samo en `NULL`). `canon.FieldValue` je dobil polja, ki jih profili
+  zahtevajo, sistem pa jih prej ni videl.
+  **Sprememba, ki jo je treba vedeti:** obveznost polja se je preselila iz zajema v
+  validacijo. Pri zajemu ostaja obvezna samo `Product.ItemID`. Razlog je izmerjen: pri prvem
+  živem zajemu je 15 od 183 artiklov (8,2 %) izpadlo v celoti, ker jim je manjkala skupina
+  popusta — pri 200.000 artiklih bi to bilo okrog 16.000 artiklov, ki jih v PIM sploh ne bi
+  bilo. Skupina popusta **ostaja obvezna**, a kot `ERROR` v `ERP_L1_SLO`, ki blokira ERP:
+  artikel obstaja, je viden, je označen in se ne promovira. Če se s tem ne strinjaš, je
+  popravek en `UPDATE` nad `map.FieldMapping`.
+  **Popravljen obstoječi test in ni skrito:** `PIM.F2.Integration` je trdil, da »poln izdelek«
+  nima nobene aktivne pomanjkljivosti. Trditev je ostala ista, spremenila se je definicija
+  polnosti — izdelek je zdaj posajen poln za **vse** aktivne profile, ne le za prva dva.
+  Test je hkrati okrepljen: dokazuje obe smeri stopnje resnosti — brez angleškega spletnega
+  naziva nastane opozorilo, izdelek pa ostane `VALID`.
+  Izmerjeno po zagonu (org 2, 6.265 aktivnih artiklov): `ERP_L1_SLO` 5.474 VALID / 791
+  INVALID; `SHARED_CORE` 906 / 5.359 (pade na EAN); `ERP_L1_EU`, `COMMERCIAL_L2` in oba
+  spletna profila 0 / 6.265, ker trgovinski podatki, spletni nazivi, kategorije, cene in
+  slike še niso zajeti.
+  **Kar ta naloga ne naredi:** ne upokoji profilov `ERP_L1` in `WEB_B2C` — uporablja ju
+  `val.Promote` in ju preverja migrator; to je ločena odločitev.
+  Dokaz: migrator uporabi `047`, 2. zagon nobene, `--verify` izhod 0;
+  `scripts\run_tests.ps1` → **44 uspeli, 0 preskočenih, 0 padlih**;
+  `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0 opozoril, 0 napak.
+
 - **[WORKERJI]** Mejnik se ne premakne pri `--only-ingest` in pri podvojenih straneh; nov
   `--map-run` — kdo: Claude Opus 5 — 2026-08-21. **Napako je razkril prvi živi zajem in
   sprožilo jo je moje navodilo** v `docs/TVOJE_NALOGE.md`, ki je predlagalo `--only-ingest`.

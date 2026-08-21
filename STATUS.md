@@ -48,7 +48,7 @@ Posodobljeno: 2026-08-21
 ## Stanje razvojne baze na tem računalniku
 
 - Baza `PIM` na `localhost\MSSQLSERVER3` (računalnik `DESKTOP-TONVQHJ`) je od
-  2026-08-21 na migraciji **046**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
+  2026-08-21 na migraciji **047**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
   `028`–`043` so bile opravljene na drugem računalniku in tu nikoli uporabljene,
   zato je 7 integracijskih testnih projektov padalo s `Class:20` (povezava).
   Dokaz po popravku: migrator 1. zagon uporabi 16 migracij, 2. zagon nobene,
@@ -66,6 +66,19 @@ Posodobljeno: 2026-08-21
   vedno koda, nov *kanal* ni.
 - 162 atributnih stolpcev je še vedno praznih — to ni koda, ampak manjkajoča odločitev,
   katera SAOP/NW lastnost pripada kateremu stolpcu (`TASKBOARD.md`, BLOKIRANO).
+
+## Validacija — od 2026-08-21 po dogovorjenem modelu
+
+- Sedem profilov kot vrstice (`SHARED_CORE`, `ERP_L1_SLO`, `ERP_L1_EU`, `ERP_L1_THIRD`,
+  `COMMERCIAL_L2`, `WEB_svetila_si`, `WEB_videlektro`), stopnja resnosti `ERROR`/`WARNING`
+  in obseg blokade (`BlocksErp`, `BlocksWeb`). Podrobno: `docs\VALIDACIJA.md`.
+- **Obveznost polja se je preselila iz zajema v validacijo.** Pri zajemu je obvezna samo
+  `Product.ItemID`. Skupina popusta ostaja obvezna kot `ERROR` v `ERP_L1_SLO`.
+- Stanje org 2 (6.265 aktivnih): `ERP_L1_SLO` 5.474 VALID / 791 INVALID; `SHARED_CORE`
+  906 / 5.359; `ERP_L1_EU`, `COMMERCIAL_L2` in spletna profila 0 / 6.265 — trgovinski
+  podatki, spletni nazivi, kategorije, cene in slike še niso zajeti.
+- Devet zahtev čaka na kanonično polje (volumen, mere pakiranja, kosi v paketu, izločitev iz
+  rezervacije); zapisane so z `IsActive = 0`, da je model viden v celoti.
 
 ## Živ zajem iz SAOP — prvič izveden 2026-08-21
 

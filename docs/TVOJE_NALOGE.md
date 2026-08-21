@@ -125,7 +125,7 @@ dotnet run --project workers\PIM.KatalogWorker -- --map-run <RunId> --organizati
 
 ---
 
-### 1b. Ali `DiscountGroup1ID` res sme ustaviti cel artikel? — **rabim tvoj odgovor**
+### 1b. ~~Ali `DiscountGroup1ID` res sme ustaviti cel artikel?~~ — **ODGOVORJENO 2026-08-21**
 
 **Zakaj.** Zdaj je prva prava meritev. Od 183 artiklov jih je bilo **15 (8,2 %) zavrnjenih v
 celoti** — ne delno, ampak brez naziva, brez EAN, brez šifre. V vseh 15 primerih manjka
@@ -141,12 +141,12 @@ a mere še ni«. Zdaj je mera tu.
 Artikel brez skupine popusta je nepopoln artikel, ne pa neobstoječ artikel; nepopolnost že
 lovi validacija (`ValidationStatus`), ki je za to narejena.
 
-**Koraki.** Odgovori z eno besedo:
+**Tvoj odgovor:** skupina popusta **je obvezno polje**, obveznost pa je v vašem modelu
+stvar validacijskega profila s stopnjo resnosti, ne zavrnitve ob zajemu.
 
-- **»ne obvezna«** → napišem migracijo, ki jima postavi `IsRequired = 0`, in ponovim zajem,
-  da se vidi, koliko artiklov je pridobljenih;
-- **»naj ostaneta obvezna«** → to zapišem kot namerno pravilo, da vprašanje ne bo vsak mesec
-  znova, in poskrbim, da so zavrnjeni zapisi vidni, ne samo prešteti.
+**Izvedeno** (migracija `047`): `DiscountGroup1ID` je `ERROR` v profilu `ERP_L1_SLO`, ki
+blokira ERP. Artikel obstaja, je viden, je označen kot neveljaven za ERP in se ne promovira.
+Pri zajemu ostane obvezna samo šifra artikla. Cel model je v `docs\VALIDACIJA.md`.
 
 ---
 

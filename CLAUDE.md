@@ -22,6 +22,7 @@ dotnet test PIM_Solution\PIM.sln --no-restore
 |---|---|
 | `AGENTS.md` | pravila, ozemlja, kaj smeš brez vprašanja |
 | `TASKBOARD.md` | kdo kaj dela zdaj in kaj je narejeno |
+| `docs\VALIDACIJA.md` | profili, stopnja resnosti, kaj blokira ERP in kaj splet |
 | `docs\TVOJE_NALOGE.md` | kaj čaka tebe — odločitve, živi klici, merge; po vrsti in z razlogom |
 | `STATUS.md` | kje je sistem trenutno |
 | `docs\HERMES.md` | navodila za koordinatorja |
