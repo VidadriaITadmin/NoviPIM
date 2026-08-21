@@ -48,7 +48,7 @@ Posodobljeno: 2026-08-21
 ## Stanje razvojne baze na tem računalniku
 
 - Baza `PIM` na `localhost\MSSQLSERVER3` (računalnik `DESKTOP-TONVQHJ`) je od
-  2026-08-21 na migraciji **045**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
+  2026-08-21 na migraciji **046**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
   `028`–`043` so bile opravljene na drugem računalniku in tu nikoli uporabljene,
   zato je 7 integracijskih testnih projektov padalo s `Class:20` (povezava).
   Dokaz po popravku: migrator 1. zagon uporabi 16 migracij, 2. zagon nobene,
@@ -66,6 +66,19 @@ Posodobljeno: 2026-08-21
   vedno koda, nov *kanal* ni.
 - 162 atributnih stolpcev je še vedno praznih — to ni koda, ampak manjkajoča odločitev,
   katera SAOP/NW lastnost pripada kateremu stolpcu (`TASKBOARD.md`, BLOKIRANO).
+
+## Odhodna pot (outbox)
+
+- **Napake so od 2026-08-21 razvrščene** (`ErrorClass`, migracija `046`). Poslovna
+  zavrnitev ne porabi poskusov; napaka poverilnice ustavi kanal in naredi en alarm na
+  integracijo, ne enega na vsak artikel.
+- **Nadomeščeno sporočilo ima svoje stanje** (`Superseded`). Prej je starejše sporočilo
+  za isto polje ostalo `Sent` za vedno in je bilo videti kot nepotrjeno.
+- **Uskladitev nove šifre ne sloni več samo na EAN** (`out.SaopItemAssignment`): odgovor
+  SAOP → zahtevana šifra → enoličen EAN → človek. Dvoumen EAN ni ujemanje.
+- **Kar še ne obstaja:** odhodna pot pošlje spremembo polja, artikla ne ustvari, zato
+  `out.ResolveSaopItemAssignment` v živo še nihče ne kliče. Stanje `Error` ostaja mrtva pot.
+  Ni urnika, ni dostave na splet, ni živega SAOP klica.
 
 ## Trenutno dokazano
 

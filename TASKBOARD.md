@@ -74,6 +74,42 @@ _(prazno)_
 
 ## KONČANO
 
+- **[ODHODNA POT]** Trije resnični manjki odhodne poti: razred napake, nadomeščeno
+  sporočilo in uskladitev nove šifre — kdo: Claude Opus 5 — 2026-08-21, migracija
+  `046_OutboundErrorClassSupersededAssignment.sql`.
+  Vir zahtev je list `Outbound-vrzeli` v
+  `PIM_Solution\docs\Povezave_virov_in_sistemov\Mapiranje_SAOP_API_PIM.xlsx`
+  (vrzeli O18, O16 in O19). Tam so opisane nad tabelami starega sistema; prenesene so
+  na dejansko shemo NoviPIM, ki je `out.OutboxMessage`.
+  1. **O18 — razred napake.** Nov stolpec `ErrorClass` (`Transient` | `Business` |
+     `AuthConfig`) na sporočilu in na poskusu. `Business` gre takoj v `Dead` in ne porabi
+     poskusov; `AuthConfig` poleg tega ustavi kanal (`IntegrationProfile.IsEnabled = 0`) in
+     sproži **en** alarm `OUTBOUND_AUTH` na integracijo namesto enega na vsak artikel.
+  2. **O16 — stanje `Superseded`.** Zaporedje „pošlji A → popravi na B → pošlji B → SAOP
+     potrdi B" je prej pustilo A v `Sent` za vedno, kar je na nadzorni strani videti kot
+     „SAOP ni potrdil". Nadomestitev nastavita `out.EnqueueMessage` (ob novem sporočilu za
+     isto polje) in `out.VerifyEcho` (ko novejše dobi odgovor — to pokrije primer, ko je bilo
+     starejše ob vpisu novejšega še v roki workerja). Ključ vsebuje tudi qualifier, zato
+     cena za `B2B` ne nadomesti cene za `B2C`.
+  3. **O19 — uskladitev nove šifre.** Nova tabela `out.SaopItemAssignment` in procedura
+     `out.ResolveSaopItemAssignment` z vrstnim redom odgovor SAOP → zahtevana šifra → EAN →
+     človek. **Dvoumen EAN namenoma ni ujemanje** — napačna povezava je slabša od nobene,
+     ker se ne vidi. Omejitev `CK_SaopItemAssignment_Resolved` prepove način ujemanja brez
+     dejansko dodeljene šifre.
+  **En obstoječi test sem moral popraviti in to ni skrito.** `PIM.F8.HardeningTests` je
+  trdil `Equal("Sent", ...)` z namenom „echo novejše spremembe ne sme starejše označiti kot
+  Drift". Namen je nespremenjen in zdaj celo izrecno preverjen; spremenil se je odgovor,
+  ker do te migracije stanja `Superseded` ni bilo. Trditev se zdaj glasi `Superseded` plus
+  ločena trditev, da ni `Drift`.
+  **Kar ta naloga NE naredi:** odhodna pot danes pošlje spremembo polja, ne ustvari artikla,
+  zato poti, ki bi `out.ResolveSaopItemAssignment` klicala v živo, še ni. Tabela, procedura
+  in pravila so pripravljeni in dokazani s testom. Stanje `Error` ostaja mrtva pot.
+  Dokaz: migrator uporabi `046`, 2. zagon nobene, `--verify` izhod 0 (razširjen s preverbo
+  stolpca `ErrorClass` in stanja `Superseded`); `scripts\run_tests.ps1 -Filter F8` →
+  7 uspeli, 0 padlih; `scripts\run_tests.ps1` → **44 uspeli, 0 preskočenih, 0 padlih**;
+  `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0 opozoril, 0 napak. Dokazi proti bazi
+  tečejo v izoliranem podjetju 9808 in za sabo ne pustijo nobene vrstice (preverjeno).
+
 - **[IZVOZ]** Magento predloga se je preselila iz C# v register `out.ExportProfile` /
   `out.ExportColumn` — kdo: Claude Opus 5 — 2026-08-21, migracija
   `045_MagentoExportProfileRows.sql`.

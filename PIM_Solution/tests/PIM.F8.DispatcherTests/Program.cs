@@ -35,10 +35,26 @@ Throws<InvalidOperationException>(() => handler.CreateRequest(new(new Uri($"http
 Equal(DispatchOutcome.Dead, DispatchClassifier.Classify(HttpStatusCode.BadRequest, 1, 5), "Trajni 4xx");
 Equal(DispatchOutcome.Retry, DispatchClassifier.Classify(HttpStatusCode.ServiceUnavailable, 1, 5), "Začasni 5xx");
 Equal(DispatchOutcome.Dead, DispatchClassifier.Classify(HttpStatusCode.ServiceUnavailable, 5, 5), "Izčrpani poskusi");
+// --- Vrzel O18: razred napake ---------------------------------------------------
+//
+// Doslej je bila zavrnitev 400 in napaka poverilnice 401 ista stvar: sporočilo je umrlo,
+// razloga pa ni bilo nikjer. Poslovne zavrnitve nima smisla ponavljati, napaka integracije
+// pa ne sodi na artikel — zato sta ločeni.
+Equal(OutboundErrorClass.None, DispatchClassifier.ClassifyError(HttpStatusCode.Accepted), "2xx ni napaka");
+Equal(OutboundErrorClass.Business, DispatchClassifier.ClassifyError(HttpStatusCode.BadRequest), "400 je poslovna zavrnitev");
+Equal(OutboundErrorClass.Business, DispatchClassifier.ClassifyError(HttpStatusCode.NotFound), "404 je poslovna zavrnitev");
+Equal(OutboundErrorClass.Business, DispatchClassifier.ClassifyError(HttpStatusCode.Conflict), "409 je poslovna zavrnitev");
+Equal(OutboundErrorClass.AuthConfig, DispatchClassifier.ClassifyError(HttpStatusCode.Unauthorized), "401 je napaka integracije");
+Equal(OutboundErrorClass.AuthConfig, DispatchClassifier.ClassifyError(HttpStatusCode.Forbidden), "403 je napaka integracije");
+Equal(OutboundErrorClass.Transient, DispatchClassifier.ClassifyError(HttpStatusCode.RequestTimeout), "408 je začasna");
+Equal(OutboundErrorClass.Transient, DispatchClassifier.ClassifyError(HttpStatusCode.TooManyRequests), "429 je začasna");
+Equal(OutboundErrorClass.Transient, DispatchClassifier.ClassifyError(HttpStatusCode.ServiceUnavailable), "503 je začasna");
+Equal(OutboundErrorClass.None, result.ErrorClass, "Uspešen odgovor nima razreda napake");
+
 Equal(TimeSpan.FromSeconds(30), RetryPolicy.Delay(1, 30, 3600), "Prvi backoff");
 Equal(TimeSpan.FromSeconds(120), RetryPolicy.Delay(3, 30, 3600), "Eksponentni backoff");
 Equal(TimeSpan.FromSeconds(3600), RetryPolicy.Delay(20, 30, 3600), "Omejen backoff");
-Console.WriteLine("F8 dispatcher: lokalni HTTP fixture, retry in redakcija PASS.");
+Console.WriteLine("F8 dispatcher: lokalni HTTP fixture, razred napake, retry in redakcija PASS.");
 
 static int GetPort()
 {

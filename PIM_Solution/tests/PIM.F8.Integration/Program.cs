@@ -54,16 +54,99 @@ try
   await Sql("DECLARE @Observed datetime2(3)=SYSUTCDATETIME(); EXEC out.VerifyEcho @Org,N'Product',N'A-4',@Hash,@Observed;",("@Org",organizationId),("@Hash",new string('0',64)));
   Equal("Drift",await Status(drift),"Neujemajoči echo");
 
+  // ==========================================================================
+  // Vrzel O18 — razred napake odloca o poskusih in o tem, koga obvestimo.
+  // ==========================================================================
+
+  // Poslovna zavrnitev: SAOP je zahtevo razumel in jo zavrnil. Ponoviti isto zahtevo pomeni
+  // dobiti isti odgovor. Pred migracijo 046 je tak 400 pristal v Retry in porabil vse tri
+  // poskuse; zdaj gre takoj v Dead in ohrani zapisan razlog.
+  var business=await Enqueue("A-5",payload.Replace("A-1","A-5"),Hash(payload.Replace("A-1","A-5")));
+  var claimedBusiness=await Claim("worker-business");
+  Equal(business,claimedBusiness.Id,"Claim poslovne zavrnitve");
+  await CompleteWithClass(business,"worker-business",false,400,"{\"error\":\"Sifra ne obstaja\"}","SAOP 400","Business");
+  Equal("Dead",await Status(business),"Poslovna zavrnitev gre takoj v Dead");
+  Equal("Business",await ErrorClass(business),"Razred napake mora biti zapisan");
+  Equal(1,await AttemptCount(business),"Poslovna zavrnitev ne sme porabiti vec kot enega poskusa");
+
+  // Napaka integracije: ni na tem artiklu, ampak na poverilnici ali naslovu. Kanal se ustavi
+  // in nastane en sam alarm — sicer bi pri 200.000 artiklih nastalo 200.000 enakih alarmov.
+  var auth=await Enqueue("A-6",payload.Replace("A-1","A-6"),Hash(payload.Replace("A-1","A-6")));
+  var claimedAuth=await Claim("worker-auth");
+  Equal(auth,claimedAuth.Id,"Claim napake avtentikacije");
+  await CompleteWithClass(auth,"worker-auth",false,401,"{\"error\":\"Unauthorized\"}","SAOP 401","AuthConfig");
+  Equal("Dead",await Status(auth),"Napaka avtentikacije gre v Dead");
+  Equal("AuthConfig",await ErrorClass(auth),"Razred napake mora biti AuthConfig");
+  Equal(0,await ScalarInt("SELECT CONVERT(int,IsEnabled) FROM dbo.IntegrationProfile WHERE OrganizationId=@Org;"),
+    "AuthConfig mora ustaviti kanal");
+  Equal(1,await ScalarInt("SELECT COUNT(*) FROM ops.Alert WHERE OrganizationId=@Org AND AlertKind=N'OUTBOUND_AUTH' AND ResolvedUtc IS NULL;"),
+    "AuthConfig mora sprozit natanko en alarm na integracijo");
+
+  // Kanal odpre clovek; test si ga vrne, da lahko nadaljuje.
+  await Sql("UPDATE dbo.IntegrationProfile SET IsEnabled=1 WHERE OrganizationId=@Org;",("@Org",organizationId));
+
+  // ==========================================================================
+  // Vrzel O16 — nadomesceno sporocilo ni nepotrjeno sporocilo.
+  // ==========================================================================
+
+  await Sql("INSERT out.OwnershipPolicy(OrganizationId,TargetKind,EntityType,FieldName,Owner,IsEnabled,UpdatedBy) VALUES(@Org,N'SAOP_PRODUCT',N'Product',N'ERP_NAME',N'PIM',1,N'F8_TEST');",("@Org",organizationId));
+
+  // Drugo polje istega izdelka: nadomestitev se ga ne sme dotakniti.
+  var otherField=await Enqueue("A-7","{\"entityKey\":\"A-7\",\"field\":\"ERP_NAME\",\"value\":\"Ime\"}",string.Empty);
+  var claimedOther=await Claim("worker-other");
+  Equal(otherField,claimedOther.Id,"Claim drugega polja");
+  await Complete(claimedOther.Id,"worker-other",true,false,202,"{}",null,null);
+  Equal("Sent",await Status(otherField),"Drugo polje je poslano");
+
+  var first7=await Enqueue("A-7","{\"entityKey\":\"A-7\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Prva\"}",string.Empty);
+  var claimed7=await Claim("worker-super");
+  Equal(first7,claimed7.Id,"Claim prvega opisa");
+  await Complete(claimed7.Id,"worker-super",true,false,202,"{}",null,null);
+  Equal("Sent",await Status(first7),"Prvi opis je poslan in caka echo");
+
+  var second7=await Enqueue("A-7","{\"entityKey\":\"A-7\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Druga\"}",string.Empty);
+  Equal("Superseded",await Status(first7),"Starejse sporocilo za isto polje mora postati Superseded");
+  Equal("Pending",await Status(second7),"Novejse sporocilo caka na posiljanje");
+  Equal("Sent",await Status(otherField),"Nadomestitev ne sme poseci v drugo polje istega izdelka");
+
+  // ==========================================================================
+  // Vrzel O19 — uskladitev nove sifre ne sme sloneti samo na EAN.
+  // ==========================================================================
+
+  const string sharedEan="3830099900001";
+  await Sql("INSERT canon.Product(OrganizationId,ItemID,EAN,BusinessHash) VALUES(@Org,N'F8-EAN-A',@Ean,NULL),(@Org,N'F8-EAN-B',@Ean,NULL);",
+    ("@Org",organizationId),("@Ean",sharedEan));
+
+  Equal("Response",await Resolve(second7,"SAOP-77","REQ-1",sharedEan),"Odgovor SAOP prevlada");
+  Equal("SAOP-77",await AssignedItemId(second7),"Dodeljena je sifra iz odgovora");
+  Equal("RequestedIdentifier",await Resolve(second7,null,"REQ-1",sharedEan),"Brez odgovora obvelja zahtevana sifra");
+  Equal("Unresolved",await Resolve(second7,null,null,sharedEan),"Dvoumen EAN ni ujemanje");
+  Equal(null,await AssignedItemId(second7),"Dvoumen EAN ne sme dodeliti sifre");
+
+  await Sql("DELETE FROM canon.Product WHERE OrganizationId=@Org AND ItemID=N'F8-EAN-B';",("@Org",organizationId));
+  Equal("EAN",await Resolve(second7,null,null,sharedEan),"Enolicen EAN je ujemanje");
+  Equal("F8-EAN-A",await AssignedItemId(second7),"Dodeli se sifra edinega ujemajocega artikla");
+
   var policy=new OwnershipPolicy([new("Product","ERP_DESCRIPTION",Ownership.Pim)]);var builder=new OutboundPayloadBuilder(policy);
   try { builder.Build(new("SAOP_PRODUCT","PATCH","Product","A-1","VAT","22"));throw new InvalidOperationException("VAT ni bil zavrnjen."); } catch(OwnershipViolationException) { }
   await server;
   Equal(2,fixtureCalls,"Lokalni fixture klici");
-  Console.WriteLine("F8 integration: PIM MSSQL isolated org 9808, dedup/retry/dead/sent/verified/drift in lokalni HTTP fixture PASS.");
+  Console.WriteLine("F8 integration: PIM MSSQL isolated org 9808, dedup/retry/dead/sent/verified/drift, razred napake, nadomestitev, uskladitev sifre in lokalni HTTP fixture PASS.");
 }
 finally
 {
   fixture.Stop();
-  await Sql("DELETE attempt FROM out.OutboxAttempt attempt INNER JOIN out.OutboxMessage message ON message.OutboxMessageId=attempt.OutboxMessageId WHERE message.OrganizationId=@Org; DELETE out.OutboxMessage WHERE OrganizationId=@Org; DELETE out.OwnershipPolicy WHERE OrganizationId=@Org; DELETE dbo.IntegrationProfile WHERE OrganizationId=@Org; DELETE dbo.OrganizationConfig WHERE OrganizationId=@Org;",("@Org",organizationId));
+  // Test brise izkljucno vrstice, ki jih je ustvaril sam, v svojem izoliranem podjetju 9808.
+  // Vrstni red sledi tujim kljucem: dodeljene sifre in poskusi pred sporocili, dostave pred alarmi.
+  await Sql(@"DELETE FROM out.SaopItemAssignment WHERE OrganizationId=@Org;
+    DELETE attempt FROM out.OutboxAttempt attempt INNER JOIN out.OutboxMessage message ON message.OutboxMessageId=attempt.OutboxMessageId WHERE message.OrganizationId=@Org;
+    DELETE out.OutboxMessage WHERE OrganizationId=@Org;
+    DELETE out.OwnershipPolicy WHERE OrganizationId=@Org;
+    DELETE delivery FROM ops.AlertDelivery delivery INNER JOIN ops.Alert alert ON alert.AlertId=delivery.AlertId WHERE alert.OrganizationId=@Org;
+    DELETE ops.Alert WHERE OrganizationId=@Org;
+    DELETE FROM canon.Product WHERE OrganizationId=@Org;
+    DELETE dbo.IntegrationProfile WHERE OrganizationId=@Org;
+    DELETE dbo.OrganizationConfig WHERE OrganizationId=@Org;",("@Org",organizationId));
 }
 return 0;
 
@@ -83,6 +166,20 @@ async Task<(long Id,string Payload,string Endpoint,string Operation)> Claim(stri
   await using var command=new SqlCommand("EXEC out.ClaimMessage @WorkerId;",connection);command.Parameters.AddWithValue("@WorkerId",worker);await using var reader=await command.ExecuteReaderAsync();if(!await reader.ReadAsync())throw new InvalidOperationException("Ni claim sporočila.");var row=(reader.GetInt64(reader.GetOrdinal("OutboxMessageId")),reader.GetString(reader.GetOrdinal("PayloadJson")),reader.GetString(reader.GetOrdinal("EndpointTemplate")),reader.GetString(reader.GetOrdinal("HttpOperation")));await reader.CloseAsync();return row;
 }
 async Task Complete(long id,string worker,bool success,bool permanent,int code,string body,string? correlation,string? failure) => await Sql("EXEC out.CompleteAttempt @Id,@Worker,@Success,@Permanent,@Code,@Body,@Correlation,@Failure;",("@Id",id),("@Worker",worker),("@Success",success),("@Permanent",permanent),("@Code",code),("@Body",body),("@Correlation",(object?)correlation??DBNull.Value),("@Failure",(object?)failure??DBNull.Value));
+async Task CompleteWithClass(long id,string worker,bool success,int code,string body,string? failure,string errorClass) =>
+  await Sql("EXEC out.CompleteAttempt @OutboxMessageId=@Id,@WorkerId=@Worker,@Succeeded=@Success,@PermanentFailure=0,@ResponseStatusCode=@Code,@ResponseBodyRedacted=@Body,@ResponseCorrelationId=NULL,@FailureReason=@Failure,@ErrorClass=@Class;",
+    ("@Id",id),("@Worker",worker),("@Success",success),("@Code",code),("@Body",body),("@Failure",(object?)failure??DBNull.Value),("@Class",errorClass));
+async Task<string?> ErrorClass(long id) { await using var command=new SqlCommand("SELECT ErrorClass FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
+async Task<int> AttemptCount(long id) { await using var command=new SqlCommand("SELECT AttemptCount FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToInt32(await command.ExecuteScalarAsync()); }
+async Task<int> ScalarInt(string sql) { await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@Org",organizationId);var value=await command.ExecuteScalarAsync();return value is DBNull or null?0:Convert.ToInt32(value); }
+async Task<string> Resolve(long id,string? response,string? requested,string? ean)
+{
+  await using var command=new SqlCommand("DECLARE @Method nvarchar(40),@Assigned nvarchar(200); EXEC out.ResolveSaopItemAssignment @OutboxMessageId=@Id,@ResponseItemId=@Response,@RequestedIdentifier=@Requested,@EAN=@Ean,@Actor=N'F8_TEST',@MatchMethod=@Method OUTPUT,@AssignedSaopItemId=@Assigned OUTPUT; SELECT @Method;",connection);
+  command.Parameters.AddWithValue("@Id",id);command.Parameters.AddWithValue("@Response",(object?)response??DBNull.Value);
+  command.Parameters.AddWithValue("@Requested",(object?)requested??DBNull.Value);command.Parameters.AddWithValue("@Ean",(object?)ean??DBNull.Value);
+  return Convert.ToString(await command.ExecuteScalarAsync())!;
+}
+async Task<string?> AssignedItemId(long id) { await using var command=new SqlCommand("SELECT AssignedSaopItemId FROM out.SaopItemAssignment WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
 async Task<string> Status(long id) { await using var command=new SqlCommand("SELECT Status FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToString(await command.ExecuteScalarAsync())!; }
 async Task<string> PayloadHash(long id) { await using var command=new SqlCommand("SELECT PayloadHash FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToString(await command.ExecuteScalarAsync())!; }
 async Task Sql(string sql,params (string Name,object Value)[] parameters) { await using var command=new SqlCommand(sql,connection);foreach(var parameter in parameters)command.Parameters.AddWithValue(parameter.Name,parameter.Value);await command.ExecuteNonQueryAsync(); }

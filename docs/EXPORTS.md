@@ -285,9 +285,9 @@ vrstice z `WebEnabled=1`, zato je strank 0.
 
 ### 4.2 Stanja in prehodi
 
-Dovoljena stanja (`CK_OutboxMessage_Status`, `021:87`): `PendingApproval`,
-`Pending`, `Sending`, `Sent`, `Verified`, `Error`, `Retry`, `Dead`, `Cancelled`,
-`Drift`.
+Dovoljena stanja (`CK_OutboxMessage_Status`, `021:87`, razširjeno v `046`):
+`PendingApproval`, `Pending`, `Sending`, `Sent`, `Verified`, `Error`, `Retry`,
+`Dead`, `Cancelled`, `Drift`, **`Superseded`**.
 
 ```
 EnqueueMessage
@@ -300,6 +300,7 @@ Sending ─(CompleteAttempt)─┬─ uspeh ────────────
 Sending ─(potekel lease, ClaimMessage)─► Retry | Dead
 Sent ─(VerifyEcho)─┬─ hash se ujema ───► Verified
                    └─ hash se ne ujema ► Drift
+PendingApproval | Pending | Retry | Sent ─(novo sporočilo za isto polje)─► Superseded
 PendingApproval | Pending | Error | Retry ─(CancelMessage)─► Cancelled
 Error | Dead ─(RetryMessage)─► Retry
 ```
@@ -311,6 +312,41 @@ Dve poštenosti glede tega diagrama:
   `CompleteAttempt` pozna samo `Sent`, `Retry` in `Dead`.
 - Iz stanja `Drift` ni izhoda prek procedur: `RetryMessage` dovoli le `Error` in
   `Dead`, `CancelMessage` pa `Drift` ne zajema. Odklon se obravnava ročno.
+
+#### `Superseded` — nadomeščeno sporočilo (vrzel O16, migracija `046`)
+
+Zaporedje »pošlji A → urednik popravi na B → pošlji B → SAOP potrdi B« je prej pustilo
+A v stanju `Sent` za vedno. Na nadzorni strani je bilo to videti kot »poslano, SAOP ni
+potrdil« — laž, saj je SAOP potrdil tisto, kar je bilo poslano nazadnje.
+
+`Superseded` nastavita dve mesti:
+
+- `out.EnqueueMessage`, ko nastane novejše sporočilo za **isto polje istega izdelka**;
+- `out.VerifyEcho`, ko novejše sporočilo dobi svoj odgovor — to pokrije primer, ko je bilo
+  starejše sporočilo ob vpisu novejšega še v roki workerja (`Sending`).
+
+Ključ nadomestitve je `(OrganizationId, TargetKind, EntityType, EntityKey, FieldSummary,
+qualifier)`. Qualifier je namenoma zraven: cena za cenik `B2B` ne sme nadomestiti cene za
+`B2C`. `Sending` se ne nadomesti (worker ga ima v rokah), `Dead` pa tudi ne — poslovna
+zavrnitev mora ostati vidna, tudi če je pozneje šla druga vrednost skozi.
+
+`Superseded` ni v filtru dedup indeksa, zato nadomeščeni ključ ne blokira poznejšega
+ponovnega vpisa iste vrednosti.
+
+#### `ErrorClass` — razred napake (vrzel O18, migracija `046`)
+
+Stolpca `out.OutboxMessage.ErrorClass` in `out.OutboxAttempt.ErrorClass` hranita
+`Transient`, `Business` ali `AuthConfig`.
+
+| Razred | Kaj pomeni | Kaj naredi `out.CompleteAttempt` |
+|---|---|---|
+| `Transient` | omrežje, iztek časa, zasedenost (408, 429, ≥ 500) | `Retry` z eksponentnim zamikom do `MaxAttempts` |
+| `Business` | SAOP je zahtevo razumel in jo zavrnil (drugi 4xx) | takoj `Dead`; poskusi se ne porabijo |
+| `AuthConfig` | poverilnica, pravica ali naslov (401, 403, 407) | `Dead`, `IntegrationProfile.IsEnabled = 0` in **en** alarm `OUTBOUND_AUTH` prek `ops.UpsertAlert` |
+
+Zakaj `AuthConfig` ustavi kanal: napaka ni na tem artiklu. Brez tega bi pri 200.000
+artiklih nastalo 200.000 enakih alarmov, prava napaka pa bi se izgubila med njimi. Kanal
+znova odpre človek, ko poverilnico popravi.
 
 ### 4.3 Procedure
 
@@ -348,7 +384,8 @@ Vsaka od `Approve`/`Cancel`/`Retry` zahteva natanko eno prizadeto vrstico, sicer
 | Varovalka | Izvedba |
 |---|---|
 | dovoljeni metodi | samo `POST` in `PATCH`, drugo vrže `InvalidOperationException` (`:20-25`) |
-| razvrstitev odziva | 2xx → `Sent`; 408, 429 in ≥ 500 → `Retry`; drugo 4xx → `Dead` (`DispatchClassifier:69-76`) |
+| razvrstitev odziva | 2xx → `Sent`; 408, 429 in ≥ 500 → `Retry`; drugo 4xx → `Dead` (`DispatchClassifier.Classify`) |
+| razred napake | 401, 403, 407 → `AuthConfig`; 408, 429, ≥ 500 → `Transient`; drugi 4xx → `Business` (`DispatchClassifier.ClassifyError`) |
 | redakcija odziva | JSON ključi `token`, `access_token`, `refresh_token`, `password`, `secret`, `authorization`, `apiKey` → `[REDACTED]`, rekurzivno (`:54-61`) |
 | omejitev odziva | shrani največ 4000 znakov (`:51`) |
 | korelacija | `X-Correlation-ID`, sicer `Request-ID` (`:37`) |
@@ -437,7 +474,7 @@ SentUtc` prepreči, da bi star odmev potrdil novo sporočilo.
 
 Protipovratna zanka je izrecna:
 
-- `EchoVerifier.Decide` loči `Missing`, `Stale`, `Verified`, `Drift`, a
+- `EchoVerifier.Decide` loči `Missing`, `Stale`, `Verified`, `Superseded` in `Drift`, a
   `ShouldAutomaticallyResend` **vedno vrne `false`** — sistem po odklonu nikoli
   ne pošlje samodejno (`src/PIM.Outbound/EchoVerifier.cs:18`);
 - `EchoAntiLoop.ShouldEnqueue` prepreči vpis spremembe, ki je hash-identična že
@@ -572,6 +609,31 @@ vrstico ali chat; na vsakem cilju se nastavijo ročno
 (`PRODUCTION_ROADMAP.md:8-9,191`).
 
 ---
+
+### 5.7 Uskladitev nove šifre artikla (vrzel O19, migracija `046`)
+
+Ko SAOP ob ustvarjanju artikla dodeli svojo šifro, je bila povezava nazaj v PIM odvisna
+izključno od EAN. To odpove, kadar EAN manjka, ni globalno enoličen ali ga SAOP normalizira:
+artikel ostane nepovezan ali — kar je huje, ker se ne vidi — se poveže na napačnega.
+
+`out.ResolveSaopItemAssignment` in `PIM.Outbound.SaopItemAssignmentResolver` izvajata isti
+vrstni red:
+
+1. **`Response`** — šifra iz odgovora SAOP; kar pove SAOP, je resnica.
+2. **`RequestedIdentifier`** — šifra, ki jo je PIM zahteval, kadar je odgovor ni vseboval.
+3. **`EAN`** — samo ob **enoličnem** ujemanju v `canon.Product`.
+4. **`Unresolved`** — ostane človek (`Manual`, ko jo dodeli).
+
+Dvoumen EAN namenoma **ni** ujemanje. Omejitev `CK_SaopItemAssignment_Resolved` poskrbi, da
+noben način razen `Unresolved` ne more obstajati brez dejansko dodeljene šifre — način
+ujemanja brez šifre bi bila trditev brez pokritja.
+
+Izid se zapiše v `out.SaopItemAssignment` (ena vrstica na odhodno sporočilo, `MatchDetail`
+pove zakaj). Nerazrešene se najdejo prek `IX_SaopItemAssignment_Unresolved`.
+
+**Kar je treba vedeti:** odhodna pot danes pošlje spremembo polja, ne ustvari artikla. Poti,
+ki bi to proceduro klicala v živo, še ni — tabela, procedura in pravila so pripravljeni in
+dokazani s testom, uporabi jih prvi tok, ki bo artikel v SAOP ustvaril.
 
 ## 9. Znane vrzeli in tveganja
 

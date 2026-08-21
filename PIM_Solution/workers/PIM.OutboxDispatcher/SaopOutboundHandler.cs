@@ -7,8 +7,19 @@ using System.Text.Json.Nodes;
 namespace PIM.OutboxDispatcher;
 
 public enum DispatchOutcome { Sent, Retry, Dead }
+
+/// <summary>
+/// Razred napake iz vrzeli O18. Odloca o poskusih in o tem, koga je treba obvestiti.
+///
+/// <c>Transient</c> — omrezje ali zasedenost; edini razred, ki se sme ponavljati.
+/// <c>Business</c> — SAOP je zahtevo razumel in jo zavrnil; ponavljanje da isti odgovor.
+/// <c>AuthConfig</c> — napaka ni na tem artiklu, ampak na integraciji; kanal se ustavi in
+/// nastane en alarm namesto enega na vsak artikel.
+/// </summary>
+public enum OutboundErrorClass { None, Transient, Business, AuthConfig }
+
 public sealed record OutboundHttpRequest(Uri Endpoint, string Operation, string PayloadJson);
-public sealed record DispatchResult(DispatchOutcome Outcome, int StatusCode, string RedactedBody, string? CorrelationId);
+public sealed record DispatchResult(DispatchOutcome Outcome, int StatusCode, string RedactedBody, string? CorrelationId, OutboundErrorClass ErrorClass = OutboundErrorClass.None);
 
 public sealed class SaopOutboundHandler(HttpClient httpClient, int responseLimit = 4000)
 {
@@ -35,7 +46,8 @@ public sealed class SaopOutboundHandler(HttpClient httpClient, int responseLimit
     using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     var raw = await response.Content.ReadAsStringAsync(cancellationToken);
     var correlation = Header(response.Headers, "X-Correlation-ID") ?? Header(response.Headers, "Request-ID");
-    return new(DispatchClassifier.Classify(response.StatusCode, 1, int.MaxValue), (int)response.StatusCode, Redact(raw), correlation);
+    return new(DispatchClassifier.Classify(response.StatusCode, 1, int.MaxValue), (int)response.StatusCode, Redact(raw), correlation,
+      DispatchClassifier.ClassifyError(response.StatusCode));
   }
 
   string Redact(string body)
@@ -71,8 +83,31 @@ public static class DispatchClassifier
     var code = (int)status;
     if (code is >= 200 and <= 299) return DispatchOutcome.Sent;
     if (attempt >= maxAttempts) return DispatchOutcome.Dead;
-    if (status is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || code >= 500) return DispatchOutcome.Retry;
+    if (IsTransient(status)) return DispatchOutcome.Retry;
     return DispatchOutcome.Dead;
+  }
+
+  /// <summary>
+  /// Vrzel O18: doslej je bila zavrnitev 400 in napaka poverilnice 401 ista stvar — sporocilo
+  /// je umrlo, razloga pa ni bilo nikjer zapisanega. Razred napake se shrani na sporocilo in
+  /// na poskus, ob <see cref="OutboundErrorClass.AuthConfig"/> pa <c>out.CompleteAttempt</c>
+  /// ustavi kanal in sprozi en sam alarm na integracijo.
+  /// </summary>
+  public static OutboundErrorClass ClassifyError(HttpStatusCode status)
+  {
+    var code = (int)status;
+    if (code is >= 200 and <= 299) return OutboundErrorClass.None;
+    if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.ProxyAuthenticationRequired)
+      return OutboundErrorClass.AuthConfig;
+    if (IsTransient(status)) return OutboundErrorClass.Transient;
+    return OutboundErrorClass.Business;
+  }
+
+  /// <summary>Omrezna ali zacasna napaka; edina, ki jo je smiselno ponoviti z isto vsebino.</summary>
+  static bool IsTransient(HttpStatusCode status)
+  {
+    var code = (int)status;
+    return status is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests || code >= 500;
   }
 }
 

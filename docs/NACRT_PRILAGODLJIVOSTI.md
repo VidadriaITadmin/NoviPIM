@@ -19,7 +19,7 @@ Tretja vrstica je hkrati tista, ki povzroča **8 artiklov/s** (~7 ur za 200.000)
 
 ## Vrstni red
 
-Potrjeno 2026-08-21: **A3 → B4 → C7.** A3 in B4 sta končana; naslednji je C7. A3 odklene 200.000 artiklov, B4 naredi
+Potrjeno 2026-08-21: **A3 → B4 → C7.** A3, B4 in C7 so končani. Ostajata C6 (register zapisovalnih končnih točk) in C8 (`out.OwnershipPolicy` iz stolpcev „Smer" in „Master"). A3 odklene 200.000 artiklov, B4 naredi
 izvoze prilagodljive brez kode, C7 zapre tri resnične manjke odhodne poti.
 
 ## A — ZAJEM
@@ -54,10 +54,14 @@ izvoze prilagodljive brez kode, C7 zapre tri resnične manjke odhodne poti.
 6. Register SAOP zapisovalnih končnih točk (`Add/UpdateItemsGeneralData`,
    `Customers`, kasneje cene) → `TargetKind`. `out.OutboxMessage` obstaja,
    manjka le vezava na pot iz Swaggerja.
-7. Trije resnični manjki proti `out.OutboxMessage`:
-   - `ErrorClass` (O18 — poslovna zavrnitev ne sme porabiti poskusov),
-   - status `Superseded` (3.B.2 — sicer lažni alarmi ob normalnem urejanju),
-   - `SaopItemAssignment` (O19 — nova šifra po ADD ne sme sloneti samo na EAN).
+7. **[KONČANO 2026-08-21]** Trije resnični manjki proti `out.OutboxMessage` —
+   migracija `046_OutboundErrorClassSupersededAssignment.sql`:
+   - `ErrorClass` (O18) — `Business` ne porabi poskusov, `AuthConfig` ustavi kanal
+     in naredi en alarm na integracijo;
+   - status `Superseded` (O16) — nadomeščeno sporočilo ni nepotrjeno sporočilo;
+   - `out.SaopItemAssignment` (O19) — odgovor → zahtevana šifra → **enoličen** EAN →
+     človek; dvoumen EAN ni ujemanje.
+   Podrobnosti in kaj še manjka: `TASKBOARD.md`, razdelka 4.2 in 5.7 v `EXPORTS.md`.
 8. Sedaj `out.OwnershipPolicy` iz stolpcev „Smer" in „Master" — vključno s
    pravilom O9: polje, ki ga ne beremo nazaj, ne sme biti zapisljivo.
 

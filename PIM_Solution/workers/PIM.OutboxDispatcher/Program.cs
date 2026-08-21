@@ -35,11 +35,12 @@ try
 }
 catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
 {
+  // Prekinjena povezava ali iztek casa je omrezna napaka, ne poslovna zavrnitev.
   var outcome = attempt >= maxAttempts ? DispatchOutcome.Dead : DispatchOutcome.Retry;
-  result = new(outcome, 0, string.Empty, null);
+  result = new(outcome, 0, string.Empty, null, OutboundErrorClass.Transient);
 }
 
-await using var complete = new SqlCommand("EXEC out.CompleteAttempt @OutboxMessageId,@WorkerId,@Succeeded,@PermanentFailure,@ResponseStatusCode,@ResponseBodyRedacted,@ResponseCorrelationId,@FailureReason;", connection);
+await using var complete = new SqlCommand("EXEC out.CompleteAttempt @OutboxMessageId,@WorkerId,@Succeeded,@PermanentFailure,@ResponseStatusCode,@ResponseBodyRedacted,@ResponseCorrelationId,@FailureReason,@ErrorClass;", connection);
 complete.Parameters.AddWithValue("@OutboxMessageId", messageId);
 complete.Parameters.AddWithValue("@WorkerId", workerId);
 complete.Parameters.AddWithValue("@Succeeded", result.Outcome == DispatchOutcome.Sent);
@@ -47,6 +48,7 @@ complete.Parameters.AddWithValue("@PermanentFailure", result.Outcome == Dispatch
 complete.Parameters.AddWithValue("@ResponseStatusCode", result.StatusCode == 0 ? DBNull.Value : result.StatusCode);
 complete.Parameters.AddWithValue("@ResponseBodyRedacted", result.RedactedBody);
 complete.Parameters.AddWithValue("@ResponseCorrelationId", (object?)result.CorrelationId ?? DBNull.Value);
-complete.Parameters.AddWithValue("@FailureReason", result.Outcome == DispatchOutcome.Sent ? DBNull.Value : $"HTTP dispatch: {result.Outcome}");
+complete.Parameters.AddWithValue("@FailureReason", result.Outcome == DispatchOutcome.Sent ? DBNull.Value : $"HTTP dispatch: {result.Outcome} ({result.ErrorClass}).");
+complete.Parameters.AddWithValue("@ErrorClass", result.ErrorClass == OutboundErrorClass.None ? DBNull.Value : result.ErrorClass.ToString());
 await complete.ExecuteNonQueryAsync();
 await operationsRun.CompleteAsync(result.Outcome == DispatchOutcome.Sent, result.Outcome == DispatchOutcome.Sent ? null : "Odhodna dostava ni uspela.");

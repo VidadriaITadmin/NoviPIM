@@ -441,11 +441,16 @@ static async Task VerifyF8Async(SqlConnection connection)
     "out.OutboxMessage", "out.OutboxAttempt", "out.OwnershipPolicy", "dbo.IntegrationProfile",
     "out.EnqueueMessage", "out.ApproveMessage", "out.CancelMessage", "out.RetryMessage",
     "out.ClaimMessage", "out.CompleteAttempt", "out.VerifyEcho",
+    "out.SaopItemAssignment", "out.ResolveSaopItemAssignment",
     "intranet.GetOutboundMessages", "intranet.GetOutboundMessage"
   };
   foreach (var expectedObject in expectedObjects)
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F8 objekt {expectedObject}.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.indexes WHERE object_id=OBJECT_ID(N'out.OutboxMessage') AND name=N'UX_OutboxMessage_ActiveDedup';", null, 1, "Manjka F8 aktivni dedup indeks.");
+  // Migracija 046: brez teh dveh se odhodna pot tiho vrne na "vsaka napaka je enaka" in
+  // "nadomeščeno sporočilo je videti kot nepotrjeno".
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'out.OutboxMessage') AND name=N'ErrorClass';", null, 1, "Manjka F8 stolpec out.OutboxMessage.ErrorClass.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.check_constraints WHERE name=N'CK_OutboxMessage_Status' AND definition LIKE N'%Superseded%';", null, 1, "F8 stanje Superseded ni dovoljeno v CK_OutboxMessage_Status.");
 }
 
 static async Task VerifyF9Async(SqlConnection connection)

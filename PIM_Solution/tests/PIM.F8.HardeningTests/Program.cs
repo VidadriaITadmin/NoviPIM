@@ -64,7 +64,13 @@ try
   await Complete(newerEcho, "echo-new-worker", true);
   var newestHash = await PayloadHash(newerEcho);
   await Sql("DECLARE @Observed datetime2(3)=SYSUTCDATETIME(); EXEC out.VerifyEcho @OrganizationId=@Org,@EntityType=N'Product',@EntityKey=N'A-echo',@InboundHash=@Hash,@ObservedUtc=@Observed;", ("@Org", organizationId), ("@Hash", newestHash));
-  Equal("Sent", await Status(olderEcho), "Echo novejše spremembe ne sme označiti starejše kot Drift");
+  // Namen te trditve je nespremenjen: echo novejše spremembe ne sme starejše označiti kot Drift.
+  // Spremenil se je odgovor. Do migracije 046 je bil pravilni odgovor "Sent", ker drugega
+  // stanja ni bilo — a to je pomenilo sporočilo, ki za vedno izgleda kot poslano in nepotrjeno.
+  // Vrzel O16 doda stanje Superseded: starejše sporočilo za isto polje ni nepotrjeno, ampak
+  // nadomeščeno. Zato je tu zdaj Superseded in izrecno preverjeno, da ni Drift.
+  Equal("Superseded", await Status(olderEcho), "Starejše sporočilo za isto polje mora biti nadomeščeno");
+  Equal(false, await Status(olderEcho) == "Drift", "Echo novejše spremembe ne sme označiti starejše kot Drift");
   Equal("Verified", await Status(newerEcho), "Echo mora potrditi sporočilo z ujemajočim pričakovanim hashem");
 
   Console.WriteLine("F8 hardening: server-side ownership/integrity, late completion, crash reclaim in concurrent recovery PASS.");
