@@ -23,9 +23,6 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   `map.ProcessRawInbox` — potrebujejo odločitev, kam v modelu spadajo.
   Od 2026-08-20 to ni več tiho: zajem teh entitet mejnika ne premakne, zato bo prvi
   zagon po dodani preslikavi isto obdobje zajel znova. Prej bi bilo trajno izgubljeno.
-- **[BAZA]** Hitrost `map.ProcessRawInbox`. Izmerjeno: 5.303 artiklov = 649 s (~8/s),
-  kar je za 200.000 artiklov okrog 7 ur. Vzrok je ugnezdeni kurzor s petimi `MERGE`
-  stavki na zapis. Potrebna je množična obdelava.
 - **[WORKERJI]** `PIM.StockFileWorker` in `PIM.B2bWorker` dobita pravi `Program.cs`.
   Pisalna logika (`StockLandingWriter`, `B2bLandingWriter`) obstaja in je dokazana,
   a jo kliče samo test — worker sam v bazo ne piše ničesar.
@@ -76,6 +73,35 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[BAZA]** Hitrost `map.ProcessRawInbox`: ugnezdeni kurzor zamenjan z množično obdelavo —
+  kdo: Claude Opus 5 — 2026-08-21, migracija `044_BulkProcessRawInbox.sql`.
+  **Merjeno pred in po, z istim merilom in istimi podatki**
+  (`PIM_Solution\tools\Bench-ProcessRawInbox.sql`, novo — ustvari svoj konektor, svojo
+  vhodno vrstico in @N zapisov, izmeri, prebere kaj je nastalo in za sabo pobriše vse svoje
+  vrstice; preveri, da je ostankov 0):
+  - 2.000 zapisov **pred**: 219.347 ms = **9,1 zapisa/s** (potrjuje ~8/s s prejšnje meritve);
+  - 2.000 zapisov **po**: 1.145 ms = **1.747 zapisov/s** → **192×**;
+  - 20.000 zapisov **po**: 9.306 ms = **2.149 zapisov/s** (raste linearno, ne kvadratno).
+  Za 200.000 artiklov to pomeni okrog **1,5 minute** namesto okrog 6 ur.
+  Odpravljena vzroka: (1) na vsak zapis je tekel obhod s petimi `MERGE`, enim `UPDATE` in
+  dvema iskanjema izdelka; (2) vsak od teh stavkov je posebej sprožil sledilne prožilce, ki
+  vsak zase vzamejo `UPDLOCK/HOLDLOCK` na `pim.ProductChangeBatch` — pri 2.000 zapisih
+  8.000 svežnjev, zdaj 4. Dodan je tudi indeks `canon.Product(OrganizationId, EAN)`; iskanje
+  po EAN je bilo edino brez indeksa.
+  **Kar se ni spremenilo:** pravila in besedila zavrnitev, vrstni red preverjanj, pravica
+  ERP vira do ustvarjanja artikla, karantena celotne vhodne vrstice ob napaki, besedilo
+  `FailureReason` in števci. Vhodne vrstice se še vedno obdelujejo ena za drugo, ker so
+  nosilec izolacije napake.
+  **Kar se je spremenilo in je treba vedeti:** zgodovina sprememb dobi en svežnj
+  (`pim.ProductChangeBatch`) na vhodno vrstico namesto enega na zapis; vsebina
+  (`pim.ProductFieldHistory`) je ista.
+  Nov varovalni test `PIM.F3.Integration` (dva zapisa iste šifre v isti strani → en artikel,
+  polje prvega zapisa ohranjeno, polje in naziv drugega obveljata) — to je edino pravilo, ki
+  ga je prej nosil vrstni red kurzorja in ga mora množična obdelava izraziti izrecno.
+  Dokaz: migrator 1. zagon uporabi `044`, 2. zagon nobene, `--verify` izhod 0;
+  `scripts\run_tests.ps1 -Filter F3` → 4 uspeli, 0 preskočenih, 0 padlih;
+  `scripts\run_tests.ps1` → **44 uspeli, 0 preskočenih, 0 padlih**.
 
 - **[INFRASTRUKTURA]** Node scaffold izbrisan in CI prevezan na .NET — kdo:
   Claude Opus 5, na izrecno zahtevo uporabnika — 2026-08-20. Odstranjeni:

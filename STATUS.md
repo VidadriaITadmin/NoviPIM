@@ -1,6 +1,6 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-13
+Posodobljeno: 2026-08-21
 
 ## BAZA naloga — karantena NW XML po izdelku
 
@@ -30,8 +30,11 @@ Posodobljeno: 2026-08-13
   `SAOP_PRODUCTS` ni bilo razporeda. Zadnji uspešen SAOP zajem je 30. 7. 2026.
 - **Od migracije 017 SAOP ni mogel ustvariti novega artikla.** Zdaj sme, ker ima
   konektor `CanCreateProducts`; dobaviteljski viri ostajajo brez te pravice.
-- **Preslikava je ozko grlo:** izmerjenih 8 artiklov/s (5.303 v 649 s). Za 200.000
-  artiklov je to okrog 7 ur, zato prvi živi zajem teci z `--only-ingest`.
+- **Preslikava ni več ozko grlo** (2026-08-21, migracija `044`). Bilo je 8–9 artiklov/s
+  (~6–7 ur za 200.000). Merjeno z istim merilom pred in po
+  (`PIM_Solution\tools\Bench-ProcessRawInbox.sql`): 2.000 zapisov 219.347 ms → 1.145 ms,
+  torej **9,1 → 1.747 zapisov/s**; pri 20.000 zapisih 2.149/s. Za 200.000 artiklov je to
+  okrog 1,5 minute. `--only-ingest` zato ni več nujen zaradi hitrosti.
 - Pokritost: zajem dela za vseh 16 končnih točk, preslikava v `canon` za tri.
 - **Zajem brez preslikave ne premakne mejnika** (2026-08-20). Preostalih 13 končnih
   točk se sme zajemati, ne da bi se podatek izgubil: zapisi ostanejo `Pending` v
@@ -45,7 +48,7 @@ Posodobljeno: 2026-08-13
 ## Stanje razvojne baze na tem računalniku
 
 - Baza `PIM` na `localhost\MSSQLSERVER3` (računalnik `DESKTOP-TONVQHJ`) je od
-  2026-08-20 na migraciji **043**. Pred tem je imela samo do `027`: migracije
+  2026-08-21 na migraciji **044**; do 2026-08-20 je bila na **043**. Pred tem je imela samo do `027`: migracije
   `028`–`043` so bile opravljene na drugem računalniku in tu nikoli uporabljene,
   zato je 7 integracijskih testnih projektov padalo s `Class:20` (povezava).
   Dokaz po popravku: migrator 1. zagon uporabi 16 migracij, 2. zagon nobene,

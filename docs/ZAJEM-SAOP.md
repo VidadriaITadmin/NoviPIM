@@ -62,7 +62,8 @@ cd C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution; $env:PIM_SAOP_MODE='Live'; d
 
 To pobere vse strani po 1.000 artiklov. Pri ~200.000 artiklih pričakuj ~200 strani.
 
-**Preden poženeš brez `--only-ingest`, preberi razdelek 6 o hitrosti.**
+Od migracije `044` preslikava ni več ozko grlo (razdelek 7); `--only-ingest` je zdaj
+izbira, ne nuja.
 
 Vsi argumenti:
 
@@ -229,17 +230,32 @@ mejnik zanjo ostane nepremaknjen — naslednji zagon isto obdobje poskusi znova.
 - pri tem: 140 novih artiklov ustvarjenih, EAN 788 → 1.026, `ItemGroup` 0 → 5.269,
   `Department` 0 → 285, `WebPublish` 0 → 184.
 
-**Iz tega sledi:** preslikava zmore ~8 artiklov na sekundo. Za 200.000 artiklov je to okrog
-7 ur. `map.ProcessRawInbox` gre čez zapise s kurzorjem in na vsakem izvede pet `MERGE`
-stavkov.
+**Iz tega je sledilo:** preslikava zmore ~8 artiklov na sekundo. Za 200.000 artiklov je to
+okrog 7 ur. `map.ProcessRawInbox` je šla čez zapise s kurzorjem in na vsakem izvedla pet
+`MERGE` stavkov.
 
 Ta meritev je bila opravljena **brez omrežja** — podatki so bili že v `raw.Inbox`, tekla je
 samo procedura. Zajem in preslikava sta ločena koraka z ločenima omejitvama: zajem omejuje
-API (`PageSize`, premor med klici), preslikavo pa SQL. Preslikavo je zato mogoče pohitriti,
-ne da bi se karkoli spremenilo v načinu klicanja SAOP.
+API (`PageSize`, premor med klici), preslikavo pa SQL.
 
-Zato: **prvi živi zajem poženi z `--only-ingest`.** Podatki bodo v `raw.Inbox` in jih boš
-lahko preslikal takrat, ko bo za to čas — ali potem, ko bo preslikava pohitrena.
+**To ozko grlo je odpravljeno (21. 8. 2026, migracija `044_BulkProcessRawInbox.sql`.)**
+Notranji kurzor po zapisih je zamenjala množična obdelava; vhodne vrstice (`raw.Inbox`) se
+še vedno obdelujejo ena za drugo, ker so nosilec izolacije napake in karantene.
+
+Merjeno s `PIM_Solution\tools\Bench-ProcessRawInbox.sql` na istem računalniku, isti podatki
+pred in po:
+
+| Zapisov | Pred (proc iz 042) | Po (proc iz 044) | Razmerje |
+|---|---|---|---|
+| 2.000 | 219.347 ms → **9,1 zapisa/s** | 1.145 ms → **1.747 zapisov/s** | 192× |
+| 20.000 | (ni merjeno, ~6 h za 200.000) | 9.306 ms → **2.149 zapisov/s** | — |
+
+Iz tega sledi za 200.000 artiklov okrog **1,5 minute** namesto okrog 6 ur. Merilo poganja
+isto pot kot živ zajem (ustvarjanje artikla, besedilo, atribut, kategorija, medij, cena) in
+za sabo pobriše vse svoje vrstice.
+
+Zato `--only-ingest` **ni več nujen** zaradi hitrosti. Ostaja uporaben, kadar hočeš najprej
+videti surov odgovor, preden ga spustiš v katalog.
 
 **Ni še izmerjeno:**
 

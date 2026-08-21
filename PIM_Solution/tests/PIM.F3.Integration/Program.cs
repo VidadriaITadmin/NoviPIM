@@ -268,6 +268,138 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
 
   Console.WriteLine("F3 celoten zajem: mejnik nepreslikane entitete ostane nespremenjen.");
 }
+// ---------------------------------------------------------------------------
+// Množična obdelava (migracija 044): ena stran, dva zapisa iste šifre.
+//
+// Zakaj je prav ta primer test: dokler je map.ProcessRawInbox tekla po kurzorju, je bil
+// vrstni red zapisov nosilec pravila „zadnja neprazna vrednost obvelja" — vsak zapis je s
+// COALESCE prepisal prejšnjega. Množična obdelava tega vrstnega reda nima, zato mora isto
+// pravilo izraziti izrecno. Če bi ga izgubila, bi se to pokazalo na dva načina: MERGE bi
+// padel z „attempted to UPDATE or INSERT the same row more than once", ali pa bi tiho
+// obveljal napačen zapis. Oboje je tu zajeto.
+{
+  const string bulkEntityType = "F3_BULK_GUARD_TEST";
+  var bulkRunId = Guid.NewGuid();
+
+  await using var bulkConnection = new SqlConnection(connectionString);
+  await bulkConnection.OpenAsync();
+  try
+  {
+    const string bulkSql = """
+      DECLARE @OrganizationId int = 2;
+      DECLARE @SourceCode nvarchar(100) = N'SAOP_IQLIGHTING';
+
+      INSERT ops.PipelineRun(RunId, Pipeline, OrganizationId, SourceCode, StartedUtc, Status, RowsRead, RowsSucceeded, RowsFailed)
+      VALUES(@RunId, N'SAOP_PRODUCTS', @OrganizationId, @SourceCode, SYSUTCDATETIME(), N'Running', 0, 0, 0);
+
+      INSERT raw.Inbox(RunId, OrganizationId, SourceCode, EntityType, PageNumber, PayloadXml, PayloadHash, Status)
+      VALUES(@RunId, @OrganizationId, @SourceCode, @EntityType, 1, N'<bulk/>',
+             CONVERT(char(64), HASHBYTES('SHA2_256', CONVERT(nvarchar(100), @RunId)), 2), N'Pending');
+      DECLARE @InboxId bigint = SCOPE_IDENTITY();
+
+      DECLARE @ConnectorId int =
+        (SELECT SourceConnectorId FROM map.SourceConnector
+         WHERE SourceCode=@SourceCode AND OrganizationId=@OrganizationId AND IsActive=1);
+      DECLARE @ItemIdMapping int       = (SELECT FieldMappingId FROM map.FieldMapping WHERE SourceConnectorId=@ConnectorId AND EntityType=N'ItemGeneralData' AND TargetFieldCode=N'Product.ItemID');
+      DECLARE @UoMMapping int          = (SELECT FieldMappingId FROM map.FieldMapping WHERE SourceConnectorId=@ConnectorId AND EntityType=N'ItemGeneralData' AND TargetFieldCode=N'Product.UoM');
+      DECLARE @ManufacturerMapping int = (SELECT FieldMappingId FROM map.FieldMapping WHERE SourceConnectorId=@ConnectorId AND EntityType=N'ItemGeneralData' AND TargetFieldCode=N'Product.Manufacturer');
+      DECLARE @TitleMapping int        = (SELECT FieldMappingId FROM map.FieldMapping WHERE SourceConnectorId=@ConnectorId AND EntityType=N'ItemGeneralData' AND TargetFieldCode=N'ProductText.TITLE_ERP.sl');
+      IF @ItemIdMapping IS NULL OR @UoMMapping IS NULL OR @ManufacturerMapping IS NULL OR @TitleMapping IS NULL
+        THROW 52340, 'Manjkajo preslikave ItemGeneralData za preizkus množične obdelave.', 1;
+
+      /* Zapisa 1 in 2 nosita isto šifro; vsak prinese svoje polje, naziv pa oba. */
+      INSERT map.ExtractedValue(InboxId, FieldMappingId, MappingVersion, RecordOrdinal, TargetFieldCode, Value, ExtractedUtc)
+      VALUES
+        (@InboxId, @ItemIdMapping,       1, 1, N'Product.ItemID',           N'F3-BULK-A',               SYSUTCDATETIME()),
+        (@InboxId, @UoMMapping,          1, 1, N'Product.UoM',              N'KOS',                     SYSUTCDATETIME()),
+        (@InboxId, @TitleMapping,        1, 1, N'ProductText.TITLE_ERP.sl', N'Naziv iz prvega zapisa',  SYSUTCDATETIME()),
+        (@InboxId, @ItemIdMapping,       1, 2, N'Product.ItemID',           N'F3-BULK-A',               SYSUTCDATETIME()),
+        (@InboxId, @ManufacturerMapping, 1, 2, N'Product.Manufacturer',     N'Drugi proizvajalec',      SYSUTCDATETIME()),
+        (@InboxId, @TitleMapping,        1, 2, N'ProductText.TITLE_ERP.sl', N'Naziv iz drugega zapisa', SYSUTCDATETIME()),
+        (@InboxId, @ItemIdMapping,       1, 3, N'Product.ItemID',           N'F3-BULK-B',               SYSUTCDATETIME()),
+        (@InboxId, @UoMMapping,          1, 3, N'Product.UoM',              N'PAK',                     SYSUTCDATETIME());
+
+      EXEC map.ProcessRawInbox @RunId=@RunId, @OrganizationId=@OrganizationId, @SourceCode=@SourceCode;
+
+      DECLARE @Status nvarchar(60), @Reason nvarchar(4000);
+      SELECT @Status=Status, @Reason=FailureReason FROM raw.Inbox WHERE InboxId=@InboxId;
+      IF @Status <> N'Processed'
+        THROW 52341, 'Vhodna vrstica ni bila obdelana.', 1;
+      IF @Reason <> N'Obdelano; novih artiklov: 2.'
+        THROW 52342, 'Trije zapisi z dvema šiframa niso ustvarili natanko dveh artiklov.', 1;
+      IF (SELECT COUNT(*) FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID IN (N'F3-BULK-A', N'F3-BULK-B')) <> 2
+        THROW 52343, 'V canon.Product ni natanko dveh novih artiklov.', 1;
+
+      DECLARE @UoM nvarchar(100), @Manufacturer nvarchar(400);
+      SELECT @UoM=UoM, @Manufacturer=Manufacturer FROM canon.Product
+      WHERE OrganizationId=@OrganizationId AND ItemID=N'F3-BULK-A';
+      IF @UoM <> N'KOS'
+        THROW 52344, 'Vrednost prvega zapisa se je ob drugem zapisu izgubila.', 1;
+      IF @Manufacturer <> N'Drugi proizvajalec'
+        THROW 52345, 'Vrednost drugega zapisa ni obveljala.', 1;
+
+      DECLARE @Title nvarchar(max) =
+      (
+        SELECT productText.Value FROM canon.ProductText productText
+        INNER JOIN canon.Product product ON product.ProductId=productText.ProductId
+        WHERE product.OrganizationId=@OrganizationId AND product.ItemID=N'F3-BULK-A'
+          AND productText.TextType=N'TITLE_ERP' AND productText.Lang=N'sl'
+      );
+      IF @Title <> N'Naziv iz drugega zapisa'
+        THROW 52346, 'Pri besedilu ni obveljal zadnji zapis.', 1;
+      """;
+
+    await using var bulk = new SqlCommand(bulkSql, bulkConnection) { CommandTimeout = 120 };
+    bulk.Parameters.AddWithValue("@RunId", bulkRunId);
+    bulk.Parameters.AddWithValue("@EntityType", bulkEntityType);
+    await bulk.ExecuteNonQueryAsync();
+  }
+  finally
+  {
+    // Test pobriše izključno vrstice, ki jih je ustvaril sam: svoja artikla po šifri in
+    // vse, kar visi na svojem RunId.
+    const string bulkCleanupSql = """
+      DECLARE @Mine TABLE(ProductId bigint PRIMARY KEY);
+      INSERT @Mine(ProductId)
+      SELECT ProductId FROM canon.Product WHERE OrganizationId=2 AND ItemID IN (N'F3-BULK-A', N'F3-BULK-B');
+
+      DECLARE @Batches TABLE(ChangeBatchId bigint PRIMARY KEY);
+      INSERT @Batches(ChangeBatchId)
+      SELECT DISTINCT ChangeBatchId FROM pim.ProductFieldHistory WHERE ProductId IN (SELECT ProductId FROM @Mine);
+
+      DELETE FROM val.ProductIssue           WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM val.ProductValidationState WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM stock.Position             WHERE MatchedProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductCommercial    WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductPrice         WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductMedia         WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductCategory      WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductAttribute     WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductText          WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM pim.ProductFieldHistory    WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM pim.ProductChangeBatch     WHERE ChangeBatchId IN (SELECT ChangeBatchId FROM @Batches)
+        AND NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=pim.ProductChangeBatch.ChangeBatchId);
+      DELETE FROM canon.Product              WHERE ProductId IN (SELECT ProductId FROM @Mine);
+
+      DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN
+      (
+        SELECT value.ExtractedValueId FROM map.ExtractedValue value
+        INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId
+      );
+      DELETE FROM map.ExtractedValue WHERE InboxId IN (SELECT InboxId FROM raw.Inbox WHERE RunId=@RunId);
+      DELETE FROM raw.Inbox WHERE RunId=@RunId;
+      DELETE FROM ops.PipelineRun WHERE RunId=@RunId;
+      """;
+
+    await using var bulkCleanupConnection = new SqlConnection(connectionString);
+    await bulkCleanupConnection.OpenAsync();
+    await using var bulkCleanup = new SqlCommand(bulkCleanupSql, bulkCleanupConnection);
+    bulkCleanup.Parameters.AddWithValue("@RunId", bulkRunId);
+    await bulkCleanup.ExecuteNonQueryAsync();
+  }
+
+  Console.WriteLine("F3 množična obdelava: dva zapisa iste šifre dasta en artikel in zadnjo vrednost.");
+}
 return 0;
 
 static async Task VerifySaopXmlDeclarationAndErpEligibilityAsync(SqlConnection connection, string connectionString)
