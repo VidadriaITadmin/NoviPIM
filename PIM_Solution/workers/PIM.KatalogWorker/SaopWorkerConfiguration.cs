@@ -8,7 +8,7 @@ namespace PIM.KatalogWorker;
 public sealed record SaopOrganization(int Id, string Name, string SourceCode, bool IsActive = true);
 
 /// <summary>Nastavitve živega SAOP zajema. Poverilnice pridejo iz lokalne konfiguracije ali okolja — nikoli iz kode.</summary>
-public sealed class SaopSettings
+public sealed record SaopSettings
 {
   public string BaseUrl { get; init; } = "";
   public string Username { get; init; } = "";

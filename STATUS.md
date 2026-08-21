@@ -80,6 +80,20 @@ Posodobljeno: 2026-08-21
 - Devet zahtev čaka na kanonično polje (volumen, mere pakiranja, kosi v paketu, izločitev iz
   rezervacije); zapisane so z `IsActive = 0`, da je model viden v celoti.
 
+## Katalog po prvem polnem zajemu (2026-08-21)
+
+- **195.756 artiklov** v štirih podjetjih: IQLighting 110.304, Ediito 39.130,
+  Vidadria 28.897, DEMO 17.425. Cene 156.114, besedila 195.723.
+- **Preslikane so 3 od 16 končnih točk.** Ostalo je zajeto in leži v `raw.Inbox` kot
+  `Pending`. `canon.ProductCommercial` je prazna, čeprav SAOP te podatke ima — manjka
+  preslikava; zato sta profila `ERP_L1_EU` in `COMMERCIAL_L2` pri 0 %.
+- **`val.Promote` polni samo `pim.Product`**, otroških tabel (`pim.ProductText`,
+  `pim.ProductPrice`, `pim.ProductMedia` …) ne — vse so na 0. Magento izvoz bere prav te.
+- Zaloge: `stock.Position` (168.594) se polni iz datotek. Končni točki SAOP
+  `GetItemsStockData` in `GetItemsStockAccountingData` sta zajeti, a brez preslikave.
+- Celoten zemljevid baze z vrsticami po tabelah: glej `docs/VALIDACIJA.md` in objavljeni
+  pregled baze.
+
 ## Živ zajem iz SAOP — prvič izveden 2026-08-21
 
 - **Prvi živi klic je uspel.** `GetItemsGeneralData` za podjetje 2 je vrnil 183 artiklov

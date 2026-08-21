@@ -16,12 +16,14 @@ namespace PIM.KatalogWorker;
 /// </param>
 public sealed record EndpointResult(
   string EndpointKey,
+  string EntityType,
   int Pages,
   int Records,
   string? Error,
   bool WatermarkAdvanced = true,
   string? WatermarkHold = null,
-  int PendingBacklog = 0)
+  int PendingBacklog = 0,
+  long DurationMs = 0)
 {
   public bool Succeeded => Error is null;
 
@@ -29,7 +31,7 @@ public sealed record EndpointResult(
   public bool AwaitingMapping => Succeeded && !WatermarkAdvanced;
 }
 
-public sealed record IngestSummary(int OrganizationId, Guid RunId, IReadOnlyList<EndpointResult> Endpoints)
+public sealed record IngestSummary(int OrganizationId, Guid RunId, IReadOnlyList<EndpointResult> Endpoints, DateTime StartedUtc = default)
 {
   public int TotalRecords => Endpoints.Sum(endpoint => endpoint.Records);
   public int TotalPages => Endpoints.Sum(endpoint => endpoint.Pages);
@@ -56,14 +58,26 @@ public sealed class SaopIngestRunner(
   SaopSettings settings,
   HttpMessageHandler? handlerForTests = null)
 {
+  /// <summary>
+  /// Kako pogosto se javi znak zivljenja med branjem strani. Mora biti obcutno manj od
+  /// najmanjsega ops.ScheduleProfile.StaleAfterSeconds (danes 900 s), sicer se dolg klic
+  /// koncne tocke razglasi za zastalega sam od sebe.
+  /// </summary>
+  private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(60);
+
   public async Task<IngestSummary> RunAsync(
     SaopOrganization organization,
     IReadOnlyList<SaopEndpoint> endpoints,
     bool fullSync,
     Func<Task>? heartbeatAsync = null,
     CancellationToken cancellationToken = default,
-    bool skipMapping = false)
+    bool skipMapping = false,
+    Action<string>? log = null,
+    int maxParallelEndpoints = 1)
   {
+    // Ko podjetja tecejo vzporedno, se izpisi prepletajo v kaso. Klicatelj zato lahko poda
+    // svoj zapisovalnik in izpis enega podjetja izpise v enem kosu, ko je koncano.
+    var write = log ?? Console.WriteLine;
     var runId = Guid.NewGuid();
     var startedUtc = DateTime.UtcNow;
     var results = new List<EndpointResult>(endpoints.Count);
@@ -85,35 +99,68 @@ public sealed class SaopIngestRunner(
       ? await ResolvePriceListIdsAsync(connection, organization, client, cancellationToken)
       : [];
 
-    foreach (var endpoint in endpoints)
-    {
-      cancellationToken.ThrowIfCancellationRequested();
-      var result = await RunEndpointAsync(
-        connection, client, endpoint, organization, sourceConnectorId, runId, startedUtc, fullSync, skipMapping, priceListIds, cancellationToken);
-      results.Add(result);
-      Console.WriteLine(result switch
-      {
-        { Succeeded: false } => $"  {endpoint.Key}: NAPAKA — {result.Error}",
-        { AwaitingMapping: true } =>
-          $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records} — MEJNIK STOJI "
-          + $"({result.WatermarkHold}); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova",
-        _ => $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records}"
-      });
+    /*
+      Vzporednost po koncnih tockah je privzeto izklopljena (1). Vsaka hkratna koncna tocka je
+      dodaten hkraten zahtevek na SAOP za isto podjetje, zato je to stikalo namenjeno merjenju
+      in ne slepemu pospesevanju: 4 podjetja krat 16 tock bi bilo 64 hkratnih zahtevkov.
+    */
+    var endpointSlots = new SemaphoreSlim(Math.Max(1, maxParallelEndpoints));
+    var ordered = new EndpointResult?[endpoints.Count];
 
-      // Poln zajem traja dlje od okna zastalosti, zato javimo živost po vsaki končni točki.
-      if (heartbeatAsync is not null)
+    async Task RunOneEndpointAsync(int index)
+    {
+      await endpointSlots.WaitAsync(cancellationToken);
+      try
       {
-        await heartbeatAsync();
+        ordered[index] = await RunEndpointAsync(
+          client, endpoints[index], organization, sourceConnectorId, runId, startedUtc, fullSync, skipMapping,
+          priceListIds, heartbeatAsync, cancellationToken);
+      }
+      finally { endpointSlots.Release(); }
+    }
+
+    if (maxParallelEndpoints > 1)
+    {
+      await Task.WhenAll(Enumerable.Range(0, endpoints.Count).Select(RunOneEndpointAsync));
+    }
+    else
+    {
+      for (var index = 0; index < endpoints.Count; index++)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        await RunOneEndpointAsync(index);
       }
     }
 
-    var summary = new IngestSummary(organization.Id, runId, results);
+    for (var index = 0; index < endpoints.Count; index++)
+    {
+      var endpoint = endpoints[index];
+      var result = ordered[index]!;
+      results.Add(result);
+      var cas = result.Pages > 0
+        ? $" [{result.DurationMs / 1000.0:0.0} s, {result.DurationMs / 1000.0 / result.Pages:0.00} s/stran]"
+        : $" [{result.DurationMs / 1000.0:0.0} s]";
+      write(result switch
+      {
+        { Succeeded: false } => $"  {endpoint.Key}: NAPAKA{cas} — {result.Error}",
+        { AwaitingMapping: true } =>
+          $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records} — MEJNIK STOJI "
+          + $"({result.WatermarkHold}); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova",
+        _ => $"  {endpoint.Key}: strani={result.Pages} zapisov={result.Records}{cas}"
+      });
+    }
+
+    if (heartbeatAsync is not null)
+    {
+      await heartbeatAsync();
+    }
+
+    var summary = new IngestSummary(organization.Id, runId, results, startedUtc);
     await FinishPipelineRunAsync(connection, summary, cancellationToken);
     return summary;
   }
 
   private async Task<EndpointResult> RunEndpointAsync(
-    SqlConnection connection,
     SaopApiClient client,
     SaopEndpoint endpoint,
     SaopOrganization organization,
@@ -123,10 +170,17 @@ public sealed class SaopIngestRunner(
     bool fullSync,
     bool skipMapping,
     IReadOnlyList<string> priceListIds,
+    Func<Task>? heartbeatAsync,
     CancellationToken cancellationToken)
   {
     var pages = 0;
     var records = 0;
+    var lastHeartbeatUtc = DateTime.UtcNow;
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+    // Svoja povezava na koncno tocko: en SqlConnection ne prenese hkratne uporabe iz vec nalog.
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
     try
     {
       var modifiedFromUtc = fullSync
@@ -143,7 +197,7 @@ public sealed class SaopIngestRunner(
       var pricesError = PricesUnavailableError(endpoint.Kind, priceListIds);
       if (pricesError is not null)
       {
-        return new EndpointResult(endpoint.Key, 0, 0, pricesError, WatermarkAdvanced: false);
+        return new EndpointResult(endpoint.Key, endpoint.EntityType, 0, 0, pricesError, WatermarkAdvanced: false, DurationMs: stopwatch.ElapsedMilliseconds);
       }
 
       foreach (var priceListId in priceLists)
@@ -171,6 +225,25 @@ public sealed class SaopIngestRunner(
           await command.ExecuteNonQueryAsync(cancellationToken);
           pages++;
           records += page.RecordCount;
+
+          /*
+            Znak zivljenja po vsaki strani, ne sele po koncani koncni tocki.
+
+            Zakaj: izmerjeno 2026-08-21 je GetItemsGeneralData za IQLighting 112 strani ob
+            ~51 s na stran, torej ura in 40 minut v enem samem klicu koncne tocke. Okno
+            zastalosti (ops.ScheduleProfile.StaleAfterSeconds) je 900 sekund. Zagon je zato
+            sam sebe razglasil za zastalega in ops.RecordHeartbeat je vrgel 51102
+            "Aktivno izvajanje ne obstaja" — podjetje je padlo po prvi koncni tocki in
+            preostalih 15 sploh ni prislo na vrsto.
+
+            Utrip je omejen, da ne posilja po enega na vsako stran pri hitrih podjetjih,
+            kjer je stran opravljena v dveh sekundah.
+          */
+          if (heartbeatAsync is not null && DateTime.UtcNow - lastHeartbeatUtc >= HeartbeatInterval)
+          {
+            await heartbeatAsync();
+            lastHeartbeatUtc = DateTime.UtcNow;
+          }
         }
       }
 
@@ -182,8 +255,9 @@ public sealed class SaopIngestRunner(
       // ne premakne, dokler zajetega podatka ni mogoče uporabiti.
       if (!await HasActiveMappingAsync(connection, sourceConnectorId, endpoint.EntityType, cancellationToken))
       {
-        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
-          WatermarkHold: $"za entiteto {endpoint.EntityType} ni aktivne preslikave v map.EntityMapping/map.FieldMapping");
+        return new EndpointResult(endpoint.Key, endpoint.EntityType, pages, records, null, WatermarkAdvanced: false,
+          WatermarkHold: $"za entiteto {endpoint.EntityType} ni aktivne preslikave v map.EntityMapping/map.FieldMapping",
+          DurationMs: stopwatch.ElapsedMilliseconds);
       }
 
       // Zajem brez preslikave po definiciji ničesar ne preslika. Če bi mejnik kljub temu
@@ -192,8 +266,9 @@ public sealed class SaopIngestRunner(
       // zajemu: --only-ingest je premaknil mejnik, 183 artiklov pa je ostalo Pending.
       if (skipMapping)
       {
-        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
-          WatermarkHold: "zagon je bil --only-ingest, torej ni bilo kaj preslikati");
+        return new EndpointResult(endpoint.Key, endpoint.EntityType, pages, records, null, WatermarkAdvanced: false,
+          WatermarkHold: "zagon je bil --only-ingest, torej ni bilo kaj preslikati",
+          DurationMs: stopwatch.ElapsedMilliseconds);
       }
 
       // Drugi sprožilec iste izgube: če je SAOP vrnil isto vsebino kot prej, jo raw.Inbox
@@ -206,18 +281,30 @@ public sealed class SaopIngestRunner(
         connection, organization, endpoint.EntityType, runId, cancellationToken);
       if (records > 0 && landed == 0)
       {
-        return new EndpointResult(endpoint.Key, pages, records, null, WatermarkAdvanced: false,
+        return new EndpointResult(endpoint.Key, endpoint.EntityType, pages, records, null, WatermarkAdvanced: false,
           WatermarkHold: $"SAOP je vrnil {records} zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati",
-          PendingBacklog: backlog);
+          PendingBacklog: backlog, DurationMs: stopwatch.ElapsedMilliseconds);
       }
 
-      await UpdateWatermarkAsync(connection, sourceConnectorId, endpoint.EntityType, startedUtc, cancellationToken);
-      return new EndpointResult(endpoint.Key, pages, records, null, PendingBacklog: backlog);
+      /*
+        Mejnika tu NE zapisemo, ceprav je koncna tocka upravicena. Preslikava tece sele, ko
+        so vse koncne tocke podjetja koncane; ce podjetje med tem pade, bi bil mejnik pred
+        podatkom, ki ni nikoli prisel v katalog.
+
+        Izmerjeno 2026-08-21: prav to se je zgodilo. IQLighting je zajel 112 strani
+        (111.065 artiklov), mejnik se je premaknil na 08:37:00, nato je podjetje padlo pri
+        znaku zivljenja — in delta teh artiklov ne bi vec prinesla. Zdaj mejnik zapise sele
+        AdvanceWatermarksAsync, po preslikavi in samo, ce za to entiteto ni ostalo nic
+        nepreslikanega.
+      */
+      return new EndpointResult(endpoint.Key, endpoint.EntityType, pages, records, null, PendingBacklog: backlog,
+        DurationMs: stopwatch.ElapsedMilliseconds);
     }
     catch (Exception exception) when (exception is not OperationCanceledException)
     {
       // Watermarka namenoma ne premaknemo — naslednji zagon mora isto obdobje poskusiti znova.
-      return new EndpointResult(endpoint.Key, pages, records, exception.Message, WatermarkAdvanced: false);
+      return new EndpointResult(endpoint.Key, endpoint.EntityType, pages, records, exception.Message, WatermarkAdvanced: false,
+        DurationMs: stopwatch.ElapsedMilliseconds);
     }
   }
 
@@ -307,6 +394,60 @@ public sealed class SaopIngestRunner(
   /// Poizvedba namenoma ponovi ta pogoj namesto da bi preverjala samo eno od tabel — sicer bi
   /// se merili dve različni stvari in mejnik bi se premaknil pri polovično nastavljeni preslikavi.
   /// </summary>
+  /// <summary>
+  /// Premakne mejnike za koncne tocke, ki so do tega upravicene — a sele potem, ko je za
+  /// njihovo entiteto v tem zagonu vse preslikano. Klice se PO preslikavi.
+  ///
+  /// To je edino mesto, ki mejnik zapise. Pravilo je eno samo in ga je mogoce preveriti:
+  /// <b>mejnik ne sme nikoli pokazati na obdobje, katerega podatek ni v katalogu.</b>
+  /// </summary>
+  /// <returns>Imena entitet, katerih mejnik je bil premaknjen.</returns>
+  public async Task<IReadOnlyList<string>> AdvanceWatermarksAsync(
+    IngestSummary summary,
+    SaopOrganization organization,
+    CancellationToken cancellationToken = default)
+  {
+    var advanced = new List<string>();
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+
+    var sourceConnectorId = await ReadSourceConnectorIdAsync(connection, organization, cancellationToken);
+    if (sourceConnectorId is null) return advanced;
+
+    foreach (var endpoint in summary.Endpoints.Where(result => result.WatermarkAdvanced))
+    {
+      var pendingFromThisRun = await CountRunPendingRowsAsync(
+        connection, organization, endpoint.EntityType, summary.RunId, cancellationToken);
+      if (pendingFromThisRun > 0) continue;
+
+      await UpdateWatermarkAsync(
+        connection, sourceConnectorId.Value, endpoint.EntityType, summary.StartedUtc, cancellationToken);
+      advanced.Add(endpoint.EntityType);
+    }
+
+    return advanced;
+  }
+
+  /// <summary>Koliko vrstic te entitete iz tega zagona je se vedno <c>Pending</c>.</summary>
+  internal static async Task<int> CountRunPendingRowsAsync(
+    SqlConnection connection,
+    SaopOrganization organization,
+    string entityType,
+    Guid runId,
+    CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand(
+      "SELECT COUNT(*) FROM raw.Inbox WHERE RunId=@RunId AND OrganizationId=@OrganizationId "
+      + "AND SourceCode=@SourceCode AND EntityType=@EntityType AND Status=N'Pending';",
+      connection);
+    command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organization.Id;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = organization.SourceCode;
+    command.Parameters.Add("@EntityType", SqlDbType.NVarChar, 100).Value = entityType;
+    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+  }
+
   /// <summary>Koliko vrstic te entitete je ta zagon dejansko zapisal v raw.Inbox.</summary>
   internal static async Task<int> CountRunRowsAsync(
     SqlConnection connection,

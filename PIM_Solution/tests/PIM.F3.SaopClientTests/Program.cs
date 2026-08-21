@@ -355,17 +355,17 @@ static void Assert(bool condition, string message)
 // (SqlMappingPipeline.ReadInboxesAsync jo veže z INNER JOIN). Če bi se mejnik kljub temu
 // premaknil, bi ob pozneje dodani preslikavi to obdobje ostalo trajno preskočeno.
 {
-  var mapped = new EndpointResult("GetItemsGeneralData", 3, 2500, null);
+  var mapped = new EndpointResult("GetItemsGeneralData", "ItemGeneralData", 3, 2500, null);
   Assert(mapped.Succeeded, "Zajem brez napake mora biti uspešen.");
   Assert(mapped.WatermarkAdvanced, "Preslikana končna točka mora premakniti mejnik.");
   Assert(!mapped.AwaitingMapping, "Preslikana končna točka ne čaka na preslikavo.");
 
-  var awaiting = new EndpointResult("GetItemsPlanningData", 4, 1200, null, WatermarkAdvanced: false);
+  var awaiting = new EndpointResult("GetItemsPlanningData", "GetItemsPlanningData", 4, 1200, null, WatermarkAdvanced: false);
   Assert(awaiting.Succeeded, "Zajem brez preslikave je vseeno uspel — to ni napaka zajema.");
   Assert(!awaiting.WatermarkAdvanced, "Brez preslikave se mejnik NE sme premakniti.");
   Assert(awaiting.AwaitingMapping, "Uspešen zajem brez premika mejnika pomeni čakanje na preslikavo.");
 
-  var failedResult = new EndpointResult("GetPrices", 0, 0, "HTTP 503", WatermarkAdvanced: false);
+  var failedResult = new EndpointResult("GetPrices", "Prices", 0, 0, "HTTP 503", WatermarkAdvanced: false);
   Assert(!failedResult.Succeeded, "Rezultat z napako ne sme biti uspešen.");
   Assert(!failedResult.AwaitingMapping, "Padli zajem ni 'čaka na preslikavo'.");
 
@@ -386,7 +386,7 @@ static void Assert(bool condition, string message)
 {
   var pricesEndpoint = SaopEndpoints.Find(SaopEndpoints.GetPrices)!;
   var error = SaopIngestRunner.PricesUnavailableError(pricesEndpoint.Kind, []);
-  var result = new EndpointResult(pricesEndpoint.Key, 0, 0, error, WatermarkAdvanced: false);
+  var result = new EndpointResult(pricesEndpoint.Key, pricesEndpoint.EntityType, 0, 0, error, WatermarkAdvanced: false);
   Assert(!result.WatermarkAdvanced, "Brez cenika se mejnik ne sme premakniti.");
   Assert(!result.Succeeded, "Brez cenika je rezultat napaka.");
 
@@ -487,7 +487,64 @@ static void Assert(bool condition, string message)
     Assert(!failed, "Brez napak mora zanka javiti uspeh.");
   }
 
-  Console.WriteLine("20. Padec enega podjetja ne ustavi ostalih: OK");
+  // (e) Vzporedno: ista zaveza mora veljati tudi, kadar podjetja tecejo hkrati, hkratnost pa
+  //     ne sme preseci dane meje. To je pomembno navzven — meja je edino, kar SAOP varuje
+  //     pred tem, da bi mu poslali stiri hkratne polne zajeme.
+  {
+    var worked = new List<int>();
+    var reported = new List<int>();
+    var running = 0;
+    var peak = 0;
+    var gate = new object();
+
+    var failed = await OrganizationLoop.RunAsync<object>(
+      organizations,
+      beginAsync: _ => Task.FromResult<object>(new object()),
+      workAsync: async (organization, _) =>
+      {
+        lock (gate) { running++; peak = Math.Max(peak, running); }
+        await Task.Delay(30);
+        lock (gate) { worked.Add(organization.Id); running--; }
+        if (organization.Id == 2) throw new InvalidOperationException("Zajem drugega podjetja je padel.");
+        return true;
+      },
+      completeAsync: (_, _, _) => Task.CompletedTask,
+      disposeAsync: _ => Task.CompletedTask,
+      reportFailure: (organization, _) => { lock (gate) { reported.Add(organization.Id); } },
+      maxParallel: 2);
+
+    Assert(worked.Count == 3, $"Vsa tri podjetja morajo priti do dela, dobil {worked.Count}.");
+    Assert(reported.SequenceEqual([2]), $"Napaka mora biti javljena samo za 2, dobil [{string.Join(",", reported)}].");
+    Assert(failed, "Padec enega podjetja mora obarvati celoten zagon kot neuspesen tudi vzporedno.");
+    Assert(peak > 1, $"Pri maxParallel = 2 morata vsaj dve podjetji teci hkrati, najvec hkratnih je bilo {peak}.");
+    Assert(peak <= 2, $"Hkratnost je presegla mejo: {peak} > 2. SAOP bi dobil vec zahtevkov, kot je dovoljeno.");
+  }
+
+  // (f) maxParallel = 1 ostane natanko to, kar je bilo prej: eno podjetje naenkrat.
+  {
+    var running = 0;
+    var peak = 0;
+    var gate = new object();
+
+    await OrganizationLoop.RunAsync<object>(
+      organizations,
+      beginAsync: _ => Task.FromResult<object>(new object()),
+      workAsync: async (_, _) =>
+      {
+        lock (gate) { running++; peak = Math.Max(peak, running); }
+        await Task.Delay(10);
+        lock (gate) { running--; }
+        return true;
+      },
+      completeAsync: (_, _, _) => Task.CompletedTask,
+      disposeAsync: _ => Task.CompletedTask,
+      reportFailure: (_, _) => { },
+      maxParallel: 1);
+
+    Assert(peak == 1, $"Privzeto mora teci eno podjetje naenkrat, najvec hkratnih je bilo {peak}.");
+  }
+
+  Console.WriteLine("20. Padec enega podjetja ne ustavi ostalih, tudi vzporedno: OK");
 }
 
 Console.WriteLine("\nF3 SaopClient testi so uspešni.");

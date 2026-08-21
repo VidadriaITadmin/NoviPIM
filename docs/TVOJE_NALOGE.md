@@ -189,7 +189,7 @@ podatkov: nič ni treba prevesti in ponovno namestiti.
 > tisti list ima sedem splošnih vprašanj (in nanje si **že odgovoril**), ne pa mesta za
 > preslikavo stolpec → vir. Takega lista v delovnem zvezku sploh ni bilo.
 
-1. Odpri `docs\Magento_stolpci_ZA-POTRDITEV.csv` (Excel ga odpre neposredno; ločilo je `;`).
+1. Odpri `PIM_Solution\docs\Magento_stolpci_ZA-POTRDITEV.csv` (Excel ga odpre neposredno; ločilo je `;`).
    V njem je vseh 162 stolpcev, za vsakega pa **moj predlog vira**, ki sem ga izpeljal iz
    dobaviteljevega XML (`fixtures\nw\products_en_US.xml`), in stopnja zanesljivosti:
 
@@ -235,6 +235,27 @@ dotnet run --project PIM_Solution\workers\PIM.B2bWorker -- --export-magento --or
 **Kaj naredim jaz potem.** Vsak odgovor postane vrstica v `map.FieldMapping`, ne veja v kodi.
 Nato dokažem s testom, da se vrednost pojavi v pravem stolpcu izvoza.
 
+**Stanje 2026-08-21.** Odgovoril si na 62 vrstic. Iz njih in iz obeh dobaviteljevih XML je
+nastal `PIM_Solution\docs\Magento_stolpci_VIRI.csv` — isti stolpci, zdaj z virom pri
+Nowodvorskem in pri Braytronu vzporedno: 24 stolpcev ima oba vira, 71 samo Nowodvorskega,
+45 samo Braytrona, 22 nobenega (16 od teh so prevodi `SLO`).
+
+Sloj, ki je za to manjkal, je narejen in dokazan (migraciji `049` in `056`, test
+`PIM.F5.ValueTransformTests`): `map.FieldTransform` in `map.ValueLookup`. Tvoja prevajalna
+tabela je v bazi — 6.316 vrstic v slovenščini, nemščini in hrvaščini.
+
+Preslikave so vpisane (migraciji `054` in `055`): **106 iz Nowodvorskega XML** in **75 iz
+Braytronovega**, konektor `BT_XML` obstaja. Dokazano na resničnih podatkih — `NW.203` ima
+zdaj `Grlo = E14`, `Simbol atributa = NW.203`, `Svetilka vključuje svetlobni vir = 0`,
+`Uporaba SLO = Dnevna soba`.
+
+Ostane eno, kar lahko narediš samo ti: `PIM_Solution\docs\Prevodi_sporni.csv` — 236
+angleških besed ima v tvoji preglednici več slovenskih prevodov (`black` → črn / črna /
+črne / črni / črno). To ni napaka preglednice, ampak sklanjatev: prevod je odvisen od
+lastnosti. Dokler ni odločeno, katera lastnost dobi kateri prevod, te besede v slovarju ni
+in vrednost ostane v angleščini. Kar manjka, se sproti zbira v `map.MissingTranslation` —
+tam je delovni seznam s števci, koliko izdelkov posamezno vrednost čaka.
+
 ---
 
 ### 3. Stolpca 24 in 25 — »Kategorije svetila ANG« in »Kategorije svetila SLO«
@@ -277,7 +298,31 @@ mogoče gre za dve različni frekvenci (na primer omrežna in delovna).
 
 **Kako veš, da je uspelo.** V izvozu sta stolpca 58 in 122 taka, kot si rekel.
 
-**Kaj naredim jaz potem.** En `UPDATE` v `out.ExportColumn`. Nič kode, nič namestitve.
+**Stanje 2026-08-21.** Rekel si, da bi morala biti samo ena, in tvoja razlaga se ujema z
+dokazi: stolpci 113–215 so urejeni po abecedi angleških imen atributov in tam ima
+`122 Frekvenca` takoj za sabo `123 Enota frekvence`. Stolpec 58 svoje enote nima — je
+ostanek. V Excelu sta to stolpca **BF** (58) in **DR** (122).
+
+Nisem tega izvedel, ker to ni več en `UPDATE`, kot je prej kazalo. Predloga je zunanja
+pogodba s 215 stolpci in ista številka stoji na štirih mestih: `out.ExportColumn`,
+`PIM.B2b.MagentoCsvContract`, `MagentoProductSchema` in osem trditev v testih. Če stolpec
+odstranim, se vsi za njim premaknejo za eno mesto in predloga ima 214 stolpcev.
+
+**Zaključeno 2026-08-21.** Povedal si, da Magento bere po imenu glave. Stolpec 58 je zato
+izklopljen (migracija `050`), predloga ima 214 stolpcev.
+
+Ker je glava ključ, sem ob tem pregledal vse glave in našel še dve enaki imeni:
+`Enota bruto teže` (13 in 125) in `Enota neto teže` (15 in 164). Vrednostna stolpca sta se
+ločila s pripono `(2)`, enotna pa ne — zato imata zdaj `Enota bruto teže (2)` in
+`Enota neto teže (2)`. Devetnajst glav je imelo na koncu presledek (`Enota dolžine `),
+ki bi ga bilo treba v Magentu vtipkati, sicer se ime tiho ne bi ujelo; odrezan je
+(migraciji `050` in `051`).
+
+Izklopljen je tudi stolpec 55 `Grlo SLO` (migracija `052`) — vrednost grla je koda
+(`E14`, `GU10`), ne beseda, zato sta bila stolpca po vsebini ista. Predloga ima 213 stolpcev.
+
+Glave v točnem zapisu, kot bodo v datoteki, so v `PIM_Solution\docs\Magento_glave_ZA_MAGENTO.csv`
+— tam je tudi prazen stolpec za Magentov atribut.
 
 ---
 

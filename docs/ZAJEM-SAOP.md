@@ -74,6 +74,11 @@ Vsi argumenti:
 | `--full` | prezri mejnik in poberi vse (privzeto se pobere le spremenjeno) |
 | `--only-ingest` | samo v `raw.Inbox`, brez preslikave v katalog; **mejnik se ne premakne** |
 | `--map-run <RunId>` | preslikaj že zajet zagon iz `raw.Inbox`, brez klica na SAOP |
+| `--max-parallel <n>` | koliko podjetij teče hkrati (privzeto 1, največ 8) |
+| `--max-parallel-endpoints <n>` | koliko končnih točk istega podjetja hkrati (privzeto 1) |
+| `--max-pages <n>` | ustavi se po n straneh na končno točko (za meritve) |
+| `--page-size <n>` | koliko zapisov na stran (za meritve) |
+| `--brez-neaktivnih` | ne zahtevaj neaktivnih artiklov (za meritve) |
 | `--help` | izpiše seznam vseh znanih končnih točk |
 
 ---
@@ -126,6 +131,128 @@ dotnet run --project workers\PIM.KatalogWorker -- --map-run <RunId> --organizati
 ```
 
 `--map-run` ne potrebuje niti poverilnic niti `PIM_SAOP_MODE=Live` — podatek je že v bazi.
+
+---
+
+## 3.3 Vzporedno po podjetjih — in zakaj samo po podjetjih
+
+`--max-parallel <n>` požene do `n` podjetij hkrati. **Znotraj podjetja gre klic za klicem**,
+zato SAOP od nas nikoli ne dobi več hkratnih zahtevkov, kot je podjetij. Vzporednost po
+končnih točkah bi to mejo takoj podrla in je zato namenoma ni.
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --full --max-parallel 4
+```
+
+Privzeto je 1, torej eno podjetje naenkrat — enako, kot je bilo doslej.
+
+Dve meji varujeta SAOP pred preobremenitvijo; obe sta v `appsettings.Local.json`:
+
+| Nastavitev | Vrednost | Kaj pomeni |
+|---|---|---|
+| `PageSize` | 1000 | največ 1.000 zapisov na stran |
+| `MaxPagesPerEndpoint` | 1000 | največ 1.000 strani na končno točko |
+| `DelayAfterSuccessMilliseconds` | 250 | premor po vsakem uspešnem klicu, znotraj podjetja |
+
+Ko podjetja tečejo vzporedno, se izpisi ne prepletajo: vsako podjetje piše v svoj
+medpomnilnik, ki se izpiše v enem kosu, ko je podjetje končano.
+
+---
+
+## 3.4 Nočni zajem — načrtovana naloga
+
+Registrirana je ena sama naloga Windows, `NoviPIM - nocni zajem SAOP`, ki vsako noč ob
+**02:00** požene [`scripts\Nocni-zajem.ps1`](../scripts/Nocni-zajem.ps1). Skripta sama odloči,
+ali je nocojšnji zagon poln ali delta.
+
+| Nastavitev | Vrednost | Zakaj |
+|---|---|---|
+| Sprožilec | vsak dan ob 02:00 | poln zajem štirih podjetij je 300.000+ zapisov; podnevi bi jemal zmogljivost ERP, ki ga uporabljajo ljudje |
+| Poln zajem | 1. dan v mesecu | delta po zasnovi ne vidi brisanj; poln zajem je edini način, da se zanje izve |
+| Hkratnost | `IgnoreNew` | če prejšnji zagon še teče, se novi ne zažene |
+| Časovna meja | 8 ur | varovalka pred zagonom, ki se zatakne |
+| Če zamudi | zažene, ko je mogoče | ugasnjen računalnik ne pomeni preskočenega meseca |
+| Teče kot | `david`, samo ko je prijavljen | naloga uporablja Windows Integrated Auth do baze in bere `appsettings.Local.json` iz uporabniškega profila |
+
+**Kar je treba vedeti:** naloga teče **samo, kadar je uporabnik prijavljen** (zaklenjen zaslon
+je v redu, odjava ni). Za zagon brez prijave bi bilo treba shraniti geslo ali uporabiti
+storitveni račun — to je odločitev, ne tehnična ovira.
+
+Skripta ima svojo varovalko proti prekrivanju, neodvisno od `IgnoreNew`: pogleda v
+`ops.PipelineRun` in se ne zažene, če kak zajem `SAOP_PRODUCTS` še teče. Dokazano v živo
+2026-08-21 med polnim zajemom — skripta je izpisala `PRESKOCENO` in se končala z izhodom 0.
+
+Dnevniki gredo v `logs\zajem_<datum>_<ura>.log`; starejši od 90 dni se pobrišejo sami.
+To je začasno: naslednji korak je, da se podrobnost po končnih točkah zapiše v
+`ops.PipelineStepLog`, kjer je poizvedljiva in se ne izgubi.
+
+Ročno preverjanje in zagon:
+
+```powershell
+Get-ScheduledTaskInfo -TaskName 'NoviPIM - nocni zajem SAOP'
+Start-ScheduledTask   -TaskName 'NoviPIM - nocni zajem SAOP'
+```
+
+Ritem se spremeni s parametrom skripte (`-DanPolnegaZajema`), dokler se pravilo ne preseli v
+`ops.ScheduleProfile`.
+
+---
+
+## 3.5 Kaj je izmerjeno na živem SAOP (21. 8. 2026)
+
+Prvi polni zajem vseh štirih podjetij: **195.756 artiklov**, 4 podjetja vzporedno.
+
+| Podjetje | Strani | Zapisov | s/stran |
+|---|---|---|---|
+| DEMO | 95 | 83.372 | 1,9 |
+| Vidadria | 211 | 193.159 | 2,3 |
+| Ediito | 237 | 220.927 | 3,2 |
+| IQLighting | 112 (samo 1 končna točka) | 111.065 | ~51 |
+
+### Cena je na klic, ne na zapis
+
+Meritve na `GetItemsGeneralData` za IQLighting, vse v isti uri:
+
+| Poskus | Zapisov | Klicev | Čas | Na zapis |
+|---|---|---|---|---|
+| 1 stran po 1.000 | 1.000 | 1 | **50,4 s** | 0,050 s |
+| 4 strani po 250 | 1.000 | 4 | **202,8 s** | 0,203 s |
+| 1 stran po 5.000 | 5.000 | 1 | **51,6 s** | **0,010 s** |
+
+SAOP porabi okrog **50 sekund za vsak klic** te končne točke, ne glede na to, koliko zapisov
+vrne. Iz tega sledi troje:
+
+1. **Manjše strani so strogo slabše.** Štirikrat več klicev je štirikrat več časa.
+2. **Večje strani so strogo boljše** — in hkrati **manj obremenijo SAOP**, ker je klicev manj.
+   Pri 5.000 na stran je poln zajem IQLighting 23 klicev namesto 112: **~20 minut namesto ~95**.
+3. Počasna je **ena sama končna točka**, ne podjetje. Na istem podjetju in v isti minuti:
+   `GetItemsDescriptions` 0,78 s/stran, `GetPrices` 2,16 s/stran, `GetItemsGeneralData` 50 s/stran.
+
+Izklop neaktivnih artiklov (`IncludeNonActiveItems`) prihrani okrog 15 % — ni vzrok.
+
+### Vzporedne končne točke: varne, a skoraj brez učinka
+
+Tri končne točke istega podjetja hkrati proti zaporedno:
+
+| Končna točka | Zaporedno | Vzporedno (3) |
+|---|---|---|
+| `GetItemsGeneralData` | 52,0 s/stran | 50,1 s/stran |
+| `GetItemsDescriptions` | 0,75 s/stran | 0,78 s/stran |
+| `GetPrices` | 2,05 s/stran | 2,16 s/stran |
+| **Stenska ura** | **228 s** | **203 s** |
+
+**SAOP se pod tremi hkratnimi zahtevki ne upogne** — časi na stran ostanejo enaki. To je
+dobra novica in hkrati odgovor: vzporednost po končnih točkah prinese samo 11 %, ker ena
+končna točka porabi 92 % časa. Zgornja meja je najdaljša končna točka.
+
+Zato `--max-parallel-endpoints` ostaja privzeto **1**. Vzvod ni vzporednost, ampak
+`PageSize`.
+
+### Kako vem, ali je SAOP preobremenjen
+
+Worker za vsako končno točko izpiše čas in **sekunde na stran**. Merilo je to število:
+če pri isti končni točki in istem podjetju zraste, je SAOP pod obremenitvijo.
+Izhodišča za IQLighting: `ItemGeneralData` ~50, `Prices` ~2, `Descriptions` ~0,8.
 
 ---
 

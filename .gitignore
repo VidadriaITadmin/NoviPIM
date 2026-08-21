@@ -29,3 +29,4 @@ appsettings.Local.json
 # artefakt preusmeritve "> NUL" v POSIX lupini (NUL tam ni naprava, ampak datoteka)
 NUL
 **/NUL
+logs/

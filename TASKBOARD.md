@@ -78,6 +78,51 @@ _(prazno)_
 
 ## KONČANO
 
+- **[WORKERJI]** Prvi polni zajem vseh štirih podjetij + dve napaki, ki ju je razkril — kdo:
+  Claude Opus 5 — 2026-08-21. **195.756 artiklov** (prej 6.141): IQLighting 110.304,
+  Ediito 39.130, Vidadria 28.897, DEMO 17.425.
+  1. **Znak življenja je šel samo med končnimi točkami.** `GetItemsGeneralData` za IQLighting
+     je 112 strani ob ~51 s = 1 h 40 min v enem klicu končne točke, okno zastalosti pa je
+     900 s. Zagon se je razglasil za zastalega (`51102 Aktivno izvajanje ne obstaja`),
+     podjetje je padlo po prvi končni točki in preostalih 15 sploh ni prišlo na vrsto.
+     Popravljeno: utrip po vsaki strani, omejen na enkrat na 60 s.
+  2. **Mejnik je šel čez nepreslikan podatek — drugič, skozi druga vrata.** Mejnik se je
+     premikal takoj po končani končni točki, preslikava pa teče šele po vseh točkah podjetja.
+     Ko je podjetje vmes padlo, je 112 strani (**111.065 artiklov**) ostalo `Pending` za
+     mejnikom in delta jih ne bi več prinesla. Rešil jih je `--map-run`.
+     Popravljeno: mejnik zapisuje **samo** `AdvanceWatermarksAsync`, po preslikavi in le, če
+     za to entiteto iz tega zagona ni ostalo nič `Pending`. Pravilo je zdaj eno in
+     preverljivo: *mejnik ne sme nikoli pokazati na obdobje, katerega podatek ni v katalogu.*
+     `PIM.F3.Integration` ima regresijsko varovalko za točno ta scenarij (mejnik stoji, dokler
+     je kaj Pending; premakne se, ko je obdelano).
+  Nova stikala: `--max-parallel <n>` (podjetja hkrati), `--max-parallel-endpoints <n>`
+  (končne točke istega podjetja), `--max-pages`, `--page-size`, `--brez-neaktivnih`.
+  Izpis po končni točki zdaj navede čas in **sekunde na stran** — to je merilo, ali je SAOP
+  pod obremenitvijo.
+  Dokaz: `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0/0;
+  `scripts\run_tests.ps1` → **45 uspeli, 0 preskočenih, 0 padlih**.
+
+- **[MERITEV]** Cena klica SAOP je na klic, ne na zapis — 2026-08-21, `GetItemsGeneralData`
+  za IQLighting, vse meritve v isti uri:
+  1.000 zapisov v 1 klicu = **50,4 s**; istih 1.000 v 4 klicih po 250 = **202,8 s**;
+  5.000 zapisov v 1 klicu = **51,6 s**.
+  Iz tega: manjše strani so strogo slabše, večje strogo boljše — pri `PageSize` 5.000 je poln
+  zajem IQLighting 23 klicev namesto 112, torej **~20 minut namesto ~95**, in hkrati 5×
+  manj zahtevkov na SAOP. Odločitev o `PageSize` je na uporabniku (naloga v `TVOJE_NALOGE.md`).
+  Počasna je **ena končna točka, ne podjetje**: na istem podjetju in v isti minuti je
+  `GetItemsDescriptions` 0,78 s/stran, `GetPrices` 2,16 s/stran, `GetItemsGeneralData` 50 s/stran.
+  **Vzporedne končne točke: varne, a skoraj brez učinka.** Tri hkrati proti zaporedno:
+  228 s → 203 s (11 %), časi na stran pa ostanejo enaki (50,1 proti 52,0). SAOP se pod tremi
+  hkratnimi zahtevki ne upogne; vzporednost ne pomaga, ker ena končna točka porabi 92 % časa.
+  Zato `--max-parallel-endpoints` ostaja privzeto 1.
+
+- **[OBRATOVANJE]** Nočni zajem kot načrtovana naloga — 2026-08-21, na izrecno zahtevo
+  uporabnika. `NoviPIM - nocni zajem SAOP` vsak dan ob 02:00 požene `scripts\Nocni-zajem.ps1`;
+  skripta sama odloči poln (1. v mesecu) ali delta. Dvojna varovalka proti prekrivanju:
+  `IgnoreNew` na nalogi in preverba `ops.PipelineRun` v skripti — dokazano v živo med polnim
+  zajemom (`PRESKOCENO`, izhod 0). Teče kot prijavljen uporabnik, ker rabi Windows Integrated
+  Auth in `appsettings.Local.json`. Podrobno: razdelek 3.4 v `docs/ZAJEM-SAOP.md`.
+
 - **[TESTI]** `PIM.ChangeTracking.Integration` je puščal artikle v razvojni bazi — kdo:
   Claude Opus 5 — 2026-08-21. Najdeno med preverjanjem, ali je naloga 1 zaključena:
   v podjetju 2 se je nabralo **38 artiklov `CHANGE-TRACKING-*`**, približno štirje na vsak

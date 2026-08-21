@@ -166,7 +166,55 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     $"Živ SAOP zajem: podjetij={organizations.Length}, končnih točk={endpoints.Count}, "
     + $"{(arguments.FullSync ? "poln zajem" : "delta zajem")}{(arguments.SkipMapping ? ", brez preslikave" : "")}.");
 
+  if (arguments.MaxPages is { } pageLimit)
+  {
+    // SaopSettings je nespremenljiv; za meritev naredimo kopijo z drugo mejo strani.
+    settings = settings with { MaxPagesPerEndpoint = pageLimit };
+    Console.WriteLine($"MERITEV: omejeno na {pageLimit} strani na koncno tocko.");
+  }
+  if (arguments.PageSize is { } size)
+  {
+    settings = settings with { PageSize = size };
+    Console.WriteLine($"MERITEV: {size} zapisov na stran.");
+  }
+  if (arguments.IncludeNonActive == false)
+  {
+    settings = settings with { IncludeNonActiveItems = false };
+    Console.WriteLine("MERITEV: brez neaktivnih artiklov.");
+  }
+
   var runner = new SaopIngestRunner(connection, settings);
+  var parallel = Math.Min(arguments.MaxParallelOrganizations, organizations.Length);
+  if (parallel > 1)
+  {
+    Console.WriteLine($"Podjetja tečejo vzporedno ({parallel} hkrati).");
+    Console.WriteLine($"Meja na klic: {settings.PageSize} zapisov na stran, največ {settings.MaxPagesPerEndpoint} strani na končno točko.");
+  }
+  if (arguments.MaxParallelEndpoints > 1)
+  {
+    Console.WriteLine(
+      $"Znotraj podjetja tece {arguments.MaxParallelEndpoints} koncnih tock hkrati — "
+      + $"najvec {parallel * arguments.MaxParallelEndpoints} hkratnih zahtevkov na SAOP.");
+  }
+
+  // Vzporedno bi se izpisi podjetij prepletali v kašo. Vsako podjetje zato piše v svoj
+  // medpomnilnik, ki se izpiše v enem kosu, ko je podjetje končano.
+  var consoleLock = new object();
+  var buffers = organizations.ToDictionary(organization => organization.Id, _ => new System.Text.StringBuilder());
+  void Log(SaopOrganization organization, string line)
+  {
+    if (parallel <= 1) { Console.WriteLine(line); return; }
+    lock (consoleLock) { buffers[organization.Id].AppendLine(line); }
+  }
+  void Flush(SaopOrganization organization)
+  {
+    if (parallel <= 1) return;
+    lock (consoleLock)
+    {
+      Console.Write(buffers[organization.Id].ToString());
+      buffers[organization.Id].Clear();
+    }
+  }
 
   // Zanka je v OrganizationLoop, ker mora veljati ena zaveza: padec enega podjetja ne ustavi
   // ostalih. Sem sodi tudi ops.BeginRun — manjkajoč razpored vrne 51100 in je prej ubil worker.
@@ -174,7 +222,7 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     organizations,
     beginAsync: organization =>
     {
-      Console.WriteLine($"[{organization.Id}] {organization.Name} ({organization.SourceCode})");
+      Log(organization, $"[{organization.Id}] {organization.Name} ({organization.SourceCode})");
       return OperationsRun.BeginAsync(
         connection, organization.Id, "SAOP_PRODUCTS", $"{Environment.MachineName}:{Environment.ProcessId}");
     },
@@ -182,19 +230,32 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     {
       var summary = await runner.RunAsync(
         organization, endpoints, arguments.FullSync, () => operationsRun.HeartbeatAsync(),
-        skipMapping: arguments.SkipMapping);
+        skipMapping: arguments.SkipMapping, log: line => Log(organization, line),
+        maxParallelEndpoints: arguments.MaxParallelEndpoints);
       if (!arguments.SkipMapping)
       {
         await new SqlMappingPipeline(connection)
           .ExtractAndApplyAsync(summary.RunId, organization.Id, organization.SourceCode);
+
+        // Sele zdaj, ko je podatek v katalogu, se sme mejnik premakniti. Prej je stal tu
+        // zajem, preslikava pa je prisla za njim — in ce je podjetje vmes padlo, je mejnik
+        // ostal pred nepreslikanim podatkom.
+        var advanced = await runner.AdvanceWatermarksAsync(summary, organization);
+        var candidates = summary.Endpoints.Count(endpoint => endpoint.WatermarkAdvanced);
+        if (advanced.Count < candidates)
+        {
+          Log(organization,
+            $"  OPOZORILO: mejnik premaknjen za {advanced.Count} od {candidates} upravicenih koncnih tock; "
+            + "za ostale je v raw.Inbox ostalo nepreslikano. Isto obdobje bo zajeto znova.");
+        }
       }
 
-      Console.WriteLine(
+      Log(organization,
         $"  SKUPAJ strani={summary.TotalPages} zapisov={summary.TotalRecords} RunId={summary.RunId}");
       var backlog = summary.Endpoints.Where(endpoint => endpoint.PendingBacklog > 0).ToArray();
       if (backlog.Length > 0)
       {
-        Console.WriteLine(
+        Log(organization,
           "  OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: "
           + string.Join(", ", backlog.Select(endpoint => $"{endpoint.EndpointKey}={endpoint.PendingBacklog}"))
           + ". Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba:"
@@ -203,18 +264,23 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
 
       if (summary.AwaitingMappingCount > 0)
       {
-        Console.WriteLine(
+        Log(organization,
           $"  OPOZORILO: pri {summary.AwaitingMappingCount} končnih točkah mejnik stoji. "
           + "Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; "
           + "če ga hočeš preslikati brez ponovnega klica, uporabi --map-run " + summary.RunId + ".");
       }
 
+      Flush(organization);
       return summary.AllSucceeded;
     },
     completeAsync: (operationsRun, succeeded, error) => operationsRun.CompleteAsync(succeeded, error),
     disposeAsync: operationsRun => operationsRun.DisposeAsync().AsTask(),
     reportFailure: (organization, exception) =>
-      Console.Error.WriteLine($"  Zajem podjetja {organization.Id} je padel: {exception.Message}"));
+    {
+      Flush(organization);
+      Console.Error.WriteLine($"  Zajem podjetja {organization.Id} je padel: {exception.Message}");
+    },
+    maxParallel: parallel);
 
   return failed ? 1 : 0;
 }
@@ -239,7 +305,12 @@ internal sealed record WorkerArguments(
   bool FullSync,
   bool SkipMapping,
   bool ShowHelp,
-  Guid? MapRunId = null)
+  Guid? MapRunId = null,
+  int MaxParallelOrganizations = 1,
+  int MaxParallelEndpoints = 1,
+  int? MaxPages = null,
+  int? PageSize = null,
+  bool? IncludeNonActive = null)
 {
   public static WorkerArguments Parse(string[] args)
   {
@@ -254,6 +325,11 @@ internal sealed record WorkerArguments(
     var full = false;
     var skipMapping = false;
     Guid? mapRunId = null;
+    var maxParallel = 1;
+    var maxParallelEndpoints = 1;
+    int? maxPages = null;
+    int? pageSize = null;
+    bool? includeNonActive = null;
 
     for (var index = 0; index < args.Length; index++)
     {
@@ -288,6 +364,53 @@ internal sealed record WorkerArguments(
         case "--only-ingest":
           skipMapping = true;
           break;
+        case "--max-parallel":
+          // Vzporednost je po podjetjih, ne po koncnih tockah: znotraj podjetja gre en klic
+          // naenkrat, zato SAOP nikoli ne dobi vec hkratnih zahtevkov, kot je podjetij.
+          if (index + 1 >= args.Length)
+          {
+            throw new ArgumentException($"Argument '{arg}' zahteva vrednost (stevilo hkratnih podjetij).");
+          }
+          if (!int.TryParse(args[++index], out maxParallel) || maxParallel < 1 || maxParallel > 8)
+          {
+            throw new ArgumentException($"Neveljavna vrednost --max-parallel: '{args[index]}'. Dovoljeno je 1 do 8.");
+          }
+          break;
+        case "--max-parallel-endpoints":
+          // Merilno stikalo. Vsaka hkratna koncna tocka je dodaten hkraten zahtevek na SAOP
+          // za ISTO podjetje, zato privzeto ostaja 1, dokler ne izmerimo, ali sploh pomaga.
+          if (index + 1 >= args.Length)
+          {
+            throw new ArgumentException($"Argument '{arg}' zahteva vrednost (stevilo hkratnih koncnih tock).");
+          }
+          if (!int.TryParse(args[++index], out maxParallelEndpoints) || maxParallelEndpoints < 1 || maxParallelEndpoints > 8)
+          {
+            throw new ArgumentException($"Neveljavna vrednost --max-parallel-endpoints: '{args[index]}'. Dovoljeno je 1 do 8.");
+          }
+          break;
+        case "--max-pages":
+          // Za meritve: ustavi se po n straneh na koncno tocko, da ni treba cakati celega zajema.
+          if (index + 1 >= args.Length)
+          {
+            throw new ArgumentException($"Argument '{arg}' zahteva vrednost (stevilo strani na koncno tocko).");
+          }
+          if (!int.TryParse(args[++index], out var parsedMaxPages) || parsedMaxPages < 1)
+          {
+            throw new ArgumentException($"Neveljavna vrednost --max-pages: '{args[index]}'.");
+          }
+          maxPages = parsedMaxPages;
+          break;
+        case "--page-size":
+          // Za meritve: koliko zapisov naj SAOP vrne na stran.
+          if (index + 1 >= args.Length) throw new ArgumentException($"Argument '{arg}' zahteva vrednost.");
+          if (!int.TryParse(args[++index], out var parsedPageSize) || parsedPageSize < 1 || parsedPageSize > 5000)
+            throw new ArgumentException($"Neveljavna vrednost --page-size: '{args[index]}'. Dovoljeno je 1 do 5000.");
+          pageSize = parsedPageSize;
+          break;
+        case "--brez-neaktivnih":
+          // Za meritve: ali naj SAOP vkljuci tudi neaktivne artikle.
+          includeNonActive = false;
+          break;
         case "--map-run":
           // Preslikaj že zajet zagon, brez novega klica na SAOP. Potrebno, ker --only-ingest
           // pusti vrstice Pending: brez tega bi bilo treba iste podatke pobrati še enkrat.
@@ -312,7 +435,7 @@ internal sealed record WorkerArguments(
       throw new ArgumentException("--map-run in --only-ingest se izključujeta: prvi preslika, drugi preslikavo preskoči.");
     }
 
-    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId);
+    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId, maxParallel, maxParallelEndpoints, maxPages, pageSize, includeNonActive);
   }
 
   private static IEnumerable<string> Split(string value) =>

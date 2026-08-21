@@ -257,7 +257,42 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
     if (await ReadWatermarkValueAsync(connectionString, probeConnectorId, unmappedEntityType) is not null)
       throw new InvalidOperationException("map.Watermark je dobil vrstico za nepreslikano entiteto.");
 
-    // Preslikana entiteta pa se je premaknila.
+    // ---------------------------------------------------------------------
+    // Preslikana entiteta: mejnik se sme premakniti SELE, ko je podatek v katalogu.
+    //
+    // To je regresijska varovalka za incident 2026-08-21. IQLighting je zajel 112 strani
+    // (111.065 artiklov), mejnik se je premaknil takoj po koncani koncni tocki, nato pa je
+    // podjetje padlo pred preslikavo. Podatek je ostal Pending za mejnikom in ga delta ne bi
+    // vec prinesla; resila ga je samo rocna preslikava z --map-run.
+    // ---------------------------------------------------------------------
+
+    // (1) Sam zajem mejnika ne premakne vec.
+    var afterIngest = await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData");
+    if (afterIngest != mappedBefore)
+      throw new InvalidOperationException("Zajem sam je premaknil mejnik, ceprav podatek se ni preslikan.");
+
+    // (2) Tudi izrecna zahteva ga ne premakne, dokler je za to entiteto kaj Pending.
+    var advancedWhilePending = await runner.AdvanceWatermarksAsync(summary, organization);
+    if (advancedWhilePending.Contains("ItemGeneralData"))
+      throw new InvalidOperationException("Mejnik se je premaknil, ceprav je v raw.Inbox ostal nepreslikan zapis.");
+    if (await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData") != mappedBefore)
+      throw new InvalidOperationException("Mejnik se je premaknil kljub nepreslikanemu zapisu.");
+
+    // (3) Ko je podatek obdelan, se mejnik mora premakniti. Test oznaci samo svoje vrstice.
+    await using (var processConnection = new SqlConnection(connectionString))
+    {
+      await processConnection.OpenAsync();
+      await using var process = new SqlCommand(
+        "UPDATE raw.Inbox SET Status=N'Processed', ProcessedUtc=SYSUTCDATETIME() WHERE RunId=@RunId AND EntityType=N'ItemGeneralData';",
+        processConnection);
+      process.Parameters.AddWithValue("@RunId", summary.RunId);
+      await process.ExecuteNonQueryAsync();
+    }
+
+    var advancedAfterMapping = await runner.AdvanceWatermarksAsync(summary, organization);
+    if (!advancedAfterMapping.Contains("ItemGeneralData"))
+      throw new InvalidOperationException("Mejnik se po preslikavi ni premaknil, ceprav bi se moral.");
+
     var mappedAfter = await ReadWatermarkValueAsync(connectionString, probeConnectorId, "ItemGeneralData");
     if (mappedAfter is null) throw new InvalidOperationException("Preslikana entiteta ni dobila mejnika.");
     if (mappedAfter == mappedBefore) throw new InvalidOperationException("Mejnik preslikane entitete se ni premaknil.");

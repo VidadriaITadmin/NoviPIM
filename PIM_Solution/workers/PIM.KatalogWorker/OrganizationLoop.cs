@@ -19,19 +19,47 @@ internal static class OrganizationLoop
   /// <paramref name="completeAsync"/>, na koncu vedno <paramref name="disposeAsync"/>.
   /// Vrne true, če je katerokoli podjetje padlo ali javilo neuspeh.
   /// </summary>
+  /// <param name="maxParallel">
+  /// Koliko podjetij sme teči hkrati. 1 pomeni eno za drugim, kot je bilo doslej.
+  ///
+  /// Vzporednost je namenoma <em>po podjetjih</em> in ne po končnih točkah: znotraj enega
+  /// podjetja gre en klic naenkrat, zato SAOP od nas nikoli ne dobi več hkratnih zahtevkov,
+  /// kot je podjetij. Vzporednost po končnih točkah bi to mejo takoj podrla.
+  /// </param>
   internal static async Task<bool> RunAsync<TRun>(
     IReadOnlyList<SaopOrganization> organizations,
     Func<SaopOrganization, Task<TRun>> beginAsync,
     Func<SaopOrganization, TRun, Task<bool>> workAsync,
     Func<TRun, bool, string?, Task> completeAsync,
     Func<TRun, Task> disposeAsync,
-    Action<SaopOrganization, Exception> reportFailure)
+    Action<SaopOrganization, Exception> reportFailure,
+    int maxParallel = 1)
     where TRun : class
   {
-    var failed = false;
-
-    foreach (var organization in organizations)
+    if (maxParallel <= 1)
     {
+      var sequentialFailed = false;
+      foreach (var organization in organizations)
+      {
+        sequentialFailed |= await RunOneAsync(organization);
+      }
+      return sequentialFailed;
+    }
+
+    // Zaveza ostaja ista tudi vzporedno: padec enega podjetja ne sme ustaviti ostalih. Zato
+    // RunOneAsync nikoli ne vrže — vsako podjetje si svojo napako obravnava samo.
+    using var slots = new SemaphoreSlim(maxParallel, maxParallel);
+    var results = await Task.WhenAll(organizations.Select(async organization =>
+    {
+      await slots.WaitAsync();
+      try { return await RunOneAsync(organization); }
+      finally { slots.Release(); }
+    }));
+    return results.Any(organizationFailed => organizationFailed);
+
+    async Task<bool> RunOneAsync(SaopOrganization organization)
+    {
+      var failed = false;
       // beginAsync stoji ZNOTRAJ try — to je bistvo tega razreda.
       TRun? run = null;
       try
@@ -69,8 +97,8 @@ internal static class OrganizationLoop
           }
         }
       }
-    }
 
-    return failed;
+      return failed;
+    }
   }
 }
