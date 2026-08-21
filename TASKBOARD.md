@@ -12,6 +12,10 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ---
 
+> **Kar čaka človeka, ne agenta, je zbrano na enem mestu:
+> [`docs/TVOJE_NALOGE.md`](docs/TVOJE_NALOGE.md)** — po vrsti, z razlogom in koraki.
+> Vsaka postavka BLOKIRANO spodaj ima tam svojo nalogo.
+
 ## TODO (čaka)
 
 - **[WORKERJI]** Preslikave za 13 še nepreslikanih SAOP končnih točk. Zajem dela za
