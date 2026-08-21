@@ -70,9 +70,27 @@ public sealed class ChangeTrackingIntegrationTests
     Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
   }
 
+  /// <summary>
+  /// Ovoj okoli ene preizkusne seje. Vse tece v transakciji, ki se ob koncu povrne — a to
+  /// samo po sebi ni dovolj:
+  ///
+  /// <c>ExpectSqlErrorAsync</c> namenoma sprozi napako v proceduri, ki tece s
+  /// <c>SET XACT_ABORT ON</c>. Taka napaka povrne objemno transakcijo <em>takoj</em>, zato
+  /// vse, kar test naredi za tem, tece v samopotrditvenem nacinu in ostane zapisano.
+  /// Ob povrnitvi na koncu ni vec kaj povrniti.
+  ///
+  /// Posledica, izmerjena 2026-08-21: v razvojni bazi se je nabralo 38 artiklov
+  /// <c>CHANGE-TRACKING-*</c> v podjetju 2, priblizno stirje na vsak polni zagon paketa.
+  /// Niso samo smet — sedijo med pravimi artikli IQLighting in kvarijo vsako stetje.
+  ///
+  /// Zato si seja zapomni vsak artikel, ki ga je ustvarila, in ga ob koncu pobrise, ce je
+  /// preziveel; ob zacetku pa pobrise ostanke prejsnjih zagonov istega testa. Brise se
+  /// izkljucno to, kar je ustvaril ta test (AGENTS.md #4.1).
+  /// </summary>
   private sealed class TestScope : IAsyncDisposable
   {
     private readonly SqlConnection _connection;
+    private readonly List<long> _createdProductIds = [];
     private bool _disposed;
     public long ProductId { get; private set; }
 
@@ -82,13 +100,48 @@ public sealed class ChangeTrackingIntegrationTests
     {
       var connection = new SqlConnection(connectionString);
       await connection.OpenAsync();
+
+      // Pred transakcijo, sicer bi bilo pospravljanje povrnjeno skupaj z vsem ostalim.
+      await using (var sweep = new SqlCommand(SweepSql, connection) { CommandTimeout = 120 })
+      {
+        sweep.Parameters.AddWithValue("@OrganizationId", OrganizationId);
+        await sweep.ExecuteNonQueryAsync();
+      }
+
       await new SqlCommand("BEGIN TRANSACTION;", connection).ExecuteNonQueryAsync();
       return new TestScope(connection);
     }
 
+    /// <summary>Pobrise artikle tega testa in vse, kar visi na njih, po vrsti tujih kljucev.</summary>
+    private const string SweepSql = """
+      DECLARE @Mine TABLE(ProductId bigint PRIMARY KEY);
+      INSERT @Mine(ProductId)
+      SELECT ProductId FROM canon.Product
+      WHERE OrganizationId = @OrganizationId AND ItemID LIKE N'CHANGE-TRACKING-%';
+
+      DECLARE @Batches TABLE(ChangeBatchId bigint PRIMARY KEY);
+      INSERT @Batches(ChangeBatchId)
+      SELECT DISTINCT ChangeBatchId FROM pim.ProductFieldHistory WHERE ProductId IN (SELECT ProductId FROM @Mine);
+
+      DELETE FROM val.ProductIssue           WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM val.ProductValidationState WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM stock.Position             WHERE MatchedProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductCommercial    WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductPrice         WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductMedia         WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductCategory      WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductAttribute     WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM canon.ProductText          WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM pim.ProductFieldHistory    WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM pim.ProductChangeBatch     WHERE ChangeBatchId IN (SELECT ChangeBatchId FROM @Batches)
+        AND NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId = pim.ProductChangeBatch.ChangeBatchId);
+      DELETE FROM canon.Product              WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      """;
+
     public async Task<long> CreateTrackedProductChangeAsync(bool includeIsActive = false)
     {
       ProductId = await ScalarAsync<long>("INSERT canon.Product(OrganizationId,ItemID,WebPublish,IsActive) VALUES(@OrganizationId,CONCAT(N'CHANGE-TRACKING-',NEWID()),0,0); SELECT CONVERT(bigint,SCOPE_IDENTITY());", ("@OrganizationId", OrganizationId));
+      _createdProductIds.Add(ProductId);
       var batchGuid = Guid.NewGuid();
       await ExecuteAsync(includeIsActive
         ? "EXEC pim.SetChangeContext @ChangeSource=N'INTEGRATION_TEST',@ChangedBy=N'PIM.ChangeTracking.Integration',@BatchId=@BatchId; UPDATE canon.Product SET WebPublish=1,IsActive=1 WHERE ProductId=@ProductId; EXEC pim.ClearChangeContext;"
@@ -131,8 +184,19 @@ public sealed class ChangeTrackingIntegrationTests
       _disposed = true;
       try
       {
-        await using var state = new SqlCommand("IF XACT_STATE()<>0 ROLLBACK TRANSACTION; EXEC pim.ClearChangeContext;", _connection);
-        await state.ExecuteNonQueryAsync();
+        await using (var state = new SqlCommand("IF XACT_STATE()<>0 ROLLBACK TRANSACTION; EXEC pim.ClearChangeContext;", _connection))
+        {
+          await state.ExecuteNonQueryAsync();
+        }
+
+        // Povrnitev je pobrisala vse, kar je bilo v transakciji. Kar je nastalo po napaki s
+        // XACT_ABORT, pa je bilo samopotrjeno in je se tu — to pospravimo zdaj, po id-jih.
+        if (_createdProductIds.Count > 0)
+        {
+          await using var cleanup = new SqlCommand(SweepSql, _connection) { CommandTimeout = 120 };
+          cleanup.Parameters.AddWithValue("@OrganizationId", OrganizationId);
+          await cleanup.ExecuteNonQueryAsync();
+        }
       }
       finally { await _connection.DisposeAsync(); }
     }

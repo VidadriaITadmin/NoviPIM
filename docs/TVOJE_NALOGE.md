@@ -83,15 +83,33 @@ Uspeh je `Status = Succeeded` in število artiklov, ki je bistveno večje od dan
 **IZVEDENO 2026-08-21 — prvi živi klic je uspel.** `GetItemsGeneralData` je vrnil 183
 artiklov, od tega jih je 168 obogatenih in 148 novih. EAN 789 → 906, `ItemGroup` 0 → 168.
 
-**Kar je ostalo od te naloge: poženi še poln zajem.** 183 je bila delta, ne katalog —
-mejnik je bil postavljen ob prejšnjih zagonih, zato je SAOP vrnil samo spremenjeno. Za vse:
+**Naloga 1 zato še NI zaključena.** Dokazano je najtežje — povezava, geslo in pot podatka od
+SAOP do kataloga. Manjkajo trije koraki:
+
+**1. Poln zajem artiklov.** 183 je bila delta, ne katalog. Živo je zajeta ena sama končna
+točka od šestnajstih:
 
 ```powershell
 dotnet run --project workers\PIM.KatalogWorker -- --endpoints GetItemsGeneralData --organizations 2 --full
 ```
 
 Pri ~200.000 artiklih pričakuj ~200 strani. Zdaj je to smiselno, ker preslikava od migracije
-`044` teče ~1,5 minute namesto ~6 ur.
+`044` teče ~1,5 minute namesto ~6 ur. Ob tem zajemu se bo vrnilo tudi tistih 15 artiklov, ki
+so prej izpadli — od migracije `047` jih zajem ne zavrne več.
+
+**2. Preostali dve preslikani končni točki.** Opisi in cene so v bazi še vedno iz posnetkov
+z dne 4. 8., ne iz živega SAOP:
+
+```powershell
+dotnet run --project workers\PIM.KatalogWorker -- --endpoints GetItemsDescriptions,GetPrices --organizations 2 --full
+```
+
+**3. Ostala tri podjetja.** V `appsettings.Local.json` so Vidadria, Ediito in DEMO
+nastavljeni z `"IsActive": false`. Ko bo čas zanje, jim to prestavi na `true`.
+
+**Kako veš, da je naloga zaključena:** `canon.Product` za podjetje 2 ima red velikosti
+100.000 artiklov (danes 6.265), `raw.Inbox` pa ima žive strani za `ItemGeneralData`,
+`Descriptions` in `Prices` z današnjim datumom.
 
 **Kaj sem jaz naredil po tvojem zagonu.**
 - Našel in popravil napako, ki jo je sprožilo moje navodilo: `--only-ingest` je premaknil

@@ -78,6 +78,22 @@ _(prazno)_
 
 ## KONČANO
 
+- **[TESTI]** `PIM.ChangeTracking.Integration` je puščal artikle v razvojni bazi — kdo:
+  Claude Opus 5 — 2026-08-21. Najdeno med preverjanjem, ali je naloga 1 zaključena:
+  v podjetju 2 se je nabralo **38 artiklov `CHANGE-TRACKING-*`**, približno štirje na vsak
+  polni zagon paketa. Niso bili samo smet — sedeli so med pravimi artikli IQLighting in
+  kvarili vsako štetje (6.303 namesto 6.265).
+  **Vzrok:** seja je tekla v transakciji, ki se ob koncu povrne, a `ExpectSqlErrorAsync`
+  namenoma sproži napako v proceduri s `SET XACT_ABORT ON`. Taka napaka objemno transakcijo
+  povrne **takoj**, zato je vse, kar je test naredil za tem, teklo v samopotrditvenem načinu
+  in ostalo zapisano; ob koncu ni bilo več česa povrniti.
+  **Popravek:** seja si zapomni vsak artikel, ki ga je ustvarila, in ga ob koncu pobriše, če
+  je preživel; ob začetku pobriše ostanke prejšnjih zagonov istega testa. Briše izključno to,
+  kar je ustvaril ta test (`AGENTS.md` §4.1).
+  Dokaz: `scripts\run_tests.ps1` → 44 uspeli, 0 padlih; po zagonu
+  `SELECT COUNT(*) FROM canon.Product WHERE ItemID LIKE 'CHANGE-TRACKING-%'` → **0**
+  (pred tem 38), podjetje 2 pa ima 6.265 pravih artiklov.
+
 - **[BAZA/VALIDACIJA]** Validacijski model iz preglednic naročnika: profili, stopnja resnosti
   in obseg blokade — kdo: Claude Opus 5 — 2026-08-21, migracija
   `047_ValidationProfilesSeverityAndScope.sql`. Podrobno: [`docs/VALIDACIJA.md`](docs/VALIDACIJA.md).
