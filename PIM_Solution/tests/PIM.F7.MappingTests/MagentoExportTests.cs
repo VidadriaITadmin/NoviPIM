@@ -6,7 +6,7 @@ public static class MagentoExportTests
 {
     public static async Task RunAllAsync()
     {
-        Equal(215, MagentoProductSchema.Headers.Length, "Product CSV mora imeti točno 215 stolpcev.");
+        Equal(213, MagentoProductSchema.Headers.Length, "Product CSV mora imeti točno 213 stolpcev.");
         Equal(19, MagentoCustomerSchema.Headers.Length, "Customer CSV mora imeti točno 19 stolpcev.");
 
         Equal("Šifra artikla", MagentoProductSchema.Headers[0], "1. stolpec produktov (ItemID).");
@@ -20,8 +20,8 @@ public static class MagentoExportTests
         Equal("Skupina popusta", MagentoProductSchema.Headers[34], "35. stolpec produktov (S code).");
         Equal("S popust %", MagentoProductSchema.Headers[35], "36. stolpec produktov (S percent).");
         Equal("Glavna slika", MagentoProductSchema.Headers[37], "38. stolpec produktov (main image).");
-        Equal("Grlo ANG", MagentoProductSchema.Headers[53], "54. stolpec produktov (1. atribut).");
-        Equal("Združljivo z", MagentoProductSchema.Headers[214], "215. stolpec produktov (zadnji).");
+        Equal("Grlo", MagentoProductSchema.Headers[53], "54. stolpec produktov (1. atribut).");
+        Equal("Združljivo z", MagentoProductSchema.Headers[212], "213. stolpec produktov (zadnji).");
 
         Equal("Šifra stranke", MagentoCustomerSchema.Headers[0], "1. stolpec strank (key).");
         Equal("Naziv", MagentoCustomerSchema.Headers[1], "2. stolpec strank (name).");
@@ -32,7 +32,7 @@ public static class MagentoExportTests
 
         // Od migracije 045 obliko izvoza pove register out.ExportColumn, ne koda. Ta test
         // baze nima, zato si obliko sestavi sam iz iste predloge in preveri, kar je njegovo:
-        // da zapisovalnik postavi vrednosti na mesto po SortOrder, izpiše 215 oziroma 19 polj,
+        // da zapisovalnik postavi vrednosti na mesto po SortOrder, izpiše 213 oziroma 19 polj,
         // pusti nekonfigurirane stolpce prazne in pravilno ubeži vejico in narekovaj.
         // Da se register in predloga nista razšla, dokazuje PIM.F7.MagentoExportTests proti bazi.
         var productColumns = TemplateColumns(MagentoProductSchema.Headers, new Dictionary<int, string>
@@ -72,20 +72,20 @@ public static class MagentoExportTests
 
             var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var headerFields = ParseCsv(lines[0]);
-            Equal(215, headerFields.Length, "Header line ima 215 polj.");
+            Equal(213, headerFields.Length, "Header line ima 213 polj.");
             Equal("Šifra artikla", headerFields[0], "1. header v CSV.");
             Equal("PAK2", headerFields[32], "33. header je PAK2.");
-            Equal("Združljivo z", headerFields[214], "215. header je Združljivo z.");
+            Equal("Združljivo z", headerFields[212], "213. header je Združljivo z.");
 
             var dataFields = ParseCsv(lines[1]);
-            Equal(215, dataFields.Length, "Data line ima 215 polj.");
+            Equal(213, dataFields.Length, "Data line ima 213 polj.");
             Equal("0000123", dataFields[0], "ItemID ohranja vodilne ničle.");
             Equal("4030096006084", dataFields[1], "EAN vrednost.");
             Equal("5", dataFields[32], "PAK2 vrednost.");
             Equal("Nowodvorski", dataFields[5], "Manufacturer vrednost.");
             Equal("", dataFields[6], "Dobavitelj je prazen (stolpec brez kanonične kode).");
             Equal("", dataFields[8], "Merska enota je prazna (stolpec brez kanonične kode).");
-            Equal("", dataFields[53], "Grlo ANG je prazen (stolpec brez kanonične kode).");
+            Equal("", dataFields[53], "Grlo je prazen (stolpec brez kanonične kode).");
 
             var escapeRow = new Dictionary<string, string?>
             {

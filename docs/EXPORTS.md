@@ -160,7 +160,7 @@ manjkajoči operativni člen.
 
 `PIM.B2bWorker` podpira read-only ukaz `--export-magento --organization-id <int>
 --output-dir <dir>`. Bere izključno `PIM_CONNECTION_STRING` in lokalno ustvari
-`magento-products.csv` (215 glav po predlogi) ter `magento-customers.csv` (19
+`magento-products.csv` (213 glav po predlogi) ter `magento-customers.csv` (19
 glav po predlogi). Datoteki sta UTF-8 brez BOM z vrsticami LF; manjkajoča polja
 ostanejo prazna. FTP, HTTP in Magento dostava niso del ukaza.
 
@@ -173,7 +173,7 @@ dotnet run --project PIM_Solution\workers\PIM.B2bWorker -- `
 ```
 
 **Oblika datoteke je od 2026-08-21 v registru, ne v kodi** (migracija
-`045_MagentoExportProfileRows.sql`). Profila `MAGENTO_PRODUCTS` (215 vrstic) in
+`045_MagentoExportProfileRows.sql`). Profila `MAGENTO_PRODUCTS` (213 aktivnih vrstic) in
 `MAGENTO_CUSTOMERS` (19 vrstic) živita v `out.ExportProfile` / `out.ExportColumn`;
 `ExportProfileRegistry.LoadColumnsAsync` ju prebere in `MagentoExportCommand` dobi
 stolpce od zunaj. Prej je bil vrstni red seznam nizov, preslikava stolpec→kanonična
@@ -217,14 +217,29 @@ ceno in bi se ta pojavila v Magentu, preden začne veljati. Prag stranke velja s
 `pim.CustomerValueDiscountTier.IsActive = 1`; izklopljen prag se vrne na privzeti iz
 `pim.ValueDiscountTier`. Skupinski rabat mora ustrezati oknu `ValidFrom`/`ValidTo`.
 
-**Atributni stolpci (54–215) so nastavitev, ne koda.** Kanonična koda atributa je zapisana
+**Glava je ključ, ne okras (od migracije `050`).** Uvoz v Magento povezuje stolpce **po imenu
+glave**, ne po zaporedju. Zato so imena glav od 2026-08-21 enolična in brez presledka na robu:
+podvojena `Frekvenca` (stolpec 58) je izklopljena, `Enota bruto teže` in `Enota neto teže` v
+drugem paru sta preimenovani v `… (2)`, devetnajstim glavam pa je odrezan končni presledek.
+Iz istega razloga je izklopljen tudi stolpec 55 `Grlo SLO` (migracija `052`): vrednost grla
+je koda (`E14`, `GU10`), ne beseda, zato sta bila stolpca po vsebini ista. Predloga ima zato
+213 stolpcev namesto 215. Zaporedje se sme premakniti prav zato, ker ga
+nihče ne šteje. `PIM.F7.MagentoExportTests` to varuje s trditvijo, da so glave enolične in
+obrezane.
+
+**Atributni stolpci (54–213) so nastavitev, ne koda.** Kanonična koda atributa je zapisana
 v `out.ExportColumn.CanonicalFieldCode` in je posejana kot glava iz predloge: stolpec
-`Grlo ANG` ima kodo `Attr.Grlo ANG` in se napolni iz atributa s kodo `Grlo ANG`. Da to deluje, mora
-v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.Grlo ANG`.
-**Danes ni nastavljena nobena taka preslikava**, zato je vseh 162 atributnih stolpcev v
-izvozu praznih — edina obstoječa koda v bazi je `CategoryRequired`. Mehanizem sam je dokazan
-s testom; manjka poslovna odločitev, katera SAOP/NW lastnost pripada kateremu stolpcu
-(glej `TASKBOARD.md`, razdelek BLOKIRANO).
+`Grlo` ima kodo `Attr.Grlo` in se napolni iz atributa s kodo `Grlo`. Da to deluje, mora
+v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.Grlo`.
+
+Od 2026-08-21 te vrstice obstajajo (migraciji `054` in `055`): **106 preslikav iz
+Nowodvorskega XML** in **75 iz Braytronovega**, od tega 24 stolpcev, ki jih polnita oba
+dobavitelja. Kanonična koda je stičišče — `attribute_light_source` pri Nowodvorskem in
+`slug=socket` pri Braytronu oba pišeta v `ProductAttribute.Grlo`. Kar en dobavitelj pošilja
+drugače kot drugi (enota v istem nizu, `CLASS II` proti `Class I`, angleščina namesto
+slovenščine), poravna sloj pretvorb iz migracije `049`.
+
+Brez vira ostaja 51 stolpcev; kaj je kje, je v `PIM_Solution\docs\Magento_glave_ZA_MAGENTO.csv`.
 
 **Par datotek je nedeljiv.** Obe datoteki se najprej zapišeta ob stran (`.tmp`), prejšnji par
 se odmakne v `.prej`, šele nato se datoteki prestavita na končni imeni. Če karkoli od tega
@@ -245,7 +260,7 @@ zamenjava pade in se prejšnji par vrne, se vrne tudi oznaka — velja spet za v
 > dostave na splet, ta pa še ni določen — glej `deploy/PRODUCTION_ROADMAP.md`.
 
 **Kaj je dokazano.** `PIM.F7.MagentoExportTests` ukaz dejansko izvede proti razvojni
-bazi `PIM`: preveri, da se poizvedba prevede in vrne vrstice, da imata datoteki 215
+bazi `PIM`: preveri, da se poizvedba prevede in vrne vrstice, da imata datoteki 213
 oziroma 19 stolpcev (razčlenjeno po RFC 4180), in da se medij z vlogo `PRIMARY`
 pojavi v stolpcu `Glavna slika`. Zadnja meritev: 18 izdelkov. Pot za stranke je
 izvedena, a na razvojnih podatkih ni dokazana — `pim.CustomerWebProfile` nima

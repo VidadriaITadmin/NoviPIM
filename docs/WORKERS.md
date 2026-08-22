@@ -13,7 +13,7 @@ integracijski testi, ne workerji. Stanje 13. 8. 2026:
 | Worker | Piše v bazo | Vhod | Izhod | Lokalni dokaz |
 |---|---|---|---|---|
 | `PIM.KatalogWorker` | **da** | SAOP API (Live) ali fixture | `raw.Inbox` → `map` → `canon` | F3 integration; glej [`ZAJEM-SAOP.md`](ZAJEM-SAOP.md) |
-| `PIM.XmlFileWorker` | **da** | XML datoteke, npr. NW | `raw.Inbox` → `map` → `canon` | F5 integration |
+| `PIM.XmlFileWorker` | **da** | XML datoteke poljubnega dobavitelja | `raw.Inbox` → `map` → `canon` | F5 integration, F5 value transform |
 | `PIM.Watchdog` | **da** (le `ops`) | `ops` zdravstveno stanje | `ops.IntegrationHealth`, `ops.Alert` | F9 tests |
 | `PIM.OutboxDispatcher` | **da** (le `out`) | `out.OutboxMessage` | HTTP samo do eksplicitnega profila | F8 local HTTP fixture |
 | `PIM.AlertDispatcher` | **da** (le `ops`) | alert queue | dostava alarma | F9 local fixture; dostava privzeto izklopljena |
@@ -24,6 +24,33 @@ integracijski testi, ne workerji. Stanje 13. 8. 2026:
 
 `PIM.NwXmlWorker` v `workers\` ima samo `bin\` in `obj\`; projekta ni v `PIM.sln` in izvorne
 kode ni. Ni worker, je ostanek.
+
+### `PIM.XmlFileWorker` ni vezan na enega dobavitelja
+
+Kaj bere in kako to razume, mu povedo tri spremenljivke okolja in register — v kodi ni ne
+imena dobavitelja ne oblike njegovega XML. Nowodvorski ima za vsako lastnost svoj element,
+Braytron eno samo obliko z razločevalnim `slug`; poti se ovrednotijo z `XPathNavigator`
+(polni XPath 1.0), zato drugo obliko naslovi pogoj v oglatih oklepajih:
+
+```
+Nowodvorski   attributes/attribute_ip/ip_value/text()
+Braytron      .//attribute[slug="ip"]/value/text()
+```
+
+Nov dobavitelj je zato vrstica v `map.SourceConnector`, `map.EntityMapping` in
+`map.FieldMapping` — nova različica programa ni potrebna.
+
+```powershell
+$env:PIM_CONNECTION_STRING = (Get-Content .\appsettings.Local.json -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+$env:PIM_XML_SOURCE_CODE = 'BT_XML'        # ali 'NW_XML'
+$env:PIM_XML_ORGANIZATION_ID = '2'
+$env:PIM_XML_ROOT = 'C:\Users\David\Desktop\PIM\NoviPIM\PIM_Solution\fixtures\bt'
+dotnet run --project PIM_Solution\workers\PIM.XmlFileWorker
+```
+
+Isti paket se ne zajame dvakrat: `raw.Inbox` ima enoličnost po (vir, entiteta, stran, hash
+vsebine), zato ponoven zagon nespremenjene datoteke pade z napako 2627. To ni okvara, ampak
+zaščita pred podvojenim zajemom.
 
 ## Standardni dokaz pred namestitvijo
 

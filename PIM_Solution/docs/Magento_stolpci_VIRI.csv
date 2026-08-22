@@ -1,0 +1,163 @@
+﻿Stolpec;Glava v predlogi;Kanonicna koda;Vir NOWODVORSKI (NW_XML);Vir BRAYTRON (BT_XML);Potrebna pretvorba;Opomba
+54;Grlo ANG;Attr.Grlo ANG;attributes/attribute_light_source/light_source_value/text();".//attribute[slug=""socket""]/value/text()";;ISTA STVAR, DVE IMENI: NW attribute_light_source, Braytron slug=socket
+55;Grlo SLO;Attr.Grlo SLO;;;;tvoj odgovor: brez prevoda, samo en stolpec -> glej vprasanje 1 v odgovoru
+56;Svetilka vključuje svetlobni vir;Attr.Svetilka vključuje svetlobni vir;attributes/attribute_lamp_includes_source_of_light/lamp_includes_source_of_light_value/text();;BIT (Yes/No, Dimmable/Not-Dimmable -> 1/0);
+57;Senzor gibanja;Attr.Senzor gibanja;attributes/attribute_motion_sensor/motion_sensor_value/text();".//attribute[slug=""sensor_type""]/value/text()";BIT (Yes/No, Dimmable/Not-Dimmable -> 1/0);
+58;Frekvenca;Attr.Frekvenca;;;;"dvojnik glave; par vrednost+enota je 122/123 (Excel stolpca BF in DR)"
+59;Max moč sijalke;Attr.Max moč sijalke;attributes/attribute_maximum_wattage/maximum_wattage_value/text();".//attribute[slug=""max-wattage""]/value/text()";;
+60;Garancija;Attr.Garancija;attributes/attribute_warranty/warranty_value/text();".//attribute[slug=""warranty""]/value/text()";;tvoj odgovor: mora tudi nazaj v SAOP ob pisanju
+61;Zračni pretok;Attr.Zračni pretok;;".//attribute[slug=""air_flow""]/value/text()";;
+62;Uporaba ANG;Attr.Uporaba ANG;attributes/attribute_application/application_value/text();;;
+63;Uporaba SLO;Attr.Uporaba SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+64;Način montaže ANG;Attr.Način montaže ANG;attributes/attribute_assembly_method/assembly_method_value/text();;;
+65;Način montaže SLO;Attr.Način montaže SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+66;Simbol atributa;Attr.Simbol atributa;attributes/attribute_symbol/text();;"PREFIX ""NW.""";"tvoj odgovor: NW sifra s predpono ""NW."", ni kategorija"
+67;Baterija;Attr.Baterija;;".//attribute[slug=""battery""]/value/text()";;
+68;Kapaciteta baterije;Attr.Kapaciteta baterije;;".//attribute[slug=""battery_capacity""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+69;Kot svetlobnega snopa;Attr.Kot svetlobnega snopa;attributes/attribute_beam_angle/beam_angle_value/text();".//attribute[slug=""beam_angle""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+70;Enota kota svetlobnega snopa;Attr.Enota kota svetlobnega snopa;attributes/attribute_beam_angle/beam_angle_unit/text();;"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+71;Presek kabla;Attr.Presek kabla;;".//attribute[slug=""cable_cross_section""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+72;Višina stropne kapice;Attr.Višina stropne kapice;attributes/attribute_ceiling_cup_height/ceiling_cup_height_value/text();;;
+73;Enota višine stropne kapice ;Attr.Enota višine stropne kapice ;attributes/attribute_ceiling_cup_height/ceiling_cup_height_unit/text();;;
+74;Širina stropne kapice;Attr.Širina stropne kapice;attributes/attribute_ceiling_cup_width/ceiling_cup_width_value/text();;;
+75;Enota širine stropne kapice;Attr.Enota širine stropne kapice;attributes/attribute_ceiling_cup_width/ceiling_cup_width_unit/text();;;
+76;Čas polnjenja;Attr.Čas polnjenja;;".//attribute[slug=""charging_time""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+77;Način polnjenja ANG;Attr.Način polnjenja ANG;;".//attribute[slug=""charging_type""]/value/text()";;
+78;Način polnjenja SLO;Attr.Način polnjenja SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+79;Nazivna jakost toka;Attr.Nazivna jakost toka;;".//attribute[slug=""current""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+80;Nazivna napetost;Attr.Nazivna napetost;;".//attribute[slug=""voltage""]/value/text()";;"negotovo: Braytron voltage je zapakiran niz ""220-240V 50/60Hz"""
+81;Nazivna moč;Attr.Nazivna moč;;".//attribute[slug=""wattage""]/value/text()";;
+82;Kolekcija;Attr.Kolekcija;collection/text();;;
+83;Temperatura barve;Attr.Temperatura barve;attributes/attribute_colour_temperature/colour_temperature_value/text();".//attribute[slug=""color_temperature""]/value/text()";;
+84;Komentarji;Attr.Komentarji;attributes/attribute_comments/comments_value/text();;;
+85;Dopolnilna barva I ANG;Attr.Dopolnilna barva I ANG;attributes/attribute_complementary_colour_i/complementary_colour_i_value/text();;;
+86;Dopolnilna barva I SLO;Attr.Dopolnilna barva I SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+87;Dopolnilna barva II ANG;Attr.Dopolnilna barva II ANG;attributes/attribute_complementary_colour_ii/complementary_colour_ii_value/text();;;
+88;Dopolnilna barva II SLO;Attr.Dopolnilna barva II SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+89;Dopolnilni simbol tkanine iz vzorčne škatle I;Attr.Dopolnilni simbol tkanine iz vzorčne škatle I;attributes/attribute_complementary_fabric_symbol_from_swatch_box_i/complementary_fabric_symbol_from_swatch_box_i_value/text();;;
+90;Dopolnilni material I ANG;Attr.Dopolnilni material I ANG;attributes/attribute_complementary_material_i/complementary_material_i_value/text();;;
+91;Dopolnilni material I SLO;Attr.Dopolnilni material I SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+92;Dopolnilni material II ANG;Attr.Dopolnilni material II ANG;attributes/attribute_complementary_material_ii/complementary_material_ii_value/text();;;
+93;Dopolnilni material II SLO;Attr.Dopolnilni material II SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+94;Dopolnilni material III ANG;Attr.Dopolnilni material III ANG;attributes/attribute_complementary_material_iii/complementary_material_iii_value/text();;;
+95;Dopolnilni material III SLO;Attr.Dopolnilni material III SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+96;Indeks barvnega videza (CRI);Attr.Indeks barvnega videza (CRI);attributes/attribute_cri/cri_value/text();".//attribute[slug=""color_rendering_index_cri""]/value/text()";;
+97;Vrsta toka;Attr.Vrsta toka;;;;"vrste toka (AC/DC) noben vir nima kot svoje polje; da se izlusciti iz Braytron voltage"
+98;Izvrtina (cutout);Attr.Izvrtina (cutout);;".//attribute[slug=""cutout""]/value/text()";ENOTA-LOCI;Braytron slug=cutout (389 izdelkov)
+99;Kot detekcije;Attr.Kot detekcije;;".//attribute[slug=""detection_angle""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+100;Razdalja detekcije;Attr.Razdalja detekcije;;".//attribute[slug=""detection_distance""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+101;Hitrost detekcije;Attr.Hitrost detekcije;;".//attribute[slug=""detection_speed""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+102;Premer;Attr.Premer;;".//attribute[slug=""diameter""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+103;Višina;Attr.Višina;;".//attribute[slug=""height""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+104;Enota višine;Attr.Enota višine;;".//attribute[slug=""height""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+105;Dolžina;Attr.Dolžina;;".//attribute[slug=""length""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+106;Enota dolžine ;Attr.Enota dolžine ;;".//attribute[slug=""length""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+107;Širina;Attr.Širina;;".//attribute[slug=""width""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+108;Enota širine;Attr.Enota širine;;".//attribute[slug=""width""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+109;Zatemnljivo ANG;Attr.Zatemnljivo ANG;;".//attribute[slug=""dimmable""]/value/text()";BIT (Yes/No, Dimmable/Not-Dimmable -> 1/0);
+110;Zatemnljivo SLO;Attr.Zatemnljivo SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+111;Razdalja od stene;Attr.Razdalja od stene;attributes/attribute_distance_from_wall/distance_from_wall_value/text();;;
+112;Enota razdalje od stene ;Attr.Enota razdalje od stene ;attributes/attribute_distance_from_wall/distance_from_wall_unit/text();;;
+113;EAN koda;Attr.EAN koda;ean/text();".//attribute[slug=""ean""]/value/text()";;dvojnik stolpca 2 (EAN)
+114;Električni razred ANG;Attr.Električni razred ANG;attributes/attribute_electrical_security_class/electrical_security_class_value/text();".//attribute[slug=""class""]/value/text()";"NORMALIZIRAJ (Braytron: "" CLASS II"" / ""Class I"" -> ""II"")";
+115;Režim nujne osvetlitve ANG;Attr.Režim nujne osvetlitve ANG;;".//attribute[slug=""emergency_mode""]/value/text()";;
+116;Režim nujne osvetlitve SLO;Attr.Režim nujne osvetlitve SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+117;Energijski razred;Attr.Energijski razred;attributes/attribute_energy_efficiency_class/energy_efficiency_class_value/text();".//attribute[slug=""energy_efficiency_level""]/value/text()";"NORMALIZIRAJ (Braytron: "" CLASS II"" / ""Class I"" -> ""II"")";
+118;Ekvivalent;Attr.Ekvivalent;;".//attribute[slug=""equivalent""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+119;Simbol tkanine iz vzorčne škatle;Attr.Simbol tkanine iz vzorčne škatle;attributes/attribute_fabric_symbol_from_swatch_box/fabric_symbol_from_swatch_box_value/text();;;
+120;Svetlobni tok;Attr.Svetlobni tok;attributes/attribute_flux/flux_value/text();".//attribute[slug=""quse_lumen""]/value/text()";;
+121;Enota svetlobnega toka;Attr.Enota svetlobnega toka;attributes/attribute_flux/flux_unit/text();;;
+122;Frekvenca;Attr.Frekvenca;attributes/attribute_frequency/frequency_value/text();;;
+123;Enota frekvence;Attr.Enota frekvence;attributes/attribute_frequency/frequency_unit/text();;;
+124;Bruto teža (2);Attr.Bruto teža (2);;".//attribute[slug=""gw""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";"""(2)"" je najbrz Braytron G.W. (SAOP bruto teza je stolpec 12)"
+125;Enota bruto teže;Attr.Enota bruto teže;;".//attribute[slug=""gw""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+126;Nastavitev višine ;Attr.Nastavitev višine ;attributes/attribute_height_modification/height_modification_value/text();;;
+127;Razpon nastavitve višine;Attr.Razpon nastavitve višine;attributes/attribute_height_modification_range/height_modification_range_value/text();;;
+128;Enota razpona nastavitve višine ;Attr.Enota razpona nastavitve višine ;attributes/attribute_height_modification_range/height_modification_range_unit/text();;;
+129;Višina daljše roke;Attr.Višina daljše roke;attributes/attribute_height_of__longer_arm/height_of__longer_arm_value/text();;;
+130;Enota višine daljše roke ;Attr.Enota višine daljše roke ;attributes/attribute_height_of__longer_arm/height_of__longer_arm_unit/text();;;
+131;Višina senčnika reflektorja;Attr.Višina senčnika reflektorja;attributes/attribute_height_of_shade__spot_light/height_of_shade__spot_light_value/text();;;
+132;Enota višine senčnika reflektorja;Attr.Enota višine senčnika reflektorja;attributes/attribute_height_of_shade__spot_light/height_of_shade__spot_light_unit/text();;;
+133;Višina krajše roke;Attr.Višina krajše roke;attributes/attribute_height_of_shorter_arm/height_of_shorter_arm_value/text();;;
+134;Enota višine krajše roke;Attr.Enota višine krajše roke;attributes/attribute_height_of_shorter_arm/height_of_shorter_arm_unit/text();;;
+135;Dimenzije odprtine;Attr.Dimenzije odprtine;attributes/attribute_hole_dimensions/hole_dimensions_value/text();;;
+136;Enota dimenzij odprtine;Attr.Enota dimenzij odprtine;attributes/attribute_hole_dimensions/hole_dimensions_unit/text();;;
+137;Oblika odprtine ANG;Attr.Oblika odprtine ANG;attributes/attribute_hole_shape/hole_shape_value/text();;;
+138;Oblika odprtine SLO;Attr.Oblika odprtine SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+139;Ikone;Attr.Ikone;;".//attribute[slug=""icons""]/value/text()";;
+140;IK stopnja;Attr.IK stopnja;;".//attribute[slug=""ik""]/value/text()";;
+141;Montažna višina;Attr.Montažna višina;;".//attribute[slug=""installation_height""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+142;IP stopnja zaščite;Attr.IP stopnja zaščite;attributes/attribute_ip/ip_value/text();".//attribute[slug=""ip""]/value/text()";;
+143;Oblika svetilke ANG;Attr.Oblika svetilke ANG;;".//attribute[slug=""lamp_shape""]/value/text()";;
+144;Oblika svetilke SLO;Attr.Oblika svetilke SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+145;Prevladujoča barva ANG;Attr.Prevladujoča barva ANG;attributes/attribute_leading_colour/leading_colour_value/text();".//attribute[slug=""body_color""]/value/text()";;
+146;Prevladujoča barva SLO;Attr.Prevladujoča barva SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+147;Prevladujoč material ANG;Attr.Prevladujoč material ANG;attributes/attribute_leading_material/leading_material_value/text();".//attribute[slug=""material""]/value/text()";;
+148;Prevladujoč material SLO;Attr.Prevladujoč material SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+149;Dolžina podnožja;Attr.Dolžina podnožja;attributes/attribute_lenght_of_base/lenght_of_base_value/text();;;
+150;Enota dolžine podnožja ;Attr.Enota dolžine podnožja ;attributes/attribute_lenght_of_base/lenght_of_base_unit/text();;;
+151;Dolžina horizontalne roke;Attr.Dolžina horizontalne roke;attributes/attribute_lenght_of_horizontal_arm/lenght_of_horizontal_arm_value/text();;;
+152;Enota dolžine horizontalne roke ;Attr.Enota dolžine horizontalne roke ;attributes/attribute_lenght_of_horizontal_arm/lenght_of_horizontal_arm_unit/text();;;
+153;Dolžina senčnika;Attr.Dolžina senčnika;attributes/attribute_lenght_of_shade/lenght_of_shade_value/text();;;
+154;Enota dolžine senčnika ;Attr.Enota dolžine senčnika ;attributes/attribute_lenght_of_shade/lenght_of_shade_unit/text();;;
+155;Dolžina vertikalne roke;Attr.Dolžina vertikalne roke;attributes/attribute_lenght_of_vertical_arm/lenght_of_vertical_arm_value/text();;;
+156;Enota dolžine vertikalne roke;Attr.Enota dolžine vertikalne roke;attributes/attribute_lenght_of_vertical_arm/lenght_of_vertical_arm_unit/text();;;
+157;Življenjska doba;Attr.Življenjska doba;attributes/attribute_lifetime/lifetime_value/text();".//attribute[slug=""lifetime""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+158;Vrsta svetlobnega vira ANG;Attr.Vrsta svetlobnega vira ANG;attributes/attribute_light_sources_type/light_sources_type_value/text();".//attribute[slug=""light_source""]/value/text()";;
+159;Vrsta svetlobnega vira SLO;Attr.Vrsta svetlobnega vira SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+160;Luks;Attr.Luks;;".//attribute[slug=""lux""]/value/text()";;
+161;Model;Attr.Model;;".//attribute[slug=""model""]/value/text()";;
+162;Vrtenje motorja;Attr.Vrtenje motorja;;".//attribute[slug=""motor_rotation""]/value/text()";;
+163;Neto teža (2);Attr.Neto teža (2);;".//attribute[slug=""nw""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";"""(2)"" je najbrz Braytron N.W. (SAOP neto teza je stolpec 14)"
+164;Enota neto teže;Attr.Enota neto teže;;".//attribute[slug=""nw""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+165;Hrup;Attr.Hrup;;".//attribute[slug=""noise""]/value/text()";;
+166;Število svetlobnih segmentov;Attr.Število svetlobnih segmentov;attributes/attribute_number_of_light_sections/number_of_light_sections_value/text();;;
+167;Število svetlobnih virov;Attr.Število svetlobnih virov;attributes/attribute_number_of_light_sources/number_of_light_sources_value/text();;;
+168;Število paketov;Attr.Število paketov;attributes/attribute_the_number_of_packages/the_number_of_packages_value/text();;;
+169;Število ciklov polnjenja;Attr.Število ciklov polnjenja;;".//attribute[slug=""number_of_charging_cycles""]/value/text()";;
+170;PCN;Attr.PCN;attributes/attribute_pcn/pcn_value/text();;;
+171;Kosov na karton;Attr.Kosov na karton;;".//attribute[slug=""pcsctn""]/value/text()";;
+172;Višina paketa I;Attr.Višina paketa I;attributes/attribute_package_height/package_height_value/text();".//attribute[slug=""package_height""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+173;Višina paketa II;Attr.Višina paketa II;attributes/attribute_package_height_ii/package_height_ii_value/text();;;Braytron ima samo en paket (I), NW ima I/II/III
+174;Višina paketa III;Attr.Višina paketa III;attributes/attribute_package_height_iii/package_height_iii_value/text();;;Braytron ima samo en paket (I), NW ima I/II/III
+175;Enota višine paketa I;Attr.Enota višine paketa I;attributes/attribute_package_height/package_height_unit/text();".//attribute[slug=""package_height""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+176;Enota višine paketa II ;Attr.Enota višine paketa II ;attributes/attribute_package_height_ii/package_height_ii_unit/text();;;
+177;Enota višine paketa III ;Attr.Enota višine paketa III ;attributes/attribute_package_height_iii/package_height_iii_unit/text();;;
+178;Dolžina paketa I;Attr.Dolžina paketa I;attributes/attribute_length_packing/length_packing_value/text();".//attribute[slug=""package_length""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+179;Dolžina paketa II;Attr.Dolžina paketa II;attributes/attribute_length_packing_ii/length_packing_ii_value/text();;;
+180;Dolžina paketa III;Attr.Dolžina paketa III;attributes/attribute_length_packing_iii/length_packing_iii_value/text();;;
+181;Enota dolžine paketa I ;Attr.Enota dolžine paketa I ;attributes/attribute_length_packing/length_packing_unit/text();".//attribute[slug=""package_length""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+182;Enota dolžine paketa II ;Attr.Enota dolžine paketa II ;attributes/attribute_length_packing_ii/length_packing_ii_unit/text();;;
+183;Enota dolžine paketa III ;Attr.Enota dolžine paketa III ;attributes/attribute_length_packing_iii/length_packing_iii_unit/text();;;
+184;Volumen paketa;Attr.Volumen paketa;attributes/attribute_packaging_volume/packaging_volume_value/text();;;
+185;Enota volumna paketa;Attr.Enota volumna paketa;attributes/attribute_packaging_volume/packaging_volume_unit/text();;;
+186;Širina paketa I;Attr.Širina paketa I;attributes/attribute_width_packaging/width_packaging_value/text();".//attribute[slug=""package_width""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+187;Širina paketa II;Attr.Širina paketa II;attributes/attribute_width_packaging_ii/width_packaging_ii_value/text();;;
+188;Širina paketa III;Attr.Širina paketa III;attributes/attribute_width_packaging_iii/width_packaging_iii_value/text();;;
+189;Enota širine paketa I ;Attr.Enota širine paketa I ;attributes/attribute_width_packaging/width_packaging_unit/text();".//attribute[slug=""package_width""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+190;Enota širine paketa II ;Attr.Enota širine paketa II ;attributes/attribute_width_packaging_ii/width_packaging_ii_unit/text();;;
+191;Enota širine paketa III ;Attr.Enota širine paketa III ;attributes/attribute_width_packaging_iii/width_packaging_iii_unit/text();;;
+192;Faktor moči;Attr.Faktor moči;attributes/attribute_power_factor/power_factor_value/text();".//attribute[slug=""power_factor""]/value/text()";;
+193;Ime izdelka;Attr.Ime izdelka;product_name/text();name/text();;dvojnik stolpcev 4/5 (Naziv artikla)
+194;Razdelitev na segmente;Attr.Razdelitev na segmente;attributes/attribute_section_division/section_division_value/text();;;
+195;Velikost;Attr.Velikost;;".//attribute[slug=""size""]/value/text()";;
+196;Podnožje / socket;Attr.Podnožje / socket;;".//attribute[slug=""socket""]/value/text()";;isti vir kot 54 Grlo (Braytron socket) - dvojnik?
+197;Dolžina spuščenega stropa;Attr.Dolžina spuščenega stropa;attributes/attribute_soffit_ceiling_length/soffit_ceiling_length_value/text();;;
+198;Enota dolžine spuščenega stropa ;Attr.Enota dolžine spuščenega stropa ;attributes/attribute_soffit_ceiling_length/soffit_ceiling_length_unit/text();;;
+199;Solarni panel;Attr.Solarni panel;;".//attribute[slug=""solar_panel""]/value/text()";BIT (Yes/No, Dimmable/Not-Dimmable -> 1/0);
+200;Solarna moč;Attr.Solarna moč;;".//attribute[slug=""solar_power""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+201;Slog ANG;Attr.Slog ANG;attributes/attribute_style/style_value/text();;;
+202;Slog SLO;Attr.Slog SLO;;;PREVOD (EN -> SL prek prevajalne tabele);
+203;Tehnična opomba;Attr.Tehnična opomba;;;;ni ne v NW ne v Braytron
+204;Časovna zakasnitev;Attr.Časovna zakasnitev;;".//attribute[slug=""time_delay""]/value/text()";;
+205;Vrsta kabla;Attr.Vrsta kabla;;".//attribute[slug=""type_of_cable""]/value/text()";;
+206;Video;Attr.Video;;".//attribute[slug=""video""]/value/text()";;
+207;Napetost;Attr.Napetost;attributes/attribute_voltage/voltage_value/text();".//attribute[slug=""voltage""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+208;Enota napetosti;Attr.Enota napetosti;attributes/attribute_voltage/voltage_unit/text();;"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+209;Širina podnožja;Attr.Širina podnožja;attributes/attribute_width_of_base/width_of_base_value/text();;;
+210;Enota širine podnožja ;Attr.Enota širine podnožja ;attributes/attribute_width_of_base/width_of_base_unit/text();;;
+211;Širina senčnika reflektorja;Attr.Širina senčnika reflektorja;attributes/attribute_width_of_shadespot_light/width_of_shadespot_light_value/text();;;
+212;Enota širine senčnika reflektorja;Attr.Enota širine senčnika reflektorja;attributes/attribute_width_of_shadespot_light/width_of_shadespot_light_unit/text();;;
+213;Delovna temperatura;Attr.Delovna temperatura;;".//attribute[slug=""working_temperature""]/value/text()";;
+214;Delovni čas;Attr.Delovni čas;;".//attribute[slug=""working_time""]/value/text()";"ENOTA-LOCI (Braytron ima vrednost in enoto v enem nizu: ""30 mm"")";
+215;Združljivo z;Attr.Združljivo z;attributes/attribute_works_with/works_with_value/text();;;

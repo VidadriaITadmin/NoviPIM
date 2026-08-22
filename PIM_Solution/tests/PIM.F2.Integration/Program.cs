@@ -24,8 +24,10 @@ IF NOT EXISTS (SELECT 1 FROM val.ProductIssue WHERE ProductId = @ProductId AND I
 -- profili SHARED_CORE, ERP_L1_SLO, ERP_L1_EU/THIRD, COMMERCIAL_L2 in oba WEB; trditev spodaj
 -- (poln izdelek nima nobene aktivne pomanjkljivosti) drzi samo, ce je res poln.
 UPDATE canon.Product SET EAN=N'3830000000001', UoM=N'KOS', Supplier=N'Dobavitelj', Manufacturer=N'Proizvajalec', AccountingGroup=N'AG', DiscountGroup=N'DG', ItemGroup=N'SKUPINA', Department=N'ODDELEK' WHERE ProductId=@ProductId;
-INSERT canon.ProductCommercial (ProductId,NetWeight,GrossWeight,CustomsTariff,CountryOfOrigin,Pak1,Pak2)
-  VALUES (@ProductId,1.5,2.0,N'94051140',N'SI',1,6);
+-- Od migracije 057 so aktivne tudi zahteve za volumen in mere pakiranja (prej so cakale,
+-- ker polja niso obstajala). "Poln izdelek" zato pomeni tudi te stiri.
+INSERT canon.ProductCommercial (ProductId,NetWeight,GrossWeight,CustomsTariff,CountryOfOrigin,Pak1,Pak2,Volume,PackageLength,PackageWidth,PackageHeight,DimensionUnit)
+  VALUES (@ProductId,1.5,2.0,N'94051140',N'SI',1,6,0.0125,250,120,90,N'mm');
 INSERT canon.ProductText (ProductId,Lang,TextType,Value) VALUES (@ProductId,N'sl',N'TITLE_ERP',N'ERP naziv'),(@ProductId,N'sl',N'WEB_TITLE',N'Spletni naziv'),(@ProductId,N'en',N'WEB_TITLE',N'Web title');
 INSERT canon.ProductAttribute (ProductId,AttributeCode,Value) VALUES (@ProductId,N'CategoryRequired',N'Vrednost');
 INSERT canon.ProductCategory (ProductId,WebSite,CategoryPath) VALUES (@ProductId,N'svetila.si',N'Svetila/Test');
@@ -52,6 +54,16 @@ EXEC val.Promote @OrganizationId = 1;
 EXEC val.Promote @OrganizationId = 1;
 IF (SELECT COUNT(*) FROM pim.Product WHERE OrganizationId=1 AND ItemID=N'F2-PROOF-001') <> 1 THROW 52204, 'Promocija ni idempotentna.', 1;
 """;
-await using var command = new SqlCommand(sql, connection);
+// Privzeta meja SqlCommand je 30 sekund. Dokler je bila organizacija 1 testna in je imela
+// par izdelkov, je to zadoscalo; po prvem zivem zajemu (2026-08-21) jih ima 17.425 in samo
+// val.RunValidation nad njo tece 26 sekund, Promote se enkrat toliko manj — celotna serija
+// je torej pristala tik ob meji in test je padal z napako -2 (timeout), ne z napacnim
+// rezultatom.
+//
+// Meja je zato izrecna in velika. To ni skrivanje pocasnosti: val.RunValidation je mnozicna
+// poizvedba brez kurzorja (migracija 047) in 26 sekund je cena resnicnega dela nad 17.425
+// izdelki. Je pa to tudi merilo — ce se ta stevilka priblizuje minutam, je treba pohitriti
+// val.RunValidation in ne dvigniti te meje se enkrat.
+await using var command = new SqlCommand(sql, connection) { CommandTimeout = 600 };
 await command.ExecuteNonQueryAsync();
 Console.WriteLine("F2 integracijski dokaz je uspešen.");

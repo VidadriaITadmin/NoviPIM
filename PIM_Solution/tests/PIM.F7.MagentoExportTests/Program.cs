@@ -7,13 +7,22 @@ using PIM.B2bWorker;
 // 1. Pogodba CSV — brez baze.
 // ---------------------------------------------------------------------------
 
-Equal(215, MagentoCsvContract.ProductHeaders.Count, "Magento products mora imeti 215 glav.");
+Equal(213, MagentoCsvContract.ProductHeaders.Count, "Magento products mora imeti 213 glav.");
 Equal(19, MagentoCsvContract.CustomerHeaders.Count, "Magento customers mora imeti 19 glav.");
 Equal("Šifra artikla", MagentoCsvContract.ProductHeaders[0], "Prva glava izdelkov.");
 Equal("Združljivo z", MagentoCsvContract.ProductHeaders[^1], "Zadnja glava izdelkov.");
 Equal("Šifra stranke", MagentoCsvContract.CustomerHeaders[0], "Prva glava strank.");
 Equal("Popust NW", MagentoCsvContract.CustomerHeaders[^1], "Zadnja glava strank.");
-Equal("Enota višine stropne kapice ", MagentoCsvContract.ProductHeaders[72], "Končni presledek predloge je ohranjen.");
+// Od migracije 050 je glava ključ, po katerem Magento poveže stolpec s svojim atributom.
+// Ključ mora biti enoličen in brez presledka na robu, sicer se povezave ne da narediti
+// ali pa se tiho ne ujame.
+Equal("Enota višine stropne kapice", MagentoCsvContract.ProductHeaders[70], "Glava ne sme imeti presledka na koncu.");
+Equal(true, MagentoCsvContract.ProductHeaders.All(header => header.Length > 0 && header == header.Trim()),
+  "Nobena glava izdelkov ne sme biti prazna ali imeti presledka na robu.");
+Equal(MagentoCsvContract.ProductHeaders.Count, MagentoCsvContract.ProductHeaders.Distinct(StringComparer.Ordinal).Count(),
+  "Glave izdelkov morajo biti enolične — Magento bere po imenu.");
+Equal(MagentoCsvContract.CustomerHeaders.Count, MagentoCsvContract.CustomerHeaders.Distinct(StringComparer.Ordinal).Count(),
+  "Glave strank morajo biti enolične.");
 
 // Predloga, s katero se primerja register, mora biti ista pogodba.
 Equal(true, MagentoProductSchema.Headers.SequenceEqual(MagentoCsvContract.ProductHeaders),
@@ -115,21 +124,21 @@ await connection.OpenAsync();
 // Prej je bila oblika switch v MagentoProductSchema in seznam v MagentoCustomerSchema.
 // Zdaj so to vrstice; nov spletni kanal je nov profil in ne nova razlicica programa.
 // Ta razdelek dokazuje troje: da register sploh obstaja, da se glave znak za znak ujemajo
-// s predlogo Magenta (vkljucno s koncnim presledkom v glavi 73) in da so kljucne
+// s predlogo Magenta in da so kljucne
 // kanonicne kode na pravem mestu.
 // ---------------------------------------------------------------------------
 
 var registryProductColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode);
 var registryCustomerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode);
 
-Equal(215, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 215 aktivnih stolpcev.");
+Equal(213, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 213 aktivnih stolpcev.");
 Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
 Equal(true, registryProductColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo izdelkov.");
 Equal(true, registryCustomerColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.CustomerHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo strank.");
-Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 215)),
-  "SortOrder izdelkov mora biti zvezen 1..215.");
+Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 213)),
+  "SortOrder izdelkov mora biti zvezen 1..213.");
 Equal(true, registryCustomerColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 19)),
   "SortOrder strank mora biti zvezen 1..19.");
 
@@ -137,7 +146,7 @@ Equal("Product.ItemID", registryProductColumns[0].CanonicalFieldCode, "Stolpec 1
 Equal("Product.Pak2", registryProductColumns[32].CanonicalFieldCode, "Stolpec 33 je PAK2.");
 Equal("Product.MainImage", registryProductColumns[37].CanonicalFieldCode, "Stolpec 38 je glavna slika.");
 Equal("Product.OtherImages", registryProductColumns[38].CanonicalFieldCode, "Stolpec 39 so ostale slike.");
-Equal("Attr.Grlo ANG", registryProductColumns[53].CanonicalFieldCode, "Stolpec 54 je prvi atribut.");
+Equal("Attr.Grlo", registryProductColumns[53].CanonicalFieldCode, "Stolpec 54 je prvi atribut.");
 Equal("", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 (Dobavitelj) nima dolocenega vira.");
 Equal("Customer.Key", registryCustomerColumns[0].CanonicalFieldCode, "Stolpec 1 strank je sifra.");
 Equal("Customer.MagentoGroup", registryCustomerColumns[5].CanonicalFieldCode, "Stolpec 6 strank je skupina.");
@@ -372,7 +381,7 @@ try
   var customerLines = (await File.ReadAllTextAsync(customersCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-  Equal(215, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora imeti 215 stolpcev.");
+  Equal(213, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora imeti 213 stolpcev.");
   Equal(19, SplitCsvLine(customerLines[0]).Count, "Glava strank mora imeti 19 stolpcev.");
   Equal(true, productLines.Length > 1, "Izvoz mora vrniti vsaj eno vrstico izdelka — če je SQL padel, jih ni.");
 
@@ -380,7 +389,7 @@ try
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
     ?? throw new InvalidOperationException($"Izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-  Equal(215, row.Count, "Vrstica izdelka mora imeti 215 stolpcev.");
+  Equal(213, row.Count, "Vrstica izdelka mora imeti 213 stolpcev.");
   Equal("111.11", row[28], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
   Equal("E27", row[53], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
 

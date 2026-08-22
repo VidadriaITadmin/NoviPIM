@@ -30,3 +30,7 @@ appsettings.Local.json
 NUL
 **/NUL
 logs/
+
+# Excelove zaklepne datoteke
+~$*
+**/~$*

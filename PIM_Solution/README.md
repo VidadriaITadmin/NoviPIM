@@ -1,5 +1,7 @@
 # PIM_Solution
 
+Za usklajeno delo Hermesa, Claude Code in Codexa glej [docs/AGENTSKA_ORKESTRACIJA.md](docs/AGENTSKA_ORKESTRACIJA.md). Nadrejena pravila ostajajo v `..\AGENTS.md`.
+
 F0 vsebuje samo temelje: .NET 8 rešitev, oštevilčene MSSQL migracije, nadzorno sobo `ops.*`, začetne organizacije in skupni transakcijski vzorec za pisalne procedure.
 
 ## Lokalni zagon migracij

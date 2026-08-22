@@ -1,0 +1,163 @@
+﻿Stolpec;Glava v predlogi;Kanonicna koda;Moj predlog vira;Zanesljivost;Opomba;TVOJ ODGOVOR (potrdi / popravi)
+54;Grlo ANG;Attr.Grlo ANG;NW XML: attributes/attribute_light_source/light_source_value/text();gotovo;NW vrednost je koda (E14, GU10) - jezikovno nevtralna;To je pravilno za Nowodvorski. Kako bom pa to povezoval z drugimi partnerji ki bodo imeli XMLje pa druga imena?
+55;Grlo SLO;Attr.Grlo SLO;NW XML: attributes/attribute_light_source/light_source_value/text();vprasanje;"ce je vrednost koda (E14), je ANG=SLO; potrdi";Ja za grlo ne bo prevajan. To mora na izvozi biti samo en stolpec. 
+56;Svetilka vključuje svetlobni vir;Attr.Svetilka vključuje svetlobni vir;NW XML: attributes/attribute_lamp_includes_source_of_light/lamp_includes_source_of_light_value/text();gotovo;;Da ne rabiva prevajati lahko Yes pa No pretvoriva v Bit (0 ali 1) in potem imava samo en stolpec
+57;Senzor gibanja;Attr.Senzor gibanja;NW XML: attributes/attribute_motion_sensor/motion_sensor_value/text();gotovo;;Da ne rabiva prevajati lahko Yes pa No pretvoriva v Bit (0 ali 1) in potem imava samo en stolpec
+58;Frekvenca;Attr.Frekvenca;;vprasanje;"dvojnik glave Frekvenca - glej nalogo 4; par vrednost+enota je 122/123";Atribute dobivamo od dobaviteljev serpavi iz XMLjev. Zdej možnost je da kateri podatek se podavaja v SAOPju (vem samo za garancijo, ker jo rabijo za racune itd). Zdej zakaj so dve frekvence pa ne vem mi  moraš točno lokacijo povedati. 
+59;Max moč sijalke;Attr.Max moč sijalke;NW XML: attributes/attribute_maximum_wattage/maximum_wattage_value/text();gotovo;;"Zdej tukaj v NW XMLju ima ta besedilo notri in ga je treba prevesti v vse jezike ""10W only LED"". "
+60;Garancija;Attr.Garancija;NW XML: attributes/attribute_warranty/warranty_value/text();gotovo;;Garancijo preberemo kot atribut in tudi v SAOP ju jo potrebujemo tako da ta podatek mora iti v SAOP ko se bo pisalo. 
+61;Zračni pretok;Attr.Zračni pretok;;ni vira;"v NW XML ni; verjetno drug dobavitelj (ventilatorji)";Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+62;Uporaba ANG;Attr.Uporaba ANG;NW XML: attributes/attribute_application/application_value/text();gotovo;;
+63;Uporaba SLO;Attr.Uporaba SLO;;vprasanje;SLO prevod - iz katerega vira? glej vprasanje A;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+64;Način montaže ANG;Attr.Način montaže ANG;NW XML: attributes/attribute_assembly_method/assembly_method_value/text();gotovo;;
+65;Način montaže SLO;Attr.Način montaže SLO;;vprasanje;SLO prevod - glej vprasanje A;
+66;Simbol atributa;Attr.Simbol atributa;NW XML: attributes/attribute_symbol/text();gotovo;danes ta vrednost pade v ProductAttribute.CategoryRequired, kar ne ustreza nobenemu stolpcu;"To polje so sicer NW šifre. To uporabimo za naše ampak dodame prefix ""NW."". TO nima veze s kategorijo. Lahko postane NW sifra ker jo uporabljajo za iskanje v njihovem PIMu."
+67;Baterija;Attr.Baterija;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+68;Kapaciteta baterije;Attr.Kapaciteta baterije;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+69;Kot svetlobnega snopa;Attr.Kot svetlobnega snopa;NW XML: attributes/attribute_beam_angle/beam_angle_value/text();gotovo;;
+70;Enota kota svetlobnega snopa;Attr.Enota kota svetlobnega snopa;NW XML: attributes/attribute_beam_angle/beam_angle_unit/text();gotovo;;
+71;Presek kabla;Attr.Presek kabla;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+72;Višina stropne kapice;Attr.Višina stropne kapice;NW XML: attributes/attribute_ceiling_cup_height/ceiling_cup_height_value/text();gotovo;;
+73;Enota višine stropne kapice ;Attr.Enota višine stropne kapice ;NW XML: attributes/attribute_ceiling_cup_height/ceiling_cup_height_unit/text();gotovo;;
+74;Širina stropne kapice;Attr.Širina stropne kapice;NW XML: attributes/attribute_ceiling_cup_width/ceiling_cup_width_value/text();gotovo;;
+75;Enota širine stropne kapice;Attr.Enota širine stropne kapice;NW XML: attributes/attribute_ceiling_cup_width/ceiling_cup_width_unit/text();gotovo;;
+76;Čas polnjenja;Attr.Čas polnjenja;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+77;Način polnjenja ANG;Attr.Način polnjenja ANG;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+78;Način polnjenja SLO;Attr.Način polnjenja SLO;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+79;Nazivna jakost toka;Attr.Nazivna jakost toka;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona. 
+80;Nazivna napetost;Attr.Nazivna napetost;;negotovo;morda voltage_value, a par Napetost/Enota napetosti je ze 207/208;
+81;Nazivna moč;Attr.Nazivna moč;;negotovo;morda maximum_wattage, a ta je ze 59;
+82;Kolekcija;Attr.Kolekcija;NW XML: collection/text();gotovo;na ravni izdelka, ne med atributi;
+83;Temperatura barve;Attr.Temperatura barve;NW XML: attributes/attribute_colour_temperature/colour_temperature_value/text();gotovo;;
+84;Komentarji;Attr.Komentarji;NW XML: attributes/attribute_comments/comments_value/text();gotovo;;
+85;Dopolnilna barva I ANG;Attr.Dopolnilna barva I ANG;NW XML: attributes/attribute_complementary_colour_i/complementary_colour_i_value/text();gotovo;;
+86;Dopolnilna barva I SLO;Attr.Dopolnilna barva I SLO;;vprasanje;SLO prevod;
+87;Dopolnilna barva II ANG;Attr.Dopolnilna barva II ANG;NW XML: attributes/attribute_complementary_colour_ii/complementary_colour_ii_value/text();gotovo;;
+88;Dopolnilna barva II SLO;Attr.Dopolnilna barva II SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+89;Dopolnilni simbol tkanine iz vzorčne škatle I;Attr.Dopolnilni simbol tkanine iz vzorčne škatle I;NW XML: attributes/attribute_complementary_fabric_symbol_from_swatch_box_i/complementary_fabric_symbol_from_swatch_box_i_value/text();gotovo;;
+90;Dopolnilni material I ANG;Attr.Dopolnilni material I ANG;NW XML: attributes/attribute_complementary_material_i/complementary_material_i_value/text();gotovo;;
+91;Dopolnilni material I SLO;Attr.Dopolnilni material I SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+92;Dopolnilni material II ANG;Attr.Dopolnilni material II ANG;NW XML: attributes/attribute_complementary_material_ii/complementary_material_ii_value/text();gotovo;;
+93;Dopolnilni material II SLO;Attr.Dopolnilni material II SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+94;Dopolnilni material III ANG;Attr.Dopolnilni material III ANG;NW XML: attributes/attribute_complementary_material_iii/complementary_material_iii_value/text();gotovo;;
+95;Dopolnilni material III SLO;Attr.Dopolnilni material III SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+96;Indeks barvnega videza (CRI);Attr.Indeks barvnega videza (CRI);NW XML: attributes/attribute_cri/cri_value/text();gotovo;;
+97;Vrsta toka;Attr.Vrsta toka;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+98;Izvrtina (cutout);Attr.Izvrtina (cutout);;negotovo;morda hole_dimensions, a ta je ze 135;
+99;Kot detekcije;Attr.Kot detekcije;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+100;Razdalja detekcije;Attr.Razdalja detekcije;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+101;Hitrost detekcije;Attr.Hitrost detekcije;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+102;Premer;Attr.Premer;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+103;Višina;Attr.Višina;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+104;Enota višine;Attr.Enota višine;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+105;Dolžina;Attr.Dolžina;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+106;Enota dolžine ;Attr.Enota dolžine ;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+107;Širina;Attr.Širina;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+108;Enota širine;Attr.Enota širine;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+109;Zatemnljivo ANG;Attr.Zatemnljivo ANG;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+110;Zatemnljivo SLO;Attr.Zatemnljivo SLO;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+111;Razdalja od stene;Attr.Razdalja od stene;NW XML: attributes/attribute_distance_from_wall/distance_from_wall_value/text();gotovo;;
+112;Enota razdalje od stene ;Attr.Enota razdalje od stene ;NW XML: attributes/attribute_distance_from_wall/distance_from_wall_unit/text();gotovo;;
+113;EAN koda;Attr.EAN koda;NW XML: ean/text();negotovo;"dvojnik stolpca 2 (EAN); potrdi, ali naj bo izpolnjen dvakrat";
+114;Električni razred ANG;Attr.Električni razred ANG;NW XML: attributes/attribute_electrical_security_class/electrical_security_class_value/text();gotovo;;
+115;Režim nujne osvetlitve ANG;Attr.Režim nujne osvetlitve ANG;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+116;Režim nujne osvetlitve SLO;Attr.Režim nujne osvetlitve SLO;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+117;Energijski razred;Attr.Energijski razred;NW XML: attributes/attribute_energy_efficiency_class/energy_efficiency_class_value/text();gotovo;;
+118;Ekvivalent;Attr.Ekvivalent;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+119;Simbol tkanine iz vzorčne škatle;Attr.Simbol tkanine iz vzorčne škatle;NW XML: attributes/attribute_fabric_symbol_from_swatch_box/fabric_symbol_from_swatch_box_value/text();gotovo;;
+120;Svetlobni tok;Attr.Svetlobni tok;NW XML: attributes/attribute_flux/flux_value/text();gotovo;;
+121;Enota svetlobnega toka;Attr.Enota svetlobnega toka;NW XML: attributes/attribute_flux/flux_unit/text();gotovo;;
+122;Frekvenca;Attr.Frekvenca;NW XML: attributes/attribute_frequency/frequency_value/text();gotovo;;
+123;Enota frekvence;Attr.Enota frekvence;NW XML: attributes/attribute_frequency/frequency_unit/text();gotovo;;
+124;Bruto teža (2);Attr.Bruto teža (2);;negotovo;"bruto teza je ze v stolpcu 12 iz SAOP; kaj je ""(2)""?";
+125;Enota bruto teže;Attr.Enota bruto teže;;negotovo;;
+126;Nastavitev višine ;Attr.Nastavitev višine ;NW XML: attributes/attribute_height_modification/height_modification_value/text();gotovo;;
+127;Razpon nastavitve višine;Attr.Razpon nastavitve višine;NW XML: attributes/attribute_height_modification_range/height_modification_range_value/text();gotovo;;
+128;Enota razpona nastavitve višine ;Attr.Enota razpona nastavitve višine ;NW XML: attributes/attribute_height_modification_range/height_modification_range_unit/text();gotovo;;
+129;Višina daljše roke;Attr.Višina daljše roke;NW XML: attributes/attribute_height_of__longer_arm/height_of__longer_arm_value/text();gotovo;;
+130;Enota višine daljše roke ;Attr.Enota višine daljše roke ;NW XML: attributes/attribute_height_of__longer_arm/height_of__longer_arm_unit/text();gotovo;;
+131;Višina senčnika reflektorja;Attr.Višina senčnika reflektorja;NW XML: attributes/attribute_height_of_shade__spot_light/height_of_shade__spot_light_value/text();gotovo;;
+132;Enota višine senčnika reflektorja;Attr.Enota višine senčnika reflektorja;NW XML: attributes/attribute_height_of_shade__spot_light/height_of_shade__spot_light_unit/text();gotovo;;
+133;Višina krajše roke;Attr.Višina krajše roke;NW XML: attributes/attribute_height_of_shorter_arm/height_of_shorter_arm_value/text();gotovo;;
+134;Enota višine krajše roke;Attr.Enota višine krajše roke;NW XML: attributes/attribute_height_of_shorter_arm/height_of_shorter_arm_unit/text();gotovo;;
+135;Dimenzije odprtine;Attr.Dimenzije odprtine;NW XML: attributes/attribute_hole_dimensions/hole_dimensions_value/text();gotovo;;
+136;Enota dimenzij odprtine;Attr.Enota dimenzij odprtine;NW XML: attributes/attribute_hole_dimensions/hole_dimensions_unit/text();gotovo;;
+137;Oblika odprtine ANG;Attr.Oblika odprtine ANG;NW XML: attributes/attribute_hole_shape/hole_shape_value/text();gotovo;;
+138;Oblika odprtine SLO;Attr.Oblika odprtine SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+139;Ikone;Attr.Ikone;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+140;IK stopnja;Attr.IK stopnja;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+141;Montažna višina;Attr.Montažna višina;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+142;IP stopnja zaščite;Attr.IP stopnja zaščite;NW XML: attributes/attribute_ip/ip_value/text();gotovo;;
+143;Oblika svetilke ANG;Attr.Oblika svetilke ANG;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+144;Oblika svetilke SLO;Attr.Oblika svetilke SLO;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+145;Prevladujoča barva ANG;Attr.Prevladujoča barva ANG;NW XML: attributes/attribute_leading_colour/leading_colour_value/text();gotovo;;
+146;Prevladujoča barva SLO;Attr.Prevladujoča barva SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+147;Prevladujoč material ANG;Attr.Prevladujoč material ANG;NW XML: attributes/attribute_leading_material/leading_material_value/text();gotovo;;
+148;Prevladujoč material SLO;Attr.Prevladujoč material SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+149;Dolžina podnožja;Attr.Dolžina podnožja;NW XML: attributes/attribute_lenght_of_base/lenght_of_base_value/text();gotovo;;
+150;Enota dolžine podnožja ;Attr.Enota dolžine podnožja ;NW XML: attributes/attribute_lenght_of_base/lenght_of_base_unit/text();gotovo;;
+151;Dolžina horizontalne roke;Attr.Dolžina horizontalne roke;NW XML: attributes/attribute_lenght_of_horizontal_arm/lenght_of_horizontal_arm_value/text();gotovo;;
+152;Enota dolžine horizontalne roke ;Attr.Enota dolžine horizontalne roke ;NW XML: attributes/attribute_lenght_of_horizontal_arm/lenght_of_horizontal_arm_unit/text();gotovo;;
+153;Dolžina senčnika;Attr.Dolžina senčnika;NW XML: attributes/attribute_lenght_of_shade/lenght_of_shade_value/text();gotovo;;
+154;Enota dolžine senčnika ;Attr.Enota dolžine senčnika ;NW XML: attributes/attribute_lenght_of_shade/lenght_of_shade_unit/text();gotovo;;
+155;Dolžina vertikalne roke;Attr.Dolžina vertikalne roke;NW XML: attributes/attribute_lenght_of_vertical_arm/lenght_of_vertical_arm_value/text();gotovo;;
+156;Enota dolžine vertikalne roke;Attr.Enota dolžine vertikalne roke;NW XML: attributes/attribute_lenght_of_vertical_arm/lenght_of_vertical_arm_unit/text();gotovo;;
+157;Življenjska doba;Attr.Življenjska doba;NW XML: attributes/attribute_lifetime/lifetime_value/text();gotovo;;
+158;Vrsta svetlobnega vira ANG;Attr.Vrsta svetlobnega vira ANG;NW XML: attributes/attribute_light_sources_type/light_sources_type_value/text();gotovo;;
+159;Vrsta svetlobnega vira SLO;Attr.Vrsta svetlobnega vira SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+160;Luks;Attr.Luks;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+161;Model;Attr.Model;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+162;Vrtenje motorja;Attr.Vrtenje motorja;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+163;Neto teža (2);Attr.Neto teža (2);;negotovo;neto teza je ze v stolpcu 14 iz SAOP;
+164;Enota neto teže;Attr.Enota neto teže;;negotovo;;
+165;Hrup;Attr.Hrup;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+166;Število svetlobnih segmentov;Attr.Število svetlobnih segmentov;NW XML: attributes/attribute_number_of_light_sections/number_of_light_sections_value/text();gotovo;;
+167;Število svetlobnih virov;Attr.Število svetlobnih virov;NW XML: attributes/attribute_number_of_light_sources/number_of_light_sources_value/text();gotovo;;
+168;Število paketov;Attr.Število paketov;NW XML: attributes/attribute_the_number_of_packages/the_number_of_packages_value/text();gotovo;;
+169;Število ciklov polnjenja;Attr.Število ciklov polnjenja;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+170;PCN;Attr.PCN;NW XML: attributes/attribute_pcn/pcn_value/text();gotovo;;
+171;Kosov na karton;Attr.Kosov na karton;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+172;Višina paketa I;Attr.Višina paketa I;NW XML: attributes/attribute_package_height/package_height_value/text();gotovo;;
+173;Višina paketa II;Attr.Višina paketa II;NW XML: attributes/attribute_package_height_ii/package_height_ii_value/text();gotovo;;
+174;Višina paketa III;Attr.Višina paketa III;NW XML: attributes/attribute_package_height_iii/package_height_iii_value/text();gotovo;;
+175;Enota višine paketa I;Attr.Enota višine paketa I;NW XML: attributes/attribute_package_height/package_height_unit/text();gotovo;;
+176;Enota višine paketa II ;Attr.Enota višine paketa II ;NW XML: attributes/attribute_package_height_ii/package_height_ii_unit/text();gotovo;;
+177;Enota višine paketa III ;Attr.Enota višine paketa III ;NW XML: attributes/attribute_package_height_iii/package_height_iii_unit/text();gotovo;;
+178;Dolžina paketa I;Attr.Dolžina paketa I;NW XML: attributes/attribute_length_packing/length_packing_value/text();gotovo;;
+179;Dolžina paketa II;Attr.Dolžina paketa II;NW XML: attributes/attribute_length_packing_ii/length_packing_ii_value/text();gotovo;;
+180;Dolžina paketa III;Attr.Dolžina paketa III;NW XML: attributes/attribute_length_packing_iii/length_packing_iii_value/text();gotovo;;
+181;Enota dolžine paketa I ;Attr.Enota dolžine paketa I ;NW XML: attributes/attribute_length_packing/length_packing_unit/text();gotovo;;
+182;Enota dolžine paketa II ;Attr.Enota dolžine paketa II ;NW XML: attributes/attribute_length_packing_ii/length_packing_ii_unit/text();gotovo;;
+183;Enota dolžine paketa III ;Attr.Enota dolžine paketa III ;NW XML: attributes/attribute_length_packing_iii/length_packing_iii_unit/text();gotovo;;
+184;Volumen paketa;Attr.Volumen paketa;NW XML: attributes/attribute_packaging_volume/packaging_volume_value/text();gotovo;;
+185;Enota volumna paketa;Attr.Enota volumna paketa;NW XML: attributes/attribute_packaging_volume/packaging_volume_unit/text();gotovo;;
+186;Širina paketa I;Attr.Širina paketa I;NW XML: attributes/attribute_width_packaging/width_packaging_value/text();gotovo;;
+187;Širina paketa II;Attr.Širina paketa II;NW XML: attributes/attribute_width_packaging_ii/width_packaging_ii_value/text();gotovo;;
+188;Širina paketa III;Attr.Širina paketa III;NW XML: attributes/attribute_width_packaging_iii/width_packaging_iii_value/text();gotovo;;
+189;Enota širine paketa I ;Attr.Enota širine paketa I ;NW XML: attributes/attribute_width_packaging/width_packaging_unit/text();gotovo;;
+190;Enota širine paketa II ;Attr.Enota širine paketa II ;NW XML: attributes/attribute_width_packaging_ii/width_packaging_ii_unit/text();gotovo;;
+191;Enota širine paketa III ;Attr.Enota širine paketa III ;NW XML: attributes/attribute_width_packaging_iii/width_packaging_iii_unit/text();gotovo;;
+192;Faktor moči;Attr.Faktor moči;NW XML: attributes/attribute_power_factor/power_factor_value/text();negotovo;v vzorcu NW ima ta atribut samo ime, brez vrednosti;
+193;Ime izdelka;Attr.Ime izdelka;NW XML: product_name/text();negotovo;dvojnik stolpcev 4/5 (Naziv artikla);
+194;Razdelitev na segmente;Attr.Razdelitev na segmente;NW XML: attributes/attribute_section_division/section_division_value/text();gotovo;;
+195;Velikost;Attr.Velikost;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+196;Podnožje / socket;Attr.Podnožje / socket;;negotovo;morda isto kot 54 Grlo (light_source);
+197;Dolžina spuščenega stropa;Attr.Dolžina spuščenega stropa;NW XML: attributes/attribute_soffit_ceiling_length/soffit_ceiling_length_value/text();gotovo;;
+198;Enota dolžine spuščenega stropa ;Attr.Enota dolžine spuščenega stropa ;NW XML: attributes/attribute_soffit_ceiling_length/soffit_ceiling_length_unit/text();gotovo;;
+199;Solarni panel;Attr.Solarni panel;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+200;Solarna moč;Attr.Solarna moč;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+201;Slog ANG;Attr.Slog ANG;NW XML: attributes/attribute_style/style_value/text();gotovo;;
+202;Slog SLO;Attr.Slog SLO;;vprasanje;SLO prevod;Ja sami prevedemo XMLji so v angleščini. Drugače obstaja prevajalna tabela, ki so jo naredili smo ne malo pomešana in jo je treba prej preurediti. Povej če ti jo dam. To velja za vse prevode.
+203;Tehnična opomba;Attr.Tehnična opomba;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+204;Časovna zakasnitev;Attr.Časovna zakasnitev;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+205;Vrsta kabla;Attr.Vrsta kabla;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+206;Video;Attr.Video;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+207;Napetost;Attr.Napetost;NW XML: attributes/attribute_voltage/voltage_value/text();gotovo;;
+208;Enota napetosti;Attr.Enota napetosti;NW XML: attributes/attribute_voltage/voltage_unit/text();gotovo;;
+209;Širina podnožja;Attr.Širina podnožja;NW XML: attributes/attribute_width_of_base/width_of_base_value/text();gotovo;;
+210;Enota širine podnožja ;Attr.Enota širine podnožja ;NW XML: attributes/attribute_width_of_base/width_of_base_unit/text();gotovo;;
+211;Širina senčnika reflektorja;Attr.Širina senčnika reflektorja;NW XML: attributes/attribute_width_of_shadespot_light/width_of_shadespot_light_value/text();gotovo;;
+212;Enota širine senčnika reflektorja;Attr.Enota širine senčnika reflektorja;NW XML: attributes/attribute_width_of_shadespot_light/width_of_shadespot_light_unit/text();gotovo;;
+213;Delovna temperatura;Attr.Delovna temperatura;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+214;Delovni čas;Attr.Delovni čas;;ni vira;;Ja nekateri atributi so od drugih dobaviteljev ta izključno je od Braytrona.
+215;Združljivo z;Attr.Združljivo z;NW XML: attributes/attribute_works_with/works_with_value/text();gotovo;;
