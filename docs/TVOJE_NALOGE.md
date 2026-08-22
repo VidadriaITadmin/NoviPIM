@@ -27,6 +27,7 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 | A | Šifra registriranega pogleda za Vidadrio in prvi živi klic zaloge | živ klic je tvoja odločitev (`AGENTS.md` §4.5) |
 | B | Potrditev prevodov — `Prevodi_predlog.csv` (120 predlogov, 96 % pojavitev) | oblika je odvisna od lastnosti; zadnja beseda je tvoja |
 | C | Stolpca 26/27 »Kategorije vid« — drevo videlektro | drevesa ni nikjer, tudi v starem sistemu ne |
+| D | Ali dobaviteljev XML obogati tudi Vidadrio (in DEMO), ne le IQLighting | katero podjetje prodaja katerega dobavitelja, veš samo ti |
 | E | Kam v modelu spadajo šifranti in B2B entitete (naloga 5) | poslovna odločitev |
 | F | Vhod za `PIM.B2bWorker` (naloga 8) | ni zapisano nikjer |
 | G | Pregled in merge veje (naloga 10) | `git push` in merge sta tvoja |
@@ -223,6 +224,24 @@ Zaključeno 2026-08-22: polno branje dobaviteljevega XML, kategorije, zaloga dob
 preskok testov brez baze, šifrant skladišč, pot do zaloge iz SAOP in **C8 (lastništvo polj)**.
 
 ---
+
+## Točka D — dobaviteljev XML danes obogati samo eno podjetje
+
+**Kaj sem izmeril 2026-08-22.** Konektorja `NW_XML` in `BT_XML` sta registrirana samo za
+podjetje 2 (IQLighting), ujemanje pa teče po EAN. Ko sem iste EAN-e primerjal z vsemi štirimi
+katalogi, se pokaže tole:
+
+| Dobavitelj | EAN v datoteki | IQLighting (2) | Vidadria (3) | DEMO (1) | Nikjer |
+|---|---|---|---|---|---|
+| Nowodvorski | 2.619 | 2.543 | **2.571** | 1.145 | 47 |
+| Braytron | 3.074 | 291 | **1.086** | 7 | 1.980 |
+
+Vidadria ima torej **več** ujemanj kot IQLighting — pri Braytronu skoraj štirikrat toliko —
+lastnosti, kategorij in slik pa ne dobi, ker konektorja zanjo ni.
+
+**Vprašanje.** Ali naj `NW_XML` in `BT_XML` registriram tudi za Vidadrio (in DEMO)? Če ja,
+je to samo nekaj vrstic registra: konektor, entitete in kopija preslikav; preslikave same so že
+napisane in dokazane. Če ne, zapišem, zakaj — da naslednjič ne izgleda kot pozabljeno.
 
 ## Prevodi: delovni list je pripravljen (točka B)
 
