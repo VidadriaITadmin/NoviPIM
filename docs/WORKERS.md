@@ -119,7 +119,8 @@ Fixture-only workerjev (`SaopStockWorker`, `StockFileWorker`, `B2bWorker`) siste
 |---|---|
 | SAOP katalog | **dela** — 16 končnih točk zajetih, preslikane so `ItemGeneralData`, `Descriptions`, `Prices` in trgovinski podatki (`057`) |
 | Dobaviteljev XML (NW, BT) | **dela** — obe datoteki v celoti; 2.548 izdelkov z lastnostmi, 2.382 s kategorijami |
-| SAOP zaloge | **ne pride do `stock.*`** — `GetItemsStockData` (5 strani) in `GetItemsStockAccountingData` (87) čakata v `raw.Inbox` kot `Pending`; `PIM.SaopStockWorker` je izpis brez vsebine |
+| SAOP zaloge | **pot je narejena in dokazana lokalno; živ klic čaka tebe** — `PIM.SaopStockWorker` bere profil iz `stock.SaopProviderProfile`, šifre skladišč iz `canon.Warehouse` in zapiše v `stock.*`. Klic izvede samo pri `PIM_SAOP_MODE=Live` |
+| SAOP šifrant skladišč | **dela** — `canon.Warehouse`: DEMO 7, IQLighting 35, Vidadria 74, Ediito 15 skladišč s šiframi in imeni |
 | Zaloge dobaviteljev | **dela** — `PIM.StockFileWorker` zapiše zalogo v `stock.*` (dokazano: NW 2.697, BT 1.361 vrstic, 0 v karanteni); datoteko je treba položiti v mapo, prevzem s FTP je zunanji klic |
 | Šifranti in B2B (7 entitet) | zajeti, brez cilja v modelu — čaka odločitev (`docs/TVOJE_NALOGE.md`, naloga 5) |
 
@@ -142,3 +143,31 @@ dotnet run --project PIM_Solution\workers\PIM.StockFileWorker -- --file PIM_Solu
 Posnetek nosi čas datoteke, ne čas zagona — ista datoteka je zato isti posnetek. Konektor in
 pravilo identitete (`map.SourceConnector`, `map.StockIdentityRule`) morata obstajati; worker si
 ju ne izmišlja. Izhod je 1, kadar ni bila uporabljena nobena vrstica in je karantena neprazna.
+
+## PIM.SaopStockWorker — količine zaloge iz SAOP
+
+Med šestnajstimi zajetimi končnimi točkami dejanskih količin ni: `GetItemsStockData` nosi
+najmanjšo in največjo zalogo po skladišču, `GetItemsStockAccountingData` pa konte. Količine so
+na ločenem vmesniku, in katerega uporabimo, je vrstica v `stock.SaopProviderProfile` (migracija
+`065`), ne nastavitev v kodi.
+
+| Podjetje | Profil | Vmesnik | Stanje |
+|---|---|---|---|
+| 1, 2, 3, 4 | `SAOP_GETSTOCKS` | `api/Stock/GetStocks` | vklopljen |
+| 3 (Vidadria) | `SAOP_REGISTERED_VIEW` | `api/registeredviews/data` | izklopljen, dokler ni znan `RegisteredViewId` |
+
+Skladišča: `WarehouseSelectionMode = 'ActiveFromRegister'` pomeni vsa aktivna skladišča podjetja
+iz `canon.Warehouse` (migracija `064`). V zahtevo gre **samo šifra**; ime je v registru zaradi
+prikaza.
+
+```powershell
+$env:PIM_CONNECTION_STRING = (Get-Content .\appsettings.Local.json -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+dotnet run --project PIM_Solution\workers\PIM.SaopStockWorker -- --organizations 2 --samo-nastavitve
+$env:PIM_SAOP_MODE = 'Live'   # brez tega worker samo izpiše, kaj bi poklical
+dotnet run --project PIM_Solution\workers\PIM.SaopStockWorker -- --organizations 2
+```
+
+Dokaz brez živega SAOP je `PIM.F6.SaopStockIntegration`: lokalni strežnik na `127.0.0.1` vrne
+odgovor in posname zahtevo — preverjeno je, da gre na `GetStocks`, da nosi šifre skladišč in
+glavo `OrganisationId`, da se znan artikel ujame v pozicijo zaloge in da neznan ne izgine
+(pozicija brez izdelka, `MatchKey = 'Unmatched'`).

@@ -24,8 +24,8 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 
 | # | Kaj čaka tebe | Zakaj ne morem sam |
 |---|---|---|
-| A | Iz katerega SAOP vira beremo količine zaloge (profil in skladišča) | poverilnice in živ klic sta tvoja; profila ne smem ugibati |
-| B | 236 spornih prevodov (`Prevodi_sporni.csv`) | ista angleška beseda ima več slovenskih oblik |
+| A | Šifra registriranega pogleda za Vidadrio in prvi živi klic zaloge | živ klic je tvoja odločitev (`AGENTS.md` §4.5) |
+| B | Potrditev prevodov — `Prevodi_predlog.csv` (120 predlogov, 96 % pojavitev) | oblika je odvisna od lastnosti; zadnja beseda je tvoja |
 | C | Stolpca 26/27 »Kategorije vid« — drevo videlektro | drevesa ni nikjer, tudi v starem sistemu ne |
 | E | Kam v modelu spadajo šifranti in B2B entitete (naloga 5) | poslovna odločitev |
 | F | Vhod za `PIM.B2bWorker` (naloga 8) | ni zapisano nikjer |
@@ -215,41 +215,60 @@ Ko bo čas, povej in pripravim korake; navodila so v `docs\LAPTOP_INSTALL.md` in
 
 ## Kaj delam jaz brez tebe
 
-Po vrsti, kot bo:
+1. **Preslikave za entitete, ki dobijo cilj** — takoj ko odgovoriš na nalogo 5. Pot je od
+   migracije `064` znana: nova vrstica v registru s svojim `TargetDomain` in svoj postopek.
+2. **C6** — register SAOP zapisovalnih končnih točk iz Swaggerja.
 
-1. **C6/C8** iz `docs\NACRT_PRILAGODLJIVOSTI.md` — register SAOP zapisovalnih končnih točk in
-   `out.OwnershipPolicy` iz stolpcev »Smer« in »Master« tvoje preglednice.
-2. **Preslikave za entitete, ki dobijo cilj** — takoj ko odgovoriš na nalogo 5.
-
-Zaključeno 2026-08-22: polno branje dobaviteljevega XML, kategorije, zaloga dobavitelja v bazi
-in preskok testov brez baze.
+Zaključeno 2026-08-22: polno branje dobaviteljevega XML, kategorije, zaloga dobavitelja v bazi,
+preskok testov brez baze, šifrant skladišč, pot do zaloge iz SAOP in **C8 (lastništvo polj)**.
 
 ---
 
-## Novo vprašanje, ki je nastalo med delom: od kod pridejo količine zaloge?
+## Prevodi: delovni list je pripravljen (točka B)
 
-**Zakaj.** Nalogo 7 si zaključil z »`SaopStockWorker` dokončaj«. Ko sem pogledal, kaj je v
-zajetih straneh, se je pokazalo, da tega ne morem dokončati brez tebe:
+`PIM_Solution\docs\Prevodi_predlog.csv` — 213 vrednosti, ki danes ostanejo v angleščini, z
+lastnostjo, številom izdelkov, kandidati iz tvoje preglednice in mojim predlogom. Predlog je pri
+120 vrsticah in pokrije **96 % pojavitev**; ostalo je dolg rep z nekaj izdelki.
 
-- `GetItemsStockData` nosi **samo najmanjšo in največjo zalogo po skladišču** (`MinimumStock`,
-  `MaximumStock`), ne dejanske količine;
-- `GetItemsStockAccountingData` nosi **konte po vrsti skladišča**, ne količin;
-- med vsemi 16 zajetimi končnimi točkami dejanskih količin torej ni.
+Zakaj predlog ni bil mogoč prej: oblika je odvisna od lastnosti. `White` je pri barvi `bela`,
+pri materialu pa bi bil `bel`. Zdaj, ko je znano, katera lastnost katero vrednost potrebuje
+(`map.MissingTranslation`), je predlog mogoč — potrebna je samo tvoja potrditev, enako kot pri
+kategorijah.
 
-Količine pridejo iz ločenega SAOP vmesnika za zaloge. `PIM.SaopStockWorker` ima zanj že
-pripravljene tri načine (`RegisteredViewData`, `StockAdvance`, `GetStocks`), tabela
-`stock.SaopProviderProfile` pa je prazna — brez nje ne ve, kaj naj pokliče.
+---
 
-**Koraki.** Povej dvoje:
+## Zaloga iz SAOP — narejeno po tvojem odgovoru, ostane en korak
 
-1. **Kateri način** — registriran pogled (in njegov `viewId`), `GetStocks` ali `StockAdvance`.
-2. **Katera skladišča** — šifre skladišč, ki nas zanimajo (v `GetItemsStockData` se pojavlja
-   na primer `0000016`).
+Tvoj odgovor 2026-08-22: `GetStocks` za vsa podjetja, `RegisteredViewData` za Vidadrio, ker dela
+samo tam; skladišče vodimo s šifro in imenom, v endpoint gre samo šifra.
 
-Prvi živi klic tega vmesnika je po `AGENTS.md` §4.5 tvoja odločitev; pripravim vse, kar je
-mogoče lokalno, in ti povem, kaj pognati.
+**Kaj je narejeno.**
 
-**Kaj naredim jaz potem.** Vrstico profila zapišem kot migracijo, worker dokončam proti
-lokalnemu preizkusnemu strežniku na `127.0.0.1` (isti vzorec kot F8) in dokažem, da zapis
-pristane v `stock.*`. Zaloga dobaviteljev (Nowodvorski, Braytron) že teče: worker jo zapiše v
-bazo, dokazano na 2.697 in 1.361 vrsticah.
+- **Šifrant skladišč** (`064`): `canon.Warehouse` s šifro in imenom — DEMO 7, IQLighting 35,
+  Vidadria 74, Ediito 15. Podatek je bil že zajet in je čakal v `raw.Inbox`; nov klic ni bil
+  potreben. Ob tem je nastala razlika med šifrantom in izdelkom v registru
+  (`map.EntityMapping.TargetDomain`), kar je pot tudi za valute, cenike in jezike.
+- **Profili** (`065`): `GetStocks` vklopljen za vsa štiri podjetja,
+  `SAOP_REGISTERED_VIEW` za Vidadrio vpisan, a **izklopljen**, ker njegove šifre ne poznam.
+- **Worker** `PIM.SaopStockWorker` je napisan: profil → šifre skladišč → zahteva → XML →
+  `stock.*`. Ob tem se je pokazalo, da je bila stara koda zahteve napačna — pošiljala je `POST`
+  z JSON telesom, Swagger SAOP pa pravi `GET` s parametri v naslovu in odgovorom v XML. Klica
+  ni nikoli nihče izvedel, zato napake ni bilo videti.
+- **Dokaz brez živega SAOP:** `PIM.F6.SaopStockIntegration` — lokalni strežnik vrne odgovor in
+  posname zahtevo; preverjeno je, da gre na `GetStocks`, da nosi šifre skladišč (in ne imen),
+  da ima glavo `OrganisationId`, da se znan artikel ujame in da neznan ne izgine.
+
+**Kar ostane tebi — dvoje:**
+
+1. **Šifra registriranega pogleda za Vidadrio.** Dobi se s klicem `api/registeredviews`, ki
+   pogleda našteje. To je živ klic; če ga poženeš ti ali mi poveš šifro, jo vpišem in profil
+   vklopim. Do takrat za Vidadrio velja `GetStocks`, torej podatek ni odvisen od tega koraka.
+2. **Prvi živi klic zaloge.** Ko boš pripravljen:
+
+   ```powershell
+   $env:PIM_SAOP_MODE = 'Live'
+   dotnet run --project PIM_Solution\workers\PIM.SaopStockWorker -- --organizations 2
+   ```
+
+   Izpis pove profil, število skladišč, prebranih zapisov, uporabljenih in v karanteni. Če kaj
+   pade, pade samo tisto podjetje; ostala tečejo naprej.

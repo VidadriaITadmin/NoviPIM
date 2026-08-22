@@ -73,11 +73,10 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 - **[WORKERJI]** Dostava datotek dobavitelja: `PIM.StockFileWorker` zdaj zna zapisati
   zalogo v bazo, datoteko pa mu je treba še vedno položiti v mapo. Prevzem s FTP oziroma
   drugega vira dobavitelja je zunanji klic (`AGENTS.md` §4.5) in čaka na odločitev.
-- **[WORKERJI]** SAOP zaloge dobijo cilj: `GetItemsStockData` (5 strani) in
-  `GetItemsStockAccountingData` (87 strani) že ležita v `raw.Inbox` kot `Pending`, v
-  `stock.*` pa ne pride nič — `PIM.SaopStockWorker` je štirivrstični izpis in
-  `stock.SaopProviderProfile` ima 0 vrstic. Odločitev uporabnika 2026-08-22: dokončati.
-  Živ klic za to ni potreben, ker so strani že zajete.
+- **[WORKERJI]** Preslikave za preostale šifrante (`Currencies`, `PriceLists`,
+  `GetLanguages`) in B2B entitete. Pot je od migracije `064` znana: nova vrstica v registru s
+  svojim `TargetDomain` in svoj postopek, brez posega v postopek za izdelke. Kam v modelu
+  spadajo, je še vedno odločitev uporabnika (`docs/TVOJE_NALOGE.md`, naloga 5).
 
 ## DELAM (v teku)
 
@@ -110,6 +109,65 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[ODHODNA POT]** C8: lastništvo polj iz preglednice — kdo: Claude Opus 5 — 2026-08-22,
+  migracija `068`. **To je bil manjkajoči kos odhodne poti, ne dispatcher.**
+  `out.EnqueueMessage` zavrne vsako spremembo, za katero ni vrstice v `out.OwnershipPolicy` z
+  `Owner = 'PIM'` (napaka 51010); tabela je bila prazna, zato v `out.OutboxMessage` ni moglo
+  nikoli vstopiti nobeno sporočilo. Zdaj je napolnjena iz stolpcev »Smer« in »Master« v
+  `Mapiranje_SAOP_API_PIM.xlsx`: od 259 polj s smerjo je 50 pisljivih.
+  **Pravilo O9 je izvedeno in ne le zapisano:** pravica nastane samo za polja, ki imajo aktivno
+  vhodno preslikavo — česar ne beremo nazaj, ne moremo preveriti, zato ne sme biti pisljivo.
+  Rezultat: **20 polj s pravico do pisanja in 8 samo za branje** na podjetje. Polja, ki so po
+  preglednici pisljiva, a jih (še) ne beremo, pravice ne dobijo; ko preslikava nastane, jo
+  dobijo brez spremembe kode.
+  Dokaz: nov `PIM.F8.OwnershipPolicyTests` — preveri pravilo O9 nad celotno tabelo, potrdi
+  `Product.ItemID` kot pisljiv in `ProductPrice.Net` kot samo za branje, nato v transakciji, ki
+  se povrne, res pošlje eno spremembo skozi `out.EnqueueMessage` in dokaže, da druga pade s
+  51010; v bazi ne ostane nobeno sporočilo.
+  **Kar ni zajeto:** stranke (10 pisljivih polj lista »Stranke«) — odhodna pot za stranke danes
+  ne obstaja, `TargetKind` bi bil `SAOP_CUSTOMER`.
+
+- **[PREVODI]** Delovni list s predlogi prevodov — kdo: Claude Opus 5 — 2026-08-22.
+  `map.MissingTranslation` ima **213 vrednosti v 16 lastnostih**, ki v izvozu ostanejo v
+  angleščini. Nastal je `PIM_Solution\docs\Prevodi_predlog.csv`: za vsako vrednost lastnost,
+  jezik, število izdelkov, kandidati iz uporabnikove preglednice in **moj predlog**.
+  Predlog je pri **120 od 213 vrstic**, kar pokrije **96 % pojavitev** (19.036 od 19.792).
+  Oblika je izbrana po lastnosti, ker je od nje odvisna: barva je ženskega spola (`White` →
+  `bela`), material je samostalnik (`Painted steel` → `barvano jeklo`), tehnične oznake
+  materialov (`PC+PC`, `FPCB`) pa ostanejo, kot so.
+
+- **[WORKERJI/BAZA]** Zaloga iz SAOP: šifrant skladišč, profili in worker, ki ni več izpis —
+  kdo: Claude Opus 5 — 2026-08-22, migracije `064`, `065`, `066`.
+  **Kaj se je pokazalo najprej:** med šestnajstimi zajetimi končnimi točkami dejanskih količin
+  ni. `GetItemsStockData` nosi najmanjšo in največjo zalogo po skladišču,
+  `GetItemsStockAccountingData` pa konte. Količine so na ločenem vmesniku, zato je bila naloga
+  drugačna, kot je izgledala: ne »preslikaj že zajeto«, ampak »napiši pot do vmesnika, ki ga
+  še nismo klicali«.
+  **Šifrant skladišč (`064`).** `canon.Warehouse` s šifro in imenom — DEMO 7, IQLighting 35,
+  Vidadria 74, Ediito 15. Podatek je bil že zajet in je čakal v `raw.Inbox`; nov klic ni bil
+  potreben. Ob tem je register dobil razliko med šifrantom in izdelkom
+  (`map.EntityMapping.TargetDomain`): `map.ProcessRawInbox` zna samo izdelke in bi skladišče
+  zavrnil kot artikel brez šifre, zato ga zdaj preskoči, obdela pa ga
+  `map.ProcessWarehouseInbox`. Isti vzorec je odslej pot za valute, cenike in jezike.
+  **Profili (`065`, `066`).** Odločitev uporabnika: `GetStocks` za vsa štiri podjetja,
+  `RegisteredViewData` za Vidadrio (dela samo tam). Registrirani pogled je vpisan izklopljen,
+  ker njegove šifre ne poznamo — dobi se z živim klicem `api/registeredviews`. Skladišča se
+  jemljejo iz registra (`ActiveFromRegister`); v zahtevo gre samo šifra, ime je za prikaz.
+  Zaloga ima svoje konektorje (`SAOP_*_STOCK`) in pravila identitete po šifri artikla brez
+  predpone — SAOP pošlje našo šifro, dobavitelj tujo.
+  **Napaka, ki jo je razkrilo pisanje workerja:** `SaopStockProviderRegistry` je za `GetStocks`
+  in `StockAdvance` gradil `POST` z JSON telesom. Swagger SAOP pravi `GET` s parametri v naslovu
+  in odgovorom v XML. Klica ni nikoli nihče izvedel, zato je bila napaka nevidna.
+  **Dokaz brez živega SAOP:** nov `PIM.F6.SaopStockIntegration` v izoliranem podjetju 9606 —
+  lokalni strežnik na `127.0.0.1` vrne odgovor in posname zahtevo. Preverjeno: zahteva gre na
+  `api/Stock/GetStocks`, nosi šifre skladišč in ne imen, ima glavo `OrganisationId`, znan
+  artikel dobi pozicijo s količino, neznan pa pozicijo brez izdelka (`MatchKey = 'Unmatched'`)
+  namesto da bi izginil. Test za sabo pobriše vse svoje vrstice.
+  **Kar ostane človeku:** šifra registriranega pogleda za Vidadrio in prvi živi klic
+  (`PIM_SAOP_MODE=Live`), oboje po `AGENTS.md` §4.5.
+  Ob tem se je `StockLandingWriter` preselil iz `PIM.StockFileWorker` v `src\PIM.StockMapping`:
+  pisalna pot je skupna vsem virom zaloge, sicer bi worker referenciral drugega workerja.
 
 - **[WORKERJI/TESTI]** Zaloga dobavitelja pride v bazo; paket brez baze ne laže več — kdo:
   Claude Opus 5 — 2026-08-22.
