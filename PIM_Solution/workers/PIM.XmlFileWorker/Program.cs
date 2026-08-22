@@ -10,10 +10,64 @@ var sourceCode = Environment.GetEnvironmentVariable("PIM_XML_SOURCE_CODE");
 var root = Environment.GetEnvironmentVariable("PIM_XML_ROOT");
 var organizationText = Environment.GetEnvironmentVariable("PIM_XML_ORGANIZATION_ID");
 var connectionString = ReadConnectionString();
-if (string.IsNullOrWhiteSpace(sourceCode) || string.IsNullOrWhiteSpace(root)
-  || !int.TryParse(organizationText, out var organizationId) || string.IsNullOrWhiteSpace(connectionString))
+
+// --map-run <RunId> preslika ze zajet zagon brez ponovnega branja datotek. Isti razlog kot pri
+// PIM.KatalogWorker: ko se preslikave dopolnijo, morajo iti iste ze zajete strani skozi novo
+// preslikavo. Ponoven zajem iste datoteke bi bil drugi izvod istih 19 MB v raw.Inbox.
+Guid? mapRunId = null;
+var reprocess = false;
+for (var index = 0; index < args.Length; index++)
 {
-  Console.Error.WriteLine("Manjkajo PIM_XML_SOURCE_CODE, PIM_XML_ROOT, PIM_XML_ORGANIZATION_ID ali povezava Pim.");
+  var isMapRun = args[index].Equals("--map-run", StringComparison.OrdinalIgnoreCase);
+  // --znova-preslikaj je isto kot --map-run, le da strani tega zagona najprej postavi nazaj
+  // na Pending. Rabi se, ko se preslikave dopolnijo nad ze obdelanim zajemom: iste datoteke
+  // ni mogoce zajeti drugic (raw.Inbox je enolicen po vsebini), preslikava pa bere Pending.
+  var isReprocess = args[index].Equals("--znova-preslikaj", StringComparison.OrdinalIgnoreCase);
+  if (!isMapRun && !isReprocess) continue;
+  if (index + 1 >= args.Length || !Guid.TryParse(args[index + 1], out var parsed))
+  {
+    Console.Error.WriteLine($"{args[index]} potrebuje veljaven RunId.");
+    return 2;
+  }
+  mapRunId = parsed;
+  reprocess = isReprocess;
+}
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.Error.WriteLine("Manjka povezava Pim (PIM_CONNECTION_STRING ali appsettings.Local.json).");
+  return 2;
+}
+
+if (mapRunId is Guid existingRunId)
+{
+  // Podjetje in vir bereva iz zajetih vrstic, ne iz okolja — zagon je ze zapisan in samo ta
+  // vrednost je pravilna. Tako se tudi ne da po pomoti preslikati tujega zagona z drugim virom.
+  await using var mapConnection = new SqlConnection(connectionString);
+  await mapConnection.OpenAsync();
+  var existing = await ReadRunAsync(mapConnection, existingRunId);
+  if (existing is null)
+  {
+    Console.Error.WriteLine($"Zagon {existingRunId} v raw.Inbox ne obstaja.");
+    return 2;
+  }
+  var (existingOrganizationId, existingSourceCode) = existing.Value;
+  Console.WriteLine($"Preslikava ze zajetega zagona {existingRunId}; vir={existingSourceCode}, podjetje={existingOrganizationId}.");
+  if (reprocess)
+  {
+    var vrnjenih = await ReopenRunAsync(mapConnection, existingRunId);
+    Console.WriteLine($"  Na ponovno preslikavo postavljenih strani: {vrnjenih}. Nic ni pobrisano — preslikava je zdruzevalna.");
+  }
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(existingRunId, existingOrganizationId, existingSourceCode);
+  await FinishRunAsync(mapConnection, existingRunId);
+  foreach (var line in await ReadRunSummaryAsync(mapConnection, existingRunId)) Console.WriteLine($"  {line}");
+  return 0;
+}
+
+if (string.IsNullOrWhiteSpace(sourceCode) || string.IsNullOrWhiteSpace(root)
+  || !int.TryParse(organizationText, out var organizationId))
+{
+  Console.Error.WriteLine("Manjkajo PIM_XML_SOURCE_CODE, PIM_XML_ROOT ali PIM_XML_ORGANIZATION_ID.");
   return 2;
 }
 
@@ -43,6 +97,11 @@ await using (var connection = new SqlConnection(connectionString))
   await FinishRunAsync(connection, runId);
 }
 Console.WriteLine($"Generični XML zajem je končan; datotek={files.Length}, RunId={runId}.");
+await using (var summaryConnection = new SqlConnection(connectionString))
+{
+  await summaryConnection.OpenAsync();
+  foreach (var line in await ReadRunSummaryAsync(summaryConnection, runId)) Console.WriteLine($"  {line}");
+}
 await operationsRun.CompleteAsync(true);
 return 0;
 
@@ -109,4 +168,45 @@ static async Task InsertInboxAsync(SqlConnection connection, Guid runId, int org
   command.Parameters.Add("@PayloadXml", SqlDbType.NVarChar, -1).Value = payload;
   command.Parameters.AddWithValue("@PayloadHash", hash);
   await command.ExecuteNonQueryAsync();
+}
+
+static async Task<(int OrganizationId, string SourceCode)?> ReadRunAsync(SqlConnection connection, Guid runId)
+{
+  await using var command = new SqlCommand("""
+    SELECT TOP 1 OrganizationId, SourceCode FROM raw.Inbox WHERE RunId=@RunId;
+    """, connection);
+  command.Parameters.AddWithValue("@RunId", runId);
+  await using var reader = await command.ExecuteReaderAsync();
+  if (!await reader.ReadAsync()) return null;
+  return (reader.GetInt32(0), reader.GetString(1));
+}
+static async Task<string[]> ReadRunSummaryAsync(SqlConnection connection, Guid runId)
+{
+  // Izpis po entiteti in stanju: brez tega je edini dokaz zagona vrstica v bazi, ki je nihce ne pogleda.
+  await using var command = new SqlCommand("""
+    SELECT EntityType, Status, COUNT(*) AS Strani, MAX(ISNULL(FailureReason,N'')) AS Razlog
+    FROM raw.Inbox WHERE RunId=@RunId GROUP BY EntityType, Status ORDER BY EntityType, Status;
+    """, connection);
+  command.Parameters.AddWithValue("@RunId", runId);
+  await using var reader = await command.ExecuteReaderAsync();
+  var lines = new List<string>();
+  while (await reader.ReadAsync())
+  {
+    var reason = reader.GetString(3);
+    lines.Add($"{reader.GetString(0),-16} {reader.GetString(1),-12} strani={reader.GetInt32(2)}"
+      + (reason.Length == 0 ? string.Empty : $" — {reason}"));
+  }
+  return lines.ToArray();
+}
+
+static async Task<int> ReopenRunAsync(SqlConnection connection, Guid runId)
+{
+  // Samo stanje strani, brez brisanja: ze izluscene vrednosti in ze zapisani podatki ostanejo,
+  // preslikava jih ob ponovnem zagonu zdruzi (MERGE oziroma "vstavi, ce se ni").
+  await using var command = new SqlCommand("""
+    UPDATE raw.Inbox SET Status=N'Pending', ProcessedUtc=NULL
+    WHERE RunId=@RunId AND Status IN (N'Processed', N'Quarantined');
+    """, connection);
+  command.Parameters.AddWithValue("@RunId", runId);
+  return await command.ExecuteNonQueryAsync();
 }

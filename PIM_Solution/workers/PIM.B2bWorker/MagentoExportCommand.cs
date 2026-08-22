@@ -275,6 +275,17 @@ public static class MagentoExportCommand
                     row["Product.OtherImages"] = string.Join('|', list);
         }
 
+        // Register spletnih strani: koda strani -> kanonicna koda stolpca izvoza.
+        var siteFieldCodes = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using (var cmd = new SqlCommand(
+            "SELECT WebSiteCode, CategoryFieldCode FROM canon.WebSite WHERE IsActive = 1;",
+            connection) { CommandTimeout = 60 })
+        {
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                siteFieldCodes[reader.GetString(0)] = reader.GetString(1);
+        }
+
         await using (var cmd = new SqlCommand("""
             SELECT p.ItemID, pc.WebSite, pc.CategoryPath
             FROM pim.Product p
@@ -286,8 +297,10 @@ public static class MagentoExportCommand
             cmd.Parameters.AddWithValue("@OrgId", organizationId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             var sites = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            var categoriesSl = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-            var categoriesEn = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            // Katera spletna stran gre v kateri stolpec, pove register canon.WebSite, ne koda.
+            // Prej je bilo to stikalo v C# ("B2C" => SLO, "B2C_EN" => ANG) in nova stran je
+            // pomenila novo razlicico programa; zdaj je vrstica v bazi.
+            var byField = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
             while (await reader.ReadAsync(ct))
             {
                 var itemId = reader["ItemID"] as string ?? "";
@@ -295,19 +308,15 @@ public static class MagentoExportCommand
                 if (!sites.TryGetValue(itemId, out var list)) { list = []; sites[itemId] = list; }
                 if (!list.Contains(site, StringComparer.Ordinal)) list.Add(site);
 
-                // Poti kategorij po jeziku spletne strani. Prej se je CategoryPath sploh ni
-                // bralo, zato sta stolpca "Kategorije vid ANG/SLO" ostajala prazna, ceprav so
-                // podatki v pim.ProductCategory obstajali.
-                var target = site switch
-                {
-                    "B2C" => categoriesSl,
-                    "B2C_EN" => categoriesEn,
-                    _ => null
-                };
-                if (target is null) continue;
+                if (!siteFieldCodes.TryGetValue(site, out var fieldCode)) continue;
 
                 var path = reader["CategoryPath"] as string ?? "";
                 if (path.Length == 0) continue;
+                if (!byField.TryGetValue(fieldCode, out var target))
+                {
+                    target = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+                    byField[fieldCode] = target;
+                }
                 if (!target.TryGetValue(itemId, out var paths)) { paths = []; target[itemId] = paths; }
                 if (!paths.Contains(path, StringComparer.Ordinal)) paths.Add(path);
             }
@@ -315,12 +324,10 @@ public static class MagentoExportCommand
             foreach (var (itemId, list) in sites)
                 if (products.TryGetValue(itemId, out var row))
                     row["Product.WebSites"] = string.Join('|', list);
-            foreach (var (itemId, paths) in categoriesSl)
-                if (products.TryGetValue(itemId, out var row))
-                    row["Product.CategorySl"] = string.Join('|', paths);
-            foreach (var (itemId, paths) in categoriesEn)
-                if (products.TryGetValue(itemId, out var row))
-                    row["Product.CategoryEn"] = string.Join('|', paths);
+            foreach (var (fieldCode, perProduct) in byField)
+                foreach (var (itemId, paths) in perProduct)
+                    if (products.TryGetValue(itemId, out var row))
+                        row[fieldCode] = string.Join('|', paths);
         }
 
         await using (var cmd = new SqlCommand("""

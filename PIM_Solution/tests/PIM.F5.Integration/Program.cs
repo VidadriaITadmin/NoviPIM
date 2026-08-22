@@ -46,7 +46,19 @@ var configuredFieldMappings = await ScalarAsync<int>(connection, """
     AND connector.IsActive=1 AND entityMapping.IsActive=1 AND mapping.IsActive=1;
   """, ("@SourceCode", sourceCode), ("@OrganizationId", organizationId));
 Equal(configuredFieldMappings, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM map.ExtractedValue value INNER JOIN raw.Inbox inbox ON inbox.InboxId=value.InboxId WHERE inbox.RunId=@RunId;", ("@RunId", runId)), "Staging sled ne ustreza aktivni konfiguraciji polj.");
-Equal("F5 svetila", await ProductValueAsync(connection, "canon.ProductCategory", "CategoryPath"), "EAN kategorija ni obogatena.");
+// Kategorija dobavitelja ("F5 svetila") ni vec tisto, kar pride v katalog — od migracije 059
+// se pot prevede v naso kategorijo, in to za obe spletni strani drevesa (slovensko in
+// anglesko). Namen trditve je isti kot prej: obogatitev po EAN mora priti do kategorije.
+Equal("Notranja svetila", await ScalarAsync<string>(connection, """
+  SELECT category.CategoryPath FROM canon.ProductCategory category
+  INNER JOIN canon.Product product ON product.ProductId=category.ProductId
+  WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID AND category.WebSite=N'svetila_si';
+  """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "EAN kategorija ni obogatena z naso potjo.");
+Equal("Interior lighting", await ScalarAsync<string>(connection, """
+  SELECT category.CategoryPath FROM canon.ProductCategory category
+  INNER JOIN canon.Product product ON product.ProductId=category.ProductId
+  WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID AND category.WebSite=N'svetila_si_en';
+  """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "Angleska pot kategorije ni nastala.");
 Equal("//example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
 Equal("F5-203", await ProductValueAsync(connection, "canon.ProductAttribute", "Value"), "EAN atribut ni obogaten.");
 
@@ -110,6 +122,9 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     FROM pim.ProductChangeBatch batch
     INNER JOIN @TestChangeBatches testBatch ON testBatch.ChangeBatchId=batch.ChangeBatchId
     WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
+
+    DELETE FROM map.CategoryPathMap WHERE SourceCode=N'NW_XML' AND SourcePathKey=N'f5_svetila';
+    DELETE FROM map.MissingCategoryMap WHERE SourcePathKey=N'f5_svetila';
 
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN
     (
@@ -275,6 +290,12 @@ async Task SeedBaseProductAsync(SqlConnection sqlConnection)
     DECLARE @ProductId bigint=SCOPE_IDENTITY();
     INSERT canon.ProductText(ProductId,Lang,TextType,Value) VALUES(@ProductId,N'sl',N'WEB_TITLE',N'F5 testno svetilo');
     INSERT canon.ProductPrice(ProductId,PriceList,Net,VatRate,ValidFrom,IsActive) VALUES(@ProductId,N'B2C',100,22,'20260101',1);
+
+    /* Od migracije 059 dobaviteljeva kategorija ni vec nasa kategorija: pot se prevede prek
+       map.CategoryPathMap. Test si zato vpise svojo vrstico slovarja za svojo pot in jo v
+       CleanupAsync pobrise. Ciljna kategorija je iz drevesa svetila.si, ki ga vpise 059. */
+    INSERT map.CategoryPathMap(SourceCode,CategoryTreeCode,SourcePathKey,CategoryCode,IsActive)
+    VALUES(N'NW_XML',N'svetila_si',N'f5_svetila',N'notranja_svetila',1);
     """, ("@OrganizationId", organizationId), ("@ItemID", itemId), ("@EAN", ean));
 }
 async Task InsertRunAndInboxAsync(SqlConnection sqlConnection, Guid id, string payload)
