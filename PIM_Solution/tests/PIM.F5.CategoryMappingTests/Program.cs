@@ -30,8 +30,15 @@ const string expectedSl = "Notranja svetila > Stenska svetila > Svečniki";
 const string expectedEn = "Interior lighting > Wall lamps > Sconces";
 const string unknownKey = "track_systems___3-circuit_ctls___accessories";
 
-var connectionString = ReadConnectionString()
-  ?? throw new InvalidOperationException("Manjka razvojna povezava Pim; testa kategorij ni dovoljeno preskočiti.");
+// Brez nastavljene povezave se preskoci, ne pade (glej isti popravek v F2/F3/F5/F8/F9):
+// padec je pomenil, da je paket na racunalniku brez razvojne baze videti pokvarjen.
+// Kjer je povezava nastavljena, dokaz tece kot prej.
+var connectionString = ReadConnectionString();
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.WriteLine("F5 kategorije preskocene: manjka razvojna povezava Pim.");
+  return 0;
+}
 var builder = new SqlConnectionStringBuilder(connectionString);
 if (!string.Equals(builder.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase) || !builder.IntegratedSecurity)
   throw new InvalidOperationException("Test se sme zaganjati samo z Windows Integrated Auth v bazi PIM.");
@@ -214,13 +221,16 @@ async Task CleanupAsync(SqlConnection sqlConnection)
 
     DELETE FROM map.CategoryPathMap WHERE SourceCode=@SourceCode;
     DELETE FROM map.MissingCategoryMap WHERE SourceCode=@SourceCode;
-    DELETE FROM canon.CategoryTranslation WHERE CategoryTreeCode=@TreeCode;
-    DELETE FROM canon.Category WHERE CategoryTreeCode=@TreeCode;
-    DELETE FROM canon.WebSite WHERE CategoryTreeCode=@TreeCode;
 
+    /* Kategorije izdelka gredo pred spletno stranjo: od migracije 063 canon.ProductCategory
+       kaze na canon.WebSite s tujim kljucem in obratni vrstni red pade s 547. */
     DELETE category FROM canon.ProductCategory category
     INNER JOIN canon.Product product ON product.ProductId=category.ProductId
     WHERE product.OrganizationId=@OrganizationId AND product.ItemID IN (@ItemID,@ItemIDUnknown);
+
+    DELETE FROM canon.CategoryTranslation WHERE CategoryTreeCode=@TreeCode;
+    DELETE FROM canon.Category WHERE CategoryTreeCode=@TreeCode;
+    DELETE FROM canon.WebSite WHERE CategoryTreeCode=@TreeCode;
 
     /* Najprej odvisne vrstice, sele nato izdelek — enak vrstni red kot v testu pretvorb. */
     DELETE history FROM pim.ProductFieldHistory history

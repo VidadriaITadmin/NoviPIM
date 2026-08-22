@@ -120,5 +120,25 @@ Fixture-only workerjev (`SaopStockWorker`, `StockFileWorker`, `B2bWorker`) siste
 | SAOP katalog | **dela** — 16 končnih točk zajetih, preslikane so `ItemGeneralData`, `Descriptions`, `Prices` in trgovinski podatki (`057`) |
 | Dobaviteljev XML (NW, BT) | **dela** — obe datoteki v celoti; 2.548 izdelkov z lastnostmi, 2.382 s kategorijami |
 | SAOP zaloge | **ne pride do `stock.*`** — `GetItemsStockData` (5 strani) in `GetItemsStockAccountingData` (87) čakata v `raw.Inbox` kot `Pending`; `PIM.SaopStockWorker` je izpis brez vsebine |
-| Zaloge dobaviteljev | **samo fixture** — `PIM.StockFileWorker` prebrano prešteje in izpiše, v bazo ne piše; vrstice v `stock.*` so iz testov |
+| Zaloge dobaviteljev | **dela** — `PIM.StockFileWorker` zapiše zalogo v `stock.*` (dokazano: NW 2.697, BT 1.361 vrstic, 0 v karanteni); datoteko je treba položiti v mapo, prevzem s FTP je zunanji klic |
 | Šifranti in B2B (7 entitet) | zajeti, brez cilja v modelu — čaka odločitev (`docs/TVOJE_NALOGE.md`, naloga 5) |
+
+## PIM.StockFileWorker — zaloga dobavitelja od datoteke do baze
+
+```powershell
+$env:PIM_CONNECTION_STRING = (Get-Content .\appsettings.Local.json -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+dotnet run --project PIM_Solution\workers\PIM.StockFileWorker -- --file PIM_Solution\fixtures\stocks\nw\NOWODVORSKI.csv
+```
+
+| Argument | Pomen | Privzeto |
+|---|---|---|
+| `--file` | pot do datoteke (obvezno) | — |
+| `--source` | `NW_STOCK` ali `BT_STOCK` | iz končnice: `.xml` = Braytron, ostalo = Nowodvorski CSV |
+| `--organization-id` | podjetje | 2 |
+| `--endpoint` | oznaka vira v `stock.SyncRun` | `file://<ime datoteke>` |
+| `--date-format` | oblika datuma v datoteki | iz vira: Braytron `yyyy-MM-dd`, Nowodvorski `dd/MM/yyyy` |
+| `--samo-preberi` | prebere in prešteje, v bazo ne piše | izklopljeno |
+
+Posnetek nosi čas datoteke, ne čas zagona — ista datoteka je zato isti posnetek. Konektor in
+pravilo identitete (`map.SourceConnector`, `map.StockIdentityRule`) morata obstajati; worker si
+ju ne izmišlja. Izhod je 1, kadar ni bila uporabljena nobena vrstica in je karantena neprazna.

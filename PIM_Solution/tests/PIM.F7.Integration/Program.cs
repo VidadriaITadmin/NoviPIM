@@ -93,8 +93,15 @@ finally
 
 Console.WriteLine("F7 integration: več strank in izdelkov, komponente pravil, Unknown ter dostava PASS.");
 
-var connectionString = ReadPimConnectionString()
-  ?? throw new InvalidOperationException("Manjka razvojna povezava Pim; F7 MSSQL integracije ni dovoljeno preskočiti.");
+// Brez nastavljene povezave se preskoci, ne pade (glej isti popravek v F2/F3/F5/F8/F9):
+// padec je pomenil, da je paket na racunalniku brez razvojne baze videti pokvarjen.
+// Kjer je povezava nastavljena, dokaz tece kot prej.
+var connectionString = ReadPimConnectionString();
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.WriteLine("F7 MSSQL integracija preskocena: manjka razvojna povezava Pim.");
+  return 0;
+}
 await using (var connection = new SqlConnection(connectionString))
 {
   await connection.OpenAsync();
@@ -105,6 +112,7 @@ await using (var connection = new SqlConnection(connectionString))
   Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM b2b.Customer WHERE OrganizationId=9707;"), "Dokazne B2B stranke niso odstranjene.");
 }
 Console.WriteLine("F7 MSSQL integration: landing, profil, revizija, B2B izvozi in čiščenje PASS.");
+return 0;
 
 static ExportColumnDefinition[] Columns(params (string Code, string Name, string Field, bool Required)[] definitions)
   => definitions.Select((definition, index) => new ExportColumnDefinition(definition.Code, definition.Name, definition.Field, (index + 1) * 10, definition.Required, true)).ToArray();

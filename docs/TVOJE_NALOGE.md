@@ -1,8 +1,8 @@
 # Tvoje naloge — po vrsti, z razlogom in koraki
 
-Zadnja sprememba: 2026-08-22 (po potrditvi kategorij in odstranitvi dobaviteljevih vrstic).
-Stanje sistema: migracija `062`, `scripts\run_tests.ps1` → 46 uspeli, 0 padlih, veja
-`feature/baza-a3-mnozicna-obdelava`.
+Zadnja sprememba: 2026-08-22 (zaloga dobavitelja v bazi, paket brez baze ne pade več).
+Stanje sistema: migracija `063`, `scripts\run_tests.ps1` → 46 uspeli, 0 padlih; brez baze
+36 uspeli, 10 preskočenih, 0 padlih. Veja `feature/baza-a3-mnozicna-obdelava`.
 
 To je edini seznam stvari, **ki jih ne morem narediti jaz**. Vse ostalo delam sam.
 Trije razlogi, zakaj je nekaj tu:
@@ -24,6 +24,7 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 
 | # | Kaj čaka tebe | Zakaj ne morem sam |
 |---|---|---|
+| A | Iz katerega SAOP vira beremo količine zaloge (profil in skladišča) | poverilnice in živ klic sta tvoja; profila ne smem ugibati |
 | B | 236 spornih prevodov (`Prevodi_sporni.csv`) | ista angleška beseda ima več slovenskih oblik |
 | C | Stolpca 26/27 »Kategorije vid« — drevo videlektro | drevesa ni nikjer, tudi v starem sistemu ne |
 | E | Kam v modelu spadajo šifranti in B2B entitete (naloga 5) | poslovna odločitev |
@@ -216,10 +217,39 @@ Ko bo čas, povej in pripravim korake; navodila so v `docs\LAPTOP_INSTALL.md` in
 
 Po vrsti, kot bo:
 
-1. **SAOP zaloge → `stock.*`** (tvoja odločitev pri nalogi 7). 92 strani
-   `GetItemsStockData` in `GetItemsStockAccountingData` že leži v `raw.Inbox`; potrebna je
-   preslikava in prava vsebina `PIM.SaopStockWorker`. Živ klic za to ni potreben.
-2. **Zaloge dobaviteljev v bazo** — `PIM.StockFileWorker` dobi pravi `Program.cs`.
-3. **Pet testnih projektov**, ki na računalniku brez baze padejo, namesto da bi se preskočila.
-4. **C6/C8** iz `docs\NACRT_PRILAGODLJIVOSTI.md` — register SAOP zapisovalnih končnih točk in
+1. **C6/C8** iz `docs\NACRT_PRILAGODLJIVOSTI.md` — register SAOP zapisovalnih končnih točk in
    `out.OwnershipPolicy` iz stolpcev »Smer« in »Master« tvoje preglednice.
+2. **Preslikave za entitete, ki dobijo cilj** — takoj ko odgovoriš na nalogo 5.
+
+Zaključeno 2026-08-22: polno branje dobaviteljevega XML, kategorije, zaloga dobavitelja v bazi
+in preskok testov brez baze.
+
+---
+
+## Novo vprašanje, ki je nastalo med delom: od kod pridejo količine zaloge?
+
+**Zakaj.** Nalogo 7 si zaključil z »`SaopStockWorker` dokončaj«. Ko sem pogledal, kaj je v
+zajetih straneh, se je pokazalo, da tega ne morem dokončati brez tebe:
+
+- `GetItemsStockData` nosi **samo najmanjšo in največjo zalogo po skladišču** (`MinimumStock`,
+  `MaximumStock`), ne dejanske količine;
+- `GetItemsStockAccountingData` nosi **konte po vrsti skladišča**, ne količin;
+- med vsemi 16 zajetimi končnimi točkami dejanskih količin torej ni.
+
+Količine pridejo iz ločenega SAOP vmesnika za zaloge. `PIM.SaopStockWorker` ima zanj že
+pripravljene tri načine (`RegisteredViewData`, `StockAdvance`, `GetStocks`), tabela
+`stock.SaopProviderProfile` pa je prazna — brez nje ne ve, kaj naj pokliče.
+
+**Koraki.** Povej dvoje:
+
+1. **Kateri način** — registriran pogled (in njegov `viewId`), `GetStocks` ali `StockAdvance`.
+2. **Katera skladišča** — šifre skladišč, ki nas zanimajo (v `GetItemsStockData` se pojavlja
+   na primer `0000016`).
+
+Prvi živi klic tega vmesnika je po `AGENTS.md` §4.5 tvoja odločitev; pripravim vse, kar je
+mogoče lokalno, in ti povem, kaj pognati.
+
+**Kaj naredim jaz potem.** Vrstico profila zapišem kot migracijo, worker dokončam proti
+lokalnemu preizkusnemu strežniku na `127.0.0.1` (isti vzorec kot F8) in dokažem, da zapis
+pristane v `stock.*`. Zaloga dobaviteljev (Nowodvorski, Braytron) že teče: worker jo zapiše v
+bazo, dokazano na 2.697 in 1.361 vrsticah.

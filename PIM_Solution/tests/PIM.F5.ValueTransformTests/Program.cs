@@ -25,8 +25,15 @@ const string itemId = "F5-TRANSFORM-PROBE";
 const string ean = "9999900000048";
 const string unknownValue = "F5 vrednost brez prevoda";
 
-var connectionString = ReadConnectionString()
-  ?? throw new InvalidOperationException("Manjka razvojna povezava Pim; testa pretvorb ni dovoljeno preskočiti.");
+// Brez nastavljene povezave se preskoci, ne pade (glej isti popravek v F2/F3/F5/F8/F9):
+// padec je pomenil, da je paket na racunalniku brez razvojne baze videti pokvarjen.
+// Kjer je povezava nastavljena, dokaz tece kot prej.
+var connectionString = ReadConnectionString();
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.WriteLine("F5 pretvorbe preskocene: manjka razvojna povezava Pim.");
+  return 0;
+}
 var builder = new SqlConnectionStringBuilder(connectionString);
 if (!string.Equals(builder.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase) || !builder.IntegratedSecurity)
   throw new InvalidOperationException("Test se sme zaganjati samo z Windows Integrated Auth v bazi PIM.");

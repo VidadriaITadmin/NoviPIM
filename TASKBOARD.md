@@ -70,18 +70,9 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   obstaja in dela — podpira `--export-magento` in je bil v tej meritvi pognan v živo.
   Kar ne obstaja, je pot za `StockLandingWriter` in `B2bLandingWriter`: pisalna logika je
   dokazana, a jo kliče samo test in worker sam v bazo ne piše ničesar.
-- **[WORKERJI]** `PIM.StockFileWorker` dobi pravi `Program.cs`. Danes prebrano samo
-  prešteje in izpiše; vse vrstice v `stock.*` (192.690 landing, 190.847 pozicij) so iz
-  testnih fixture datotek, ne iz dobaviteljevega vira.
-- **[TESTI]** Pet projektov brez baze pade namesto da bi se preskočilo. Izmerjeno
-  2026-08-20 z odmaknjenim `appsettings.Local.json` in praznim
-  `PIM_CONNECTION_STRING`: `scripts\run_tests.ps1` → izhod 1, 38 uspeli,
-  1 preskočen, **5 padli**. `PIM.F3.Integration` in xUnit se korektno preskočita
-  (izhod 0), `PIM.F2.Integration`, `PIM.F5.Integration`, `PIM.F8.HardeningTests`,
-  `PIM.F8.Integration` in `PIM.F9.Integration` pa končajo z izhodom 2
-  „MSSQL BLOCKED". Posledica: na računalniku brez razvojne baze je paket videti
-  pokvarjen, čeprav ni, in CI ne more poganjati testov — zato zdaj samo prevaja.
-  Vzorec za popravek je `PIM.F3.Integration/Program.cs:5-10`.
+- **[WORKERJI]** Dostava datotek dobavitelja: `PIM.StockFileWorker` zdaj zna zapisati
+  zalogo v bazo, datoteko pa mu je treba še vedno položiti v mapo. Prevzem s FTP oziroma
+  drugega vira dobavitelja je zunanji klic (`AGENTS.md` §4.5) in čaka na odločitev.
 - **[WORKERJI]** SAOP zaloge dobijo cilj: `GetItemsStockData` (5 strani) in
   `GetItemsStockAccountingData` (87 strani) že ležita v `raw.Inbox` kot `Pending`, v
   `stock.*` pa ne pride nič — `PIM.SaopStockWorker` je štirivrstični izpis in
@@ -119,6 +110,39 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[WORKERJI/TESTI]** Zaloga dobavitelja pride v bazo; paket brez baze ne laže več — kdo:
+  Claude Opus 5 — 2026-08-22.
+  **`PIM.StockFileWorker` je dobil pravi `Program.cs`.** Bralna stran (NW CSV, BT XML) in
+  pisalna stran (`StockLandingWriter`, `stock.ApplyLandingRecord`) sta obstajali in bili
+  dokazani, manjkal je zapisan vhodni dogovor — čigava zaloga je in v kateri vir gre. Zdaj:
+  `--file <pot>` z izbirnimi `--source`, `--organization-id`, `--endpoint`, `--date-format`
+  in `--samo-preberi`. Vir se privzeto ugane iz končnice (`.xml` = Braytron, ostalo =
+  Nowodvorski CSV), oblika datuma iz vira (Braytron ISO, Nowodvorski evropsko). Konektorja in
+  pravila identitete si worker ne izmišlja — morata biti v registru.
+  Dokaz proti bazi: `NOWODVORSKI.csv` → 2.697 uporabljenih, 0 v karanteni;
+  `Braytron_stocks.xml` → 1.361 uporabljenih, 0 v karanteni. Vhodni dogovor pokriva
+  `PIM.F6.FileWorkerTests` (privzetki, prevlada `--source`, pet napačnih klicev).
+  **Kar ostaja:** datoteko je treba položiti v mapo; prevzem s FTP je zunanji klic.
+  **Pet projektov, ki so brez baze padli, se zdaj preskoči.** Izmerjeno z odmaknjenim
+  `appsettings.Local.json` in praznim `PIM_CONNECTION_STRING`: prej izhod 1, 38 uspeli,
+  1 preskočen, **5 padlih**; zdaj **izhod 0, 36 uspeli, 10 preskočenih, 0 padlih**.
+  Preskoči se samo, kadar povezave ni nikjer; kjer je nastavljena, dokaz teče kot prej, in
+  izpis paketa izrecno pove, da preskočeno ni dokaz. Popravljenih je osem projektov (pet s
+  table, plus `PIM.F5.ValueTransformTests`, `PIM.F5.CategoryMappingTests` in
+  `PIM.F7.Integration`, ki so padli iz istega razloga).
+  **Kar je bilo za to treba prevzeti nazaj:** trije testi so imeli v kodi zapisano »ni
+  dovoljeno preskočiti«. Namen te trditve je bil, da se dokaz ne izgubi tiho; ostaja
+  izpolnjen, ker se preskoči izključno takrat, ko povezave ni nikjer.
+
+- **[BAZA]** Kategorija ne sme kazati na spletno stran, ki je v registru ni — kdo:
+  Claude Opus 5 — 2026-08-22, migracija `063`. Po odobritvi je pobrisana zadnja vrstica
+  `canon.ProductCategory` s spletno stranjo `svetila.si` (s piko) in potjo `Svetila/Test`;
+  naredil jo je dokazni izdelek `F2-PROOF-001`, ki ga `PIM.F2.Integration` namenoma pušča v
+  razvojni bazi, koda pa v registru ne obstaja — od `059` se stran imenuje `svetila_si`.
+  Da se ne ponovi, je pravilo zdaj omejitev baze (`FK_ProductCategory_WebSite`), test pa
+  uporablja registrirano kodo. Ob tem je `canon.WebSite.WebSiteCode` razširjen na
+  `nvarchar(100)`, ker tuji ključ zahteva enak tip kot `canon.ProductCategory.WebSite`.
 
 - **[BAZA]** Enajst poti tračnih sistemov, odstranjene dobaviteljeve kategorije in napaka, ki
   jo je to razkrilo — kdo: Claude Opus 5 — 2026-08-22, migraciji `060` in `062`.
