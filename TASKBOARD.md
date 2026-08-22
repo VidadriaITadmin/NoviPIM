@@ -63,8 +63,9 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   obstaja in dela — podpira `--export-magento` in je bil v tej meritvi pognan v živo.
   Kar ne obstaja, je pot za `StockLandingWriter` in `B2bLandingWriter`: pisalna logika je
   dokazana, a jo kliče samo test in worker sam v bazo ne piše ničesar.
-- **[WORKERJI]** Odločitev o `PIM.SaopStockWorker`, `PIM.FoundationWorker` in ostanku
-  `PIM.NwXmlWorker` (samo `bin\`/`obj\`, projekta ni v `PIM.sln`).
+- **[WORKERJI]** `PIM.StockFileWorker` dobi pravi `Program.cs`. Danes prebrano samo
+  prešteje in izpiše; vse vrstice v `stock.*` (192.690 landing, 190.847 pozicij) so iz
+  testnih fixture datotek, ne iz dobaviteljevega vira.
 - **[TESTI]** Pet projektov brez baze pade namesto da bi se preskočilo. Izmerjeno
   2026-08-20 z odmaknjenim `appsettings.Local.json` in praznim
   `PIM_CONNECTION_STRING`: `scripts\run_tests.ps1` → izhod 1, 38 uspeli,
@@ -74,14 +75,24 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   „MSSQL BLOCKED". Posledica: na računalniku brez razvojne baze je paket videti
   pokvarjen, čeprav ni, in CI ne more poganjati testov — zato zdaj samo prevaja.
   Vzorec za popravek je `PIM.F3.Integration/Program.cs:5-10`.
-- **[IZVOZ]** `PIM.B2bWorker\MagentoExportRunner.cs` je mrtva koda — nanj se ne
-  sklicuje nič (`grep` po celotni rešitvi vrne samo definicijo). Je druga, vzporedna
-  izvedba istega izvoza; priklopljen je `MagentoExportCommand`. Potrebna je odločitev,
-  ali se izbriše — brisanje je na zaprtem seznamu `AGENTS.md` §4.1.
+- **[WORKERJI]** SAOP zaloge dobijo cilj: `GetItemsStockData` (5 strani) in
+  `GetItemsStockAccountingData` (87 strani) že ležita v `raw.Inbox` kot `Pending`, v
+  `stock.*` pa ne pride nič — `PIM.SaopStockWorker` je štirivrstični izpis in
+  `stock.SaopProviderProfile` ima 0 vrstic. Odločitev uporabnika 2026-08-22: dokončati.
+  Živ klic za to ni potreben, ker so strani že zajete.
 
 ## DELAM (v teku)
 
-_(prazno)_
+- **[ODHODNA POT / Agent C]** `PIM.OutboxDispatcher` — vrstni red `BeginRun`/`Claim`, zanka
+  čez čakalno vrsto in test, ki oboje dokaže. Kdo: Claude Opus 5, začeto 2026-08-22.
+  **Ozemlje:** `workers/PIM.OutboxDispatcher/`, `tests/PIM.F8.Integration/`. Brez migracije,
+  brez `PIM.sln`, brez `src/PIM.XmlMapping` — migracijska steza je zasedena z 059.
+  **Zakaj:** `ops.BeginRun` vrže 51100, če za par (organizacija, `OUTBOUND`) ni omogočenega
+  razporeda; te vrstice ni. `Program.cs` pa kliče `out.ClaimMessage` **pred** `BeginRun`,
+  zato ob prvem resničnem sporočilu porabi poskus, sporočilo pusti zakupljeno in umre,
+  ne da bi kdaj poslal zahtevo. Noben test tega ne ujame — `F8.DispatcherTests` preizkuša
+  `SaopOutboundHandler`, `F8.Integration` in `F8.HardeningTests` pa kličeta procedure
+  neposredno; `Program.cs` ni pokrit.
 
 
 ## BLOKIRANO
@@ -93,9 +104,10 @@ _(prazno)_
   profila jih ima vir **156**.
   **Kar od te blokade ostane, je ožje in še vedno čaka tvojo odločitev:**
   1. **4 atributni stolpci** brez vira v `map.FieldMapping`.
-  2. **33 stolpcev sploh nima kanonične kode** — zanje ni odločeno, od kod pridejo:
+  2. **31 stolpcev sploh nima kanonične kode** (dva sta dobila vir 2026-08-22:
+     `Kategorije svetila ANG/SLO`, migracija `059`) — zanje ni odločeno, od kod pridejo:
      `Dobavitelj`, `ABC klasifikacija`, `Merska enota`, enote teže/volumna/paketa,
-     `Kategorije svetila ANG/SLO`, `Popust`, `Valuta`, `Omejitev pri naročanju`,
+     `Popust`, `Valuta`, `Omejitev pri naročanju`,
      `Posebni popust za stranko`, dokumenti (3), zaloge `VID *` (7), dobaviteljeva
      zaloga (3), `Skladišče`.
   3. **`slug=sensor_type` pri Braytronu** ('Motion', 'PIR', 'Microwave') ni Da/Ne in ni
@@ -110,6 +122,58 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[ZAJEM/IZVOZ]** Dobaviteljev XML se prvič prebere v celoti; kategorije so naše —
+  kdo: Claude Opus 5 — 2026-08-22, migracija `059_CategoryTreeAndSupplierMapping.sql`.
+  **Kaj je bilo narobe:** preslikave iz migracij `054`/`055` so obstajale, brala pa se je
+  samo 336 KB izrezek Nowodvorskega (25 izdelkov) in 30 KB izrezek Braytrona (3 izdelki).
+  Polna datoteka (19 MB) je 4. 8. končala v karanteni in od takrat je ni nihče pognal.
+  Lastnosti je imelo **29 izdelkov** — zato so bili atributni stolpci izvoza v praksi prazni,
+  čeprav je bil mehanizem dokazan.
+  **Zakaj polna datoteka ni šla skozi:** trije razlogi, vsi izmerjeni.
+  1. `SqlMappingPipeline` je bral strani in preslikave z enim JOIN-om, zato je vsaka vrstica
+     nosila cel `PayloadXml`: 37 MB × 112 preslikav ≈ 4 GB po žici za eno stran. Zdaj sta to
+     dve poizvedbi in vsebina strani gre po žici enkrat.
+  2. `XPathMappingExtractor` je pot prevajal ob vsakem zapisu — 2.619 × 112 = 293.000 prevodov
+     istih 112 izrazov. Zdaj se prevede enkrat na preslikavo.
+  3. Vsaka izluščena vrednost je bila svoj obhod do strežnika (`IF NOT EXISTS` + `INSERT`),
+     torej 293.000 obhodov na stran. Zdaj gredo množično v začasno tabelo, vstavi pa jih en
+     stavek z istim pravilom »kar že obstaja, se ne vstavi znova«.
+  Merjeno na isti datoteki: prej **prek 20 minut brez konca**, zdaj **110 s** za vse tri
+  entitete. `canon.ProductAttribute` 1.064 → **112.820** vrstic, 29 → **2.548** izdelkov.
+  Braytron: od 3.082 izdelkov v datoteki jih je 291 v našem katalogu (ujemanje po EAN).
+  **Kategorije (naloga 3):** dobaviteljeva kategorija ni naša. Iz stare baze `PIM_test`
+  (samo branje) je prenesenih 132 kategorij, 225 prevodov in 190 poti slovarja; nastali so
+  `canon.WebSite`, `canon.Category`, `canon.CategoryTranslation`, `map.CategoryPathMap`,
+  `map.MissingCategoryMap` in pogled `canon.CategoryPathTranslated`. Ključ poti je isti kot v
+  starem sistemu (male črke, presledek je podčrtaj, ravni loči `___`) in pokrije 44 od 56 poti
+  Nowodvorskega, kar je 93 % izdelkov; preostalih 11 poti (tračni sistemi, 161 izdelkov) gre
+  v `map.MissingCategoryMap` in čaka človeka.
+  Katera spletna stran gre v kateri stolpec, je zdaj vrstica v `canon.WebSite` — prej stikalo
+  v C# (`"B2C" => SLO`), zaradi katerega je bila nova spletna stran nova različica programa.
+  **Izvoz:** polnih **152 od 213 stolpcev** (prej 12). Stolpca 24/25 sta polna pri 2.113
+  izdelkih (`Cameleon sistem > Rozete` / `Cameleon System > Canopies`).
+  **Nov ukaz** `--znova-preslikaj <RunId>`: iste datoteke ni mogoče zajeti dvakrat (`raw.Inbox`
+  je enoličen po vsebini), zato ta ukaz strani zagona postavi nazaj na `Pending` in jih požene
+  skozi dopolnjeno preslikavo. Nič ne briše; preslikava je združevalna.
+  **Kar namenoma ostaja:** 2.267 starih vrstic `canon.ProductCategory` z dobaviteljevo
+  kategorijo pod `B2C`; preslikava, ki jih je delala, je izklopljena, brisanje pa je odločitev
+  uporabnika (`AGENTS.md` §4.1).
+  Dokaz: migrator uporabi `059`, 2. zagon nobene, `--verify` izhod 0; nov test
+  `PIM.F5.CategoryMappingTests` (ključ poti, naša pot v obeh jezikih, delovni seznam neznanih,
+  ponoven zagon brez podvojitev), ki za sabo pobriše vse svoje vrstice;
+  `dotnet build PIM_Solution\PIM.sln -warnaserror` → 0 opozoril, 0 napak.
+
+- **[IZVOZ]** `MagentoExportRunner.cs` ostane, a je zavarovan — kdo: Claude Opus 5 —
+  2026-08-22, odločitev uporabnika (naloga 6). Mrtva koda se ne briše; namesto tega
+  `PIM.F7.MappingTests` pade, če se nanjo sklicuje karkoli razen komentarja. RED dokazan z
+  začasno datoteko, ki jo uporabi (`sklicujejo se nanj: ZzzRedProbe.cs`), GREEN po njeni
+  odstranitvi.
+
+- **[WORKERJI]** `PIM.FoundationWorker` in ostanek `PIM.NwXmlWorker` sta arhiv — kdo:
+  Claude Opus 5 — 2026-08-22, odločitev uporabnika (naloga 7). Nič ni pobrisano;
+  `FoundationWorker` to pove v svojem izpisu, `NwXmlWorker` pa sta samo še `bin\`/`obj\`,
+  ni ne v rešitvi ne v Gitu.
 
 - **[DOKUMENTACIJA]** Analiza treh delov A/B/C proti živi bazi — kdo: Claude Opus 5 —
   2026-08-22. Nastal je [`docs/ANALIZA_A_B_C.md`](docs/ANALIZA_A_B_C.md); `STATUS.md` in
