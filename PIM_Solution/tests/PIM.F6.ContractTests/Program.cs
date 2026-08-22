@@ -20,7 +20,10 @@ Contains(migration, "OrganizationId, SourceConnectorId, SourceRecordKey, Snapsho
   "Immutable identiteta landing zapisa ni eksplicitna.");
 Contains(migration, "IX_stock_Position_Identity", "Manjka iskalni indeks ItemID/EAN.");
 Contains(identityConfiguration, "MERGE map.StockIdentityRule", "Manjka konfigurirana identitetna pravila za stock vire.");
-var writer = Read("workers/PIM.StockFileWorker/StockLandingWriter.cs");
+// Pisalna pot zaloge se je 2026-08-22 preselila v src/PIM.StockMapping, ker iz nje pisejo vsi
+// viri (datoteka dobavitelja in SAOP), ne le datotecni worker. Trditev je ista: pravilo
+// identitete se bere iz registra, ne iz kode.
+var writer = Read("src/PIM.StockMapping/StockLandingWriter.cs");
 Contains(writer, "LoadIdentityRuleAsync", "Worker mora identitetno pravilo prebrati iz map.StockIdentityRule.");
 if (migration.Contains("val.", StringComparison.OrdinalIgnoreCase))
 {

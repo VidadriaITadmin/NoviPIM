@@ -1,4 +1,5 @@
 using PIM.StockFileWorker;
+using PIM.StockMapping;
 
 // Zaloga dobavitelja od datoteke do baze. Doslej je worker prebrano samo preštel in izpisal,
 // zato so bile vse vrstice v stock.* iz testov, ne iz pravega vira. Bralna in pisalna stran

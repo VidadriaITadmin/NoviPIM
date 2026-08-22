@@ -77,6 +77,22 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
       apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
       await apply.ExecuteNonQueryAsync(cancellationToken);
 
+      // Sifranti niso izdelki in imajo svoj postopek (od migracije 064). map.ProcessRawInbox jih
+      // preskoci po map.EntityMapping.TargetDomain, tu pa se obdelajo. Nad virom brez sifrantov
+      // postopek ne naredi nicesar.
+      await using (var warehouses = new SqlCommand(
+        "EXEC map.ProcessWarehouseInbox @RunId,@OrganizationId,@SourceCode;",
+        connection)
+      {
+        CommandTimeout = ApplyCommandTimeoutSeconds
+      })
+      {
+        warehouses.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+        warehouses.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+        warehouses.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+        await warehouses.ExecuteNonQueryAsync(cancellationToken);
+      }
+
       // Kategorija dobavitelja ni nasa kategorija. Ko so izdelki najdeni oziroma ustvarjeni,
       // se dobaviteljeva pot prevede v nase drevo (map.CategoryPathMap); cesar slovar ne
       // pozna, gre v map.MissingCategoryMap in ostane vidno. Postopek nad virom brez

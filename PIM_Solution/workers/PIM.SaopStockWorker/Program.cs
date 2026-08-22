@@ -1,4 +1,140 @@
+using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using PIM.SaopStockWorker;
 
-Console.WriteLine("SAOP stock worker je konfiguracijsko pripravljen. Živi klic ni izveden brez eksplicitnega profila in poverilnic.");
-return 0;
+// Zaloga iz SAOP. Profil (kateri vmesnik, katera skladišča) je vrstica v
+// stock.SaopProviderProfile, ne nastavitev v kodi — migracija 065.
+//
+//   dotnet run --project PIM_Solution\workers\PIM.SaopStockWorker -- --organizations 2,3 [--page-size 5000]
+//              [--base-url https://…] [--samo-nastavitve]
+//
+// Živ klic je odločitev človeka (AGENTS.md §4.5), zato ga worker izvede samo, kadar je
+// PIM_SAOP_MODE=Live. Brez tega izpiše, kaj bi poklical, in konča z 0.
+
+var organizations = new List<int>();
+int? pageSize = null;
+string? baseUrlOverride = null;
+var onlySettings = false;
+
+for (var index = 0; index < args.Length; index++)
+{
+  switch (args[index].ToLowerInvariant())
+  {
+    case "--organizations":
+      if (index + 1 >= args.Length) return Napaka("--organizations potrebuje seznam, npr. 2,3.");
+      organizations.AddRange(args[++index].Split(',', StringSplitOptions.RemoveEmptyEntries)
+        .Select(value => int.Parse(value.Trim(), CultureInfo.InvariantCulture)));
+      break;
+    case "--page-size":
+      if (index + 1 >= args.Length) return Napaka("--page-size potrebuje število.");
+      pageSize = int.Parse(args[++index], CultureInfo.InvariantCulture);
+      break;
+    case "--base-url":
+      if (index + 1 >= args.Length) return Napaka("--base-url potrebuje naslov.");
+      baseUrlOverride = args[++index];
+      break;
+    case "--samo-nastavitve":
+      onlySettings = true;
+      break;
+    default:
+      return Napaka($"Neznan argument: {args[index]}.");
+  }
+}
+
+var settings = SaopStockSettings.Read(baseUrlOverride);
+if (settings is null) return Napaka("Manjka nastavitev Saop (BaseUrl, Username, Password) v appsettings.Local.json.");
+if (string.IsNullOrWhiteSpace(settings.ConnectionString)) return Napaka("Manjka povezava Pim.");
+
+if (organizations.Count == 0) organizations.AddRange(settings.ActiveOrganizations);
+if (organizations.Count == 0) return Napaka("Nobenega podjetja: navedi --organizations ali vklopi podjetje v nastavitvah.");
+
+var live = string.Equals(Environment.GetEnvironmentVariable("PIM_SAOP_MODE"), "Live", StringComparison.OrdinalIgnoreCase);
+if (onlySettings || !live)
+{
+  Console.WriteLine(live ? "Samo nastavitve, klic ni izveden." : "PIM_SAOP_MODE ni Live — klic ni izveden.");
+  Console.WriteLine($"  naslov:   {settings.BaseUrl}");
+  Console.WriteLine($"  podjetja: {string.Join(", ", organizations)}");
+  Console.WriteLine("  profil in skladišča se preberejo iz stock.SaopProviderProfile in canon.Warehouse.");
+  return 0;
+}
+
+using var handler = new HttpClientHandler();
+if (settings.AcceptUntrustedCertificate)
+{
+  // Isto pravilo kot pri katalogu: velja samo za ta odjemalec in samo, kadar je izrecno vklopljeno.
+  handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
+}
+using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(Math.Max(30, settings.TimeoutSeconds)) };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+  "Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"{settings.Username}:{settings.Password}")));
+http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
+
+var runner = new SaopStockRunner(settings.ConnectionString, http, new Uri(settings.BaseUrl.TrimEnd('/') + "/"));
+var napake = 0;
+foreach (var organizationId in organizations)
+{
+  try
+  {
+    var izid = await runner.RunAsync(organizationId, pageSize);
+    Console.WriteLine($"[{organizationId}] {izid.ProfileCode} ({izid.ProviderKind}): skladišč={izid.Warehouses}, "
+      + $"zapisov={izid.RecordsRead}, uporabljenih={izid.Applied}, v karanteni={izid.Quarantined}, RunId={izid.RunId}.");
+  }
+  catch (Exception exception)
+  {
+    // Padec enega podjetja ne sme ustaviti ostalih — isto pravilo kot pri katalogu.
+    napake++;
+    Console.Error.WriteLine($"[{organizationId}] NAPAKA: {exception.Message}");
+  }
+}
+return napake == 0 ? 0 : 1;
+
+static int Napaka(string sporocilo)
+{
+  Console.Error.WriteLine(sporocilo);
+  Console.Error.WriteLine("Uporaba: PIM.SaopStockWorker [--organizations 2,3] [--page-size N] [--base-url URL] [--samo-nastavitve]");
+  return 2;
+}
+
+/// <summary>Nastavitve SAOP in povezava, prebrane iz iste lokalne datoteke kot pri katalogu.</summary>
+internal sealed record SaopStockSettings(
+  string BaseUrl, string Username, string Password, int TimeoutSeconds,
+  bool AcceptUntrustedCertificate, string? ConnectionString, IReadOnlyList<int> ActiveOrganizations)
+{
+  public static SaopStockSettings? Read(string? baseUrlOverride)
+  {
+    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (directory is not null)
+    {
+      var path = Path.Combine(directory.FullName, "appsettings.Local.json");
+      if (File.Exists(path))
+      {
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var root = document.RootElement;
+        if (!root.TryGetProperty("Saop", out var saop)) return null;
+        var organizations = new List<int>();
+        if (saop.TryGetProperty("Organizations", out var array))
+        {
+          foreach (var element in array.EnumerateArray())
+          {
+            if (element.TryGetProperty("IsActive", out var active) && active.GetBoolean()
+              && element.TryGetProperty("Id", out var id)) organizations.Add(id.GetInt32());
+          }
+        }
+        var connection = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
+        if (string.IsNullOrWhiteSpace(connection) && root.TryGetProperty("ConnectionStrings", out var strings)
+          && strings.TryGetProperty("Pim", out var pim)) connection = pim.GetString();
+        return new(
+          baseUrlOverride ?? saop.GetProperty("BaseUrl").GetString() ?? "",
+          saop.TryGetProperty("Username", out var user) ? user.GetString() ?? "" : "",
+          saop.TryGetProperty("Password", out var pass) ? pass.GetString() ?? "" : "",
+          saop.TryGetProperty("TimeoutSeconds", out var timeout) ? timeout.GetInt32() : 120,
+          saop.TryGetProperty("AcceptUntrustedCertificate", out var untrusted) && untrusted.GetBoolean(),
+          connection, organizations);
+      }
+      directory = directory.Parent;
+    }
+    return null;
+  }
+}

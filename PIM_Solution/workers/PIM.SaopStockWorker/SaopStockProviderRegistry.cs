@@ -4,7 +4,13 @@ using System.Text.Json;
 
 namespace PIM.SaopStockWorker;
 
-public sealed record SaopProviderConfiguration(string ProviderKind, string? RegisteredViewId, IReadOnlyList<int> WarehouseIds);
+public sealed record SaopProviderConfiguration(
+  string ProviderKind,
+  string? RegisteredViewId,
+  IReadOnlyList<int> WarehouseIds,
+  int? PageSize = null,
+  int Page = 1,
+  DateTime? ModifiedFromUtc = null);
 
 public sealed class SaopStockProviderRegistry
 {
@@ -33,8 +39,25 @@ public sealed class SaopStockProviderRegistry
   static HttpRequestMessage Warehouse(SaopProviderConfiguration profile, Uri baseUri, string endpoint)
   {
     if (profile.WarehouseIds.Count == 0) throw new InvalidOperationException("Vsaj en warehouse ID je obvezen.");
-    var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, endpoint));
-    request.Content = JsonContent.Create(new { searchQuery = new { warehouseIdList = profile.WarehouseIds } });
-    return request;
+
+    // Pogodba je iz Swaggerja SAOP (docs\Povezave_virov_in_sistemov\SAOP_API_swagger_v2.json):
+    // GetStocks in GetStockAdvance sta GET s parametri v naslovu in vrneta XML. Prej je bil tu
+    // POST z JSON telesom — oblika, ki je API ne pozna; napaka je bila nevidna, ker klica ni
+    // nikoli nihce izvedel.
+    var query = new List<string>
+    {
+      $"searchQuery.warehouseIdList={WebUtility.UrlEncode(string.Join(',', profile.WarehouseIds))}",
+      "searchQuery.includeZeroQuantities=true"
+    };
+    if (profile.PageSize is int pageSize && pageSize > 0)
+    {
+      query.Add($"searchQuery.page={profile.Page}");
+      query.Add($"searchQuery.pageSize={pageSize}");
+    }
+    if (profile.ModifiedFromUtc is DateTime modifiedFrom)
+    {
+      query.Add($"searchQuery.recordDtModifiedFrom={WebUtility.UrlEncode(modifiedFrom.ToString("O"))}");
+    }
+    return new(HttpMethod.Get, new Uri(baseUri, $"{endpoint}?{string.Join('&', query)}"));
   }
 }

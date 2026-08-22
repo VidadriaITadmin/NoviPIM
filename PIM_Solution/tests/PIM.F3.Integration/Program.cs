@@ -467,7 +467,11 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
 
     await using var bulkCleanupConnection = new SqlConnection(connectionString);
     await bulkCleanupConnection.OpenAsync();
-    await using var bulkCleanup = new SqlCommand(bulkCleanupSql, bulkCleanupConnection);
+    // Ciscenje brise tudi zgodovino sprememb, na kateri visijo sledilni prozilci; na razvojni
+    // bazi s 196.000 artikli to redno preseze privzetih 30 sekund, kadar tece cel paket testov
+    // in je streznik obremenjen. Meja je zato izrecna in velika — to ni skrivanje pocasnosti,
+    // ampak priznanje obsega.
+    await using var bulkCleanup = new SqlCommand(bulkCleanupSql, bulkCleanupConnection) { CommandTimeout = 300 };
     bulkCleanup.Parameters.AddWithValue("@RunId", bulkRunId);
     await bulkCleanup.ExecuteNonQueryAsync();
   }

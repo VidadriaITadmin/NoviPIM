@@ -1,7 +1,9 @@
 using Microsoft.Data.SqlClient;
-using PIM.StockMapping;
+namespace PIM.StockMapping;
 
-namespace PIM.StockFileWorker;
+// Skupna pisalna pot zaloge: iz nje pisejo vsi viri, ne le datotecni. Doslej je zivela v
+// PIM.StockFileWorker, ker je bil ta edini pisec; ko je zalogo dobil se SAOP, bi to pomenilo
+// workerja, ki referencira drugega workerja. Vsebina je nespremenjena.
 
 public sealed class StockLandingWriter(string connectionString)
 {
