@@ -1,6 +1,51 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-21
+Posodobljeno: 2026-08-22
+
+## Stanje treh delov po meritvi 2026-08-22
+
+Celotna analiza z vsemi številkami: [`docs/ANALIZA_A_B_C.md`](docs/ANALIZA_A_B_C.md).
+Merjeno proti živi bazi (migracija **058**), ne proti dokumentaciji.
+
+| Del | Mehanizem | V obratovanju | Ozko grlo |
+|---|---|---|---|
+| **A — zajem** | ~90 % | ~55 % | 294 strani v `raw.Inbox` je `Pending` — zajeto, a nepreslikano |
+| **B — izvoz** | ~85 % | **~10 %** | v resnični datoteki ima vrednost **15 od 213 stolpcev** |
+| **C — odhodna pot** | ~50 % | **0 %** | v `out.OutboxMessage` ni nikoli vstopilo nobeno sporočilo |
+
+**Razkorak ni v kodi, ampak med kodo in podatkom.** Vsi trije deli imajo več zgrajenega,
+kot ga je v obratovanju.
+
+Meritev je nastala nad delovnim drevesom **pred** commitom `2beee25`; vse številke iz baze
+veljajo naprej, ker se shema od takrat ni spremenila.
+
+Dokazi te meritve: `dotnet build PIM_Solution\PIM.sln` → 0 napak;
+`PIM.Migrator --verify` → izhod 0; `PIM.B2bWorker --export-magento --organization-id 1`
+→ datoteka 1.729 vrstic. `scripts\run_tests.ps1` v tej seji ni bil pognan (zadnji znani
+rezultat 44/0/0 z dne 2026-08-21).
+
+**Prvi štirje koraki po vrsti:** (1) ponovna preslikava zajetih strani za trgovinske
+podatke (`--map-run`/`--full`), (2) preslikava `GetItemsTitlesLanguage` — spletni nazivi,
+(3) poln zajem NW in BT XML, (4) odločitev o profilu za objavo in `val.Promote` za
+organizaciji 3 in 4.
+
+## Migracije 049–058
+
+`dbo.SchemaMigration` je na **058**. Deset migracij (`049`–`058`) je uporabljenih na
+razvojni bazi in od commita `2beee25` (2026-08-22) tudi v git — skupaj s popravki
+`MagentoCsvContract.cs` in testov F2/F5/F7. Kar prinašajo:
+
+- **049** slovar vrednosti in pretvorbe (`map.FieldTransform` 40, `map.ValueLookup` 6.316)
+- **050–053** čiščenje glav Magento predloge (213 aktivnih stolpcev namesto 215)
+- **054/055** preslikave lastnosti iz Nowodvorski (108) in Braytron (76) XML
+- **056** vrstni red manjkajočih prevodov
+- **057** trgovinski podatki iz SAOP — 11 preslikav v `canon.ProductCommercial`
+- **058** `val.Promote` polni tudi otroške tabele
+
+Bradavica: `dbo.SchemaMigration` vsebuje zapisa `047_ValueDictionaryAndTransforms.sql` in
+`048_ValueDictionaryAndTransforms.sql`, ki kot datoteki ne obstajata (preimenovani v 049).
+`--verify` kljub temu vrne 0.
+
 
 ## BAZA naloga — karantena NW XML po izdelku
 
@@ -64,8 +109,16 @@ Posodobljeno: 2026-08-21
   stolpec→kanonična koda ni več `switch` v `MagentoProductSchema`.
 - Kar ostaja koda: poizvedbe, ki kanonične vrednosti proizvedejo. Nov *podatek* je še
   vedno koda, nov *kanal* ni.
-- 162 atributnih stolpcev je še vedno praznih — to ni koda, ampak manjkajoča odločitev,
-  katera SAOP/NW lastnost pripada kateremu stolpcu (`TASKBOARD.md`, BLOKIRANO).
+- **Popravljeno 2026-08-22:** trditev „162 atributnih stolpcev je praznih, ker manjka
+  odločitev" ne velja več. Odgovor je zapisan kot vrstice registra v migracijah 054
+  (Nowodvorski, 108 preslikav) in 055 (Braytron, 76). Od 160 atributnih stolpcev aktivnega
+  profila jih ima vir **156**; brez vira ostanejo **4**, ločeno pa **33 stolpcev sploh nima
+  kanonične kode** (zaloge VID, dobavitelj, dokumenti, kategorije svetila, popust, valuta,
+  skladišče).
+- **Prazni so kljub temu — a iz drugega razloga.** Zagnan izvoz za organizacijo 1
+  (2026-08-22) je dal 1.728 vrstic, v katerih ima vrednost **15 od 213 stolpcev**: šifra,
+  EAN, proizvajalec in DDV pri vseh, cena B2B pri 1.109, vse ostalo pri enem ali nič.
+  Vzrok je prazen `canon`, ne izvoz. Podrobno: `docs/ANALIZA_A_B_C.md`.
 
 ## Validacija — od 2026-08-21 po dogovorjenem modelu
 
@@ -92,11 +145,21 @@ Posodobljeno: 2026-08-21
 
 - **195.756 artiklov** v štirih podjetjih: IQLighting 110.304, Ediito 39.130,
   Vidadria 28.897, DEMO 17.425. Cene 156.114, besedila 195.723.
-- **Preslikane so 3 od 16 končnih točk.** Ostalo je zajeto in leži v `raw.Inbox` kot
-  `Pending`. `canon.ProductCommercial` je prazna, čeprav SAOP te podatke ima — manjka
-  preslikava; zato sta profila `ERP_L1_EU` in `COMMERCIAL_L2` pri 0 %.
-- **`val.Promote` polni samo `pim.Product`**, otroških tabel (`pim.ProductText`,
-  `pim.ProductPrice`, `pim.ProductMedia` …) ne — vse so na 0. Magento izvoz bere prav te.
+- **Preslikane so 3 od 16 SAOP končnih točk.** Ostalo je zajeto in leži v `raw.Inbox` kot
+  `Pending` — 2026-08-22 je bilo takih **294 strani**, največ `GetItemsPlanningData` (110),
+  `GetItemsStockAccountingData` (87) in `GetItemsTitlesLanguage` (45, spletni nazivi).
+- **`canon.ProductCommercial` — popravljeno 2026-08-22.** Preslikava zdaj obstaja
+  (migracija 057, uporabljena). Tabela je kljub temu pri **1 vrstici**, ker so zajete strani
+  že `Processed`: potreben je `--full` ali `--map-run`, ne nova preslikava. Zato so
+  `ERP_L1_EU`, `ERP_L1_THIRD` in `COMMERCIAL_L2` še vedno pri 1 veljavnem artiklu od 115.685.
+- **`val.Promote` — popravljeno 2026-08-22.** Migracija 058 jo je razširila na otroške
+  tabele in to dela: `pim.Product` 44.510, `pim.ProductText` 44.511, `pim.ProductPrice`
+  85.777. Nizke ostajajo `pim.ProductAttribute` (901 / 27 izdelkov), `pim.ProductCategory`
+  (21), `pim.ProductMedia` (21) in `pim.ProductCommercial` (1) — ker je nizek `canon`,
+  ne ker `Promote` ne bi delala.
+- **Objava teče samo za organizaciji 1 in 2.** Vidadria (3) in Ediito (4) imata 0
+  objavljenih artiklov. Vstopnica je še stari profil `ERP_L1` (44.510 VALID); po
+  `ERP_L1_SLO` bi jih bilo 100.809. Zamenjava je poslovna odločitev.
 - Zaloge: `stock.Position` (168.594) se polni iz datotek. Končni točki SAOP
   `GetItemsStockData` in `GetItemsStockAccountingData` sta zajeti, a brez preslikave.
 - Celoten zemljevid baze z vrsticami po tabelah: glej `docs/VALIDACIJA.md` in objavljeni
@@ -125,6 +188,17 @@ Posodobljeno: 2026-08-21
   za isto polje ostalo `Sent` za vedno in je bilo videti kot nepotrjeno.
 - **Uskladitev nove šifre ne sloni več samo na EAN** (`out.SaopItemAssignment`): odgovor
   SAOP → zahtevana šifra → enoličen EAN → človek. Dvoumen EAN ni ujemanje.
+- **Izmerjeno 2026-08-22: skozi to pot ni šlo nikoli nobeno sporočilo.**
+  `out.OutboxMessage` 0, `out.OutboxAttempt` 0, `out.SaopItemAssignment` 0,
+  `out.OwnershipPolicy` 0. Koda in shema sta zgrajeni, obratovanje je na ničli.
+- **Trije konkretni manjki:**
+  1. *Nihče ne piše v outbox.* Ni proizvajalca sporočil — ne iz intraneta, ne iz preslikave,
+     ne iz razveljavitve. Tabela je prazna, ker vanjo nihče ne vstavlja.
+  2. *Dispatcher obdela natanko eno sporočilo in konča.*
+     `workers\PIM.OutboxDispatcher\Program.cs` naredi en `ClaimMessage`, en HTTP klic in
+     en `CompleteAttempt`. Ni zanke čez čakalno vrsto.
+  3. *Ni razporeda.* `ops.ScheduleProfile` ima vrstice za `SAOP_PRODUCTS`, `GENERIC_XML`,
+     `ALERT_DISPATCH` in `WATCHDOG`; za `OUTBOUND` je ni.
 - **Kar še ne obstaja:** odhodna pot pošlje spremembo polja, artikla ne ustvari, zato
   `out.ResolveSaopItemAssignment` v živo še nihče ne kliče. Stanje `Error` ostaja mrtva pot.
   Ni urnika, ni dostave na splet, ni živega SAOP klica.

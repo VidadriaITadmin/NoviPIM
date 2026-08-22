@@ -18,7 +18,38 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## TODO (čaka)
 
-- **[WORKERJI]** Preslikave za 13 še nepreslikanih SAOP končnih točk. Zajem dela za
+> Vrstni red spodnjih petih postavk je priporočilo iz meritve 2026-08-22
+> ([`docs/ANALIZA_A_B_C.md`](docs/ANALIZA_A_B_C.md)) — od najcenejšega učinka navzdol.
+
+- **[WORKERJI] 1. Ponovna preslikava zajetih strani za trgovinske podatke.** Migracija
+  **057** je uporabljena in doda 11 preslikav v `canon.ProductCommercial`, tabela pa ima
+  **1 vrstico**: zajete strani so že `Processed`, zato jih nova preslikava ne vidi.
+  Potreben je `--map-run <RunId>` ali `--full`. Odklene stolpce 10–23 Magento izvoza in
+  profile `ERP_L1_EU`, `ERP_L1_THIRD`, `COMMERCIAL_L2`, ki so danes pri **1 veljavnem
+  artiklu od 115.685**.
+- **[WORKERJI] 2. Preslikava `GetItemsTitlesLanguage`.** 45 strani čaka kot `Pending`.
+  To so spletni nazivi — stolpec „Naziv artikla" ima danes izpolnjen **1 izdelek od 1.728**.
+  Brez tega spletni izvoz ni uporaben, ne glede na atribute.
+- **[WORKERJI] 3. Poln zajem NW in BT XML.** Mehanizem je cel (049 pretvorbe in slovar,
+  054/055 preslikave), pognan pa je bil samo za vzorec: BT_XML **ena stran**,
+  `canon.ProductAttribute` ima **1.064 vrstic za 27 izdelkov**. To je največji razkorak
+  med „narejeno" in „teče" v celotnem sistemu.
+- **[BAZA / odločitev] 4. Kateri profil je vstopnica za objavo** in objava za organizaciji
+  3 in 4. Danes je vstopnica stari `ERP_L1` → **44.510 VALID**; po `ERP_L1_SLO` bi jih bilo
+  **100.809**. Vidadria (3) in Ediito (4) imata **0** objavljenih artiklov. Migracija 058 te
+  odločitve nalašč ni sprejela — je poslovna, ne tehnična.
+- **[ODHODNA POT] 5. Proizvajalec sporočil za outbox.** `out.OutboxMessage` ima **0**
+  vrstic in nihče vanjo ne piše — ne intranet, ne preslikava, ne razveljavitev. Dokler
+  proizvajalca ni, sta dodelava dispatcherja in urnik brezpredmetna. Za tem šele:
+  zanka v `PIM.OutboxDispatcher\Program.cs` (danes obdela **eno** sporočilo in konča)
+  in vrstica `OUTBOUND` v `ops.ScheduleProfile` (danes je ni).
+- **[BAZA] Počistiti rep meritve 2026-08-22:** dva zagona `F5_INTEGRATION` obtičala
+  v `ops.PipelineRun` kot `Running` brez
+  `EndedUtc`; `dbo.SchemaMigration` vsebuje zapisa `047_ValueDictionaryAndTransforms.sql`
+  in `048_ValueDictionaryAndTransforms.sql`, ki kot datoteki ne obstajata (preimenovani
+  v 049) — `--verify` kljub temu vrne 0.
+
+- **[WORKERJI]** Preslikave za 13 še nepreslikanih SAOP končnih točk (2026-08-22: **294 strani `Pending`**). Zajem dela za
   vseh 16, preslikava v `canon` je nastavljena za `GetItemsGeneralData`, `GetPrices`
   in `GetItemsDescriptions`. Za šest končnih točk oblika XML ni znana — v posnetih
   odgovorih ni bilo vsebine, zato se preslikava zanje piše šele po prvem živem zajemu.
@@ -27,9 +58,11 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   `map.ProcessRawInbox` — potrebujejo odločitev, kam v modelu spadajo.
   Od 2026-08-20 to ni več tiho: zajem teh entitet mejnika ne premakne, zato bo prvi
   zagon po dodani preslikavi isto obdobje zajel znova. Prej bi bilo trajno izgubljeno.
-- **[WORKERJI]** `PIM.StockFileWorker` in `PIM.B2bWorker` dobita pravi `Program.cs`.
-  Pisalna logika (`StockLandingWriter`, `B2bLandingWriter`) obstaja in je dokazana,
-  a jo kliče samo test — worker sam v bazo ne piše ničesar.
+- **[WORKERJI]** `PIM.StockFileWorker` dobi pravi `Program.cs`; pri `PIM.B2bWorker`
+  manjka **landing pot**, ne cel worker. Popravljeno 2026-08-22: `PIM.B2bWorker\Program.cs`
+  obstaja in dela — podpira `--export-magento` in je bil v tej meritvi pognan v živo.
+  Kar ne obstaja, je pot za `StockLandingWriter` in `B2bLandingWriter`: pisalna logika je
+  dokazana, a jo kliče samo test in worker sam v bazo ne piše ničesar.
 - **[WORKERJI]** Odločitev o `PIM.SaopStockWorker`, `PIM.FoundationWorker` in ostanku
   `PIM.NwXmlWorker` (samo `bin\`/`obj\`, projekta ni v `PIM.sln`).
 - **[TESTI]** Pet projektov brez baze pade namesto da bi se preskočilo. Izmerjeno
@@ -53,22 +86,22 @@ _(prazno)_
 
 ## BLOKIRANO
 
-- **[IZVOZ]** 162 atributnih stolpcev Magento predloge (stolpci 54–215) je v izvozu
-  praznih — blokirano 2026-08-20, **potrebna je tvoja odločitev**. Mehanizem dela in
-  je dokazan: `PIM.F7.MagentoExportTests` posadi atribut s kodo `Grlo ANG` in ta
-  pristane v svojem stolpcu. Manjka konfiguracija, ne koda: da se stolpec napolni,
-  mora v `map.FieldMapping` obstajati vrstica s `TargetFieldCode` = `ProductAttribute.<glava>`
-  (na primer `ProductAttribute.Grlo ANG`). Danes je edina obstoječa koda atributa v
-  bazi `CategoryRequired` (`canon.ProductAttribute`: 2 vrstici), zato se ne ujema
-  nobeden od 162 stolpcev.
-  **Vprašanje:** katera SAOP oziroma NW lastnost pripada kateremu stolpcu predloge?
-  Tega ne smem ugibati. Če je odgovor v `docs/Mapiranje_SAOP_NoviPIM.xlsx`, povej —
-  preslikave bom zapisal kot vrstice registra, ne kot kodo.
-  Do takrat izvoz te stolpce izpiše prazne; napačnih vrednosti ne izvozi.
+- **[IZVOZ]** ~~162 atributnih stolpcev Magento predloge nima vira~~ — **preklicano
+  2026-08-22, blokada je iz 2026-08-20 in je bila medtem odpravljena.** Odgovor je
+  zapisan kot vrstice registra v migracijah **054** (Nowodvorski, 108 preslikav) in
+  **055** (Braytron, 76). Merjeno v bazi: od **160** atributnih stolpcev aktivnega
+  profila jih ima vir **156**.
+  **Kar od te blokade ostane, je ožje in še vedno čaka tvojo odločitev:**
+  1. **4 atributni stolpci** brez vira v `map.FieldMapping`.
+  2. **33 stolpcev sploh nima kanonične kode** — zanje ni odločeno, od kod pridejo:
+     `Dobavitelj`, `ABC klasifikacija`, `Merska enota`, enote teže/volumna/paketa,
+     `Kategorije svetila ANG/SLO`, `Popust`, `Valuta`, `Omejitev pri naročanju`,
+     `Posebni popust za stranko`, dokumenti (3), zaloge `VID *` (7), dobaviteljeva
+     zaloga (3), `Skladišče`.
+  3. **`slug=sensor_type` pri Braytronu** ('Motion', 'PIR', 'Microwave') ni Da/Ne in ni
+     isto kot stolpec `Senzor gibanja` — migracija 055 ga zato nalašč ne preslika.
 
-_(prazno)_
-
-- **[WORKERJI / Agent B]** `PIM.B2bWorker` dobi pravi `Program.cs` — blokirano
+- **[WORKERJI / Agent B]** `PIM.B2bWorker` dobi **landing** pot — blokirano
   2026-08-20: `B2bLandingWriter` že zna atomarno zapisati en JSON zapis, toda
   repozitorij ne določa lokalnega execution contracta workerja (vhodne datoteke
   oziroma fixture, argumenti/okoljske nastavitve za `OrganizationId`, `SourceCode`,
@@ -77,6 +110,32 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[DOKUMENTACIJA]** Analiza treh delov A/B/C proti živi bazi — kdo: Claude Opus 5 —
+  2026-08-22. Nastal je [`docs/ANALIZA_A_B_C.md`](docs/ANALIZA_A_B_C.md); `STATUS.md` in
+  ta tabla sta popravljena tam, kjer sta bila zastarela.
+  **Dokazi:** `dotnet build PIM_Solution\PIM.sln` → **Build succeeded**, 0 napak
+  (3× MSB3026, zaklenjena `.dll`, ker je tekel `PIM.F3.Integration`);
+  `dotnet run --project src\PIM.Migrator -- --verify` → `Preverjanje F0–F10 baze je
+  uspešno.`, izhod **0**; `dotnet run --project workers\PIM.B2bWorker -- --export-magento
+  --organization-id 1 --output-dir <temp>` → nastali `magento-products.csv` (**1.729
+  vrstic**, 433 KB), `magento-customers.csv` in `magento-export.complete`; ~20 poizvedb nad
+  bazo `PIM` (migracija **058**).
+  **Kaj je meritev pokazala:** A zajem ~90 % mehanizma / ~55 % v obratovanju,
+  B izvoz ~85 % / **~10 %**, C odhodna pot ~50 % / **0 %**. Razkorak ni v kodi, ampak med
+  kodo in podatkom.
+  **Tri trditve na tabli in v `STATUS.md` so bile napačne** in so popravljene:
+  (1) „162 atributnih stolpcev nima vira" — 156 od 160 ga ima (054/055);
+  (2) „`canon.ProductCommercial` nima preslikave" — ima jo (057), manjka ponovna preslikava
+  zajetih strani; (3) „`val.Promote` polni samo `pim.Product`" — 058 to odpravi,
+  `pim.ProductText` 44.511, `pim.ProductPrice` 85.777.
+  **Novo, kar prej ni bilo nikjer zapisano:** izvožena datoteka ima vrednost v **15 od 213
+  stolpcev**; `out.OutboxMessage`/`OutboxAttempt`/`SaopItemAssignment`/`OwnershipPolicy`
+  imajo **0** vrstic; `PIM.OutboxDispatcher` obdela **eno** sporočilo na zagon in nima
+  zanke; za `OUTBOUND` ni vrstice v `ops.ScheduleProfile`; objava teče samo za organizaciji
+  1 in 2.
+  **Ni bilo pognano:** `scripts\run_tests.ps1` (PowerShell, meritev je tekla iz WSL) —
+  zadnji znani rezultat ostaja 44/0/0 z dne 2026-08-21.
 
 - **[WORKERJI]** IQLighting dopolnjen: vseh 16 končnih točk, oba popravka potrjena v živo —
   2026-08-21. Prejšnji zagon je umrl po **eni** končni točki v 100 minutah; ta je opravil

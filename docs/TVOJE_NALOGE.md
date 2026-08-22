@@ -170,6 +170,20 @@ Pri zajemu ostane obvezna samo šifra artikla. Cel model je v `docs\VALIDACIJA.m
 
 ### 2. Katera SAOP ali NW lastnost pripada kateremu Magento stolpcu?
 
+> **Stanje 2026-08-22 — večina te naloge je opravljena; spodnje besedilo je starejše.**
+> Tvoji odgovori v `Magento_stolpci_ZA-POTRDITEV.csv` so zapisani kot vrstice registra v
+> migracijah **054** (Nowodvorski, 108 preslikav) in **055** (Braytron, 76). Merjeno v bazi:
+> od **160** atributnih stolpcev jih ima vir **156**.
+>
+> **Kar še čaka tebe, je ožje:** 4 atributni stolpci brez vira, **33 stolpcev sploh brez
+> kanonične kode** (zaloge `VID *`, dobavitelj, dokumenti, kategorije svetila, popust,
+> valuta, skladišče) in Braytronov `slug=sensor_type`, ki ni Da/Ne in ga 055 nalašč ne
+> preslika.
+>
+> **Pozor — to ni več razlog, da je izvoz prazen.** Izvožena datoteka ima danes vrednost v
+> **15 od 213 stolpcev**, ker so `pim.*` otroške tabele skoraj prazne, ne ker bi manjkale
+> preslikave. Prava ozka grla so v [`ANALIZA_A_B_C.md`](ANALIZA_A_B_C.md) §6.
+
 **Zakaj.** 162 od 215 stolpcev Magento predloge (stolpci 54–215: `Grlo ANG`, `Barva`,
 `Delovna temperatura` …) je v izvozu **praznih**. To ni napaka v kodi — mehanizem je dokazan
 s testom: če v `map.FieldMapping` obstaja vrstica s `TargetFieldCode = ProductAttribute.Grlo ANG`,
