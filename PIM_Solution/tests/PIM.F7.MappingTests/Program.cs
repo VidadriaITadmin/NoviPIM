@@ -52,6 +52,32 @@ Equal("Customers", fixture.EntityType, "Fixture entity");
 Equal(2, fixture.Records.Count, "Fixture records");
 Equal(64, fixture.PayloadHash.Length, "SHA-256");
 Equal(before, File.GetLastWriteTimeUtc(fixturePath), "Fixture vir ostane read-only.");
+// Naloga 6 (odlocitev uporabnika 2026-08-22): MagentoExportRunner.cs ostane v repozitoriju, ceprav
+// je mrtva koda — priklopljen je MagentoExportCommand. Dokler ga nihce ne klice, sta dve izvedbi
+// istega izvoza nevarnost samo na papirju; nevarna postane takrat, ko ga kdo prikljuci in se izvedbi
+// tiho razideta. Ta trditev pade prav takrat in odlocitev o brisanju pride nazaj z vec podatki.
+var runnerUsages = Directory
+  .EnumerateFiles(FindRoot(), "*.cs", SearchOption.AllDirectories)
+  .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+    && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+    && !path.EndsWith("MagentoExportRunner.cs", StringComparison.OrdinalIgnoreCase)
+    && !path.Contains("PIM.F7.MappingTests"))
+  // Omemba v komentarju ni uporaba: MagentoExportCommand ga navaja v SQL komentarju kot vir istega
+  // pravila. Steje samo vrstica kode, zato komentarji (C# in SQL) izpadejo iz iskanja.
+  .Where(path => File.ReadLines(path).Any(line =>
+  {
+    var trimmed = line.TrimStart();
+    if (trimmed.StartsWith("//", StringComparison.Ordinal) || trimmed.StartsWith("--", StringComparison.Ordinal)
+      || trimmed.StartsWith("*", StringComparison.Ordinal) || trimmed.StartsWith("/*", StringComparison.Ordinal))
+      return false;
+    return line.Contains("MagentoExportRunner", StringComparison.Ordinal);
+  }))
+  .Select(path => Path.GetFileName(path))
+  .OrderBy(name => name, StringComparer.Ordinal)
+  .ToArray();
+Equal(0, runnerUsages.Length,
+  $"MagentoExportRunner je mrtva koda in mora tako ostati; sklicujejo se nanj: {string.Join(", ", runnerUsages)}");
+
 Console.WriteLine("F7 mapping: konfiguracijski landing, replay in zavrnitve PASS.");
 await MagentoExportTests.RunAllAsync();
 
