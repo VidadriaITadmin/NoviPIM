@@ -131,7 +131,66 @@ try
   try { builder.Build(new("SAOP_PRODUCT","PATCH","Product","A-1","VAT","22"));throw new InvalidOperationException("VAT ni bil zavrnjen."); } catch(OwnershipViolationException) { }
   await server;
   Equal(2,fixtureCalls,"Lokalni fixture klici");
-  Console.WriteLine("F8 integration: PIM MSSQL isolated org 9808, dedup/retry/dead/sent/verified/drift, razred napake, nadomestitev, uskladitev sifre in lokalni HTTP fixture PASS.");
+
+  // ==========================================================================
+  // Vrzel C1 — dispatcher: razpored pred prevzemom in zanka cez cakalno vrsto.
+  //
+  // Doslej PIM.OutboxDispatcher\Program.cs ni pokrival noben test: F8.DispatcherTests
+  // preizkusa SaopOutboundHandler, ta datoteka in F8.HardeningTests pa klicejo procedure
+  // neposredno. Zato se ni videlo dvoje:
+  //
+  //   1. ops.BeginRun vrze 51100, ce za par (organizacija, OUTBOUND) ni omogocenega
+  //      razporeda. Program.cs je klical out.ClaimMessage PRED BeginRun, zato je sporocilo
+  //      ze bilo prevzeto, ko je zagon umrl: poskus je bil porabljen, zahteva pa nikoli
+  //      poslana. Ob dovolj ponovitvah bi sporocilo umrlo od poskusov, ki se niso zgodili.
+  //   2. Zagon je obdelal natanko eno sporocilo in koncal. Cakalna vrsta se ni praznila.
+  //
+  // Posiljanje je tu nadomesceno z lokalnim odgovorom: predmet tega dokaza je vrstni red
+  // in zanka, ne HTTP — tega pokrivata F8.DispatcherTests in fixture zgoraj.
+  // ==========================================================================
+
+  // Cakalna vrsta mora biti prazna, da test nadzoruje, kaj je v njej. second7 je iz vrzeli
+  // O16 ostal Pending; preklicemo ga, ker je svojo trditev ze dokazal.
+  await Sql("EXEC out.CancelMessage @Id,N'F8_TEST';",("@Id",second7));
+
+  var dispatched=new List<long>();
+  var runner=new OutboxDispatchRunner(connectionString!,"worker-runner",(message,_) =>
+  {
+    dispatched.Add(message.OutboxMessageId);
+    return Task.FromResult(new DispatchResult(DispatchOutcome.Sent,202,"{\"accepted\":true}","runner-echo"));
+  },maxMessages:8);
+
+  // --- 1) Brez razporeda: zagon ne sme prevzeti nicesar ----------------------
+  var stranded=await Enqueue("A-8","{\"entityKey\":\"A-8\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Brez razporeda\"}",string.Empty);
+  var withoutSchedule=await runner.RunAsync();
+  Equal(true,withoutSchedule.ScheduleMissing,"Manjkajoc razpored mora biti izid zagona, ne izjema");
+  Equal(0,withoutSchedule.Claimed,"Brez razporeda dispatcher ne sme prevzeti sporocila");
+  Equal(0,dispatched.Count,"Brez razporeda ne sme biti odhodne zahteve");
+  Equal("Pending",await Status(stranded),"Sporocilo mora ostati Pending, ne obviseti v Sending");
+  Equal(0,await AttemptCount(stranded),"Poskus, ki se ni zgodil, se ne sme steti");
+
+  // --- 2) Z razporedom: en zagon izprazni cakalno vrsto ----------------------
+  await Sql(@"INSERT ops.ScheduleProfile(OrganizationId,Provider,Pipeline,IsEnabled,IntervalSeconds,StaleAfterSeconds,LockTimeoutMilliseconds,UpdatedBy)
+    VALUES(@Org,N'Fixture',N'OUTBOUND',1,60,600,5000,N'F8_TEST');",("@Org",organizationId));
+
+  var alsoQueued=await Enqueue("A-9","{\"entityKey\":\"A-9\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Druga v vrsti\"}",string.Empty);
+  var withSchedule=await runner.RunAsync();
+  Equal(false,withSchedule.ScheduleMissing,"Z razporedom zagon ni preskocen");
+  Equal(2,withSchedule.Claimed,"En zagon mora obdelati vso cakalno vrsto, ne enega sporocila");
+  Equal(2,withSchedule.Sent,"Obe sporocili sta poslani");
+  Equal(0,withSchedule.Failed,"Nobeno ni padlo");
+  Equal(2,dispatched.Count,"Dve odhodni zahtevi");
+  Equal("Sent",await Status(stranded),"Prvo sporocilo je poslano");
+  Equal("Sent",await Status(alsoQueued),"Drugo sporocilo je poslano v istem zagonu");
+  Equal(1,await AttemptCount(stranded),"Vsako sporocilo porabi natanko en poskus");
+
+  // --- 3) Prazna cakalna vrsta ni napaka -------------------------------------
+  var empty=await runner.RunAsync();
+  Equal(0,empty.Claimed,"Prazna cakalna vrsta ne prevzame nicesar");
+  Equal(false,empty.ScheduleMissing,"Prazna vrsta ni manjkajoc razpored");
+  Equal("Healthy",await ScalarString("SELECT Status FROM ops.IntegrationHealth WHERE OrganizationId=@Org AND Pipeline=N'OUTBOUND';"),
+    "Zagon mora zapreti ops.IntegrationHealth kot Healthy");
+  Console.WriteLine("F8 integration: PIM MSSQL isolated org 9808, dedup/retry/dead/sent/verified/drift, razred napake, nadomestitev, uskladitev sifre, dispatcher (razpored pred prevzemom + zanka) in lokalni HTTP fixture PASS.");
 }
 finally
 {
@@ -144,6 +203,8 @@ finally
     DELETE out.OwnershipPolicy WHERE OrganizationId=@Org;
     DELETE delivery FROM ops.AlertDelivery delivery INNER JOIN ops.Alert alert ON alert.AlertId=delivery.AlertId WHERE alert.OrganizationId=@Org;
     DELETE ops.Alert WHERE OrganizationId=@Org;
+    DELETE ops.IntegrationHealth WHERE OrganizationId=@Org;
+    DELETE ops.ScheduleProfile WHERE OrganizationId=@Org;
     DELETE FROM canon.Product WHERE OrganizationId=@Org;
     DELETE dbo.IntegrationProfile WHERE OrganizationId=@Org;
     DELETE dbo.OrganizationConfig WHERE OrganizationId=@Org;",("@Org",organizationId));
@@ -171,6 +232,7 @@ async Task CompleteWithClass(long id,string worker,bool success,int code,string 
     ("@Id",id),("@Worker",worker),("@Success",success),("@Code",code),("@Body",body),("@Failure",(object?)failure??DBNull.Value),("@Class",errorClass));
 async Task<string?> ErrorClass(long id) { await using var command=new SqlCommand("SELECT ErrorClass FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
 async Task<int> AttemptCount(long id) { await using var command=new SqlCommand("SELECT AttemptCount FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToInt32(await command.ExecuteScalarAsync()); }
+async Task<string?> ScalarString(string sql) { await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@Org",organizationId);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
 async Task<int> ScalarInt(string sql) { await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@Org",organizationId);var value=await command.ExecuteScalarAsync();return value is DBNull or null?0:Convert.ToInt32(value); }
 async Task<string> Resolve(long id,string? response,string? requested,string? ean)
 {

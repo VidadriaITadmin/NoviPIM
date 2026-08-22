@@ -83,17 +83,7 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
-- **[ODHODNA POT / Agent C]** `PIM.OutboxDispatcher` — vrstni red `BeginRun`/`Claim`, zanka
-  čez čakalno vrsto in test, ki oboje dokaže. Kdo: Claude Opus 5, začeto 2026-08-22.
-  **Ozemlje:** `workers/PIM.OutboxDispatcher/`, `tests/PIM.F8.Integration/`. Brez migracije,
-  brez `PIM.sln`, brez `src/PIM.XmlMapping` — migracijska steza je zasedena z 059.
-  **Zakaj:** `ops.BeginRun` vrže 51100, če za par (organizacija, `OUTBOUND`) ni omogočenega
-  razporeda; te vrstice ni. `Program.cs` pa kliče `out.ClaimMessage` **pred** `BeginRun`,
-  zato ob prvem resničnem sporočilu porabi poskus, sporočilo pusti zakupljeno in umre,
-  ne da bi kdaj poslal zahtevo. Noben test tega ne ujame — `F8.DispatcherTests` preizkuša
-  `SaopOutboundHandler`, `F8.Integration` in `F8.HardeningTests` pa kličeta procedure
-  neposredno; `Program.cs` ni pokrit.
-
+_(prazno)_
 
 ## BLOKIRANO
 
@@ -122,6 +112,42 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[ODHODNA POT / Agent C]** Dispatcher: razpored pred prevzemom, zanka čez čakalno vrsto in
+  prvi test, ki `Program.cs` sploh pokriva — kdo: Claude Opus 5 — 2026-08-22.
+  **Napaka, ki je bila najdena:** `ops.BeginRun` vrže `51100 'Razpored ni omogočen.'`, če za
+  par (organizacija, `OUTBOUND`) ni omogočene vrstice v `ops.ScheduleProfile` — te vrstice ni
+  za nobeno podjetje. `PIM.OutboxDispatcher\Program.cs` pa je klical `out.ClaimMessage`
+  **pred** `BeginRun`. Ob prvem resničnem sporočilu bi ga torej prevzel, povečal `AttemptCount`,
+  vpisal vrstico v `out.OutboxAttempt` in šele nato umrl — poskus porabljen, zahteva nikoli
+  poslana. Ob dovolj ponovitvah bi sporočilo prišlo v `Dead` od poskusov, ki se niso zgodili.
+  **Zakaj tega ni ujel noben test:** `F8.DispatcherTests` preizkuša `SaopOutboundHandler` in
+  `DispatchClassifier`, `F8.Integration` in `F8.HardeningTests` pa kličeta procedure
+  neposredno. `Program.cs` do zdaj ni pokrival noben test.
+  **Kaj je spremenjeno:** logika je izluščena v `OutboxDispatchRunner` (zato je sploh
+  preizkusljiva); razpored se prebere pred prvim prevzemom in manjkajoč razpored je izid
+  zagona, ne izjema; zagoni za vsa podjetja se odprejo pred prvim prevzemom; obdelava je
+  zanka do prazne vrste z mejo `maxMessages`; utrip gre po vsakem sporočilu. Sporočilo
+  podjetja brez razporeda se ne ubije — zaključi se kot `Transient` in gre v `Retry`,
+  ker je to nastavitvena in ne poslovna napaka.
+  **Dokaz — RED:** `PIM.F8.Integration` z novimi trditvami → izhod 82,
+  `Error Number:51100` iz `OperationsRun.BeginAsync`, klicanega iz
+  `OutboxDispatchRunner.RunAsync`.
+  **Dokaz — GREEN:** vseh sedem F8 projektov posamično → **izhod 0**
+  (`BehaviorTests`, `ContractTests`, `DispatcherTests`, `EchoTests`, `HardeningTests`,
+  `Integration`, `IntranetTests`). Build `PIM.OutboxDispatcher` in `PIM.F8.Integration`:
+  0 opozoril, 0 napak. Živ zagon workerja proti bazi:
+  `Za pipeline OUTBOUND ni omogocenega razporeda v ops.ScheduleProfile; nobeno sporocilo ni
+  bilo prevzeto.`, izhod 1 — prej bi na tem mestu crknil s 51100 sredi prevzema.
+  Po zagonih: `out.OutboxMessage` 0, `ops.ScheduleProfile` za `OUTBOUND` 0, org 9808 0 —
+  test počisti izključno svoje vrstice.
+  **Česa NI:** poln `scripts\run_tests.ps1` v tej seji ni bil izveden. Build celotne rešitve
+  pade izključno na `MSB3021`/`MSB3027` — druga seja hkrati poganja svoj
+  `PIM.F5.CategoryMappingTests` in drži `PIM.XmlMapping.dll` zaklenjeno. Nobene `error CS`;
+  po `AGENTS.md` §3 to ni napaka v kodi, tujih procesov pa nisem ustavljal.
+  **Ostane:** vrstica `OUTBOUND` v `ops.ScheduleProfile` za prava podjetja (migracija 060,
+  čaka, da se sprosti migracijska steza — druga seja ima odprto 059) in vrstica o dispatcherju
+  v `docs/WORKERS.md` (datoteka je bila ob commitu odprta v drugi seji).
 
 - **[ZAJEM/IZVOZ]** Dobaviteljev XML se prvič prebere v celoti; kategorije so naše —
   kdo: Claude Opus 5 — 2026-08-22, migracija `059_CategoryTreeAndSupplierMapping.sql`.
