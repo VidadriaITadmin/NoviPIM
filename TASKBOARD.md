@@ -120,6 +120,32 @@ _(prazno)_
 
 ## KONČANO
 
+- **[BAZA]** Enajst poti tračnih sistemov, odstranjene dobaviteljeve kategorije in napaka, ki
+  jo je to razkrilo — kdo: Claude Opus 5 — 2026-08-22, migraciji `060` in `062`.
+  Uporabnik je potrdil vseh enajst predlogov (`PIM_Solution\docs\Kategorije_manjkajoce.csv`):
+  Nowodvorski pošilja te poti na treh ravneh, stari slovar jih je imel na štirih, zato gredo
+  v nadrejeno kategorijo, ki v drevesu že obstaja. `map.MissingCategoryMap` je prazen,
+  kategorijo ima **2.540 izdelkov** (prej 2.382).
+  Ob tem so po odobritvi pobrisane vrstice, ki jih je delala preslikava, izklopljena v `059`
+  — 2.541 vrstic `canon.ProductCategory` in enako v `pim.ProductCategory` s spletno stranjo
+  `B2C` in dobaviteljevo kategorijo prve ravni v angleščini. Brisanje je omejeno na natanko
+  pet znanih poti; kategorije istih izdelkov pod `svetila_si` ostanejo.
+  **Napaka, ki jo je to razkrilo (migracija `062`):** vrstice so se ob prvi ponovni preslikavi
+  vrnile. `map.ProcessRawInbox` bere `map.ExtractedValue` in ni gledal, ali je preslikava, ki
+  je vrednost izluščila, še aktivna — izluščene vrednosti namenoma ostanejo kot sled, zato je
+  izklopljena preslikava pisala naprej. `IsActive = 0` je bil s tem samo napol resničen: novih
+  vrednosti ni več luščil, stare pa so tekle v katalog. Popravljenih je vseh pet mest, kjer
+  postopek bere vrednosti za vpis (identiteta zapisa, preverba cene, zmagovalne vrednosti,
+  kategorije, cene); nespremenjeno ostane branje, ki ob karanteni zapiše v `map.UnmappedValue`,
+  ker tam je pravilno videti vse, kar je vhodna vrstica nosila.
+  Dokaz: po `062` ponovna preslikava istega zajema vrstic pod `B2C` **ne vrne** (prej 2.540),
+  `svetila_si` ostane 2.540; migrator uporabi `060` in `062`, 2. zagon nobene, `--verify` 0;
+  `scripts\run_tests.ps1` → 46 uspeli, 0 padlih.
+  **Opomba za pregled veje:** moja datoteka je bila najprej oštevilčena `061`, kar je trčilo z
+  `061_ReleaseRunApplock.sql` druge seje. Preimenovana je v `062`, njena vrstica v
+  `dbo.SchemaMigration` pa je bila pobrisana, da se je uporabila pod novim imenom — šlo je za
+  mojo vrstico, staro nekaj minut, na tem računalniku.
+
 - **[ODHODNA POT / Agent C + BAZA]** Zanka dispatcherja utrjena; ob tem najdena kljucavnica,
   ki je nihce ni sprostil — kdo: Claude Opus 5 — 2026-08-22.
   **Tri luknje v zanki, ki sem jo dodal v `70c677f`:**

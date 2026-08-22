@@ -1,12 +1,12 @@
 ﻿Dobaviteljeva pot;Izdelkov;Moj predlog (koda nase kategorije);Kako se izpise;Tvoj odgovor (da / druga koda / ne rabimo)
-track_systems___3-circuit_ctls___accessories;55;tracni_sistemi___3_fazni_ctls___dodatki;Tračni sistemi > 3-fazni CTLS > Dodatki;
-track_systems___1-circuit_profile___accessories;37;tracni_sistemi___1_fazni_profile___dodatki;Tračni sistemi > 1-fazni Profile > Dodatki;
-track_systems___1-circuit_low-voltage_48v_lvm___accessories;18;tracni_sistemi___1_fazni_48v_lvm___dodatki;Tračni sistemi > 1-fazni 48V LVM > Dodatki;
-track_systems___1-circuit_low-voltage_24v_nano-lvm___accessories;10;tracni_sistemi___1_fazni_24v_nano_lvm___dodatki;Tračni sistemi > 1-fazni 24V NANO-LVM > Dodatki;
-track_systems___1-circuit_low-voltage_48v_lvm___tracks;8;tracni_sistemi___1_fazni_48v_lvm___tracnice;Tračni sistemi > 1-fazni 48V LVM > Tračnice;
-track_systems___1-circuit_profile___tracks;8;tracni_sistemi___1_fazni_profile___tracnice;Tračni sistemi > 1-fazni Profile > Tračnice;
-track_systems___3-circuit_ctls___tracks;8;tracni_sistemi___3_fazni_ctls___tracnice;Tračni sistemi > 3-fazni CTLS > Tračnice;
-track_systems___1-circuit_low-voltage_24v_nano-lvm___tracks;5;tracni_sistemi___1_fazni_24v_nano_lvm___tracnice;Tračni sistemi > 1-fazni 24V NANO-LVM > Tračnice;
-track_systems___1-circuit_low-voltage_48v___ut-_lvm___accessories;5;tracni_sistemi___1_fazni_48v_ut_lvm___dodatki;Tračni sistemi > 1-fazni 48V UT- LVM > Dodatki;
-track_systems___1-circuit_low-voltage_48v___ut-_lvm___tracks;2;tracni_sistemi___1_fazni_48v_ut_lvm___tracnice;Tračni sistemi > 1-fazni 48V UT- LVM > Tračnice;
-track_systems___power_supplies_for_low_-voltage_systems___power_supplies_for_24v_low-voltage_system;2;svetlobni_viri_in_dodatki___napajalniki;Svetlobni viri in dodatki > Napajalniki;
+track_systems___3-circuit_ctls___accessories;55;tracni_sistemi___3_fazni_ctls___dodatki;Tračni sistemi > 3-fazni CTLS > Dodatki;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_profile___accessories;37;tracni_sistemi___1_fazni_profile___dodatki;Tračni sistemi > 1-fazni Profile > Dodatki;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_48v_lvm___accessories;18;tracni_sistemi___1_fazni_48v_lvm___dodatki;Tračni sistemi > 1-fazni 48V LVM > Dodatki;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_24v_nano-lvm___accessories;10;tracni_sistemi___1_fazni_24v_nano_lvm___dodatki;Tračni sistemi > 1-fazni 24V NANO-LVM > Dodatki;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_48v_lvm___tracks;8;tracni_sistemi___1_fazni_48v_lvm___tracnice;Tračni sistemi > 1-fazni 48V LVM > Tračnice;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_profile___tracks;8;tracni_sistemi___1_fazni_profile___tracnice;Tračni sistemi > 1-fazni Profile > Tračnice;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___3-circuit_ctls___tracks;8;tracni_sistemi___3_fazni_ctls___tracnice;Tračni sistemi > 3-fazni CTLS > Tračnice;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_24v_nano-lvm___tracks;5;tracni_sistemi___1_fazni_24v_nano_lvm___tracnice;Tračni sistemi > 1-fazni 24V NANO-LVM > Tračnice;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_48v___ut-_lvm___accessories;5;tracni_sistemi___1_fazni_48v_ut_lvm___dodatki;Tračni sistemi > 1-fazni 48V UT- LVM > Dodatki;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___1-circuit_low-voltage_48v___ut-_lvm___tracks;2;tracni_sistemi___1_fazni_48v_ut_lvm___tracnice;Tračni sistemi > 1-fazni 48V UT- LVM > Tračnice;da (potrjeno 2026-08-22, vpisano v migraciji 060)
+track_systems___power_supplies_for_low_-voltage_systems___power_supplies_for_24v_low-voltage_system;2;svetlobni_viri_in_dodatki___napajalniki;Svetlobni viri in dodatki > Napajalniki;da (potrjeno 2026-08-22, vpisano v migraciji 060)

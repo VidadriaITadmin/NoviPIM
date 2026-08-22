@@ -1,7 +1,7 @@
 # Tvoje naloge — po vrsti, z razlogom in koraki
 
-Zadnja sprememba: 2026-08-22 (po prenosu kategorij iz starega sistema). Stanje sistema:
-migracija `059`, `scripts\run_tests.ps1` → 46 uspeli, 0 padlih, veja
+Zadnja sprememba: 2026-08-22 (po potrditvi kategorij in odstranitvi dobaviteljevih vrstic).
+Stanje sistema: migracija `062`, `scripts\run_tests.ps1` → 46 uspeli, 0 padlih, veja
 `feature/baza-a3-mnozicna-obdelava`.
 
 To je edini seznam stvari, **ki jih ne morem narediti jaz**. Vse ostalo delam sam.
@@ -24,10 +24,8 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 
 | # | Kaj čaka tebe | Zakaj ne morem sam |
 |---|---|---|
-| A | 11 poti kategorij (tračni sistemi), ki jih slovar ne pozna | v starem sistemu jih ni; kam sodijo, veš samo ti |
 | B | 236 spornih prevodov (`Prevodi_sporni.csv`) | ista angleška beseda ima več slovenskih oblik |
 | C | Stolpca 26/27 »Kategorije vid« — drevo videlektro | drevesa ni nikjer, tudi v starem sistemu ne |
-| D | 2.267 starih vrstic kategorij dobavitelja v `canon.ProductCategory` | brisanje je tvoja beseda |
 | E | Kam v modelu spadajo šifranti in B2B entitete (naloga 5) | poslovna odločitev |
 | F | Vhod za `PIM.B2bWorker` (naloga 8) | ni zapisano nikjer |
 | G | Pregled in merge veje (naloga 10) | `git push` in merge sta tvoja |
@@ -91,27 +89,26 @@ Rezultat v izvozu: stolpca 24 in 25 sta polna pri **2.113 izdelkih**, na primer
 `Cameleon sistem > Rozete` in `Cameleon System > Canopies`. Katera spletna stran gre v
 kateri stolpec, je zdaj vrstica v registru, ne stikalo v programu.
 
-**Kar čaka tebe:**
+**Izvedeno po tvoji potrditvi 2026-08-22:**
 
-- **Točka A — 11 poti, ki jih slovar ne pozna.** Vse so tračni sistemi; v starem sistemu
-  jih ni. Skupaj 161 izdelkov. Seznam s števci:
+- **Enajst poti tračnih sistemov** je vpisanih (migracija `060`). Nowodvorski jih pošilja na
+  treh ravneh, stari slovar jih je imel na štirih — vseh enajst gre v nadrejeno kategorijo,
+  ki v drevesu že obstaja. `map.MissingCategoryMap` je zdaj prazen, kategorijo pa ima
+  **2.540 izdelkov** (prej 2.382) oziroma **2.267 objavljenih** v izvozu.
+- **Stare vrstice z dobaviteljevo kategorijo pod `B2C` so pobrisane** (migracija `060`) —
+  2.541 vrstic v katalogu in enako v objavi. Stolpec 27 »Kategorije vid SLO« je zato zdaj
+  prazen namesto poln angleških besed dobavitelja.
+- **Ob tem se je pokazala napaka, ki je vredna svoje vrstice:** izklopljena preslikava je
+  še naprej pisala v katalog. `map.ProcessRawInbox` je bral že izluščene vrednosti in ni
+  gledal, ali je preslikava, ki jih je naredila, še aktivna — zato so se pobrisane vrstice ob
+  prvi ponovni preslikavi vrnile. Popravljeno v migraciji `062`; `IsActive = 0` zdaj res
+  pomeni »ta preslikava ne piše več«.
 
-  ```sql
-  SELECT SourcePathKey, SeenCount FROM map.MissingCategoryMap ORDER BY SeenCount DESC;
-  ```
-
-  Povej, v katero našo kategorijo sodi vsaka (ali »ne rabimo«), in vpišem vrstice v
-  `map.CategoryPathMap`.
+**Kar pri kategorijah še čaka tebe:**
 
 - **Točka C — drevo videlektro.** Stolpca 26/27 sta prazna, ker drevesa videlektro ni
   nikjer — tudi v starem sistemu je `pim.WebSite` zanj izklopljen in brez kategorij.
   Ko drevo obstaja (izvoz iz Magenta ali seznam), ga vpišem po isti poti kot svetila.si.
-
-- **Točka D — 2.267 starih vrstic.** V `canon.ProductCategory` so še vrstice s spletno
-  stranjo `B2C` in dobaviteljevo angleško kategorijo prve ravni (`Interior lighting`).
-  Preslikava, ki jih je delala, je izklopljena, vrstice pa **niso pobrisane** — brisanje je
-  na zaprtem seznamu. V izvozu se kažejo v stolpcu 27 »Kategorije vid SLO«. Reci in jih
-  pobrišem v svojem commitu.
 
 ### 4. Podvojena glava »Frekvenca« — **ZAKLJUČENO 2026-08-21**
 
