@@ -38,6 +38,13 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   3 in 4. Danes je vstopnica stari `ERP_L1` → **44.510 VALID**; po `ERP_L1_SLO` bi jih bilo
   **100.809**. Vidadria (3) in Ediito (4) imata **0** objavljenih artiklov. Migracija 058 te
   odločitve nalašč ni sprejela — je poslovna, ne tehnična.
+- **[ODHODNA POT / odločitev] Vrstica `OUTBOUND` v `ops.ScheduleProfile` — namerno še ni
+  dodana.** Preverjeno 2026-08-22 v `WatchdogRules.Evaluate`: ko za omogočen razpored obstaja
+  vrstica v `ops.IntegrationHealth` z `LastHeartbeatUtc` starejšim od `StaleAfterSeconds`,
+  nastane **Critical `StaleHeartbeat`**. Dispatcherja ne poganja nič po urniku (Scheduled Task
+  je na zaprtem seznamu `AGENTS.md` §4.7), zato bi vklop razporeda po prvem zagonu naredil
+  trajen kritičen alarm za pot, ki je nihče ne poganja. Razpored zato sodi v isti korak kot
+  odločitev, kaj dispatcherja sploh zaganja — to je tvoja odločitev, ne tehnična.
 - **[ODHODNA POT] 5. Proizvajalec sporočil za outbox.** `out.OutboxMessage` ima **0**
   vrstic in nihče vanjo ne piše — ne intranet, ne preslikava, ne razveljavitev. Dokler
   proizvajalca ni, sta dodelava dispatcherja in urnik brezpredmetna. Za tem šele:
@@ -112,6 +119,37 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[ODHODNA POT / Agent C + BAZA]** Zanka dispatcherja utrjena; ob tem najdena kljucavnica,
+  ki je nihce ni sprostil — kdo: Claude Opus 5 — 2026-08-22.
+  **Tri luknje v zanki, ki sem jo dodal v `70c677f`:**
+  1. *Zastrupljeno sporočilo je zaprlo vso vrsto.* Lovljena je bila samo `HttpRequestException`
+     in `TaskCanceledException`. `out.ClaimMessage` bere vrsto po `OutboxMessageId`, zato bi
+     eno sporočilo s pokvarjeno nastavitvijo (`HttpOperation`, ki ni POST/PATCH, neveljaven
+     `EndpointTemplate`) ob **vsakem** zagonu vrglo na istem mestu in nobeno sporočilo za njim
+     ne bi prišlo nikoli na vrsto. Zdaj se ujame vsaka izjema; sporočilo gre v `Retry`.
+     V bazo gre samo **vrsta** izjeme — sporočilo izjeme lahko nosi naslov s poverilnico.
+  2. *Prekrivanje s samim sabo je bilo neobravnavana izjema.* `51101` je za načrtovan worker
+     normalno stanje; zdaj se drugi zagon umakne in vrne `AlreadyRunning`.
+  3. *Meja `maxMessages` je bila tiha.* Odrezana vrsta je izgledala kot prazna; zdaj se izpiše.
+  **Kaj je pri tem prišlo na dan (in je večje):** `ops.BeginRun` vzame `sp_getapplock` z
+  `@LockOwner=N'Session'`, `ops.CompleteRun` pa je ni nikoli sprostil. Ker `OperationsRun` svojo
+  `SqlConnection` ob `Dispose` vrne v bazen namesto da bi jo ubil, je ključavnica preživela
+  logično zapiranje za nedoločen čas. **To zadene vsak worker, ne le dispatcherja** — le da je
+  bilo doslej nevidno, ker je vsak worker v svojem procesu opravil eno izvajanje in končal.
+  Popravljeno z migracijo **061**.
+  **Dokaz — RED:** `PIM.F8.Integration` z novimi trditvami → izhod 82, `Error Number:51101`
+  na testovem lastnem `BeginAsync`. Neposredna meritev v eni seji: `po BeginRun Exclusive`,
+  `po CompleteRun` **`Exclusive`** — tam bi moralo biti `NoLock`.
+  **Dokaz — GREEN:** po 061 `po CompleteRun NoLock` in drugi `BeginRun` v isti seji uspe.
+  Testi: **F8 vseh sedem izhod 0**, **F9 vseh šest izhod 0** (drugi uporabnik
+  `ops.CompleteRun`), **F3 vsi štirje izhod 0**. Migrator: 1. zagon uporabi 061, 2. zagon
+  nobene, `--verify` izhod 0.
+  **Trk številk migracij:** moja je najprej nastala kot `060`, ker je druga seja svojo `060`
+  uporabila na bazo, ne da bi jo commitala. Preštevilčena v `061`. **V `dbo.SchemaMigration`
+  zato ostaja vrstica `060_ReleaseRunApplock.sql`, ki ji datoteka ne pripada** — brisanje je
+  na zaprtem seznamu `AGENTS.md` §4.1, zato je nisem odstranil. Isto vrsto ostanka imata že
+  `047_ValueDictionaryAndTransforms.sql` in `048_...`.
 
 - **[ODHODNA POT / Agent C]** Dispatcher: razpored pred prevzemom, zanka čez čakalno vrsto in
   prvi test, ki `Program.cs` sploh pokriva — kdo: Claude Opus 5 — 2026-08-22.

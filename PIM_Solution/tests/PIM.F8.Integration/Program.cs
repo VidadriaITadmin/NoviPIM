@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
+using PIM.Operations;
 using PIM.Outbound;
 using PIM.OutboxDispatcher;
 
@@ -154,11 +155,15 @@ try
   await Sql("EXEC out.CancelMessage @Id,N'F8_TEST';",("@Id",second7));
 
   var dispatched=new List<long>();
-  var runner=new OutboxDispatchRunner(connectionString!,"worker-runner",(message,_) =>
+  var poisoned=new HashSet<long>();
+  Task<DispatchResult> Send(ClaimedOutboxMessage message,CancellationToken _)
   {
     dispatched.Add(message.OutboxMessageId);
+    // Natanko izjema, ki jo vrze SaopOutboundHandler.CreateRequest ob nepodprti metodi.
+    if(poisoned.Contains(message.OutboxMessageId)) throw new InvalidOperationException("Dispatcher dovoljuje samo HTTP POST in PATCH.");
     return Task.FromResult(new DispatchResult(DispatchOutcome.Sent,202,"{\"accepted\":true}","runner-echo"));
-  },maxMessages:8);
+  }
+  var runner=new OutboxDispatchRunner(connectionString!,"worker-runner",Send,maxMessages:8);
 
   // --- 1) Brez razporeda: zagon ne sme prevzeti nicesar ----------------------
   var stranded=await Enqueue("A-8","{\"entityKey\":\"A-8\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Brez razporeda\"}",string.Empty);
@@ -190,6 +195,52 @@ try
   Equal(false,empty.ScheduleMissing,"Prazna vrsta ni manjkajoc razpored");
   Equal("Healthy",await ScalarString("SELECT Status FROM ops.IntegrationHealth WHERE OrganizationId=@Org AND Pipeline=N'OUTBOUND';"),
     "Zagon mora zapreti ops.IntegrationHealth kot Healthy");
+
+  // --- 4) Pokvarjeno sporocilo ne sme zapreti vrste ---------------------------
+  //
+  // out.ClaimMessage bere vrsto po OutboxMessageId. Dokler je lovljena samo omrezna izjema,
+  // eno sporocilo s pokvarjeno nastavitvijo ob vsakem zagonu vrze na istem mestu in nobeno
+  // sporocilo za njim ne pride nikoli na vrsto.
+  var poison=await Enqueue("B-1","{\"entityKey\":\"B-1\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Pokvarjen profil\"}",string.Empty);
+  poisoned.Add(poison);
+  var behind=await Enqueue("B-2","{\"entityKey\":\"B-2\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Za pokvarjenim\"}",string.Empty);
+  var mixed=await runner.RunAsync();
+  Equal(2,mixed.Claimed,"Zagon se ne sme ustaviti na pokvarjenem sporocilu");
+  Equal(1,mixed.Sent,"Sporocilo za pokvarjenim mora iti skozi");
+  Equal(1,mixed.Failed,"Pokvarjeno sporocilo se steje kot neuspeh");
+  Equal("Retry",await Status(poison),"Pokvarjeno sporocilo gre v Retry, ne obvisi v Sending");
+  Equal("Sent",await Status(behind),"Vrsta se ne sme zapreti za pokvarjenim sporocilom");
+  Equal(true,(await LastError(poison))?.Contains("InvalidOperationException",StringComparison.Ordinal),
+    "Zapisana mora biti vrsta izjeme");
+  Equal(false,(await LastError(poison))?.Contains("POST",StringComparison.Ordinal),
+    "Sporocilo izjeme ne sme v bazo - lahko nosi naslov s poverilnico");
+  await Sql("EXEC out.CancelMessage @Id,N'F8_TEST';",("@Id",poison));
+
+  // --- 5) Meja sporocil na zagon ni tiha -------------------------------------
+  var capped=new OutboxDispatchRunner(connectionString!,"worker-capped",Send,maxMessages:1);
+  var firstOfTwo=await Enqueue("B-3","{\"entityKey\":\"B-3\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Prvo\"}",string.Empty);
+  var secondOfTwo=await Enqueue("B-4","{\"entityKey\":\"B-4\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Drugo\"}",string.Empty);
+  var truncated=await capped.RunAsync();
+  Equal(1,truncated.Claimed,"Meja mora ustaviti zagon");
+  Equal(true,truncated.Truncated,"Odrezana vrsta se mora povedati, ne izgledati kot prazna");
+  Equal("Sent",await Status(firstOfTwo),"Prvo je poslano");
+  Equal("Pending",await Status(secondOfTwo),"Drugo caka na naslednji zagon");
+  Equal(1,(await capped.RunAsync()).Sent,"Naslednji zagon pobere ostanek");
+  Equal("Sent",await Status(secondOfTwo),"Ostanek gre skozi");
+
+  // --- 6) Prekrivanje s samim sabo ni napaka ---------------------------------
+  //
+  // ops.BeginRun vrze 51101, kadar isto izvajanje ze tece. Nacrtovan worker se sam s sabo
+  // redno prekriva; drugi zagon se mora umakniti, ne koncati z neobravnavano izjemo.
+  await using (await OperationsRun.BeginAsync(connectionString!,organizationId,OutboxDispatchRunner.Pipeline,"worker-prvi"))
+  {
+    var blocked=await Enqueue("B-5","{\"entityKey\":\"B-5\",\"field\":\"ERP_DESCRIPTION\",\"value\":\"Med prekrivanjem\"}",string.Empty);
+    var overlapped=await runner.RunAsync();
+    Equal(true,overlapped.AlreadyRunning,"Prekrivanje mora biti izid, ne izjema");
+    Equal(0,overlapped.Claimed,"Umaknjeni zagon ne sme prevzeti sporocila");
+    Equal("Pending",await Status(blocked),"Sporocilo pocaka na prvi zagon");
+    await Sql("EXEC out.CancelMessage @Id,N'F8_TEST';",("@Id",blocked));
+  }
   Console.WriteLine("F8 integration: PIM MSSQL isolated org 9808, dedup/retry/dead/sent/verified/drift, razred napake, nadomestitev, uskladitev sifre, dispatcher (razpored pred prevzemom + zanka) in lokalni HTTP fixture PASS.");
 }
 finally
@@ -231,6 +282,7 @@ async Task CompleteWithClass(long id,string worker,bool success,int code,string 
   await Sql("EXEC out.CompleteAttempt @OutboxMessageId=@Id,@WorkerId=@Worker,@Succeeded=@Success,@PermanentFailure=0,@ResponseStatusCode=@Code,@ResponseBodyRedacted=@Body,@ResponseCorrelationId=NULL,@FailureReason=@Failure,@ErrorClass=@Class;",
     ("@Id",id),("@Worker",worker),("@Success",success),("@Code",code),("@Body",body),("@Failure",(object?)failure??DBNull.Value),("@Class",errorClass));
 async Task<string?> ErrorClass(long id) { await using var command=new SqlCommand("SELECT ErrorClass FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
+async Task<string?> LastError(long id) { await using var command=new SqlCommand("SELECT LastError FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
 async Task<int> AttemptCount(long id) { await using var command=new SqlCommand("SELECT AttemptCount FROM out.OutboxMessage WHERE OutboxMessageId=@Id;",connection);command.Parameters.AddWithValue("@Id",id);return Convert.ToInt32(await command.ExecuteScalarAsync()); }
 async Task<string?> ScalarString(string sql) { await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@Org",organizationId);var value=await command.ExecuteScalarAsync();return value is DBNull or null?null:Convert.ToString(value); }
 async Task<int> ScalarInt(string sql) { await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@Org",organizationId);var value=await command.ExecuteScalarAsync();return value is DBNull or null?0:Convert.ToInt32(value); }

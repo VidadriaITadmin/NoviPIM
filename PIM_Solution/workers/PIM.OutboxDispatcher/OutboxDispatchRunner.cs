@@ -23,7 +23,21 @@ public sealed record ClaimedOutboxMessage(
 /// Ali je zagon odpadel, ker za <c>OUTBOUND</c> ni omogočenega razporeda. Ni napaka
 /// dispatcherja — je manjkajoča nastavitev.
 /// </param>
-public sealed record DispatchRunResult(int Claimed, int Sent, int Failed, bool ScheduleMissing);
+/// <param name="AlreadyRunning">
+/// Ali je isto izvajanje že teklo (<c>51101</c>). Za načrtovan worker je prekrivanje
+/// normalno stanje, ne napaka: drugi zagon se umakne in ne stori ničesar.
+/// </param>
+/// <param name="Truncated">
+/// Ali je zagon zadel mejo <c>maxMessages</c>. Takrat v vrsti lahko ostane še kaj —
+/// meja se izpiše, da tiho odrezana vrsta ne izgleda kot prazna.
+/// </param>
+public sealed record DispatchRunResult(
+  int Claimed,
+  int Sent,
+  int Failed,
+  bool ScheduleMissing,
+  bool AlreadyRunning = false,
+  bool Truncated = false);
 
 /// <summary>Pošiljanje ene zahteve. Ločeno od zagona, da ga test lahko zamenja z lokalnim fixtureom.</summary>
 public delegate Task<DispatchResult> OutboundSend(ClaimedOutboxMessage message, CancellationToken cancellationToken);
@@ -36,6 +50,9 @@ public delegate Task<DispatchResult> OutboundSend(ClaimedOutboxMessage message, 
 public sealed class OutboxDispatchRunner(string connectionString, string workerId, OutboundSend send, int maxMessages = 100)
 {
   public const string Pipeline = "OUTBOUND";
+
+  /// <summary>ops.BeginRun: za ta par (organizacija, pipeline) izvajanje ze tece.</summary>
+  const int ConcurrentRunErrorNumber = 51101;
 
   public async Task<DispatchRunResult> RunAsync(CancellationToken cancellationToken = default)
   {
@@ -61,7 +78,17 @@ public sealed class OutboxDispatchRunner(string connectionString, string workerI
       // zagona. Zakljucek je v finally, tudi ce eno izvajanje ne uspe odpreti.
       foreach (var organizationId in scheduled)
       {
-        runs[organizationId] = await OperationsRun.BeginAsync(connectionString, organizationId, Pipeline, workerId, cancellationToken);
+        try
+        {
+          runs[organizationId] = await OperationsRun.BeginAsync(connectionString, organizationId, Pipeline, workerId, cancellationToken);
+        }
+        catch (SqlException exception) when (exception.Number == ConcurrentRunErrorNumber)
+        {
+          // 51101: za to podjetje ta pipeline ze tece. Nacrtovan worker se sam s sabo redno
+          // prekriva, kadar prejsnji zagon traja dlje od intervala; to ni napaka in ne sme
+          // koncati z neobravnavano izjemo. Drugi zagon se umakne in ne prevzame nicesar.
+          return new(0, 0, 0, false, AlreadyRunning: true);
+        }
         failuresByOrganization[organizationId] = 0;
       }
 
@@ -88,8 +115,8 @@ public sealed class OutboxDispatchRunner(string connectionString, string workerI
         // enako kot se je zgodilo zajemu 2026-08-21.
         await operationsRun.HeartbeatAsync(cancellationToken: cancellationToken);
 
-        var result = await SendAsync(message, cancellationToken);
-        await CompleteAttemptAsync(connection, message, result, null, cancellationToken);
+        var (result, failureReason) = await SendAsync(message, cancellationToken);
+        await CompleteAttemptAsync(connection, message, result, failureReason, cancellationToken);
         if (result.Outcome == DispatchOutcome.Sent) sent++;
         else { failed++; failuresByOrganization[message.OrganizationId]++; }
       }
@@ -105,7 +132,7 @@ public sealed class OutboxDispatchRunner(string connectionString, string workerI
       }
     }
 
-    return new(claimed, sent, failed, false);
+    return new(claimed, sent, failed, false, Truncated: claimed >= maxMessages);
   }
 
   /// <summary>Organizacije z omogocenim razporedom za <see cref="Pipeline"/>.</summary>
@@ -121,17 +148,27 @@ public sealed class OutboxDispatchRunner(string connectionString, string workerI
     return organizations;
   }
 
-  async Task<DispatchResult> SendAsync(ClaimedOutboxMessage message, CancellationToken cancellationToken)
+  /// <summary>
+  /// Posiljanje enega sporocila. Nobena napaka enega sporocila ne sme podreti zagona:
+  /// out.ClaimMessage bere vrsto po <c>OutboxMessageId</c>, zato bi eno sporocilo s pokvarjeno
+  /// nastavitvijo (na primer <c>HttpOperation</c>, ki ni POST ali PATCH, ali neveljaven
+  /// <c>EndpointTemplate</c>) ob vsakem zagonu vrglo izjemo na istem mestu in trajno zaprlo
+  /// pot vsem sporocilom za sabo. Zato se ujame vsaka izjema, ne le omrezna.
+  /// </summary>
+  async Task<(DispatchResult Result, string? FailureReason)> SendAsync(ClaimedOutboxMessage message, CancellationToken cancellationToken)
   {
     try
     {
-      return await send(message, cancellationToken);
+      return (await send(message, cancellationToken), null);
     }
-    catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+    catch (Exception exception)
     {
-      // Prekinjena povezava ali iztek casa je omrezna napaka, ne poslovna zavrnitev.
+      // Prekinjena povezava, iztek casa ali pokvarjena nastavitev — nic od tega ni poslovna
+      // zavrnitev, zato ostane Transient in sporocilo se sme ponoviti.
       var outcome = message.AttemptCount >= message.MaxAttempts ? DispatchOutcome.Dead : DispatchOutcome.Retry;
-      return new(outcome, 0, string.Empty, null, OutboundErrorClass.Transient);
+      // V bazo gre samo vrsta izjeme. Sporocilo izjeme lahko nosi naslov s poverilnico ali
+      // zeton, redakcija iz SaopOutboundHandler pa velja za telo odgovora, ne za izjemo.
+      return (new(outcome, 0, string.Empty, null, OutboundErrorClass.Transient), $"Dispatcher: {exception.GetType().Name}.");
     }
   }
 
