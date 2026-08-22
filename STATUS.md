@@ -19,6 +19,14 @@ kot ga je v obratovanju.
 Meritev je nastala nad delovnim drevesom **pred** commitom `2beee25`; vse številke iz baze
 veljajo naprej, ker se shema od takrat ni spremenila.
 
+**Popravek istega dne, po polnem branju dobaviteljevega XML in migraciji `059`:** del B ni več
+pri ~10 %. Dobaviteljev XML se je do takrat bral samo v izrezku (25 izdelkov Nowodvorskega,
+3 Braytrona), zato so bile `pim.*` otroške tabele skoraj prazne — vzrok ni bil v objavi, ampak
+v zajemu. Po polnem branju obeh datotek, ponovni validaciji in objavi:
+`canon.ProductAttribute` 1.064 → **112.820** vrstic (2.548 izdelkov), `pim.ProductAttribute`
+901 → **101.462**, `pim.ProductCategory` 21 → **6.494**, izvožena datoteka pa ima vrednost v
+**152 od 213 stolpcev** namesto v 15. Podrobno v `TASKBOARD.md` pod 2026-08-22.
+
 Dokazi te meritve: `dotnet build PIM_Solution\PIM.sln` → 0 napak;
 `PIM.Migrator --verify` → izhod 0; `PIM.B2bWorker --export-magento --organization-id 1`
 → datoteka 1.729 vrstic. `scripts\run_tests.ps1` v tej seji ni bil pognan (zadnji znani

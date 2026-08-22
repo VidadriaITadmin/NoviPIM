@@ -52,6 +52,28 @@ Isti paket se ne zajame dvakrat: `raw.Inbox` ima enoličnost po (vir, entiteta, 
 vsebine), zato ponoven zagon nespremenjene datoteke pade z napako 2627. To ni okvara, ampak
 zaščita pred podvojenim zajemom.
 
+### Kadar se dopolnijo preslikave (2026-08-22)
+
+Ker se ista datoteka ne zajame dvakrat, dopolnjena preslikava sama po sebi ne pride do že
+zajetih strani. Zato ima worker dve stikali:
+
+```powershell
+# preslikaj zagon, ki je ostal Pending (na primer po --only-ingest ali po padcu)
+dotnet run --project PIM_Solution\workers\PIM.XmlFileWorker -- --map-run <RunId>
+
+# preslikaj znova zagon, ki je ze obdelan — strani gredo nazaj na Pending
+dotnet run --project PIM_Solution\workers\PIM.XmlFileWorker -- --znova-preslikaj <RunId>
+```
+
+`--znova-preslikaj` ničesar ne briše: izluščene vrednosti in katalog se le dopolnijo, ker so
+vsi zapisi združevalni (`MERGE` oziroma »vstavi, če še ni«). Podjetje in vir se prebereta iz
+zajetih vrstic, zato zadostuje `RunId`; ob koncu worker izpiše stanje po entitetah.
+
+**Hitrost.** Polni datoteki dobaviteljev (19 MB Nowodvorski, 18 MB Braytron) sta bili do
+2026-08-22 predraga za preslikavo — 4 GB po žici na stran, 293.000 prevodov XPath in prav
+toliko obhodov do strežnika. Po popravku (dve poizvedbi namesto JOIN-a, prevedena pot in
+množičen vpis) je celotna datoteka Nowodvorskega **110 s** za vse tri entitete.
+
 ## Standardni dokaz pred namestitvijo
 
 V `PIM_Solution`:
@@ -90,3 +112,13 @@ dotnet publish .\workers\PIM.XmlFileWorker\PIM.XmlFileWorker.csproj -c Release -
 `PIM.Watchdog` uporablja lokalni profil `WATCHDOG` v `ops.ScheduleProfile` in ob uspehu zapiše `ops.IntegrationHealth=Healthy`. `PIM.AlertDispatcher` uporablja `ALERT_DISPATCH` samo po izrecnem `PIM_ALERT_DELIVERY_ENABLED=true`; brez tega flaga se ustavi pred povezavo oziroma omrežnim klicem. Profila ne ustvarita Scheduled Taska in sama po sebi ne omogočita nobene dostave.
 
 Fixture-only workerjev (`SaopStockWorker`, `StockFileWorker`, `B2bWorker`) sistem ne označuje lažno kot živih DB workerjev; dobijo heartbeat šele, ko imajo dejansko povezavo in potrjen lokalni execution contract. Ob napaki preveri `ops.ErrorLog`, `ops.Alert`, `ops.DeadLetterQueue` in specifično karanteno; ne briši sledi, dokler incident ni raziskan.
+
+## Kaj se danes res bere (stanje 2026-08-22)
+
+| Vir | Stanje |
+|---|---|
+| SAOP katalog | **dela** — 16 končnih točk zajetih, preslikane so `ItemGeneralData`, `Descriptions`, `Prices` in trgovinski podatki (`057`) |
+| Dobaviteljev XML (NW, BT) | **dela** — obe datoteki v celoti; 2.548 izdelkov z lastnostmi, 2.382 s kategorijami |
+| SAOP zaloge | **ne pride do `stock.*`** — `GetItemsStockData` (5 strani) in `GetItemsStockAccountingData` (87) čakata v `raw.Inbox` kot `Pending`; `PIM.SaopStockWorker` je izpis brez vsebine |
+| Zaloge dobaviteljev | **samo fixture** — `PIM.StockFileWorker` prebrano prešteje in izpiše, v bazo ne piše; vrstice v `stock.*` so iz testov |
+| Šifranti in B2B (7 entitet) | zajeti, brez cilja v modelu — čaka odločitev (`docs/TVOJE_NALOGE.md`, naloga 5) |

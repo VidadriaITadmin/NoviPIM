@@ -92,6 +92,27 @@ polj pri njih preverja šele CSV generator ob pisanju (razdelek 3.2).
 
 ---
 
+## 2a. Kategorije: `canon.WebSite` pove, katera stran gre v kateri stolpec
+
+Od migracije `059` spletna stran ni več zapisana v programu. Prej je bilo v
+`MagentoExportCommand` stikalo `"B2C" => slovenski stolpec, "B2C_EN" => angleški`, zato je
+bila nova spletna stran nova različica programa. Zdaj je vrstica:
+
+| `WebSiteCode` | `CategoryTreeCode` | `LanguageCode` | `CategoryFieldCode` | stolpec predloge |
+|---|---|---|---|---|
+| `svetila_si` | `svetila_si` | `sl` | `Product.CategorySvetilaSl` | 25 Kategorije svetila SLO |
+| `svetila_si_en` | `svetila_si` | `en` | `Product.CategorySvetilaEn` | 24 Kategorije svetila ANG |
+| `B2C` | `videlektro` | `sl` | `Product.CategorySl` | 27 Kategorije vid SLO |
+| `B2C_EN` | `videlektro` | `en` | `Product.CategoryEn` | 26 Kategorije vid ANG |
+
+`B2C` in `B2C_EN` sta zgodovinski oznaki drevesa videlektro; ostajata, ker sta vezani na
+validacijski profil in na teste.
+
+Kategorija dobavitelja ni kategorija spletne strani. Dobaviteljevo pot (`Interior lighting >
+Wall lamps > Sconces`) prevede `map.CategoryPathMap` v našo kategorijo, celo pot v izbranem
+jeziku pa sestavi pogled `canon.CategoryPathTranslated`. Česar slovar ne pozna, se s števcem
+zapiše v `map.MissingCategoryMap` — to je delovni seznam, ne napaka.
+
 ## 3. A) Izvozi
 
 ### 3.1 Izvozne procedure (vrnejo nabor vrstic, ne datoteke)
