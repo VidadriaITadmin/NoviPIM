@@ -13,7 +13,7 @@ using PIM.Outbound;
 // v tej vrsti, vključno s pokvarjenim kodiranjem, v kakršnem so tam shranjena.
 
 var contract = Contract();
-var builder = new SaopItemXmlBuilder(contract);
+var builder = new SaopDocumentBuilder(SaopKnownShapes.Product, contract);
 var stamp = new DateTime(2026, 7, 23, 11, 31, 22, 1, DateTimeKind.Utc);
 
 // --- 1) ADD: dokument mora biti enak resničnemu -------------------------------------
@@ -254,7 +254,67 @@ Equal("PATCH", SaopIntentResolver.HttpOperation(SaopIntent.Update), "Sprememba g
 Equal("api/Item/AddItemsGeneralData", SaopIntentResolver.Endpoint(SaopIntent.Add), "Končna točka za nov artikel");
 Equal("api/Item/UpdateItemsGeneralData", SaopIntentResolver.Endpoint(SaopIntent.Update), "Končna točka za spremembo");
 
-Console.WriteLine("F8 SAOP XML: ADD proti resničnemu dokumentu, PATCH samo izpolnjena polja, oblika vrednosti, "
+
+// --- 9) Druge entitete: stranka, cenik in cena ------------------------------------------
+//
+// Izdelek je edini z gnezdenim ovojem. Stranka je edina, ki ima ob spremembi drug koren.
+// Cenik in cena gresta tudi za spremembo s POST. Cena je edina s sestavljenim kljucem.
+// Ce se katera od teh trditev spremeni, mora pasti tukaj in ne sele ob posiljanju.
+
+var stranka = new SaopDocumentBuilder(SaopKnownShapes.Customer,
+[
+  new("Item", "Code", "Customer.Code", 10, true, "text", null, null, IsKey: true),
+  new("Item", "Name", "Customer.Name", 20, true, "text", null, null),
+  new("Item", "Country", "Customer.Country", 60, false, "text", null, null)
+]);
+
+var novaStranka = stranka.Build(SaopIntent.Add, "9999999",
+  new Dictionary<string, string?> { ["Customer.Name"] = "David P", ["Customer.Country"] = "SI" },
+  new Dictionary<string, string>(), stamp, suggestFirstFreeCode: false);
+Equal(true, novaStranka.Xml.Contains("<Customer>"), "Nova stranka ima koren Customer");
+Equal(true, novaStranka.Xml.Contains("<Code>9999999</Code>"), "Kljuc stranke je Code");
+Equal(false, novaStranka.Xml.Contains("ItemCreated"), "Stranka nima casovnega ziga");
+Equal(false, novaStranka.Xml.Contains("<ItemGeneralData"), "Stranka je plosk dokument brez ovoja");
+
+var spremenjenaStranka = stranka.Build(SaopIntent.Update, "9999999",
+  new Dictionary<string, string?> { ["Customer.Name"] = "David P" }, new Dictionary<string, string>(), stamp);
+Equal(true, spremenjenaStranka.Xml.Contains("<CustomerV2>"), "Sprememba stranke ima koren CustomerV2");
+Equal("PATCH", SaopKnownShapes.Customer.Operation(SaopIntent.Update), "Sprememba stranke gre s PATCH");
+Equal("POST", SaopKnownShapes.Customer.Operation(SaopIntent.Add), "Nova stranka gre s POST");
+
+// Cenik: sprememba gre s POST, ne s PATCH — to je razlika od izdelkov in strank.
+Equal("POST", SaopKnownShapes.PriceList.Operation(SaopIntent.Update), "Sprememba cenika gre s POST");
+Equal("api/pricelists/ModifyPriceLists", SaopKnownShapes.PriceList.Path(SaopIntent.Update), "Pot za spremembo cenika");
+Equal(null, SaopKnownShapes.PriceList.SuggestCodeElement, "Cenik ne pozna dodelitve sifre");
+
+// Cena: sestavljen kljuc PriceListId|ItemCode se razdeli v dva elementa.
+var cena = new SaopDocumentBuilder(SaopKnownShapes.Price,
+[
+  new("Item", "PriceListId", "Price.PriceListId", 10, true, "text", null, null, IsKey: true),
+  new("Item", "ItemCode", "Price.ItemCode", 20, true, "text", null, null, IsKey: true),
+  new("Item", "Price", "Price.Net", 30, true, "decimal4", null, null),
+  new("Item", "Active", "Price.Active", 50, false, "bool", "true", "false")
+]);
+var cenaXml = cena.Build(SaopIntent.Update, "B2C|NW.12603",
+  new Dictionary<string, string?> { ["Price.Net"] = "12,5", ["Price.Active"] = "1" },
+  new Dictionary<string, string>(), stamp);
+Equal(true, cenaXml.Xml.Contains("<PriceListId>B2C</PriceListId>"), "Prvi del kljuca je cenik");
+Equal(true, cenaXml.Xml.Contains("<ItemCode>NW.12603</ItemCode>"), "Drugi del kljuca je artikel");
+Equal(true, cenaXml.Xml.Contains("<Price>12.5000</Price>"), "Cena gre s piko in stirimi mesti");
+Equal(true, cenaXml.Xml.Contains("<Active>true</Active>"), "Logicna vrednost cene je true/false, ne D/N");
+
+Throws(() => cena.Build(SaopIntent.Update, "B2C", new Dictionary<string, string?>(), new Dictionary<string, string>(), stamp),
+  "Nepopoln sestavljen kljuc ne sme nasloviti napacnega zapisa");
+Throws(() => cena.Build(SaopIntent.Update, "B2C|", new Dictionary<string, string?>(), new Dictionary<string, string>(), stamp),
+  "Prazen del kljuca ni kljuc");
+
+// --- 10) Sedma resnicna vrsta napake: SAOP pove polje in sifrant --------------------------
+var polje = Advice("Napaka v polju Country . \u0161ifra Slovenija ne obstaja v tabeli SPLDrzave .");
+Equal(SaopErrorKind.CodebookMissing, polje.Kind, "SAOP je povedal, katero polje je narobe");
+Equal("Country", polje.Field, "Ime polja mora biti izlusceno");
+Equal(true, polje.Instruction.Contains("SPLDrzave"), "Navodilo mora povedati, kateri sifrant je vir resnice");
+
+Console.WriteLine("F8 SAOP XML: štiri entitete, ADD proti resničnemu dokumentu, PATCH samo izpolnjena polja, oblika vrednosti, "
   + "branje odgovora, kodiranje, prevod vseh šestih napak in izbira ADD/PATCH PASS.");
 return 0;
 
@@ -279,7 +339,7 @@ static void Throws(Action action, string message)
 // integracijski test PIM.F8.Integration prebere iz baze in primerja s tem seznamom.
 static SaopXmlField[] Contract() =>
 [
-  new("Item", "ItemID", "Product.ItemID", 10, true, "text", null, null),
+  new("Item", "ItemID", "Product.ItemID", 10, true, "text", null, null, IsKey: true),
   new("Item", "ItemTitle1", "ProductText.TITLE_ERP.sl", 30, true, "text", null, null),
   new("Item", "ItemTitle2", "ProductText.TITLE_ERP2.sl", 40, false, "text", null, null),
   new("GeneralData", "ItemType", null, 110, true, "text", null, null),

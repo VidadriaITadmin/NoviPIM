@@ -59,6 +59,22 @@ public static class SaopErrorTranslator
     var items = ReadItemIds(error.Message);
     var naming = items.Count == 0 ? "artikel" : string.Join(", ", items);
 
+    // SAOP zna povedati tudi popolnoma natancno, katero polje in kateri sifrant sta problem:
+    // "Napaka v polju Country . sifra Slovenija ne obstaja v tabeli SPLDrzave ." Ta oblika je
+    // najbolj uporabna od vseh, zato se preveri prva. Resnicen primer iz stare vrste je bil
+    // ime drzave namesto sifre drzave.
+    if (text.Contains("napaka v polju"))
+    {
+      var (fieldName, table) = ReadFieldAndTable(error.Message);
+      return new(SaopErrorKind.CodebookMissing, fieldName, items,
+        $"SAOP je zavrnil vrednost polja {fieldName ?? "?"}.",
+        $"SAOP pravi: {error.Message.Trim()} "
+        + (table is null
+          ? "Popravi vrednost tega polja na tisto, ki je v šifrantu SAOP."
+          : $"Polje mora nositi šifro iz šifranta {table}, ne opisnega imena. Popravi vrednost v PIM ali naj skrbnik doda šifro v SAOP."),
+        IsSelfHealing: false);
+    }
+
     if (text.Contains("obstaja/obstajajo") || text.Contains("ze obstaja"))
       return new(SaopErrorKind.ItemAlreadyExists, null, items,
         $"SAOP ima artikel {naming} že zaveden, poslan pa je bil kot nov.",
@@ -129,6 +145,17 @@ public static class SaopErrorTranslator
     // Znana napaka pove več od neznane; med znanimi je prva dovolj, ker SAOP vse naštete
     // napake nanaša na isti dokument.
     return advices.FirstOrDefault(advice => advice.Kind != SaopErrorKind.Unknown) ?? advices[0];
+  }
+
+  /// <summary>
+  /// Iz sporočila oblike »Napaka v polju X . šifra Y ne obstaja v tabeli Z .« prebere ime polja
+  /// in ime šifranta. Oboje je za uporabnika bistveno: brez imena šifranta ne ve, kje popraviti.
+  /// </summary>
+  static (string? Field, string? Table) ReadFieldAndTable(string message)
+  {
+    var field = Regex.Match(message, @"polju\s+([A-Za-z0-9_]+)");
+    var table = Regex.Match(message, @"tabeli\s+([A-Za-z0-9_]+)");
+    return (field.Success ? field.Groups[1].Value : null, table.Success ? table.Groups[1].Value : null);
   }
 
   static IReadOnlyList<string> ReadItemIds(string message) =>
