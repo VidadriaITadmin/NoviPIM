@@ -34,3 +34,6 @@ logs/
 # Excelove zaklepne datoteke
 ~$*
 **/~$*
+
+# izhod nocnega opravila (Magento CSV, do 14 MB na podjetje)
+izvoz/
