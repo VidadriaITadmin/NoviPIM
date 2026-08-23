@@ -251,10 +251,22 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     INNER JOIN canon.Product product ON product.ProductId=attribute.ProductId
     WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
 
+    /* Svezenj brisemo samo tistega, ki ga je naredil ta test. Vprasanje "kateri svezenj nima vec
+       zgodovine" nad celo tabelo je z rastjo kataloga postalo predrago in je test padel na
+       casovni meji, ceprav ni bilo nic narobe (isti popravek kot v PIM.F6.SaopStockIntegration). */
+    DECLARE @Svezenj TABLE(ChangeBatchId bigint PRIMARY KEY);
+    INSERT @Svezenj(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+
     DELETE history FROM pim.ProductFieldHistory history
     INNER JOIN canon.Product product ON product.ProductId=history.ProductId
     WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
+
     DELETE batch FROM pim.ProductChangeBatch batch
+    INNER JOIN @Svezenj mojSvezenj ON mojSvezenj.ChangeBatchId=batch.ChangeBatchId
     WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
 
     /* Validacija lahko medtem tece kadarkoli in testnemu izdelku pripise stanje;

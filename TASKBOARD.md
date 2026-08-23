@@ -110,6 +110,30 @@ _(prazno)_
 
 ## KONČANO
 
+- **[ZAJEM]** Spletni nazivi iz delovnih zvezkov — kdo: Claude Opus 5 — 2026-08-23, migracija
+  `078`. Odločitev uporabnika: spletni naziv in ERP naziv sta dve različni stvari — ERP naziv je
+  v SAOP omejen na dvakrat 30 znakov, spletni je poljuben in so ga sestavljali ročno.
+  Sestavljeni nazivi živijo v **58 delovnih zvezkih** (`PIM_test\1-Uvoz artiklov_Splet`), povsod
+  z istimi naslovi stolpcev: `Šifra artikla`, `Naziv artikla`, `Naziv angleški`, `Naziv nemški`,
+  `Naziv hrvaški`.
+  **Zvezek ni nov tok podatkov, ampak druga oblika istega.** `PIM.XmlFileWorker` ga pretvori v
+  isti generični XML, ki ga že zna zajeti, in gre po isti poti — nabiralnik, izluščanje po XPath,
+  preslikave iz registra, karantena, mejnik. Imena elementov nastanejo iz naslovov stolpcev
+  (`Naziv angleški` → `NazivAngleski`); pravilo je na enem mestu, v `WorkbookReader.SanitizeName`.
+  Rezultat po vseh štirih podjetjih: **31.500 slovenskih spletnih nazivov** (Vidadria 15.676,
+  IQLighting 9.946, DEMO 4.724, Ediito 1.158) in 19.273 angleških. V izvozu za IQLighting je to
+  4.593 slovenskih in 3.265 angleških nazivov; polnih **167 od 213 stolpcev**.
+  **Tri pasti, ki jih je razkril prvi zagon:**
+  1. Zvezek brez lista s šifro artikla je ustavil cel zajem in vse za njim je ostalo nezajeto;
+     zdaj se preskoči z izpisom (dva taka: »Uvoz oddelek in kategorija«, »Uvoz opisov«).
+  2. Datoteka, odprta v Excelu, je zajem ubila; zdaj se bere v načinu, ki to dopušča.
+  3. Napaka formule v celici je pristala v katalogu kot spletni naziv `#N/A`. Zdaj se celica z
+     napako bere kot prazna; 17 takih vrstic v katalogu in 7 v objavi je pobrisanih (nastale so
+     v tem istem zagonu, pred popravkom).
+  **Kar ta migracija namenoma ne naredi:** opisov iz istih zvezkov ne prenaša — `DESCRIPTION`
+  danes prihaja iz SAOP in bi ga spletni opis prepisal. Kaj je pravi vir opisa, je ločena
+  odločitev.
+
 - **[IZVOZ]** Dobavitelj in merska enota prideta do izvoza — kdo: Claude Opus 5 — 2026-08-23,
   migracija `077`. Stolpca 7 in 9 sta bila prazna, čeprav podatka v katalogu obstajata od prvega
   zajema (`canon.Product.Supplier`, `canon.Product.UoM`). Objava (`pim.Product`) ju ni poznala —

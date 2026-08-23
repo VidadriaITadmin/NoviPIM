@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
+using PIM.XmlFileWorker;
 using PIM.XmlMapping;
 using PIM.Operations;
 
@@ -71,7 +72,14 @@ if (string.IsNullOrWhiteSpace(sourceCode) || string.IsNullOrWhiteSpace(root)
   return 2;
 }
 
-var files = Directory.GetFiles(root, "*.xml").OrderBy(path => path, StringComparer.Ordinal).ToArray();
+// Poleg XML beremo tudi delovne zvezke: pretvorimo jih v isti generični XML in gredo po isti
+// poti (WorkbookReader). Zacasne Excelove datoteke (~$...) preskocimo.
+var files = Directory.GetFiles(root, "*.*")
+  .Where(path => path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+    || path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+  .Where(path => !Path.GetFileName(path).StartsWith("~$", StringComparison.Ordinal))
+  .OrderBy(path => path, StringComparer.Ordinal)
+  .ToArray();
 await using var operationsRun = await OperationsRun.BeginAsync(connectionString, organizationId, "GENERIC_XML", $"{Environment.MachineName}:{Environment.ProcessId}");
 var runId = Guid.NewGuid();
 await using (var connection = new SqlConnection(connectionString))
@@ -80,14 +88,43 @@ await using (var connection = new SqlConnection(connectionString))
   var entities = await ReadEntitiesAsync(connection, sourceCode, organizationId);
   await InsertRunAsync(connection, runId, organizationId, sourceCode);
   var page = 0;
+  var preskoceneDatoteke = 0;
+  var zeZajete = 0;
   foreach (var file in files)
   {
-    var payload = await File.ReadAllTextAsync(file);
+    string payload;
+    try
+    {
+      payload = file.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)
+        ? WorkbookReader.ToXml(file)
+        : await File.ReadAllTextAsync(file);
+    }
+    catch (Exception exception) when (exception is InvalidOperationException or IOException
+      or System.IO.InvalidDataException)
+    {
+      // Zvezek brez lista s sifro artikla ni napaka zajema, ampak datoteka, ki ne sodi sem.
+      // Prej je taka datoteka ustavila cel zagon in vse za njo je ostalo nezajeto.
+      Console.Error.WriteLine($"  preskoceno: {Path.GetFileName(file)} — {exception.Message}");
+      preskoceneDatoteke++;
+      continue;
+    }
+
     foreach (var entity in entities)
     {
-      await InsertInboxAsync(connection, runId, organizationId, sourceCode, entity, ++page, payload);
+      try
+      {
+        await InsertInboxAsync(connection, runId, organizationId, sourceCode, entity, ++page, payload);
+      }
+      catch (SqlException exception) when (exception.Number is 2627 or 2601)
+      {
+        // Enolicnost (vir, entiteta, stran, hash) pomeni: to vsebino smo ze zajeli. To ni okvara,
+        // ampak varovalka pred podvojenim zajemom — in ne sme ustaviti datotek za njo.
+        zeZajete++;
+      }
     }
   }
+  if (preskoceneDatoteke > 0 || zeZajete > 0)
+    Console.WriteLine($"Preskocenih datotek: {preskoceneDatoteke}; ze zajetih strani: {zeZajete}.");
 }
 await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
 // Zaključi lasten zapis v ops.PipelineRun (enako kot PIM.KatalogWorker), da run ne ostane v stanju Running.
