@@ -1,0 +1,255 @@
+﻿Entiteta;Zapis;Pot v XML;Pojavitev;Polnih;Vzorci vrednosti;Kanonicna koda (danes);Preslikano;Kam naj gre (izpolni)
+Currencies;Currency;CurrencyId;181;100 %;004 | 008 | 012;;;canon.Codebook CURRENCY -> sifra
+Currencies;Currency;CurrencyDescription;181;100 %;Afgan | Lek | Alžirski dinar;;;canon.Codebook CURRENCY -> ime
+Currencies;Currency;CurrencyCode;180;100 %;AFA | ALL | DZD;;;canon.Codebook CURRENCY -> ISO oznaka
+Currencies;Currency;Units;181;100 %;1 | 0;;;canon.Codebook CURRENCY -> enota
+Currencies;Currency;InsUpdDate;181;100 %;2002-05-28T14:48:37 | 2002-05-28T14:51:33 | 2002-05-28T14:51:56;;;predlog: ne rabimo (ERP notranje)
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;ItemDiscountGroupID;3;100 %;KABLI | VD.L812;;;b2b.CustomerItemGroupDiscount.ItemGroupCode
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;CustomerDiscountGroupID;3;100 %;73764256 | B2C;;;b2b.CustomerItemGroupDiscount.CustomerGroupCode
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;LimitQTY;3;100 %;0.00000;;;b2b.CustomerItemGroupDiscount.MinQuantity
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;ValidFromDate;3;100 %;2022-08-04T00:00:00 | 2022-08-01T00:00:00;;;b2b.CustomerItemGroupDiscount.ValidFrom
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;ValidToDate;3;0 %;;;;b2b.CustomerItemGroupDiscount.ValidTo
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;Discount;3;100 %;10.00 | 5.00;;;b2b.CustomerItemGroupDiscount.Percent
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;ItemOrganisationID;3;100 %;1;;;predlog: ne rabimo (podjetje je ze v zajemu)
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;CustomerOrganisationID;3;100 %;1;;;predlog: ne rabimo (podjetje je ze v zajemu)
+CustomerItemGroupDiscounts;CustomerItemGroupDiscountsComercialTermsV2;InsUpdDate;3;100 %;2022-08-04T09:25:42.093 | 2022-08-04T10:40:58.917 | 2022-08-04T13:22:35.54;;;predlog: ne rabimo (ERP notranje)
+Customers;Customer;Code;1614;100 %;00000001 | 00000002 | 00000003;;;b2b.Customer.CustomerKey
+Customers;Customer;Name;1614;100 %;MARCHIOL d.o.o., PE LJUBLJANA | MARCHIOL d.o.o., PE MARIBOR | MARCHIOL d.o.o., PE Novo mesto;;;b2b.Customer.Name
+Customers;Customer;Address;1481;100 %;Letališka cesta 34a | Perhavčeva ulica 15/a | Ljubljanska cesta 80;;;b2b.Customer.Address
+Customers;Customer;Country;1614;100 %;SI | DE | PL;;;b2b.Customer.Country
+Customers;Customer;PostalCode;1484;100 %;1000 | 2000 | 8000;;;b2b.Customer.PostalCode
+Customers;Customer;City;1487;100 %;LJUBLJANA | Maribor | Novo mesto;;;b2b.Customer.City
+Customers;Customer;SubjectToVAT;1614;100 %;0 | 1;;;b2b.Customer.SubjectToVat
+Customers;Customer;ExpirationDays;1614;100 %;0 | 14 | 45;;;b2b.Customer.PaymentDays
+Customers;Customer;RebatePercent;1614;100 %;0;;;b2b.Customer.RebatePercent
+Customers;Customer;Usage;1614;100 %;1;;;
+Customers;Customer;CustomerPayerCode;3;100 %;89249577;;;b2b.Customer.PayerCode (obstaja)
+Customers;Customer;TaxAccounting;1614;100 %;1 | 0;;;
+Customers;Customer;SuggestFirstFreeCode;1614;0 %;;;;(vedno prazno v tem odgovoru)
+Customers;Customer;Name1;1614;100 %;MARCHIOL d.o.o., PE LJUBLJANA | MARCHIOL d.o.o., PE MARIBOR | MARCHIOL d.o.o., PE Novo mesto;;;
+Customers;Customer;CustomerStatus;1614;100 %;false | true;;;b2b.Customer.Status
+Customers;Customer;Name1Transfer;13;100 %;MARCHIOL d.o.o., P | Sonja Jamšek | Matič Rodič;;;predlog: ne rabimo (naslov za prenos)
+Customers;Customer;Name2Transfer;5;100 %;Letališka cesta 34 | Ljubljanska cesta | Preloge 25;;;predlog: ne rabimo (naslov za prenos)
+Customers;Customer;Name3Transfer;6;100 %;Ljubljana | Novo mesto | Ljubljana - Šmartn;;;predlog: ne rabimo (naslov za prenos)
+Customers;Customer;CustomerType;1614;100 %;O | K | D;;;nova kolona b2b.Customer.CustomerType (O/K/D)
+Customers;Customer;EntityType;24;100 %;P | F;;;nova kolona b2b.Customer.EntityType (P=pravna, F=fizicna)
+Customers;Customer;Street;1481;100 %;Letališka cesta 34a | Perhavčeva ulica 15/a | Ljubljanska cesta;;;nova kolona b2b.Customer.Street
+Customers;Customer;SupplierExpirationDays;1614;100 %;0;;;
+Customers;Customer;Defaulter;1614;100 %;false;;;nova kolona b2b.Customer.IsDefaulter (neplacnik)
+Customers;Customer;UpfrontPayment;1614;100 %;false;;;nova kolona b2b.Customer.UpfrontPayment (placilo vnaprej)
+Customers;Customer;RecordInserted;1614;100 %;2022-08-04T09:07:21.057;;;predlog: ne rabimo (SAOP revizija)
+Customers;Customer;RecordInsertedBy;1614;100 %;Skrbnik;;;predlog: ne rabimo (SAOP revizija)
+Customers;Customer;RecordLastModified;1614;100 %;2022-08-04T09:07:21.057 | 2022-08-04T09:48:47.377 | 2022-08-04T13:30:45.173;;;predlog: ne rabimo (SAOP revizija)
+Customers;Customer;RecordLastModifiedBy;1614;100 %;Skrbnik;;;predlog: ne rabimo (SAOP revizija)
+Customers;Customer;AlertMinimalAmount;1614;100 %;0;;;predlog: ne rabimo (opozorila v ERP)
+Customers;Customer;BlockingUpAmount;1614;100 %;0;;;predlog: ne rabimo (blokade v ERP)
+Customers;Customer;AlertNumberOfDays;1614;100 %;0;;;predlog: ne rabimo (opozorila v ERP)
+Customers;Customer;BlockingUpNumberOfDays;1614;100 %;0;;;predlog: ne rabimo (blokade v ERP)
+Customers;Customer;SIDReporting;1614;100 %;false;;;predlog: ne rabimo (porocanje SID)
+Customers;Customer;SIDLimitAmount;1614;100 %;0;;;predlog: ne rabimo (porocanje SID)
+Customers;Customer;Vies/Status;1614;100 %;false | true;;;predlog: ne rabimo (preverba VIES)
+Customers;Customer;Vies/Date;1614;0 %;2022-08-01T00:00:00 | 2022-08-03T00:00:00 | 2022-08-02T00:00:00;;;(vedno prazno v tem odgovoru)
+Customers;Customer;CompanyLinkType;1614;100 %;I;;;
+Customers;Customer;HomeNumber;24;100 %;80 | 25 | 15;;;nova kolona b2b.Customer.HouseNumber
+Customers;Customer;SearchTag;1594;100 %;MARCHIOL d.o.o., PE Novo mesto | 214;;;
+Customers;Customer;ActivityCode;20;100 %;43.210 | 32.500 | 41.200;;;nova kolona b2b.Customer.ActivityCode (SKD)
+Customers;Customer;RegistrationNumber;20;100 %;5594901000 | 3059570000 | 5600871000;;;nova kolona b2b.Customer.RegistrationNumber (maticna)
+Customers;Customer;TaxNumber;1045;100 %;30724309 | 23893109 | 37763032;;;b2b.Customer.TaxNumber
+Customers;Customer;InstitutionalSector;20;100 %;S.11 | S.14 | S.122;;;
+Customers;Customer;SalesClerkID;11;100 %;0000006 | 0000001 | 0000004;;;predlog: ne rabimo (SAOP referent)
+Customers;Customer;Name2;532;100 %;JURE ŽVELC | S.P. | O.;;;
+Customers;Customer;LanguageID;941;100 %;3 | 1 | 2;;;nova kolona b2b.Customer.LanguageId (sifrant jezikov)
+Customers;Customer;Name3;107;100 %;UZEOP | NAPRAVAMI IN DELI, D.O.O. | S.P.;;;
+Customers;Customer;DiscountGroupID;2;100 %;00000742 | 73764256;;;b2b.Customer.DiscountPriceListCode (obstaja)
+Customers;Customer;Currency;5;100 %;987 | 978;;;nova kolona b2b.Customer.CurrencyId (sifrant valut)
+Customers;Customer;PriceList;6;100 %;B2B | B2C;;;b2b.Customer.PriceListCode (obstaja)
+Customers;Customer;PurchaseClerkID;1;100 %;0000005;;;predlog: ne rabimo (SAOP referent)
+Descriptions;itemDescriptions;ItemID;1052;100 %;TT.K5999940 | TT.K6000200 | TT.K6000201;Product.ItemID;DA;(ze preslikano)
+Descriptions;itemDescriptions;Descriptions/Description/DescriptionType;1986;100 %;T | O | K;;;
+Descriptions;itemDescriptions;Descriptions/Description/LanguageID;1986;100 %;1 | 2 | 3;;;
+Descriptions;itemDescriptions;Descriptions/Description/ItemDescription;1986;100 %;"; Material: ABS; Vidna dim.ABS; Pakiranj | ; Material: ABS; Visual dim.7x7x22mm; Pa | ; Material: ABS; Sichtbare Dim.7x7x22mm;";;;
+Descriptions;itemDescriptions;Descriptions/Description/ItemLastModified;1986;100 %;2024-09-28T21:24:07.553 | 2023-11-24T06:52:00.947 | 2023-11-24T06:51:34.013;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemID;1000;100 %;3F.58616 | A9V2RGB.5 | ACB.1BIS38431O;;;Product.ItemID (kljuc)
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemName;1000;100 %;LINDA PRO prahotesna LED 9715lm 150cm 66 | LED trak 24V 9W RGB 120 LED 5mm 293lm IP | Mako Gold Bezel;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemOrganisationID;1000;100 %;3;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;CustomerOrganisationID;1000;100 %;3;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/CustomerID;1000;100 %;0000541 | 0000506 | 0001053;;;b2b.Customer (kljuc)
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/CustomerName;1000;100 %;EDIITO d.o.o. | DIGIMAX SRL | MARCHIOL d.o.o.;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/CustomerItemID;1000;100 %;3F.58616 | DA1202405NO0RGB | 1BIS38431O;;;sifra artikla pri stranki
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/CustomerConvertFactor;1000;100 %;1.00000;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingAllowed;1000;100 %;true | false;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingCurrencyID;1000;100 %;978 | 840;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingPrice;1000;100 %;0.00000 | 4.75000 | 10.35000;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingDiscount;1000;100 %;0.00 | 40.00;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingDiscount2;1000;100 %;0.00;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingDiscount3;1000;100 %;0.00;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingDiscount4;1000;100 %;0.00;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingDiscount5;1000;100 %;0.00;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/LeadTime;1000;100 %;0 | 21;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingType;1000;100 %;1;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/MinimalOrderQty;1000;100 %;1.000;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingMultiplier;1000;100 %;1.000;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/OrderingStep;1000;100 %;1.000;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/InsertedBy;1000;100 %;Luka;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/InsertionTime;1000;100 %;2023-08-03T06:09:20.883 | 2023-02-24T17:12:32.027 | 2023-11-16T06:10:27.33;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/ModifiedBy;1000;100 %;Luka;;;
+GetItemCustomerDataV2;ItemCustomerDataHeader;ItemCustomersData/ItemCustomerData/ModificationTime;1000;100 %;2023-08-03T06:09:20.883 | 2023-02-24T17:21:55.34 | 2023-11-16T06:32:53.633;;;
+GetItemsCustomProperties;ItemCustProperties;ItemID;1000;100 %;ER.ES60.C | ER.ES60.C.RGB | IQ.LDD.03.FK3;;;Product.ItemID (kljuc)
+GetItemsCustomProperties;ItemCustProperties;CustProperties/CustProperty/PropertyID;1001;100 %;BUG | SEKUNDARNAMERSKAENOTA | STEVILOKOSOVVPAKETU;;;ime lastnosti -> ProductAttribute.<PropertyID>
+GetItemsCustomProperties;ItemCustProperties;CustProperties/CustProperty/PropertyValue;1001;100 %;18.05.2022 | 02.06.2022 | 30.05.2022;;;vrednost lastnosti
+GetItemsCustomProperties;ItemCustProperties;CustProperties/CustProperty/PropertyType;1001;100 %;B | S;;;ne rabimo (tip zapisa v SAOP)
+GetItemsCustomProperties;ItemCustProperties;CustProperties/CustProperty/InsUpdDate;1001;100 %;2022-08-04T09:07:08.39;;;predlog: ne rabimo (ERP notranje)
+GetItemsPlanningData;ItemPlanningData;ItemID;1000;100 %;0000000000001 | 0000000000002 | 11.OGL01;;;
+GetItemsPlanningData;ItemPlanningData;InsUpdDate;1000;100 %;2022-08-04T09:07:07.457;;;predlog: ne rabimo (ERP notranje)
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemLeadTime;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemLeadTimeQty;1000;100 %;1.000;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemDailyProductionQty;1000;100 %;0.000;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemPurchaseLeadTime;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemAggregationPeriodDays;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemOptimumProductionQty;1000;100 %;0.000;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemMinQtyPlanning;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/LabelsAddOn;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/Phantom;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ProjectProductionItem;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemDismantle;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemExcludeMSP;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;PlanningData/ItemExcludeQtyReservation;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemMaxScrap;1000;100 %;0.00;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemDurability;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemEmergency;1000;100 %;0;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemPlanningType;1000;0 %;2;;;(vedno prazno v tem odgovoru)
+GetItemsPlanningData;ItemPlanningData;MITData/WOTransfer;1000;100 %;false;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemComplexityFactor;1000;100 %;0.0000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemConverterLiter;1000;100 %;0.000000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemConverterVolume;1000;100 %;0.000000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemConverterSurfaceArea;1000;100 %;0.000000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemConverterM;1000;100 %;0.000000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemSurfaceArea;1000;100 %;0.00;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemTare;1000;100 %;0.000000;;;
+GetItemsPlanningData;ItemPlanningData;MITData/ItemQuantityOfPackaging3;1000;100 %;0.000000;;;
+GetItemsStockAccountingData;ItemStockAccountingData;ItemID;1000;100 %;0.S.LGD500 | 00000000000000000003 | 0000000000001;;;Product.ItemID (kljuc)
+GetItemsStockAccountingData;ItemStockAccountingData;WarehouseTypesData/WarehouseTypeData/WarehouseType;1000;100 %;V;;;vrsta skladisca
+GetItemsStockAccountingData;ItemStockAccountingData;WarehouseTypesData/WarehouseTypeData/InventoryAccount;1000;100 %;6500;;;canon.ProductStockAccounting.InventoryAccount
+GetItemsStockAccountingData;ItemStockAccountingData;WarehouseTypesData/WarehouseTypeData/BillingAccount;26;100 %;6500;;;canon.ProductStockAccounting.BillingAccount
+GetItemsStockAccountingData;ItemStockAccountingData;WarehouseTypesData/WarehouseTypeData/InsUpdDate;1000;100 %;2024-06-29T10:19:40.373 | 2024-12-13T07:36:52.28 | 2026-02-27T07:07:37.96;;;predlog: ne rabimo (ERP notranje)
+GetItemsStockAccountingData;ItemStockAccountingData;ItemGroup;1000;100 %;VD0 | DL | AR;;;Product.ItemGroup (ze imamo iz splosnih podatkov)
+GetItemsStockAccountingData;ItemStockAccountingData;ItemDepartment;985;100 %;P | B | C;;;
+GetItemsStockAccountingData;ItemStockAccountingData;ItemClassification;14;100 %;RAZLEDTRA | OROROCPRE;;;
+GetItemsStockData;ItemStockData;ItemID;1000;100 %;3F.58594 | 3F.58616 | 3F.58765;;;Product.ItemID (kljuc)
+GetItemsStockData;ItemStockData;InsUpdDate;1000;100 %;2026-05-14T06:35:33.863 | 2025-01-14T07:45:12.857 | 2026-05-14T06:36:17.673;;;predlog: ne rabimo (ERP notranje)
+GetItemsStockData;ItemStockData;ItemWarehousesData/ItemWarehouseData/WarehouseID;1000;100 %;0000001;;;skladisce (canon.Warehouse)
+GetItemsStockData;ItemStockData;ItemWarehousesData/ItemWarehouseData/MinimumStock;1000;100 %;1.000 | 10.000 | 20.000;;;canon.ProductStockPolicy.MinimumStock
+GetItemsStockData;ItemStockData;ItemWarehousesData/ItemWarehouseData/MaximumStock;1000;100 %;10.000 | 20.000 | 1.000;;;canon.ProductStockPolicy.MaximumStock
+GetItemsTitlesLanguage;itemTitlesLanguage;ItemID;1000;100 %;ACB.1BIS38431O | ACB.5CLA41161B | ACB.5CLA41161N;;;Product.ItemID (kljuc)
+GetItemsTitlesLanguage;itemTitlesLanguage;Titles/Title/LanguageID;1000;100 %;2;;;jezik zapisa (iz sifranta jezikov)
+GetItemsTitlesLanguage;itemTitlesLanguage;Titles/Title/ItemTitle1;1000;100 %;Mako Gold Bezel | Pendant clamp 180mm White | Pendant clamp 180mm Black;;;ProductText.TITLE_ERP.<jezik>
+GetItemsTitlesLanguage;itemTitlesLanguage;Titles/Title/ItemUnitOfMeas;1000;100 %;pcs;;;ne rabimo (enota je ze na izdelku)
+GetItemsTitlesLanguage;itemTitlesLanguage;Titles/Title/ItemTitle2;352;100 %;DecoGlobo 7W LE | oGlobo 6W LED Blac | DecoGlobo 6W LE;;;ProductText.TITLE_ERP2.<jezik>
+GetLanguages;Language;LanguageID;5;100 %;1 | 2 | 3;;;canon.Codebook LANGUAGE -> sifra
+GetLanguages;Language;LanguageDescription;5;100 %;SLOVENŠČINA | ANGLEŠČINA | NEMŠČINA;;;canon.Codebook LANGUAGE -> ime
+GetLanguages;Language;InsUpdDate;5;100 %;2021-11-26T10:46:46.723 | 2022-01-18T11:19:15.897 | 2022-01-18T11:19:35.487;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;ItemID;1074;100 %;ZZ.LLB000018577 | ZZ.LLB000018578 | ZZ.LLB000018579;Product.ItemID;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;ItemCreated;1074;100 %;2026-06-22T14:15:25.247;;;Product.SourceCreatedUtc
+ItemGeneralData;ItemGeneralData;ItemLastModified;1074;100 %;2026-06-22T14:24:34.55;;;Product.SourceUpdatedUtc
+ItemGeneralData;ItemGeneralData;ItemTitle1;1074;100 %;LEDline svetilka;ProductText.TITLE_ERP.sl;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;ItemTitle2;1074;100 %;izdelana po meri;;;ProductText.TITLE_ERP2.sl
+ItemGeneralData;ItemGeneralData;SuggestFirstFreeCode;1074;0 %;;;;(vedno prazno v tem odgovoru)
+ItemGeneralData;ItemGeneralData;GeneralData/ItemTitleShort;1074;100 %;LEDline;;;ProductText.TITLE_SHORT.sl
+ItemGeneralData;ItemGeneralData;GeneralData/ItemType;1074;100 %;I;;;Product.ItemType
+ItemGeneralData;ItemGeneralData;GeneralData/ItemUnitOfMeas;1074;100 %;kom;Product.UoM;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;GeneralData/VATRateID;1074;100 %;02;;;Product.VatRateId
+ItemGeneralData;ItemGeneralData;GeneralData/VATRefund;1074;100 %;true;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;GeneralData/ExciseConverter;1074;100 %;1.000000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;GeneralData/ItemGroup;1074;100 %;LEDLINE;Product.ItemGroup;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;GeneralData/WebPublish;1074;100 %;N;Product.WebPublish;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;GeneralData/ItemFirstPublished;1074;0 %;;;;(vedno prazno v tem odgovoru)
+ItemGeneralData;ItemGeneralData;GeneralData/ItemClassification;1074;100 %;LLN;;;Product.Classification
+ItemGeneralData;ItemGeneralData;GeneralData/AccountingBookGroupID;1074;100 %;LEDLINE;Product.AccountingGroup;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;GeneralData/ItemQuantityExtraUOM;1074;100 %;0.000000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;GeneralData/Priority;1074;100 %;0;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;GeneralData/ParentItemQtyConverter;1074;100 %;0.00000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;GeneralData/ParentItemPriceConverter;1074;100 %;0.00000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/DiscountGroup1ID;1074;100 %;LEDLINE;Product.DiscountGroup;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;SalesData/MinSalesPrice;1074;100 %;0.00000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/IsActive;1074;100 %;D;Product.IsActive;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;SalesData/SalesPricePercentage;1074;100 %;0.00;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/RetailPricePercentage;1074;100 %;0.00;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/RebateCalculation;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/SalesPriceChange;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/RetailPriceChange;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/MaintainTradeMargin;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;SalesData/PlannedPrice;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/ItemHasSeries;1074;100 %;N;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/WarningDays;1074;100 %;0;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/MandatorySampling;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/SerialNo;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/FixedPrice;1074;100 %;0.00000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/WithoutSharedCosts;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;StockData/SupplierID;1074;100 %;10778985;Product.Supplier;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;StockData/ManufacturerID;1074;100 %;00000814;Product.Manufacturer;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemWeightPerUnit;1074;100 %;0.000000;ProductCommercial.NetWeight;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemVolumePerUnit;1074;100 %;0.000000;ProductCommercial.Volume;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemQuantityOfPackaging;1074;100 %;0.000;ProductCommercial.Pak1;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemQuantityOfPackaging2;1074;100 %;0.000;ProductCommercial.Pak2;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/PaperWeight;1074;100 %;0;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemGrossWeight;1074;100 %;0.000000;ProductCommercial.GrossWeight;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemQuantityUOMPriceList;1074;100 %;1.000;;;ProductCommercial.PriceListUomFactor
+ItemGeneralData;ItemGeneralData;PropertiesData/Package;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;PropertiesData/Voucher;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;PropertiesData/EnvironmentalTax;1074;100 %;0.0000000;;;ProductCommercial.EnvironmentalTax
+ItemGeneralData;ItemGeneralData;PropertiesData/OriginFromCustomerUser;1074;100 %;false;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;PropertiesData/Contribution;1074;100 %;0.00000;;;predlog: ne rabimo (ERP notranje)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemLength;1074;100 %;0.000;ProductCommercial.PackageLength;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemWidth;1074;100 %;0.000;ProductCommercial.PackageWidth;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemHeight;1074;100 %;0.000;ProductCommercial.PackageHeight;DA;(ze preslikano)
+ItemGeneralData;ItemGeneralData;PropertiesData/ItemDimensionUOM;1074;100 %;mm;ProductCommercial.DimensionUnit;DA;(ze preslikano)
+PriceLists;PriceList;PriceListId;13;100 %;ACB | B2C | BTT;;;canon.Codebook PRICELIST -> sifra
+PriceLists;PriceList;PriceListDescription;13;100 %;Nabavni cenik ACB | Maloprodajni cenik | BT Trade;;;canon.Codebook PRICELIST -> ime
+PriceLists;PriceList;CurrencyId;13;100 %;978;;;canon.Codebook PRICELIST -> valuta
+PriceLists;PriceList;ExcludeDiscount;13;100 %;false;;;canon.Codebook PRICELIST -> brez popusta
+PriceLists;PriceList;LimitedView;13;100 %;false;;;predlog: ne rabimo (vidnost v ERP)
+PriceLists;PriceList;VatIncluded;13;100 %;false;;;canon.Codebook PRICELIST -> DDV vkljucen
+PriceLists;PriceList;ContractPriceList;13;100 %;true | false;;;canon.Codebook PRICELIST -> pogodbeni
+PriceLists;PriceList;PriceListValidityFrom;13;46 %;2022-08-03T00:00:00 | 2022-08-11T00:00:00 | 2022-08-05T00:00:00;;;
+PriceLists;PriceList;PriceListValidityTo;13;0 %;;;;(vedno prazno v tem odgovoru)
+PriceLists;PriceList;Active;13;100 %;true | false;;;canon.Codebook PRICELIST -> aktiven
+PriceLists;PriceList;PriceListCustomerId;7;100 %;89249577 | 21993408 | 00000320;;;
+PriceLists;PriceList;InsUpdDate;13;100 %;2022-08-03T17:11:21.067 | 2026-02-23T08:57:46.027 | 2022-08-11T11:40:44.04;;;predlog: ne rabimo (ERP notranje)
+PriceLists;PriceList;PaymentPeriod;13;15 %;0;;;
+Prices;Price;PriceListId;3000;100 %;PRC;ProductPrice.PriceList;DA;(ze preslikano)
+Prices;Price;PriceListDescription;3000;100 %;Prevzemni cenik;;;(sifrant cenikov, ne izdelek)
+Prices;Price;ItemCode;3000;100 %;ZZ.LLB000010566 | ZZ.LLB000010567 | ZZ.LLB000010568;Product.ItemID;DA;(ze preslikano)
+Prices;Price;VATRate;3000;100 %;22.00;ProductPrice.VatRate;DA;(ze preslikano)
+Prices;Price;Price;3000;100 %;85.19293 | 36.30665 | 42.90350;ProductPrice.Net;DA;(ze preslikano)
+Prices;Price;UnitOfMeasurementForPrice;3000;100 %;1;;;ProductPrice.UomFactor
+Prices;Price;VATIncluded;3000;100 %;false;;;ProductPrice.VatIncluded
+Prices;Price;Active;3000;100 %;true;;;ProductPrice.IsActive
+Prices;Price;DiscountPrice;3000;100 %;false;;;ProductPrice.IsDiscount
+Prices;Price;ApplyToComparisonCode;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceValidityFrom;3000;100 %;2025-07-16T00:00:00 | 2025-01-20T00:00:00 | 2025-01-21T00:00:00;ProductPrice.ValidFrom;DA;(ze preslikano)
+Prices;Price;PriceValidityTo;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;InsUpdDate;3000;100 %;2025-09-08T07:16:58.737 | 2025-02-07T08:24:58.82 | 2025-02-07T08:24:58.823;;;ProductPrice.SourceUpdatedUtc
+Prices;Price;Quantity1;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceForQuantity1;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;Quantity2;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceForQuantity2;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;Quantity3;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceForQuantity3;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;Quantity4;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceForQuantity4;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;Quantity5;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;PriceForQuantity5;3000;0 %;;;;(vedno prazno v tem odgovoru)
+Prices;Price;ItemOrganisationID;3000;100 %;2;;;predlog: ne rabimo (podjetje je ze v zajemu)
+Prices;Price;CustomerOrganisationID;3000;100 %;2;;;predlog: ne rabimo (podjetje je ze v zajemu)
+Prices;Price;ItemEAN;1;100 %;4039677003539;Product.EAN;DA;(ze preslikano)
+Warehouses;Warehouse;WarehouseId;7;100 %;0000001 | 0000002 | 0000003;Warehouse.Code;DA;(ze preslikano)
+Warehouses;Warehouse;WarehouseDescription;7;100 %;Rakovnik 9 | Škofije | Brnčičeva;Warehouse.Name;DA;(ze preslikano)
+Warehouses;Warehouse;WarehouseType;7;100 %;V;Warehouse.Type;DA;(ze preslikano)
+Warehouses;Warehouse;Active;7;100 %;true | false;Warehouse.IsActive;DA;(ze preslikano)
+Warehouses;Warehouse;FIFORecalculation;7;100 %;true;;;predlog: ne rabimo (ERP notranje)
+Warehouses;Warehouse;PlanningExcluded;7;100 %;false | true;;;canon.Warehouse -> izlocen iz planiranja
+Warehouses;Warehouse;WMSCompentence;7;100 %;false;;;predlog: ne rabimo (ERP notranje)
+Warehouses;Warehouse;MITActive;7;100 %;false;;;predlog: ne rabimo (ERP notranje)
+Warehouses;Warehouse;SeriesManagement;7;100 %;true;;;predlog: ne rabimo (ERP notranje)
+Warehouses;Warehouse;InventoryManagement;7;100 %;true;;;predlog: ne rabimo (ERP notranje)
+Warehouses;Warehouse;InsUpdDate;7;100 %;2022-01-22T08:30:15.02 | 2022-01-22T08:26:45.96 | 2022-01-22T08:27:03.857;;;predlog: ne rabimo (ERP notranje)
