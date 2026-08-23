@@ -27,6 +27,9 @@ await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 
 // 1. O9 — pravica do pisanja brez vhodne preslikave ne sme obstajati.
+//    Od migracije 080 pride jezik besedila iz podatka in ne iz imena kode, zato koda
+//    ProductTextByLanguage.X pokriva vso družino ProductText.X.<jezik>. To pravilo je tu edino
+//    zapisano in izvedeno; migracija 068 je preverila stanje ob svojem času.
 Equal(0, await ScalarAsync<int>(connection, """
   SELECT COUNT(*) FROM out.OwnershipPolicy policy
   WHERE policy.Owner=N'PIM' AND policy.TargetKind=N'SAOP_PRODUCT' AND policy.IsEnabled=1
@@ -36,7 +39,18 @@ Equal(0, await ScalarAsync<int>(connection, """
       INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId=mapping.SourceConnectorId
       WHERE connector.OrganizationId=policy.OrganizationId AND connector.SourceCode LIKE N'SAOP[_]%'
         AND connector.SourceCode NOT LIKE N'%[_]STOCK' AND mapping.IsActive=1
-        AND mapping.TargetFieldCode=policy.FieldName
+        AND
+        (
+          mapping.TargetFieldCode=policy.FieldName
+          OR
+          (
+            -- Od migracije 080 pride jezik besedila iz podatka in ne iz imena kode: koda
+            -- ProductTextByLanguage.X pokriva vso druzino ProductText.X.<jezik>.
+            mapping.TargetFieldCode LIKE N'ProductTextByLanguage.%'
+            AND policy.FieldName LIKE N'ProductText.'
+              + REPLACE(mapping.TargetFieldCode, N'ProductTextByLanguage.', N'') + N'.%'
+          )
+        )
     );
   """), "Polje ima pravico do pisanja, a ga ne beremo nazaj (O9).");
 
