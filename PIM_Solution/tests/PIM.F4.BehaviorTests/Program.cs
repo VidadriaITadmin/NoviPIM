@@ -24,7 +24,7 @@ try
   if (LocalSettingsLocator.FindRepositoryRootLocalSettingsPath(projectDir) != expectedFromRoot)
     throw new InvalidOperationException("Iskanje mora najti korensko nastavitev, ko se zažene iz projektne mape.");
 
-  var publishDir = Path.Combine(projectDir, "bin", "Release", "net8.0", "publish");
+  var publishDir = Path.Combine(projectDir, "bin", "Release", "net10.0", "publish");
   Directory.CreateDirectory(publishDir);
   if (LocalSettingsLocator.FindRepositoryRootLocalSettingsPath(publishDir) != expectedFromRoot)
     throw new InvalidOperationException("Iskanje mora najti korensko nastavitev tudi iz objavljene (publish) mape poljubne globine.");
