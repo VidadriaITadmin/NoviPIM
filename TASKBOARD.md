@@ -110,6 +110,36 @@ _(prazno)_
 
 ## KONČANO
 
+- **[IZVOZ]** Meritev izvozov in objava za Vidadrio in Ediito — kdo: Claude Opus 5 —
+  2026-08-23. Nova analiza [`docs/ANALIZA_IZVOZI.md`](docs/ANALIZA_IZVOZI.md) nadomešča
+  razdelek „B — IZVOZ" iz `ANALIZA_A_B_C.md`, ki je bil star 22 migracij (059–080).
+  **Merjeno na resničnih datotekah, ne v dokumentaciji:** izvoz pognan za vsa štiri podjetja,
+  vsaka datoteka preštéta stolpec za stolpcem.
+  **Kaj je odpravljeno med meritvijo:** `val.Promote` za organizaciji 3 in 4 od migracije
+  `077` ni bila pognana, zato je objava zaostajala za katalogom — `pim.Product` je imel
+  dobavitelja in mersko enoto pri **0** izdelkih, čeprav sta v `canon` pri 24.364 oziroma
+  38.171. Po zagonu (3 in 4 sekunde): dobavitelj **10.593 / 33.304**, `DESCRIPTION`
+  12.064 → **35.613**, `WEB_TITLE` 20.623 → **48.203**, `TITLE_ERP2` 48.968 → **63.437**.
+  V izvozu: Vidadria 169 → **180** polnih stolpcev (naziv 0 → 8.671), Ediito 10 → **21**.
+  Isti zagon za organizaciji 1 in 2 je bil prazen tek — ti dve sta bili že objavljeni.
+  **Stanje izvozov:** od sedmih izvoznih profilov v obratovanju teče **en** (Magento
+  izdelki). 180 od 213 stolpcev ima vsaj pri enem podjetju vrednost, polnost celic pa je
+  **8,2 %**: ERP hrbtenica je 100-odstotna, spletna vsebina ne (naziv 10,6 %, kategorija in
+  slika 5,2 %, lastnosti 8,6 %).
+  **Pet vrzeli, ki jih je meritev razkrila** (podrobno v analizi, §5): cenika `B2B`/`B2C` sta
+  v `MagentoExportCommand` zapisana s trdo roko in IQLighting cenika `B2B` sploh nima,
+  Ediito pa ne `B2C`; opisi pridejo v objavo, a Magento predloga nima stolpca za opis;
+  zaloga je v bazi (278.160 pozicij), izvoz je ne bere (11 praznih stolpcev); datoteka
+  strank je povsod samo glava (`b2b.Customer` = 0); pet procedur `out.Export*Csv` in dva
+  profila nimajo nobenega klicatelja v produkcijski kodi.
+  **Dokaz:** `dotnet build workers\PIM.B2bWorker` → 0 napak, 0 opozoril;
+  `PIM.B2bWorker --export-magento --organization-id 1..4` → štirje pari datotek z oznako
+  `magento-export.complete`; `dotnet run --project tests\PIM.F7.MagentoExportTests` →
+  **PASS**; ~20 poizvedb nad `PIM` (migracija 080).
+  **Odprto za človeka:** cenik B2B/B2C v register, stolpec za opis v predlogi, katero
+  skladišče v kateri stolpec `VID *`, in vstopnica za objavo (`ERP_L1` 89.129 VALID proti
+  `ERP_L1_SLO` 156.141).
+
 - **[ZAJEM]** Spletni nazivi iz delovnih zvezkov — kdo: Claude Opus 5 — 2026-08-23, migracija
   `078`. Odločitev uporabnika: spletni naziv in ERP naziv sta dve različni stvari — ERP naziv je
   v SAOP omejen na dvakrat 30 znakov, spletni je poljuben in so ga sestavljali ročno.

@@ -37,6 +37,21 @@ podatke (`--map-run`/`--full`), (2) preslikava `GetItemsTitlesLanguage` — sple
 (3) poln zajem NW in BT XML, (4) odločitev o profilu za objavo in `val.Promote` za
 organizaciji 3 in 4.
 
+## Izvozi — meritev 2026-08-23 (novejša od tabele zgoraj)
+
+Vrstica **B — izvoz** v tabeli velja za stanje pri migraciji 058. Za izvoze je merodajna
+novejša meritev: [`docs/ANALIZA_IZVOZI.md`](docs/ANALIZA_IZVOZI.md) (migracija **080**,
+merjeno na resničnih datotekah za vsa štiri podjetja).
+
+- Objavljenih je **89.129** izdelkov v vseh štirih podjetjih — Vidadria in Ediito nista
+  več na ničli. Vstopnica za objavo je še vedno `ERP_L1`.
+- Magento izvoz teče v živo za vsa štiri podjetja; vrednost ima **180 od 213** stolpcev
+  (2026-08-22: 15), polnost celic pa je **8,2 %**.
+- Od sedmih izvoznih profilov ima poganjalnik **en**. Dostave do Magenta ni (namerna meja).
+- `val.Promote` za organizaciji 3 in 4 je bila pognana 2026-08-23; objava od takrat ni v
+  zaostanku za katalogom pri nobenem podjetju.
+
+
 ## Migracije 049–058
 
 `dbo.SchemaMigration` je na **058**. Deset migracij (`049`–`058`) je uporabljenih na
