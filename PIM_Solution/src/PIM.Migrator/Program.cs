@@ -422,7 +422,8 @@ static async Task VerifyF7Async(SqlConnection connection)
     "b2b.Customer", "pim.CustomerTypeCatalog", "pim.CustomerWebProfile", "pim.PackagingDiscountCatalog",
     "pim.ValueDiscountTier", "pim.ShippingRuleCatalog", "b2b.GroupDiscountOverride", "b2b.AuditLog",
     "b2b.LandingRecord", "map.B2bFieldMapping", "b2b.MappingRejection", "b2b.ApplyLandingRecord",
-    "b2b.ReplayLandingRecord", "out.ExportB2bCustomersCsv", "out.ExportB2bProductsCsv"
+    "b2b.ReplayLandingRecord", "out.ExportB2bCustomersCsv", "out.ExportB2bProductsCsv",
+    "out.ExportPriceList"
   };
   foreach (var expectedObject in expectedObjects)
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F7 objekt {expectedObject}.");
