@@ -110,6 +110,26 @@ _(prazno)_
 
 ## KONČANO
 
+- **[ZAJEM]** Dobavitelj se veže na vsa štiri podjetja — kdo: Claude Opus 5 — 2026-08-23,
+  migraciji `069` in `070`. Odločitev uporabnika: dobavitelj ni last enega podjetja; njegov XML
+  se poveže z vsemi štirimi katalogi po EAN.
+  Konektorja `NW_XML` in `BT_XML` sta bila registrirana samo pri podjetju 2, zato je Vidadria
+  ostala brez vsega, čeprav ima **več** ujemanj kot IQLighting. Prepis entitet, preslikav in
+  pretvorb je narejen iz konektorja podjetja 2, ne na novo — vir resnice ostane ena, že
+  dokazana nastavitev.
+  **Ob tem je padla ista varovalka kot 2026-08-20 pri SAOP:** `ops.BeginRun` je zavrnil zagon z
+  »Razpored ni omogočen«, ker je `GENERIC_XML` imelo vrstico v `ops.ScheduleProfile` samo pri
+  podjetju 2. Varovalke nismo obšli; register je dopolnjen (`070`), kot je bilo takrat storjeno
+  z `043`.
+  **Izmerjeno po zagonu vseh šestih kombinacij:** Vidadria 2.571 (NW) + 1.086 (BT) obogatenih,
+  DEMO 1.145 + 7, Ediito 0 (njenih EAN-ov v datotekah dobaviteljev ni). Lastnosti ima zdaj
+  **7.645 izdelkov** namesto 2.835: Vidadria 3.657 (143.493 vrstic), IQLighting 2.835 (112.819),
+  DEMO 1.153 (45.959). Kategorijo ima 6.254 izdelkov, sliko 6.261.
+  **Kar ostaja odprto in je zdaj vidno v številkah:** zapisi brez ujemanja (Braytron 1.996 pri
+  Vidadrii, Nowodvorski 48) so nove dobaviteljeve šifre. Te ne smejo v katalog mimo SAOP —
+  šifra artikla je last SAOP (`068`), zato dobaviteljev konektor ostaja `CanCreateProducts = 0`.
+  Pot zanje je opisana v `docs/TVOJE_NALOGE.md` in čaka na potrditveni seznam.
+
 - **[ODHODNA POT]** C8: lastništvo polj iz preglednice — kdo: Claude Opus 5 — 2026-08-22,
   migracija `068`. **To je bil manjkajoči kos odhodne poti, ne dispatcher.**
   `out.EnqueueMessage` zavrne vsako spremembo, za katero ni vrstice v `out.OwnershipPolicy` z
