@@ -1,5 +1,6 @@
 @page "/system/integracije"
 @attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
 @* Pogodbeni izraz: Zadnji srčni utrip. *@

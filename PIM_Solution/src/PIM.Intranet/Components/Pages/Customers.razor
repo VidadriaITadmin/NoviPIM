@@ -1,5 +1,6 @@
 @page "/stranke"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Stranke</PageTitle>
 <div class="page-header"><div><h1>Stranke</h1><p>Pregled strank in njihovih B2B nastavitev v aktivni organizaciji.</p></div></div>

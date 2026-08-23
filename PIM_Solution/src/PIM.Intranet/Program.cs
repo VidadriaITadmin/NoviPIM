@@ -26,8 +26,10 @@ builder.Services.AddAuthorization(options =>
     .RequireAuthenticatedUser()
     .Build();
 });
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<LocalUserAuthenticationService>();
 builder.Services.AddScoped<IntranetDataService>();
+builder.Services.AddScoped<IntranetContextService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
 
@@ -75,6 +77,30 @@ app.MapPost("/odjava", async (HttpContext context) =>
 {
   await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
   return Results.Redirect($"{context.Request.PathBase}/prijava");
+});
+// Preklop delovnega konteksta v zgornji vrstici. Zakaj POST in ne povezava: izbira spremeni
+// stanje seje, zato mora skozi antiforgery. Zakaj piskotek in ne vezje: strani so staticni SSR.
+app.MapPost("/kontekst", async (HttpContext context, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+  await antiforgery.ValidateRequestAsync(context);
+  var form = await context.Request.ReadFormAsync();
+  var options = new CookieOptions { HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddDays(180) };
+  foreach (var (field, cookie) in new[]
+  {
+    ("organizacija", IntranetContextService.OrganizationCookie),
+    ("kanal", IntranetContextService.ChannelCookie),
+    ("jezik", IntranetContextService.LanguageCookie),
+  })
+  {
+    var value = form[field].ToString();
+    if (!string.IsNullOrWhiteSpace(value)) context.Response.Cookies.Append(cookie, value, options);
+  }
+
+  // Vrnemo se tja, od koder je uporabnik prisel, a samo znotraj te aplikacije: zunanji naslov
+  // v skritem polju bi bil odprta preusmeritev.
+  var back = form["nazaj"].ToString();
+  var safe = !string.IsNullOrWhiteSpace(back) && back.StartsWith('/') && !back.StartsWith("//", StringComparison.Ordinal);
+  return Results.Redirect(safe ? back : $"{context.Request.PathBase}/nadzorna-plosca");
 });
 app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymous();
 

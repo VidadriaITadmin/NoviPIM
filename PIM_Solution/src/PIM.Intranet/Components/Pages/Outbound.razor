@@ -1,5 +1,6 @@
 @page "/outbound"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
 <PageTitle>Izvozi</PageTitle>

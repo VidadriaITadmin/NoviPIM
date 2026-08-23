@@ -1,0 +1,28 @@
+/* Izbirnik delovnega konteksta v zgornji vrstici. Slog je tu in ne v MainLayout.razor.css,
+   ker CSS izolacija veze pravila na komponento, v kateri je oznaka dejansko izrisana. */
+
+.top-context { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; min-width: 112px; padding: 5px 11px; text-align: left; }
+.top-context small { color: #78869a; display: block; font-size: 9px; }
+.top-context strong { color: #27364d; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.top-context-empty { opacity: .68; }
+
+.top-context-picker { padding: 0; position: relative; }
+.top-context-picker > summary { align-items: center; cursor: pointer; display: flex; gap: 8px; list-style: none; padding: 5px 11px; }
+.top-context-picker > summary::-webkit-details-marker { display: none; }
+.top-context-picker > summary:focus-visible { border-radius: var(--pim-radius-sm); outline: 2px solid var(--pim-accent); outline-offset: 1px; }
+.top-context-picker[open] > summary { background: #f4f7fc; border-radius: var(--pim-radius-sm); }
+
+.context-label { display: flex; flex-direction: column; min-width: 0; }
+.context-caret { border-bottom: 1.6px solid #78869a; border-right: 1.6px solid #78869a; flex: 0 0 auto; height: 6px; margin-left: auto; transform: rotate(45deg) translate(-2px, -2px); width: 6px; }
+.top-context-picker[open] .context-caret { transform: rotate(-135deg) translate(-2px, -2px); }
+
+.context-menu { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); box-shadow: 0 8px 22px rgba(23, 35, 61, .12); display: flex; flex-direction: column; margin: 0; min-width: 100%; padding: 5px; position: absolute; right: 0; top: calc(100% + 5px); white-space: nowrap; z-index: 60; }
+.context-option { background: transparent; border: 0; border-radius: var(--pim-radius-xs); color: var(--pim-text-strong); cursor: pointer; font: inherit; font-size: 13px; padding: 7px 11px; text-align: left; }
+.context-option:hover { background: var(--pim-surface-hover); }
+.context-option.selected { background: #eef4ff; color: var(--pim-accent); font-weight: 650; }
+
+/* Ozji zasloni: najprej odpade jezik, nato kanal; organizacija ostane najdlje,
+   ker brez nje stevilke na strani nimajo pomena. */
+@media (max-width: 1180px) { .hide-narrow { display: none; } }
+@media (max-width: 1050px) { .hide-medium { display: none; } }
+@media (max-width: 760px) { .top-context { display: none; } }

@@ -1,19 +1,42 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.IntranetContextService Context
+@inject NavigationManager Navigation
 
+@* Preklop navigacije je CSS, ne JavaScript in ne vezje: postavitev ostane staticni SSR, ker
+   obrazca za prijavo in odjavo potrebujeta antiforgery, ta pa v interaktivnem nacinu ne velja. *@
+<input type="checkbox" id="pim-menu-toggle" class="menu-toggle-input" aria-hidden="true" tabindex="-1" />
 <div class="app-shell">
-  <aside id="primary-navigation" class="app-sidebar @(MenuOpen ? "open" : null)"><NavMenu /></aside>
+  <aside id="primary-navigation" class="app-sidebar"><NavMenu /></aside>
+  <label class="menu-scrim" for="pim-menu-toggle" aria-hidden="true"></label>
   <main class="app-main">
     <header class="app-topbar">
-      <button class="menu-glyph" type="button" aria-label="Preklopi glavno navigacijo" aria-controls="primary-navigation" aria-expanded="@MenuOpen" @onclick="()=>MenuOpen=!MenuOpen"><span class="menu-glyph-icon" aria-hidden="true"></span></button>
+      <label class="menu-glyph" for="pim-menu-toggle" aria-controls="primary-navigation" title="Preklopi glavno navigacijo">
+        <span class="menu-glyph-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Preklopi glavno navigacijo</span>
+      </label>
       <a class="global-search" href="izdelki"><span class="search-icon" aria-hidden="true"></span><span>Poišči izdelke, EAN, nazive …</span></a>
       <div class="topbar-spacer"></div>
-      <div class="top-context"><small>Organizacija</small><strong>@(Organization?.Name ?? "Ni na voljo")</strong></div>
-      <button class="top-context top-control" type="button" disabled title="Podatek o prodajnem kanalu ni v podatkovnem modelu"><small>Kanal</small><strong>Ni na voljo</strong></button>
-      <button class="top-context top-control" type="button" disabled title="Izbira jezika še ni podprta"><small>Jezik</small><strong>Slovenščina</strong></button>
-      <button class="notification-button" type="button" disabled aria-label="Obvestila niso na voljo" title="Obvestila v glavi še niso podprta"><span aria-hidden="true"></span></button>
+
+      <PimContextPicker Label="Organizacija" Field="organizacija" Selected="@Ctx?.Organization?.Name"
+                        Options="@(Ctx?.Organizations.Select(o => new PimOption(o.OrganizationId.ToString(), o.Name)).ToList())"
+                        Back="@BackPath" />
+      <PimContextPicker Label="Kanal" Field="kanal" Extra="hide-medium" Selected="@Ctx?.Channel?.WebSiteName"
+                        Options="@(Ctx?.Channels.Select(c => new PimOption(c.WebSiteCode, c.WebSiteName)).ToList())"
+                        Back="@BackPath" />
+      <PimContextPicker Label="Jezik" Field="jezik" Extra="hide-narrow" Selected="@Ctx?.Language?.Name"
+                        Options="@(Ctx?.Languages.Select(l => new PimOption(l.LanguageCode, l.Name)).ToList())"
+                        Back="@BackPath" />
+
+      <a class="notification-button" href="system/integracije" title="@AlertTitle">
+        <span class="notification-icon" aria-hidden="true"></span>
+        @if (OpenAlerts > 0)
+        {
+          <span class="notification-count">@OpenAlerts</span>
+        }
+        <span class="visually-hidden">@AlertTitle</span>
+      </a>
       <div class="signed-user"><span>@Initials</span><strong>@DisplayName</strong></div>
       <form method="post" action="odjava"><AntiforgeryToken /><button type="submit" class="logout-button">Odjava</button></form>
     </header>
@@ -22,16 +45,41 @@
 </div>
 
 @code {
-  PIM.Intranet.Services.OrganizationContext? Organization;
+  PIM.Intranet.Services.IntranetContext? Ctx;
   string DisplayName = "Uporabnik";
   string Initials = "U";
-  bool MenuOpen;
+  int OpenAlerts;
+
+  string AlertTitle => OpenAlerts == 0 ? "Ni odprtih opozoril" : $"Odprta opozorila: {OpenAlerts}";
+
+  // Pot, na katero se vrnemo po preklopu konteksta. Samo pot in poizvedba, brez gostitelja —
+  // vrednost gre v obrazec, zato ne sme biti nadzorovana od zunaj.
+  string BackPath
+  {
+    get
+    {
+      var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+      var basePath = new Uri(Navigation.BaseUri).AbsolutePath.TrimEnd('/');
+      return $"{basePath}/{relative}";
+    }
+  }
+
   protected override async Task OnInitializedAsync()
   {
     var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
     DisplayName = user.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? user.Identity?.Name ?? "Uporabnik";
     Initials = string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
-    Organization = await Data.GetCurrentOrganizationAsync();
+    try
+    {
+      Ctx = await Context.GetAsync();
+      if (Ctx.Organization is { } organization) OpenAlerts = await Context.GetOpenAlertCountAsync(organization.OrganizationId);
+    }
+    catch
+    {
+      // Baza ni dosegljiva: glava ostane brez konteksta, stran pa se vseeno izrise s svojim
+      // lastnim sporocilom o napaki. Prazna glava je poštenejša od izmišljene.
+      Ctx = null;
+    }
   }
 }
 

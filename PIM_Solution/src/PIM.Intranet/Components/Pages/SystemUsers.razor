@@ -1,5 +1,6 @@
 @page "/system/uporabniki"
 @attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetUserAdministrationService Users
 
 <PageTitle>Uporabniki</PageTitle>

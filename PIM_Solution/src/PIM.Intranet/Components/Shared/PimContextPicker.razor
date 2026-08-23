@@ -1,0 +1,50 @@
+@* Izbirnik delovnega konteksta v zgornji vrstici (organizacija, kanal, jezik).
+
+   Zakaj <details> in ne gumb z @onclick: glava je del postavitve, ta pa ostaja staticni SSR
+   zaradi antiforgery obrazcev. <details> da spustni meni brez JavaScripta in brez vezja.
+   Vsaka moznost je gumb za oddajo istega obrazca, zato preklop deluje tudi brez skript. *@
+
+@if (Options is null || Options.Count == 0)
+{
+  <span class="top-context top-context-empty @Extra" title="@($"{Label} ni v podatkovnem modelu")">
+    <small>@Label</small><strong>Ni na voljo</strong>
+  </span>
+}
+else
+{
+  <details class="top-context top-context-picker @Extra">
+    <summary>
+      <span class="context-label"><small>@Label</small><strong>@(Selected ?? "Ni izbrano")</strong></span>
+      <span class="context-caret" aria-hidden="true"></span>
+    </summary>
+    <form class="context-menu" method="post" action="kontekst">
+      <AntiforgeryToken />
+      <input type="hidden" name="nazaj" value="@Back" />
+      @foreach (var option in Options)
+      {
+        <button type="submit" name="@Field" value="@option.Value"
+                class="context-option @(option.Label == Selected ? "selected" : null)">@option.Label</button>
+      }
+    </form>
+  </details>
+}
+
+@code {
+  /// <summary>Vidna oznaka razsežnosti, na primer »Organizacija«.</summary>
+  [Parameter, EditorRequired] public required string Label { get; set; }
+
+  /// <summary>Ime polja, ki ga prebere pot <c>/kontekst</c>.</summary>
+  [Parameter, EditorRequired] public required string Field { get; set; }
+
+  /// <summary>Ime trenutne izbire; null pomeni, da izbire ni.</summary>
+  [Parameter] public string? Selected { get; set; }
+
+  /// <summary>Moznosti iz baze. Prazen ali null seznam pomeni, da razseznosti ni.</summary>
+  [Parameter] public IReadOnlyList<PimOption>? Options { get; set; }
+
+  /// <summary>Pot, na katero se vrnemo po preklopu.</summary>
+  [Parameter] public string? Back { get; set; }
+
+  /// <summary>Dodaten razred za odzivno skrivanje (hide-narrow, hide-medium).</summary>
+  [Parameter] public string? Extra { get; set; }
+}

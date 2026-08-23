@@ -1,5 +1,6 @@
 @page "/izdelki/{ProductId:long}"
 @attribute [Authorize]
+@rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Izdelek</PageTitle>
 @if (Loading) { <div class="ui-card loading-state" role="status">Nalaganje izdelka …</div> }
