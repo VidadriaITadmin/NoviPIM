@@ -7,7 +7,11 @@ namespace PIM.StockMapping;
 
 public sealed class StockLandingWriter(string connectionString)
 {
-  public async Task<(Guid RunId, int Applied, int Quarantined)> PersistAsync(
+  /// <summary>
+  /// Zapise en posnetek zaloge. Cetrti clen pove, da je bil ta posnetek ze v bazi in da ta
+  /// klic ni zapisal nicesar.
+  /// </summary>
+  public async Task<(Guid RunId, int Applied, int Quarantined, bool AlreadyApplied)> PersistAsync(
     int organizationId, string sourceCode, string connectorType, string endpoint, DateTime snapshotUtc,
     string payloadHash, IReadOnlyList<ExtractedStockRow> records, string dateFormat,
     StockFieldContract? fields = null, CancellationToken cancellationToken = default)
@@ -20,6 +24,24 @@ public sealed class StockLandingWriter(string connectionString)
     try
     {
       var connectorId = await EnsureConnectorAsync(connection, transaction, organizationId, sourceCode, connectorType, cancellationToken);
+
+      // Posnetek nosi cas datoteke, ne cas zagona (glej PIM.StockFileWorker), zato je ista
+      // nespremenjena datoteka isti posnetek. stock.Snapshot to zahtevo pozna kot UQ_StockSnapshot
+      // (podjetje, konektor, cas posnetka) — drugi zagon iste datoteke je torej po zasnovi
+      // podvojen kljuc in ne okvara.
+      //
+      // Doslej je to koncalo kot neujeta SqlException 2627 in worker je padel s sledjo sklada.
+      // V nocnem opravilu je to pravilo, ne izjema: dobavitelj datoteke ne posodobi vsak dan,
+      // ob koncu tedna pa nikoli. Zato tak zagon zdaj pove, da je posnetek ze v bazi, in
+      // konca brez napake.
+      var existingRunId = await FindSnapshotRunAsync(connection, transaction, organizationId, connectorId, snapshotUtc, cancellationToken);
+      if (existingRunId is { } alreadyRunId)
+      {
+        var counts = await ReadRunCountsAsync(connection, transaction, alreadyRunId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (alreadyRunId, counts.Applied, counts.Quarantined, true);
+      }
+
       var identityRule = await LoadIdentityRuleAsync(connection, transaction, connectorId, cancellationToken);
       await ExecuteAsync(connection, transaction, """
         INSERT stock.SyncRun(SyncRunId,OrganizationId,SourceConnectorId,Status,Endpoint,StartedUtc,FetchedUtc,RecordsRead)
@@ -48,9 +70,26 @@ public sealed class StockLandingWriter(string connectionString)
       }
       await ExecuteAsync(connection,transaction,"UPDATE stock.Snapshot SET IsActive=0 WHERE OrganizationId=@OrganizationId AND SourceConnectorId=@ConnectorId; UPDATE stock.Snapshot SET IsActive=1 WHERE SyncRunId=@RunId; UPDATE stock.SyncRun SET Status=N'Completed',CompletedUtc=SYSUTCDATETIME(),RecordsApplied=@Applied,RecordsQuarantined=@Quarantined WHERE SyncRunId=@RunId;",cancellationToken,("@OrganizationId",organizationId),("@ConnectorId",connectorId),("@RunId",runId),("@Applied",applied),("@Quarantined",quarantined));
       await transaction.CommitAsync(cancellationToken);
-      return(runId,applied,quarantined);
+      return(runId,applied,quarantined,false);
     }
     catch { await transaction.RollbackAsync(cancellationToken); throw; }
+  }
+
+  /// <summary>Ali ta posnetek (podjetje, konektor, cas) v bazi ze obstaja; ce da, vrne njegov zagon.</summary>
+  static async Task<Guid?> FindSnapshotRunAsync(SqlConnection c,SqlTransaction t,int organizationId,int connectorId,DateTime snapshotUtc,CancellationToken ct)
+  {
+    await using var cmd=new SqlCommand("SELECT TOP(1) SyncRunId FROM stock.Snapshot WHERE OrganizationId=@Org AND SourceConnectorId=@Connector AND SnapshotUtc=@Snapshot ORDER BY SnapshotId DESC;",c,t);
+    cmd.Parameters.AddWithValue("@Org",organizationId);cmd.Parameters.AddWithValue("@Connector",connectorId);cmd.Parameters.AddWithValue("@Snapshot",snapshotUtc);
+    var value=await cmd.ExecuteScalarAsync(ct);
+    return value is null or DBNull?null:(Guid)value;
+  }
+
+  static async Task<(int Applied,int Quarantined)> ReadRunCountsAsync(SqlConnection c,SqlTransaction t,Guid runId,CancellationToken ct)
+  {
+    await using var cmd=new SqlCommand("SELECT SUM(CASE WHEN Status=N'Applied' THEN 1 ELSE 0 END),SUM(CASE WHEN Status=N'Quarantined' THEN 1 ELSE 0 END) FROM stock.LandingRecord WHERE SyncRunId=@RunId;",c,t);
+    cmd.Parameters.AddWithValue("@RunId",runId);
+    await using var reader=await cmd.ExecuteReaderAsync(ct);await reader.ReadAsync(ct);
+    return(reader.IsDBNull(0)?0:reader.GetInt32(0),reader.IsDBNull(1)?0:reader.GetInt32(1));
   }
 
   static async Task<StockIdentityRule> LoadIdentityRuleAsync(SqlConnection c,SqlTransaction t,int connectorId,CancellationToken ct)

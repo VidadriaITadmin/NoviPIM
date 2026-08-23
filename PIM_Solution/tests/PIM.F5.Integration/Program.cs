@@ -99,6 +99,31 @@ if (definition.Contains(".nodes(", StringComparison.OrdinalIgnoreCase)
 {
   throw new InvalidOperationException("SQL apply še vedno izvaja dinamični XPath.");
 }
+// Vsak svet v registru mora imeti postopek, ki ga obdela — in ta postopek mora obstajati.
+// Brez te trditve se ponovi napaka migracije 082: preslikave zapisane, postopki ustvarjeni,
+// poklical pa jih ni nihce, zato so tabele ostale prazne in nihce tega ni opazil.
+await using (var domainReader = await Command(connection, """
+  SELECT DISTINCT TargetDomain FROM map.EntityMapping
+  WHERE IsActive=1 AND TargetDomain IS NOT NULL;
+  """).ExecuteReaderAsync())
+{
+  var uncovered = new List<string>();
+  while (await domainReader.ReadAsync())
+  {
+    var domain = domainReader.GetString(0);
+    if (!MappingProcedures.CoveredDomains.Contains(domain)) uncovered.Add(domain);
+  }
+  if (uncovered.Count > 0)
+    throw new InvalidOperationException(
+      $"Svetovi iz map.EntityMapping brez postopka v MappingProcedures: {string.Join(", ", uncovered)}.");
+}
+foreach (var step in MappingProcedures.All)
+{
+  Equal(1, await ScalarAsync<int>(connection,
+    "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@Name) AND type=N'P';", ("@Name", step.ProcedureName)),
+    $"Postopek {step.ProcedureName} za svet {step.TargetDomain} v bazi ne obstaja.");
+}
+
 Console.WriteLine("F5 integration: EAN enrichment category/media/attribute, B2C validation, pim in CSV PASS.");
 await CleanupAsync(connection);
 return 0;

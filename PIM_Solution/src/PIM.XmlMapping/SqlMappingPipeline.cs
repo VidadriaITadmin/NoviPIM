@@ -77,34 +77,15 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
       apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
       await apply.ExecuteNonQueryAsync(cancellationToken);
 
-      // Sifranti niso izdelki in imajo svoj postopek (od migracije 064). map.ProcessRawInbox jih
-      // preskoci po map.EntityMapping.TargetDomain, tu pa se obdelajo. Nad virom brez sifrantov
-      // postopek ne naredi nicesar.
-      await using (var warehouses = new SqlCommand(
-        "EXEC map.ProcessWarehouseInbox @RunId,@OrganizationId,@SourceCode;",
-        connection)
-      {
-        CommandTimeout = ApplyCommandTimeoutSeconds
-      })
-      {
-        warehouses.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
-        warehouses.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-        warehouses.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
-        await warehouses.ExecuteNonQueryAsync(cancellationToken);
-      }
-
-      // Sifrant jezikov mora biti obdelan pred nazivi: naziv brez kode jezika nima kam.
-      // Oba postopka nad virom brez teh entitet ne naredita nicesar (migracija 072).
-      // Vrstni red ni nakljucen: sifrant jezikov pred nazivi (naziv brez kode jezika nima kam),
-      // sifrant skladisc pa je ze tekel zgoraj. Vsak postopek nad virom brez svoje entitete ne
-      // naredi nicesar, zato jih klicemo brezpogojno.
-      foreach (var procedura in new[]
-      {
-        "map.ProcessLanguageInbox",
-        "map.ProcessProductTextInbox",
-        "map.ProcessAttributePairInbox",
-        "map.ProcessStockPolicyInbox"
-      })
+      // Vse, kar ni izdelek, ima svoj postopek: sifranti od migracije 064, nazivi in jeziki od
+      // 072, lastnosti po meri in pravilo zaloge od 076, valute/ceniki/konti/planiranje od 082,
+      // stranke in artikel pri stranki od 087. map.ProcessRawInbox jih preskoci po
+      // map.EntityMapping.TargetDomain, tu pa se obdelajo.
+      //
+      // Seznam je v MappingProcedures, ne tukaj, ker ga preverja test: 082 je preslikave
+      // registrirala in postopke ustvarila, poklical pa jih ni nihce — vrstice v registru,
+      // tabele prazne. Vrstni red je razlozen tam.
+      foreach (var (_, procedura) in MappingProcedures.All)
       {
         await using var command = new SqlCommand(
           $"EXEC {procedura} @RunId,@OrganizationId,@SourceCode;", connection)
