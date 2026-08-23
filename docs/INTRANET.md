@@ -197,7 +197,7 @@ pogodbeni test to preverja tako v migraciji kot v provisioning orodju.
 
 ## 5. Testni projekti
 
-Testi so **konzolne aplikacije** (`OutputType=Exe`, net8.0), ne xUnit. Vsak vrne
+Testi so **konzolne aplikacije** (`OutputType=Exe`, net10.0), ne xUnit. Vsak vrne
 izjemo ob kršitvi in izpiše vrstico `… PASS.` ob uspehu. Poganja se jih z
 `dotnet run --project <pot>`.
 
@@ -339,7 +339,8 @@ cd PIM_Solution
 dotnet run --project tests\PIM.F10.AuthTests\PIM.F10.AuthTests.csproj
 dotnet run --project tests\PIM.F9.IntranetTests\PIM.F9.IntranetTests.csproj
 dotnet run --project tests\PIM.F8.IntranetTests\PIM.F8.IntranetTests.csproj
-# UX pogodbeni testi niso v PIM.sln — poženi jih posamično:
+# UX pogodbeni testi so od 2026-08-23 v PIM.sln in jih pozene scripts\run_tests.ps1.
+# Posamicen zagon je se vedno mogoc:
 dotnet run --project tests\PIM.F10.DashboardUxTests\PIM.F10.DashboardUxTests.csproj
 dotnet run --project tests\PIM.F10.ProductsUxTests\PIM.F10.ProductsUxTests.csproj
 dotnet run --project tests\PIM.F10.ProductDetailUxTests\PIM.F10.ProductDetailUxTests.csproj

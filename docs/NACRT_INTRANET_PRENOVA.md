@@ -340,6 +340,25 @@ Vsa vidna besedila v slovenščini, `lang="sl"`, oznake za vsak vnos, `caption` 
 `aria-live` za rezultate filtrov, fokus viden, celotna mreža uporabna s tipkovnico.
 Ta pravila že veljajo v obstoječih testih F10 — ohranimo jih.
 
+
+### 7.7 IIS je ciljno okolje, ne le lokalni Kestrel
+
+Aplikacija tece na IIS, pogosto kot virtualna aplikacija pod `/PIM`, in mora tam izgledati
+enako kot lokalno. Iz tega sledijo stiri trde zahteve, ki veljajo za vsako novo stran:
+
+1. **Nobene korensko-absolutne povezave.** `href="/izdelki"` pod `/PIM` pristane na korenu
+   streznika. Vse povezave so base-relativne (`href="izdelki"`), `<base href>` pa se racuna iz
+   `NavigationManager.BaseUri`. Ta napaka je ta projekt ze enkrat stala zavrnjen posnetek.
+2. **Objava je `--self-contained`.** Runtime potuje z aplikacijo, zato prehod na .NET 10 ne
+   zahteva posega na strezniku; IIS potrebuje samo modul `AspNetCoreModuleV2`, ki je ze tam.
+3. **WebSockets.** Interaktivne strani gredo prek SignalR. Ce IIS nima vklopljenih WebSocketov,
+   se povezava tiho degradira na dolgo pooling in vmesnik je opazno pocasnejsi.
+4. **Antiforgery obrazci zahtevajo staticni SSR.** Zato postavitev, prijava in preklop
+   konteksta niso interaktivni; preklop navigacije je zato izveden s CSS, ne z JavaScriptom.
+
+Dokaz, ki ga je treba ponoviti ob vsaki vecji spremembi lupine: isti binarni izvod odgovori
+`200 text/css` na `/app.css` in na `/PIM/app.css`, `<base href>` pa se prilagodi obema.
+
 ---
 
 ## 8. Vrstni red dela
@@ -395,3 +414,60 @@ I0–I2 dajo uporabno aplikacijo za urednika kataloga. I3–I4 sta srce razlike 
 - Nobene kontrole, ki bi videti shranjevala, če zapisovalna pot ne obstaja.
 - Nobenega prepisa stare kode: iz `PIM_test` prevzemamo **seznam funkcionalnosti in IA**,
   ne datotek.
+
+
+---
+
+## 11. Izvedba I0 — stanje 2026-08-23
+
+### Narejeno in dokazano
+
+| Tocka I0 | Stanje | Dokaz |
+|---|---|---|
+| Retarget na `net10.0` | narejeno | 68 `.csproj`, build 0/0; commit `e649cc2` |
+| B1 — `@rendermode InteractiveServer` | narejeno | 12 strani; postavitev ostaja staticni SSR zaradi antiforgery |
+| Preklop navigacije brez JS | narejeno | skrito potrditveno polje + oznaka; `menu-glyph-icon` ohranjen |
+| Odstranitev Bootstrapa | narejeno v kodi | povezava iz `App.razor` in ostanki iz `app.css`; datoteki v `wwwroot/bootstrap` cakata na dovoljenje za brisanje |
+| Zetoni CSS | narejeno | `--pim-*` v `app.css`, vrednosti nespremenjene |
+| Kontekst organizacija/kanal/jezik | narejeno | `IntranetContextService` bere `dbo.OrganizationConfig`, `canon.WebSite`, `canon.Language`; izbira v piskotku prek POST `/kontekst` |
+| Zvonec opozoril | narejeno | dejansko stevilo nerazresenih `ops.Alert` |
+| IIS pot | preverjeno | `/app.css` in `/PIM/app.css` oba `200 text/css`; `<base href>` se prilagodi |
+| Vseh 10 F10 pogodbenih testov | PASS | zagnani posamicno |
+
+### Ustavljeno in zakaj
+
+**Komponentna knjizica (tocka I0.6) ni izvedena.** Devet UX pogodbenih testov preverja
+**dobesedno oznako v izvorni datoteki strani**, ne izrisanega rezultata — na primer
+`Regex.IsMatch(markup, "<h1>Izdelki</h1>")` nad `Products.razor`. Vsaka zamenjava te oznake s
+komponento (`<PimPageHeader Title="Izdelki" />`) tak test podre, tudi ce je izrisani HTML
+identicen.
+
+Po `AGENTS.md` par. 5.3 testa ne smem spremeniti zato, da bi sel skozi. Testi niso napacni
+glede dostopnosti — pinajo pa izvedbo strani, ki jih nacrt namerno prenavlja. To je odlocitev
+za cloveka, ne zame:
+
+- **Moznost A:** testi se ob I1 zavestno posodobijo tako, da preverjajo **izrisani** HTML
+  (prek komponente), ne izvorne oznake strani. Vsebina zahtev (ARIA, `caption`, `scope`,
+  `:focus-visible`, prepoved Unicode ikon) ostane ista.
+- **Moznost B:** komponentne knjizice ni; vsaka stran ostane svoja oznaka. To pomeni, da
+  ostane tudi vzrok, zaradi katerega je bila stara aplikacija razmetana.
+
+Priporocam **A**, izvedeno kot loceno, izrecno odobreno opravilo na zacetku I1.
+
+**Navigacija ostaja v bazi in nespremenjena.** Odlocitev iz par. 9 se ni sprejeta, poleg tega
+je `sec.NavigationItem` v tuji domeni (BAZA) in bi zahteval novo migracijo v trenutku, ko na
+isti veji nastajajo migracije `080`–`087`. Posledica ostaja: v meniju je 6 postavk, strani
+`stranke`, `zaloge`, `outbound`, `pravila-popustov`, `system/*` pa so dosegljive samo prek
+naslova.
+
+### Opozorilo o soocasnem delu
+
+Med to sejo je na isti veji in v istem delovnem drevesu delal se en agent (migracije
+`080`–`087`, `PIM.Outbound`, `PIM.SaopXmlPreview`). Posledice, ki jih je treba vedeti:
+
+- Commit `d261014` z opisom o odhodni poti **vsebuje tudi vseh 22 datotek intranetne faze I0**.
+  Vsebina je cela, sporocilo commita pa je zavajajoce. Tuje zgodovine nisem prepisoval.
+- `PIM.F3.Integration` pade zaradi migracije `082`, ki je `GetItemsPlanningData` dala aktivno
+  preslikavo, test pa trdi, da je ta entiteta nepreslikana. Ni posledica intraneta.
+- Polnega `scripts/run_tests.ps1` ni bilo mogoce dokoncati, ker se `tools/PIM.SaopXmlPreview`
+  v tujem vmesnem stanju ne prevede.
