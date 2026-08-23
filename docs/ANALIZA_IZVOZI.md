@@ -165,6 +165,13 @@ zanjo pa je v delovnih zvezkih 1.158 in se z objavljenimi šiframi skoraj ne uje
 
 ### 5.2 Cenika sta v kodi zapisana s trdo roko — `B2B` in `B2C`
 
+> **ODPRAVLJENO 2026-08-23, migracija `083`.** Šifra cenika je zdaj vrstica v
+> `out.ExportPriceList` (podjetje → kanonična koda cenovnega stolpca → šifra cenika,
+> s `SortOrder` kot prednostjo). Izvoz je po zamenjavi do zadnjega znaka enak kot prej;
+> podrobno v [`EXPORTS.md`](EXPORTS.md) §2b. **Odločitev uporabnika:** manjkajoča vrstica
+> ni napaka — če podjetje cenika nima, stolpec ostane prazen. Ali ima IQLighting B2B cenik
+> pod drugo šifro, preveri uporabnik pri viru.
+
 `MagentoExportCommand` bere `pim.ProductPrice WHERE PriceList = N'B2B'` oziroma `N'B2C'`.
 Cenike pa vsako podjetje imenuje po svoje:
 
@@ -234,8 +241,9 @@ dispatcher obdela eno sporočilo in konča, vrstice `OUTBOUND` v razporedu ni.
 1. ~~**Pognati `val.Promote` za organizaciji 3 in 4**~~ — **narejeno 2026-08-23, 21:05**
    (razdelek 5.1a). Ostane pravilo: objavo je treba pognati po vsaki migraciji, ki doda
    objavljeni stolpec, sicer izvoz kaže staro stanje.
-2. **Cenik B2B/B2C v register**, po podjetju in kanalu. Danes sta dva od štirih podjetij
-   brez cene v enem od dveh cenovnih stolpcev, ker se cenik podjetja ne imenuje `B2B`/`B2C`.
+2. ~~**Cenik B2B/B2C v register**~~ — **narejeno 2026-08-23, migracija `083`** (§5.2).
+   Ostane preveriti, ali ima IQLighting B2B cenik pod drugo šifro; če ga ima, je to en
+   `INSERT` v `out.ExportPriceList`.
 3. **Odločitev o opisu v predlogi** — ali Magento dobi stolpce za opis in v katerih jezikih.
    Podatek je od danes v katalogu (56.706 opisov v petih jezikih).
 4. **Zaloga v izvoz** — 11 stolpcev, podatek obstaja (278.160 pozicij). Potrebna je

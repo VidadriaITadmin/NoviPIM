@@ -178,19 +178,32 @@ public static class MagentoExportCommand
             -- IsActive = 1: izklopljena akcija v katalogu se ne sme izvoziti kot veljaven popust.
             LEFT JOIN pim.PackagingDiscountCatalog pdc ON pdc.DiscountCode = ppd.DiscountCode AND pdc.IsActive = 1
             LEFT JOIN (
-                -- ValidFrom <= zdaj: brez tega bi ORDER BY ValidFrom DESC izbral vnaprej
-                -- pripravljeno ceno in bi se ta pojavila v Magentu, preden zacne veljati.
-                SELECT PimProductId, CONVERT(nvarchar(50), Net) Net, CONVERT(nvarchar(10), VatRate) VatRate,
-                    ROW_NUMBER() OVER(PARTITION BY PimProductId ORDER BY ValidFrom DESC) rn
-                FROM pim.ProductPrice WHERE PriceList = N'B2B' AND IsActive = 1 AND ValidFrom <= SYSUTCDATETIME()
+                -- Katera sifra cenika je "Cena B2B", pove out.ExportPriceList za to podjetje
+                -- (migracija 083). Prej je bila sifra zapisana tu, v programu — zato je imel
+                -- IQLighting stolpec prazen pri vseh izdelkih: njegov cenik se ne imenuje B2B.
+                -- SortOrder je prednost, ko je cenikov za isti stolpec vec; ValidFrom <= zdaj
+                -- pa je tu iz istega razloga kot prej — brez njega bi ORDER BY ValidFrom DESC
+                -- izbral vnaprej pripravljeno ceno in bi se ta pojavila v Magentu, preden
+                -- zacne veljati.
+                SELECT pp.PimProductId, CONVERT(nvarchar(50), pp.Net) Net, CONVERT(nvarchar(10), pp.VatRate) VatRate,
+                    ROW_NUMBER() OVER(PARTITION BY pp.PimProductId ORDER BY reg.SortOrder, pp.ValidFrom DESC) rn
+                FROM pim.ProductPrice pp
+                INNER JOIN out.ExportPriceList reg
+                    ON reg.PriceListCode = pp.PriceList AND reg.OrganizationId = @OrgId
+                    AND reg.PriceFieldCode = N'Product.PriceB2B' AND reg.IsActive = 1
+                WHERE pp.IsActive = 1 AND pp.ValidFrom <= SYSUTCDATETIME()
             ) prb2b ON prb2b.PimProductId = p.PimProductId AND prb2b.rn = 1
             LEFT JOIN (
                 -- VatRate je tu obvezen: zunanja projekcija bere prb2c.VatRate v COALESCE.
                 -- Brez njega se poizvedba ne prevede ("Invalid column name 'VatRate'") in
                 -- ukaz --export-magento ne more zajeti niti ene vrstice.
-                SELECT PimProductId, CONVERT(nvarchar(50), Net) Net, CONVERT(nvarchar(10), VatRate) VatRate,
-                    ROW_NUMBER() OVER(PARTITION BY PimProductId ORDER BY ValidFrom DESC) rn
-                FROM pim.ProductPrice WHERE PriceList = N'B2C' AND IsActive = 1 AND ValidFrom <= SYSUTCDATETIME()
+                SELECT pp.PimProductId, CONVERT(nvarchar(50), pp.Net) Net, CONVERT(nvarchar(10), pp.VatRate) VatRate,
+                    ROW_NUMBER() OVER(PARTITION BY pp.PimProductId ORDER BY reg.SortOrder, pp.ValidFrom DESC) rn
+                FROM pim.ProductPrice pp
+                INNER JOIN out.ExportPriceList reg
+                    ON reg.PriceListCode = pp.PriceList AND reg.OrganizationId = @OrgId
+                    AND reg.PriceFieldCode = N'Product.PriceB2C' AND reg.IsActive = 1
+                WHERE pp.IsActive = 1 AND pp.ValidFrom <= SYSUTCDATETIME()
             ) prb2c ON prb2c.PimProductId = p.PimProductId AND prb2c.rn = 1
             LEFT JOIN (
                 SELECT PimProductId, CONVERT(nvarchar(10), VatRate) VatRate,

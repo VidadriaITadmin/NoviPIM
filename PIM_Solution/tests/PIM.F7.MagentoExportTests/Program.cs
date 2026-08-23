@@ -249,8 +249,10 @@ var seededMediaIds = new List<long>();
 var seededPriceIds = new List<long>();
 var seededAttributeIds = new List<long>();
 var seededCategoryIds = new List<long>();
+var seededPriceListIds = new List<int>();
 long? seededCustomerId = null;
 var exportDirectory = Path.Combine(Path.GetTempPath(), "f7-magento-db-" + Guid.NewGuid().ToString("N"));
+var registryExportDirectory = Path.Combine(Path.GetTempPath(), "f7-cenik-" + Guid.NewGuid().ToString("N"));
 
 // try se zacne PRED prvim vstavljanjem. Ce bi se zacel sele po sajenju, bi neuspeh
 // vmesnega koraka (krsitev omejitve, manjkajoc privzeti prag) pustil testne vrstice
@@ -289,6 +291,36 @@ try
   }
 
   Equal(2, seededPriceIds.Count, "Test mora vstaviti natanko dve ceni.");
+
+  // ---------------------------------------------------------------------------
+  // Cenik za stolpca "Cena B2B" in "Cena B2C" pride iz out.ExportPriceList (083), ne iz
+  // programa. Dokaz mora biti tak, da ga koda ne more opraviti sama: sifra F7_CENIK ne
+  // obstaja nikjer v programu in je ni v nobeni migraciji. Ce bi bila sifra cenika se
+  // vedno zapisana v poizvedbi, ta cena v izvoz ne bi mogla priti.
+  //
+  // SortOrder 5 je pred privzeto vrstico (10, sifra B2B iz semena migracije): ko je za isti
+  // stolpec vec cenikov, mora izvoz vzeti tistega z manjsim SortOrder.
+  // ---------------------------------------------------------------------------
+
+  await using (var seedRegistryPrice = new SqlCommand("""
+    INSERT pim.ProductPrice (PimProductId, PriceList, Net, VatRate, ValidFrom, IsActive)
+    OUTPUT INSERTED.PimProductPriceId
+    VALUES (@PimProductId, N'F7_CENIK', 222.22, 22, SYSUTCDATETIME(), 1);
+    """, connection))
+  {
+    seedRegistryPrice.Parameters.AddWithValue("@PimProductId", pimProductId);
+    seededPriceIds.Add(Convert.ToInt64(await seedRegistryPrice.ExecuteScalarAsync()));
+  }
+
+  await using (var seedRegistry = new SqlCommand("""
+    INSERT out.ExportPriceList (OrganizationId, PriceFieldCode, PriceListCode, SortOrder, IsActive)
+    OUTPUT INSERTED.ExportPriceListId
+    VALUES (@OrgId, N'Product.PriceB2B', N'F7_CENIK', 5, 1);
+    """, connection))
+  {
+    seedRegistry.Parameters.AddWithValue("@OrgId", organizationId);
+    seededPriceListIds.Add(Convert.ToInt32(await seedRegistry.ExecuteScalarAsync()));
+  }
 
   await using (var seedCategory = new SqlCommand("""
     INSERT pim.ProductCategory (PimProductId, WebSite, CategoryPath)
@@ -396,6 +428,8 @@ try
 
   Equal(213, row.Count, "Vrstica izdelka mora imeti 213 stolpcev.");
   Equal("111.11", row[28], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
+  Equal("222.22", row[27],
+    "Cena B2B mora priti iz cenika, ki ga doloca out.ExportPriceList — sifre F7_CENIK v programu ni.");
   Equal("E27", row[53], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
 
   // Kategorije: WebSite B2C -> slovenski stolpec, B2C_EN -> angleski.
@@ -416,6 +450,35 @@ try
   Contains(row[38], galleryUrl, "Stolpec 'Ostale slike' mora vsebovati medij z vlogo GALLERY.");
   Equal(false, row[38].Contains(primaryUrl, StringComparison.Ordinal),
     "Glavna slika se ne sme podvojiti med ostalimi slikami.");
+
+  // --- Negativni preizkus registra cenikov -------------------------------
+  //
+  // Trditev "izvoz visi na registru" je dokazana sele, ko se ob izklopljeni vrstici stolpec
+  // izprazni. Podatek ostane nedotaknjen — cena v F7_CENIK je se vedno v pim.ProductPrice —
+  // spremeni se samo vrstica registra. Isti vzorec kot negativni preizkus stolpca COL033
+  // pri migraciji 045.
+  {
+    await using (var disable = new SqlCommand(
+      "UPDATE out.ExportPriceList SET IsActive = 0 WHERE ExportPriceListId = @Id;", connection))
+    {
+      disable.Parameters.AddWithValue("@Id", seededPriceListIds[0]);
+      await disable.ExecuteNonQueryAsync();
+    }
+
+    await MagentoExportCommand.ExecuteAsync(organizationId, registryExportDirectory, connectionString);
+
+    var withoutRegistry = (await File.ReadAllTextAsync(
+        Path.Combine(registryExportDirectory, "magento-products.csv"), Encoding.UTF8))
+      .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+      .Skip(1).Select(SplitCsvLine)
+      .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
+      ?? throw new InvalidOperationException($"Drugi izvoz ne vsebuje vrstice za izdelek {itemId}.");
+
+    Equal("", withoutRegistry[27],
+      "Brez aktivne vrstice registra mora stolpec 'Cena B2B' ostati prazen, cetudi cena v bazi obstaja.");
+    Equal("111.11", withoutRegistry[28],
+      "Izklop vrstice za B2B ne sme vplivati na stolpec 'Cena B2C'.");
+  }
 
   // --- Stranka: izklopljen prag in veljavnostno okno rabatov --------------
   var customerRow = customerLines.Skip(1).Select(SplitCsvLine)
@@ -548,7 +611,20 @@ finally
     await cleanupCustomer.ExecuteNonQueryAsync();
   }
 
+  // Vrstice registra cenikov, ki jih je posadil ta test. Privzetih vrstic iz migracije 083
+  // se ne dotika — brise samo identitete, ki jih je sam dobil ob vstavljanju.
+  if (seededPriceListIds.Count > 0)
+  {
+    var priceListParameters = seededPriceListIds.Select((_, index) => "@Cenik" + index).ToArray();
+    await using var cleanupPriceLists = new SqlCommand(
+      $"DELETE FROM out.ExportPriceList WHERE ExportPriceListId IN ({string.Join(",", priceListParameters)});", connection);
+    for (var index = 0; index < seededPriceListIds.Count; index++)
+      cleanupPriceLists.Parameters.AddWithValue(priceListParameters[index], seededPriceListIds[index]);
+    await cleanupPriceLists.ExecuteNonQueryAsync();
+  }
+
   if (Directory.Exists(exportDirectory)) Directory.Delete(exportDirectory, true);
+  if (Directory.Exists(registryExportDirectory)) Directory.Delete(registryExportDirectory, true);
 }
 
 Console.WriteLine("F7 Magento export: pogodba, shema, vloga glavne slike, LF/UTF8 brez BOM, escape in izvoz proti bazi PASS.");

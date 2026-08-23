@@ -113,6 +113,38 @@ Wall lamps > Sconces`) prevede `map.CategoryPathMap` v našo kategorijo, celo po
 jeziku pa sestavi pogled `canon.CategoryPathTranslated`. Česar slovar ne pozna, se s števcem
 zapiše v `map.MissingCategoryMap` — to je delovni seznam, ne napaka.
 
+## 2b. Cene: `out.ExportPriceList` pove, kateri cenik gre v kateri stolpec
+
+Od migracije `083` šifra cenika ni več zapisana v programu. Prej je `MagentoExportCommand`
+bral `WHERE PriceList = N'B2B'` oziroma `N'B2C'`, vsako podjetje pa svoje cenike imenuje
+po svoje — izmerjeno 2026-08-23 nad objavljenim slojem:
+
+| Podjetje | Ceniki v `pim.ProductPrice` |
+|---|---|
+| DEMO (1) | B2B 1.109, B2C 3, NAB 1.665, PRC 7 |
+| IQLighting (2) | B2C 43.218, LOM 24.914, NAB 6.833, PRC 3.288, EGL 3.126, BTT 1.880, IDE 1.156, ACB 20 — **cenika `B2B` ni** |
+| Vidadria (3) | B2B 9.691, B2C 9.758 + 16 drugih |
+| Ediito (4) | B2B 33.315, LOM 24.914, NAB 3.185, ACB 2.212, PRC 390 — **cenika `B2C` ni** |
+
+Zato je vrstica:
+
+| stolpec | `PriceFieldCode` | `PriceListCode` | `SortOrder` |
+|---|---|---|---|
+| 28 Cena B2B | `Product.PriceB2B` | šifra cenika podjetja | manjše gre prej |
+| 29 Cena B2C | `Product.PriceB2C` | šifra cenika podjetja | manjše gre prej |
+
+`SortOrder` je prednost, kadar je za isti stolpec več cenikov: izvoz vzame prvi cenik po tem
+vrstnem redu, ki ima za izdelek veljavno tekočo ceno (`ValidFrom <= zdaj`, `IsActive = 1`).
+
+**Manjkajoča vrstica ni napaka.** Odločitev uporabnika 2026-08-23: če se cenik tako imenuje,
+se tako imenuje — če ga podjetje nima, stolpec ostane prazen. Zato izvoz ob manjkajoči
+vrstici ne pade; pade samo ob manjkajočem izvoznem profilu (`045`), ker je profil oblika
+datoteke, cenik pa njena vsebina. Seme migracije `083` vpiše `B2B` → „Cena B2B" in
+`B2C` → „Cena B2C" za vsa podjetja, torej natanko to, kar je bilo prej v kodi.
+
+**Odprto:** ali ima IQLighting B2B cenik pod drugo šifro, preverja uporabnik pri viru (SAOP).
+Če ga ima, je popravek en `INSERT` v `out.ExportPriceList` in nobena sprememba programa.
+
 ## 3. A) Izvozi
 
 ### 3.1 Izvozne procedure (vrnejo nabor vrstic, ne datoteke)

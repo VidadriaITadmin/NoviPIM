@@ -110,6 +110,35 @@ _(prazno)_
 
 ## KONČANO
 
+- **[BAZA + IZVOZ]** Cenik B2B/B2C v register namesto trdo v kodi — kdo: Claude Opus 5 —
+  2026-08-23, migracija `083`. `MagentoExportCommand` je bral `WHERE PriceList = N'B2B'`
+  oziroma `N'B2C'`; vsako podjetje pa svoje cenike imenuje po svoje, zato je imel
+  **IQLighting stolpec „Cena B2B" prazen pri vseh 43.503 izdelkih** (cenika `B2B` sploh nima)
+  in **Ediito „Cena B2C" pri vseh 33.304**. Ni bila napaka podatka — nastavitev podjetja na
+  napačnem mestu. Isti vzorec kot glave stolpcev (`045`), spletne strani (`059`) in
+  skladišča (`064`).
+  Nastane `out.ExportPriceList`: podjetje → kanonična koda cenovnega stolpca → šifra cenika,
+  s `SortOrder` kot prednostjo, kadar je cenikov za isti stolpec več.
+  **Seme ne odloča ničesar:** vpiše natanko to, kar je bilo v kodi (`B2B` → „Cena B2B",
+  `B2C` → „Cena B2C" za vsa štiri podjetja), zato je izvoz po migraciji do zadnjega znaka
+  enak kot prej.
+  **Odločitev uporabnika 2026-08-23:** manjkajoča vrstica ni napaka — če se cenik tako
+  imenuje in ga podjetje nima, stolpec ostane prazen. Zato izvoz ob manjkajoči vrstici ne
+  pade; pade samo ob manjkajočem profilu, ker je profil oblika datoteke, cenik pa vsebina.
+  **Dokaz (RED/GREEN, ne samo trditev):** `PIM.F7.MagentoExportTests` posadi ceno v cenik
+  `F7_CENIK` — šifre ni nikjer v programu in v nobeni migraciji — in vrstico registra s
+  `SortOrder 5`; cena pride v stolpec „Cena B2B". Po izklopu iste vrstice (`IsActive = 0`)
+  je stolpec prazen, „Cena B2C" pa nedotaknjena. Negativni preizkus nad **privzeto** vrstico
+  (org 2, `Product.PriceB2C`) je test pričakovano podrl (`Cena B2C ... pričakovano 111.11,
+  dejansko prazno`), po vrnitvi `IsActive = 1` pa spet uspe — izvoz res visi na registru.
+  **Ostali dokazi:** migrator 1. in 2. zagon (druga je migracijo preskočila — idempotentna),
+  `--verify` → `Preverjanje F0–F10 baze je uspešno.`, izhod **0**;
+  `PIM.F7.MagentoExportTests` → **PASS**, izhod 0; izvoz za vsa štiri podjetja po zamenjavi
+  vrne iste številke kot pred njo (polnih stolpcev 125/167/180/21, Cena B2B 1.109/0/9.691/33.296,
+  Cena B2C 3/43.196/9.757/0).
+  **Odprto za človeka:** ali ima IQLighting B2B cenik pod drugo šifro (uporabnik preveri pri
+  viru). Če ga ima, je to en `INSERT` v `out.ExportPriceList` in nobena sprememba programa.
+
 - **[IZVOZ]** Meritev izvozov in objava za Vidadrio in Ediito — kdo: Claude Opus 5 —
   2026-08-23. Nova analiza [`docs/ANALIZA_IZVOZI.md`](docs/ANALIZA_IZVOZI.md) nadomešča
   razdelek „B — IZVOZ" iz `ANALIZA_A_B_C.md`, ki je bil star 22 migracij (059–080).
