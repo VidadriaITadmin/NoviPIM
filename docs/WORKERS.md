@@ -74,6 +74,25 @@ zajetih vrstic, zato zadostuje `RunId`; ob koncu worker izpiše stanje po entite
 toliko obhodov do strežnika. Po popravku (dve poizvedbi namesto JOIN-a, prevedena pot in
 množičen vpis) je celotna datoteka Nowodvorskega **110 s** za vse tri entitete.
 
+### Zaostanek v `raw.Inbox` — `--preslikaj-zaostanek` (2026-08-23)
+
+`--map-run` in `--znova-preslikaj` zahtevata `RunId`. Nočno opravilo ga nima od kod vzeti, zato
+ima `PIM.KatalogWorker` še tretje stikalo, ki si zagone poišče samo:
+
+```powershell
+$env:PIM_SAOP_MODE = 'Live'   # klica na SAOP kljub temu ni — podatek je že v raw.Inbox
+dotnet run --project PIM_Solution\workers\PIM.KatalogWorker -- --preslikaj-zaostanek
+```
+
+Vzame **vsak** zagon, ki ima še kakšno vrstico `Pending`, ne glede na vir (SAOP ali dobaviteljev
+XML), in ga požene skozi preslikavo. Padec enega zagona ne ustavi ostalih; izhodna koda je 1,
+če je kateri padel. Poverilnice za SAOP niso potrebne.
+
+Zakaj obstaja: zaostanek ne nastane zaradi okvare, ampak po zasnovi. Ko se preslikava dopolni,
+so strani že zajete in čakajo pod svojim `RunId`, ki ga naslednji zajem ne pozna. Prvi zagon
+tega stikala je 2026-08-23 preslikal **223 strani** vseh štirih podjetij, ki so v bazi ležale
+od 21. avgusta.
+
 ## Standardni dokaz pred namestitvijo
 
 V `PIM_Solution`:
@@ -113,16 +132,22 @@ dotnet publish .\workers\PIM.XmlFileWorker\PIM.XmlFileWorker.csproj -c Release -
 
 Fixture-only workerjev (`SaopStockWorker`, `StockFileWorker`, `B2bWorker`) sistem ne označuje lažno kot živih DB workerjev; dobijo heartbeat šele, ko imajo dejansko povezavo in potrjen lokalni execution contract. Ob napaki preveri `ops.ErrorLog`, `ops.Alert`, `ops.DeadLetterQueue` in specifično karanteno; ne briši sledi, dokler incident ni raziskan.
 
-## Kaj se danes res bere (stanje 2026-08-22)
+## Kaj se danes res bere (stanje 2026-08-23)
 
 | Vir | Stanje |
 |---|---|
-| SAOP katalog | **dela** — 16 končnih točk zajetih, preslikane so `ItemGeneralData`, `Descriptions`, `Prices` in trgovinski podatki (`057`) |
-| Dobaviteljev XML (NW, BT) | **dela** — obe datoteki v celoti; 2.548 izdelkov z lastnostmi, 2.382 s kategorijami |
+| SAOP katalog | **dela in je preslikan v celoti** — vseh 16 končnih točk ima cilj v modelu (migracija `087`). Preslikano: izdelki, opisi, cene, nazivi po jezikih, lastnosti po meri, pravilo zaloge, skladišča, jeziki, valute, ceniki, tehnološki proces, konti zaloge, planiranje, stranke, artikel pri stranki, popusti po skupinah |
+| Dobaviteljev XML (NW, BT) | **dela** — obe datoteki v celoti, za vsa štiri podjetja. Braytron ima od `087` tudi slike (1.384 izdelkov); Braytronovih kategorij namenoma ni — glej spodaj |
 | SAOP zaloge | **pot je narejena in dokazana lokalno; živ klic čaka tebe** — `PIM.SaopStockWorker` bere profil iz `stock.SaopProviderProfile`, šifre skladišč iz `canon.Warehouse` in zapiše v `stock.*`. Klic izvede samo pri `PIM_SAOP_MODE=Live` |
 | SAOP šifrant skladišč | **dela** — `canon.Warehouse`: DEMO 7, IQLighting 35, Vidadria 74, Ediito 15 skladišč s šiframi in imeni |
-| Zaloge dobaviteljev | **dela** — `PIM.StockFileWorker` zapiše zalogo v `stock.*` (dokazano: NW 2.697, BT 1.361 vrstic, 0 v karanteni); datoteko je treba položiti v mapo, prevzem s FTP je zunanji klic |
-| Šifranti in B2B (7 entitet) | zajeti, brez cilja v modelu — čaka odločitev (`docs/TVOJE_NALOGE.md`, naloga 5) |
+| Zaloge dobaviteljev | **dela za vsa štiri podjetja** (`087`) — `PIM.StockFileWorker` zapiše zalogo v `stock.*`; NW 2.697 in BT 1.361 vrstic na podjetje, 0 v karanteni. Datoteko je treba položiti v mapo, prevzem s FTP je zunanji klic |
+| Šifranti in B2B (7 entitet) | **dela** (`082`, `087`) — valute 181, ceniki 7–31 in tehnološki proces 5–101 na podjetje v `canon.Codebook`; stranke 11.558, artikel pri stranki 9.207 in popusti po skupinah 4.270 v `b2b.*` |
+
+**Braytronove kategorije namenoma niso preslikane.** Sama preslikava ne bi naredila ničesar:
+`map.ResolveProductCategories` gre čez drevesa iz `map.CategoryPathMap` za ta vir, in za
+`BT_XML` tam ni nobene vrstice — brez odločitve, v katero drevo Braytronove družine
+(`main_family`/`sub_family`) sodijo, ne nastane ne vrstica v katalogu ne vrstica v delovnem
+seznamu manjkajočih. To je poslovna odločitev in je v `TASKBOARD.md`.
 
 ## PIM.StockFileWorker — zaloga dobavitelja od datoteke do baze
 
@@ -143,6 +168,19 @@ dotnet run --project PIM_Solution\workers\PIM.StockFileWorker -- --file PIM_Solu
 Posnetek nosi čas datoteke, ne čas zagona — ista datoteka je zato isti posnetek. Konektor in
 pravilo identitete (`map.SourceConnector`, `map.StockIdentityRule`) morata obstajati; worker si
 ju ne izmišlja. Izhod je 1, kadar ni bila uporabljena nobena vrstica in je karantena neprazna.
+
+**Ista datoteka drugič ni napaka** (popravljeno 2026-08-23). `stock.Snapshot` ima enoličnost
+(podjetje, konektor, čas posnetka), zato je drugi zagon nespremenjene datoteke po zasnovi
+podvojen ključ. Doslej je to končalo kot neujeta `SqlException 2627` in worker je padel s
+sledjo sklada — v nočnem opravilu pravilo, ne izjema, saj dobavitelj datoteke ne posodobi vsak
+dan. Zdaj worker pove `Ta posnetek je ze v bazi ... Zapisano ni bilo nic.` in vrne 0.
+
+**Zaloga se ujame samo z artiklom istega podjetja** (migracija `088`). `stock.ApplyLandingRecord`
+je od migracije `018` iskal artikel brez pogoja po podjetju; dokler je zalogo imelo samo
+podjetje 2, se to ni poznalo. Ko je `087` zalogo vklopil za vsa štiri, je isti stavek začel
+vezati zalogo enega podjetja na artikel drugega. Dokaz po popravku — ujetih vrstic na podjetje:
+NW 1.066 / 2.455 / 2.461 / 131, BT 5 / 215 / 1.296 / 40, in nobene pozicije, vezane na artikel
+tujega podjetja.
 
 ## PIM.SaopStockWorker — količine zaloge iz SAOP
 
@@ -171,3 +209,69 @@ Dokaz brez živega SAOP je `PIM.F6.SaopStockIntegration`: lokalni strežnik na `
 odgovor in posname zahtevo — preverjeno je, da gre na `GetStocks`, da nosi šifre skladišč in
 glavo `OrganisationId`, da se znan artikel ujame v pozicijo zaloge in da neznan ne izgine
 (pozicija brez izdelka, `MatchKey = 'Unmatched'`).
+
+## Nočno opravilo — vsi vhodi na en zagon (2026-08-23)
+
+Do zdaj je načrtovana naloga poganjala samo zajem iz SAOP (`scripts\Nocni-zajem.ps1`). Vse
+ostalo — dobaviteljev XML, zaloge, spletni nazivi, preslikava zaostanka, validacija, objava in
+izvoz — je bilo treba pognati ročno. Zato je bil katalog svež, vse drugo pa staro toliko,
+kolikor časa ni nihče ničesar pognal.
+
+```powershell
+# ročni zagon
+pwsh -File scripts\Nocno-vse.ps1
+
+# vse razen klica na ERP (za preizkus ali kadar je SAOP v vzdrževanju)
+pwsh -File scripts\Nocno-vse.ps1 -BrezSaopKataloga
+```
+
+Koraki in njihov vrstni red:
+
+| # | Korak | Zakaj tu |
+|---|---|---|
+| 0 | gradnja | workerji tečejo z `--no-build`; če gradnja pade, se ne poganja nič |
+| 1 | SAOP katalog | nova šifra artikla mora obstajati, preden jo kdo obogati |
+| 2 | dobaviteljev XML (NW, BT) | lastnosti, kategorije in slike se vežejo na artikel po EAN |
+| 3 | spletni nazivi | zvezki se vežejo na artikel po šifri (samo če je podana mapa) |
+| 4 | preslikava zaostanka | kar je ostalo `Pending`, pride v katalog, **preden** objava pogleda, kaj ima |
+| 5 | zaloge dobaviteljev | za **vsa** podjetja, ne le za privzeto |
+| 6 | zaloga iz SAOP | samo s stikalom `-ZalogaIzSaop` — živ klic je odločitev človeka (`AGENTS.md` §4.5) |
+| 7 | validacija in objava | šele ko so vsi podatki v katalogu |
+| 8 | Magento izvoz | iz objave |
+
+Padec enega koraka ne ustavi ostalih; izhodna koda je število padlih korakov. Dnevnik gre v
+`logs\nocno_<datum>_<ura>.log`, dnevniki starejši od 90 dni se pobrišejo.
+
+**Povzetek pove tudi, kaj je ostalo neobdelano** (`raw.Inbox`: `Pending` in `Quarantined`).
+Brez tega je »vse OK« lahko pomenilo, da so koraki tekli, podatek pa je ostal ležati — natanko
+to se je dogajalo mesece.
+
+**Varovalka za prekrivanje ne gleda samo statusa.** Vrstica `Running` v `ops.PipelineRun` ni
+dokaz, da kaj teče: zagon, ki mu je proces umrl, ostane `Running` za vedno (ob pisanju te
+skripte jih je bilo v razvojni bazi deset, najstarejši iz julija). Blokira samo zagon, ki je
+hkrati `Running`, je zadnji za svoj cevovod v `ops.IntegrationHealth` **in** je utripnil v
+zadnjih 15 minutah. Zapuščene zagone skripta prijavi kot opozorilo in nadaljuje.
+
+**Poizvedbe gredo skozi `sqlcmd`, ne skozi ADO.NET.** `Microsoft.Data.SqlClient` je paket NuGet
+in ne del PowerShella; ročno naložen iz izhoda gradnje potrebuje še domorodni
+`Microsoft.Data.SqlClient.SNI.dll`, ki ga `Add-Type` ne najde. Prejšnja različica skripte bi
+zaradi tega padla že ob prvi poizvedbi — in to šele ponoči.
+
+### Načrtovana naloga Windows
+
+Registracija je **sistemska nastavitev** in po `AGENTS.md` §4.7 na zaprtem seznamu: požene jo
+človek, ne agent. Ukaz je zapisan, da je ponovljiv:
+
+```powershell
+pwsh -File scripts\Namesti-nocno-opravilo.ps1            # privzeto vsak dan ob 02:30
+pwsh -File scripts\Namesti-nocno-opravilo.ps1 -Ura 03:15
+pwsh -File scripts\Namesti-nocno-opravilo.ps1 -Odstrani
+```
+
+Naloga teče pod tvojim računom, se ne podvaja (`IgnoreNew`) in nadoknadi zamujen zagon
+(`StartWhenAvailable`). Živi klic na SAOP za količine zaloge **ni** vklopljen; ko se odločiš,
+da sme teči, dodaj `-ZalogaIzSaop` med argumente v tej skripti in nalogo registriraj znova.
+
+**Izmerjeno 2026-08-23** (brez koraka 1, ker je živ klic tvoja odločitev): 6 korakov, 0 padlih,
+2 min 39 s; `raw.Inbox` `Pending` 0. Validacija in objava štirih podjetij 120 s, Magento izvoz
+štirih podjetij 12 s.

@@ -60,7 +60,7 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
     // Posnetek je trenutek klica: zaloga velja za takrat, ne za trenutek zapisa v bazo.
     var snapshotUtc = DateTime.UtcNow;
     var sourceCode = await ReadStockSourceCodeAsync(connection, organizationId, cancellationToken);
-    var (runId, applied, quarantined) = await new StockLandingWriter(connectionString).PersistAsync(
+    var (runId, applied, quarantined, _) = await new StockLandingWriter(connectionString).PersistAsync(
       organizationId, sourceCode, "SAOP", request.RequestUri!.PathAndQuery, snapshotUtc, hash, records,
       "yyyy-MM-dd", cancellationToken: cancellationToken);
 

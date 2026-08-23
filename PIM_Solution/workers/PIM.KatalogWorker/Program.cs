@@ -28,7 +28,7 @@ if (arguments.ShowHelp)
 
 // --map-run ne kliče SAOP, zato ne potrebuje niti načina Live niti poverilnic: podatek je
 // že v raw.Inbox in gre samo skozi preslikavo.
-if (arguments.MapRunId is not null || mode == SaopSourceMode.Live)
+if (arguments.MapRunId is not null || arguments.MapPending || mode == SaopSourceMode.Live)
 {
   return await RunLiveAsync(arguments);
 }
@@ -105,8 +105,52 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     return 2;
   }
 
+  // --preslikaj-zaostanek: pospravi vse, kar je v raw.Inbox ostalo nepreslikano.
+  //
+  // Zaostanek nastane po zasnovi, ne po okvari: ko se preslikava dopolni (nova koncna tocka,
+  // novo polje), so zajete strani ze v bazi in nova preslikava jih ne vidi, ker cakajo kot
+  // Pending pod svojim RunId. Worker je doslej znal preslikati en zagon, ce si njegov RunId
+  // nasel sam. V nocnem opravilu to ne gre — zato si zagone poisce sam.
+  //
+  // Vir ni omejen na SAOP: iste vrstice pusca za sabo tudi dobaviteljev XML, cevovod pa je
+  // za oba isti. Podjetje in vir bereva iz vrstic, ne iz nastavitev, ker je samo tam resnica.
+  if (arguments.MapPending)
+  {
+    var backlog = await ReadPendingRunsAsync(connection, arguments.OrganizationIds);
+    if (backlog.Count == 0)
+    {
+      Console.WriteLine("V raw.Inbox ni nepreslikanih vrstic.");
+      return 0;
+    }
+
+    Console.WriteLine($"Zagonov z nepreslikanimi vrsticami: {backlog.Count}.");
+    var mappedTotal = 0;
+    var padli = 0;
+    foreach (var (runId, organizationId, sourceCode, pending) in backlog)
+    {
+      Console.WriteLine($"  {sourceCode} [{organizationId}] {runId}: {pending} vrstic.");
+      try
+      {
+        await new SqlMappingPipeline(connection).ExtractAndApplyAsync(runId, organizationId, sourceCode);
+      }
+      catch (Exception exception)
+      {
+        // Padec enega zagona ne sme ustaviti ostalih — enako pravilo kot pri zajemu podjetij.
+        Console.Error.WriteLine($"  Preslikava zagona {runId} je padla: {exception.Message}");
+        padli++;
+        continue;
+      }
+      var left = await CountPendingAsync(connection, runId, organizationId, sourceCode);
+      Console.WriteLine($"    obdelano {pending - left}, ostalo Pending {left}.");
+      mappedTotal += pending - left;
+    }
+
+    Console.WriteLine($"SKUPAJ preslikanih vrstic raw.Inbox: {mappedTotal}; padlih zagonov: {padli}.");
+    return padli > 0 ? 1 : 0;
+  }
+
   var settings = SaopWorkerConfiguration.Read();
-  if (!settings.HasCredentials && arguments.MapRunId is null)
+  if (!settings.HasCredentials && arguments.MapRunId is null && !arguments.MapPending)
   {
     Console.Error.WriteLine(
       "Manjkajo SAOP poverilnice. Dopolni sekcijo \"Saop\" v korenski appsettings.Local.json "
@@ -292,6 +336,29 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
   return failed ? 1 : 0;
 }
 
+static async Task<IReadOnlyList<(Guid RunId, int OrganizationId, string SourceCode, int Pending)>> ReadPendingRunsAsync(
+  string connectionString, IReadOnlyList<int> organizationIds)
+{
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  await using var command = new SqlCommand("""
+    SELECT RunId, OrganizationId, SourceCode, COUNT(*) AS Pending
+    FROM raw.Inbox
+    WHERE Status = N'Pending'
+    GROUP BY RunId, OrganizationId, SourceCode
+    ORDER BY MIN(ReceivedUtc);
+    """, connection) { CommandTimeout = 300 };
+  await using var reader = await command.ExecuteReaderAsync();
+  var runs = new List<(Guid, int, string, int)>();
+  while (await reader.ReadAsync())
+  {
+    var organizationId = reader.GetInt32(1);
+    if (organizationIds.Count > 0 && !organizationIds.Contains(organizationId)) continue;
+    runs.Add((reader.GetGuid(0), organizationId, reader.GetString(2), reader.GetInt32(3)));
+  }
+  return runs;
+}
+
 static async Task<int> CountPendingAsync(string connectionString, Guid runId, int organizationId, string sourceCode)
 {
   await using var connection = new SqlConnection(connectionString);
@@ -332,7 +399,8 @@ internal sealed record WorkerArguments(
   int? MaxPages = null,
   int? PageSize = null,
   bool? IncludeNonActive = null,
-  bool Reprocess = false)
+  bool Reprocess = false,
+  bool MapPending = false)
 {
   public static WorkerArguments Parse(string[] args)
   {
@@ -343,6 +411,7 @@ internal sealed record WorkerArguments(
     }
 
     var reprocess = false;
+    var mapPending = false;
     var endpoints = new List<string>();
     var organizations = new List<int>();
     var full = false;
@@ -434,6 +503,12 @@ internal sealed record WorkerArguments(
           // Za meritve: ali naj SAOP vkljuci tudi neaktivne artikle.
           includeNonActive = false;
           break;
+        case "--preslikaj-zaostanek":
+          // Preslika vse zagone, ki imajo v raw.Inbox se kaksno vrstico Pending. Rabi se v
+          // nocnem opravilu: zaostanek nastane vsakic, ko se preslikava dopolni po zajemu,
+          // in doslej ga je bilo treba pobrati rocno, RunId po RunId.
+          mapPending = true;
+          break;
         case "--znova-preslikaj":
           // Kot --map-run, le da najprej vrne že obdelane in karantenirane strani na Pending.
           reprocess = true;
@@ -462,7 +537,13 @@ internal sealed record WorkerArguments(
       throw new ArgumentException("--map-run in --only-ingest se izključujeta: prvi preslika, drugi preslikavo preskoči.");
     }
 
-    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId, maxParallel, maxParallelEndpoints, maxPages, pageSize, includeNonActive, reprocess);
+    if (mapPending && (mapRunId is not null || skipMapping))
+    {
+      throw new ArgumentException(
+        "--preslikaj-zaostanek se izključuje z --map-run in --only-ingest: sam si poišče zagone z nepreslikanimi vrsticami.");
+    }
+
+    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId, maxParallel, maxParallelEndpoints, maxPages, pageSize, includeNonActive, reprocess, mapPending);
   }
 
   private static IEnumerable<string> Split(string value) =>
@@ -483,6 +564,7 @@ internal sealed record WorkerArguments(
                               (mejnik se v tem primeru NE premakne)
         --map-run <RunId>     preslikaj že zajet zagon iz raw.Inbox, brez klica na SAOP
         --znova-preslikaj <RunId>  isto, a strani najprej vrne na Pending (po dopolnjeni preslikavi)
+        --preslikaj-zaostanek preslikaj vse zagone, ki imajo se kaksno vrstico Pending
         --help                ta izpis
 
       Znane končne točke:

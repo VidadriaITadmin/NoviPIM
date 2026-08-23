@@ -52,9 +52,19 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Posnetek nosi čas datoteke, ne čas zagona: zaloga pripada trenutku, ko jo je dobavitelj
 // zapisal. Dvakrat obdelana ista datoteka je zato isti posnetek, ne dva različna.
 var snapshotUtc = File.GetLastWriteTimeUtc(options.FilePath);
-var (runId, applied, quarantined) = await new StockLandingWriter(connectionString).PersistAsync(
+var (runId, applied, quarantined, alreadyApplied) = await new StockLandingWriter(connectionString).PersistAsync(
   options.OrganizationId, options.SourceCode, "FILE", options.Endpoint, snapshotUtc,
   batch.PayloadHash, batch.Records, options.DateFormat);
+
+if (alreadyApplied)
+{
+  // Ista datoteka z istim casom spremembe je isti posnetek. To ni napaka: dobavitelj datoteke
+  // ne posodobi vsak dan, nocno opravilo pa tece vsako noc.
+  Console.WriteLine($"Ta posnetek je ze v bazi; vir={options.SourceCode}, podjetje={options.OrganizationId}, "
+    + $"cas posnetka={snapshotUtc:yyyy-MM-dd HH:mm:ss}Z, uporabljenih={applied}, v karanteni={quarantined}, RunId={runId}. "
+    + "Zapisano ni bilo nic.");
+  return 0;
+}
 
 Console.WriteLine($"Zaloga zapisana; vir={options.SourceCode}, podjetje={options.OrganizationId}, "
   + $"uporabljenih={applied}, v karanteni={quarantined}, RunId={runId}.");
