@@ -158,7 +158,13 @@ public static class MagentoExportCommand
                 pc.CountryOfOrigin,
                 CONVERT(nvarchar(50), pc.GrossWeight) AS GrossWeight,
                 CONVERT(nvarchar(50), pc.NetWeight) AS NetWeight,
+                CONVERT(nvarchar(50), pc.Pak1) AS Pak1,
                 CONVERT(nvarchar(50), pc.Pak2) AS Pak2,
+                CONVERT(nvarchar(50), pc.Volume) AS Volume,
+                CONVERT(nvarchar(50), pc.PackageLength) AS PackageLength,
+                CONVERT(nvarchar(50), pc.PackageWidth) AS PackageWidth,
+                CONVERT(nvarchar(50), pc.PackageHeight) AS PackageHeight,
+                pc.DimensionUnit,
                 ppd.DiscountCode AS PackagingDiscountCode,
                 CONVERT(nvarchar(50), pdc.PercentValue) AS PackagingDiscountPercent,
                 prb2b.Net AS PriceB2B,
@@ -208,7 +214,16 @@ public static class MagentoExportCommand
                     ["Product.CountryOfOrigin"] = reader["CountryOfOrigin"] as string,
                     ["Product.GrossWeight"] = FormatDecimalString(reader["GrossWeight"]),
                     ["Product.NetWeight"] = FormatDecimalString(reader["NetWeight"]),
+                    ["Product.Pak1"] = FormatDecimalString(reader["Pak1"]),
                     ["Product.Pak2"] = FormatDecimalString(reader["Pak2"]),
+                    // Mere in volumen pakiranja: v katalogu so od migracije 057, stolpci predloge
+                    // pa so vir dobili v 074. Enota je ena sama za vse tri dimenzije, tako jo
+                    // poslje SAOP (PropertiesData/ItemDimensionUOM).
+                    ["Product.Volume"] = FormatDecimalString(reader["Volume"]),
+                    ["Product.PackageLength"] = FormatDecimalString(reader["PackageLength"]),
+                    ["Product.PackageWidth"] = FormatDecimalString(reader["PackageWidth"]),
+                    ["Product.PackageHeight"] = FormatDecimalString(reader["PackageHeight"]),
+                    ["Product.DimensionUnit"] = reader["DimensionUnit"] as string,
                     ["Product.PackagingDiscountCode"] = reader["PackagingDiscountCode"] as string,
                     ["Product.PackagingDiscountPercent"] = FormatDecimalString(reader["PackagingDiscountPercent"]),
                     ["Product.PriceB2B"] = FormatDecimalString(reader["PriceB2B"]),
@@ -235,8 +250,16 @@ public static class MagentoExportCommand
                 var lang = reader["Lang"] as string ?? "";
                 var textType = reader["TextType"] as string ?? "";
                 var value = reader["Value"] as string;
-                if (textType == "WEB_TITLE" && lang == "en") row["Product.WebTitleEn"] = value;
-                if (textType == "WEB_TITLE" && lang == "sl") row["Product.WebTitleSl"] = value;
+                // Spletni naziv ima prednost; kjer ga ni, gre v izvoz ERP naziv istega jezika.
+                // Spletnih nazivov danes skoraj ni, ERP nazivi po jezikih pa so od migracije 072
+                // (angleskih 67.880). Prazen stolpec ni bolj resnicen od ERP naziva — je samo prazen.
+                if (lang is "en" or "sl")
+                {
+                    var kljuc = lang == "en" ? "Product.WebTitleEn" : "Product.WebTitleSl";
+                    if (textType == "WEB_TITLE") row[kljuc] = value;
+                    else if (textType == "TITLE_ERP" && string.IsNullOrWhiteSpace(row.TryGetValue(kljuc, out var obstojeci) ? obstojeci : null))
+                        row[kljuc] = value;
+                }
             }
         }
 

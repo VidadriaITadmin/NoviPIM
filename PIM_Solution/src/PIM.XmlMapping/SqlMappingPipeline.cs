@@ -93,6 +93,21 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
         await warehouses.ExecuteNonQueryAsync(cancellationToken);
       }
 
+      // Sifrant jezikov mora biti obdelan pred nazivi: naziv brez kode jezika nima kam.
+      // Oba postopka nad virom brez teh entitet ne naredita nicesar (migracija 072).
+      foreach (var procedura in new[] { "map.ProcessLanguageInbox", "map.ProcessProductTextInbox" })
+      {
+        await using var command = new SqlCommand(
+          $"EXEC {procedura} @RunId,@OrganizationId,@SourceCode;", connection)
+        {
+          CommandTimeout = ApplyCommandTimeoutSeconds
+        };
+        command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+        command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+        command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+      }
+
       // Kategorija dobavitelja ni nasa kategorija. Ko so izdelki najdeni oziroma ustvarjeni,
       // se dobaviteljeva pot prevede v nase drevo (map.CategoryPathMap); cesar slovar ne
       // pozna, gre v map.MissingCategoryMap in ostane vidno. Postopek nad virom brez

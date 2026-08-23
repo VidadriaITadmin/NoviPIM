@@ -141,6 +141,13 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
   if (arguments.MapRunId is { } mapRunId)
   {
     Console.WriteLine($"Preslikava že zajetega zagona {mapRunId}; klica na SAOP ni.");
+    if (arguments.Reprocess)
+    {
+      // Isti ukaz kot pri PIM.XmlFileWorker: strani tega zagona gredo nazaj na Pending, da jih
+      // dopolnjena preslikava lahko obdela. Nič se ne briše — vsi zapisi so združevalni.
+      var reopened = await ReopenRunAsync(connection, mapRunId);
+      Console.WriteLine($"Na ponovno preslikavo postavljenih strani: {reopened}.");
+    }
     var mapped = 0;
     foreach (var organization in organizations)
     {
@@ -299,6 +306,20 @@ static async Task<int> CountPendingAsync(string connectionString, Guid runId, in
   return Convert.ToInt32(await command.ExecuteScalarAsync());
 }
 
+static async Task<int> ReopenRunAsync(string connectionString, Guid runId)
+{
+  // Samo stanje strani, brez brisanja: že izluščene vrednosti in zapisani podatki ostanejo,
+  // preslikava jih ob ponovnem zagonu združi (MERGE oziroma "vstavi, če še ni").
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  await using var command = new SqlCommand("""
+    UPDATE raw.Inbox SET Status=N'Pending', ProcessedUtc=NULL
+    WHERE RunId=@RunId AND Status IN (N'Processed', N'Quarantined');
+    """, connection);
+  command.Parameters.AddWithValue("@RunId", runId);
+  return await command.ExecuteNonQueryAsync();
+}
+
 internal sealed record WorkerArguments(
   IReadOnlyList<string> EndpointKeys,
   IReadOnlyList<int> OrganizationIds,
@@ -310,7 +331,8 @@ internal sealed record WorkerArguments(
   int MaxParallelEndpoints = 1,
   int? MaxPages = null,
   int? PageSize = null,
-  bool? IncludeNonActive = null)
+  bool? IncludeNonActive = null,
+  bool Reprocess = false)
 {
   public static WorkerArguments Parse(string[] args)
   {
@@ -320,6 +342,7 @@ internal sealed record WorkerArguments(
       return new WorkerArguments([], [], false, false, true);
     }
 
+    var reprocess = false;
     var endpoints = new List<string>();
     var organizations = new List<int>();
     var full = false;
@@ -411,6 +434,10 @@ internal sealed record WorkerArguments(
           // Za meritve: ali naj SAOP vkljuci tudi neaktivne artikle.
           includeNonActive = false;
           break;
+        case "--znova-preslikaj":
+          // Kot --map-run, le da najprej vrne že obdelane in karantenirane strani na Pending.
+          reprocess = true;
+          goto case "--map-run";
         case "--map-run":
           // Preslikaj že zajet zagon, brez novega klica na SAOP. Potrebno, ker --only-ingest
           // pusti vrstice Pending: brez tega bi bilo treba iste podatke pobrati še enkrat.
@@ -435,7 +462,7 @@ internal sealed record WorkerArguments(
       throw new ArgumentException("--map-run in --only-ingest se izključujeta: prvi preslika, drugi preslikavo preskoči.");
     }
 
-    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId, maxParallel, maxParallelEndpoints, maxPages, pageSize, includeNonActive);
+    return new WorkerArguments(endpoints, organizations, full, skipMapping, false, mapRunId, maxParallel, maxParallelEndpoints, maxPages, pageSize, includeNonActive, reprocess);
   }
 
   private static IEnumerable<string> Split(string value) =>
@@ -455,6 +482,7 @@ internal sealed record WorkerArguments(
         --only-ingest         samo zapiši v raw.Inbox, brez preslikave v canon
                               (mejnik se v tem primeru NE premakne)
         --map-run <RunId>     preslikaj že zajet zagon iz raw.Inbox, brez klica na SAOP
+        --znova-preslikaj <RunId>  isto, a strani najprej vrne na Pending (po dopolnjeni preslikavi)
         --help                ta izpis
 
       Znane končne točke:

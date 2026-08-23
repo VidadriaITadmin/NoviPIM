@@ -110,6 +110,35 @@ _(prazno)_
 
 ## KONČANO
 
+- **[ZAJEM/IZVOZ]** Nazivi po jezikih, šifrant jezikov in trgovinski podatki do izvoza — kdo:
+  Claude Opus 5 — 2026-08-23, migracije `072`–`075`.
+  **Šifrant jezikov (`072`).** SAOP govori v šifrah (1, 2, 3), katalog v kodah jezika
+  (`sl`, `en`, `de`), ker tako je zapisan `canon.ProductText.Lang`. Prevod imena v kodo je
+  vrstica slovarja (`map.ValueLookup`, domena `SAOP jezik`), ne veja v programu. Pet jezikov
+  pri vseh štirih podjetjih.
+  **Nazivi po jezikih (`072`).** `map.ProcessRawInbox` tega ne zna, ker jezik pozna samo kot del
+  imena ciljne kode; tu pride iz podatka. Zato svoj postopek `map.ProcessProductTextInbox`, po
+  vzorcu skladišč. Šifra artikla je v tem odgovoru en nivo višje, zato pot `../../ItemID` —
+  XPath 1.0 to zna in nova koda ni bila potrebna.
+  Rezultat: **angleških nazivov 67.880**, nemških 12.349, hrvaških 12.398, drugih vrstic naziva
+  (`TITLE_ERP2`) 83.281. 45 strani, ki so čakale od prvega zajema, je obdelanih.
+  **Kar je razkrila ista pot:** ponovna preslikava je uveljavila tudi preslikave iz `057` —
+  `canon.ProductCommercial` ima **196.513 vrstic namesto ene**. Trgovinski podatki so bili
+  preslikani avgusta, a nikoli pognani čez že zajete strani.
+  **Tri napake, ki so bile do zdaj nevidne:**
+  1. `073` — `TITLE_ERP2` ni bil dovoljena vrsta besedila, zato je 92.735 izluščenih vrednosti
+     padlo na `CK_CanonProductText_Type`. Naziv ima v SAOP dve vrstici in obe sta naziv.
+  2. `074` — `pim.Product.Name` je bil `NULL` pri **vseh** izdelkih: objava ga je brala samo iz
+     spletnega naziva, teh pa je v katalogu ena sama vrstica. Stolpec »Naziv artikla« je bil
+     zato prazen pri 43.503 izdelkih, čeprav naziv obstaja pri 196.515. Odslej velja: spletni
+     naziv, če obstaja, sicer ERP naziv istega jezika.
+  3. `075` — objava ni nesla volumna in mer pakiranja: stolpci so bili dodani v `canon`
+     (migracija `057`), v `pim.ProductCommercial` pa ne. Isti razred napake kot `058`, eno
+     nadstropje nižje.
+  **Izvoz:** polnih **165 od 213 stolpcev** (prej 156). Naziv 43.502, angleški naziv 11.193,
+  volumen in mere pakiranja 43.502, enota mer 41.555.
+  Nov ukaz `--znova-preslikaj <RunId>` tudi v `PIM.KatalogWorker` (prej samo v XML workerju).
+
 - **[ZAJEM]** Dobavitelj se veže na vsa štiri podjetja — kdo: Claude Opus 5 — 2026-08-23,
   migraciji `069` in `070`. Odločitev uporabnika: dobavitelj ni last enega podjetja; njegov XML
   se poveže z vsemi štirimi katalogi po EAN.
