@@ -1,6 +1,6 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-22
+Posodobljeno: 2026-08-23
 
 ## Stanje treh delov po meritvi 2026-08-22
 
@@ -36,6 +36,54 @@ rezultat 44/0/0 z dne 2026-08-21).
 podatke (`--map-run`/`--full`), (2) preslikava `GetItemsTitlesLanguage` — spletni nazivi,
 (3) poln zajem NW in BT XML, (4) odločitev o profilu za objavo in `val.Promote` za
 organizaciji 3 in 4.
+
+## Vhodi — zaključeni 2026-08-23 (novejše od tabele zgoraj)
+
+Vrstica **A — zajem** v tabeli velja za stanje pri migraciji 058. Za vhode je merodajno to.
+
+**Vseh 16 bralnih končnih točk SAOP ima cilj v modelu.** Do 2026-08-23 jih je bilo preslikanih
+12; štiri (`Customers`, `GetItemCustomerDataV2`, `CustomerItemGroupDiscounts`,
+`TechnologicalProcess`) so se zajemale in ležale v `raw.Inbox` kot `Pending`. Migracija **087**
+jim je dala cilj.
+
+**Tri preslikave iz migracije 082 sploh niso tekle.** Migracija je registrirala šifrante, konte
+zaloge in planiranje ter zanje ustvarila `map.ProcessCodebookInbox`,
+`map.ProcessStockAccountingInbox` in `map.ProcessPlanningInbox` — poklical pa jih ni nihče.
+Vrstice v registru, tabele prazne. Zdaj so v `MappingProcedures` in jih kliče cevovod; test
+`PIM.F5.Integration` odslej pade, če kateri `TargetDomain` v registru nima svojega postopka.
+
+Kaj je prišlo v bazo po preslikavi zaostanka (223 strani, ki so ležale od 21. avgusta):
+
+| Tabela | Pred | Po |
+|---|---|---|
+| `canon.Codebook` (valute, ceniki, tehnološki proces) | 0 | **708** |
+| `canon.ProductPlanning` | 0 | **196.512** |
+| `canon.ProductStockAccounting` | 0 | **176.086** |
+| `b2b.Customer` | 0 | **11.558** |
+| `b2b.CustomerItem` (artikel pri stranki) | — | **9.207** |
+| `b2b.CustomerItemGroupDiscount` | — | **4.270** |
+| Braytronove slike v `canon.ProductMedia` | 0 | **1.384** |
+
+`raw.Inbox` nima več nobene vrstice `Pending` (bilo jih je 229). V karanteni ostane 10 strani
+iz julija in začetka avgusta — »Neveljaven XML« in »Izdelek ne obstaja«, rep prejšnjih meritev.
+
+**Dobaviteljeva zaloga teče za vsa štiri podjetja**, ne le za IQLighting. Ob tem sta se
+pokazali dve pravi napaki, obe popravljeni:
+
+- ista nespremenjena datoteka je drugič porušila `PIM.StockFileWorker` s podvojenim ključem
+  (`UQ_StockSnapshot`) — za nočno opravilo pravilo, ne izjema;
+- `stock.ApplyLandingRecord` je od migracije `018` iskal artikel **brez pogoja po podjetju**
+  (migracija `088`). Dokler je zalogo imelo samo podjetje 2, se to ni poznalo.
+
+**Nočno opravilo poganja vse vhode** (`scripts\Nocno-vse.ps1`): SAOP katalog, dobaviteljev XML,
+spletni nazivi, preslikava zaostanka, zaloge za vsa podjetja, validacija, objava in izvoz.
+Načrtovano nalogo Windows registrira `scripts\Namesti-nocno-opravilo.ps1` — to je po
+`AGENTS.md` §4.7 tvoj korak, ne agentov. Podrobno: `docs/WORKERS.md`.
+
+**Kar pri vhodih ostaja odprto:** Braytronove kategorije (potrebujejo odločitev o drevesu),
+prevzem dobaviteljevih datotek s FTP (zunanji klic) in izvoz strank — `b2b.Customer` ima zdaj
+11.558 vrstic, `out.ExportB2bCustomersCsv` pa jih ne izvozi, ker se veže na
+`pim.CustomerWebProfile`, ki je prazen.
 
 ## Izvozi — meritev 2026-08-23 (novejša od tabele zgoraj)
 

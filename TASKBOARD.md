@@ -56,15 +56,16 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   in `048_ValueDictionaryAndTransforms.sql`, ki kot datoteki ne obstajata (preimenovani
   v 049) — `--verify` kljub temu vrne 0.
 
-- **[WORKERJI]** Preslikave za 13 še nepreslikanih SAOP končnih točk (2026-08-22: **294 strani `Pending`**). Zajem dela za
-  vseh 16, preslikava v `canon` je nastavljena za `GetItemsGeneralData`, `GetPrices`
-  in `GetItemsDescriptions`. Za šest končnih točk oblika XML ni znana — v posnetih
-  odgovorih ni bilo vsebine, zato se preslikava zanje piše šele po prvem živem zajemu.
-  Šifranti (`Currencies`, `PriceLists`, `Warehouses`, `GetLanguages`) in B2B
-  (`Customers`, `GetItemCustomerDataV2`, `CustomerItemGroupDiscounts`) nimajo cilja v
-  `map.ProcessRawInbox` — potrebujejo odločitev, kam v modelu spadajo.
-  Od 2026-08-20 to ni več tiho: zajem teh entitet mejnika ne premakne, zato bo prvi
-  zagon po dodani preslikavi isto obdobje zajel znova. Prej bi bilo trajno izgubljeno.
+- **[BAZA / odločitev] Braytronove kategorije.** Braytronov XML ima družine
+  (`main_family`, `sub_family`), a `BT_XML` nima nobene vrstice v `map.CategoryPathMap`.
+  `map.ResolveProductCategories` gre čez drevesa iz slovarja za ta vir, zato brez odločitve,
+  v katero drevo (`svetila_si`, `videlektro`) Braytronove družine sodijo, sama preslikava ne
+  naredi ničesar — niti vrstice v katalogu niti vrstice v delovnem seznamu manjkajočih.
+  Migracija `087` je zato namenoma dodala samo slike, ne kategorij.
+- **[IZVOZ] Izvoz strank nima česa izvoziti, čeprav so stranke v bazi.** Od `087` ima
+  `b2b.Customer` 11.558 vrstic, `out.ExportB2bCustomersCsv` pa vrne prazno datoteko, ker se
+  veže na `pim.CustomerWebProfile` (0 vrstic). Katera stranka je v kateri Magento skupini, je
+  poslovna odločitev.
 - **[WORKERJI]** `PIM.StockFileWorker` dobi pravi `Program.cs`; pri `PIM.B2bWorker`
   manjka **landing pot**, ne cel worker. Popravljeno 2026-08-22: `PIM.B2bWorker\Program.cs`
   obstaja in dela — podpira `--export-magento` in je bil v tej meritvi pognan v živo.
@@ -83,6 +84,30 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 _(prazno)_
 
 ## BLOKIRANO
+
+- **[TESTI / odločitev] `PIM.F3.Integration` pade, ker je njegov primer »nepreslikane
+  entitete« postal preslikan.** Ugotovljeno 2026-08-23 (Claude Opus 5).
+
+  Test na `tests/PIM.F3.Integration/Program.cs:87` trdi:
+
+  ```csharp
+  if (await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "GetItemsPlanningData", default))
+    throw new InvalidOperationException("GetItemsPlanningData nima preslikave, a je bila prepoznana kot preslikana.");
+  ```
+
+  `GetItemsPlanningData` je preslikan od **migracije 082**, torej je bil test rdeč že pred
+  delom na vhodih; migracija `087` se te entitete ne dotakne. Namen testa (»entiteta brez
+  preslikave ne sme premakniti mejnika«) je pravilen in ga ne izpodbijamo — zastarel je samo
+  njegov primer, ker po `087` med šestnajstimi končnimi točkami nobena ni več brez preslikave.
+
+  **Testa nisem spremenil** (`AGENTS.md` §5.3). Predlog, ki čaka tvojo odločitev: drugo
+  trditev izbrisati, ker tretja (`F3_WATERMARK_GUARD_TEST`) isto dokaže bolje — sama si vstavi
+  entiteto brez polj, preveri in za sabo pospravi, torej ne more zastarati.
+
+  **Dokaz:** `dotnet run --no-build` v `tests/PIM.F3.Integration` → prve tri trditve uspejo
+  (`CSV vrstic=43503`), četrta vrže zgornjo napako. Preostalih **49** konzolnih testnih
+  projektov uspe.
+
 
 - **[IZVOZ]** ~~162 atributnih stolpcev Magento predloge nima vira~~ — **preklicano
   2026-08-22, blokada je iz 2026-08-20 in je bila medtem odpravljena.** Odgovor je
@@ -109,6 +134,49 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[BAZA + DOMENA + WORKERJI] Vhodi so zaključeni: vse končne točke, vsi dobaviteljevi XML,
+  vse zaloge dobaviteljev, in nočno opravilo, ki to poganja** — kdo: Claude Opus 5 — 2026-08-23.
+
+  **Kaj je bilo narobe.** Štiri od šestnajstih SAOP končnih točk so se zajemale brez cilja in
+  ležale v `raw.Inbox` kot `Pending`. Hujše: migracija `082` je registrirala šifrante, konte
+  zaloge in planiranje ter zanje ustvarila tri postopke — **poklical pa jih ni nihče**, zato so
+  bile tabele prazne kljub vrsticam v registru. Dobaviteljeva zaloga je tekla samo za IQLighting.
+
+  **Kaj je narejeno.**
+  - Migracija **087**: cilj za `Customers`, `GetItemCustomerDataV2`, `CustomerItemGroupDiscounts`
+    (nove tabele `b2b.CustomerItem`, `b2b.CustomerItemGroupDiscount`, 19 novih stolpcev na
+    `b2b.Customer`) in `TechnologicalProcess` kot šifrant `TECHPROCESS`; Braytronove slike;
+    konektorji in pravila identitete za dobaviteljevo zalogo pri vseh podjetjih. Preverba v
+    migraciji zahteva, da ima **vsak** SAOP konektor vseh 16 končnih točk v registru.
+  - Migracija **088**: `stock.ApplyLandingRecord` je od `018` iskal artikel brez pogoja po
+    podjetju. Nevidno, dokler je zalogo imelo eno podjetje; po `087` je vezalo zalogo enega
+    podjetja na artikel drugega.
+  - `PIM.XmlMapping.MappingProcedures` — seznam svet → postopek na enem mestu, vključno s
+    tremi iz `082`, ki jih ni klical nihče. `PIM.F5.Integration` odslej pade, če kateri
+    dejaven `TargetDomain` nima postopka ali če postopka v bazi ni.
+  - `PIM.KatalogWorker --preslikaj-zaostanek` — preslika vsak zagon, ki ima še vrstice
+    `Pending`, brez klica na SAOP in brez iskanja `RunId` po rokah.
+  - `PIM.StockFileWorker`: ista nespremenjena datoteka drugič ni več neujeta `SqlException 2627`.
+  - `scripts\Nocno-vse.ps1` — vsi vhodi na en zagon; `scripts\Namesti-nocno-opravilo.ps1` za
+    registracijo načrtovane naloge (požene človek, `AGENTS.md` §4.7).
+
+  **Dokaz.** Migrator: `087` in `088` uporabljeni, drugi zagon ne uporabi nobene, `--verify`
+  izhod 0. `--preslikaj-zaostanek`: 223 strani štirih podjetij preslikanih, `Pending` 0.
+  V bazi po tem: `canon.Codebook` 0 → **708**, `canon.ProductPlanning` 0 → **196.512**,
+  `canon.ProductStockAccounting` 0 → **176.086**, `b2b.Customer` 0 → **11.558**,
+  `b2b.CustomerItem` **9.207**, `b2b.CustomerItemGroupDiscount` **4.270**, Braytronove slike
+  0 → **1.384**. Dobaviteljeva zaloga za vsa štiri podjetja: NW 2.697 in BT 1.361 vrstic na
+  podjetje, 0 v karanteni; ujetih po podjetju NW 1.066/2.455/2.461/131, BT 5/215/1.296/40 in
+  **nobene** pozicije, vezane na artikel tujega podjetja. Testa `PIM.F5.Integration` in
+  `PIM.F6.Integration` izhod 0. Nočno opravilo brez koraka 1 (živ klic na SAOP je odločitev
+  človeka): 6 korakov, 0 padlih, 2 min 39 s, `Pending` 0.
+
+  **Kaj ni narejeno in zakaj:** Braytronove kategorije (potrebujejo odločitev o drevesu, glej
+  TODO), prevzem datotek s FTP (zunanji klic), registracija načrtovane naloge (sistemska
+  nastavitev). `scripts\run_tests.ps1` v tej seji ni bil pognan do konca, ker je v delovnem
+  drevesu hkrati tekla druga seja (odhodna pot) in je bila rešitev vmes neprevedljiva —
+  pognani so bili ciljni testi in gradnja prizadetih projektov.
 
 - **[BAZA + IZVOZ]** Cenik B2B/B2C v register namesto trdo v kodi — kdo: Claude Opus 5 —
   2026-08-23, migracija `083`. `MagentoExportCommand` je bral `WHERE PriceList = N'B2B'`
