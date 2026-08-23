@@ -110,6 +110,17 @@ _(prazno)_
 
 ## KONČANO
 
+- **[IZVOZ]** Dobavitelj in merska enota prideta do izvoza — kdo: Claude Opus 5 — 2026-08-23,
+  migracija `077`. Stolpca 7 in 9 sta bila prazna, čeprav podatka v katalogu obstajata od prvega
+  zajema (`canon.Product.Supplier`, `canon.Product.UoM`). Objava (`pim.Product`) ju ni poznala —
+  tabela je imela šifro, EAN, naziv in proizvajalca. Izvoz bere objavo, ne kataloga; isti razred
+  napake kot `058`, `075` in `077`.
+  Merska enota je hkrati obvezno polje profila `ERP_L1_SLO`, zato je bila njena odsotnost v
+  izvozu še posebej zavajajoča: validacija je izdelek priznala, izvoz pa je stolpec pustil prazen.
+  Rezultat: **43.502 izdelkov z dobaviteljem in mersko enoto**; izvoz ima **165 od 213** polnih
+  stolpcev. **Opomba:** dobavitelj je šifra (`91086973`), ne ime — šifranta dobaviteljev SAOP med
+  16 končnimi točkami ne pošilja.
+
 - **[ZAJEM]** Lastnosti po meri, pravilo najmanjše/največje zaloge in ločena naziva — kdo:
   Claude Opus 5 — 2026-08-23, migracija `076`.
   **Lastnosti po meri** (`GetItemsCustomProperties`, 10 strani, ki so čakale od prvega zajema):

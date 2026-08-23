@@ -147,7 +147,12 @@ Equal("Product.Pak2", registryProductColumns[32].CanonicalFieldCode, "Stolpec 33
 Equal("Product.MainImage", registryProductColumns[37].CanonicalFieldCode, "Stolpec 38 je glavna slika.");
 Equal("Product.OtherImages", registryProductColumns[38].CanonicalFieldCode, "Stolpec 39 so ostale slike.");
 Equal("Attr.Grlo", registryProductColumns[53].CanonicalFieldCode, "Stolpec 54 je prvi atribut.");
-Equal("", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 (Dobavitelj) nima dolocenega vira.");
+// Stolpec 7 je do migracije 077 sluzil kot primer stolpca brez vira; zdaj ima vir
+// (Product.Supplier), ker sta dobavitelj in merska enota v katalogu od prvega zajema, le objava
+// ju ni nesla naprej. Namen trditve je isti — da se vidi, kateri stolpec ima vir in kateri ne —
+// zato primer prevzame stolpec 13, kjer vira res ni: SAOP poslje tezo brez enote.
+Equal("Product.Supplier", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 je dobavitelj.");
+Equal("", registryProductColumns[12].CanonicalFieldCode, "Stolpec 13 (Enota bruto teze) nima dolocenega vira.");
 Equal("Customer.Key", registryCustomerColumns[0].CanonicalFieldCode, "Stolpec 1 strank je sifra.");
 Equal("Customer.MagentoGroup", registryCustomerColumns[5].CanonicalFieldCode, "Stolpec 6 strank je skupina.");
 Equal("Customer.NwDiscount", registryCustomerColumns[18].CanonicalFieldCode, "Stolpec 19 strank je popust NW.");

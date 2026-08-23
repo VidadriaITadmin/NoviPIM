@@ -154,6 +154,8 @@ public static class MagentoExportCommand
                 p.EAN,
                 p.Name,
                 p.Manufacturer,
+                p.Supplier,
+                p.UoM,
                 pc.CustomsTariff,
                 pc.CountryOfOrigin,
                 CONVERT(nvarchar(50), pc.GrossWeight) AS GrossWeight,
@@ -213,6 +215,10 @@ public static class MagentoExportCommand
                     // artikla' in 'Naziv artikla EN' polni izkljucno WEB_TITLE.
                     ["Product.ErpTitleSl"] = reader["Name"] as string,
                     ["Product.Manufacturer"] = reader["Manufacturer"] as string,
+                    // Dobavitelj in merska enota sta v katalogu od prvega zajema; do migracije 077
+                    // ju objava ni nesla naprej, zato sta bila stolpca prazna.
+                    ["Product.Supplier"] = reader["Supplier"] as string,
+                    ["Product.UoM"] = reader["UoM"] as string,
                     ["Product.CustomsTariff"] = reader["CustomsTariff"] as string,
                     ["Product.CountryOfOrigin"] = reader["CountryOfOrigin"] as string,
                     ["Product.GrossWeight"] = FormatDecimalString(reader["GrossWeight"]),
