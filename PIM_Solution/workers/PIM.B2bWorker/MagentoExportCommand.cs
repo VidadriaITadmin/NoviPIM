@@ -208,7 +208,10 @@ public static class MagentoExportCommand
                 {
                     ["Product.ItemID"] = itemId,
                     ["Product.EAN"] = reader["EAN"] as string,
-                    ["Product.WebTitleSl"] = reader["Name"] as string,
+                    // pim.Product.Name je ERP naziv artikla. V spletni stolpec ne gre: ERP naziv in
+                    // spletni naziv sta razlicna (odlocitev uporabnika 2026-08-23). Stolpca 'Naziv
+                    // artikla' in 'Naziv artikla EN' polni izkljucno WEB_TITLE.
+                    ["Product.ErpTitleSl"] = reader["Name"] as string,
                     ["Product.Manufacturer"] = reader["Manufacturer"] as string,
                     ["Product.CustomsTariff"] = reader["CustomsTariff"] as string,
                     ["Product.CountryOfOrigin"] = reader["CountryOfOrigin"] as string,
@@ -250,16 +253,12 @@ public static class MagentoExportCommand
                 var lang = reader["Lang"] as string ?? "";
                 var textType = reader["TextType"] as string ?? "";
                 var value = reader["Value"] as string;
-                // Spletni naziv ima prednost; kjer ga ni, gre v izvoz ERP naziv istega jezika.
-                // Spletnih nazivov danes skoraj ni, ERP nazivi po jezikih pa so od migracije 072
-                // (angleskih 67.880). Prazen stolpec ni bolj resnicen od ERP naziva — je samo prazen.
-                if (lang is "en" or "sl")
-                {
-                    var kljuc = lang == "en" ? "Product.WebTitleEn" : "Product.WebTitleSl";
-                    if (textType == "WEB_TITLE") row[kljuc] = value;
-                    else if (textType == "TITLE_ERP" && string.IsNullOrWhiteSpace(row.TryGetValue(kljuc, out var obstojeci) ? obstojeci : null))
-                        row[kljuc] = value;
-                }
+                // Spletni naziv in ERP naziv sta razlicna (odlocitev uporabnika 2026-08-23), zato
+                // ERP naziv v spletni stolpec ne gre niti takrat, ko spletnega ni. Prazen stolpec
+                // pove resnico: spletnega naziva za ta izdelek se ni.
+                if (textType == "WEB_TITLE" && lang == "en") row["Product.WebTitleEn"] = value;
+                if (textType == "WEB_TITLE" && lang == "sl") row["Product.WebTitleSl"] = value;
+                if (textType == "TITLE_ERP" && lang == "en") row["Product.ErpTitleEn"] = value;
             }
         }
 

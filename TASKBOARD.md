@@ -110,6 +110,22 @@ _(prazno)_
 
 ## KONČANO
 
+- **[ZAJEM]** Lastnosti po meri, pravilo najmanjše/največje zaloge in ločena naziva — kdo:
+  Claude Opus 5 — 2026-08-23, migracija `076`.
+  **Lastnosti po meri** (`GetItemsCustomProperties`, 10 strani, ki so čakale od prvega zajema):
+  zapis je par — ime lastnosti in vrednost. Isti razlog za svoj postopek kot pri nazivih: ključ
+  pride iz podatka, ne iz imena ciljne kode. Ime lastnosti se ne prevaja — kar SAOP imenuje
+  `BUG`, se v katalogu imenuje `BUG` (3.841 izdelkov).
+  **Pravilo zaloge** (`GetItemsStockData`, 5 strani): to ni količina na zalogi, ampak koliko naj
+  bi je bilo. Zato svoja tabela `canon.ProductStockPolicy` in ne `stock.*`, kjer živijo posnetki
+  količin. **2.099 pravil pri 2.097 izdelkih v treh skladiščih.**
+  **ERP naziv in spletni naziv sta različna** — odločitev uporabnika 2026-08-23. Migracija `074`
+  je ERP naziv uporabila kot rezervo za spletni stolpec; to je zdaj odpravljeno. `pim.Product.Name`
+  ostaja ERP naziv (in ima ga 43.502 od 43.503 izdelkov), stolpca »Naziv artikla« in »Naziv
+  artikla EN« pa polni izključno `WEB_TITLE`. Danes sta zato prazna — in to je resnica: spletnih
+  nazivov v katalogu (še) ni.
+  Izvoz: polnih **163 od 213 stolpcev**.
+
 - **[ZAJEM/IZVOZ]** Nazivi po jezikih, šifrant jezikov in trgovinski podatki do izvoza — kdo:
   Claude Opus 5 — 2026-08-23, migracije `072`–`075`.
   **Šifrant jezikov (`072`).** SAOP govori v šifrah (1, 2, 3), katalog v kodah jezika

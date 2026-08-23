@@ -95,7 +95,16 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
 
       // Sifrant jezikov mora biti obdelan pred nazivi: naziv brez kode jezika nima kam.
       // Oba postopka nad virom brez teh entitet ne naredita nicesar (migracija 072).
-      foreach (var procedura in new[] { "map.ProcessLanguageInbox", "map.ProcessProductTextInbox" })
+      // Vrstni red ni nakljucen: sifrant jezikov pred nazivi (naziv brez kode jezika nima kam),
+      // sifrant skladisc pa je ze tekel zgoraj. Vsak postopek nad virom brez svoje entitete ne
+      // naredi nicesar, zato jih klicemo brezpogojno.
+      foreach (var procedura in new[]
+      {
+        "map.ProcessLanguageInbox",
+        "map.ProcessProductTextInbox",
+        "map.ProcessAttributePairInbox",
+        "map.ProcessStockPolicyInbox"
+      })
       {
         await using var command = new SqlCommand(
           $"EXEC {procedura} @RunId,@OrganizationId,@SourceCode;", connection)

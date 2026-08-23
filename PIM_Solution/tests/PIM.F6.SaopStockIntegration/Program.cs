@@ -166,14 +166,29 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE FROM map.SourceConnector WHERE OrganizationId=@OrganizationId;
 
     DELETE FROM canon.Warehouse WHERE OrganizationId=@OrganizationId;
+    DELETE pravilo FROM canon.ProductStockPolicy pravilo
+    INNER JOIN canon.Product product ON product.ProductId=pravilo.ProductId
+    WHERE product.OrganizationId=@OrganizationId;
 
     DELETE state FROM val.ProductValidationState state
     INNER JOIN canon.Product product ON product.ProductId=state.ProductId WHERE product.OrganizationId=@OrganizationId;
     DELETE issue FROM val.ProductIssue issue
     INNER JOIN canon.Product product ON product.ProductId=issue.ProductId WHERE product.OrganizationId=@OrganizationId;
+    /* Svezenj brisemo samo tistega, ki ga je naredil ta test. Prejsnja razlicica je vprasala
+       "kateri svezenj nima vec zgodovine" nad celo tabelo; ta je z rastjo kataloga postala
+       predraga in je test padel na casovni meji, ceprav ni bilo nic narobe. */
+    DECLARE @Svezenj TABLE(ChangeBatchId bigint PRIMARY KEY);
+    INSERT @Svezenj(ChangeBatchId)
+    SELECT DISTINCT history.ChangeBatchId
+    FROM pim.ProductFieldHistory history
+    INNER JOIN canon.Product product ON product.ProductId=history.ProductId
+    WHERE product.OrganizationId=@OrganizationId;
+
     DELETE history FROM pim.ProductFieldHistory history
     INNER JOIN canon.Product product ON product.ProductId=history.ProductId WHERE product.OrganizationId=@OrganizationId;
+
     DELETE batch FROM pim.ProductChangeBatch batch
+    INNER JOIN @Svezenj mojSvezenj ON mojSvezenj.ChangeBatchId=batch.ChangeBatchId
     WHERE NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId=batch.ChangeBatchId);
     DELETE FROM canon.Product WHERE OrganizationId=@OrganizationId;
     DELETE FROM dbo.OrganizationConfig WHERE OrganizationId=@OrganizationId;

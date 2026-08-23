@@ -27,7 +27,7 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 | A | Šifra registriranega pogleda za Vidadrio in prvi živi klic zaloge | živ klic je tvoja odločitev (`AGENTS.md` §4.5) |
 | B | Potrditev prevodov — `Prevodi_predlog.csv` (120 predlogov, 96 % pojavitev) | oblika je odvisna od lastnosti; zadnja beseda je tvoja |
 | C | Stolpca 26/27 »Kategorije vid« — drevo videlektro | drevesa ni nikjer, tudi v starem sistemu ne |
-| E | Ali je ERP naziv v tujem jeziku hkrati spletni naziv | zdaj tako je (sicer bi bil stolpec prazen); reci, če ne sme biti |
+| E | Od kod pridejo spletni nazivi (stolpca 4 in 5 sta prazna) | ERP naziv ni spletni naziv — odločeno 2026-08-23 |
 | F | Enota teže — SAOP pošlje težo brez enote | če je vedno kilogram, je to ena vrstica registra |
 | D | Ali dobaviteljev XML obogati tudi Vidadrio (in DEMO), ne le IQLighting | katero podjetje prodaja katerega dobavitelja, veš samo ti |
 | E | Kam v modelu spadajo šifranti in B2B entitete (naloga 5) | poslovna odločitev |
