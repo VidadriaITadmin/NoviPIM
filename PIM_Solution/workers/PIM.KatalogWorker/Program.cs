@@ -375,16 +375,21 @@ static async Task<int> CountPendingAsync(string connectionString, Guid runId, in
 
 static async Task<int> ReopenRunAsync(string connectionString, Guid runId)
 {
-  // Samo stanje strani, brez brisanja: že izluščene vrednosti in zapisani podatki ostanejo,
-  // preslikava jih ob ponovnem zagonu združi (MERGE oziroma "vstavi, če še ni").
+  // Strani nazaj na Pending IN izluščene vrednosti nazaj v surovo obliko. Drugo je bistvo:
+  // map.ApplyValueTransforms preskoči vrednost, ki ima RawValue (že pretvorjena), zato
+  // dopolnjen slovar brez tega nad že obdelanim zajemom nima učinka — natanko primer, za
+  // katerega to stikalo obstaja. Postopek je v bazi (migracija 094), ker ga kličeta oba workerja.
   await using var connection = new SqlConnection(connectionString);
   await connection.OpenAsync();
-  await using var command = new SqlCommand("""
-    UPDATE raw.Inbox SET Status=N'Pending', ProcessedUtc=NULL
-    WHERE RunId=@RunId AND Status IN (N'Processed', N'Quarantined');
-    """, connection);
+  await using var command = new SqlCommand("map.ReopenRunForMapping", connection)
+  {
+    CommandType = System.Data.CommandType.StoredProcedure
+  };
   command.Parameters.AddWithValue("@RunId", runId);
-  return await command.ExecuteNonQueryAsync();
+  var pages = command.Parameters.Add("@Pages", System.Data.SqlDbType.Int);
+  pages.Direction = System.Data.ParameterDirection.Output;
+  await command.ExecuteNonQueryAsync();
+  return pages.Value as int? ?? 0;
 }
 
 internal sealed record WorkerArguments(

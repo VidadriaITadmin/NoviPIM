@@ -238,12 +238,17 @@ static async Task<string[]> ReadRunSummaryAsync(SqlConnection connection, Guid r
 
 static async Task<int> ReopenRunAsync(SqlConnection connection, Guid runId)
 {
-  // Samo stanje strani, brez brisanja: ze izluscene vrednosti in ze zapisani podatki ostanejo,
-  // preslikava jih ob ponovnem zagonu zdruzi (MERGE oziroma "vstavi, ce se ni").
-  await using var command = new SqlCommand("""
-    UPDATE raw.Inbox SET Status=N'Pending', ProcessedUtc=NULL
-    WHERE RunId=@RunId AND Status IN (N'Processed', N'Quarantined');
-    """, connection);
+  // Strani nazaj na Pending IN izluscene vrednosti nazaj v surovo obliko. Drugo je bistvo:
+  // map.ApplyValueTransforms preskoci vrednost, ki ima RawValue (ze pretvorjena), zato
+  // dopolnjen slovar brez tega nad ze obdelanim zajemom nima ucinka — natanko primer, za
+  // katerega to stikalo obstaja. Postopek je v bazi (migracija 094), ker ga kliceta oba workerja.
+  await using var command = new SqlCommand("map.ReopenRunForMapping", connection)
+  {
+    CommandType = System.Data.CommandType.StoredProcedure
+  };
   command.Parameters.AddWithValue("@RunId", runId);
-  return await command.ExecuteNonQueryAsync();
+  var pages = command.Parameters.Add("@Pages", System.Data.SqlDbType.Int);
+  pages.Direction = System.Data.ParameterDirection.Output;
+  await command.ExecuteNonQueryAsync();
+  return pages.Value as int? ?? 0;
 }
