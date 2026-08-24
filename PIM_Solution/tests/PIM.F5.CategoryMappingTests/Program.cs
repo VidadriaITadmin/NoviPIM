@@ -221,6 +221,7 @@ async Task CleanupAsync(SqlConnection sqlConnection)
 
     DELETE FROM map.CategoryPathMap WHERE SourceCode=@SourceCode;
     DELETE FROM map.MissingCategoryMap WHERE SourceCode=@SourceCode;
+    DELETE FROM map.SourceCategory WHERE SourceCode=@SourceCode;
 
     /* Kategorije izdelka gredo pred spletno stranjo: od migracije 063 canon.ProductCategory
        kaze na canon.WebSite s tujim kljucem in obratni vrstni red pade s 547. */

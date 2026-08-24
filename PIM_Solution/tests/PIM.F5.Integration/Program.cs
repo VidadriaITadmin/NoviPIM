@@ -157,6 +157,7 @@ async Task CleanupAsync(SqlConnection sqlConnection)
 
     DELETE FROM map.CategoryPathMap WHERE SourceCode=N'NW_XML' AND SourcePathKey=N'f5_svetila';
     DELETE FROM map.MissingCategoryMap WHERE SourcePathKey=N'f5_svetila';
+    DELETE FROM map.SourceCategory WHERE SourcePathKey=N'f5_svetila';
 
     DELETE FROM map.UnmappedValue WHERE ExtractedValueId IN
     (
