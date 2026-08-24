@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Nocno opravilo: vsi vhodi v PIM, po vrsti, z dnevnikom in povzetkom.
 
@@ -83,13 +83,36 @@ if ([string]::IsNullOrWhiteSpace($MapaZalogBt)) { $MapaZalogBt = Join-Path $resi
 
 $mapaDnevnikov = Join-Path $KorenRepozitorija 'logs'
 if (-not (Test-Path $mapaDnevnikov)) { New-Item -ItemType Directory -Path $mapaDnevnikov | Out-Null }
+# Absolutna pot: dnevnik pisemo prek .NET, ta pa relativno pot razresi po delovni mapi
+# procesa, ki je Set-Location v tej skripti ne spremeni.
+$mapaDnevnikov = (Resolve-Path -LiteralPath $mapaDnevnikov).Path
 $zaznamek = Get-Date -Format 'yyyy-MM-dd_HHmm'
 $dnevnik = Join-Path $mapaDnevnikov "nocno_$zaznamek.log"
+
+# --- kodne strani ------------------------------------------------------------
+# Worker pise UTF-8, konzola pa je na tem racunalniku v kodni strani 852. PowerShell izpis
+# zunanjega programa dekodira po [Console]::OutputEncoding, zato je "Z" s stresico (UTF-8
+# C5 BD) v dnevniku koncal kot dva znaka, "c" s stresico kot trije in pomisljaj kot "OCo".
+# Dnevnik pri tem ni bil pokvarjen: bil je pravilen UTF-8, ki je posteno shranil ze
+# pokvarjene znake. Napaka nastane na meji med dotnetom in PowerShellom, zato mora biti
+# odpravljena tu, preden preberemo prvo vrstico.
+#
+# Ta datoteka ima odslej UTF-8 BOM, ker PowerShell 5.1 skripto brez njega bere kot ANSI in
+# bi sumnike v sporocilih pokvaril ze pri branju same skripte. Sumniki v sporocilih so zato
+# od tod naprej dovoljeni; starejsi komentarji ostajajo brez njih.
+#
+# Nastavitev velja za ta proces in se ne vraca -- skripta tece kot svoj proces (nacrtovana
+# naloga, -File).
+$utf8BrezBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8BrezBom
+$OutputEncoding = $utf8BrezBom
 
 function Zapisi([string]$vrstica) {
   $vrstica = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $vrstica"
   Write-Output $vrstica
-  Add-Content -Path $dnevnik -Value $vrstica -Encoding UTF8
+  # Add-Content -Encoding UTF8 v PowerShell 5.1 datoteko zacne z BOM. Dnevnik bereta clovek
+  # in grep, zato gre ven kot UTF-8 brez BOM.
+  [System.IO.File]::AppendAllText($dnevnik, $vrstica + [Environment]::NewLine, $utf8BrezBom)
 }
 
 # --- povezava: ista pot kot jo uporablja worker -----------------------------
@@ -172,14 +195,25 @@ function PozeniWorker([string]$projekt, [string[]]$argumenti) {
   $prej = Get-Location
   try {
     Set-Location $resitev
-    & dotnet run --project $projekt --no-build -- @argumenti 2>&1 | ForEach-Object { Zapisi "   $_" }
-    if ($LASTEXITCODE -ne 0) { throw "worker $projekt je koncal z izhodno kodo $LASTEXITCODE" }
+    # Enak vzorec kot v Nocni-zajem.ps1: pod 'Stop' bi prva vrstica na stderr postala
+    # terminirajoca napaka in korak bi padel brez tega, kar je worker o napaki povedal.
+    # Merilo uspeha je izhodna koda, ne to, ali je worker kaj napisal na stderr.
+    $prejsnjaObravnava = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      & dotnet run --project $projekt --no-build -- @argumenti 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { Zapisi "   STDERR: $($_.Exception.Message)" }
+        else { Zapisi "   $_" }
+      }
+    }
+    finally { $ErrorActionPreference = $prejsnjaObravnava }
+    if ($LASTEXITCODE -ne 0) { throw "worker $projekt je končal z izhodno kodo $LASTEXITCODE" }
   }
   finally { Set-Location $prej }
 }
 
 function ZajemXml([string]$sifraVira, [string]$mapa, [int]$podjetje) {
-  if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; return }
+  if (-not (Test-Path $mapa)) { Zapisi "   preskočeno: mape $mapa ni"; return }
   $env:PIM_XML_SOURCE_CODE = $sifraVira
   $env:PIM_XML_ORGANIZATION_ID = "$podjetje"
   $env:PIM_XML_ROOT = $mapa
@@ -208,7 +242,7 @@ WHERE zagon.Pipeline IN (N'SAOP_PRODUCTS', N'GENERIC_XML') AND zagon.Status = N'
   AND zdravje.LastHeartbeatUtc > DATEADD(minute, -15, SYSUTCDATETIME());
 "@)
 if ($tece -gt 0) {
-  Zapisi "PRESKOCENO: $tece ziv zajem(ov) se tece (utrip mlajsi od 15 minut). Nocojsnji zagon se ne zacne."
+  Zapisi "PRESKOČENO: $tece živ zajem(ov) še teče (utrip mlajši od 15 minut). Nocojšnji zagon se ne začne."
   exit 0
 }
 
@@ -218,11 +252,11 @@ SELECT COUNT(*) FROM ops.PipelineRun
 WHERE Status = N'Running' AND StartedUtc < DATEADD(hour, -1, SYSUTCDATETIME());
 "@)
 if ($zapusceni -gt 0) {
-  Zapisi "OPOZORILO: v ops.PipelineRun je $zapusceni zagon(ov) v stanju Running brez konca, starejsih od ure. Ne blokirajo, so pa rep prejsnjih padcev."
+  Zapisi "OPOZORILO: v ops.PipelineRun je $zapusceni zagon(ov) v stanju Running brez konca, starejših od ure. Ne blokirajo, so pa rep prejšnjih padcev."
 }
 
 $poln = ((Get-Date).Day -eq $DanPolnegaZajema)
-Zapisi "Zacetek nocnega opravila: $(if ($poln) { 'POLN' } else { 'delta' }) zajem, podjetja: $($Podjetja -join ', ')."
+Zapisi "Začetek nočnega opravila: $(if ($poln) { 'POLN' } else { 'delta' }) zajem, podjetja: $($Podjetja -join ', ')."
 Zapisi "Dnevnik: $dnevnik"
 
 # --- 0. gradnja -------------------------------------------------------------
@@ -233,7 +267,15 @@ if (-not $BrezGradnje) {
   $prej = Get-Location
   try {
     Set-Location $KorenRepozitorija
-    & dotnet build PIM_Solution\PIM.sln -v q --nologo 2>&1 | ForEach-Object { Zapisi "   $_" }
+    $prejsnjaObravnava = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = 'Continue'
+      & dotnet build PIM_Solution\PIM.sln -v q --nologo 2>&1 | ForEach-Object {
+        if ($_ -is [System.Management.Automation.ErrorRecord]) { Zapisi "   STDERR: $($_.Exception.Message)" }
+        else { Zapisi "   $_" }
+      }
+    }
+    finally { $ErrorActionPreference = $prejsnjaObravnava }
     if ($LASTEXITCODE -ne 0) { Zapisi 'NAPAKA: gradnja je padla. Nocojsnji zagon se ne nadaljuje.'; exit 98 }
   }
   finally { Set-Location $prej }
@@ -241,7 +283,7 @@ if (-not $BrezGradnje) {
 
 # --- 1. SAOP katalog --------------------------------------------------------
 if ($BrezSaopKataloga) {
-  Zapisi '== SAOP katalog == preskoceno: stikalo -BrezSaopKataloga. Klica navzven ni bilo.'
+  Zapisi '== SAOP katalog == preskočeno: stikalo -BrezSaopKataloga. Klica navzven ni bilo.'
 }
 else {
   Korak 'SAOP katalog' {
@@ -277,7 +319,7 @@ Korak 'Preslikava zaostanka v raw.Inbox' {
 Korak 'Zaloge dobaviteljev' {
   foreach ($par in @(@($MapaZalogNw, 'NW_STOCK'), @($MapaZalogBt, 'BT_STOCK'))) {
     $mapa = $par[0]; $vir = $par[1]
-    if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; continue }
+    if (-not (Test-Path $mapa)) { Zapisi "   preskočeno: mape $mapa ni"; continue }
     foreach ($datoteka in Get-ChildItem $mapa -File | Where-Object { $_.Name -notlike '~$*' }) {
       foreach ($o in $Podjetja) {
         PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $datoteka.FullName, '--source', $vir, '--organization-id', "$o")
@@ -288,13 +330,13 @@ Korak 'Zaloge dobaviteljev' {
 
 # --- 6. Zaloga iz SAOP ------------------------------------------------------
 if ($ZalogaIzSaop) {
-  Korak 'Zaloga iz SAOP (kolicine)' {
+  Korak 'Zaloga iz SAOP (količine)' {
     $env:PIM_SAOP_MODE = 'Live'
     PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','))
   }
 }
 else {
-  Zapisi '== Zaloga iz SAOP == preskoceno: brez stikala -ZalogaIzSaop (ziv klic je odlocitev cloveka).'
+  Zapisi '== Zaloga iz SAOP == preskočeno: brez stikala -ZalogaIzSaop (živ klic je odločitev človeka).'
 }
 
 # --- 7. Validacija in objava ------------------------------------------------

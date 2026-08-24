@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Nocni zajem iz SAOP. Enkrat na mesec poln, sicer delta.
 
@@ -50,14 +50,37 @@ if ([string]::IsNullOrWhiteSpace($KorenRepozitorija)) {
 $resitev = Join-Path $KorenRepozitorija 'PIM_Solution'
 $mapaDnevnikov = Join-Path $KorenRepozitorija 'logs'
 if (-not (Test-Path $mapaDnevnikov)) { New-Item -ItemType Directory -Path $mapaDnevnikov | Out-Null }
+# Absolutna pot: dnevnik pisemo prek .NET, ta pa relativno pot razresi po delovni mapi
+# procesa, ki je Set-Location v tej skripti ne spremeni.
+$mapaDnevnikov = (Resolve-Path -LiteralPath $mapaDnevnikov).Path
 
 $zaznamek = Get-Date -Format 'yyyy-MM-dd_HHmm'
 $dnevnik = Join-Path $mapaDnevnikov "zajem_$zaznamek.log"
 
+# --- kodne strani ------------------------------------------------------------
+# Worker pise UTF-8, konzola pa je na tem racunalniku v kodni strani 852. PowerShell izpis
+# zunanjega programa dekodira po [Console]::OutputEncoding, zato je "Z" s stresico (UTF-8
+# C5 BD) v dnevniku koncal kot dva znaka, "c" s stresico kot trije in pomisljaj kot "OCo".
+# Dnevnik pri tem ni bil pokvarjen: bil je pravilen UTF-8, ki je posteno shranil ze
+# pokvarjene znake. Napaka nastane na meji med dotnetom in PowerShellom, zato mora biti
+# odpravljena tu, preden preberemo prvo vrstico.
+#
+# Ta datoteka ima odslej UTF-8 BOM, ker PowerShell 5.1 skripto brez njega bere kot ANSI in
+# bi sumnike v sporocilih pokvaril ze pri branju same skripte. Sumniki v sporocilih so zato
+# od tod naprej dovoljeni; starejsi komentarji ostajajo brez njih.
+#
+# Nastavitev velja za ta proces in se ne vraca -- skripta tece kot svoj proces (nacrtovana
+# naloga, -File), enako kot velja za $env:PIM_SAOP_MODE nizje.
+$utf8BrezBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8BrezBom
+$OutputEncoding = $utf8BrezBom
+
 function Zapisi([string]$vrstica) {
   $vrstica = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  $vrstica"
   Write-Output $vrstica
-  Add-Content -Path $dnevnik -Value $vrstica -Encoding UTF8
+  # Add-Content -Encoding UTF8 v PowerShell 5.1 datoteko zacne z BOM. Dnevnik bereta clovek
+  # in grep, zato gre ven kot UTF-8 brez BOM.
+  [System.IO.File]::AppendAllText($dnevnik, $vrstica + [Environment]::NewLine, $utf8BrezBom)
 }
 
 # --- povezava: ista pot kot jo uporablja worker -----------------------------
@@ -93,7 +116,7 @@ WHERE Pipeline = N'SAOP_PRODUCTS' AND Status = N'Running'
 "@
 
 if ([int]$tece -gt 0) {
-  Zapisi "PRESKOCENO: $tece zajem(ov) SAOP_PRODUCTS se tece. Nocojsnji zagon se ne zacne."
+  Zapisi "PRESKOČENO: $tece zajem(ov) SAOP_PRODUCTS še teče. Nocojšnji zagon se ne začne."
   exit 0
 }
 
@@ -103,18 +126,59 @@ $poln = ($danes -eq $DanPolnegaZajema)
 $argumenti = @('run', '--project', 'workers\PIM.KatalogWorker', '--', '--max-parallel', "$HkratnihPodjetij")
 if ($poln) { $argumenti += '--full' }
 
-Zapisi "Zacetek: $(if ($poln) { 'POLN zajem (dan ' + $DanPolnegaZajema + ' v mesecu)' } else { 'delta zajem' }), hkratnih podjetij: $HkratnihPodjetij."
+Zapisi "Začetek: $(if ($poln) { 'POLN zajem (dan ' + $DanPolnegaZajema + ' v mesecu)' } else { 'delta zajem' }), hkratnih podjetij: $HkratnihPodjetij."
 Zapisi "Dnevnik: $dnevnik"
 
 # --- zagon ------------------------------------------------------------------
+# Zakaj je zagon ovit tako natancno, kot je. Do 2026-08-24 je tu stala ena sama vrstica:
+#
+#     & dotnet @argumenti 2>&1 | ForEach-Object { Zapisi $_ }
+#
+# Pod $ErrorActionPreference = 'Stop' PowerShell vsako vrstico, ki jo dotnet napise na
+# stderr, spremeni v ErrorRecord — in ker je nastavitev 'Stop', je to terminirajoca napaka.
+# Posledice so bile tri hkrati in nobena ni bila vidna:
+#
+#   1. skripta je umrla sredi pipeline, zato vrstice "Konec, izhodna koda" ni nikoli
+#      zapisala — dnevnik je izgledal, kot da zajem se tece;
+#   2. razlog padca ni pristal nikjer: ne v dnevniku, ne v nacrtovani nalogi, ki je
+#      pokazala samo LastTaskResult = 1;
+#   3. s pipeline je umrl tudi proces workerja. Worker svoj zagon ob prekinitvi sicer zna
+#      zapreti (OperationsRun.DisposeAsync ga zakljuci z "Izvajanje je bilo prekinjeno."),
+#      a ubit proces tega nima kje izvesti — zato so zagoni v ops.PipelineRun obticali v
+#      stanju Running brez konca in jih je bilo treba pospravljati na roke.
+#
+# Merjeno 2026-08-24 ob 02:00: stiri podjetja, RowsRead = 0, dnevnik pet vrstic, izhod 1;
+# zadnja stran iz SAOP v raw.Inbox je bila takrat stara tri dni.
+#
+# Zato je tu — in samo tu — obravnava napak 'Continue': stderr je pri dotnetu obicajen
+# izpis, ne dogodek, ki bi smel ubiti nocno opravilo. Vsaka vrstica gre v dnevnik, vrstice
+# s stderr pa oznacene, da se v dnevniku loci, kaj je worker javil kot napako.
 $prej = Get-Location
+$prejsnjaObravnava = $ErrorActionPreference
+$izhod = $null
 try {
   Set-Location $resitev
   $env:PIM_SAOP_MODE = 'Live'
-  & dotnet @argumenti 2>&1 | ForEach-Object { Zapisi $_ }
+  $ErrorActionPreference = 'Continue'
+  & dotnet @argumenti 2>&1 | ForEach-Object {
+    if ($_ -is [System.Management.Automation.ErrorRecord]) { Zapisi "STDERR: $($_.Exception.Message)" }
+    else { Zapisi $_ }
+  }
   $izhod = $LASTEXITCODE
 }
-finally { Set-Location $prej }
+catch {
+  # Sem pride to, kar ni stderr workerja: dotnet ni na poti, mape ni, povezava je padla.
+  Zapisi "NAPAKA: $($_.Exception.Message)"
+  $izhod = 1
+}
+finally {
+  $ErrorActionPreference = $prejsnjaObravnava
+  Set-Location $prej
+}
+
+# Ce se & dotnet sploh ni izvedel, $izhod ostane $null. Prazna izhodna koda se navzven bere
+# kot uspeh, zato je to izrecno neuspeh — nacrtovana naloga mora videti razliko.
+if ($null -eq $izhod) { $izhod = 1 }
 
 Zapisi "Konec, izhodna koda: $izhod."
 
