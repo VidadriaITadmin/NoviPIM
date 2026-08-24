@@ -1,8 +1,145 @@
 # Tvoje naloge — po vrsti, z razlogom in koraki
 
-Zadnja sprememba: 2026-08-22 (zaloga dobavitelja v bazi, paket brez baze ne pade več).
-Stanje sistema: migracija `063`, `scripts\run_tests.ps1` → 46 uspeli, 0 padlih; brez baze
-36 uspeli, 10 preskočenih, 0 padlih. Veja `feature/baza-a3-mnozicna-obdelava`.
+Zadnja sprememba: **2026-08-24**. Stanje sistema: migracija **090**, katalog 196.531 artiklov,
+objavljenih 89.129, `raw.Inbox` brez nepreslikanih vrstic. Veja
+`feature/intranet-i0-ia-bralni-moduli`.
+
+> **Vse pod tem odstavkom do razdelka »Del 1« je merjeno 2026-08-24. Kar je nižje (»Del 1« in
+> naprej), je zgodovina od 2026-08-22 in ima ponekod zastarele številke — pusti jo kot zapis,
+> beri pa ta razdelek.**
+
+---
+
+## Odgovori uporabnika 2026-08-24 in kaj iz njih sledi
+
+Devet vprašanj je odgovorjenih. Spodaj je pri vsakem **odgovor**, **kaj iz tega sledi kot delo**
+in **kaj še manjka**, da se lahko začne.
+
+### 1. Viri dobaviteljev — vsak ima svojo pot
+
+| Vir | Kako pride danes | Kaj je mogoče |
+|---|---|---|
+| **NW izdelki (XML)** | Nowodvorski ima svojo PIM platformo; XML se potegne **na roke** in položi v mapo | ostane ročno, dokler nimajo dostopa za stroj |
+| **BT izdelki (XML)** | **HTTPS povezava**, sam se osvežuje | prevzame worker |
+| **NW zaloge (CSV)** | **FTP strežnik** | prevzame worker |
+| **BT zaloge (XML)** | **HTTP povezava**, sam se osvežuje | prevzame worker |
+
+*Kaj sledi:* vir dobi v registru svoje **mesto prevzema** (mapa / HTTP(S) / FTP) namesto samo
+mape. Tri od štirih poti se s tem avtomatizirajo, NW izdelki ostanejo ročni — in prav zato mora
+biti mapa še naprej veljavno mesto prevzema, ne izjema.
+
+*Kaj še manjka:* **same povezave in poverilnice** — dva URL-ja (BT izdelki, BT zaloge) in FTP
+(gostitelj, mapa, uporabnik, geslo). Gredo v `appsettings.Local.json`, ne v pogovor.
+
+### 2. Kategorije — dobaviteljeve se generirajo same, uporabnik jih preslika
+
+Odločitev: dobavitelji imajo svoje kategorije, mi svoje; preslikava je stalnica, ne enkraten
+opravek. Naše drevo (svetila.si, videlektro) se vnese v PIM ročno. Dobaviteljeve kategorije se
+morajo **same pojaviti** iz tega, kar pride, uporabnik pa jih poveže z našo.
+
+*Zakaj je to prava odločitev:* tako to dela vsak resen PIM (Akeneo, Pimcore, inRiver) —
+dobaviteljeva kategorija je *podatek*, ne nastavitev. Ključno je, da se **odkrije tudi takrat,
+ko preslikave zanjo še ni**; danes je ravno to luknja: `map.CategoryPathMap` za `BT_XML` ima 0
+vrstic, zato `map.ResolveProductCategories` za ta vir ne naredi ničesar — niti vrstice v
+delovnem seznamu `map.MissingCategoryMap`. Zato Braytron nima kategorij in to nikjer ni videti.
+
+*Kaj sledi:* register dobaviteljevih kategorij, ki se polni iz zajema sam, in delovni seznam
+nepreslikanih. Za Braytron je vmesni delovni list že pripravljen:
+`PIM_Solution\docs\Braytron_druzine_predlog.csv` — 103 pari, predlog za 70 (71 % izdelkov).
+
+### 3. Braytronov elektromaterial → videlektro
+
+Odločitev: elektromaterial gre pod **videlektro**; kategorije je treba še vnesti. Predlog: drevo
+prenesti s https://www.videlektro.com/sl/.
+
+### 4. Drevo videlektro — **IZVEDENO 2026-08-24, migracija `092`**
+
+Drevo je preneseno s spletne strani: **77 kategorij** (5 oddelkov, 20 druge ravni, 52 tretje).
+`OUTLET`, `ALL BLACK` in `AKCIJA` namenoma niso vzeti — to so prodajni sklopi, ne kategorije.
+Angleška imena so moj predlog, ker je stran samo slovenska; popravek nima posledic, saj noben
+izdelek še nima kategorije v tem drevesu.
+
+**Kar čaka tebe:** v `PIM_Solution\docs\Braytron_druzine_predlog.csv` je zdaj predlog za
+**96 od 103** Braytronovih parov družin — v stolpcu za svetila.si ali za videlektro. Brez
+predloga ostaja šest: `Decorative CLS > Metal / Glass CLR / Glass OPL / Glass CRY / Wooden /
+Rattan`. Iz datoteke ni razvidno, ali so to senčniki, sestavni deli ali cele svetilke.
+
+### 5. Objava — ERP se deli po trgih
+
+Odgovor: ERP se deli na **SLO** in **EU/THIRD**; komerciala sodi pod ERP.
+
+*Kaj še manjka — eno vprašanje:* ali je vstopnica za objavo `ERP_L1_SLO` **sam**, ali
+`ERP_L1_SLO` **in** `COMMERCIAL_L2` skupaj. Številke so v pogovoru; razlika je velika.
+
+### 6. Prevodi — **IZVEDENO 2026-08-24, migraciji `093` in `094`**
+
+Vseh **213** manjkajočih prevodov je vpisanih, vsak vezan na svojo lastnost in ne globalno —
+zato »White« pri barvi da *bela*, pri materialu pa *bel*. V katalogu je angleščine pri teh
+lastnostih **nič**: `Prevladujoča barva SLO` je bila 2.425× »White«, zdaj je 2.428× »bela«.
+
+Ob tem se je pokazala napaka, ki je bila starejša od prevodov: `--znova-preslikaj` je vračal
+samo stanje strani, ne pa tudi vrednosti, zato dopolnjen slovar nad že obdelanim zajemom **ni
+imel nobenega učinka**. Popravljeno z `map.ReopenRunForMapping`.
+
+**Prevodi so strojni predlog, ne odločitev.** Popravek je ena vrstica registra
+(`UPDATE map.ValueLookup SET TargetValue = ...`), izklop je `IsActive = 0`. Vrstice so
+označene z `Note = '093 strojni prevod, uporabnik potrdi'`, da se ločijo od potrjenih.
+
+**Kar ostaja odprto:** stran v intranetu za urejanje slovarja — druga polovica tvoje odločitve.
+Ozemlje INTRANET je zaenkrat blokirano z drugim sklopom.
+
+### 6a. Datoteke dobaviteljev — **VHOD IZVEDEN 2026-08-24, migraciji `095` in `096`**
+
+Četrti sklop poleg atributov, kategorij in medijev. V katalogu je **9.953 dokumentov na 7.521
+izdelkih**, ločenih po vlogi: navodila za montažo, podatkovni list, CE izjava, 3D datoteka,
+DIALux datoteka, video, energijska nalepka.
+
+**Kar čaka tebe — ena odločitev:** kateri dokument je »Glavni dokument« (stolpec 40) in kaj gre
+v »Ostali dokumenti« (42). Predlog: pri Nowodvorskem *navodila za montažo*, pri Braytronu
+*podatkovni list*; vse ostale vloge v stolpec 42, njihova imena v stolpec 41. Ko potrdiš,
+naredim `pim.ProductDocument`, razširim `val.Promote` in napolnim stolpce 40–42.
+
+### 7. Stranke — pravila obstajajo
+
+`docs\pravila\Magento_Pravila_Cene_Popusti_Postnine 1.docx` je popolna specifikacija: skupina
+strank je nosilna vez, S-popust na pakiranje (S1 3 %, S2 5 %, S3 10 %, S4 15 %), vrednostni
+rabat s tremi pragovi, spletni rabat 2 %, kaskadno kombiniranje, poštnina in pravilo
+plačnik PE/tranzit.
+
+*Kaj sledi:* `pim.CustomerWebProfile` se polni po tem dokumentu. Dokument sam našteje dve vrzeli,
+ki ju je treba zapreti: **neto ceniki po stranki** (npr. Topdom) v izvozu izdelkov niso, in
+pravilo **»PE podeduje osnovne popuste od plačnika«** še ni izvedeno.
+
+*Kaj še manjka:* preslikava **Tip stranke → Magento skupina** (dokument pravi, da jo vzdržuje
+poslovni tim).
+
+### 8. Ritem izvozov
+
+Odločitev: **izdelki na uro**; **stranke, cene in zaloge ločeno in pogosteje — cilj 5 minut**.
+Cevovod za cene in predvsem zaloge mora biti hiter in zanesljiv.
+
+*Odprto vprašanje uporabnika (prekrivanje naročil):* dva kupca hkrati naročita po 5 kosov,
+na zalogi so 4.
+
+*Moje stališče:* tega ne rešuje PIM in ne izvoz — rešuje ga rezervacija ob naročilu v spletni
+trgovini oziroma ERP. PIM lahko naredi le troje: (a) objavi **razpoložljivo** količino, ne
+knjižne, (b) drži **varnostno rezervo** na artikel ali skupino, da 5-minutni zamik ne pomeni
+prodaje zadnjega kosa dvakrat, (c) objavlja **spremembe**, ne celotnega stanja, da je 5 minut
+sploh dosegljivih. Dokler rezervacije ni, je prekrivanje neizogibno — 5 minut ga samo zoži.
+
+### 9. Odhodna pot — validacija je vratar
+
+Odločitev: nazaj v SAOP gredo **ERP in komercialni** podatki (ADD in PATCH). Potrebna sta
+samodejno pošiljanje ob spremembi **in** ročno pošiljanje. Skrb je prava: napačen vnos ali test
+bi se sicer prenesel naprej.
+
+Odgovor je v odgovoru samem: sprememba gre najprej skozi **validacijo**; če sta ERP in komerciala
+veljavna, sme iti samodejno, sicer čaka na potrditev človeka. To je natanko tisto, za kar
+`out.OutboxMessage` obstaja — manjka le tisti, ki vanj piše, in vratar pred njim.
+
+---
+
+## Zgodovina od 2026-08-22 naprej (nekatere številke so zastarele)
 
 To je edini seznam stvari, **ki jih ne morem narediti jaz**. Vse ostalo delam sam.
 Trije razlogi, zakaj je nekaj tu:

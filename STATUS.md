@@ -1,6 +1,70 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-23
+Posodobljeno: 2026-08-24
+
+## Intranet prenova — stanje 2026-08-24
+
+Prekinjena navigacijska in bralna osnova je sestavljena v koherentno aplikacijo. Navigacija
+je v `PimNavigation` (koda, filtrirana po vlogah), uporablja base-relativne povezave in ima
+ciljno stran za vsako menijsko postavko. Skupni gradniki pokrivajo glavo strani, tabele,
+stanja nalaganja/napake/praznega nabora, paginacijo, statuse in razdelilne kartice.
+
+Novi bralni pogledi: mediji, partnerji, cene, kakovost in njene vrzeli, zajem z viri in
+čakalno vrsto, izvozni profili s stolpci, nastavitve kataloga (atributi, kategorije,
+skladišča, kanali, jeziki), pravila (validacija, slovar, preslikave) ter sistemske napake in
+vloge. Stare poti ostajajo kot aliasi, zato neposredni zaznamki niso prekinjeni.
+
+Dokaz v tej izvedbi: `scripts\run_tests.ps1 -Filter F10` → 10 uspešnih, 0 preskočenih,
+0 padlih; celoten `PIM.sln` build → 0 opozoril/0 napak; bralni smoke-test proti lokalni bazi
+`PIM` in kontrola menijskih poti → izhod 0. Polni `scripts\run_tests.ps1` vrne 50 uspešnih,
+0 preskočenih in 1 padec (`PIM.F3.Integration`, zastareli primer `GetItemsPlanningData`, ki
+je od migracije 082 preslikan). Zaradi pravila, da se napačnega testa ne spreminja za zelen
+rezultat, intranetni sklop še ni commitan in ni označen kot končan.
+
+Korenska preusmeritev uporablja .NET 10 nastavitev
+`BlazorDisableThrowNavigationException=true`; cilj ostaja `/nadzorna-plosca`, Visual Studio
+pa se med statičnim SSR ne ustavi več na notranji `NavigationException`.
+
+Vizualna osnova je 2026-08-24 preslikana iz uporabnikove reference
+`src_navigation_ux_v2`: referenčna nevtralna/indigo/oranžna paleta, 18-rem temna stranska
+vrstica, kartice, tabele, obrazci, prijava in mobilna prelomnica so uporabljeni na obstoječih
+razredih. Razor, poti, `PimNavigation`, vloge in podatkovni dostop ostajajo NoviPIM. Strategija
+združitve in zavrnjeni deli reference so v `docs/NACRT_INTRANET_PRENOVA.md` §13.
+
+Navigacijske povezave so dodatno usklajene z referenčnim videzom: niso več brskalniško modre
+in podčrtane, aktivna pot je temna kartica z oranžno levo črto, pomembni cilji imajo kratek
+opis, razdelilne strani pa puščico. Vzrok starega prikaza je bil Blazor CSS isolation —
+izolirani slog starševske komponente ni dosegel sidra, ki ga izriše `NavLink`; selektor zdaj
+uporablja `::deep`. Spletnega konteksta oziroma polja »Svetila.si« v meniju ni, ker uporabnik
+tega elementa ne želi. Strani, poti in filtriranje po vlogah se niso spremenili.
+
+Modul **Vhodni podatki** je 2026-08-24 izveden kot pet pogledov: Pregled, Viri, Teki,
+Težave in Preslikave. Združuje dejanske katalogske vhode (`raw.Inbox` +
+`ops.PipelineRun`) in zalogovne vhode (`stock.SyncRun`), pri čemer je zadnji poskus ločen od
+zadnjega uspeha. Čakalna vrsta, neujemanja ter podrobnosti vira, teka in težave so dostopne
+iz teh pogledov in ne obremenjujejo stranskega menija. Administrator lahko pregleduje vsa
+podjetja in omejeno tehnično diagnostiko; drugi uporabniki so na seznamih in neposrednih
+podrobnostih omejeni na aktivno organizacijo. Dostava ostaja pošteno bralna brez gumbov za
+dejanja, ki nimajo auditirane procedure. Znana vrzel je neuspešen zalogovni tek: writer ob
+izjemi povrne celotno transakcijo in zato nima trajnega `Failed` zapisa, ki bi ga UI lahko
+prikazal.
+
+Dokaz vhodnega modula: `scripts\\run_tests.ps1 -Filter F10` → 10/0/0 in `Build OK`;
+`PIM.Migrator --verify` → uspešno; read-only SQL smoke za glavne, pomožne in podrobnostne
+poglede → izhod 0. Polni paket je bil ponovljen po izvedbi in ostaja 50 uspešnih / 0
+preskočenih / 1 padel: isti nepovezani `PIM.F3.Integration` na vrstici 89. Zaradi tega sklop
+po pravilih ni commitan.
+
+Skupno produktno ogrodje pred prenovo posameznih strani je določeno 2026-08-24. Obvezni
+kontekst VHODI → PIM → KAKOVOST → IZHODI ERP/SPLET → OBVESTILA/NADZOR → ANALITIKA je v
+`AGENTS.md` §2.1, dejanski zemljevid shem, vlog, pogodb in vrzeli pa v
+`docs/PRODUKTNI_MODEL_PIM.md`. `PimNavigation` je razdeljen po istih življenjskih skupinah;
+`PimLifecycle` na vsaki poti določi področje, ki ga skupna zgornja vrstica pokaže uporabniku.
+Analitika trendov in naročilnice ostajajo pošteno označene vrzeli brez mrtve menijske poti.
+
+Odprta meja: novi domenski bralni servisi imajo parametriziran SQL v intranetnem projektu.
+Načrt zahteva `intranet.*` procedure; to je naslednja ločena odvisnost BAZA → INTRANET in ne
+sme biti pomešana v isti commit.
 
 ## Stanje treh delov po meritvi 2026-08-22
 
@@ -84,6 +148,27 @@ Načrtovano nalogo Windows registrira `scripts\Namesti-nocno-opravilo.ps1` — t
 prevzem dobaviteljevih datotek s FTP (zunanji klic) in izvoz strank — `b2b.Customer` ima zdaj
 11.558 vrstic, `out.ExportB2bCustomersCsv` pa jih ne izvozi, ker se veže na
 `pim.CustomerWebProfile`, ki je prazen.
+
+## Vhodi — posodobljeno 2026-08-24
+
+**Nočno opravilo je ugasnjeno.** Naloga `NoviPIM - nocni zajem SAOP` je v stanju `Disabled`, ker
+je SAOP s tega računalnika dosegljiv le prek FortiClient: zagon ob 02:00 je padal na časovni
+iztek do gostitelja `192.168.178.12:81`. Ko bo koda v domeni, se registrira `Nocno-vse.ps1`.
+
+**Padec se je skrival v skripti, ne v kodi.** `Nocni-zajem.ps1` je pod `$ErrorActionPreference =
+'Stop'` umrl ob prvi vrstici, ki jo je worker napisal na stderr — brez zapisa v dnevnik in z
+ubitim procesom, zato so zagoni ostajali `Running`. Popravljeno; ob tem so bili popravljeni še
+dnevniki v pokvarjeni slovenščini (konzola v kodni strani 852 proti UTF-8 iz workerja).
+Zataknjenih 14 zagonov `Running` je zaprtih kot `Failed`; `Running` je zdaj 0.
+
+**Ročni zajem 2026-08-24 je uspel:** 69 strani, 280.407 zapisov, izhod 0. V `raw.Inbox` 79 novih
+strani vseh štirih podjetij, `canon.Product` 196.515 → 196.531, `Pending` 0.
+
+**Ediito iz dobaviteljev ne dobi ničesar in to ni napaka.** Ima 33.423 EAN (najboljša polnost od
+vseh štirih), a nobenega z GS1 predpono Nowodvorskega (`5903139*`) ali Braytrona (`5949097*`) —
+njegova ponudba je italijanska in španska. Pravi strop obogatitve je drugje: **6.651 artiklov
+obeh dobaviteljev v katalogu v julijskih datotekah sploh ni**, obratno pa 1.979 Braytronovih EAN
+iz datoteke ne ustreza nobenemu artiklu. Podrobno v `TASKBOARD.md`.
 
 ## Izvozi — meritev 2026-08-23 (novejša od tabele zgoraj)
 

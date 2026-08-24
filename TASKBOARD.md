@@ -18,8 +18,41 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## TODO (čaka)
 
+> **2026-08-24: uporabnik je odgovoril na vseh devet odprtih vprašanj.** Odgovori in kaj iz njih
+> sledi so v [`docs/TVOJE_NALOGE.md`](docs/TVOJE_NALOGE.md). Na kratko, kaj se je s tem spremenilo:
+>
+> - **Viri:** BT izdelki in BT zaloge imata HTTP(S) povezavo, NW zaloge FTP, NW izdelki ostanejo
+>   ročni (dobavitelj ima svojo PIM platformo). Vir dobi **mesto prevzema** v registru; mapa
+>   ostane veljavno mesto, ne izjema. Manjkajo še povezave in poverilnice.
+> - **Kategorije:** dobaviteljeve se **generirajo same** iz zajema in čakajo na preslikavo;
+>   naše drevo se vnaša ročno. Elektromaterial gre pod **videlektro**, ki ga je treba vnesti
+>   (predlog: s spletne strani videlektro.com).
+> - **Prevodi:** manjkajoče zapolni AI, uporabnik popravlja v vmesniku.
+> - **Stranke:** pravila so v `docs/pravila/Magento_Pravila_Cene_Popusti_Postnine 1.docx` —
+>   skupina strank je nosilna vez; dokument sam našteje dve vrzeli (neto ceniki po stranki,
+>   PE podeduje popuste od plačnika).
+> - **Izvozi:** izdelki na uro; stranke, cene in zaloge ločeno, cilj 5 minut.
+> - **Odhodna pot:** ERP + komerciala, ADD in PATCH; **validacija je vratar** — veljavno gre
+>   samodejno, neveljavno čaka na potrditev človeka.
+
+
 > Vrstni red spodnjih petih postavk je priporočilo iz meritve 2026-08-22
 > ([`docs/ANALIZA_A_B_C.md`](docs/ANALIZA_A_B_C.md)) — od najcenejšega učinka navzdol.
+
+> **Merjeno 2026-08-24 nad bazo (migracija `090`): postavke 1, 2 in 3 spodaj so opravljene.**
+> `canon.ProductCommercial` ima **196.513** vrstic (v meritvi 2026-08-22 eno),
+> `canon.ProductAttribute` **312.136**, `canon.ProductMedia` **7.645**, `WEB_TITLE` ima
+> **31.490** izdelkov v slovenščini, `raw.Inbox` pa **0** vrstic `Pending`. Zaostanek je
+> pobral `--preslikaj-zaostanek` 2026-08-23. Vrstic ne brišem, ker je iz njih vidno, kaj je
+> bilo ozko grlo; odprti od petih ostajata **4** (vstopnica za objavo) in **5** (outbox).
+
+- **[OPERATIVA / čaka selitev v domeno] Nočno opravilo je ugasnjeno.** Naloga
+  `NoviPIM - nocni zajem SAOP` je na zahtevo uporabnika 2026-08-24 v stanju `Disabled`. Kazala
+  je na `scripts\Nocni-zajem.ps1`, torej samo na zajem iz SAOP; `Nocno-vse.ps1` ni bila
+  registrirana nikoli. Razlog za izklop: SAOP je s tega računalnika dosegljiv le prek
+  FortiClient, zato je nočni zagon ob 02:00 padal na časovni iztek. **Ko bo koda v domeni in
+  SAOP dosegljiv od tam, se registrira `Nocno-vse.ps1`** s `scripts\Namesti-nocno-opravilo.ps1`
+  — po `AGENTS.md` §4.7 sistemska nastavitev in tvoj korak.
 
 - **[WORKERJI] 1. Ponovna preslikava zajetih strani za trgovinske podatke.** Migracija
   **057** je uporabljena in doda 11 preslikav v `canon.ProductCommercial`, tabela pa ima
@@ -71,9 +104,37 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   obstaja in dela — podpira `--export-magento` in je bil v tej meritvi pognan v živo.
   Kar ne obstaja, je pot za `StockLandingWriter` in `B2bLandingWriter`: pisalna logika je
   dokazana, a jo kliče samo test in worker sam v bazo ne piše ničesar.
-- **[WORKERJI]** Dostava datotek dobavitelja: `PIM.StockFileWorker` zdaj zna zapisati
-  zalogo v bazo, datoteko pa mu je treba še vedno položiti v mapo. Prevzem s FTP oziroma
-  drugega vira dobavitelja je zunanji klic (`AGENTS.md` §4.5) in čaka na odločitev.
+
+- **[BAZA + DOMENA] Datoteke dobavitelja so četrti sklop in edini, ki ga model nima.**
+  Uporabnik 2026-08-24: »od dobaviteljev je treba ločiti atribute, kategorijo, medijo in pa
+  datoteke — to je nekak standard; potem je pa v mappingu treba povedati, kateri so kateri
+  atributi, ker nekateri so podobni, nekateri pa novi.«
+
+  **Model to že dela za tri od štirih.** `map.EntityMapping.EntityType` loči `Attribute`,
+  `Classification` (kategorija) in `Media`, `map.FieldMapping` pa za vsakega pove, kateri
+  element vira gre v katero kanonično polje — 108 preslikav za Nowodvorskega, 76 za Braytrona.
+  To je natanko »v mappingu povemo, kateri je kateri«.
+
+  **Četrtega ni.** Kanonične tabele za dokumente ni, zato tudi trije dokumentni stolpci Magento
+  predloge nimajo vira (že zapisano pri blokadi izvoza). Oba dobavitelja jih pošiljata:
+
+  - **Braytron**: `<sections>` z naslovom sklopa (`Specifications`, `3D Files`, `DIALux Files`)
+    in v vsakem `<files><file><filename|name><url>` — **11.958** elementov `<file>` v datoteki.
+    Vrsta dokumenta je torej naslov sklopa.
+  - **Nowodvorski**: blok `<media>` nosi hkrati slike (`image_i`, `image_i_path`,
+    `image_i_type`) in datoteke (`file`, `file_path`, `file_type`) — vrsta je v `file_type`.
+
+  *Kaj je treba narediti:* `canon.ProductDocument` (izdelek, vrsta, naslov, URL, jezik),
+  entiteta `Document` v registru za oba vira in postopek, ki jo prenese — po isti poti kot
+  `Media`. Šele nato imajo dokumentni stolpci izvoza vir.
+
+- **[WORKERJI] Dostava datotek dobavitelja — zdaj s ceno.** `PIM.StockFileWorker` zna zapisati
+  zalogo v bazo, datoteko pa mu je treba še vedno položiti v mapo; prevzem s FTP je zunanji klic
+  (`AGENTS.md` §4.5) in čaka na odločitev. **Merjeno 2026-08-24, koliko to stane:** obe datoteki
+  v `fixtures\` sta z 29. in 30. julija in pokrivata le del ponudbe. V katalogu je **6.651
+  artiklov obeh dobaviteljev, ki jih v datotekah ni** (Nowodvorski: 2.619 EAN v datoteki proti
+  4.930 samo pri Vidadrii); obratno pa **1.979 Braytronovih EAN iz datoteke ne ustreza nobenemu
+  artiklu v nobenem katalogu**. Zgornja meja obogatitve ni v preslikavi, ampak v datoteki.
 - **[WORKERJI]** Preslikave za preostale šifrante (`Currencies`, `PriceLists`,
   `GetLanguages`) in B2B entitete. Pot je od migracije `064` znana: nova vrstica v registru s
   svojim `TargetDomain` in svoj postopek, brez posega v postopek za izdelke. Kam v modelu
@@ -84,6 +145,64 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 _(prazno)_
 
 ## BLOKIRANO
+
+- **[INTRANET] Enoten modul »Vhodni podatki« s petimi operativnimi pogledi** — kdo:
+  Codex — ozemlje: INTRANET — 2026-08-24. Izvedeni so Pregled, Viri, Teki, Težave in
+  Preslikave z enotnimi zavihki ter podrobnostmi vira, teka in težave. Bralni model združuje
+  `raw`/`ops` katalogske vhode in `stock.*` zalogovne vhode, loči zadnji poskus od zadnjega
+  uspeha, prikaže vse dejanske SAOP/XML/XLSX/zalogovne konektorje in ne kaže navideznih
+  zapisovalnih dejanj. Administrator lahko preklopi na vsa podjetja in vidi omejeno tehnično
+  diagnostiko; drugi uporabniki so tudi na neposredni podrobnostni poti omejeni na aktivno
+  organizacijo. Dokumentacija: `docs/INTRANET.md` §2.1 in
+  `docs/NACRT_INTRANET_PRENOVA.md` §14.
+
+  **Dokaz:** `scripts\\run_tests.ps1 -Filter F10` → 10 uspešnih / 0 preskočenih / 0
+  padlih in `Build OK`; `PIM.Migrator --verify` → »Preverjanje F0–F10 baze je uspešno«;
+  read-only SQL smoke test vseh osmih glavnih/pomožnih poizvedb, štirih vrst podrobnosti in
+  natančnega filtra teka po viru → izhod 0; build intraneta → 0 opozoril/0 napak.
+  **Commit blokira nepovezani merodajni polni paket:** `scripts\\run_tests.ps1` → 50
+  uspešnih / 0 preskočenih / 1 padel, izhod 1; edini padec je že dokumentirani
+  `PIM.F3.Integration` na vrstici 89, kjer test še pričakuje, da `GetItemsPlanningData` ni
+  preslikan, migracija 082 pa ga je preslikala. Testa po §5.3 ne spreminjamo samo za zelen
+  rezultat, zato sklop ni commitan.
+
+- **[INTRANET] Navigacija vizualno usklajena z referenco v2, brez spletnega konteksta** —
+  kdo: Codex — ozemlje: INTRANET — 2026-08-24. Struktura, slovenske poti, vloge in
+  `PimNavigation` ostajajo NoviPIM. Popravljena je dejanska napaka CSS isolation:
+  `NavLink` izriše povezavo v otroški komponenti, zato jo izolirani slog zdaj doseže prek
+  `::deep`. Meni ima temno skrilasto ozadje, bele nepodčrtane povezave, večje klikljive
+  vrstice, aktivno kartico z oranžno levo črto, opis pri pomembnih ciljih ter puščico samo
+  pri razdelilnih straneh. Bloka »Spletni kontekst / Svetila.si« namenoma ni.
+  **Dokaz:** generirani scoped CSS vsebuje `.app-navigation[b-*] .navigation-link`;
+  kontrola poti → vse poti obstajajo, brez dvojnikov in spletnega konteksta;
+  `scripts\\run_tests.ps1 -Filter F10` → 10/0/0; `dotnet build PIM.sln --no-restore` →
+  0 opozoril/0 napak;
+  `git diff --check` → izhod 0. **Commit blokira nepovezani polni paket:**
+  `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1 padel, edini padec
+  `PIM.F3.Integration` na vrstici 89.
+
+- **[INTRANET] Skupno produktno ogrodje pred prenovo posameznih strani** — kdo: Codex —
+  ozemlje: INTRANET — 2026-08-24. Trajni tok VHODI → PIM → KAKOVOST → IZHODI ERP/SPLET →
+  OBVESTILA/NADZOR → ANALITIKA je zapisan v `AGENTS.md` in
+  `docs/PRODUKTNI_MODEL_PIM.md` z dejanskimi shemami, vlogami, pogodbami strani in znanimi
+  vrzelmi. Meni uporablja iste življenjske skupine, skupni topbar pa fazo samodejno izpelje
+  tudi na podstraneh; vse menijske poti imajo dejanski `@page` cilj. **Dokaz:** kontrola
+  menijskih poti → izhod 0; `scripts\\run_tests.ps1 -Filter F10` → 10/0/0; `dotnet build
+  PIM.sln --no-restore` → 0 opozoril/0 napak; `git diff --check` → izhod 0. **Commit blokira
+  nepovezani polni paket:** `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1
+  padel, edini padec `PIM.F3.Integration` na vrstici 89.
+
+- **[INTRANET] Preslikava vizualnega sistema iz `src_navigation_ux_v2` na obstoječo
+  aplikacijo** — kdo: Codex — ozemlje: INTRANET — 2026-08-24. Referenčni vizualni žetoni,
+  18-rem temna stranska vrstica, skupne kartice/tabele/obrazci, prijava in mobilna
+  prelomnica so preslikani na obstoječe razrede; Razor, `PimNavigation`, poti in podatkovni
+  dostop niso spremenjeni. Primerjava in združitvena smer sta v
+  `docs/NACRT_INTRANET_PRENOVA.md` §13. **Dokaz:** `scripts\\run_tests.ps1 -Filter F10` →
+  10/0/0; `dotnet build PIM.sln --no-restore` → 0 opozoril/0 napak; `git diff --check` →
+  izhod 0. **Commit blokira isti nepovezani polni paket:** `scripts\\run_tests.ps1` →
+  50 uspešnih / 0 preskočenih / 1 padel, edini padec `PIM.F3.Integration` na vrstici 89.
+
+- **[INTRANET] Dokončanje prekinjene informacijske arhitekture in bralnih strani iz načrta prenove** — kdo: Codex — ozemlje: INTRANET — 2026-08-24. Implementacija je pripravljena: navigacija nima mrtvih poti, korenska SSR-preusmeritev v .NET 10 ne vrže več debuggerjeve `NavigationException`, intranet in celoten `PIM.sln` se prevedeta z 0 opozorili/0 napakami, `scripts\\run_tests.ps1 -Filter F10` vrne 10/0/0, bralni SQL smoke-test proti lokalni bazi `PIM` pa izhod 0. **Commit blokira merodajni polni paket:** `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1 padel, izhod 1; edini padec je že spodaj dokumentirani zastareli primer `PIM.F3.Integration` (`GetItemsPlanningData` je od migracije 082 preslikan). Testa po §5.3 ne spreminjamo samo zato, da bi šel skozi. Delovno drevo zato namenoma ostaja necommitano.
 
 - **[TESTI / odločitev] `PIM.F3.Integration` pade, ker je njegov primer »nepreslikane
   entitete« postal preslikan.** Ugotovljeno 2026-08-23 (Claude Opus 5).
@@ -134,6 +253,421 @@ _(prazno)_
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[BAZA] Stranke: profil za splet in delovni seznam odločitev** — kdo: Claude Opus 5 —
+  2026-08-24, migraciji `097` in `098`.
+
+  **Odločitev uporabnika:** vrsta stranke (kupec / trgovec / oboje) in PE/tranzit sta PIM-lastni
+  polji, ki ju postavi človek, ne uvožen podatek. `CHECK` na `CustomerKind` je za to že
+  dovoljeval `CUSTOMER` / `SUPPLIER` / `BOTH`.
+
+  **Narejeno:** `PayerKind` (`PE`/`TRANZIT`), `pim.PromoteCustomerWebProfile` (vrstica profila za
+  vsako aktivno stranko, nobene odločitve ne postavi in nobene ne prepiše — varno za nočno
+  opravilo), `pim.CustomerWebProfileToDecide` (delovni seznam s kontekstom iz SAOP in predlogom
+  za PE iz naziva).
+
+  **Merjeno po zagonu:** 4.390 profilov (toliko je aktivnih strank od 11.566), `WebEnabled = 1`
+  pri **0** — izvoz zato ostane prazen, kar je pravilno: po dokumentu je skupina nosilna vez in
+  stranka brez tipa v izvoz ne sme. Odločitev čaka pri 4.390 strankah, PE/tranzit je vprašanje
+  le pri **149** (plačnik je nekdo drug), pri **52** naziv vsebuje »PE«.
+
+  **Napaka, ujeta med izvedbo (`098` popravlja `097`):** v prvi različici sem `CustomerKind`
+  polnil iz pravne oblike (P/F). To je narobe — pravna oblika pove pravna/fizična oseba, ne
+  kupec/trgovec — in `CHECK CK_CustomerWebProfile_Kind` je MERGE pravilno ustavil. Preveril sem,
+  ali je vrsto mogoče izpeljati iz SAOP: `CustomerType` ima `O` 11.514, `K` 47, `D` 4, `S` 1, kjer
+  »O« nosi 99,5 % strank vseh vrst — izpeljava bi bila ugibanje z 11.514 posledicami. Postopek
+  je zato ne postavi.
+
+  **Dokaz:** `097` in `098` uporabljeni, `--verify` izhod 0, `PIM.F7.Integration`,
+  `PIM.F7.MagentoExportTests` in `PIM.F7.ContractTests` uspejo (izhod 0).
+
+- **[MERITEV] Stranke: mehanizem izvoza je cel, manjka podatek — in ta ni v SAOP** — kdo:
+  Claude Opus 5 — 2026-08-24. Podrobno: [`docs/STRANKE_VHOD.md`](docs/STRANKE_VHOD.md).
+
+  `out.ExportB2bCustomersCsv` je napisan, `pim.CustomerTypeMagentoGroup` ima **18** tipov strank,
+  `pim.ValueDiscountTier` ima pragove 800/1.500/3.000 → 1/2/3 % natanko po dokumentu §4.6,
+  `b2b.Customer` ima 11.558 strank. Izvoz vrne prazno datoteko izključno zato, ker je
+  `pim.CustomerWebProfile` prazen — in ta nima vira.
+
+  **Merjeno na surovem odgovoru SAOP `Customers`:** `CustomerType` je `O`/`K`/`S`/`D` (vrsta
+  partnerja), `EntityType` `P`/`F` (pravna/fizična oseba). Poslovne taksonomije
+  (`RESELLER`, `INSTALLER`, `CARPENTER`, …) **SAOP ne pošlje**. `CompanyLinkType` je bil kandidat
+  za razločevanje PE/tranzit iz §4.10 — ni: pri **vseh 4.683** strankah ima vrednost `I`.
+
+  **Zato tu nisem pisal kode.** Napolniti profil iz SAOP bi pomenilo izmisliti tip stranke; izvoz
+  bi oddal 11.558 vrstic z ugibano skupino, po dokumentu pa je skupina nosilna vez za vse cene in
+  popuste. Napačna skupina je dražja od prazne datoteke.
+
+  **Kar je potrebno:** preglednica STRANKE kot vir (ista pot kot `SPLET_XLSX`, migracija 078),
+  imena 18 Magento skupin, in podatek, kako ločiti PE od tranzita.
+
+
+- **[BAZA + DOMENA] Datoteke so četrti sklop in zdaj pridejo v katalog: 9.953 dokumentov** —
+  kdo: Claude Opus 5 — 2026-08-24, migraciji `095` in `096`.
+
+  **Odločitev uporabnika 2026-08-24:** »od dobaviteljev je treba ločiti atribute, kategorijo,
+  medijo in pa datoteke — to je nekak standard; potem je pa v mappingu treba povedati, kateri so
+  kateri.« Model je to delal za tri od štirih; kanonične tabele za dokumente ni bilo, zato so
+  trije dokumentni stolpci Magento predloge (40 »Glavni dokument«, 41 »Vloge dokumentov«,
+  42 »Ostali dokumenti«) ostajali brez vira.
+
+  **Kaj dobavitelja pošiljata (merjeno na 401 izdelku Braytrona):** `CE Files` 972 datotek,
+  `Data Sheet` 401, `3D Files` 209, `DIALux Files` 130, `Video` 91 — od 1 do 10 na izdelek.
+  Nowodvorski ima največ eno: 2.484× navodila za montažo, 89× energijska nalepka.
+
+  **Zakaj preslikava po vlogi in ne po zaporedju.** `XPathMappingExtractor` bere s
+  `SelectSingleNode`, torej eno vrednost na polje na zapis — seznama ne zna vrniti. Zaporedne
+  preslikave (»prva datoteka, druga, tretja«) bi bile krhke, ker vrstni red sklopov ni zajamčen,
+  podatkovni list pa mora ostati podatkovni list. Zato je vsaka vloga svoja preslikava — natanko
+  to, kar pravi odločitev: v preslikavi povemo, kateri je kateri.
+
+  **Kaj je narejeno:** `canon.ProductDocument`, postopek `map.ProcessDocumentInbox`, entiteta
+  `Document` z osmimi preslikavami (pet vlog Braytrona, dve Nowodvorskega, plus EAN) pri vseh
+  štirih podjetjih, in `Document` v `MappingProcedures` (test `PIM.F5.Integration` odslej pade,
+  če ta svet ostane brez postopka). `CK_EntityMapping_TargetDomain` je razširjen — vseh dvanajst
+  obstoječih vrednosti ostane, doda se trinajsta.
+
+  **Napaka, ujeta med izvedbo (migracija `096`).** Prva različica postopka je dokumente pravilno
+  vpisala, strani v `raw.Inbox` pa pustila v stanju `Pending` — manjkala sta zaključek strani in
+  obravnava napake, ki ju imajo vsi ostali postopki. Brez škode za podatke (MERGE je združevalen),
+  a števec »nepreslikanih strani« bi rasel z vsakim zajemom in nihče ne bi vedel, zakaj. Postopek
+  je prepisan po istem vzorcu: kurzor čez strani, transakcija na stran, `Processed` s povzetkom,
+  ob napaki `Quarantined`.
+
+  **Dokaz.** Migratorja `095` in `096` uporabljena, drugi zagon nobene, `--verify` izhod 0,
+  gradnja 0/0. Po zajemu in preslikavi: `canon.ProductDocument` **9.953 dokumentov na 7.521
+  izdelkih**, strani entitete `Document` **8 Processed, 0 Pending**. Po vlogah:
+
+  | Podjetje | Navodila | Podatkovni list | CE izjava | 3D | DIALux | Video | Nalepka |
+  |---|---|---|---|---|---|---|---|
+  | DEMO | 1.022 | 7 | 1 | 1 | — | — | 86 |
+  | IQLighting | 2.414 | 294 | 233 | 150 | 131 | 8 | 87 |
+  | Vidadria | 2.436 | 1.086 | 834 | 556 | 395 | 123 | 89 |
+  | Ediito | — | — | — | — | — | — | — |
+
+  Ediito je pri ničli iz istega razloga kot pri slikah in kategorijah: nima nobenega artikla teh
+  dveh dobaviteljev (odločitev uporabnika 2026-08-24). `PIM.F5.Integration`,
+  `PIM.F5.CategoryMappingTests` in `PIM.F6.Integration` uspejo, izhod 0.
+
+  **Kaj namenoma ni narejeno:** izvoz. `pim.ProductDocument`, `val.Promote` in stolpci 40–42
+  so naslednji korak, in **kateri dokument je »glavni«, je poslovna odločitev** — ne sme nastati
+  mimogrede v migraciji. Predlog: pri Nowodvorskem navodila za montažo, pri Braytronu podatkovni
+  list. Prav tako ostaja meja: pri vlogi z več datotekami (CE izjave) se vzame prva; za seznam bi
+  moral izluščevalnik znati več vrednosti na polje, kar je ločena sprememba jedra.
+
+
+- **[BAZA + WORKERJI] Manjkajoči prevodi po lastnosti — in napaka, zaradi katere prevod ni
+  prišel do kataloga** — kdo: Claude Opus 5 — 2026-08-24, migraciji `093` in `094`.
+
+  **Odločitev uporabnika 2026-08-24:** »prevode je treba iz te tabele prebrati, kar manjka se
+  načeloma lahko uporabi AI, da vse zapolni prevajalne tabele, drugače pa bi uporabnik to mogel,
+  samo mu je potrebno omogočiti.«
+
+  ### Prevodi so vezani na lastnost, ne na besedo
+
+  `map.ValueLookup` je imel 6.316 vrstic in **vse** z `Domain = '*'` — en prevod na besedo za
+  cel katalog. Prav zato je 2026-08-21 nastala `docs\Prevodi_sporni.csv` z 236 besedami, ki
+  imajo več slovenskih ustreznic: »White« je pri barvi *bela*, pri materialu *bel*. Globalen
+  slovar tega ne loči, zato je vrednost ostala v angleščini.
+
+  Postopek `map.ApplyValueTransforms` to zna že od migracije `049`, le da ni bilo uporabljeno:
+
+  ```sql
+  AND lookup.Domain IN (N'*', scope.Domain)
+  ORDER BY CASE WHEN lookup.Domain = N'*' THEN 1 ELSE 0 END
+  ```
+
+  Migracija `093` zato ne vpiše nobene vrstice z `'*'`: vseh **213** manjkajočih prevodov
+  (**78.709** pojavitev v katalogu, 16 lastnosti) je vezanih na svojo lastnost. »Wooden« je pri
+  `Prevladujoča barva SLO` *lesena*, pri `Prevladujoč material SLO` pa *les* — ista angleška
+  beseda, dva pravilna prevoda, brez spora.
+
+  Prevodi so **strojni predlog, ne odločitev**: vsak je vrstica registra, popravek je `UPDATE`
+  na `TargetValue`, izklop `IsActive = 0`. Stolpec `Note` pove, od kod vrstica je.
+
+  Nastane tudi pogled `map.MissingTranslationOpen`: `map.MissingTranslation` je zapisnik in se
+  ne prazni, zato bi po vpisu še vedno kazal 213 vrstic. Pogled odšteje tisto, kar je medtem
+  dobilo prevod — enako kot `map.SourceCategoryToMap` pri kategorijah. Ničesar ne brišemo.
+
+  ### Napaka, ki jo je to razkrilo (migracija `094`)
+
+  Po `093` je bilo `map.MissingTranslationOpen` **0**, v katalogu pa **nobene spremembe** —
+  `Prevladujoča barva SLO` je imela še vedno 2.425× »White« in 0× »bela«. Ponovna preslikava
+  obeh dobaviteljev za vsa štiri podjetja ni spremenila ničesar.
+
+  Vzrok je varovalka v `map.ApplyValueTransforms`:
+
+  ```sql
+  AND value.RawValue IS NULL
+  ```
+
+  Postopek pred prvo pretvorbo shrani izvirnik v `RawValue` in vrednost s tem označi kot
+  obdelano. To je **pravilno** — brez tega bi se pretvorbe ob ponovnem zagonu izvedle dvakrat
+  (`PREFIX` bi predpono dodal dvakrat, `STRIPPREFIX` odrezal dva). Posledica pa je bila, da nov
+  prevod doseže samo na novo zajete strani.
+
+  Ravno to je primer, za katerega `--znova-preslikaj` obstaja; njegov komentar v obeh workerjih
+  pravi »rabi se, ko se preslikave dopolnijo nad že obdelanim zajemom«. Stikalo je vračalo samo
+  stanje strani na `Pending`, vrednosti pa puščalo pretvorjene — **svoje naloge torej ni
+  opravilo do konca in tega ni bilo videti nikjer.**
+
+  `map.ReopenRunForMapping` (migracija `094`) naredi oboje v enem koraku: strani na `Pending`
+  **in** vrednosti nazaj v surovo obliko (`Value = RawValue`, `RawValue = NULL`). Pretvorbe se
+  izvedejo znova nad izvirnikom — deterministično in ponovljivo, izvirnik je shranjen prav zato.
+  Ničesar ne briše. Postopek je v bazi, ker sta workerja dva (`PIM.XmlFileWorker` in
+  `PIM.KatalogWorker`) in sta isti stavek imela prepisan vsak zase.
+
+  ### Dokaz
+
+  Migrator: `093` in `094` uporabljeni, drugi zagon ne uporabi nobene, `--verify` izhod 0.
+  Gradnja `PIM.sln` 0 opozoril / 0 napak. Po popravku je bilo ponovno preslikanih **vseh 21
+  zagonov** obeh dobaviteljev (lokalni datoteki, brez klica navzven). V katalogu:
+
+  | Lastnost in vrednost | Pred | Po |
+  |---|---|---|
+  | `Prevladujoča barva SLO` = White | 2.425 | **0** |
+  | `Prevladujoča barva SLO` = bela | 0 | **2.428** |
+  | `Prevladujoča barva SLO` = črna | 0 | **2.493** |
+  | `Slog SLO` = moderen | 0 | **4.031** |
+  | `Prevladujoč material SLO` = barvano jeklo | 0 | **2.175** |
+
+  `map.MissingTranslationOpen` je **0**. Strogo preverjeno (binarna primerjava, ki loči velike
+  črke): **0** vrednosti v katalogu, kjer bi se prevod razlikoval od zapisane vrednosti. Ostane
+  260 vrstic, kjer je prevod enak izvirniku — tehnične oznake (`MDF`, `PBT-PC`, `FPCB`) in
+  razlike v veliki začetnici (`Japandi` → `japandi`); te niso neprevedene.
+
+  `PIM.F5.CategoryMappingTests` in `PIM.F5.Integration` uspeta nespremenjena, izhod 0.
+
+  **Kaj ostane odprto:** stran v intranetu, kjer uporabnik prevode ureja sam — druga polovica
+  tvoje odločitve (»uporabnik bi to mogel, samo mu je potrebno omogočiti«). To je ozemlje
+  INTRANET, ki je trenutno blokirano z drugim sklopom, zato se ga ta seja ni dotaknila.
+
+
+- **[BAZA] Drevo videlektro je v PIM: 77 kategorij** — kdo: Claude Opus 5 — 2026-08-24,
+  migracija `092`.
+
+  **Zakaj je to blokiralo štiri stvari naenkrat.** `canon.WebSite` je imel vrstici `B2C` in
+  `B2C_EN` za drevo `videlektro`, drevo pa **0** kategorij. Posledice: stolpca 26 in 27 Magento
+  izvoza (»Kategorije vid«) sta bila prazna; profil `WEB_videlektro` je imel 0 veljavnih artiklov
+  pri Ediitu; po migraciji `091` je bilo drevo iz preslikave namenoma izpuščeno (drevo brez
+  kategorij ne sme delati hrupa), zato Braytronov elektromaterial ni imel kam.
+
+  **Vir:** navigacija https://www.videlektro.com/sl/ , brana 2026-08-24 — po izrecni odločitvi
+  uporabnika. Imena druge ravni so preverjena na straneh oddelkov (Inštalacije, Razsvetljava),
+  tretja raven pri Sijalkah; ujemanje je bilo natančno, zato imen nisem ugibal.
+
+  **Struktura:** 5 oddelkov (Inštalacije, Razsvetljava, Orodje, E-mobility, Alarmni sistemi),
+  20 kategorij druge ravni, 52 tretje — skupaj **77**. Ključ je zapisan enako kot pri
+  `svetila_si`, da ga `map.CategoryPathMap` obravnava po isti poti.
+
+  **Namenoma ni vzeto:** `OUTLET`, `ALL BLACK` in `AKCIJA`. To niso kategorije izdelka, ampak
+  prodajni sklopi; če jih hočeš v drevesu, so tri vrstice.
+
+  **Angleška imena so predlog, ne prevod iz vira** — spletna stran je samo slovenska. Zapisana so,
+  ker stolpec 26 zahteva angleško pot. Popravek nima posledic za podatke: noben izdelek še nima
+  kategorije v tem drevesu.
+
+  **Dokaz.** Migrator: `092` uporabljena, drugi zagon nobene, `--verify` izhod 0. V bazi
+  `canon.Category` po drevesih: `svetila_si` 132, `videlektro` **77** (5/20/52 po ravneh).
+  Prevedena pot dela v obeh jezikih: `Razsvetljava > Sijalke > LED sijalke E27` in
+  `Lighting > Bulbs > LED Bulbs E27`.
+
+  **Samoaktivacija iz `091` je dokazana v živo:** po vnosu drevesa je ponovna preslikava
+  Braytrona za Vidadrio dala `map.MissingCategoryMap` **78 poti za `svetila_si` in 78 za
+  `videlektro`** (prej samo 78 za `svetila_si`). Drevo se je vklopilo samo, brez spremembe kode.
+
+  `PIM.F5.CategoryMappingTests`, `PIM.F5.Integration` in `PIM.F7.MagentoExportTests` uspejo
+  nespremenjeni. **Pošteno zabeleženo:** en zagon `PIM.F5.Integration` je vmes padel s
+  `SqlException 1205` (žrtev zaklepa) — na razvojni bazi je hkrati delala druga seja; dva
+  zaporedna ponovna zagona sta uspela z izhodom 0. Pri `PIM.F7.MagentoExportTests` se je del
+  proti bazi preskočil, ker v tisti lupini ni bilo `PIM_CONNECTION_STRING`.
+
+  **Delovni list dopolnjen:** `PIM_Solution\docs\Braytron_druzine_predlog.csv` ima zdaj dva
+  stolpca predlogov — `moj_predlog_svetila_si` (70 parov) in `moj_predlog_videlektro` (27).
+  Skupaj ima predlog **96 od 103** parov. Brez predloga ostaja 6 pravih:
+  `Decorative CLS > Metal / Glass CLR / Glass OPL / Glass CRY / Wooden / Rattan` — iz datoteke
+  ni razvidno, ali so to senčniki, deli ali cele svetilke, in tega ne ugibam.
+
+
+- **[BAZA + WORKERJI] Dobaviteljeve kategorije se odkrijejo same; Braytron jih je dobil 78** —
+  kdo: Claude Opus 5 — 2026-08-24, migracija `091`.
+
+  **Kaj je bilo narobe.** `map.ResolveProductCategories` je seznam dreves dobil s
+  `CROSS JOIN (SELECT DISTINCT CategoryTreeCode FROM map.CategoryPathMap WHERE SourceCode = @SourceCode ...)`.
+  Vir brez ene same preslikave torej ni imel nobenega drevesa, CROSS JOIN je vrnil nič vrstic in
+  postopek zanj ni naredil ničesar — **niti vrstice v katalogu niti vrstice v delovnem seznamu**.
+  Da bi se dobaviteljeva kategorija pokazala, bi morala zanjo že obstajati preslikava; da bi
+  nastala preslikava, bi jo moral nekdo videti. Kura in jajce, in luknja je bila tiha.
+
+  Drugič: **Braytron kategorij sploh ni izluščil.** `map.FieldMapping` je imel `ProductCategory.*`
+  samo za `NW_XML`. Braytron družine pošilja kot lastnosti `main_family` in `sub_family` znotraj
+  `<attributes>`, preslikave zanje pa ni bilo — zato v `raw.Inbox` ni bilo niti strani
+  `Classification`, le `Attribute` in `Media`.
+
+  **Kaj je narejeno** (odločitev uporabnika 2026-08-24: »kategorije dobaviteljev se bodo same
+  generirale in uporabnik jih bo zmaperal z našo«):
+  - `map.SourceCategory` — register dobaviteljevih kategorij, ki se polni sam iz zajema. Ne pozna
+    ne dreves ne preslikav; hrani berljive ravni, ne le normaliziran ključ.
+  - `map.SourceCategoryToMap` — pogled za človeka: kaj je dobavitelj poslal in še nima cilja.
+  - Seznam dreves se bere iz `canon.WebSite` in samo za drevesa, ki dejansko **imajo** kategorije.
+    Dvoje naenkrat: nov vir ni več neviden, drevo brez kategorij pa ne dela hrupa. Danes to
+    pomeni natanko `svetila_si`; `videlektro` ima 0 kategorij in se vklopi sam, ko bo vnesen.
+  - `BT_XML` dobi entiteto `Classification` in preslikavi za `main_family` / `sub_family`, pri
+    vseh štirih podjetjih.
+
+  **Dokaz.** Migrator: `091` uporabljena, drugi zagon ne uporabi nobene, `--verify` izhod 0.
+  Ponoven zajem Braytronove datoteke za vsa štiri podjetja (lokalna datoteka, brez klica navzven)
+  je ustvaril strani `Classification` in jih preslikal: ujetih 7 / 294 / 1.086 / 0 po podjetjih —
+  natanko toliko, kolikor je ujemanj po EAN. Po tem: `map.SourceCategory` **78** kategorij
+  Braytrona (prej 0), `map.MissingCategoryMap` za `BT_XML` **78** (prej 0), delovni seznam na
+  vrhu »Indoor Lighting > LED Small Panel«, »Outdoor Lighting > LED Wall Light«.
+  `PIM.F5.CategoryMappingTests` in `PIM.F5.Integration` uspeta **nespremenjena**, izhod 0;
+  gradnja `PIM.sln` 0 opozoril / 0 napak.
+
+  **`canon.ProductCategory` se ni spremenil (12.507) in to je pravilno:** ta korak ničesar ne
+  preslika, samo odkrije. Katera Braytronova družina sodi v katero našo kategorijo, je odločitev
+  uporabnika — delovni list s predlogom za 70 od 103 parov je v
+  `PIM_Solution\docs\Braytron_druzine_predlog.csv`.
+
+  **Dopolnjeno pospravljanje testov:** oba testa zdaj pobrišeta tudi svoje vrstice v
+  `map.SourceCategory`. Tabela ob njunem nastanku ni obstajala, brez tega pa bi testni vir
+  `F5_CATEGORY` smetil delovni seznam za človeka. Test ni bil spremenjen zato, da bi šel skozi —
+  uspel je že prej in uspe tudi potem.
+
+  **Znana meja:** `ProductCount` v registru pove, koliko izdelkov je kategorijo nosilo ob
+  **zadnjem zajemu, ki jo je videl**; pri štirih podjetjih je to zadnje podjetje z ujemanjem
+  (tu Vidadria). Za razvrščanje dela je dovolj, za poročilo po podjetjih ne — natančen razrez
+  sodi k strani za preslikavo v intranetu.
+
+
+- **[MERITEV] Zakaj Ediito iz dobaviteljev ne dobi ničesar — in kje je pravi strop obogatitve**
+  — kdo: Claude Opus 5 — 2026-08-24.
+
+  **Vprašanje.** Ediito ima 39.137 artiklov, od tega **0** s kategorijo in **0** s sliko, Vidadria
+  pa 2.568 oziroma 3.657. Migracija `069` je konektorja `NW_XML` in `BT_XML` dala vsem štirim
+  podjetjem, zato je bilo videti kot napaka.
+
+  **Ni napaka.** Ediito ima EAN-e — 33.423 od 39.137, najboljša polnost od vseh štirih — a
+  **nobenega z GS1 predpono kateregakoli dobavitelja** (Nowodvorski `5903139*`, Braytron
+  `5949097*`). Njegova ponudba je italijanska (28.113 EAN) in španska (3.500); teh dveh
+  dobaviteljev preprosto ne prodaja. Ujemanje po EAN dela pravilno.
+
+  **Ob tem se je pokazal pravi strop.** Datoteki v `fixtures\` sta z 29. in 30. julija:
+
+  | Podjetje | Nowodvorski v katalogu | od tega v datoteki | Braytron v katalogu | od tega v datoteki |
+  |---|---|---|---|---|
+  | DEMO | 3.075 | 1.145 | 7 | 7 |
+  | IQLighting | 4.569 | 2.543 | 371 | 294 |
+  | Vidadria | 4.930 | 2.571 | 1.345 | 1.086 |
+  | Ediito | 0 | 0 | 0 | 0 |
+
+  **6.651 artiklov obeh dobaviteljev v katalogu v datotekah sploh ni**; obratno **1.979
+  Braytronovih EAN iz datoteke ne ustreza nobenemu artiklu v nobenem katalogu.** Strop torej ni
+  v preslikavi in ne v konektorjih, ampak v vsebini datoteke — kar je cena odločitve o prevzemu
+  svežih datotek (glej TODO).
+
+  **Dokaz.** EAN izluščeni neposredno iz `fixtures\nw\products_en_US.xml` (2.619) in
+  `fixtures\bt\BRaytron_xml_2026_07_29.xml` (3.072), primerjani s 110.874 EAN iz
+  `canon.Product`. Nobene spremembe kode ali podatkov; samo branje.
+
+  **Odločitev uporabnika 2026-08-24:** Ediito artiklov Nowodvorskega in Braytrona nima in to je
+  pričakovano; obogatitev zanj pride takrat, ko bodo dodani dobavitelji, ki te artikle imajo.
+  Zato to ni odprta postavka in ne potrebuje ne konektorja ne preslikave — zapisano zato, da
+  naslednjič ne izgleda kot pozabljeno.
+
+- **[OPERATIVA] Nočno opravilo ugasnjeno, zataknjeni zagoni zaprti** — kdo: Claude Opus 5 —
+  2026-08-24, na izrecno zahtevo uporabnika (brez nje tega ne bi bilo: `AGENTS.md` §4.1 in §4.7).
+
+  Načrtovana naloga `NoviPIM - nocni zajem SAOP` je `Disabled`. V `ops.PipelineRun` je bilo
+  **14** zagonov `Running` brez konca (najstarejša dva z 2026-07-30, najnovejši štirje z
+  2026-08-24 00:00, vsi z `RowsRead = 0`); vsi so zaprti kot `Failed`. Po posegu `Running` **0**,
+  `Failed` 30, `Succeeded` 56. `EndedUtc` je pri teh štirinajstih namenoma ostal `NULL` — kdaj se
+  je ubit proces res končal, ne ve nihče, izmišljen čas konca pa bi bil videti kot izmerjen
+  podatek. `UPDATE` je imel varovalko `StartedUtc < DATEADD(hour, -1, ...)`, da se ne bi dotaknil
+  zagona, ki res teče.
+
+
+- **[WORKERJI] Dnevniki nočnih opravil so bili v pokvarjeni slovenščini — kriva je bila kodna
+  stran, ne dnevnik** — kdo: Claude Opus 5 — 2026-08-24.
+
+  **Kaj je bilo narobe.** V dnevniku je pisalo `┼Żiv SAOP zajem`, `kon─Źnih to─Źkah` in `ÔÇö`
+  namesto pomišljaja. Worker piše UTF-8, konzola tega računalnika pa je v kodni strani **852**;
+  PowerShell izpis zunanjega programa dekodira po `[Console]::OutputEncoding`, zato je `Ž`
+  (UTF-8 `C5 BD`) postal `┼` + `Ż`. Dnevnik pri tem sploh ni bil pokvarjen — bil je pravilen
+  UTF-8, ki je pošteno shranil že pokvarjene znake (preverjeno na bajtih: `e2 94 bc c5 bb`).
+  Napaka je nastala na meji med `dotnet` in PowerShellom.
+
+  Drugi del iste zgodbe: obe skripti sta bili shranjeni **brez BOM**. PowerShell 5.1 tako
+  datoteko bere kot ANSI, zato so bila njuna lastna sporočila napisana brez šumnikov — obvod
+  okoli iste napake, ne odločitev o jeziku.
+
+  **Kaj je narejeno** (`scripts/Nocni-zajem.ps1`, `scripts/Nocno-vse.ps1`):
+  `[Console]::OutputEncoding` in `$OutputEncoding` na UTF-8, preden se prebere prva vrstica;
+  obe datoteki dobita UTF-8 BOM in s tem lastna sporočila v pravi slovenščini; `Zapisi` piše
+  prek `[System.IO.File]::AppendAllText` kot UTF-8 **brez** BOM (`Add-Content -Encoding UTF8`
+  v 5.1 BOM doda); pot dnevnika je razrešena v absolutno, ker .NET relativne poti razreši po
+  delovni mapi procesa, ki je `Set-Location` ne spremeni. `Nocno-vse.ps1` je ob tem dobil še
+  isto obravnavo stderr kot `Nocni-zajem.ps1` — doslej je stderr ubil korak in razlog izgubil,
+  čeprav ga je `Korak` ujel; merilo uspeha ostane izhodna koda.
+
+  **Dokaz.** Razčlenjevalnik PowerShell nad obema datotekama: brez napak. Popravljena
+  `Nocni-zajem.ps1` je pognana v celoti z lažnim workerjem, ki piše šumnike na stdout in stderr,
+  brez ene zahteve navzven: v dnevniku je `— MEJNIK STOJI (že zajeto, ta zagon nima česa
+  preslikati)` in `STDERR: Napaka pri končni točki GetPrices: preveč zahtevkov, počakaj.`, `č`
+  je zapisan kot `c4 8d`, datoteka je brez BOM, lastno sporočilo skripte pa se glasi `Začetek:`.
+  `Nocno-vse.ps1` je dobil isto spremembo in je razčlenjen brez napak, ni pa pognan od začetka
+  do konca — njegovi koraki pišejo v pravo bazo.
+
+
+- **[WORKERJI] Nočni zajem iz SAOP je padal tiho; zdaj razlog konča v dnevniku** — kdo: Claude
+  Opus 5 — 2026-08-24.
+
+  **Kaj je bilo narobe.** Načrtovana naloga `NoviPIM - nocni zajem SAOP` se je 2026-08-24 ob
+  02:00 sprožila in vrnila `LastTaskResult = 1`. Dnevnik `logs/zajem_2026-08-24_0200.log` ima
+  pet vrstic in se konča pri »Meja na klic…«; vrstice `Konec, izhodna koda` ni. V
+  `ops.PipelineRun` so za vsa štiri podjetja ostali zagoni `SAOP_PRODUCTS` v stanju `Running`
+  z `RowsRead = 0`. **Zadnja stran iz SAOP v `raw.Inbox` je z 2026-08-21 12:21** — katalog je
+  bil tri dni star, ne da bi to kdo videl.
+
+  Vzrok je bil `scripts/Nocni-zajem.ps1`: `& dotnet @argumenti 2>&1 | ForEach-Object { Zapisi $_ }`
+  pod `$ErrorActionPreference = 'Stop'`. Prva vrstica, ki jo worker napiše na stderr, postane
+  `ErrorRecord` in s tem terminirajoča napaka — skripta umre sredi pipeline, razloga ne zapiše
+  nikamor in s pipeline ubije tudi proces workerja, zato `ops.CompleteRun` ni bil poklican.
+  Worker sam to zna (`OperationsRun.DisposeAsync`), ubit proces pa tega nima kje izvesti.
+
+  **Kaj je narejeno.** Obravnava napak je `Continue` samo okoli tega klica; vsaka vrstica gre v
+  dnevnik, tiste s stderr označene z `STDERR:`; nepričakovana PowerShell napaka pade v `catch`
+  in se zapiše kot `NAPAKA:`; `Konec, izhodna koda` se zapiše vedno; `$izhod`, ki ostane `$null`,
+  je izrecno neuspeh, da se prazna koda navzven ne bere kot uspeh.
+
+  **Dokaz (RED → GREEN, brez klica na SAOP).** Stari vzorec je reproduciran z lažnim workerjem,
+  ki piše na stdout in stderr in konča z 1: stdout se zabeleži, stderr ubije skripto, `Konec`
+  ne pride nikoli — enako kot v produkcijskem dnevniku. Popravljena skripta je pognana v celoti
+  z istim lažnim `dotnet` na `PATH` in nadomestnim korenom, torej brez ene same zahteve navzven:
+  padec → `STDERR: Unhandled exception: SqlException: Login failed.` + `Konec, izhodna koda: 1.`,
+  izhod 1; uspeh → `Konec, izhodna koda: 0.`, izhod 0; manjkajoča mapa → `NAPAKA: Cannot find
+  path …`, izhod 1. Razčlenjevalnik PowerShell nad datoteko vrne brez napak.
+
+  **Potrjeno v živo isti dan.** Uporabnik je zajem pognal ob 13:38. V dnevniku je zdaj tole,
+  osem sekund po začetku:
+
+  ```
+  13:38:26  STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the
+                      connected party did not properly respond ... (192.168.178.12:81))
+  ```
+
+  To je vrstica, ki je 2026-08-24 ob 02:00 ubila skripto in za sabo ni pustila ničesar. Zdaj je
+  zapisana, poleg nje pa še 44 vrstic `NAPAKA` s časovnimi iztekami na isti naslov. Zajem ob
+  13:49 je stekel čisto: 69 strani, 280.407 zapisov, `Konec, izhodna koda: 0.` V `raw.Inbox` je
+  po tem 79 novih strani vseh štirih podjetij (zadnja 2026-08-24 11:54 UTC namesto 2026-08-21),
+  `canon.Product` 196.515 → 196.531, `Pending` 0. Novih zagonov v stanju `Running` ni.
+
+  **Vzrok padca ob 02:00 je torej omrežje do SAOP (`192.168.178.12:81`), ne koda.** Skripta ga
+  je le skrila.
+
+  **Kaj ni narejeno in zakaj:** prevezava načrtovane naloge na `Nocno-vse.ps1` je sistemska
+  nastavitev (`AGENTS.md` §4.7). Štirinajst zataknjenih zagonov `Running` je zaprtih — glej
+  naslednji vpis.
 
 - **[BAZA + DOMENA + WORKERJI] Vhodi so zaključeni: vse končne točke, vsi dobaviteljevi XML,
   vse zaloge dobaviteljev, in nočno opravilo, ki to poganja** — kdo: Claude Opus 5 — 2026-08-23.
