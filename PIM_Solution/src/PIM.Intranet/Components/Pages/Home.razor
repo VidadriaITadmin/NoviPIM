@@ -1,3 +1,6 @@
 @page "/"
 @inject NavigationManager Navigation
-@code { protected override void OnInitialized() => Navigation.NavigateTo("/nadzorna-plosca", true); }
+@* Pot brez zacetne posevnice je nujna: "/nadzorna-plosca" se razresi glede na koren
+   streznika, ne glede na <base href>, zato bi pod IIS virtualno aplikacijo /PIM
+   preusmerilo na http://streznik/nadzorna-plosca in koncalo s 404. *@
+@code { protected override void OnInitialized() => Navigation.NavigateTo("nadzorna-plosca", true); }
