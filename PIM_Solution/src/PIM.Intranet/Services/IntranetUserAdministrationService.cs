@@ -2,7 +2,11 @@ using Microsoft.Data.SqlClient;
 
 namespace PIM.Intranet.Services;
 
-public sealed record IntranetUserRow(string UserName, string DisplayName, string AuthSource, string? DomainIdentity, bool IsEnabled, string Roles);
+/// <param name="Email">
+/// Naslov za opozorila. Napaka odhodne poti, ki je uporabnik pet minut ne potrdi, gre sem;
+/// brez naslova ni komu pisati in stopnjevanje tiho odpade.
+/// </param>
+public sealed record IntranetUserRow(string UserName, string DisplayName, string AuthSource, string? DomainIdentity, bool IsEnabled, string Roles, string? Email);
 
 public sealed class IntranetUserAdministrationService(IConfiguration configuration, ActiveDirectoryService activeDirectory)
 {
@@ -31,19 +35,40 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
       SELECT localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled,
-        STRING_AGG(roleValue.RoleCode, N', ') WITHIN GROUP (ORDER BY roleValue.RoleCode) AS Roles
+        STRING_AGG(roleValue.RoleCode, N', ') WITHIN GROUP (ORDER BY roleValue.RoleCode) AS Roles,
+        localUser.Email
       FROM sec.LocalUser localUser
       LEFT JOIN sec.LocalUserRole userRole ON userRole.LocalUserId = localUser.LocalUserId
       LEFT JOIN sec.Role roleValue ON roleValue.RoleId = userRole.RoleId
-      GROUP BY localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled
+      GROUP BY localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled, localUser.Email
       ORDER BY localUser.UserName;
       """, connection);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     while (await reader.ReadAsync(cancellationToken))
     {
-      users.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4), reader.IsDBNull(5) ? "—" : reader.GetString(5)));
+      users.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4), reader.IsDBNull(5) ? "—" : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
     }
 
     return users;
+  }
+
+  /// <summary>
+  /// Zapise ali pobrise naslov za opozorila. Prazen naslov je dovoljen in pomeni, da uporabnik
+  /// e-poste ne prejema; to je odlocitev, ne napaka, zato se ne zavrne.
+  /// </summary>
+  public async Task SetEmailAsync(string userName, string? email, CancellationToken cancellationToken = default)
+  {
+    var normalized = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+    if (normalized is not null && (!normalized.Contains('@') || normalized.Length > 320))
+      throw new InvalidOperationException("Naslov e-poste ni veljaven.");
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "UPDATE sec.LocalUser SET Email = @Email WHERE UserName = @UserName;", connection);
+    command.Parameters.AddWithValue("@Email", (object?)normalized ?? DBNull.Value);
+    command.Parameters.AddWithValue("@UserName", userName);
+    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+      throw new InvalidOperationException("Uporabnika ni bilo mogoce najti.");
   }
 }

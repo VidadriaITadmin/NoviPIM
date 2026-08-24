@@ -26,8 +26,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 
-var contract = await ReadContractAsync(connection);
-var builder = new SaopItemXmlBuilder(contract);
+var (shape, contract) = await ReadContractAsync(connection);
+var builder = new SaopDocumentBuilder(shape, contract);
 var items = options.Items.Count > 0 ? options.Items : await ReadSampleAsync(connection, options.OrganizationId, options.Sample);
 
 if (items.Count == 0)
@@ -60,7 +60,7 @@ foreach (var itemId in items)
   var built = builder.Build(decision.Intent, itemId, state.Values, state.Defaults, stamp,
     suggestFirstFreeCode: decision.Intent == SaopIntent.Add && options.SuggestFirstFreeCode);
 
-  var fileName = $"{Safe(itemId)}.{(decision.Intent == SaopIntent.Add ? "ADD" : "PATCH")}.xml";
+  var fileName = $"{Safe(itemId)}.{shape.Operation(decision.Intent)}.xml";
   await File.WriteAllTextAsync(Path.Combine(options.OutputDirectory, fileName), built.Xml);
 
   var missing = built.MissingMandatory.Count == 0 ? "—" : string.Join(", ", built.MissingMandatory);
@@ -97,10 +97,31 @@ static string Safe(string value) => string.Concat(value.Select(c => Path.GetInva
 
 static string Shorten(string value) => value.Length <= 38 ? value : value[..37] + "…";
 
-static async Task<List<SaopXmlField>> ReadContractAsync(SqlConnection connection)
+// Oblika dokumenta in polja se bereta iz baze, ne iz kode: merodajna sta out.SaopDocument in
+// out.SaopXmlField, da predogled kaze isto, kar bo poslal worker.
+static async Task<(SaopDocumentShape Shape, List<SaopXmlField> Contract)> ReadContractAsync(SqlConnection connection)
 {
-  await using var command = new SqlCommand("EXEC out.GetSaopXmlContract;", connection);
+  await using var command = new SqlCommand("EXEC out.GetSaopXmlContract @TargetKind;", connection);
+  command.Parameters.Add("@TargetKind", SqlDbType.NVarChar, 100).Value = "SAOP_PRODUCT";
   await using var reader = await command.ExecuteReaderAsync();
+
+  if (!await reader.ReadAsync()) throw new InvalidOperationException("Za izdelke ni zapisane oblike dokumenta.");
+  var shape = new SaopDocumentShape(
+    reader.GetString(reader.GetOrdinal("TargetKind")),
+    reader.GetString(reader.GetOrdinal("EntityType")),
+    reader.GetString(reader.GetOrdinal("RootElementAdd")),
+    reader.GetString(reader.GetOrdinal("RootElementUpdate")),
+    Text(reader, "ItemElement"),
+    reader.GetString(reader.GetOrdinal("KeyElements")).Split(SaopDocumentShape.KeySeparator),
+    reader.GetString(reader.GetOrdinal("AddPath")),
+    reader.GetString(reader.GetOrdinal("AddOperation")),
+    reader.GetString(reader.GetOrdinal("UpdatePath")),
+    reader.GetString(reader.GetOrdinal("UpdateOperation")),
+    Text(reader, "StampAddElement"),
+    Text(reader, "StampUpdateElement"),
+    Text(reader, "SuggestCodeElement"));
+
+  await reader.NextResultAsync();
   var fields = new List<SaopXmlField>();
   while (await reader.ReadAsync())
     fields.Add(new(
@@ -111,8 +132,9 @@ static async Task<List<SaopXmlField>> ReadContractAsync(SqlConnection connection
       reader.GetBoolean(reader.GetOrdinal("IsAddMandatory")),
       reader.GetString(reader.GetOrdinal("ValueFormat")),
       Text(reader, "TrueValue"),
-      Text(reader, "FalseValue")));
-  return fields;
+      Text(reader, "FalseValue"),
+      reader.GetBoolean(reader.GetOrdinal("IsKey"))));
+  return (shape, fields);
 }
 
 static async Task<List<string>> ReadSampleAsync(SqlConnection connection, int organizationId, int count)

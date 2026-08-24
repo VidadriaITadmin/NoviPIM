@@ -30,8 +30,14 @@ Assert(markup.Contains("<h1>Izvozi</h1>", StringComparison.Ordinal), "Stran mora
 var tabs = Regex.Match(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>");
 Assert(tabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
 Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki izvozov morajo imeti aria-label.");
-Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 2,
-  "Izvozi imajo dva podatkovno podprta zavihka; kanalskih zavihkov iz reference ni dovoljeno izmišljati.");
+// Zavihki so stirje: Uvozi, Vsi izvozi, Mnozicno urejanje in Obvestila. Vsak od njih ima svojo
+// stran s podatki; kanalskih zavihkov iz reference se se vedno ne sme izmisljati.
+Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 4,
+  "Izvozi imajo stiri podatkovno podprte zavihke.");
+Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"izvozi/mnozicno\">"),
+  "Zavihek Mnozicno urejanje mora biti povezava na /izvozi/mnozicno.");
+Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"izvozi/obvestila\">"),
+  "Zavihek Obvestila mora biti povezava na /izvozi/obvestila.");
 Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"teki-obdelave\">"), "Zavihek Uvozi mora ostati povezava na /teki-obdelave.");
 Assert(markup.Contains("<span class=\"page-tab active\" aria-current=\"page\">", StringComparison.Ordinal),
   "Aktivni zavihek mora imeti aria-current=\"page\".");

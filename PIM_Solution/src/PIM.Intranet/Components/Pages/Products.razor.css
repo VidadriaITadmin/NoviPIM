@@ -22,3 +22,24 @@
 @media (max-width: 900px) {
   .data-table { min-width: 640px; }
 }
+
+/* Stolpec za množično izbiro. Ozek, da ne krade prostora podatkom, in s hitrim ciljem za
+   miško — kljukica sama je premajhna, celica pa ne. */
+.select-cell {
+  width: 2.5rem;
+  text-align: center;
+}
+
+.select-cell input {
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: pointer;
+  accent-color: var(--accent, #1d4ed8);
+}
+
+/* Fokus mora biti viden tudi na kljukici; brez tega se pri tipkovnični izbiri ne vidi,
+   katera vrstica je na vrsti. */
+.select-cell input:focus-visible {
+  outline: 2px solid var(--focus, #1d4ed8);
+  outline-offset: 2px;
+}

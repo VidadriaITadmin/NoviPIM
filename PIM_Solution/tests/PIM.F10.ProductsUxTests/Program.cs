@@ -70,7 +70,10 @@ Assert(scroll.Success, "Tabela mora biti v ovoju <div class=\"table-scroll\"> za
 foreach (var attribute in new[] { "role=\"region\"", "tabindex=\"0\"", "aria-label=" })
   Assert(scroll.Value.Contains(attribute, StringComparison.Ordinal), "Pomični ovoj tabele nima " + attribute + ": " + scroll.Value);
 Assert(Regex.IsMatch(markup, "<caption>"), "Tabela mora ohraniti napis <caption>.");
-Assert(Regex.Matches(markup, "<th scope=\"col\">").Count == 5, "Tabela mora ohraniti natanko pet obstoječih stolpcev z scope=\"col\".");
+// Stolpcev je zdaj sest: pet obstojecih in stolpec za mnozicno izbiro.
+Assert(Regex.Matches(markup, "<th scope=\"col\"").Count == 6, "Tabela mora imeti sest stolpcev z scope=\"col\".");
+Assert(Regex.IsMatch(markup, "aria-label=\"Izberi vse na strani\""), "Izbira vseh na strani mora imeti aria-label.");
+Assert(Regex.IsMatch(markup, "aria-label=\"Izberi izdelek @row.ItemId\""), "Vsaka kljukica mora povedati, kateri izdelek izbira.");
 Assert(Regex.IsMatch(css, "\\.table-scroll\\s*\\{[^}]*overflow-x:\\s*auto"), "Ovoj tabele mora imeti overflow-x: auto.");
 Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
 Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zaslonih se tabela ne sme stiskati; potrebna je min-width.");
@@ -79,11 +82,11 @@ Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zasl
 var pagination = Regex.Match(markup, "<nav class=\"pagination\"[^>]*>");
 Assert(pagination.Success, "Paginacija mora ostati <nav class=\"pagination\">.");
 Assert(Regex.IsMatch(pagination.Value, "aria-label=\"[^\"]+\""), "Paginacija mora imeti aria-label.");
-Assert(Regex.Matches(markup, "<button type=\"button\"").Count == 3,
-  "Filter in obe strani morajo biti izrecni gumbi type=\"button\" brez oddajanja obrazca.");
+Assert(Regex.Matches(markup, "<button type=\"button\"").Count == 4,
+  "Filter, mnozicno urejanje in obe strani morajo biti izrecni gumbi type=\"button\" brez oddajanja obrazca.");
 
 // 8. Tipkovnični fokus mora biti viden na vseh interaktivnih elementih strani.
-foreach (var selector in new[] { ".search-input", ".filter-select", ".filter-button", ".pagination button", ".table-scroll", ".data-table a", ".open-link" })
+foreach (var selector in new[] { ".search-input", ".filter-select", ".filter-button", ".pagination button", ".table-scroll", ".data-table a", ".open-link", ".select-cell input" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");
@@ -98,16 +101,28 @@ foreach (Match call in Regex.Matches(markup, "Data\\.(\\w+)"))
 // 10. Varovalka: obstoječe ravnanje s filtri in paginacijo ostane nedotaknjeno.
 foreach (var behavior in new[] { "const int Take = 50", "Skip=0", "Skip=Math.Max(0,Skip-Take)", "Skip+=Take" })
   Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstoječe ravnanje s filtri/paginacijo je spremenjeno; manjka: " + behavior);
-var allowedHandlers = new[] { "ApplyFiltersAsync", "PreviousAsync", "NextAsync" };
+// Seznam se je razsiril z mnozicno izbiro. Vsak od dodanih rokovalcev samo spreminja izbiro
+// ali odpre drugo stran; nobeden ne pise v bazo.
+var allowedHandlers = new[] { "ApplyFiltersAsync", "PreviousAsync", "NextAsync", "EditSelected", "ToggleAll" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
-// 11. Varovalka: gre za predstavitveni sklop brez akcij pisanja in brez nepodprtih kontrol.
-foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"checkbox\"", "type=\"file\"", "<dialog", "contenteditable" })
+// 11. Varovalka: stran sme izbirati, ne sme pa pisati.
+//
+// Kljukica za mnozicno izbiro je odslej dovoljena — brez nje mnozicnega urejanja ni. Vse
+// ostalo ostaja prepovedano, in dodana je ostrejsa zahteva: stran ne sme klicati nobene
+// zapisovalne storitve. Izbrane sifre samo preda strani /izvozi/mnozicno, ki edina naroci
+// spremembo in ima za to svojo varovalko v bazi.
+foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"file\"", "<dialog", "contenteditable" })
   Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Predstavitveni sklop ne sme uvesti " + forbidden + ".");
+foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "ApproveBatchAsync" })
+  Assert(!markup.Contains(writeSurface, StringComparison.Ordinal), "Seznam izdelkov ne sme sam pisati v odhodno pot: " + writeSurface + ".");
+Assert(markup.Contains("izvozi/mnozicno", StringComparison.Ordinal), "Izbrani izdelki morajo voditi na stran za mnozicno urejanje.");
 
 // 12. Varovalka: nobenega novega stolpca ali izmišljene vsebine brez podatkovnega vira.
-foreach (var fabricated in new[] { "Proizvajalec", "Slika", "Cena", "Zaloga", "Kategorija", "Nov izdelek", "Uvozi", "Izvozi", "Uredi", "Izbriši", "Osnutek", "Objavljeno", "Nedavno" })
+// 'Uredi izbrane' ni izmisljen stolpec, ampak dejanje nad dejansko izbiro, zato 'Uredi' tu ni
+// vec prepovedana beseda; ostale ostajajo.
+foreach (var fabricated in new[] { "Proizvajalec", "Slika", "Cena", "Zaloga", "Kategorija", "Nov izdelek", "Uvozi", "Izbriši", "Osnutek", "Objavljeno", "Nedavno" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmišljene vsebine: " + fabricated + ".");
 
 Console.WriteLine("F10 products UX contract PASS.");

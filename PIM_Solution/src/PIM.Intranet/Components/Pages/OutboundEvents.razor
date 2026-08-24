@@ -1,0 +1,159 @@
+@page "/izvozi/obvestila"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@using PIM.Intranet.Services
+@inject SaopWriteService Write
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Obvestila izvozov</PageTitle>
+<div class="page-header">
+  <div>
+    <h1>Obvestila</h1>
+    <p>Kaj se je zgodilo s spremembami, ki so šle proti SAOP. Uspeh je tih, napaka ni.</p>
+  </div>
+</div>
+<nav class="page-tabs" aria-label="Pogledi izvozov">
+  <a class="page-tab" href="outbound">Vsi izvozi</a>
+  <a class="page-tab" href="izvozi/mnozicno">Množično urejanje</a>
+  <span class="page-tab active" aria-current="page">Obvestila</span>
+</nav>
+
+@if (Counts is not null)
+{
+  <section class="kpi-grid" aria-labelledby="events-kpi-title">
+    <h2 id="events-kpi-title" class="visually-hidden">Hitri pregled obvestil</h2>
+    <article class="ui-card kpi"><span>Nepotrjene napake</span><strong>@Counts.Errors.ToString("N0")</strong><span class="kpi-share">zahtevajo ukrep</span></article>
+    <article class="ui-card kpi"><span>Opozorila</span><strong>@Counts.Warnings.ToString("N0")</strong><span class="kpi-share">sistem popravlja sam</span></article>
+    <article class="ui-card kpi"><span>Stopnjevanih</span><strong>@Counts.Escalated.ToString("N0")</strong><span class="kpi-share">poslano po e-pošti</span></article>
+    <article class="ui-card kpi"><span>Tihih (24 h)</span><strong>@Counts.QuietToday.ToString("N0")</strong><span class="kpi-share">uspešnih sprememb</span></article>
+  </section>
+}
+
+@if (Counts is { Escalated: > 0 })
+{
+  <p class="message-state error-message" role="alert">
+    @Counts.Escalated obvestil ni bilo potrjenih v dogovorjenem času in so bila poslana po e-pošti.
+    Dokler jih ne potrdiš, se bo opozorilo ponavljalo.
+  </p>
+}
+
+<section class="ui-card toolbar" role="search" aria-labelledby="events-filter-title">
+  <h2 id="events-filter-title" class="visually-hidden">Filtriranje obvestil</h2>
+  <label class="check-field"><input type="checkbox" @bind="OnlyOpen" @bind:after="ReloadAsync" /> Pokaži samo nepotrjena</label>
+  <span class="result-count" role="status" aria-live="polite">@Summary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Seznam obvestil">
+  @if (Loading) { <div class="loading-state" role="status">Nalaganje obvestil …</div> }
+  else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
+  else if (Rows is null || Rows.Count == 0) { <div class="empty-state">Ni obvestil za izbrani pogled.</div> }
+  else
+  {
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela obvestil">
+      <table class="data-table">
+        <caption>Obvestila odhodne poti</caption>
+        <thead>
+          <tr>
+            <th scope="col">Kdaj</th><th scope="col">Resnost</th><th scope="col">Korak</th>
+            <th scope="col">Artikel</th><th scope="col">Kaj se je zgodilo</th>
+            <th scope="col">Kaj naredi</th><th scope="col">Dejanje</th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var row in Rows)
+          {
+            <tr class="@(row.Severity == "Error" && row.AcknowledgedUtc is null ? "row-attention" : null)">
+              <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td>
+              <td><span class="status-chip @Chip(row.Severity)"><span class="visually-hidden">Resnost: </span>@Resnost(row.Severity)</span></td>
+              <td>@Korak(row.Step)</td>
+              <td>@row.EntityKey<br /><span class="hint">@row.FieldName</span></td>
+              <td>@row.Title</td>
+              <td>@(row.Detail ?? "—")</td>
+              <td>
+                @if (row.Severity == "Info") { <span class="hint">tiho</span> }
+                else if (row.AcknowledgedUtc is null)
+                {
+                  <button type="button" class="small-action good-action" disabled="@Busy"
+                          aria-label="Potrdi obvestilo za @row.EntityKey" @onclick="() => AcknowledgeAsync(row.OutboundEventId)">
+                    Potrdi
+                  </button>
+                }
+                else { <span class="hint">@row.AcknowledgedBy</span> }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+@code {
+  int? OrganizationId;
+  IReadOnlyList<OutboundEventRow>? Rows;
+  OutboundEventCounts? Counts;
+  bool OnlyOpen = true;
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  string Summary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows?.Count ?? 0} obvestil";
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      await ReloadAsync();
+    }
+    catch { Error = "Obvestil trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ReloadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true; Error = null;
+    try
+    {
+      Rows = await Write.GetEventsAsync(OrganizationId.Value, OnlyOpen);
+      Counts = await Write.GetEventCountsAsync(OrganizationId.Value);
+    }
+    catch { Error = "Obvestil trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task AcknowledgeAsync(long eventId)
+  {
+    Busy = true; Message = null; Error = null;
+    try
+    {
+      var state = await Authentication.GetAuthenticationStateAsync();
+      await Write.AcknowledgeAsync(eventId, state.User.Identity?.Name ?? "neznan");
+      Message = "Obvestilo je potrjeno; opozorilo se ne bo več ponavljalo.";
+      await ReloadAsync();
+    }
+    catch { Error = "Obvestila trenutno ni mogoče potrditi."; }
+    finally { Busy = false; }
+  }
+
+  static string Chip(string severity) => severity switch { "Error" => "bad", "Warning" => "warn", _ => "good" };
+
+  static string Resnost(string severity) => severity switch
+  {
+    "Error" => "Napaka", "Warning" => "Opozorilo", _ => "V redu"
+  };
+
+  static string Korak(string step) => step switch
+  {
+    "Queued" => "Uvrščeno", "Approved" => "Odobreno", "Cancelled" => "Preklicano",
+    "Sent" => "Poslano", "Verified" => "Potrjeno", "Drift" => "Odklon",
+    "SelfHealed" => "Samopopravek", "Failed" => "Zavrnjeno", _ => step
+  };
+}

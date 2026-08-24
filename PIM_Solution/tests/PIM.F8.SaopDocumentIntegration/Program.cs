@@ -231,6 +231,7 @@ async Task CleanupAsync()
 {
   // Pobriše izključno vrstice, ki jih je ta test ustvaril, in samo v svoji organizaciji.
   await SqlAsync("""
+    DELETE FROM ops.OutboundEvent WHERE OrganizationId = @Org;
     DELETE assignment FROM out.SaopItemAssignment assignment
       INNER JOIN out.OutboxMessage message ON message.OutboxMessageId = assignment.OutboxMessageId
       WHERE message.OrganizationId = @Org;

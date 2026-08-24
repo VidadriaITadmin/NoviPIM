@@ -1,0 +1,255 @@
+@page "/izvozi/mnozicno"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using PIM.Intranet.Services
+@inject SaopWriteService Write
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
+
+<PageTitle>Množično urejanje</PageTitle>
+<div class="page-header">
+  <div>
+    <h1>Množično urejanje</h1>
+    <p>Spremembe se uvrstijo v vrsto za SAOP. Nič ne odide, dokler skupine ne odobriš.</p>
+  </div>
+</div>
+<nav class="page-tabs" aria-label="Pogledi izvozov">
+  <a class="page-tab" href="outbound">Vsi izvozi</a>
+  <span class="page-tab active" aria-current="page">Množično urejanje</span>
+  <a class="page-tab" href="izvozi/obvestila">Obvestila</a>
+</nav>
+
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card panel">
+  <h2>1. Kaj spreminjaš</h2>
+  <div class="form-grid">
+    <label class="form-field" for="bulk-items">
+      Šifre artiklov (ena na vrstico ali ločene z vejico)
+      <textarea id="bulk-items" class="form-input" rows="4" @bind="ItemsText" placeholder="NW.12603&#10;BA.BH85.00040"></textarea>
+    </label>
+    <label class="form-field" for="bulk-field">
+      Polje
+      <select id="bulk-field" class="filter-select" @bind="SelectedFieldKey">
+        <option value="">— izberi polje —</option>
+        @if (Fields is not null) { @foreach (var polje in Fields) { <option value="@polje.FieldKey">@polje.ElementName (@polje.FieldKey)</option> } }
+      </select>
+    </label>
+    <label class="form-field" for="bulk-value">
+      Nova vrednost @if (SelectedField?.ValueFormat == "bool") { <text>(da / ne)</text> }
+      <input id="bulk-value" class="form-input" @bind="NewValue" />
+    </label>
+    <div class="form-action">
+      <button type="button" class="primary-button" disabled="@(Busy || !CanQueueManual)" @onclick="QueueManualAsync">
+        Uvrsti v vrsto (@ManualItemIds.Count artiklov)
+      </button>
+    </div>
+  </div>
+  <p class="hint">
+    Na voljo so samo polja, ki jih sme PIM pisati v SAOP. Če polja ni na seznamu, je njegov
+    lastnik SAOP — to ni napaka vmesnika, ampak zapisano pravilo.
+  </p>
+</section>
+
+<section class="ui-card panel section-gap">
+  <h2>2. Ali uvozi iz Excela</h2>
+  <p class="hint">
+    Prvi stolpec naj se imenuje <strong>Šifra artikla</strong> (ali <code>ItemID</code>), vsak
+    naslednji stolpec pa naj nosi ime polja iz seznama zgoraj. <strong>Prazna celica pomeni, da
+    se polja ne dotaknemo</strong> — ne, da ga izpraznimo.
+  </p>
+  <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+
+  @if (Preview is not null)
+  {
+    <div class="preview-summary">
+      <p role="status">
+        Prebranih vrstic: <strong>@Preview.Rows.Count</strong>, sprememb: <strong>@Preview.ChangeCount</strong>.
+      </p>
+      @if (Preview.Unmapped.Count > 0)
+      {
+        <p class="message-state warn-message">
+          Stolpci brez ustreznega polja (ne bodo uvoženi): @string.Join(", ", Preview.Unmapped)
+        </p>
+      }
+      @foreach (var problem in Preview.Problems) { <p class="message-state warn-message">@problem</p> }
+    </div>
+
+    @if (Preview.Rows.Count > 0)
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza">
+        <table class="data-table">
+          <caption>Predogled prvih 20 vrstic</caption>
+          <thead><tr><th scope="col">Vrstica</th><th scope="col">Artikel</th><th scope="col">Spremembe</th></tr></thead>
+          <tbody>
+            @foreach (var row in Preview.Rows.Take(20))
+            {
+              <tr>
+                <td>@row.RowNumber</td>
+                <td>@row.ItemId</td>
+                <td>@string.Join(", ", row.Values.Select(pair => $"{Element(pair.Key)} = {pair.Value}"))</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="primary-button" disabled="@Busy" @onclick="QueueWorkbookAsync">
+        Uvrsti @Preview.ChangeCount sprememb v vrsto
+      </button>
+    }
+  }
+</section>
+
+@if (Outcome is not null)
+{
+  <section class="ui-card data-card section-gap" aria-label="Izid uvrstitve">
+    <h2>3. Izid</h2>
+    <p role="status">
+      Skupina <strong>@Outcome.OutboundBatchId</strong> — uvrščenih <strong>@Outcome.Queued</strong>,
+      že v vrsti <strong>@Outcome.Duplicates</strong>, zavrnjenih <strong>@Outcome.Rejected</strong>.
+    </p>
+
+    @if (Outcome.Queued > 0)
+    {
+      <div class="table-actions">
+        <button type="button" class="small-action good-action" disabled="@Busy" @onclick="ApproveAsync">Odobri skupino</button>
+        <button type="button" class="small-action" disabled="@Busy" @onclick="CancelAsync">Prekliči skupino</button>
+      </div>
+      <p class="hint">Odobritev skupino samo uvrsti v vrsto. Pošlje jo šele odhodni worker.</p>
+    }
+
+    @if (Outcome.Rejected > 0)
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Zavrnjene vrstice">
+        <table class="data-table">
+          <caption>Zavrnjene vrstice in razlog</caption>
+          <thead><tr><th scope="col">Artikel</th><th scope="col">Polje</th><th scope="col">Razlog</th></tr></thead>
+          <tbody>
+            @foreach (var row in Outcome.Rows.Where(row => row.Status == "Rejected"))
+            {
+              <tr><td>@row.ItemId</td><td>@row.FieldKey</td><td>@row.Reason</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+@code {
+  /// <summary>Sifre, izbrane na seznamu izdelkov; stran jih prevzame, da ju ni treba prepisovati.</summary>
+  [SupplyParameterFromQuery(Name = "items")]
+  public string? SelectedItems { get; set; }
+
+  int? OrganizationId;
+  IReadOnlyList<WritableFieldRow>? Fields;
+  WorkbookImportPreview? Preview;
+  BulkChangeOutcome? Outcome;
+  string ItemsText = "";
+  string SelectedFieldKey = "";
+  string NewValue = "";
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  // Zvezek se prebere v pomnilnik; meja je varovalka pred datoteko, ki bi pojedla strežnik.
+  const long MaxUploadBytes = 8 * 1024 * 1024;
+
+  WritableFieldRow? SelectedField => Fields?.FirstOrDefault(polje => polje.FieldKey == SelectedFieldKey);
+
+  IReadOnlyList<string> ManualItemIds => ItemsText
+    .Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+  bool CanQueueManual => ManualItemIds.Count > 0 && SelectedFieldKey.Length > 0;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      Fields = await Write.GetWritableFieldsAsync(OrganizationId.Value);
+      if (!string.IsNullOrWhiteSpace(SelectedItems) && ItemsText.Length == 0)
+        ItemsText = string.Join('\n', SelectedItems.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+    catch { Error = "Seznama pisljivih polj trenutno ni mogoče naložiti."; }
+  }
+
+  string Element(string fieldKey) => Fields?.FirstOrDefault(polje => polje.FieldKey == fieldKey)?.ElementName ?? fieldKey;
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  async Task OnFileAsync(InputFileChangeEventArgs args)
+  {
+    Error = null; Message = null; Preview = null; Outcome = null;
+    if (Fields is null) return;
+    try
+    {
+      var file = args.File;
+      if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 8 MB. Razdeli jo na več datotek."; return; }
+
+      // Zvezek gre najprej v pomnilnik: bralnik potrebuje iskanje po toku, česar tok brskalnika ne zna.
+      using var buffer = new MemoryStream();
+      await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
+      buffer.Position = 0;
+      Preview = Write.PreviewWorkbook(buffer, Fields);
+    }
+    catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
+    catch { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel."; }
+  }
+
+  async Task QueueManualAsync()
+  {
+    if (OrganizationId is null || !CanQueueManual) return;
+    var changes = ManualItemIds.Select(itemId => (itemId, SelectedFieldKey, (string?)NewValue));
+    await QueueAsync(changes, "BULK", $"Množično: {Element(SelectedFieldKey)} = {NewValue}");
+  }
+
+  async Task QueueWorkbookAsync()
+  {
+    if (OrganizationId is null || Preview is null) return;
+    var changes = Preview.Rows
+      .SelectMany(row => row.Values.Select(pair => (row.ItemId, pair.Key, (string?)pair.Value)));
+    await QueueAsync(changes, "EXCEL", $"Uvoz Excela: {Preview.Rows.Count} artiklov");
+  }
+
+  async Task QueueAsync(IEnumerable<(string, string, string?)> changes, string source, string note)
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      Outcome = await Write.EnqueueAsync(OrganizationId!.Value, changes, await ActorAsync(), source, note);
+      Message = $"Uvrščeno v skupino {Outcome.OutboundBatchId}.";
+    }
+    catch { Error = "Sprememb trenutno ni mogoče uvrstiti v vrsto."; }
+    finally { Busy = false; }
+  }
+
+  async Task ApproveAsync()
+  {
+    if (Outcome is null) return;
+    Busy = true;
+    try { Message = $"Odobrenih sporočil: {await Write.ApproveBatchAsync(Outcome.OutboundBatchId, await ActorAsync())}."; }
+    catch { Error = "Skupine trenutno ni mogoče odobriti."; }
+    finally { Busy = false; }
+  }
+
+  async Task CancelAsync()
+  {
+    if (Outcome is null) return;
+    Busy = true;
+    try { Message = $"Preklicanih sporočil: {await Write.CancelBatchAsync(Outcome.OutboundBatchId, await ActorAsync())}."; }
+    catch { Error = "Skupine trenutno ni mogoče preklicati."; }
+    finally { Busy = false; }
+  }
+}

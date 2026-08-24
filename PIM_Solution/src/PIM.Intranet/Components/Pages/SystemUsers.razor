@@ -20,7 +20,8 @@
 
 <section class="ui-card data-card section-gap">
   @if (Rows is null) { <div class="loading-state">Nalaganje uporabnikov …</div> }
-  else { <table class="data-table"><caption>Obstoječi uporabniki</caption><thead><tr><th>Uporabnik</th><th>Ime</th><th>Vir</th><th>Vloge</th><th>Aktiven</th></tr></thead><tbody>@foreach(var user in Rows){<tr><td>@(user.DomainIdentity ?? user.UserName)</td><td>@user.DisplayName</td><td>@(user.AuthSource == "DOMAIN" ? "AD" : "Lokalno")</td><td>@user.Roles</td><td><span class="status-chip @(user.IsEnabled ? "good" : null)">@(user.IsEnabled ? "Da" : "Ne")</span></td></tr>}</tbody></table> }
+  else { <table class="data-table"><caption>Obstoječi uporabniki</caption><thead><tr><th>Uporabnik</th><th>Ime</th><th>Vir</th><th>Vloge</th><th>Aktiven</th><th>E-pošta za opozorila</th><th><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach(var user in Rows){<tr><td>@(user.DomainIdentity ?? user.UserName)</td><td>@user.DisplayName</td><td>@(user.AuthSource == "DOMAIN" ? "AD" : "Lokalno")</td><td>@user.Roles</td><td><span class="status-chip @(user.IsEnabled ? "good" : null)">@(user.IsEnabled ? "Da" : "Ne")</span></td><td><input class="table-input" type="email" aria-label="E-pošta za @user.UserName" value="@(Emails.TryGetValue(user.UserName, out var e) ? e : user.Email)" @onchange="args => Emails[user.UserName] = args.Value?.ToString()" /></td><td><button class="small-action good-action" disabled="@Busy" @onclick="() => SaveEmail(user.UserName)">Shrani</button></td></tr>}</tbody></table>
+    <p class="hint">Na ta naslov gre opozorilo, kadar napaka odhodne poti v SAOP ni potrjena v dogovorjenem času. Prazno polje pomeni, da uporabnik e-pošte ne prejema.</p> }
 </section>
 
 @code {
@@ -31,6 +32,21 @@
   string? Message;
   PIM.Intranet.Services.ActiveDirectoryUser? Found;
   IReadOnlyList<PIM.Intranet.Services.IntranetUserRow>? Rows;
+  readonly Dictionary<string, string?> Emails = new(StringComparer.OrdinalIgnoreCase);
+
+  async Task SaveEmail(string userName)
+  {
+    Busy = true; Message = null;
+    try
+    {
+      await Users.SetEmailAsync(userName, Emails.TryGetValue(userName, out var value) ? value : null);
+      MessageOk = true;
+      Message = $"Naslov za {userName} je shranjen.";
+      await Reload();
+    }
+    catch (Exception exception) { MessageOk = false; Message = exception.Message; }
+    finally { Busy = false; }
+  }
 
   protected override async Task OnInitializedAsync() => await Reload();
   async Task Reload() => Rows = await Users.GetUsersAsync();

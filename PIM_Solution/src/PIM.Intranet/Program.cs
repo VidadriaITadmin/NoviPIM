@@ -30,8 +30,13 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<LocalUserAuthenticationService>();
 builder.Services.AddScoped<IntranetDataService>();
 builder.Services.AddScoped<IntranetContextService>();
+builder.Services.AddScoped<PimDb>();
+builder.Services.AddScoped<CatalogReadService>();
+builder.Services.AddScoped<PipelineReadService>();
+builder.Services.AddScoped<GovernanceReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
+builder.Services.AddScoped<SaopWriteService>();
 
 var app = builder.Build();
 

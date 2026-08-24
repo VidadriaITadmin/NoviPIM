@@ -11,4 +11,9 @@
     <PackageReference Include="System.DirectoryServices.AccountManagement" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- WorkbookTable: branje delovnega zvezka pri uvozu mnozicnih sprememb. -->
+    <ProjectReference Include="..\PIM.Operations\PIM.Operations.csproj" />
+  </ItemGroup>
+
 </Project>

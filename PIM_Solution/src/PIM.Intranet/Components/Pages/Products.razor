@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject NavigationManager Navigation
 <PageTitle>Izdelki</PageTitle>
 <div class="page-header"><div><h1>Izdelki</h1><p>Pregled izdelkov v aktivni organizaciji.</p></div></div>
 <nav class="page-tabs" aria-label="Pogledi izdelkov"><span class="page-tab active" aria-current="page">Vsi izdelki @(Page is null ? null : $"({Page.TotalCount:N0})")</span></nav>
@@ -9,7 +10,7 @@
   <h2 id="products-filter-title" class="visually-hidden">Filtriranje izdelkov</h2>
   <label class="visually-hidden" for="product-search">Išči po artiklu ali EAN</label><input id="product-search" type="search" class="search-input" placeholder="Išči po artiklu ali EAN …" @bind="Search" @bind:event="oninput" />
   <label class="visually-hidden" for="product-status">Status</label><select id="product-status" class="filter-select" @bind="Status"><option value="">Vsi statusi</option><option value="VALID">VALID</option><option value="INVALID">INVALID</option><option value="PENDING">PENDING</option></select>
-  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button><span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button><button type="button" class="primary-button" disabled="@(Selected.Count == 0)" @onclick="EditSelected" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button><span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 <section class="ui-card data-card" aria-label="Seznam izdelkov">
 @if (Loading) { <div class="loading-state" role="status">Nalaganje izdelkov …</div> }
@@ -17,17 +18,40 @@ else if (Error is not null) { <div class="error-state" role="alert">@Error</div>
 else if (Page?.Rows.Count == 0) { <div class="empty-state">Za izbrane filtre ni izdelkov.</div> }
 else if (Page is not null) {
   <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela izdelkov">
-    <table class="data-table"><caption>Izdelki v aktivni organizaciji</caption><thead><tr><th scope="col">Artikel</th><th scope="col">EAN</th><th scope="col">Status</th><th scope="col">Popolnost</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach (var row in Page.Rows) { <tr><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@(row.Ean ?? "—")</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@row.Status</span></td><td><div class="progress-line"><span class="progress-track" role="progressbar" aria-label="Popolnost" aria-valuenow="@Number(row.Completeness)" aria-valuemin="0" aria-valuemax="100"><i class="@(row.Completeness < 75 ? "warn" : null)" aria-hidden="true" style="width:@Percent(row.Completeness)"></i></span><span class="progress-value">@row.Completeness.ToString("0.#") %</span></div></td><td class="row-action"><a class="open-link" href="izdelki/@row.ProductId" aria-label="Odpri izdelek @row.ItemId"><span class="chevron" aria-hidden="true"></span></a></td></tr> }</tbody></table>
+    <table class="data-table"><caption>Izdelki v aktivni organizaciji</caption><thead><tr><th scope="col" class="select-cell"><input type="checkbox" aria-label="Izberi vse na strani" checked="@AllOnPageSelected" @onchange="ToggleAll" /></th><th scope="col">Artikel</th><th scope="col">EAN</th><th scope="col">Status</th><th scope="col">Popolnost</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach (var row in Page.Rows) { <tr><td class="select-cell"><input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selected.Contains(row.ItemId)" @onchange="e => Toggle(row.ItemId, e)" /></td><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@(row.Ean ?? "—")</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@row.Status</span></td><td><div class="progress-line"><span class="progress-track" role="progressbar" aria-label="Popolnost" aria-valuenow="@Number(row.Completeness)" aria-valuemin="0" aria-valuemax="100"><i class="@(row.Completeness < 75 ? "warn" : null)" aria-hidden="true" style="width:@Percent(row.Completeness)"></i></span><span class="progress-value">@row.Completeness.ToString("0.#") %</span></div></td><td class="row-action"><a class="open-link" href="izdelki/@row.ProductId" aria-label="Odpri izdelek @row.ItemId"><span class="chevron" aria-hidden="true"></span></a></td></tr> }</tbody></table>
   </div>
   <nav class="pagination" aria-label="Strani izdelkov"><button type="button" disabled="@(Skip == 0)" @onclick="PreviousAsync">Prejšnja</button><span class="page-position">Stran @(Skip / Take + 1) od @Math.Max(1, (long)Math.Ceiling(Page.TotalCount / (decimal)Take))</span><button type="button" disabled="@(Skip + Take >= Page.TotalCount)" @onclick="NextAsync">Naslednja</button></nav> }
 </section>
 @code {
+  // Izbira zivi cez straniceje in cez filtre: urednik pogosto izbere nekaj na eni strani,
+  // spremeni filter in izbere se nekaj. Ce bi se izbira ob vsakem premiku izgubila, bi bila
+  // mnozicna sprememba uporabna samo za eno stran rezultatov.
+  readonly HashSet<string> Selected = new(StringComparer.OrdinalIgnoreCase);
   PIM.Intranet.Services.ProductPage? Page; bool Loading = true; string? Error; string Search = ""; string Status = ""; int Skip; const int Take = 50; int? OrganizationId;
   protected override async Task OnInitializedAsync() { try { var org=await Data.GetCurrentOrganizationAsync(); if(org is null){Error="Aktivna organizacija ni na voljo.";return;} OrganizationId=org.OrganizationId; await LoadAsync(); } catch { Error="Izdelkov trenutno ni mogoče naložiti."; } finally { Loading=false; } }
   async Task LoadAsync(){if(OrganizationId is null)return;Loading=true;Error=null;try{Page=await Data.GetProductsAsync(OrganizationId.Value,Skip,Take,Search,Status);}catch{Error="Izdelkov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
   async Task ApplyFiltersAsync(){Skip=0;await LoadAsync();} async Task PreviousAsync(){Skip=Math.Max(0,Skip-Take);await LoadAsync();} async Task NextAsync(){Skip+=Take;await LoadAsync();}
   // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Page?.TotalCount ?? 0} rezultatov";
+  bool AllOnPageSelected => Page is not null && Page.Rows.Count > 0 && Page.Rows.All(row => Selected.Contains(row.ItemId));
+  void Toggle(string itemId, ChangeEventArgs args)
+  {
+    if (args.Value is true) Selected.Add(itemId); else Selected.Remove(itemId);
+  }
+  void ToggleAll(ChangeEventArgs args)
+  {
+    if (Page is null) return;
+    if (args.Value is true) foreach (var row in Page.Rows) Selected.Add(row.ItemId);
+    else foreach (var row in Page.Rows) Selected.Remove(row.ItemId);
+  }
+  // Sifre gredo v naslov; dolg seznam se skrajsa, da naslov ostane uporaben in ga strefnik sprejme.
+  void EditSelected()
+  {
+    if (Selected.Count == 0) return;
+    var items = string.Join(',', Selected.Take(MaxSelectionInUrl));
+    Navigation.NavigateTo($"izvozi/mnozicno?items={Uri.EscapeDataString(items)}");
+  }
+  const int MaxSelectionInUrl = 200;
   static string Chip(string value) => value == "VALID" ? "good" : value == "PENDING" ? "warn" : "bad";
   static string Percent(decimal value) => $"{Math.Clamp(value,0,100).ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
   // aria-valuenow mora biti številka s piko ne glede na območne nastavitve strežnika.
