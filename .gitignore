@@ -37,3 +37,9 @@ logs/
 
 # izhod nocnega opravila (Magento CSV, do 14 MB na podjetje)
 izvoz/
+
+# lokalna pomozna skripta za migrator (bere appsettings.Local.json, absolutna pot tega racunalnika)
+/.migrate.ps1
+
+# izhod orodja SaopXmlPreview (generirani PATCH XML iz pravega kataloga)
+PIM_Solution/tools/PIM.SaopXmlPreview/primeri/
