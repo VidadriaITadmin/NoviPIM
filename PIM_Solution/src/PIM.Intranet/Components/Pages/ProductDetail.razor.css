@@ -1,6 +1,6 @@
 /* Izoliran slog osebne izkaznice izdelka. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
 .breadcrumb { align-items: center; color: #64748b; display: flex; font-size: 12px; gap: 8px; margin-bottom: 10px; }
-.breadcrumb a { color: #1264e8; text-decoration: none; }
+.breadcrumb a { color: var(--pim-primary); text-decoration: none; }
 .breadcrumb a:hover { text-decoration: underline; }
 .breadcrumb-current { color: #36465f; font-weight: 600; }
 /* Ločilo drobtinic je nadzorovana oblika, ne besedilni znak. */
@@ -19,8 +19,8 @@
 .summary-card { padding: 16px 17px; }
 .summary-card h3 { color: #64748b; font-size: 12px; font-weight: 650; margin: 0 0 10px; }
 .summary-status { margin: 0 0 10px; }
-.summary-issues { color: #526078; font-size: 12px; margin: 0; }
-.summary-value { color: #17233d; font-size: 22px; font-weight: 700; margin: 0 0 10px; }
+.summary-issues { color: var(--pim-text-soft); font-size: 12px; margin: 0; }
+.summary-value { color: var(--pim-text); font-size: 22px; font-weight: 700; margin: 0 0 10px; }
 .completeness-card .progress-track { width: 100%; }
 
 .tab-panel { padding-bottom: 4px; }
@@ -32,7 +32,7 @@
 .breadcrumb a:focus-visible,
 .page-tab:focus-visible,
 .tab-panel:focus-visible,
-.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .table-scroll .data-table { min-width: 640px; }

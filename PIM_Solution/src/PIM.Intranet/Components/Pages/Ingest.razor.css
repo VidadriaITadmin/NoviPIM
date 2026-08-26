@@ -1,0 +1,15 @@
+.ingest-scope { align-items: center; display: flex; justify-content: space-between; margin-bottom: 1rem; padding: .8rem 1rem; }
+.ingest-scope div { display: flex; flex-direction: column; }
+.ingest-scope strong { color: var(--pim-text-strong); font-size: .85rem; }
+.ingest-scope span { color: var(--pim-text-muted); font-size: .72rem; margin-top: .1rem; }
+.ingest-kpis { grid-template-columns: repeat(3, minmax(170px, 1fr)); }
+.ingest-failure { color: var(--pim-bad-text); font-size: .68rem; margin-top: .15rem; }
+.ingest-attention { margin-top: 1rem; padding: 1rem 1.1rem; }
+.ingest-attention h2 { font-size: .95rem; margin: 0 0 .75rem; }
+.ingest-attention article { border-top: 1px solid var(--pim-border-soft); padding: .65rem 0; }
+.ingest-attention article:first-of-type { border-top: 0; }
+.ingest-attention strong { font-size: .78rem; }
+.ingest-attention p { color: var(--pim-text-muted); font-size: .75rem; margin: .2rem 0 0; }
+
+@media (max-width: 900px) { .ingest-kpis { grid-template-columns: repeat(2, minmax(160px, 1fr)); } }
+@media (max-width: 560px) { .ingest-scope { align-items: stretch; flex-direction: column; gap: .7rem; }.ingest-kpis { grid-template-columns: 1fr; } }

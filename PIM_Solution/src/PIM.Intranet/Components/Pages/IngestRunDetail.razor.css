@@ -1,0 +1,4 @@
+.technical-details { margin-top: 1rem; padding: 1rem 1.1rem; }
+.technical-details summary { color: var(--pim-text-strong); cursor: pointer; font-size: .85rem; font-weight: 650; }
+.technical-details .detail-list { margin-top: 1rem; }
+.numeric { font-variant-numeric: tabular-nums; }

@@ -1,0 +1,39 @@
+@page "/sistem/vloge"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+
+<PageTitle>Vloge</PageTitle>
+<PimPage Title="Vloge" Subtitle="Varnostne vloge in število uporabnikov, ki jim je posamezna vloga dodeljena." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam vlog">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Varnostnih vlog ni." LoadingText="Nalaganje vlog …">
+    <PimTable Caption="Vloge iz varnostnega registra" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.RoleCode</span></td>
+            <td>@row.Name</td>
+            <td class="numeric">@row.UserCount.ToString("N0")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.RoleRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Vloge")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Koda"), new("Ime"), new("Uporabnikov", Numeric: true)];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Rows = await Governance.GetRolesAsync(); }
+    catch { Error = "Vlog trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

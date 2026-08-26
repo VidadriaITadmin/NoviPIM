@@ -1,6 +1,6 @@
 # Načrt prenove PIM Intraneta — analiza in načrt
 
-Datum: 2026-08-23. Avtor: Claude Code. Stanje: **predlog, brez sprememb kode.**
+Datum: 2026-08-23. Avtor: Claude Code. Stanje: **izvedba v teku; stanje izvedbe je v §11–12.**
 Sprejeti odločitvi (2026-08-23, uporabnik): **retarget na `net10.0` v fazi I0** (§2.3 B2) in
 **model zapisa nazaj v SAOP** (§4).
 
@@ -353,8 +353,8 @@ enako kot lokalno. Iz tega sledijo stiri trde zahteve, ki veljajo za vsako novo 
    zahteva posega na strezniku; IIS potrebuje samo modul `AspNetCoreModuleV2`, ki je ze tam.
 3. **WebSockets.** Interaktivne strani gredo prek SignalR. Ce IIS nima vklopljenih WebSocketov,
    se povezava tiho degradira na dolgo pooling in vmesnik je opazno pocasnejsi.
-4. **Antiforgery obrazci zahtevajo staticni SSR.** Zato postavitev, prijava in preklop
-   konteksta niso interaktivni; preklop navigacije je zato izveden s CSS, ne z JavaScriptom.
+4. **Antiforgery obrazci zahtevajo staticni SSR.** Zato prijava in odjava ostajata navadna
+   obrazca; preklop navigacije je izveden s CSS, ne z JavaScriptom.
 
 Dokaz, ki ga je treba ponoviti ob vsaki vecji spremembi lupine: isti binarni izvod odgovori
 `200 text/css` na `/app.css` in na `/PIM/app.css`, `<base href>` pa se prilagodi obema.
@@ -368,7 +368,7 @@ posnetkom prijavljene strani.
 
 | Faza | Vsebina | Dokaz |
 |---|---|---|
-| **I0 — Temelji** | **retarget vseh 16 projektov na `net10.0`**, odprava B1 (rendermode), odstranitev Bootstrapa in mrtvih strani, žetoni CSS, komponentna knjižnica, lupina s pravim kontekstom organizacije/kanala/jezika, odločitev o navigaciji (baza ali koda) | `dotnet --version` → 10.x, build 0/0, `scripts\run_tests.ps1` izhod 0, F10 PASS, stran se odziva na klik |
+| **I0 — Temelji** | **retarget vseh 16 projektov na `net10.0`**, odprava B1 (rendermode), odstranitev Bootstrapa in mrtvih strani, žetoni CSS, komponentna knjižnica, lupina brez globalnega konteksta, odločitev o navigaciji (baza ali koda) | `dotnet --version` → 10.x, build 0/0, `scripts\run_tests.ps1` izhod 0, F10 PASS, stran se odziva na klik |
 | **I1 — Izdelki, branje** | nova procedura za iskanje s polnimi filtri in `TotalCount`, mreža s shranjenimi pogledi, kartica izdelka z zavihki (pregled, besedila, lastnosti, kategorije, mediji, cene, zaloga, ERP, zgodovina) | seznam pod 300 ms, kartica prikaže vseh 8 zavihkov iz baze |
 | **I2 — Kakovost** | pregled po profilih z resnostjo in obsegom blokade, napake, karantena z urejanjem in revalidacijo | števci se ujemajo z `val.*` |
 | **I3 — Izdelki, pisanje** | zapisovalna pot za polja v lasti PIM, značke lastnika, zgodovina in razveljavitev, množična obdelava s paketom | sprememba je v `pim.ProductFieldHistory`, razveljavitev jo vrne |
@@ -429,7 +429,7 @@ I0–I2 dajo uporabno aplikacijo za urednika kataloga. I3–I4 sta srce razlike 
 | Preklop navigacije brez JS | narejeno | skrito potrditveno polje + oznaka; `menu-glyph-icon` ohranjen |
 | Odstranitev Bootstrapa | narejeno v kodi | povezava iz `App.razor` in ostanki iz `app.css`; datoteki v `wwwroot/bootstrap` cakata na dovoljenje za brisanje |
 | Zetoni CSS | narejeno | `--pim-*` v `app.css`, vrednosti nespremenjene |
-| Kontekst organizacija/kanal/jezik | narejeno | `IntranetContextService` bere `dbo.OrganizationConfig`, `canon.WebSite`, `canon.Language`; izbira v piskotku prek POST `/kontekst` |
+| Globalni kontekst organizacija/kanal/jezik | odstranjen 2026-08-26 | lupina nima izbirnikov ali POST poti `/kontekst`; organizacijski in kanalski filtri sodijo na konkretno stran |
 | Zvonec opozoril | narejeno | dejansko stevilo nerazresenih `ops.Alert` |
 | IIS pot | preverjeno | `/app.css` in `/PIM/app.css` oba `200 text/css`; `<base href>` se prilagodi |
 | Vseh 10 F10 pogodbenih testov | PASS | zagnani posamicno |
@@ -471,3 +471,109 @@ Med to sejo je na isti veji in v istem delovnem drevesu delal se en agent (migra
   preslikavo, test pa trdi, da je ta entiteta nepreslikana. Ni posledica intraneta.
 - Polnega `scripts/run_tests.ps1` ni bilo mogoce dokoncati, ker se `tools/PIM.SaopXmlPreview`
   v tujem vmesnem stanju ne prevede.
+
+---
+
+## 12. Nadaljevanje izvedbe — 2026-08-24
+
+Prekinjeni I0 sklop je nadaljevan brez spremembe obstoječih UX testov:
+
+- `PimPage`, `PimTable`, `PimState`, `PimPager`, `PimChip`, `PimBar`, `PimStat` in
+  `PimHubCard` so skupni gradniki novih strani. Stare pogodbeno pinane strani za zdaj ostajajo
+  v svoji oznaki; zato F10 preverja isto dostopnostno pogodbo kot prej.
+- Navigacijska resnica je `PimNavigation` v kodi, kot je priporočeno v §9. Katalog upošteva
+  vloge, uporablja base-relativne poti in nobena menijska postavka več ne vodi na 404.
+- Dodani so bralni pogledi za medije, partnerje, cene, kakovost, zajem, izvozne profile,
+  nastavitve kataloga, validacijska pravila, slovar, preslikave, sistemske napake in vloge.
+  Stare poti kakovosti, tekov in `system/*` ostajajo kot združljivi aliasi.
+- Novi pogledi nastavitev so namenoma brez zapisovalnih gumbov. Zapisovalne procedure in
+  revizijska sled zanje še ne obstajajo, zato bi bil gumb navidezna funkcionalnost.
+
+Dokaz tega sklopa: ciljni F10 paket 10/0/0, build intraneta 0 opozoril/0 napak, avtomatski
+pregled navigacijskih poti izhod 0 in bralni SQL smoke-test proti lokalni bazi `PIM` izhod 0.
+
+Naslednja tehnična meja: bralne SQL poizvedbe iz `CatalogReadService`, `PipelineReadService`
+in `GovernanceReadService` je treba v ločenem zaporedju BAZA → INTRANET preseliti v
+`intranet.*` procedure. Ta commit ne meša ozemlja BAZA v intranetno izvedbo.
+
+---
+
+## 13. Vizualna združitev z referenco `src_navigation_ux_v2` — 2026-08-24
+
+Referenca je vizualni vir, ne nova kodna osnova. Njeni CSS žetoni in razmerja so preslikani
+na obstoječe razrede NoviPIM; Razor strani, `PimNavigation`, poti, vloge in podatkovni dostop
+se niso kopirali ali zamenjali.
+
+### Kaj vzamemo iz katere aplikacije
+
+| Področje | Iz reference v2 | Iz NoviPIM | Ciljna združitev |
+|---|---|---|---|
+| Vizualni sistem | podlaga `#f4f6f9`, bele površine, meja `#e5e7eb`, indigo `#4f46e5`, oranžna identiteta, 12-px kartice in mehke sence | enotni `--pim-*` žetoni brez Bootstrapa | referenčne vrednosti ostanejo na enem mestu v `app.css`; strani ne zakodirajo svojih primarnih barv |
+| Lupina | 18-rem temna skrilasta stranska vrstica in zračna vsebina | zgornja vrstica z dejansko organizacijo, kanalom, jezikom, opozorili in uporabnikom | referenčni sidebar + obstoječi funkcionalni topbar; mobilni preklop ostane CSS/SSR |
+| Navigacija | jasna aktivna kartica z oranžno črto, večji cilji klika, opisna hierarhija in puščice pri razdelilnih straneh | `PimNavigation` v kodi, filtriranje po vlogah, slovenske base-relativne poti in nič mrtvih povezav | struktura ostane NoviPIM, vizualna stanja so iz reference; `NavLink` se zaradi CSS isolation slogi prek `::deep`; spletnega konteksta »Svetila.si« ne prenesemo |
+| Kartice in tabele | dobra gostota, lepljive glave, statusne značke, prazna stanja in hover | dostopni `caption`/`scope`, resnični podatki, strežniška paginacija ter `PimTable`, `PimState`, `PimChip`, `PimBar` | referenčni izgled na skupnih komponentah; posamezne strani ne podvajajo osnovnih pravil |
+| Obrazci in filtri | jasne orodne vrstice, aktivni filtri, zavihki, meniji in vidna hierarhija dejanj | dejanski servisni filtri, antiforgery, avtorizacija in brez navideznih zapisovalnih gumbov | interakcijske vzorce dodajamo stran po stran šele, ko obstaja prava podatkovna/zapisovalna pogodba |
+| Mobilno in dostopnost | 900-px mobilni sidebar, dovolj veliki cilji in pomične tabele | viden `:focus-visible`, slovenska stanja, ARIA pogodbe in F10 testi | ohranimo oboje; vizualni odzivni pregled dopolni avtomatske pogodbe |
+
+### Česa iz reference ne prenesemo
+
+- 1.680-vrstične globalne datoteke z več hkratnimi generacijami navigacije (`rail`, `subnav`
+  in `sidebar`) ter podvojenimi selektorji;
+- Bootstrapa in njegovih razredov, ker ima NoviPIM manjšo lastno komponentno plast;
+- zunanjega Google Fonts klica; intranet mora delovati brez dostopa do interneta, zato ostane
+  sistemski sklad z `Inter` samo kot lokalno razpoložljivo prvo izbiro;
+- slogovnih blokov znotraj posameznih `.razor` strani in poslovnih vrednosti v CSS/HTML;
+- strani, SQL-a, servisov, navigacijskega kataloga ali konfiguracije iz referenčnega projekta.
+
+### Predlagani vrstni red strani
+
+1. **Nadzorna plošča:** referenčni ritem KPI in kartic, podatki ter dovoljenja NoviPIM.
+2. **Izdelki:** referenčna orodna vrstica, hitri filtri in gostota; obstoječe strežniško
+   iskanje, izbor in paginacija.
+3. **Kartica izdelka:** referenčni hero, domenski zavihki in galerija; kanonični podatki,
+   lastništvo polj, zgodovina in validacija NoviPIM.
+4. **Kakovost in karantena:** referenčni delovni seznam in statusni filtri; `val.*` kot edini
+   vir resnice ter zapisovanje šele prek revizijsko sledljive procedure.
+5. **Zajem, izvozi in poslovni moduli:** enaki skupni gradniki, vendar vsaka stran šele po
+   potrditvi svojega bralnega in zapisovalnega kontrakta.
+
+Prvi CSS korak je že izveden brez spremembe označbe strani: barvni žetoni, lupina,
+navigacijska stanja, skupne kartice/tabele/obrazci, prijava in mobilna prelomnica sledijo
+referenci. Nadaljnje spremembe so namerno stran-po-stran, da se vizualna prenova ne zamenja
+za nekritično kopiranje stare aplikacije. Navigacijski korak je dokončan tudi na ravni
+izoliranega CSS: povezave niso več privzeto modre/podčrtane, aktivna pot ima referenčno
+kartico in oranžen poudarek, pomembne postavke imajo opis in razdelilne strani puščico.
+
+---
+
+## 14. Izvedba modula Vhodni podatki — 2026-08-24
+
+Odločitev po pregledu prvotnega predloga z dvanajstimi stranmi je izvedena: v stranskem
+meniju ostane en cilj, modul pa ima pet jasnih pogledov **Pregled, Viri, Teki, Težave in
+Preslikave**. Čakalna vrsta, posamezen vir, posamezen tek, posamezna težava in neujemanja so
+podrobnosti iz teh pogledov, ne dodatne enakovredne menijske postavke.
+
+Pregled združuje vseh pet dejanskih vhodnih poti: SAOP katalog, dobaviteljev XML, SAOP
+zalogo, dobaviteljevo zalogo in delovni zvezek. `ops.PipelineRun` in `stock.SyncRun` nista
+ista sledilna modela, zato sta združena samo v bralnem servisu. Zadnji poskus in zadnji uspeh
+sta ločena stolpca; star uspeh ne sme skriti novega padca. Zdravje zajema zaloge je v tem
+modulu, poslovno stanje količin pa ostane na strani Zaloga.
+
+Pogled Težave združi samo operativne težave vhodov: čakajoče in karantenske strani,
+zavrnjene zalogovne pozicije, mrtva pisma registriranih vhodnih konektorjev in napake z
+dejanskim `PipelineRun`. Vsebinske odločitve — neznane vrednosti, kategorije in prevodi — so
+ločene v Preslikave. Podrobnosti vsebujejo omejeno tehnično diagnostiko samo za `ADMIN`;
+neadministratorska neposredna pot je omejena na aktivno organizacijo. Ker `sec.Role` danes
+pozna samo `ADMIN`, `CATALOG_EDITOR`, `COMMERCIAL` in `VIEWER`, izvedba ne izumlja vlog
+»operater integracij« ali »tehnična podpora«.
+
+Prva dostava je namenoma bralna. Za ponovni zagon, upload, popravljanje prevoda ali
+preslikavo kategorije ni gumba, dokler ne obstajata zapisovalna procedura in revizijska
+sled. Znana tehnična vrzel je zalogovni writer: nepričakovana napaka povrne transakcijo,
+zato neuspešen `stock.SyncRun` ni trajno zapisan. UI tega ne ponareja; pokaže zadnji uspeh,
+svežino in dejansko zavrnjene pozicije. Zaprtje te vrzeli zahteva ločeno spremembo zapisa
+workerja, ne kozmetičnega gumba v intranetu.
+
+Dokazi izvedbe: parametrizirane SQL poizvedbe za vseh osem glavnih in pomožnih bralnih
+pogledov ter štiri vrste podrobnosti so bile izvedene proti lokalni razvojni bazi `PIM` z
+izhodom 0; `PIM.Migrator --verify` potrdi F0–F10; ciljni F10 paket ostaja 10/0/0.

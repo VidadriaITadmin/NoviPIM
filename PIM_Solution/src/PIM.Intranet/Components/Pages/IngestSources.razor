@@ -1,0 +1,70 @@
+@page "/zajem/viri"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Viri in konektorji</PageTitle>
+<PimPage Title="Viri vhodnih podatkov" Subtitle="Register konektorjev, dejanska svežina in zadnje izvedbe. Mesto prevzema je prikazano samo, kadar ga je sled teka res zapisala; poverilnice se nikoli ne prikazujejo." Crumbs="Crumbs" />
+<IngestTabs Active="sources" />
+
+<section class="ui-card data-card" aria-label="Seznam virov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za to organizacijo ni nastavljenih virov." LoadingText="Nalaganje virov …">
+    <PimTable Caption="Viri podatkov izbrane organizacije" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td>
+              <a href="zajem/viri/@Uri.EscapeDataString(row.SourceCode)"><strong>@row.SourceCode</strong></a>
+              <div class="tree-path">@Kind(row.FlowKind) · @row.ConnectorType</div>
+            </td>
+            <td><PimChip Text="@(row.IsActive ? "Aktiven" : "Ustavljen")" Tone="@(row.IsActive ? "good" : null)" /></td>
+            <td>
+              @if (row.CanCreateProducts) { <PimChip Text="Sme ustvarjati" Tone="warn" Prefix="Pravica: " /> }
+              else { <span class="muted">samo dopolnjuje</span> }
+            </td>
+            <td><PimChip Text="@Status(row.Status)" Tone="@Tone(row.Status)" /></td>
+            <td>@Location(row)</td>
+            <td>@Moment(row.LastAttemptUtc)</td>
+            <td>@Moment(row.LastSuccessUtc)</td>
+            <td>@(row.ScheduleEnabled == false ? "Izklopljen" : Moment(row.NextScheduledUtc))</td>
+            <td class="numeric">@row.PendingCount.ToString("N0")</td>
+            <td class="numeric">@row.RejectedCount.ToString("N0")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<InboundFlowRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zajem", "zajem"), new("Viri in konektorji")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Vir"), new("Register"), new("Pravica"), new("Zdravje"), new("Mesto prevzema"),
+    new("Zadnji poskus"), new("Zadnji uspeh"), new("Naslednji zagon"), new("Čaka", Numeric: true), new("Zavrnjeno", Numeric: true),
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Pipeline.GetInboundFlowsAsync(organization.OrganizationId);
+    }
+    catch { Error = "Virov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Kind(string value) => value switch { "SAOP" => "API", "XML" => "XML", "STOCK" => "zaloga", "WORKBOOK" => "delovni zvezek", _ => value };
+  static string Location(InboundFlowRow row) => !string.IsNullOrWhiteSpace(row.Endpoint) ? row.Endpoint : "Ni registrirano";
+  static string Status(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja", "NeverRun" => "Še brez teka", _ => value };
+  static string? Tone(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "good", "Stale" => "warn", "Failed" => "bad", _ => null };
+}

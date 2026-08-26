@@ -1,0 +1,75 @@
+@page "/pravila/slovar"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+
+<PageTitle>Slovar vrednosti</PageTitle>
+<PimPage Title="Slovar vrednosti" Subtitle="Izvorna vrednost se prevede v ciljno znotraj domene. Stran prikazuje register; urejanje bo dodano šele z zapisovalno proceduro in revizijsko sledjo." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="dictionary-filter-title">
+  <h2 id="dictionary-filter-title" class="visually-hidden">Filtriranje slovarja vrednosti</h2>
+  <label class="visually-hidden" for="dictionary-search">Išči vrednost</label>
+  <input id="dictionary-search" class="search-input" type="search" placeholder="Išči izvorno ali ciljno vrednost …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="dictionary-domain">Domena</label>
+  <select id="dictionary-domain" class="filter-select" @bind="Domain" @bind:after="ApplyAsync">
+    <option value="">Vse domene</option>
+    @foreach (var row in Domains) { <option value="@row.Domain">@row.Domain (@row.RowCount.ToString("N0"))</option> }
+  </select>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Slovar vrednosti">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni vrednosti." LoadingText="Nalaganje slovarja …">
+    <PimTable Caption="Preslikave izvornih vrednosti" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.Domain</span></td>
+            <td>@row.SourceValue</td>
+            <td>@(row.Language ?? "—")</td>
+            <td>@row.TargetValue</td>
+            <td class="muted">@(row.Note ?? "—")</td>
+            <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani slovarja vrednosti" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ValueLookupRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.ValueDomainRow> Domains = [];
+  string Domain = "";
+  string Search = "";
+  int Skip;
+  const int Take = 50;
+  long Total;
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Slovar vrednosti")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Domena"), new("Izvorna vrednost"), new("Jezik"), new("Ciljna vrednost"), new("Opomba"), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Domains = await Governance.GetValueDomainsAsync(); } catch { Domains = []; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try { (Rows, Total) = await Governance.GetValueLookupsAsync(Domain, Search, Skip, Take); }
+    catch { Error = "Slovarja trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} vrstic";
+}

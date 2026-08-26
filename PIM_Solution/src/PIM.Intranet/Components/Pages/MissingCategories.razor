@@ -1,0 +1,52 @@
+@page "/kakovost/kategorije"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Nepreslikane kategorije</PageTitle>
+<PimPage Title="Nepreslikane kategorije" Subtitle="Poti iz dobaviteljevih virov, ki jim v kategorijskem drevesu ne ustreza nobena kategorija. Dokler ni preslikave, izdelek na spletu nima uvrstitve."
+         Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam nepreslikanih kategorij">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni nepreslikanih kategorij." LoadingText="Nalaganje kategorij …">
+    <PimTable Caption="Poti iz virov brez ustrezne kategorije, razvrščene po pogostosti" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td class="tree-path">@row.SourcePathKey</td>
+            <td class="numeric">@row.SeenCount.ToString("N0")</td>
+            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.MissingCategoryRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  const int Take = 300;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Nepreslikane kategorije")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Vir"), new("Pot iz vira"), new("Izdelkov", Numeric: true), new("Nazadnje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Pipeline.GetMissingCategoriesAsync(organization.OrganizationId, Take);
+    }
+    catch { Error = "Nepreslikanih kategorij trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

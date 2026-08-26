@@ -1,0 +1,14 @@
+@page "/nastavitve"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+
+<PageTitle>Nastavitve kataloga</PageTitle>
+<PimPage Title="Nastavitve kataloga" Subtitle="Šifranti in strukture, ki določajo obliko kataloga. Strani so za zdaj bralne; brez zapisovalne procedure ne prikazujejo navideznega gumba za shranjevanje." />
+
+<section class="hub-grid" aria-label="Področja nastavitev kataloga">
+  <PimHubCard Title="Atributi" Href="nastavitve/atributi" Description="Katere lastnosti obstajajo in pri koliko izdelkih imajo vrednost." />
+  <PimHubCard Title="Kategorije" Href="nastavitve/kategorije" Description="Drevesa, vozlišča in dejanska uporaba kategorij pri izdelkih." />
+  <PimHubCard Title="Skladišča" Href="nastavitve/skladisca" Description="Šifranti skladišč po organizaciji, kot so prišli iz SAOP." />
+  <PimHubCard Title="Spletni kanali" Href="nastavitve/kanali" Description="Jezik, kategorijsko drevo in ciljno polje posameznega spletnega mesta." />
+  <PimHubCard Title="Jeziki" Href="nastavitve/jeziki" Description="Jezikovne šifre po organizaciji in njihova preslikava v katalog." />
+  <PimHubCard Title="Pravila in preslikave" Href="pravila" Description="Validacijski profili, slovar vrednosti, preslikave polj in komercialna pravila." />
+</section>

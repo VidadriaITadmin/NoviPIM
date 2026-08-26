@@ -5,7 +5,7 @@
 
 /* Kartici pregleda sta gosti, a berljivi; na ozkih zaslonih se tabeli pomikata, namesto da bi se stiskali. */
 .table-scroll { overflow-x: auto; }
-.progress-value { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.progress-value { color: var(--pim-text-soft); font-variant-numeric: tabular-nums; min-width: 46px; }
 .issue-count { font-variant-numeric: tabular-nums; text-align: right; }
 .no-value { color: #8593a8; }
 
@@ -15,7 +15,7 @@
 .filter-select:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
-.kpi a:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.kpi a:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .quality-grid { grid-template-columns: 1fr; }

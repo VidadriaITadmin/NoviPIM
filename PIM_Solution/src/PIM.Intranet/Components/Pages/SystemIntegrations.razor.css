@@ -16,7 +16,7 @@
 /* Viden fokus tipkovnice: skupni slog gumbov obris odstrani, zato ga tu vrnemo. */
 .filter-button:focus-visible,
 .small-action:focus-visible,
-.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .data-table { min-width: 900px; }

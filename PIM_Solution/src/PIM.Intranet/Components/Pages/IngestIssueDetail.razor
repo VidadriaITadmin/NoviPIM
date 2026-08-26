@@ -1,0 +1,85 @@
+@page "/zajem/tezave/{IssueKind}/{IssueId:long}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PipelineReadService Pipeline
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Podrobnosti težave</PageTitle>
+<PimPage Title="Podrobnosti težave" Subtitle="Poslovno razumljiv vzrok in, samo za administratorje, omejena tehnična diagnostika." Crumbs="Crumbs" />
+<IngestTabs Active="issues" />
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Detail is null)" EmptyText="Težava ne obstaja ali ni več dostopna." LoadingText="Nalaganje težave …">
+  @if (Detail is not null)
+  {
+    <section class="detail-grid">
+      <article class="ui-card panel" aria-labelledby="issue-summary-title">
+        <h2 id="issue-summary-title">Kaj se je zgodilo</h2>
+        <p class="issue-summary">@Detail.Summary</p>
+        <dl class="detail-list">
+          <dt>Vrsta</dt><dd>@Detail.IssueKind</dd>
+          <dt>Stanje</dt><dd><PimChip Text="@Detail.Status" Tone="@Tone(Detail.Status)" /></dd>
+          <dt>Koda</dt><dd>@(Detail.ErrorCode ?? "—")</dd>
+          <dt>Vir</dt><dd>@Detail.SourceCode</dd>
+          <dt>Entiteta</dt><dd>@(Detail.EntityType ?? "—")</dd>
+        </dl>
+      </article>
+      <article class="ui-card panel" aria-labelledby="issue-context-title">
+        <h2 id="issue-context-title">Kontekst</h2>
+        <dl class="detail-list">
+          <dt>Podjetje</dt><dd>@Detail.OrganizationName</dd>
+          <dt>Prvič</dt><dd>@Detail.FirstSeenUtc.ToLocalTime().ToString("g")</dd>
+          <dt>Nazadnje</dt><dd>@Detail.LastSeenUtc.ToLocalTime().ToString("g")</dd>
+          <dt>Tek</dt><dd>@if (Detail.RunId is not null) { <a href="zajem/teki/@Detail.RunId">@Detail.RunId</a> } else { <span>—</span> }</dd>
+        </dl>
+      </article>
+    </section>
+
+    @if (IsAdmin)
+    {
+      <details class="ui-card technical-details">
+        <summary>Tehnične podrobnosti za administratorja</summary>
+        @if (!string.IsNullOrWhiteSpace(Detail.TechnicalDetail))
+        {
+          <p>@Detail.TechnicalDetail</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(Detail.PayloadPreview))
+        {
+          <h2>Omejen predogled vhoda</h2>
+          <p class="muted">Prikazanih je največ 20.000 znakov. Poverilnice se ne berejo iz konfiguracije.</p>
+          <pre>@Detail.PayloadPreview</pre>
+        }
+      </details>
+    }
+  }
+</PimState>
+
+@code {
+  [Parameter] public string IssueKind { get; set; } = "";
+  [Parameter] public long IssueId { get; set; }
+  InboundIssueDetail? Detail;
+  bool IsAdmin;
+  bool Loading = true;
+  string? Error;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Težave", "zajem/tezave"), new("Podrobnosti")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+      IsAdmin = state.User.IsInRole(PimRoles.Admin);
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      int? scope = IsAdmin ? null : organization.OrganizationId;
+      Detail = await Pipeline.GetInboundIssueDetailAsync(IssueKind, IssueId, scope, IsAdmin);
+    }
+    catch { Error = "Podrobnosti težave trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static string? Tone(string value) => value switch { "Critical" or "Error" or "Failed" or "Quarantined" or "Dead" => "bad", "Warning" or "Pending" or "Retrying" => "warn", "Resolved" or "Processed" or "Applied" => "good", _ => null };
+}

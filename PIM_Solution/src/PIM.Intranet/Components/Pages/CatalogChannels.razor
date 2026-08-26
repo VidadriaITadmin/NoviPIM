@@ -1,0 +1,42 @@
+@page "/nastavitve/kanali"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+
+<PageTitle>Spletni kanali</PageTitle>
+<PimPage Title="Spletni kanali" Subtitle="Register pove, kateri jezik, drevo kategorij in kanonično polje uporablja posamezno spletno mesto." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam spletnih kanalov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Spletnih kanalov ni." LoadingText="Nalaganje kanalov …">
+    <PimTable Caption="Spletni kanali iz registra" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><strong>@row.WebSiteName</strong><div class="tree-path">@row.WebSiteCode</div></td>
+            <td><span class="code-value">@row.LanguageCode</span></td>
+            <td><span class="code-value">@row.CategoryTreeCode</span></td>
+            <td><span class="code-value">@row.CategoryFieldCode</span></td>
+            <td class="numeric">@row.CategoryCount.ToString("N0")</td>
+            <td><PimChip Text="@(row.IsActive ? "Aktiven" : "Neaktiven")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.WebSiteRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Spletni kanali")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Kanal"), new("Jezik"), new("Drevo"), new("Kanonično polje"), new("Kategorij", Numeric: true), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Rows = await Catalog.GetWebSitesAsync(); }
+    catch { Error = "Spletnih kanalov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

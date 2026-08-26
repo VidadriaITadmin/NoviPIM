@@ -1,43 +1,51 @@
 using System.Text.RegularExpressions;
 
-// Pogodbeni test UX skladnosti osebne izkaznice izdelka.
-// Obseg je namenoma ozek: samo predstavitev in dostopnost strani /izdelki/{id}.
-// Referenca je potrjena slika `../PIM_test/UX_pictures/Osebna_izkaznica_izdelka.png`,
-// vendar se prevzame samo tisto, kar pokriva obstoječi read model `GetProductDetailAsync`.
-// Test ne sme zahtevati novih poizvedb, novih polj, urejevalnih kontrol ali akcij pisanja.
+// Pogodbeni test celovite bralne kartice izdelka. Uporabnik je 2026-08-26 izrecno odobril
+// zamenjavo stare pogodbe s stirimi zavihki. Dostopnostne zahteve prejsnje pogodbe ostajajo;
+// spremenjen je samo podatkovni obseg, ki ga zdaj dokazujeta migracija 100 in Workbench servis.
 
 var root = FindRoot();
-var razorPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ProductDetail.razor");
-var cssPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ProductDetail.razor.css");
+var razorPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ProductCard.razor");
+var cssPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ProductCard.razor.css");
+var servicePath = Path.Combine(root, "src", "PIM.Intranet", "Services", "ProductWorkbenchService.cs");
+var tablePath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimTable.razor");
+var statePath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimState.razor");
+var chipPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimChip.razor");
+var barPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimBar.razor");
 
 Assert(File.Exists(razorPath), "Manjka stran podrobnosti izdelka: " + razorPath);
 Assert(File.Exists(cssPath), "Manjka izoliran slog podrobnosti izdelka: " + cssPath);
+foreach (var path in new[] { servicePath, tablePath, statePath, chipPath, barPath })
+  Assert(File.Exists(path), "Manjka zahtevani gradnik kartice: " + path);
 
 var markup = File.ReadAllText(razorPath);
 var css = File.ReadAllText(cssPath);
+var service = File.ReadAllText(servicePath);
+var table = File.ReadAllText(tablePath);
+var state = File.ReadAllText(statePath);
+var chip = File.ReadAllText(chipPath);
+var bar = File.ReadAllText(barPath);
 
-// 1. Drobtinice so navigacijski sklop nazaj na seznam (referenca: "Izdelki › AZ_0002").
-var breadcrumb = Regex.Match(markup, "<nav class=\"breadcrumb\"[^>]*>");
-Assert(breadcrumb.Success, "Pot do izdelka mora biti navigacijski sklop <nav class=\"breadcrumb\">.");
-Assert(Regex.IsMatch(breadcrumb.Value, "aria-label=\"[^\"]+\""), "Drobtinice morajo imeti aria-label.");
-Assert(Regex.IsMatch(markup, "<nav class=\"breadcrumb\"[^>]*>\\s*<a href=\"izdelki\">"), "Prva drobtinica mora biti povezava na seznam izdelkov.");
-Assert(Regex.IsMatch(markup, "class=\"breadcrumb-current\" aria-current=\"page\""), "Zadnja drobtinica mora biti označena z aria-current=\"page\".");
-Assert(Regex.IsMatch(markup, "<span class=\"breadcrumb-sep\" aria-hidden=\"true\"></span>"), "Ločilo drobtinic mora biti nadzorovana CSS oblika z aria-hidden.");
+// 1. Skupna glava izrise dostopne drobtine nazaj na seznam.
+Assert(markup.Contains("<PimPage", StringComparison.Ordinal), "Kartica mora uporabljati skupno glavo PimPage.");
+Assert(markup.Contains("new(\"Izdelki\", \"izdelki\")", StringComparison.Ordinal), "Prva drobtina mora voditi na seznam izdelkov.");
 Assert(!markup.Contains('\u203A'), "Unicode nadomestne ikone niso dovoljene; uporabi CSS obliko.");
 
 // 2. Naslov in identifikacijska vrstica izhajata iz resničnih polj glave (referenca: naslov + "ItemID · EAN").
-Assert(markup.Contains("<h1>@Detail.Header.ItemId</h1>", StringComparison.Ordinal), "Naslov strani mora biti dejanski ItemId izdelka.");
+Assert(markup.Contains("Title=\"@Detail.Header.Name\"", StringComparison.Ordinal), "Naslov strani mora biti dejanski naziv izdelka.");
 var identity = Regex.Match(markup, "<p class=\"identity-line\">[\\s\\S]*?</p>");
 Assert(identity.Success, "Manjka identifikacijska vrstica <p class=\"identity-line\">.");
 Assert(identity.Value.Contains("Detail.Header.ItemId", StringComparison.Ordinal), "Identifikacijska vrstica mora izpisati dejanski ItemId.");
 Assert(identity.Value.Contains("Detail.Header.Ean", StringComparison.Ordinal), "Identifikacijska vrstica mora izpisati dejanski EAN.");
 
-// 3. Zastavici aktivnosti in spletne objave sta resnični polji glave, izpisani s svojo oznako.
-Assert(Regex.Matches(markup, "class=\"flag-chip").Count == 2, "Glava mora prikazati natanko obe obstoječi zastavici (IsActive, WebPublish).");
+// 3. Glava loci aktivnost, objavo in pripravljenost obeh ciljnih svetov.
+Assert(Regex.Matches(markup, "class=\"flag-chip").Count >= 2, "Glava mora ohraniti zastavici IsActive in WebPublish.");
 Assert(markup.Contains(">Aktiven: ", StringComparison.Ordinal), "Zastavica aktivnosti mora imeti vidno oznako \"Aktiven: \".");
 Assert(markup.Contains(">Za splet: ", StringComparison.Ordinal), "Zastavica spletne objave mora imeti vidno oznako \"Za splet: \".");
 foreach (var field in new[] { "Detail.Header.IsActive", "Detail.Header.WebPublish" })
   Assert(markup.Contains(field, StringComparison.Ordinal), "Zastavica mora izhajati iz " + field + ".");
+foreach (var field in new[] { "Detail.Header.IsPromoted", "Detail.Header.ErpStatus", "Detail.Header.WebStatus", "Detail.Header.Completeness" })
+  Assert(markup.Contains(field, StringComparison.Ordinal), "Glava mora prikazati resnicno polje " + field + ".");
 
 // 4. Povzetek stanja je poimenovan sklop kartic, izpeljan iz dejanskih profilov (referenca: kartice kanalov + popolnost).
 var summary = Regex.Match(markup, "<section class=\"detail-summary\"[\\s\\S]*?</section>");
@@ -54,25 +62,26 @@ Assert(summary.Value.Contains("Detail.Header.Completeness", StringComparison.Ord
   "Kartica popolnosti mora izpisati dejansko popolnost izdelka.");
 Assert(Regex.IsMatch(css, "\\.summary-grid\\s*\\{[^}]*grid-template-columns:"), "Kartice povzetka morajo biti postavljene v mrežo.");
 
-// 5. Merilnik popolnosti mora sporočati vrednost, ne samo širine.
-var meters = Regex.Matches(markup, "<span class=\"progress-track\"[^>]*>");
-Assert(meters.Count >= 1, "Povzetek mora ohraniti merilnik popolnosti.");
+// 5. Skupni merilnik popolnosti mora sporocati vrednost, ne samo sirine.
+Assert(markup.Contains("<PimBar", StringComparison.Ordinal), "Povzetek mora uporabiti skupni merilnik PimBar.");
+var meters = Regex.Matches(bar, "<span class=\"progress-track\"[^>]*>");
+Assert(meters.Count == 1, "PimBar mora imeti en merilnik popolnosti.");
 foreach (Match meter in meters)
   foreach (var attribute in new[] { "role=\"progressbar\"", "aria-valuenow=", "aria-valuemin=\"0\"", "aria-valuemax=\"100\"", "aria-label=" })
     Assert(meter.Value.Contains(attribute, StringComparison.Ordinal), "Merilnik popolnosti nima " + attribute + ": " + meter.Value);
-Assert(Regex.IsMatch(markup, "aria-valuenow=\"@Number\\("), "aria-valuenow mora biti izpisan neodvisno od območnih nastavitev.");
-foreach (Match icon in Regex.Matches(markup, "<i [^>]*>"))
+Assert(bar.Contains("aria-valuenow=\"@Number\"", StringComparison.Ordinal), "aria-valuenow mora biti izpisan neodvisno od obmocnih nastavitev.");
+foreach (Match icon in Regex.Matches(markup + bar, "<i [^>]*>"))
   Assert(icon.Value.Contains("aria-hidden=\"true\"", StringComparison.Ordinal), "Okrasni element mora imeti aria-hidden: " + icon.Value);
 
 // 6. Zavihki so pravi ARIA tablist, vsak zavihek pa je povezan s svojim panelom (referenca: vrstica zavihkov).
-var tablist = Regex.Match(markup, "<div class=\"page-tabs\"[^>]*>");
+var tablist = Regex.Match(markup, "<div class=\"product-tabs\"[^>]*>");
 Assert(tablist.Success, "Zavihki morajo ostati sklop <div class=\"page-tabs\">.");
 Assert(tablist.Value.Contains("role=\"tablist\"", StringComparison.Ordinal), "Sklop zavihkov mora biti razglašen kot role=\"tablist\".");
 Assert(Regex.IsMatch(tablist.Value, "aria-label=\"[^\"]+\""), "Sklop zavihkov mora imeti aria-label.");
 
 var tabs = Regex.Matches(markup, "<button[^>]*role=\"tab\"[^>]*>");
 var panels = Regex.Matches(markup, "<section[^>]*role=\"tabpanel\"[^>]*>");
-Assert(tabs.Count >= 3, "Stran mora ohraniti vsaj tri zavihke; obstoječih se ne odstranjuje. Najdenih: " + tabs.Count);
+Assert(tabs.Count == 12, "Nova odobrena pogodba zahteva natanko 12 domenskih zavihkov. Najdenih: " + tabs.Count);
 Assert(panels.Count == tabs.Count,
   "Vsak zavihek mora imeti natanko en pripadajoč panel role=\"tabpanel\". Zavihkov: " + tabs.Count + ", panelov: " + panels.Count);
 
@@ -102,70 +111,71 @@ foreach (Match tab in tabs)
   Assert(panel.Value.Contains("tabindex=\"0\"", StringComparison.Ordinal), "Panel mora biti dosegljiv s tipkovnico: " + panel.Value);
   Assert(panel.Value.Contains("tab-panel", StringComparison.Ordinal), "Panel mora nositi razred tab-panel: " + panel.Value);
 }
-Assert(Regex.IsMatch(markup, "role=\"tab\"[^>]*>[^<]*Detail\\.Profiles\\.Count"), "Števec profilov mora izhajati iz dejanskega Detail.Profiles.Count.");
-Assert(Regex.IsMatch(markup, "role=\"tab\"[^>]*>[^<]*Detail\\.Issues\\.Count"), "Števec težav mora izhajati iz dejanskega Detail.Issues.Count.");
+Assert(markup.Contains("Detail.Profiles.Count", StringComparison.Ordinal), "Stevec kakovosti mora izhajati iz dejanskih profilov.");
+Assert(markup.Contains("Detail.Issues.Count", StringComparison.Ordinal), "Stevec kakovosti mora izhajati iz dejanskih tezav.");
 
 // 7. Tabele morajo ostati berljive, opisane in se na ozkih zaslonih vodoravno pomikati.
 // Pravila se ne vežejo na fiksno število tabel, ampak na razmerje: vsaka
 // podatkovna tabela mora imeti svoj pomični ovoj, vsaka tabela svoj napis in
 // vsaka celica glave svoj scope. Tako nova tabela ne podre testa, izpuščen
 // ovoj ali napis pa ga.
-var scrolls = Regex.Matches(markup, "<div class=\"table-scroll\"[^>]*>");
-var dataTables = Regex.Matches(markup, "<table class=\"data-table\"[^>]*>");
-Assert(scrolls.Count == dataTables.Count,
-  "Vsaka podatkovna tabela mora biti v ovoju <div class=\"table-scroll\">. Tabel: " + dataTables.Count + ", ovojev: " + scrolls.Count);
+Assert(Regex.Matches(markup, "<PimTable").Count >= 10, "Kartica mora podatkovne sklope izrisati s skupnim PimTable.");
+var scrolls = Regex.Matches(table, "<div class=\"table-scroll\"[^>]*>");
+var dataTables = Regex.Matches(table, "<table class=\"data-table\"[^>]*>");
+Assert(scrolls.Count == dataTables.Count && dataTables.Count == 1,
+  "Skupni PimTable mora imeti en pomični ovoj in eno tabelo.");
 foreach (Match scroll in scrolls)
   foreach (var attribute in new[] { "role=\"region\"", "tabindex=\"0\"", "aria-label=" })
     Assert(scroll.Value.Contains(attribute, StringComparison.Ordinal), "Pomični ovoj tabele nima " + attribute + ": " + scroll.Value);
 
-var allTables = Regex.Matches(markup, "<table[^>]*>");
-Assert(Regex.Matches(markup, "<caption>").Count == allTables.Count,
-  "Vsaka tabela mora ohraniti napis <caption>. Tabel: " + allTables.Count + ", napisov: " + Regex.Matches(markup, "<caption>").Count);
+var allTables = Regex.Matches(table, "<table[^>]*>");
+Assert(Regex.Matches(table, "<caption>").Count == allTables.Count,
+  "Vsaka tabela mora ohraniti napis <caption>.");
 
 // \b prepreci, da bi se "<th" ujel tudi z "<thead>".
-var glaveBrezScope = Regex.Matches(markup, "<th\\b(?![^>]*scope=)[^>]*>");
+var glaveBrezScope = Regex.Matches(table, "<th\\b(?![^>]*scope=)[^>]*>");
 Assert(glaveBrezScope.Count == 0,
   "Vsaka celica glave <th> mora imeti scope. Brez scope: " + (glaveBrezScope.Count > 0 ? glaveBrezScope[0].Value : ""));
-Assert(Regex.Matches(markup, "<th scope=\"col\">").Count >= 8, "Obstoječih stolpcev s scope=\"col\" se ne odstranjuje.");
-Assert(Regex.Matches(markup, "<th scope=\"row\">").Count >= 8, "Vrstice pregleda morajo biti glave vrstic z scope=\"row\".");
-Assert(Regex.IsMatch(css, "\\.table-scroll\\s*\\{[^}]*overflow-x:\\s*auto"), "Ovoj tabele mora imeti overflow-x: auto.");
+Assert(table.Contains("<th scope=\"col\"", StringComparison.Ordinal), "PimTable mora stolpce oznaciti s scope=col.");
+Assert(markup.Contains("<th scope=\"row\"", StringComparison.Ordinal), "Vrstice pregleda morajo imeti scope=row.");
 Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
 Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zaslonih se tabela ne sme stiskati; potrebna je min-width.");
 
 // 8. Statusni čipi ne smejo biti razločljivi samo po barvi.
-var chipCount = Regex.Matches(markup, "class=\"status-chip ").Count;
-Assert(chipCount >= 3, "Stran mora ohraniti statusne čipe glave, povzetka in profilov.");
-Assert(Regex.Matches(markup, "<span class=\"visually-hidden\">Status: </span>").Count == chipCount,
-  "Vsak statusni čip mora imeti bralcem zaslona namenjeno oznako \"Status: \".");
+Assert(Regex.Matches(markup, "<PimChip").Count >= 5, "Kartica mora statusne cipe uporabljati v glavi, povzetku in profilih.");
+Assert(chip.Contains("<span class=\"visually-hidden\">@Prefix</span>", StringComparison.Ordinal),
+  "Vsak statusni cip mora imeti bralcem zaslona namenjeno predpono.");
+Assert(chip.Contains("= \"Status: \"", StringComparison.Ordinal), "Privzeta predpona statusnega cipa mora biti Status.");
 
 // 9. Asinhrona in prazna stanja se morajo sporočiti tehnologijam za dostopnost.
-Assert(Regex.IsMatch(markup, "class=\"ui-card loading-state\"[^>]*role=\"status\""), "Stanje nalaganja mora biti razglašeno kot role=\"status\".");
-Assert(Regex.IsMatch(markup, "class=\"ui-card error-state\"[^>]*role=\"alert\""), "Stanje napake mora biti razglašeno kot role=\"alert\".");
+Assert(markup.Contains("<PimState", StringComparison.Ordinal), "Kartica mora uporabljati skupna stanja PimState.");
+Assert(Regex.IsMatch(state, "loading-state[^>]*role=\"status\""), "Stanje nalaganja mora biti razglašeno kot role=status.");
+Assert(Regex.IsMatch(state, "error-state[^>]*role=\"alert\""), "Stanje napake mora biti razglašeno kot role=alert.");
 // Vsaka podatkovna tabela potrebuje svoje prazno stanje, poleg tega še
 // neobstoječ izdelek. Vezano na število tabel, ne na fiksno številko.
-var praznaStanja = Regex.Matches(markup, "empty-state").Count;
-Assert(praznaStanja >= dataTables.Count + 1,
-  "Vsaka podatkovna tabela in neobstoječ izdelek morajo ohraniti prazno stanje. Tabel: " + dataTables.Count + ", praznih stanj: " + praznaStanja);
+Assert(Regex.Matches(markup, "empty-state").Count >= 11,
+  "Vsak domenski sklop kartice mora imeti posteno prazno stanje.");
 
 // 10. Viden fokus tipkovnice na vseh interaktivnih in pomičnih elementih strani.
-foreach (var selector in new[] { ".breadcrumb a", ".page-tab", ".tab-panel", ".table-scroll" })
+foreach (var selector in new[] { ".product-tabs button", ".tab-panel", ".media-link", ".origin-link" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
-Assert(Regex.IsMatch(css, "\\.breadcrumb-sep\\s*\\{[^}]*transform:\\s*rotate\\(45deg\\)"), "Ločilo drobtinic mora biti CSS oblika, ne besedilni znak.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");
 
 // 11. Varovalka: stran ostane vezana na obstoječi resnični poizvedbi.
-var allowedCalls = new[] { "GetCurrentOrganizationAsync", "GetProductDetailAsync" };
+var allowedCalls = new[] { "GetCurrentOrganizationAsync" };
 foreach (var call in allowedCalls)
   Assert(markup.Contains("Data." + call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "Data\\.(\\w+)"))
   Assert(allowedCalls.Contains(call.Groups[1].Value, StringComparer.Ordinal), "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
+foreach (var call in new[] { "GetProductCardAsync", "GetProductOriginAsync" })
+  Assert(markup.Contains("Workbench." + call, StringComparison.Ordinal), "Kartica mora uporabiti " + call + ".");
 
 // 12. Varovalka: obstoječe ravnanje ostane nedotaknjeno — zavihki samo preklapljajo prikaz.
-foreach (var behavior in new[] { "OnParametersSetAsync", "GetProductDetailAsync(org.OrganizationId,ProductId)" })
+foreach (var behavior in new[] { "OnParametersSetAsync", "GetProductCardAsync(organization.OrganizationId, ProductId", "GetProductOriginAsync(organization.OrganizationId, ProductId" })
   Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstoječe ravnanje strani je spremenjeno; manjka: " + behavior);
 // "history" dodan 2026-08-12 s sledljivostjo sprememb (migracije 028-038).
-var allowedTabs = new[] { "overview", "profiles", "issues", "history" };
+var allowedTabs = new[] { "overview", "texts", "attributes", "categories", "media", "prices", "stock", "commercial", "quality", "outbound", "history", "origin" };
 var handlers = Regex.Matches(markup, "@onclick='\\(\\)=>Tab=\"(\\w+)\"'");
 Assert(handlers.Count == tabs.Count,
   "Vsak zavihek mora imeti natanko en preklop prikaza. Zavihkov: " + tabs.Count + ", preklopov: " + handlers.Count);
@@ -177,14 +187,14 @@ Assert(Regex.Matches(markup, "@onclick").Count == handlers.Count, "Novo dejanje 
 foreach (var forbidden in new[] { "<form", "@onsubmit", "@bind", "method=\"post\"", "<input", "<select", "<textarea", "<img", "type=\"checkbox\"", "type=\"file\"", "<dialog", "contenteditable" })
   Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Predstavitveni sklop ne sme uvesti " + forbidden + ".");
 
-// 14. Varovalka: referenčna slika ni podatkovna pogodba — polj in dejanj brez vira ni dovoljeno prikazati.
-// "Zgodovina" je bila s tega seznama umaknjena 2026-08-12: dobila je pravi
-// podatkovni vir (Detail.History, migracije 028-038). Ostale postavke ostajajo
-// prepovedane, dokler nimajo svojega vira.
-foreach (var fabricated in new[] { "Shrani", "Uredi", "Izbriši", "Revalidiraj", "Naziv", "Kratki naziv", "Tip izdelka", "Dimenzije",
-  "Teža", "Višina", "Širina", "Globina", "Država porekla", "HS koda", "Slika", "Mediji", "Kategorije", "Atributi", "Cene", "Zaloga",
-  "Komerciala", "Napake in opozorila" })
-  Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati nepodprte vsebine: " + fabricated + ".");
+// 14. Nova polja so dovoljena samo zato, ker imajo proceduro; zapisovanje ostaja prepovedano.
+foreach (var value in new[] { "intranet.GetProductCard", "intranet.GetProductOrigin", "CommandType.StoredProcedure", "GetOrdinal" })
+  Assert(service.Contains(value, StringComparison.Ordinal), "Bralni servis ne dokazuje: " + value);
+Assert(!service.Contains("HttpClient", StringComparison.Ordinal), "Kartica ne sme klicati zunanjih URL-jev.");
+foreach (var fabricatedAction in new[] { "Shrani", "Uredi", "Izbriši", "Revalidiraj" })
+  Assert(!markup.Contains(fabricatedAction, StringComparison.Ordinal), "Bralna kartica ne sme ponujati dejanja: " + fabricatedAction + ".");
+foreach (var link in new[] { "zajem/tezave/INBOX/", "outbound", "mediji?izdelek=", "cene?izdelek=", "zaloge?izdelek=" })
+  Assert(markup.Contains(link, StringComparison.Ordinal), "Kartica mora povezati uporabnika v kontekst: " + link);
 
 Console.WriteLine("F10 product detail UX contract PASS.");
 

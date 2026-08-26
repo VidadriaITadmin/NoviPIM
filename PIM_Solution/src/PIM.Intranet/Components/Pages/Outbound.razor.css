@@ -8,10 +8,10 @@
 /* Deset stolpcev je gostih; na ozkih zaslonih se tabela pomika, namesto da bi se stiskala. */
 .table-scroll { overflow-x: auto; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
-.page-position { color: #526078; font-size: 13px; }
+.page-position { color: var(--pim-text-soft); font-size: 13px; }
 
 /* Odklon je opozorilo, zato nosi tudi besedilo in ne le barve. */
-.drift-flag { background: #fff7e8; border: 1px solid #fde1ad; border-radius: 5px; color: #cf7200; display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 6px; }
+.drift-flag { background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: 5px; color: var(--pim-warn-text); display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 6px; }
 
 /* Viden fokus tipkovnice: skupni slog polj in gumbov obris odstrani, zato ga tu vrnemo. */
 .page-tab:focus-visible,
@@ -19,7 +19,7 @@
 .filter-select:focus-visible,
 .small-action:focus-visible,
 .pagination button:focus-visible,
-.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .data-table { min-width: 1180px; }

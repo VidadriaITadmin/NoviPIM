@@ -1,0 +1,12 @@
+@page "/pravila"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+
+<PageTitle>Pravila</PageTitle>
+<PimPage Title="Pravila" Subtitle="Registri, ki določajo veljavnost, prevode in preslikavo podatkov. Sprememba vrstice je poslovna odločitev; pregled je ločen od zapisovalnih poti." />
+
+<section class="hub-grid" aria-label="Področja pravil">
+  <PimHubCard Title="Validacijski profili" Href="pravila/validacija" Description="Obvezna polja, resnost in obseg blokade za ERP ali splet." />
+  <PimHubCard Title="Slovar vrednosti" Href="pravila/slovar" Description="Prevodi in normalizacije izvornih vrednosti v kanonične vrednosti." />
+  <PimHubCard Title="Preslikave polj" Href="pravila/preslikave" Description="Kateri element vira polni katero kanonično polje in ali je pri zajemu obvezen." />
+  <PimHubCard Title="Komercialna pravila" Href="pravila-popustov" Description="Popusti, pragovi in izjeme za stranke ter vrste strank." />
+</section>

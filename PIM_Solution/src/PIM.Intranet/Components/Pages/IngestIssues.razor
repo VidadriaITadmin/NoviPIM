@@ -1,0 +1,130 @@
+@page "/zajem/tezave"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PipelineReadService Pipeline
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Težave vhodnih podatkov</PageTitle>
+<PimPage Title="Težave vhodnih podatkov" Subtitle="En delovni seznam čakalnih strani, karantene, zavrnjene zaloge, mrtvih pisem in sistemskih napak. Ponavljajoči vzroki so združeni, ne prikazani tisočkrat." Crumbs="Crumbs" />
+<IngestTabs Active="issues" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="ingest-issues-filter-title">
+  <h2 id="ingest-issues-filter-title" class="visually-hidden">Filtriranje težav vhodnih podatkov</h2>
+  <label class="visually-hidden" for="ingest-issue-search">Poišči težavo</label>
+  <input id="ingest-issue-search" type="search" class="search-input" placeholder="Vir, razlog ali podjetje …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="ingest-issue-kind">Vrsta težave</label>
+  <select id="ingest-issue-kind" class="filter-select" @bind="Kind" @bind:after="ApplyAsync">
+    <option value="">Vse težave</option>
+    <option value="INBOX">Čakalna vrsta in karantena</option>
+    <option value="STOCK">Zavrnjena zaloga</option>
+    <option value="DEADLETTER">Mrtva pisma</option>
+    <option value="ERROR">Sistemske napake</option>
+  </select>
+  @if (IsAdmin)
+  {
+    <button type="button" class="secondary-button" @onclick="ToggleScopeAsync">@(ShowAll ? "Aktivno podjetje" : "Vsa podjetja")</button>
+  }
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<div class="message-state info-message">
+  Nerazvrščene vrednosti, dobaviteljeve kategorije in prevodi so v pogledu
+  <a href="zajem/preslikave">Preslikave</a>, ker zahtevajo vsebinsko odločitev in niso tehnična napaka.
+</div>
+
+<section class="ui-card data-card section-gap" aria-label="Seznam težav vhodnih podatkov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni težav." LoadingText="Nalaganje težav …">
+    <PimTable Caption="Združene težave po viru in vzroku" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><PimChip Text="@Severity(row.Severity)" Tone="@Tone(row.Severity)" Prefix="Resnost: " /></td>
+            <td>
+              <a href="zajem/tezave/@row.IssueKind/@row.IssueId"><strong>@row.Title</strong></a>
+              <div class="issue-detail">@row.Detail</div>
+            </td>
+            <td>@row.OrganizationName</td>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td class="numeric">@row.OccurrenceCount.ToString("N0")</td>
+            <td>@row.FirstSeenUtc.ToLocalTime().ToString("g")</td>
+            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+            <td>
+              @if (row.RunId is not null) { <a href="zajem/teki/@row.RunId">Odpri tek</a> }
+              else { <span class="muted">—</span> }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani težav vhodnih podatkov" />
+  </PimState>
+</section>
+
+@code {
+  [Parameter, SupplyParameterFromQuery(Name = "vrsta")] public string? RequestedKind { get; set; }
+
+  IReadOnlyList<InboundIssueRow> Rows = [];
+  int? OrganizationId;
+  bool IsAdmin;
+  bool ShowAll;
+  bool Loading = true;
+  bool QueryApplied;
+  string? Error;
+  string Search = "";
+  string Kind = "";
+  int Skip;
+  const int Take = 50;
+  long Total;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Težave")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Resnost"), new("Težava"), new("Podjetje"), new("Vir"), new("Ponovitev", Numeric: true),
+    new("Prvič"), new("Nazadnje"), new("Povezava"),
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    IsAdmin = state.User.IsInRole(PimRoles.Admin);
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    await LoadAsync();
+  }
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (!QueryApplied && !string.IsNullOrWhiteSpace(RequestedKind))
+    {
+      QueryApplied = true;
+      Kind = RequestedKind.ToUpperInvariant();
+      if (OrganizationId is not null) await LoadAsync();
+    }
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try
+    {
+      int? scope = ShowAll && IsAdmin ? null : OrganizationId.Value;
+      (Rows, Total) = await Pipeline.GetInboundIssuesAsync(scope, Kind, Search, Skip, Take);
+    }
+    catch { Error = "Težav vhodnih podatkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task ToggleScopeAsync() { ShowAll = !ShowAll; Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} skupin težav";
+  static string Severity(string value) => value switch { "Critical" => "Kritično", "Error" => "Napaka", "Warning" => "Opozorilo", _ => value };
+  static string? Tone(string value) => value switch { "Critical" or "Error" => "bad", "Warning" => "warn", _ => null };
+}

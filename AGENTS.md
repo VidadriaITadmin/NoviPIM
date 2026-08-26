@@ -5,7 +5,7 @@
 > je zastarel — ne upoštevaj ga in to javi.
 
 Velja za: Hermes (koordinator), Claude Code (izvajalec), Codex (QA).
-Zadnja sprememba: 2026-08-12.
+Zadnja sprememba: 2026-08-24.
 
 ---
 
@@ -32,18 +32,42 @@ Vse poti v tem dokumentu so relativne na koren repozitorija.
 
 PIM za ~200.000 artiklov štirih podjetij.
 
-- **.NET 9** (`dotnet --version` → 9.0.x), C#
+- **.NET 10** (`dotnet --version` → 10.0.x), C#
 - **Blazor Server** intranet (`PIM.Intranet`), teče na `http://127.0.0.1:5199`
 - **MS SQL Server**, migracije so oštevilčene SQL datoteke
-- 7 domenskih projektov, 10 workerjev, 33+ testnih projektov
+- 7 domenskih projektov, 10 workerjev, 53 konzolnih testnih projektov in 1 xUnit projekt
 
 **Ni** Node, ni React, ni Vite. Če v repozitoriju najdeš `package.json`,
 `npm test` ali `vitest`, to **ni** del tega sistema in ni dokaz ničesar.
 
+### 2.1 Trajni produktni model (obvezni kontekst)
+
+NoviPIM ni samo seznam artiklov. Je nadzorna in delovna aplikacija za celoten tok:
+
+1. **VHODI** — SAOP, dobaviteljski XML in datoteke; uporabnik vidi zajem, napake ter ureja
+   preslikave polj, atributov, kategorij, vrednosti in prevodov.
+2. **PIM** — kanonični in PIM-lastni podatki o artiklih, besedilih, lastnostih, kategorijah,
+   medijih, cenah, zalogi, strankah in partnerjih z lastništvom ter zgodovino sprememb.
+3. **KAKOVOST** — validacijski profili, manjkajoča polja, karantena in pripravljenost za
+   posamezen cilj; napaka mora povedati, kaj blokira in kdo jo lahko odpravi.
+4. **IZHODI ERP** — nadzorovan zapis nazaj v SAOP za artikle, cene, cenike, stranke in druge
+   ERP entitete: odobritev, poskus, odgovor, echo in odklon.
+5. **IZHODI SPLET** — nadzor izvoznih profilov in CSV-jev za spletne kanale, vključno s
+   pokritostjo stolpcev, validacijo, predogledom, zgodovino in dostavo.
+6. **OBVESTILA IN NADZOR** — alarmi v aplikaciji, e-poštne dostave, stopnjevanje ter pregled
+   po organizaciji in skupinah uporabnikov.
+7. **UPRAVLJANJE IN ANALITIKA** — vloge, nastavitve, izvor/lastništvo podatkov, komercialna
+   pravila in popusti ter analize artiklov, zaloge, cen in naročilnic.
+
+Vsaka nova stran ali funkcija mora povedati: fazo toka, avtoritativni vir, organizacijski
+kontekst, dovoljene vloge, ali je samo bralna ali ima resnično zapisovalno pot, ter katero
+opozorilo nastane ob napaki. Podrobni in trajni zemljevid je v
+[`docs/PRODUKTNI_MODEL_PIM.md`](docs/PRODUKTNI_MODEL_PIM.md).
+
 ## 3. Ukazi, ki edini štejejo kot dokaz
 
 ```powershell
-# EDINI merodajni testni zagon (build + vseh 43 testnih projektov)
+# EDINI merodajni testni zagon (build + 53 konzolnih projektov + xUnit)
 scripts\run_tests.ps1
 
 # samo ciljni projekti med razvojem
@@ -56,7 +80,7 @@ dotnet run --project PIM_Solution\src\PIM.Migrator -- --verify
 ### Zakaj `dotnet test` ni dovolj
 
 `dotnet test PIM_Solution\PIM.sln` zažene **samo projekte s test-sdk**. Tak je v
-tej rešitvi **en sam** (`PIM.ChangeTracking.Integration`). Preostalih 42 testnih
+tej rešitvi **en sam** (`PIM.ChangeTracking.Integration`). Preostalih 53 testnih
 projektov so konzolne aplikacije (`OutputType Exe`), ki jih `dotnet test` samo
 prevede in **nikoli ne požene**. Zato je vračal 0, tudi če ni izvedel skoraj
 ničesar. Uporabljaj `scripts\run_tests.ps1`, ki požene vse.

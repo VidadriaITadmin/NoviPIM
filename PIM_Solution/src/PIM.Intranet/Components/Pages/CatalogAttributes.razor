@@ -1,0 +1,46 @@
+@page "/nastavitve/atributi"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Atributi</PageTitle>
+<PimPage Title="Atributi" Subtitle="Atribut je prikazan samo, če ima v kanoničnem katalogu vsaj eno vrednost." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam atributov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni atributov." LoadingText="Nalaganje atributov …">
+    <PimTable Caption="Atributi in njihova uporaba" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.AttributeCode</span></td>
+            <td class="numeric">@row.ProductCount.ToString("N0")</td>
+            <td class="numeric">@row.ValueCount.ToString("N0")</td>
+            <td class="muted">@(row.SampleValue ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.AttributeRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Atribut"), new("Izdelkov", Numeric: true), new("Vrednosti", Numeric: true), new("Primer vrednosti")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Catalog.GetAttributesAsync(organization.OrganizationId);
+    }
+    catch { Error = "Atributov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

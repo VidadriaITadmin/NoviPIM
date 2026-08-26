@@ -51,13 +51,33 @@ public sealed class IntranetDataService(IConfiguration configuration)
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
+  /// <summary>
+  /// Privzeta aktivna organizacija aplikacije. Globalnega preklopnika organizacije ni vec;
+  /// vecorganizacijski pogledi izbiro ponudijo lokalno samo tam, kjer je poslovno smiselna.
+  /// </summary>
   public async Task<OrganizationContext?> GetCurrentOrganizationAsync(CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("SELECT TOP (1) OrganizationId, Name FROM dbo.OrganizationConfig WHERE IsActive = 1 ORDER BY OrganizationId;", connection);
+    await using var command = new SqlCommand("""
+      SELECT TOP (1) OrganizationId, Name FROM dbo.OrganizationConfig
+      WHERE IsActive = 1
+      ORDER BY OrganizationId;
+      """, connection);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    return await reader.ReadAsync(cancellationToken) ? new(reader.GetInt32(0), reader.GetString(1)) : null;
+    return await reader.ReadAsync(cancellationToken)
+      ? new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name")))
+      : null;
+  }
+
+  public async Task<int> GetOpenAlertCountAsync(int organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "SELECT COUNT_BIG(*) FROM ops.Alert WHERE OrganizationId = @OrganizationId AND ResolvedUtc IS NULL;", connection);
+    command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
   }
 
   public async Task<IReadOnlyList<NavigationEntry>> GetNavigationAsync(IEnumerable<string> roles, CancellationToken cancellationToken = default)

@@ -1,47 +1,82 @@
-/* Lupina intraneta. Barve in mere so iz potrjenih UX slik; kjer obstaja zeton iz app.css,
-   je uporabljen zeton, da se odtenek spremeni na enem mestu. */
+/* Lupina ohranja obstoječi Razor in kontekstno vrstico, vizualno pa sledi referenci v2. */
 
 .app-shell { background: var(--pim-bg); display: flex; min-height: 100vh; }
-.app-sidebar { background: linear-gradient(160deg, #1c242e, #111820); color: #dce4f0; flex: 0 0 200px; min-height: 100vh; position: relative; }
+.app-sidebar {
+  background: #0f172a;
+  border-right: 1px solid #1e293b;
+  color: #e2e8f0;
+  flex: 0 0 18rem;
+  height: 100vh;
+  overflow-y: auto;
+  position: sticky;
+  scrollbar-color: #334155 transparent;
+  scrollbar-width: thin;
+  top: 0;
+}
 .app-main { flex: 1; min-width: 0; }
-.app-topbar { align-items: center; background: var(--pim-surface); border-bottom: 1px solid #e2e7ee; display: flex; gap: 12px; height: 66px; padding: 0 26px; }
+.app-topbar {
+  align-items: center;
+  background: rgba(255, 255, 255, .96);
+  border-bottom: 1px solid var(--pim-border);
+  display: flex;
+  gap: .75rem;
+  min-height: 4rem;
+  padding: .65rem clamp(1.25rem, 2.5vw, 2.75rem);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
 
 /* Preklop navigacije brez JavaScripta: skrito potrditveno polje in oznaka kot gumb.
    Polje je pred .app-shell, zato lahko s sosedskim izbirnikom (~) odpre stransko vrstico. */
 .menu-toggle-input { height: 0; opacity: 0; pointer-events: none; position: absolute; width: 0; }
-.menu-glyph { align-items: center; background: transparent; border: 0; color: #34445d; cursor: pointer; display: inline-flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.menu-glyph { align-items: center; background: transparent; border: 0; color: #475569; cursor: pointer; display: none; height: 36px; justify-content: center; padding: 0; width: 36px; }
 .menu-glyph-icon, .menu-glyph-icon::before, .menu-glyph-icon::after { background: currentColor; border-radius: 2px; display: block; height: 2px; position: relative; width: 17px; }
 .menu-glyph-icon::before, .menu-glyph-icon::after { content: ""; left: 0; position: absolute; }
 .menu-glyph-icon::before { top: -6px; }
 .menu-glyph-icon::after { top: 6px; }
-.menu-toggle-input:focus-visible + .app-shell .menu-glyph { border-radius: var(--pim-radius-xs); box-shadow: 0 0 0 3px rgba(23, 100, 232, .18); outline: none; }
+.menu-toggle-input:focus-visible + .app-shell .menu-glyph { border-radius: var(--pim-radius-xs); box-shadow: 0 0 0 3px var(--pim-accent-ring); outline: none; }
 .menu-scrim { display: none; }
 
-.global-search { align-items: center; border: 1px solid #dbe2eb; border-radius: var(--pim-radius-sm); color: #718096; display: flex; font-size: 13px; gap: 10px; height: 38px; max-width: 350px; padding: 0 13px; text-decoration: none; width: 100%; }
-.search-icon { border: 1.6px solid #718096; border-radius: 50%; height: 11px; position: relative; width: 11px; }
-.search-icon::after { background: #718096; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
+.flow-context { display: flex; flex: 0 0 auto; flex-direction: column; min-width: 7.5rem; }
+.flow-context small { color: #94a3b8; font-size: .58rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.flow-context strong { color: #334155; font-size: .78rem; font-weight: 650; margin-top: .08rem; white-space: nowrap; }
+
+.global-search { align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: var(--pim-radius-sm); color: #64748b; display: flex; font-size: .875rem; gap: .65rem; height: var(--pim-control-height); max-width: 24rem; padding: 0 .8rem; text-decoration: none; width: 100%; }
+.global-search:hover { border-color: #94a3b8; color: #334155; }
+.search-icon { border: 1.6px solid #94a3b8; border-radius: 50%; height: 11px; position: relative; width: 11px; }
+.search-icon::after { background: #94a3b8; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
 .topbar-spacer { flex: 1; }
 
 /* --- Opozorila in uporabnik --------------------------------------------- */
-.notification-button { align-items: center; display: inline-flex; height: 34px; justify-content: center; position: relative; text-decoration: none; width: 34px; }
-.notification-icon { border: 1.7px solid #41516a; border-radius: 9px 9px 4px 4px; display: block; height: 14px; position: relative; width: 13px; }
-.notification-icon::after { background: #41516a; border-radius: 50%; bottom: -5px; content: ""; height: 3px; left: 4px; position: absolute; width: 3px; }
-.notification-count { align-items: center; background: var(--pim-bad-text); border-radius: 9px; color: #fff; display: flex; font-size: 10px; font-weight: 700; height: 16px; justify-content: center; min-width: 16px; padding: 0 4px; position: absolute; right: 0; top: 0; }
+.notification-button { align-items: center; border-radius: var(--pim-radius-sm); display: inline-flex; height: 2.35rem; justify-content: center; position: relative; text-decoration: none; width: 2.35rem; }
+.notification-button:hover { background: #f1f5f9; }
+.notification-icon { border: 1.7px solid #475569; border-radius: 9px 9px 4px 4px; display: block; height: 14px; position: relative; width: 13px; }
+.notification-icon::after { background: #475569; border-radius: 50%; bottom: -5px; content: ""; height: 3px; left: 4px; position: absolute; width: 3px; }
+.notification-count { align-items: center; background: var(--pim-bad-text); border: 2px solid #fff; border-radius: 999px; color: #fff; display: flex; font-size: .6rem; font-weight: 700; height: 18px; justify-content: center; min-width: 18px; padding: 0 3px; position: absolute; right: -2px; top: -2px; }
 .signed-user { align-items: center; display: flex; gap: 9px; }
-.signed-user span { align-items: center; background: #47556c; border-radius: 50%; color: #fff; display: flex; font-size: 11px; height: 32px; justify-content: center; width: 32px; }
-.signed-user strong { font-size: 13px; white-space: nowrap; }
-.logout-button { background: transparent; border: 0; color: #53627a; cursor: pointer; font: inherit; font-size: 12px; }
-.app-content { padding: 20px 26px 34px; }
+.signed-user span { align-items: center; background: #334155; border-radius: 50%; color: #fff; display: flex; font-size: .7rem; font-weight: 700; height: 2rem; justify-content: center; width: 2rem; }
+.signed-user strong { color: #334155; font-size: .8rem; white-space: nowrap; }
+.logout-button { background: transparent; border: 0; border-radius: var(--pim-radius-xs); color: #64748b; cursor: pointer; font: inherit; font-size: .75rem; padding: .45rem .55rem; }
+.logout-button:hover { background: #f1f5f9; color: #334155; }
+.app-content { padding: 1.75rem clamp(1.25rem, 2.5vw, 2.75rem) 3rem; }
 
-@media (max-width: 1050px) { .global-search { display: none; } }
-@media (max-width: 760px) {
-  .app-sidebar { display: none; left: 0; position: fixed; top: 0; width: 220px; z-index: 100; }
-  .menu-toggle-input:checked + .app-shell .app-sidebar { display: block; }
-  .menu-toggle-input:checked + .app-shell .menu-scrim { background: rgba(17, 24, 32, .38); display: block; inset: 0; position: fixed; z-index: 90; }
-  .app-topbar { padding: 0 14px; }
+@media (max-width: 1180px) { .global-search { display: none; } }
+@media (max-width: 900px) {
+  .app-sidebar { height: 100vh; left: 0; position: fixed; top: 0; transform: translateX(-102%); transition: transform .18s ease; width: min(20rem, 88vw); z-index: 100; }
+  .menu-glyph { display: inline-flex; }
+  .menu-toggle-input:checked + .app-shell .app-sidebar { transform: translateX(0); }
+  .menu-toggle-input:checked + .app-shell .menu-scrim { background: rgba(2, 6, 23, .58); display: block; inset: 0; position: fixed; z-index: 90; }
+  .app-topbar { padding: .6rem .9rem; }
   .signed-user strong, .logout-button { display: none; }
-  .app-content { padding: 18px 14px; }
+  .app-content { padding: 1.15rem .9rem 2rem; }
 }
 
-#blazor-error-ui { background: lightyellow; bottom: 0; box-shadow: 0 -1px 2px rgba(0, 0, 0, .2); display: none; left: 0; padding: .6rem 1.25rem .7rem; position: fixed; width: 100%; z-index: 1000; }
+@media (max-width: 520px) {
+  .flow-context small { display: none; }
+  .flow-context { min-width: 0; }
+}
+
+#blazor-error-ui { background: #b91c1c; bottom: 0; box-shadow: 0 -2px 12px rgba(15, 23, 42, .18); color: #fff; display: none; left: 0; padding: .7rem 1.25rem; position: fixed; width: 100%; z-index: 1000; }
+#blazor-error-ui a { color: #fff; font-weight: 600; }
 #blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }

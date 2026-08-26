@@ -1,0 +1,47 @@
+@page "/nastavitve/jeziki"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Jeziki</PageTitle>
+<PimPage Title="Jeziki" Subtitle="SAOP-ova identifikacijska šifra in jezikovna koda, ki jo katalog uporablja pri besedilih." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam jezikov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni jezikov." LoadingText="Nalaganje jezikov …">
+    <PimTable Caption="Jeziki izbrane organizacije" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td>@row.Name</td>
+            <td><span class="code-value">@row.SaopLanguageId</span></td>
+            <td><span class="code-value">@row.LanguageCode</span></td>
+            <td><PimChip Text="@(row.IsActive ? "Aktiven" : "Neaktiven")" Tone="@(row.IsActive ? "good" : null)" /></td>
+            <td>@row.UpdatedUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.LanguageRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Jeziki")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Ime"), new("Šifra SAOP"), new("Koda kataloga"), new("Stanje"), new("Posodobljeno")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Catalog.GetLanguagesAsync(organization.OrganizationId);
+    }
+    catch { Error = "Jezikov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

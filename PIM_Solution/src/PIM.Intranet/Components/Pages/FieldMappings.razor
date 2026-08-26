@@ -1,0 +1,81 @@
+@page "/pravila/preslikave"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Preslikave polj</PageTitle>
+<PimPage Title="Preslikave polj" Subtitle="Povezava med elementom vira in kanoničnim poljem. Obveznost tukaj pomeni, da brez elementa zapisa ni mogoče zajeti; poslovna obveznost sodi v validacijo." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="mapping-filter-title">
+  <h2 id="mapping-filter-title" class="visually-hidden">Filtriranje preslikav</h2>
+  <label class="visually-hidden" for="mapping-search">Išči element ali ciljno polje</label>
+  <input id="mapping-search" class="search-input" type="search" placeholder="Išči element ali ciljno polje …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="mapping-entity">Entiteta</label>
+  <select id="mapping-entity" class="filter-select" @bind="EntityType" @bind:after="ApplyAsync">
+    <option value="">Vse entitete</option>
+    @foreach (var option in EntityTypes) { <option value="@option.Value">@option.Label</option> }
+  </select>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Preslikave polj">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni preslikav." LoadingText="Nalaganje preslikav …">
+    <PimTable Caption="Elementi virov in ciljna polja" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td>@row.EntityType</td>
+            <td class="tree-path">@row.SourceElement</td>
+            <td><span class="code-value">@row.TargetFieldCode</span></td>
+            <td><PimChip Text="@(row.IsRequired ? "Obvezno pri zajemu" : "Neobvezno")" Tone="@(row.IsRequired ? "warn" : null)" Prefix="Zahteva: " /></td>
+            <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani preslikav polj" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.FieldMappingRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.PimOption> EntityTypes = [];
+  int? OrganizationId;
+  string EntityType = "";
+  string Search = "";
+  int Skip;
+  const int Take = 50;
+  long Total;
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Preslikave polj")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Vir"), new("Entiteta"), new("Element vira"), new("Ciljno polje"), new("Obveznost"), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    try { EntityTypes = await Governance.GetMappedEntityTypesAsync(organization.OrganizationId); } catch { EntityTypes = []; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try { (Rows, Total) = await Governance.GetFieldMappingsAsync(OrganizationId.Value, EntityType, Search, Skip, Take); }
+    catch { Error = "Preslikav trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} preslikav";
+}

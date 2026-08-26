@@ -1,0 +1,61 @@
+@page "/izvozi"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Izvozi</PageTitle>
+<PimPage Title="Izvozi" Subtitle="Izvozni profili določajo obliko datotek. Odhodna pošta pa sledi spremembam, ki jih PIM pošilja nazaj v SAOP." />
+
+@if (CanManage)
+{
+  <section class="hub-grid" aria-label="Delovne strani izvozov">
+    <PimHubCard Title="Odhodna pošta" Href="outbound" Description="Odobritev, pošiljanje, ponovni poskusi in odmiki sprememb proti SAOP." />
+    <PimHubCard Title="Množično urejanje" Href="izvozi/mnozicno" Description="Priprava skupine sprememb ročno ali iz delovnega zvezka; nič ne odide brez odobritve." />
+    <PimHubCard Title="Obvestila" Href="izvozi/obvestila" Description="Napake in opozorila odhodne poti, ki zahtevajo odziv uporabnika." />
+  </section>
+}
+
+<section class="ui-card data-card section-gap" aria-label="Izvozni profili">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Izvoznih profilov ni." LoadingText="Nalaganje izvoznih profilov …">
+    <PimTable Caption="Izvozni profili in pokritost stolpcev" Columns="Columns">
+      <Rows>
+        @foreach (var profile in Profiles)
+        {
+          <tr>
+            <td><a href="izvozi/profili/@profile.ExportProfileId">@profile.Name</a><div class="tree-path">@profile.ProfileCode</div></td>
+            <td><span class="code-value">@profile.ChannelCode</span></td>
+            <td>@profile.EntityType</td>
+            <td class="numeric">@profile.ColumnCount.ToString("N0")</td>
+            <td><PimBar Percent="@Coverage(profile)" Label="@($"Delež preslikanih stolpcev profila {profile.ProfileCode}")" /></td>
+            <td><PimChip Text="@(profile.IsActive ? "Aktiven" : "Neaktiven")" Tone="@(profile.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ExportProfileRow> Profiles = [];
+  bool Loading = true;
+  bool CanManage;
+  string? Error;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Profil"), new("Kanal"), new("Entiteta"), new("Stolpcev", Numeric: true), new("Preslikano"), new("Stanje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var user = (await Authentication.GetAuthenticationStateAsync()).User;
+    CanManage = user.IsInRole(PimRoles.Admin) || user.IsInRole(PimRoles.CatalogEditor) || user.IsInRole(PimRoles.Commercial);
+    try { Profiles = await Governance.GetExportProfilesAsync(); }
+    catch { Error = "Izvoznih profilov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static decimal Coverage(PIM.Intranet.Services.ExportProfileRow profile) =>
+    profile.ColumnCount == 0 ? 0 : 100m * profile.MappedColumnCount / profile.ColumnCount;
+}

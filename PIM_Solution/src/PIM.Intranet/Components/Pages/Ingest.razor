@@ -1,0 +1,146 @@
+@page "/zajem"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Vhodni podatki</PageTitle>
+<PimPage Title="Vhodni podatki" Subtitle="Enotna operativna slika zajema artiklov, XML-jev, delovnih zvezkov in zaloge. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
+<IngestTabs Active="overview" />
+
+<section class="ui-card ingest-scope" aria-label="Obseg pregleda">
+  <div>
+    <strong>@(ShowAll ? "Vsa aktivna podjetja" : OrganizationName)</strong>
+    <span>@(ShowAll ? "Primerjava vseh registriranih vhodov" : "Trenutni organizacijski kontekst")</span>
+  </div>
+  @if (IsAdmin)
+  {
+    <button type="button" class="secondary-button" @onclick="ToggleScopeAsync">
+      @(ShowAll ? "Prikaži aktivno podjetje" : "Prikaži vsa podjetja")
+    </button>
+  }
+</section>
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Flows.Count == 0)" EmptyText="Za izbrani obseg ni registriranih vhodnih tokov." LoadingText="Sestavljanje pregleda vseh vhodov …">
+  @if (Summary is not null)
+  {
+    <section class="kpi-grid ingest-kpis" aria-label="Povzetek vhodnih podatkov">
+      <PimStat Label="Tokovi v redu" Value="@HealthyFlowLabel" Note="registrirani tokovi" />
+      <PimStat Label="Čaka" Value="@Summary.PendingPages.ToString("N0")" Note="@($"najstarejša: {Moment(Summary.OldestPendingUtc)}")" Href="zajem/cakalna-vrsta" />
+      <PimStat Label="V karanteni" Value="@Summary.QuarantinedPages.ToString("N0")" Href="zajem/tezave?vrsta=INBOX" />
+      <PimStat Label="Delo preslikav" Value="@Summary.MappingWorkCount.ToString("N0")" Note="kategorije in prevodi" Href="zajem/preslikave" />
+      <PimStat Label="Zavrnjena zaloga" Value="@Summary.StockUnmatchedCount.ToString("N0")" Href="zajem/tezave?vrsta=STOCK" />
+      <PimStat Label="Tehnične težave" Value="@Summary.OpenTechnicalProblems.ToString("N0")" Note="mrtva pisma in napake v 7 dneh" Href="zajem/tezave" />
+    </section>
+  }
+
+  <section class="ui-card data-card" aria-label="Vhodni tokovi">
+    <PimTable Caption="Vhodni tokovi — zadnji poskus, uspeh in količine" Columns="Columns">
+      <Rows>
+        @foreach (var flow in Flows)
+        {
+          <tr>
+            <td><strong>@flow.OrganizationName</strong></td>
+            <td>
+              <a href="zajem/viri/@Uri.EscapeDataString(flow.SourceCode)">@FlowLabel(flow)</a>
+              <div class="tree-path"><span class="code-value">@flow.SourceCode</span> · @FlowKind(flow.FlowKind)</div>
+            </td>
+            <td><PimChip Text="@StatusLabel(flow.Status)" Tone="@StatusTone(flow.Status)" /></td>
+            <td>
+              @if (flow.LastRunId is not null)
+              {
+                <a href="zajem/teki/@flow.LastRunId">@Moment(flow.LastAttemptUtc)</a>
+              }
+              else { <span class="muted">Nikoli</span> }
+              @if (flow.LastFailureUtc is not null) { <div class="ingest-failure">Neuspeh: @Moment(flow.LastFailureUtc)</div> }
+            </td>
+            <td>@Moment(flow.LastSuccessUtc)</td>
+            <td>
+              @if (flow.ScheduleEnabled == false) { <span class="muted">Izklopljen</span> }
+              else { @Moment(flow.NextScheduledUtc) }
+            </td>
+            <td class="numeric">@flow.ReceivedLast24Hours.ToString("N0")</td>
+            <td class="numeric">@flow.PendingCount.ToString("N0")</td>
+            <td class="numeric">@flow.RejectedCount.ToString("N0")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+
+  @if (Flows.Any(flow => !string.IsNullOrWhiteSpace(flow.LastError)))
+  {
+    <section class="ui-card ingest-attention" aria-labelledby="ingest-attention-title">
+      <h2 id="ingest-attention-title">Zadnje prijavljene napake</h2>
+      @foreach (var flow in Flows.Where(flow => !string.IsNullOrWhiteSpace(flow.LastError)).Take(5))
+      {
+        <article><strong>@flow.OrganizationName · @flow.SourceCode</strong><p>@flow.LastError</p></article>
+      }
+    </section>
+  }
+</PimState>
+
+@code {
+  IReadOnlyList<InboundFlowRow> Flows = [];
+  InboundOverviewSummary? Summary;
+  int? OrganizationId;
+  string OrganizationName = "Aktivno podjetje";
+  bool IsAdmin;
+  bool ShowAll;
+  bool Loading = true;
+  string? Error;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Podjetje"), new("Vir in vrsta"), new("Stanje"), new("Zadnji poskus"), new("Zadnji uspeh"),
+    new("Naslednji zagon"), new("Prišlo 24 h", Numeric: true), new("Čaka", Numeric: true), new("Zavrnjeno", Numeric: true),
+  ];
+
+  string HealthyFlowLabel => $"{Flows.Count(flow => flow.Status == "Healthy")}/{Flows.Count}";
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    IsAdmin = state.User.IsInRole(PimRoles.Admin);
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    OrganizationName = organization.Name;
+    await LoadAsync();
+  }
+
+  async Task ToggleScopeAsync() { ShowAll = !ShowAll; await LoadAsync(); }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try
+    {
+      int? scope = ShowAll && IsAdmin ? null : OrganizationId.Value;
+      var flowsTask = Pipeline.GetInboundFlowsAsync(scope);
+      var summaryTask = Pipeline.GetInboundOverviewSummaryAsync(scope);
+      await Task.WhenAll(flowsTask, summaryTask);
+      Flows = await flowsTask;
+      Summary = await summaryTask;
+    }
+    catch { Error = "Pregleda vhodnih podatkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static string FlowLabel(InboundFlowRow flow) => flow.FlowKind switch
+  {
+    "STOCK" => flow.SourceCode.StartsWith("SAOP", StringComparison.OrdinalIgnoreCase) ? "Zaloga SAOP" : "Zaloga dobavitelja",
+    "WORKBOOK" => "Ročni uvoz iz delovnega zvezka",
+    "XML" => "Dobaviteljev XML",
+    "SAOP" => "SAOP API",
+    _ => flow.SourceCode,
+  };
+
+  static string FlowKind(string value) => value switch { "STOCK" => "zaloga", "WORKBOOK" => "delovni zvezek", "XML" => "XML", "SAOP" => "API", _ => value };
+  static string StatusLabel(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja", "NeverRun" => "Še brez teka", _ => value };
+  static string? StatusTone(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "good", "Running" or "NeverRun" => null, "Stale" => "warn", "Failed" => "bad", _ => null };
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+}

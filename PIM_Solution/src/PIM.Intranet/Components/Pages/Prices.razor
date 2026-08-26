@@ -1,0 +1,93 @@
+@page "/cene"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Cene in ceniki</PageTitle>
+<PimPage Title="Cene in ceniki" Subtitle="Cene izdelkov po cenikih, kot so prišle iz vira. Bruto je izračunan iz neto in stopnje DDV, ne hranjen posebej." />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="price-filter-title">
+  <h2 id="price-filter-title" class="visually-hidden">Filtriranje cen</h2>
+  <label class="visually-hidden" for="price-search">Išči po šifri artikla</label>
+  <input id="price-search" type="search" class="search-input" placeholder="Išči po šifri artikla …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="price-list">Cenik</label>
+  <select id="price-list" class="filter-select" @bind="PriceList" @bind:after="ApplyAsync">
+    <option value="">Vsi ceniki</option>
+    @foreach (var option in PriceLists)
+    {
+      <option value="@option.Value">@option.Label</option>
+    }
+  </select>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Seznam cen">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni cen." LoadingText="Nalaganje cen …">
+    <PimTable Caption="Cene izdelkov po cenikih" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
+            <td><span class="code-value">@row.PriceList</span></td>
+            <td class="numeric">@row.Net.ToString("N2")</td>
+            <td class="numeric">@row.VatRate.ToString("N1") %</td>
+            <td class="numeric">@Gross(row).ToString("N2")</td>
+            <td>@row.ValidFrom.ToLocalTime().ToString("d")</td>
+            <td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani cen" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.PriceRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.PimOption> PriceLists = [];
+  long Total;
+  bool Loading = true;
+  string? Error;
+  string Search = "";
+  string PriceList = "";
+  int Skip;
+  const int Take = 50;
+  int? OrganizationId;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Artikel"), new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true),
+    new("Bruto", Numeric: true), new("Velja od"), new("Stanje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    try { PriceLists = await Catalog.GetPriceListsAsync(OrganizationId.Value); } catch { PriceLists = []; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try { (Rows, Total) = await Catalog.GetPricesAsync(OrganizationId.Value, PriceList, Search, Skip, Take); }
+    catch { Error = "Cen trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zapisov";
+
+  // Bruto ni v bazi; izracun je isti kot v canon.FieldValue, da se stran in izvoz ne razideta.
+  static decimal Gross(PIM.Intranet.Services.PriceRow row) => Math.Round(row.Net * (1 + row.VatRate / 100), 2);
+}

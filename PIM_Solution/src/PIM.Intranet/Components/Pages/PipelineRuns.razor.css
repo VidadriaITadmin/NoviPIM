@@ -8,14 +8,14 @@
 /* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
 .table-scroll { overflow-x: auto; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
-.page-position { color: #526078; font-size: 13px; }
+.page-position { color: var(--pim-text-soft); font-size: 13px; }
 
 /* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
 .page-tab:focus-visible,
 .search-input:focus-visible,
 .filter-select:focus-visible,
 .pagination button:focus-visible,
-.table-scroll:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 /* Osem stolpcev in trije stolpci kartic virov se na telefonu ne smejo stisniti. */
 @media (max-width: 900px) {

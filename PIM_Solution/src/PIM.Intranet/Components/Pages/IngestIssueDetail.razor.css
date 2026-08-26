@@ -1,0 +1,5 @@
+.issue-summary { color: var(--pim-text-strong); line-height: 1.55; }
+.technical-details { margin-top: 1rem; padding: 1rem 1.1rem; }
+.technical-details summary { cursor: pointer; font-size: .85rem; font-weight: 650; }
+.technical-details p { font-size: .8rem; line-height: 1.5; }
+.technical-details pre { background: #0f172a; border-radius: var(--pim-radius-sm); color: #dbeafe; font: .75rem/1.55 Consolas, "Cascadia Mono", monospace; max-height: 32rem; overflow: auto; padding: 1rem; white-space: pre; }

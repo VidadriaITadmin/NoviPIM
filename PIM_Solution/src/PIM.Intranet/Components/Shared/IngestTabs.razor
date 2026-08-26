@@ -1,0 +1,25 @@
+<nav class="ingest-tabs" aria-label="Pogledi vhodnih podatkov">
+  @foreach (var tab in Tabs)
+  {
+    <a class="ingest-tab @(tab.Key == Active ? "active" : null)" href="@tab.Href"
+       aria-current="@(tab.Key == Active ? "page" : null)">
+      <span class="ingest-tab-icon @tab.Icon" aria-hidden="true"></span>
+      <span><strong>@tab.Label</strong><small>@tab.Description</small></span>
+    </a>
+  }
+</nav>
+
+@code {
+  [Parameter, EditorRequired] public required string Active { get; set; }
+
+  static readonly IReadOnlyList<IngestTabDefinition> Tabs =
+  [
+    new("overview", "Pregled", "zajem", "Stanje vseh tokov", "tab-overview"),
+    new("sources", "Viri", "zajem/viri", "Konektorji in svežina", "tab-sources"),
+    new("runs", "Teki", "zajem/teki", "Izvedbe in koraki", "tab-runs"),
+    new("issues", "Težave", "zajem/tezave", "Napake in čakalne vrste", "tab-issues"),
+    new("mappings", "Preslikave", "zajem/preslikave", "Atributi, kategorije in prevodi", "tab-mappings"),
+  ];
+
+  sealed record IngestTabDefinition(string Key, string Label, string Href, string Description, string Icon);
+}

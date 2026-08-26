@@ -1,0 +1,28 @@
+@* Enotna stanja seznama: nalaganje, napaka, prazen rezultat. Vsa tri so v UX pravilih
+   obvezna in so bila prej na vsaki strani napisana znova. *@
+
+@if (Loading)
+{
+  <div class="loading-state" role="status">@LoadingText</div>
+}
+else if (!string.IsNullOrWhiteSpace(Error))
+{
+  <div class="error-state" role="alert">@Error</div>
+}
+else if (Empty)
+{
+  <div class="empty-state">@EmptyText</div>
+}
+else
+{
+  @ChildContent
+}
+
+@code {
+  [Parameter] public bool Loading { get; set; }
+  [Parameter] public string? Error { get; set; }
+  [Parameter] public bool Empty { get; set; }
+  [Parameter] public string LoadingText { get; set; } = "Nalaganje …";
+  [Parameter] public string EmptyText { get; set; } = "Ni zapisov.";
+  [Parameter] public RenderFragment? ChildContent { get; set; }
+}

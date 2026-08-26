@@ -1,0 +1,24 @@
+@* Tabelaricni okvir: vodoravni drsnik, napis in glava. Napis in scope na celicah sta zahtevi
+   dostopnosti, ki ju UX pogodbeni testi zahtevajo na vsaki tabeli. *@
+
+<div class="table-scroll" role="region" tabindex="0" aria-label="@(AriaLabel ?? Caption)">
+  <table class="data-table">
+    <caption>@Caption</caption>
+    <thead>
+      <tr>
+        @foreach (var column in Columns)
+        {
+          <th scope="col" class="@(column.Numeric ? "numeric" : null)">@column.Label</th>
+        }
+      </tr>
+    </thead>
+    <tbody>@Rows</tbody>
+  </table>
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required string Caption { get; set; }
+  [Parameter] public string? AriaLabel { get; set; }
+  [Parameter, EditorRequired] public required IReadOnlyList<PimColumn> Columns { get; set; }
+  [Parameter, EditorRequired] public required RenderFragment Rows { get; set; }
+}

@@ -1,0 +1,96 @@
+@page "/pravila/validacija"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Validacijski profili</PageTitle>
+<PimPage Title="Validacijski profili" Subtitle="Profil združuje zahtevana polja. ERROR naredi izdelek neveljaven, WARNING ga označi; profil lahko blokira ERP, splet ali ničesar." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Validacijski profili">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje profilov …">
+    <PimTable Caption="Validacijski profili" Columns="ProfileColumns">
+      <Rows>
+        @foreach (var profile in Profiles)
+        {
+          <tr>
+            <td><strong>@profile.Name</strong><div class="tree-path">@profile.ProfileCode</div></td>
+            <td>@(profile.Scope ?? "—")</td>
+            <td>
+              @if (profile.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
+              @if (profile.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
+              @if (!profile.BlocksErp && !profile.BlocksWeb) { <span class="muted">ne blokira</span> }
+            </td>
+            <td class="numeric">@profile.RequirementCount.ToString("N0")</td>
+            <td class="numeric">@profile.InvalidCount.ToString("N0")</td>
+            <td><button type="button" class="small-action" disabled="@RequirementsLoading" @onclick="() => SelectAsync(profile)">Prikaži zahteve</button></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@if (Selected is not null)
+{
+  <h2 class="section-title">Zahteve profila @Selected.ProfileCode</h2>
+  <section class="ui-card data-card" aria-label="Zahteve izbranega validacijskega profila">
+    <PimState Loading="RequirementsLoading" Error="@RequirementsError" Empty="@(Requirements.Count == 0)" EmptyText="Profil nima zahtev." LoadingText="Nalaganje zahtev …">
+      <PimTable Caption="Polja in resnost v izbranem profilu" Columns="RequirementColumns">
+        <Rows>
+          @foreach (var requirement in Requirements)
+          {
+            <tr>
+              <td><span class="code-value">@requirement.FieldCode</span></td>
+              <td><PimChip Text="@(requirement.Severity ?? "—")" Tone="@(requirement.Severity == "ERROR" ? "bad" : requirement.Severity == "WARNING" ? "warn" : null)" Prefix="Resnost: " /></td>
+              <td><PimChip Text="@(requirement.IsRequired ? "Obvezno" : "Neobvezno")" Tone="@(requirement.IsRequired ? "warn" : null)" Prefix="Zahteva: " /></td>
+              <td class="numeric">@requirement.OpenIssueCount.ToString("N0")</td>
+              <td><PimChip Text="@(requirement.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(requirement.IsActive ? "good" : null)" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+  </section>
+}
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ValidationProfileRow> Profiles = [];
+  IReadOnlyList<PIM.Intranet.Services.FieldRequirementRow> Requirements = [];
+  PIM.Intranet.Services.ValidationProfileRow? Selected;
+  int? OrganizationId;
+  bool Loading = true;
+  bool RequirementsLoading;
+  string? Error;
+  string? RequirementsError;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Validacijski profili")];
+  static readonly IReadOnlyList<PimColumn> ProfileColumns = [new("Profil"), new("Obseg"), new("Blokira"), new("Zahtev", Numeric: true), new("Neveljavnih", Numeric: true), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> RequirementColumns = [new("Polje"), new("Resnost"), new("Obveznost"), new("Odprtih napak", Numeric: true), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      var first = Profiles.FirstOrDefault(profile => profile.IsActive) ?? Profiles.FirstOrDefault();
+      if (first is not null) await SelectAsync(first);
+    }
+    catch { Error = "Validacijskih profilov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task SelectAsync(PIM.Intranet.Services.ValidationProfileRow profile)
+  {
+    if (OrganizationId is null) return;
+    Selected = profile;
+    RequirementsLoading = true;
+    RequirementsError = null;
+    try { Requirements = await Governance.GetFieldRequirementsAsync(profile.ValidationProfileId, OrganizationId.Value); }
+    catch { RequirementsError = "Zahtev profila trenutno ni mogoče naložiti."; Requirements = []; }
+    finally { RequirementsLoading = false; }
+  }
+}

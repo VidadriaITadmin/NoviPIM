@@ -1,0 +1,132 @@
+@page "/zajem/viri/{SourceCode}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PipelineReadService Pipeline
+@inject IntranetDataService Data
+
+<PageTitle>Vir @SourceCode</PageTitle>
+<PimPage Title="@($"Vir: {SourceCode}")" Subtitle="Entitete, preslikave, svežina in zadnje izvedbe izbranega vira." Crumbs="Crumbs" />
+<IngestTabs Active="sources" />
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Flow is null)" EmptyText="Vir v aktivni organizaciji ne obstaja." LoadingText="Nalaganje podrobnosti vira …">
+  @if (Flow is not null)
+  {
+    <section class="detail-grid section-gap">
+      <article class="ui-card panel" aria-labelledby="source-state-title">
+        <h2 id="source-state-title">Operativno stanje</h2>
+        <dl class="detail-list">
+          <dt>Podjetje</dt><dd>@Flow.OrganizationName</dd>
+          <dt>Vrsta</dt><dd>@Flow.FlowKind · @Flow.ConnectorType</dd>
+          <dt>Stanje</dt><dd><PimChip Text="@Status(Flow.Status)" Tone="@Tone(Flow.Status)" /></dd>
+          <dt>Zadnji poskus</dt><dd>@Moment(Flow.LastAttemptUtc)</dd>
+          <dt>Zadnji uspeh</dt><dd>@Moment(Flow.LastSuccessUtc)</dd>
+          <dt>Zadnji neuspeh</dt><dd>@Moment(Flow.LastFailureUtc)</dd>
+          <dt>Naslednji zagon</dt><dd>@(Flow.ScheduleEnabled == false ? "Urnik je izklopljen" : Moment(Flow.NextScheduledUtc))</dd>
+        </dl>
+      </article>
+      <article class="ui-card panel" aria-labelledby="source-volume-title">
+        <h2 id="source-volume-title">Količine in prevzem</h2>
+        <dl class="detail-list">
+          <dt>Prejeto v 24 urah</dt><dd class="numeric">@Flow.ReceivedLast24Hours.ToString("N0")</dd>
+          <dt>Čaka</dt><dd class="numeric">@Flow.PendingCount.ToString("N0")</dd>
+          <dt>Zavrnjeno</dt><dd class="numeric">@Flow.RejectedCount.ToString("N0")</dd>
+          <dt>Mesto prevzema</dt><dd>@(Flow.Endpoint ?? "Ni registrirano v sledilnem modelu")</dd>
+          <dt>Ustvarjanje artiklov</dt><dd>@(Flow.CanCreateProducts ? "Dovoljeno" : "Vir samo dopolnjuje obstoječe artikle")</dd>
+        </dl>
+      </article>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Flow.LastError))
+    {
+      <div class="message-state error-message" role="alert"><strong>Zadnja napaka:</strong> @Flow.LastError</div>
+    }
+
+    <h2 class="section-title">Entitete in mejniki</h2>
+    <section class="ui-card data-card" aria-label="Entitete vira">
+      <PimState Empty="@(Entities.Count == 0)" EmptyText="Vir še nima entitet, preslikav ali zajetih strani.">
+        <PimTable Caption="Entitete, preslikave in stanje strani" Columns="EntityColumns">
+          <Rows>
+            @foreach (var entity in Entities)
+            {
+              <tr>
+                <td><strong>@entity.EntityType</strong></td>
+                <td><PimChip Text="@(entity.HasActiveMapping ? "Aktivna" : "Manjka")" Tone="@(entity.HasActiveMapping ? "good" : "warn")" Prefix="Preslikava: " /></td>
+                <td class="numeric">@entity.FieldCount.ToString("N0")</td>
+                <td class="numeric">@entity.RequiredFieldCount.ToString("N0")</td>
+                <td class="numeric">@entity.PendingCount.ToString("N0")</td>
+                <td class="numeric">@entity.ProcessedCount.ToString("N0")</td>
+                <td class="numeric">@entity.QuarantinedCount.ToString("N0")</td>
+                <td>@Moment(entity.LastReceivedUtc)</td>
+                <td>@Moment(entity.WatermarkUtc)</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </PimState>
+    </section>
+
+    <h2 class="section-title">Zadnji teki</h2>
+    <section class="ui-card data-card" aria-label="Zadnji teki vira">
+      <PimState Empty="@(Runs.Count == 0)" EmptyText="Vir še nima zabeleženega teka.">
+        <PimTable Caption="Zadnjih 20 tekov vira" Columns="RunColumns">
+          <Rows>
+            @foreach (var run in Runs)
+            {
+              <tr>
+                <td><a href="zajem/teki/@run.RunId">@run.StartedUtc.ToLocalTime().ToString("g")</a></td>
+                <td>@run.Pipeline</td>
+                <td><PimChip Text="@Status(run.Status)" Tone="@Tone(run.Status)" /></td>
+                <td class="numeric">@run.RowsRead.ToString("N0")</td>
+                <td class="numeric">@run.RowsFailed.ToString("N0")</td>
+                <td>@Duration(run.StartedUtc, run.EndedUtc)</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </PimState>
+    </section>
+  }
+</PimState>
+
+@code {
+  [Parameter] public string SourceCode { get; set; } = "";
+
+  InboundFlowRow? Flow;
+  IReadOnlyList<SourceEntityRow> Entities = [];
+  IReadOnlyList<InboundRunRow> Runs = [];
+  bool Loading = true;
+  string? Error;
+
+  IReadOnlyList<PimCrumb> Crumbs => [new("Vhodni podatki", "zajem"), new("Viri", "zajem/viri"), new(SourceCode)];
+  static readonly IReadOnlyList<PimColumn> EntityColumns =
+  [
+    new("Entiteta"), new("Preslikava"), new("Polj", Numeric: true), new("Obveznih", Numeric: true),
+    new("Čaka", Numeric: true), new("Obdelano", Numeric: true), new("Karantena", Numeric: true), new("Zadnji prejem"), new("Mejnik"),
+  ];
+  static readonly IReadOnlyList<PimColumn> RunColumns = [new("Začetek"), new("Postopek"), new("Stanje"), new("Prebrano", Numeric: true), new("Napake", Numeric: true), new("Trajanje")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      var flowsTask = Pipeline.GetInboundFlowsAsync(organization.OrganizationId);
+      var entitiesTask = Pipeline.GetSourceEntitiesAsync(organization.OrganizationId, SourceCode);
+      var runsTask = Pipeline.GetInboundRunsAsync(organization.OrganizationId, null, null, 0, 20, SourceCode);
+      await Task.WhenAll(flowsTask, entitiesTask, runsTask);
+      Flow = (await flowsTask).FirstOrDefault(row => row.SourceCode.Equals(SourceCode, StringComparison.OrdinalIgnoreCase));
+      Entities = await entitiesTask;
+      Runs = (await runsTask).Rows;
+    }
+    catch { Error = "Podrobnosti vira trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static string Status(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja", "NeverRun" => "Še brez teka", _ => value };
+  static string? Tone(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "good", "Stale" => "warn", "Failed" => "bad", _ => null };
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Duration(DateTime start, DateTime? end) => end is null ? "V teku" : $"{Math.Max(0, (end.Value - start).TotalSeconds):N0} s";
+}

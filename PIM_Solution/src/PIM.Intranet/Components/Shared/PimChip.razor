@@ -1,0 +1,11 @@
+@* Statusni cip. Ton je izpeljan iz vrednosti, nikoli vpisan na strani. *@
+<span class="status-chip @Tone"><span class="visually-hidden">@Prefix</span>@Text</span>
+
+@code {
+  [Parameter, EditorRequired] public required string Text { get; set; }
+
+  /// <summary>good, warn, bad ali prazno za nevtralno.</summary>
+  [Parameter] public string? Tone { get; set; }
+
+  [Parameter] public string Prefix { get; set; } = "Status: ";
+}

@@ -1,0 +1,110 @@
+@page "/zajem/teki"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PipelineReadService Pipeline
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Teki vhodnih podatkov</PageTitle>
+<PimPage Title="Teki vhodnih podatkov" Subtitle="Skupna zgodovina kataloških, XML, delovnih in zalogovnih izvedb. Vrstica vodi v dejanske korake, strani ter napake teka." Crumbs="Crumbs" />
+<IngestTabs Active="runs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="inbound-runs-filter-title">
+  <h2 id="inbound-runs-filter-title" class="visually-hidden">Filtriranje tekov vhodnih podatkov</h2>
+  <label class="visually-hidden" for="inbound-run-search">Poišči vir, postopek ali podjetje</label>
+  <input id="inbound-run-search" type="search" class="search-input" placeholder="Vir, postopek ali podjetje …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="inbound-run-status">Status</label>
+  <select id="inbound-run-status" class="filter-select" @bind="Status" @bind:after="ApplyAsync">
+    <option value="">Vsi statusi</option>
+    <option value="Running">V teku</option>
+    <option value="Succeeded">Uspešno</option>
+    <option value="Completed">Uspešno — zaloga</option>
+    <option value="Failed">Neuspešno</option>
+    <option value="Cancelled">Preklicano</option>
+  </select>
+  @if (IsAdmin)
+  {
+    <button type="button" class="secondary-button" @onclick="ToggleScopeAsync">@(ShowAll ? "Aktivno podjetje" : "Vsa podjetja")</button>
+  }
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Teki vhodnih podatkov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni tekov." LoadingText="Nalaganje tekov …">
+    <PimTable Caption="Zgodovina vseh vhodnih tekov" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><a href="zajem/teki/@row.RunId">@row.StartedUtc.ToLocalTime().ToString("g")</a></td>
+            <td>@row.OrganizationName</td>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td>@row.Pipeline</td>
+            <td><PimChip Text="@StatusLabel(row.Status)" Tone="@Tone(row.Status)" /></td>
+            <td class="numeric">@row.RowsRead.ToString("N0")</td>
+            <td class="numeric">@row.RowsSucceeded.ToString("N0")</td>
+            <td class="numeric">@row.RowsFailed.ToString("N0")</td>
+            <td>@Duration(row.StartedUtc, row.EndedUtc)</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani tekov vhodnih podatkov" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<InboundRunRow> Rows = [];
+  int? OrganizationId;
+  bool IsAdmin;
+  bool ShowAll;
+  bool Loading = true;
+  string? Error;
+  string Search = "";
+  string Status = "";
+  int Skip;
+  const int Take = 50;
+  long Total;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Teki")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Začetek"), new("Podjetje"), new("Vir"), new("Postopek"), new("Stanje"),
+    new("Prebrano", Numeric: true), new("Uspešno", Numeric: true), new("Zavrnjeno", Numeric: true), new("Trajanje"),
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    IsAdmin = state.User.IsInRole(PimRoles.Admin);
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try
+    {
+      int? scope = ShowAll && IsAdmin ? null : OrganizationId.Value;
+      (Rows, Total) = await Pipeline.GetInboundRunsAsync(scope, Status, Search, Skip, Take);
+    }
+    catch { Error = "Tekov vhodnih podatkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task ToggleScopeAsync() { ShowAll = !ShowAll; Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} tekov";
+  static string StatusLabel(string value) => value switch { "Succeeded" or "Completed" => "Uspešno", "Failed" => "Neuspešno", "Cancelled" => "Preklicano", "Running" => "V teku", "Pending" => "Čaka", _ => value };
+  static string? Tone(string value) => value switch { "Succeeded" or "Completed" => "good", "Failed" or "Cancelled" => "bad", "Running" or "Pending" => "warn", _ => null };
+  static string Duration(DateTime start, DateTime? end) => end is null ? "V teku" : $"{Math.Max(0, (end.Value - start).TotalSeconds):N0} s";
+}

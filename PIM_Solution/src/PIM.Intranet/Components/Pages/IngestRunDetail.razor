@@ -1,0 +1,167 @@
+@page "/zajem/teki/{RunId:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PipelineReadService Pipeline
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Tek vhodnih podatkov</PageTitle>
+<PimPage Title="Podrobnosti teka" Subtitle="Korelacija, dejanski koraki, vhodne strani in napake ene izvedbe." Crumbs="Crumbs" />
+<IngestTabs Active="runs" />
+
+<PimState Loading="Loading" Error="@Error" Empty="@(View is null)" EmptyText="Tek ne obstaja." LoadingText="Nalaganje podrobnosti teka …">
+  @if (View is not null)
+  {
+    <section class="detail-grid">
+      <article class="ui-card panel" aria-labelledby="run-identity-title">
+        <h2 id="run-identity-title">Identiteta teka</h2>
+        <dl class="detail-list">
+          <dt>RunId</dt><dd><span class="code-value">@View.Header.RunId</span></dd>
+          <dt>Korelacija</dt><dd>@(View.Header.CorrelationId?.ToString() ?? "—")</dd>
+          <dt>Podjetje</dt><dd>@View.Header.OrganizationName</dd>
+          <dt>Vir</dt><dd>@View.Header.SourceCode</dd>
+          <dt>Postopek</dt><dd>@View.Header.Pipeline</dd>
+          <dt>Stanje</dt><dd><PimChip Text="@Status(View.Header.Status)" Tone="@Tone(View.Header.Status)" /></dd>
+        </dl>
+      </article>
+      <article class="ui-card panel" aria-labelledby="run-volume-title">
+        <h2 id="run-volume-title">Rezultat</h2>
+        <dl class="detail-list">
+          <dt>Začetek</dt><dd>@View.Header.StartedUtc.ToLocalTime().ToString("g")</dd>
+          <dt>Konec</dt><dd>@Moment(View.Header.EndedUtc)</dd>
+          <dt>Trajanje</dt><dd>@Duration(View.Header.StartedUtc, View.Header.EndedUtc)</dd>
+          <dt>Prebrano</dt><dd class="numeric">@View.Header.RowsRead.ToString("N0")</dd>
+          <dt>Uspešno</dt><dd class="numeric">@View.Header.RowsSucceeded.ToString("N0")</dd>
+          <dt>Zavrnjeno</dt><dd class="numeric">@View.Header.RowsFailed.ToString("N0")</dd>
+        </dl>
+      </article>
+    </section>
+
+    <h2 class="section-title">Koraki obdelave</h2>
+    <section class="ui-card data-card" aria-label="Koraki teka">
+      <PimState Empty="@(View.Steps.Count == 0)" EmptyText="Ta worker korakov ne zapisuje. Pri zalogovnem toku so trenutno na voljo samo rezultat teka in zavrnjene pozicije.">
+        <PimTable Caption="Koraki, poskusi in trajanje" Columns="StepColumns">
+          <Rows>
+            @foreach (var step in View.Steps)
+            {
+              <tr>
+                <td><span class="code-value">@step.StepCode</span></td>
+                <td class="numeric">@step.Attempt</td>
+                <td class="numeric">@step.RowsIn.ToString("N0")</td>
+                <td class="numeric">@step.RowsMerged.ToString("N0")</td>
+                <td class="numeric">@(step.DurationMs?.ToString("N0") ?? "—")</td>
+                <td><PimChip Text="@Status(step.Status)" Tone="@Tone(step.Status)" /></td>
+                <td>@step.RecordedUtc.ToLocalTime().ToString("g")</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </PimState>
+    </section>
+
+    @if (View.Errors.Count > 0)
+    {
+      <h2 class="section-title">Napake teka</h2>
+      <section class="ui-card data-card" aria-label="Napake teka">
+        <PimTable Caption="Sistemske napake, povezane s tekom" Columns="ErrorColumns">
+          <Rows>
+            @foreach (var errorValue in View.Errors)
+            {
+              <tr>
+                <td>@errorValue.OccurredUtc.ToLocalTime().ToString("g")</td>
+                <td><PimChip Text="@errorValue.Severity" Tone="@Tone(errorValue.Severity)" /></td>
+                <td><a href="zajem/tezave/ERROR/@errorValue.ErrorLogId"><span class="code-value">@errorValue.ErrorCode</span></a></td>
+                <td>@errorValue.Message</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </section>
+    }
+
+    @if (View.StockIssues.Count > 0)
+    {
+      <h2 class="section-title">Zavrnjene pozicije zaloge</h2>
+      <section class="ui-card data-card" aria-label="Zavrnjene pozicije zaloge">
+        <PimTable Caption="Pozicije zaloge, ki niso prestale normalizacije" Columns="StockColumns">
+          <Rows>
+            @foreach (var issue in View.StockIssues)
+            {
+              <tr>
+                <td><a href="zajem/tezave/STOCK/@issue.UnmatchedPositionId"><span class="code-value">@issue.ReasonCode</span></a></td>
+                <td>@(issue.ItemId ?? "—")</td><td>@(issue.Ean ?? "—")</td><td>@issue.Detail</td>
+                <td>@issue.CreatedUtc.ToLocalTime().ToString("g")</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </section>
+    }
+
+    <h2 class="section-title">Vhodne strani</h2>
+    <section class="ui-card data-card" aria-label="Vhodne strani teka">
+      <PimState Empty="@(View.Pages.Count == 0)" EmptyText="Tek nima strani v raw.Inbox; to je pričakovano pri zalogovnem toku.">
+        <PimTable Caption="Največ 200 vhodnih strani teka" Columns="PageColumns">
+          <Rows>
+            @foreach (var pageRow in View.Pages)
+            {
+              <tr>
+                <td><a href="zajem/tezave/INBOX/@pageRow.InboxId">@pageRow.PageNumber</a></td>
+                <td>@pageRow.EntityType</td><td><PimChip Text="@Status(pageRow.Status)" Tone="@Tone(pageRow.Status)" /></td>
+                <td>@pageRow.ReceivedUtc.ToLocalTime().ToString("g")</td><td>@(pageRow.FailureReason ?? "—")</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </PimState>
+    </section>
+
+    <AuthorizeView Roles="ADMIN">
+      <Authorized>
+        <details class="ui-card technical-details">
+          <summary>Tehnične podrobnosti</summary>
+          <dl class="detail-list">
+            <dt>Vrsta sledilnega modela</dt><dd>@View.Header.RunKind</dd>
+            <dt>Endpoint</dt><dd>@(View.Header.Endpoint ?? "Ni zapisan")</dd>
+            <dt>RunId</dt><dd><span class="code-value">@View.Header.RunId</span></dd>
+            <dt>CorrelationId</dt><dd>@(View.Header.CorrelationId?.ToString() ?? "Ni zapisan")</dd>
+          </dl>
+        </details>
+      </Authorized>
+    </AuthorizeView>
+  }
+</PimState>
+
+@code {
+  [Parameter] public Guid RunId { get; set; }
+  InboundRunView? View;
+  bool Loading = true;
+  string? Error;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Teki", "zajem/teki"), new("Podrobnosti")];
+  static readonly IReadOnlyList<PimColumn> StepColumns = [new("Korak"), new("Poskus", Numeric: true), new("Vhod", Numeric: true), new("Združeno", Numeric: true), new("Trajanje ms", Numeric: true), new("Stanje"), new("Zapisano")];
+  static readonly IReadOnlyList<PimColumn> ErrorColumns = [new("Čas"), new("Resnost"), new("Koda"), new("Sporočilo")];
+  static readonly IReadOnlyList<PimColumn> StockColumns = [new("Razlog"), new("Artikel"), new("EAN"), new("Podrobnost"), new("Čas")];
+  static readonly IReadOnlyList<PimColumn> PageColumns = [new("Stran"), new("Entiteta"), new("Stanje"), new("Prejeto"), new("Razlog")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+      int? scope = state.User.IsInRole(PimRoles.Admin) ? null : organization.OrganizationId;
+      View = await Pipeline.GetInboundRunAsync(RunId, scope);
+    }
+    catch { Error = "Podrobnosti teka trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static string Status(string value) => value switch { "Succeeded" or "Completed" => "Uspešno", "Failed" => "Neuspešno", "Cancelled" => "Preklicano", "Running" => "V teku", "Pending" => "Čaka", "Processed" => "Obdelano", "Quarantined" => "Karantena", "Skipped" => "Preskočeno", _ => value };
+  static string? Tone(string value) => value switch { "Succeeded" or "Completed" or "Processed" => "good", "Failed" or "Cancelled" or "Quarantined" or "Error" or "Critical" => "bad", "Running" or "Pending" or "Warning" => "warn", _ => null };
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Duration(DateTime start, DateTime? end) => end is null ? "V teku" : $"{Math.Max(0, (end.Value - start).TotalSeconds):N0} s";
+}

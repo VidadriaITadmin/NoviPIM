@@ -1,0 +1,16 @@
+@* Stevilcna kartica. Kadar je podana povezava, je kartica klikljiva — kot v potrjenem UX. *@
+@if (Href is null)
+{
+  <article class="ui-card kpi"><span>@Label</span><strong>@Value</strong>@if (Note is not null) { <span class="kpi-share">@Note</span>}</article>
+}
+else
+{
+  <a class="ui-card kpi kpi-link" href="@Href"><span>@Label</span><strong>@Value</strong>@if (Note is not null) { <span class="kpi-share">@Note</span>}</a>
+}
+
+@code {
+  [Parameter, EditorRequired] public required string Label { get; set; }
+  [Parameter, EditorRequired] public required string Value { get; set; }
+  [Parameter] public string? Note { get; set; }
+  [Parameter] public string? Href { get; set; }
+}

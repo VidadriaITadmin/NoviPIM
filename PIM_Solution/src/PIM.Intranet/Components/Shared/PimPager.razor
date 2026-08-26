@@ -1,0 +1,21 @@
+@* Strezniska paginacija. Stran in skupno stevilo prideta iz iste poizvedbe, zato je polozaj
+   resnicen tudi takrat, kadar je nabor vecji od zaslona. *@
+<nav class="pagination" aria-label="@Label">
+  <button type="button" disabled="@(Skip <= 0)" @onclick="PreviousAsync">Prejšnja</button>
+  <span class="page-position">Stran @Current od @PageCount · @Total.ToString("N0") zapisov</span>
+  <button type="button" disabled="@(Skip + Take >= Total)" @onclick="NextAsync">Naslednja</button>
+</nav>
+
+@code {
+  [Parameter, EditorRequired] public required int Skip { get; set; }
+  [Parameter, EditorRequired] public required int Take { get; set; }
+  [Parameter, EditorRequired] public required long Total { get; set; }
+  [Parameter] public string Label { get; set; } = "Strani rezultatov";
+  [Parameter] public EventCallback<int> SkipChanged { get; set; }
+
+  long PageCount => Math.Max(1, (long)Math.Ceiling(Total / (decimal)Math.Max(1, Take)));
+  long Current => Skip / Math.Max(1, Take) + 1;
+
+  Task PreviousAsync() => SkipChanged.InvokeAsync(Math.Max(0, Skip - Take));
+  Task NextAsync() => SkipChanged.InvokeAsync(Skip + Take);
+}

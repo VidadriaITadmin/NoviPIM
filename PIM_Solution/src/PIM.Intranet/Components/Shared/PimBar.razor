@@ -1,0 +1,19 @@
+@* Merilnik popolnosti oziroma deleza. Vrednost je vedno 0–100 in vedno iz podatkov. *@
+<div class="progress-line">
+  <span class="progress-track" role="progressbar" aria-label="@Label" aria-valuenow="@Number" aria-valuemin="0" aria-valuemax="100">
+    <i class="@(Percent < Threshold ? "warn" : null)" style="width:@Width" aria-hidden="true"></i>
+  </span>
+  <span class="progress-value">@Number %</span>
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required decimal Percent { get; set; }
+  [Parameter] public string Label { get; set; } = "Delež";
+  [Parameter] public decimal Threshold { get; set; } = 75;
+
+  decimal Clamped => Math.Clamp(Percent, 0, 100);
+
+  // aria-valuenow in sirina morata biti s piko ne glede na obmocne nastavitve streznika.
+  string Number => Clamped.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+  string Width => Clamped.ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

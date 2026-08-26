@@ -1,0 +1,110 @@
+@page "/mediji"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Mediji</PageTitle>
+<PimPage Title="Mediji" Subtitle="Slike in dokumenti izdelkov. Medij je zaenkrat naslov (URL) v bazi; datotečno skladišče pride pozneje." />
+
+@if (Summary is not null)
+{
+  <section class="kpi-grid" aria-label="Povzetek medijev">
+    <PimStat Label="Zapisov medijev" Value="@Summary.TotalMedia.ToString("N0")" />
+    <PimStat Label="Izdelkov s sliko" Value="@Summary.ProductsWithMedia.ToString("N0")" />
+    <PimStat Label="Aktivnih brez slike" Value="@Summary.ProductsWithoutMedia.ToString("N0")" Note="Kandidati za dopolnitev" Href="izdelki" />
+  </section>
+}
+
+<section class="ui-card toolbar" role="search" aria-labelledby="media-filter-title">
+  <h2 id="media-filter-title" class="visually-hidden">Filtriranje medijev</h2>
+  <label class="visually-hidden" for="media-search">Išči po artiklu, naslovu ali vlogi</label>
+  <input id="media-search" type="search" class="search-input" placeholder="Išči po artiklu, naslovu ali vlogi …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Seznam medijev">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni medijev." LoadingText="Nalaganje medijev …">
+    <PimTable Caption="Mediji izdelkov v izbrani organizaciji" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          var mediaUrl = SafeMediaUrl(row.Url);
+          <tr>
+            <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
+            <td><span class="code-value">@row.Role</span></td>
+            <td class="numeric">@row.SortOrder</td>
+            <td>
+              @if (mediaUrl is not null)
+              {
+                <a href="@mediaUrl" target="_blank" rel="noopener noreferrer">@Shorten(row.Url)</a>
+              }
+              else
+              {
+                <span class="muted" title="Naslov ni varna spletna povezava">@Shorten(row.Url)</span>
+              }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani medijev" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.MediaRow> Rows = [];
+  PIM.Intranet.Services.MediaSummary? Summary;
+  long Total;
+  bool Loading = true;
+  string? Error;
+  string Search = "";
+  int Skip;
+  const int Take = 50;
+  int? OrganizationId;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Artikel"), new("Vloga"), new("Vrstni red", Numeric: true), new("Naslov medija")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    try { Summary = await Catalog.GetMediaSummaryAsync(OrganizationId.Value); } catch { Summary = null; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try
+    {
+      (Rows, Total) = await Catalog.GetMediaAsync(OrganizationId.Value, Search, Skip, Take);
+    }
+    catch
+    {
+      Error = "Medijev trenutno ni mogoče naložiti.";
+    }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zapisov";
+
+  // Dolg naslov razbije stolpec; celoten ostane v naslovu povezave.
+  static string Shorten(string url) => url.Length <= 72 ? url : url[..36] + " … " + url[^30..];
+
+  // Naslov prihaja iz zunanjega vira. Kot klikljivo povezavo sprejmemo samo HTTP(S), sicer bi
+  // lahko dobaviteljski podatek postal izvajljiva shema (na primer javascript:).
+  static string? SafeMediaUrl(string url) =>
+    Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Scheme is "http" or "https" ? parsed.AbsoluteUri : null;
+}

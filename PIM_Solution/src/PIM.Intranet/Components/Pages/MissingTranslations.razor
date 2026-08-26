@@ -1,0 +1,73 @@
+@page "/kakovost/prevodi"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+
+<PageTitle>Manjkajoči prevodi</PageTitle>
+<PimPage Title="Manjkajoči prevodi" Subtitle="Vrednosti iz vseh virov, za katere slovar lastnosti in jezika nima prevoda. Vrstica nastane med preslikavo, zato je seznam posledica dejanskega zajema, ne domneve."
+         Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="translation-filter-title">
+  <h2 id="translation-filter-title" class="visually-hidden">Filtriranje manjkajočih prevodov</h2>
+  <label class="visually-hidden" for="translation-language">Jezik</label>
+  <select id="translation-language" class="filter-select" @bind="Language" @bind:after="LoadAsync">
+    <option value="">Vsi jeziki</option>
+    @foreach (var language in Languages)
+    {
+      <option value="@language">@language</option>
+    }
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Seznam manjkajočih prevodov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni manjkajočih prevodov." LoadingText="Nalaganje prevodov …">
+    <PimTable Caption="Vrednosti brez prevoda, razvrščene po pogostosti" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.Domain</span></td>
+            <td><span class="code-value">@row.Language</span></td>
+            <td>@row.SourceValue</td>
+            <td class="numeric">@row.SeenCount.ToString("N0")</td>
+            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.MissingTranslationRow> Rows = [];
+  IReadOnlyList<string> Languages = [];
+  bool Loading = true;
+  string? Error;
+  string Language = "";
+  const int Take = 300;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Manjkajoči prevodi")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Domena"), new("Jezik"), new("Vrednost iz vira"), new("Pojavitev", Numeric: true), new("Nazadnje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadAsync();
+    // Jeziki v izbirniku so tisti, ki dejansko nastopajo v vrzelih — ne celoten sifrant.
+    Languages = Rows.Select(row => row.Language).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value).ToList();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try { Rows = await Pipeline.GetMissingTranslationsAsync(Language, Take); }
+    catch { Error = "Manjkajočih prevodov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+}

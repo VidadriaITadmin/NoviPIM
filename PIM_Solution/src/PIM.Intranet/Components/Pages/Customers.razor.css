@@ -7,7 +7,7 @@
 .row-action { text-align: right; width: 44px; }
 .open-link { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
 .chevron { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
-.page-position { color: #526078; font-size: 13px; }
+.page-position { color: var(--pim-text-soft); font-size: 13px; }
 
 /* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
 .page-tab:focus-visible,
@@ -16,7 +16,7 @@
 .pagination button:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
-.open-link:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.open-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 /* Sedem podatkovnih stolpcev in stolpec dejanja se na telefonu ne smejo stisniti. */
 @media (max-width: 900px) {

@@ -1,0 +1,48 @@
+@page "/nastavitve/skladisca"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Skladišča</PageTitle>
+<PimPage Title="Skladišča" Subtitle="Šifrant skladišč izbrane organizacije; količine zaloge so na ločeni strani Zaloga." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam skladišč">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni skladišč." LoadingText="Nalaganje skladišč …">
+    <PimTable Caption="Skladišča izbrane organizacije" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.WarehouseCode</span></td>
+            <td>@(row.Name ?? "—")</td>
+            <td>@(row.WarehouseType ?? "—")</td>
+            <td>@(row.GroupCode ?? "—")</td>
+            <td><PimChip Text="@(row.IsActive ? "Aktivno" : "Neaktivno")" Tone="@(row.IsActive ? "good" : null)" /></td>
+            <td>@row.UpdatedUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.WarehouseRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Skladišča")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Šifra"), new("Ime"), new("Vrsta"), new("Skupina"), new("Stanje"), new("Posodobljeno")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Catalog.GetWarehousesAsync(organization.OrganizationId);
+    }
+    catch { Error = "Skladišč trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

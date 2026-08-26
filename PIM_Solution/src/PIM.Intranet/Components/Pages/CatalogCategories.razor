@@ -1,0 +1,69 @@
+@page "/nastavitve/kategorije"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Kategorije</PageTitle>
+<PimPage Title="Kategorije" Subtitle="Vozlišča kategorijskih dreves in število izdelkov, ki so dejansko uvrščeni vanje." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="category-filter-title">
+  <h2 id="category-filter-title" class="visually-hidden">Filtriranje kategorij</h2>
+  <label class="visually-hidden" for="category-tree">Kategorijsko drevo</label>
+  <select id="category-tree" class="filter-select" @bind="TreeCode" @bind:after="LoadAsync">
+    <option value="">Vsa drevesa</option>
+    @foreach (var option in Trees) { <option value="@option.Value">@option.Label</option> }
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Kategorijsko drevo">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="V izbranem drevesu ni kategorij." LoadingText="Nalaganje kategorij …">
+    <PimTable Caption="Kategorije in njihova uporaba" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.CategoryTreeCode</span></td>
+            <td><strong>@row.CategoryName</strong><div class="tree-path">@row.CategoryPath</div></td>
+            <td class="numeric">@row.LevelNo</td>
+            <td class="numeric">@row.ProductCount.ToString("N0")</td>
+            <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.CategoryRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.PimOption> Trees = [];
+  int? OrganizationId;
+  string TreeCode = "";
+  bool Loading = true;
+  string? Error;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Kategorije")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Drevo"), new("Kategorija"), new("Nivo", Numeric: true), new("Izdelkov", Numeric: true), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    try { Trees = await Catalog.GetCategoryTreesAsync(); } catch { Trees = []; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    Loading = true;
+    Error = null;
+    try { Rows = await Catalog.GetCategoriesAsync(OrganizationId.Value, TreeCode); }
+    catch { Error = "Kategorij trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} kategorij";
+}

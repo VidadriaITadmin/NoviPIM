@@ -1,12 +1,12 @@
 # PIM Intranet — referenca
 
 Ta dokument opisuje **dejansko stanje** aplikacije `PIM_Solution/src/PIM.Intranet`
-(Blazor Web App, .NET 8, interaktivni strežniški način). Vse navedbe so povzete iz
+(Blazor Web App, .NET 10, interaktivni strežniški način). Vse navedbe so povzete iz
 izvorne kode, SQL migracij in testnih projektov v tem repozitoriju; nič ni povzeto
 iz načrtov ali UX slik. Dokument ne vsebuje povezovalnih nizov, gesel ali vsebine
 `appsettings*.json`.
 
-Zadnji pregled kode: 2026-08-09.
+Zadnji pregled kode: 2026-08-26.
 
 ---
 
@@ -17,7 +17,7 @@ Zadnji pregled kode: 2026-08-09.
 | Ogrodje | Razor Components + `AddInteractiveServerComponents()` | `Program.cs:12` |
 | Osnovna pot | `app.UsePathBase("/PIM")` — deluje pod korenom in pod IIS virtualno aplikacijo `/PIM` | `Program.cs:36` |
 | `<base href>` | dinamičen `@NavigationManager.BaseUri` | `Components/App.razor` |
-| Statična sredstva | `UseStaticWebAssets()` + `app.css`, `PIM.Intranet.styles.css`, `bootstrap/bootstrap.min.css`, `favicon.svg` | `Program.cs:8`, `App.razor` |
+| Statična sredstva | `UseStaticWebAssets()` + `app.css`, `PIM.Intranet.styles.css`, `favicon.svg`; Bootstrap ni več vključen | `Program.cs:8`, `App.razor` |
 | Razvojni URL | profil `http` → `http://localhost:5091`, IIS Express → `http://localhost:12988` | `Properties/launchSettings.json` |
 | Jezik dokumenta | `<html lang="sl">`, celoten UI v slovenščini | `App.razor` |
 
@@ -43,19 +43,32 @@ Zahtevki (claims) po prijavi: `ClaimTypes.Name` (uporabniško ime),
 
 | Pot | Komponenta | Avtorizacija | Postavitev |
 |---|---|---|---|
-| `/` | `Pages/Home.razor` | zahteva sejo (fallback) | preusmeri na `/nadzorna-plosca` |
+| `/` | `Pages/Home.razor` | zahteva sejo (fallback) | preusmeri na `/nadzorna-plosca`; .NET 10 SSR-preusmeritev ne uporablja `NavigationException` (`BlazorDisableThrowNavigationException=true`) |
 | `/prijava` | `Pages/Login.razor` | `[AllowAnonymous]` | `EmptyLayout` |
 | `/nadzorna-plosca` | `Pages/Dashboard.razor` | `[Authorize]` | `MainLayout` |
 | `/izdelki` | `Pages/Products.razor` | `[Authorize]` | `MainLayout` |
-| `/izdelki/{ProductId:long}` | `Pages/ProductDetail.razor` | `[Authorize]` | `MainLayout` |
+| `/izdelki/{ProductId:long}` | `Pages/ProductCard.razor` | `[Authorize]` | `MainLayout` |
 | `/zaloge` | `Pages/Stocks.razor` | `[Authorize]` | `MainLayout` |
 | `/napake-validacije` | `Pages/ValidationErrors.razor` | `[Authorize]` | `MainLayout` |
 | `/karantena` | `Pages/RawQuarantine.razor` | `[Authorize]` | `MainLayout` |
 | `/teki-obdelave` | `Pages/PipelineRuns.razor` | `[Authorize]` | `MainLayout` |
+| `/mediji`, `/partnerji`, `/cene` | istoimenske strani | `[Authorize]` | `MainLayout` |
+| `/kakovost` | `Pages/Quality.razor` | `[Authorize]` | `MainLayout` |
+| `/kakovost/napake`, `/kakovost/karantena` | alias obstoječih strani | `[Authorize]` | `MainLayout` |
+| `/kakovost/prevodi`, `/kakovost/kategorije` | strani vrzeli preslikave | `[Authorize]` | `MainLayout` |
+| `/zajem` | `Pages/Ingest.razor` | `[Authorize]` | `MainLayout` |
+| `/zajem/viri`, `/zajem/teki`, `/zajem/tezave`, `/zajem/preslikave` | pet glavnih pogledov vhodnega modula skupaj z `/zajem` | `[Authorize]` | `MainLayout` |
+| `/zajem/viri/{SourceCode}`, `/zajem/teki/{RunId:guid}`, `/zajem/tezave/{IssueKind}/{IssueId:long}` | podrobnosti vira, teka in težave | `[Authorize]`; tehnični predogled samo `ADMIN` | `MainLayout` |
+| `/zajem/cakalna-vrsta`, `/zajem/neujemanja` | podrobna delovna seznama iz pogleda Preslikave/Težave | `[Authorize]` | `MainLayout` |
+| `/izvozi`, `/izvozi/profili/{id}` | profili in stolpci izvoza | `[Authorize]` | `MainLayout` |
+| `/izvozi/mnozicno`, `/izvozi/obvestila` | odhodna množična obdelava in dogodki | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/outbound` | `Pages/Outbound.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/stranke` | `Pages/Customers.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/stranke/{CustomerId:long}` | `Pages/CustomerDetail.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/pravila-popustov` | `Pages/DiscountRules.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
+| `/pravila`, `/pravila/validacija`, `/pravila/slovar`, `/pravila/preslikave` | registri pravil | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
+| `/nastavitve` in `/nastavitve/{atributi,kategorije,skladisca,kanali,jeziki}` | bralni pogledi nastavitev kataloga | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
+| `/sistem`, `/sistem/napake`, `/sistem/vloge` | sistemska razdelilna stran in bralni pogledi | `ADMIN` | `MainLayout` |
 | `/system/integracije` | `Pages/SystemIntegrations.razor` | `ADMIN` | `MainLayout` |
 | `/system/uporabniki` | `Pages/SystemUsers.razor` | `ADMIN` | `MainLayout` |
 | `/Error` | `Pages/Error.razor` | zahteva sejo (fallback) | privzeto |
@@ -66,12 +79,41 @@ direktive `@page`; pogodbeni test to izrecno preverja.
 `Routes.razor` za nepooblaščene uporabnike izriše besedilo »Za nadaljevanje se
 prijavite.« s povezavo na `prijava` (base-relativno) in ne preusmeri samodejno.
 
+### 2.1 Modul Vhodni podatki
+
+V stranskem meniju je namenoma samo en cilj **Zajem in preslikave**. Znotraj njega je pet
+enakovrednih operativnih pogledov, zato uporabniku ni treba izbirati med dvanajstimi
+tehničnimi stranmi:
+
+| Pogled | Odgovori na vprašanje | Dejanski vir |
+|---|---|---|
+| **Pregled** | Ali vsi vhodi delajo; kdaj je bil zadnji poskus in kdaj zadnji uspeh? | `map.SourceConnector`, `ops.PipelineRun`, `ops.IntegrationHealth`, `ops.ScheduleProfile`, `stock.SyncRun` |
+| **Viri** | Kaj je registrirano, kaj sme ustvarjati artikle, katere entitete in preslikave ima? | `map.SourceConnector`, `map.EntityMapping`, `map.FieldMapping`, `map.Watermark`, `map.StockIdentityRule` |
+| **Teki** | Kaj se je izvedlo, s kakšnim rezultatom, koraki in vhodnimi stranmi? | enoten bralni pogled čez `ops.PipelineRun`/`ops.PipelineStepLog` in `stock.SyncRun` |
+| **Težave** | Kaj čaka, je v karanteni, zavrnjeno ali tehnično spodletelo? | `raw.Inbox`, `stock.UnmatchedPosition`, vhodna `ops.DeadLetterQueue` in `ops.ErrorLog` z dejanskim `RunId` |
+| **Preslikave** | Česa PIM vsebinsko še ne razume? | `map.UnmappedValue`, `map.MissingTranslationOpen`, `map.SourceCategoryToMap`, `map.FieldMapping` |
+
+Zaloga je zavestno razdeljena: zdravje **zajema zaloge** je tukaj, trenutno poslovno stanje
+zaloge pa ostane na `/zaloge`. Administrator lahko na Pregledu, Tekih in Težavah preklopi na
+vsa podjetja; drugi uporabniki in neposredne podrobnostne poti so omejeni na aktivno
+organizacijo. Predogled vhodnega payload-a je samo za `ADMIN`, omejen na 20.000 znakov in
+nikoli ne bere poverilnic. Ločene vloge »operater integracij« ali »tehnična podpora« še ni v
+`sec.Role`, zato je vmesnik ne izumlja.
+
+Prva dostava je bralna. Ponovni zagon, nalaganje datoteke, potrjevanje prevoda in urejanje
+preslikav se ne prikažejo, dokler zanje ni revizijsko sledljive procedure. Znana sledilna
+vrzel ostaja pri zalogovnem writerju: nepričakovana izjema povrne celotno transakcijo, zato
+`stock.SyncRun` nima lažnega zapisa `Failed`; UI lahko pokaže zadnji uspeh, svežino in
+zavrnjene pozicije, ne more pa prikazati dogodka, ki ga worker ni trajno zapisal.
+
 ---
 
 ## 3. Dejanski viri podatkov
 
-Vsa poslovna vsebina se bere prek `Services/IntranetDataService.cs` in
-`Services/IntranetUserAdministrationService.cs`. Obe storitvi uporabljata
+Poslovna vsebina se bere prek `IntranetDataService`, `ProductWorkbenchService`,
+`CatalogReadService`, `PipelineReadService`, `GovernanceReadService` in
+`IntranetUserAdministrationService`.
+Skupni `PimDb` izvaja parametrizirane ukaze in preslikava stolpce po imenu. Storitve uporabljajo
 `Microsoft.Data.SqlClient` in povezovalni niz `ConnectionStrings:Pim`. Intranet ne
 kliče HTTP-ja neposredno — to varovalko preverja test F8.
 
@@ -80,10 +122,11 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | Metoda storitve | SQL vir | Uporabljeno na |
 |---|---|---|
 | `GetCurrentOrganizationAsync` | `SELECT TOP (1) … FROM dbo.OrganizationConfig WHERE IsActive = 1` | `MainLayout` in vse strani s podatki |
-| `GetNavigationAsync` | `sec.NavigationItem` ⋈ `sec.NavigationGroup` ⋈ `sec.NavigationItemRole` ⋈ `sec.Role` (parametriziran `IN` seznam vlog) | `NavMenu` |
+| `PimNavigation.For` | katalog poti v kodi + filtriranje po zahtevkih vlog | `NavMenu` |
 | `GetDashboardAsync` | `intranet.GetDashboard` | `/nadzorna-plosca` |
 | `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | `/izdelki` |
-| `GetProductDetailAsync` | `intranet.GetProductDetail` (4 nabori: glava, profili, težave, zgodovina sprememb) | `/izdelki/{id}` |
+| `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |
+| `ProductWorkbenchService.GetProductOriginAsync` | `intranet.GetProductOrigin` (zadnjih največ 100 ujemajočih se vhodnih zapisov po dejanski izluščeni identiteti) | `/izdelki/{id}` |
 | `GetValidationIssuesAsync` | `intranet.GetValidationIssues` (3 nabori: težave, profili, najpogostejše) | `/napake-validacije`, `/nadzorna-plosca` |
 | `GetQuarantineAsync` | `intranet.GetRawQuarantine` | `/karantena` |
 | `GetPipelineRunsAsync` | `intranet.GetPipelineRuns` | `/teki-obdelave`, `/nadzorna-plosca` |
@@ -97,6 +140,9 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetOutboundAsync` | `intranet.GetOutboundMessages` | `/outbound` |
 | `GetSystemIntegrationsAsync` | `intranet.GetSystemIntegrations` (2 nabora: integracije, opozorila) | `/system/integracije`, `/nadzorna-plosca` |
 | `IntranetUserAdministrationService.GetUsersAsync` | `sec.LocalUser` ⋈ `sec.LocalUserRole` ⋈ `sec.Role`, `STRING_AGG` vlog | `/system/uporabniki` |
+| `CatalogReadService` | `canon.ProductMedia`, `ProductPrice`, partnerji na izdelku, atributi, kategorije, skladišča, kanali in jeziki | `/mediji`, `/cene`, `/partnerji`, `/nastavitve/*` |
+| `PipelineReadService` | enotni vhodi čez `map.*`, `raw.Inbox`, `ops.PipelineRun`/napake in `stock.SyncRun`/zavrnjene pozicije | `/zajem/*`, deli `/kakovost` |
+| `GovernanceReadService` | izvozni in validacijski profili, slovar, preslikave, napake, alarmi in vloge | `/izvozi/*`, `/pravila/*`, `/sistem/*` |
 
 ### 3.2 Zapisovalne poti
 
@@ -129,12 +175,12 @@ konstanta (pogodbeni test prepoveduje vzorec `Async(2,`).
 Read modeli strank, tekov, outbounda in zalog **nimajo** `TotalCount` niti
 strežniških filtrov, zato prikazano število vedno predstavlja samo vrnjeni nabor.
 
-### 3.4 Podatki, ki jih shell namenoma ne ponuja
+### 3.4 Organizacijska meja brez globalnega izbirnika
 
-`MainLayout` prikaže ime aktivne organizacije iz baze in prikazno ime iz zahtevka.
-Izbirniki za **kanal**, **jezik** in **obvestila** so prisotni kot `disabled`
-kontrole z razlago v `title`, ker za njih ni podatkovnega modela. Preslikave
-uporabnik → organizacija oziroma uporabnik → kanal ni.
+`MainLayout` nima globalnih izbirnikov organizacije, kanala ali jezika. Strani, ki delajo v
+privzetem organizacijskem obsegu, uporabijo prvo aktivno organizacijo iz
+`dbo.OrganizationConfig`; večorganizacijski in kanalski pregledi ponudijo filter lokalno,
+kjer je njegov pomen jasen. Pot `/kontekst` in kontekstni piškotki niso del aktivne aplikacije.
 
 ---
 
@@ -149,11 +195,26 @@ Vloge so vrstice v `sec.Role`; imena so kode, ki se preslikajo v `ClaimTypes.Rol
 | `VIEWER` | Pregledovalec | `010_CreateIntranetF4.sql` |
 | `COMMERCIAL` | Urednik komerciale | `sql/migrations/020_CreateB2bChannel.sql` |
 
-Levi meni **ni** hardkodiran: `NavMenu` prebere `sec.NavigationItem` za vloge
-prijavljenega uporabnika. Ikone se izberejo v `NavMenu.IconClass` po poti; za
-neznano pot se uporabi `icon-link`.
+Levi meni uporablja katalog `PimNavigation` v kodi. Navigacija je del izdelka, zato se pot,
+avtorizacija in stran spremenijo v istem commitu; `NavMenu` postavke filtrira po vlogah.
+Vse povezave so base-relativne zaradi gostovanja pod IIS `/PIM`.
 
-Zasejane navigacijske skupine in postavke:
+Meni je razdeljen po trajnem podatkovnem toku: **Vhodni podatki**, **PIM katalog**,
+**Kakovost**, **Izhodi ERP in splet**, **Poslovanje**, **Upravljanje** in
+**Administracija**. `PimLifecycle.ResolveLifecycleArea` isto področje izpelje tudi za
+podstrani in ga prikaže v zgornji vrstici. S tem uporabnik na primer na strani preslikav še
+vedno vidi, da je v upravljanju podatkov, na karanteni pa v kakovosti. Poslovni model in
+obvezna pogodba vsake strani sta v `docs/PRODUKTNI_MODEL_PIM.md`.
+
+Vizualna pogodba menija sledi referenci v2, ne njeni informacijski arhitekturi: temno
+skrilasto ozadje, svetle nepodčrtane povezave, aktivna kartica z oranžno levo črto, opis pri
+pomembnih delovnih ciljih in puščica pri razdelilnih straneh. Ker sidro izriše komponenta
+`NavLink`, ga izolirani `NavMenu.razor.css` doseže prek `::deep`; brez tega brskalnik pokaže
+privzeto modro podčrtano povezavo. Referenčni blok »Spletni kontekst / Svetila.si« ni del
+NoviPIM menija in se ne prenese.
+
+Tabele `sec.Navigation*` ostajajo v bazi kot zgodovinski bralni model, vendar menija ne polnijo.
+Njihove zasejane postavke so:
 
 | Skupina (`GroupCode`) | Postavka (`ItemCode`) | Pot | Vloge | Migracija |
 |---|---|---|---|---|
@@ -167,15 +228,7 @@ Zasejane navigacijske skupine in postavke:
 | `PRAVILA` | `DISCOUNT_RULES_B2B` | `/pravila-popustov` | isti trije | 020 |
 | `NADZOR` | `USERS` | `/system/uporabniki` | `ADMIN` | 026 |
 
-Pomembne posledice, ki jih je treba preveriti v vsakem okolju posebej:
-
-- Migracija 018 veže postavko `STOCKS` na skupino z `GroupCode = N'PIM'`. Te skupine
-  migracije v tem repozitoriju ne ustvarijo; če v bazi ne obstaja, se postavka ne
-  vstavi in `/zaloge` v meniju ni, čeprav je pot dosegljiva neposredno.
-- Za `/outbound` in `/system/integracije` v migracijah **ni** navigacijske postavke.
-  Strani sta dosegljivi samo z neposrednim URL-jem (in prek nadzorne plošče).
-- Postavke iz 010 in 018 so vezane na vloge s CROSS JOIN v času izvedbe migracije,
-  zato vloga `COMMERCIAL` (dodana v 020) teh postavk ne dobi samodejno.
+Te vrstice ne vplivajo več na vidnost ali vrstni red menija.
 
 ### Prijava in izvor uporabnikov
 
@@ -221,12 +274,8 @@ Vsi `PIM.F10.*UxTests` imajo isti vzorec: preverijo obstoj `Pages/<Stran>.razor`
 zaprt seznam dovoljenih `Data.*` klicev in izrecen seznam prepovedanih izmišljenih
 vrednosti iz UX slik.
 
-**Opozorilo:** v `PIM.sln` je od projektov F10 vključen samo `PIM.F10.AuthTests`.
-Projekti `PIM.F10.*UxTests` v rešitvi niso, zato jih `dotnet build PIM.sln` in
-`dotnet test PIM.sln` ne zajameta — pognati jih je treba posamično.
-
-`npm test` (vitest) in `npm run lint` sta v korenu repozitorija; `lint` je še vedno
-samo nadomestek (`echo "(lint se doda kasneje)"`) in ničesar ne preverja.
+Vseh deset projektov F10 je v `PIM.sln`; merodajni zagon ostaja
+`scripts\run_tests.ps1`, ker ta poleg builda dejansko požene tudi konzolne testne projekte.
 
 ---
 
@@ -240,10 +289,10 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
 2. **Referenčne slike so v `../PIM_test/UX_pictures/` in so samo vizualni standard**,
    ne podatkovna pogodba. Nova referenca se doda šele po potrditvi uporabnika, z
    imenom, ki se začne z `NOV_UX_` in vsebuje `PREDLOG`.
-3. **Ne prikazujemo kontrol, ki navidezno shranjujejo**, če procedura ne obstaja.
-   Kanal, jezik in obvestila v glavi so zato onemogočeni z razlago.
-4. **Vizualni sistem:** temna leva navigacija ≈200 px, svetla vsebina, bela zgornja
-   vrstica; modra za dejanja, oranžna kot poudarek/opozorilo, zelena uspeh, rdeča
+3. **Ne prikazujemo kontrol, ki navidezno shranjujejo**, če zapisovalna pot ne obstaja.
+   Nove strani nastavitev so zato bralne; globalnih kontekstnih izbirnikov ni.
+4. **Vizualni sistem:** temna leva navigacija 18 rem, svetla vsebina, bela zgornja
+   vrstica; indigo za dejanja, oranžna kot identiteta/poudarek, zelena uspeh, rdeča
    napaka; bele kartice s tankim robom in minimalno senco; goste tabele z jasnim
    zaglavjem, statusnimi oznakami in enotnim dnom.
 5. **Skupni razredi namesto Bootstrapa** na prenovljenih straneh: `page-header`,
@@ -251,7 +300,7 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
    Test prepoveduje Bootstrap razrede `row`, `col`, `card`, `table`, `form-control`,
    `form-select`, `form-check`, `btn` na `DiscountRules`, `CustomerDetail` in
    `SystemUsers`.
-6. **Ikone so CSS/SVG, ne Unicode znaki.** Meni uporablja `menu-glyph-icon`; znak
+6. **Ikone so CSS/SVG, ne Unicode znaki.** Meni uporablja `navigation-icon`; znak
    `☰` je izrecno prepovedan. Okrasne ikone morajo imeti `aria-hidden="true"`.
 7. **Dostopnost je del pogodbe:** vsak sklop ima `aria-labelledby` na obstoječ `h2`,
    statusni čipi imajo skrito oznako »Status: «, merilniki imajo
@@ -264,9 +313,8 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
    `href="/izdelki"`), sicer pod `/PIM` padejo na koren strežnika. Prijavni obrazec
    oddaja na `auth/prijava`.
 10. **Neznan status se izpiše z izvorno vrednostjo**; UI prevaja samo znane statuse.
-11. **Brez read modela ni strani.** Mediji, partnerji, ceniki izdelkov in nastavitve
-    kataloga niso implementirani, ker zanje ni dogovorjenih poti in modelov.
-    Resnosti validacijskih napak ni, ker je shema nima.
+11. **Brez read modela ni strani.** Novi pogledi prikazujejo samo registre in tabele, ki
+    dejansko obstajajo; zapisovalnih gumbov na bralnih nastavitvah ni.
 
 ---
 
@@ -294,7 +342,7 @@ Za preverjanje obeh načinov gostovanja se ista instanca odziva na `/…` in `/P
 - [ ] `GET /` brez seje preusmeri oziroma pripelje na `/prijava`.
 - [ ] `/prijava` se izriše s PIM identiteto in **stiliziran** (če je videti kot gol
       HTML, CSS ni dostavljen — glej naslednjo točko).
-- [ ] `GET /app.css`, `/PIM.Intranet.styles.css`, `/bootstrap/bootstrap.min.css`,
+- [ ] `GET /app.css`, `/PIM.Intranet.styles.css`,
       `/favicon.svg` vrnejo 200 s pravim `Content-Type`; isto pod `/PIM/…`.
 - [ ] Izrisani `<head>` vsebuje `<base href="…/">` oziroma `<base href="…/PIM/">`
       glede na način dostopa.
@@ -304,8 +352,8 @@ Za preverjanje obeh načinov gostovanja se ista instanca odziva na `/…` in `/P
 - [ ] `zapomniMe` označen → piškotek je trajen (potek ≈ 14 dni); neoznačen → sejni.
 - [ ] Levi meni vsebuje samo postavke, dovoljene za vloge prijavljenega uporabnika;
       preveri z uporabnikom vloge `VIEWER` in `ADMIN`.
-- [ ] V glavi je vidno ime aktivne organizacije iz `dbo.OrganizationConfig` in
-      prikazno ime uporabnika; kanal/jezik/obvestila so onemogočeni.
+- [ ] V glavi so faza toka, opozorila in prikazno ime uporabnika; globalnih izbirnikov
+      organizacije, kanala in jezika ni.
 - [ ] Gumb menija je viden in preklaplja navigacijo tudi pri ozkem oknu.
 - [ ] `/nadzorna-plosca`: pet KPI kartic v eni vrsti na namizju, paneli za kakovost,
       procese, opozorila, integracije in hitre dostope; nobene izmišljene vsebine.
@@ -352,8 +400,7 @@ dotnet run --project tests\PIM.F10.OutboundUxTests\PIM.F10.OutboundUxTests.cspro
 dotnet run --project tests\PIM.F10.SystemIntegrationsUxTests\PIM.F10.SystemIntegrationsUxTests.csproj
 ```
 
-Nato še `npm test` v korenu repozitorija. `npm run lint` uspe, vendar ničesar ne
-preveri.
+Merodajni zaključni dokaz je `scripts\run_tests.ps1`; ukazi Node niso del tega sistema.
 
 ---
 
@@ -363,6 +410,6 @@ preveri.
   veljavne uporabniške seje; agenti gesel ne uporabljajo. Ta pregled ostaja ročen.
 - `/_framework/blazor.web.js` za neprijavljeno zahtevo vrne 302 na prijavo
   (posledica `FallbackPolicy`); prijava je navaden POST in JS ne potrebuje.
-- Ni modela uporabnik → organizacija in uporabnik → kanal; shell zato prikaže prvo
-  aktivno organizacijo.
+- Preslikava pravic uporabnika na dovoljene organizacije ali kanale še ne obstaja;
+  večorganizacijski pogledi zato ostajajo omejeni na strani, ki imajo svojo preverjeno pot.
 - Zgodovinskega read modela ni, zato na nadzorni plošči ni časovnih trendov.

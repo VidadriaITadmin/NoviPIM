@@ -1,0 +1,372 @@
+@page "/izdelki/{ProductId:long}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IntranetDataService Data
+@inject ProductWorkbenchService Workbench
+
+<PageTitle>@(Detail?.Header.Name ?? "Izdelek")</PageTitle>
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Detail is null)"
+          EmptyText="Izdelek ne obstaja v aktivni organizaciji." LoadingText="Nalaganje kartice izdelka …">
+  @if (Detail is not null)
+  {
+    <PimPage Title="@Detail.Header.Name" Subtitle="@($"Artikel {Detail.Header.ItemId} · kanonični podatki, kakovost, izhodi in izvor")" Crumbs="ProductCrumbs" />
+
+    <section class="product-hero ui-card" aria-labelledby="product-identity-title">
+      <div class="media-tile" aria-hidden="true"><span>MEDIJ</span></div>
+      <div class="product-identity">
+        <h2 id="product-identity-title" class="visually-hidden">Identiteta izdelka</h2>
+        <p class="identity-line"><span>ItemID: @Detail.Header.ItemId</span>@if (Detail.Header.Ean is not null) { <span>EAN: @Detail.Header.Ean</span> }</p>
+        <div class="header-chips" aria-label="Stanje izdelka">
+          <span class="flag-chip @(Detail.Header.IsActive ? "on" : "off")">Aktiven: @YesNo(Detail.Header.IsActive)</span>
+          <span class="flag-chip @(Detail.Header.WebPublish ? "on" : "off")">Za splet: @YesNo(Detail.Header.WebPublish)</span>
+          <PimChip Text="@(Detail.Header.IsPromoted ? "Objavljen v PIM" : "Ni objavljen v PIM")" Tone="@(Detail.Header.IsPromoted ? "good" : "warn")" />
+          <PimChip Text="@($"ERP: {StatusLabel(Detail.Header.ErpStatus)}")" Tone="@Tone(Detail.Header.ErpStatus)" />
+          <PimChip Text="@($"Splet: {StatusLabel(Detail.Header.WebStatus)}")" Tone="@Tone(Detail.Header.WebStatus)" />
+        </div>
+        @if (SafeUrl(Detail.Header.ThumbnailUrl) is { } thumbnail)
+        {
+          <a class="media-link" href="@thumbnail" target="_blank" rel="noopener noreferrer">Odpri glavni medij</a>
+        }
+        else
+        {
+          <span class="muted">Glavni medij ni na voljo.</span>
+        }
+      </div>
+      <div class="hero-completeness">
+        <strong>@Detail.Header.Completeness.ToString("0.#") %</strong>
+        <span>skupna popolnost</span>
+        <PimBar Percent="Detail.Header.Completeness" Label="Popolnost izdelka" />
+      </div>
+    </section>
+
+    <section class="detail-summary" aria-labelledby="povzetek-izdelka-naslov">
+      <h2 id="povzetek-izdelka-naslov" class="visually-hidden">Povzetek stanja izdelka</h2>
+      <div class="summary-grid">
+        <article class="ui-card summary-card @(Detail.Header.ErpStatus == "VALID" ? "good" : "bad")">
+          <h3>Pripravljenost ERP</h3>
+          <PimChip Text="@StatusLabel(Detail.Header.ErpStatus)" Tone="@Tone(Detail.Header.ErpStatus)" />
+          <p>@BlockingSummary(erp: true)</p>
+        </article>
+        <article class="ui-card summary-card @(Detail.Header.WebStatus == "VALID" ? "good" : "bad")">
+          <h3>Pripravljenost splet</h3>
+          <PimChip Text="@StatusLabel(Detail.Header.WebStatus)" Tone="@Tone(Detail.Header.WebStatus)" />
+          <p>@BlockingSummary(erp: false)</p>
+        </article>
+        <article class="ui-card summary-card">
+          <h3>Odprte težave</h3>
+          <strong class="summary-number">@Detail.Issues.Count</strong>
+          <p>@Detail.Issues.Count(row => row.Severity == "ERROR") napak · @Detail.Issues.Count(row => row.Severity == "WARNING") opozoril</p>
+        </article>
+        <article class="ui-card summary-card">
+          <h3>Čaka SAOP</h3>
+          <strong class="summary-number">@Detail.PendingOverlays.Count</strong>
+          <p>@(Detail.PendingOverlays.Count == 0 ? "Ni nepotrjenih sprememb." : "Vrednosti so vidne kot prekrivka.")</p>
+        </article>
+        <article class="ui-card summary-card">
+          <h3>Popolnost izdelka</h3>
+          <strong class="summary-number">@Detail.Header.Completeness.ToString("0.#") %</strong>
+          <p>Skupna pokritost podatkov glede na aktivne validacijske profile.</p>
+        </article>
+        @foreach (var profile in Detail.Profiles.Where(row => row.BlocksErp || row.BlocksWeb))
+        {
+          <article class="ui-card summary-card profile-card">
+            <h3>@profile.ProfileCode</h3>
+            <PimChip Text="@StatusLabel(profile.Status)" Tone="@Tone(profile.Status)" />
+            <p>@Detail.Issues.Count(row => row.ProfileCode == profile.ProfileCode) odprtih težav</p>
+          </article>
+        }
+      </div>
+    </section>
+
+    @if (Detail.Profiles.Any(row => row.Status == "INVALID" && row.OpenIssueCount == 0))
+    {
+      <div class="consistency-warning" role="status">
+        Eden ali več profilov je označenih kot neveljavnih, vendar nima aktivne težave. Podatek
+        potrebuje ponovno validacijo; kartica neskladja ne skriva.
+      </div>
+    }
+
+    <div class="product-tabs" role="tablist" aria-label="Sklopi izdelka">
+      <button type="button" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="@Flag(Tab=="overview")" class="@(Tab=="overview"?"active":null)" @onclick='()=>Tab="overview"'>Pregled</button>
+      <button type="button" role="tab" id="tab-texts" aria-controls="panel-texts" aria-selected="@Flag(Tab=="texts")" class="@(Tab=="texts"?"active":null)" @onclick='()=>Tab="texts"'>Besedila (@Detail.Texts.Count)</button>
+      <button type="button" role="tab" id="tab-attributes" aria-controls="panel-attributes" aria-selected="@Flag(Tab=="attributes")" class="@(Tab=="attributes"?"active":null)" @onclick='()=>Tab="attributes"'>Lastnosti (@Detail.Attributes.Count)</button>
+      <button type="button" role="tab" id="tab-categories" aria-controls="panel-categories" aria-selected="@Flag(Tab=="categories")" class="@(Tab=="categories"?"active":null)" @onclick='()=>Tab="categories"'>Kategorije (@Detail.Categories.Count)</button>
+      <button type="button" role="tab" id="tab-media" aria-controls="panel-media" aria-selected="@Flag(Tab=="media")" class="@(Tab=="media"?"active":null)" @onclick='()=>Tab="media"'>Mediji in dokumenti (@(Detail.Media.Count + Detail.Documents.Count))</button>
+      <button type="button" role="tab" id="tab-prices" aria-controls="panel-prices" aria-selected="@Flag(Tab=="prices")" class="@(Tab=="prices"?"active":null)" @onclick='()=>Tab="prices"'>Cene (@Detail.Prices.Count)</button>
+      <button type="button" role="tab" id="tab-stock" aria-controls="panel-stock" aria-selected="@Flag(Tab=="stock")" class="@(Tab=="stock"?"active":null)" @onclick='()=>Tab="stock"'>Zaloga (@Detail.Stock.Count)</button>
+      <button type="button" role="tab" id="tab-commercial" aria-controls="panel-commercial" aria-selected="@Flag(Tab=="commercial")" class="@(Tab=="commercial"?"active":null)" @onclick='()=>Tab="commercial"'>Trgovinski podatki</button>
+      <button type="button" role="tab" id="tab-quality" aria-controls="panel-quality" aria-selected="@Flag(Tab=="quality")" class="@(Tab=="quality"?"active":null)" @onclick='()=>Tab="quality"'>Kakovost (@(Detail.Profiles.Count + Detail.Issues.Count))</button>
+      <button type="button" role="tab" id="tab-outbound" aria-controls="panel-outbound" aria-selected="@Flag(Tab=="outbound")" class="@(Tab=="outbound"?"active":null)" @onclick='()=>Tab="outbound"'>ERP / SAOP (@Detail.Outbound.Count)</button>
+      <button type="button" role="tab" id="tab-history" aria-controls="panel-history" aria-selected="@Flag(Tab=="history")" class="@(Tab=="history"?"active":null)" @onclick='()=>Tab="history"'>Zgodovina (@Detail.History.Count)</button>
+      <button type="button" role="tab" id="tab-origin" aria-controls="panel-origin" aria-selected="@Flag(Tab=="origin")" class="@(Tab=="origin"?"active":null)" @onclick='()=>Tab="origin"'>Izvor (@Origins.Count)</button>
+    </div>
+
+    <section id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0" class="ui-card panel tab-panel" hidden="@(Tab!="overview")">
+      <h2>Ključni podatki in lastništvo</h2>
+      <PimTable Caption="Kanonična vrednost, lastnik in čakajoča sprememba" Columns="OverviewColumns">
+        <Rows>
+          @foreach (var row in Detail.Fields)
+          {
+            var pending = Detail.PendingOverlays.FirstOrDefault(value => value.FieldKey == row.FieldKey);
+            <tr>
+              <th scope="row">@row.Label</th>
+              <td><span class="code-value">@row.FieldKey</span></td>
+              <td>@Value(row.Value)</td>
+              <td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td>
+              <td>
+                @if (pending is null) { <span class="muted">—</span> }
+                else
+                {
+                  <div class="pending-overlay"><strong>@Value(pending.Value)</strong><PimChip Text="@StatusLabel(pending.Status)" Tone="@Tone(pending.Status)" /></div>
+                }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+
+    <section id="panel-texts" role="tabpanel" aria-labelledby="tab-texts" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="texts")">
+      @if (Detail.Texts.Count == 0) { <div class="empty-state">Izdelek nima besedil.</div> }
+      else
+      {
+        <PimTable Caption="Besedila izdelka po jeziku in vrsti" Columns="TextColumns">
+          <Rows>@foreach (var row in Detail.Texts) { <tr><td>@row.Language</td><td><span class="code-value">@row.TextType</span></td><td class="long-value">@row.Value</td><td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-attributes" role="tabpanel" aria-labelledby="tab-attributes" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="attributes")">
+      @if (Detail.Attributes.Count == 0) { <div class="empty-state">Izdelek nima lastnosti.</div> }
+      else
+      {
+        <PimTable Caption="Kanonične lastnosti izdelka" Columns="AttributeColumns">
+          <Rows>@foreach (var row in Detail.Attributes) { <tr><td><span class="code-value">@row.AttributeCode</span></td><td class="long-value">@row.Value</td><td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-categories" role="tabpanel" aria-labelledby="tab-categories" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="categories")">
+      @if (Detail.Categories.Count == 0) { <div class="empty-state">Izdelek nima kategorije.</div> }
+      else
+      {
+        <div class="panel-context"><a href="nastavitve/kategorije">Odpri register kategorij</a></div>
+        <PimTable Caption="Uvrstitve izdelka v kategorijska drevesa" Columns="CategoryColumns">
+          <Rows>@foreach (var row in Detail.Categories) { <tr><td>@row.WebSite</td><td>@(row.CategoryTreeCode ?? "—")</td><td>@(row.CategoryName ?? "—")</td><td class="long-value">@row.CategoryPath</td><td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="media")">
+      <div class="panel-context"><a href="mediji?izdelek=@Detail.Header.ItemId">Vsi mediji tega izdelka</a></div>
+      <h2>Slike in povezani mediji</h2>
+      @if (Detail.Media.Count == 0) { <div class="empty-state">Izdelek nima medijev.</div> }
+      else
+      {
+        <PimTable Caption="Mediji izdelka" Columns="MediaColumns">
+          <Rows>@foreach (var row in Detail.Media) { <tr><td>@row.Role</td><td class="numeric">@row.SortOrder</td><td>@if (SafeUrl(row.Url) is { } mediaUrl) { <a class="media-link" href="@mediaUrl" target="_blank" rel="noopener noreferrer">@Shorten(row.Url)</a> } else { <span class="muted">Neveljaven naslov</span> }</td><td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td></tr> }</Rows>
+        </PimTable>
+      }
+      <h2>Dokumenti</h2>
+      @if (Detail.Documents.Count == 0) { <div class="empty-state">Izdelek nima dokumentov.</div> }
+      else
+      {
+        <PimTable Caption="Dokumenti in tehnične datoteke izdelka" Columns="DocumentColumns">
+          <Rows>@foreach (var row in Detail.Documents) { <tr><td>@row.Role</td><td>@Value(row.Title)</td><td class="numeric">@row.SortOrder</td><td>@if (SafeUrl(row.Url) is { } documentUrl) { <a class="media-link" href="@documentUrl" target="_blank" rel="noopener noreferrer">@Shorten(row.Url)</a> } else { <span class="muted">Neveljaven naslov</span> }</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-prices" role="tabpanel" aria-labelledby="tab-prices" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="prices")">
+      <div class="panel-context"><a href="cene?izdelek=@Detail.Header.ItemId">Odpri cene v poslovnem pogledu</a></div>
+      @if (Detail.Prices.Count == 0) { <div class="empty-state">Izdelek nima cene.</div> }
+      else
+      {
+        <PimTable Caption="Cene izdelka po cenikih" Columns="PriceColumns">
+          <Rows>@foreach (var row in Detail.Prices) { <tr><td>@row.PriceList</td><td class="numeric">@row.Net.ToString("N2")</td><td class="numeric">@row.VatRate.ToString("N1") %</td><td class="numeric">@row.Gross.ToString("N2")</td><td>@row.ValidFrom.ToLocalTime().ToString("d")</td><td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-stock" role="tabpanel" aria-labelledby="tab-stock" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="stock")">
+      <div class="panel-context"><a href="zaloge?izdelek=@Detail.Header.ItemId">Odpri zalogo v poslovnem pogledu</a></div>
+      @if (Detail.Stock.Count == 0) { <div class="empty-state">Izdelek nima aktivnega zalogovnega posnetka.</div> }
+      else
+      {
+        <PimTable Caption="Aktivne zalogovne pozicije izdelka" Columns="StockColumns">
+          <Rows>@foreach (var row in Detail.Stock) { <tr><td>@(row.WarehouseName ?? row.WarehouseCode ?? row.MatchKey)</td><td>@row.ProviderKind</td><td class="numeric">@row.Quantity.ToString("N2")</td><td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td><td>@(row.AvailabilityDate?.ToLocalTime().ToString("d") ?? "—")</td><td>@row.SnapshotUtc.ToLocalTime().ToString("g")</td><td>@StockRule(row)</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-commercial" role="tabpanel" aria-labelledby="tab-commercial" tabindex="0" class="ui-card panel tab-panel" hidden="@(Tab!="commercial")">
+      @if (Detail.Commercial is null) { <div class="empty-state">Izdelek nima trgovinskih podatkov.</div> }
+      else
+      {
+        <PimTable Caption="Trgovinski, carinski in pakirni podatki" Columns="CommercialColumns">
+          <Rows>
+            @foreach (var row in CommercialRows(Detail.Commercial))
+            {
+              <tr><th scope="row">@row.Label</th><td>@row.Value</td></tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-quality" role="tabpanel" aria-labelledby="tab-quality" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="quality")">
+      <h2>Validacijski profili</h2>
+      @if (Detail.Profiles.Count == 0) { <div class="empty-state">Izdelek nima izračunanih validacijskih profilov.</div> }
+      else
+      {
+        <PimTable Caption="Profili, pripravljenost in obseg blokade" Columns="ProfileColumns">
+          <Rows>@foreach (var row in Detail.Profiles) { <tr><td>@row.ProfileCode<br /><span class="muted">@row.Name</span></td><td><PimChip Text="@StatusLabel(row.Status)" Tone="@Tone(row.Status)" /></td><td><PimBar Percent="row.Completeness" Label="@($"Popolnost profila {row.ProfileCode}")" /></td><td>@Blocks(row)</td><td class="numeric">@row.OpenIssueCount</td><td>@(row.ValidatedUtc?.ToLocalTime().ToString("g") ?? "Ni validirano")</td></tr> }</Rows>
+        </PimTable>
+      }
+      <h2>Odprte težave</h2>
+      @if (Detail.Issues.Count == 0) { <div class="empty-state">Izdelek nima odprtih validacijskih težav.</div> }
+      else
+      {
+        <PimTable Caption="Kaj manjka in kateri cilj je blokiran" Columns="IssueColumns">
+          <Rows>@foreach (var row in Detail.Issues) { <tr><td>@row.ProfileCode</td><td><PimChip Text="@row.Severity" Tone="@(row.Severity == "ERROR" ? "bad" : "warn")" /></td><td><span class="code-value">@row.FieldCode</span></td><td class="long-value">@row.Message</td><td>@Blocks(row)</td><td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-outbound" role="tabpanel" aria-labelledby="tab-outbound" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="outbound")">
+      <div class="panel-context"><a href="outbound">Odpri celotno odhodno pošto</a></div>
+      @if (Detail.Outbound.Count == 0) { <div class="empty-state">Za izdelek ni odhodnih sporočil.</div> }
+      else
+      {
+        <PimTable Caption="Spremembe izdelka na poti v SAOP" Columns="OutboundColumns">
+          <Rows>@foreach (var row in Detail.Outbound) { <tr><td>@row.OutboxMessageId</td><td><span class="code-value">@row.FieldSummary</span></td><td>@row.Operation</td><td><PimChip Text="@StatusLabel(row.Status)" Tone="@Tone(row.Status)" /></td><td class="numeric">@row.AttemptCount</td><td>@Moment(row.SentUtc)</td><td>@Moment(row.VerifiedUtc)</td><td class="long-value">@OutboundReason(row)</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="history")">
+      @if (Detail.History.Count == 0) { <div class="empty-state">Za ta izdelek še ni zabeleženih sprememb sledljivih polj.</div> }
+      else
+      {
+        <PimTable Caption="Revizijska sled sprememb izdelka" Columns="HistoryColumns">
+          <Rows>@foreach (var row in Detail.History) { <tr><td><span class="code-value">@row.FieldKey</span></td><td>@Value(row.OldValue)</td><td>@Value(row.NewValue)</td><td><PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /></td><td>@row.ChangeSource</td><td>@row.ChangedBy</td><td>@row.ChangedAtUtc.ToLocalTime().ToString("g")</td><td>@Value(row.Note)</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+
+    <section id="panel-origin" role="tabpanel" aria-labelledby="tab-origin" tabindex="0" class="ui-card data-card tab-panel" hidden="@(Tab!="origin")">
+      <p class="panel-intro">Izvor je ujemanje identitete <strong>@Detail.Header.ItemId</strong> z dejansko izluščenimi vrednostmi vhodnih strani.</p>
+      @if (Origins.Count == 0) { <div class="empty-state">Za izdelek ni mogoče določiti vhodnega zapisa.</div> }
+      else
+      {
+        <PimTable Caption="Vhodni teki in strani, iz katerih izvirajo podatki" Columns="OriginColumns">
+          <Rows>@foreach (var row in Origins) { <tr><td><a class="origin-link" href="zajem/tezave/INBOX/@row.InboxId">@row.SourceCode</a></td><td><a href="zajem/teki/@row.RunId">@ShortId(row.RunId)</a></td><td>@row.EntityType</td><td class="numeric">@row.PageNumber</td><td class="numeric">@row.RecordOrdinal</td><td class="numeric">@row.ExtractedFieldCount</td><td><PimChip Text="@StatusLabel(row.Status)" Tone="@Tone(row.Status)" /></td><td>@row.ReceivedUtc.ToLocalTime().ToString("g")</td></tr> }</Rows>
+        </PimTable>
+      }
+    </section>
+  }
+</PimState>
+
+@code {
+  [Parameter] public long ProductId { get; set; }
+
+  ProductCardView? Detail;
+  IReadOnlyList<ProductOriginRow> Origins = [];
+  bool Loading = true;
+  string? Error;
+  string Tab = "overview";
+
+  static readonly IReadOnlyList<PimCrumb> ProductCrumbs = [new("Izdelki", "izdelki"), new("Kartica")];
+  static readonly IReadOnlyList<PimColumn> OverviewColumns = [new("Polje"), new("Ključ"), new("Kanonična vrednost"), new("Lastnik"), new("Čaka potrditev")];
+  static readonly IReadOnlyList<PimColumn> TextColumns = [new("Jezik"), new("Vrsta"), new("Besedilo"), new("Lastnik")];
+  static readonly IReadOnlyList<PimColumn> AttributeColumns = [new("Lastnost"), new("Vrednost"), new("Lastnik")];
+  static readonly IReadOnlyList<PimColumn> CategoryColumns = [new("Splet"), new("Drevo"), new("Kategorija"), new("Pot"), new("Lastnik")];
+  static readonly IReadOnlyList<PimColumn> MediaColumns = [new("Vloga"), new("Vrstni red", Numeric: true), new("Naslov"), new("Lastnik")];
+  static readonly IReadOnlyList<PimColumn> DocumentColumns = [new("Vrsta"), new("Naslov"), new("Vrstni red", Numeric: true), new("Datoteka")];
+  static readonly IReadOnlyList<PimColumn> PriceColumns = [new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true), new("Bruto", Numeric: true), new("Velja od"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> StockColumns = [new("Skladišče"), new("Vir"), new("Količina", Numeric: true), new("Prihaja", Numeric: true), new("Razpoložljivo"), new("Posnetek"), new("Pravilo min/max")];
+  static readonly IReadOnlyList<PimColumn> CommercialColumns = [new("Polje"), new("Vrednost")];
+  static readonly IReadOnlyList<PimColumn> ProfileColumns = [new("Profil"), new("Status"), new("Popolnost"), new("Blokira"), new("Težav", Numeric: true), new("Validirano")];
+  static readonly IReadOnlyList<PimColumn> IssueColumns = [new("Profil"), new("Resnost"), new("Manjkajoče polje"), new("Vzrok"), new("Blokira"), new("Zadnji pojav")];
+  static readonly IReadOnlyList<PimColumn> OutboundColumns = [new("ID"), new("Polje"), new("Operacija"), new("Status"), new("Poskusov", Numeric: true), new("Poslano"), new("Potrjeno"), new("Vzrok/odmik")];
+  static readonly IReadOnlyList<PimColumn> HistoryColumns = [new("Polje"), new("Stara vrednost"), new("Nova vrednost"), new("Lastnik"), new("Vir"), new("Spremenil"), new("Čas"), new("Razlog")];
+  static readonly IReadOnlyList<PimColumn> OriginColumns = [new("Vir"), new("Tek"), new("Entiteta"), new("Stran", Numeric: true), new("Zapis", Numeric: true), new("Polj", Numeric: true), new("Stanje"), new("Prejeto")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    Detail = null;
+    Origins = [];
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      var cardTask = Workbench.GetProductCardAsync(organization.OrganizationId, ProductId, "sl");
+      var originTask = Workbench.GetProductOriginAsync(organization.OrganizationId, ProductId);
+      await Task.WhenAll(cardTask, originTask);
+      Detail = await cardTask;
+      Origins = await originTask;
+    }
+    catch
+    {
+      Error = "Kartice izdelka trenutno ni mogoče naložiti.";
+    }
+    finally { Loading = false; }
+  }
+
+  string BlockingSummary(bool erp)
+  {
+    if (Detail is null) return "Ni podatka.";
+    var profiles = Detail.Profiles.Where(row => erp ? row.BlocksErp : row.BlocksWeb).ToList();
+    var invalid = profiles.Where(row => row.Status != "VALID").Select(row => row.ProfileCode).ToList();
+    return invalid.Count == 0 ? "Noben profil ne blokira cilja." : $"Blokira: {string.Join(", ", invalid)}";
+  }
+
+  static IEnumerable<(string Label, string Value)> CommercialRows(ProductCardCommercial row)
+  {
+    yield return ("Neto teža", Measure(row.NetWeight, "kg"));
+    yield return ("Bruto teža", Measure(row.GrossWeight, "kg"));
+    yield return ("Carinska tarifa", Value(row.CustomsTariff));
+    yield return ("Država porekla", Value(row.CountryOfOrigin));
+    yield return ("Pakiranje 1", Number(row.Pak1));
+    yield return ("Pakiranje 2", Number(row.Pak2));
+    yield return ("Dimenzije", Value(row.Dimensions));
+    yield return ("Volumen", Number(row.Volume));
+    yield return ("Dolžina paketa", Measure(row.PackageLength, row.DimensionUnit));
+    yield return ("Širina paketa", Measure(row.PackageWidth, row.DimensionUnit));
+    yield return ("Višina paketa", Measure(row.PackageHeight, row.DimensionUnit));
+  }
+
+  static string Blocks(ProductCardProfile row) => Blocks(row.BlocksErp, row.BlocksWeb);
+  static string Blocks(ProductCardIssue row) => Blocks(row.BlocksErp, row.BlocksWeb);
+  static string Blocks(bool erp, bool web) => (erp, web) switch { (true, true) => "ERP in splet", (true, false) => "ERP", (false, true) => "Splet", _ => "Samo opozarja" };
+  static string StockRule(ProductCardStock row) => row.MinimumStock is null && row.MaximumStock is null ? "—" : $"{Number(row.MinimumStock)} / {Number(row.MaximumStock)}";
+  static string OutboundReason(ProductCardOutbound row) => Value(row.DriftDetail ?? row.LastAttemptFailureReason ?? row.LastError);
+  static string Moment(DateTime? value) => value?.ToLocalTime().ToString("g") ?? "—";
+  static string YesNo(bool value) => value ? "Da" : "Ne";
+  static string Flag(bool value) => value ? "true" : "false";
+  static string Value(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+  static string Number(decimal? value) => value?.ToString("N2") ?? "—";
+  static string Measure(decimal? value, string? unit) => value is null ? "—" : $"{value:N2} {unit}".Trim();
+  static string ShortId(Guid value) => value.ToString("N")[..8];
+  static string Shorten(string value) => value.Length <= 72 ? value : value[..36] + " … " + value[^30..];
+  static string? SafeUrl(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var parsed) && parsed.Scheme is "http" or "https" ? parsed.AbsoluteUri : null;
+  static string? OwnerTone(string owner) => owner switch { "PIM" => "good", "SAOP" => "warn", _ => null };
+  static string? Tone(string value) => value switch
+  {
+    "VALID" or "Verified" or "Processed" or "Sent" => "good",
+    "PENDING" or "Pending" or "PendingApproval" or "Retry" or "Sending" => "warn",
+    "INVALID" or "Error" or "Dead" or "Drift" or "Failed" or "Quarantined" => "bad",
+    _ => null,
+  };
+  static string StatusLabel(string value) => value switch
+  {
+    "VALID" => "Veljavno", "INVALID" => "Neveljavno", "PENDING" => "Čaka izračun",
+    "NOT_CONFIGURED" => "Ni nastavljenega profila", "PendingApproval" => "Čaka odobritev",
+    "Pending" => "V vrsti", "Sending" => "Pošiljanje", "Sent" => "Poslano, čaka echo",
+    "Verified" => "Potrjeno", "Drift" => "Odmik", "Dead" => "Mrtvo", "Retry" => "Ponovni poskus",
+    "Processed" => "Obdelano", "Quarantined" => "Karantena", _ => value,
+  };
+}

@@ -1,7 +1,7 @@
 @inherits LayoutComponentBase
 
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject PIM.Intranet.Services.IntranetContextService Context
+@inject PIM.Intranet.Services.IntranetDataService Data
 @inject NavigationManager Navigation
 
 @* Preklop navigacije je CSS, ne JavaScript in ne vezje: postavitev ostane staticni SSR, ker
@@ -16,18 +16,11 @@
         <span class="menu-glyph-icon" aria-hidden="true"></span>
         <span class="visually-hidden">Preklopi glavno navigacijo</span>
       </label>
+      <div class="flow-context" title="@Lifecycle.Description">
+        <small>Podatkovni tok</small><strong>@Lifecycle.Label</strong>
+      </div>
       <a class="global-search" href="izdelki"><span class="search-icon" aria-hidden="true"></span><span>Poišči izdelke, EAN, nazive …</span></a>
       <div class="topbar-spacer"></div>
-
-      <PimContextPicker Label="Organizacija" Field="organizacija" Selected="@Ctx?.Organization?.Name"
-                        Options="@(Ctx?.Organizations.Select(o => new PimOption(o.OrganizationId.ToString(), o.Name)).ToList())"
-                        Back="@BackPath" />
-      <PimContextPicker Label="Kanal" Field="kanal" Extra="hide-medium" Selected="@Ctx?.Channel?.WebSiteName"
-                        Options="@(Ctx?.Channels.Select(c => new PimOption(c.WebSiteCode, c.WebSiteName)).ToList())"
-                        Back="@BackPath" />
-      <PimContextPicker Label="Jezik" Field="jezik" Extra="hide-narrow" Selected="@Ctx?.Language?.Name"
-                        Options="@(Ctx?.Languages.Select(l => new PimOption(l.LanguageCode, l.Name)).ToList())"
-                        Back="@BackPath" />
 
       <a class="notification-button" href="system/integracije" title="@AlertTitle">
         <span class="notification-icon" aria-hidden="true"></span>
@@ -45,40 +38,29 @@
 </div>
 
 @code {
-  PIM.Intranet.Services.IntranetContext? Ctx;
   string DisplayName = "Uporabnik";
   string Initials = "U";
   int OpenAlerts;
+  PimLifecycleArea Lifecycle = PimLifecycle.Oversight;
 
   string AlertTitle => OpenAlerts == 0 ? "Ni odprtih opozoril" : $"Odprta opozorila: {OpenAlerts}";
 
-  // Pot, na katero se vrnemo po preklopu konteksta. Samo pot in poizvedba, brez gostitelja —
-  // vrednost gre v obrazec, zato ne sme biti nadzorovana od zunaj.
-  string BackPath
-  {
-    get
-    {
-      var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-      var basePath = new Uri(Navigation.BaseUri).AbsolutePath.TrimEnd('/');
-      return $"{basePath}/{relative}";
-    }
-  }
-
   protected override async Task OnInitializedAsync()
   {
+    Lifecycle = PimLifecycle.ResolveLifecycleArea(Navigation.ToBaseRelativePath(Navigation.Uri));
     var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
     DisplayName = user.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? user.Identity?.Name ?? "Uporabnik";
     Initials = string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
     try
     {
-      Ctx = await Context.GetAsync();
-      if (Ctx.Organization is { } organization) OpenAlerts = await Context.GetOpenAlertCountAsync(organization.OrganizationId);
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is not null) OpenAlerts = await Data.GetOpenAlertCountAsync(organization.OrganizationId);
     }
     catch
     {
-      // Baza ni dosegljiva: glava ostane brez konteksta, stran pa se vseeno izrise s svojim
-      // lastnim sporocilom o napaki. Prazna glava je poštenejša od izmišljene.
-      Ctx = null;
+      // Baza ni dosegljiva: zvonec ostane brez stevca, stran pa se vseeno izrise s svojim
+      // lastnim sporocilom o napaki.
+      OpenAlerts = 0;
     }
   }
 }

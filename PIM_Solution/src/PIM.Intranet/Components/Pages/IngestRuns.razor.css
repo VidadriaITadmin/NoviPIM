@@ -1,0 +1,4 @@
+.toolbar { flex-wrap: wrap; }
+.data-table { min-width: 980px; }
+.numeric { font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .data-table { min-width: 920px; } }

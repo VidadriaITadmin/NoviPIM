@@ -1,0 +1,80 @@
+@page "/kakovost"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Kakovost</PageTitle>
+<PimPage Title="Kakovost" Subtitle="Koliko izdelkov je veljavnih po posameznem profilu in kje so odprte vrzeli. Profil pove, kaj mora izdelek imeti; obseg blokade pove, kaj se zaradi napake ustavi." />
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje kakovosti …">
+  <section class="ui-card data-card section-gap" aria-label="Kakovost po profilih">
+    <PimTable Caption="Veljavnost izdelkov po validacijskih profilih" Columns="Columns">
+      <Rows>
+        @foreach (var profile in Profiles)
+        {
+          <tr>
+            <td>
+              <a href="pravila/validacija">@profile.ProfileCode</a>
+              <div class="tree-path">@profile.Name</div>
+            </td>
+            <td>@(profile.Scope ?? "—")</td>
+            <td>
+              @if (profile.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
+              @if (profile.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
+              @if (!profile.BlocksErp && !profile.BlocksWeb) { <span class="muted">ne blokira</span> }
+            </td>
+            <td class="numeric">@profile.RequirementCount.ToString("N0")</td>
+            <td class="numeric">@profile.ValidCount.ToString("N0")</td>
+            <td class="numeric">@profile.InvalidCount.ToString("N0")</td>
+            <td><PimBar Percent="@Share(profile)" Label="@($"Delež veljavnih v profilu {profile.ProfileCode}")" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+</PimState>
+
+<h2 class="section-title">Kje popraviti</h2>
+<section class="hub-grid" aria-label="Delovne strani kakovosti">
+  <PimHubCard Title="Napake validacije" Href="kakovost/napake" Description="Odprte napake po izdelku in pravilu. Napaka izgine, ko je izdelek popravljen in znova validiran." />
+  <PimHubCard Title="Karantena" Href="kakovost/karantena" Description="Zapisi, ki jih preslikava ni sprejela. Vsak nosi razlog zavrnitve." />
+  <PimHubCard Title="Manjkajoči prevodi" Href="kakovost/prevodi" Description="Vrednosti, za katere slovar nima prevoda v ciljni jezik." Count="@Counts(Summary?.MissingTranslations)" />
+  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije" Description="Poti iz vira, ki jim ne ustreza nobena kategorija v drevesu." Count="@Counts(Summary?.MissingCategories)" />
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ValidationProfileRow> Profiles = [];
+  PIM.Intranet.Services.IngestSummary? Summary;
+  bool Loading = true;
+  string? Error;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Profil"), new("Obseg"), new("Blokira"), new("Zahtev", Numeric: true),
+    new("Veljavnih", Numeric: true), new("Neveljavnih", Numeric: true), new("Delež veljavnih")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      try { Summary = await Pipeline.GetSummaryAsync(organization.OrganizationId); } catch { Summary = null; }
+    }
+    catch { Error = "Kakovosti trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static decimal Share(PIM.Intranet.Services.ValidationProfileRow profile)
+  {
+    var total = profile.ValidCount + profile.InvalidCount;
+    return total == 0 ? 0 : 100m * profile.ValidCount / total;
+  }
+
+  // Brez podatka ne izpisemo nicle: nic in »ne vemo« nista isto.
+  static string? Counts(long? value) => value is null ? null : value.Value.ToString("N0");
+}

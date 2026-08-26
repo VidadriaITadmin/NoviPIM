@@ -1,0 +1,52 @@
+@page "/zajem/neujemanja"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Neujemanja</PageTitle>
+<PimPage Title="Neujemanja" Subtitle="Vrednosti iz virov, ki jih preslikava ni znala razvrstiti. Ista neznana vrednost običajno pride na tisočih zapisih, zato je seznam združen po vrednosti." Crumbs="Crumbs" />
+
+<section class="ui-card data-card" aria-label="Seznam nerazvrščenih vrednosti">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni nerazvrščenih vrednosti." LoadingText="Nalaganje neujemanj …">
+    <PimTable Caption="Nerazvrščene vrednosti, razvrščene po pogostosti" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><span class="code-value">@row.TargetFieldCode</span></td>
+            <td>@row.Value</td>
+            <td class="muted">@row.Reason</td>
+            <td class="numeric">@row.SeenCount.ToString("N0")</td>
+            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.UnmappedValueRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  const int Take = 300;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zajem", "zajem"), new("Neujemanja")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Ciljno polje"), new("Vrednost iz vira"), new("Razlog"), new("Pojavitev", Numeric: true), new("Nazadnje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Pipeline.GetUnmappedValuesAsync(organization.OrganizationId, Take);
+    }
+    catch { Error = "Neujemanj trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+}

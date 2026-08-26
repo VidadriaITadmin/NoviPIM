@@ -1,0 +1,4 @@
+.toolbar { flex-wrap: wrap; }
+.issue-detail { color: var(--pim-text-muted); display: -webkit-box; font-size: .72rem; line-height: 1.35; margin-top: .15rem; max-width: 38rem; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.data-table { min-width: 980px; }
+.numeric { font-variant-numeric: tabular-nums; }

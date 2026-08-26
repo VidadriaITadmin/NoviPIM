@@ -4,11 +4,11 @@
 
 /* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
 .table-scroll { overflow-x: auto; }
-.progress-value { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.progress-value { color: var(--pim-text-soft); font-variant-numeric: tabular-nums; min-width: 46px; }
 .row-action { text-align: right; width: 44px; }
 .open-link { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
 .chevron { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
-.page-position { color: #526078; font-size: 13px; }
+.page-position { color: var(--pim-text-soft); font-size: 13px; }
 
 /* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
 .search-input:focus-visible,
@@ -17,7 +17,7 @@
 .pagination button:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
-.open-link:focus-visible { outline: 2px solid #1764e8; outline-offset: 2px; }
+.open-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .data-table { min-width: 640px; }
@@ -34,12 +34,12 @@
   width: 1.05rem;
   height: 1.05rem;
   cursor: pointer;
-  accent-color: var(--accent, #1d4ed8);
+  accent-color: var(--pim-primary);
 }
 
 /* Fokus mora biti viden tudi na kljukici; brez tega se pri tipkovnični izbiri ne vidi,
    katera vrstica je na vrsti. */
 .select-cell input:focus-visible {
-  outline: 2px solid var(--focus, #1d4ed8);
+  outline: 2px solid var(--pim-primary);
   outline-offset: 2px;
 }

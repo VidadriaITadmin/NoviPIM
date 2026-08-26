@@ -1,0 +1,65 @@
+@page "/sistem/napake"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.GovernanceReadService Governance
+
+<PageTitle>Dnevnik napak</PageTitle>
+<PimPage Title="Dnevnik napak" Subtitle="Najnovejši tehnični dogodki. Podrobna diagnostika ostaja v dnevnikih workerjev; tu je varni povzetek iz baze." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="error-filter-title">
+  <h2 id="error-filter-title" class="visually-hidden">Filtriranje dnevnika napak</h2>
+  <label class="visually-hidden" for="error-severity">Resnost</label>
+  <select id="error-severity" class="filter-select" @bind="Severity" @bind:after="LoadAsync">
+    <option value="">Vse resnosti</option>
+    <option value="Info">Info</option>
+    <option value="Warning">Opozorilo</option>
+    <option value="Error">Napaka</option>
+    <option value="Critical">Kritično</option>
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card" aria-label="Dnevnik napak">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrano resnost ni dogodkov." LoadingText="Nalaganje dnevnika …">
+    <PimTable Caption="Najnovejši tehnični dogodki" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td>@row.OccurredUtc.ToLocalTime().ToString("g")</td>
+            <td><PimChip Text="@SeverityLabel(row.Severity)" Tone="@SeverityTone(row.Severity)" Prefix="Resnost: " /></td>
+            <td><span class="code-value">@row.Layer</span></td>
+            <td>@(row.ErrorCode ?? "—")</td>
+            <td>@row.Message</td>
+            <td class="muted">@(row.RunId?.ToString() ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ErrorLogRow> Rows = [];
+  string Severity = "";
+  bool Loading = true;
+  string? Error;
+  const int Take = 300;
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Dnevnik napak")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Resnost"), new("Plast"), new("Koda"), new("Sporočilo"), new("Tek")];
+
+  protected override Task OnInitializedAsync() => LoadAsync();
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try { Rows = await Governance.GetErrorLogAsync(Severity, Take); }
+    catch { Error = "Dnevnika napak trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+  static string? SeverityTone(string value) => value switch { "Critical" or "Error" => "bad", "Warning" => "warn", "Info" => "good", _ => null };
+  static string SeverityLabel(string value) => value switch { "Critical" => "Kritično", "Error" => "Napaka", "Warning" => "Opozorilo", "Info" => "Info", _ => value };
+}

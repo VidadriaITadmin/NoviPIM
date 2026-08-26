@@ -1,0 +1,121 @@
+@page "/zajem/cakalna-vrsta"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+<PageTitle>Čakalna vrsta zajema</PageTitle>
+<PimPage Title="Čakalna vrsta zajema" Subtitle="Zajete strani po viru, entiteti in stanju. Stanje »Pending« ni napaka: stran je shranjena in počaka na preslikavo." Crumbs="Crumbs" />
+
+<section class="ui-card data-card section-gap" aria-label="Povzetek čakalne vrste">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Groups.Count == 0)" EmptyText="Za to organizacijo ni zajetih strani." LoadingText="Nalaganje čakalne vrste …">
+    <PimTable Caption="Zajete strani po viru, entiteti in stanju" Columns="GroupColumns">
+      <Rows>
+        @foreach (var group in Groups)
+        {
+          <tr>
+            <td><span class="code-value">@group.SourceCode</span></td>
+            <td>
+              <button type="button" class="link-button" @onclick="() => FilterAsync(group.EntityType, group.Status)">@group.EntityType</button>
+            </td>
+            <td><PimChip Text="@group.Status" Tone="@Tone(group.Status)" /></td>
+            <td class="numeric">@group.PageCount.ToString("N0")</td>
+            <td>@Moment(group.OldestUtc)</td>
+            <td>@Moment(group.NewestUtc)</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+<h2 class="section-title">Posamezne strani @(FilterLabel)</h2>
+<section class="ui-card data-card" aria-label="Seznam zajetih strani">
+  <PimState Loading="PagesLoading" Error="@PagesError" Empty="@(Pages.Count == 0)" EmptyText="Za izbrani filter ni strani." LoadingText="Nalaganje strani …">
+    <PimTable Caption="Posamezne zajete strani" Columns="PageColumns">
+      <Rows>
+        @foreach (var page in Pages)
+        {
+          <tr>
+            <td class="numeric">@(page.PageNumber)</td>
+            <td><span class="code-value">@(page.SourceCode)</span></td>
+            <td>@(page.EntityType)</td>
+            <td><PimChip Text="@(page.Status)" Tone="@Tone(page.Status)" /></td>
+            <td>@(page.ReceivedUtc.ToLocalTime().ToString("g"))</td>
+            <td>@(Moment(page.ProcessedUtc))</td>
+            <td class="muted">@(page.FailureReason ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani čakalne vrste" />
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.InboxGroupRow> Groups = [];
+  IReadOnlyList<PIM.Intranet.Services.InboxRow> Pages = [];
+  long Total;
+  bool Loading = true;
+  bool PagesLoading = true;
+  string? Error;
+  string? PagesError;
+  string? EntityType;
+  string? Status;
+  int Skip;
+  const int Take = 50;
+  int? OrganizationId;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zajem", "zajem"), new("Čakalna vrsta")];
+  static readonly IReadOnlyList<PimColumn> GroupColumns =
+  [
+    new("Vir"), new("Entiteta"), new("Stanje"), new("Strani", Numeric: true), new("Najstarejša"), new("Najnovejša")
+  ];
+  static readonly IReadOnlyList<PimColumn> PageColumns =
+  [
+    new("Stran", Numeric: true), new("Vir"), new("Entiteta"), new("Stanje"), new("Prejeto"), new("Obdelano"), new("Razlog")
+  ];
+
+  string FilterLabel => EntityType is null && Status is null ? "(vse)" : $"({EntityType ?? "vse entitete"}, {Status ?? "vsa stanja"})";
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; PagesLoading = false; return; }
+    OrganizationId = organization.OrganizationId;
+    try { Groups = await Pipeline.GetInboxGroupsAsync(OrganizationId.Value); }
+    catch { Error = "Povzetka čakalne vrste trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+    await LoadPagesAsync();
+  }
+
+  async Task LoadPagesAsync()
+  {
+    if (OrganizationId is null) return;
+    PagesLoading = true;
+    PagesError = null;
+    try { (Pages, Total) = await Pipeline.GetInboxPagesAsync(OrganizationId.Value, Status, EntityType, Skip, Take); }
+    catch { PagesError = "Strani trenutno ni mogoče naložiti."; }
+    finally { PagesLoading = false; }
+  }
+
+  async Task FilterAsync(string entityType, string status)
+  {
+    EntityType = entityType;
+    Status = status;
+    Skip = 0;
+    await LoadPagesAsync();
+  }
+
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadPagesAsync(); }
+
+  static string? Tone(string status) => status switch
+  {
+    "Processed" => "good",
+    "Pending" => "warn",
+    "Quarantined" or "Failed" => "bad",
+    _ => null
+  };
+
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+}

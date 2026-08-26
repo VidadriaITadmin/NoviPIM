@@ -1,0 +1,33 @@
+@* Glava strani: naslov, podnaslov, drobtine in dejanja. Ena sama izvedba za vse nove strani —
+   stara aplikacija je imela to prepisano na 61 mestih. *@
+
+<div class="page-header">
+  <div>
+    @if (Crumbs is not null && Crumbs.Count > 0)
+    {
+      <nav class="page-crumbs" aria-label="Drobtine">
+        @foreach (var crumb in Crumbs)
+        {
+          @if (crumb.Href is null)
+          {
+            <span aria-current="page">@crumb.Label</span>
+          }
+          else
+          {
+            <a href="@crumb.Href">@crumb.Label</a>
+          }
+        }
+      </nav>
+    }
+    <h1>@Title</h1>
+    @if (!string.IsNullOrWhiteSpace(Subtitle)) { <p>@Subtitle</p> }
+  </div>
+  @if (Actions is not null) { <div class="page-actions">@Actions</div> }
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required string Title { get; set; }
+  [Parameter] public string? Subtitle { get; set; }
+  [Parameter] public IReadOnlyList<PimCrumb>? Crumbs { get; set; }
+  [Parameter] public RenderFragment? Actions { get; set; }
+}
