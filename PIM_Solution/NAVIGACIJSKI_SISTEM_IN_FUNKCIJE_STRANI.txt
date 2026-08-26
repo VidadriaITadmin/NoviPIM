@@ -1,0 +1,888 @@
+NAVIGACIJSKI SISTEM PIM INTRANETA IN FUNKCIJE STRANI
+====================================================
+
+Datum: 26. 8. 2026
+
+Namen dokumenta
+---------------
+
+Ta dokument opisuje:
+
+1. kako je sestavljena glavna navigacija PIM intraneta,
+2. kaj uporabnik najde v posamezni skupini,
+3. katere funkcije na posamezni strani že obstajajo,
+4. katere funkcije je treba še dodati,
+5. katere vloge smejo videti oziroma urejati posamezne podatke.
+
+Oznake:
+
+- TRENUTNO = funkcija ali prikaz že obstaja v aplikaciji.
+- DODATI = načrtovana funkcija, ki še ni v celoti izvedena.
+- BRALNO = podatki so prikazani, urejanje še ni dovoljeno.
+- HUB = razdelilna stran, ki vodi na podstrani istega področja.
+
+
+1. OSNOVNA ZGRADBA APLIKACIJE
+=============================
+
+Aplikacija ima tri stalne dele:
+
+A. Leva navigacija
+
+- prikazuje glavna poslovna področja,
+- postavke so razvrščene po življenjskem toku podatkov,
+- aktivna stran je označena s temnejšo kartico in oranžno črto,
+- puščica je prikazana samo pri HUB straneh, ki imajo podstrani,
+- podstrani niso vse razmetane po meniju, ampak se odprejo z matične strani,
+- navigacija ostane aktivna tudi na podrobnostih, na primer /izdelki/123,
+- na manjšem zaslonu se meni zapre oziroma odpre z gumbom.
+
+B. Zgornja vrstica
+
+TRENUTNO:
+
+- prikaz trenutne faze podatkovnega toka,
+- povezava na globalno iskanje izdelkov,
+- zvonec s številom odprtih sistemskih opozoril,
+- ime prijavljenega uporabnika,
+- odjava.
+
+Globalnih izbirnikov organizacije, spletnega kanala in jezika ni. Kjer je tak filter
+poslovno smiseln, je del konkretne strani in ne stalne lupine aplikacije.
+
+DODATI:
+
+- pravo globalno iskanje, ki išče po šifri, EAN, nazivu, stranki in viru,
+- uporabnikove bližnjice in shranjeni pogledi,
+- center obvestil z označevanjem prebranih opozoril,
+- povezava na osebna opravila uporabnika.
+
+C. Delovna vsebina strani
+
+Vse strani morajo uporabljati enak vzorec:
+
+- naslov in kratek opis,
+- drobtinice na podstraneh,
+- KPI kartice samo, kadar pomagajo pri odločitvi,
+- filtri in iskanje nad tabelo,
+- jasno stanje nalaganja, napake ali praznega rezultata,
+- strežniška paginacija pri velikih seznamih,
+- statusi z enakimi barvami,
+- dejanja glede na vlogo uporabnika,
+- noben gumb ne sme biti prikazan, če zanj še ni varne zapisovalne poti,
+- neposredne povezave med povezanim podatkom, na primer iz zaloge na izdelek,
+- podatki se omejijo na organizacijo, kanal in jezik v podatkovni poizvedbi ali lokalnem
+  filtru strani, kjer je to smiselno.
+
+
+2. VLOGE IN DOSTOP
+==================
+
+ADMIN
+
+- vidi vse organizacije in vsa področja,
+- vidi tehnično diagnostiko, integracije, uporabnike in vloge,
+- upravlja sistemske in katalogske nastavitve,
+- vidi izvor podatkov in revizijsko sled,
+- lahko odobri občutljiva dejanja, ko bo zapisovalna pot izvedena.
+
+CATALOG_EDITOR
+
+- ureja PIM-lastne podatke izdelkov,
+- ureja besedila, prevode, atribute, kategorije in medije,
+- rešuje validacijske napake in preslikave,
+- nima dostopa do sistemske administracije.
+
+COMMERCIAL
+
+- vidi izdelke, stranke, cene, cenike, zalogo in komercialne podatke,
+- pripravlja oziroma zahteva spremembe podatkov, ki gredo v SAOP,
+- vidi stanje odobritve in dostave teh sprememb,
+- vidi pravila, ki vplivajo na poslovanje.
+
+VIEWER
+
+- bere dovoljene podatke,
+- nima zapisovalnih dejanj,
+- vidi iste poslovne številke kot druge vloge, da vsi uporabljajo isti vir resnice.
+
+Vidnost glavnega menija:
+
+- Nadzorna plošča, Vhodni podatki, Izdelki, Mediji, Kakovost, Izvozi, Stranke,
+  Partnerji, Zaloga ter Cene so vidni vsem prijavljenim uporabnikom.
+- Nastavitve kataloga so vidne ADMIN in CATALOG_EDITOR.
+- Pravila in izvor podatkov so vidni ADMIN, CATALOG_EDITOR in COMMERCIAL.
+- Sistem je viden samo ADMIN.
+
+
+3. GLAVNA NAVIGACIJA IN STRANI
+==============================
+
+3.1 NADZOR
+----------
+
+Nadzorna plošča
+Pot: /nadzorna-plosca
+Tip: glavna operativna stran
+
+TRENUTNO:
+
+- skupno število kanoničnih izdelkov,
+- število ERP veljavnih izdelkov,
+- število objavljenih izdelkov,
+- število izdelkov z napakami za splet,
+- število zapisov v karanteni,
+- kakovost po validacijskih profilih,
+- zadnji procesni teki,
+- odprta opozorila,
+- stanje integracij,
+- hitre povezave na najpomembnejše delovne strani.
+
+DODATI:
+
+- kartico "Moja opravila",
+- število izdelkov brez slike, naziva, kategorije ali prevoda,
+- ločeno svežino izdelkov, cen, strank in zaloge,
+- število neuspelih uvozov in izvozov v zadnjih 24 urah,
+- trende glede na prejšnji dan oziroma teden,
+- prikaz opravil glede na vlogo uporabnika,
+- povezavo iz vsake številke neposredno na že filtriran delovni seznam.
+
+
+3.2 VHODNI PODATKI
+------------------
+
+Glavna postavka: Zajem in preslikave
+Pot: /zajem
+Tip: HUB z notranjimi zavihki
+
+Notranji zavihki so:
+
+1. Pregled
+2. Viri
+3. Teki
+4. Težave
+5. Preslikave
+
+3.2.1 Pregled vhodnih podatkov
+Pot: /zajem
+
+TRENUTNO:
+
+- enoten pregled SAOP API, dobaviteljskih XML, Excel/CSV in zalogovnih tokov,
+- ločen prikaz zadnjega poskusa in zadnjega uspeha,
+- stanje vsakega vhodnega toka,
+- število čakajočih strani,
+- število zapisov v karanteni,
+- število odprtih preslikav,
+- zavrnjene zalogovne pozicije,
+- tehnične težave in mrtva pisma,
+- ADMIN lahko preklopi med aktivno organizacijo in vsemi organizacijami,
+- povezave na vir, tek, čakalno vrsto in težavo.
+
+DODATI:
+
+- ročni varen zagon dovoljenega vira,
+- načrt naslednjega zagona,
+- opozorilo o zastarelem viru glede na dogovorjeno frekvenco,
+- graf količine prejetih in zavrnjenih zapisov,
+- jasno lastništvo vira in odgovorna oseba,
+- e-poštna naročnina na neuspeh oziroma zastaranje vira.
+
+3.2.2 Viri in konektorji
+Pot: /zajem/viri
+Podrobnost: /zajem/viri/{SourceCode}
+
+TRENUTNO:
+
+- register dejanskih virov,
+- organizacija, vrsta konektorja in ciljno področje,
+- mesto prevzema, kadar ga je tek dejansko zabeležil,
+- zadnji poskus, zadnji uspeh in svežina,
+- podrobnost vira z entitetami, preslikavami in zadnjimi teki,
+- poverilnice niso nikoli prikazane.
+
+DODATI:
+
+- omogoči/onemogoči vir z revizijsko sledjo,
+- nastavitev urnika in dovoljene zamude,
+- test povezave brez prikaza skrivnosti,
+- nastavitev odgovorne skupine in prejemnikov obvestil,
+- podprti formati ter validacija vhodne datoteke,
+- zgodovina sprememb nastavitev vira,
+- razvojni pogled vzorčnega vhodnega zapisa z zakritimi občutljivimi podatki.
+
+3.2.3 Teki vhodnih podatkov
+Pot: /zajem/teki
+Podrobnost: /zajem/teki/{RunId}
+
+TRENUTNO:
+
+- iskanje po viru, postopku in podjetju,
+- filter po statusu,
+- pogled aktivne ali vseh organizacij za ADMIN,
+- strežniška paginacija,
+- podrobnost teka,
+- koraki teka, vhodne strani, količine in napake,
+- korelacijski ID za razvijalce in podporo.
+
+DODATI:
+
+- čas trajanja posameznega koraka in celotnega teka,
+- primerjava s prejšnjim uspešnim tekom,
+- varen ponovni zagon samo neuspelega koraka,
+- ponovna preslikava že zajetega teka brez novega klica v SAOP,
+- prenos varnega diagnostičnega poročila,
+- časovnica teka,
+- označitev napake kot obravnavane in zapis opombe.
+
+3.2.4 Težave vhodnih podatkov
+Pot: /zajem/tezave
+Podrobnost: /zajem/tezave/{vrsta}/{id}
+
+TRENUTNO:
+
+- enoten seznam čakalnih strani, karantene, zavrnjene zaloge, mrtvih pisem in napak,
+- združevanje ponavljajočih se težav po vzroku,
+- iskanje in filter po vrsti težave,
+- povezava na pripadajoči tek,
+- poslovno razumljiv opis napake,
+- omejena tehnična diagnostika samo za ADMIN.
+
+DODATI:
+
+- stanje Novo, V obravnavi, Rešeno in Prezrto,
+- dodelitev težave uporabniku ali skupini,
+- komentarji in zgodovina obravnave,
+- množično reševanje ponavljajočega se vzroka,
+- ponovni poskus po popravku,
+- obvestilo odgovorni osebi,
+- povezava na vse prizadete izdelke.
+
+3.2.5 Preslikave vhodnih podatkov
+Pot: /zajem/preslikave
+Povezane strani: /zajem/neujemanja, /kakovost/prevodi,
+                 /kakovost/kategorije, /pravila/preslikave
+
+TRENUTNO:
+
+- število nerazvrščenih vrednosti,
+- manjkajoči prevodi,
+- dobaviteljeve kategorije brez cilja,
+- čakajoče strani brez potrebne preslikave,
+- najpogostejša neujemanja,
+- vzorec aktivnih preslikav polj,
+- povezave na celotne delovne sezname.
+
+DODATI:
+
+- urejanje preslikave atributa iz uporabniškega vmesnika,
+- preslikava dobaviteljeve kategorije v naše drevo,
+- vpis prevoda in normalizirane vrednosti,
+- predogled, koliko zapisov bo sprememba popravila,
+- ponovna preslikava prizadetih zapisov po potrditvi,
+- predlogi podobnih obstoječih atributov in kategorij,
+- AI predlog prevoda, ki ga mora uporabnik potrditi,
+- revizijska sled vsake spremembe preslikave.
+
+
+3.3 PIM KATALOG
+---------------
+
+3.3.1 Izdelki
+Pot: /izdelki
+Podrobnost: /izdelki/{ProductId}
+
+TRENUTNO NA SEZNAMU:
+
+- iskanje po šifri artikla in EAN,
+- filter po skupnem statusu,
+- strežniška paginacija,
+- izbor izdelkov čez več strani,
+- šifra, EAN, status in popolnost,
+- povezava na kartico izdelka.
+
+DODATI NA SEZNAMU:
+
+- shranjene delovne poglede: Vsi, Za urediti, Brez slike, Brez spletnega
+  naziva, Brez kategorije, Neobjavljeni in Čaka SAOP,
+- število izdelkov pri vsakem pogledu,
+- sliko in naziv izdelka,
+- proizvajalca, dobavitelja, skupino in oddelek,
+- ceno iz izbranega cenika in trenutno zalogo,
+- ločena statusa ERP in Splet,
+- število odprtih napak in datum zadnje spremembe,
+- filtre po proizvajalcu, dobavitelju, kategoriji, viru, popolnosti,
+  sliki, objavi, aktivnosti, profilu in obdobju,
+- odstranljive čipe aktivnih filtrov,
+- razvrščanje po šifri, nazivu, popolnosti in zadnji spremembi,
+- stanje filtrov v naslovu URL, da povezavo lahko delimo,
+- izbiro stolpcev in gostote prikaza,
+- izvoz filtriranega seznama ali izbora v CSV,
+- varno množično urejanje brez tihe omejitve na 200 izdelkov.
+
+TRENUTNO NA KARTICI IZDELKA:
+
+- naslovni medij, pravi naziv, šifra, EAN, aktiven, za splet in objavljen v PIM,
+- ločena statusa ERP in Splet, skupna popolnost ter neposreden povzetek blokirajočih profilov,
+- 12 bralnih zavihkov: Pregled, Besedila, Lastnosti, Kategorije, Mediji in dokumenti, Cene,
+  Zaloga, Trgovinski podatki, Kakovost, ERP/SAOP, Zgodovina in Izvor,
+- lastništvo ključnih polj (PIM / SAOP / SHARED) ter čakajoča SAOP vrednost,
+- validacijski profili, odprte težave z manjkajočim poljem in obsegom blokade,
+- zgodovina sledljivih polj ter vhodni vir, tek, stran in zapis,
+- poštena prazna stanja in povezave v pripadajoče delovne poglede.
+
+DODATI NA KARTICI IZDELKA:
+
+- urejanje PIM-lastnih polj,
+- priprava spremembe SAOP-lastnega polja prek odobritve,
+- razveljavitev spremembe oziroma paketa iz zavihka Zgodovina,
+- množične spremembe s predogledom učinka,
+- ponovna validacija po spremembi.
+
+Pravilo kartice izdelka:
+
+- PIM polje se lahko po dovoljenju spremeni neposredno in se zapiše v zgodovino.
+- SAOP polje se ne prepiše neposredno; ustvari se zahtevek, ki čaka odobritev,
+  pošiljanje in povratno potrditev iz SAOP.
+- Polje brez varne zapisovalne poti nima gumba za urejanje.
+
+3.3.2 Mediji
+Pot: /mediji
+
+TRENUTNO:
+
+- število vseh medijev,
+- število izdelkov s sliko in brez slike,
+- iskanje po artiklu, URL in vlogi medija,
+- povezava na izdelek,
+- odpiranje zunanjega URL v novem zavihku,
+- strežniška paginacija.
+
+DODATI:
+
+- galerijski prikaz in predogled slike,
+- ločevanje slik, dokumentov, 3D in DIALux datotek,
+- filter po vlogi, tipu, viru in manjkajočem mediju,
+- nalaganje oziroma povezovanje medija,
+- sprememba vrstnega reda in glavne slike,
+- preverjanje nedosegljivih URL,
+- zaznavanje podvojenih datotek,
+- zgodovina in izvor medija.
+
+
+3.4 KAKOVOST
+-------------
+
+Glavna postavka: Validacija in vrzeli
+Pot: /kakovost
+Tip: HUB
+
+TRENUTNO:
+
+- veljavnost izdelkov po validacijskih profilih,
+- število veljavnih in neveljavnih izdelkov,
+- povprečna popolnost,
+- povezave na napake validacije, karanteno, manjkajoče prevode in kategorije.
+
+DODATI:
+
+- ločeno resnost ERROR in WARNING,
+- jasno oznako, ali napaka blokira ERP, splet ali samo opozarja,
+- trend kakovosti skozi čas,
+- razčlenitev po viru, dobavitelju in kategoriji,
+- seznam pravil z največjim vplivom,
+- možnost sprožitve ponovne validacije po popravku.
+
+Napake validacije
+Pot: /kakovost/napake
+
+TRENUTNO:
+
+- seznam odprtih napak po izdelku, profilu in pravilu,
+- iskanje, statusi in povezava na izdelek.
+
+DODATI:
+
+- filtri po resnosti, profilu, viru in vrsti blokade,
+- dodelitev napake uredniku,
+- množično odpiranje prizadetih izdelkov,
+- prikaz zahtevanega polja in trenutne vrednosti,
+- hitro urejanje PIM-lastnega podatka,
+- ponovna validacija in samodejno zapiranje odpravljene napake.
+
+Karantena
+Pot: /kakovost/karantena
+
+TRENUTNO:
+
+- seznam zavrnjenih vhodnih zapisov,
+- razlog, vir, entiteta, stanje in čas,
+- iskanje in paginacija.
+
+DODATI:
+
+- varen prikaz surovega zapisa,
+- popravek dovoljene vrednosti,
+- ponovni poskus preslikave,
+- množično reševanje istega vzroka,
+- povezava na tek in morebitni izdelek,
+- revizijska sled obravnave.
+
+Manjkajoči prevodi
+Pot: /kakovost/prevodi
+
+TRENUTNO:
+
+- združen seznam neprevedenih vrednosti po viru, jeziku in pogostosti.
+
+DODATI:
+
+- ročni prevod,
+- AI predlog prevoda,
+- množična potrditev pregledanih predlogov,
+- slovar sopomenk in normalizacij,
+- ponovna preslikava prizadetih izdelkov.
+
+Nepreslikane kategorije
+Pot: /kakovost/kategorije
+
+TRENUTNO:
+
+- dobaviteljeva pot kategorije,
+- vir in pogostost uporabe,
+- stanje preslikave.
+
+DODATI:
+
+- prikaz našega kategorijskega drevesa,
+- izbira ciljne kategorije,
+- predlog najbolj podobne kategorije,
+- predogled števila prizadetih izdelkov,
+- ponovna preslikava in validacija po potrditvi.
+
+
+3.5 IZHODI ERP IN SPLET
+-----------------------
+
+Glavna postavka: Izvozi in dostava
+Pot: /izvozi
+Tip: HUB
+
+TRENUTNO:
+
+- register izvoznih profilov,
+- kanal, entiteta, število stolpcev in pokritost preslikav,
+- aktivno/neaktivno stanje profila,
+- podrobnost profila s seznamom stolpcev,
+- povezave na odhodno pošto, množično urejanje in obvestila za dovoljene vloge.
+
+DODATI:
+
+- ločena sklopa ERP/SAOP in Spletni CSV,
+- predogled izvoza pred zagonom,
+- ročni varen zagon izvoza,
+- zgodovina izdelanih datotek,
+- prenos CSV datoteke,
+- primerjava dveh izvozov,
+- število izvoženih, izpuščenih in zavrnjenih zapisov,
+- prikaz razlogov, zakaj posamezen izdelek ni šel v izvoz,
+- urnik, zadnji uspeh in naslednji zagon,
+- obvestila po e-pošti brez pošiljanja resnične pošte v razvojnem okolju.
+
+Odhodna pošta proti SAOP
+Pot: /outbound
+
+TRENUTNO:
+
+- seznam odhodnih sporočil,
+- status dostave,
+- napake in poskusi,
+- osnovna odobritev sporočila.
+
+DODATI:
+
+- jasen tok Čaka odobritev -> V vrsti -> Poslano -> Potrjeno,
+- stanje Odmik, Mrtvo in Preklicano,
+- primerjava zahtevane in iz SAOP vrnjene vrednosti,
+- odobritev glede na vlogo,
+- varen ponovni poskus,
+- preklic pred pošiljanjem,
+- povezava na izdelek ali stranko,
+- združevanje paketnih sprememb,
+- obvestilo odgovorni osebi ob končni napaki.
+
+Množično urejanje
+Pot: /izvozi/mnozicno
+
+TRENUTNO:
+
+- priprava skupine sprememb iz izbora izdelkov oziroma delovnega zvezka,
+- validacija osnovnega vnosa.
+
+DODATI:
+
+- prestavitev dejanja na stran Izdelki, ker se dejanje nanaša na izdelke,
+- predogled vpliva pred potrditvijo,
+- ločitev PIM-lastnih in SAOP-lastnih polj,
+- paket sprememb z avtorjem in razlogom,
+- delni uspeh brez izgube celotnega paketa,
+- razveljavitev PIM-lastnega paketa.
+
+Obvestila izvozov
+Pot: /izvozi/obvestila
+
+TRENUTNO:
+
+- pregled napak in opozoril odhodne poti.
+
+DODATI:
+
+- filtri po cilju, resnosti, stanju in času,
+- označi kot prebrano oziroma rešeno,
+- dodelitev uporabniku,
+- e-poštne naročnine po skupinah uporabnikov,
+- povezava na točno sporočilo, izdelek, stranko ali izvoz.
+
+
+3.6 POSLOVANJE
+---------------
+
+3.6.1 Stranke
+Pot: /stranke
+Podrobnost: /stranke/{CustomerId}
+
+TRENUTNO:
+
+- zavihki Vse, Kupci, Dobavitelji in Oboje,
+- iskanje po šifri ali nazivu,
+- filter po tipu stranke,
+- Magento skupina, B2B+ in spletno stanje,
+- podrobnost stranke in osnovni popusti.
+
+DODATI:
+
+- strežniška paginacija in popolni filtri,
+- plačnik in poslovne enote,
+- podedovanje popustov s plačnika,
+- neto cenik za posamezno stranko,
+- posebni popusti po artiklu, skupini in proizvajalcu,
+- poštnina, pragovi in izjeme,
+- zgodovina sprememb,
+- prikaz izvora iz SAOP,
+- spremembe prek odhodne poti z odobritvijo in echo potrditvijo.
+
+3.6.2 Partnerji
+Pot: /partnerji
+
+TRENUTNO:
+
+- ločena zavihka Dobavitelji in Proizvajalci,
+- število vseh in aktivnih izdelkov pri partnerju.
+
+DODATI:
+
+- pravi register partnerjev,
+- kontaktni in povezovalni podatki brez občutljivih skrivnosti,
+- povezani viri in konektorji,
+- kakovost podatkov po partnerju,
+- dostopnost zalogovne in produktne datoteke,
+- seznam izdelkov partnerja,
+- dogovorjena pravila, jeziki in kategorijska drevesa.
+
+3.6.3 Zaloga
+Pot: /zaloge
+
+TRENUTNO:
+
+- iskanje po artiklu, EAN in viru,
+- filter Na zalogi/Brez zaloge,
+- trenutna količina in prihajajoča količina,
+- vir, čas posnetka in opozorilo o zastarelosti,
+- povezava na ujemajoči izdelek.
+
+DODATI:
+
+- strežniška paginacija,
+- prikaz po podjetju, skladišču in dobavitelju,
+- starost in popolnost vsakega posnetka,
+- neujemajoče zalogovne pozicije,
+- najmanjša in največja zaloga,
+- dobavni rok in datum razpoložljivosti,
+- zgodovina oziroma trend zaloge,
+- opozorila ob nenavadnem padcu ali zastarelem viru.
+
+3.6.4 Cene in ceniki
+Pot: /cene
+
+TRENUTNO:
+
+- iskanje po šifri izdelka,
+- filter po ceniku,
+- neto cena, DDV in izračunana bruto cena,
+- veljavnost in aktivno stanje,
+- povezava na izdelek,
+- strežniška paginacija.
+
+DODATI:
+
+- pregled cenikov kot ločenih poslovnih objektov,
+- filtri po podjetju, valuti, veljavnosti in statusu,
+- zgodovina sprememb cene,
+- primerjava cen med podjetji in ceniki,
+- marža, nabavna cena in opozorila o nenavadni spremembi,
+- strankin cenik in posebni popust,
+- simulacija končne cene za izbrano stranko,
+- nadzor izvoza cen na splet.
+
+
+3.7 UPRAVLJANJE
+---------------
+
+3.7.1 Nastavitve kataloga
+Pot: /nastavitve
+Tip: HUB
+Vloge: ADMIN, CATALOG_EDITOR
+
+Podstrani:
+
+- /nastavitve/atributi
+- /nastavitve/kategorije
+- /nastavitve/skladisca
+- /nastavitve/kanali
+- /nastavitve/jeziki
+- povezava na /pravila
+
+TRENUTNO (BRALNO):
+
+- atributi in njihova dejanska uporaba pri izdelkih,
+- kategorijska drevesa, poti in število izdelkov,
+- šifrant skladišč,
+- spletni kanali z jezikom in kategorijskim drevesom,
+- jeziki in SAOP identifikacijske šifre.
+
+DODATI:
+
+- ustvarjanje in urejanje atributa,
+- podatkovni tip, enota, dovoljene vrednosti in prevod imena atributa,
+- ročno upravljanje našega kategorijskega drevesa,
+- vrstni red in aktivnost kategorij,
+- nastavitve kanala, jezika in privzetega cenika,
+- povezava kategorijskega drevesa s spletno stranjo,
+- revizijska sled in predogled vpliva vsake spremembe,
+- prepoved brisanja nastavitev, ki so še v uporabi.
+
+3.7.2 Pravila in izvor podatkov
+Pot: /pravila
+Tip: HUB
+Vloge: ADMIN, CATALOG_EDITOR, COMMERCIAL
+
+Podstrani:
+
+- /pravila/validacija
+- /pravila/slovar
+- /pravila/preslikave
+- /pravila-popustov
+
+Validacijski profili
+
+TRENUTNO (BRALNO):
+
+- zahtevana polja,
+- resnost ERROR ali WARNING,
+- podatek, ali pravilo blokira ERP ali splet.
+
+DODATI:
+
+- ustvarjanje in urejanje pravil brez spremembe kode,
+- predogled števila prizadetih izdelkov,
+- test pravila nad izbranim izdelkom,
+- različice pravil in datum začetka veljavnosti,
+- revizijska sled in povrnitev prejšnje različice.
+
+Slovar vrednosti
+
+TRENUTNO (BRALNO):
+
+- izvorna in ciljna vrednost,
+- domena ter jezik normalizacije oziroma prevoda.
+
+DODATI:
+
+- dodajanje, urejanje in deaktivacija preslikave,
+- združevanje sopomenk,
+- predogled vpliva,
+- ponovna preslikava prizadetih zapisov,
+- AI predlog s človeško potrditvijo.
+
+Preslikave polj
+
+TRENUTNO (BRALNO):
+
+- vir in entiteta,
+- izvorni element,
+- ciljno kanonično polje,
+- obveznost pri zajemu.
+
+DODATI:
+
+- urejanje preslikave,
+- ločene vrste Atribut, Kategorija, Medij in Dokument,
+- transformacije in pretvorbe enot,
+- test nad vzorčnim zapisom,
+- preverjanje konflikta dveh preslikav,
+- revizijska sled in ponovna obdelava.
+
+Komercialna pravila
+
+TRENUTNO:
+
+- pregled pravil popustov, pragov, poštnine in skupin strank.
+
+DODATI:
+
+- urejanje pravil z datumom veljavnosti,
+- prioritete in razreševanje konfliktov,
+- simulator končne cene za stranko in košarico,
+- podedovanje pravil s plačnika,
+- revizijska sled in odobritev spremembe.
+
+
+3.8 ADMINISTRACIJA
+------------------
+
+Glavna postavka: Sistem
+Pot: /sistem
+Tip: HUB
+Vloga: samo ADMIN
+
+Podstrani:
+
+- /sistem/integracije
+- /sistem/uporabniki
+- /sistem/vloge
+- /sistem/napake
+
+Integracije in alarmi
+
+TRENUTNO:
+
+- stanje integracij,
+- srčni utrip,
+- zadnji uspešni teki,
+- urniki in vodni žigi,
+- odprta opozorila,
+- ročna osvežitev prikaza.
+
+DODATI:
+
+- varno potrjevanje oziroma zapiranje opozorila,
+- lastnik integracije in eskalacijska skupina,
+- čas do kršitve dogovorjene svežine,
+- zgodovina razpoložljivosti,
+- povezava na ustrezen vir, tek ali odhodno sporočilo,
+- nastavitve obvestil in e-poštnih prejemnikov.
+
+Uporabniki
+
+TRENUTNO:
+
+- lokalni in domenski uporabniki,
+- način prijave,
+- aktivno stanje in dodeljene vloge,
+- geslo domenskega uporabnika se v PIM ne shranjuje.
+
+DODATI:
+
+- ustvarjanje oziroma aktivacija uporabnika,
+- dodelitev organizacij, kanalov in vlog,
+- deaktivacija brez brisanja zgodovine,
+- zadnja prijava in revizijska sled,
+- prisilna odjava oziroma preklic seje, če bo varno podprto.
+
+Vloge
+
+TRENUTNO:
+
+- seznam varnostnih vlog,
+- število uporabnikov v posamezni vlogi.
+
+DODATI:
+
+- matrika pravic po področjih in dejanjih,
+- pregled uporabnikov v vlogi,
+- ločitev pravice beri, urejaj, odobri in administriraj,
+- omejitev po organizacijah,
+- revizijska sled sprememb dovoljenj.
+
+Dnevnik napak
+
+TRENUTNO:
+
+- najnovejši tehnični dogodki,
+- plast, resnost, čas in procesni tek,
+- varen povzetek brez prikaza skrivnosti.
+
+DODATI:
+
+- filtri po času, resnosti, komponenti in korelacijskem ID,
+- združevanje ponavljajočih se napak,
+- stanje obravnave in odgovorna oseba,
+- povezava na vir, tek, izdelek ali sporočilo,
+- izvoz varnega diagnostičnega poročila za razvijalca.
+
+
+4. POVEZAVE MED PODROČJI
+========================
+
+Navigacija ni samo levi meni. Najpomembnejše povezave morajo biti neposredno v vsebini:
+
+- Vhodni vir -> tek -> težava -> prizadeti izdelek.
+- Izdelek -> izvorni vir, vhodni tek in vhodni zapis.
+- Izdelek -> validacijska napaka -> pravilo -> manjkajoče polje.
+- Izdelek -> cena, zaloga, medij, kategorija in prevod.
+- Izdelek ali stranka -> odhodno sporočilo -> poskus -> potrditev SAOP.
+- Izvozni profil -> stolpec -> kanonično polje -> preslikava vhodnega vira.
+- Sistemski alarm -> integracija -> tek oziroma odhodno sporočilo.
+
+Uporabnik se mora iz problema premakniti do vzroka in rešitve brez iskanja istega
+zapisa na petih nepovezanih straneh.
+
+
+5. PRAVILA ZA VSE NOVE FUNKCIJE
+===============================
+
+1. Ena entiteta ima eno glavno stran. Različna stanja so filtri ali shranjeni pogledi,
+   ne nove podvojene strani.
+2. Vsaka številka ali status mora voditi na filtrirani seznam, ki jo pojasni.
+3. Veliki seznami uporabljajo strežniško filtriranje in paginacijo.
+4. Filter in stran se zapišeta v URL, da povezavo lahko delimo in gumb Nazaj deluje.
+5. Vse zapisovanje ima uporabnika, čas, staro in novo vrednost ter razlog.
+6. PIM-lastna in SAOP-lastna polja se obravnavajo različno.
+7. SAOP odgovor še ni potrditev; sprememba je potrjena šele, ko jo naslednje branje
+   iz SAOP vrne v pričakovani vrednosti.
+8. Neuspeh ne sme biti skrit za starejšim uspešnim stanjem.
+9. VIEWER nikoli ne vidi zapisovalnega gumba.
+10. Razvijalec in ADMIN vidita tehnične podatke, poslovni uporabnik pa razumljiv vzrok.
+11. Poverilnice, gesla in občutljivi surovi podatki se v uporabniškem vmesniku ne prikazujejo.
+12. Funkcija brez podatkovnega vira ali varne zapisovalne procedure se ne prikaže kot
+    navidezno delujoč gumb.
+
+
+6. PRIPOROČEN VRSTNI RED NADALJNJE IZDELAVE
+===========================================
+
+1. Izdelki - celovit bralni seznam in kartica izdelka.
+2. Kakovost - povezava napake z izdelkom in manjkajočim poljem.
+3. Izdelki - urejanje PIM-lastnih polj, zgodovina in razveljavitev.
+4. ERP/SAOP - odobritev, pošiljanje, echo potrditev in odmiki.
+5. Izvozi za splet - predogled, zgodovina in prenos CSV.
+6. Stranke, popusti, cene in zaloga.
+7. Nastavitve - varno urejanje atributov, kategorij, prevodov in preslikav.
+8. Sistem - uporabniki, dovoljenja, alarmi, obvestila in revizijska sled.
+
+Naslednji konkretni modul je Izdelki. Najprej mora samo z branjem odgovoriti na vprašanje:
+
+"Zakaj ta izdelek ni pripravljen za ERP ali objavo na spletu in od kod je prišel njegov podatek?"
+
+Ko je ta odgovor zanesljiv, se dodajo urejanje, množične spremembe in pošiljanje v SAOP.
