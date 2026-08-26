@@ -55,9 +55,9 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
 // ---------------------------------------------------------------------------
 // Mejnik se ne sme premakniti za entiteto brez aktivne preslikave.
 //
-// Zakaj je to pomembno: zajem dela za vseh 16 SAOP končnih točk, preslikava v canon pa je
-// nastavljena samo za tri. SqlMappingPipeline.ReadInboxesAsync veže raw.Inbox z INNER JOIN na
-// map.EntityMapping in map.FieldMapping, zato zapisi nepreslikanih entitet ostanejo Pending.
+// Zakaj je to pomembno: zajem dela za vseh 16 SAOP končnih točk, preslikave pa se dodajajo po
+// domenah. SqlMappingPipeline.ReadInboxesAsync veže raw.Inbox z INNER JOIN na map.EntityMapping
+// in map.FieldMapping, zato zapisi dejansko nepreslikanih entitet ostanejo Pending.
 // Če bi zajem kljub temu premaknil mejnik, bi bilo to obdobje ob pozneje dodani preslikavi
 // trajno preskočeno — delta zajem ga ne bi več prinesel.
 {
@@ -80,13 +80,14 @@ Console.WriteLine("F3 varna ponovna vrstitev karantenskega raw.Inbox je preverje
     sourceConnectorId = Convert.ToInt32(value);
   }
 
-  // 1. Preslikana entiteta — mejnik se sme premakniti.
+  // 1. Osnovna preslikana entiteta — mejnik se sme premakniti.
   if (!await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "ItemGeneralData", default))
     throw new InvalidOperationException("ItemGeneralData ima nastavljeno preslikavo, a je bila prepoznana kot nepreslikana.");
 
-  // 2. Nepreslikana entiteta — mejnik mora ostati na mestu.
-  if (await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "GetItemsPlanningData", default))
-    throw new InvalidOperationException("GetItemsPlanningData nima preslikave, a je bila prepoznana kot preslikana.");
+  // 2. Migracija 082 je GetItemsPlanningData namenoma dodala v domeno ProductPlanning.
+  //    Ta trditev prepreči, da bi se stara domneva »nepreslikano« znova vrnila v pogodbo.
+  if (!await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "GetItemsPlanningData", default))
+    throw new InvalidOperationException("GetItemsPlanningData mora imeti aktivno preslikavo iz migracije 082.");
 
   // 3. Polovično nastavljena preslikava (entiteta brez polj) šteje kot NEpreslikana — enako, kot
   //    jo obravnava INNER JOIN v SqlMappingPipeline. Vrstico testa vstavimo in jo sami odstranimo.
