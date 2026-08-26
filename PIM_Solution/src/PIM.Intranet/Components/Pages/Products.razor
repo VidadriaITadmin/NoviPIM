@@ -1,59 +1,367 @@
 @page "/izdelki"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject IntranetDataService Data
+@inject ProductWorkbenchService Workbench
 @inject NavigationManager Navigation
+
 <PageTitle>Izdelki</PageTitle>
-<div class="page-header"><div><h1>Izdelki</h1><p>Pregled izdelkov v aktivni organizaciji.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi izdelkov"><span class="page-tab active" aria-current="page">Vsi izdelki @(Page is null ? null : $"({Page.TotalCount:N0})")</span></nav>
+
+<PimPage Title="Izdelki" Subtitle="Delovni seznam kataloga: kaj je pripravljeno za ERP, kaj za splet in kaj manjka." />
+
+<nav class="page-tabs" aria-label="Shranjeni delovni pogledi">
+  @foreach (var view in Views)
+  {
+    var active = string.Equals(ActiveView, view.Code, StringComparison.OrdinalIgnoreCase);
+    <a class="page-tab @(active ? "active" : null)" aria-current="@(active ? "page" : null)" href="@ViewHref(view.Code)">@view.Label @ViewCount(view.Code)</a>
+  }
+</nav>
+
 <section class="ui-card toolbar" role="search" aria-labelledby="products-filter-title">
   <h2 id="products-filter-title" class="visually-hidden">Filtriranje izdelkov</h2>
-  <label class="visually-hidden" for="product-search">Išči po artiklu ali EAN</label><input id="product-search" type="search" class="search-input" placeholder="Išči po artiklu ali EAN …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="product-status">Status</label><select id="product-status" class="filter-select" @bind="Status"><option value="">Vsi statusi</option><option value="VALID">VALID</option><option value="INVALID">INVALID</option><option value="PENDING">PENDING</option></select>
-  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button><button type="button" class="primary-button" disabled="@(Selected.Count == 0)" @onclick="EditSelected" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button><span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  <label class="visually-hidden" for="product-search">Išči po artiklu ali EAN</label>
+  <input id="product-search" type="search" class="search-input" placeholder="Išči po artiklu ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+  <label class="visually-hidden" for="product-manufacturer">Proizvajalec</label>
+  <select id="product-manufacturer" class="filter-select" @bind="ManufacturerDraft">
+    <option value="">Vsi proizvajalci</option>
+    @foreach (var facet in Facets.Where(row => row.FacetKind == "MANUFACTURER"))
+    {
+      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="product-supplier">Dobavitelj</label>
+  <select id="product-supplier" class="filter-select" @bind="SupplierDraft">
+    <option value="">Vsi dobavitelji</option>
+    @foreach (var facet in Facets.Where(row => row.FacetKind == "SUPPLIER"))
+    {
+      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="product-group">Skupina</label>
+  <select id="product-group" class="filter-select" @bind="GroupDraft">
+    <option value="">Vse skupine</option>
+    @foreach (var facet in Facets.Where(row => row.FacetKind == "ITEM_GROUP"))
+    {
+      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="product-erp">Pripravljenost za ERP</label>
+  <select id="product-erp" class="filter-select" @bind="ErpDraft">
+    <option value="">ERP: vsi</option>
+    <option value="VALID">ERP: pripravljeni</option>
+    <option value="INVALID">ERP: blokirani</option>
+  </select>
+
+  <label class="visually-hidden" for="product-web">Pripravljenost za splet</label>
+  <select id="product-web" class="filter-select" @bind="WebDraft">
+    <option value="">Splet: vsi</option>
+    <option value="VALID">Splet: pripravljeni</option>
+    <option value="INVALID">Splet: blokirani</option>
+  </select>
+
+  <label class="visually-hidden" for="product-sort">Razvrstitev</label>
+  <select id="product-sort" class="filter-select" @bind="SortDraft">
+    <option value="ITEM">Razvrsti po šifri</option>
+    <option value="ITEM:desc">Šifra padajoče</option>
+    <option value="COMPLETENESS:desc">Najbolj popolni</option>
+    <option value="COMPLETENESS">Najmanj popolni</option>
+    <option value="CHANGED:desc">Nazadnje spremenjeni</option>
+    <option value="CHANGED">Najdlje nespremenjeni</option>
+  </select>
+
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+  <button type="button" class="primary-button" disabled="@(Selected.Count == 0)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
+  <a class="filter-button" href="@ExportHref()">Izvozi pogled (CSV)</a>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
+
+@if (ActiveChips.Count > 0)
+{
+  <section class="ui-card active-filters" aria-label="Aktivni filtri">
+    @foreach (var chip in ActiveChips)
+    {
+      <a class="filter-chip" href="@chip.RemoveHref" aria-label="Odstrani filter @chip.Label">@chip.Label<span class="chip-remove" aria-hidden="true"></span></a>
+    }
+    <a class="filter-chip clear-all" href="izdelki">Počisti vse</a>
+  </section>
+}
+
+@if (SelectionOverflow)
+{
+  <p class="notice" role="status">Izbranih je @Selected.Count izdelkov, v množično urejanje jih gre prvih @MaxSelectionInUrl. Preostale uredi v naslednjem paketu.</p>
+}
+
 <section class="ui-card data-card" aria-label="Seznam izdelkov">
-@if (Loading) { <div class="loading-state" role="status">Nalaganje izdelkov …</div> }
-else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
-else if (Page?.Rows.Count == 0) { <div class="empty-state">Za izbrane filtre ni izdelkov.</div> }
-else if (Page is not null) {
-  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela izdelkov">
-    <table class="data-table"><caption>Izdelki v aktivni organizaciji</caption><thead><tr><th scope="col" class="select-cell"><input type="checkbox" aria-label="Izberi vse na strani" checked="@AllOnPageSelected" @onchange="ToggleAll" /></th><th scope="col">Artikel</th><th scope="col">EAN</th><th scope="col">Status</th><th scope="col">Popolnost</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach (var row in Page.Rows) { <tr><td class="select-cell"><input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selected.Contains(row.ItemId)" @onchange="e => Toggle(row.ItemId, e)" /></td><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@(row.Ean ?? "—")</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@row.Status</span></td><td><div class="progress-line"><span class="progress-track" role="progressbar" aria-label="Popolnost" aria-valuenow="@Number(row.Completeness)" aria-valuemin="0" aria-valuemax="100"><i class="@(row.Completeness < 75 ? "warn" : null)" aria-hidden="true" style="width:@Percent(row.Completeness)"></i></span><span class="progress-value">@row.Completeness.ToString("0.#") %</span></div></td><td class="row-action"><a class="open-link" href="izdelki/@row.ProductId" aria-label="Odpri izdelek @row.ItemId"><span class="chevron" aria-hidden="true"></span></a></td></tr> }</tbody></table>
-  </div>
-  <nav class="pagination" aria-label="Strani izdelkov"><button type="button" disabled="@(Skip == 0)" @onclick="PreviousAsync">Prejšnja</button><span class="page-position">Stran @(Skip / Take + 1) od @Math.Max(1, (long)Math.Ceiling(Page.TotalCount / (decimal)Take))</span><button type="button" disabled="@(Skip + Take >= Page.TotalCount)" @onclick="NextAsync">Naslednja</button></nav> }
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)"
+            EmptyText="Za izbrane filtre ni izdelkov." LoadingText="Nalaganje izdelkov …">
+    @if (Page is not null)
+    {
+      <PimTable Caption="Izdelki v aktivni organizaciji" AriaLabel="Tabela izdelkov" Columns="Columns">
+        <Rows>
+          @foreach (var row in Page.Rows)
+          {
+            <tr>
+              <td class="select-cell"><input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selected.Contains(row.ItemId)" @onchange="e => Toggle(row.ItemId, e)" /></td>
+              <td>
+                <a class="product-name" href="izdelki/@row.ProductId">@row.Name</a>
+                <span class="product-meta"><span class="code-value">@row.ItemId</span>@if (row.Ean is not null) { <span>· EAN @row.Ean</span> }</span>
+              </td>
+              <td>@(row.Manufacturer ?? "—")</td>
+              <td><PimChip Text="@StatusLabel(row.ErpStatus)" Tone="@Tone(row.ErpStatus)" Prefix="Stanje ERP: " /></td>
+              <td><PimChip Text="@StatusLabel(row.WebStatus)" Tone="@Tone(row.WebStatus)" Prefix="Stanje splet: " /></td>
+              <td><PimBar Percent="row.Completeness" Label="@($"Popolnost izdelka {row.ItemId}")" /></td>
+              <td class="numeric">@row.OpenIssueCount.ToString("N0")</td>
+              <td class="row-flags">
+                @if (row.MediaCount == 0) { <span class="gap-flag">brez slike</span> }
+                @if (!row.HasWebTitle) { <span class="gap-flag">brez naziva</span> }
+                @if (row.CategoryCount == 0) { <span class="gap-flag">brez kategorije</span> }
+                @if (row.PendingOutboundCount > 0) { <span class="wait-flag">čaka SAOP (@row.PendingOutboundCount)</span> }
+                @if (row.IsPromoted) { <span class="ok-flag">objavljen</span> }
+              </td>
+              <td>@(row.LastChangedUtc?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+              <td class="row-action"><a class="open-link" href="izdelki/@row.ProductId" aria-label="Odpri izdelek @row.ItemId"><span class="chevron" aria-hidden="true"></span></a></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      <PimPager Skip="Skip" Take="Take" Total="Page.TotalCount" Label="Strani izdelkov" SkipChanged="GoToSkipAsync" />
+    }
+  </PimState>
 </section>
+
+<p class="muted source-note">
+  Vir: <span class="code-value">intranet.GetProductList</span>, <span class="code-value">intranet.GetProductListViews</span> in
+  <span class="code-value">intranet.GetProductListFilters</span> (migracija 101). Stran je bralna — urejanje polja je na kartici izdelka.
+</p>
+
 @code {
-  // Izbira zivi cez straniceje in cez filtre: urednik pogosto izbere nekaj na eni strani,
-  // spremeni filter in izbere se nekaj. Ce bi se izbira ob vsakem premiku izgubila, bi bila
-  // mnozicna sprememba uporabna samo za eno stran rezultatov.
+  [SupplyParameterFromQuery(Name = "pogled")] public string? QueryView { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "proizvajalec")] public string? QueryManufacturer { get; set; }
+  [SupplyParameterFromQuery(Name = "dobavitelj")] public string? QuerySupplier { get; set; }
+  [SupplyParameterFromQuery(Name = "skupina")] public string? QueryGroup { get; set; }
+  [SupplyParameterFromQuery(Name = "erp")] public string? QueryErp { get; set; }
+  [SupplyParameterFromQuery(Name = "splet")] public string? QueryWeb { get; set; }
+  [SupplyParameterFromQuery(Name = "sort")] public string? QuerySort { get; set; }
+  [SupplyParameterFromQuery(Name = "smer")] public string? QueryDirection { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
+
+  // Izbira zivi cez strani in cez filtre: urednik pogosto izbere nekaj na eni strani, spremeni
+  // filter in izbere se nekaj. Ce bi se izbira ob vsakem premiku izgubila, bi bilo mnozicno
+  // urejanje uporabno samo za eno stran rezultatov.
   readonly HashSet<string> Selected = new(StringComparer.OrdinalIgnoreCase);
-  PIM.Intranet.Services.ProductPage? Page; bool Loading = true; string? Error; string Search = ""; string Status = ""; int Skip; const int Take = 50; int? OrganizationId;
-  protected override async Task OnInitializedAsync() { try { var org=await Data.GetCurrentOrganizationAsync(); if(org is null){Error="Aktivna organizacija ni na voljo.";return;} OrganizationId=org.OrganizationId; await LoadAsync(); } catch { Error="Izdelkov trenutno ni mogoče naložiti."; } finally { Loading=false; } }
-  async Task LoadAsync(){if(OrganizationId is null)return;Loading=true;Error=null;try{Page=await Data.GetProductsAsync(OrganizationId.Value,Skip,Take,Search,Status);}catch{Error="Izdelkov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
-  async Task ApplyFiltersAsync(){Skip=0;await LoadAsync();} async Task PreviousAsync(){Skip=Math.Max(0,Skip-Take);await LoadAsync();} async Task NextAsync(){Skip+=Take;await LoadAsync();}
-  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Page?.TotalCount ?? 0} rezultatov";
-  bool AllOnPageSelected => Page is not null && Page.Rows.Count > 0 && Page.Rows.All(row => Selected.Contains(row.ItemId));
+
+  ProductListPage? Page;
+  ProductListViewCounts? Counts;
+  IReadOnlyList<ProductListFacet> Facets = [];
+  bool Loading = true;
+  string? Error;
+  int? OrganizationId;
+  string SearchDraft = "";
+  string ManufacturerDraft = "";
+  string SupplierDraft = "";
+  string GroupDraft = "";
+  string ErpDraft = "";
+  string WebDraft = "";
+  string SortDraft = "ITEM";
+
+  const int Take = 50;
+  const int MaxSelectionInUrl = 200;
+
+  int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
+  string ActiveView => string.IsNullOrWhiteSpace(QueryView) ? "ALL" : QueryView.Trim().ToUpperInvariant();
+  bool SelectionOverflow => Selected.Count > MaxSelectionInUrl;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Izbor"), new("Izdelek"), new("Proizvajalec"), new("ERP"), new("Splet"),
+    new("Popolnost"), new("Težave", Numeric: true), new("Vrzeli"), new("Zadnja sprememba"), new("Odpri"),
+  ];
+
+  sealed record SavedView(string Code, string Label);
+
+  static readonly IReadOnlyList<SavedView> Views =
+  [
+    new("ALL", "Vsi izdelki"),
+    new("TO_FIX", "Za urediti"),
+    new("NO_IMAGE", "Brez slike"),
+    new("NO_WEB_TITLE", "Brez spletnega naziva"),
+    new("NO_CATEGORY", "Brez kategorije"),
+    new("NO_EAN", "Brez EAN"),
+    new("NOT_PUBLISHED", "Neobjavljeni"),
+    new("WAITING_SAOP", "Čaka SAOP"),
+  ];
+
+  sealed record FilterChip(string Label, string RemoveHref);
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchDraft = QuerySearch ?? "";
+    ManufacturerDraft = QueryManufacturer ?? "";
+    SupplierDraft = QuerySupplier ?? "";
+    GroupDraft = QueryGroup ?? "";
+    ErpDraft = QueryErp ?? "";
+    WebDraft = QueryWeb ?? "";
+    SortDraft = string.IsNullOrWhiteSpace(QuerySort) ? "ITEM"
+      : string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase) ? QuerySort + ":desc" : QuerySort;
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+
+      if (OrganizationId != organization.OrganizationId)
+      {
+        OrganizationId = organization.OrganizationId;
+        Selected.Clear();
+        Counts = await Workbench.GetProductListViewsAsync(organization.OrganizationId);
+        Facets = await Workbench.GetProductListFacetsAsync(organization.OrganizationId);
+      }
+
+      Page = await Workbench.GetProductListAsync(new ProductListFilter(
+        organization.OrganizationId, Skip, Take, QuerySearch, ActiveView,
+        QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
+        QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase)));
+    }
+    catch
+    {
+      Error = "Izdelkov trenutno ni mogoče naložiti.";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Page?.TotalCount ?? 0:N0} rezultatov";
+
+  string ViewCount(string code)
+  {
+    if (Counts is null) return "";
+    var value = code switch
+    {
+      "ALL" => Counts.TotalCount,
+      "TO_FIX" => Counts.ToFixCount,
+      "NO_IMAGE" => Counts.NoImageCount,
+      "NO_WEB_TITLE" => Counts.NoWebTitleCount,
+      "NO_CATEGORY" => Counts.NoCategoryCount,
+      "NO_EAN" => Counts.NoEanCount,
+      "NOT_PUBLISHED" => Counts.NotPublishedCount,
+      "WAITING_SAOP" => Counts.WaitingSaopCount,
+      _ => 0,
+    };
+    return $"({value:N0})";
+  }
+
+  List<FilterChip> ActiveChips
+  {
+    get
+    {
+      var chips = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
+      if (!string.IsNullOrWhiteSpace(QueryManufacturer)) chips.Add(new($"Proizvajalec: {QueryManufacturer}", Href(manufacturer: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySupplier)) chips.Add(new($"Dobavitelj: {QuerySupplier}", Href(supplier: "")));
+      if (!string.IsNullOrWhiteSpace(QueryGroup)) chips.Add(new($"Skupina: {QueryGroup}", Href(group: "")));
+      if (!string.IsNullOrWhiteSpace(QueryErp)) chips.Add(new($"ERP: {StatusLabel(QueryErp)}", Href(erp: "")));
+      if (!string.IsNullOrWhiteSpace(QueryWeb)) chips.Add(new($"Splet: {StatusLabel(QueryWeb)}", Href(web: "")));
+      return chips;
+    }
+  }
+
+  // Filtri, pogled, razvrscanje in stran zivijo v naslovu: povezavo je mogoce deliti, gumb Nazaj
+  // pa dela. Sentinel "" pomeni "odstrani ta filter", null pomeni "ohrani obstojecega".
+  string Href(string? view = null, string? search = null, string? manufacturer = null, string? supplier = null,
+    string? group = null, string? erp = null, string? web = null, string? sort = null, string? direction = null, int? page = null)
+  {
+    var parameters = new List<string>();
+    Add("pogled", Resolve(view, ActiveView == "ALL" ? null : ActiveView));
+    Add("isci", Resolve(search, QuerySearch));
+    Add("proizvajalec", Resolve(manufacturer, QueryManufacturer));
+    Add("dobavitelj", Resolve(supplier, QuerySupplier));
+    Add("skupina", Resolve(group, QueryGroup));
+    Add("erp", Resolve(erp, QueryErp));
+    Add("splet", Resolve(web, QueryWeb));
+    Add("sort", Resolve(sort, QuerySort));
+    Add("smer", Resolve(direction, QueryDirection));
+    var resolvedPage = page ?? (view is null && search is null && manufacturer is null && supplier is null
+      && group is null && erp is null && web is null && sort is null && direction is null ? QueryPage : null);
+    if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
+
+    return parameters.Count == 0 ? "izdelki" : "izdelki?" + string.Join('&', parameters);
+
+    void Add(string name, string? value)
+    {
+      if (!string.IsNullOrWhiteSpace(value)) parameters.Add(name + "=" + Uri.EscapeDataString(value));
+    }
+
+    static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
+  }
+
+  string ViewHref(string code) => Href(view: code == "ALL" ? "" : code, page: 1);
+
+  // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi.
+  string ExportHref()
+  {
+    var listHref = Href(page: 1);
+    var separatorIndex = listHref.IndexOf('?');
+    return separatorIndex < 0 ? "izvoz/izdelki.csv" : "izvoz/izdelki.csv" + listHref[separatorIndex..];
+  }
+
+  Task ApplyFiltersAsync()
+  {
+    var sort = SortDraft.Split(':');
+    Navigation.NavigateTo(Href(
+      search: SearchDraft.Trim(), manufacturer: ManufacturerDraft, supplier: SupplierDraft,
+      group: GroupDraft, erp: ErpDraft, web: WebDraft,
+      sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1));
+    return Task.CompletedTask;
+  }
+
+  Task SearchKeyAsync(KeyboardEventArgs args) =>
+    args.Key == "Enter" ? ApplyFiltersAsync() : Task.CompletedTask;
+
+  Task GoToSkipAsync(int skip)
+  {
+    Navigation.NavigateTo(Href(page: skip / Take + 1));
+    return Task.CompletedTask;
+  }
+
   void Toggle(string itemId, ChangeEventArgs args)
   {
     if (args.Value is true) Selected.Add(itemId); else Selected.Remove(itemId);
   }
-  void ToggleAll(ChangeEventArgs args)
+
+  // Sifre gredo v naslov; dolg seznam se skrajsa, kar stran pove na glas (SelectionOverflow).
+  Task EditSelectedAsync()
   {
-    if (Page is null) return;
-    if (args.Value is true) foreach (var row in Page.Rows) Selected.Add(row.ItemId);
-    else foreach (var row in Page.Rows) Selected.Remove(row.ItemId);
-  }
-  // Sifre gredo v naslov; dolg seznam se skrajsa, da naslov ostane uporaben in ga strefnik sprejme.
-  void EditSelected()
-  {
-    if (Selected.Count == 0) return;
+    if (Selected.Count == 0) return Task.CompletedTask;
     var items = string.Join(',', Selected.Take(MaxSelectionInUrl));
     Navigation.NavigateTo($"izvozi/mnozicno?items={Uri.EscapeDataString(items)}");
+    return Task.CompletedTask;
   }
-  const int MaxSelectionInUrl = 200;
-  static string Chip(string value) => value == "VALID" ? "good" : value == "PENDING" ? "warn" : "bad";
-  static string Percent(decimal value) => $"{Math.Clamp(value,0,100).ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
-  // aria-valuenow mora biti številka s piko ne glede na območne nastavitve strežnika.
-  static string Number(decimal value) => Math.Clamp(value,0,100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+  static string StatusLabel(string? status) => status switch
+  {
+    "VALID" => "Pripravljen",
+    "INVALID" => "Blokiran",
+    "PENDING" => "Čaka validacijo",
+    "NOT_CONFIGURED" => "Ni profila",
+    _ => status ?? "—",
+  };
+
+  static string Tone(string status) => status switch
+  {
+    "VALID" => "good",
+    "INVALID" => "bad",
+    "NOT_CONFIGURED" => "",
+    _ => "warn",
+  };
 }

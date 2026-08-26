@@ -28,6 +28,7 @@ Ne-Razor končne točke:
 | POST | `/auth/prijava` | `AllowAnonymous`, obvezen antiforgery token | prevzame `uporabniskoIme`, `geslo`, neobvezno `zapomniMe`; ob uspehu prijavi in preusmeri na `{PathBase}/nadzorna-plosca`, sicer na `{PathBase}/prijava?napaka=1` |
 | POST | `/odjava` | zahteva sejo (velja `FallbackPolicy`) | odjava iz piškotne sheme, preusmeritev na `{PathBase}/prijava` |
 | GET | `/health` | `AllowAnonymous` | vrne `{ "stanje": "zdravo" }` |
+| GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki`, CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
 
 Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` in
 `AccessDeniedPath` sta oba `/prijava`. Globalni `FallbackPolicy` zahteva
@@ -124,7 +125,10 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetCurrentOrganizationAsync` | `SELECT TOP (1) … FROM dbo.OrganizationConfig WHERE IsActive = 1` | `MainLayout` in vse strani s podatki |
 | `PimNavigation.For` | katalog poti v kodi + filtriranje po zahtevkih vlog | `NavMenu` |
 | `GetDashboardAsync` | `intranet.GetDashboard` | `/nadzorna-plosca` |
-| `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | `/izdelki` |
+| `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); filtri iskanje, shranjen pogled, proizvajalec, dobavitelj, skupina, ERP/spletni status, razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
+| `ProductWorkbenchService.GetProductListViewsAsync` | `intranet.GetProductListViews` (števci osmih shranjenih pogledov) | `/izdelki` |
+| `ProductWorkbenchService.GetProductListFacetsAsync` | `intranet.GetProductListFilters` (3 nabori: proizvajalci, dobavitelji, skupine) | `/izdelki` |
+| `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | zapuščinska pot; seznam je od migracije 101 na `GetProductList` |
 | `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |
 | `ProductWorkbenchService.GetProductOriginAsync` | `intranet.GetProductOrigin` (zadnjih največ 100 ujemajočih se vhodnih zapisov po dejanski izluščeni identiteti) | `/izdelki/{id}` |
 | `GetValidationIssuesAsync` | `intranet.GetValidationIssues` (3 nabori: težave, profili, najpogostejše) | `/napake-validacije`, `/nadzorna-plosca` |

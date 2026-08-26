@@ -48,6 +48,28 @@ public sealed record ProductOriginRow(
   long InboxId, Guid RunId, string SourceCode, string EntityType, int PageNumber, string Status,
   DateTime ReceivedUtc, DateTime? ProcessedUtc, int RecordOrdinal, long ExtractedFieldCount);
 
+public sealed record ProductListRow(
+  long ProductId, string ItemId, string? Ean, string Name, bool HasWebTitle, string? ThumbnailUrl,
+  string? Manufacturer, string? Supplier, string? ItemGroup, string? Department,
+  bool IsActive, bool WebPublish, bool IsPromoted, string ValidationStatus, decimal Completeness,
+  DateTime? LastValidatedUtc, string ErpStatus, string WebStatus, long OpenIssueCount,
+  long CategoryCount, long MediaCount, long PendingOutboundCount, DateTime? LastChangedUtc);
+
+public sealed record ProductListPage(IReadOnlyList<ProductListRow> Rows, long TotalCount);
+
+/// <param name="View">Koda shranjenega pogleda; null ali ALL pomeni ves katalog.</param>
+public sealed record ProductListFilter(
+  int OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? View = null,
+  string? Manufacturer = null, string? Supplier = null, string? ItemGroup = null,
+  string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
+  bool SortDescending = false, string Language = "sl");
+
+public sealed record ProductListViewCounts(
+  long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
+  long NoCategoryCount, long NoEanCount, long NotPublishedCount, long WaitingSaopCount);
+
+public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount);
+
 public sealed record ProductCardView(
   ProductCardHeader Header,
   IReadOnlyList<ProductCardField> Fields,
@@ -224,6 +246,101 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       PimDb.DateTimeValue(row, "ReceivedUtc"), PimDb.NullableDateTime(row, "ProcessedUtc"),
       PimDb.Int32(row, "RecordOrdinal"), PimDb.Int64(row, "ExtractedFieldCount")), cancellationToken);
   }
+
+  public async Task<ProductListPage> GetProductListAsync(
+    ProductListFilter filter, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductList", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 60,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = filter.OrganizationId;
+    command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = filter.Take;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(filter.Search);
+    command.Parameters.Add("@View", SqlDbType.NVarChar, 40).Value = Optional(filter.View);
+    command.Parameters.Add("@Manufacturer", SqlDbType.NVarChar, 200).Value = Optional(filter.Manufacturer);
+    command.Parameters.Add("@Supplier", SqlDbType.NVarChar, 200).Value = Optional(filter.Supplier);
+    command.Parameters.Add("@ItemGroup", SqlDbType.NVarChar, 100).Value = Optional(filter.ItemGroup);
+    command.Parameters.Add("@ErpStatus", SqlDbType.NVarChar, 30).Value = Optional(filter.ErpStatus);
+    command.Parameters.Add("@WebStatus", SqlDbType.NVarChar, 30).Value = Optional(filter.WebStatus);
+    command.Parameters.Add("@Sort", SqlDbType.NVarChar, 40).Value = Optional(filter.Sort);
+    command.Parameters.Add("@SortDescending", SqlDbType.Bit).Value = filter.SortDescending;
+    command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = await ReadAsync(reader, row => new ProductListRow(
+      PimDb.Int64(row, "ProductId"), PimDb.TextOrEmpty(row, "ItemID"), PimDb.Text(row, "EAN"),
+      PimDb.TextOrEmpty(row, "Name"), PimDb.Bool(row, "HasWebTitle"), PimDb.Text(row, "ThumbnailUrl"),
+      PimDb.Text(row, "Manufacturer"), PimDb.Text(row, "Supplier"), PimDb.Text(row, "ItemGroup"),
+      PimDb.Text(row, "Department"), PimDb.Bool(row, "IsActive"), PimDb.Bool(row, "WebPublish"),
+      PimDb.Bool(row, "IsPromoted"), PimDb.TextOrEmpty(row, "ValidationStatus"),
+      PimDb.Decimal(row, "Completeness"), PimDb.NullableDateTime(row, "LastValidatedUtc"),
+      PimDb.TextOrEmpty(row, "ErpStatus"), PimDb.TextOrEmpty(row, "WebStatus"),
+      PimDb.Int64(row, "OpenIssueCount"), PimDb.Int64(row, "CategoryCount"),
+      PimDb.Int64(row, "MediaCount"), PimDb.Int64(row, "PendingOutboundCount"),
+      PimDb.NullableDateTime(row, "LastChangedUtc")), cancellationToken);
+
+    long total = 0;
+    if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
+      total = Convert.ToInt64(reader.GetValue(0));
+
+    return new(rows, total);
+  }
+
+  public async Task<ProductListViewCounts> GetProductListViewsAsync(
+    int organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductListViews", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 60,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, 0, 0, 0, 0, 0, 0);
+    return new(
+      PimDb.Int64(reader, "TotalCount"), PimDb.Int64(reader, "ToFixCount"),
+      PimDb.Int64(reader, "NoImageCount"), PimDb.Int64(reader, "NoWebTitleCount"),
+      PimDb.Int64(reader, "NoCategoryCount"), PimDb.Int64(reader, "NoEanCount"),
+      PimDb.Int64(reader, "NotPublishedCount"), PimDb.Int64(reader, "WaitingSaopCount"));
+  }
+
+  /// <summary>Vrednosti filtrov so dejanske vrednosti kataloga, ne trdo kodiran seznam.</summary>
+  public async Task<IReadOnlyList<ProductListFacet>> GetProductListFacetsAsync(
+    int organizationId, int take = 100, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductListFilters", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 60,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var facets = new List<ProductListFacet>();
+    var more = true;
+    while (more)
+    {
+      facets.AddRange(await ReadAsync(reader, row => new ProductListFacet(
+        PimDb.TextOrEmpty(row, "FacetKind"), PimDb.TextOrEmpty(row, "FacetValue"),
+        PimDb.Int64(row, "ProductCount")), cancellationToken));
+      more = await reader.NextResultAsync(cancellationToken);
+    }
+
+    return facets;
+  }
+
+  static object Optional(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 
   static async Task NextAsync(SqlDataReader reader, CancellationToken cancellationToken)
   {

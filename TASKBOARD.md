@@ -258,6 +258,39 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[MERITEV + NAČRT] En artikel na spletu, več podjetij v bazi — rešitev je v starem sistemu** —
+  kdo: Claude Opus 5 — 2026-08-26. Podrobno:
+  [`docs/EN_ARTIKEL_VEC_PODJETIJ.md`](docs/EN_ARTIKEL_VEC_PODJETIJ.md).
+
+  Uporabnik je pokazal izvozni SELECT starega sistema. Ta problem resuje s tremi potezami:
+  ključ artikla za splet je **`ItemID` in ne `(OrganizationId, ItemID)`**; ob podvojitvi zmaga
+  podjetje z nižjo prioriteto iz registra (`#CatalogOrg`, IQL pred VID); zaloga in dobavni roki
+  pa pridejo iz **enega izbranega podjetja** (`@StockOrganizationId`), ločeno od kataloga.
+
+  **Predpostavka drži tudi pri nas.** Aktivnih vrstic v `canon.Product` je 177.635, različnih
+  šifer pa **116.742**; **52.077** šifer obstaja v več kot enem podjetju (44.918 v dveh, 5.502 v
+  treh, 1.657 v štirih). Združevanje po šifri torej stisne 177.635 vrstic na 116.742 artiklov.
+
+  **Ista šifra res pomeni isti artikel v 99,8 %:** EAN se ujema ali ga ni pri **51.978**,
+  razlikuje se pri **99**. Teh 99 ni napaka združevanja, ampak delovni seznam.
+
+  **Past, ki jo je stari sistem že poznal:** pri **46.270** šifrah se proizvajalec razlikuje med
+  podjetji, ker je shranjen kot šifra, lokalna za podjetje. Stari sistem ima zato register z
+  `ManufacturerCodeIQL` in `ManufacturerCodeVID` in iz njiju sestavi eno ime. Brez tega bi po
+  združitvi vsak drugi artikel dobil proizvajalca, odvisnega od tega, katero podjetje je zmagalo.
+  To je edini del rešitve, ki ga v NoviPIM še ni.
+
+  **Predlog:** trije registri in nobene nove logike v programu — `out.WebCatalogOrganization`
+  (vrstni red podjetij), podjetje za zalogo kot lastnost izvoznega profila, ter
+  `canon.ManufacturerAlias` / `canon.SupplierAlias`. Ob tem delovni seznam za 99 spornih šifer.
+
+  **Posledica za validacijo:** spletni profil mora preverjati **združeni artikel**, ne zapisa po
+  podjetjih, sicer artikel pade zaradi manjkajoče slike v podjetju, ki na splet sploh ne gre.
+  ERP validacija ostane po podjetjih, ker ERP je po podjetjih.
+
+  Ničesar nisem zgradil — vrstni red podjetij in podjetje za zalogo sta poslovni odločitvi.
+
+
 - **[MERITEV] ERP validacijska pravila so napačno sestavljena — trije dokazljivi očitki** —
   kdo: Claude Opus 5 — 2026-08-26. Podrobno:
   [`docs/ANALIZA_ERP_PRAVIL.md`](docs/ANALIZA_ERP_PRAVIL.md).
