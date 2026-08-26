@@ -142,7 +142,11 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
-_(prazno)_
+- **[BAZA → INTRANET] Celovita bralna kartica izdelka** — kdo: Codex — ozemlji:
+  najprej BAZA, nato INTRANET — 2026-08-26. Uporabnik je izrecno dovolil posodobitev
+  zastarelih F10 pogodb. Cilj: kartica odgovori, zakaj izdelek ni pripravljen za ERP/splet,
+  pokaže besedila, lastnosti, kategorije, medije/dokumente, cene, zalogo, komercialo,
+  kakovost, odhodno pot, zgodovino in izvor, brez navideznih zapisovalnih gumbov.
 
 ## BLOKIRANO
 

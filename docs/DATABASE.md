@@ -56,7 +56,7 @@ Začetna polnitev slovarja je `scripts\seed_prevodi_besede.sql` (ni migracija �
 
 ## Migracije
 
-Trenutni paket zajema migracije 001–056. Migrator sledi `dbo.SchemaMigration` in preveri hash vsake že uporabljene datoteke. Nameščenih migracij se ne ureja; popravek je vedno nova številka.
+Trenutni paket zajema migracije 001–100. Migrator sledi `dbo.SchemaMigration` in preveri hash vsake že uporabljene datoteke. Nameščenih migracij se ne ureja; popravek je vedno nova številka.
 
 ### Varni postopek
 
@@ -112,3 +112,22 @@ Migracije 032–038 dodajo omejeni poslovni Ctrl+Z: `pim.UndoProductField` in `p
 `tests/PIM.ChangeTracking.Integration` je xUnit integracijski test (ni console proof) in pokriva uspešen undo polja, redo/conflict blokadi, skupni batch undo, SAOP/SHARED ownership blokado, prazen batch in čiščenje session konteksta po uspehu.
 
 Migracija 034 razširi množično sledljivost na `canon.ProductText`, `canon.ProductAttribute` in `canon.ProductMedia`. Vrednosti so omejene na prvih 400 znakov prek `CONVERT(nvarchar(400), ...)`; za tekste se v zgodovini hrani kvalifikator `TextType.Lang`, za atribut koda atributa in za medij `Role.SortOrder`.
+
+## Bralni model kartice izdelka
+
+Migracija `100_ProductCardReadModel.sql` doda izključno bralni proceduri:
+
+- `intranet.GetProductCard` vrne 15 imenovanih naborov: glavo z ločenima statusoma ERP in
+  splet, ključna polja z lastnikom, čakajočo prekrivko iz obstoječe
+  `intranet.GetPendingOverlay`, besedila, lastnosti, kategorije, medije, dokumente, cene,
+  zalogo, trgovinske podatke, validacijske profile, odprte težave, odhodna sporočila in
+  zgodovino;
+- `intranet.GetProductOrigin` pove, iz katerega `raw.Inbox` teka, strani in zapisa je bila
+  izluščena identiteta izdelka. Povezuje po dejanski `map.ExtractedValue` identiteti in vedno
+  ohrani mejo `OrganizationId`.
+
+Meritev na razvojnem izdelku `NW.9072` (ProductId 5971, organizacija 2): kartica je vrnila
+vseh 15 naborov v 81 ms; izvor 28 vrstic v 869 ms. Neposredno iskanje identitete nad
+837.404 vrednostmi `Product.ItemID` je pred migracijo trajalo 415 ms. Poskus materializiranega
+indeksa nad `nvarchar(max)` je bil zavrnjen kot nesorazmeren, ker je prekinil povezavo med
+gradnjo; migracija zato ne spreminja `map.ExtractedValue` in ostane lahka ter aditivna.
