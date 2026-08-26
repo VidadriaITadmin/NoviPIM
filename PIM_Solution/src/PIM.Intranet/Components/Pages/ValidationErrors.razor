@@ -2,57 +2,360 @@
 @page "/kakovost/napake"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.IntranetDataService Data
-<PageTitle>Kakovost</PageTitle>
-<div class="page-header"><div><h1>Kakovost</h1><p>Živ pregled validacijskega stanja in odprtih težav.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi kakovosti"><button type="button" class="page-tab @(Tab=="overview"?"active":null)" aria-current="@(Tab=="overview"?"page":null)" @onclick="ShowOverview">Pregled kakovosti</button><button type="button" class="page-tab @(Tab=="issues"?"active":null)" aria-current="@(Tab=="issues"?"page":null)" @onclick="ShowIssues">Napake</button><a class="page-tab" href="karantena">Karantena</a></nav>
-@if (Loading) { <div class="ui-card loading-state" role="status">Nalaganje kakovosti …</div> }
-else if (Error is not null) { <div class="ui-card error-state" role="alert">@Error</div> }
-else if (View is not null && Tab == "overview") {
-  <section class="kpi-grid" aria-labelledby="quality-kpi-title">
-    <h2 id="quality-kpi-title" class="visually-hidden">Povzetek stanja kakovosti</h2>
-    <div class="ui-card kpi"><span>Odprte težave</span><strong>@View.Issues.Count.ToString("N0")</strong></div>
-    <div class="ui-card kpi"><span>Prizadeti izdelki</span><strong>@View.Issues.Select(x=>x.ProductId).Distinct().Count().ToString("N0")</strong></div>
-    <div class="ui-card kpi"><span>Merjeni profili</span><strong>@View.Profiles.Count.ToString("N0")</strong></div>
-    <div class="ui-card kpi"><span>Karantena</span><strong><a href="karantena">Odpri pregled</a></strong></div>
+@inject IntranetDataService Data
+@inject QualityReadService Quality
+@inject NavigationManager Navigation
+
+<PageTitle>Napake validacije</PageTitle>
+
+<PimPage Title="Napake validacije" Subtitle="Kaj izdelku manjka, kateri profil to zahteva in kaj se zaradi tega ustavi. Napake ni mogoče označiti za rešeno — izgine sama, ko je izdelek popravljen in znova validiran." Crumbs="Crumbs" />
+
+<section class="kpi-grid" aria-labelledby="quality-kpi-title">
+  <h2 id="quality-kpi-title" class="visually-hidden">Povzetek odprtih napak</h2>
+  <PimStat Label="Odprte težave" Value="@Number(Overview?.Totals.OpenIssueCount)" Note="@($"{Number(Overview?.Totals.ErrorCount)} napak · {Number(Overview?.Totals.WarningCount)} opozoril")" />
+  <PimStat Label="Prizadeti izdelki" Value="@Number(Overview?.Totals.AffectedProductCount)" Note="izdelkov z vsaj eno odprto težavo" />
+  <PimStat Label="Blokira ERP" Value="@Number(Overview?.Totals.BlockingErpCount)" Note="težav v profilih, ki ustavijo zapis v SAOP" Href="kakovost/napake?blokira=ERP" />
+  <PimStat Label="Blokira splet" Value="@Number(Overview?.Totals.BlockingWebCount)" Note="težav v profilih, ki ustavijo objavo" Href="kakovost/napake?blokira=WEB" />
+  <PimStat Label="Samo opozorilo" Value="@Number(Overview?.Totals.AdvisoryCount)" Note="vidno, a ne ustavi ničesar" Href="kakovost/napake?blokira=NONE" />
+</section>
+
+<section class="ui-card toolbar" role="search" aria-labelledby="issues-filter-title">
+  <h2 id="issues-filter-title" class="visually-hidden">Iskanje odprtih težav</h2>
+  <label class="visually-hidden" for="issue-search">Poišči po šifri ali EAN</label>
+  <input id="issue-search" type="search" class="search-input" placeholder="Poišči po šifri ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+  <label class="visually-hidden" for="issue-profile">Profil</label>
+  <select id="issue-profile" class="filter-select" @bind="ProfileDraft">
+    <option value="">Vsi profili</option>
+    @foreach (var profile in ProfileCodes)
+    {
+      <option value="@profile">@profile</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="issue-severity">Resnost</label>
+  <select id="issue-severity" class="filter-select" @bind="SeverityDraft">
+    <option value="">Vse resnosti</option>
+    <option value="ERROR">Samo napake</option>
+    <option value="WARNING">Samo opozorila</option>
+  </select>
+
+  <label class="visually-hidden" for="issue-blocks">Kaj blokira</label>
+  <select id="issue-blocks" class="filter-select" @bind="BlocksDraft">
+    <option value="">Blokira: vseeno</option>
+    <option value="ERP">Blokira ERP</option>
+    <option value="WEB">Blokira splet</option>
+    <option value="NONE">Ne blokira</option>
+  </select>
+
+  <label class="visually-hidden" for="issue-field">Polje</label>
+  <select id="issue-field" class="filter-select" @bind="FieldDraft">
+    <option value="">Vsa polja</option>
+    @foreach (var field in FieldCodes)
+    {
+      <option value="@field">@field</option>
+    }
+  </select>
+
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+@if (ActiveChips.Count > 0)
+{
+  <section class="ui-card active-filters" aria-label="Aktivni filtri">
+    @foreach (var chip in ActiveChips)
+    {
+      <a class="filter-chip" href="@chip.RemoveHref" aria-label="Odstrani filter @chip.Label">@chip.Label<span class="chip-remove" aria-hidden="true"></span></a>
+    }
+    <a class="filter-chip clear-all" href="kakovost/napake">Počisti vse</a>
   </section>
-  <div class="quality-grid">
-    <section class="ui-card data-card" aria-label="Kakovost po validacijskih profilih">
-    @if (View.Profiles.Count == 0) { <div class="empty-state">Merjenih validacijskih profilov ni.</div> }
-    else {
-      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela kakovosti po profilih">
-        <table class="data-table"><caption>Kakovost po validacijskih profilih</caption><thead><tr><th scope="col">Profil</th><th scope="col">Izdelki</th><th scope="col">Veljavni</th><th scope="col">Neveljavni</th><th scope="col">Povprečna popolnost</th></tr></thead><tbody>@foreach (var row in View.Profiles) { <tr><td>@row.ProfileCode</td><td>@row.ProductCount</td><td>@row.ValidCount</td><td>@row.InvalidCount</td><td>@if (row.AverageCompleteness is null) { <span class="no-value">Ni podatka</span> } else { <div class="progress-line"><span class="progress-track" role="progressbar" aria-label="Povprečna popolnost profila @row.ProfileCode" aria-valuenow="@Number(row.AverageCompleteness.Value)" aria-valuemin="0" aria-valuemax="100"><i class="@(row.AverageCompleteness.Value < 75 ? "warn" : null)" aria-hidden="true" style="width:@Percent(row.AverageCompleteness.Value)"></i></span><span class="progress-value">@row.AverageCompleteness.Value.ToString("0.#") %</span></div> }</td></tr> }</tbody></table>
-      </div> }
-    </section>
-    <section class="ui-card data-card" aria-label="Najpogostejše odprte težave">
-    @if (View.FrequentIssues.Count == 0) { <div class="empty-state">Ponavljajočih se težav ni.</div> }
-    else {
-      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela najpogostejših težav">
-        <table class="data-table"><caption>Najpogostejše odprte težave</caption><thead><tr><th scope="col">Koda</th><th scope="col">Sporočilo</th><th scope="col">Pojavitve</th></tr></thead><tbody>@foreach (var row in View.FrequentIssues) { <tr><td>@row.IssueCode</td><td>@row.Message</td><td class="issue-count">@row.OccurrenceCount.ToString("N0")</td></tr> }</tbody></table>
-      </div> }
-    </section>
-  </div>
 }
-else if (View is not null) {
-  <section class="ui-card toolbar" role="search" aria-labelledby="issues-filter-title">
-    <h2 id="issues-filter-title" class="visually-hidden">Iskanje odprtih težav</h2>
-    <label class="visually-hidden" for="issue-search">Poišči težavo</label><input id="issue-search" type="search" class="search-input" placeholder="Poišči po izdelku, kodi ali sporočilu …" @bind="Search" @bind:event="oninput" />
-    <label class="visually-hidden" for="issue-profile">Profil</label><select id="issue-profile" class="filter-select" @bind="Profile"><option value="">Vsi profili</option>@foreach (var p in Profiles) { <option>@p</option> }</select>
-    <span class="result-count" role="status" aria-live="polite">@Filtered.Count rezultatov</span>
-  </section>
-  <section class="ui-card data-card" aria-label="Odprte validacijske težave">
-  @if (Filtered.Count == 0) { <div class="empty-state">Ni odprtih težav za izbrane filtre.</div> }
-  else {
-    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odprtih težav">
-      <table class="data-table"><caption>Odprte validacijske težave</caption><thead><tr><th scope="col">Izdelek</th><th scope="col">Profil</th><th scope="col">Koda</th><th scope="col">Sporočilo</th><th scope="col">Zadnji pojav</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td><a href="izdelki/@row.ProductId">@row.ItemId</a></td><td>@row.ProfileCode</td><td>@row.IssueCode</td><td>@row.Message</td><td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td></tr> }</tbody></table>
-    </div> }
-  </section>
-}
-@code {PIM.Intranet.Services.QualityView? View;bool Loading=true;string? Error;string Search="";string Profile="";string Tab="overview";IEnumerable<string> Profiles=>View is null?Enumerable.Empty<string>():View.Issues.Select(x=>x.ProfileCode).Distinct().Order();IReadOnlyList<PIM.Intranet.Services.ValidationIssueRow> Filtered=>View?.Issues.Where(x=>(Profile==""||x.ProfileCode==Profile)&&(Search==""||x.ItemId.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.IssueCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.Message.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}View=await Data.GetValidationIssuesAsync(org.OrganizationId);}catch{Error="Podatkov o kakovosti trenutno ni mogoče naložiti.";}finally{Loading=false;}}
-  // Zavihka preklapljata samo predstavitveno stanje; podatki so naloženi enkrat ob inicializaciji.
-  void ShowOverview() => Tab = "overview";
-  void ShowIssues() => Tab = "issues";
-  static string Percent(decimal value) => $"{Math.Clamp(value,0,100).ToString(System.Globalization.CultureInfo.InvariantCulture)}%";
-  // aria-valuenow mora biti številka s piko ne glede na območne nastavitve strežnika.
-  static string Number(decimal value) => Math.Clamp(value,0,100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+<section class="ui-card data-card" aria-label="Izdelki z odprtimi težavami">
+  <PimState Loading="Loading" Error="@Error" Empty="@(PageData is not null && PageData.Products.Count == 0)"
+            EmptyText="Za izbrane filtre ni odprtih težav." LoadingText="Nalaganje odprtih težav …">
+    @if (PageData is not null)
+    {
+      <PimTable Caption="Izdelki z odprtimi validacijskimi težavami" AriaLabel="Tabela izdelkov z odprtimi težavami" Columns="Columns">
+        <Rows>
+          @foreach (var product in PageData.Products)
+          {
+            <tr>
+              <td>
+                <a class="product-name" href="izdelki/@product.ProductId">@product.Name</a>
+                <span class="product-meta"><span class="code-value">@product.ItemId</span>@if (product.Ean is not null) { <span>· EAN @product.Ean</span> }</span>
+              </td>
+              <td class="numeric">@product.ErrorCount.ToString("N0")</td>
+              <td class="numeric">@product.WarningCount.ToString("N0")</td>
+              <td>
+                @if (product.BlockingErpCount > 0) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
+                @if (product.BlockingWebCount > 0) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
+                @if (product.BlockingErpCount == 0 && product.BlockingWebCount == 0) { <span class="muted">ne blokira</span> }
+              </td>
+              <td><PimBar Percent="product.Completeness" Label="@($"Popolnost izdelka {product.ItemId}")" /></td>
+              <td class="issue-cell">
+                <ul class="issue-list">
+                  @foreach (var issue in IssuesOf(product.ProductId))
+                  {
+                    <li>
+                      <span class="issue-field">@(issue.FieldCode ?? issue.IssueCode)</span>
+                      <span class="issue-profile">@issue.ProfileCode</span>
+                      <span class="issue-severity @(issue.Severity == "WARNING" ? "warn" : "bad")">@SeverityLabel(issue.Severity)</span>
+                      <span class="issue-message">@issue.Message</span>
+                    </li>
+                  }
+                </ul>
+                @if (HiddenIssueCount(product) > 0)
+                {
+                  <a class="issue-more" href="izdelki/@product.ProductId">… še @HiddenIssueCount(product) na kartici izdelka</a>
+                }
+              </td>
+              <td>@(product.LastDetectedUtc?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      <PimPager Skip="Skip" Take="Take" Total="PageData.TotalCount" Label="Strani izdelkov z napakami" SkipChanged="GoToSkipAsync" />
+    }
+  </PimState>
+</section>
+
+<h2 class="section-title">Katera zahteva ustavi največ izdelkov</h2>
+<section class="ui-card data-card" aria-label="Pravila z največjim vplivom">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Rules.Count == 0)"
+            EmptyText="Odprtih zahtev ni." LoadingText="Nalaganje pravil …">
+    @if (Overview is not null)
+    {
+      <PimTable Caption="Zahteve, razvrščene po številu prizadetih izdelkov" AriaLabel="Tabela pravil z največjim vplivom" Columns="RuleColumns">
+        <Rows>
+          @foreach (var rule in Overview.Rules)
+          {
+            <tr>
+              <td><a href="@RuleHref(rule)"><span class="code-value">@rule.FieldCode</span></a></td>
+              <td>@rule.ProfileCode</td>
+              <td><span class="issue-severity @(rule.Severity == "WARNING" ? "warn" : "bad")">@SeverityLabel(rule.Severity)</span></td>
+              <td>
+                @if (rule.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
+                @if (rule.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
+                @if (!rule.BlocksErp && !rule.BlocksWeb) { <span class="muted">ne blokira</span> }
+              </td>
+              <td class="numeric">@rule.ProductCount.ToString("N0")</td>
+              <td class="numeric">@rule.IssueCount.ToString("N0")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<h2 class="section-title">Pri katerem dobavitelju se napake kopičijo</h2>
+<section class="ui-card data-card" aria-label="Vpliv po dobavitelju">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Suppliers.Count == 0)"
+            EmptyText="Razčlenitve po dobavitelju ni." LoadingText="Nalaganje razčlenitve …">
+    @if (Overview is not null)
+    {
+      <PimTable Caption="Dobavitelji, razvrščeni po številu prizadetih izdelkov" AriaLabel="Tabela vpliva po dobavitelju" Columns="SupplierColumns">
+        <Rows>
+          @foreach (var supplier in Overview.Suppliers)
+          {
+            <tr>
+              <td>@supplier.Supplier</td>
+              <td class="numeric">@supplier.ProductCount.ToString("N0")</td>
+              <td class="numeric">@supplier.WithIssuesCount.ToString("N0")</td>
+              <td class="numeric">@supplier.IssueCount.ToString("N0")</td>
+              <td><PimBar Percent="@Share(supplier)" Label="@($"Delež izdelkov z napako pri {supplier.Supplier}")" Threshold="101" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<p class="muted source-note">
+  Vir: <span class="code-value">intranet.GetQualityIssues</span> in <span class="code-value">intranet.GetQualityOverview</span>
+  (migracija 102). Stran je bralna: napake ni mogoče zapreti ročno, ker status izhaja iz podatka, ne iz oznake.
+</p>
+
+@code {
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "profil")] public string? QueryProfile { get; set; }
+  [SupplyParameterFromQuery(Name = "resnost")] public string? QuerySeverity { get; set; }
+  [SupplyParameterFromQuery(Name = "blokira")] public string? QueryBlocks { get; set; }
+  [SupplyParameterFromQuery(Name = "polje")] public string? QueryField { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
+
+  QualityIssuePage? PageData;
+  QualityOverview? Overview;
+  bool Loading = true;
+  string? Error;
+  int? OrganizationId;
+  string SearchDraft = "";
+  string ProfileDraft = "";
+  string SeverityDraft = "";
+  string BlocksDraft = "";
+  string FieldDraft = "";
+
+  const int Take = 25;
+  const int VisibleIssuesPerProduct = 4;
+
+  int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Napake validacije")];
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Izdelek"), new("Napak", Numeric: true), new("Opozoril", Numeric: true),
+    new("Blokira"), new("Popolnost"), new("Kaj manjka"), new("Zadnji pojav"),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> RuleColumns =
+  [
+    new("Polje"), new("Profil"), new("Resnost"), new("Blokira"),
+    new("Izdelkov", Numeric: true), new("Težav", Numeric: true),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> SupplierColumns =
+  [
+    new("Dobavitelj"), new("Izdelkov", Numeric: true), new("Z napako", Numeric: true),
+    new("Težav", Numeric: true), new("Delež z napako"),
+  ];
+
+  sealed record FilterChip(string Label, string RemoveHref);
+
+  IReadOnlyList<string> ProfileCodes => Overview is null ? []
+    : Overview.Rules.Select(rule => rule.ProfileCode).Distinct().OrderBy(code => code).ToList();
+
+  IReadOnlyList<string> FieldCodes => Overview is null ? []
+    : Overview.Rules.Select(rule => rule.FieldCode).Distinct().OrderBy(code => code).ToList();
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchDraft = QuerySearch ?? "";
+    ProfileDraft = QueryProfile ?? "";
+    SeverityDraft = QuerySeverity ?? "";
+    BlocksDraft = QueryBlocks ?? "";
+    FieldDraft = QueryField ?? "";
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+
+      if (OrganizationId != organization.OrganizationId)
+      {
+        OrganizationId = organization.OrganizationId;
+        Overview = await Quality.GetOverviewAsync(organization.OrganizationId);
+      }
+
+      PageData = await Quality.GetIssuesAsync(new QualityIssueFilter(
+        organization.OrganizationId, Skip, Take, QuerySearch, QueryProfile,
+        QuerySeverity, QueryBlocks, QueryField));
+    }
+    catch
+    {
+      Error = "Odprtih težav trenutno ni mogoče naložiti.";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{PageData?.TotalCount ?? 0:N0} izdelkov z odprto težavo";
+
+  IEnumerable<QualityIssueRow> IssuesOf(long productId) => PageData is null ? []
+    : PageData.Issues.Where(issue => issue.ProductId == productId).Take(VisibleIssuesPerProduct);
+
+  long HiddenIssueCount(QualityProductRow product)
+  {
+    if (PageData is null) return 0;
+    var shown = PageData.Issues.Count(issue => issue.ProductId == product.ProductId);
+    return Math.Max(0, shown - VisibleIssuesPerProduct);
+  }
+
+  static decimal Share(QualitySupplierImpact supplier) =>
+    supplier.ProductCount == 0 ? 0 : Math.Round(supplier.WithIssuesCount * 100m / supplier.ProductCount, 1);
+
+  List<FilterChip> ActiveChips
+  {
+    get
+    {
+      var chips = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
+      if (!string.IsNullOrWhiteSpace(QueryProfile)) chips.Add(new($"Profil: {QueryProfile}", Href(profile: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySeverity)) chips.Add(new($"Resnost: {SeverityLabel(QuerySeverity)}", Href(severity: "")));
+      if (!string.IsNullOrWhiteSpace(QueryBlocks)) chips.Add(new($"Blokira: {BlocksLabel(QueryBlocks)}", Href(blocks: "")));
+      if (!string.IsNullOrWhiteSpace(QueryField)) chips.Add(new($"Polje: {QueryField}", Href(field: "")));
+      return chips;
+    }
+  }
+
+  // Filtri in stran zivijo v naslovu: povezavo je mogoce deliti, gumb Nazaj dela, KPI kartica
+  // pa lahko pelje naravnost na svoj filtriran seznam. "" pomeni odstrani, null ohrani.
+  string Href(string? search = null, string? profile = null, string? severity = null,
+    string? blocks = null, string? field = null, int? page = null)
+  {
+    var parameters = new List<string>();
+    Add("isci", Resolve(search, QuerySearch));
+    Add("profil", Resolve(profile, QueryProfile));
+    Add("resnost", Resolve(severity, QuerySeverity));
+    Add("blokira", Resolve(blocks, QueryBlocks));
+    Add("polje", Resolve(field, QueryField));
+    var resolvedPage = page ?? (search is null && profile is null && severity is null
+      && blocks is null && field is null ? QueryPage : null);
+    if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
+
+    return parameters.Count == 0 ? "kakovost/napake" : "kakovost/napake?" + string.Join('&', parameters);
+
+    void Add(string name, string? value)
+    {
+      if (!string.IsNullOrWhiteSpace(value)) parameters.Add(name + "=" + Uri.EscapeDataString(value));
+    }
+
+    static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
+  }
+
+  string RuleHref(QualityRuleImpact rule) =>
+    $"kakovost/napake?profil={Uri.EscapeDataString(rule.ProfileCode)}&polje={Uri.EscapeDataString(rule.FieldCode)}";
+
+  Task ApplyFiltersAsync()
+  {
+    Navigation.NavigateTo(Href(
+      search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
+      blocks: BlocksDraft, field: FieldDraft, page: 1));
+    return Task.CompletedTask;
+  }
+
+  Task SearchKeyAsync(KeyboardEventArgs args) =>
+    args.Key == "Enter" ? ApplyFiltersAsync() : Task.CompletedTask;
+
+  Task GoToSkipAsync(int skip)
+  {
+    Navigation.NavigateTo(Href(page: skip / Take + 1));
+    return Task.CompletedTask;
+  }
+
+  static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+
+  static string SeverityLabel(string? severity) => severity switch
+  {
+    "ERROR" => "Napaka",
+    "WARNING" => "Opozorilo",
+    _ => severity ?? "—",
+  };
+
+  static string BlocksLabel(string? blocks) => blocks switch
+  {
+    "ERP" => "ERP",
+    "WEB" => "splet",
+    "NONE" => "ne blokira",
+    _ => blocks ?? "—",
+  };
 }

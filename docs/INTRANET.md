@@ -131,7 +131,9 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | zapuščinska pot; seznam je od migracije 101 na `GetProductList` |
 | `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |
 | `ProductWorkbenchService.GetProductOriginAsync` | `intranet.GetProductOrigin` (zadnjih največ 100 ujemajočih se vhodnih zapisov po dejanski izluščeni identiteti) | `/izdelki/{id}` |
-| `GetValidationIssuesAsync` | `intranet.GetValidationIssues` (3 nabori: težave, profili, najpogostejše) | `/napake-validacije`, `/nadzorna-plosca` |
+| `QualityReadService.GetIssuesAsync` | `intranet.GetQualityIssues` (3 nabori: izdelki na strani, njihove težave, `TotalCount`); stranicenje je po **izdelku**, filtri profil, resnost, obseg blokade, polje in iskanje | `/kakovost/napake`, `/napake-validacije` |
+| `QualityReadService.GetOverviewAsync` | `intranet.GetQualityOverview` (3 nabori: skupno stanje, zahteve z največjim vplivom, razčlenitev po dobavitelju) | `/kakovost/napake` |
+| `GetValidationIssuesAsync` | `intranet.GetValidationIssues` (3 nabori: težave, profili, najpogostejše) | `/nadzorna-plosca` |
 | `GetQuarantineAsync` | `intranet.GetRawQuarantine` | `/karantena` |
 | `GetPipelineRunsAsync` | `intranet.GetPipelineRuns` | `/teki-obdelave`, `/nadzorna-plosca` |
 | `GetStocksAsync` | `intranet.GetStocks` | `/zaloge` |

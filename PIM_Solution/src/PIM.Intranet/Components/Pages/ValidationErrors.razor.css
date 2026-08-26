@@ -1,23 +1,101 @@
-/* Izoliran slog strani /napake-validacije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
-.toolbar { flex-wrap: wrap; row-gap: 10px; }
-.result-count { font-variant-numeric: tabular-nums; }
-.kpi strong { font-variant-numeric: tabular-nums; }
+/* Napake validacije. Skupne oblike so v app.css; tu je samo tisto, kar je lastno tej strani.
+   Izolirani slog ne sega v otroške komponente — te nosijo svoj slog same. */
 
-/* Kartici pregleda sta gosti, a berljivi; na ozkih zaslonih se tabeli pomikata, namesto da bi se stiskali. */
+.toolbar { flex-wrap: wrap; }
+
+.search-input { flex: 1 1 14rem; min-width: 11rem; }
+
+.filter-select { max-width: 13rem; }
+
+.result-count { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
+
+.active-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1.25rem; }
+
+.filter-chip {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  display: inline-flex;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+  text-decoration: none;
+}
+
+.filter-chip:hover { background: var(--pim-surface-hover); }
+
+.filter-chip.clear-all { border-style: dashed; color: var(--pim-text-muted); }
+
+.chip-remove { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove::before,
+.chip-remove::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 50%;
+  width: 100%;
+}
+.chip-remove::before { transform: rotate(45deg); }
+.chip-remove::after { transform: rotate(-45deg); }
+
+.kpi-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin-bottom: 1.25rem; }
+
+.section-title { font-size: 1rem; font-weight: 600; margin: 1.75rem 0 .75rem; }
+
+.data-card { margin-bottom: 1.25rem; padding: 0; }
+
+.product-name { display: block; font-weight: 600; }
+
+.product-meta { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+
+.product-meta span + span { margin-left: .35rem; }
+
+.code-value { font-family: var(--pim-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .75rem; }
+
+.issue-cell { max-width: 34rem; }
+
+.issue-list { display: flex; flex-direction: column; gap: .25rem; list-style: none; margin: 0; padding: 0; }
+
+.issue-list li { align-items: baseline; display: flex; flex-wrap: wrap; gap: .4rem; font-size: .78rem; }
+
+.issue-field { font-weight: 600; }
+
+.issue-profile { color: var(--pim-text-muted); font-size: .72rem; }
+
+.issue-severity { border-radius: 999px; font-size: .68rem; font-weight: 700; padding: .1rem .4rem; text-transform: uppercase; }
+.issue-severity.bad { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.issue-severity.warn { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+
+.issue-message { color: var(--pim-text-muted); }
+
+.issue-more { display: inline-block; font-size: .75rem; margin-top: .35rem; }
+
+.muted { color: var(--pim-text-muted); }
+
+.source-note { font-size: .78rem; margin: 1rem 0 2rem; }
+
+.data-table { min-width: 68rem; }
+
 .table-scroll { overflow-x: auto; }
-.progress-value { color: var(--pim-text-soft); font-variant-numeric: tabular-nums; min-width: 46px; }
-.issue-count { font-variant-numeric: tabular-nums; text-align: right; }
-.no-value { color: #8593a8; }
 
-/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
-.page-tab:focus-visible,
 .search-input:focus-visible,
 .filter-select:focus-visible,
+.filter-button:focus-visible,
+.filter-chip:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
-.kpi a:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.issue-more:focus-visible {
+  outline: 2px solid var(--pim-accent);
+  outline-offset: 2px;
+}
 
 @media (max-width: 900px) {
-  .quality-grid { grid-template-columns: 1fr; }
-  .data-table { min-width: 560px; }
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .filter-select { max-width: none; }
+  .result-count { margin-left: 0; }
+  .issue-cell { max-width: none; }
 }

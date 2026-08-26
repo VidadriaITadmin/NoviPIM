@@ -24,77 +24,92 @@ var quarantine = File.ReadAllText(quarantineRazorPath);
 var quarantineCss = File.ReadAllText(quarantineCssPath);
 
 // ---------------------------------------------------------------------------
-// A. /napake-validacije
+// A. /napake-validacije in /kakovost/napake
 // ---------------------------------------------------------------------------
+//
+// Obseg te strani je bil razsirjen z odlocitvijo uporabnika: stran je prej brala vse odprte
+// tezave podjetja naenkrat (3.004.688 aktivnih vrstic v val.ProductIssue) in filtrirala v
+// pomnilniku. Zdaj stranici po izdelku nad intranet.GetQualityIssues in pokaze resnost,
+// obseg blokade in manjkajoce polje. Pogodba je zato posodobljena skupaj s stranjo; varovalke
+// so ostale in so ostrejse.
 
-// A1. Naslov in kontekstni zavihki (referenca: Kakovost + trije zavihki).
-Assert(issues.Contains("@attribute [Authorize]", StringComparison.Ordinal), "Stran kakovosti mora ostati zaščitena z [Authorize].");
-Assert(Regex.IsMatch(issues, "<h1>Kakovost</h1>"), "Stran mora ohraniti vidni naslov <h1>Kakovost</h1>.");
-var issuesTabs = Regex.Match(issues, "<nav[^>]*class=\"page-tabs\"[^>]*>");
-Assert(issuesTabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
-Assert(Regex.IsMatch(issuesTabs.Value, "aria-label=\"[^\"]+\""), "Zavihki kakovosti morajo imeti aria-label.");
-Assert(Regex.Matches(issues, "class=\"page-tab(?!s)").Count == 3,
-  "Kakovost ima natanko tri zavihke referenčne slike; dodatnih zavihkov brez podatkovnega vira ni dovoljeno ustvariti.");
-var issuesTabButtons = Regex.Matches(issues, "<button[^>]*class=\"page-tab");
-Assert(issuesTabButtons.Count == 2, "Zavihka Pregled kakovosti in Napake morata biti gumba, ker preklapljata stanje strani.");
-foreach (Match button in Regex.Matches(issues, "<button type=\"button\" class=\"page-tab[^>]*"))
-  Assert(button.Value.Contains("aria-current=", StringComparison.Ordinal),
-    "Zavihek mora izbrano stanje sporočiti z aria-current: " + button.Value);
-Assert(Regex.IsMatch(issues, "<a class=\"page-tab\" href=\"karantena\">"), "Zavihek Karantena mora ostati povezava na /karantena.");
+Assert(issues.Contains("@attribute [Authorize]", StringComparison.Ordinal), "Stran kakovosti mora ostati zascitena z [Authorize].");
+Assert(Regex.IsMatch(issues, "<PimPage Title=\"Napake validacije\""), "Stran mora uporabiti skupno glavo PimPage.");
+Assert(issues.Contains("Crumbs=\"Crumbs\"", StringComparison.Ordinal), "Podstran mora imeti drobtine nazaj na kakovost.");
 
-// A2. KPI povzetek je poimenovan sklop s štirimi obstoječimi karticami.
-var kpiGrid = Regex.Match(issues, "<section[^>]*class=\"kpi-grid\"[^>]*>");
+// A1. KPI povzetek izhaja iz podatkov in vodi na svoj filtriran seznam.
+var kpiGrid = Regex.Match(issues, "<section class=\"kpi-grid\"[^>]*>");
 Assert(kpiGrid.Success, "KPI povzetek mora biti poimenovan sklop <section class=\"kpi-grid\">.");
 var kpiLabel = Regex.Match(kpiGrid.Value, "aria-labelledby=\"([^\"]+)\"");
 Assert(kpiLabel.Success, "KPI sklop mora imeti aria-labelledby.");
 AssertHeading(issues, kpiLabel.Groups[1].Value, "KPI sklopa");
-Assert(Regex.Matches(issues, "class=\"ui-card kpi\"").Count == 4,
-  "Povzetek mora ohraniti natanko štiri obstoječe KPI kartice brez izmišljenih trendov.");
+Assert(Regex.Matches(issues, "<PimStat ").Count == 5, "Povzetek ima pet kartic: odprto, prizadeti izdelki in trije obsegi blokade.");
+foreach (var target in new[] { "kakovost/napake?blokira=ERP", "kakovost/napake?blokira=WEB", "kakovost/napake?blokira=NONE" })
+  Assert(issues.Contains(target, StringComparison.Ordinal), "Stevilka mora voditi na filtriran seznam, ki jo pojasni: " + target);
 
-// A3. Iskalni sklop je poimenovan, vsaka kontrola pa ima svojo oznako.
-var issuesToolbar = Regex.Match(issues, "<section[^>]*class=\"ui-card toolbar\"[^>]*>");
+// A2. Iskalni sklop je poimenovan, vsaka kontrola pa ima svojo oznako.
+var issuesToolbar = Regex.Match(issues, "<section class=\"ui-card toolbar\"[^>]*>");
 Assert(issuesToolbar.Success, "Orodna vrstica napak mora ostati <section class=\"ui-card toolbar\">.");
-Assert(issuesToolbar.Value.Contains("role=\"search\"", StringComparison.Ordinal), "Orodna vrstica napak mora biti razglašena kot role=\"search\".");
+Assert(issuesToolbar.Value.Contains("role=\"search\"", StringComparison.Ordinal), "Orodna vrstica napak mora biti razglasena kot role=\"search\".");
 var issuesToolbarLabel = Regex.Match(issuesToolbar.Value, "aria-labelledby=\"([^\"]+)\"");
 Assert(issuesToolbarLabel.Success, "Iskalni sklop napak mora imeti aria-labelledby.");
 AssertHeading(issues, issuesToolbarLabel.Groups[1].Value, "iskalnega sklopa napak");
-foreach (var control in new[] { "issue-search", "issue-profile" })
+foreach (var control in new[] { "issue-search", "issue-profile", "issue-severity", "issue-blocks", "issue-field" })
+{
   Assert(Regex.IsMatch(issues, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
+  Assert(Regex.IsMatch(issues, "id=\"" + control + "\""), "Kontrola " + control + " ne obstaja.");
+}
 Assert(Regex.IsMatch(issues, "<input id=\"issue-search\"[^>]*type=\"search\""), "Iskalno polje napak mora biti type=\"search\".");
 
-// A4. Živa stanja: število rezultatov, nalaganje in napaka.
-AssertLiveStates(issues, "Kakovost");
+// A3. Vrednosti profila in polja izhajajo iz meritve vpliva, ne iz vpisanega seznama.
+foreach (var source in new[] { "Overview.Rules.Select(rule => rule.ProfileCode)", "Overview.Rules.Select(rule => rule.FieldCode)" })
+  Assert(issues.Contains(source, StringComparison.Ordinal), "Spustni seznam mora izhajati iz podatkov: " + source + ".");
 
-// A5. Kakovost po profilih se izriše z merilnikom, ki sporoča vrednost (referenca: vrstice z odstotkom).
-var meters = Regex.Matches(issues, "<span class=\"progress-track\"[^>]*>");
-Assert(meters.Count >= 1, "Stolpec povprečne popolnosti mora ohraniti merilnik.");
-foreach (Match meter in meters)
-  foreach (var attribute in new[] { "role=\"progressbar\"", "aria-valuenow=", "aria-valuemin=\"0\"", "aria-valuemax=\"100\"", "aria-label=" })
-    Assert(meter.Value.Contains(attribute, StringComparison.Ordinal), "Merilnik popolnosti nima " + attribute + ": " + meter.Value);
-Assert(Regex.IsMatch(issues, "aria-valuenow=\"@Number\\("), "aria-valuenow mora biti izpisan neodvisno od območnih nastavitev.");
-Assert(issues.Contains("AverageCompleteness is null", StringComparison.Ordinal),
-  "Manjkajoča povprečna popolnost se ne sme prikazati kot merilnik z vrednostjo nič.");
-foreach (Match icon in Regex.Matches(issues, "<i [^>]*>"))
-  Assert(icon.Value.Contains("aria-hidden=\"true\"", StringComparison.Ordinal), "Okrasni element mora imeti aria-hidden: " + icon.Value);
+// A4. Ziva stanja gredo skozi skupni PimState, rezultat pa se sporoci na glas.
+var count = Regex.Match(issues, "<span class=\"result-count\"[^>]*>");
+Assert(count.Success, "Orodna vrstica mora ohraniti izpis stevila rezultatov.");
+foreach (var attribute in new[] { "role=\"status\"", "aria-live=\"polite\"" })
+  Assert(count.Value.Contains(attribute, StringComparison.Ordinal), "Izpis rezultatov nima " + attribute + ": " + count.Value);
+Assert(Regex.Matches(issues, "<PimState ").Count == 3, "Vsaka od treh tabel mora imeti svoje stanje nalaganja, napake in praznega nabora.");
+foreach (var parameter in new[] { "Loading=", "Error=", "Empty=", "EmptyText=", "LoadingText=" })
+  Assert(issues.Contains(parameter, StringComparison.Ordinal), "PimState mora dobiti " + parameter + ".");
 
-// A6. Vse tri tabele ostanejo berljive in se na ozkih zaslonih vodoravno pomikajo.
-AssertTables(issues, 3, 13, "Kakovost");
-Assert(Regex.Matches(issues, "class=\"empty-state\"").Count == 3,
-  "Vsaka od treh tabel kakovosti mora imeti pošteno prazno stanje.");
+// A5. Resnost in obseg blokade sta locena in nista razlocljiva samo po barvi.
+Assert(issues.Contains("SeverityLabel(issue.Severity)", StringComparison.Ordinal), "Vrstica tezave mora povedati resnost z besedo.");
+Assert(Regex.Matches(issues, "<PimChip Text=\"ERP\" Tone=\"bad\" Prefix=\"Blokira: \"").Count >= 1, "Blokada ERP mora biti oznacena z govorno predpono.");
+Assert(Regex.Matches(issues, "<PimChip Text=\"Splet\" Tone=\"warn\" Prefix=\"Blokira: \"").Count >= 1, "Blokada spleta mora biti oznacena z govorno predpono.");
+Assert(Regex.IsMatch(issues, "<PimBar Percent=\"product\\.Completeness\"[^>]*Label="), "Popolnost mora uporabiti skupni merilnik z oznako.");
 
-// A7. Tipkovnični fokus in izoliran slog.
-AssertCss(issuesCss, new[] { ".page-tab", ".search-input", ".filter-select", ".table-scroll", ".data-table a", ".kpi a" }, "kakovosti");
+// A6. Stranicenje je streznisko in izhaja iz istega stetja kot seznam.
+Assert(Regex.IsMatch(issues, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"PageData\\.TotalCount\""),
+  "Seznam mora biti strezniski; odjemalsko filtriranje treh milijonov vrstic ni dovoljeno.");
+foreach (var parameter in new[] { "isci", "profil", "resnost", "blokira", "polje", "stran" })
+  Assert(Regex.IsMatch(issues, "SupplyParameterFromQuery\\(Name = \"" + parameter + "\"\\)"),
+    "Filter " + parameter + " mora ziveti v naslovu URL.");
+Assert(!issues.Contains("x.ProfileCode==Profile", StringComparison.Ordinal), "Odjemalskega filtriranja ne sme biti vec.");
 
-// A8. Varovalka: stran ostane vezana na obstoječi resnični poizvedbi.
-AssertDataCalls(issues, new[] { "GetCurrentOrganizationAsync", "GetValidationIssuesAsync" }, "Kakovost");
+// A7. Tabele so skupni gradnik z napisom in oznako.
+Assert(Regex.Matches(issues, "<PimTable Caption=\"").Count == 3, "Stran ima tri tabele: izdelki, pravila in dobavitelji.");
+foreach (Match table in Regex.Matches(issues, "<PimTable [^>]*>"))
+  Assert(table.Value.Contains("AriaLabel=", StringComparison.Ordinal), "Tabela nima aria-label: " + table.Value);
+Assert(!issues.Contains("<table class=\"data-table\">", StringComparison.Ordinal), "Tabele se ne pisejo znova; uporabi PimTable.");
 
-// A9. Varovalka: obstoječe odjemalsko filtriranje ostane nedotaknjeno.
-foreach (var behavior in new[] { "x.ProfileCode==Profile", "StringComparison.OrdinalIgnoreCase" })
-  Assert(issues.Contains(behavior, StringComparison.Ordinal), "Obstoječe filtriranje napak je spremenjeno; manjka: " + behavior);
-var allowedHandlers = new[] { "ShowOverview", "ShowIssues" };
+// A8. Tipkovnicni fokus in izoliran slog.
+AssertCss(issuesCss, new[] { ".search-input", ".filter-select", ".filter-button", ".filter-chip", ".table-scroll", ".data-table a" }, "kakovosti");
+
+// A9. Varovalka: stran ostane vezana na dejanski bralni proceduri in ne pise.
+Assert(issues.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal), "Stran mora prevzeti aktivno organizacijo.");
+foreach (var call in new[] { "Quality.GetIssuesAsync", "Quality.GetOverviewAsync" })
+  Assert(issues.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
+foreach (Match call in Regex.Matches(issues, "(?<![A-Za-z0-9_])(?:Data|Quality)\\.(\\w+)"))
+  Assert(new[] { "GetCurrentOrganizationAsync", "GetIssuesAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
+    "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
+Assert(issues.Contains("intranet.GetQualityIssues", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
+var allowedHandlers = new[] { "ApplyFiltersAsync" };
 foreach (Match handler in Regex.Matches(issues, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
-Assert(!Regex.IsMatch(issues, "@onclick='"), "Zavihki morajo klicati imenovane metode, ne vgrajenih lambd.");
+foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "ApproveBatchAsync", "ResolveIssue", "MarkResolved", "Označi kot rešeno" })
+  Assert(!issues.Contains(writeSurface, StringComparison.Ordinal), "Napake ni mogoce zapreti rocno: " + writeSurface + ".");
 
 // ---------------------------------------------------------------------------
 // B. /karantena
@@ -144,11 +159,13 @@ foreach (var (name, markup) in new[] { ("Kakovost", issues), ("Karantena", quara
   foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"checkbox\"", "type=\"file\"", "<dialog", "contenteditable" })
     Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), name + ": predstavitveni sklop ne sme uvesti " + forbidden + ".");
 
-  // C2. Nobene vsebine iz referenčne slike brez podatkovnega vira.
-  // Resnost je bila kot neutemeljena že odstranjena, trendi pa niso pošteni brez zgodovinskega read modela.
-  foreach (var fabricated in new[] { "Resnost", "Opozorilo", ">Napaka</span>", "Skupna popolnost", "Izdelki brez napak",
-             "ta teden", "Trend", "Osveži podatke", "Stolpci", "Filtri", "Počisti vse", "Vrstic na stran", "Izbranih",
-             "Polje", "Akcije", "Izvozi", "Uvozi", "Privzeti" })
+  // C2. Nobene vsebine brez podatkovnega vira.
+  //
+  // Resnost in obseg blokade sta od migracije 102 resnicna stolpca (val.FieldRequirement.Severity,
+  // val.ValidationProfile.BlocksErp/BlocksWeb), zato nista vec na tem seznamu. Trendi ostanejo
+  // prepovedani, ker zgodovinskega read modela ni.
+  foreach (var fabricated in new[] { "ta teden", "Trend", "Osveži podatke", "Stolpci",
+             "Vrstic na stran", "Izbranih", "Akcije", "Uvozi", "Privzeti" })
     Assert(!markup.Contains(fabricated, StringComparison.Ordinal), name + " ne sme prikazovati izmišljene vsebine: " + fabricated + ".");
 
   // C3. Povezave ostanejo base-relativne, sicer pod virtualno potjo /PIM padejo na koren strežnika.
