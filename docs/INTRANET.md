@@ -136,7 +136,9 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetValidationIssuesAsync` | `intranet.GetValidationIssues` (3 nabori: težave, profili, najpogostejše) | `/nadzorna-plosca` |
 | `GetQuarantineAsync` | `intranet.GetRawQuarantine` | `/karantena` |
 | `GetPipelineRunsAsync` | `intranet.GetPipelineRuns` | `/teki-obdelave`, `/nadzorna-plosca` |
-| `GetStocksAsync` | `intranet.GetStocks` | `/zaloge` |
+| `StockReadService.GetPositionsAsync` | `intranet.GetStockPositions` (2 nabora: pozicije + `TotalCount`); filtri vir, razpoložljivost, ujemanje z artiklom, svežina posnetka in iskanje | `/zaloge` |
+| `StockReadService.GetOverviewAsync` | `intranet.GetStockOverview` (3 nabori: skupno stanje, svežina po viru, zavrnjene pozicije po razlogu) | `/zaloge` |
+| `GetStocksAsync` | `intranet.GetStocks` | zapuščinska pot; seznam je od migracije 103 na `GetStockPositions` |
 | `GetCustomersAsync` | `intranet.GetCustomers` | `/stranke` |
 | `GetCustomerDetailAsync` | `intranet.GetCustomerDetail` | `/stranke/{id}` |
 | `GetCustomerTypesAsync` | `intranet.GetCustomerTypes` | `/stranke/{id}`, `/pravila-popustov` |

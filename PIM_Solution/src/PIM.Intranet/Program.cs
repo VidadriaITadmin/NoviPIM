@@ -34,6 +34,7 @@ builder.Services.AddScoped<CatalogReadService>();
 builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
+builder.Services.AddScoped<StockReadService>();
 builder.Services.AddScoped<GovernanceReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();

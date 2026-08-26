@@ -1,41 +1,360 @@
 @page "/zaloge"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject IntranetDataService Data
+@inject StockReadService Stock
+@inject NavigationManager Navigation
+
 <PageTitle>Zaloga</PageTitle>
-<div class="page-header"><div><h1>Zaloga</h1><p>Trenutno stanje zalog in dobavljivosti izdelkov.</p></div></div>
-<nav class="page-tabs" aria-label="Zaloge: pogledi zalog"><span class="page-tab active" aria-current="page">Pregled zalog</span></nav>
-<p class="visually-hidden">Zaloge: Količina, Prihodna količina, Pričakovana dobava, Vir, Čas posnetka, Ujemanje in Svežina so prikazani, kadar jih vrne obstoječi read model.</p>
-@if (Rows is not null) {
-  <section class="kpi-grid" aria-label="Povzetek stanja zaloge">
-    <article class="ui-card kpi"><span>Na zalogi</span><strong>@(Rows.Count(x => x.Quantity > 0).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.Quantity > 0))</span></article>
-    <article class="ui-card kpi"><span>Brez zaloge</span><strong>@(Rows.Count(x => x.Quantity <= 0).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.Quantity <= 0))</span></article>
-    <article class="ui-card kpi"><span>Zastareli podatki</span><strong>@(Rows.Count(IsStale).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(IsStale))</span></article>
-    <article class="ui-card kpi"><span>Neujemajoči zapisi</span><strong>@(Rows.Count(x => x.ProductId is null).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x => x.ProductId is null))</span></article>
-  </section> }
+
+<PimPage Title="Zaloga" Subtitle="Kaj je na zalogi, kdaj je bil posnetek narejen in katera pozicija nima svojega artikla. Zaloga je samo za branje — PIM je nikoli ne piše nazaj v ERP." />
+
+<section class="kpi-grid" aria-labelledby="stock-kpi-title">
+  <h2 id="stock-kpi-title" class="visually-hidden">Povzetek stanja zaloge</h2>
+  <PimStat Label="Pozicij skupaj" Value="@Number(Overview?.Totals.PositionCount)" Note="@FreshnessNote()" />
+  <PimStat Label="Na zalogi" Value="@Number(Overview?.Totals.InStockCount)" Note="pozicij s količino nad nič" Href="zaloge?razpolozljivost=IN_STOCK" />
+  <PimStat Label="Brez zaloge" Value="@Number(Overview?.Totals.OutOfStockCount)" Note="pozicij s količino nič ali manj" Href="zaloge?razpolozljivost=OUT_OF_STOCK" />
+  <PimStat Label="Prihaja" Value="@Number(Overview?.Totals.IncomingCount)" Note="pozicij z napovedano dobavo" Href="zaloge?razpolozljivost=INCOMING" />
+  <PimStat Label="Brez artikla" Value="@Number(Overview?.Totals.UnmatchedCount)" Note="pozicij, ki jih ni mogoče pripeti na artikel" Href="zaloge?ujemanje=UNMATCHED" />
+</section>
+
 <section class="ui-card toolbar" role="search" aria-labelledby="stocks-filter-title">
   <h2 id="stocks-filter-title" class="visually-hidden">Filtriranje zaloge</h2>
-  <label class="visually-hidden" for="stock-search">Išči zalogo</label><input id="stock-search" type="search" class="search-input" placeholder="Poišči po artiklu, EAN ali viru …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="stock-availability">Razpoložljivost</label><select id="stock-availability" class="filter-select" @bind="Availability"><option value="">Vsa razpoložljivost</option><option value="yes">Na zalogi</option><option value="no">Brez zaloge</option></select>
+  <label class="visually-hidden" for="stock-search">Poišči po artiklu ali EAN</label>
+  <input id="stock-search" type="search" class="search-input" placeholder="Poišči po artiklu ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+  <label class="visually-hidden" for="stock-source">Vir</label>
+  <select id="stock-source" class="filter-select" @bind="SourceDraft">
+    <option value="">Vsi viri</option>
+    @foreach (var source in SourceCodes)
+    {
+      <option value="@source">@source</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="stock-availability">Razpoložljivost</label>
+  <select id="stock-availability" class="filter-select" @bind="AvailabilityDraft">
+    <option value="">Vsa razpoložljivost</option>
+    <option value="IN_STOCK">Na zalogi</option>
+    <option value="OUT_OF_STOCK">Brez zaloge</option>
+    <option value="INCOMING">Prihaja</option>
+  </select>
+
+  <label class="visually-hidden" for="stock-matched">Ujemanje z artiklom</label>
+  <select id="stock-matched" class="filter-select" @bind="MatchedDraft">
+    <option value="">Ujemanje: vseeno</option>
+    <option value="MATCHED">Pripeto na artikel</option>
+    <option value="UNMATCHED">Brez artikla</option>
+  </select>
+
+  <label class="visually-hidden" for="stock-age">Svežina posnetka</label>
+  <select id="stock-age" class="filter-select" @bind="AgeDraft">
+    <option value="">Svežina: vseeno</option>
+    <option value="24">Posnetek do 24 ur</option>
+    <option value="72">Posnetek do 3 dni</option>
+    <option value="168">Posnetek do 7 dni</option>
+  </select>
+
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
-<section class="ui-card data-card" aria-label="Seznam zalogovnih zapisov">
-@if (Loading) { <div class="loading-state" role="status">Nalaganje zalog …</div> }
-else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
-else if (Filtered.Count == 0) { <div class="empty-state">Ni zalogovnih zapisov za izbrane filtre.</div> }
-else {
-  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela zaloge">
-    <table class="data-table"><caption>Trenutno stanje zalog in dobavljivosti izdelkov</caption><thead><tr><th scope="col">Artikel / EAN</th><th scope="col" class="numeric">Količina</th><th scope="col" class="numeric">Prihod</th><th scope="col">Vir</th><th scope="col">Posodobljeno</th><th scope="col">Status</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td>@if (row.ProductId is not null) { <a href="izdelki/@row.ProductId">@Label(row)</a> } else { @Label(row) }</td><td class="numeric">@row.Quantity.ToString("N2")</td><td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td><td>@row.SourceCode</td><td>@row.SnapshotUtc.ToLocalTime().ToString("g")@if (IsStale(row)) { <span class="stale-flag">zastarelo</span> }</td><td><span class="status-chip @(row.Quantity > 0 ? "good" : "bad")"><span class="visually-hidden">Status: </span>@(row.Quantity > 0 ? "Na zalogi" : "Brez zaloge")</span></td></tr> }</tbody></table>
-  </div> }
+
+@if (ActiveChips.Count > 0)
+{
+  <section class="ui-card active-filters" aria-label="Aktivni filtri">
+    @foreach (var chip in ActiveChips)
+    {
+      <a class="filter-chip" href="@chip.RemoveHref" aria-label="Odstrani filter @chip.Label">@chip.Label<span class="chip-remove" aria-hidden="true"></span></a>
+    }
+    <a class="filter-chip clear-all" href="zaloge">Počisti vse</a>
+  </section>
+}
+
+<section class="ui-card data-card" aria-label="Zalogovne pozicije">
+  <PimState Loading="Loading" Error="@Error" Empty="@(PageData is not null && PageData.Rows.Count == 0)"
+            EmptyText="Za izbrane filtre ni zalogovnih pozicij." LoadingText="Nalaganje zaloge …">
+    @if (PageData is not null)
+    {
+      <PimTable Caption="Zaloge in dobavljivost v aktivni organizaciji" AriaLabel="Tabela zalogovnih pozicij" Columns="Columns">
+        <Rows>
+          @foreach (var row in PageData.Rows)
+          {
+            <tr>
+              <td>
+                @if (row.MatchedProductId is { } productId)
+                {
+                  <a class="product-name" href="izdelki/@productId">@(row.ProductName ?? row.ProductItemId ?? row.NormalizedItemId ?? "—")</a>
+                }
+                else
+                {
+                  <span class="product-name">@(row.NormalizedItemId ?? row.Ean ?? "—")</span>
+                }
+                <span class="product-meta">
+                  @if (row.NormalizedItemId is not null) { <span class="code-value">@row.NormalizedItemId</span> }
+                  @if (row.Ean is not null) { <span>· EAN @row.Ean</span> }
+                  @if (row.MatchedProductId is null) { <span class="gap-flag">brez artikla</span> }
+                </span>
+              </td>
+              <td class="numeric">@row.Quantity.ToString("N2")</td>
+              <td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td>
+              <td>@(row.AvailabilityDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+              <td class="numeric">@Limits(row)</td>
+              <td>
+                <span class="source-code">@row.SourceCode</span>
+                @if (row.ProviderKind is not null) { <span class="product-meta">@row.ProviderKind</span> }
+              </td>
+              <td>
+                @row.SnapshotUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                <span class="product-meta">@FreshnessLabel(row.FreshnessMinutes)</span>
+              </td>
+              <td><PimChip Text="@(row.Quantity > 0 ? "Na zalogi" : "Brez zaloge")" Tone="@(row.Quantity > 0 ? "good" : "bad")" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      <PimPager Skip="Skip" Take="Take" Total="PageData.TotalCount" Label="Strani zalogovnih pozicij" SkipChanged="GoToSkipAsync" />
+    }
+  </PimState>
 </section>
+
+<h2 class="section-title">Svežina po viru</h2>
+<section class="ui-card data-card" aria-label="Svežina zaloge po viru">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Sources.Count == 0)"
+            EmptyText="Aktivnih zalogovnih virov ni." LoadingText="Nalaganje virov …">
+    @if (Overview is not null)
+    {
+      <PimTable Caption="Zalogovni viri in starost njihovega zadnjega posnetka" AriaLabel="Tabela zalogovnih virov" Columns="SourceColumns">
+        <Rows>
+          @foreach (var source in Overview.Sources)
+          {
+            <tr>
+              <td><a href="@($"zaloge?vir={Uri.EscapeDataString(source.SourceCode)}")"><span class="source-code">@source.SourceCode</span></a></td>
+              <td>@(source.ProviderKind ?? "—")</td>
+              <td class="numeric">@source.PositionCount.ToString("N0")</td>
+              <td class="numeric">@source.MatchedCount.ToString("N0")</td>
+              <td class="numeric">@source.InStockCount.ToString("N0")</td>
+              <td>@(source.SnapshotUtc?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+              <td>
+                @if (source.FreshnessMinutes is { } minutes)
+                {
+                  <PimChip Text="@FreshnessLabel(minutes)" Tone="@(minutes > StaleAfterMinutes ? "warn" : "good")" Prefix="Svežina: " />
+                }
+                else
+                {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<h2 class="section-title">Izpeljane težave</h2>
+<section class="ui-card data-card" aria-label="Izpeljane težave zaloge">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Issues.Count == 0)"
+            EmptyText="Zavrnjenih zalogovnih pozicij ni." LoadingText="Nalaganje težav …">
+    @if (Overview is not null)
+    {
+      <PimTable Caption="Zavrnjene zalogovne pozicije po razlogu" AriaLabel="Tabela izpeljanih težav zaloge" Columns="IssueColumns">
+        <Rows>
+          @foreach (var issue in Overview.Issues)
+          {
+            <tr>
+              <td><span class="code-value">@issue.ReasonCode</span></td>
+              <td class="numeric">@issue.PositionCount.ToString("N0")</td>
+              <td>@issue.FirstSeenUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+              <td>@issue.LastSeenUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+              <td class="detail-cell">@(issue.SampleDetail ?? "—")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<p class="muted source-note">
+  Vir: <span class="code-value">intranet.GetStockPositions</span> in <span class="code-value">intranet.GetStockOverview</span>
+  (migracija 103). Izpeljane težave nimajo gumba »reši« — izginejo, ko izgine vzrok.
+</p>
+
 @code {
-  IReadOnlyList<PIM.Intranet.Services.StockRow>? Rows; bool Loading = true; string? Error; string Search = ""; string Availability = "";
-  IReadOnlyList<PIM.Intranet.Services.StockRow> Filtered => Rows?.Where(x => (Availability == "" || (Availability == "yes" ? x.Quantity > 0 : x.Quantity <= 0)) && (Search == "" || (x.ItemId?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || (x.Ean?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || x.SourceCode.Contains(Search, StringComparison.OrdinalIgnoreCase))).ToList() ?? [];
-  static bool IsStale(PIM.Intranet.Services.StockRow x) => DateTime.UtcNow - x.SnapshotUtc > TimeSpan.FromMinutes(x.FreshnessMinutes);
-  protected override async Task OnInitializedAsync() { try { var org = await Data.GetCurrentOrganizationAsync(); if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; } Rows = await Data.GetStocksAsync(org.OrganizationId); } catch { Error = "Zalog trenutno ni mogoče naložiti."; } finally { Loading = false; } }
-  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Filtered.Count} rezultatov";
-  // Delež je izpeljan iz istega nabora vrstic; brez vrstic ni imenovalca in se zato ne prikaže.
-  string Share(int count) => Rows is null || Rows.Count == 0 ? "—" : $"{((decimal)count * 100 / Rows.Count).ToString("0.#")} % zapisov";
-  static string Label(PIM.Intranet.Services.StockRow row) => row.ItemId ?? row.Ean ?? row.MatchKey;
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "vir")] public string? QuerySource { get; set; }
+  [SupplyParameterFromQuery(Name = "razpolozljivost")] public string? QueryAvailability { get; set; }
+  [SupplyParameterFromQuery(Name = "ujemanje")] public string? QueryMatched { get; set; }
+  [SupplyParameterFromQuery(Name = "starost")] public int? QueryAge { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
+
+  StockPositionPage? PageData;
+  StockOverview? Overview;
+  bool Loading = true;
+  string? Error;
+  int? OrganizationId;
+  string SearchDraft = "";
+  string SourceDraft = "";
+  string AvailabilityDraft = "";
+  string MatchedDraft = "";
+  string AgeDraft = "";
+
+  const int Take = 50;
+  const int StaleAfterMinutes = 24 * 60;
+
+  int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Artikel"), new("Količina", Numeric: true), new("Prihodna količina", Numeric: true),
+    new("Pričakovana dobava"), new("Min / max", Numeric: true), new("Vir"),
+    new("Čas posnetka"), new("Stanje"),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> SourceColumns =
+  [
+    new("Vir"), new("Vrsta"), new("Pozicij", Numeric: true), new("Pripetih", Numeric: true),
+    new("Na zalogi", Numeric: true), new("Zadnji posnetek"), new("Svežina"),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> IssueColumns =
+  [
+    new("Razlog"), new("Pozicij", Numeric: true), new("Prvič"), new("Nazadnje"), new("Primer"),
+  ];
+
+  sealed record FilterChip(string Label, string RemoveHref);
+
+  IReadOnlyList<string> SourceCodes => Overview is null ? []
+    : Overview.Sources.Select(source => source.SourceCode).Distinct().OrderBy(code => code).ToList();
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchDraft = QuerySearch ?? "";
+    SourceDraft = QuerySource ?? "";
+    AvailabilityDraft = QueryAvailability ?? "";
+    MatchedDraft = QueryMatched ?? "";
+    AgeDraft = QueryAge?.ToString() ?? "";
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+
+      if (OrganizationId != organization.OrganizationId)
+      {
+        OrganizationId = organization.OrganizationId;
+        Overview = await Stock.GetOverviewAsync(organization.OrganizationId);
+      }
+
+      PageData = await Stock.GetPositionsAsync(new StockPositionFilter(
+        organization.OrganizationId, Skip, Take, QuerySearch, QuerySource,
+        QueryAvailability, QueryMatched, QueryAge));
+    }
+    catch
+    {
+      Error = "Zaloge trenutno ni mogoče naložiti.";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{PageData?.TotalCount ?? 0:N0} pozicij";
+
+  string FreshnessNote()
+  {
+    if (Overview?.Totals.NewestSnapshotUtc is not { } newest) return "posnetka še ni";
+    var minutes = (int)Math.Max(0, (DateTime.UtcNow - newest).TotalMinutes);
+    return $"najnovejši posnetek {FreshnessLabel(minutes)}";
+  }
+
+  static string FreshnessLabel(int minutes) => minutes switch
+  {
+    < 60 => $"pred {minutes} min",
+    < 60 * 48 => $"pred {minutes / 60} h",
+    _ => $"pred {minutes / (60 * 24)} dnevi",
+  };
+
+  static string Limits(StockPositionRow row) =>
+    row.MinimumStock is null && row.MaximumStock is null
+      ? "—"
+      : $"{row.MinimumStock?.ToString("N0") ?? "—"} / {row.MaximumStock?.ToString("N0") ?? "—"}";
+
+  List<FilterChip> ActiveChips
+  {
+    get
+    {
+      var chips = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySource)) chips.Add(new($"Vir: {QuerySource}", Href(source: "")));
+      if (!string.IsNullOrWhiteSpace(QueryAvailability)) chips.Add(new($"Razpoložljivost: {AvailabilityLabel(QueryAvailability)}", Href(availability: "")));
+      if (!string.IsNullOrWhiteSpace(QueryMatched)) chips.Add(new($"Ujemanje: {MatchedLabel(QueryMatched)}", Href(matched: "")));
+      if (QueryAge is > 0) chips.Add(new($"Svežina: do {QueryAge} h", Href(age: "")));
+      return chips;
+    }
+  }
+
+  // Filtri in stran zivijo v naslovu; "" pomeni odstrani, null ohrani obstojecega.
+  string Href(string? search = null, string? source = null, string? availability = null,
+    string? matched = null, string? age = null, int? page = null)
+  {
+    var parameters = new List<string>();
+    Add("isci", Resolve(search, QuerySearch));
+    Add("vir", Resolve(source, QuerySource));
+    Add("razpolozljivost", Resolve(availability, QueryAvailability));
+    Add("ujemanje", Resolve(matched, QueryMatched));
+    Add("starost", Resolve(age, QueryAge?.ToString()));
+    var resolvedPage = page ?? (search is null && source is null && availability is null
+      && matched is null && age is null ? QueryPage : null);
+    if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
+
+    return parameters.Count == 0 ? "zaloge" : "zaloge?" + string.Join('&', parameters);
+
+    void Add(string name, string? value)
+    {
+      if (!string.IsNullOrWhiteSpace(value)) parameters.Add(name + "=" + Uri.EscapeDataString(value));
+    }
+
+    static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
+  }
+
+  Task ApplyFiltersAsync()
+  {
+    Navigation.NavigateTo(Href(
+      search: SearchDraft.Trim(), source: SourceDraft, availability: AvailabilityDraft,
+      matched: MatchedDraft, age: AgeDraft, page: 1));
+    return Task.CompletedTask;
+  }
+
+  Task SearchKeyAsync(KeyboardEventArgs args) =>
+    args.Key == "Enter" ? ApplyFiltersAsync() : Task.CompletedTask;
+
+  Task GoToSkipAsync(int skip)
+  {
+    Navigation.NavigateTo(Href(page: skip / Take + 1));
+    return Task.CompletedTask;
+  }
+
+  static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+
+  static string AvailabilityLabel(string? value) => value switch
+  {
+    "IN_STOCK" => "na zalogi",
+    "OUT_OF_STOCK" => "brez zaloge",
+    "INCOMING" => "prihaja",
+    _ => value ?? "—",
+  };
+
+  static string MatchedLabel(string? value) => value switch
+  {
+    "MATCHED" => "pripeto na artikel",
+    "UNMATCHED" => "brez artikla",
+    _ => value ?? "—",
+  };
 }

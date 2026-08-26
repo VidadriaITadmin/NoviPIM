@@ -76,7 +76,10 @@ foreach (var pageName in new[] { "Dashboard.razor", "Products.razor", "ProductDe
 var dashboardPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Dashboard.razor"));
 Assert(dashboardPage.Contains("else if (Metrics is null)", StringComparison.Ordinal), "Nadzorna plošča ne sme hkrati prikazati napake in nalaganja.");
 var stocksPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Stocks.razor"));
-Assert(stocksPage.Contains("<caption>", StringComparison.Ordinal), "Tabela zalog mora imeti programsko določen napis.");
+// Napis tabele je od prenove zaloge parameter skupnega gradnika PimTable; zahteva ostaja
+// ista (tabela mora imeti napis), le zapisana je tam, kjer tabela zdaj nastane.
+Assert(stocksPage.Contains("<caption>", StringComparison.Ordinal) || stocksPage.Contains("<PimTable Caption=\"", StringComparison.Ordinal),
+  "Tabela zalog mora imeti programsko določen napis.");
 var quarantinePage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "RawQuarantine.razor"));
 Assert(quarantinePage.Contains("<h1>Karantena</h1>", StringComparison.Ordinal), "Vidni naslov karantene mora biti dosleden.");
 foreach (var pageName in new[] { "Customers.razor", "CustomerDetail.razor", "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor", "DiscountRules.razor" })
