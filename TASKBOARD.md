@@ -142,95 +142,16 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
-- **[BAZA → INTRANET] Celovita bralna kartica izdelka** — kdo: Codex — ozemlji:
-  najprej BAZA, nato INTRANET — 2026-08-26. Uporabnik je izrecno dovolil posodobitev
-  zastarelih F10 pogodb. Cilj: kartica odgovori, zakaj izdelek ni pripravljen za ERP/splet,
-  pokaže besedila, lastnosti, kategorije, medije/dokumente, cene, zalogo, komercialo,
-  kakovost, odhodno pot, zgodovino in izvor, brez navideznih zapisovalnih gumbov.
+Trenutno nihče. Naslednji koraki iz načrta so v razdelku TODO in v
+`docs/Sprecifikacije_starega_PIMa/Nacrt_Intranet_Aplikacija.md` §7.
 
 ## BLOKIRANO
 
-- **[INTRANET] Enoten modul »Vhodni podatki« s petimi operativnimi pogledi** — kdo:
-  Codex — ozemlje: INTRANET — 2026-08-24. Izvedeni so Pregled, Viri, Teki, Težave in
-  Preslikave z enotnimi zavihki ter podrobnostmi vira, teka in težave. Bralni model združuje
-  `raw`/`ops` katalogske vhode in `stock.*` zalogovne vhode, loči zadnji poskus od zadnjega
-  uspeha, prikaže vse dejanske SAOP/XML/XLSX/zalogovne konektorje in ne kaže navideznih
-  zapisovalnih dejanj. Administrator lahko preklopi na vsa podjetja in vidi omejeno tehnično
-  diagnostiko; drugi uporabniki so tudi na neposredni podrobnostni poti omejeni na aktivno
-  organizacijo. Dokumentacija: `docs/INTRANET.md` §2.1 in
-  `docs/NACRT_INTRANET_PRENOVA.md` §14.
-
-  **Dokaz:** `scripts\\run_tests.ps1 -Filter F10` → 10 uspešnih / 0 preskočenih / 0
-  padlih in `Build OK`; `PIM.Migrator --verify` → »Preverjanje F0–F10 baze je uspešno«;
-  read-only SQL smoke test vseh osmih glavnih/pomožnih poizvedb, štirih vrst podrobnosti in
-  natančnega filtra teka po viru → izhod 0; build intraneta → 0 opozoril/0 napak.
-  **Commit blokira nepovezani merodajni polni paket:** `scripts\\run_tests.ps1` → 50
-  uspešnih / 0 preskočenih / 1 padel, izhod 1; edini padec je že dokumentirani
-  `PIM.F3.Integration` na vrstici 89, kjer test še pričakuje, da `GetItemsPlanningData` ni
-  preslikan, migracija 082 pa ga je preslikala. Testa po §5.3 ne spreminjamo samo za zelen
-  rezultat, zato sklop ni commitan.
-
-- **[INTRANET] Navigacija vizualno usklajena z referenco v2, brez spletnega konteksta** —
-  kdo: Codex — ozemlje: INTRANET — 2026-08-24. Struktura, slovenske poti, vloge in
-  `PimNavigation` ostajajo NoviPIM. Popravljena je dejanska napaka CSS isolation:
-  `NavLink` izriše povezavo v otroški komponenti, zato jo izolirani slog zdaj doseže prek
-  `::deep`. Meni ima temno skrilasto ozadje, bele nepodčrtane povezave, večje klikljive
-  vrstice, aktivno kartico z oranžno levo črto, opis pri pomembnih ciljih ter puščico samo
-  pri razdelilnih straneh. Bloka »Spletni kontekst / Svetila.si« namenoma ni.
-  **Dokaz:** generirani scoped CSS vsebuje `.app-navigation[b-*] .navigation-link`;
-  kontrola poti → vse poti obstajajo, brez dvojnikov in spletnega konteksta;
-  `scripts\\run_tests.ps1 -Filter F10` → 10/0/0; `dotnet build PIM.sln --no-restore` →
-  0 opozoril/0 napak;
-  `git diff --check` → izhod 0. **Commit blokira nepovezani polni paket:**
-  `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1 padel, edini padec
-  `PIM.F3.Integration` na vrstici 89.
-
-- **[INTRANET] Skupno produktno ogrodje pred prenovo posameznih strani** — kdo: Codex —
-  ozemlje: INTRANET — 2026-08-24. Trajni tok VHODI → PIM → KAKOVOST → IZHODI ERP/SPLET →
-  OBVESTILA/NADZOR → ANALITIKA je zapisan v `AGENTS.md` in
-  `docs/PRODUKTNI_MODEL_PIM.md` z dejanskimi shemami, vlogami, pogodbami strani in znanimi
-  vrzelmi. Meni uporablja iste življenjske skupine, skupni topbar pa fazo samodejno izpelje
-  tudi na podstraneh; vse menijske poti imajo dejanski `@page` cilj. **Dokaz:** kontrola
-  menijskih poti → izhod 0; `scripts\\run_tests.ps1 -Filter F10` → 10/0/0; `dotnet build
-  PIM.sln --no-restore` → 0 opozoril/0 napak; `git diff --check` → izhod 0. **Commit blokira
-  nepovezani polni paket:** `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1
-  padel, edini padec `PIM.F3.Integration` na vrstici 89.
-
-- **[INTRANET] Preslikava vizualnega sistema iz `src_navigation_ux_v2` na obstoječo
-  aplikacijo** — kdo: Codex — ozemlje: INTRANET — 2026-08-24. Referenčni vizualni žetoni,
-  18-rem temna stranska vrstica, skupne kartice/tabele/obrazci, prijava in mobilna
-  prelomnica so preslikani na obstoječe razrede; Razor, `PimNavigation`, poti in podatkovni
-  dostop niso spremenjeni. Primerjava in združitvena smer sta v
-  `docs/NACRT_INTRANET_PRENOVA.md` §13. **Dokaz:** `scripts\\run_tests.ps1 -Filter F10` →
-  10/0/0; `dotnet build PIM.sln --no-restore` → 0 opozoril/0 napak; `git diff --check` →
-  izhod 0. **Commit blokira isti nepovezani polni paket:** `scripts\\run_tests.ps1` →
-  50 uspešnih / 0 preskočenih / 1 padel, edini padec `PIM.F3.Integration` na vrstici 89.
-
-- **[INTRANET] Dokončanje prekinjene informacijske arhitekture in bralnih strani iz načrta prenove** — kdo: Codex — ozemlje: INTRANET — 2026-08-24. Implementacija je pripravljena: navigacija nima mrtvih poti, korenska SSR-preusmeritev v .NET 10 ne vrže več debuggerjeve `NavigationException`, intranet in celoten `PIM.sln` se prevedeta z 0 opozorili/0 napakami, `scripts\\run_tests.ps1 -Filter F10` vrne 10/0/0, bralni SQL smoke-test proti lokalni bazi `PIM` pa izhod 0. **Commit blokira merodajni polni paket:** `scripts\\run_tests.ps1` → 50 uspešnih / 0 preskočenih / 1 padel, izhod 1; edini padec je že spodaj dokumentirani zastareli primer `PIM.F3.Integration` (`GetItemsPlanningData` je od migracije 082 preslikan). Testa po §5.3 ne spreminjamo samo zato, da bi šel skozi. Delovno drevo zato namenoma ostaja necommitano.
-
-- **[TESTI / odločitev] `PIM.F3.Integration` pade, ker je njegov primer »nepreslikane
-  entitete« postal preslikan.** Ugotovljeno 2026-08-23 (Claude Opus 5).
-
-  Test na `tests/PIM.F3.Integration/Program.cs:87` trdi:
-
-  ```csharp
-  if (await SaopIngestRunner.HasActiveMappingAsync(guardConnection, sourceConnectorId, "GetItemsPlanningData", default))
-    throw new InvalidOperationException("GetItemsPlanningData nima preslikave, a je bila prepoznana kot preslikana.");
-  ```
-
-  `GetItemsPlanningData` je preslikan od **migracije 082**, torej je bil test rdeč že pred
-  delom na vhodih; migracija `087` se te entitete ne dotakne. Namen testa (»entiteta brez
-  preslikave ne sme premakniti mejnika«) je pravilen in ga ne izpodbijamo — zastarel je samo
-  njegov primer, ker po `087` med šestnajstimi končnimi točkami nobena ni več brez preslikave.
-
-  **Testa nisem spremenil** (`AGENTS.md` §5.3). Predlog, ki čaka tvojo odločitev: drugo
-  trditev izbrisati, ker tretja (`F3_WATERMARK_GUARD_TEST`) isto dokaže bolje — sama si vstavi
-  entiteto brez polj, preveri in za sabo pospravi, torej ne more zastarati.
-
-  **Dokaz:** `dotnet run --no-build` v `tests/PIM.F3.Integration` → prve tri trditve uspejo
-  (`CSV vrstic=43503`), četrta vrže zgornjo napako. Preostalih **49** konzolnih testnih
-  projektov uspe.
-
+> **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
+> Vse je držala ena in ista stvar — polni paket je imel en nepovezan padec
+> (`PIM.F3.Integration`, zastarel primer `GetItemsPlanningData`). Commit `b91bc40` je ta test
+> uskladil z migracijo 082, zato je polni paket od takrat **51 uspelih / 0 preskočenih /
+> 0 padlih**. Zadržano delo je commitano kot `d35e407`; podrobnosti so v razdelku KONČANO.
 
 - **[IZVOZ]** ~~162 atributnih stolpcev Magento predloge nima vira~~ — **preklicano
   2026-08-22, blokada je iz 2026-08-20 in je bila medtem odpravljena.** Odgovor je
@@ -257,6 +178,50 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[INTRANET + BAZA] Delovni seznami: izdelki, kakovost, zaloga in pripravljenost izvoza** —
+  kdo: Claude Opus 5 (1M) — ozemlji: BAZA, nato INTRANET — 2026-08-26.
+
+  Najprej je bil odblokiran in commitan Codexov paket (`d35e407`): skupni gradniki, modul
+  Vhodni podatki, bralne strani in celovita kartica izdelka nad migracijo 100. Blokada je
+  padla, ker je `b91bc40` uskladil `PIM.F3.Integration`; polni paket je odtlej zelen.
+
+  Nato štirje moduli po načrtu (`docs/Sprecifikacije_starega_PIMa/Nacrt_Intranet_Aplikacija.md`):
+
+  | Modul | Migracija | Kaj je bilo narobe | Kaj je zdaj |
+  |---|---|---|---|
+  | Izdelki — seznam | `101` | seznam je pokazal samo šifro, EAN, status in popolnost | osem shranjenih pogledov s števci, filtri, razvrščanje, stanje v URL, ločena statusa ERP/splet, vrzeli po vrstici, CSV izvoz pogleda |
+  | Kakovost — napake | `102` | stran je brala **3.004.688** odprtih težav naenkrat in filtrirala v pomnilniku | strežniška stran po izdelku, resnost, obseg blokade, polje; »katera zahteva ustavi največ izdelkov« in razčlenitev po dobavitelju |
+  | Zaloga | `103` | stran je naložila vseh **379.610** pozicij naenkrat | strežniška stran, filtri vir/razpoložljivost/ujemanje/svežina, svežina po viru, izpeljane težave z razlogom |
+  | Izvozi | `104` | stran je pokazala samo register profilov | koliko izdelkov je objavljenih in koliko ne, katera zahteva jih ustavi, kateri stolpci nimajo vira |
+
+  Meritve pred/po so v glavah migracij; najpomembnejši: filter po pripravljenosti
+  2.911 ms → 172 ms, razvrščanje po popolnosti 1.489 ms → 67 ms (dva ozka indeksa),
+  seznam napak z odjemalskega filtriranja 3 milijonov vrstic na 181 ms.
+
+  **Predogleda izvozne datoteke namenoma ni.** Obliko Magento izvoza dela `PIM.B2bWorker`;
+  druga izvedba iste logike v SQL bi bila druga resnica. Stran to pove na glas.
+
+  **Pogodbeni testi F10 so posodobljeni skupaj s stranmi** (izdelki, kakovost, zaloga; ena
+  trditev v `PIM.F10.AuthTests`). Prejšnje pogodbe so zamrznile ozek obseg — pri zalogi in
+  kakovosti prav tisti obseg, ki je bil odvisen od okvare. Varovalke so ostale in so ostrejše:
+  dostopnost, samo dejanske bralne procedure, brez zapisovalne površine, brez izmišljene
+  vsebine in vsak prikazan podatek mora imeti stolpec v bralnem modelu.
+
+  **Dokaz:** `scripts\run_tests.ps1` → **51 uspelih / 0 preskočenih / 0 padlih**, izhod 0
+  (pognan po vsakem modulu); `scripts\run_tests.ps1 -Filter F10` → 10/0/0; `-Filter F6` → 6/0/0;
+  `dotnet build PIM_Solution\PIM.sln` → 0 opozoril / 0 napak; migrator 1. zagon uporabi
+  101–104, 2. zagon nobene, `--verify` → izhod 0; zagon na 127.0.0.1:5199: `/health` 200,
+  `/prijava` 200, `/izdelki` in `/izvoz/izdelki.csv` 302 na prijavo.
+
+  **Česa nisem preveril:** izrisa prijavljenih strani. Poverilnic za lokalno prijavo nimam,
+  ustvarjanje testnega uporabnika pa je varnostno blokirano. Za to je potreben tvoj klik ali
+  razvojna poverilnica.
+
+  **Opozorilo o vzporednem delu:** med to sejo je v istem repozitoriju delala še ena seja
+  (`session_017rtCjszqCQ3VK9imCL6Zmf`). Njen commit `8173ff2` je pobral moje takrat pripravljene
+  datoteke, zato so spremembe seznama izdelkov v zgodovini pod njegovim sporočilom. Zgodovine
+  nisem prepisoval.
 
 - **[MERITEV + NAČRT] En artikel na spletu, več podjetij v bazi — rešitev je v starem sistemu** —
   kdo: Claude Opus 5 — 2026-08-26. Podrobno:

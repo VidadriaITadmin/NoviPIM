@@ -1,6 +1,39 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-24
+Posodobljeno: 2026-08-26
+
+## Intranet — stanje 2026-08-26
+
+**Zadržani intranetni paket je commitan.** Pet vnosov je bilo v `TASKBOARD.md` pod BLOKIRANO
+samo zato, ker je imel polni paket en nepovezan padec (`PIM.F3.Integration`, zastarel primer
+`GetItemsPlanningData`). Commit `b91bc40` je test uskladil z migracijo 082; polni paket je od
+takrat **51 uspelih / 0 preskočenih / 0 padlih**, zadržano delo pa je v `d35e407`.
+
+**Štirje delovni seznami so prenovljeni po načrtu** (`docs/Sprecifikacije_starega_PIMa/`):
+
+| Stran | Migracija | Kaj je bilo narobe |
+|---|---|---|
+| `/izdelki` | 101 | seznam je pokazal samo šifro, EAN, status in popolnost |
+| `/kakovost/napake` | 102 | brala je **3.004.688** odprtih težav naenkrat in filtrirala v pomnilniku |
+| `/zaloge` | 103 | naložila je vseh **379.610** pozicij naenkrat |
+| `/izvozi` | 104 | pokazala je samo register profilov, ne pa kaj v izvoz ne gre in zakaj |
+
+Vse štiri strani so strežniško paginirane, filtri živijo v naslovu URL, vsaka številka vodi na
+svoj filtriran seznam, nobena nima gumba brez varne zapisovalne poti. Meritve pred/po so v
+glavah migracij; največji premik: filter po pripravljenosti 2.911 ms → 172 ms in razvrščanje
+po popolnosti 1.489 ms → 67 ms (dva nova ozka indeksa nad `canon.Product`).
+
+**Predogleda izvozne datoteke ni in ne bo v SQL-u.** Obliko Magento izvoza dela
+`PIM.B2bWorker`; druga izvedba iste logike bi bila druga resnica. Stran zato pove tisto, kar je
+točno: kaj je objavljeno, kaj ni in katera zahteva to ustavi.
+
+**Izmerjeno stanje podjetja 2 ob prenovi:** 111.068 kanoničnih izdelkov, 43.503 objavljenih,
+67.565 neobjavljenih; najpogostejši razlogi so manjkajoča kategorija (54.766), slika (54.758)
+in spletni naziv (52.649). 22 od 213 stolpcev profila `MAGENTO_PRODUCTS` nima kanoničnega vira.
+
+**Kar ostaja nepreverjeno:** izris prijavljenih strani. Zagon na `127.0.0.1:5199` vrne
+`/health` 200, `/prijava` 200 ter 302 na prijavo za `/izdelki` in `/izvoz/izdelki.csv`, prijava
+sama pa brez poverilnic ni bila izvedena.
 
 ## Intranet prenova — stanje 2026-08-24
 
