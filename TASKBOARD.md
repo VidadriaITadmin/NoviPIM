@@ -254,6 +254,34 @@ _(prazno)_
 
 ## KONČANO
 
+- **[MERITEV] ERP validacijska pravila so napačno sestavljena — trije dokazljivi očitki** —
+  kdo: Claude Opus 5 — 2026-08-26. Podrobno:
+  [`docs/ANALIZA_ERP_PRAVIL.md`](docs/ANALIZA_ERP_PRAVIL.md).
+
+  Uporabnik 2026-08-26: »povej, kaj je razlika med temi ERP pravili, ker se mi zdi, da je
+  napačno sestavljeno.« Je.
+
+  1. **`ERP_L1_EU` in `ERP_L1_THIRD` sta dobesedno ista profila** — oba zahtevata natanko
+     `CountryOfOrigin`, `CustomsTariff`, `GrossWeight`, `NetWeight`. Zato imata skupaj s
+     `COMMERCIAL_L2` **identično** število veljavnih izdelkov pri vseh štirih podjetjih
+     (5.500 / 43.466 / 12.315 / 35.757). Trije profili, tri iste številke: delitev na EU in
+     tretje države obstaja v imenu, ne v pravilu.
+  2. **`ERP_L1_SLO` nima nič slovenskega** — vseh sedem zahtev je splošnih, stopnje DDV pa
+     ne zahteva, čeprav jo `ERP_L1` zahteva. Zahteva pa `Product.IsActive`, kar je zastavica
+     in ne podatek: »ne« je prav tako izpolnjena vrednost.
+  3. **Vstopnica za objavo je profil, ki po lastni nastavitvi ne blokira.** `val.Promote` ima
+     privzeti `@ValidationProfileCode = N'ERP_L1'`; ta ima `Scope = LEGACY` in
+     `BlocksErp = 0`, `BlocksWeb = 0`. Ob tem podvaja `SHARED_CORE` (EAN, ItemID).
+
+  **Predlagana oblika** je jedro plus dodatki, kot pravi uporabnik sam (»ERP validacija je level
+  ena, ta se deli na SLO in EU/tretje«): `SHARED_CORE` → `ERP_L1` (skupno za vse trge, z DDV) →
+  dodatki `SLO` / `EU` / `THIRD`, kjer vsak pove **samo razliko**.
+
+  **Ničesar nisem spremenil.** Preklop vstopnice iz `ERP_L1` v `ERP_L1_SLO` objavi 67.000
+  izdelkov več (89.129 → 156.131); to je poslovna odločitev in ne sme nastati kot stranski
+  učinek čiščenja. Tri vprašanja, ki to odklenejo, so na koncu analize.
+
+
 - **[BAZA] Stranke: profil za splet in delovni seznam odločitev** — kdo: Claude Opus 5 —
   2026-08-24, migraciji `097` in `098`.
 
