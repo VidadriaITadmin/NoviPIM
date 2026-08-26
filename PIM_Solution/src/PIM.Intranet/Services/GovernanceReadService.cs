@@ -1,3 +1,6 @@
+using System.Data;
+using Microsoft.Data.SqlClient;
+
 namespace PIM.Intranet.Services;
 
 public sealed record ExportProfileRow(int ExportProfileId, string ProfileCode, string Name, string ChannelCode, string EntityType, bool IsActive, long ColumnCount, long MappedColumnCount, DateTime UpdatedUtc);
@@ -10,6 +13,16 @@ public sealed record FieldMappingRow(long FieldMappingId, string SourceCode, str
 public sealed record ErrorLogRow(long ErrorLogId, DateTime OccurredUtc, string Layer, string Severity, string? ErrorCode, string Message, Guid? RunId);
 public sealed record AlertRow(long AlertId, string Pipeline, string AlertKind, string Severity, string Title, string PayloadSummaryRedacted, long OccurrenceCount, DateTime FirstSeenUtc, DateTime LastSeenUtc, DateTime? AcknowledgedUtc, string? AcknowledgedBy, DateTime? ResolvedUtc, string? ResolvedBy);
 public sealed record RoleRow(int RoleId, string RoleCode, string Name, long UserCount);
+public sealed record ExportReadinessTotals(
+  long CanonicalCount, long ActiveCount, long PublishedCount, long NotPublishedCount,
+  long WebFlaggedCount, long PublishedWithOpenIssues);
+public sealed record ExportBlockingReason(
+  string FieldCode, string ProfileCode, bool BlocksErp, bool BlocksWeb, string Severity, long ProductCount);
+public sealed record ExportProfileCoverage(
+  string ProfileCode, string Name, string ChannelCode, string EntityType, bool IsActive,
+  long ColumnCount, long MappedColumnCount, long UnmappedColumnCount, long RequiredUnmappedCount);
+public sealed record ExportReadiness(
+  ExportReadinessTotals Totals, IReadOnlyList<ExportBlockingReason> Reasons, IReadOnlyList<ExportProfileCoverage> Profiles);
 
 /// <summary>
 /// Bralni model registrov, ki dolocajo obnasanje sistema: izvozni profili, validacijski profili,
@@ -17,7 +30,7 @@ public sealed record RoleRow(int RoleId, string RoleCode, string Name, long User
 ///
 /// Te strani so bistvo obljube »nov kanal ni koda«: kar je tu vrstica, ni v programu.
 /// </summary>
-public sealed class GovernanceReadService(PimDb database)
+public sealed class GovernanceReadService(PimDb database, IConfiguration configuration)
 {
   // ─── Izvozni profili ──────────────────────────────────────────────────────
   public Task<IReadOnlyList<ExportProfileRow>> GetExportProfilesAsync(CancellationToken cancellationToken = default) =>
@@ -224,4 +237,53 @@ public sealed class GovernanceReadService(PimDb database)
       reader => new RoleRow(PimDb.Int32(reader, "RoleId"), PimDb.TextOrEmpty(reader, "RoleCode"),
         PimDb.TextOrEmpty(reader, "Name"), PimDb.Int64(reader, "UserCount")),
       cancellationToken: cancellationToken);
+
+  // ─── Pripravljenost izvoza ────────────────────────────────────────────────
+  //
+  // Tri nabore vrne ena procedura (migracija 104), zato tu ni PimDb, ampak neposreden klic.
+  // Predogleda datoteke namenoma ni: obliko Magento izvoza dela PIM.B2bWorker in druga
+  // izvedba iste logike bi bila druga resnica.
+  public async Task<ExportReadiness> GetExportReadinessAsync(
+    int organizationId, CancellationToken cancellationToken = default)
+  {
+    var connectionString = ConnectionStringResolver.Resolve(configuration)
+      ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetExportReadiness", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 60,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var totals = new ExportReadinessTotals(0, 0, 0, 0, 0, 0);
+    if (await reader.ReadAsync(cancellationToken))
+      totals = new(
+        PimDb.Int64(reader, "CanonicalCount"), PimDb.Int64(reader, "ActiveCount"),
+        PimDb.Int64(reader, "PublishedCount"), PimDb.Int64(reader, "NotPublishedCount"),
+        PimDb.Int64(reader, "WebFlaggedCount"), PimDb.Int64(reader, "PublishedWithOpenIssues"));
+
+    var reasons = new List<ExportBlockingReason>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        reasons.Add(new(
+          PimDb.TextOrEmpty(reader, "FieldCode"), PimDb.TextOrEmpty(reader, "ProfileCode"),
+          PimDb.Bool(reader, "BlocksErp"), PimDb.Bool(reader, "BlocksWeb"),
+          PimDb.TextOrEmpty(reader, "Severity"), PimDb.Int64(reader, "ProductCount")));
+
+    var profiles = new List<ExportProfileCoverage>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        profiles.Add(new(
+          PimDb.TextOrEmpty(reader, "ProfileCode"), PimDb.TextOrEmpty(reader, "Name"),
+          PimDb.TextOrEmpty(reader, "ChannelCode"), PimDb.TextOrEmpty(reader, "EntityType"),
+          PimDb.Bool(reader, "IsActive"), PimDb.Int64(reader, "ColumnCount"),
+          PimDb.Int64(reader, "MappedColumnCount"), PimDb.Int64(reader, "UnmappedColumnCount"),
+          PimDb.Int64(reader, "RequiredUnmappedCount")));
+
+    return new(totals, reasons, profiles);
+  }
 }

@@ -151,6 +151,7 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `CatalogReadService` | `canon.ProductMedia`, `ProductPrice`, partnerji na izdelku, atributi, kategorije, skladišča, kanali in jeziki | `/mediji`, `/cene`, `/partnerji`, `/nastavitve/*` |
 | `PipelineReadService` | enotni vhodi čez `map.*`, `raw.Inbox`, `ops.PipelineRun`/napake in `stock.SyncRun`/zavrnjene pozicije | `/zajem/*`, deli `/kakovost` |
 | `GovernanceReadService` | izvozni in validacijski profili, slovar, preslikave, napake, alarmi in vloge | `/izvozi/*`, `/pravila/*`, `/sistem/*` |
+| `GovernanceReadService.GetExportReadinessAsync` | `intranet.GetExportReadiness` (3 nabori: objavljeno/neobjavljeno, zahteve ki ustavijo objavo, pokritost stolpcev po profilu) | `/izvozi` |
 
 ### 3.2 Zapisovalne poti
 

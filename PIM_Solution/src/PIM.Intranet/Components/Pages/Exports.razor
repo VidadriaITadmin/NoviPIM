@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.GovernanceReadService Governance
 @inject AuthenticationStateProvider Authentication
+@inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Izvozi</PageTitle>
 <PimPage Title="Izvozi" Subtitle="Izvozni profili določajo obliko datotek. Odhodna pošta pa sledi spremembam, ki jih PIM pošilja nazaj v SAOP." />
@@ -16,6 +17,71 @@
   </section>
 }
 
+<section class="kpi-grid" aria-labelledby="export-kpi-title">
+  <h2 id="export-kpi-title" class="visually-hidden">Kaj gre v izvoz in kaj ne</h2>
+  <PimStat Label="Objavljenih" Value="@Number(Readiness?.Totals.PublishedCount)" Note="izdelkov, ki jih izvoz sploh vidi" />
+  <PimStat Label="Neobjavljenih" Value="@Number(Readiness?.Totals.NotPublishedCount)" Note="izdelkov, ki v datoteko ne pridejo" Href="kakovost/napake?blokira=ERP" />
+  <PimStat Label="Kanoničnih skupaj" Value="@Number(Readiness?.Totals.CanonicalCount)" Note="@($"{Number(Readiness?.Totals.ActiveCount)} aktivnih")" />
+  <PimStat Label="Objavljenih z odprto težavo" Value="@Number(Readiness?.Totals.PublishedWithOpenIssues)" Note="objavljeni, a še vedno neveljavni" Href="kakovost/napake" />
+</section>
+
+<h2 class="section-title">Zakaj izdelek ne pride do datoteke</h2>
+<section class="ui-card data-card section-gap" aria-label="Razlogi, zakaj izdelek ni objavljen">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Readiness is not null && Readiness.Reasons.Count == 0)"
+            EmptyText="Neobjavljenih izdelkov z zabeleženim razlogom ni." LoadingText="Nalaganje razlogov …">
+    @if (Readiness is not null)
+    {
+      <PimTable Caption="Zahteve, ki ustavijo objavo, razvrščene po številu izdelkov" AriaLabel="Tabela razlogov za neobjavo" Columns="ReasonColumns">
+        <Rows>
+          @foreach (var reason in Readiness.Reasons)
+          {
+            <tr>
+              <td><a href="@ReasonHref(reason)"><span class="code-value">@reason.FieldCode</span></a></td>
+              <td>@reason.ProfileCode</td>
+              <td>
+                @if (reason.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
+                @if (reason.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
+              </td>
+              <td class="numeric">@reason.ProductCount.ToString("N0")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<h2 class="section-title">Stolpci brez vira</h2>
+<section class="ui-card data-card section-gap" aria-label="Pokritost stolpcev po profilu">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Readiness is not null && Readiness.Profiles.Count == 0)"
+            EmptyText="Izvoznih profilov ni." LoadingText="Nalaganje pokritosti …">
+    @if (Readiness is not null)
+    {
+      <PimTable Caption="Stolpci profila brez kanoničnega vira ne bodo izpolnjeni nikoli" AriaLabel="Tabela pokritosti stolpcev" Columns="CoverageColumns">
+        <Rows>
+          @foreach (var profile in Readiness.Profiles)
+          {
+            <tr>
+              <td><span class="code-value">@profile.ProfileCode</span></td>
+              <td>@profile.EntityType</td>
+              <td class="numeric">@profile.ColumnCount.ToString("N0")</td>
+              <td class="numeric">@profile.MappedColumnCount.ToString("N0")</td>
+              <td class="numeric">@profile.UnmappedColumnCount.ToString("N0")</td>
+              <td><PimBar Percent="@CoverageShare(profile)" Label="@($"Delež stolpcev z virom v profilu {profile.ProfileCode}")" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </PimState>
+</section>
+
+<p class="muted source-note">
+  Vir: <span class="code-value">intranet.GetExportReadiness</span> (migracija 104). Predogleda same datoteke tu ni:
+  obliko Magento izvoza dela <span class="code-value">PIM.B2bWorker</span> in druga izvedba iste logike bi bila druga resnica.
+</p>
+
+<h2 class="section-title">Izvozni profili</h2>
 <section class="ui-card data-card section-gap" aria-label="Izvozni profili">
   <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Izvoznih profilov ni." LoadingText="Nalaganje izvoznih profilov …">
     <PimTable Caption="Izvozni profili in pokritost stolpcev" Columns="Columns">
@@ -38,9 +104,21 @@
 
 @code {
   IReadOnlyList<PIM.Intranet.Services.ExportProfileRow> Profiles = [];
+  PIM.Intranet.Services.ExportReadiness? Readiness;
   bool Loading = true;
   bool CanManage;
   string? Error;
+
+  static readonly IReadOnlyList<PimColumn> ReasonColumns =
+  [
+    new("Zahteva"), new("Profil"), new("Blokira"), new("Izdelkov", Numeric: true),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> CoverageColumns =
+  [
+    new("Profil"), new("Entiteta"), new("Stolpcev", Numeric: true),
+    new("Z virom", Numeric: true), new("Brez vira", Numeric: true), new("Pokritost"),
+  ];
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
@@ -51,11 +129,26 @@
   {
     var user = (await Authentication.GetAuthenticationStateAsync()).User;
     CanManage = user.IsInRole(PimRoles.Admin) || user.IsInRole(PimRoles.CatalogEditor) || user.IsInRole(PimRoles.Commercial);
-    try { Profiles = await Governance.GetExportProfilesAsync(); }
+    try
+    {
+      Profiles = await Governance.GetExportProfilesAsync();
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is not null)
+        Readiness = await Governance.GetExportReadinessAsync(organization.OrganizationId);
+    }
     catch { Error = "Izvoznih profilov trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
   static decimal Coverage(PIM.Intranet.Services.ExportProfileRow profile) =>
     profile.ColumnCount == 0 ? 0 : 100m * profile.MappedColumnCount / profile.ColumnCount;
+
+  static decimal CoverageShare(PIM.Intranet.Services.ExportProfileCoverage profile) =>
+    profile.ColumnCount == 0 ? 0 : Math.Round(100m * profile.MappedColumnCount / profile.ColumnCount, 1);
+
+  static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+
+  // Razlog vodi na svoj filtriran delovni seznam, ne na splosno stran kakovosti.
+  static string ReasonHref(PIM.Intranet.Services.ExportBlockingReason reason) =>
+    $"kakovost/napake?profil={Uri.EscapeDataString(reason.ProfileCode)}&polje={Uri.EscapeDataString(reason.FieldCode)}";
 }
