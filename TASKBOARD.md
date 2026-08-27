@@ -176,6 +176,91 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Seznam izdelkov bere vsa podjetja, ne samo prvega — migracija 108** —
+  kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
+
+  `intranet.GetProductList`, `GetProductListViews` in `GetProductListFilters` so imele
+  `@OrganizationId` kot **obvezen** parameter, stran pa ga je dobila iz
+  `GetCurrentOrganizationAsync` (`TOP (1) … ORDER BY OrganizationId`), torej vedno **DEMO**.
+  Vidnih je bilo 17.425 od 196.531 izdelkov; 179.106 izdelkov treh podjetij prek te strani
+  ni bilo mogoče videti. Zdaj je `@OrganizationId` neobvezen: `NULL` pomeni vsa podjetja,
+  neznana številka pomeni **prazen nabor** (ne tiha razširitev obsega). Vrstica vrne tudi
+  `OrganizationId` in `OrganizationName`, ker ista šifra artikla obstaja v več podjetjih
+  (`0000000000001` je AVANS v DEMO **in** v Vidadrii).
+
+  Dodani filtri iz stolpcev, ki so že bili v bralnem modelu: `@Department`, `@Activity`
+  (ACTIVE/INACTIVE), `@WebPublish` (YES/NO) in `@Completeness` (EMPTY/LOW/MID/FULL);
+  `GetProductListFilters` dobi četrti nabor `DEPARTMENT`; razvrstitev dobi `ORGANIZATION`.
+
+  **Dokaz — merjeno nad razvojno bazo PIM po migraciji (196.531 izdelkov, štiri podjetja):**
+
+  | Poizvedba | Čas |
+  |---|---|
+  | privzeta stran, vsa podjetja | 130 ms |
+  | privzeta stran, podjetje 2 (111.068 izdelkov) | 53 ms |
+  | stran 201 (`@Skip = 10000`), vsa podjetja | 112 ms |
+  | ERP blokirani, vsa podjetja | 293 ms |
+  | splet pripravljeni, vsa podjetja | 156 ms |
+  | pogled »čaka SAOP«, vsa podjetja | 35 ms |
+  | vsi štirje novi filtri hkrati | 126 ms |
+  | razvrstitev po podjetju | 49 ms |
+  | štetje pogledov, vsa podjetja | 75 ms |
+  | vrednosti filtrov, vsa podjetja | 97 ms |
+
+  Nov indeks `IX_CanonProduct_ItemOrg (ItemID, OrganizationId)`: privzeta razvrstitev je po
+  šifri artikla, `UQ_CanonProduct_OrganizationItem` pa se začne z organizacijo in je brez
+  podjetja v pogoju ne pokrije.
+
+  `TotalCount` preverjen proti `canon.Product` za vsak nov filter — aktivnost 177.637,
+  za splet 15.137, oddelek C 135.866, popolnost 100 % 340, podjetje 4 39.137; vsi se ujemajo
+  (popolnost 0 % se je med meritvama premaknila za eno vrstico, ker validacija teče sproti).
+
+  ```
+  dotnet run --project src\PIM.Migrator            → Uporabljena migracija: 108_ProductListAllOrganizations.sql
+  dotnet run --project src\PIM.Migrator -- --verify → Preverjanje F0–F10 baze je uspešno.
+  ```
+
+- **[INTRANET] Stran /izdelki pokaže vsa podjetja in dobi filtre po podjetju, oddelku,
+  aktivnosti, objavi in popolnosti** — kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
+
+  Stran je privzeto večorganizacijska (kot `/zajem`), tabela dobi stolpec **Podjetje**,
+  spustni seznam podjetij pride iz `dbo.OrganizationConfig`. Novi filtri živijo v naslovu
+  (`podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), zato je povezavo mogoče deliti.
+  Ob zamenjavi podjetja se sprostijo izbrani proizvajalec, dobavitelj, skupina in oddelek —
+  vrednosti so lastne podjetju in bi sicer vrnile prazen seznam brez pojasnila.
+
+  Dve posledici, ki nista kozmetični:
+
+  1. **Kartica izdelka** je dobila obseg iz `GetCurrentOrganizationAsync`, zato bi bil izdelek
+     tujega podjetja prikazan kot neobstoječ. Zdaj podjetje določi izdelek sam
+     (`GetProductOrganizationAsync`).
+  2. **Množično urejanje** piše v eno podjetje. Izbira čez več podjetij je onemogočena in
+     povedana na glas; izbira iz enega podjetja nese `podjetje=<id>` na `/izvozi/mnozicno`,
+     ki ga uporabi namesto privzetega. Brez tega bi šifre enega podjetja pisale v drugo.
+
+  Izvoz `/izvoz/izdelki.csv` sledi istim filtrom in ima prvi stolpec `Podjetje` ter nov
+  stolpec `Oddelek`.
+
+  **Dokaz:**
+
+  ```
+  scripts\run_tests.ps1 -Filter F10  → uspeli 11, padli 0
+  dotnet build PIM_Solution\PIM.sln  → 0 Warning(s), 0 Error(s)
+  ```
+
+  Bralna pot preverjena skozi servis proti razvojni bazi (ne samo prek SQL):
+  vsa podjetja `TotalCount = 196.531`, po podjetjih 17.425 / 111.068 / 28.901 / 39.137,
+  neznano podjetje 999 → 0 vrstic, kartica izdelka podjetja 2 se prebere.
+
+  **Česa nisem preveril:** strani v brskalniku — nimam prijavnih poverilnic za lokalni
+  intranet, zato je vizualni pregled `/izdelki` na tebi (`docs/INTRANET.md`, kontrolni seznam).
+
+  **Ni od te naloge:** `scripts\run_tests.ps1` (vse) vrne dva padla projekta —
+  `PIM.F2.Integration` pade z `THROW 52202 'Poln izdelek ima aktivne napake.'`, ker
+  necommitana migracija **105** doda zahtevo `ProductAttribute.Garancija` (WARNING) v
+  `WEB_svetila_si` in `WEB_videlektro`, test pa šteje **vse** aktivne težave, ne samo napak.
+  `PIM.F8.Integration` v samostojnem zagonu uspe. Nobeden ne uporablja seznama izdelkov.
+
 - **[BAZA] Preslikave kategorij in uvrstitev izdelka postanejo urejiv podatek — migracija 109** —
   kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
 

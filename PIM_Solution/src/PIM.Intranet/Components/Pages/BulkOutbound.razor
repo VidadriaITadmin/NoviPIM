@@ -12,7 +12,7 @@
 <div class="page-header">
   <div>
     <h1>Množično urejanje</h1>
-    <p>Spremembe se uvrstijo v vrsto za SAOP. Nič ne odide, dokler skupine ne odobriš.</p>
+    <p>Spremembe se uvrstijo v vrsto za SAOP@(OrganizationName is null ? "" : " podjetja " + OrganizationName). Nič ne odide, dokler skupine ne odobriš.</p>
   </div>
 </div>
 <nav class="page-tabs" aria-label="Pogledi izvozov">
@@ -145,7 +145,13 @@
   [SupplyParameterFromQuery(Name = "items")]
   public string? SelectedItems { get; set; }
 
+  /// <summary>Podjetje izbranih sifer. Sifra artikla je enolicna samo znotraj podjetja, zato
+  /// brez tega podatka pisemo tuje sifre v privzeto podjetje.</summary>
+  [SupplyParameterFromQuery(Name = "podjetje")]
+  public int? SelectedOrganizationId { get; set; }
+
   int? OrganizationId;
+  string? OrganizationName;
   IReadOnlyList<WritableFieldRow>? Fields;
   WorkbookImportPreview? Preview;
   BulkChangeOutcome? Outcome;
@@ -171,9 +177,13 @@
   {
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      var organizations = await Data.GetOrganizationsAsync();
+      var organization = SelectedOrganizationId is null
+        ? await Data.GetCurrentOrganizationAsync()
+        : organizations.FirstOrDefault(row => row.OrganizationId == SelectedOrganizationId);
+      if (organization is null) { Error = "Podjetje izbranih izdelkov ni na voljo."; return; }
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
       Fields = await Write.GetWritableFieldsAsync(OrganizationId.Value);
       if (!string.IsNullOrWhiteSpace(SelectedItems) && ItemsText.Length == 0)
         ItemsText = string.Join('\n', SelectedItems.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));

@@ -28,7 +28,7 @@ Ne-Razor končne točke:
 | POST | `/auth/prijava` | `AllowAnonymous`, obvezen antiforgery token | prevzame `uporabniskoIme`, `geslo`, neobvezno `zapomniMe`; ob uspehu prijavi in preusmeri na `{PathBase}/nadzorna-plosca`, sicer na `{PathBase}/prijava?napaka=1` |
 | POST | `/odjava` | zahteva sejo (velja `FallbackPolicy`) | odjava iz piškotne sheme, preusmeritev na `{PathBase}/prijava` |
 | GET | `/health` | `AllowAnonymous` | vrne `{ "stanje": "zdravo" }` |
-| GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki`, CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
+| GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki` (vključno s `podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), brez `podjetje` zajame vsa podjetja, prvi stolpec je podjetje; CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
 
 Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` in
 `AccessDeniedPath` sta oba `/prijava`. Globalni `FallbackPolicy` zahteva
@@ -125,9 +125,10 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetCurrentOrganizationAsync` | `SELECT TOP (1) … FROM dbo.OrganizationConfig WHERE IsActive = 1` | `MainLayout` in vse strani s podatki |
 | `PimNavigation.For` | katalog poti v kodi + filtriranje po zahtevkih vlog | `NavMenu` |
 | `GetDashboardAsync` | `intranet.GetDashboard` | `/nadzorna-plosca` |
-| `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); filtri iskanje, shranjen pogled, proizvajalec, dobavitelj, skupina, ERP/spletni status, razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
-| `ProductWorkbenchService.GetProductListViewsAsync` | `intranet.GetProductListViews` (števci osmih shranjenih pogledov) | `/izdelki` |
-| `ProductWorkbenchService.GetProductListFacetsAsync` | `intranet.GetProductListFilters` (3 nabori: proizvajalci, dobavitelji, skupine) | `/izdelki` |
+| `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); `@OrganizationId` je neobvezen — `NULL` pomeni **vsa podjetja**, neznano podjetje vrne prazen nabor; filtri iskanje, shranjen pogled, podjetje, proizvajalec, dobavitelj, skupina, oddelek, ERP/spletni status, aktivnost, zastavica za splet, razred popolnosti, razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
+| `ProductWorkbenchService.GetProductListViewsAsync` | `intranet.GetProductListViews` (števci osmih shranjenih pogledov); `NULL` podjetje pomeni vsa | `/izdelki` |
+| `ProductWorkbenchService.GetProductListFacetsAsync` | `intranet.GetProductListFilters` (4 nabori: proizvajalci, dobavitelji, skupine, oddelki); `NULL` podjetje pomeni vsa | `/izdelki` |
+| `GetProductOrganizationAsync` | `SELECT TOP (1) OrganizationId … FROM canon.Product WHERE ProductId = @ProductId` — kartica izdelka dobi obseg iz izdelka, ker je dosegljiva iz seznama vseh podjetij | `/izdelki/{id}` |
 | `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | zapuščinska pot; seznam je od migracije 101 na `GetProductList` |
 | `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |
 | `ProductWorkbenchService.GetProductOriginAsync` | `intranet.GetProductOrigin` (zadnjih največ 100 ujemajočih se vhodnih zapisov po dejanski izluščeni identiteti) | `/izdelki/{id}` |
@@ -175,7 +176,7 @@ konstanta (pogodbeni test prepoveduje vzorec `Async(2,`).
 
 | Stran | Paginacija | Filtri |
 |---|---|---|
-| `/izdelki` | **strežniška**, `Take = 50`, `TotalCount` iz drugega nabora | strežniški `@Search` in `@Status` |
+| `/izdelki` | **strežniška**, `Take = 50`, `TotalCount` iz drugega nabora | vsi strežniški: podjetje (privzeto vsa), iskanje, shranjen pogled, proizvajalec, dobavitelj, skupina, oddelek, ERP, splet, aktivnost, objava, popolnost |
 | `/stranke` | odjemalska nad naloženim naborom, `PageSize = 25` | odjemalski (iskanje, vrsta, tip) |
 | `/teki-obdelave` | odjemalska, `PageSize = 10` | odjemalski (iskanje, status) |
 | `/outbound` | odjemalska, `PageSize = 10` | odjemalski (iskanje, status) |
@@ -366,8 +367,12 @@ Za preverjanje obeh načinov gostovanja se ista instanca odziva na `/…` in `/P
 - [ ] Gumb menija je viden in preklaplja navigacijo tudi pri ozkem oknu.
 - [ ] `/nadzorna-plosca`: pet KPI kartic v eni vrsti na namizju, paneli za kakovost,
       procese, opozorila, integracije in hitre dostope; nobene izmišljene vsebine.
-- [ ] `/izdelki`: iskanje in status filtrirata **strežniško**; »Prejšnja/Naslednja«
-      se pravilno onemogočita na robovih; števec strani ustreza `TotalCount`.
+- [ ] `/izdelki`: privzeto so vidna **vsa podjetja**, stolpec Podjetje pove, čigav je
+      izdelek; filter podjetja zoži seznam, števce zavihkov in vrednosti spustnih
+      seznamov. Iskanje in status filtrirata **strežniško**; »Prejšnja/Naslednja« se
+      pravilno onemogočita na robovih; števec strani ustreza `TotalCount`.
+- [ ] `/izdelki`: izbira izdelkov iz **dveh podjetij** onemogoči »Uredi izbrane« in to
+      pove na glas; izbira iz enega podjetja odpre množično urejanje tega podjetja.
 - [ ] `/izdelki/{id}`: glava, profili in odprte težave se ujemajo z bazo; neobstoječ
       ID ne vrže napake strežnika.
 - [ ] `/zaloge`, `/napake-validacije`, `/karantena`, `/teki-obdelave`: podatki,

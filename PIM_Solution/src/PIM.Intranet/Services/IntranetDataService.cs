@@ -89,6 +89,28 @@ public sealed class IntranetDataService(IConfiguration configuration)
     return rows;
   }
 
+  /// <summary>
+  /// Podjetje, ki mu izdelek pripada. Kartica izdelka je dosegljiva iz seznama vseh podjetij,
+  /// zato obseg ne sme priti iz <see cref="GetCurrentOrganizationAsync"/> — ta vrne vedno prvo
+  /// podjetje in kartica tujega izdelka bi bila prazna.
+  /// </summary>
+  public async Task<OrganizationContext?> GetProductOrganizationAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT TOP (1) product.OrganizationId, Name = COALESCE(organizationValue.Name, CONVERT(nvarchar(200), product.OrganizationId))
+      FROM canon.Product AS product
+      LEFT JOIN dbo.OrganizationConfig AS organizationValue ON organizationValue.OrganizationId = product.OrganizationId
+      WHERE product.ProductId = @ProductId;
+      """, connection);
+    command.Parameters.AddWithValue("@ProductId", productId);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    return await reader.ReadAsync(cancellationToken)
+      ? new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name")))
+      : null;
+  }
+
   public async Task<int> GetOpenAlertCountAsync(int organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);

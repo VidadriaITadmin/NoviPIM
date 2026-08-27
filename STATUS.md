@@ -37,13 +37,21 @@ takrat **51 uspelih / 0 preskočenih / 0 padlih**, zadržano delo pa je v `d35e4
 
 | Stran | Migracija | Kaj je bilo narobe |
 |---|---|---|
-| `/izdelki` | 101 | seznam je pokazal samo šifro, EAN, status in popolnost |
+| `/izdelki` | 101, 108 | seznam je pokazal samo šifro, EAN, status in popolnost; od 108 tudi **vsa štiri podjetja** namesto samo DEMO |
 | `/kakovost/napake` | 102 | brala je **3.004.688** odprtih težav naenkrat in filtrirala v pomnilniku |
 | `/zaloge` | 103 | naložila je vseh **379.610** pozicij naenkrat |
 | `/izvozi` | 104 | pokazala je samo register profilov, ne pa kaj v izvoz ne gre in zakaj |
 
 Vse štiri strani so strežniško paginirane, filtri živijo v naslovu URL, vsaka številka vodi na
-svoj filtriran seznam, nobena nima gumba brez varne zapisovalne poti. Meritve pred/po so v
+svoj filtriran seznam, nobena nima gumba brez varne zapisovalne poti.
+
+**`/izdelki` je od 2026-08-27 večorganizacijski.** Do takrat je bral obseg iz
+`GetCurrentOrganizationAsync` (prvo aktivno podjetje po šifri) in je pokazal **17.425 od
+196.531** izdelkov — samo DEMO. Zdaj so privzeto vsa podjetja, tabela ima stolpec Podjetje,
+filter podjetja pa zoži seznam, števce zavihkov in vrednosti spustnih seznamov. Iz tega sta
+sledili dve popravljeni posledici: kartica izdelka dobi podjetje iz izdelka (prej bi bil tuj
+izdelek »neobstoječ«), množično urejanje pa sprejme samo izbiro iz enega podjetja in prejme
+njegovo šifro (prej bi tuje šifre pisalo v privzeto podjetje). Meritve pred/po so v
 glavah migracij; največji premik: filter po pripravljenosti 2.911 ms → 172 ms in razvrščanje
 po popolnosti 1.489 ms → 67 ms (dva nova ozka indeksa nad `canon.Product`).
 

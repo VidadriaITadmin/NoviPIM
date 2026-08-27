@@ -43,7 +43,9 @@ var toolbarLabel = Regex.Match(toolbar.Value, "aria-labelledby=\"([^\"]+)\"");
 Assert(toolbarLabel.Success, "Iskalni sklop mora imeti aria-labelledby.");
 Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(toolbarLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
   "Naslov iskalnega sklopa mora ostati bralcem zaslona dostopen in vizualno skrit.");
-foreach (var control in new[] { "product-search", "product-manufacturer", "product-supplier", "product-group", "product-erp", "product-web", "product-sort" })
+foreach (var control in new[] { "product-search", "product-organization", "product-manufacturer", "product-supplier",
+  "product-group", "product-department", "product-erp", "product-web", "product-activity", "product-webpublish",
+  "product-completeness", "product-sort" })
 {
   Assert(Regex.IsMatch(markup, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
   Assert(Regex.IsMatch(markup, "id=\"" + control + "\""), "Kontrola " + control + " ne obstaja.");
@@ -51,9 +53,19 @@ foreach (var control in new[] { "product-search", "product-manufacturer", "produ
 Assert(Regex.IsMatch(markup, "<input id=\"product-search\"[^>]*type=\"search\""), "Iskalno polje mora biti type=\"search\".");
 
 // 3. Vrednosti filtrov so dejanske vrednosti kataloga, ne trdo kodiran seznam.
-foreach (var facet in new[] { "MANUFACTURER", "SUPPLIER", "ITEM_GROUP" })
+foreach (var facet in new[] { "MANUFACTURER", "SUPPLIER", "ITEM_GROUP", "DEPARTMENT" })
   Assert(markup.Contains("row.FacetKind == \"" + facet + "\"", StringComparison.Ordinal),
     "Spustni seznam " + facet + " mora izhajati iz intranet.GetProductListFilters.");
+
+// 3.1 Seznam ni vezan na eno podjetje: privzeto so vsa, izbira pa pride iz registra podjetij.
+Assert(Regex.IsMatch(markup, "<option value=\"\">Vsa podjetja</option>"),
+  "Privzeta izbira podjetja mora biti \u00bbVsa podjetja\u00ab; seznam ne sme tiho pokazati samo prvega podjetja.");
+Assert(markup.Contains("GetOrganizationsAsync", StringComparison.Ordinal),
+  "Spustni seznam podjetij mora izhajati iz dbo.OrganizationConfig (GetOrganizationsAsync), ne iz trdo kodiranega seznama.");
+Assert(!markup.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal),
+  "Seznam izdelkov ne sme brati samo privzetega podjetja; obseg dolocita filter in vsa podjetja.");
+Assert(markup.Contains("row.OrganizationName", StringComparison.Ordinal),
+  "Ker ista sifra artikla obstaja v vec podjetjih, mora vsaka vrstica povedati, cigava je.");
 
 // 4. Stanje seznama in zivo sporocanje rezultata.
 var count = Regex.Match(markup, "<span class=\"result-count\"[^>]*>");
@@ -77,14 +89,15 @@ Assert(Regex.IsMatch(markup, "<PimBar Percent=\"row\\.Completeness\"[^>]*Label="
 Assert(Regex.IsMatch(markup, "<PimTable Caption=\"[^\"]+\"[^>]*AriaLabel=\"[^\"]+\""), "Tabela mora imeti napis in aria-label.");
 var columns = Regex.Match(markup, "Columns =\\s*\\[(.*?)\\];", RegexOptions.Singleline);
 Assert(columns.Success, "Stolpci morajo biti razglaseni kot seznam PimColumn.");
-Assert(Regex.Matches(columns.Groups[1].Value, "new\\(").Count == 10, "Tabela ima deset stolpcev; vsak mora imeti ime.");
+Assert(Regex.Matches(columns.Groups[1].Value, "new\\(").Count == 11, "Tabela ima enajst stolpcev; vsak mora imeti ime.");
 Assert(!Regex.IsMatch(columns.Groups[1].Value, "new\\(\"\"\\)"), "Prazno ime stolpca ni dovoljeno; tudi izbor in odpiranje se poimenujeta.");
 Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"Page\\.TotalCount\""),
   "Paginacija mora biti strezniska in izhajati iz istega stetja kot seznam.");
 Assert(Regex.IsMatch(markup, "aria-label=\"Izberi izdelek @row.ItemId\""), "Vsaka kljukica mora povedati, kateri izdelek izbira.");
 
 // 7. Stanje pogleda mora biti v naslovu, da je povezavo mogoce deliti in gumb Nazaj dela.
-foreach (var parameter in new[] { "pogled", "isci", "proizvajalec", "dobavitelj", "skupina", "erp", "splet", "sort", "smer", "stran" })
+foreach (var parameter in new[] { "pogled", "isci", "podjetje", "proizvajalec", "dobavitelj", "skupina", "oddelek",
+  "erp", "splet", "aktivnost", "objava", "popolnost", "sort", "smer", "stran" })
   Assert(Regex.IsMatch(markup, "SupplyParameterFromQuery\\(Name = \"" + parameter + "\"\\)"),
     "Filter " + parameter + " mora ziveti v naslovu URL.");
 
@@ -92,13 +105,19 @@ foreach (var parameter in new[] { "pogled", "isci", "proizvajalec", "dobavitelj"
 Assert(markup.Contains("SelectionOverflow", StringComparison.Ordinal), "Prekoracena izbira mora biti vidna uporabniku.");
 Assert(Regex.IsMatch(markup, "class=\"notice\"[^>]*role=\"status\""), "Obvestilo o meji izbire mora biti razglaseno kot role=\"status\".");
 
+// 8.1 Mnozicno urejanje pise v eno podjetje: izbira cez vec podjetij mora biti ustavljena in pojasnjena.
+Assert(markup.Contains("SelectionSpansOrganizations", StringComparison.Ordinal),
+  "Izbira cez vec podjetij mora biti prepoznana; sicer bi sifre enega podjetja pisale v drugo.");
+Assert(Regex.IsMatch(markup, "izvozi/mnozicno\\?items=[^\"]*podjetje="),
+  "Mnozicno urejanje mora dobiti podjetje izbranih izdelkov, ne privzetega.");
+
 // 9. Izvoz pogleda uporabi iste filtre kot pogled.
 Assert(markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda.");
 Assert(Regex.IsMatch(markup, "string ExportHref\\(\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
 
 // 10. Varovalka: stran ostane vezana na dejanske bralne procedure.
-var allowedCalls = new[] { "GetCurrentOrganizationAsync", "GetProductListAsync", "GetProductListViewsAsync", "GetProductListFacetsAsync" };
+var allowedCalls = new[] { "GetOrganizationsAsync", "GetProductListAsync", "GetProductListViewsAsync", "GetProductListFacetsAsync" };
 foreach (var call in allowedCalls)
   Assert(markup.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "(?:Data|Workbench)\\.(\\w+)"))
@@ -117,7 +136,7 @@ foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
 // 12. Varovalka: vsak prikazan podatek ima svoj stolpec v bralnem modelu.
 foreach (var bound in new[] { "row.Name", "row.ItemId", "row.Manufacturer", "row.ErpStatus", "row.WebStatus",
   "row.Completeness", "row.OpenIssueCount", "row.MediaCount", "row.CategoryCount", "row.PendingOutboundCount",
-  "row.IsPromoted", "row.HasWebTitle", "row.LastChangedUtc" })
+  "row.IsPromoted", "row.HasWebTitle", "row.LastChangedUtc", "row.OrganizationName" })
   Assert(markup.Contains(bound, StringComparison.Ordinal), "Prikaz mora izhajati iz bralnega modela: " + bound + ".");
 Assert(markup.Contains("intranet.GetProductList", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
 foreach (var fabricated in new[] { "Cena", "Zaloga", "Nov izdelek", "Uvozi", "Izbriši", "Osnutek" })

@@ -68,11 +68,19 @@ var uxMigration = File.ReadAllText(Path.Combine(root, "sql", "migrations", "027_
 foreach (var value in new[] { "TotalCount", "@Search", "@Status", "AverageCompleteness", "OccurrenceCount", "FirstDetectedUtc" })
   Assert(uxMigration.Contains(value, StringComparison.Ordinal), "UX read-model migracija ne vsebuje: " + value);
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ValidationErrors.razor")).Contains(">Napaka</span>", StringComparison.Ordinal), "UI ne sme izmišljati resnosti validacijske težave.");
-foreach (var pageName in new[] { "Dashboard.razor", "Products.razor", "ProductDetail.razor", "Stocks.razor", "ValidationErrors.razor", "RawQuarantine.razor" })
+foreach (var pageName in new[] { "Dashboard.razor", "ProductDetail.razor", "Stocks.razor", "ValidationErrors.razor", "RawQuarantine.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
   Assert(pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " mora uporabljati aktivno organizacijo iz baze.");
 }
+
+// Seznam izdelkov je vecorganizacijski: privzeto pokaze vsa podjetja, filter zozi na eno.
+// Zahteva ostaja ista — organizacija pride iz baze in ni vpisana v stran — samo bralna pot
+// je zdaj register vseh podjetij namesto prvega aktivnega.
+var productsPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Products.razor"));
+Assert(productsPage.Contains("GetOrganizationsAsync", StringComparison.Ordinal), "Products.razor mora podjetja prebrati iz baze.");
+Assert(!productsPage.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), "Products.razor ne sme biti omejen na prvo aktivno organizacijo.");
+Assert(!System.Text.RegularExpressions.Regex.IsMatch(productsPage, "ProductListFilter\\(\\s*\\d"), "Products.razor ne sme uporabljati hardkodirane organizacije.");
 var dashboardPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Dashboard.razor"));
 Assert(dashboardPage.Contains("else if (Metrics is null)", StringComparison.Ordinal), "Nadzorna plošča ne sme hkrati prikazati napake in nalaganja.");
 var stocksPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Stocks.razor"));

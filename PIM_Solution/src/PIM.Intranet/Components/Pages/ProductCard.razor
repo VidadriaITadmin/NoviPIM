@@ -11,7 +11,7 @@
 <PageTitle>@(Detail?.Header.Name ?? "Izdelek")</PageTitle>
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Detail is null)"
-          EmptyText="Izdelek ne obstaja v aktivni organizaciji." LoadingText="Nalaganje kartice izdelka …">
+          EmptyText="Izdelek s to oznako ne obstaja." LoadingText="Nalaganje kartice izdelka …">
   @if (Detail is not null)
   {
     var heroUrl = MediaUrlPolicy.Normalize(Detail.Header.ThumbnailUrl);
@@ -243,8 +243,10 @@
     Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      // Kartica je dosegljiva iz seznama vseh podjetij, zato obseg dolocì izdelek sam;
+      // privzeto podjetje bi tuji izdelek prikazalo kot neobstojec.
+      var organization = await Data.GetProductOrganizationAsync(ProductId);
+      if (organization is null) { Error = "Izdelek s to oznako ne obstaja."; return; }
       var cardTask = Workbench.GetProductCardAsync(organization.OrganizationId, ProductId, "sl");
       var originTask = Workbench.GetProductOriginAsync(organization.OrganizationId, ProductId);
       var priceTask = Features.GetPriceChecksAsync(organization.OrganizationId, ProductId);

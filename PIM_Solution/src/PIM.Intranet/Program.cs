@@ -40,6 +40,7 @@ builder.Services.AddScoped<IntranetFeatureReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
 builder.Services.AddScoped<SaopWriteService>();
+builder.Services.AddScoped<CategoryMappingService>();
 
 var app = builder.Build();
 
@@ -92,14 +93,14 @@ app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymou
 // filtre kot stran, zato je datoteka natanko to, kar uporabnik vidi. Zgornja meja je
 // izrecna in zapisana v datoteko — tiho odrezan izvoz je huje kot majhen izvoz.
 app.MapGet("/izvoz/izdelki.csv", async (
-  HttpContext context, IntranetDataService data, ProductWorkbenchService workbench,
+  HttpContext context, ProductWorkbenchService workbench,
   CancellationToken cancellationToken) =>
 {
-  var organization = await data.GetCurrentOrganizationAsync();
-  if (organization is null) return Results.BadRequest("Aktivna organizacija ni na voljo.");
-
   var query = context.Request.Query;
   string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
+
+  // Brez podjetja v naslovu je obseg enak kot na strani: vsa podjetja.
+  int? organizationId = int.TryParse(Value("podjetje"), out var parsedOrganization) ? parsedOrganization : null;
 
   const int pageSize = 200;
   const int maximumRows = 20_000;
@@ -109,9 +110,10 @@ app.MapGet("/izvoz/izdelki.csv", async (
   while (rows.Count < maximumRows)
   {
     var page = await workbench.GetProductListAsync(new ProductListFilter(
-      organization.OrganizationId, rows.Count, pageSize, Value("isci"), Value("pogled"),
+      organizationId, rows.Count, pageSize, Value("isci"), Value("pogled"),
       Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
-      Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase)),
+      Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
+      "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost")),
       cancellationToken);
 
     total = page.TotalCount;
@@ -121,13 +123,13 @@ app.MapGet("/izvoz/izdelki.csv", async (
   }
 
   var builderCsv = new System.Text.StringBuilder();
-  builderCsv.AppendLine("Sifra;EAN;Naziv;Proizvajalec;Dobavitelj;Skupina;ERP;Splet;Popolnost;OdprteTezave;Mediji;Kategorije;CakaSAOP;Objavljen;ZadnjaSprememba");
+  builderCsv.AppendLine("Podjetje;Sifra;EAN;Naziv;Proizvajalec;Dobavitelj;Skupina;Oddelek;ERP;Splet;Popolnost;OdprteTezave;Mediji;Kategorije;CakaSAOP;Objavljen;ZadnjaSprememba");
   foreach (var row in rows)
   {
     builderCsv.AppendLine(string.Join(';', new[]
     {
-      Csv(row.ItemId), Csv(row.Ean), Csv(row.Name), Csv(row.Manufacturer), Csv(row.Supplier),
-      Csv(row.ItemGroup), Csv(row.ErpStatus), Csv(row.WebStatus),
+      Csv(row.OrganizationName), Csv(row.ItemId), Csv(row.Ean), Csv(row.Name), Csv(row.Manufacturer),
+      Csv(row.Supplier), Csv(row.ItemGroup), Csv(row.Department), Csv(row.ErpStatus), Csv(row.WebStatus),
       row.Completeness.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
       row.OpenIssueCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
       row.MediaCount.ToString(System.Globalization.CultureInfo.InvariantCulture),

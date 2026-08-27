@@ -53,16 +53,22 @@ public sealed record ProductListRow(
   string? Manufacturer, string? Supplier, string? ItemGroup, string? Department,
   bool IsActive, bool WebPublish, bool IsPromoted, string ValidationStatus, decimal Completeness,
   DateTime? LastValidatedUtc, string ErpStatus, string WebStatus, long OpenIssueCount,
-  long CategoryCount, long MediaCount, long PendingOutboundCount, DateTime? LastChangedUtc);
+  long CategoryCount, long MediaCount, long PendingOutboundCount, DateTime? LastChangedUtc,
+  int OrganizationId, string OrganizationName);
 
 public sealed record ProductListPage(IReadOnlyList<ProductListRow> Rows, long TotalCount);
 
+/// <param name="OrganizationId">null pomeni vsa podjetja; katalog ni last enega podjetja.</param>
 /// <param name="View">Koda shranjenega pogleda; null ali ALL pomeni ves katalog.</param>
+/// <param name="Activity">ACTIVE ali INACTIVE; null pomeni oboje.</param>
+/// <param name="WebPublish">YES ali NO; null pomeni oboje.</param>
+/// <param name="CompletenessBand">EMPTY, LOW, MID ali FULL; null pomeni vse razrede.</param>
 public sealed record ProductListFilter(
-  int OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? View = null,
+  int? OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? View = null,
   string? Manufacturer = null, string? Supplier = null, string? ItemGroup = null,
   string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
-  bool SortDescending = false, string Language = "sl");
+  bool SortDescending = false, string Language = "sl", string? Department = null,
+  string? Activity = null, string? WebPublish = null, string? CompletenessBand = null);
 
 public sealed record ProductListViewCounts(
   long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
@@ -257,7 +263,7 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
     };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = filter.OrganizationId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
     command.Parameters.Add("@Take", SqlDbType.Int).Value = filter.Take;
     command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(filter.Search);
@@ -270,6 +276,10 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     command.Parameters.Add("@Sort", SqlDbType.NVarChar, 40).Value = Optional(filter.Sort);
     command.Parameters.Add("@SortDescending", SqlDbType.Bit).Value = filter.SortDescending;
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+    command.Parameters.Add("@Department", SqlDbType.NVarChar, 100).Value = Optional(filter.Department);
+    command.Parameters.Add("@Activity", SqlDbType.NVarChar, 20).Value = Optional(filter.Activity);
+    command.Parameters.Add("@WebPublish", SqlDbType.NVarChar, 20).Value = Optional(filter.WebPublish);
+    command.Parameters.Add("@Completeness", SqlDbType.NVarChar, 20).Value = Optional(filter.CompletenessBand);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new ProductListRow(
@@ -282,7 +292,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       PimDb.TextOrEmpty(row, "ErpStatus"), PimDb.TextOrEmpty(row, "WebStatus"),
       PimDb.Int64(row, "OpenIssueCount"), PimDb.Int64(row, "CategoryCount"),
       PimDb.Int64(row, "MediaCount"), PimDb.Int64(row, "PendingOutboundCount"),
-      PimDb.NullableDateTime(row, "LastChangedUtc")), cancellationToken);
+      PimDb.NullableDateTime(row, "LastChangedUtc"), PimDb.Int32(row, "OrganizationId"),
+      PimDb.TextOrEmpty(row, "OrganizationName")), cancellationToken);
 
     long total = 0;
     if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
@@ -291,8 +302,9 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     return new(rows, total);
   }
 
+  /// <param name="organizationId">null pomeni vsa podjetja.</param>
   public async Task<ProductListViewCounts> GetProductListViewsAsync(
-    int organizationId, CancellationToken cancellationToken = default)
+    int? organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
@@ -301,7 +313,7 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
     };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, 0, 0, 0, 0, 0, 0);
     return new(
@@ -312,8 +324,9 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
   }
 
   /// <summary>Vrednosti filtrov so dejanske vrednosti kataloga, ne trdo kodiran seznam.</summary>
+  /// <param name="organizationId">null pomeni vsa podjetja.</param>
   public async Task<IReadOnlyList<ProductListFacet>> GetProductListFacetsAsync(
-    int organizationId, int take = 100, CancellationToken cancellationToken = default)
+    int? organizationId, int take = 100, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
@@ -322,7 +335,7 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
     };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
     command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
