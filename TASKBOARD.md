@@ -176,6 +176,48 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA + INTRANET] Drevo kategorij prenovljeno: vsi jeziki hkrati, zložljive veje, brez kartic — migracija 113** —
+  kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-27.
+
+  Prva izvedba (110) je bila napačno zastavljena in uporabnik je to takoj videl:
+
+  - **Deset kartic KPI** je zasedlo cel zaslon, preden se je videla prva kategorija.
+  - **Drevo se ni bralo kot drevo** — zamik 20 px v tabeli s šestimi stolpci hierarhije ne pokaže.
+  - **Prevodi so bili en jezik naenkrat.** Za pet jezikov bi urednik moral petkrat prevesti isto
+    vrstico in petkrat menjati filter. Delo pa ne poteka tako: kategorijo prevedeš enkrat, v vse
+    jezike, ker jo takrat imaš pred sabo.
+
+  **Kaj je zdaj drugače.**
+
+  Pokritost je **pet vrstic z deležem** namesto desetih kartic, in vsaka vrstica je hkrati filter:
+  klik na `de` postavi jezik v ospredje in vklopi »brez imena«. Stran se odpre pri jeziku z največ
+  manjkajočimi imeni — tam, kjer je delo.
+
+  Drevo je **`<ul role="tree">`, ne tabela**: zložljive veje (`−`/`+`), »Razpri vse« in »Zloži na
+  prvi nivo«, število otrok ob imenu, zamik 22 px na nivo. Ob iskanju ali filtru se zlaganje samo
+  sprosti — sicer bi bil zadetek skrit pod vejo, ki jo je uporabnik zložil prej in nanjo ni več
+  mislil.
+
+  **Vsi jeziki so vidni v vsaki vrstici** kot pet značk: zapolnjena = ime obstaja (in je v
+  opisu), črtkana = manjka. Klik na ime odpre **urejevalnik z vsemi petimi polji naenkrat**,
+  shrani pa se z enim klicem `canon.SaveCategoryTranslations` v eni transakciji. Če en jezik pade
+  na pravilu, **ne obvelja noben** — delno shranjen prevod izgleda opravljen in ga nihče ne
+  pregleda znova. Prazno polje pusti prejšnje ime pri miru; imena se z vpisom nič ne da izbrisati.
+
+  Oblački (`PimStat`, `PimChip`) so s te strani odstranjeni; stanje nosita značka jezika in števec.
+
+  **Dokaz:** `PIM.Migrator` prvi in drugi zagon ter `--verify` → izhod 0.
+  `dotnet build PIM.Intranet` → **0 opozoril, 0 napak**.
+  `scripts\run_tests.ps1 -Filter F10` → **13 uspelih / 0 preskočenih / 0 padlih**.
+  Pogodbeni test je bil pred prenovo rdeč (`Servis mora klicati postopek
+  intranet.GetCategoryTranslationGaps`) in je po njej zelen — dokaz, da drži obliko strani, ne
+  samo prevajanje.
+
+  Preizkušeno v živo: `113001` brez akterja, `113002` neznana kategorija, `113003` neznan jezik.
+  **Atomarnost potrjena:** shranjevanje `{en: "A", zz: "B"}` je bilo v celoti zavrnjeno in `en`
+  je ostal »Interior lighting«. Krožni preizkus večjezičnega zapisa spremenil in vrnil ime,
+  zgodovina ima obe spremembi, končno stanje 391 prevodov — enako kot prej.
+
 - **[INTRANET] Stran medijev: predogledi, vrste kot filtri, dokumenti in videi** — kdo: Claude Code
   — ozemlje: INTRANET — končano 2026-08-27.
 

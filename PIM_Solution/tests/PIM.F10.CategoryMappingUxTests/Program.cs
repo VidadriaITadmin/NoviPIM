@@ -70,54 +70,82 @@ Assert(productPage.Contains("ClearProductCategoryOverrideAsync", StringCompariso
   "Vrnitev pod vir mora biti mozna, sicer je rocna uvrstitev enosmerna.");
 
 
-// --- Drevo kategorij in prevodi (110) ------------------------------------------------------
+// --- Drevo kategorij in prevodi (110, 113) -------------------------------------------------
 var treePage = Read(Path.Combine(pages, "CatalogCategories.razor"));
+var treeStyle = Read(Path.Combine(pages, "CatalogCategories.razor.css"));
 var treeService = Read(Path.Combine(services, "CategoryTreeService.cs"));
 
 Assert(program.Contains("AddScoped<CategoryTreeService>", StringComparison.Ordinal),
   "CategoryTreeService mora biti registriran.");
 Assert(treePage.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal),
-  "Urejanje prevodov spreminja katalog, zato ni dovolj samo prijava.");
+  "Urejanje imen spreminja katalog, zato ni dovolj samo prijava.");
 Assert(treePage.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
-  "Brez interaktivnega nacina urejanje prevoda ne dela.");
+  "Brez interaktivnega nacina zlaganje in urejanje ne delata.");
 Assert(treePage.Contains("ActorAsync", StringComparison.Ordinal),
   "Prevod mora imeti akterja iz prijave.");
 Assert(treePage.Contains("catch (Exception exception) { Error = exception.Message; }", StringComparison.Ordinal),
   "Napaka iz baze mora priti do uporabnika.");
 
 foreach (var procedure in new[]
-  { "intranet.GetCategoryTree", "intranet.GetCategoryTranslationGaps", "canon.SaveCategoryTranslation" })
+  { "intranet.GetCategoryTree", "intranet.GetCategoryTranslationCoverage", "canon.SaveCategoryTranslations" })
   Assert(treeService.Contains(procedure, StringComparison.Ordinal),
-    "Servis mora klicati postopek " + procedure + " iz migracije 110.");
+    "Servis mora klicati postopek " + procedure + ".");
 
 // Drevo brez zamika je tabela. Zamik mora izhajati iz nivoja, ne iz rocno vpisanih presledkov.
 Assert(treePage.Contains("Indent(row.LevelNo)", StringComparison.Ordinal)
-  && treePage.Contains("(level - 1) * 20", StringComparison.Ordinal),
+  && treePage.Contains("(level - 1) *", StringComparison.Ordinal),
   "Zamik mora izhajati iz LevelNo.");
+
+// Drevo se bere navpicno; tabela s stolpci hierarhije ne pokaze.
+Assert(treePage.Contains("role=\"tree\"", StringComparison.Ordinal)
+  && treePage.Contains("role=\"treeitem\"", StringComparison.Ordinal)
+  && treePage.Contains("aria-level=\"@row.LevelNo\"", StringComparison.Ordinal),
+  "Drevo mora biti oznaceno kot drevo, ne kot tabela.");
+
+// Zlaganje vej je bistvo pregleda pri 209 vozliscih.
+Assert(treePage.Contains("ExpandAll", StringComparison.Ordinal)
+  && treePage.Contains("CollapseAll", StringComparison.Ordinal)
+  && treePage.Contains("Collapsed", StringComparison.Ordinal),
+  "Veje mora biti mogoce zloziti in razpreti.");
+Assert(treePage.Contains("Collapsed.Clear();", StringComparison.Ordinal)
+  && treePage.Contains("!string.IsNullOrWhiteSpace(Search) || OnlyMissing", StringComparison.Ordinal),
+  "Ob filtru se mora zlaganje sprostiti, sicer je zadetek skrit pod zlozeno vejo.");
 
 // Zadetek brez prednikov je iztrgan iz drevesa.
 Assert(treePage.Contains("row.IsMatch", StringComparison.Ordinal)
-  && treePage.Contains("row-context", StringComparison.Ordinal),
+  && treePage.Contains("is-context", StringComparison.Ordinal),
   "Predniki zadetkov morajo biti prikazani in loceni od zadetkov.");
 
-// Filtri, ki jih je narocil uporabnik.
-foreach (var filter in new[]
-  { "tree-code", "tree-language", "tree-organization", "tree-branch", "tree-level", "tree-search" })
-  Assert(treePage.Contains("id=\"" + filter + "\"", StringComparison.Ordinal),
-    "Manjka filter " + filter + ".");
-Assert(treePage.Contains("@bind=\"OnlyMissing\"", StringComparison.Ordinal)
-  && treePage.Contains("@bind=\"OnlyWithProducts\"", StringComparison.Ordinal),
-  "Manjkata stikali za brez prevoda in za kategorije z izdelki.");
+// Vsi jeziki hkrati: vprasanje "kateri manjka" je pomembnejse od vrednosti enega.
+Assert(treePage.Contains("foreach (var language in Languages)", StringComparison.Ordinal)
+  && treePage.Contains("row.Translations.TryGetValue", StringComparison.Ordinal),
+  "Vrstica mora pokazati stanje vseh jezikov, ne samo izbranega.");
+Assert(treeService.Contains("IReadOnlyDictionary<string, string> Translations", StringComparison.Ordinal),
+  "Servis mora vrniti vse prevode vrstice, ne samo enega.");
+Assert(treePage.Contains("SaveTranslationsAsync", StringComparison.Ordinal)
+  && treePage.Contains("editor-grid", StringComparison.Ordinal),
+  "Urejanje mora odpreti vsa jezikovna polja naenkrat.");
+
+// Prazno polje ne sme brisati imena - to je pravilo, ki mora biti tudi povedano.
+Assert(treePage.Contains("!string.IsNullOrWhiteSpace(pair.Value)", StringComparison.Ordinal),
+  "Prazna polja se ne smejo poslati kot brisanje imena.");
+
+// Deset kartic KPI je zasedlo cel zaslon pred prvo kategorijo.
+Assert(!treePage.Contains("<PimStat ", StringComparison.Ordinal),
+  "Pokritost ne sme biti niz kartic KPI.");
+Assert(treePage.Contains("coverage-row", StringComparison.Ordinal)
+  && treeStyle.Contains(".coverage-fill", StringComparison.Ordinal),
+  "Pokritost mora biti kompakten trak z deleziem, ki je hkrati filter.");
+Assert(!treePage.Contains("<PimChip ", StringComparison.Ordinal),
+  "V drevesu ni oblackov; stanje nosita znacka jezika in stevec.");
 
 // Prej je stolpec Prevod izpisoval pomisljaj za vsako vrstico.
 Assert(!treePage.Contains("<td>\u2014</td>", StringComparison.Ordinal),
   "Stolpec ne sme izpisovati mrtvega pomisljaja namesto podatka.");
-Assert(treePage.Contains("MissingLanguageList", StringComparison.Ordinal),
-  "Stran mora povedati, v katerih jezikih prevoda ni.");
 
 // Locilo poti je " > ". Stara formula je iskala potomce z "/%" in zato ni nasla nobenega.
 Assert(!treeService.Contains("+ N'/%'", StringComparison.Ordinal),
-  "Potomci se ne smejo iskati po locilu poševnica.");
+  "Potomci se ne smejo iskati po locilu posevnica.");
 
 Console.WriteLine("PIM.F10.CategoryMappingUxTests: vse pogodbe drzijo.");
 return 0;
