@@ -7,9 +7,14 @@ namespace PIM.SourceFetchWorker;
 /// <param name="Location">Naslov ali pot; pri HTTP/FTP je lahko prazen, kadar je cel naslov skrivnost.</param>
 /// <param name="CredentialKey">Kljuc v appsettings.Local.json, na primer <c>Fetch:BT_STOCK</c>.</param>
 /// <param name="FileNamePattern">Ime ciljne datoteke ali vzorec za mapo.</param>
+/// <param name="MinIntervalMinutes">
+/// Najmanjsi razmik med dvema prevzemoma tega vira; null pomeni brez omejitve. To ni nas urnik,
+/// ampak dobaviteljeva lastnost — kako pogosto sploh ima kaj novega.
+/// </param>
 public sealed record FetchLocation(
   int SourceFetchLocationId, int? OrganizationId, string SourceCode, string Kind,
-  string? Location, string? CredentialKey, string? FileNamePattern, string? Note);
+  string? Location, string? CredentialKey, string? FileNamePattern, string? Note,
+  int? MinIntervalMinutes = null);
 
 /// <summary>Kaj je bilo za en vir dejansko prevzeto.</summary>
 public sealed record FetchOutcome(string SourceCode, string Kind, bool Fetched, long Bytes, string? TargetPath, string? Skipped, string? Error);

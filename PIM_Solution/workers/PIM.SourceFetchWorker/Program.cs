@@ -134,7 +134,8 @@ static int Napaka(string sporocilo)
 static async Task<List<FetchLocation>> ReadLocationsAsync(SqlConnection connection, string? sourceCode)
 {
   await using var command = new SqlCommand("""
-    SELECT SourceFetchLocationId, OrganizationId, SourceCode, Kind, Location, CredentialKey, FileNamePattern, Note
+    SELECT SourceFetchLocationId, OrganizationId, SourceCode, Kind, Location, CredentialKey, FileNamePattern, Note,
+           MinIntervalMinutes
     FROM map.SourceFetchLocation
     WHERE IsActive = 1 AND (@SourceCode IS NULL OR SourceCode = @SourceCode)
     ORDER BY SourceCode;
@@ -151,7 +152,8 @@ static async Task<List<FetchLocation>> ReadLocationsAsync(SqlConnection connecti
       reader.IsDBNull(4) ? null : reader.GetString(4),
       reader.IsDBNull(5) ? null : reader.GetString(5),
       reader.IsDBNull(6) ? null : reader.GetString(6),
-      reader.IsDBNull(7) ? null : reader.GetString(7)));
+      reader.IsDBNull(7) ? null : reader.GetString(7),
+      reader.IsDBNull(8) ? null : reader.GetInt32(8)));
   }
 
   return rows;

@@ -21,8 +21,7 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
       {
         // Datoteko v mapo polozi clovek; prevzemnik nima kaj prinesti in to ni napaka.
         "MAPA" => new(location.SourceCode, location.Kind, false, 0, location.Location, "Lokalna mapa — prevzem ni potreben.", null),
-        "HTTP" => await FetchHttpAsync(location, credential, cancellationToken),
-        "FTP" => await FetchFtpAsync(location, credential, cancellationToken),
+        "HTTP" or "FTP" => await PrevzemiCeSmemo(location, credential, cancellationToken),
         _ => new(location.SourceCode, location.Kind, false, 0, null, null, $"Neznana vrsta prevzema: {location.Kind}."),
       };
     }
@@ -34,20 +33,33 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     }
   }
 
+  /// <summary>
+  /// Vira ne klicemo, dokler ni minil njegov razmik. Cikel zaloge tece na 5 minut, dobavitelji
+  /// pa osvezujejo redkeje: Nowodvorski na 2 uri, Braytron na 3. Brez te varovalke bi jih klicali
+  /// 288-krat na dan za podatek, ki se spremeni 12- oziroma 8-krat, pri Braytronu pa bi 283 od
+  /// 288 klicev koncalo z zavrnitvijo.
+  ///
+  /// Cakalni cas ima dva vira: razmik iz registra (nasa vednost o dobavitelju) in okno, ki ga
+  /// dobavitelj sam sporoci ob zavrnitvi. Slednje povozi prvo, ker je od dobavitelja.
+  /// </summary>
+  async Task<FetchOutcome> PrevzemiCeSmemo(FetchLocation location, FetchCredential? credential, CancellationToken cancellationToken)
+  {
+    var target = TargetPath(location);
+    if (CooldownUntil(target) is { } until && DateTime.UtcNow < until)
+      return new(location.SourceCode, location.Kind, false, 0, File.Exists(target) ? target : null,
+        $"Razmik dobavitelja se tece; naslednji prenos po {until.ToLocalTime():g}.", null);
+
+    return location.Kind.Equals("FTP", StringComparison.OrdinalIgnoreCase)
+      ? await FetchFtpAsync(location, credential, cancellationToken)
+      : await FetchHttpAsync(location, credential, cancellationToken);
+  }
+
   async Task<FetchOutcome> FetchHttpAsync(FetchLocation location, FetchCredential? credential, CancellationToken cancellationToken)
   {
     var url = credential?.Url ?? location.Location;
     if (string.IsNullOrWhiteSpace(url))
       return new(location.SourceCode, location.Kind, false, 0, null,
         $"Naslov ni nastavljen — vpisi ga v appsettings.Local.json pod {location.CredentialKey}.", null);
-
-    // Dobavitelj z omejitvijo pogostosti se ne klice, dokler njegovo okno ne potece. Cikel zaloge
-    // tece na 5 minut, Braytron pa dovoli en prenos na 180: brez tega bi ga klicali 288-krat na
-    // dan in 283-krat dobili zavrnitev. Cakalni cas zapise sam dobavitelj v svojem odgovoru.
-    var target0 = TargetPath(location);
-    if (CooldownUntil(target0) is { } until && DateTime.UtcNow < until)
-      return new(location.SourceCode, location.Kind, false, 0, File.Exists(target0) ? target0 : null,
-        $"Dobaviteljevo okno se tece; naslednji prenos po {until.ToLocalTime():g}.", null);
 
     using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     if (!response.IsSuccessStatusCode)
@@ -196,6 +208,10 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
   /// </summary>
   static FetchOutcome Prevzemi(FetchLocation location, string temporary, string target)
   {
+    // Razmik tece od uspesnega stika z dobaviteljem, ne od spremembe datoteke: tudi kadar je
+    // vsebina enaka, smo pravkar preverili in do izteka razmika ni cesa preverjati znova.
+    if (location.MinIntervalMinutes is int razmik && razmik > 0) WriteCooldown(target, razmik);
+
     if (File.Exists(target) && IstaVsebina(temporary, target))
     {
       File.Delete(temporary);
