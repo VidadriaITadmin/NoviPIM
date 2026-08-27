@@ -198,7 +198,8 @@
 
 .lang.is-set { background: var(--pim-good-bg); color: var(--pim-good-text); }
 .lang.is-missing { background: var(--pim-neutral-bg); border: 1px dashed var(--pim-border-strong); color: var(--pim-text-muted); }
-.lang.is-focus { outline: 2px solid var(--pim-primary); outline-offset: 1px; }
+/* Izbrani jezik ni obrobljen: jezik nosi ze naslov vozlisca. Znacka ga samo tise poudari. */
+.lang.is-focus { box-shadow: inset 0 -2px 0 currentColor; }
 
 .node-count {
   color: var(--pim-text-muted);
@@ -277,3 +278,26 @@
   .node-line { grid-template-columns: 1.5rem 1fr auto; }
   .node-count { display: none; }
 }
+
+/* --- Ime v izbranem jeziku ----------------------------------------------------------------
+   Ce prevoda ni, se pokaze slovensko ime - a pikcasto podcrtano, da se vidi, da je nadomestek
+   in ne prevod. Tiho slovensko ime sredi tujega drevesa je natanko tisto, cesar nihce ne
+   opazi. */
+
+.node-title.is-fallback {
+  border-bottom: 1px dotted var(--pim-warn-border);
+  color: var(--pim-text-muted);
+  font-weight: 500;
+}
+
+.node-original {
+  color: var(--pim-text-muted);
+  font-size: .74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-original::before { content: "· "; }
+
+.editor-origin { color: var(--pim-text-soft); font-weight: 600; }

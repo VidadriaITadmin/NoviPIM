@@ -66,7 +66,7 @@
   <label class="visually-hidden" for="tree-branch">Veja</label>
   <select id="tree-branch" class="filter-select" @bind="Branch" @bind:after="LoadAsync">
     <option value="">Vse veje</option>
-    @foreach (var root in Roots) { <option value="@root.CategoryCode">@root.CategoryName</option> }
+    @foreach (var root in Roots) { <option value="@root.CategoryCode">@DisplayName(root)</option> }
   </select>
 
   <label class="visually-hidden" for="tree-level">Nivo</label>
@@ -132,7 +132,9 @@
             }
 
             <button type="button" class="node-name" @onclick="() => ToggleEditor(row)">
-              <span class="node-title">@row.CategoryName</span>
+              <span class="node-title @(IsFallback(row) ? "is-fallback" : null)"
+                    title="@(IsFallback(row) ? "Ime v jeziku " + Language + " manjka; prikazano je slovensko." : null)">@DisplayName(row)</span>
+              @if (ShowOriginal(row)) { <span class="node-original">@row.CategoryName</span> }
               @if (row.ChildCount > 0) { <span class="node-children">@row.ChildCount</span> }
               @if (!row.IsActive) { <span class="node-off">neaktivna</span> }
             </button>
@@ -154,6 +156,7 @@
           {
             <div class="node-editor">
               <div class="editor-head">
+                <span class="editor-origin">sl: @row.CategoryName</span>
                 <span class="editor-path">@row.CategoryPath</span>
                 <span class="editor-code">@row.CategoryCode</span>
               </div>
@@ -232,6 +235,23 @@
     : $"{Rows.Count(row => row.IsMatch):N0} kategorij · {Visible.Count:N0} vidnih vrstic";
 
   static string Indent(int level) => $"padding-left:{(level - 1) * 22}px";
+
+  // Drevo se bere v izbranem jeziku. Ce imena v tem jeziku ni, obvelja slovensko - enako, kot to
+  // za spletne poti dela canon.CategoryPathTranslated - a je tu oznaceno, da se vidi, da je to
+  // nadomestek in ne prevod.
+  string DisplayName(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    row.Translations.TryGetValue(Language, out var name) && !string.IsNullOrWhiteSpace(name)
+      ? name
+      : row.CategoryName;
+
+  bool IsFallback(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    !string.Equals(Language, "sl", StringComparison.OrdinalIgnoreCase)
+      && !row.Translations.ContainsKey(Language);
+
+  // Slovensko ime ob prevodu drzi orientacijo: v tujem drevesu se je lahko izgubiti.
+  bool ShowOriginal(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    !string.Equals(Language, "sl", StringComparison.OrdinalIgnoreCase)
+      && row.Translations.ContainsKey(Language);
 
   protected override async Task OnInitializedAsync()
   {

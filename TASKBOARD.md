@@ -176,6 +176,33 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[INTRANET] Drevo kategorij se bere v izbranem jeziku** —
+  kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
+
+  Uporabnikova pripomba po prvem pogledu na prenovljeno stran, obe točki upravičeni:
+
+  1. **Izbira jezika ni spremenila drevesa.** Naslov vozlišča je ostal slovenski, ne glede na
+     izbrani jezik. Izbira jezika torej ni pomenila ničesar in se je brala kot okvara.
+  2. **Vijolični obris na znački izbranega jezika je motil** in ni nosil informacije.
+
+  Zdaj se naslov vozlišča bere v izbranem jeziku. Kjer imena v tem jeziku ni, obvelja slovensko —
+  enako, kot to za spletne poti dela `canon.CategoryPathTranslated` — a je **pikčasto podčrtano**,
+  da se vidi, da je nadomestek in ne prevod. Tiho slovensko ime sredi tujega drevesa je natanko
+  tisto, česar nihče ne opazi. Kadar prevod obstaja, stoji ob njem slovensko ime v drobnem tisku,
+  ker se je v tujem drevesu lahko izgubiti. Izbirnik veje bere v istem jeziku kot drevo.
+
+  Značka izbranega jezika ni več obrobljena — poudari jo tanka črta pod besedo.
+
+  **Dokaz:** `dotnet build PIM.Intranet` → **0 opozoril, 0 napak**;
+  `PIM.F10.CategoryMappingUxTests` → zelen, s štirimi novimi trditvami, ki to vedenje držijo
+  (naslov mora biti `DisplayName(row)`, izbirnik veje prav tako, nadomestek mora biti označen,
+  značka ne sme biti obrobljena).
+
+  **Neuspeh, ki ni moj:** polni `-Filter F10` je v tej seji vrnil 12 uspelih in 1 padel —
+  `PIM.F10.ProductsUxTests` z `Tabela ima enajst stolpcev; vsak mora imeti ime`. Pade na
+  necommitani spremembi `Products.razor`, ki je delo vzporednega agenta; te datoteke se po
+  `AGENTS.md` §4.2 nisem dotaknil.
+
 - **[BAZA + INTRANET] Drevo kategorij prenovljeno: vsi jeziki hkrati, zložljive veje, brez kartic — migracija 113** —
   kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-27.
 

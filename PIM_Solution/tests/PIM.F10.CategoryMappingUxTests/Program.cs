@@ -147,6 +147,20 @@ Assert(!treePage.Contains("<td>\u2014</td>", StringComparison.Ordinal),
 Assert(!treeService.Contains("+ N'/%'", StringComparison.Ordinal),
   "Potomci se ne smejo iskati po locilu posevnica.");
 
+
+// Izbira jezika mora spremeniti drevo. Ce naslov vozlisca ostane slovenski, izbira jezika ne
+// pomeni nicesar in uporabnik jo prebere kot okvaro.
+Assert(treePage.Contains("@DisplayName(row)", StringComparison.Ordinal)
+  && treePage.Contains("row.Translations.TryGetValue(Language, out var name)", StringComparison.Ordinal),
+  "Naslov vozlisca mora biti ime v izbranem jeziku.");
+Assert(treePage.Contains("@DisplayName(root)", StringComparison.Ordinal),
+  "Izbirnik veje mora brati v istem jeziku kot drevo.");
+Assert(treePage.Contains("IsFallback(row)", StringComparison.Ordinal)
+  && treeStyle.Contains(".node-title.is-fallback", StringComparison.Ordinal),
+  "Slovensko ime namesto manjkajocega prevoda mora biti oznaceno kot nadomestek.");
+Assert(!treeStyle.Contains("outline: 2px solid var(--pim-primary)", StringComparison.Ordinal),
+  "Znacka izbranega jezika ne sme biti obrobljena - barva je motila in ni nosila informacije.");
+
 Console.WriteLine("PIM.F10.CategoryMappingUxTests: vse pogodbe drzijo.");
 return 0;
 
