@@ -46,6 +46,49 @@ Throws<WorkbookReadException>(() =>
   WorkbookTable.Read(prazen);
 }, "Zvezek brez uporabne naslovne vrstice mora pasti razumljivo");
 
+/* --- 1b) Zapis delovnega zvezka: kar zapisemo, mora biti mogoce prebrati nazaj -------- */
+
+// Dokaz, da je zapisana datoteka pravi .xlsx, je branje z isto potjo, ki bere Excelove
+// datoteke dobaviteljev. Ce bi bil zapis pokvarjen, bi WorkbookTable.Read padel.
+{
+  var written = WorkbookWriter.Write(
+    "Izdelki",
+    [
+      new("Sifra", WorkbookCellKind.Text),
+      new("Naziv", WorkbookCellKind.Text),
+      new("Popolnost", WorkbookCellKind.Percent),
+      new("Tezav", WorkbookCellKind.Number),
+      new("Zadnja sprememba", WorkbookCellKind.DateTime),
+      new("Objavljen", WorkbookCellKind.Text),
+    ],
+    [
+      ["0000000000001", "Sijalka <E14> & \"plamen\"", 42.5m, 6L, new DateTime(2026, 8, 27, 14, 5, 0), true],
+      ["NW.12603", null, 0m, 0L, null, false],
+    ],
+    ["Izvozenih 2 od 5 vrstic pogleda."]);
+
+  using var reread = new MemoryStream(written);
+  var sheet = WorkbookTable.Read(reread);
+  Equal(6, sheet.Headers.Count, "Zapisani zvezek mora imeti vseh sest naslovov");
+  Equal("Zadnja sprememba", sheet.Headers[4], "Naslov stolpca mora priti nazaj nespremenjen");
+  Equal("0000000000001", sheet.Rows[0][0], "Sifra artikla mora ostati besedilo z vodilnimi niclami");
+  Equal("Sijalka <E14> & \"plamen\"", sheet.Rows[0][1], "Znaki XML v nazivu ne smejo pokvariti zvezka");
+  Equal("da", sheet.Rows[0][5], "Logicna vrednost se zapise kot da/ne");
+  Equal("ne", sheet.Rows[1][5], "Logicna vrednost se zapise kot da/ne");
+  Equal("", sheet.Rows[1][1], "Prazna vrednost mora ostati prazna celica");
+  Assert(sheet.Rows.Any(row => row[0].StartsWith("Izvozenih", StringComparison.Ordinal)),
+    "Opomba o odrezanem izvozu mora biti zapisana v datoteko, ne samo na zaslon");
+
+  // Zvezek mora nositi tudi obliko: brez sloga bi bil datum videti kot stevilo 46261.
+  using var archive = new ZipArchive(new MemoryStream(written), ZipArchiveMode.Read);
+  foreach (var part in new[] { "[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/worksheets/sheet1.xml" })
+    Assert(archive.GetEntry(part) is not null, "Zvezku manjka del " + part);
+  using var sheetPart = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+  var sheetXml = sheetPart.ReadToEnd();
+  Assert(sheetXml.Contains("state=\"frozen\"", StringComparison.Ordinal), "Naslovna vrstica mora biti zamrznjena");
+  Assert(sheetXml.Contains("<autoFilter", StringComparison.Ordinal), "Tabela mora imeti samodejni filter");
+}
+
 /* --- 2) Preslikava zvezka na pisljiva polja ------------------------------------------ */
 
 var writable = new[]
@@ -338,6 +381,11 @@ static string? ReadConnectionString()
       && strings.TryGetProperty("Pim", out var pim)) return pim.GetString();
   }
   return null;
+}
+
+static void Assert(bool condition, string message)
+{
+  if (!condition) throw new InvalidOperationException(message);
 }
 
 static void Equal<T>(T expected, T actual, string message)
