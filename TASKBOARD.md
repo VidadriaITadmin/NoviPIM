@@ -176,6 +176,44 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Braytronove kategorije, garancija in skladišče za zalogo — migracija 105** —
+  kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
+
+  Tri odločitve uporabnika iz datotek `brayxtron_kategorije.xlsx` in
+  `Kartica artikla - podatki in pravila.xlsx` (27. 8. 2026), zapisane kot podatek.
+
+  **1. Braytronove kategorije.** `map.CategoryPathMap` je imel za `BT_XML` **0 vrstic**, zajem
+  pa je prepoznal 78 izvornih kategorij (1.086 izdelkov). Migracija zapiše **25 preslikav**
+  (309 izdelkov) — tiste, kjer je uporabnik cilj poimenoval **in** cilj obstaja v drevesu
+  `svetila_si`. Namenoma izpuščeno: 26 kategorij (465 izdelkov), ker ciljne kategorije v drevesu
+  ni; 7 (148), ker je cilj odvisen od tipa; 15 (126) izključenih z odločitvijo; 5 (38) brez
+  vnosa v Excelu. Sijalke (113) niso tu — pravilo je »vedno gledaš GRLO«, torej po atributu.
+
+  **2. Garancija** je dodana v `WEB_svetila_si` in `WEB_videlektro` kot **WARNING, ne ERROR**.
+  Izmerjeno: od 2.090 izdelkov org 2, ki so VALID po `WEB_svetila_si`, jih ima garancijo 77.
+  Kot ERROR bi zahteva razveljavila 2.013 od 2.090 veljavnih. Prehod na ERROR je en `UPDATE`.
+
+  **3. Skladišče.** `stock.SaopProviderProfile` za org 2 in 3 dobi način `List` in šifro
+  `0000001` (obe preverjeni in aktivni v `canon.Warehouse`). Prej `ActiveFromRegister` = zahteva
+  čez 35 oziroma 70 skladišč. Org 1 in 4 v uporabnikovem listu nista in ostaneta nespremenjena.
+
+  **Dokaz — merjeno pred in po:**
+
+  | Kaj | Prej | Potem |
+  |---|---|---|
+  | `map.CategoryPathMap` za `BT_XML` | 0 | 25 |
+  | Braytronovi izdelki s kategorijo (org 2) | 0 | 180 |
+  | Braytron VALID po `WEB_svetila_si` (org 2) | 0 / 411 | **86 / 411** |
+  | Braytron skupni status VALID (org 2) | 0 | **80** |
+  | Braytron skupni status VALID (org 3) | 0 | **232** |
+
+  `PIM.Migrator` → `Uporabljena migracija: 105_...`, izhod 0.
+  `map.ResolveProductCategories`: org 2 **270 ms**, org 1+3+4 skupaj **684 ms**.
+  `val.RunValidation`: org 1 **12,6 s**, org 2 **61,2 s**, org 3 **15,1 s**, org 4 **20,3 s**.
+
+  Migracija sama preveri, da ciljna kategorija obstaja (`THROW 105001`), ker bi preslikava na
+  neobstoječo kategorijo tiho izginila v spoju s `canon.Category`.
+
 - **[INTRANET I1] Kartica izdelka, validacijski nivoji, preverbe ter skupna pogleda SAOP in splet** —
   kdo: Codex — ozemlje: INTRANET — končano 2026-08-27.
 
