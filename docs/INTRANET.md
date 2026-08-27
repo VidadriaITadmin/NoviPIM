@@ -331,7 +331,14 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
 10. **Neznan status se izpiše z izvorno vrednostjo**; UI prevaja samo znane statuse.
 11. **Brez read modela ni strani.** Novi pogledi prikazujejo samo registre in tabele, ki
     dejansko obstajajo; zapisovalnih gumbov na bralnih nastavitvah ni.
-12. **Predogled slike ima vedno svoje razmerje in omejeno sliko.** Elementi, sestavljeni prek
+12. **Vgrajen predogled tuje datoteke mora imeti zasilni izhod.** Prvo stran PDF izriše
+    brskalnikov bralnik v `<object type="application/pdf">`, vsebina pa pride s strežnika
+    dobavitelja. Ta sme vgrajevanje zavrniti (`X-Frame-Options`, `frame-ancestors`) ali
+    datoteko postreči samo po `http`. Zato je povezava na izvirnik **znotraj** `<object>`,
+    kot nadomestna vsebina, in ne samo v nogi okna. Vgrajujemo le, kar brskalnik res zna
+    pokazati (`MediaKindPolicy.IsInlineViewable` — danes samo PDF); `.rar`, `.dwg` in `.ldt`
+    ostanejo povezava.
+13. **Predogled slike ima vedno svoje razmerje in omejeno sliko.** Elementi, sestavljeni prek
     `RenderTreeBuilder` v `@code`, **ne dobijo oznake obsegnega CSS** (`b-…`), zato jih
     `<Stran>.razor.css` ne more omejiti — slika pride v naravni velikosti in razbije stran.
     Predogledi se zato pišejo kot razčlenjevalni izpis (`RenderFragment … => __builder => { … }`

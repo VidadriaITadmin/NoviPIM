@@ -80,6 +80,20 @@ Assert(pageCss.Contains("aspect-ratio", StringComparison.Ordinal) && pageCss.Con
   "Ploscica mora imeti fiksno razmerje in omejeno sliko.");
 Assert(page.Contains("loading=\"lazy\"", StringComparison.Ordinal), "Slike se nalagajo lenobno.");
 Assert(page.Contains("media-lightbox", StringComparison.Ordinal), "Klik na sliko mora ponuditi povecan predogled.");
+
+// PDF: prva stran se izrise v povecanem predogledu, brez novega zavihka. Vgrajevanje je odvisno
+// od tujega streznika, zato mora imeti <object> nadomestno vsebino s povezavo na izvirnik.
+Assert(MediaKindPolicy.IsInlineViewable("https://primer.si/navodila.pdf"), "PDF zna brskalnik pokazati kar v strani.");
+Assert(!MediaKindPolicy.IsInlineViewable("https://primer.si/model.rar"), "Arhiva ne zna prikazati noben brskalnik.");
+Assert(MediaKindPolicy.InlineViewerHref("https://primer.si/a.pdf").Contains("toolbar=0", StringComparison.Ordinal),
+  "Orodna vrstica bralnika v majhnem oknu samo jemlje prostor.");
+Assert(page.Contains("<object", StringComparison.Ordinal) && page.Contains("application/pdf", StringComparison.Ordinal),
+  "Prva stran PDF se mora izrisati v samem oknu predogleda.");
+var objectStart = page.IndexOf("<object", StringComparison.Ordinal);
+var objectEnd = page.IndexOf("</object>", StringComparison.Ordinal);
+Assert(objectStart > 0 && objectEnd > objectStart
+  && page[objectStart..objectEnd].Contains("Odpri izvirnik", StringComparison.Ordinal),
+  "Ce streznik dobavitelja vgrajevanje zavrne, mora znotraj <object> ostati povezava na izvirnik.");
 Assert(page.Contains("[Authorize", StringComparison.Ordinal), "Stran medijev zahteva prijavo.");
 
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");

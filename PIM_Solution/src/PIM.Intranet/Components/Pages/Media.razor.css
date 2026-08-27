@@ -124,7 +124,9 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
 .media-lightbox-panel header strong { display: block; color: var(--pim-text-strong); }
 .media-lightbox-panel header span { color: var(--pim-text-muted); font-size: .75rem; }
 .media-lightbox-body { align-items: center; background: var(--pim-surface-subtle); display: flex; justify-content: center; min-height: 12rem; overflow: auto; padding: 1rem; }
+.media-lightbox-body:has(.media-lightbox-pdf) { padding: .5rem; }
 .media-lightbox-body img { max-height: 62vh; max-width: 100%; object-fit: contain; }
+.media-lightbox-pdf { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-xs); height: 68vh; width: 100%; }
 .media-lightbox-fallback { color: var(--pim-text-muted); font-size: .8125rem; margin: 0; text-align: center; }
 .media-lightbox-panel footer { align-items: center; border-top: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .75rem; padding: .8rem 1rem; }
 .media-lightbox-panel footer .media-address { color: var(--pim-text-muted); font-size: .72rem; overflow-wrap: anywhere; }

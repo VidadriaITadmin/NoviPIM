@@ -90,6 +90,19 @@ public static class MediaKindPolicy
     return name.Length == 0 ? (url ?? string.Empty) : name;
   }
 
+  /// <summary>
+  /// Ali zna brskalnik ta naslov pokazati kar v strani, brez prenosa v nov zavihek.
+  ///
+  /// Danes je to samo PDF: brskalnik ima svoj pregledovalnik in izrise prvo stran. Za .rar,
+  /// .dwg ali .ldt tega ne zna nihce, zato tam ostane povezava. Odlocitev je namerno ozka —
+  /// vgrajen predogled je odvisen od tujega streznika (glava X-Frame-Options ga sme zavrniti),
+  /// zato mora biti povezava do izvirnika vedno se vedno vidna kot zasilni izhod.
+  /// </summary>
+  public static bool IsInlineViewable(string? url) => Extension(url) == ".pdf";
+
+  /// <summary>Naslov s pripisom, ki skrije orodno vrstico bralnika in stran umeri na sirino okna.</summary>
+  public static string InlineViewerHref(string href) => href + "#toolbar=0&navpanes=0&view=FitH";
+
   /// <summary>Slika predogleda za video, kadar jo je mogoce izpeljati iz naslova (YouTube).</summary>
   public static string? VideoPoster(string? url)
   {

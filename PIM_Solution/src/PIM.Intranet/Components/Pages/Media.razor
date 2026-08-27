@@ -89,7 +89,7 @@
         {
           var url = MediaUrlPolicy.Normalize(row.Url);
           <article class="media-tile">
-            <button type="button" class="media-preview" title="Povečaj predogled" @onclick="() => Open(row)">
+            <button type="button" class="media-preview" title="@(MediaKindPolicy.IsInlineViewable(row.Url) ? "Pokaži prvo stran dokumenta" : "Povečaj predogled")" @onclick="() => Open(row)">
               @Preview(row, url, false)
               <span class="kind-badge @KindTone(row.Kind)">@row.Kind</span>
               @if (url.Note is not null) { <span class="note-badge" title="@url.Note">!</span> }
@@ -162,9 +162,23 @@
         {
           <img src="@poster" alt="Predogled videa artikla @selected.ItemId" loading="lazy" />
         }
+        else if (MediaKindPolicy.IsInlineViewable(selected.Url) && selectedUrl.Href is not null)
+        {
+          @* Vsebina PDF pride iz tujega streznika. Ce ta vgrajevanje zavrne (X-Frame-Options),
+             brskalnik izrise nadomestno vsebino <object> — zato je povezava tu, ne v komentarju. *@
+          <object class="media-lightbox-pdf" data="@MediaKindPolicy.InlineViewerHref(selectedUrl.Href)"
+                  type="application/pdf" aria-label="Prva stran dokumenta @(selected.Title ?? selected.Role)">
+            <p class="media-lightbox-fallback">
+              Strežnik dobavitelja tega dokumenta ne dovoli prikazati znotraj strani.
+              <a href="@selectedUrl.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik v novem zavihku.</a>
+            </p>
+          </object>
+        }
         else
         {
-          <p class="media-lightbox-fallback">Predogleda ni mogoče prikazati v aplikaciji — odpri izvirnik v novem zavihku.</p>
+          <p class="media-lightbox-fallback">
+            Te vrste datoteke (@Zapis(selected)) brskalnik ne zna prikazati — odpri izvirnik v novem zavihku.
+          </p>
         }
       </div>
       <footer>
@@ -360,6 +374,12 @@
     MediaKindPolicy.DocumentCode => "kind-document",
     _ => "kind-other"
   };
+  static string Zapis(MediaRow row)
+  {
+    var extension = MediaKindPolicy.Extension(row.Url);
+    return extension.Length > 1 ? extension[1..].ToUpperInvariant() : row.Kind.ToLowerInvariant();
+  }
+
   static string ExtensionLabel(MediaRow row)
   {
     var extension = MediaKindPolicy.Extension(row.Url);
