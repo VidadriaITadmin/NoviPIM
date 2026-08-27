@@ -4,6 +4,8 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 @inject QualityReadService Quality
+@inject GovernanceReadService Governance
+@inject CatalogReadService Catalog
 @inject NavigationManager Navigation
 
 <PageTitle>Napake validacije</PageTitle>
@@ -21,6 +23,16 @@
 
 <section class="ui-card toolbar" role="search" aria-labelledby="issues-filter-title">
   <h2 id="issues-filter-title" class="visually-hidden">Iskanje odprtih težav</h2>
+
+  <label class="visually-hidden" for="issue-layer">Nivo</label>
+  <select id="issue-layer" class="filter-select" @bind="LayerDraft">
+    <option value="">Vsi nivoji</option>
+    @foreach (var layer in Layers)
+    {
+      <option value="@ValidationLayer.Code(layer)">@ValidationLayer.Label(layer)</option>
+    }
+  </select>
+
   <label class="visually-hidden" for="issue-search">Poišči po šifri ali EAN</label>
   <input id="issue-search" type="search" class="search-input" placeholder="Poišči po šifri ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
 
@@ -32,6 +44,18 @@
       <option value="@profile">@profile</option>
     }
   </select>
+
+  @if (LayerDraft == "SPLET")
+  {
+    <label class="visually-hidden" for="issue-site">Spletno mesto</label>
+    <select id="issue-site" class="filter-select" @bind="WebSiteDraft">
+      <option value="">Vsa spletna mesta</option>
+      @foreach (var site in WebSites)
+      {
+        <option value="@site.WebSiteCode">@site.WebSiteName</option>
+      }
+    </select>
+  }
 
   <label class="visually-hidden" for="issue-severity">Resnost</label>
   <select id="issue-severity" class="filter-select" @bind="SeverityDraft">
@@ -83,7 +107,13 @@
           {
             <tr>
               <td>
-                <a class="product-name" href="izdelki/@product.ProductId">@product.Name</a>
+                @foreach (var layer in LayersOf(product.ProductId))
+                {
+                  <PimChip Text="@ValidationLayer.Code(layer)" Tone="@LayerTone(layer)" />
+                }
+              </td>
+              <td>
+                <a class="product-name" href="@ProductHref(product.ProductId)">@product.Name</a>
                 <span class="product-meta"><span class="code-value">@product.ItemId</span>@if (product.Ean is not null) { <span>· EAN @product.Ean</span> }</span>
               </td>
               <td class="numeric">@product.ErrorCount.ToString("N0")</td>
@@ -101,6 +131,7 @@
                     <li>
                       <span class="issue-field">@(issue.FieldCode ?? issue.IssueCode)</span>
                       <span class="issue-profile">@issue.ProfileCode</span>
+                      @if (IsShared(issue)) { <PimChip Text="Skupno" Tone="info" /> }
                       <span class="issue-severity @(issue.Severity == "WARNING" ? "warn" : "bad")">@SeverityLabel(issue.Severity)</span>
                       <span class="issue-message">@issue.Message</span>
                     </li>
@@ -108,7 +139,7 @@
                 </ul>
                 @if (HiddenIssueCount(product) > 0)
                 {
-                  <a class="issue-more" href="izdelki/@product.ProductId">… še @HiddenIssueCount(product) na kartici izdelka</a>
+                  <a class="issue-more" href="@ProductHref(product.ProductId)">… še @HiddenIssueCount(product) na kartici izdelka</a>
                 }
               </td>
               <td>@(product.LastDetectedUtc?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
@@ -181,6 +212,8 @@
 
 @code {
   [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "nivo")] public string? QueryLayer { get; set; }
+  [SupplyParameterFromQuery(Name = "spletisce")] public string? QueryWebSite { get; set; }
   [SupplyParameterFromQuery(Name = "profil")] public string? QueryProfile { get; set; }
   [SupplyParameterFromQuery(Name = "resnost")] public string? QuerySeverity { get; set; }
   [SupplyParameterFromQuery(Name = "blokira")] public string? QueryBlocks { get; set; }
@@ -193,6 +226,8 @@
   string? Error;
   int? OrganizationId;
   string SearchDraft = "";
+  string LayerDraft = "";
+  string WebSiteDraft = "";
   string ProfileDraft = "";
   string SeverityDraft = "";
   string BlocksDraft = "";
@@ -200,6 +235,9 @@
 
   const int Take = 25;
   const int VisibleIssuesPerProduct = 4;
+  static readonly PimValidationLayer[] Layers = Enum.GetValues<PimValidationLayer>();
+  IReadOnlyList<ValidationProfileRow> Profiles = [];
+  IReadOnlyList<WebSiteRow> Sites = [];
 
   int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
 
@@ -207,7 +245,7 @@
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Izdelek"), new("Napak", Numeric: true), new("Opozoril", Numeric: true),
+    new("Nivo"), new("Izdelek"), new("Napak", Numeric: true), new("Opozoril", Numeric: true),
     new("Blokira"), new("Popolnost"), new("Kaj manjka"), new("Zadnji pojav"),
   ];
 
@@ -225,8 +263,10 @@
 
   sealed record FilterChip(string Label, string RemoveHref);
 
-  IReadOnlyList<string> ProfileCodes => Overview is null ? []
-    : Overview.Rules.Select(rule => rule.ProfileCode).Distinct().OrderBy(code => code).ToList();
+  IReadOnlyList<string> ProfileCodes => ProfilesForLayer(LayerDraft, WebSiteDraft)
+    .Select(profile => profile.ProfileCode).Distinct().OrderBy(code => code).ToList();
+
+  IReadOnlyList<WebSiteRow> WebSites => Sites;
 
   IReadOnlyList<string> FieldCodes => Overview is null ? []
     : Overview.Rules.Select(rule => rule.FieldCode).Distinct().OrderBy(code => code).ToList();
@@ -234,6 +274,8 @@
   protected override async Task OnParametersSetAsync()
   {
     SearchDraft = QuerySearch ?? "";
+    LayerDraft = QueryLayer ?? "";
+    WebSiteDraft = QueryWebSite ?? "";
     ProfileDraft = QueryProfile ?? "";
     SeverityDraft = QuerySeverity ?? "";
     BlocksDraft = QueryBlocks ?? "";
@@ -250,11 +292,17 @@
       {
         OrganizationId = organization.OrganizationId;
         Overview = await Quality.GetOverviewAsync(organization.OrganizationId);
+        Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+        Sites = await Catalog.GetWebSitesAsync();
       }
 
-      PageData = await Quality.GetIssuesAsync(new QualityIssueFilter(
+      var filter = new QualityIssueFilter(
         organization.OrganizationId, Skip, Take, QuerySearch, QueryProfile,
-        QuerySeverity, QueryBlocks, QueryField));
+        QuerySeverity, QueryBlocks, QueryField);
+      var layerProfiles = ProfilesForLayer(QueryLayer, QueryWebSite).Select(profile => profile.ProfileCode).ToArray();
+      PageData = string.IsNullOrWhiteSpace(QueryLayer)
+        ? await Quality.GetIssuesAsync(filter)
+        : await Quality.GetIssuesForProfilesAsync(filter, layerProfiles);
     }
     catch
     {
@@ -288,6 +336,8 @@
     get
     {
       var chips = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QueryLayer)) chips.Add(new($"Nivo: {LayerLabel(QueryLayer)}", Href(layer: "", webSite: "")));
+      if (!string.IsNullOrWhiteSpace(QueryWebSite)) chips.Add(new($"Spletno mesto: {QueryWebSite}", Href(webSite: "")));
       if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
       if (!string.IsNullOrWhiteSpace(QueryProfile)) chips.Add(new($"Profil: {QueryProfile}", Href(profile: "")));
       if (!string.IsNullOrWhiteSpace(QuerySeverity)) chips.Add(new($"Resnost: {SeverityLabel(QuerySeverity)}", Href(severity: "")));
@@ -300,16 +350,18 @@
   // Filtri in stran zivijo v naslovu: povezavo je mogoce deliti, gumb Nazaj dela, KPI kartica
   // pa lahko pelje naravnost na svoj filtriran seznam. "" pomeni odstrani, null ohrani.
   string Href(string? search = null, string? profile = null, string? severity = null,
-    string? blocks = null, string? field = null, int? page = null)
+    string? blocks = null, string? field = null, string? layer = null, string? webSite = null, int? page = null)
   {
     var parameters = new List<string>();
+    Add("nivo", Resolve(layer, QueryLayer));
+    Add("spletisce", Resolve(webSite, QueryWebSite));
     Add("isci", Resolve(search, QuerySearch));
     Add("profil", Resolve(profile, QueryProfile));
     Add("resnost", Resolve(severity, QuerySeverity));
     Add("blokira", Resolve(blocks, QueryBlocks));
     Add("polje", Resolve(field, QueryField));
     var resolvedPage = page ?? (search is null && profile is null && severity is null
-      && blocks is null && field is null ? QueryPage : null);
+      && blocks is null && field is null && layer is null && webSite is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "kakovost/napake" : "kakovost/napake?" + string.Join('&', parameters);
@@ -329,7 +381,7 @@
   {
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
-      blocks: BlocksDraft, field: FieldDraft, page: 1));
+      blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1));
     return Task.CompletedTask;
   }
 
@@ -357,5 +409,60 @@
     "WEB" => "splet",
     "NONE" => "ne blokira",
     _ => blocks ?? "—",
+  };
+
+  IReadOnlyList<ValidationProfileRow> ProfilesForLayer(string? layerValue = null, string? webSiteValue = null)
+  {
+    layerValue ??= QueryLayer;
+    webSiteValue ??= QueryWebSite;
+    if (!Enum.TryParse<PimValidationLayer>(NormalizeLayer(layerValue), true, out var layer)) return Profiles;
+    return Profiles.Where(profile => ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb).Contains(layer))
+      .Where(profile => layer != PimValidationLayer.Splet || string.IsNullOrWhiteSpace(webSiteValue)
+        || ValidationLayer.IsShared(profile.Scope) || SiteMatches(profile.ProfileCode, webSiteValue))
+      .ToArray();
+  }
+
+  IEnumerable<PimValidationLayer> LayersOf(long productId) => PageData is null ? [] : PageData.Issues
+    .Where(issue => issue.ProductId == productId)
+    .SelectMany(issue => ValidationLayer.Resolve(issue.ProfileCode, Profile(issue.ProfileCode)?.Scope, issue.BlocksErp, issue.BlocksWeb))
+    .Distinct();
+
+  bool IsShared(QualityIssueRow issue) => ValidationLayer.IsShared(Profile(issue.ProfileCode)?.Scope);
+  ValidationProfileRow? Profile(string code) => Profiles.FirstOrDefault(profile => profile.ProfileCode.Equals(code, StringComparison.OrdinalIgnoreCase));
+
+  string ProductHref(long productId)
+  {
+    var fragment = NormalizeLayer(QueryLayer) switch
+    {
+      "KOMERCIALA" => "komerciala",
+      "SPLET" => "splet",
+      _ => "erp",
+    };
+    return $"izdelki/{productId}#{fragment}";
+  }
+
+  static string NormalizeLayer(string? value) => value?.Replace("/", "", StringComparison.Ordinal).Replace("_", "", StringComparison.Ordinal) switch
+  {
+    "ERPSLO" => nameof(PimValidationLayer.ErpSlo),
+    "ERPEUTHIRD" => nameof(PimValidationLayer.ErpEuThird),
+    "KOMERCIALA" => nameof(PimValidationLayer.Komerciala),
+    "SPLET" => nameof(PimValidationLayer.Splet),
+    _ => value ?? "",
+  };
+
+  static bool SiteMatches(string profileCode, string site)
+  {
+    static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
+    return Normalize(profileCode).Contains(Normalize(site), StringComparison.OrdinalIgnoreCase);
+  }
+
+  static string LayerLabel(string value) => Enum.TryParse<PimValidationLayer>(NormalizeLayer(value), true, out var layer)
+    ? ValidationLayer.Label(layer) : value;
+
+  static string? LayerTone(PimValidationLayer layer) => layer switch
+  {
+    PimValidationLayer.Komerciala => "info",
+    PimValidationLayer.Splet => "warn",
+    _ => "bad",
   };
 }

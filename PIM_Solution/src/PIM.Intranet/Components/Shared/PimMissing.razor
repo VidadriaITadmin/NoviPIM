@@ -1,0 +1,12 @@
+<aside class="missing-read-model" role="note">
+  <strong>Bralni model še ni nameščen.</strong>
+  <p>Ta pogled bere <span class="code-value">@Object</span>, ki v bazi še ne obstaja.</p>
+  <p>Potrebuje: <em>@What</em> iz @Needs.</p>
+  <p>Stran je pripravljena; ko procedura nastane, se napolni brez spremembe kode.</p>
+</aside>
+
+@code {
+  [Parameter, EditorRequired] public required string Object { get; set; }
+  [Parameter, EditorRequired] public required string What { get; set; }
+  [Parameter, EditorRequired] public required string Needs { get; set; }
+}

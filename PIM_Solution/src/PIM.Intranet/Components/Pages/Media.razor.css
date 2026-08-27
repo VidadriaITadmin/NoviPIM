@@ -1,0 +1,18 @@
+.toolbar { flex-wrap: wrap; }
+.search-input { flex: 1 1 16rem; }
+.result-count { color: var(--pim-text-muted); margin-left: auto; }
+.data-card { padding: 0; }
+.media-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); padding: 1rem; }
+.media-grid-card { border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .65rem; }
+.media-grid-card img, .media-thumb img { background: var(--pim-surface-subtle); object-fit: contain; }
+.media-grid-card img { aspect-ratio: 1; width: 100%; }
+.media-thumb { height: 3rem; width: 3rem; }
+.media-thumb img { height: 3rem; width: 3rem; }
+.media-thumb > span { color: var(--pim-text-muted); font-size: .68rem; }
+.address-note { color: var(--pim-warn-text); display: block; }
+.muted { color: var(--pim-text-muted); overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .result-count { margin-left: 0; }
+}

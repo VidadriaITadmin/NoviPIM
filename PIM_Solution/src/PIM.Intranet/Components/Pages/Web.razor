@@ -1,0 +1,124 @@
+@page "/splet"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject GovernanceReadService Governance
+@inject CatalogReadService Catalog
+@inject IntranetDataService Data
+
+<PageTitle>Splet — kaj gre ven</PageTitle>
+<PimPage Title="Splet — kaj gre ven" Subtitle="Po spletnem mestu: kaj gre v datoteko, kaj ne, zakaj in ali imajo stolpci podatkovni vir." />
+
+<div class="filter-bar section-gap">
+  <label class="field-control"><span>Spletno mesto</span><select value="@SelectedSite" @onchange="SiteChangedAsync"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
+</div>
+
+<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje spletnih izhodov …">
+  <section class="kpi-grid" aria-label="Pripravljenost spletnega izvoza">
+    <PimStat Label="Gre na splet" Value="@ValidWeb.ToString("N0")" Note="brez blokirajoče spletne napake" />
+    <PimStat Label="Ne gre" Value="@WebSummary.AffectedProductCount.ToString("N0")" Note="ista množica kot nivo SPLET na Kakovosti" Href="@IssueHref()" />
+    <PimStat Label="Gre, a z odprto težavo" Value="@Number(Readiness?.Totals.PublishedWithOpenIssues)" Href="kakovost/napake?nivo=SPLET&resnost=WARNING" />
+    <PimStat Label="Stolpcev brez vira" Value="@FilteredCoverage.Sum(profile => profile.UnmappedColumnCount).ToString("N0")" Href="izvozi" />
+  </section>
+
+  <h2 class="section-title">Zakaj izdelek ne pride do datoteke</h2>
+  <section class="ui-card data-card">
+    <PimTable Caption="Spletne zahteve, ki blokirajo izvoz" Columns="ReasonColumns">
+      <Rows>
+        @foreach (var reason in FilteredReasons)
+        {
+          <tr><td><a href="@IssueHref(reason)"><span class="code-value">@reason.FieldCode</span></a></td><td>@reason.ProfileCode</td><td><PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /></td><td class="numeric">@reason.ProductCount.ToString("N0")</td></tr>
+        }
+      </Rows>
+    </PimTable>
+    @if (FilteredReasons.Count == 0) { <div class="note-panel">Za izbrano spletno mesto ni zabeleženega blokirajočega razloga.</div> }
+  </section>
+
+  <h2 class="section-title">Stolpci profila brez vira</h2>
+  <section class="ui-card data-card">
+    <PimTable Caption="Pokritost stolpcev spletnih profilov" Columns="CoverageColumns">
+      <Rows>
+        @foreach (var profile in FilteredCoverage)
+        {
+          <tr><td>@profile.ProfileCode</td><td class="numeric">@profile.ColumnCount.ToString("N0")</td><td class="numeric">@profile.MappedColumnCount.ToString("N0")</td><td class="numeric">@profile.UnmappedColumnCount.ToString("N0")</td><td><PimBar Percent="@Coverage(profile)" Label="@($"Pokritost {profile.ProfileCode}")" /></td></tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+
+  <h2 class="section-title">Izvozni profili tega spletnega mesta</h2>
+  <section class="ui-card data-card">
+    <PimTable Caption="Spletni izvozni profili" Columns="ProfileColumns">
+      <Rows>
+        @foreach (var profile in FilteredProfiles)
+        {
+          <tr><td><a href="izvozi/profili/@profile.ExportProfileId">@profile.Name</a><div class="tree-path">@profile.ProfileCode</div></td><td class="numeric">@profile.ColumnCount.ToString("N0")</td><td class="numeric">@profile.MappedColumnCount.ToString("N0")</td><td>—</td><td>—</td><td><a href="izvozi/profili/@profile.ExportProfileId">→</a></td></tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+
+  <h2 class="section-title">Zgodovina dostav</h2>
+  <PimMissing Object="intranet.GetWebExportDeliveries" What="čas izdelave, profil, število vrstic, velikost, rezultat in cilj vsake spletne dostave" Needs="evidence iz PIM.B2bWorker in dostavnega transporta" />
+</PimState>
+
+@code {
+  static readonly IReadOnlyList<PimColumn> ReasonColumns = [new("Zahteva"), new("Profil"), new("Blokira"), new("Izdelkov", true)];
+  static readonly IReadOnlyList<PimColumn> CoverageColumns = [new("Profil"), new("Stolpcev", true), new("Z virom", true), new("Brez vira", true), new("Pokritost")];
+  static readonly IReadOnlyList<PimColumn> ProfileColumns = [new("Profil"), new("Stolpcev", true), new("Pokritih", true), new("Zadnja datoteka"), new("Vrstic"), new("Podrobnost")];
+  IReadOnlyList<WebSiteRow> Sites = [];
+  IReadOnlyList<ExportProfileRow> Profiles = [];
+  IReadOnlyList<ValidationProfileRow> ValidationProfiles = [];
+  ExportReadiness? Readiness;
+  ValidationLayerSummary WebSummary = new(PimValidationLayer.Splet, 0, 0);
+  int? OrganizationId;
+  string SelectedSite = "";
+  bool Loading = true;
+  string? Error;
+
+  IReadOnlyList<ExportProfileRow> FilteredProfiles => Profiles.Where(IsWebProfile).Where(profile => SiteMatches(profile.ProfileCode, profile.ChannelCode)).ToArray();
+  IReadOnlyList<ExportProfileCoverage> FilteredCoverage => (Readiness?.Profiles ?? []).Where(profile => IsWebProfile(profile.ChannelCode)).Where(profile => SiteMatches(profile.ProfileCode, profile.ChannelCode)).ToArray();
+  IReadOnlyList<ExportBlockingReason> FilteredReasons => (Readiness?.Reasons ?? []).Where(reason => reason.BlocksWeb).Where(reason => SiteMatches(reason.ProfileCode, "")).ToArray();
+  long ValidWeb => Math.Max(0, WebSummary.ProductCount - WebSummary.AffectedProductCount);
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var org = await Data.GetCurrentOrganizationAsync();
+      if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = org.OrganizationId;
+      var sitesTask = Catalog.GetWebSitesAsync();
+      var profilesTask = Governance.GetExportProfilesAsync();
+      var validationTask = Governance.GetValidationProfilesAsync(org.OrganizationId);
+      var readinessTask = Governance.GetExportReadinessAsync(org.OrganizationId);
+      Sites = await sitesTask; Profiles = await profilesTask; ValidationProfiles = await validationTask; Readiness = await readinessTask;
+      await LoadSummaryAsync();
+    }
+    catch { Error = "Spletnih izhodov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task SiteChangedAsync(ChangeEventArgs args) { SelectedSite = args.Value?.ToString() ?? ""; await LoadSummaryAsync(); }
+  async Task LoadSummaryAsync()
+  {
+    if (OrganizationId is null) return;
+    WebSummary = (await Governance.GetValidationLayerSummariesAsync(OrganizationId.Value, ValidationProfiles, SelectedSite)).First(summary => summary.Layer == PimValidationLayer.Splet);
+  }
+  bool SiteMatches(string profileCode, string channel)
+  {
+    if (string.IsNullOrWhiteSpace(SelectedSite)) return true;
+    static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
+    return Normalize(profileCode + channel).Contains(Normalize(SelectedSite), StringComparison.OrdinalIgnoreCase);
+  }
+  static bool IsWebProfile(ExportProfileRow profile) => IsWebProfile(profile.ChannelCode);
+  static bool IsWebProfile(string channel) => !channel.Contains("SAOP", StringComparison.OrdinalIgnoreCase) && !channel.Contains("ERP", StringComparison.OrdinalIgnoreCase);
+  string IssueHref(ExportBlockingReason? reason = null)
+  {
+    var values = new List<string> { "nivo=SPLET" };
+    if (!string.IsNullOrWhiteSpace(SelectedSite)) values.Add("spletisce=" + Uri.EscapeDataString(SelectedSite));
+    if (reason is not null) { values.Add("profil=" + Uri.EscapeDataString(reason.ProfileCode)); values.Add("polje=" + Uri.EscapeDataString(reason.FieldCode)); }
+    return "kakovost/napake?" + string.Join('&', values);
+  }
+  static decimal Coverage(ExportProfileCoverage profile) => profile.ColumnCount == 0 ? 0 : Math.Round(100m * profile.MappedColumnCount / profile.ColumnCount, 1);
+  static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+}

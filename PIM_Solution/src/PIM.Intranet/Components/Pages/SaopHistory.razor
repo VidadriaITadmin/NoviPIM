@@ -1,0 +1,62 @@
+@page "/saop/zgodovina"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IntranetDataService Data
+
+<PageTitle>Zgodovina zapisov v SAOP</PageTitle>
+<PimPage Title="Zgodovina zapisov v SAOP" Subtitle="Ena vrstica predstavlja poslovno operacijo. Posamezni poskusi zahtevajo dodaten bralni model." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-label="Filtri zgodovine SAOP">
+  <select class="filter-select" @bind="Entity"><option value="">Vse entitete</option>@foreach (var value in Entities) { <option value="@value">@value</option> }</select>
+  <select class="filter-select" @bind="Status"><option value="">Vsa stanja</option>@foreach (var value in Statuses) { <option value="@value">@value</option> }</select>
+  <select class="filter-select" disabled title="Odobritelj ni v bralnem modelu"><option>Uporabnik — ni podatka</option></select>
+  <select class="filter-select" @bind="Period"><option value="0">Vse obdobje</option><option value="7">Zadnjih 7 dni</option><option value="30">Zadnjih 30 dni</option><option value="90">Zadnjih 90 dni</option></select>
+  <input class="search-input" type="search" placeholder="Ključ, polje ali cilj …" @bind="Search" @bind:event="oninput" />
+  <span class="result-count">@Filtered.Count.ToString("N0") operacij</span>
+</section>
+
+<PimMissing Object="intranet.GetOutboundMessages" What="odobritelja, čas pošiljanja, staro in novo vrednost ter razčlenitev out.OutboxAttempt" Needs="out.OutboxMessage, out.OutboxAttempt in posnetek dejansko poslanih polj" />
+
+<section class="ui-card data-card section-gap" aria-label="Zgodovina operacij SAOP">
+  <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Filtered.Count == 0)" EmptyText="Za izbrane filtre ni operacij." LoadingText="Nalaganje zgodovine …">
+    <PimTable Caption="Operacije zapisa v SAOP" Columns="Columns">
+      <Rows>
+        @foreach (var row in Filtered)
+        {
+          <tr>
+            <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td><td>@row.Operation</td>
+            <td>@row.FieldSummary</td><td>—</td><td>@(row.Status == "Sent" ? "Da, nepotrjeno" : "—")</td><td>@Response(row)</td>
+            <td>@(row.Status is "Verified" or "Succeeded" ? "Da" : "—")</td><td><PimChip Text="@Label(row.Status)" Tone="@Tone(row.Status)" /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "stanje")] public string Status { get; set; } = "";
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Zgodovina")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat")];
+  IReadOnlyList<OutboundRow> Rows = [];
+  bool Loading = true;
+  string? Error;
+  string Entity = "", Search = "", Period = "30";
+  IReadOnlyList<string> Entities => Rows.Select(row => row.EntityType).Distinct().Order().ToArray();
+  IReadOnlyList<string> Statuses => Rows.Select(row => row.Status).Distinct().Order().ToArray();
+  IReadOnlyList<OutboundRow> Filtered => Rows.Where(row =>
+    (Entity.Length == 0 || row.EntityType == Entity) && (Status.Length == 0 || row.Status == Status)
+    && (Period == "0" || row.CreatedUtc >= DateTime.UtcNow.AddDays(-int.Parse(Period)))
+    && (Search.Length == 0 || row.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.FieldSummary.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.TargetKind.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+    .OrderByDescending(row => row.CreatedUtc).ToArray();
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { var org = await Data.GetCurrentOrganizationAsync(); if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; } Rows = await Data.GetOutboundAsync(org.OrganizationId); }
+    catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+  static string Response(OutboundRow row) => row.ResponseStatusCode is null && row.ResponseCorrelationId is null ? "—" : $"{row.ResponseStatusCode} {row.ResponseCorrelationId}".Trim();
+  static string Label(string status) => status == "Sent" ? "Poslano, nepotrjeno" : status;
+  static string? Tone(string status) => status is "Verified" or "Succeeded" ? "good" : status is "Error" or "Dead" or "Drift" or "Cancelled" ? "bad" : "warn";
+}

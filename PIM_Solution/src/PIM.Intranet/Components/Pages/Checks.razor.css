@@ -1,0 +1,7 @@
+.checks-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.checks-toolbar { align-items: start; }
+.check-code-filter { display: grid; grid-template-columns: repeat(2, minmax(12rem, 1fr)); gap: .25rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .65rem; }
+.check-code-filter legend { color: var(--text-muted); font-size: .8rem; padding: 0 .3rem; }
+.check-code-filter label { font-size: .78rem; white-space: nowrap; }
+@media (max-width: 900px) { .checks-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .check-code-filter { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .checks-kpis { grid-template-columns: 1fr; } }

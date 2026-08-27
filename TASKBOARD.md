@@ -142,9 +142,6 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
-Trenutno nihče. Naslednji koraki iz načrta so v razdelku TODO in v
-`docs/Sprecifikacije_starega_PIMa/Nacrt_Intranet_Aplikacija.md` §7.
-
 ## BLOKIRANO
 
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
@@ -178,6 +175,23 @@ Trenutno nihče. Naslednji koraki iz načrta so v razdelku TODO in v
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[INTRANET I1] Kartica izdelka, validacijski nivoji, preverbe ter skupna pogleda SAOP in splet** —
+  kdo: Codex — ozemlje: INTRANET — končano 2026-08-27.
+
+  Kartica izdelka ima 11 kanalskih/dokaznih zavihkov, dejanske slike, skupno normalizacijo
+  medijskih naslovov in poenoten prikaz svežine. Kakovost, napake in pravila uporabljajo isti
+  razvrščevalnik `ERP_SLO` · `ERP_EU/THIRD` · `KOMERCIALA` · `SPLET`. Dodani so `/preverbe`,
+  ločeni strehi `/saop` in `/splet`, predogledna pogodba izvoza ter razširjene nastavitve za
+  atribute, kategorije in povezave izdelkov. Vse manjkajoče bralne odvisnosti so vidne prek
+  `PimMissing` in popisane v `docs/porocila-faz/BAZA_ZAHTEVE_INTRANET.md`.
+
+  Dokaz: `scripts\run_tests.ps1 -Filter F10` → **11 uspelih / 0 preskočenih / 0 padlih**;
+  `scripts\run_tests.ps1` → **52 uspelih / 0 preskočenih / 0 padlih**, izhod 0 in `Build OK`;
+  ločen `dotnet build PIM_Solution\PIM.sln` → **0 opozoril / 0 napak**. Zagonski smoke:
+  `/health` in `/prijava` → 200, `/saop`, `/splet`, `/preverbe` in
+  `/nastavitve/povezave-izdelkov` → 302 na prijavo. Vseh 61 deklariranih `@page` poti je
+  unikatnih.
 
 - **[INTRANET + BAZA] Delovni seznami: izdelki, kakovost, zaloga in pripravljenost izvoza** —
   kdo: Claude Opus 5 (1M) — ozemlji: BAZA, nato INTRANET — 2026-08-26.

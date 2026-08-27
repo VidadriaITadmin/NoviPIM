@@ -2,20 +2,10 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.GovernanceReadService Governance
-@inject AuthenticationStateProvider Authentication
 @inject PIM.Intranet.Services.IntranetDataService Data
 
-<PageTitle>Izvozi</PageTitle>
-<PimPage Title="Izvozi" Subtitle="Izvozni profili določajo obliko datotek. Odhodna pošta pa sledi spremembam, ki jih PIM pošilja nazaj v SAOP." />
-
-@if (CanManage)
-{
-  <section class="hub-grid" aria-label="Delovne strani izvozov">
-    <PimHubCard Title="Odhodna pošta" Href="outbound" Description="Odobritev, pošiljanje, ponovni poskusi in odmiki sprememb proti SAOP." />
-    <PimHubCard Title="Množično urejanje" Href="izvozi/mnozicno" Description="Priprava skupine sprememb ročno ali iz delovnega zvezka; nič ne odide brez odobritve." />
-    <PimHubCard Title="Obvestila" Href="izvozi/obvestila" Description="Napake in opozorila odhodne poti, ki zahtevajo odziv uporabnika." />
-  </section>
-}
+<PageTitle>Spletni izvozi</PageTitle>
+<PimPage Title="Spletni izvozi" Subtitle="Profili, pokritost stolpcev in datoteke za spletne kanale. Zapisi nazaj v SAOP so ločeno pod streho SAOP." />
 
 <section class="kpi-grid" aria-labelledby="export-kpi-title">
   <h2 id="export-kpi-title" class="visually-hidden">Kaj gre v izvoz in kaj ne</h2>
@@ -106,7 +96,6 @@
   IReadOnlyList<PIM.Intranet.Services.ExportProfileRow> Profiles = [];
   PIM.Intranet.Services.ExportReadiness? Readiness;
   bool Loading = true;
-  bool CanManage;
   string? Error;
 
   static readonly IReadOnlyList<PimColumn> ReasonColumns =
@@ -127,8 +116,6 @@
 
   protected override async Task OnInitializedAsync()
   {
-    var user = (await Authentication.GetAuthenticationStateAsync()).User;
-    CanManage = user.IsInRole(PimRoles.Admin) || user.IsInRole(PimRoles.CatalogEditor) || user.IsInRole(PimRoles.Commercial);
     try
     {
       Profiles = await Governance.GetExportProfilesAsync();
@@ -150,5 +137,5 @@
 
   // Razlog vodi na svoj filtriran delovni seznam, ne na splosno stran kakovosti.
   static string ReasonHref(PIM.Intranet.Services.ExportBlockingReason reason) =>
-    $"kakovost/napake?profil={Uri.EscapeDataString(reason.ProfileCode)}&polje={Uri.EscapeDataString(reason.FieldCode)}";
+    $"kakovost/napake?nivo=SPLET&profil={Uri.EscapeDataString(reason.ProfileCode)}&polje={Uri.EscapeDataString(reason.FieldCode)}";
 }

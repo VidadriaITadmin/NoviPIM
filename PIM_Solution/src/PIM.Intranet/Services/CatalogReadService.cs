@@ -3,11 +3,11 @@ using Microsoft.Data.SqlClient;
 namespace PIM.Intranet.Services;
 
 public sealed record MediaRow(long ProductMediaId, long ProductId, string ItemId, string Url, string Role, int SortOrder);
-public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia);
+public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia, long SchemeLessCount);
 public sealed record PriceRow(long ProductPriceId, long ProductId, string ItemId, string PriceList, decimal Net, decimal VatRate, DateTime ValidFrom, bool IsActive);
 public sealed record PartnerRow(string Name, long ProductCount, long ActiveCount);
 public sealed record AttributeRow(string AttributeCode, long ProductCount, long ValueCount, string? SampleValue);
-public sealed record CategoryRow(int CategoryId, string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath, bool IsActive, long ProductCount);
+public sealed record CategoryRow(int CategoryId, string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath, bool IsActive, long ProductCount, long DescendantProductCount);
 public sealed record WarehouseRow(int WarehouseId, string WarehouseCode, string? Name, string? WarehouseType, string? GroupCode, bool IsActive, DateTime UpdatedUtc);
 public sealed record WebSiteRow(int WebSiteId, string WebSiteCode, string WebSiteName, string CategoryTreeCode, string LanguageCode, string CategoryFieldCode, int SortOrder, bool IsActive, long CategoryCount);
 public sealed record LanguageRow(int LanguageRowId, string SaopLanguageId, string LanguageCode, string Name, int OrganizationId, bool IsActive, DateTime UpdatedUtc);
@@ -25,13 +25,21 @@ public sealed class CatalogReadService(PimDb database)
   // Uporabnik je odlocil, da medij za zdaj ostane naslov v bazi; datotecno skladisce pride
   // pozneje. Stran zato prikazuje povezavo, vlogo in vrstni red, ne pa nalaganja datotek.
   public Task<(IReadOnlyList<MediaRow> Rows, long TotalCount)> GetMediaAsync(
-    int organizationId, string? search, int skip, int take, CancellationToken cancellationToken = default) =>
+    int organizationId, string? search, string? role, string? addressState, int skip, int take,
+    CancellationToken cancellationToken = default) =>
     database.PageAsync("""
       SELECT media.ProductMediaId, media.ProductId, product.ItemID, media.Url, media.Role, media.SortOrder
       FROM canon.ProductMedia media
       INNER JOIN canon.Product product ON product.ProductId = media.ProductId
       WHERE product.OrganizationId = @OrganizationId
         AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%' OR media.Url LIKE '%' + @Search + '%' OR media.Role LIKE '%' + @Search + '%')
+        AND (@Role IS NULL OR media.Role = @Role)
+        AND (@AddressState IS NULL
+          OR (@AddressState = N'OK' AND media.Url LIKE N'https://%')
+          OR (@AddressState = N'CORRECTED' AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
+          OR (@AddressState = N'HTTP' AND media.Url LIKE N'http://%')
+          OR (@AddressState = N'INVALID' AND media.Url NOT LIKE N'https://%' AND media.Url NOT LIKE N'http://%'
+              AND media.Url NOT LIKE N'//%' AND media.Url NOT LIKE N'www.%'))
       ORDER BY product.ItemID, media.Role, media.SortOrder
       OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
 
@@ -39,12 +47,36 @@ public sealed class CatalogReadService(PimDb database)
       FROM canon.ProductMedia media
       INNER JOIN canon.Product product ON product.ProductId = media.ProductId
       WHERE product.OrganizationId = @OrganizationId
-        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%' OR media.Url LIKE '%' + @Search + '%' OR media.Role LIKE '%' + @Search + '%');
+        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%' OR media.Url LIKE '%' + @Search + '%' OR media.Role LIKE '%' + @Search + '%')
+        AND (@Role IS NULL OR media.Role = @Role)
+        AND (@AddressState IS NULL
+          OR (@AddressState = N'OK' AND media.Url LIKE N'https://%')
+          OR (@AddressState = N'CORRECTED' AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
+          OR (@AddressState = N'HTTP' AND media.Url LIKE N'http://%')
+          OR (@AddressState = N'INVALID' AND media.Url NOT LIKE N'https://%' AND media.Url NOT LIKE N'http://%'
+              AND media.Url NOT LIKE N'//%' AND media.Url NOT LIKE N'www.%'));
       """,
       reader => new MediaRow(
         PimDb.Int64(reader, "ProductMediaId"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
         PimDb.TextOrEmpty(reader, "Url"), PimDb.TextOrEmpty(reader, "Role"), PimDb.Int32(reader, "SortOrder")),
-      command => Bind(command, organizationId, search, skip, take), cancellationToken);
+      command =>
+      {
+        Bind(command, organizationId, search, skip, take);
+        command.Parameters.AddWithValue("@Role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role);
+        command.Parameters.AddWithValue("@AddressState", string.IsNullOrWhiteSpace(addressState) ? DBNull.Value : addressState);
+      }, cancellationToken);
+
+  public Task<IReadOnlyList<PimOption>> GetMediaRolesAsync(int organizationId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync("""
+      SELECT media.Role, COUNT_BIG(*) AS RowCountValue
+      FROM canon.ProductMedia media
+      INNER JOIN canon.Product product ON product.ProductId = media.ProductId
+      WHERE product.OrganizationId = @OrganizationId
+      GROUP BY media.Role ORDER BY media.Role;
+      """,
+      reader => new PimOption(PimDb.TextOrEmpty(reader, "Role"),
+        $"{PimDb.TextOrEmpty(reader, "Role")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
+      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
 
   public async Task<MediaSummary> GetMediaSummaryAsync(int organizationId, CancellationToken cancellationToken = default)
   {
@@ -58,11 +90,16 @@ public sealed class CatalogReadService(PimDb database)
            AND NOT EXISTS (SELECT 1 FROM canon.ProductMedia media WHERE media.ProductId = product.ProductId)) AS WithoutMedia,
         (SELECT COUNT_BIG(*) FROM canon.ProductMedia media
          INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-         WHERE product.OrganizationId = @OrganizationId) AS TotalMedia;
+         WHERE product.OrganizationId = @OrganizationId) AS TotalMedia,
+        (SELECT COUNT_BIG(*) FROM canon.ProductMedia media
+         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
+         WHERE product.OrganizationId = @OrganizationId
+           AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%')) AS SchemeLessCount;
       """,
-      reader => new MediaSummary(PimDb.Int64(reader, "WithMedia"), PimDb.Int64(reader, "WithoutMedia"), PimDb.Int64(reader, "TotalMedia")),
+      reader => new MediaSummary(PimDb.Int64(reader, "WithMedia"), PimDb.Int64(reader, "WithoutMedia"),
+        PimDb.Int64(reader, "TotalMedia"), PimDb.Int64(reader, "SchemeLessCount")),
       command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
-    return rows.Count > 0 ? rows[0] : new(0, 0, 0);
+    return rows.Count > 0 ? rows[0] : new(0, 0, 0, 0);
   }
 
   // ─── Cene ─────────────────────────────────────────────────────────────────
@@ -148,7 +185,8 @@ public sealed class CatalogReadService(PimDb database)
     database.QueryAsync("""
       SELECT category.CategoryId, category.CategoryTreeCode, category.CategoryCode, category.ParentCategoryCode,
              category.LevelNo, category.CategoryName, category.CategoryPath, category.IsActive,
-             ISNULL(usage.ProductCount, 0) AS ProductCount
+             ISNULL(usage.ProductCount, 0) AS ProductCount,
+             ISNULL(descendantUsage.ProductCount, 0) AS DescendantProductCount
       FROM canon.Category category
       OUTER APPLY
       (
@@ -157,13 +195,22 @@ public sealed class CatalogReadService(PimDb database)
         INNER JOIN canon.Product product ON product.ProductId = productCategory.ProductId
         WHERE product.OrganizationId = @OrganizationId AND productCategory.CategoryPath = category.CategoryPath
       ) usage
+      OUTER APPLY
+      (
+        SELECT COUNT_BIG(DISTINCT productCategory.ProductId) AS ProductCount
+        FROM canon.ProductCategory productCategory
+        INNER JOIN canon.Product product ON product.ProductId = productCategory.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+          AND (productCategory.CategoryPath = category.CategoryPath
+            OR productCategory.CategoryPath LIKE category.CategoryPath + N'/%')
+      ) descendantUsage
       WHERE (@TreeCode IS NULL OR category.CategoryTreeCode = @TreeCode)
       ORDER BY category.CategoryTreeCode, category.CategoryPath;
       """,
       reader => new CategoryRow(
         PimDb.Int32(reader, "CategoryId"), PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"),
         PimDb.Text(reader, "ParentCategoryCode"), PimDb.Int32(reader, "LevelNo"), PimDb.TextOrEmpty(reader, "CategoryName"),
-        PimDb.TextOrEmpty(reader, "CategoryPath"), PimDb.Bool(reader, "IsActive"), PimDb.Int64(reader, "ProductCount")),
+        PimDb.TextOrEmpty(reader, "CategoryPath"), PimDb.Bool(reader, "IsActive"), PimDb.Int64(reader, "ProductCount"), PimDb.Int64(reader, "DescendantProductCount")),
       command =>
       {
         command.Parameters.AddWithValue("@OrganizationId", organizationId);

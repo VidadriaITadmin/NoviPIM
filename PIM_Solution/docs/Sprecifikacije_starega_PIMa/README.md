@@ -10,6 +10,7 @@ workerji in izmerjene številke za NoviPIM ne veljajo, poslovna vizija in obliko
 | `Nacrt_PIM_Sistem_Vizija.md` | **v2.0 — prepisano za NoviPIM**: vizija, izmerjeno stanje, vrzeli, prioritete |
 | `Nacrt_Intranet_Aplikacija.md` | **v2.0 — prepisano za NoviPIM**: izgled, navigacija, sklopi, pravila strani |
 | `izvirniki_stari_PIM/` | **nespremenjena izvirnika v1.0** (stari sistem) — samo za primerjavo |
+| `Sestva_PIMa/Prompt_Codex_Delovna_Okolja_Reorganizacija.md` | **ZASTARELO — ne izvajaj.** Prompt za star sistem (`src/`, sheme `stg`/`pim`, poti `/products`, `/quality/issues`). Nadomešča ga [`docs/agent-prompts/CODEX_INTRANET_KARTICA_VALIDACIJA_PREVERBE.md`](../agent-prompts/CODEX_INTRANET_KARTICA_VALIDACIJA_PREVERBE.md) |
 
 Izvirnika sta ohranjena zato, ker sta edini zapis, kako je bilo nekaj rešeno prej. Po
 `AGENTS.md` §1 velja: iz `PIM_test` se ničesar ne kopira kot pravilo.

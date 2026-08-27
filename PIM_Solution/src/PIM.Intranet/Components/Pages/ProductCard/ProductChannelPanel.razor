@@ -1,0 +1,81 @@
+@namespace PIM.Intranet.Components.Pages.ProductCardParts
+@using PIM.Intranet.Components.Pages.ProductCardParts
+
+<section id="@PanelId" role="tabpanel" aria-labelledby="@TabId" tabindex="0"
+         class="ui-card data-card tab-panel" hidden="@Hidden">
+  <div class="channel-status">
+    <div>
+      <h2>@Title</h2>
+      <PimChip Text="@StatusText" Tone="@StatusTone" />
+    </div>
+    <p><strong>@BlockingCount.ToString("N0")</strong> blokirajočih napak · <strong>@WarningCount.ToString("N0")</strong> opozoril</p>
+    <p>Zadnja validacija: @PimFormat.Ago(LastValidatedUtc)</p>
+  </div>
+
+  @if (Toolbar is not null) { <div class="channel-toolbar">@Toolbar</div> }
+
+  <h2>Polja kanala</h2>
+  <PimTable Caption="Polja, vrednosti, lastništvo in svežina kanala" Columns="FieldColumns">
+    <Rows>
+      @foreach (var row in Fields)
+      {
+        <tr>
+          <th scope="row">@row.Label<div class="tree-path">@row.FieldKey</div></th>
+          <td>
+            @if (!row.InReadModel) { <span class="missing-inline">ni v bralnem modelu</span> }
+            else { @Value(row.Value) }
+          </td>
+          <td>@if (row.Owner == "—") { <span class="muted">—</span> } else { <PimChip Text="@row.Owner" Prefix="Lastnik: " Tone="@OwnerTone(row.Owner)" /> }</td>
+          <td>@(row.Source ?? "—")</td>
+          <td>@PimFormat.Ago(row.FreshnessUtc)</td>
+          <td>@if (row.Pending) { <PimChip Text="Čaka SAOP" Tone="warn" /> } else { <span class="muted">—</span> }</td>
+        </tr>
+      }
+    </Rows>
+  </PimTable>
+
+  <h2>Odprte težave kanala</h2>
+  <PimState Empty="@(Issues.Count == 0)" EmptyText="Kanal nima odprtih validacijskih težav.">
+    <PimTable Caption="Odprte težave izbranega kanala" Columns="IssueColumns">
+      <Rows>
+        @foreach (var row in Issues)
+        {
+          <tr>
+            <td><PimChip Text="@row.Severity" Tone="@(row.Severity == "ERROR" ? "bad" : "warn")" Prefix="Resnost: " /></td>
+            <td>@row.ProfileCode</td>
+            <td><span class="code-value">@row.FieldCode</span></td>
+            <td>@row.Message</td>
+            <td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  [Parameter, EditorRequired] public required string PanelId { get; set; }
+  [Parameter, EditorRequired] public required string TabId { get; set; }
+  [Parameter, EditorRequired] public required string Title { get; set; }
+  [Parameter, EditorRequired] public required string StatusText { get; set; }
+  [Parameter] public string? StatusTone { get; set; }
+  [Parameter] public long BlockingCount { get; set; }
+  [Parameter] public long WarningCount { get; set; }
+  [Parameter] public DateTime? LastValidatedUtc { get; set; }
+  [Parameter, EditorRequired] public required IReadOnlyList<ProductChannelField> Fields { get; set; }
+  [Parameter, EditorRequired] public required IReadOnlyList<ProductCardIssue> Issues { get; set; }
+  [Parameter] public bool Hidden { get; set; }
+  [Parameter] public RenderFragment? Toolbar { get; set; }
+
+  static readonly IReadOnlyList<PimColumn> FieldColumns =
+  [
+    new("Polje"), new("Vrednost"), new("Lastnik"), new("Vir"), new("Svežina"), new("Čaka SAOP"),
+  ];
+  static readonly IReadOnlyList<PimColumn> IssueColumns =
+  [
+    new("Resnost"), new("Profil"), new("Zahteva"), new("Sporočilo"), new("Zaznano"),
+  ];
+
+  static string Value(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+  static string? OwnerTone(string owner) => owner switch { "PIM" => "good", "SAOP" => "warn", _ => null };
+}

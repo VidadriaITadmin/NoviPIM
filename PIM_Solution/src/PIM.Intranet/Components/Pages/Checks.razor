@@ -1,0 +1,211 @@
+@page "/preverbe"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IntranetFeatureReadService Features
+@inject GovernanceReadService Governance
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
+
+<PageTitle>Preverbe cen in zaloge</PageTitle>
+<PimPage Title="Preverbe cen in zaloge" Subtitle="Opozorila, ne napake. Nič od tega ne ustavi izvoza — pove, kje je vredno pogledati." />
+
+<section class="kpi-grid checks-kpis" aria-label="Povzetek preverb">
+  @foreach (var card in KpiCards)
+  {
+    <PimStat Label="@card.Label" Value="@KpiValue(card.Code)" Href="@($"preverbe?vrsta={card.Code}")" />
+  }
+</section>
+
+<div class="note-panel section-gap"><strong>Faktor marže:</strong> prag 2,00 je privzet; nastavljiv prag po organizaciji in kategoriji še ni v bazi.</div>
+
+<section class="ui-card toolbar checks-toolbar" role="search" aria-label="Filtri preverb">
+  <input type="search" class="search-input" placeholder="Šifra, EAN ali naziv …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+  <input class="filter-select" placeholder="Cenik ali skladišče" @bind="ContextDraft" />
+  <fieldset class="check-code-filter">
+    <legend>Vrsta preverbe</legend>
+    @foreach (var code in Enum.GetValues<PimCheckCode>())
+    {
+      <label><input type="checkbox" checked="@SelectedCodes.Contains(code)" @onchange="args => Toggle(code, args)" /> @(code)</label>
+    }
+  </fieldset>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count">@ResultSummary</span>
+</section>
+
+@if (PriceChecks?.IsMissing == true)
+{
+  <PimMissing Object="@(PriceChecks.MissingObject!)" What="eno vrstico na (artikel, preverba cene, cenik) z izračunom prevzemne cene, faktorja in merske osnove" Needs="canon.ProductPrice, out.ExportPriceList in potrjeno cenovno osnovo" />
+}
+@if (StockChecks?.IsMissing == true)
+{
+  <PimMissing Object="@(StockChecks.MissingObject!)" What="eno vrstico na (artikel, preverba zaloge, skladišče), vključno s prihodi in svežino posnetka" Needs="stock.Snapshot, stock.UnmatchedPosition in SAOP pravila minimalne zaloge" />
+}
+
+<section class="ui-card data-card section-gap" aria-label="Seznam preverb">
+  <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Rows.Count == 0)" EmptyText="Za izbrane filtre ni preverb oziroma bralni model še ni na voljo." LoadingText="Nalaganje preverb …">
+    <PimTable Caption="Opozorila cen in zaloge" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          <tr>
+            <td><a href="@($"izdelki/{row.ProductId}#{(IsPrice(row.CheckCode) ? "prices" : "stock")}")"><span class="code-value">@row.ItemId</span><div class="tree-path">@row.Name</div></a></td>
+            <td>@row.Context</td>
+            <td><PimChip Text="@row.CheckCode" Tone="warn" /></td>
+            <td>@row.Detail</td>
+            <td class="numeric">@(row.SalesPrice?.ToString("N2") ?? "—")</td>
+            <td class="numeric">@(row.PurchasePrice?.ToString("N2") ?? "—")</td>
+            <td class="numeric">@(row.MarginFactor?.ToString("N2") ?? "—")</td>
+            <td>@(row.UnitBasis ?? "—")</td>
+            <td>@PimFormat.Ago(row.ObservedUtc)</td>
+            <td><a href="@($"izdelki/{row.ProductId}")" aria-label="Odpri izdelek @row.ItemId">→</a></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+<h2 class="section-title">Obvestila</h2>
+<section class="ui-card data-card" aria-label="Obvestila o preverbah">
+  @if (Alerts.Count == 0 && !Loading)
+  {
+    <PimMissing Object="ops.Alert (PRICE_CHECK/ STOCK_CHECK)" What="Alarme vrste PRICE_CHECK/STOCK_CHECK mora ustvarjati worker prek ops.UpsertAlert; danes jih nihče ne ustvarja" Needs="workerja za preverbe cen in zaloge; obstoječe tabele in dostava ostanejo skupne" />
+  }
+  else
+  {
+    <PimTable Caption="Odprti alarmi poslovnih preverb" Columns="AlertColumns">
+      <Rows>
+        @foreach (var alert in Alerts)
+        {
+          <tr>
+            <td><PimChip Text="@alert.AlertKind" Tone="warn" /></td><td>@alert.Title<div class="tree-path">@alert.PayloadSummaryRedacted</div></td>
+            <td class="numeric">@alert.OccurrenceCount.ToString("N0")</td><td>@PimFormat.Ago(alert.LastSeenUtc)</td>
+            <td>
+              <button class="small-action" disabled="@ActionBusy" @onclick="() => AcknowledgeAsync(alert.AlertId)">Potrdi</button>
+              <button class="small-action" disabled="@ActionBusy" @onclick="() => ResolveAsync(alert.AlertId)">Reši</button>
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  }
+  @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryCodes { get; set; }
+  [SupplyParameterFromQuery(Name = "kontekst")] public string? QueryContext { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+
+  sealed record KpiCard(PimCheckCode Code, string Label);
+  static readonly KpiCard[] KpiCards =
+  [
+    new(PimCheckCode.CENA_MANJKA_B2C, "Brez B2C cene"), new(PimCheckCode.CENA_MANJKA_B2B, "Brez B2B cene"),
+    new(PimCheckCode.FAKTOR_MARZE, "Faktor marže pod pragom"), new(PimCheckCode.BREZ_ZALOGE_BREZ_PRIHODA, "Brez zaloge in brez prihoda"),
+    new(PimCheckCode.PODVOJEN_ZAPIS, "Podvojen zapis cene"), new(PimCheckCode.ZALOGA_POD_MIN, "Zaloga pod minimumom"),
+    new(PimCheckCode.POSNETEK_ZASTAREL, "Zastarel posnetek"),
+  ];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [new("Izdelek"), new("Cenik / skladišče"), new("Vrsta preverbe"), new("Kaj je narobe"), new("Prodajna", Numeric: true), new("Prevzemna", Numeric: true), new("Faktor", Numeric: true), new("Osnova"), new("Svežina"), new("Podrobnost")];
+  static readonly IReadOnlyList<PimColumn> AlertColumns = [new("Vrsta"), new("Obvestilo"), new("Ponovitev", Numeric: true), new("Svežina"), new("Dejanje")];
+
+  readonly HashSet<PimCheckCode> SelectedCodes = [];
+  readonly Dictionary<PimCheckCode, long?> KpiCounts = [];
+  PimReadResult<BusinessCheckRow>? PriceChecks;
+  PimReadResult<BusinessCheckRow>? StockChecks;
+  IReadOnlyList<BusinessCheckRow> Rows = [];
+  IReadOnlyList<AlertRow> Alerts = [];
+  int? OrganizationId;
+  string SearchDraft = "";
+  string ContextDraft = "";
+  bool Loading = true;
+  bool ActionBusy;
+  string? Error;
+  string? Message;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchDraft = QuerySearch ?? "";
+    ContextDraft = QueryContext ?? "";
+    SelectedCodes.Clear();
+    foreach (var value in (QueryCodes ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+      if (Enum.TryParse<PimCheckCode>(value, out var code)) SelectedCodes.Add(code);
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true; Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      var codes = SelectedCodes.Count == 0 ? null : SelectedCodes;
+      var priceTasks = (codes?.Where(PimCheckCodes.IsPrice).Cast<PimCheckCode>() ?? []).Select(code => Features.GetPriceChecksAsync(organization.OrganizationId, checkCode: code.ToString(), context: QueryContext, search: QuerySearch));
+      var stockTasks = (codes?.Where(code => !PimCheckCodes.IsPrice(code)).Cast<PimCheckCode>() ?? []).Select(code => Features.GetStockChecksAsync(organization.OrganizationId, checkCode: code.ToString(), context: QueryContext, search: QuerySearch));
+      PriceChecks = codes is null ? await Features.GetPriceChecksAsync(organization.OrganizationId, context: QueryContext, search: QuerySearch) : Merge(await Task.WhenAll(priceTasks));
+      StockChecks = codes is null ? await Features.GetStockChecksAsync(organization.OrganizationId, context: QueryContext, search: QuerySearch) : Merge(await Task.WhenAll(stockTasks));
+      Rows = PriceChecks.Rows.Concat(StockChecks.Rows).OrderBy(row => row.ItemId).ThenBy(row => row.CheckCode).ToArray();
+      Alerts = (await Governance.GetAlertsAsync(organization.OrganizationId, true)).Where(alert => alert.AlertKind is "PRICE_CHECK" or "STOCK_CHECK").ToArray();
+      var kpiTasks = KpiCards.Select(async card =>
+      {
+        var result = PimCheckCodes.IsPrice(card.Code)
+          ? await Features.GetPriceChecksAsync(organization.OrganizationId, checkCode: card.Code.ToString(), take: 1)
+          : await Features.GetStockChecksAsync(organization.OrganizationId, checkCode: card.Code.ToString(), take: 1);
+        return (card.Code, Count: result.IsMissing ? (long?)null : result.Total);
+      });
+      foreach (var item in await Task.WhenAll(kpiTasks)) KpiCounts[item.Code] = item.Count;
+    }
+    catch { Error = "Preverb trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  static PimReadResult<BusinessCheckRow> Merge(IReadOnlyList<PimReadResult<BusinessCheckRow>> results)
+  {
+    var missing = results.FirstOrDefault(result => result.IsMissing)?.MissingObject;
+    return missing is not null ? PimReadResult<BusinessCheckRow>.Missing(missing)
+      : new(results.SelectMany(result => result.Rows).ToArray(), results.Sum(result => result.Total));
+  }
+
+  string KpiValue(PimCheckCode code) => KpiCounts.TryGetValue(code, out var count) && count is not null ? count.Value.ToString("N0") : "—";
+  string ResultSummary => Loading ? "Nalaganje …" : $"{(PriceChecks?.Total ?? 0) + (StockChecks?.Total ?? 0):N0} preverb";
+  static bool IsPrice(string code) => Enum.TryParse<PimCheckCode>(code, out var parsed) && PimCheckCodes.IsPrice(parsed);
+
+  void Toggle(PimCheckCode code, ChangeEventArgs args)
+  {
+    if (args.Value is true) SelectedCodes.Add(code); else SelectedCodes.Remove(code);
+  }
+
+  Task ApplyAsync()
+  {
+    var parameters = new List<string>();
+    if (SelectedCodes.Count > 0) parameters.Add("vrsta=" + Uri.EscapeDataString(string.Join(',', SelectedCodes)));
+    if (!string.IsNullOrWhiteSpace(ContextDraft)) parameters.Add("kontekst=" + Uri.EscapeDataString(ContextDraft.Trim()));
+    if (!string.IsNullOrWhiteSpace(SearchDraft)) parameters.Add("isci=" + Uri.EscapeDataString(SearchDraft.Trim()));
+    Navigation.NavigateTo(parameters.Count == 0 ? "preverbe" : "preverbe?" + string.Join('&', parameters));
+    return Task.CompletedTask;
+  }
+
+  Task SearchKeyAsync(KeyboardEventArgs args) => args.Key == "Enter" ? ApplyAsync() : Task.CompletedTask;
+  async Task<string> ActorAsync() => (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task AcknowledgeAsync(long id)
+  {
+    if (OrganizationId is null) return;
+    ActionBusy = true;
+    try { await Data.AcknowledgeAlertAsync(OrganizationId.Value, id, await ActorAsync()); Message = "Obvestilo je potrjeno."; await LoadAsync(); }
+    catch { Error = "Obvestila ni bilo mogoče potrditi."; }
+    finally { ActionBusy = false; }
+  }
+
+  async Task ResolveAsync(long id)
+  {
+    if (OrganizationId is null) return;
+    ActionBusy = true;
+    try { await Data.ResolveAlertAsync(OrganizationId.Value, id, await ActorAsync()); Message = "Obvestilo je rešeno."; await LoadAsync(); }
+    catch { Error = "Obvestila ni bilo mogoče rešiti."; }
+    finally { ActionBusy = false; }
+  }
+}

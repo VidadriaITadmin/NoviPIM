@@ -1,0 +1,91 @@
+@page "/nastavitve/povezave-izdelkov"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject IntranetFeatureReadService Features
+@inject IntranetDataService Data
+
+<PageTitle>Povezave izdelkov</PageTitle>
+<PimPage Title="Povezave izdelkov" Subtitle="Variante, podobni in povezani izdelki. Stran je do odločitve o smernosti in virih samo bralna." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-label="Filtri povezav izdelkov">
+  <select class="filter-select" disabled><option>@(OrganizationName ?? "Aktivna organizacija")</option></select>
+  <select class="filter-select" @bind="Source" @bind:after="LoadAsync"><option value="">Vsi viri</option><option value="MANUAL">Ročno</option><option value="FEED">Dobaviteljski vir</option><option value="DERIVED">Izpeljano iz atributa</option></select>
+  <input class="search-input" type="search" placeholder="Šifra ali naziv izdelka …" @bind="Search" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+  <button type="button" class="filter-button" @onclick="LoadAsync">Uporabi filtre</button>
+</section>
+
+@if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
+
+@if (Result?.IsMissing == true)
+{
+  <PimMissing Object="@(Result.MissingObject!)" What="pare izdelkov vrste VARIANT, SIMILAR in RELATED z vlogo, skupino, virom ter revizijskimi podatki" Needs="predlagano tabelo pim.ProductLink in primarni medij obeh izdelkov" />
+}
+
+@foreach (var section in Sections)
+{
+  var rows = RowsFor(section.Code);
+  <section class="ui-card data-card section-gap" aria-labelledby="@($"links-{section.Code}")">
+    <h2 id="@($"links-{section.Code}")">@section.Title</h2>
+    <p class="muted">@section.Description</p>
+    <PimTable Caption="@($"{section.Title}: izdelek in povezani izdelek")" Columns="Columns">
+      <Rows>
+        @foreach (var row in rows)
+        {
+          <tr>
+            <td>@Thumbnail(row.ProductLinkId * 2, row.ProductImageUrl, row.ProductName)<a href="izdelki/@row.ProductId"><strong>@row.ProductName</strong><div class="tree-path">@row.ItemId</div></a></td>
+            <td class="link-arrow">→</td>
+            <td>@Thumbnail(row.ProductLinkId * 2 + 1, row.LinkedImageUrl, row.LinkedProductName)<a href="izdelki/@row.LinkedProductId"><strong>@row.LinkedProductName</strong><div class="tree-path">@row.LinkedItemId</div></a></td>
+            <td><PimChip Text="@row.LinkType" Tone="info" /></td><td>@(row.LinkRole ?? "—")</td><td>@(row.GroupKey ?? "—")</td><td>@(row.IsPrimary ? "Vodilni" : "—")</td>
+            <td>@row.Source</td><td>@row.CreatedBy<div class="tree-path">@row.CreatedUtc.ToLocalTime().ToString("g")</div></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    @if (rows.Count == 0) { <div class="note-panel">Podatkov za ta razdelek ni.</div> }
+  </section>
+}
+
+<div class="note-panel section-gap"><strong>Odprto:</strong> smernost podobnih izdelkov, nosilec variantne skupine in dovoljeni viri povezav zahtevajo poslovno odločitev. Vmesnik zato ne ponuja navideznega urejanja.</div>
+
+@code {
+  sealed record LinkSection(string Code, string Title, string Description);
+  static readonly LinkSection[] Sections =
+  [new("VARIANT", "Variante", "Skupina izvedb z vodilnim izdelkom in razlikovalnim atributom."), new("SIMILAR", "Podobni", "Zamenljive alternative; smernost še ni odločena."), new("RELATED", "Povezani", "Usmerjene povezave na pribor, dodatke in rezervne dele.")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Izdelek"), new(""), new("Povezani izdelek"), new("Vrsta"), new("Vloga / atribut"), new("Skupina"), new("Vodilni"), new("Vir"), new("Ustvaril")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Povezave izdelkov")];
+  PimReadResult<ProductLinkRow>? Result;
+  int? OrganizationId;
+  string? OrganizationName;
+  string Source = "", Search = "";
+  string? Error;
+  readonly HashSet<long> FailedImages = [];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var org = await Data.GetCurrentOrganizationAsync();
+    if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+    OrganizationId = org.OrganizationId; OrganizationName = org.Name; await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    if (OrganizationId is null) return;
+    try { Result = await Features.GetProductLinksAsync(OrganizationId.Value, source: Source, search: Search); }
+    catch { Error = "Povezav izdelkov trenutno ni mogoče naložiti."; }
+  }
+  IReadOnlyList<ProductLinkRow> RowsFor(string type) => Result?.Rows.Where(row => row.LinkType.Equals(type, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
+  Task SearchKeyAsync(KeyboardEventArgs args) => args.Key == "Enter" ? LoadAsync() : Task.CompletedTask;
+
+  RenderFragment Thumbnail(long key, string? rawUrl, string name) => builder =>
+  {
+    var url = MediaUrlPolicy.Normalize(rawUrl);
+    builder.OpenElement(0, "span"); builder.AddAttribute(1, "class", "link-thumb");
+    if (url.Href is not null && !FailedImages.Contains(key))
+    {
+      builder.OpenElement(2, "img"); builder.AddAttribute(3, "src", url.Href); builder.AddAttribute(4, "alt", name); builder.AddAttribute(5, "loading", "lazy");
+      builder.AddAttribute(6, "onerror", EventCallback.Factory.Create(this, () => FailedImages.Add(key))); builder.CloseElement();
+    }
+    else builder.AddContent(7, "Brez slike");
+    builder.CloseElement();
+  };
+}

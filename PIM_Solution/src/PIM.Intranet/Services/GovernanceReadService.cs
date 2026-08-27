@@ -6,6 +6,10 @@ namespace PIM.Intranet.Services;
 public sealed record ExportProfileRow(int ExportProfileId, string ProfileCode, string Name, string ChannelCode, string EntityType, bool IsActive, long ColumnCount, long MappedColumnCount, DateTime UpdatedUtc);
 public sealed record ExportColumnRow(int ExportColumnId, string ColumnCode, string OutputColumnName, string? CanonicalFieldCode, int SortOrder, bool IsRequired, bool IsActive);
 public sealed record ValidationProfileRow(int ValidationProfileId, string ProfileCode, string Name, string? Scope, bool BlocksErp, bool BlocksWeb, bool IsActive, long RequirementCount, long ValidCount, long InvalidCount);
+public sealed record ValidationLayerSummary(PimValidationLayer Layer, long ProductCount, long AffectedProductCount)
+{
+  public decimal ValidShare => ProductCount == 0 ? 0 : Math.Round(100m * Math.Max(0, ProductCount - AffectedProductCount) / ProductCount, 1);
+}
 public sealed record FieldRequirementRow(int FieldRequirementId, string FieldCode, bool IsRequired, bool IsActive, string? Severity, long OpenIssueCount);
 public sealed record ValueLookupRow(long ValueLookupId, string Domain, string SourceValue, string? Language, string TargetValue, string? Note, bool IsActive);
 public sealed record ValueDomainRow(string Domain, long RowCount, long ActiveCount);
@@ -111,6 +115,49 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
         command.Parameters.AddWithValue("@ValidationProfileId", validationProfileId);
         command.Parameters.AddWithValue("@OrganizationId", organizationId);
       }, cancellationToken);
+
+  public async Task<IReadOnlyList<ValidationLayerSummary>> GetValidationLayerSummariesAsync(
+    int organizationId, IReadOnlyList<ValidationProfileRow> profiles, string? webSite = null,
+    CancellationToken cancellationToken = default)
+  {
+    var tasks = Enum.GetValues<PimValidationLayer>().Select(async layer =>
+    {
+      var profileIds = profiles
+        .Where(profile => ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb).Contains(layer))
+        .Where(profile => layer != PimValidationLayer.Splet || string.IsNullOrWhiteSpace(webSite)
+          || ValidationLayer.IsShared(profile.Scope) || SiteMatches(profile.ProfileCode, webSite))
+        .Select(profile => profile.ValidationProfileId).Distinct().ToArray();
+      if (profileIds.Length == 0) return new ValidationLayerSummary(layer, 0, 0);
+
+      var parameters = string.Join(", ", profileIds.Select((_, index) => $"@Profile{index}"));
+      var rows = await database.QueryAsync($"""
+        SELECT
+          ProductCount = (SELECT COUNT_BIG(*) FROM canon.Product WHERE OrganizationId = @OrganizationId),
+          AffectedProductCount = COUNT_BIG(DISTINCT issue.ProductId)
+        FROM val.ProductIssue issue
+        INNER JOIN canon.Product product ON product.ProductId = issue.ProductId AND product.OrganizationId = @OrganizationId
+        LEFT JOIN val.FieldRequirement requirement ON requirement.FieldRequirementId = issue.FieldRequirementId
+        WHERE issue.IsActive = 1 AND issue.ValidationProfileId IN ({parameters})
+          AND (@IncludeWarnings = 1 OR COALESCE(requirement.Severity, N'ERROR') = N'ERROR');
+        """,
+        reader => new ValidationLayerSummary(layer, PimDb.Int64(reader, "ProductCount"), PimDb.Int64(reader, "AffectedProductCount")),
+        command =>
+        {
+          command.Parameters.AddWithValue("@OrganizationId", organizationId);
+          command.Parameters.AddWithValue("@IncludeWarnings", layer == PimValidationLayer.Komerciala);
+          for (var index = 0; index < profileIds.Length; index++)
+            command.Parameters.AddWithValue($"@Profile{index}", profileIds[index]);
+        }, cancellationToken);
+      return rows.FirstOrDefault() ?? new(layer, 0, 0);
+    });
+    return await Task.WhenAll(tasks);
+  }
+
+  static bool SiteMatches(string profileCode, string webSite)
+  {
+    static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
+    return Normalize(profileCode).Contains(Normalize(webSite), StringComparison.OrdinalIgnoreCase);
+  }
 
   // ─── Slovar vrednosti in preslikave polj ─────────────────────────────────
   public Task<IReadOnlyList<ValueDomainRow>> GetValueDomainsAsync(CancellationToken cancellationToken = default) =>

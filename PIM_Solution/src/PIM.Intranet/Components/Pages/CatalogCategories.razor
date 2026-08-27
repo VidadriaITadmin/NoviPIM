@@ -17,6 +17,12 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
+<div class="hub-grid section-gap">
+  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije" Description="Izvorne poti, ki še nimajo ciljne kategorije." />
+  <PimHubCard Title="Preslikave poti" Href="pravila/preslikave" Description="Pregled preslikav polj; kategorijske poti zahtevajo lasten bralni pogled." />
+</div>
+<PimMissing Object="intranet.GetCategoryTranslations" What="prevod imena kategorije po jeziku izbranega spletnega mesta in neposredno povezavo na map.CategoryPathMap" Needs="canon.CategoryTranslation, canon.WebSite in map.CategoryPathMap" />
+
 <section class="ui-card data-card" aria-label="Kategorijsko drevo">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="V izbranem drevesu ni kategorij." LoadingText="Nalaganje kategorij …">
     <PimTable Caption="Kategorije in njihova uporaba" Columns="Columns">
@@ -28,6 +34,8 @@
             <td><strong>@row.CategoryName</strong><div class="tree-path">@row.CategoryPath</div></td>
             <td class="numeric">@row.LevelNo</td>
             <td class="numeric">@row.ProductCount.ToString("N0")</td>
+            <td class="numeric">@row.DescendantProductCount.ToString("N0")</td>
+            <td>—</td>
             <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
           </tr>
         }
@@ -39,19 +47,21 @@
 @code {
   IReadOnlyList<PIM.Intranet.Services.CategoryRow> Rows = [];
   IReadOnlyList<PIM.Intranet.Services.PimOption> Trees = [];
+  IReadOnlyList<PIM.Intranet.Services.WebSiteRow> Sites = [];
   int? OrganizationId;
   string TreeCode = "";
+  string SiteCode = "";
   bool Loading = true;
   string? Error;
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Kategorije")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Drevo"), new("Kategorija"), new("Nivo", Numeric: true), new("Izdelkov", Numeric: true), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Drevo"), new("Kategorija"), new("Nivo", Numeric: true), new("Neposredno", Numeric: true), new("S podkategorijami", Numeric: true), new("Prevod"), new("Stanje")];
 
   protected override async Task OnInitializedAsync()
   {
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
-    try { Trees = await Catalog.GetCategoryTreesAsync(); } catch { Trees = []; }
+    try { Trees = await Catalog.GetCategoryTreesAsync(); Sites = await Catalog.GetWebSitesAsync(); } catch { Trees = []; Sites = []; }
     await LoadAsync();
   }
 
@@ -66,4 +76,17 @@
   }
 
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} kategorij";
+
+  async Task SiteChangedAsync(ChangeEventArgs args)
+  {
+    SiteCode = args.Value?.ToString() ?? "";
+    if (!string.IsNullOrWhiteSpace(SiteCode)) TreeCode = Sites.First(site => site.WebSiteCode == SiteCode).CategoryTreeCode;
+    await LoadAsync();
+  }
+
 }
+  <label class="visually-hidden" for="category-site">Spletno mesto</label>
+  <select id="category-site" class="filter-select" value="@SiteCode" @onchange="SiteChangedAsync">
+    <option value="">Vsa spletna mesta</option>
+    @foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }
+  </select>

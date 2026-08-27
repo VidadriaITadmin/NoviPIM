@@ -1,0 +1,45 @@
+@page "/nastavitve/atributi/{AttributeCode}"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject IntranetFeatureReadService Features
+@inject IntranetDataService Data
+
+<PageTitle>Atribut @AttributeCode</PageTitle>
+<PimPage Title="@AttributeCode" Subtitle="Različne vrednosti atributa, njihova uporaba in stanje prevoda. Stran je samo bralna." Crumbs="Crumbs" />
+
+@if (Result?.IsMissing == true)
+{
+  <PimMissing Object="@(Result.MissingObject!)" What="različne vrednosti atributa, število izdelkov, prevod, vir in uporabo na spletu" Needs="canon.ProductAttribute, map.ValueLookup, map.MissingTranslation, map.SourceConnector in out.ExportColumn" />
+}
+
+<section class="ui-card data-card section-gap" aria-label="Vrednosti atributa">
+  <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && (Result?.Rows.Count ?? 0) == 0)" EmptyText="Vrednosti niso na voljo." LoadingText="Nalaganje vrednosti atributa …">
+    @if (Result is not null)
+    {
+      <PimTable Caption="@($"Vrednosti atributa {AttributeCode}")" Columns="Columns">
+        <Rows>@foreach (var row in Result.Rows) { <tr><td>@row.Value</td><td class="numeric">@row.ProductCount.ToString("N0")</td><td>@(row.Translation ?? "Manjka")</td><td>@(row.SourceCode ?? "—")</td><td>@(row.UsedOnWeb ? "Da" : "Ne")</td><td class="numeric">@row.MissingTranslationCount.ToString("N0")</td></tr> }</Rows>
+      </PimTable>
+      <PimPager Skip="Skip" Take="Take" Total="Result.Total" SkipChanged="SkipChangedAsync" Label="Strani vrednosti atributa" />
+    }
+  </PimState>
+</section>
+
+@code {
+  [Parameter] public string AttributeCode { get; set; } = "";
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Vrednost"), new("Izdelkov", true), new("Prevod"), new("Vir"), new("Na spletu"), new("Manjka prevodov", true)];
+  IReadOnlyList<PimCrumb> Crumbs => [new("Nastavitve", "nastavitve"), new("Atributi", "nastavitve/atributi"), new(AttributeCode)];
+  PimReadResult<AttributeValueRow>? Result;
+  int? OrganizationId;
+  int Skip;
+  const int Take = 50;
+  bool Loading = true;
+  string? Error;
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true; Error = null;
+    try { var org = await Data.GetCurrentOrganizationAsync(); if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; } OrganizationId = org.OrganizationId; Result = await Features.GetAttributeValuesAsync(org.OrganizationId, AttributeCode, Skip, Take); }
+    catch { Error = "Vrednosti atributa trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+  async Task SkipChangedAsync(int skip) { Skip = skip; if (OrganizationId is not null) Result = await Features.GetAttributeValuesAsync(OrganizationId.Value, AttributeCode, Skip, Take); }
+}

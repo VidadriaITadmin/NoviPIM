@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\src\PIM.Intranet\Services\MediaUrlPolicy.cs" Link="MediaUrlPolicy.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\PimFormat.cs" Link="PimFormat.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\ValidationLayer.cs" Link="ValidationLayer.cs" />
+  </ItemGroup>
+</Project>

@@ -5,19 +5,30 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Atributi</PageTitle>
-<PimPage Title="Atributi" Subtitle="Atribut je prikazan samo, če ima v kanoničnem katalogu vsaj eno vrednost." Crumbs="Crumbs" />
+<PimPage Title="Atributi" Subtitle="Atribut je izpeljan iz kanoničnih vrednosti. Podrobnost je delovni pogled za vrednosti in prevode." Crumbs="Crumbs" />
+
+<section class="ui-card toolbar" role="search" aria-label="Filtri atributov">
+  <input class="search-input" type="search" placeholder="Poišči atribut …" @bind="Search" @bind:event="oninput" />
+  <select class="filter-select" disabled title="Vir ni v bralnem modelu"><option>Vir — bralni model manjka</option></select>
+  <select class="filter-select" disabled title="Pokritost prevodov ni v bralnem modelu"><option>Prevod — bralni model manjka</option></select>
+  <select class="filter-select" disabled title="Uporaba na spletu ni v bralnem modelu"><option>Splet — bralni model manjka</option></select>
+  <span class="result-count">@Filtered.Count.ToString("N0") atributov</span>
+</section>
+
+<PimMissing Object="intranet.GetAttributeValues" What="vir atributa, pokritost prevodov in uporabo v izvoznih profilih za seznam atributov" Needs="map.FieldMapping, map.SourceConnector, map.ValueLookup, map.MissingTranslation in out.ExportColumn" />
 
 <section class="ui-card data-card" aria-label="Seznam atributov">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni atributov." LoadingText="Nalaganje atributov …">
     <PimTable Caption="Atributi in njihova uporaba" Columns="Columns">
       <Rows>
-        @foreach (var row in Rows)
+        @foreach (var row in Filtered)
         {
           <tr>
-            <td><span class="code-value">@row.AttributeCode</span></td>
+            <td><a href="@($"nastavitve/atributi/{Uri.EscapeDataString(row.AttributeCode)}")"><span class="code-value">@row.AttributeCode</span></a></td>
             <td class="numeric">@row.ProductCount.ToString("N0")</td>
             <td class="numeric">@row.ValueCount.ToString("N0")</td>
             <td class="muted">@(row.SampleValue ?? "—")</td>
+            <td>—</td><td><a href="@($"kakovost/prevodi?atribut={Uri.EscapeDataString(row.AttributeCode)}")">—</a></td><td>—</td>
           </tr>
         }
       </Rows>
@@ -29,8 +40,10 @@
   IReadOnlyList<PIM.Intranet.Services.AttributeRow> Rows = [];
   bool Loading = true;
   string? Error;
+  string Search = "";
+  IReadOnlyList<PIM.Intranet.Services.AttributeRow> Filtered => Rows.Where(row => string.IsNullOrWhiteSpace(Search) || row.AttributeCode.Contains(Search, StringComparison.OrdinalIgnoreCase) || (row.SampleValue?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)).ToArray();
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Atribut"), new("Izdelkov", Numeric: true), new("Vrednosti", Numeric: true), new("Primer vrednosti")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Atribut"), new("Izdelkov", Numeric: true), new("Vrednosti", Numeric: true), new("Primer vrednosti"), new("Vir"), new("Prevod"), new("Uporaba na spletu")];
 
   protected override async Task OnInitializedAsync()
   {

@@ -1,6 +1,30 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-26
+Posodobljeno: 2026-08-27
+
+## Intranet — kanalska kartica, nivoji kakovosti in skupne strehe 2026-08-27
+
+Kartica izdelka je razdeljena na **11** sklopov: Pregled, ERP, Komerciala, Splet, Mediji,
+Cene, Zaloga, Kakovost, SAOP, Zgodovina in Izvor. Glava ter galerija prikazujeta dejanske
+slike; skupni `MediaUrlPolicy` varno normalizira tudi Nowodvorskega `//...` naslove. ERP,
+komerciala in splet imajo enako tabelo polj, lastništva, izvora, svežine in odprtih težav.
+
+Validacija ima en skupen izpeljan zemljevid **ERP_SLO · ERP_EU/THIRD · KOMERCIALA · SPLET**,
+ki ga uporabljajo `/kakovost`, `/kakovost/napake`, `/pravila/validacija` in kartica izdelka.
+Skupne zahteve se pokažejo v vsakem blokiranem nivoju, števci pa deduplicirajo izdelke.
+
+Novi delovni pogledi so `/preverbe`, `/saop`, `/saop/zgodovina`, `/saop/odkloni`,
+`/saop/polja`, `/splet`, `/nastavitve/atributi/{koda}` in
+`/nastavitve/povezave-izdelkov`. `Sent` je povsod rumeno »poslano, nepotrjeno«; zeleno je
+rezervirano za `Verified`/potrjen uspeh. Kjer bralni model še ne obstaja, UI pokaže skupni
+`PimMissing`, celotna naslednja bazna faza pa je popisana v
+`docs/porocila-faz/BAZA_ZAHTEVE_INTRANET.md`.
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` → **11/0/0**; polni
+`scripts\run_tests.ps1` → **52/0/0**, izhod 0 in `Build OK`; ločen build rešitve →
+**0 opozoril / 0 napak**. Zagon na `127.0.0.1:5199`: `/health` in `/prijava` 200, vse štiri
+preverjene nove zaščitene poti 302 na prijavo. Prijavljeni vizualni izris brez uporabniških
+poverilnic ni bil preverjen.
 
 ## Intranet — stanje 2026-08-26
 

@@ -36,6 +36,7 @@ builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
 builder.Services.AddScoped<StockReadService>();
 builder.Services.AddScoped<GovernanceReadService>();
+builder.Services.AddScoped<IntranetFeatureReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
 builder.Services.AddScoped<SaopWriteService>();

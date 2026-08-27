@@ -1,110 +1,139 @@
 @page "/mediji"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.CatalogReadService Catalog
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject CatalogReadService Catalog
+@inject IntranetDataService Data
 
 <PageTitle>Mediji</PageTitle>
-<PimPage Title="Mediji" Subtitle="Slike in dokumenti izdelkov. Medij je zaenkrat naslov (URL) v bazi; datotečno skladišče pride pozneje." />
+<PimPage Title="Mediji" Subtitle="Slike izdelkov z varno normaliziranimi naslovi. Naslov brez sheme je prikazan, vendar trajni popravek ostaja naloga preslikave vira." />
 
-@if (Summary is not null)
-{
-  <section class="kpi-grid" aria-label="Povzetek medijev">
-    <PimStat Label="Zapisov medijev" Value="@Summary.TotalMedia.ToString("N0")" />
-    <PimStat Label="Izdelkov s sliko" Value="@Summary.ProductsWithMedia.ToString("N0")" />
-    <PimStat Label="Aktivnih brez slike" Value="@Summary.ProductsWithoutMedia.ToString("N0")" Note="Kandidati za dopolnitev" Href="izdelki" />
-  </section>
-}
+<section class="kpi-grid" aria-label="Povzetek medijev">
+  <PimStat Label="Zapisov medijev" Value="@Number(Summary?.TotalMedia)" />
+  <PimStat Label="Izdelkov s sliko" Value="@Number(Summary?.ProductsWithMedia)" />
+  <PimStat Label="Aktivnih brez slike" Value="@Number(Summary?.ProductsWithoutMedia)" Note="Kandidati za dopolnitev" Href="izdelki?pogled=BREZ_SLIKE" />
+  <PimStat Label="Naslovov brez sheme" Value="@Number(Summary?.SchemeLessCount)" Note="Po PREFIX transformaciji mora pasti na nič" Href="mediji?naslov=CORRECTED" />
+</section>
 
 <section class="ui-card toolbar" role="search" aria-labelledby="media-filter-title">
   <h2 id="media-filter-title" class="visually-hidden">Filtriranje medijev</h2>
   <label class="visually-hidden" for="media-search">Išči po artiklu, naslovu ali vlogi</label>
   <input id="media-search" type="search" class="search-input" placeholder="Išči po artiklu, naslovu ali vlogi …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="media-role">Vloga medija</label>
+  <select id="media-role" class="filter-select" @bind="Role"><option value="">Vse vloge</option>@foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }</select>
+  <label class="visually-hidden" for="media-address">Stanje naslova</label>
+  <select id="media-address" class="filter-select" @bind="AddressState">
+    <option value="">Vsa stanja naslovov</option><option value="OK">V redu</option>
+    <option value="CORRECTED">Popravljen (dodan https:)</option><option value="HTTP">Nešifrirano (http)</option>
+    <option value="INVALID">Neveljaven naslov</option>
+  </select>
   <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <button type="button" class="filter-button" @onclick="ToggleView">@(GridView ? "Prikaži seznam" : "Prikaži mrežo")</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
 <section class="ui-card data-card" aria-label="Seznam medijev">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni medijev." LoadingText="Nalaganje medijev …">
-    <PimTable Caption="Mediji izdelkov v izbrani organizaciji" Columns="Columns">
-      <Rows>
-        @foreach (var row in Rows)
-        {
-          var mediaUrl = SafeMediaUrl(row.Url);
-          <tr>
-            <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
-            <td><span class="code-value">@row.Role</span></td>
-            <td class="numeric">@row.SortOrder</td>
-            <td>
-              @if (mediaUrl is not null)
-              {
-                <a href="@mediaUrl" target="_blank" rel="noopener noreferrer">@Shorten(row.Url)</a>
-              }
-              else
-              {
-                <span class="muted" title="Naslov ni varna spletna povezava">@Shorten(row.Url)</span>
-              }
-            </td>
-          </tr>
-        }
-      </Rows>
-    </PimTable>
+    @if (GridView)
+    {
+      <div class="media-grid">
+        @foreach (var row in Rows) { @MediaCard(row) }
+      </div>
+    }
+    else
+    {
+      <PimTable Caption="Mediji izdelkov v izbrani organizaciji" Columns="Columns">
+        <Rows>
+          @foreach (var row in Rows)
+          {
+            var url = MediaUrlPolicy.Normalize(row.Url);
+            <tr>
+              <td class="media-thumb">@MediaImage(row, url)</td>
+              <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
+              <td><span class="code-value">@row.Role</span></td><td class="numeric">@row.SortOrder</td>
+              <td>@MediaAddress(url)</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
     <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani medijev" />
   </PimState>
 </section>
 
 @code {
-  IReadOnlyList<PIM.Intranet.Services.MediaRow> Rows = [];
-  PIM.Intranet.Services.MediaSummary? Summary;
+  [SupplyParameterFromQuery(Name = "naslov")] public string? QueryAddressState { get; set; }
+  [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
+  IReadOnlyList<MediaRow> Rows = [];
+  IReadOnlyList<PimOption> Roles = [];
+  MediaSummary? Summary;
+  readonly HashSet<long> Failed = [];
   long Total;
   bool Loading = true;
+  bool GridView;
   string? Error;
   string Search = "";
+  string Role = "";
+  string AddressState = "";
   int Skip;
   const int Take = 50;
   int? OrganizationId;
 
-  static readonly IReadOnlyList<PimColumn> Columns =
-  [
-    new("Artikel"), new("Vloga"), new("Vrstni red", Numeric: true), new("Naslov medija")
-  ];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Slika"), new("Artikel"), new("Vloga"), new("Vrstni red", true), new("Naslov medija")];
 
   protected override async Task OnInitializedAsync()
   {
+    AddressState = QueryAddressState ?? "";
+    Search = QueryProduct ?? "";
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
-    try { Summary = await Catalog.GetMediaSummaryAsync(OrganizationId.Value); } catch { Summary = null; }
+    try
+    {
+      var summaryTask = Catalog.GetMediaSummaryAsync(OrganizationId.Value);
+      var rolesTask = Catalog.GetMediaRolesAsync(OrganizationId.Value);
+      await Task.WhenAll(summaryTask, rolesTask);
+      Summary = await summaryTask; Roles = await rolesTask;
+    }
+    catch { Summary = null; Roles = []; }
     await LoadAsync();
   }
 
   async Task LoadAsync()
   {
     if (OrganizationId is null) return;
-    Loading = true;
-    Error = null;
-    try
-    {
-      (Rows, Total) = await Catalog.GetMediaAsync(OrganizationId.Value, Search, Skip, Take);
-    }
-    catch
-    {
-      Error = "Medijev trenutno ni mogoče naložiti.";
-    }
+    Loading = true; Error = null;
+    try { (Rows, Total) = await Catalog.GetMediaAsync(OrganizationId.Value, Search, Role, AddressState, Skip, Take); }
+    catch { Error = "Medijev trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
+
+  RenderFragment MediaCard(MediaRow row) => builder =>
+  {
+    var url = MediaUrlPolicy.Normalize(row.Url);
+    builder.OpenElement(0, "article"); builder.AddAttribute(1, "class", "media-grid-card");
+    builder.AddContent(2, MediaImage(row, url));
+    builder.OpenElement(3, "strong"); builder.AddContent(4, row.ItemId); builder.CloseElement();
+    builder.OpenElement(5, "span"); builder.AddContent(6, $"{row.Role} · #{row.SortOrder}"); builder.CloseElement();
+    builder.AddContent(7, MediaAddress(url)); builder.CloseElement();
+  };
+  RenderFragment MediaImage(MediaRow row, MediaUrl url) => builder =>
+  {
+    if (url.Href is null || Failed.Contains(row.ProductMediaId)) { builder.OpenElement(0, "span"); builder.AddContent(1, "Brez slike"); builder.CloseElement(); return; }
+    builder.OpenElement(0, "img"); builder.AddAttribute(1, "src", url.Href); builder.AddAttribute(2, "alt", $"Medij artikla {row.ItemId}");
+    builder.AddAttribute(3, "loading", "lazy"); builder.AddAttribute(4, "onerror", EventCallback.Factory.Create(this, () => Failed.Add(row.ProductMediaId))); builder.CloseElement();
+  };
+  RenderFragment MediaAddress(MediaUrl url) => builder =>
+  {
+    if (url.Href is not null) { builder.OpenElement(0, "a"); builder.AddAttribute(1, "href", url.Href); builder.AddAttribute(2, "target", "_blank"); builder.AddAttribute(3, "rel", "noopener noreferrer"); builder.AddContent(4, Shorten(url.Display)); builder.CloseElement(); }
+    else { builder.OpenElement(5, "span"); builder.AddAttribute(6, "class", "muted"); builder.AddAttribute(7, "title", url.Note); builder.AddContent(8, Shorten(url.Display)); builder.CloseElement(); }
+    if (url.Note is not null) { builder.OpenElement(9, "small"); builder.AddAttribute(10, "class", "address-note"); builder.AddContent(11, url.Note); builder.CloseElement(); }
+  };
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
-
+  void ToggleView() => GridView = !GridView;
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zapisov";
-
-  // Dolg naslov razbije stolpec; celoten ostane v naslovu povezave.
-  static string Shorten(string url) => url.Length <= 72 ? url : url[..36] + " … " + url[^30..];
-
-  // Naslov prihaja iz zunanjega vira. Kot klikljivo povezavo sprejmemo samo HTTP(S), sicer bi
-  // lahko dobaviteljski podatek postal izvajljiva shema (na primer javascript:).
-  static string? SafeMediaUrl(string url) =>
-    Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.Scheme is "http" or "https" ? parsed.AbsoluteUri : null;
+  static string Number(long? value) => value?.ToString("N0") ?? "—";
+  static string Shorten(string value) => value.Length <= 72 ? value : value[..36] + " … " + value[^30..];
 }

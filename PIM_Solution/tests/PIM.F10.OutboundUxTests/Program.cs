@@ -84,8 +84,10 @@ Assert(chipCount == 1, "Seznam mora ohraniti natanko en statusni čip izvoza.");
 Assert(Regex.Matches(markup, "<span class=\"visually-hidden\">Status: </span>").Count == chipCount,
   "Statusni čip mora imeti bralcem zaslona namenjeno oznako \"Status: \".");
 Assert(Regex.IsMatch(markup, "static string Chip\\(string"), "Barvna razvrstitev statusa mora ostati v obstoječi funkciji Chip.");
-foreach (var group in new[] { "\"Succeeded\" or \"Sent\" or \"Completed\"", "\"Error\" or \"Dead\" or \"Drift\" or \"Cancelled\"" })
+foreach (var group in new[] { "\"Verified\" or \"Succeeded\" or \"Completed\"", "\"Error\" or \"Dead\" or \"Drift\" or \"Cancelled\"" })
   Assert(markup.Contains(group, StringComparison.Ordinal), "Obstoječa razvrstitev statusov je spremenjena; manjka: " + group);
+Assert(markup.Contains("status==\"Sent\"?\"Poslano, nepotrjeno\"", StringComparison.Ordinal),
+  "Sent mora biti opozorilo 'Poslano, nepotrjeno', ne zeleni uspeh.");
 
 // 7. Tabela ostane berljiva in se na ozkih zaslonih vodoravno pomika.
 var dataCard = Regex.Match(markup, "<section class=\"ui-card data-card\"[^>]*>");

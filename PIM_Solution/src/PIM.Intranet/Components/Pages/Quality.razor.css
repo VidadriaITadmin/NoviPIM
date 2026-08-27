@@ -1,0 +1,11 @@
+.toolbar { margin-bottom: var(--space-5); }
+.validation-level-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+.level-card { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
+.level-card h2 { margin: .2rem 0 .35rem; font-size: 1.05rem; }
+.level-card p { margin: 0; color: var(--text-muted); }
+.metric-row { display: grid; gap: .1rem; }
+.metric-row strong { font-size: 1.65rem; }
+.metric-row span { color: var(--text-muted); font-size: .85rem; }
+.level-card .button-link { margin-top: auto; }
+@media (max-width: 1050px) { .validation-level-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .validation-level-grid { grid-template-columns: 1fr; } }

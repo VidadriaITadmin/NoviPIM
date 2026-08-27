@@ -4,56 +4,105 @@
 @inject PIM.Intranet.Services.GovernanceReadService Governance
 @inject PIM.Intranet.Services.PipelineReadService Pipeline
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.CatalogReadService Catalog
 
 <PageTitle>Kakovost</PageTitle>
-<PimPage Title="Kakovost" Subtitle="Koliko izdelkov je veljavnih po posameznem profilu in kje so odprte vrzeli. Profil pove, kaj mora izdelek imeti; obseg blokade pove, kaj se zaradi napake ustavi." />
+<PimPage Title="Kakovost" Subtitle="Validacija je razdeljena na štiri poslovne nivoje. Skupne zahteve so prikazane v vsakem nivoju, ki ga blokirajo." />
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje kakovosti …">
-  <section class="ui-card data-card section-gap" aria-label="Kakovost po profilih">
-    <PimTable Caption="Veljavnost izdelkov po validacijskih profilih" Columns="Columns">
-      <Rows>
-        @foreach (var profile in Profiles)
+  <div class="filter-bar toolbar">
+    <label class="field-control">
+      <span>Spletno mesto</span>
+      <select value="@SelectedWebSite" @onchange="ChangeWebSiteAsync">
+        <option value="">Vsa spletna mesta</option>
+        @foreach (var site in Sites)
         {
-          <tr>
-            <td>
-              <a href="pravila/validacija">@profile.ProfileCode</a>
-              <div class="tree-path">@profile.Name</div>
-            </td>
-            <td>@(profile.Scope ?? "—")</td>
-            <td>
-              @if (profile.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Blokira: " /> }
-              @if (profile.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Blokira: " /> }
-              @if (!profile.BlocksErp && !profile.BlocksWeb) { <span class="muted">ne blokira</span> }
-            </td>
-            <td class="numeric">@profile.RequirementCount.ToString("N0")</td>
-            <td class="numeric">@profile.ValidCount.ToString("N0")</td>
-            <td class="numeric">@profile.InvalidCount.ToString("N0")</td>
-            <td><PimBar Percent="@Share(profile)" Label="@($"Delež veljavnih v profilu {profile.ProfileCode}")" /></td>
-          </tr>
+          <option value="@site.WebSiteCode">@site.WebSiteName</option>
         }
-      </Rows>
-    </PimTable>
+      </select>
+    </label>
+  </div>
+
+  <section class="validation-level-grid" aria-label="Nivoji validacije">
+    @foreach (var layer in Layers)
+    {
+      var summary = SummaryFor(layer);
+      <article class="ui-card level-card">
+        <div>
+          <div class="eyebrow">@PIM.Intranet.Services.ValidationLayer.Code(layer)</div>
+          <h2>@PIM.Intranet.Services.ValidationLayer.Label(layer)</h2>
+          <p>@LayerNote(layer)</p>
+        </div>
+        <div class="metric-row">
+          <strong>@summary.AffectedProductCount.ToString("N0")</strong>
+          <span>izdelkov z odprto napako</span>
+        </div>
+        <PimBar Percent="@summary.ValidShare" Label="@($"Delež veljavnih: {summary.ValidShare:N1} %")" />
+        <a class="button-link" href="@($"kakovost/napake?nivo={PIM.Intranet.Services.ValidationLayer.Code(layer)}{SiteQuery(layer)}")">Odpri napake →</a>
+      </article>
+    }
   </section>
+
+  @foreach (var layer in Layers)
+  {
+    var layerProfiles = ProfilesFor(layer);
+    <section class="ui-card data-card section-gap" aria-labelledby="@($"profiles-{layer}")">
+      <h2 id="@($"profiles-{layer}")">@PIM.Intranet.Services.ValidationLayer.Label(layer)</h2>
+      <PimTable Caption="@($"Profili nivoja {PIM.Intranet.Services.ValidationLayer.Label(layer)}")" Columns="ProfileColumns">
+        <Rows>
+          @foreach (var profile in layerProfiles)
+          {
+            <tr>
+              <td><a href="@($"pravila/validacija?profil={Uri.EscapeDataString(profile.ProfileCode)}")">@profile.ProfileCode</a><div class="tree-path">@profile.Name</div></td>
+              <td>@(profile.Scope ?? "—")</td>
+              <td>
+                @if (PIM.Intranet.Services.ValidationLayer.IsShared(profile.Scope)) { <PimChip Text="Skupna" Tone="info" /> }
+                @if (!profile.IsActive) { <PimChip Text="Neaktivna" Tone="neutral" /> }
+              </td>
+              <td>@Blocks(profile)</td>
+              <td class="numeric">@profile.RequirementCount.ToString("N0")</td>
+              <td class="numeric">@profile.InvalidCount.ToString("N0")</td>
+              <td><PimBar Percent="@Share(profile)" Label="@($"Delež veljavnih v profilu {profile.ProfileCode}")" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (layerProfiles.Count == 0)
+      {
+        <div class="note-panel">Za ta nivo ni nastavljenega profila.</div>
+      }
+    </section>
+  }
 </PimState>
 
 <h2 class="section-title">Kje popraviti</h2>
 <section class="hub-grid" aria-label="Delovne strani kakovosti">
-  <PimHubCard Title="Napake validacije" Href="kakovost/napake" Description="Odprte napake po izdelku in pravilu. Napaka izgine, ko je izdelek popravljen in znova validiran." />
+  <PimHubCard Title="Napake validacije" Href="kakovost/napake" Description="Odprte napake po nivoju, izdelku in zahtevi." />
   <PimHubCard Title="Karantena" Href="kakovost/karantena" Description="Zapisi, ki jih preslikava ni sprejela. Vsak nosi razlog zavrnitve." />
-  <PimHubCard Title="Manjkajoči prevodi" Href="kakovost/prevodi" Description="Vrednosti, za katere slovar nima prevoda v ciljni jezik." Count="@Counts(Summary?.MissingTranslations)" />
-  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije" Description="Poti iz vira, ki jim ne ustreza nobena kategorija v drevesu." Count="@Counts(Summary?.MissingCategories)" />
+  <PimHubCard Title="Manjkajoči prevodi" Href="kakovost/prevodi" Description="Vrednosti brez prevoda v ciljni jezik." Count="@Counts(Ingest?.MissingTranslations)" />
+  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije" Description="Izvorne poti brez ciljne kategorije." Count="@Counts(Ingest?.MissingCategories)" />
 </section>
 
+<div class="note-panel section-gap">
+  <strong>Kako brati nivoje</strong>
+  <p>ERP EU/tretji trgi je dodatek zahtevam ERP Slovenija. Komerciala opozarja, vendar ne blokira objave. Nivo Splet se lahko zoži na izbrano spletno mesto.</p>
+</div>
+
 @code {
+  static readonly PIM.Intranet.Services.PimValidationLayer[] Layers = Enum.GetValues<PIM.Intranet.Services.PimValidationLayer>();
   IReadOnlyList<PIM.Intranet.Services.ValidationProfileRow> Profiles = [];
-  PIM.Intranet.Services.IngestSummary? Summary;
+  IReadOnlyList<PIM.Intranet.Services.WebSiteRow> Sites = [];
+  IReadOnlyList<PIM.Intranet.Services.ValidationLayerSummary> Summaries = [];
+  PIM.Intranet.Services.IngestSummary? Ingest;
+  int? OrganizationId;
+  string SelectedWebSite = "";
   bool Loading = true;
   string? Error;
 
-  static readonly IReadOnlyList<PimColumn> Columns =
+  static readonly IReadOnlyList<PimColumn> ProfileColumns =
   [
-    new("Profil"), new("Obseg"), new("Blokira"), new("Zahtev", Numeric: true),
-    new("Veljavnih", Numeric: true), new("Neveljavnih", Numeric: true), new("Delež veljavnih")
+    new("Profil"), new("Obseg"), new("Vrsta"), new("Vpliv"), new("Zahtev", Numeric: true),
+    new("Neveljavnih", Numeric: true), new("Delež veljavnih")
   ];
 
   protected override async Task OnInitializedAsync()
@@ -62,11 +111,42 @@
     {
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
-      try { Summary = await Pipeline.GetSummaryAsync(organization.OrganizationId); } catch { Summary = null; }
+      OrganizationId = organization.OrganizationId;
+      var profilesTask = Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      var sitesTask = Catalog.GetWebSitesAsync();
+      Profiles = await profilesTask;
+      Sites = await sitesTask;
+      Summaries = await Governance.GetValidationLayerSummariesAsync(organization.OrganizationId, Profiles);
+      try { Ingest = await Pipeline.GetSummaryAsync(organization.OrganizationId); } catch { Ingest = null; }
     }
     catch { Error = "Kakovosti trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  async Task ChangeWebSiteAsync(ChangeEventArgs args)
+  {
+    SelectedWebSite = args.Value?.ToString() ?? "";
+    if (OrganizationId is int organizationId)
+      Summaries = await Governance.GetValidationLayerSummariesAsync(organizationId, Profiles, SelectedWebSite);
+  }
+
+  IReadOnlyList<PIM.Intranet.Services.ValidationProfileRow> ProfilesFor(PIM.Intranet.Services.PimValidationLayer layer) => Profiles
+    .Where(profile => PIM.Intranet.Services.ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb).Contains(layer))
+    .Where(profile => layer != PIM.Intranet.Services.PimValidationLayer.Splet || string.IsNullOrWhiteSpace(SelectedWebSite)
+      || PIM.Intranet.Services.ValidationLayer.IsShared(profile.Scope) || SiteMatches(profile.ProfileCode, SelectedWebSite))
+    .ToArray();
+
+  PIM.Intranet.Services.ValidationLayerSummary SummaryFor(PIM.Intranet.Services.PimValidationLayer layer) =>
+    Summaries.FirstOrDefault(summary => summary.Layer == layer) ?? new(layer, 0, 0);
+
+  string SiteQuery(PIM.Intranet.Services.PimValidationLayer layer) =>
+    layer == PIM.Intranet.Services.PimValidationLayer.Splet && !string.IsNullOrWhiteSpace(SelectedWebSite)
+      ? $"&spletisce={Uri.EscapeDataString(SelectedWebSite)}" : "";
+
+  static bool SiteMatches(string profileCode, string site)
+  {
+    static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
+    return Normalize(profileCode).Contains(Normalize(site), StringComparison.OrdinalIgnoreCase);
   }
 
   static decimal Share(PIM.Intranet.Services.ValidationProfileRow profile)
@@ -75,6 +155,21 @@
     return total == 0 ? 0 : 100m * profile.ValidCount / total;
   }
 
-  // Brez podatka ne izpisemo nicle: nic in »ne vemo« nista isto.
+  static string Blocks(PIM.Intranet.Services.ValidationProfileRow profile) => (profile.BlocksErp, profile.BlocksWeb) switch
+  {
+    (true, true) => "ERP in splet",
+    (true, false) => "ERP",
+    (false, true) => "Splet",
+    _ => "Ne blokira",
+  };
+
+  static string LayerNote(PIM.Intranet.Services.PimValidationLayer layer) => layer switch
+  {
+    PIM.Intranet.Services.PimValidationLayer.ErpSlo => "Osnovne zahteve za slovenski ERP tok.",
+    PIM.Intranet.Services.PimValidationLayer.ErpEuThird => "Dodatne zahteve za EU in tretje trge.",
+    PIM.Intranet.Services.PimValidationLayer.Komerciala => "Opozorila za komercialno kakovost; ne blokirajo.",
+    _ => "Zahteve za spletni kanal in izbrano spletno mesto.",
+  };
+
   static string? Counts(long? value) => value is null ? null : value.Value.ToString("N0");
 }

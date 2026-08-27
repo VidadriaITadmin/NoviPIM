@@ -1,0 +1,3 @@
+.link-thumb { align-items: center; background: var(--pim-surface-subtle); display: inline-flex; height: 3rem; justify-content: center; margin-right: .65rem; overflow: hidden; vertical-align: middle; width: 3rem; color: var(--pim-text-muted); font-size: .65rem; }
+.link-thumb img { height: 100%; object-fit: contain; width: 100%; }
+.link-arrow { font-size: 1.4rem; color: var(--pim-text-muted); }

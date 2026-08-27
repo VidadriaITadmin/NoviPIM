@@ -3,9 +3,17 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CatalogReadService Catalog
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.IntranetFeatureReadService Features
 
 <PageTitle>Cene in ceniki</PageTitle>
 <PimPage Title="Cene in ceniki" Subtitle="Cene izdelkov po cenikih, kot so prišle iz vira. Bruto je izračunan iz neto in stopnje DDV, ne hranjen posebej." />
+
+<section class="kpi-grid" aria-label="Povzetek cenovnih preverb">
+  <PimStat Label="Brez B2C cene" Value="@Kpi(PimCheckCode.CENA_MANJKA_B2C)" Href="cene?stanje=CENA_MANJKA_B2C" />
+  <PimStat Label="Faktor pod pragom" Value="@Kpi(PimCheckCode.FAKTOR_MARZE)" Href="cene?stanje=FAKTOR_MARZE" />
+  <PimStat Label="Podvojen zapis" Value="@Kpi(PimCheckCode.PODVOJEN_ZAPIS)" Href="cene?stanje=PODVOJEN_ZAPIS" />
+  <PimStat Label="Vse preverbe" Value="→" Note="Cene in zaloge" Href="preverbe" />
+</section>
 
 <section class="ui-card toolbar" role="search" aria-labelledby="price-filter-title">
   <h2 id="price-filter-title" class="visually-hidden">Filtriranje cen</h2>
@@ -19,9 +27,22 @@
       <option value="@option.Value">@option.Label</option>
     }
   </select>
+  <label class="visually-hidden" for="price-state">Stanje cene</label>
+  <select id="price-state" class="filter-select" @bind="CheckCode" @bind:after="ApplyAsync">
+    <option value="">Vsa stanja cen</option>
+    @foreach (var code in PriceCheckCodes)
+    {
+      <option value="@(code.ToString())">@(PimCheckCodes.Description(code))</option>
+    }
+  </select>
   <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
+
+@if (PriceChecks?.IsMissing == true)
+{
+  <PimMissing Object="@(PriceChecks.MissingObject!)" What="cenovne preverbe, prevzemno ceno in faktor na isti merski osnovi" Needs="canon.ProductPrice, identiteto cenikov po organizaciji in canon.ProductCommercial" />
+}
 
 <section class="ui-card data-card" aria-label="Seznam cen">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni cen." LoadingText="Nalaganje cen …">
@@ -35,6 +56,8 @@
             <td class="numeric">@row.Net.ToString("N2")</td>
             <td class="numeric">@row.VatRate.ToString("N1") %</td>
             <td class="numeric">@Gross(row).ToString("N2")</td>
+            <td class="numeric">@(CheckFor(row)?.PurchasePrice?.ToString("N2") ?? "—")</td>
+            <td class="numeric">@(CheckFor(row)?.MarginFactor?.ToString("N2") ?? "—")</td>
             <td>@row.ValidFrom.ToLocalTime().ToString("d")</td>
             <td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
           </tr>
@@ -46,6 +69,8 @@
 </section>
 
 @code {
+  [SupplyParameterFromQuery(Name = "stanje")] public string CheckCode { get; set; } = "";
+  [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
   IReadOnlyList<PIM.Intranet.Services.PriceRow> Rows = [];
   IReadOnlyList<PIM.Intranet.Services.PimOption> PriceLists = [];
   long Total;
@@ -56,11 +81,18 @@
   int Skip;
   const int Take = 50;
   int? OrganizationId;
+  string LoadedCheckCode = "";
+  PIM.Intranet.Services.PimReadResult<PIM.Intranet.Services.BusinessCheckRow>? PriceChecks;
+  readonly Dictionary<PIM.Intranet.Services.PimCheckCode, long?> KpiCounts = [];
+  static readonly PIM.Intranet.Services.PimCheckCode[] PriceCheckCodes =
+  [PimCheckCode.CENA_MANJKA_B2C, PimCheckCode.CENA_MANJKA_B2B, PimCheckCode.CENA_NIC,
+    PimCheckCode.DDV_MANJKA, PimCheckCode.CENIK_POTEKEL, PimCheckCode.PODVOJEN_ZAPIS,
+    PimCheckCode.FAKTOR_MARZE, PimCheckCode.CENA_POD_NABAVNO];
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new("Artikel"), new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true),
-    new("Bruto", Numeric: true), new("Velja od"), new("Stanje")
+    new("Bruto", Numeric: true), new("Prevzemna cena", Numeric: true), new("Faktor", Numeric: true), new("Velja od"), new("Stanje")
   ];
 
   protected override async Task OnInitializedAsync()
@@ -68,6 +100,8 @@
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
+    Search = QueryProduct ?? Search;
+    LoadedCheckCode = CheckCode;
     try { PriceLists = await Catalog.GetPriceListsAsync(OrganizationId.Value); } catch { PriceLists = []; }
     await LoadAsync();
   }
@@ -77,12 +111,32 @@
     if (OrganizationId is null) return;
     Loading = true;
     Error = null;
-    try { (Rows, Total) = await Catalog.GetPricesAsync(OrganizationId.Value, PriceList, Search, Skip, Take); }
+    try
+    {
+      var pricesTask = Catalog.GetPricesAsync(OrganizationId.Value, PriceList, Search, Skip, Take);
+      var checksTask = Features.GetPriceChecksAsync(OrganizationId.Value, checkCode: CheckCode, context: PriceList, search: Search, skip: Skip, take: Take);
+      var result = await pricesTask;
+      PriceChecks = await checksTask;
+      Rows = string.IsNullOrWhiteSpace(CheckCode) || PriceChecks.IsMissing
+        ? result.Rows
+        : result.Rows.Where(row => PriceChecks.Rows.Any(check => check.ProductId == row.ProductId && (string.IsNullOrWhiteSpace(check.Context) || check.Context == row.PriceList))).ToArray();
+      Total = string.IsNullOrWhiteSpace(CheckCode) || PriceChecks.IsMissing ? result.TotalCount : PriceChecks.Total;
+      var kpiTasks = new[] { PimCheckCode.CENA_MANJKA_B2C, PimCheckCode.FAKTOR_MARZE, PimCheckCode.PODVOJEN_ZAPIS }
+        .Select(async code => (Code: code, Result: await Features.GetPriceChecksAsync(OrganizationId.Value, checkCode: code.ToString(), take: 1)));
+      foreach (var item in await Task.WhenAll(kpiTasks)) KpiCounts[item.Code] = item.Result.IsMissing ? null : item.Result.Total;
+    }
     catch { Error = "Cen trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  protected override async Task OnParametersSetAsync()
+  {
+    if (OrganizationId is not null && !string.Equals(LoadedCheckCode, CheckCode, StringComparison.Ordinal))
+    {
+      LoadedCheckCode = CheckCode; Skip = 0; await LoadAsync();
+    }
+  }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
 
@@ -90,4 +144,9 @@
 
   // Bruto ni v bazi; izracun je isti kot v canon.FieldValue, da se stran in izvoz ne razideta.
   static decimal Gross(PIM.Intranet.Services.PriceRow row) => Math.Round(row.Net * (1 + row.VatRate / 100), 2);
+
+  PIM.Intranet.Services.BusinessCheckRow? CheckFor(PIM.Intranet.Services.PriceRow row) => PriceChecks?.Rows.FirstOrDefault(check =>
+    check.ProductId == row.ProductId && (string.IsNullOrWhiteSpace(check.Context) || check.Context == row.PriceList));
+
+  string Kpi(PIM.Intranet.Services.PimCheckCode code) => KpiCounts.TryGetValue(code, out var value) && value is not null ? value.Value.ToString("N0") : "—";
 }
