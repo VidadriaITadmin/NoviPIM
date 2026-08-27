@@ -70,6 +70,25 @@ public sealed class IntranetDataService(IConfiguration configuration)
       : null;
   }
 
+  /// <summary>
+  /// Vsa aktivna podjetja za lokalni filter na strani. Vecorganizacijski pogledi privzeto
+  /// prikazejo vsa; brez tega seznama je edina izbira <see cref="GetCurrentOrganizationAsync"/>,
+  /// ki vedno vrne prvo po sifri in zato pokaze samo eno podjetje.
+  /// </summary>
+  public async Task<IReadOnlyList<OrganizationContext>> GetOrganizationsAsync(CancellationToken cancellationToken = default)
+  {
+    var rows = new List<OrganizationContext>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "SELECT OrganizationId, Name FROM dbo.OrganizationConfig WHERE IsActive = 1 ORDER BY OrganizationId;", connection);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name"))));
+
+    return rows;
+  }
+
   public async Task<int> GetOpenAlertCountAsync(int organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);

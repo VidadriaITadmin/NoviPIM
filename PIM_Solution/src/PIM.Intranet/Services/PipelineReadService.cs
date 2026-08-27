@@ -42,6 +42,10 @@ public sealed record SourceEntityRow(
   string EntityType, bool HasActiveMapping, long FieldCount, long RequiredFieldCount, long PendingCount,
   long ProcessedCount, long QuarantinedCount, DateTime? LastReceivedUtc, DateTime? WatermarkUtc);
 
+/// <param name="Sources">Sifre virov, ki dejansko obstajajo v registru konektorjev.</param>
+/// <param name="Pipelines">Imena postopkov, ki so dejansko tekla.</param>
+public sealed record InboundFilterOptions(IReadOnlyList<string> Sources, IReadOnlyList<string> Pipelines);
+
 public sealed record InboundIssueRow(
   string IssueKind, long IssueId, int? OrganizationId, string OrganizationName, string SourceCode,
   string Severity, string Title, string Detail, long OccurrenceCount, DateTime FirstSeenUtc,
@@ -466,7 +470,7 @@ public sealed class PipelineReadService(PimDb database)
       }, cancellationToken);
 
   public Task<(IReadOnlyList<InboundIssueRow> Rows, long TotalCount)> GetInboundIssuesAsync(
-    int? organizationId, string? issueKind, string? search, int skip, int take,
+    int? organizationId, string? issueKind, string? search, int skip, int take, string? sourceCode = null,
     CancellationToken cancellationToken = default) => database.PageAsync("""
       CREATE TABLE #InboundIssues
       (
@@ -532,6 +536,7 @@ public sealed class PipelineReadService(PimDb database)
              OccurrenceCount, FirstSeenUtc, LastSeenUtc, RunId
       FROM #InboundIssues
       WHERE (@IssueKind IS NULL OR IssueKind = @IssueKind)
+        AND (@SourceCode IS NULL OR SourceCode = @SourceCode)
         AND (@Search IS NULL OR SourceCode LIKE N'%' + @Search + N'%' OR Title LIKE N'%' + @Search + N'%'
           OR Detail LIKE N'%' + @Search + N'%' OR OrganizationName LIKE N'%' + @Search + N'%')
       ORDER BY CASE Severity WHEN N'Critical' THEN 0 WHEN N'Error' THEN 1 WHEN N'Warning' THEN 2 ELSE 3 END,
@@ -540,6 +545,7 @@ public sealed class PipelineReadService(PimDb database)
 
       SELECT COUNT_BIG(*) FROM #InboundIssues
       WHERE (@IssueKind IS NULL OR IssueKind = @IssueKind)
+        AND (@SourceCode IS NULL OR SourceCode = @SourceCode)
         AND (@Search IS NULL OR SourceCode LIKE N'%' + @Search + N'%' OR Title LIKE N'%' + @Search + N'%'
           OR Detail LIKE N'%' + @Search + N'%' OR OrganizationName LIKE N'%' + @Search + N'%');
       """,
@@ -555,6 +561,7 @@ public sealed class PipelineReadService(PimDb database)
       {
         command.Parameters.AddWithValue("@OrganizationId", organizationId is null ? DBNull.Value : organizationId.Value);
         command.Parameters.AddWithValue("@IssueKind", string.IsNullOrWhiteSpace(issueKind) ? DBNull.Value : issueKind);
+        command.Parameters.AddWithValue("@SourceCode", string.IsNullOrWhiteSpace(sourceCode) ? DBNull.Value : sourceCode);
         command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
         command.Parameters.AddWithValue("@Skip", skip);
         command.Parameters.AddWithValue("@Take", take);
@@ -760,17 +767,19 @@ public sealed class PipelineReadService(PimDb database)
         command.Parameters.AddWithValue("@Language", string.IsNullOrWhiteSpace(language) ? DBNull.Value : language);
       }, cancellationToken);
 
-  public Task<IReadOnlyList<MissingCategoryRow>> GetMissingCategoriesAsync(int organizationId, int take, CancellationToken cancellationToken = default) =>
+  /// <summary>
+  /// Nepreslikane dobaviteljeve kategorije. Filtra po organizaciji ni namenoma: kategorijsko
+  /// drevo je dobaviteljevo in <c>map.SourceCategory</c> organizacije nima. Prejsnja izvedba je
+  /// filtrirala prek <c>map.SourceConnector</c> in bila navidezna — isti dobavitelj je registriran
+  /// pri vseh stirih podjetjih, zato je pogoj vedno drzal. Resnicna razseznost je vir.
+  /// </summary>
+  public Task<IReadOnlyList<MissingCategoryRow>> GetMissingCategoriesAsync(string? sourceCode, int take, CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT TOP (@Take) CONVERT(bigint, 0) AS MissingCategoryMapId, missing.SourceCode,
              CAST(N'' AS nvarchar(100)) AS CategoryTreeCode, missing.SourcePath AS SourcePathKey,
              CONVERT(bigint, missing.ProductCount) AS SeenCount, missing.FirstSeenUtc, missing.LastSeenUtc
       FROM map.SourceCategoryToMap missing
-      WHERE EXISTS
-      (
-        SELECT 1 FROM map.SourceConnector connector
-        WHERE connector.OrganizationId = @OrganizationId AND connector.SourceCode = missing.SourceCode
-      )
+      WHERE @SourceCode IS NULL OR missing.SourceCode = @SourceCode
       ORDER BY missing.ProductCount DESC, missing.LastSeenUtc DESC;
       """,
       reader => new MissingCategoryRow(PimDb.Int64(reader, "MissingCategoryMapId"), PimDb.TextOrEmpty(reader, "SourceCode"),
@@ -778,9 +787,38 @@ public sealed class PipelineReadService(PimDb database)
         PimDb.DateTimeValue(reader, "FirstSeenUtc"), PimDb.DateTimeValue(reader, "LastSeenUtc")),
       command =>
       {
-        command.Parameters.AddWithValue("@OrganizationId", organizationId);
+        command.Parameters.AddWithValue("@SourceCode", string.IsNullOrWhiteSpace(sourceCode) ? DBNull.Value : sourceCode);
         command.Parameters.AddWithValue("@Take", take);
       }, cancellationToken);
+
+  /// <summary>
+  /// Vrednosti za spustne filtre. Berejo se iz registra in iz dejanskih tekov, ne iz trenutne
+  /// strani rezultatov — sicer bi filter ponudil samo tisto, kar je ze vidno.
+  /// </summary>
+  public async Task<InboundFilterOptions> GetInboundFilterOptionsAsync(int? organizationId, CancellationToken cancellationToken = default)
+  {
+    var sources = await database.QueryAsync(
+      "SELECT DISTINCT SourceCode FROM map.SourceConnector WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId ORDER BY SourceCode;",
+      reader => PimDb.TextOrEmpty(reader, "SourceCode"),
+      command => command.Parameters.AddWithValue("@OrganizationId", (object?)organizationId ?? DBNull.Value),
+      cancellationToken);
+
+    var pipelines = await database.QueryAsync(
+      """
+      SELECT Pipeline FROM
+      (
+        SELECT DISTINCT Pipeline FROM ops.PipelineRun WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId
+        UNION
+        SELECT DISTINCT N'STOCK_SYNC' FROM stock.SyncRun WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId
+      ) AS combined
+      ORDER BY Pipeline;
+      """,
+      reader => PimDb.TextOrEmpty(reader, "Pipeline"),
+      command => command.Parameters.AddWithValue("@OrganizationId", (object?)organizationId ?? DBNull.Value),
+      cancellationToken);
+
+    return new(sources, pipelines);
+  }
 
   public async Task<IngestSummary> GetSummaryAsync(int organizationId, CancellationToken cancellationToken = default)
   {

@@ -3,7 +3,6 @@
 @rendermode InteractiveServer
 @inject PipelineReadService Pipeline
 @inject IntranetDataService Data
-@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Težave vhodnih podatkov</PageTitle>
 <PimPage Title="Težave vhodnih podatkov" Subtitle="En delovni seznam čakalnih strani, karantene, zavrnjene zaloge, mrtvih pisem in sistemskih napak. Ponavljajoči vzroki so združeni, ne prikazani tisočkrat." Crumbs="Crumbs" />
@@ -13,6 +12,24 @@
   <h2 id="ingest-issues-filter-title" class="visually-hidden">Filtriranje težav vhodnih podatkov</h2>
   <label class="visually-hidden" for="ingest-issue-search">Poišči težavo</label>
   <input id="ingest-issue-search" type="search" class="search-input" placeholder="Vir, razlog ali podjetje …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="ingest-issue-organization">Podjetje</label>
+  <select id="ingest-issue-organization" class="filter-select" @bind="Organization" @bind:after="ApplyAsync">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="ingest-issue-source">Vir</label>
+  <select id="ingest-issue-source" class="filter-select" @bind="Source" @bind:after="ApplyAsync">
+    <option value="">Vsi viri</option>
+    @foreach (var source in Sources)
+    {
+      <option value="@source">@source</option>
+    }
+  </select>
+
   <label class="visually-hidden" for="ingest-issue-kind">Vrsta težave</label>
   <select id="ingest-issue-kind" class="filter-select" @bind="Kind" @bind:after="ApplyAsync">
     <option value="">Vse težave</option>
@@ -21,17 +38,15 @@
     <option value="DEADLETTER">Mrtva pisma</option>
     <option value="ERROR">Sistemske napake</option>
   </select>
-  @if (IsAdmin)
-  {
-    <button type="button" class="secondary-button" @onclick="ToggleScopeAsync">@(ShowAll ? "Aktivno podjetje" : "Vsa podjetja")</button>
-  }
   <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
 <div class="message-state info-message">
-  Nerazvrščene vrednosti, dobaviteljeve kategorije in prevodi so v pogledu
-  <a href="zajem/preslikave">Preslikave</a>, ker zahtevajo vsebinsko odločitev in niso tehnična napaka.
+  Tu so tehnične napake zajema. Nerazvrščene vrednosti so v
+  <a href="zajem/neujemanja">neujemanjih</a>, manjkajoči <a href="kakovost/prevodi">prevodi</a> in
+  <a href="kakovost/kategorije">dobaviteljeve kategorije</a> pa v kakovosti — zahtevajo vsebinsko
+  odločitev in niso okvara.
 </div>
 
 <section class="ui-card data-card section-gap" aria-label="Seznam težav vhodnih podatkov">
@@ -67,14 +82,17 @@
   [Parameter, SupplyParameterFromQuery(Name = "vrsta")] public string? RequestedKind { get; set; }
 
   IReadOnlyList<InboundIssueRow> Rows = [];
-  int? OrganizationId;
-  bool IsAdmin;
-  bool ShowAll;
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  IReadOnlyList<string> Sources = [];
   bool Loading = true;
   bool QueryApplied;
   string? Error;
   string Search = "";
   string Kind = "";
+  // Prazen niz pomeni vsa podjetja. Tezava enega podjetja je pogosto vidna sele v primerjavi
+  // z ostalimi, zato je privzeti obseg skupen.
+  string Organization = "";
+  string Source = "";
   int Skip;
   const int Take = 50;
   long Total;
@@ -86,13 +104,13 @@
     new("Prvič"), new("Nazadnje"), new("Povezava"),
   ];
 
+  int? OrganizationFilter => int.TryParse(Organization, out var value) ? value : null;
+
   protected override async Task OnInitializedAsync()
   {
-    var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-    IsAdmin = state.User.IsInRole(PimRoles.Admin);
-    var organization = await Data.GetCurrentOrganizationAsync();
-    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
-    OrganizationId = organization.OrganizationId;
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Organizations = []; }
+
     await LoadAsync();
   }
 
@@ -102,26 +120,29 @@
     {
       QueryApplied = true;
       Kind = RequestedKind.ToUpperInvariant();
-      if (OrganizationId is not null) await LoadAsync();
+      await LoadAsync();
     }
   }
 
   async Task LoadAsync()
   {
-    if (OrganizationId is null) return;
     Loading = true;
     Error = null;
     try
     {
-      int? scope = ShowAll && IsAdmin ? null : OrganizationId.Value;
-      (Rows, Total) = await Pipeline.GetInboundIssuesAsync(scope, Kind, Search, Skip, Take);
+      var scope = OrganizationFilter;
+      var optionsTask = Pipeline.GetInboundFilterOptionsAsync(scope);
+      var issuesTask = Pipeline.GetInboundIssuesAsync(scope, Kind, Search, Skip, Take, Source == "" ? null : Source);
+      await Task.WhenAll(optionsTask, issuesTask);
+      Sources = (await optionsTask).Sources;
+      if (Source != "" && !Sources.Contains(Source)) Source = "";
+      (Rows, Total) = await issuesTask;
     }
     catch { Error = "Težav vhodnih podatkov trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
-  async Task ToggleScopeAsync() { ShowAll = !ShowAll; Skip = 0; await LoadAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} skupin težav";

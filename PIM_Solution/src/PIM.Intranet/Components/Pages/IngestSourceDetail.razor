@@ -97,7 +97,7 @@
   bool Loading = true;
   string? Error;
 
-  IReadOnlyList<PimCrumb> Crumbs => [new("Vhodni podatki", "zajem"), new("Viri", "zajem/viri"), new(SourceCode)];
+  IReadOnlyList<PimCrumb> Crumbs => [new("Vhodni podatki", "zajem"), new(SourceCode)];
   static readonly IReadOnlyList<PimColumn> EntityColumns =
   [
     new("Entiteta"), new("Preslikava"), new("Polj", Numeric: true), new("Obveznih", Numeric: true),

@@ -2,13 +2,25 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.PipelineReadService Pipeline
-@inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Nepreslikane kategorije</PageTitle>
-<PimPage Title="Nepreslikane kategorije" Subtitle="Poti iz dobaviteljevih virov, ki jim v kategorijskem drevesu ne ustreza nobena kategorija. Dokler ni preslikave, izdelek na spletu nima uvrstitve."
+<PimPage Title="Nepreslikane kategorije" Subtitle="Poti iz dobaviteljevih virov, ki jim v kategorijskem drevesu ne ustreza nobena kategorija. Dokler ni preslikave, izdelek na spletu nima uvrstitve. Seznam je skupen vsem podjetjem, ker je drevo dobaviteljevo — preslikava, ki jo narediš tu, velja povsod."
          Crumbs="Crumbs" />
 
-<section class="ui-card data-card" aria-label="Seznam nepreslikanih kategorij">
+<section class="ui-card toolbar" role="search" aria-labelledby="category-filter-title">
+  <h2 id="category-filter-title" class="visually-hidden">Filtriranje nepreslikanih kategorij</h2>
+  <label class="visually-hidden" for="category-source">Vir</label>
+  <select id="category-source" class="filter-select" @bind="Source" @bind:after="LoadAsync">
+    <option value="">Vsi viri</option>
+    @foreach (var source in Sources)
+    {
+      <option value="@source">@source</option>
+    }
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card section-gap" aria-label="Seznam nepreslikanih kategorij">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni nepreslikanih kategorij." LoadingText="Nalaganje kategorij …">
     <PimTable Caption="Poti iz virov brez ustrezne kategorije, razvrščene po pogostosti" Columns="Columns">
       <Rows>
@@ -28,8 +40,10 @@
 
 @code {
   IReadOnlyList<PIM.Intranet.Services.MissingCategoryRow> Rows = [];
+  IReadOnlyList<string> Sources = [];
   bool Loading = true;
   string? Error;
+  string Source = "";
   const int Take = 300;
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Nepreslikane kategorije")];
@@ -38,14 +52,23 @@
     new("Vir"), new("Pot iz vira"), new("Izdelkov", Numeric: true), new("Nazadnje")
   ];
 
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} poti";
+
   protected override async Task OnInitializedAsync()
   {
-    try
-    {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      Rows = await Pipeline.GetMissingCategoriesAsync(organization.OrganizationId, Take);
-    }
+    // Vir je edina resnicna razseznost tega seznama; organizacije tu ni, ker je nima niti
+    // map.SourceCategory. Seznam virov beremo cez vsa podjetja iz istega razloga.
+    try { Sources = (await Pipeline.GetInboundFilterOptionsAsync(null)).Sources; }
+    catch { Sources = []; }
+
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try { Rows = await Pipeline.GetMissingCategoriesAsync(Source == "" ? null : Source, Take); }
     catch { Error = "Nepreslikanih kategorij trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }

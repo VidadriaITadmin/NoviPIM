@@ -14,11 +14,9 @@
 
   static readonly IReadOnlyList<IngestTabDefinition> Tabs =
   [
-    new("overview", "Pregled", "zajem", "Stanje vseh tokov", "tab-overview"),
-    new("sources", "Viri", "zajem/viri", "Konektorji in svežina", "tab-sources"),
+    new("overview", "Vhodi", "zajem", "Viri, stanje in svežina", "tab-sources"),
     new("runs", "Teki", "zajem/teki", "Izvedbe in koraki", "tab-runs"),
     new("issues", "Težave", "zajem/tezave", "Napake in čakalne vrste", "tab-issues"),
-    new("mappings", "Preslikave", "zajem/preslikave", "Atributi, kategorije in prevodi", "tab-mappings"),
   ];
 
   sealed record IngestTabDefinition(string Key, string Label, string Href, string Description, string Icon);

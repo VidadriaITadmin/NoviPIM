@@ -3,63 +3,100 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.PipelineReadService Pipeline
 @inject PIM.Intranet.Services.IntranetDataService Data
-@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Vhodni podatki</PageTitle>
-<PimPage Title="Vhodni podatki" Subtitle="Enotna operativna slika zajema artiklov, XML-jev, delovnih zvezkov in zaloge. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
+<PimPage Title="Vhodni podatki" Subtitle="Vsi registrirani vhodi vseh podjetij na enem mestu: kaj beremo, od kod, kdaj nazadnje in s kakšnim izidom. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
 <IngestTabs Active="overview" />
 
-<section class="ui-card ingest-scope" aria-label="Obseg pregleda">
-  <div>
-    <strong>@(ShowAll ? "Vsa aktivna podjetja" : OrganizationName)</strong>
-    <span>@(ShowAll ? "Primerjava vseh registriranih vhodov" : "Trenutni organizacijski kontekst")</span>
-  </div>
-  @if (IsAdmin)
-  {
-    <button type="button" class="secondary-button" @onclick="ToggleScopeAsync">
-      @(ShowAll ? "Prikaži aktivno podjetje" : "Prikaži vsa podjetja")
-    </button>
-  }
+<section class="ui-card toolbar" role="search" aria-labelledby="ingest-filter-title">
+  <h2 id="ingest-filter-title" class="visually-hidden">Filtriranje vhodnih tokov</h2>
+
+  <label class="visually-hidden" for="ingest-organization">Podjetje</label>
+  <select id="ingest-organization" class="filter-select" @bind="Organization" @bind:after="ReloadAsync">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="ingest-source">Vir</label>
+  <select id="ingest-source" class="filter-select" @bind="Source">
+    <option value="">Vsi viri</option>
+    @foreach (var source in Sources)
+    {
+      <option value="@source">@source</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="ingest-kind">Vrsta vhoda</label>
+  <select id="ingest-kind" class="filter-select" @bind="Kind">
+    <option value="">Vse vrste</option>
+    <option value="SAOP">SAOP API</option>
+    <option value="XML">Dobaviteljev XML</option>
+    <option value="STOCK">Zaloga</option>
+    <option value="WORKBOOK">Ročni uvoz</option>
+  </select>
+
+  <label class="visually-hidden" for="ingest-health">Stanje</label>
+  <select id="ingest-health" class="filter-select" @bind="Health">
+    <option value="">Vsa stanja</option>
+    <option value="Healthy">V redu</option>
+    <option value="Stale">Zamuja</option>
+    <option value="Failed">Neuspešno</option>
+    <option value="Running">V teku</option>
+    <option value="NeverRun">Še brez teka</option>
+  </select>
+
+  <label class="visually-hidden" for="ingest-activity">Aktivnost</label>
+  <select id="ingest-activity" class="filter-select" @bind="Activity">
+    <option value="">Aktivni in ustavljeni</option>
+    <option value="ACTIVE">Samo aktivni</option>
+    <option value="STOPPED">Samo ustavljeni</option>
+  </select>
+
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
-<PimState Loading="Loading" Error="@Error" Empty="@(Flows.Count == 0)" EmptyText="Za izbrani obseg ni registriranih vhodnih tokov." LoadingText="Sestavljanje pregleda vseh vhodov …">
+<PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)" EmptyText="Za izbrane filtre ni registriranih vhodnih tokov." LoadingText="Sestavljanje pregleda vseh vhodov …">
   @if (Summary is not null)
   {
     <section class="kpi-grid ingest-kpis" aria-label="Povzetek vhodnih podatkov">
       <PimStat Label="Tokovi v redu" Value="@HealthyFlowLabel" Note="registrirani tokovi" />
       <PimStat Label="Čaka" Value="@Summary.PendingPages.ToString("N0")" Note="@($"najstarejša: {Moment(Summary.OldestPendingUtc)}")" Href="zajem/cakalna-vrsta" />
       <PimStat Label="V karanteni" Value="@Summary.QuarantinedPages.ToString("N0")" Href="zajem/tezave?vrsta=INBOX" />
-      <PimStat Label="Delo preslikav" Value="@Summary.MappingWorkCount.ToString("N0")" Note="kategorije in prevodi" Href="zajem/preslikave" />
+      <PimStat Label="Nerazvrščene vrednosti" Value="@Summary.UnmappedValues.ToString("N0")" Note="čakajo na slovar" Href="zajem/neujemanja" />
       <PimStat Label="Zavrnjena zaloga" Value="@Summary.StockUnmatchedCount.ToString("N0")" Href="zajem/tezave?vrsta=STOCK" />
       <PimStat Label="Tehnične težave" Value="@Summary.OpenTechnicalProblems.ToString("N0")" Note="mrtva pisma in napake v 7 dneh" Href="zajem/tezave" />
     </section>
   }
 
   <section class="ui-card data-card" aria-label="Vhodni tokovi">
-    <PimTable Caption="Vhodni tokovi — zadnji poskus, uspeh in količine" Columns="Columns">
+    <PimTable Caption="Registrirani vhodi — kaj beremo, od kod, kdaj in s kakšnim izidom" Columns="Columns">
       <Rows>
-        @foreach (var flow in Flows)
+        @foreach (var flow in Visible)
         {
           <tr>
             <td><strong>@flow.OrganizationName</strong></td>
             <td>
               <a href="zajem/viri/@Uri.EscapeDataString(flow.SourceCode)">@FlowLabel(flow)</a>
-              <div class="tree-path"><span class="code-value">@flow.SourceCode</span> · @FlowKind(flow.FlowKind)</div>
+              <div class="tree-path"><span class="code-value">@flow.SourceCode</span> · @FlowKind(flow.FlowKind) · @flow.ConnectorType</div>
+            </td>
+            <td>
+              <PimChip Text="@(flow.IsActive ? "Aktiven" : "Ustavljen")" Tone="@(flow.IsActive ? "good" : null)" />
+              @if (flow.CanCreateProducts) { <PimChip Text="Sme ustvarjati" Tone="warn" /> }
             </td>
             <td><PimChip Text="@StatusLabel(flow.Status)" Tone="@StatusTone(flow.Status)" /></td>
+            <td>@(string.IsNullOrWhiteSpace(flow.Endpoint) ? "Ni registrirano" : flow.Endpoint)</td>
             <td>
               @if (flow.LastRunId is not null)
               {
                 <a href="zajem/teki/@flow.LastRunId">@Moment(flow.LastAttemptUtc)</a>
               }
               else { <span class="muted">Nikoli</span> }
-              @if (flow.LastFailureUtc is not null) { <div class="ingest-failure">Neuspeh: @Moment(flow.LastFailureUtc)</div> }
             </td>
             <td>@Moment(flow.LastSuccessUtc)</td>
-            <td>
-              @if (flow.ScheduleEnabled == false) { <span class="muted">Izklopljen</span> }
-              else { @Moment(flow.NextScheduledUtc) }
-            </td>
+            <td>@(flow.ScheduleEnabled == false ? "Izklopljen" : flow.NextScheduledUtc is null ? "Ni urnika" : Moment(flow.NextScheduledUtc))</td>
             <td class="numeric">@flow.ReceivedLast24Hours.ToString("N0")</td>
             <td class="numeric">@flow.PendingCount.ToString("N0")</td>
             <td class="numeric">@flow.RejectedCount.ToString("N0")</td>
@@ -68,63 +105,69 @@
       </Rows>
     </PimTable>
   </section>
-
-  @if (Flows.Any(flow => !string.IsNullOrWhiteSpace(flow.LastError)))
-  {
-    <section class="ui-card ingest-attention" aria-labelledby="ingest-attention-title">
-      <h2 id="ingest-attention-title">Zadnje prijavljene napake</h2>
-      @foreach (var flow in Flows.Where(flow => !string.IsNullOrWhiteSpace(flow.LastError)).Take(5))
-      {
-        <article><strong>@flow.OrganizationName · @flow.SourceCode</strong><p>@flow.LastError</p></article>
-      }
-    </section>
-  }
 </PimState>
 
 @code {
   IReadOnlyList<InboundFlowRow> Flows = [];
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  IReadOnlyList<string> Sources = [];
   InboundOverviewSummary? Summary;
-  int? OrganizationId;
-  string OrganizationName = "Aktivno podjetje";
-  bool IsAdmin;
-  bool ShowAll;
   bool Loading = true;
   string? Error;
 
+  // Prazen niz pomeni vsa podjetja. Privzeto je prav to: pregled je vecorganizacijski,
+  // ker se delo enega podjetja pogosto ustavi zaradi vira, ki ga polni drugo.
+  string Organization = "";
+  string Source = "";
+  string Kind = "";
+  string Health = "";
+  string Activity = "";
+
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Podjetje"), new("Vir in vrsta"), new("Stanje"), new("Zadnji poskus"), new("Zadnji uspeh"),
-    new("Naslednji zagon"), new("Prišlo 24 h", Numeric: true), new("Čaka", Numeric: true), new("Zavrnjeno", Numeric: true),
+    new("Podjetje"), new("Vir in vrsta"), new("Register"), new("Stanje"), new("Mesto prevzema"),
+    new("Zadnji poskus"), new("Zadnji uspeh"), new("Naslednji zagon"),
+    new("Prišlo 24 h", Numeric: true), new("Čaka", Numeric: true), new("Zavrnjeno", Numeric: true),
   ];
 
-  string HealthyFlowLabel => $"{Flows.Count(flow => flow.Status == "Healthy")}/{Flows.Count}";
+  int? OrganizationFilter => int.TryParse(Organization, out var value) ? value : null;
+
+  IReadOnlyList<InboundFlowRow> Visible => Flows
+    .Where(flow => Source == "" || flow.SourceCode == Source)
+    .Where(flow => Kind == "" || flow.FlowKind == Kind)
+    .Where(flow => Health == "" || flow.Status == Health)
+    .Where(flow => Activity == "" || (Activity == "ACTIVE" ? flow.IsActive : !flow.IsActive))
+    .ToList();
+
+  string HealthyFlowLabel => $"{Visible.Count(flow => flow.Status == "Healthy")}/{Visible.Count}";
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Visible.Count} vhodnih tokov";
 
   protected override async Task OnInitializedAsync()
   {
-    var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-    IsAdmin = state.User.IsInRole(PimRoles.Admin);
-    var organization = await Data.GetCurrentOrganizationAsync();
-    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
-    OrganizationId = organization.OrganizationId;
-    OrganizationName = organization.Name;
-    await LoadAsync();
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Organizations = []; }
+
+    await ReloadAsync();
   }
 
-  async Task ToggleScopeAsync() { ShowAll = !ShowAll; await LoadAsync(); }
-
-  async Task LoadAsync()
+  async Task ReloadAsync()
   {
-    if (OrganizationId is null) return;
     Loading = true;
     Error = null;
     try
     {
-      int? scope = ShowAll && IsAdmin ? null : OrganizationId.Value;
+      var scope = OrganizationFilter;
       var flowsTask = Pipeline.GetInboundFlowsAsync(scope);
       var summaryTask = Pipeline.GetInboundOverviewSummaryAsync(scope);
-      await Task.WhenAll(flowsTask, summaryTask);
+      var optionsTask = Pipeline.GetInboundFilterOptionsAsync(scope);
+      await Task.WhenAll(flowsTask, summaryTask, optionsTask);
       Flows = await flowsTask;
       Summary = await summaryTask;
+      Sources = (await optionsTask).Sources;
+
+      // Po zozitvi podjetja izbrani vir morda ne obstaja vec; tiho ga sprostimo,
+      // da tabela ne ostane prazna brez pojasnila.
+      if (Source != "" && !Sources.Contains(Source)) Source = "";
     }
     catch { Error = "Pregleda vhodnih podatkov trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
