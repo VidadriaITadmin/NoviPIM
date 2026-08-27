@@ -165,17 +165,30 @@ static async Task<int?> ReadScheduledOrganizationAsync(SqlConnection connection)
   return await command.ExecuteScalarAsync() as int?;
 }
 
+/// <summary>
+/// Nastavitve korena repozitorija, ne prve najdene datoteke. Pod PIM_Solution stoji svoja
+/// appsettings.Local.json, ki nosi samo povezavo in nima odseka Fetch; ce bi worker vzel njo
+/// (kar se zgodi, ko ga pozene skripta iz PIM_Solution), poverilnic ne bi nasel. Koren
+/// prepoznamo po PIM_Solution\PIM.sln — isti postopek kot LocalSettingsLocator v intranetu.
+/// </summary>
 static string? FindLocalSettings()
 {
   var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+  string? prvaNajdena = null;
+
   while (directory is not null)
   {
     var candidate = Path.Combine(directory.FullName, "appsettings.Local.json");
-    if (File.Exists(candidate)) return candidate;
+    if (File.Exists(candidate))
+    {
+      prvaNajdena ??= candidate;
+      if (File.Exists(Path.Combine(directory.FullName, "PIM_Solution", "PIM.sln"))) return candidate;
+    }
+
     directory = directory.Parent;
   }
 
-  return null;
+  return prvaNajdena;
 }
 
 static string RepositoryRoot(string? settingsPath) =>

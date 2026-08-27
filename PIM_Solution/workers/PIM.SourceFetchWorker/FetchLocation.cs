@@ -24,6 +24,11 @@ public sealed record FetchCredential(string? Url, string? BaseUri, string? UserN
   /// </summary>
   public static FetchCredential? Read(JsonElement fetch, string credentialKey)
   {
+    // Odsek Fetch je lahko neobstojec (JsonValueKind.Undefined), kadar je bila prebrana napacna
+    // ali starejsa datoteka nastavitev. TryGetProperty nad takim elementom vrze; brez te vrstice
+    // se worker sesuje namesto da bi posteno povedal, da nastavitve ni.
+    if (fetch.ValueKind != JsonValueKind.Object) return null;
+
     var name = credentialKey.StartsWith("Fetch:", StringComparison.OrdinalIgnoreCase)
       ? credentialKey["Fetch:".Length..]
       : credentialKey;

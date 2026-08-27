@@ -57,6 +57,9 @@ param(
   # Zivi klic na SAOP za kolicine zaloge. Privzeto izklopljen (AGENTS.md #4.5).
   [switch]$ZalogaIzSaop,
 
+  # Preskoci prevzem datotek od dobaviteljev; uporabno, kadar datoteke prinasa kdo drug.
+  [switch]$BrezPrevzema,
+
   # Preskoci izvoz; uporabno, kadar se izvozna mapa se ne dostavlja nikamor.
   [switch]$BrezIzvoza,
 
@@ -78,8 +81,10 @@ if ([string]::IsNullOrWhiteSpace($KorenRepozitorija)) {
 $resitev = Join-Path $KorenRepozitorija 'PIM_Solution'
 if ([string]::IsNullOrWhiteSpace($MapaNwXml))   { $MapaNwXml = Join-Path $resitev 'fixtures\nw' }
 if ([string]::IsNullOrWhiteSpace($MapaBtXml))   { $MapaBtXml = Join-Path $resitev 'fixtures\bt' }
-if ([string]::IsNullOrWhiteSpace($MapaZalogNw)) { $MapaZalogNw = Join-Path $resitev 'fixtures\stocks\nw' }
-if ([string]::IsNullOrWhiteSpace($MapaZalogBt)) { $MapaZalogBt = Join-Path $resitev 'fixtures\stocks\bt' }
+# Zaloga se bere iz mape, kamor jo polozi prevzemnik, ne iz fixtures: fixtures so testni podatki
+# in ziv prenos jih ne sme povoziti. 2026-08-27 se je prav to zgodilo in podrlo tri teste F6.
+if ([string]::IsNullOrWhiteSpace($MapaZalogNw)) { $MapaZalogNw = Join-Path $resitev 'data\prevzem\NW_STOCK' }
+if ([string]::IsNullOrWhiteSpace($MapaZalogBt)) { $MapaZalogBt = Join-Path $resitev 'data\prevzem\BT_STOCK' }
 
 $mapaDnevnikov = Join-Path $KorenRepozitorija 'logs'
 if (-not (Test-Path $mapaDnevnikov)) { New-Item -ItemType Directory -Path $mapaDnevnikov | Out-Null }
@@ -292,6 +297,17 @@ else {
     $env:PIM_SAOP_MODE = 'Live'
     PozeniWorker 'workers\PIM.KatalogWorker' $argumenti
   }
+}
+
+# --- 1a. Prevzem dobaviteljevih datotek --------------------------------------
+# Pred vsemi vhodi, sicer bi ostali koraki brali vceraj prineseno datoteko. Prevzemnik sam ve,
+# kateri viri so v map.SourceFetchLocation in kateri so lokalne mape; zavrnitev dobavitelja
+# (Braytron dovoli en prenos na 180 minut) ni napaka koraka, ker prejsnja datoteka ostane.
+if ($BrezPrevzema) {
+  Zapisi '== Prevzem datotek == preskočeno: stikalo -BrezPrevzema.'
+}
+else {
+  Korak 'Prevzem dobaviteljevih datotek' { PozeniWorker 'workers\PIM.SourceFetchWorker' @() }
 }
 
 # --- 2. Dobaviteljev XML ----------------------------------------------------

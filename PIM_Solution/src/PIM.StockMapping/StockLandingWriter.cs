@@ -17,6 +17,14 @@ public sealed class StockLandingWriter(string connectionString)
     StockFieldContract? fields = null, CancellationToken cancellationToken = default)
   {
     fields ??= new();
+
+    // stock.Snapshot.SnapshotUtc je datetime2(3), cas datoteke pa nosi 100-nanosekundne enote.
+    // Neporezan cas se ob vpisu zaokrozi na milisekunde, iskanje obstojecega posnetka pa isce s
+    // polno natancnostjo in zato zaokrozene vrstice ne najde: zagon gre mimo dedupa in pade na
+    // UQ_StockSnapshot (SQL 2627). Izmerjeno 2026-08-27 pri ponovnem branju iste datoteke.
+    // Cas zato porezemo na isto natancnost, kot jo ima stolpec, in to enkrat za vse klicatelje.
+    snapshotUtc = new DateTime(snapshotUtc.Ticks - snapshotUtc.Ticks % TimeSpan.TicksPerMillisecond, snapshotUtc.Kind);
+
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync(cancellationToken);
     await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
@@ -79,7 +87,8 @@ public sealed class StockLandingWriter(string connectionString)
   static async Task<Guid?> FindSnapshotRunAsync(SqlConnection c,SqlTransaction t,int organizationId,int connectorId,DateTime snapshotUtc,CancellationToken ct)
   {
     await using var cmd=new SqlCommand("SELECT TOP(1) SyncRunId FROM stock.Snapshot WHERE OrganizationId=@Org AND SourceConnectorId=@Connector AND SnapshotUtc=@Snapshot ORDER BY SnapshotId DESC;",c,t);
-    cmd.Parameters.AddWithValue("@Org",organizationId);cmd.Parameters.AddWithValue("@Connector",connectorId);cmd.Parameters.AddWithValue("@Snapshot",snapshotUtc);
+    cmd.Parameters.AddWithValue("@Org",organizationId);cmd.Parameters.AddWithValue("@Connector",connectorId);
+    DodajCasPosnetka(cmd,"@Snapshot",snapshotUtc);
     var value=await cmd.ExecuteScalarAsync(ct);
     return value is null or DBNull?null:(Guid)value;
   }
@@ -112,5 +121,22 @@ public sealed class StockLandingWriter(string connectionString)
     foreach(var p in new(string,object?)[ ]{("@Run",run),("@Org",org),("@Connector",connector),("@Key",key),("@Snapshot",snapshot),("@Endpoint",endpoint),("@Raw",key),("@Hash",hash),("@Ean",ean),("@Source",source),("@Normalized",normalized),("@Quantity",quantity),("@Date",date),("@Incoming",incoming)})cmd.Parameters.AddWithValue(p.Item1,p.Item2??DBNull.Value);
     return Convert.ToInt64(await cmd.ExecuteScalarAsync(ct));
   }
+  /// <summary>
+  /// Cas posnetka kot datetime2(3), tako kot stolpec. AddWithValue bi za DateTime sklepal
+  /// SqlDbType.DateTime, ki ima ločljivost 1/300 sekunde in vrednost .993 zaokrozi na .99333;
+  /// primerjava s shranjenim .993 zato ne ujame nicesar in dedup posnetka odpove. Izmerjeno
+  /// 2026-08-27: drugo branje iste datoteke je padlo na UQ_StockSnapshot (SQL 2627), ceprav je
+  /// bil posnetek ze v bazi.
+  /// </summary>
+  static void DodajCasPosnetka(SqlCommand cmd,string ime,DateTime vrednost)
+  {
+    var p=cmd.Parameters.Add(ime,System.Data.SqlDbType.DateTime2);
+    p.Scale=3;
+    p.Value=vrednost;
+  }
+
+  // Vpis namenoma ostane na AddWithValue: stolpci so datetime2(3) in vrednost se ob vpisu poreze
+  // na milisekundo. Popravka potrebuje samo iskanje, kjer se primerjata dve razlicno zaokrozeni
+  // vrednosti. Sirsa sprememba je bila poskusena in je podrla vstavljanje pozicij.
   static async Task ExecuteAsync(SqlConnection c,SqlTransaction t,string sql,CancellationToken ct,params (string,object?)[] values){await using var cmd=new SqlCommand(sql,c,t);foreach(var p in values)cmd.Parameters.AddWithValue(p.Item1,p.Item2??DBNull.Value);await cmd.ExecuteNonQueryAsync(ct);}
 }

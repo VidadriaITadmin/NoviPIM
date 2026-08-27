@@ -59,7 +59,15 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     if (refusal is not null)
     {
       File.Delete(temporary);
-      return new(location.SourceCode, location.Kind, false, 0, File.Exists(target) ? target : null, null, refusal);
+
+      // Zavrnjen prenos ob veljavni prejsnji datoteki NI napaka zagona: dobavitelj omejuje
+      // pogostost, mi pa imamo podatek. Ce bi to steli za napako, bi bilo nacrtovano opravilo
+      // videti pokvarjeno ob vsakem ciklu, ki pride prezgodaj. Brez prejsnje datoteke pa smo
+      // dejansko brez podatka in to je napaka.
+      var imamoPrejsnjo = File.Exists(target);
+      return imamoPrejsnjo
+        ? new(location.SourceCode, location.Kind, false, 0, target, refusal, null)
+        : new(location.SourceCode, location.Kind, false, 0, null, null, refusal + " Prejsnje datoteke ni.");
     }
 
     File.Move(temporary, target, overwrite: true);

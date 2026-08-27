@@ -134,11 +134,13 @@ internal sealed record SaopStockSettings(
 {
   public static SaopStockSettings? Read(string? baseUrlOverride)
   {
-    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-    while (directory is not null)
+    // Nastavitve korena repozitorija, ne prve najdene datoteke. Pod PIM_Solution stoji svoja
+    // appsettings.Local.json, ki nosi samo povezavo in nima odseka Saop; ko worker pozene
+    // skripta iz PIM_Solution, bi vzel njo in koncal z "Manjka nastavitev Saop", ceprav so
+    // nastavitve v korenu. Koren prepoznamo po PIM_Solution\PIM.sln.
+    var path = FindSettingsPath();
+    if (path is not null)
     {
-      var path = Path.Combine(directory.FullName, "appsettings.Local.json");
-      if (File.Exists(path))
       {
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var root = document.RootElement;
@@ -163,8 +165,29 @@ internal sealed record SaopStockSettings(
           saop.TryGetProperty("AcceptUntrustedCertificate", out var untrusted) && untrusted.GetBoolean(),
           connection, organizations);
       }
+    }
+
+    return null;
+  }
+
+  /// <summary>Prva najdena datoteka navzgor; ce je med njimi koren repozitorija, zmaga ta.</summary>
+  static string? FindSettingsPath()
+  {
+    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+    string? prvaNajdena = null;
+
+    while (directory is not null)
+    {
+      var candidate = Path.Combine(directory.FullName, "appsettings.Local.json");
+      if (File.Exists(candidate))
+      {
+        prvaNajdena ??= candidate;
+        if (File.Exists(Path.Combine(directory.FullName, "PIM_Solution", "PIM.sln"))) return candidate;
+      }
+
       directory = directory.Parent;
     }
-    return null;
+
+    return prvaNajdena;
   }
 }
