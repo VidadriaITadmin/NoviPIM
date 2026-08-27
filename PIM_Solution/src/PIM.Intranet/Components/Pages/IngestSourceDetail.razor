@@ -6,11 +6,28 @@
 
 <PageTitle>Vir @SourceCode</PageTitle>
 <PimPage Title="@($"Vir: {SourceCode}")" Subtitle="Entitete, preslikave, svežina in zadnje izvedbe izbranega vira." Crumbs="Crumbs" />
-<IngestTabs Active="sources" />
+<IngestTabs Active="overview" />
 
-<PimState Loading="Loading" Error="@Error" Empty="@(Flow is null)" EmptyText="Vir v aktivni organizaciji ne obstaja." LoadingText="Nalaganje podrobnosti vira …">
+<PimState Loading="Loading" Error="@Error" Empty="@(Flow is null)" EmptyText="@($"Vira {SourceCode} ni v nobenem podjetju — konektor ni registriran.")" LoadingText="Nalaganje podrobnosti vira …">
   @if (Flow is not null)
   {
+    @if (Matches.Count > 1)
+    {
+      <nav class="page-tabs" aria-label="Podjetja s tem virom">
+        @foreach (var match in Matches)
+        {
+          @if (match.OrganizationId == Flow.OrganizationId)
+          {
+            <span class="page-tab active" aria-current="page">@match.OrganizationName</span>
+          }
+          else
+          {
+            <a class="page-tab" href="@($"zajem/viri/{Uri.EscapeDataString(SourceCode)}?podjetje={match.OrganizationId}")">@match.OrganizationName</a>
+          }
+        }
+      </nav>
+    }
+
     <section class="detail-grid section-gap">
       <article class="ui-card panel" aria-labelledby="source-state-title">
         <h2 id="source-state-title">Operativno stanje</h2>
@@ -94,8 +111,11 @@
   InboundFlowRow? Flow;
   IReadOnlyList<SourceEntityRow> Entities = [];
   IReadOnlyList<InboundRunRow> Runs = [];
+  IReadOnlyList<InboundFlowRow> Matches = [];
   bool Loading = true;
   string? Error;
+
+  [Parameter, SupplyParameterFromQuery(Name = "podjetje")] public int? RequestedOrganizationId { get; set; }
 
   IReadOnlyList<PimCrumb> Crumbs => [new("Vhodni podatki", "zajem"), new(SourceCode)];
   static readonly IReadOnlyList<PimColumn> EntityColumns =
@@ -105,19 +125,33 @@
   ];
   static readonly IReadOnlyList<PimColumn> RunColumns = [new("Začetek"), new("Postopek"), new("Stanje"), new("Prebrano", Numeric: true), new("Napake", Numeric: true), new("Trajanje")];
 
+  /// <summary>
+  /// Podjetje pride iz naslova, ker ista sifra vira zivi pri vec podjetjih (BT_XML je registriran
+  /// pri vseh stirih), nekatere pa so lastne enemu (SAOP_IQLIGHTING). Brez tega je stran brala
+  /// privzeto prvo podjetje in za vir drugega podjetja trdila, da ne obstaja.
+  /// </summary>
   protected override async Task OnParametersSetAsync()
   {
     Loading = true;
     Error = null;
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      var flowsTask = Pipeline.GetInboundFlowsAsync(organization.OrganizationId);
-      var entitiesTask = Pipeline.GetSourceEntitiesAsync(organization.OrganizationId, SourceCode);
-      var runsTask = Pipeline.GetInboundRunsAsync(organization.OrganizationId, null, null, 0, 20, SourceCode);
-      await Task.WhenAll(flowsTask, entitiesTask, runsTask);
-      Flow = (await flowsTask).FirstOrDefault(row => row.SourceCode.Equals(SourceCode, StringComparison.OrdinalIgnoreCase));
+      var flows = await Pipeline.GetInboundFlowsAsync(null);
+      Matches = flows
+        .Where(row => row.SourceCode.Equals(SourceCode, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(row => row.OrganizationId)
+        .ToList();
+
+      // Kadar naslov podjetja ne pove, izberemo tisto z zadnjim dejanskim prevzemom: to je
+      // podjetje, ki ga uporabnik skoraj vedno isce, ostala pa so dosegljiva z zavihkom nad tabelo.
+      Flow = Matches.FirstOrDefault(row => row.OrganizationId == RequestedOrganizationId)
+        ?? Matches.OrderByDescending(row => row.LastAttemptUtc ?? DateTime.MinValue).FirstOrDefault();
+
+      if (Flow is null) { Entities = []; Runs = []; return; }
+
+      var entitiesTask = Pipeline.GetSourceEntitiesAsync(Flow.OrganizationId, SourceCode);
+      var runsTask = Pipeline.GetInboundRunsAsync(Flow.OrganizationId, null, null, 0, 20, SourceCode);
+      await Task.WhenAll(entitiesTask, runsTask);
       Entities = await entitiesTask;
       Runs = (await runsTask).Rows;
     }

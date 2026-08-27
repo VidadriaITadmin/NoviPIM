@@ -1,3 +1,5 @@
+using Microsoft.Data.SqlClient;
+using PIM.Operations;
 using PIM.StockFileWorker;
 using PIM.StockMapping;
 
@@ -49,12 +51,44 @@ if (string.IsNullOrWhiteSpace(connectionString))
   return 2;
 }
 
+// Ime postopka je isto v ops.ScheduleProfile, ops.PipelineRun in ops.IntegrationHealth.
+const string Pipeline = "STOCK_FILE";
+
+// Zagon se odpre prek ops.BeginRun, da dobaviteljeva zaloga tece pod istim razporedom in isto
+// sledjo kot ostali vhodi. Doslej je to varovalko obhajala in je zato ni bilo v /zajem/teki.
+OperationsRun run;
+try
+{
+  run = await OperationsRun.BeginAsync(connectionString, options.OrganizationId, Pipeline,
+    $"{Environment.MachineName}:{Environment.ProcessId}");
+}
+catch (SqlException exception) when (exception.Number is 51100 or 51101)
+{
+  Console.Error.WriteLine(exception.Number == 51100
+    ? $"Razpored za {Pipeline} pri podjetju {options.OrganizationId} ni omogocen; nic ni bilo prebrano."
+    : $"{Pipeline} pri podjetju {options.OrganizationId} ze tece; ta zagon se je umaknil.");
+  return exception.Number == 51100 ? 1 : 0;
+}
+
 // Posnetek nosi čas datoteke, ne čas zagona: zaloga pripada trenutku, ko jo je dobavitelj
 // zapisal. Dvakrat obdelana ista datoteka je zato isti posnetek, ne dva različna.
 var snapshotUtc = File.GetLastWriteTimeUtc(options.FilePath);
-var (runId, applied, quarantined, alreadyApplied) = await new StockLandingWriter(connectionString).PersistAsync(
-  options.OrganizationId, options.SourceCode, "FILE", options.Endpoint, snapshotUtc,
-  batch.PayloadHash, batch.Records, options.DateFormat);
+Guid runId; long applied, quarantined; bool alreadyApplied;
+try
+{
+  (runId, applied, quarantined, alreadyApplied) = await new StockLandingWriter(connectionString).PersistAsync(
+    options.OrganizationId, options.SourceCode, "FILE", options.Endpoint, snapshotUtc,
+    batch.PayloadHash, batch.Records, options.DateFormat);
+  await run.CompleteAsync(true);
+}
+catch (Exception exception)
+{
+  await run.CompleteAsync(false, exception.Message);
+  await run.DisposeAsync();
+  throw;
+}
+
+await run.DisposeAsync();
 
 if (alreadyApplied)
 {

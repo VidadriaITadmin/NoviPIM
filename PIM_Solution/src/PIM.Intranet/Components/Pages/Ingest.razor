@@ -79,7 +79,7 @@
           <tr>
             <td><strong>@flow.OrganizationName</strong></td>
             <td>
-              <a href="zajem/viri/@Uri.EscapeDataString(flow.SourceCode)">@FlowLabel(flow)</a>
+              <a href="@($"zajem/viri/{Uri.EscapeDataString(flow.SourceCode)}?podjetje={flow.OrganizationId}")">@FlowLabel(flow)</a>
               <div class="tree-path"><span class="code-value">@flow.SourceCode</span> · @FlowKind(flow.FlowKind) · @flow.ConnectorType</div>
             </td>
             <td>

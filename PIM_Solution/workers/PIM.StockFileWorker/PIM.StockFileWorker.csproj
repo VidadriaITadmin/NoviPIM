@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/PIM.StockMapping/PIM.StockMapping.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/PIM.StockMapping/PIM.StockMapping.csproj" /><ProjectReference Include="../../src/PIM.Operations/PIM.Operations.csproj" /></ItemGroup>
   <ItemGroup><PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" /></ItemGroup>
 </Project>

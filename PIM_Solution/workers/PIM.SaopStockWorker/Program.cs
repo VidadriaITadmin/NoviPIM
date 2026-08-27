@@ -2,6 +2,8 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.SqlClient;
+using PIM.Operations;
 using PIM.SaopStockWorker;
 
 // Zaloga iz SAOP. Profil (kateri vmesnik, katera skladišča) je vrstica v
@@ -71,13 +73,36 @@ http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
   "Basic", Convert.ToBase64String(Encoding.ASCII.GetBytes($"{settings.Username}:{settings.Password}")));
 http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
 
+// Ime postopka je isto v ops.ScheduleProfile, ops.PipelineRun in ops.IntegrationHealth,
+// zato stoji na enem mestu.
+const string Pipeline = "SAOP_STOCK";
+
 var runner = new SaopStockRunner(settings.ConnectionString, http, new Uri(settings.BaseUrl.TrimEnd('/') + "/"));
 var napake = 0;
 foreach (var organizationId in organizations)
 {
+  // Zagon se odpre prek ops.BeginRun, da zaloga tece pod istim razporedom in isto sledjo kot
+  // ostali vhodi: brez omogocene vrstice v ops.ScheduleProfile vrze 51100 in podjetje se
+  // preskoci. Doslej je zaloga to varovalko obhajala in je zato ni bilo v /zajem/teki.
+  OperationsRun? run = null;
+  try
+  {
+    run = await OperationsRun.BeginAsync(settings.ConnectionString, organizationId, Pipeline,
+      $"{Environment.MachineName}:{Environment.ProcessId}");
+  }
+  catch (SqlException exception) when (exception.Number is 51100 or 51101)
+  {
+    napake++;
+    Console.Error.WriteLine(exception.Number == 51100
+      ? $"[{organizationId}] Razpored za {Pipeline} ni omogocen; podjetje je preskoceno."
+      : $"[{organizationId}] {Pipeline} ze tece; ta zagon se je umaknil.");
+    continue;
+  }
+
   try
   {
     var izid = await runner.RunAsync(organizationId, pageSize);
+    await run.CompleteAsync(true);
     Console.WriteLine($"[{organizationId}] {izid.ProfileCode} ({izid.ProviderKind}): skladišč={izid.Warehouses}, "
       + $"zapisov={izid.RecordsRead}, uporabljenih={izid.Applied}, v karanteni={izid.Quarantined}, RunId={izid.RunId}.");
   }
@@ -85,7 +110,12 @@ foreach (var organizationId in organizations)
   {
     // Padec enega podjetja ne sme ustaviti ostalih — isto pravilo kot pri katalogu.
     napake++;
+    await run.CompleteAsync(false, exception.Message);
     Console.Error.WriteLine($"[{organizationId}] NAPAKA: {exception.Message}");
+  }
+  finally
+  {
+    await run.DisposeAsync();
   }
 }
 return napake == 0 ? 0 : 1;
