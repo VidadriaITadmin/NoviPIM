@@ -176,6 +176,55 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Preslikave kategorij in uvrstitev izdelka postanejo urejiv podatek — migracija 109** —
+  kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
+
+  Do te migracije je bilo urejanje kategorij mogoče samo z novo migracijo. Shema `intranet` je
+  imela **30 postopkov `Get*` in nobenega `Save*`**. Register `map.SourceCategory` je vestno
+  kazal, kaj čaka na preslikavo, rešiti pa tega ni mogel nihče brez SQL-a.
+
+  **Kaj je dodano:**
+
+  - `map.SaveCategoryPathMap` / `map.DeactivateCategoryPathMap` — preslikava »dobaviteljeva pot
+    → naša kategorija« je urejiva. Vsaka sprememba gre v `map.CategoryPathMapHistory` z
+    akterjem in staro vrednostjo. Ugasnitev **ne briše** vrstice, ker bi izbrisana preslikava
+    naslednji zajem spet prijavil kot manjkajočo, kot da odločitve ni bilo.
+  - `pim.ProductCategoryOverride` + `pim.SetProductCategories` / `pim.ClearProductCategoryOverride`
+    — ročna uvrstitev enega izdelka, z zgodovino v `pim.ProductFieldHistory`
+    (`FieldKey = ProductCategory.CategoryPath`, `Owner = PIM`).
+  - `map.ResolveProductCategories` dobi eno novo pravilo: **izdelka z ročno uvrstitvijo ponovna
+    preslikava ne povozi.** Brez tega bi vsak nočni zajem tiho izbrisal urednikovo delo.
+  - Bralni modeli `intranet.GetCategoryMappings`, `intranet.GetCategoryTreeNodes`,
+    `intranet.GetProductCategories` — strežniško paginirani, filtri v bazi.
+
+  **Varovalke, ki jih postopek zavrne (vse preizkušene):**
+
+  | Napaka | Kdaj |
+  |---|---|
+  | `106001` | brez akterja — sprememba brez lastnika |
+  | `106003` | ciljna kategorija ne obstaja ali ni aktivna |
+  | `106004` | kategorija nima prevedene poti za aktivno spletno stran tega drevesa |
+  | `106005` | izdelka s to šifro v tem podjetju ni |
+  | `106007` | pot ne obstaja v drevesu te spletne strani |
+
+  `106003` in `106004` sta bistveni: preslikava na neobstoječo kategorijo ali na kategorijo brez
+  prevedene poti **se ne javi kot napaka** — tiho izpade v spoju in izgleda, kot da preslikava
+  ne dela. To je past, ki je `BT_XML` zadržala mesece.
+
+  **Dokaz:** `PIM.Migrator` prvi zagon → `Uporabljena migracija: 109_...`, drugi zagon je ne
+  uporabi znova, `--verify` → `Preverjanje F0–F10 baze je uspešno`, izhod 0.
+  `scripts\run_tests.ps1 -Filter F5` → `Build OK`, **5 uspelih / 0 preskočenih / 0 padlih**
+  (vključno s `PIM.F5.CategoryMappingTests` in `PIM.F5.Integration`, ki tečeta čez spremenjeni
+  `map.ResolveProductCategories`).
+
+  Preizkus celotnega kroga nad živimi podatki (izdelek `BA.BC15.00300`, org 2): prestavitev v
+  dve kategoriji → `canon.ProductCategory` posodobljen, stara vrednost v `pim.ProductFieldHistory`
+  → **ponovni `map.ResolveProductCategories` ročne uvrstitve ni povozil** → povrnitev v prvotno
+  stanje. Po preizkusu: 25 aktivnih preslikav, 180 kategorij, 0 prekrivk — enako kot prej.
+
+  Številka migracije je bila najprej 106; preštevilčena na 109, ker je vzporedno delo medtem
+  zasedlo 106–108.
+
 - **[BAZA] Braytronove kategorije, garancija in skladišče za zalogo — migracija 105** —
   kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
 
