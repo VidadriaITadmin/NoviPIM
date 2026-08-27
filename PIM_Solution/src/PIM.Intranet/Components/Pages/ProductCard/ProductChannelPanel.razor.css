@@ -1,13 +1,142 @@
-.channel-status { align-items: center; background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border); display: grid; gap: .75rem; grid-template-columns: minmax(12rem, 1fr) auto auto; padding: 1rem; }
-.channel-status h2 { margin: 0 0 .4rem; }
-.channel-status p { color: var(--pim-text-muted); font-size: .8rem; margin: 0; }
-.channel-toolbar { border-bottom: 1px solid var(--pim-border); padding: .75rem 1rem; }
-.tab-panel > h2 { font-size: 1rem; margin: 1.1rem 1rem .7rem; }
-.missing-inline { color: var(--pim-text-muted); font-style: italic; }
-.tree-path { color: var(--pim-text-muted); font-size: .7rem; font-weight: 400; }
-.muted { color: var(--pim-text-muted); }
-.code-value { font-family: var(--pim-font-mono, ui-monospace, monospace); font-size: .75rem; }
+/* Obrazec kanala. Slog mora biti tu in ne pri kartici: izoliran slog Blazorja doda svojo
+   oznako obsega samo elementom, zapisanim v tej datoteki. */
 
-@media (max-width: 760px) {
-  .channel-status { align-items: start; grid-template-columns: 1fr; }
+.channel-panel {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  overflow: hidden;
+}
+
+.channel-panel[hidden] { display: none; }
+
+/* --- glava panela ------------------------------------------------------------------ */
+
+.panel-head {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border-bottom: 1px solid var(--pim-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding: 1.1rem 1.5rem;
+}
+
+.panel-heading { align-items: center; display: flex; gap: .6rem; }
+.panel-heading h2 { font-size: 1.15rem; letter-spacing: -.01em; margin: 0; }
+
+.panel-meta { display: flex; gap: 1.75rem; margin: 0; }
+.panel-meta > div { display: flex; flex-direction: column; gap: .1rem; }
+.panel-meta dt { color: var(--pim-text-muted); font-size: .68rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.panel-meta dd { color: var(--pim-text-strong); font-size: .95rem; font-weight: 700; margin: 0; }
+.panel-meta dd.bad { color: var(--pim-bad-text); }
+
+.panel-tools { align-items: center; display: flex; gap: .5rem; margin-left: auto; }
+.panel-tools label { color: var(--pim-text-muted); font-size: .78rem; font-weight: 600; }
+
+/* --- skupine polj ------------------------------------------------------------------ */
+
+.panel-body { padding: .5rem 1.5rem 1.5rem; }
+
+.field-group + .field-group { margin-top: 1.75rem; }
+
+.group-title {
+  align-items: baseline;
+  border-bottom: 1px solid var(--pim-line, var(--pim-border));
+  color: var(--pim-text-strong);
+  display: flex;
+  font-size: .8rem;
+  font-weight: 700;
+  gap: .6rem;
+  letter-spacing: .06em;
+  margin: 1.5rem 0 1rem;
+  padding-bottom: .5rem;
+  text-transform: uppercase;
+}
+
+.group-count { color: var(--pim-text-muted); font-size: .72rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* Dve koloni na namizju; dolgo besedilo vzame celo vrstico. */
+.field-grid { display: grid; gap: 1.1rem 1.75rem; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+
+.field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+
+.field label { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; }
+.field-label { color: var(--pim-text-strong); font-size: .84rem; font-weight: 600; }
+
+.tag { border-radius: 999px; font-size: .64rem; font-weight: 700; letter-spacing: .04em; padding: .1rem .45rem; text-transform: uppercase; }
+.tag-required { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.tag-pending { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.tag-saop { background: var(--pim-neutral-bg); color: var(--pim-neutral-text); }
+
+.field-input {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  font: inherit;
+  font-size: .9rem;
+  min-height: 2.4rem;
+  padding: .45rem .7rem;
+  transition: border-color .12s ease, box-shadow .12s ease;
+  width: 100%;
+}
+
+.field-input:hover:not(:disabled) { border-color: var(--pim-text-muted); }
+.field-input:focus { border-color: var(--pim-accent); box-shadow: 0 0 0 3px var(--pim-accent-soft, rgba(79, 70, 229, .15)); outline: none; }
+.field-input:disabled { background: var(--pim-surface-subtle); color: var(--pim-text-muted); cursor: not-allowed; }
+
+textarea.field-input { line-height: 1.5; min-height: 6rem; resize: vertical; }
+
+/* Prazna obvezna vrednost: obroba je opozorilo, znacka »obvezno« pa pomen. Barva sama ni sporocilo. */
+.field.needs-value .field-input { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); }
+
+.field-value {
+  align-items: center;
+  border-bottom: 1px dashed var(--pim-border);
+  color: var(--pim-text);
+  display: flex;
+  font-size: .9rem;
+  min-height: 2.4rem;
+  overflow-wrap: anywhere;
+  padding: .45rem 0;
+}
+
+.field-note { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .5rem; margin: 0; }
+.field-note > span + span::before { content: "·"; margin-right: .5rem; }
+
+.code-value { font-family: var(--pim-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .7rem; }
+
+/* --- tezave ------------------------------------------------------------------------ */
+
+.issue-list { display: flex; flex-direction: column; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+
+.issue {
+  align-items: flex-start;
+  background: var(--pim-surface-subtle);
+  border-radius: var(--pim-radius-sm);
+  display: flex;
+  gap: .7rem;
+  padding: .7rem .9rem;
+}
+
+/* Znak resnosti je oblika, ne pisava; ton je razlocljiv tudi po velikosti pike. */
+.issue-mark { border-radius: 50%; flex: 0 0 auto; height: .55rem; margin-top: .35rem; width: .55rem; }
+.issue.error .issue-mark { background: var(--pim-bad-text); }
+.issue.warning .issue-mark { background: var(--pim-warn-text); }
+
+.issue-message { color: var(--pim-text-strong); font-size: .86rem; font-weight: 600; margin: 0; }
+.issue-meta { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .72rem; gap: .55rem; margin: .2rem 0 0; }
+.issue-meta > span + span::before { content: "·"; margin-right: .55rem; }
+
+.field-input:focus-visible,
+.issue-list:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .panel-head { padding: 1rem; }
+  .panel-body { padding: .25rem 1rem 1.25rem; }
+  .panel-meta { gap: 1.25rem; }
+  .panel-tools { margin-left: 0; width: 100%; }
+  .field-grid { grid-template-columns: 1fr; }
 }

@@ -1,91 +1,103 @@
 @namespace PIM.Intranet.Components.Pages.ProductCardParts
 @using PIM.Intranet.Components.Pages.ProductCardParts
 
+@* Obrazec enega kanala. Slog je v ProductChannelPanel.razor.css in ne sme biti v kartici:
+   izoliran slog Blazorja velja samo za oznako svoje komponente, zato je bil obrazec prej brez
+   sloga — pravila so bila zapisana pri kartici, oznaka pa je tu. *@
+
 <section id="@PanelId" role="tabpanel" aria-labelledby="@TabId" tabindex="0"
-         class="ui-card tab-panel channel-panel" hidden="@Hidden">
-  <header class="channel-status">
-    <div class="channel-title">
+         class="channel-panel" hidden="@Hidden">
+  <header class="panel-head">
+    <div class="panel-heading">
       <h2>@Title</h2>
       <PimChip Text="@StatusText" Tone="@StatusTone" />
     </div>
-    <p class="channel-numbers">
-      <strong>@BlockingCount.ToString("N0")</strong> blokirajočih napak ·
-      <strong>@WarningCount.ToString("N0")</strong> opozoril ·
-      zadnja validacija @PimFormat.Ago(LastValidatedUtc)
-    </p>
-    @if (Toolbar is not null) { <div class="channel-toolbar">@Toolbar</div> }
+    <dl class="panel-meta">
+      <div><dt>Blokirajoče napake</dt><dd class="@(BlockingCount > 0 ? "bad" : null)">@BlockingCount.ToString("N0")</dd></div>
+      <div><dt>Opozorila</dt><dd>@WarningCount.ToString("N0")</dd></div>
+      <div><dt>Validirano</dt><dd>@PimFormat.Ago(LastValidatedUtc)</dd></div>
+    </dl>
+    @if (Toolbar is not null) { <div class="panel-tools">@Toolbar</div> }
   </header>
 
-  @foreach (var group in Fields.GroupBy(row => row.Hint ?? DefaultGroup))
-  {
-    <div class="field-group">
-      <h3>@group.Key</h3>
-      <div class="field-grid">
-        @foreach (var row in group)
-        {
-          var controlId = ControlId(row);
-          <div class="field @(row.Missing ? "missing" : null) @(row.Format == "multiline" ? "wide" : null)">
-            <label for="@controlId">
-              @row.Label
-              @if (row.Required) { <span class="required">obvezno</span> }
-              @if (row.Pending) { <span class="pending">čaka SAOP</span> }
-            </label>
+  <div class="panel-body">
+    @foreach (var group in Fields.GroupBy(row => row.Hint ?? DefaultGroup))
+    {
+      var missing = group.Count(row => row.Missing && row.Required);
+      <section class="field-group">
+        <h3 class="group-title">
+          @group.Key
+          @if (missing > 0) { <span class="group-count">@missing brez vrednosti</span> }
+        </h3>
+        <div class="field-grid">
+          @foreach (var row in group)
+          {
+            var controlId = ControlId(row);
+            <div class="field @(row.Format == "multiline" ? "wide" : null) @(row.Required && row.Missing ? "needs-value" : null)">
+              <label for="@controlId">
+                <span class="field-label">@row.Label</span>
+                @if (row.Required) { <span class="tag tag-required">obvezno</span> }
+                @if (row.Pending) { <span class="tag tag-pending">čaka SAOP</span> }
+                @if (row.Edit == ProductFieldEdit.Saop) { <span class="tag tag-saop">SAOP</span> }
+              </label>
 
-            @if (row.Edit == ProductFieldEdit.None)
-            {
-              <output id="@controlId" class="field-readonly">@Display(row)</output>
-            }
-            else if (row.Format == "bool")
-            {
-              <select id="@controlId" class="field-input" disabled="@row.Pending"
-                      value="@Draft(row)" @onchange="args => Change(row, args)">
-                <option value="">— ni določeno —</option>
-                <option value="da">da</option>
-                <option value="ne">ne</option>
-              </select>
-            }
-            else if (row.Format == "multiline")
-            {
-              <textarea id="@controlId" class="field-input" rows="4" disabled="@row.Pending"
-                        value="@Draft(row)" @onchange="args => Change(row, args)"></textarea>
-            }
-            else
-            {
-              <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)"
-                     disabled="@row.Pending" value="@Draft(row)" @onchange="args => Change(row, args)" />
-            }
+              @if (row.Edit == ProductFieldEdit.None)
+              {
+                <output id="@controlId" class="field-value">@Display(row)</output>
+              }
+              else if (row.Format == "bool")
+              {
+                <select id="@controlId" class="field-input" disabled="@row.Pending"
+                        value="@Draft(row)" @onchange="args => Change(row, args)">
+                  <option value="">— ni določeno —</option>
+                  <option value="da">da</option>
+                  <option value="ne">ne</option>
+                </select>
+              }
+              else if (row.Format == "multiline")
+              {
+                <textarea id="@controlId" class="field-input" rows="4" disabled="@row.Pending"
+                          value="@Draft(row)" @onchange="args => Change(row, args)"></textarea>
+              }
+              else
+              {
+                <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)"
+                       disabled="@row.Pending" value="@Draft(row)" @onchange="args => Change(row, args)" />
+              }
 
-            <span class="field-note">
-              <span class="code-value">@row.FieldKey</span>
-              @if (row.Owner != "—") { <text> · lastnik @row.Owner</text> }
-              @if (row.Edit == ProductFieldEdit.Saop) { <text> · sprememba gre v vrsto za SAOP</text> }
-              @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <text> · ni v bralnem modelu</text> }
-              @if (row.FreshnessUtc is not null) { <text> · @PimFormat.Ago(row.FreshnessUtc)</text> }
-            </span>
-          </div>
-        }
-      </div>
-    </div>
-  }
+              <p class="field-note">
+                <span class="code-value">@row.FieldKey</span>
+                @if (row.Edit == ProductFieldEdit.Saop) { <span>sprememba čaka odobritev</span> }
+                @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <span>ni v bralnem modelu</span> }
+              </p>
+            </div>
+          }
+        </div>
+      </section>
+    }
 
-  <div class="field-group">
-    <h3>Odprte težave kanala</h3>
-    <PimState Empty="@(Issues.Count == 0)" EmptyText="Kanal nima odprtih validacijskih težav.">
-      <PimTable Caption="Odprte težave izbranega kanala" Columns="IssueColumns">
-        <Rows>
+    <section class="field-group">
+      <h3 class="group-title">Odprte težave kanala</h3>
+      <PimState Empty="@(Issues.Count == 0)" EmptyText="Kanal nima odprtih validacijskih težav.">
+        <ul class="issue-list">
           @foreach (var row in Issues)
           {
-            <tr>
-              <td><PimChip Text="@row.Severity" Tone="@(row.Severity == "ERROR" ? "bad" : "warn")" Prefix="Resnost: " /></td>
-              <td>@row.ProfileCode</td>
-              <td><span class="code-value">@row.FieldCode</span></td>
-              <td>@row.Message</td>
-              <td>@row.LastDetectedUtc.ToLocalTime().ToString("g")</td>
-            </tr>
+            <li class="issue @(row.Severity == "ERROR" ? "error" : "warning")">
+              <span class="issue-mark" aria-hidden="true"></span>
+              <div>
+                <p class="issue-message">@row.Message</p>
+                <p class="issue-meta">
+                  <span class="code-value">@row.FieldCode</span>
+                  <span>@row.ProfileCode</span>
+                  <span>@(row.Severity == "ERROR" ? "blokira" : "opozorilo")</span>
+                  <span>@PimFormat.Ago(row.LastDetectedUtc)</span>
+                </p>
+              </div>
+            </li>
           }
-        </Rows>
-      </PimTable>
-    </PimState>
+        </ul>
+      </PimState>
+    </section>
   </div>
 </section>
 
@@ -108,11 +120,6 @@
   [Parameter] public IReadOnlyDictionary<string, string?> Drafts { get; set; } = new Dictionary<string, string?>();
 
   [Parameter] public EventCallback<(ProductChannelField Field, string? Value)> FieldChanged { get; set; }
-
-  static readonly IReadOnlyList<PimColumn> IssueColumns =
-  [
-    new("Resnost"), new("Profil"), new("Zahteva"), new("Sporočilo"), new("Zaznano"),
-  ];
 
   string ControlId(ProductChannelField field) =>
     PanelId + "-" + new string(field.FieldKey.Select(character => char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '-').ToArray());

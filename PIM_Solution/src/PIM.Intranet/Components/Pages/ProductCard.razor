@@ -20,7 +20,7 @@
     var heroUrl = MediaUrlPolicy.Normalize(Detail.Header.ThumbnailUrl);
     <PimPage Title="@Detail.Header.Name" Subtitle="@($"Artikel {Detail.Header.ItemId} · ERP, komerciala, splet in dokazi o izvoru")" Crumbs="ProductCrumbs" />
 
-    <section class="product-hero ui-card" aria-labelledby="product-identity-title">
+    <section class="product-hero" aria-labelledby="product-identity-title">
       <div class="media-tile">
         @if (heroUrl.Href is not null && !HeroImageFailed)
         {
@@ -28,70 +28,83 @@
         }
         else { <span>Brez slike</span> }
       </div>
+
       <div class="product-identity">
         <h2 id="product-identity-title" class="visually-hidden">Identiteta izdelka</h2>
-        <p class="identity-line"><span>ItemID: @Detail.Header.ItemId</span>@if (Detail.Header.Ean is not null) { <span>EAN: @Detail.Header.Ean</span> }</p>
+        <p class="identity-line">
+          <span class="code-value">@Detail.Header.ItemId</span>
+          @if (Detail.Header.Ean is not null) { <span>EAN @Detail.Header.Ean</span> }
+          @if (Detail.Header.ItemGroup is not null) { <span>@Detail.Header.ItemGroup</span> }
+        </p>
         <div class="header-chips" aria-label="Stanje izdelka">
-          <span class="flag-chip @(Detail.Header.IsActive ? "on" : "off")">Aktiven: @YesNo(Detail.Header.IsActive)</span>
-          <span class="flag-chip @(Detail.Header.WebPublish ? "on" : "off")">Za splet: @YesNo(Detail.Header.WebPublish)</span>
+          <span class="flag-chip @(Detail.Header.IsActive ? "on" : "off")">@(Detail.Header.IsActive ? "Aktiven" : "Neaktiven")</span>
+          <span class="flag-chip @(Detail.Header.WebPublish ? "on" : "off")">@(Detail.Header.WebPublish ? "Za splet" : "Ni za splet")</span>
           <PimChip Text="@(Detail.Header.IsPromoted ? "Objavljen v PIM" : "Ni objavljen v PIM")" Tone="@(Detail.Header.IsPromoted ? "good" : "warn")" />
         </div>
         @if (heroUrl.Href is not null) { <a class="media-link" href="@heroUrl.Href" target="_blank" rel="noopener noreferrer">Odpri glavni medij</a> }
-        else { <span class="muted">@heroUrl.Note</span> }
+        else if (heroUrl.Note is not null) { <span class="muted">@heroUrl.Note</span> }
       </div>
+
       <div class="hero-completeness">
-        <strong>@Detail.Header.Completeness.ToString("0.#") %</strong>
-        <span>skupna popolnost</span>
+        <span class="score-value">@Detail.Header.Completeness.ToString("0.#") %</span>
+        <span class="score-label">skupna popolnost</span>
         <PimBar Percent="Detail.Header.Completeness" Label="Popolnost izdelka" />
+        <span class="score-note">@Detail.Header.OpenIssueCount.ToString("N0") odprtih zahtev</span>
       </div>
     </section>
 
-    <section class="ui-card edit-bar" aria-label="Urejanje izdelka">
-      <div class="edit-state" role="status" aria-live="polite">
-        @if (Busy) { <span>Shranjujem …</span> }
-        else if (SaveError is not null) { <span class="edit-error">@SaveError</span> }
-        else if (SaveMessage is not null) { <span class="edit-ok">@SaveMessage</span> }
-        else if (Drafts.Count > 0) { <span>@Drafts.Count sprememb še ni shranjenih.</span> }
-        else { <span class="muted">Polja urejaš neposredno v zavihkih. Kar piše SAOP, gre v vrsto z odobritvijo.</span> }
-      </div>
-      <div class="edit-actions">
-        <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči spremembe</button>
-        <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">Shrani in preveri (@Drafts.Count)</button>
-      </div>
-    </section>
+    @* Ena lepljiva vrstica namesto treh naloženih: kje si (zavihek) in kaj lahko narediš
+       (shrani) sta vedno na istem mestu, tudi po 60 poljih navzdol. *@
+    <div class="card-bar">
+      <nav class="product-tabs" role="tablist" aria-label="Sklopi izdelka">
+        @foreach (var entry in TabList)
+        {
+          var active = Tab == entry.Key;
+          <button type="button" role="tab" id="tab-@entry.Key" aria-controls="panel-@entry.Key"
+                  aria-selected="@Flag(active)" class="@(active ? "active" : null)" @onclick="() => SelectTab(entry.Key)">
+            @entry.Label
+            @if (entry.Count is not null) { <span class="tab-count">@entry.Count.Value.ToString("N0")</span> }
+          </button>
+        }
+      </nav>
 
-    <section class="channel-strip" aria-labelledby="channel-strip-title">
-      <h2 id="channel-strip-title" class="visually-hidden">Stanje treh kanalov izdelka</h2>
-      <button type="button" class="ui-card channel-card @Tone(ErpStatus)" @onclick='() => SelectTab("erp")'>
-        <span>ERP (SAOP)</span><PimChip Text="@StatusLabel(ErpStatus)" Tone="@Tone(ErpStatus)" />
-        <small>@ErpIssues.Count(row => row.Severity == "ERROR").ToString("N0") blokirajočih napak</small>
-      </button>
-      <button type="button" class="ui-card channel-card @(CommercialIssues.Count > 0 ? "warn" : "good")" @onclick='() => SelectTab("komerciala")'>
-        <span>Komerciala</span><PimChip Text="@(CommercialIssues.Count == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")" Tone="@(CommercialIssues.Count == 0 ? "good" : "warn")" />
-        <small>@CommercialIssues.Count.ToString("N0") opozoril · nikoli ne blokira</small>
-      </button>
-      <button type="button" class="ui-card channel-card @Tone(WebStatus)" @onclick='() => SelectTab("splet")'>
-        <span>Splet</span><PimChip Text="@StatusLabel(WebStatus)" Tone="@Tone(WebStatus)" />
-        <small>@(string.IsNullOrWhiteSpace(SelectedSite) ? "vsa spletna mesta" : SelectedSite)</small>
-      </button>
-    </section>
-
-    <div class="product-tabs" role="tablist" aria-label="Sklopi izdelka">
-      @TabButton("overview", "Pregled")
-      @TabButton("erp", "ERP")
-      @TabButton("komerciala", "Komerciala")
-      @TabButton("splet", "Splet")
-      @TabButton("media", $"Mediji ({Detail.Media.Count})")
-      @TabButton("prices", $"Cene ({Detail.Prices.Count})")
-      @TabButton("stock", $"Zaloga ({Detail.Stock.Count})")
-      @TabButton("quality", $"Kakovost ({Detail.Issues.Count})")
-      @TabButton("saop", $"SAOP ({Detail.Outbound.Count})")
-      @TabButton("history", $"Zgodovina ({Detail.History.Count})")
-      @TabButton("origin", $"Izvor ({Origins.Count})")
+      <div class="card-actions">
+        <span class="save-state" role="status" aria-live="polite">
+          @if (Busy) { <span>Shranjujem …</span> }
+          else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
+          else if (SaveMessage is not null) { <span class="save-ok">@SaveMessage</span> }
+          else if (Drafts.Count > 0) { <span class="save-dirty">@Drafts.Count neshranjenih</span> }
+        </span>
+        <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči</button>
+        <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">
+          Shrani@(Drafts.Count > 0 ? $" ({Drafts.Count})" : "")
+        </button>
+      </div>
     </div>
 
-    <section id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0" class="ui-card panel tab-panel" hidden="@(Tab != "overview")">
-      <h2>Ključni podatki in lastništvo</h2>
+    <section id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0" class="overview-panel" hidden="@(Tab != "overview")">
+      @* Povzetek treh kanalov je na Pregledu, kjer je povzetek doma. Nad vsakim zavihkom je bil
+         cetrta naložena vrstica in je podvajal to, kar zavihek ze pove. *@
+      <section class="channel-strip" aria-label="Stanje treh kanalov izdelka">
+        <button type="button" class="ui-card channel-card" @onclick='() => SelectTab("erp")'>
+          <span class="channel-name">ERP (SAOP)</span>
+          <PimChip Text="@StatusLabel(ErpStatus)" Tone="@Tone(ErpStatus)" />
+          <small>@ErpIssues.Count(row => row.Severity == "ERROR").ToString("N0") blokirajočih napak</small>
+        </button>
+        <button type="button" class="ui-card channel-card" @onclick='() => SelectTab("komerciala")'>
+          <span class="channel-name">Komerciala</span>
+          <PimChip Text="@(CommercialIssues.Count == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")" Tone="@(CommercialIssues.Count == 0 ? "good" : "warn")" />
+          <small>@CommercialIssues.Count.ToString("N0") opozoril · nikoli ne blokira</small>
+        </button>
+        <button type="button" class="ui-card channel-card" @onclick='() => SelectTab("splet")'>
+          <span class="channel-name">Splet</span>
+          <PimChip Text="@StatusLabel(WebStatus)" Tone="@Tone(WebStatus)" />
+          <small>@(string.IsNullOrWhiteSpace(SelectedSite) ? "vsa spletna mesta" : SelectedSite)</small>
+        </button>
+      </section>
+
+      <section class="ui-card data-card">
+      <h2 class="panel-title">Ključni podatki in lastništvo</h2>
       <PimTable Caption="Kanonična vrednost, lastnik in čakajoča sprememba" Columns="OverviewColumns">
         <Rows>
           @foreach (var row in Detail.Fields)
@@ -101,6 +114,7 @@
           }
         </Rows>
       </PimTable>
+      </section>
     </section>
 
     <ProductChannelPanel PanelId="panel-erp" TabId="tab-erp" Title="ERP (SAOP)" Hidden="@(Tab != "erp")"
@@ -616,13 +630,28 @@
   }
 
   static readonly string[] Tabs = ["overview", "erp", "komerciala", "splet", "media", "prices", "stock", "quality", "saop", "history", "origin"];
-  RenderFragment TabButton(string key, string label) => builder =>
-  {
-    builder.OpenElement(0, "button"); builder.AddAttribute(1, "type", "button"); builder.AddAttribute(2, "role", "tab");
-    builder.AddAttribute(3, "id", "tab-" + key); builder.AddAttribute(4, "aria-controls", "panel-" + key);
-    builder.AddAttribute(5, "aria-selected", Flag(Tab == key)); builder.AddAttribute(6, "class", Tab == key ? "active" : null);
-    builder.AddAttribute(7, "onclick", EventCallback.Factory.Create(this, () => SelectTab(key))); builder.AddContent(8, label); builder.CloseElement();
-  };
+
+  /// <param name="Count">Stevilo ob naslovu; null pomeni zavihek brez stevca.</param>
+  sealed record CardTab(string Key, string Label, int? Count);
+
+  /* Zavihki so zapisani kot oznaka in ne sestavljeni v RenderTreeBuilder. To ni slog, ampak
+     napaka, ki je bila vidna: izoliran slog Blazorja doda oznako obsega samo elementom iz
+     datoteke .razor, zato zavihki, sestavljeni v kodi, niso dobili nobenega sloga in so bili
+     videti kot goli gumbi brskalnika. */
+  IReadOnlyList<CardTab> TabList => Detail is null ? [] :
+  [
+    new("overview", "Pregled", null),
+    new("erp", "ERP", ErpIssues.Count(row => row.Severity == "ERROR")),
+    new("komerciala", "Komerciala", CommercialIssues.Count),
+    new("splet", "Splet", WebIssues.Count(row => row.Severity == "ERROR")),
+    new("media", "Mediji", Detail.Media.Count),
+    new("prices", "Cene", Detail.Prices.Count),
+    new("stock", "Zaloga", Detail.Stock.Count),
+    new("quality", "Kakovost", Detail.Issues.Count),
+    new("saop", "SAOP", Detail.Outbound.Count),
+    new("history", "Zgodovina", Detail.History.Count),
+    new("origin", "Izvor", Origins.Count),
+  ];
 
   void SelectTab(string tab) { Tab = tab; Navigation.NavigateTo($"izdelki/{ProductId}#{tab}", replace: true); }
   void HeroFailed() => HeroImageFailed = true;

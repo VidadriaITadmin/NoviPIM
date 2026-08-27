@@ -14,15 +14,17 @@ var cardPath = Path.Combine(pages, "ProductCard.razor");
 var cssPath = cardPath + ".css";
 var channelPath = Path.Combine(pages, "ProductCard", "ProductChannelPanel.razor");
 var galleryPath = Path.Combine(pages, "ProductCard", "ProductMediaGallery.razor");
+var channelCssPath = Path.Combine(pages, "ProductCard", "ProductChannelPanel.razor.css");
 var policyPath = Path.Combine(root, "src", "PIM.Intranet", "Services", "MediaUrlPolicy.cs");
 var layerPath = Path.Combine(root, "src", "PIM.Intranet", "Services", "ValidationLayer.cs");
 
-foreach (var path in new[] { cardPath, cssPath, channelPath, galleryPath, policyPath, layerPath })
+foreach (var path in new[] { cardPath, cssPath, channelPath, channelCssPath, galleryPath, policyPath, layerPath })
   Assert(File.Exists(path), "Manjka del prenovljene kartice: " + path);
 
 var card = File.ReadAllText(cardPath);
 var css = File.ReadAllText(cssPath);
 var channel = File.ReadAllText(channelPath);
+var channelCss = File.ReadAllText(channelCssPath);
 var gallery = File.ReadAllText(galleryPath);
 var policy = File.ReadAllText(policyPath);
 
@@ -49,9 +51,18 @@ var expectedTabs = new Dictionary<string, string>
   ["media"] = "Mediji", ["prices"] = "Cene", ["stock"] = "Zaloga", ["quality"] = "Kakovost",
   ["saop"] = "SAOP", ["history"] = "Zgodovina", ["origin"] = "Izvor",
 };
-Assert(Regex.Matches(card, "@TabButton\\(\"").Count == 11, "Kartica mora imeti natanko 11 dogovorjenih zavihkov.");
+Assert(Regex.Matches(card, "new\\(\"(overview|erp|komerciala|splet|media|prices|stock|quality|saop|history|origin)\", ").Count == 11,
+  "Kartica mora imeti natanko 11 dogovorjenih zavihkov.");
 foreach (var tab in expectedTabs)
-  Assert(card.Contains($"@TabButton(\"{tab.Key}\",", StringComparison.Ordinal), "Manjka zavihek " + tab.Value + ".");
+  Assert(Regex.IsMatch(card, "new\\(\"" + tab.Key + "\", \"" + Regex.Escape(tab.Value)), "Manjka zavihek " + tab.Value + ".");
+
+// Zavihki morajo biti oznaka, ne sestavljeni v RenderTreeBuilder: izoliran slog Blazorja doda
+// oznako obsega samo elementom iz datoteke .razor, zato so bili zavihki iz kode brez sloga in
+// so bili videti kot goli gumbi brskalnika. To je pogodba, ker se je napaka ze zgodila.
+Assert(Regex.IsMatch(card, "<button type=\"button\" role=\"tab\""),
+  "Zavihki morajo biti zapisani kot oznaka, sicer ostanejo brez izoliranega sloga.");
+Assert(!card.Contains("builder.OpenElement", StringComparison.Ordinal),
+  "Vidnih elementov kartice se ne sestavlja v kodi; izoliran slog jih ne doseze.");
 Assert(card.Contains("role=\"tablist\"", StringComparison.Ordinal), "Zavihki morajo biti ARIA tablist.");
 foreach (var key in expectedTabs.Keys)
   Assert(card.Contains("panel-" + key, StringComparison.Ordinal), "Manjka panel zavihka " + key + ".");
@@ -114,13 +125,23 @@ Assert(channel.Contains("disabled=\"@row.Pending\"", StringComparison.Ordinal),
   "Polje, ki ze caka potrditev SAOP, se ne sme urejati naprej.");
 Assert(channel.Contains("Drafts", StringComparison.Ordinal) && channel.Contains("FieldChanged", StringComparison.Ordinal),
   "Neshranjena sprememba mora ziveti v kartici, ne v panelu.");
-Assert(css.Contains(".field.missing .field-input", StringComparison.Ordinal),
+// Slog obrazca mora biti pri komponenti, ki nosi oznako. Ko je bil pri kartici, obrazec ni
+// imel nobenega sloga — polja in napisi so se zlili v eno vrstico.
+foreach (var selector in new[] { ".field-grid", ".field-input", ".group-title", ".field-note" })
+  Assert(channelCss.Contains(selector, StringComparison.Ordinal),
+    "Slog obrazca mora biti v ProductChannelPanel.razor.css: manjka " + selector + ".");
+foreach (var selector in new[] { ".field-grid", ".field-input" })
+  Assert(!css.Contains(selector, StringComparison.Ordinal),
+    "Slog obrazca ne sme biti v ProductCard.razor.css — do otroske komponente ne sega: " + selector + ".");
+Assert(channelCss.Contains(".field.needs-value .field-input", StringComparison.Ordinal),
   "Manjkajoce obvezno polje mora biti vidno tudi v obrazcu.");
 Assert(css.Contains(".product-tabs button.active", StringComparison.Ordinal)
   && Regex.IsMatch(css, @"\.product-tabs button\.active\s*\{[^}]*font-weight"),
   "Aktivni zavihek mora biti razpoznaven tudi brez barve (pisava, podlaga, crta).");
-Assert(Regex.IsMatch(css, @"\.product-tabs\s*\{[^}]*position: sticky"),
-  "Vrstica zavihkov mora ostati vidna med drsenjem, sicer se izgubi, kje si.");
+Assert(Regex.IsMatch(css, @"\.card-bar\s*\{[^}]*position: sticky"),
+  "Vrstica z zavihki in dejanji mora ostati vidna med drsenjem, sicer se izgubi, kje si.");
+Assert(Regex.IsMatch(card, "<div class=\"card-bar\">"),
+  "Zavihki in dejanja sodijo v eno vrstico; tri nalozene vrstice nad vsakim zavihkom so bile prevec.");
 
 Assert(css.Contains(".product-tabs button:focus-visible", StringComparison.Ordinal), "Zavihki morajo imeti viden fokus.");
 Assert(css.Contains("@media (max-width: 900px)", StringComparison.Ordinal), "Kartica mora biti odzivna.");

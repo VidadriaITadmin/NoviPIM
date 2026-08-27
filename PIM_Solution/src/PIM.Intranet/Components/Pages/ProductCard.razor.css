@@ -1,82 +1,115 @@
-.product-hero { align-items: center; display: grid; gap: 1.25rem; grid-template-columns: 7rem minmax(0, 1fr) minmax(13rem, 18rem); margin-bottom: 1rem; padding: 1.25rem; }
-.media-tile { align-items: center; aspect-ratio: 1; background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius); color: var(--pim-text-muted); display: flex; font-size: .72rem; font-weight: 700; justify-content: center; overflow: hidden; }
-.media-tile img { height: 100%; object-fit: contain; width: 100%; }
-.product-identity { min-width: 0; }
-.identity-line { color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .82rem; gap: 1rem; margin: 0 0 .7rem; }
-.header-chips { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .65rem; }
-.flag-chip { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 999px; color: var(--pim-neutral-text); font-size: .75rem; font-weight: 600; padding: .2rem .55rem; }
-.flag-chip.on { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
-.flag-chip.off { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
-.media-link { font-size: .8rem; font-weight: 600; overflow-wrap: anywhere; }
-.hero-completeness { border-left: 1px solid var(--pim-border); padding-left: 1.25rem; }
-.hero-completeness > strong { display: block; font-size: 1.8rem; }
-.hero-completeness > span { color: var(--pim-text-muted); display: block; font-size: .75rem; margin: .15rem 0 .7rem; }
+/* Kartica izdelka. Slog obrazca kanala je pri ProductChannelPanel — izoliran slog Blazorja
+   velja samo za oznako svoje komponente in do otroka ne seže. */
 
-.channel-strip { display: grid; gap: .8rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1rem; }
-/* Kanalska kartica je nevtralna: stanje pove cip, ne barvna crta cez vso sirino. Barva naj
-   nosi pomen tam, kjer je pomen — ne kot okras. */
-.channel-card { cursor: pointer; display: grid; gap: .5rem; min-width: 0; padding: .9rem 1rem; text-align: left; }
-.channel-card:hover { background: var(--pim-surface-hover); }
-.channel-card > span:first-child { color: var(--pim-text-strong); font-weight: 700; }
-.channel-card small { color: var(--pim-text-muted); }
+/* --- glava ------------------------------------------------------------------------- */
 
-/* Zavihki: prva pritozba uporabnika je bila, da se ne vidi, v katerem zavihku je. Aktivni
-   zavihek ima zato tri znake hkrati — podlago, krepko pisavo in debelo crto pod sabo — in ne
-   samo barve. Vrstica je lepljiva, da je ob dolgem panelu se vedno vidno, kje si. */
-.product-tabs {
+.product-hero {
+  align-items: center;
   background: var(--pim-surface);
-  border-bottom: 1px solid var(--pim-border);
-  display: flex;
-  gap: .15rem;
-  margin-bottom: 1rem;
-  overflow-x: auto;
-  padding-top: .25rem;
-  position: sticky;
-  scrollbar-width: thin;
-  top: 0;
-  z-index: 3;
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  margin-bottom: .75rem;
+  padding: 1.25rem 1.5rem;
 }
+
+.media-tile {
+  align-items: center;
+  aspect-ratio: 1;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  color: var(--pim-text-muted);
+  display: flex;
+  font-size: .7rem;
+  font-weight: 600;
+  justify-content: center;
+  overflow: hidden;
+}
+.media-tile img { height: 100%; object-fit: contain; width: 100%; }
+
+.product-identity { min-width: 0; }
+
+.identity-line { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .82rem; gap: .6rem; margin: 0 0 .7rem; }
+.identity-line > span + span::before { content: "·"; margin-right: .6rem; }
+
+.header-chips { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.flag-chip { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 999px; color: var(--pim-neutral-text); font-size: .74rem; font-weight: 600; padding: .2rem .6rem; }
+.flag-chip.on { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
+.flag-chip.off { background: var(--pim-surface-subtle); }
+
+.media-link { display: inline-block; font-size: .78rem; font-weight: 600; margin-top: .6rem; overflow-wrap: anywhere; }
+
+/* Popolnost je stevilka, ki jo je treba opaziti — brez obroca in brez okrasne barve. */
+.hero-completeness { border-left: 1px solid var(--pim-border); min-width: 11rem; padding-left: 1.5rem; }
+.score-value { color: var(--pim-text-strong); display: block; font-size: 2.1rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.score-label { color: var(--pim-text-muted); display: block; font-size: .74rem; margin: .1rem 0 .6rem; }
+.score-note { color: var(--pim-text-muted); display: block; font-size: .74rem; margin-top: .45rem; }
+
+/* --- lepljiva vrstica: kje si in kaj lahko naredis ---------------------------------- */
+
+.card-bar {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: .35rem .5rem .35rem .35rem;
+  position: sticky;
+  top: .5rem;
+  z-index: 5;
+}
+
+.product-tabs { display: flex; gap: .15rem; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+
+/* Aktivni zavihek je razpoznaven po treh znakih hkrati — podlagi, krepki pisavi in crti —
+   ne samo po barvi. Prva pritozba uporabnika je bila prav ta: ni se videlo, kje si. */
 .product-tabs button {
+  align-items: center;
   background: transparent;
   border: 0;
-  border-bottom: 3px solid transparent;
-  border-radius: var(--pim-radius-sm) var(--pim-radius-sm) 0 0;
+  border-radius: var(--pim-radius-sm);
   color: var(--pim-text-muted);
   cursor: pointer;
+  display: inline-flex;
   flex: 0 0 auto;
   font: inherit;
-  font-size: .82rem;
+  font-size: .84rem;
   font-weight: 600;
-  padding: .65rem .9rem;
+  gap: .4rem;
+  padding: .55rem .8rem;
+  position: relative;
   white-space: nowrap;
 }
-.product-tabs button:hover { background: var(--pim-surface-hover); color: var(--pim-text); }
-.product-tabs button.active {
-  background: var(--pim-surface-subtle);
-  border-bottom-color: var(--pim-accent);
-  color: var(--pim-text-strong);
-  font-weight: 700;
-}
-.tab-panel { min-height: 12rem; }
 
-/* Vrstica urejanja ostane pri dnu zaslona, dokler so spremembe neshranjene: gumb za shranjevanje
-   pri 60 poljih ne sme biti na vrhu strani, kamor se je treba vracati. */
-.edit-bar {
-  align-items: center;
-  bottom: .75rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: .75rem;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  padding: .7rem 1rem;
-  position: sticky;
-  z-index: 4;
+.product-tabs button:hover { background: var(--pim-surface-hover); color: var(--pim-text-strong); }
+
+.product-tabs button.active { background: var(--pim-surface-subtle); color: var(--pim-text-strong); font-weight: 700; }
+.product-tabs button.active::after {
+  background: var(--pim-accent);
+  border-radius: 2px;
+  bottom: .15rem;
+  content: "";
+  height: 2px;
+  left: .8rem;
+  position: absolute;
+  right: .8rem;
 }
-.edit-state { font-size: .84rem; }
-.edit-ok { color: var(--pim-good-text); font-weight: 600; }
-.edit-error { color: var(--pim-bad-text); font-weight: 600; }
-.edit-actions { display: flex; gap: .5rem; margin-left: auto; }
+
+.tab-count { background: var(--pim-surface-subtle); border-radius: 999px; color: var(--pim-text-muted); font-size: .7rem; font-weight: 600; padding: .05rem .4rem; }
+.product-tabs button.active .tab-count { background: var(--pim-surface); color: var(--pim-text-strong); }
+
+.card-actions { align-items: center; display: flex; gap: .5rem; margin-left: auto; }
+.save-state { font-size: .78rem; white-space: nowrap; }
+.save-ok { color: var(--pim-good-text); font-weight: 600; }
+.save-error { color: var(--pim-bad-text); font-weight: 600; }
+.save-dirty { color: var(--pim-warn-text); font-weight: 600; }
+
 .ghost-button {
   background: var(--pim-surface);
   border: 1px solid var(--pim-border);
@@ -84,58 +117,31 @@
   color: var(--pim-text-strong);
   cursor: pointer;
   font: inherit;
-  font-size: .84rem;
+  font-size: .82rem;
   font-weight: 600;
-  padding: .45rem .85rem;
+  padding: .45rem .8rem;
 }
 .ghost-button:hover:not(:disabled) { background: var(--pim-surface-hover); }
-.ghost-button:disabled { cursor: default; opacity: .5; }
+.ghost-button:disabled { cursor: default; opacity: .45; }
 
-.channel-panel { padding: 0 0 1rem; }
-.channel-status { border-bottom: 1px solid var(--pim-border); padding: 1rem 1.1rem; }
-.channel-title { align-items: center; display: flex; gap: .6rem; }
-.channel-title h2 { font-size: 1.05rem; margin: 0; }
-.channel-numbers { color: var(--pim-text-muted); font-size: .82rem; margin: .4rem 0 0; }
-.channel-toolbar { align-items: center; display: flex; gap: .5rem; margin-top: .7rem; }
+/* --- pregled ----------------------------------------------------------------------- */
 
-.field-group { padding: 1rem 1.1rem 0; }
-.field-group h3 {
-  border-bottom: 1px solid var(--pim-border);
-  color: var(--pim-text-muted);
-  font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  margin: 0 0 .8rem;
-  padding-bottom: .35rem;
-  text-transform: uppercase;
-}
+.overview-panel[hidden] { display: none; }
 
-.field-grid { display: grid; gap: .85rem 1.25rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
-.field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
-.field.wide { grid-column: 1 / -1; }
-.field label { align-items: center; color: var(--pim-text-strong); display: flex; font-size: .82rem; font-weight: 600; gap: .4rem; }
-.field .required { background: var(--pim-bad-bg); border-radius: 999px; color: var(--pim-bad-text); font-size: .65rem; font-weight: 700; padding: .05rem .4rem; text-transform: uppercase; }
-.field .pending { background: var(--pim-warn-bg); border-radius: 999px; color: var(--pim-warn-text); font-size: .65rem; font-weight: 700; padding: .05rem .4rem; }
+.channel-strip { display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1rem; }
 
-.field-input {
-  background: var(--pim-surface);
-  border: 1px solid var(--pim-border);
-  border-radius: var(--pim-radius-sm);
-  color: var(--pim-text-strong);
-  font: inherit;
-  font-size: .88rem;
-  min-height: 2.25rem;
-  padding: .4rem .6rem;
-  width: 100%;
-}
-.field-input:disabled { background: var(--pim-surface-subtle); color: var(--pim-text-muted); }
-textarea.field-input { min-height: 5rem; resize: vertical; }
+/* Kanalska kartica je nevtralna: stanje pove cip, ne barvna crta cez vso sirino. */
+.channel-card { cursor: pointer; display: grid; gap: .5rem; justify-items: start; min-width: 0; padding: 1rem; text-align: left; }
+.channel-card:hover { background: var(--pim-surface-hover); }
+.channel-name { color: var(--pim-text-strong); font-size: .95rem; font-weight: 700; }
+.channel-card small { color: var(--pim-text-muted); }
 
-/* Obvezno in prazno polje je oznaceno z obrobo IN z znackou »obvezno«: barva sama ni sporocilo. */
-.field.missing .field-input { border-color: var(--pim-bad-border); }
+.panel-title { font-size: 1rem; margin: 1.1rem 1.1rem .7rem; }
 
-.field-readonly { color: var(--pim-text); font-size: .88rem; overflow-wrap: anywhere; padding: .4rem 0; }
-.field-note { color: var(--pim-text-muted); font-size: .72rem; overflow-wrap: anywhere; }
+.tab-panel { min-height: 12rem; }
+
+
+
 .tab-panel[hidden] { display: none; }
 .tab-panel h2 { font-size: 1rem; margin: 1.1rem 1.1rem .7rem; }
 .data-table { min-width: 46rem; }
@@ -144,7 +150,6 @@ textarea.field-input { min-height: 5rem; resize: vertical; }
 .code-value { font-family: var(--pim-font-mono, ui-monospace, monospace); font-size: .75rem; }
 
 .product-tabs button:focus-visible,
-.field-input:focus-visible,
 .ghost-button:focus-visible,
 .primary-button:focus-visible,
 .channel-card:focus-visible,
@@ -152,10 +157,9 @@ textarea.field-input { min-height: 5rem; resize: vertical; }
 .media-link:focus-visible { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 @media (max-width: 900px) {
-  .field-grid { grid-template-columns: 1fr; }
-  .edit-actions { margin-left: 0; width: 100%; }
-  .edit-actions > * { flex: 1 1 auto; }
-  .product-hero { grid-template-columns: 5rem minmax(0, 1fr); }
+  .card-bar { align-items: stretch; flex-direction: column; }
+  .card-actions { margin-left: 0; }
+  .product-hero { grid-template-columns: 5rem minmax(0, 1fr); padding: 1rem; }
   .hero-completeness { border-left: 0; border-top: 1px solid var(--pim-border); grid-column: 1 / -1; padding: 1rem 0 0; }
   .channel-strip { grid-template-columns: 1fr; }
   .data-table { min-width: 42rem; }
