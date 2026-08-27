@@ -5,8 +5,11 @@ var nwPath = Path.Combine(root, "fixtures/stocks/nw/NOWODVORSKI.csv");
 var btPath = Path.Combine(root, "fixtures/stocks/bt/Braytron_stocks.xml");
 var nw = await new NwFtpTransport().ReadFixtureAsync(nwPath);
 var bt = await new BtXmlTransport().ReadFixtureAsync(btPath);
-Equal(2697, nw.Records.Count, "NW mora prebrati vse headerless vrstice.");
-Equal(1361, bt.Records.Count, "BT mora prebrati vse Stok vrstice.");
+// Stevili sta lastnost fixture datotek, ne kode. Fixturi sta bili 2026-08-27 osvezeni z zivega
+// dobaviteljevega vira (prej 2697 in 1361); trditev ostaja ista — bralnik ne sme izpustiti nobene
+// vrstice. Ob naslednji osvezitvi fixture je treba stevili znova prešteti, ne ugibati.
+Equal(2762, nw.Records.Count, "NW mora prebrati vse headerless vrstice.");
+Equal(1397, bt.Records.Count, "BT mora prebrati vse Stok vrstice.");
 Equal(64, nw.PayloadHash.Length, "NW SHA-256");
 Equal(64, bt.PayloadHash.Length, "BT SHA-256");
 if (!nw.Records.Any(row => row.Values["Quantity"] == "0")) throw new InvalidOperationException("NW fixture mora ohraniti ničelno količino.");

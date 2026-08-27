@@ -7,7 +7,7 @@ namespace PIM.SaopStockWorker;
 public sealed record SaopProviderConfiguration(
   string ProviderKind,
   string? RegisteredViewId,
-  IReadOnlyList<int> WarehouseIds,
+  IReadOnlyList<string> WarehouseIds,
   int? PageSize = null,
   int Page = 1,
   DateTime? ModifiedFromUtc = null);
@@ -44,6 +44,10 @@ public sealed class SaopStockProviderRegistry
     // GetStocks in GetStockAdvance sta GET s parametri v naslovu in vrneta XML. Prej je bil tu
     // POST z JSON telesom — oblika, ki je API ne pozna; napaka je bila nevidna, ker klica ni
     // nikoli nihce izvedel.
+    //
+    // Sifra skladisca gre v zahtevo kot NIZ z vodilnimi niclami ("0000003"). Izmerjeno na zivem
+    // SAOP 2026-08-27: "0000003" vrne 138 zapisov, "3" pa HTTP 200 z enim praznim <Item>. Swagger
+    // pravi type=string in to je treba vzeti dobesedno — pretvorba v int tiho izprazni rezultat.
     var query = new List<string>
     {
       $"searchQuery.warehouseIdList={WebUtility.UrlEncode(string.Join(',', profile.WarehouseIds))}",

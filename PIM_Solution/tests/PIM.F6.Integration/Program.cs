@@ -36,7 +36,7 @@ else
   var writer=new StockLandingWriter(pim);
   var nwRun=await writer.PersistAsync(2,"NW_STOCK","FILE","fixture://nw/NOWODVORSKI.csv",snapshot,nw.PayloadHash,nw.Records,"dd/MM/yyyy");
   var btRun=await writer.PersistAsync(2,"BT_STOCK","FILE","fixture://bt/Braytron_stocks.xml",snapshot,bt.PayloadHash,bt.Records,"yyyy-MM-dd");
-  if(nwRun.Applied+nwRun.Quarantined!=2697||btRun.Applied+btRun.Quarantined!=1361)throw new InvalidOperationException("DB števec fixture vrstic ni popoln.");
+  if(nwRun.Applied+nwRun.Quarantined!=2762||btRun.Applied+btRun.Quarantined!=1397)throw new InvalidOperationException("DB števec fixture vrstic ni popoln.");
   await using var connection=new SqlConnection(pim);await connection.OpenAsync();
   await using var command=new SqlCommand("EXEC intranet.GetStocks @OrganizationId=2;",connection);
   await using var reader=await command.ExecuteReaderAsync();if(!await reader.ReadAsync())throw new InvalidOperationException("Intranet procedura ni vrnila realne zaloge.");

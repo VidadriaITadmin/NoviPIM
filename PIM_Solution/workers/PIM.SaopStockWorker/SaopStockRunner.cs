@@ -15,12 +15,15 @@ public sealed record SaopStockOutcome(
 /// </summary>
 public sealed class SaopStockRunner(string connectionString, HttpClient http, Uri baseUrl)
 {
-  // GetStocks vrne <ArrayOfStockItem><StockItem><ItemID/><Qty/>. Sifra in kolicina sta vse, kar
-  // ta vmesnik ponuja; EAN, datum razpolozljivosti in prihajajoca kolicina so pri dobaviteljih,
-  // ne tu, zato ostanejo prazni in normalizacija jih ne zahteva.
-  static readonly XmlStockSchema Schema = new("//StockItem", new Dictionary<string, FieldSelector>
+  // Zivi odziv GetStocks (izmerjeno 2026-08-27, podjetje 2, skladisce 0000003):
+  //   <ArrayOfItem><Item ItemID="6410014506346"><Qty>1.00000</Qty><StockSeries /></Item>…
+  // Element je <Item>, ne <StockItem>, sifra pa je ATRIBUT, ne podelement — Swagger opisuje
+  // StockItem z otrokom ItemID in se s tem ne ujema. Velja izmerjeni odziv.
+  // Sifra in kolicina sta vse, kar ta vmesnik ponuja; EAN, datum razpolozljivosti in prihajajoca
+  // kolicina so pri dobaviteljih, ne tu, zato ostanejo prazni in normalizacija jih ne zahteva.
+  static readonly XmlStockSchema Schema = new("//Item", new Dictionary<string, FieldSelector>
   {
-    ["SourceItemId"] = new(SelectorKind.XPath, "ItemID/text()"),
+    ["SourceItemId"] = new(SelectorKind.XPath, "@ItemID"),
     ["Quantity"] = new(SelectorKind.XPath, "Qty/text()")
   });
 
@@ -88,10 +91,10 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
       reader.IsDBNull(5) ? null : reader.GetString(5));
   }
 
-  static async Task<IReadOnlyList<int>> ReadActiveWarehousesAsync(SqlConnection connection, int organizationId, CancellationToken cancellationToken)
+  static async Task<IReadOnlyList<string>> ReadActiveWarehousesAsync(SqlConnection connection, int organizationId, CancellationToken cancellationToken)
   {
-    // Sifra skladisca je pri SAOP niz z vodilnimi niclami ("0000016"), endpoint pa hoce stevilko.
-    // Ime skladisca je v registru zaradi prikaza; v zahtevo gre samo sifra.
+    // WarehouseCode je SAOP sifra ("0000003"); WarehouseId je nas surogatni kljuc (1, 2, 3…) in
+    // v zahtevo ne sodi. Sifra ostane niz z vodilnimi niclami — glej pojasnilo v registru.
     await using var command = new SqlCommand("""
       SELECT WarehouseCode FROM canon.Warehouse
       WHERE OrganizationId=@OrganizationId AND IsActive=1
@@ -99,29 +102,30 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
       """, connection);
     command.Parameters.AddWithValue("@OrganizationId", organizationId);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    var ids = new List<int>();
+    var codes = new List<string>();
     while (await reader.ReadAsync(cancellationToken))
     {
-      if (int.TryParse(reader.GetString(0), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)) ids.Add(id);
+      var code = reader.GetString(0).Trim();
+      if (code.Length > 0) codes.Add(code);
     }
-    if (ids.Count == 0)
+    if (codes.Count == 0)
       throw new InvalidOperationException(
         $"Podjetje {organizationId} nima aktivnih skladisc v canon.Warehouse; zajemi sifrant Warehouses.");
-    return ids;
+    return codes;
   }
 
-  static IReadOnlyList<int> ParseWarehouseList(string? json)
+  static IReadOnlyList<string> ParseWarehouseList(string? json)
   {
     if (string.IsNullOrWhiteSpace(json)) throw new InvalidOperationException("Nacin 'List' brez WarehouseIdsJson.");
     using var document = System.Text.Json.JsonDocument.Parse(json);
-    var ids = document.RootElement.EnumerateArray()
+    var codes = document.RootElement.EnumerateArray()
       .Select(element => element.ValueKind == System.Text.Json.JsonValueKind.Number
-        ? element.GetInt32()
-        : int.Parse(element.GetString() ?? "0", CultureInfo.InvariantCulture))
-      .Where(id => id > 0)
+        ? element.GetInt32().ToString(CultureInfo.InvariantCulture)
+        : (element.GetString() ?? "").Trim())
+      .Where(code => code.Length > 0)
       .ToArray();
-    if (ids.Length == 0) throw new InvalidOperationException("WarehouseIdsJson ne vsebuje nobene sifre.");
-    return ids;
+    if (codes.Length == 0) throw new InvalidOperationException("WarehouseIdsJson ne vsebuje nobene sifre.");
+    return codes;
   }
 
   static async Task<string> ReadStockSourceCodeAsync(SqlConnection connection, int organizationId, CancellationToken cancellationToken)

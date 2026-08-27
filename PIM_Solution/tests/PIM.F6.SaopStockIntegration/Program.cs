@@ -29,12 +29,16 @@ if (string.IsNullOrWhiteSpace(connectionString))
   return 0;
 }
 
+// Oblika je prepisana z ZIVEGA odziva SAOP (2026-08-27, podjetje 2, skladisce 0000003):
+// element je <Item>, sifra pa je atribut ItemID. Prejsnja razlicica tega testa je uporabljala
+// <ArrayOfStockItem><StockItem><ItemID>… po Swaggerju — oblika, ki je API ne vraca. Test je bil
+// zato zelen, worker pa je v produkciji prebral nic.
 var payload = $"""
   <?xml version="1.0" encoding="utf-8"?>
-  <ArrayOfStockItem>
-    <StockItem><ItemID>{znanItemId}</ItemID><Qty>12.500</Qty></StockItem>
-    <StockItem><ItemID>{neznanItemId}</ItemID><Qty>3.000</Qty></StockItem>
-  </ArrayOfStockItem>
+  <ArrayOfItem xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <Item ItemID="{znanItemId}"><Qty>12.500</Qty><StockSeries /></Item>
+    <Item ItemID="{neznanItemId}"><Qty>3.000</Qty><StockSeries /></Item>
+  </ArrayOfItem>
   """;
 
 await using var connection = new SqlConnection(connectionString);
@@ -76,9 +80,12 @@ try
 
   if (zahtevanaPot is null || !zahtevanaPot.Contains("api/Stock/GetStocks", StringComparison.Ordinal))
     throw new InvalidOperationException($"Zahteva ni sla na GetStocks, ampak na {zahtevanaPot}.");
-  if (!zahtevanaPot.Contains("warehouseIdList=16%2C17", StringComparison.Ordinal)
-    && !zahtevanaPot.Contains("warehouseIdList=16,17", StringComparison.Ordinal))
-    throw new InvalidOperationException($"Zahteva ne nosi sifer skladisc: {zahtevanaPot}.");
+  // Sifra mora ohraniti vodilne nicle. Izmerjeno na zivem SAOP 2026-08-27: "0000003" vrne 138
+  // zapisov, "3" pa HTTP 200 z enim praznim <Item>. Prej je ta test pricakoval "16,17" in s tem
+  // potrjeval napako, zaradi katere je bila zaloga iz SAOP vedno prazna.
+  if (!zahtevanaPot.Contains("warehouseIdList=0000016%2C0000017", StringComparison.Ordinal)
+    && !zahtevanaPot.Contains("warehouseIdList=0000016,0000017", StringComparison.Ordinal))
+    throw new InvalidOperationException($"Zahteva ne nosi sifer skladisc z vodilnimi niclami: {zahtevanaPot}.");
   if (zahtevanaPot.Contains("Testno", StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("V zahtevo je prislo ime skladisca; endpoint potrebuje samo sifro.");
   Equal(organizationId.ToString(), organisationHeader, "Glava OrganisationId ni nastavljena.");
