@@ -1,21 +1,24 @@
 ﻿<#
 .SYNOPSIS
-  Registrira vsa nacrtovana opravila PIM: nocni tok in trije zalogovni cikli.
+  Registrira nacrtovani opravili PIM: nocni tok in petminutni zalogovni cikel.
 
 .DESCRIPTION
   Nacrtovana opravila so po AGENTS.md #4.7 sistemska nastavitev. Ta skripta obstaja zato, da je
   ukaz zapisan, ponovljiv in odstranljiv - ne zato, da bi jo pognal kdorkoli.
 
-  Registrira stiri naloge pod tvojim racunom:
+  Registrira dve nalogi pod tvojim racunom:
 
-    PIM nocni tok            vsak dan ob $Ura    cel tok: katalog, XML, zaloga, validacija, izvoz
-    PIM prevzem datotek      vsakih 180 min      prinese dobaviteljeve datoteke
-    PIM zaloga iz datotek    vsakih 60 min       prebere prinesene datoteke v stock.*
-    PIM zaloga iz SAOP       vsakih 15 min       kolicine iz ERP
+    PIM nocni tok   vsak dan ob $Ura   cel tok: katalog, XML, zaloga, validacija, izvoz
+    PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP in Braytron XML
 
-  Ritem je enak razporedu v ops.ScheduleProfile (migraciji 106 in 107). Ce ga tu spremenis,
-  spremeni tudi razpored v bazi - sicer worker zavrne zagon z napako 51100 ali pa zaman klice
-  dobavitelja, ki je prenos ze zavrnil.
+  Zaloga je ena sama naloga, ker se vsak vir v istem prehodu prevzame in prebere. Loceno
+  opravilo za prevzem in loceno za branje je zalogo drzalo en cikel zadaj.
+
+  Braytron dovoli en prenos na 180 minut; prevzemnik njegovo okno spostuje sam in vira vmes ne
+  klice, zato petminutni ritem ne pomeni petminutnega prenasanja.
+
+  Ritem je enak razporedu v ops.ScheduleProfile (migracija 112). Ce ga tu spremenis, spremeni
+  tudi razpored v bazi - sicer worker zavrne zagon z napako 51100.
 
   Vsi zalogovni cikli klicejo ziv SAOP oziroma dobavitelja. Registracija te naloge JE privolitev
   v ponavljajoc se zunanji klic (AGENTS.md #4.5); brez nje nic od tega ne tece samo.
@@ -30,7 +33,7 @@
   Namesto registracije vse stiri naloge odstrani.
 
 .PARAMETER BrezZaloge
-  Registriraj samo nocni tok, brez treh zalogovnih ciklov.
+  Registriraj samo nocni tok, brez zalogovnega cikla.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -46,7 +49,9 @@ $koren = Split-Path -Parent $mestoSkripte
 $nocno  = Join-Path $mestoSkripte 'Nocno-vse.ps1'
 $cikel  = Join-Path $mestoSkripte 'Zaloga-cikel.ps1'
 
-$imena = @('PIM nocni tok', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
+# Stari imeni sta v seznamu zato, da jih -Odstrani pospravi tudi pri tistih, ki so ju ze imeli
+# registrirani; nova namestitev ju ne ustvari vec.
+$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
 
 if ($Odstrani) {
   foreach ($ime in $imena) {
@@ -101,9 +106,16 @@ Registriraj 'PIM nocni tok' $nocno @('-DanPolnegaZajema', '1', '-HkratnihPodjeti
   (New-ScheduledTaskTrigger -Daily -At $Ura)
 
 if (-not $BrezZaloge) {
-  Registriraj 'PIM prevzem datotek'   $cikel @('-Kaj', 'Prevzem')  (Ponavljajoc 180 2)
-  Registriraj 'PIM zaloga iz datotek' $cikel @('-Kaj', 'Datoteke') (Ponavljajoc 60 5)
-  Registriraj 'PIM zaloga iz SAOP'    $cikel @('-Kaj', 'Saop')     (Ponavljajoc 15 8)
+  # Prejsnja delitev na tri naloge je odpadla; ce so se registrirane, jih pocistimo, sicer bi
+  # tekle vzporedno z novo in podvajale klice na dobavitelja.
+  foreach ($staro in @('PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')) {
+    if (Get-ScheduledTask -TaskName $staro -ErrorAction SilentlyContinue) {
+      Unregister-ScheduledTask -TaskName $staro -Confirm:$false
+      Write-Output "Odstranjena stara naloga: $staro"
+    }
+  }
+
+  Registriraj 'PIM zaloga' $cikel @('-Kaj', 'Vse') (Ponavljajoc 5 2)
 }
 
 Write-Output ''

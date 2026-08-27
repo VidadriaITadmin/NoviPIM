@@ -1,22 +1,28 @@
 ﻿<#
 .SYNOPSIS
-  Zalogovni cikel cez dan: prevzem datotek, dobaviteljeva zaloga in zaloga iz SAOP.
+  Zalogovni cikel: SAOP zaloga, NW zaloga z FTP in Braytronova zaloga iz XML.
 
 .DESCRIPTION
-  Nocno opravilo (Nocno-vse.ps1) pozene cel tok enkrat na dan. Zaloga se cez dan premika
-  bistveno hitreje od kataloga, zato tece v svojem, pogostejsem ciklu.
+  Trije viri zaloge in nic drugega. Vsak od njih se v istem prehodu prevzame in prebere v
+  stock.*, zato ni locenega opravila za prevzem in locenega za branje - to je bila napacna
+  delitev, ki je zalogo drzala eno stopnjo zadaj.
 
-  Ritem je enak kot v ops.ScheduleProfile (migraciji 106 in 107) — urnik naloge in razpored v
-  bazi se ne smeta razhajati, sicer worker zavrne zagon z napako 51100:
+      SAOP        kolicine iz ERP, brez prevzema datoteke
+      NW_STOCK    FTP dobavitelja Nowodvorski
+      BT_STOCK    XML Braytrona prek HTTPS
 
-      -Kaj Prevzem   180 min   Braytron dovoli en prenos na 180 minut
-      -Kaj Datoteke   60 min   bere lokalno datoteko, ne dobavitelja
-      -Kaj Saop       15 min   nas ERP, brez omejitve pogostosti
+  Katalog (BT_XML, NW_XML) tu NE sodi. Braytronov katalog je 19 MB in se bere v nocnem toku;
+  v petminutnem ciklu bi bil to prenos 5,5 GB na dan brez pomena.
 
-  Zaloga je samo za branje. Nobena od teh poti ne pise kolicin nazaj v SAOP.
+  Braytron dovoli en prenos na 180 minut in cakalni cas pove v svojem odgovoru. Prevzemnik ga
+  spostuje sam, zato ga petminutni cikel ne klice po nepotrebnem - vmesni cikli samo preskocijo
+  ta vir in prevzeta datoteka ostane v veljavi.
+
+  Ista nespremenjena datoteka je isti posnetek: worker to pove in ne zapise nicesar. To ni
+  napaka, ampak pricakovano stanje med dvema osvezitvama pri dobavitelju.
 
 .PARAMETER Kaj
-  Kateri del cikla naj tece: Prevzem, Datoteke, Saop ali Vse.
+  Kateri del cikla naj tece: Saop, Dobavitelji ali Vse. Za rocno rabo; opravilo pozene Vse.
 
 .PARAMETER Podjetja
   Podjetja, ki jih obdelamo. Privzeto vsa stiri.
@@ -26,7 +32,7 @@
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('Prevzem', 'Datoteke', 'Saop', 'Vse')] [string]$Kaj = 'Vse',
+  [ValidateSet('Saop', 'Dobavitelji', 'Vse')] [string]$Kaj = 'Vse',
   [int[]]$Podjetja = @(1, 2, 3, 4),
   [string]$KorenRepozitorija = ''
 )
@@ -40,12 +46,12 @@ if (-not (Test-Path $resitev)) { throw "Ni najdena mapa $resitev." }
 
 $dnevnik = Join-Path $koren 'logs'
 if (-not (Test-Path $dnevnik)) { New-Item -ItemType Directory -Path $dnevnik | Out-Null }
-$datoteka = Join-Path $dnevnik ("zaloga-{0:yyyy-MM-dd}.log" -f (Get-Date))
+$datotekaDnevnika = Join-Path $dnevnik ("zaloga-{0:yyyy-MM-dd}.log" -f (Get-Date))
 
 function Zapisi([string]$vrstica) {
   $z = "{0:HH:mm:ss}  {1}" -f (Get-Date), $vrstica
   Write-Output $z
-  Add-Content -Path $datoteka -Value $z -Encoding UTF8
+  Add-Content -Path $datotekaDnevnika -Value $z -Encoding UTF8
 }
 
 $padli = 0
@@ -73,25 +79,25 @@ function Korak([string]$ime, [scriptblock]$telo) {
   Zapisi "== $ime =="
   try { & $telo; Zapisi "   konec: $ime" }
   catch {
-    # Padec enega koraka ne ustavi ostalih; izhodna koda pove, koliko jih je padlo.
+    # Padec enega vira ne ustavi ostalih; izhodna koda pove, koliko jih je padlo.
     $script:padli++
     Zapisi "   NAPAKA: $($_.Exception.Message)"
   }
 }
 
-if ($Kaj -in @('Prevzem', 'Vse')) {
-  Korak 'Prevzem dobaviteljevih datotek' { PozeniWorker 'workers\PIM.SourceFetchWorker' @() }
-}
+if ($Kaj -in @('Dobavitelji', 'Vse')) {
+  # Samo zalogovna vira. Prevzem in branje gresta skupaj, da zaloga ne caka na naslednji cikel.
+  foreach ($vir in @('NW_STOCK', 'BT_STOCK')) {
+    Korak "Zaloga $vir" {
+      PozeniWorker 'workers\PIM.SourceFetchWorker' @('--source', $vir)
 
-if ($Kaj -in @('Datoteke', 'Vse')) {
-  # Ista nespremenjena datoteka je isti posnetek: worker to pove in ne zapise nicesar. To ni
-  # napaka - dobavitelj datoteke ne osvezuje ob vsakem nasem zagonu.
-  Korak 'Zaloga dobaviteljev iz datotek' {
-    foreach ($par in @(@('NW_STOCK'), @('BT_STOCK'))) {
-      $vir = $par[0]
       $mapa = Join-Path $resitev "data\prevzem\$vir"
-      if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; continue }
-      foreach ($d in Get-ChildItem $mapa -File | Where-Object { $_.Name -notlike '*.prenos' }) {
+      if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; return }
+
+      $datoteke = Get-ChildItem $mapa -File | Where-Object { $_.Extension -notin @('.prenos', '.pocakaj') }
+      if (-not $datoteke) { Zapisi '   preskoceno: prevzete datoteke ni'; return }
+
+      foreach ($d in $datoteke) {
         foreach ($o in $Podjetja) {
           PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $d.FullName, '--source', $vir, '--organization-id', "$o")
         }
@@ -102,7 +108,7 @@ if ($Kaj -in @('Datoteke', 'Vse')) {
 
 if ($Kaj -in @('Saop', 'Vse')) {
   Korak 'Zaloga iz SAOP (kolicine)' {
-    # Ziv klic je odlocitev cloveka (AGENTS.md #4.5). Tu je vklopljen zavestno: nalogo registrira
+    # Ziv klic je odlocitev cloveka (AGENTS.md #4.5). Vklopljen je zavestno: nalogo registrira
     # clovek z Namesti-opravila.ps1 in s tem privoli v ponavljajoc se klic na ERP.
     $env:PIM_SAOP_MODE = 'Live'
     PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','))

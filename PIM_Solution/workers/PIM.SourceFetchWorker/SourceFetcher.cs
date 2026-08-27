@@ -41,6 +41,14 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
       return new(location.SourceCode, location.Kind, false, 0, null,
         $"Naslov ni nastavljen — vpisi ga v appsettings.Local.json pod {location.CredentialKey}.", null);
 
+    // Dobavitelj z omejitvijo pogostosti se ne klice, dokler njegovo okno ne potece. Cikel zaloge
+    // tece na 5 minut, Braytron pa dovoli en prenos na 180: brez tega bi ga klicali 288-krat na
+    // dan in 283-krat dobili zavrnitev. Cakalni cas zapise sam dobavitelj v svojem odgovoru.
+    var target0 = TargetPath(location);
+    if (CooldownUntil(target0) is { } until && DateTime.UtcNow < until)
+      return new(location.SourceCode, location.Kind, false, 0, File.Exists(target0) ? target0 : null,
+        $"Dobaviteljevo okno se tece; naslednji prenos po {until.ToLocalTime():g}.", null);
+
     using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     if (!response.IsSuccessStatusCode)
       return new(location.SourceCode, location.Kind, false, 0, null, null, $"Dobavitelj je vrnil HTTP {(int)response.StatusCode}.");
@@ -55,7 +63,7 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     // omejitve vrne <Hata> z besedilom "Maximum Sorgu Limitine Ulastiniz" in casom naslednjega
     // dovoljenega prenosa (izmerjeno 2026-08-27: interval 180 minut). Brez te preverbe bi
     // 193 bajtov napake povozilo 1,5 MB veljavne zaloge in naslednji worker bi prebral nic.
-    var refusal = SupplierRefusal(temporary);
+    var refusal = SupplierRefusal(temporary, out var refusalWindowMinutes);
     if (refusal is not null)
     {
       File.Delete(temporary);
@@ -64,14 +72,15 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
       // pogostost, mi pa imamo podatek. Ce bi to steli za napako, bi bilo nacrtovano opravilo
       // videti pokvarjeno ob vsakem ciklu, ki pride prezgodaj. Brez prejsnje datoteke pa smo
       // dejansko brez podatka in to je napaka.
+      WriteCooldown(target, refusalWindowMinutes);
+
       var imamoPrejsnjo = File.Exists(target);
       return imamoPrejsnjo
         ? new(location.SourceCode, location.Kind, false, 0, target, refusal, null)
         : new(location.SourceCode, location.Kind, false, 0, null, null, refusal + " Prejsnje datoteke ni.");
     }
 
-    File.Move(temporary, target, overwrite: true);
-    return new(location.SourceCode, location.Kind, true, new FileInfo(target).Length, target, null, null);
+    return Prevzemi(location, temporary, target);
   }
 
   /// <summary>Najmanjsa velikost, pod katero odgovor ni veljaven podatek, ampak sporocilo.</summary>
@@ -82,8 +91,9 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
   /// so ta sporocila kratka, veljavni odgovori pa veliki; branje 19 MB zaradi te preverbe bi bilo
   /// nesorazmerno.
   /// </summary>
-  static string? SupplierRefusal(string path)
+  static string? SupplierRefusal(string path, out int windowMinutes)
   {
+    windowMinutes = DefaultCooldownMinutes;
     var length = new FileInfo(path).Length;
     if (length > RefusalSizeLimit) return null;
     if (length == 0) return "Dobavitelj je vrnil prazno datoteko; prejsnja je ohranjena.";
@@ -99,9 +109,38 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
 
     var next = Between(head, "<SonrakiXmlTarihi>", "</SonrakiXmlTarihi>");
     var window = Between(head, "<XmlAraligi>", "</XmlAraligi>");
+
+    // "180 Dk" — vzamemo samo stevilo; enota je pri tem dobavitelju vedno minuta. Ce je ni,
+    // ostane privzetek, ker je bolje pocakati predolgo kot dobavitelja klicati brez pravice.
+    if (window is not null)
+    {
+      var stevke = new string(window.TakeWhile(char.IsDigit).ToArray());
+      if (int.TryParse(stevke, out var minute) && minute > 0) windowMinutes = minute;
+    }
     return next is null
       ? "Dobavitelj je prenos zavrnil (omejitev pogostosti); prejsnja datoteka je ohranjena."
       : $"Dobavitelj dovoli prenos na {window ?? "?"}; naslednji mozen {next}. Prejsnja datoteka je ohranjena.";
+  }
+
+  /// <summary>Privzeto cakanje, kadar dobavitelj okna ne pove.</summary>
+  const int DefaultCooldownMinutes = 180;
+
+  static string CooldownPath(string target) => target + ".pocakaj";
+
+  /// <summary>Do kdaj tega vira ne klicemo; null pomeni, da omejitve ne poznamo.</summary>
+  static DateTime? CooldownUntil(string target)
+  {
+    var path = CooldownPath(target);
+    if (!File.Exists(path)) return null;
+    return DateTime.TryParse(File.ReadAllText(path).Trim(), System.Globalization.CultureInfo.InvariantCulture,
+      System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal,
+      out var value) ? value : null;
+  }
+
+  static void WriteCooldown(string target, int minutes)
+  {
+    try { File.WriteAllText(CooldownPath(target), DateTime.UtcNow.AddMinutes(minutes).ToString("O")); }
+    catch (IOException) { /* Cakalni cas je pomoc, ne pogoj; ce ga ni mogoce zapisati, klicemo znova. */ }
   }
 
   static string? Between(string value, string start, string end)
@@ -139,8 +178,44 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     using var response = (FtpWebResponse)await request.GetResponseAsync();
     await using var stream = response.GetResponseStream();
     var target = TargetPath(location);
-    await WriteAtomicAsync(stream, target, cancellationToken);
+    var temporary = target + ".prenos";
+    await using (var file = File.Create(temporary))
+      await stream.CopyToAsync(file, cancellationToken);
+
+    return Prevzemi(location, temporary, target);
+  }
+
+  /// <summary>
+  /// Prevzem zakljuci: ce je vsebina enaka ze prevzeti, preneseno zavrzemo in obdrzimo staro
+  /// datoteko skupaj z njenim casom.
+  ///
+  /// Zakaj to steje. Cas spremembe datoteke je kljuc posnetka zaloge. Ce bi vsak prenos zapisal
+  /// novo datoteko, bi bil vsak petminutni cikel nov posnetek: pri Nowodvorskem 2.762 vrstic krat
+  /// stiri podjetja krat 288 ciklov je 3,2 milijona vrstic na dan za podatek, ki se ni spremenil.
+  /// Dobavitelj datoteke ne osvezuje ob vsakem nasem klicu.
+  /// </summary>
+  static FetchOutcome Prevzemi(FetchLocation location, string temporary, string target)
+  {
+    if (File.Exists(target) && IstaVsebina(temporary, target))
+    {
+      File.Delete(temporary);
+      return new(location.SourceCode, location.Kind, false, new FileInfo(target).Length, target,
+        "Dobaviteljeva datoteka je nespremenjena; obdrzimo prejsnjo.", null);
+    }
+
+    File.Move(temporary, target, overwrite: true);
     return new(location.SourceCode, location.Kind, true, new FileInfo(target).Length, target, null, null);
+  }
+
+  static bool IstaVsebina(string prva, string druga)
+  {
+    var prvaVelikost = new FileInfo(prva).Length;
+    if (prvaVelikost != new FileInfo(druga).Length) return false;
+
+    using var sha = System.Security.Cryptography.SHA256.Create();
+    using var tokPrva = File.OpenRead(prva);
+    using var tokDruga = File.OpenRead(druga);
+    return sha.ComputeHash(tokPrva).AsSpan().SequenceEqual(sha.ComputeHash(tokDruga));
   }
 
   string TargetPath(FetchLocation location)
@@ -151,19 +226,6 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     var directory = Path.Combine(targetRoot, location.SourceCode);
     Directory.CreateDirectory(directory);
     return Path.Combine(directory, name);
-  }
-
-  /// <summary>
-  /// Pisanje prek zacasne datoteke. Prekinjen prenos sicer pusti okrnjeno datoteko, ki jo
-  /// naslednji worker prebere kot veljavno in tiho zapise premalo zaloge.
-  /// </summary>
-  static async Task WriteAtomicAsync(Stream source, string target, CancellationToken cancellationToken)
-  {
-    var temporary = target + ".prenos";
-    await using (var file = File.Create(temporary))
-      await source.CopyToAsync(file, cancellationToken);
-
-    File.Move(temporary, target, overwrite: true);
   }
 
   static string Redact(Exception exception) => exception switch

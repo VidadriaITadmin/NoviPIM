@@ -18,12 +18,16 @@ public sealed class StockLandingWriter(string connectionString)
   {
     fields ??= new();
 
-    // stock.Snapshot.SnapshotUtc je datetime2(3), cas datoteke pa nosi 100-nanosekundne enote.
-    // Neporezan cas se ob vpisu zaokrozi na milisekunde, iskanje obstojecega posnetka pa isce s
-    // polno natancnostjo in zato zaokrozene vrstice ne najde: zagon gre mimo dedupa in pade na
-    // UQ_StockSnapshot (SQL 2627). Izmerjeno 2026-08-27 pri ponovnem branju iste datoteke.
-    // Cas zato porezemo na isto natancnost, kot jo ima stolpec, in to enkrat za vse klicatelje.
-    snapshotUtc = new DateTime(snapshotUtc.Ticks - snapshotUtc.Ticks % TimeSpan.TicksPerMillisecond, snapshotUtc.Kind);
+    // Cas posnetka porezemo na celo sekundo. Razlog ni natancnost, ampak dedup: kljuc posnetka je
+    // (podjetje, konektor, cas), vpis pa gre skozi AddWithValue, ki za DateTime sklepa
+    // SqlDbType.DateTime z locljivostjo 1/300 sekunde. Ta milisekundo popaci (.997 -> .996),
+    // stolpec datetime2(3) shrani popaceno vrednost, iskanje z izvirnim casom je ne najde in
+    // ponovno branje iste datoteke pade na UQ_StockSnapshot (SQL 2627). Izmerjeno 2026-08-27.
+    //
+    // Poravnava na sekundo je edina vrednost, ki prezivi obe predstavitvi nespremenjena, zato
+    // odpravi cel razred napake namesto posameznega primera. Dva razlicna posnetka istega vira
+    // znotraj iste sekunde niso realen primer: cas je cas spremembe dobaviteljeve datoteke.
+    snapshotUtc = new DateTime(snapshotUtc.Ticks - snapshotUtc.Ticks % TimeSpan.TicksPerSecond, snapshotUtc.Kind);
 
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync(cancellationToken);
