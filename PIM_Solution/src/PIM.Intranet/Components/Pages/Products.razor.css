@@ -62,7 +62,12 @@
 
 .filter-badge { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
 
-.toolbar-actions { display: flex; gap: .5rem; margin-left: auto; }
+.toolbar-actions { align-items: center; display: flex; gap: .5rem; margin-left: auto; }
+
+.export-choice { max-width: 15rem; }
+
+/* Izvoz izbranih brez izbire ni dejanje, ampak past; povezava to pove, ne samo ob kliku. */
+.ghost-button.disabled { opacity: .45; pointer-events: none; }
 
 .result-count { color: var(--pim-text-muted); font-size: .8rem; white-space: nowrap; }
 
@@ -130,7 +135,31 @@
 
 .data-card { padding: 0; }
 
-.product-name { display: block; font-weight: 600; }
+/* Cela vrstica vodi na kartico; naziv je zato navadno besedilo, ne povezava. */
+.row-link { cursor: pointer; }
+.row-link:hover { background: var(--pim-surface-hover); }
+.row-link:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+
+.thumb-cell { width: 3.5rem; }
+.thumb {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  display: flex;
+  height: 2.6rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 2.6rem;
+}
+.thumb img { height: 100%; object-fit: contain; width: 100%; }
+
+/* Prazna sličica je oblika, ne besedilo: v vrstici s 40 znaki ni prostora za »brez slike«,
+   vrzel pa vseeno pove značka »brez slike« v stolpcu Vrzeli. */
+.thumb-empty { border: 1.5px solid var(--pim-text-muted); border-radius: 2px; height: 1rem; opacity: .45; position: relative; width: 1.2rem; }
+.thumb-empty::after { background: var(--pim-text-muted); bottom: .15rem; content: ""; height: .45rem; left: .15rem; position: absolute; transform: skewX(-20deg); width: .9rem; }
+
+.product-name { color: var(--pim-text-strong); display: block; font-weight: 600; }
 
 .product-meta { color: var(--pim-text-muted); display: block; font-size: .75rem; }
 
@@ -154,13 +183,6 @@
 
 .select-cell { width: 2.5rem; }
 
-.row-action { text-align: right; width: 3rem; }
-
-.open-link { display: inline-flex; padding: .25rem; }
-
-/* Puščica je oblika, ne znak: pisave brez tega znaka ne smejo pokvariti vrstice. */
-.chevron { border-right: 2px solid currentColor; border-top: 2px solid currentColor; display: inline-block; height: .45rem; transform: rotate(45deg); width: .45rem; }
-
 .source-note { font-size: .78rem; margin: 1rem 0 2rem; }
 
 .data-table { min-width: 62rem; }
@@ -177,7 +199,6 @@
 .page-tab:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
-.open-link:focus-visible,
 .select-cell input:focus-visible {
   outline: 2px solid var(--pim-accent);
   outline-offset: 2px;

@@ -57,6 +57,14 @@ foreach (var facet in new[] { "MANUFACTURER", "SUPPLIER", "ITEM_GROUP", "DEPARTM
   Assert(markup.Contains("row.FacetKind == \"" + facet + "\"", StringComparison.Ordinal),
     "Spustni seznam " + facet + " mora izhajati iz intranet.GetProductListFilters.");
 
+// Uporabnik bere ime partnerja, filtriramo pa po sifri, ker sifra potuje nazaj v SAOP.
+Assert(!Regex.IsMatch(markup, "<option value=\"@facet.FacetValue\">@facet.FacetValue"),
+  "Spustni seznami morajo kazati ime (FacetLabel), ne sifre.");
+Assert(Regex.Matches(markup, "<option value=\"@facet.FacetValue\">@facet.FacetLabel").Count == 4,
+  "Vsi stirje spustni seznami morajo kazati ime in filtrirati po sifri.");
+Assert(markup.Contains("row.ManufacturerLabel", StringComparison.Ordinal) && markup.Contains("row.SupplierLabel", StringComparison.Ordinal),
+  "Tudi v vrstici mora biti ime partnerja, kadar je znano.");
+
 // 3.1 Seznam ni vezan na eno podjetje: privzeto so vsa, izbira pa pride iz registra podjetij.
 Assert(Regex.IsMatch(markup, "<option value=\"\">Vsa podjetja</option>"),
   "Privzeta izbira podjetja mora biti \u00bbVsa podjetja\u00ab; seznam ne sme tiho pokazati samo prvega podjetja.");
@@ -89,11 +97,32 @@ Assert(Regex.IsMatch(markup, "<PimBar Percent=\"row\\.Completeness\"[^>]*Label="
 Assert(Regex.IsMatch(markup, "<PimTable Caption=\"[^\"]+\"[^>]*AriaLabel=\"[^\"]+\""), "Tabela mora imeti napis in aria-label.");
 var columns = Regex.Match(markup, "Columns =\\s*\\[(.*?)\\];", RegexOptions.Singleline);
 Assert(columns.Success, "Stolpci morajo biti razglaseni kot seznam PimColumn.");
-Assert(Regex.Matches(columns.Groups[1].Value, "new\\(").Count == 11, "Tabela ima enajst stolpcev; vsak mora imeti ime.");
+Assert(Regex.Matches(columns.Groups[1].Value, "new\\(").Count == 12, "Tabela ima dvanajst stolpcev; vsak mora imeti ime.");
+Assert(!columns.Groups[1].Value.Contains("Odpri", StringComparison.Ordinal),
+  "Stolpca Odpri ni vec: cela vrstica vodi na kartico, zato bi bil drugi gumb za isto stvar odvec.");
+foreach (var column in new[] { "Slika", "Dobavitelj" })
+  Assert(columns.Groups[1].Value.Contains(column, StringComparison.Ordinal), "Manjka stolpec " + column + ".");
 Assert(!Regex.IsMatch(columns.Groups[1].Value, "new\\(\"\"\\)"), "Prazno ime stolpca ni dovoljeno; tudi izbor in odpiranje se poimenujeta.");
 Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"Page\\.TotalCount\""),
   "Paginacija mora biti strezniska in izhajati iz istega stetja kot seznam.");
 Assert(Regex.IsMatch(markup, "aria-label=\"Izberi izdelek @row.ItemId\""), "Vsaka kljukica mora povedati, kateri izdelek izbira.");
+
+// 6.1 Cela vrstica vodi na kartico; naziv zato ni povezava, kljukica pa ne sme odpirati kartice.
+Assert(Regex.IsMatch(markup, @"<tr class=""row-link""[^>]*@onclick=""\(\) => OpenAsync\(row\)"""),
+  "Klik na vrstico mora odpreti kartico izdelka.");
+Assert(markup.Contains("@onkeydown=\"args => OpenKeyAsync(args, row)\"", StringComparison.Ordinal),
+  "Vrstica mora biti dosegljiva tudi s tipkovnico (Enter ali preslednica).");
+Assert(markup.Contains("@onclick:stopPropagation=\"true\"", StringComparison.Ordinal),
+  "Klik v celico izbire ne sme odpreti kartice.");
+Assert(Regex.IsMatch(markup, "<span class=\"product-name\">@row.Name</span>"),
+  "Naziv je navadno besedilo, ne povezava: podcrtan naziv v vsej klikljivi vrstici obljublja dve dejanji, pa je le eno.");
+Assert(!Regex.IsMatch(markup, "<a class=\"product-name\""), "Naziv ne sme biti povezava.");
+
+// 6.2 Glavna slika izdelka mora biti vidna ze na seznamu, skozi isto varnostno politiko kot kartica.
+Assert(markup.Contains("MediaUrlPolicy.Normalize(row.ThumbnailUrl)", StringComparison.Ordinal),
+  "Slicica mora iti skozi skupno politiko naslovov medijev.");
+Assert(Regex.IsMatch(markup, "<img src=\"@thumbnail.Href\"[^>]*loading=\"lazy\""),
+  "Slicice se morajo nalagati leno; 50 slik na stran ne sme zadrzati seznama.");
 
 // 7. Stanje pogleda mora biti v naslovu, da je povezavo mogoce deliti in gumb Nazaj dela.
 foreach (var parameter in new[] { "pogled", "isci", "podjetje", "proizvajalec", "dobavitelj", "skupina", "oddelek",
@@ -126,6 +155,13 @@ Assert(markup.Contains("izvoz/izdelki.xlsx", StringComparison.Ordinal), "Stran m
 Assert(!markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Gumb za izvoz mora dati zvezek; CSV pot ostaja samo za skripte.");
 Assert(Regex.IsMatch(markup, "string ExportHref\\(\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
+Assert(Regex.IsMatch(markup, "id=\"product-export\""), "Uporabnik mora izbrati, kaj se izvozi.");
+foreach (var choice in new[] { "POGLED", "POGLED_SAOP", "IZBRANI", "IZBRANI_SAOP" })
+  Assert(markup.Contains("value=\"" + choice + "\"", StringComparison.Ordinal), "Manjka izbira izvoza " + choice + ".");
+Assert(markup.Contains("predloga=saop", StringComparison.Ordinal),
+  "Predloga SAOP mora biti izbirna; njeni stolpci so register out.SaopXmlField, ne seznam v strani.");
+Assert(markup.Contains("ExportDisabled", StringComparison.Ordinal),
+  "Izvoz izbranih brez izbire ni dejanje, ampak past; gumb mora biti onemogocen.");
 
 // 10. Varovalka: stran ostane vezana na dejanske bralne procedure.
 var allowedCalls = new[] { "GetOrganizationsAsync", "GetProductListAsync", "GetProductListViewsAsync", "GetProductListFacetsAsync" };
@@ -135,7 +171,10 @@ foreach (Match call in Regex.Matches(markup, "(?:Data|Workbench)\\.(\\w+)"))
   Assert(allowedCalls.Contains(call.Groups[1].Value, StringComparer.Ordinal), "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
 
 // 11. Varovalka: stran sme brati in izbirati, ne sme pa pisati.
-foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"file\"", "<dialog", "contenteditable" })
+// <img> je bil prepovedan, dokler seznam ni imel medijev. Uporabnik je zahteval glavno sliko
+// izdelka v vrstici, zato prepoved ni vec pogodba; namesto nje veljata zahtevi zgoraj: slika
+// mora skozi MediaUrlPolicy in se nalagati leno.
+foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "type=\"file\"", "<dialog", "contenteditable" })
   Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Bralni seznam ne sme uvesti " + forbidden + ".");
 foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "ApproveBatchAsync", "UndoProduct" })
   Assert(!markup.Contains(writeSurface, StringComparison.Ordinal), "Seznam izdelkov ne sme sam pisati: " + writeSurface + ".");
@@ -154,7 +193,7 @@ foreach (var fabricated in new[] { "Cena", "Zaloga", "Nov izdelek", "Uvozi", "Iz
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmisljene vsebine: " + fabricated + ".");
 
 // 13. Slog: fokus, prelivanje in odzivnost; brez uhajanja z ::deep.
-foreach (var selector in new[] { ".search-input", ".filter-select", ".ghost-button", ".link-button", ".filter-chip", ".table-scroll", ".data-table a", ".open-link", ".select-cell input" })
+foreach (var selector in new[] { ".search-input", ".filter-select", ".ghost-button", ".link-button", ".filter-chip", ".table-scroll", ".data-table a", ".row-link", ".select-cell input" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");
@@ -162,7 +201,12 @@ Assert(Regex.IsMatch(css, "\\.table-scroll\\s*\\{[^}]*overflow-x:\\s*auto"), "Ov
 Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zaslonih se tabela ne sme stiskati; potrebna je min-width.");
 Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
 Assert(!markup.Contains('\u203A'), "Unicode nadomestne ikone niso dovoljene; uporabi CSS obliko.");
-Assert(Regex.IsMatch(markup, "<span class=\"chevron\" aria-hidden=\"true\"></span>"), "Ikona odpiranja vrstice mora biti CSS oblika z aria-hidden.");
+// Puscice za odpiranje ni vec — odpira cela vrstica. Prazna slicica pa je se vedno oblika in ne
+// besedilo, zato mora biti skrita bralcu zaslona: vrzel »brez slike« pove znacka v stolpcu Vrzeli.
+Assert(Regex.IsMatch(markup, "<span class=\"thumb-empty\" aria-hidden=\"true\"></span>"),
+  "Prazna slicica mora biti CSS oblika z aria-hidden.");
+Assert(Regex.IsMatch(markup, "<img src=\"@thumbnail.Href\" alt=\"\""),
+  "Slicica je okras ob nazivu, zato prazen alt; naziv je ze v isti vrstici.");
 foreach (Match icon in Regex.Matches(markup, "<span class=\"chip-remove\"[^>]*>"))
   Assert(icon.Value.Contains("aria-hidden=\"true\"", StringComparison.Ordinal), "Okrasni krizec mora imeti aria-hidden: " + icon.Value);
 

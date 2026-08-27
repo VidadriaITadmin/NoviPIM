@@ -176,6 +176,62 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Dobavitelj in proizvajalec dobita ime, izvoz gre v enem klicu (115) in enotna
+  predloga SAOP (117)** — kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
+
+  **Od kod sta dobavitelj in proizvajalec** (uporabnikovo vprašanje): izključno iz SAOP
+  dokumenta `ItemGeneralData`, `StockData/SupplierID` in `StockData/ManufacturerID`. To sta
+  **šifri partnerja**, ne imeni; registra imen v katalogu ni bilo (`canon.Codebook` ima samo
+  CURRENCY, PRICELIST, TECHPROCESS). Imena istih šifer so že zajeta v `b2b.Customer` — isti
+  šifrant partnerjev iz SAOP. Merjeno: **273 od 275** šifer dobaviteljev in **290 od 292** šifer
+  proizvajalcev se ujame. Nov pogled `canon.PartnerName` to poveže; filter in seznam kažeta ime,
+  šifra ostane, ker ona potuje nazaj v SAOP.
+
+  **Izvoz ni deloval**, ker je bila meja `@Take` 200: stran je zvezek sestavljala s 100
+  zaporednimi klici z vedno večjim OFFSET in brskalnik je zahtevo prekinil prej, kot je datoteka
+  nastala (`TaskCanceledException` v dnevniku). Meja je zdaj 20.000 — izvoz je **en klic**,
+  merjeno **1,0 s za 20.000 vrstic**.
+
+  **Enotna predloga (117)**: stolpci niso vpisani v kodo, ampak so register `out.SaopXmlField` —
+  isti register, ki ga uporablja odhodna vrsta. `intranet.GetSaopTemplateColumns` da stolpce,
+  `intranet.GetProductFieldValues` pa vrednosti iz `canon.FieldValue` (merjeno **121.814
+  vrednosti za 20.000 izdelkov v 37 ms**).
+
+- **[INTRANET] Seznam: slika, klik na vrstico, imena partnerjev; izvoz z izbiro predloge** —
+  kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
+
+  Po uporabnikovih pripombah na zaslonsko sliko:
+  - stolpec **Slika** z glavno sliko izdelka (skozi `MediaUrlPolicy`, leno nalaganje);
+  - **klik na celo vrstico** odpre kartico, tudi s tipkovnico; klik v kljukico ne;
+  - **naziv je navadno besedilo**, ne podčrtana povezava;
+  - **stolpec Odpri odstranjen** — cela vrstica že odpira;
+  - filtra dobavitelj in proizvajalec kažeta **imena**, filtrirata pa po šifri; ime je tudi v
+    vrstici, dodan je stolpec Dobavitelj;
+  - **izvoz je izbiren**: pregled ali predloga SAOP, cel pogled ali samo izbrani.
+
+  **Dokaz — zvezka nastala iz prave baze in prebrana nazaj:**
+
+  ```
+  pregled:       19 stolpcev, 20.000 vrstic, 1,46 MB,  2,2 s
+  predloga SAOP: 25 stolpcev, 20.000 vrstic, 1,90 MB,  3,1 s
+  register predloge: 24 stolpcev, 11 obveznih pri novem artiklu, 21 pisljivih nazaj v SAOP
+  ```
+
+  ```
+  PIM.F10.ProductsUxTests      PASS
+  PIM.F10.ProductDetailUxTests PASS
+  PIM.F10.AuthTests            PASS
+  PIM.F8.BulkOutboundTests     PASS
+  migrator --verify            Preverjanje F0–F10 baze je uspešno.
+  ```
+
+  **Kar ostaja odprto in ni narejeno:**
+  1. **Register ima 24 polj, stari sistem jih je imel 86** (`SaopItemFieldCatalog`). Dokler
+     `out.SaopXmlField` ne dobi preostalih, predloga ne pokriva vsega, kar SAOP sprejme.
+  2. **Uvoza te predloge nazaj še ni** — datoteka nastane, poti nazaj v PIM in SAOP še ni.
+     Obstaja samo `/izvozi/mnozicno` (šifra + eno polje).
+  3. **Urejanja glavne slike ni**: `canon.ProductMedia` nima zapisovalne poti.
+
 - **[INTRANET] Drevo kategorij se bere v izbranem jeziku** —
   kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
 

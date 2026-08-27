@@ -54,7 +54,12 @@ public sealed record ProductListRow(
   bool IsActive, bool WebPublish, bool IsPromoted, string ValidationStatus, decimal Completeness,
   DateTime? LastValidatedUtc, string ErpStatus, string WebStatus, long OpenIssueCount,
   long CategoryCount, long MediaCount, long PendingOutboundCount, DateTime? LastChangedUtc,
-  int OrganizationId, string OrganizationName);
+  int OrganizationId, string OrganizationName, string? SupplierName, string? ManufacturerName)
+{
+  /// <summary>Ime partnerja, kadar je znano; sicer sifra, ki jo pozna SAOP.</summary>
+  public string SupplierLabel => SupplierName ?? Supplier ?? "—";
+  public string ManufacturerLabel => ManufacturerName ?? Manufacturer ?? "—";
+}
 
 public sealed record ProductListPage(IReadOnlyList<ProductListRow> Rows, long TotalCount);
 
@@ -74,7 +79,8 @@ public sealed record ProductListViewCounts(
   long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
   long NoCategoryCount, long NoEanCount, long NotPublishedCount, long WaitingSaopCount);
 
-public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount);
+/// <param name="FacetLabel">Kar uporabnik bere; pri partnerjih ime, sicer enako <paramref name="FacetValue"/>.</param>
+public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount, string FacetLabel);
 
 public sealed record ProductCardView(
   ProductCardHeader Header,
@@ -293,7 +299,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       PimDb.Int64(row, "OpenIssueCount"), PimDb.Int64(row, "CategoryCount"),
       PimDb.Int64(row, "MediaCount"), PimDb.Int64(row, "PendingOutboundCount"),
       PimDb.NullableDateTime(row, "LastChangedUtc"), PimDb.Int32(row, "OrganizationId"),
-      PimDb.TextOrEmpty(row, "OrganizationName")), cancellationToken);
+      PimDb.TextOrEmpty(row, "OrganizationName"), PimDb.Text(row, "SupplierName"),
+      PimDb.Text(row, "ManufacturerName")), cancellationToken);
 
     long total = 0;
     if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
@@ -345,7 +352,7 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     {
       facets.AddRange(await ReadAsync(reader, row => new ProductListFacet(
         PimDb.TextOrEmpty(row, "FacetKind"), PimDb.TextOrEmpty(row, "FacetValue"),
-        PimDb.Int64(row, "ProductCount")), cancellationToken));
+        PimDb.Int64(row, "ProductCount"), PimDb.TextOrEmpty(row, "FacetLabel")), cancellationToken));
       more = await reader.NextResultAsync(cancellationToken);
     }
 
