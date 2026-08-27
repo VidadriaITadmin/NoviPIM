@@ -1,41 +1,136 @@
 @page "/nastavitve/kategorije"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.CategoryTreeService Tree
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+@* Drevo z zamikom in prevodi. Prej je bila ta stran ravna tabela z nivojem kot številko in
+   stolpcem »Prevod«, ki je izpisoval pomišljaj za vsako vrstico. *@
 
 <PageTitle>Kategorije</PageTitle>
-<PimPage Title="Kategorije" Subtitle="Vozlišča kategorijskih dreves in število izdelkov, ki so dejansko uvrščeni vanje." Crumbs="Crumbs" />
+<PimPage Title="Kategorije"
+         Subtitle="Drevo, kakor ga vidi spletna trgovina, s prevodom imena v izbranem jeziku in številom izdelkov pod vsakim vozliščem. Prevod se ureja na mestu."
+         Crumbs="Crumbs" />
 
-<section class="ui-card toolbar" role="search" aria-labelledby="category-filter-title">
-  <h2 id="category-filter-title" class="visually-hidden">Filtriranje kategorij</h2>
-  <label class="visually-hidden" for="category-tree">Kategorijsko drevo</label>
-  <select id="category-tree" class="filter-select" @bind="TreeCode" @bind:after="LoadAsync">
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="kpi-grid" aria-label="Manjkajoči prevodi po jezikih">
+  @foreach (var gap in Gaps.Where(item => TreeCode == "" || item.CategoryTreeCode == TreeCode))
+  {
+    <PimStat Label="@($"{gap.CategoryTreeCode} · {gap.LanguageCode}")"
+             Value="@(gap.Missing == 0 ? "poln" : $"{gap.Missing:N0}")"
+             Note="@(gap.Missing == 0 ? $"vseh {gap.Categories:N0} kategorij ima ime" : $"od {gap.Categories:N0} kategorij nima imena")" />
+  }
+</section>
+
+<section class="ui-card toolbar section-gap" role="search" aria-labelledby="tree-filter-title">
+  <h2 id="tree-filter-title" class="visually-hidden">Filtriranje drevesa</h2>
+
+  <label class="visually-hidden" for="tree-code">Drevo</label>
+  <select id="tree-code" class="filter-select" @bind="TreeCode" @bind:after="OnTreeChangedAsync">
     <option value="">Vsa drevesa</option>
-    @foreach (var option in Trees) { <option value="@option.Value">@option.Label</option> }
+    @foreach (var treeOption in Trees) { <option value="@treeOption">@treeOption</option> }
   </select>
+
+  <label class="visually-hidden" for="tree-language">Jezik prevoda</label>
+  <select id="tree-language" class="filter-select" @bind="Language" @bind:after="LoadAsync">
+    @foreach (var language in Languages) { <option value="@language.LanguageCode">@language.LanguageCode · @language.Name</option> }
+  </select>
+
+  <label class="visually-hidden" for="tree-organization">Podjetje</label>
+  <select id="tree-organization" class="filter-select" @bind="OrganizationFilter" @bind:after="LoadAsync">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+  </select>
+
+  <label class="visually-hidden" for="tree-branch">Veja</label>
+  <select id="tree-branch" class="filter-select" @bind="Branch" @bind:after="LoadAsync">
+    <option value="">Vse veje</option>
+    @foreach (var root in Roots) { <option value="@root.CategoryCode">@root.CategoryName</option> }
+  </select>
+
+  <label class="visually-hidden" for="tree-level">Nivo</label>
+  <select id="tree-level" class="filter-select" @bind="Level" @bind:after="LoadAsync">
+    <option value="">Vsi nivoji</option>
+    <option value="1">Nivo 1</option>
+    <option value="2">Nivo 2</option>
+    <option value="3">Nivo 3</option>
+    <option value="4">Nivo 4</option>
+  </select>
+
+  <label class="visually-hidden" for="tree-search">Iskanje</label>
+  <input id="tree-search" class="form-input" type="search" placeholder="Išči po imenu ali poti"
+         @bind="Search" @bind:after="LoadAsync" />
+
+  <label class="filter-check">
+    <input type="checkbox" @bind="OnlyMissing" @bind:after="LoadAsync" />
+    Samo brez prevoda
+  </label>
+
+  <label class="filter-check">
+    <input type="checkbox" @bind="OnlyWithProducts" @bind:after="LoadAsync" />
+    Samo z izdelki
+  </label>
+
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
-<div class="hub-grid section-gap">
-  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije" Description="Izvorne poti, ki še nimajo ciljne kategorije." />
-  <PimHubCard Title="Preslikave poti" Href="pravila/preslikave" Description="Pregled preslikav polj; kategorijske poti zahtevajo lasten bralni pogled." />
-</div>
-<PimMissing Object="intranet.GetCategoryTranslations" What="prevod imena kategorije po jeziku izbranega spletnega mesta in neposredno povezavo na map.CategoryPathMap" Needs="canon.CategoryTranslation, canon.WebSite in map.CategoryPathMap" />
-
-<section class="ui-card data-card" aria-label="Kategorijsko drevo">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="V izbranem drevesu ni kategorij." LoadingText="Nalaganje kategorij …">
-    <PimTable Caption="Kategorije in njihova uporaba" Columns="Columns">
+<section class="ui-card data-card section-gap" aria-label="Kategorijsko drevo">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="Za te filtre ni nobene kategorije." LoadingText="Nalaganje drevesa …">
+    <PimTable Caption="Drevo kategorij z zamikom po nivoju; sivo pisane vrstice so predniki zadetkov" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
-          <tr>
-            <td><span class="code-value">@row.CategoryTreeCode</span></td>
-            <td><strong>@row.CategoryName</strong><div class="tree-path">@row.CategoryPath</div></td>
-            <td class="numeric">@row.LevelNo</td>
+          <tr class="@(row.IsMatch ? null : "row-context")">
+            <td>
+              @* Zamik nosi hierarhijo. Nivo 1 je brez zamika, vsak naslednji za eno stopnjo. *@
+              <span style="@Indent(row.LevelNo)">
+                @if (row.LevelNo > 1) { <span class="tree-branch" aria-hidden="true">└</span> }
+                <strong>@row.CategoryName</strong>
+              </span>
+              <div class="row-note code-value">@row.CategoryCode</div>
+            </td>
+            <td>
+              @if (Editing == row.CategoryCode)
+              {
+                <div class="form-grid">
+                  <label class="form-field" for="@($"tr-{row.CategoryCode}")">
+                    Ime v jeziku @Language
+                    <input id="@($"tr-{row.CategoryCode}")" class="form-input" @bind="Draft" />
+                  </label>
+                </div>
+                <div class="page-actions">
+                  <button type="button" class="button-primary" disabled="@Busy" @onclick="() => SaveAsync(row)">Shrani</button>
+                  <button type="button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                </div>
+              }
+              else if (row.TranslatedName is not null)
+              {
+                <span>@row.TranslatedName</span>
+                <button type="button" @onclick="() => BeginEdit(row)">uredi</button>
+              }
+              else
+              {
+                <PimChip Text="manjka" Tone="bad" />
+                <button type="button" @onclick="() => BeginEdit(row)">vpiši</button>
+              }
+            </td>
+            <td>
+              @if (row.MissingLanguages == 0)
+              {
+                <PimChip Text="@($"vsi {row.LanguageCount} jeziki")" Tone="good" />
+              }
+              else
+              {
+                <PimChip Text="@($"manjka {row.MissingLanguages}")" Tone="warn" />
+                <div class="row-note">@row.MissingLanguageList</div>
+              }
+            </td>
             <td class="numeric">@row.ProductCount.ToString("N0")</td>
             <td class="numeric">@row.DescendantProductCount.ToString("N0")</td>
-            <td>—</td>
             <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
           </tr>
         }
@@ -44,49 +139,141 @@
   </PimState>
 </section>
 
+<div class="hub-grid section-gap">
+  <PimHubCard Title="Preslikave kategorij" Href="kakovost/kategorije"
+              Description="Katera dobaviteljeva pot vodi v katero od teh kategorij." />
+  <PimHubCard Title="Uvrstitev izdelka" Href="izdelki/kategorije"
+              Description="Ročna uvrstitev posameznega izdelka po spletnih straneh." />
+</div>
+
 @code {
-  IReadOnlyList<PIM.Intranet.Services.CategoryRow> Rows = [];
-  IReadOnlyList<PIM.Intranet.Services.PimOption> Trees = [];
-  IReadOnlyList<PIM.Intranet.Services.WebSiteRow> Sites = [];
-  int? OrganizationId;
-  string TreeCode = "";
-  string SiteCode = "";
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.TreeRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.TreeRow> Roots = [];
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.TranslationGap> Gaps = [];
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.LanguageOptionRow> Languages = [];
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
+  IReadOnlyList<string> Trees = [];
+
   bool Loading = true;
+  bool Busy;
   string? Error;
+  string? Message;
+  string TreeCode = "";
+  string Language = "en";
+  string OrganizationFilter = "";
+  string Branch = "";
+  string Level = "";
+  string Search = "";
+  bool OnlyMissing;
+  bool OnlyWithProducts;
+  string? Editing;
+  string Draft = "";
+
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Kategorije")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Drevo"), new("Kategorija"), new("Nivo", Numeric: true), new("Neposredno", Numeric: true), new("S podkategorijami", Numeric: true), new("Prevod"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Kategorija"), new("Prevod"), new("Jeziki"),
+    new("Neposredno", Numeric: true), new("S podkategorijami", Numeric: true), new("Stanje")
+  ];
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Rows.Count(row => row.IsMatch):N0} zadetkov od {Rows.Count:N0} prikazanih vrstic";
+
+  // Zamik je vizualni nosilec hierarhije; brez njega je drevo samo tabela.
+  static string Indent(int level) => $"padding-left:{(level - 1) * 20}px;display:inline-block";
 
   protected override async Task OnInitializedAsync()
   {
-    var organization = await Data.GetCurrentOrganizationAsync();
-    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
-    OrganizationId = organization.OrganizationId;
-    try { Trees = await Catalog.GetCategoryTreesAsync(); Sites = await Catalog.GetWebSitesAsync(); } catch { Trees = []; Sites = []; }
+    try
+    {
+      Languages = await Tree.GetLanguagesAsync();
+      Trees = await Tree.GetTreeCodesAsync();
+      Organizations = await Data.GetOrganizationsAsync();
+      // Privzeti jezik je prvi, ki ni slovenščina: slovenska imena so že v stolpcu kategorije,
+      // zato bi privzeti sl pomenil dva enaka stolpca.
+      Language = Languages.FirstOrDefault(language => language.LanguageCode != "sl")?.LanguageCode
+        ?? Languages.FirstOrDefault()?.LanguageCode ?? "en";
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    await LoadGapsAsync();
     await LoadAsync();
+  }
+
+  async Task OnTreeChangedAsync()
+  {
+    Branch = "";
+    await LoadGapsAsync();
+    await LoadAsync();
+  }
+
+  async Task LoadGapsAsync()
+  {
+    try { Gaps = await Tree.GetTranslationGapsAsync(null); }
+    catch (Exception exception) { Error = exception.Message; Gaps = []; }
   }
 
   async Task LoadAsync()
   {
-    if (OrganizationId is null) return;
     Loading = true;
     Error = null;
-    try { Rows = await Catalog.GetCategoriesAsync(OrganizationId.Value, TreeCode); }
-    catch { Error = "Kategorij trenutno ni mogoče naložiti."; }
+    try
+    {
+      int? organizationId = int.TryParse(OrganizationFilter, out var parsedOrganization) ? parsedOrganization : null;
+      int? level = int.TryParse(Level, out var parsedLevel) ? parsedLevel : null;
+      Rows = await Tree.GetTreeAsync(TreeCode, organizationId, Language, Search, Branch, OnlyMissing, OnlyWithProducts, level);
+      // Seznam vej pride iz nefiltriranega drevesa, sicer bi filter po veji izginil takoj,
+      // ko bi ga uporabil.
+      if (Roots.Count == 0 || Branch == "")
+      {
+        var all = await Tree.GetTreeAsync(TreeCode, organizationId, Language, null, null, false, false, 1);
+        Roots = all;
+      }
+    }
+    catch (Exception exception) { Error = exception.Message; Rows = []; }
     finally { Loading = false; }
   }
 
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} kategorij";
-
-  async Task SiteChangedAsync(ChangeEventArgs args)
+  void BeginEdit(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
   {
-    SiteCode = args.Value?.ToString() ?? "";
-    if (!string.IsNullOrWhiteSpace(SiteCode)) TreeCode = Sites.First(site => site.WebSiteCode == SiteCode).CategoryTreeCode;
-    await LoadAsync();
+    Message = null;
+    Error = null;
+    Editing = row.CategoryCode;
+    // Predlagamo slovensko ime kot izhodišče: prazno polje je slabše izhodišče od imena,
+    // ki ga je treba samo prevesti.
+    Draft = row.TranslatedName ?? row.CategoryName;
   }
 
+  void CancelEdit()
+  {
+    Editing = null;
+    Draft = "";
+  }
+
+  async Task SaveAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    if (string.IsNullOrWhiteSpace(Draft)) { Error = "Prevod ne sme biti prazen."; return; }
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Tree.SaveTranslationAsync(
+        row.CategoryTreeCode, row.CategoryCode, Language, Draft, await ActorAsync());
+      Message = outcome == "Unchanged"
+        ? "Prevod je bil že takšen; nič se ni spremenilo."
+        : $"Prevod je shranjen. Poti, ki gredo skozi to kategorijo, so odslej prevedene v jezik {Language}.";
+      CancelEdit();
+      await LoadGapsAsync();
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
 }
-  <label class="visually-hidden" for="category-site">Spletno mesto</label>
-  <select id="category-site" class="filter-select" value="@SiteCode" @onchange="SiteChangedAsync">
-    <option value="">Vsa spletna mesta</option>
-    @foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }
-  </select>

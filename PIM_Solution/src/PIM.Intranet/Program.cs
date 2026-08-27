@@ -41,6 +41,7 @@ builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
 builder.Services.AddScoped<SaopWriteService>();
 builder.Services.AddScoped<CategoryMappingService>();
+builder.Services.AddScoped<CategoryTreeService>();
 
 var app = builder.Build();
 

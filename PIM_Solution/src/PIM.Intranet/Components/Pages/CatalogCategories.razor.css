@@ -1,0 +1,28 @@
+/* Zamik in kontekstne vrstice sta lastna temu drevesu; v skupni slog ne sodita, ker ju
+   ne uporablja nobena druga stran. */
+
+.tree-branch {
+  color: var(--pim-text-muted);
+  margin-right: .35rem;
+  font-size: .8rem;
+}
+
+/* Prednik zadetka ni zadetek. Je pa nujen, da se vidi, kje zadetek stoji, zato je tiho
+   prisoten in ne enakovreden. */
+.row-context > td {
+  color: var(--pim-text-muted);
+  background: var(--pim-surface-subtle);
+}
+
+.filter-check {
+  align-items: center;
+  color: var(--pim-text-soft);
+  display: inline-flex;
+  font-size: .82rem;
+  gap: .4rem;
+  white-space: nowrap;
+}
+
+.filter-check input {
+  accent-color: var(--pim-primary);
+}

@@ -176,6 +176,49 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA + INTRANET] Drevo kategorij z zamikom, prevodi v vseh jezikih in uporabni filtri — migracija 110** —
+  kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-27.
+
+  Stran `/nastavitve/kategorije` ni znala treh stvari, in dve od njiju sta bili napaki, ne vrzeli:
+
+  1. **Ni bila drevo.** Vozlišča so bila ravna tabela z nivojem kot številko; kam kaj sodi, se
+     je dalo razbrati samo iz polne poti v drobnem tisku.
+  2. **Stolpec »Prevod« je izpisoval pomišljaj za vsako vrstico** — v kodi je bil dobesedno
+     zapisan pomišljaj. Prevodi so v bazi obstajali ves čas.
+  3. **Stolpec »S podkategorijami« je bil napačen.** Formula je iskala potomce z
+     `LIKE pot + '/%'`, ločilo poti pa je `' > '`. Za »Notranja svetila« je zato pokazala
+     **1 izdelek namesto 1.579** — in to ne kot prazno polje, ampak kot prepričljivo napačno
+     številko.
+
+  **Prevodi.** Jeziki v šifrantu so `sl, en, de, hr, it`, kategorij je 209. Popolno bi bilo
+  1.045 prevodov, zapisanih je **391**, torej **manjka 654**:
+
+  | Drevo | de | en | hr | it | sl |
+  |---|---|---|---|---|---|
+  | `svetila_si` (132) | 121 | 49 | 121 | 132 | 0 |
+  | `videlektro` (77) | 77 | 0 | 77 | 77 | 0 |
+
+  Manjkajoč prevod se nikjer ni pokazal kot napaka: `canon.CategoryPathTranslated` namreč vzame
+  slovensko ime, kadar prevoda ni — kar je za splet prava odločitev, pomeni pa slovensko besedo
+  sredi tuje poti, ki je nihče ne prešteje. Zdaj `intranet.GetCategoryTree` pri vsaki kategoriji
+  pove, v katerih jezikih prevoda ni, `canon.SaveCategoryTranslation` pa ga zapiše z akterjem in
+  zgodovino v `canon.CategoryTranslationHistory`.
+
+  **Filtri:** drevo, jezik, podjetje (tudi »vsa podjetja«), veja, nivo, iskanje po imenu ali
+  poti, samo brez prevoda, samo z izdelki. Ob vsakem filtru se dodajo **predniki zadetkov**,
+  označeni kot kontekst — zadetek brez prednikov je iztrgan iz drevesa in bralec ne vidi, kje
+  stoji.
+
+  **Zavrne:** `110001` brez akterja, `110002` prazen prevod, `110003` neznana kategorija,
+  `110004` neznan jezik. Vse štiri preizkušene.
+
+  **Dokaz:** `PIM.Migrator` prvi in drugi zagon ter `--verify` → izhod 0.
+  `dotnet build PIM.Intranet` → **0 opozoril, 0 napak**.
+  `scripts\run_tests.ps1 -Filter F10` → **12 uspelih / 0 preskočenih / 0 padlih**.
+  Živ preizkus prevoda: `notranja_svetila` `en` spremenjen v »PREIZKUS« in nazaj v
+  »Interior lighting«, obe spremembi v zgodovini, končno stanje 391 prevodov — enako kot prej.
+  Popravljena formula potomcev preverjena: »Notranja svetila« org 2 → **1.579** namesto 1.
+
 - **[INTRANET] Preslikave kategorij in uvrstitev izdelka sta urejivi v vmesniku** —
   kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
 

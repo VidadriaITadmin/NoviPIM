@@ -50,7 +50,7 @@
             <td>
               @if (string.IsNullOrWhiteSpace(site.CategoryPaths))
               {
-                <span class="status-pill status-bad">brez uvrstitve</span>
+                <PimChip Text="brez uvrstitve" Tone="bad" />
               }
               else
               {
@@ -63,12 +63,12 @@
             <td>
               @if (site.IsManual)
               {
-                <span class="status-pill status-warn">ročno</span>
+                <PimChip Text="ročno" Tone="warn" />
                 <div class="row-note">@site.SetBy · @(site.SetUtc?.ToLocalTime().ToString("g"))</div>
               }
               else
               {
-                <span class="status-pill">iz vira</span>
+                <PimChip Text="iz vira" Tone="neutral" />
               }
             </td>
             <td>

@@ -62,7 +62,7 @@
             </td>
             <td class="numeric">@row.ProductCount.ToString("N0")</td>
             <td>
-              <span class="status-pill @StateClass(row.State)">@row.State</span>
+              <PimChip Text="@row.State" Tone="@StateTone(row.State)" />
               @if (row.UpdatedBy is not null)
               {
                 <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToLocalTime().ToString("g"))</div>
@@ -148,11 +148,11 @@
   static string RowKey(PIM.Intranet.Services.CategoryMappingService.MappingRow row) =>
     $"{row.SourceCode}|{row.CategoryTreeCode}|{row.SourcePathKey}";
 
-  static string StateClass(string state) => state switch
+  static string StateTone(string state) => state switch
   {
-    "Preslikano" => "status-ok",
-    "Ugasnjeno" => "status-warn",
-    _ => "status-bad"
+    "Preslikano" => "good",
+    "Ugasnjeno" => "warn",
+    _ => "bad"
   };
 
   // Ravni vira so berljive same po sebi; ključ poti je pod njimi, ker ga potrebuje samo tisti,

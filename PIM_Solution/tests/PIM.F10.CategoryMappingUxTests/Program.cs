@@ -69,6 +69,56 @@ Assert(productPage.Contains("ponovna preslikava", StringComparison.OrdinalIgnore
 Assert(productPage.Contains("ClearProductCategoryOverrideAsync", StringComparison.Ordinal),
   "Vrnitev pod vir mora biti mozna, sicer je rocna uvrstitev enosmerna.");
 
+
+// --- Drevo kategorij in prevodi (110) ------------------------------------------------------
+var treePage = Read(Path.Combine(pages, "CatalogCategories.razor"));
+var treeService = Read(Path.Combine(services, "CategoryTreeService.cs"));
+
+Assert(program.Contains("AddScoped<CategoryTreeService>", StringComparison.Ordinal),
+  "CategoryTreeService mora biti registriran.");
+Assert(treePage.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal),
+  "Urejanje prevodov spreminja katalog, zato ni dovolj samo prijava.");
+Assert(treePage.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
+  "Brez interaktivnega nacina urejanje prevoda ne dela.");
+Assert(treePage.Contains("ActorAsync", StringComparison.Ordinal),
+  "Prevod mora imeti akterja iz prijave.");
+Assert(treePage.Contains("catch (Exception exception) { Error = exception.Message; }", StringComparison.Ordinal),
+  "Napaka iz baze mora priti do uporabnika.");
+
+foreach (var procedure in new[]
+  { "intranet.GetCategoryTree", "intranet.GetCategoryTranslationGaps", "canon.SaveCategoryTranslation" })
+  Assert(treeService.Contains(procedure, StringComparison.Ordinal),
+    "Servis mora klicati postopek " + procedure + " iz migracije 110.");
+
+// Drevo brez zamika je tabela. Zamik mora izhajati iz nivoja, ne iz rocno vpisanih presledkov.
+Assert(treePage.Contains("Indent(row.LevelNo)", StringComparison.Ordinal)
+  && treePage.Contains("(level - 1) * 20", StringComparison.Ordinal),
+  "Zamik mora izhajati iz LevelNo.");
+
+// Zadetek brez prednikov je iztrgan iz drevesa.
+Assert(treePage.Contains("row.IsMatch", StringComparison.Ordinal)
+  && treePage.Contains("row-context", StringComparison.Ordinal),
+  "Predniki zadetkov morajo biti prikazani in loceni od zadetkov.");
+
+// Filtri, ki jih je narocil uporabnik.
+foreach (var filter in new[]
+  { "tree-code", "tree-language", "tree-organization", "tree-branch", "tree-level", "tree-search" })
+  Assert(treePage.Contains("id=\"" + filter + "\"", StringComparison.Ordinal),
+    "Manjka filter " + filter + ".");
+Assert(treePage.Contains("@bind=\"OnlyMissing\"", StringComparison.Ordinal)
+  && treePage.Contains("@bind=\"OnlyWithProducts\"", StringComparison.Ordinal),
+  "Manjkata stikali za brez prevoda in za kategorije z izdelki.");
+
+// Prej je stolpec Prevod izpisoval pomisljaj za vsako vrstico.
+Assert(!treePage.Contains("<td>\u2014</td>", StringComparison.Ordinal),
+  "Stolpec ne sme izpisovati mrtvega pomisljaja namesto podatka.");
+Assert(treePage.Contains("MissingLanguageList", StringComparison.Ordinal),
+  "Stran mora povedati, v katerih jezikih prevoda ni.");
+
+// Locilo poti je " > ". Stara formula je iskala potomce z "/%" in zato ni nasla nobenega.
+Assert(!treeService.Contains("+ N'/%'", StringComparison.Ordinal),
+  "Potomci se ne smejo iskati po locilu poševnica.");
+
 Console.WriteLine("PIM.F10.CategoryMappingUxTests: vse pogodbe drzijo.");
 return 0;
 
