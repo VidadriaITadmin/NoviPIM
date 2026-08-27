@@ -1,0 +1,270 @@
+@page "/izdelki/kategorije"
+@page "/izdelki/{ItemId}/kategorije"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CategoryMappingService Mapping
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+@* Ročna uvrstitev enega izdelka. Ločena stran in ne zavihek kartice, ker je to edino mesto v
+   intranetu, kjer se kategorija zapiše — pot naj bo vidna, ne skrita med enajstimi zavihki. *@
+
+<PageTitle>Uvrstitev izdelka</PageTitle>
+<PimPage Title="Uvrstitev izdelka"
+         Subtitle="Ročna uvrstitev je močnejša od vira: ponovna preslikava dobaviteljevega XML je ne povozi. Stara vrednost ostane v zgodovini sprememb."
+         Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card panel" aria-label="Izbira izdelka">
+  <h2>1. Kateri izdelek</h2>
+  <div class="form-grid">
+    <label class="form-field" for="product-item">
+      Šifra artikla
+      <input id="product-item" class="form-input" @bind="ItemIdInput" placeholder="BA.BC15.00300" />
+    </label>
+  </div>
+  <div class="page-actions">
+    <button type="button" class="button-primary" disabled="@Busy" @onclick="LoadProductAsync">Poišči</button>
+  </div>
+  @if (OrganizationName is not null)
+  {
+    <p class="row-note">Podjetje: @OrganizationName. Uvrstitev velja samo zanj.</p>
+  }
+</section>
+
+@if (Sites.Count > 0)
+{
+  <section class="ui-card data-card section-gap" aria-label="Uvrstitev po spletnih straneh">
+    <h2>2. Kje je izdelek zdaj</h2>
+    <PimTable Caption="Ena vrstica na aktivno spletno stran; prazna vrstica pomeni, da izdelek tam nima uvrstitve" Columns="Columns">
+      <Rows>
+        @foreach (var site in Sites)
+        {
+          <tr>
+            <td>
+              @site.WebSiteName
+              <div class="row-note code-value">@site.WebSiteCode</div>
+            </td>
+            <td>
+              @if (string.IsNullOrWhiteSpace(site.CategoryPaths))
+              {
+                <span class="status-pill status-bad">brez uvrstitve</span>
+              }
+              else
+              {
+                @foreach (var path in site.CategoryPaths.Split(" | ", StringSplitOptions.RemoveEmptyEntries))
+                {
+                  <div class="tree-path">@path</div>
+                }
+              }
+            </td>
+            <td>
+              @if (site.IsManual)
+              {
+                <span class="status-pill status-warn">ročno</span>
+                <div class="row-note">@site.SetBy · @(site.SetUtc?.ToLocalTime().ToString("g"))</div>
+              }
+              else
+              {
+                <span class="status-pill">iz vira</span>
+              }
+            </td>
+            <td>
+              @if (Editing == site.WebSiteCode)
+              {
+                <div class="form-grid">
+                  <label class="form-field" for="@($"pick-{site.WebSiteCode}")">
+                    Dodaj kategorijo
+                    <select id="@($"pick-{site.WebSiteCode}")" class="filter-select" @bind="PickedPath">
+                      <option value="">— izberi kategorijo —</option>
+                      @foreach (var node in NodesFor(site.CategoryTreeCode).Where(node => node.CategoryPath is not null))
+                      {
+                        <option value="@node.CategoryPath">@node.CategoryPath</option>
+                      }
+                    </select>
+                  </label>
+                </div>
+                <div class="page-actions">
+                  <button type="button" disabled="@Busy" @onclick="AddPicked">Dodaj na seznam</button>
+                </div>
+
+                @if (Chosen.Count == 0)
+                {
+                  <p class="row-note">Seznam je prazen. Shranjen prazen seznam pomeni <b>namenoma brez kategorije</b> — to ni isto kot »še ni preslikano«.</p>
+                }
+                else
+                {
+                  <ul class="plain-list">
+                    @foreach (var path in Chosen)
+                    {
+                      <li>
+                        <span class="tree-path">@path</span>
+                        <button type="button" disabled="@Busy" @onclick="() => Chosen.Remove(path)">odstrani</button>
+                      </li>
+                    }
+                  </ul>
+                }
+
+                <label class="form-field" for="@($"note-{site.WebSiteCode}")">
+                  Opomba (neobvezno)
+                  <input id="@($"note-{site.WebSiteCode}")" class="form-input" @bind="Note" />
+                </label>
+
+                <div class="page-actions">
+                  <button type="button" class="button-primary" disabled="@Busy" @onclick="() => SaveAsync(site)">Shrani uvrstitev</button>
+                  <button type="button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                  @if (site.IsManual)
+                  {
+                    <button type="button" disabled="@Busy" @onclick="() => ClearAsync(site)">Vrni pod vir</button>
+                  }
+                </div>
+              }
+              else
+              {
+                <button type="button" @onclick="() => BeginEditAsync(site)">Uredi</button>
+              }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+}
+
+@code {
+  [Parameter] public string? ItemId { get; set; }
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow> Sites = [];
+  readonly Dictionary<string, IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode>> NodeCache = [];
+  readonly List<string> Chosen = [];
+
+  int? OrganizationId;
+  string? OrganizationName;
+  string ItemIdInput = "";
+  string? Editing;
+  string PickedPath = "";
+  string Note = "";
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izdelki", "izdelki"), new("Uvrstitev")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Spletna stran"), new("Kategorije"), new("Izvor"), new("Urejanje")
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+    OrganizationId = organization.OrganizationId;
+    OrganizationName = organization.Name;
+    if (!string.IsNullOrWhiteSpace(ItemId))
+    {
+      ItemIdInput = ItemId;
+      await LoadProductAsync();
+    }
+  }
+
+  async Task LoadProductAsync()
+  {
+    if (OrganizationId is null) return;
+    if (string.IsNullOrWhiteSpace(ItemIdInput)) { Error = "Vpiši šifro artikla."; return; }
+    Busy = true;
+    Error = null;
+    Message = null;
+    Editing = null;
+    try
+    {
+      Sites = await Mapping.GetProductCategoriesAsync(OrganizationId.Value, ItemIdInput.Trim());
+      if (Sites.Count == 0) Error = "Ni aktivnih spletnih strani.";
+    }
+    catch (Exception exception) { Error = exception.Message; Sites = []; }
+    finally { Busy = false; }
+  }
+
+  async Task BeginEditAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    Message = null;
+    Error = null;
+    Editing = site.WebSiteCode;
+    PickedPath = "";
+    Note = "";
+    Chosen.Clear();
+    if (!string.IsNullOrWhiteSpace(site.CategoryPaths))
+      Chosen.AddRange(site.CategoryPaths.Split(" | ", StringSplitOptions.RemoveEmptyEntries));
+    if (!NodeCache.ContainsKey(site.CategoryTreeCode))
+    {
+      try { NodeCache[site.CategoryTreeCode] = await Mapping.GetTreeNodesAsync(site.CategoryTreeCode, null); }
+      catch (Exception exception) { Error = exception.Message; NodeCache[site.CategoryTreeCode] = []; }
+    }
+  }
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode> NodesFor(string tree) =>
+    NodeCache.TryGetValue(tree, out var nodes) ? nodes : [];
+
+  void AddPicked()
+  {
+    if (string.IsNullOrWhiteSpace(PickedPath)) return;
+    if (!Chosen.Contains(PickedPath)) Chosen.Add(PickedPath);
+    PickedPath = "";
+  }
+
+  void CancelEdit()
+  {
+    Editing = null;
+    Chosen.Clear();
+    PickedPath = "";
+    Note = "";
+  }
+
+  async Task SaveAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    if (OrganizationId is null) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Mapping.SetProductCategoriesAsync(
+        OrganizationId.Value, ItemIdInput.Trim(), site.WebSiteCode, Chosen,
+        await ActorAsync(), string.IsNullOrWhiteSpace(Note) ? null : Note);
+      Message = outcome == "Unchanged"
+        ? "Uvrstitev je bila že takšna; nič se ni spremenilo."
+        : "Uvrstitev je shranjena. Stara vrednost je v zgodovini sprememb, ponovna preslikava je ne bo povozila.";
+      CancelEdit();
+      await LoadProductAsync();
+    }
+    // Baza zavrne pot, ki v drevesu te spletne strani ne obstaja (106007). Prosto besedilo bi
+    // pomenilo izdelek v kategoriji, ki je v trgovini ni.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task ClearAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    if (OrganizationId is null) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await Mapping.ClearProductCategoryOverrideAsync(
+        OrganizationId.Value, ItemIdInput.Trim(), site.WebSiteCode, await ActorAsync());
+      Message = "Ročna uvrstitev je odstranjena. Vrednost iz vira vrne naslednja preslikava — trenutne vrstice ne ugibamo.";
+      CancelEdit();
+      await LoadProductAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}

@@ -176,6 +176,37 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[INTRANET] Preslikave kategorij in uvrstitev izdelka sta urejivi v vmesniku** —
+  kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
+
+  Zapisovalna pot iz migracije 109 dobi svoja zaslona. `/kakovost/kategorije` ni več samo
+  seznam poti brez cilja — vsaka vrstica je urejiva na mestu, z izbirnikom kategorije,
+  opombo, ugasnitvijo preslikave in strežniško paginacijo (privzeti filter je
+  **Nepreslikano**, ker stran obstaja zaradi tega dela). Nova
+  `/izdelki/{ItemId}/kategorije` prestavlja posamezen izdelek po kategorijah, po spletnih
+  straneh posebej, in zna uvrstitev vrniti pod vir.
+
+  **Pravila ostajajo v bazi.** Servis `CategoryMappingService` ne presoja ničesar: postopek
+  zavrne neobstoječo kategorijo, kategorijo brez prevedene poti, neznano pot in spremembo brez
+  akterja, stran pa pokaže tisto sporočilo, ki ga je povedala baza. Test to drži: strani ne
+  smejo vsebovati `canon.Category`, `map.CategoryPathMap`, `INSERT` ali `UPDATE`.
+
+  Ročno uvrstitev smeta samo `ADMIN` in `CATALOG_EDITOR`; urejanje preslikav zahteva prijavo.
+  Prazen seznam kategorij je na strani izrecno razložen kot **namenoma brez kategorije** in ne
+  kot manjkajoč podatek.
+
+  **Dokaz:** `dotnet build PIM.Intranet` → **0 opozoril, 0 napak**.
+  `scripts\run_tests.ps1 -Filter F10` → **12 uspelih / 0 preskočenih / 0 padlih**, vključno z
+  novim `PIM.F10.CategoryMappingUxTests`. Test je preverjeno občutljiv: ob odstranitvi vloge
+  s strani pade z `Rocno uvrstitev izdelka smeta samo ADMIN in CATALOG_EDITOR` (RED), po
+  povrnitvi je spet zelen (GREEN). Lokalni zagon na `127.0.0.1:5199`: `/health` in `/prijava`
+  vrneta 200, obe novi poti se za neprijavljenega obnašata enako kot obstoječe zaščitene
+  strani — preusmeritev na `/prijava`. **Izris prijavljenih strani ni bil preverjen**, ker
+  poverilnic lokalnega uporabnika nimam.
+
+  Opomba k zgodovini: vrstico `AddScoped<CategoryMappingService>()` v `Program.cs` je pobral
+  vzporedni commit `4a47d22`, zato je v tem commitu ni.
+
 - **[BAZA] Seznam izdelkov bere vsa podjetja, ne samo prvega — migracija 108** —
   kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
 

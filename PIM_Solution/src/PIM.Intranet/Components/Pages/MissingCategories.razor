@@ -1,36 +1,110 @@
 @page "/kakovost/kategorije"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.CategoryMappingService Mapping
+@inject AuthenticationStateProvider Authentication
 
-<PageTitle>Nepreslikane kategorije</PageTitle>
-<PimPage Title="Nepreslikane kategorije" Subtitle="Poti iz dobaviteljevih virov, ki jim v kategorijskem drevesu ne ustreza nobena kategorija. Dokler ni preslikave, izdelek na spletu nima uvrstitve. Seznam je skupen vsem podjetjem, ker je drevo dobaviteljevo — preslikava, ki jo narediš tu, velja povsod."
+@* Delovni seznam in urejanje v enem. Do migracije 109 je bila ta stran samo seznam poti brez
+   cilja — pokazala je nalogo in je ni znala rešiti. Zdaj je vsaka vrstica urejiva na mestu,
+   ker je preslikava en sam podatek in ne zasluži svojega zaslona. *@
+
+<PageTitle>Preslikave kategorij</PageTitle>
+<PimPage Title="Preslikave kategorij"
+         Subtitle="Kaj je poslal dobavitelj in kam to gre v našem drevesu. Dokler pot nima cilja, izdelek na spletu nima uvrstitve. Seznam je skupen vsem podjetjem, ker je drevo dobaviteljevo — preslikava, ki jo narediš tu, velja povsod."
          Crumbs="Crumbs" />
 
-<section class="ui-card toolbar" role="search" aria-labelledby="category-filter-title">
-  <h2 id="category-filter-title" class="visually-hidden">Filtriranje nepreslikanih kategorij</h2>
-  <label class="visually-hidden" for="category-source">Vir</label>
-  <select id="category-source" class="filter-select" @bind="Source" @bind:after="LoadAsync">
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card toolbar" role="search" aria-labelledby="mapping-filter-title">
+  <h2 id="mapping-filter-title" class="visually-hidden">Filtriranje preslikav</h2>
+
+  <label class="visually-hidden" for="mapping-source">Vir</label>
+  <select id="mapping-source" class="filter-select" @bind="Source" @bind:after="ResetAndLoadAsync">
     <option value="">Vsi viri</option>
-    @foreach (var source in Sources)
-    {
-      <option value="@source">@source</option>
-    }
+    @foreach (var source in Sources) { <option value="@source">@source</option> }
   </select>
+
+  <label class="visually-hidden" for="mapping-tree">Drevo</label>
+  <select id="mapping-tree" class="filter-select" @bind="Tree" @bind:after="ResetAndLoadAsync">
+    <option value="">Vsa drevesa</option>
+    @foreach (var tree in Trees) { <option value="@tree">@tree</option> }
+  </select>
+
+  <label class="visually-hidden" for="mapping-state">Stanje</label>
+  <select id="mapping-state" class="filter-select" @bind="State" @bind:after="ResetAndLoadAsync">
+    <option value="">Vsa stanja</option>
+    <option value="Nepreslikano">Nepreslikano</option>
+    <option value="Preslikano">Preslikano</option>
+    <option value="Ugasnjeno">Ugasnjeno</option>
+  </select>
+
+  <label class="visually-hidden" for="mapping-search">Iskanje</label>
+  <input id="mapping-search" class="form-input" type="search" placeholder="Išči po poti ali kategoriji"
+         @bind="Search" @bind:after="ResetAndLoadAsync" />
+
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
-<section class="ui-card data-card section-gap" aria-label="Seznam nepreslikanih kategorij">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni nepreslikanih kategorij." LoadingText="Nalaganje kategorij …">
-    <PimTable Caption="Poti iz virov brez ustrezne kategorije, razvrščene po pogostosti" Columns="Columns">
+<section class="ui-card data-card section-gap" aria-label="Preslikave kategorij">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="Za te filtre ni nobene poti." LoadingText="Nalaganje preslikav …">
+    <PimTable Caption="Poti iz virov, razvrščene po številu izdelkov za njimi" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
+          var key = RowKey(row);
           <tr>
             <td><span class="code-value">@row.SourceCode</span></td>
-            <td class="tree-path">@row.SourcePathKey</td>
-            <td class="numeric">@row.SeenCount.ToString("N0")</td>
-            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+            <td class="tree-path">
+              @Describe(row)
+              <div class="row-note code-value">@row.SourcePathKey</div>
+            </td>
+            <td class="numeric">@row.ProductCount.ToString("N0")</td>
+            <td>
+              <span class="status-pill @StateClass(row.State)">@row.State</span>
+              @if (row.UpdatedBy is not null)
+              {
+                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToLocalTime().ToString("g"))</div>
+              }
+            </td>
+            <td>
+              @if (Editing == key)
+              {
+                <div class="form-grid">
+                  <label class="form-field" for="@($"cat-{key}")">
+                    Ciljna kategorija
+                    <select id="@($"cat-{key}")" class="filter-select" @bind="ChosenCategory">
+                      <option value="">— izberi kategorijo —</option>
+                      @foreach (var node in NodesFor(row.CategoryTreeCode))
+                      {
+                        <option value="@node.CategoryCode">@(node.CategoryPath ?? node.CategoryName)</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="form-field" for="@($"note-{key}")">
+                    Opomba (neobvezno)
+                    <input id="@($"note-{key}")" class="form-input" @bind="Note" />
+                  </label>
+                </div>
+                <div class="page-actions">
+                  <button type="button" class="button-primary" disabled="@Busy"
+                          @onclick="() => SaveAsync(row)">Shrani</button>
+                  <button type="button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                  @if (row.State == "Preslikano")
+                  {
+                    <button type="button" disabled="@Busy" @onclick="() => DeactivateAsync(row)">Ugasni preslikavo</button>
+                  }
+                </div>
+              }
+              else
+              {
+                <div>@(row.CategoryPath ?? "—")</div>
+                <button type="button" @onclick="() => BeginEditAsync(row)">
+                  @(row.State == "Nepreslikano" ? "Preslikaj" : "Uredi")
+                </button>
+              }
+            </td>
           </tr>
         }
       </Rows>
@@ -38,29 +112,63 @@
   </PimState>
 </section>
 
-@code {
-  IReadOnlyList<PIM.Intranet.Services.MissingCategoryRow> Rows = [];
-  IReadOnlyList<string> Sources = [];
-  bool Loading = true;
-  string? Error;
-  string Source = "";
-  const int Take = 300;
+<PimPager Skip="Skip" Take="PageSize" Total="Total" SkipChanged="OnSkipAsync" />
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Nepreslikane kategorije")];
+@code {
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.MappingRow> Rows = [];
+  IReadOnlyList<string> Sources = [];
+  IReadOnlyList<string> Trees = [];
+  readonly Dictionary<string, IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode>> NodeCache = [];
+
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+  string Source = "";
+  string Tree = "";
+  string State = "Nepreslikano";
+  string Search = "";
+  string? Editing;
+  string ChosenCategory = "";
+  string Note = "";
+  int Skip;
+  long Total;
+  const int PageSize = 50;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Preslikave kategorij")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Vir"), new("Pot iz vira"), new("Izdelkov", Numeric: true), new("Nazadnje")
+    new("Vir"), new("Pot iz vira"), new("Izdelkov", Numeric: true), new("Stanje"), new("Naša kategorija")
   ];
 
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} poti";
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Total:N0} poti";
+
+  static string RowKey(PIM.Intranet.Services.CategoryMappingService.MappingRow row) =>
+    $"{row.SourceCode}|{row.CategoryTreeCode}|{row.SourcePathKey}";
+
+  static string StateClass(string state) => state switch
+  {
+    "Preslikano" => "status-ok",
+    "Ugasnjeno" => "status-warn",
+    _ => "status-bad"
+  };
+
+  // Ravni vira so berljive same po sebi; ključ poti je pod njimi, ker ga potrebuje samo tisti,
+  // ki gleda v bazo.
+  static string Describe(PIM.Intranet.Services.CategoryMappingService.MappingRow row) =>
+    string.Join(" › ", new[] { row.SourceLevel1, row.SourceLevel2, row.SourceLevel3 }
+      .Where(part => !string.IsNullOrWhiteSpace(part)));
 
   protected override async Task OnInitializedAsync()
   {
-    // Vir je edina resnicna razseznost tega seznama; organizacije tu ni, ker je nima niti
-    // map.SourceCategory. Seznam virov beremo cez vsa podjetja iz istega razloga.
-    try { Sources = (await Pipeline.GetInboundFilterOptionsAsync(null)).Sources; }
-    catch { Sources = []; }
-
+    try
+    {
+      Sources = await Mapping.GetSourceCodesAsync();
+      Trees = await Mapping.GetTreeCodesAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
     await LoadAsync();
   }
 
@@ -68,8 +176,110 @@
   {
     Loading = true;
     Error = null;
-    try { Rows = await Pipeline.GetMissingCategoriesAsync(Source == "" ? null : Source, Take); }
-    catch { Error = "Nepreslikanih kategorij trenutno ni mogoče naložiti."; }
+    try
+    {
+      var page = Skip / PageSize + 1;
+      var result = await Mapping.GetMappingsAsync(Source, Tree, State, Search, page, PageSize);
+      Rows = result.Rows;
+      Total = result.Total;
+    }
+    catch (Exception exception) { Error = exception.Message; Rows = []; Total = 0; }
     finally { Loading = false; }
+  }
+
+  Task ResetAndLoadAsync()
+  {
+    Skip = 0;
+    Editing = null;
+    return LoadAsync();
+  }
+
+  Task OnSkipAsync(int skip)
+  {
+    Skip = skip;
+    Editing = null;
+    return LoadAsync();
+  }
+
+  async Task BeginEditAsync(PIM.Intranet.Services.CategoryMappingService.MappingRow row)
+  {
+    Message = null;
+    Error = null;
+    Editing = RowKey(row);
+    ChosenCategory = row.CategoryCode ?? "";
+    Note = "";
+    // Drevo naložimo enkrat na sejo: izbirnik ima do nekaj sto vozlišč in vsak klik nanj bi
+    // sicer pomenil svoj obisk baze.
+    if (!NodeCache.ContainsKey(row.CategoryTreeCode))
+    {
+      try { NodeCache[row.CategoryTreeCode] = await Mapping.GetTreeNodesAsync(row.CategoryTreeCode, null); }
+      catch (Exception exception) { Error = exception.Message; NodeCache[row.CategoryTreeCode] = []; }
+    }
+  }
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode> NodesFor(string tree) =>
+    NodeCache.TryGetValue(tree, out var nodes) ? nodes : [];
+
+  void CancelEdit()
+  {
+    Editing = null;
+    ChosenCategory = "";
+    Note = "";
+  }
+
+  async Task SaveAsync(PIM.Intranet.Services.CategoryMappingService.MappingRow row)
+  {
+    if (string.IsNullOrWhiteSpace(ChosenCategory))
+    {
+      Error = "Izberi ciljno kategorijo.";
+      return;
+    }
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Mapping.SaveMappingAsync(
+        row.SourceCode, row.CategoryTreeCode, row.SourcePathKey, ChosenCategory, await ActorAsync(), NoteOrNull());
+      Message = outcome switch
+      {
+        "Created" => $"Preslikava je zapisana. Velja za {row.ProductCount:N0} izdelkov ob naslednji preslikavi vira.",
+        "Updated" => $"Preslikava je spremenjena. Velja za {row.ProductCount:N0} izdelkov ob naslednji preslikavi vira.",
+        _ => "Preslikava je bila že takšna; nič se ni spremenilo."
+      };
+      CancelEdit();
+      await LoadAsync();
+    }
+    // Postopek v bazi zavrne neobstoječo kategorijo (106003) in kategorijo brez prevedene poti
+    // (106004). Sporočilo pokažemo takšno, kot ga je povedala baza — tam je pravilo, ne tukaj.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task DeactivateAsync(PIM.Intranet.Services.CategoryMappingService.MappingRow row)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Mapping.DeactivateMappingAsync(
+        row.SourceCode, row.CategoryTreeCode, row.SourcePathKey, await ActorAsync(), NoteOrNull());
+      Message = outcome == "Deactivated"
+        ? "Preslikava je ugasnjena. Vrstica ostane, da se vidi, da je bila odločitev sprejeta in preklicana."
+        : "Preslikava je bila že ugasnjena.";
+      CancelEdit();
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  string? NoteOrNull() => string.IsNullOrWhiteSpace(Note) ? null : Note;
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
   }
 }
