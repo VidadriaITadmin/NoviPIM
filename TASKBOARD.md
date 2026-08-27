@@ -176,6 +176,52 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[INTRANET] Stran medijev: predogledi, vrste kot filtri, dokumenti in videi** — kdo: Claude Code
+  — ozemlje: INTRANET — končano 2026-08-27.
+
+  Uporabnik je poslal dve sliki: predogled slike je zrasel čez celo stran, štiri velike
+  števčne kartice nad seznamom so bile odveč, videov in dokumentov pa ni bilo nikjer.
+
+  1. **Zakaj je slika zrasla.** Predoglede je sestavljal `RenderTreeBuilder` v `@code`.
+     Taki elementi **ne dobijo oznake obsegnega CSS** (`b-…`), zato jih `Media.razor.css`
+     ni mogel omejiti in slika je prišla v naravni velikosti. Zdaj so predogledi
+     razčlenjevalni izpis; ploščica ima `aspect-ratio: 1` in `object-fit: contain`.
+  2. **Dokumentov ni bilo nikjer.** Stran je brala samo `canon.ProductMedia`. Dokumenti so
+     v `canon.ProductDocument` — **9.822 zapisov, ki jih uporabnik ni videl**. Oba vira sta
+     zdaj `UNION ALL` v enem predalu s stolpcem `Source`.
+  3. **Vrsta medija.** Baza je nima — izpelje jo `MediaKindPolicy` iz končnice, gostitelja
+     in vloge. SQL izraz nastane iz **istih seznamov** kot razvrstitev v C#, zato se ploščica
+     in filter ne moreta raziti.
+  4. **Števila niso več okras.** Štiri KPI kartice so odstranjene; vrste so klikljivi filtri
+     s svojimi števci, dva opozorilna števca pa sta drobni oznaki v glavi.
+  5. **Iskanje.** Vsaka beseda vnosa je svoja zahteva čez šifro, naslov, vlogo in naziv;
+     sproži se samo, z zamikom 350 ms. Vzorec `LIKE` nastane v kodi, zato so nadomestni
+     znaki iz vnosa ubežani.
+
+  **Dokaz — merjeno nad razvojno bazo `PIM`:**
+
+  ```
+  števci po vrsti (isti izraz, kot ga uporabijo čipi):
+    org 1: SLIKA=1153  DOKUMENT=1117
+    org 2: DOKUMENT=3309  SLIKA=2838  VIDEO=8
+    org 3: DOKUMENT=5396  SLIKA=3657  VIDEO=123
+    org 4: brez medijev
+  razvrstitev C# proti SQL čez vse zapise: 17.601 enakih, 0 različnih, 0 v DRUGO
+  video dobi predogled: https://i.ytimg.com/vi/NTXggzRrAWs/hqdefault.jpg
+  iskanje »BH85 3D« → BA.BH85.00040 · 3D datoteka · DOKUMENT · …/3dfiles/BH85-XXXX1.rar
+  ```
+
+  ```
+  dotnet run (tests\PIM.F10.MediaUxTests)  → PIM.F10.MediaUxTests: vse trditve drzijo.
+  dotnet build src\PIM.Intranet -warnaserror → Build succeeded. 0 opozoril
+  ```
+
+  **Česa nisem preveril:** strani nisem videl v brskalniku. Ob mojem delu je drug agent
+  urejal `ProductCard.razor` in `Products.razor` v istem delovnem drevesu in njegove
+  necommitane spremembe takrat niso prevajale, zato sem build svojih datotek pognal v
+  ločenem `git worktree` na `HEAD`. Celotnega `scripts\run_tests.ps1` iz istega razloga
+  nisem pognal.
+
 - **[BAZA] Kartica izdelka postane urejiva — migracija 111** — kdo: Claude Code — ozemlje: BAZA
   — končano 2026-08-27.
 

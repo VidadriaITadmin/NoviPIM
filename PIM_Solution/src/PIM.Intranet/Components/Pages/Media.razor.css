@@ -1,18 +1,136 @@
-.toolbar { flex-wrap: wrap; }
-.search-input { flex: 1 1 16rem; }
-.result-count { color: var(--pim-text-muted); margin-left: auto; }
+/* Stran medijev. Ključna odločitev: predogled ima vedno svoje razmerje in omejeno sliko —
+   prej je slika prišla v tabelo v naravni velikosti in razbila postavitev strani. */
+
+/* ─── Glava: števci so drobna opomba, ne štiri velike kartice ─────────────── */
+.media-meta { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; }
+.media-meta-item {
+  align-items: baseline; background: var(--pim-surface); border: 1px solid var(--pim-border);
+  border-radius: 999px; color: var(--pim-text-muted); display: inline-flex; font-size: .75rem;
+  gap: .3rem; padding: .3rem .7rem; text-decoration: none;
+}
+.media-meta-item strong { color: var(--pim-text-strong); font-size: .875rem; }
+.media-meta-item.warn { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
+.media-meta-item.warn strong { color: var(--pim-warn-text); }
+a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: var(--pim-shadow); }
+
+/* ─── Orodna vrstica ──────────────────────────────────────────────────────── */
+.media-toolbar { flex-wrap: wrap; margin-bottom: .75rem; }
+.media-search { flex: 1 1 22rem; min-width: 14rem; position: relative; }
+.media-search .search-input { min-width: 0; padding-left: 2.1rem; width: 100%; }
+.media-search-icon {
+  fill: none; height: 1rem; left: .7rem; pointer-events: none; position: absolute;
+  stroke: var(--pim-text-muted); stroke-linecap: round; stroke-width: 1.7; top: 50%;
+  transform: translateY(-50%); width: 1rem;
+}
+.media-view { display: inline-flex; }
+.view-button {
+  background: var(--pim-surface); border: 1px solid var(--pim-border-strong); color: var(--pim-text-soft);
+  cursor: pointer; font: inherit; font-size: .8125rem; min-height: var(--pim-control-height); padding: .35rem .8rem;
+}
+.view-button:first-child { border-radius: var(--pim-radius-sm) 0 0 var(--pim-radius-sm); }
+.view-button:last-child { border-left: 0; border-radius: 0 var(--pim-radius-sm) var(--pim-radius-sm) 0; }
+.view-button.active { background: var(--pim-accent-ring); border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 600; }
+.ghost-button {
+  background: transparent; border: 1px solid var(--pim-border-strong); border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-soft); cursor: pointer; font: inherit; font-size: .8125rem;
+  min-height: var(--pim-control-height); padding: .35rem .8rem;
+}
+.ghost-button:hover { border-color: var(--pim-border-strong); color: var(--pim-text-strong); }
+
+/* ─── Vrste medijev kot filtri s števci ───────────────────────────────────── */
+.media-kinds { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1rem; }
+.kind-chip {
+  align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border);
+  border-radius: 999px; color: var(--pim-text-soft); cursor: pointer; display: inline-flex;
+  font: inherit; font-size: .8125rem; gap: .4rem; padding: .35rem .8rem;
+}
+.kind-chip:hover { border-color: var(--pim-border-strong); color: var(--pim-text-strong); }
+.kind-chip.active { background: var(--pim-accent-ring); border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 600; }
+.kind-chip em { color: var(--pim-text-muted); font-size: .75rem; font-style: normal; font-variant-numeric: tabular-nums; }
+.kind-chip.active em { color: var(--pim-primary); }
+.kind-chip .kind-glyph { height: .95rem; width: .95rem; }
+.media-kinds .result-count { color: var(--pim-text-muted); font-size: .8125rem; margin-left: auto; }
+
+/* ─── Mreža ploščic ───────────────────────────────────────────────────────── */
 .data-card { padding: 0; }
-.media-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); padding: 1rem; }
-.media-grid-card { border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .65rem; }
-.media-grid-card img, .media-thumb img { background: var(--pim-surface-subtle); object-fit: contain; }
-.media-grid-card img { aspect-ratio: 1; width: 100%; }
-.media-thumb { height: 3rem; width: 3rem; }
-.media-thumb img { height: 3rem; width: 3rem; }
-.media-thumb > span { color: var(--pim-text-muted); font-size: .68rem; }
+.media-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); padding: 1.25rem; }
+.media-tile {
+  background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius);
+  display: flex; flex-direction: column; min-width: 0; overflow: hidden; transition: box-shadow .15s, transform .15s;
+}
+.media-tile:hover { box-shadow: var(--pim-shadow-hover); transform: translateY(-2px); }
+.media-preview {
+  background: var(--pim-surface-subtle); border: 0; border-bottom: 1px solid var(--pim-border-soft);
+  cursor: zoom-in; display: block; padding: 0; position: relative; width: 100%;
+}
+.media-tile-body { display: flex; flex-direction: column; gap: .2rem; min-width: 0; padding: .6rem .7rem .7rem; }
+.media-item { color: var(--pim-text-strong); font-weight: 600; font-size: .8125rem; text-decoration: none; }
+.media-item:hover { color: var(--pim-primary); }
+.media-title { color: var(--pim-text-soft); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-role { color: var(--pim-text-muted); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-file { color: var(--pim-text-muted); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-open { color: var(--pim-accent-link); font-size: .72rem; margin-top: .15rem; }
+.media-note { color: var(--pim-warn-text); font-size: .72rem; }
+
+/* Predogled: fiksno razmerje in omejena slika — brez tega slika zraste čez stran. */
+.preview-frame { align-items: center; aspect-ratio: 1; display: flex; justify-content: center; overflow: hidden; position: relative; width: 100%; }
+.preview-frame img { display: block; height: 100%; object-fit: contain; width: 100%; }
+.preview-fallback { align-items: center; color: var(--pim-text-muted); display: flex; flex-direction: column; gap: .35rem; }
+.preview-fallback .kind-glyph { height: 2.2rem; width: 2.2rem; }
+.preview-fallback.small .kind-glyph { height: 1.3rem; width: 1.3rem; }
+.preview-extension { font-size: .68rem; letter-spacing: .06em; }
+.play-mark {
+  background: rgba(17, 24, 39, .62); border-radius: 999px; height: 2.4rem; left: 50%; position: absolute;
+  top: 50%; transform: translate(-50%, -50%); width: 2.4rem;
+}
+.play-mark::after {
+  border-color: transparent transparent transparent #fff; border-style: solid; border-width: .45rem 0 .45rem .75rem;
+  content: ""; left: 54%; position: absolute; top: 50%; transform: translate(-50%, -50%);
+}
+
+.kind-glyph { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.6; }
+.kind-badge {
+  border-radius: 999px; font-size: .62rem; font-weight: 600; letter-spacing: .05em;
+  padding: .15rem .45rem; text-transform: uppercase; white-space: nowrap;
+}
+.media-preview .kind-badge { left: .45rem; position: absolute; top: .45rem; }
+.kind-image { background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); color: var(--pim-info-text); }
+.kind-video { background: #f5f3ff; border: 1px solid #ddd6fe; color: #6d28d9; }
+.kind-document { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); color: var(--pim-good-text); }
+.kind-other { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); color: var(--pim-neutral-text); }
+.note-badge {
+  align-items: center; background: var(--pim-warn-bar); border-radius: 999px; color: #fff; display: flex;
+  font-size: .7rem; font-weight: 700; height: 1.2rem; justify-content: center; position: absolute;
+  right: .45rem; top: .45rem; width: 1.2rem;
+}
+
+/* ─── Seznam ──────────────────────────────────────────────────────────────── */
+.media-thumb { width: 4rem; }
+.thumb-button { background: none; border: 0; cursor: zoom-in; display: block; padding: 0; width: 3.25rem; }
+.thumb-button .preview-frame { background: var(--pim-surface-subtle); border-radius: var(--pim-radius-xs); }
 .address-note { color: var(--pim-warn-text); display: block; }
 .muted { color: var(--pim-text-muted); overflow-wrap: anywhere; }
 
+/* ─── Povečan predogled ───────────────────────────────────────────────────── */
+.media-lightbox {
+  align-items: center; background: rgba(15, 23, 42, .62); display: flex; inset: 0; justify-content: center;
+  padding: 1.5rem; position: fixed; z-index: 60;
+}
+.media-lightbox-panel {
+  background: var(--pim-surface); border-radius: var(--pim-radius); box-shadow: var(--pim-shadow-hover);
+  display: flex; flex-direction: column; max-height: 90vh; max-width: 56rem; overflow: hidden; width: 100%;
+}
+.media-lightbox-panel header { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; gap: 1rem; justify-content: space-between; padding: .8rem 1rem; }
+.media-lightbox-panel header strong { display: block; color: var(--pim-text-strong); }
+.media-lightbox-panel header span { color: var(--pim-text-muted); font-size: .75rem; }
+.media-lightbox-body { align-items: center; background: var(--pim-surface-subtle); display: flex; justify-content: center; min-height: 12rem; overflow: auto; padding: 1rem; }
+.media-lightbox-body img { max-height: 62vh; max-width: 100%; object-fit: contain; }
+.media-lightbox-fallback { color: var(--pim-text-muted); font-size: .8125rem; margin: 0; text-align: center; }
+.media-lightbox-panel footer { align-items: center; border-top: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .75rem; padding: .8rem 1rem; }
+.media-lightbox-panel footer .media-address { color: var(--pim-text-muted); font-size: .72rem; overflow-wrap: anywhere; }
+
 @media (max-width: 900px) {
-  .toolbar { align-items: stretch; flex-direction: column; }
-  .result-count { margin-left: 0; }
+  .media-toolbar { align-items: stretch; flex-direction: column; }
+  .media-kinds .result-count { margin-left: 0; width: 100%; }
+  .media-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); padding: .85rem; }
 }

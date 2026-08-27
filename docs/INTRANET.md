@@ -54,7 +54,8 @@ Zahtevki (claims) po prijavi: `ClaimTypes.Name` (uporabniško ime),
 | `/napake-validacije` | `Pages/ValidationErrors.razor` | `[Authorize]` | `MainLayout` |
 | `/karantena` | `Pages/RawQuarantine.razor` | `[Authorize]` | `MainLayout` |
 | `/teki-obdelave` | `Pages/PipelineRuns.razor` | `[Authorize]` | `MainLayout` |
-| `/mediji`, `/partnerji`, `/cene` | istoimenske strani | `[Authorize]` | `MainLayout` |
+| `/mediji` | `Pages/Media.razor` (mreža predogledov, vrste kot filtri) | `[Authorize]` | `MainLayout` |
+| `/partnerji`, `/cene` | istoimenske strani | `[Authorize]` | `MainLayout` |
 | `/kakovost` | `Pages/Quality.razor` | `[Authorize]` | `MainLayout` |
 | `/kakovost/napake`, `/kakovost/karantena` | alias obstoječih strani | `[Authorize]` | `MainLayout` |
 | `/kakovost/prevodi`, `/kakovost/kategorije` | strani vrzeli preslikave | `[Authorize]` | `MainLayout` |
@@ -153,7 +154,7 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetOutboundAsync` | `intranet.GetOutboundMessages` | `/outbound` |
 | `GetSystemIntegrationsAsync` | `intranet.GetSystemIntegrations` (2 nabora: integracije, opozorila) | `/system/integracije`, `/nadzorna-plosca` |
 | `IntranetUserAdministrationService.GetUsersAsync` | `sec.LocalUser` ⋈ `sec.LocalUserRole` ⋈ `sec.Role`, `STRING_AGG` vlog | `/system/uporabniki` |
-| `CatalogReadService` | `canon.ProductMedia`, `ProductPrice`, partnerji na izdelku, atributi, kategorije, skladišča, kanali in jeziki | `/mediji`, `/cene`, `/partnerji`, `/nastavitve/*` |
+| `CatalogReadService` | `canon.ProductMedia` **⊎ `canon.ProductDocument`** (`UNION ALL`), `ProductPrice`, partnerji na izdelku, atributi, kategorije, skladišča, kanali in jeziki | `/mediji`, `/cene`, `/partnerji`, `/nastavitve/*` |
 | `PipelineReadService` | enotni vhodi čez `map.*`, `raw.Inbox`, `ops.PipelineRun`/napake in `stock.SyncRun`/zavrnjene pozicije | `/zajem/*`, deli `/kakovost` |
 | `GovernanceReadService` | izvozni in validacijski profili, slovar, preslikave, napake, alarmi in vloge | `/izvozi/*`, `/pravila/*`, `/sistem/*` |
 | `GovernanceReadService.GetExportReadinessAsync` | `intranet.GetExportReadiness` (3 nabori: objavljeno/neobjavljeno, zahteve ki ustavijo objavo, pokritost stolpcev po profilu) | `/izvozi` |
@@ -279,6 +280,7 @@ izjemo ob kršitvi in izpiše vrstico `… PASS.` ob uspehu. Poganja se jih z
 | `tests/PIM.F10.StocksUxTests` | `/zaloge` | `F10 stocks UX contract PASS.` |
 | `tests/PIM.F10.QualityUxTests` | `/napake-validacije` in `/karantena` | `F10 quality UX contract PASS.` |
 | `tests/PIM.F10.CustomersUxTests` | `/stranke` | `F10 customers UX contract PASS.` |
+| `tests/PIM.F10.MediaUxTests` | `/mediji`: razvrstitev vrste medija (C# in SQL iz istih seznamov), združen izvor `ProductMedia` ⊎ `ProductDocument`, vrste kot filtri s števci, samodejno večbesedno iskanje, prepoved `RenderTreeBuilder` v predogledih | `PIM.F10.MediaUxTests: vse trditve drzijo.` |
 | `tests/PIM.F10.PipelineRunsUxTests` | `/teki-obdelave` | `F10 pipeline runs UX contract PASS.` |
 | `tests/PIM.F10.OutboundUxTests` | `/outbound` (predstavitveni del) | `F10 outbound UX contract PASS.` |
 | `tests/PIM.F10.SystemIntegrationsUxTests` | `/system/integracije` (predstavitveni del) | `F10 system integrations UX contract PASS.` |
@@ -288,7 +290,7 @@ Vsi `PIM.F10.*UxTests` imajo isti vzorec: preverijo obstoj `Pages/<Stran>.razor`
 zaprt seznam dovoljenih `Data.*` klicev in izrecen seznam prepovedanih izmišljenih
 vrednosti iz UX slik.
 
-Vseh deset projektov F10 je v `PIM.sln`; merodajni zagon ostaja
+Vsi projekti F10 so v `PIM.sln`; merodajni zagon ostaja
 `scripts\run_tests.ps1`, ker ta poleg builda dejansko požene tudi konzolne testne projekte.
 
 ---
@@ -329,6 +331,11 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
 10. **Neznan status se izpiše z izvorno vrednostjo**; UI prevaja samo znane statuse.
 11. **Brez read modela ni strani.** Novi pogledi prikazujejo samo registre in tabele, ki
     dejansko obstajajo; zapisovalnih gumbov na bralnih nastavitvah ni.
+12. **Predogled slike ima vedno svoje razmerje in omejeno sliko.** Elementi, sestavljeni prek
+    `RenderTreeBuilder` v `@code`, **ne dobijo oznake obsegnega CSS** (`b-…`), zato jih
+    `<Stran>.razor.css` ne more omejiti — slika pride v naravni velikosti in razbije stran.
+    Predogledi se zato pišejo kot razčlenjevalni izpis (`RenderFragment … => __builder => { … }`
+    z markupom), ne s `builder.OpenElement`.
 
 ---
 

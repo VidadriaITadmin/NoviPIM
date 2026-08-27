@@ -5,38 +5,114 @@
 @inject IntranetDataService Data
 
 <PageTitle>Mediji</PageTitle>
-<PimPage Title="Mediji" Subtitle="Slike izdelkov z varno normaliziranimi naslovi. Naslov brez sheme je prikazan, vendar trajni popravek ostaja naloga preslikave vira." />
 
-<section class="kpi-grid" aria-label="Povzetek medijev">
-  <PimStat Label="Zapisov medijev" Value="@Number(Summary?.TotalMedia)" />
-  <PimStat Label="Izdelkov s sliko" Value="@Number(Summary?.ProductsWithMedia)" />
-  <PimStat Label="Aktivnih brez slike" Value="@Number(Summary?.ProductsWithoutMedia)" Note="Kandidati za dopolnitev" Href="izdelki?pogled=BREZ_SLIKE" />
-  <PimStat Label="Naslovov brez sheme" Value="@Number(Summary?.SchemeLessCount)" Note="Po PREFIX transformaciji mora pasti na nič" Href="mediji?naslov=CORRECTED" />
-</section>
+@* Faza toka: PIM (2). Vir: canon.ProductMedia. Bralna stran — trajni popravek naslova je
+   naloga preslikave vira, ne te strani. Vrsta medija se izpelje v MediaKindPolicy, ker je
+   baza nima; isti izraz filtrira in steje, da se ploscica in filter ne razideta. *@
+<PimPage Title="Mediji" Subtitle="Slike, videi in dokumenti izdelkov v izbrani organizaciji — canon.ProductMedia in canon.ProductDocument v enem predalu.">
+  <Actions>
+    <div class="media-meta">
+      <span class="media-meta-item"><strong>@Number(Summary?.ProductsWithMedia)</strong> izdelkov ima medij</span>
+      <a class="media-meta-item warn" href="izdelki?pogled=BREZ_SLIKE"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
+      @if (Summary is not null && Summary.SchemeLessCount > 0)
+      {
+        <a class="media-meta-item warn" href="mediji?naslov=CORRECTED"><strong>@Number(Summary.SchemeLessCount)</strong> naslovov brez sheme</a>
+      }
+    </div>
+  </Actions>
+</PimPage>
 
-<section class="ui-card toolbar" role="search" aria-labelledby="media-filter-title">
-  <h2 id="media-filter-title" class="visually-hidden">Filtriranje medijev</h2>
-  <label class="visually-hidden" for="media-search">Išči po artiklu, naslovu ali vlogi</label>
-  <input id="media-search" type="search" class="search-input" placeholder="Išči po artiklu, naslovu ali vlogi …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+<section class="ui-card toolbar media-toolbar" role="search" aria-labelledby="media-filter-title">
+  <h2 id="media-filter-title" class="visually-hidden">Iskanje in filtriranje medijev</h2>
+
+  <div class="media-search">
+    <svg class="media-search-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6" /><path d="M13.5 13.5 17 17" /></svg>
+    <label class="visually-hidden" for="media-search">Išči po artiklu, naslovu ali vlogi</label>
+    <input id="media-search" type="search" class="search-input" autocomplete="off"
+           placeholder="Išči po artiklu, naslovu ali vlogi — več besed zoži iskanje (npr. »203 pdf«)"
+           value="@Search" @oninput="OnSearchInputAsync" />
+  </div>
+
   <label class="visually-hidden" for="media-role">Vloga medija</label>
-  <select id="media-role" class="filter-select" @bind="Role"><option value="">Vse vloge</option>@foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }</select>
+  <select id="media-role" class="filter-select" @bind="Role" @bind:after="ApplyAsync">
+    <option value="">Vse vloge</option>
+    @foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }
+  </select>
+
   <label class="visually-hidden" for="media-address">Stanje naslova</label>
-  <select id="media-address" class="filter-select" @bind="AddressState">
-    <option value="">Vsa stanja naslovov</option><option value="OK">V redu</option>
-    <option value="CORRECTED">Popravljen (dodan https:)</option><option value="HTTP">Nešifrirano (http)</option>
+  <select id="media-address" class="filter-select" @bind="AddressState" @bind:after="ApplyAsync">
+    <option value="">Vsa stanja naslovov</option>
+    <option value="OK">V redu (https)</option>
+    <option value="CORRECTED">Popravljen (dodan https:)</option>
+    <option value="HTTP">Nešifrirano (http)</option>
     <option value="INVALID">Neveljaven naslov</option>
   </select>
-  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
-  <button type="button" class="filter-button" @onclick="ToggleView">@(GridView ? "Prikaži seznam" : "Prikaži mrežo")</button>
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+
+  <label class="visually-hidden" for="media-sort">Razvrstitev</label>
+  <select id="media-sort" class="filter-select" @bind="Sort" @bind:after="ApplyAsync">
+    <option value="">Artikel A → Ž</option>
+    <option value="ARTIKEL_DESC">Artikel Ž → A</option>
+    <option value="VLOGA">Vloga</option>
+    <option value="VRSTA">Vrsta medija</option>
+    <option value="NASLOV">Naslov</option>
+  </select>
+
+  <div class="media-view" role="group" aria-label="Način prikaza">
+    <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@GridView" @onclick="() => SetView(true)">Mreža</button>
+    <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(!GridView)" @onclick="() => SetView(false)">Seznam</button>
+  </div>
+
+  @if (HasFilters)
+  {
+    <button type="button" class="ghost-button" @onclick="ClearAsync">Počisti</button>
+  }
 </section>
+
+<nav class="media-kinds" aria-label="Vrsta medija">
+  @foreach (var option in KindOptions)
+  {
+    <button type="button" class="kind-chip @(Kind == option.Code ? "active" : null)" aria-pressed="@(Kind == option.Code)" @onclick="() => SelectKindAsync(option.Code)">
+      @KindGlyph(option.Code)
+      <span>@option.Label</span>
+      <em>@option.Count.ToString("N0")</em>
+    </button>
+  }
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</nav>
 
 <section class="ui-card data-card" aria-label="Seznam medijev">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni medijev." LoadingText="Nalaganje medijev …">
     @if (GridView)
     {
       <div class="media-grid">
-        @foreach (var row in Rows) { @MediaCard(row) }
+        @foreach (var row in Rows)
+        {
+          var url = MediaUrlPolicy.Normalize(row.Url);
+          <article class="media-tile">
+            <button type="button" class="media-preview" title="Povečaj predogled" @onclick="() => Open(row)">
+              @Preview(row, url, false)
+              <span class="kind-badge @KindTone(row.Kind)">@row.Kind</span>
+              @if (url.Note is not null) { <span class="note-badge" title="@url.Note">!</span> }
+            </button>
+            <div class="media-tile-body">
+              <a class="media-item" href="izdelki/@row.ProductId">@row.ItemId</a>
+              @if (!string.IsNullOrWhiteSpace(row.Title))
+              {
+                <span class="media-title" title="@row.Title">@row.Title</span>
+              }
+              <span class="media-role" title="@row.Role">@row.Role · #@row.SortOrder</span>
+              <span class="media-file" title="@url.Display">@MediaKindPolicy.FileName(row.Url)</span>
+              @if (url.Href is not null)
+              {
+                <a class="media-open" href="@url.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a>
+              }
+              else
+              {
+                <span class="media-note">@url.Note</span>
+              }
+            </div>
+          </article>
+        }
       </div>
     }
     else
@@ -47,43 +123,116 @@
           {
             var url = MediaUrlPolicy.Normalize(row.Url);
             <tr>
-              <td class="media-thumb">@MediaImage(row, url)</td>
+              <td class="media-thumb">
+                <button type="button" class="thumb-button" title="Povečaj predogled" @onclick="() => Open(row)">@Preview(row, url, true)</button>
+              </td>
               <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
-              <td><span class="code-value">@row.Role</span></td><td class="numeric">@row.SortOrder</td>
-              <td>@MediaAddress(url)</td>
+              <td><span class="kind-badge @KindTone(row.Kind)">@row.Kind</span></td>
+              <td><span class="code-value">@row.Role</span></td>
+              <td>@(string.IsNullOrWhiteSpace(row.Title) ? "—" : row.Title)</td>
+              <td class="numeric">@row.SortOrder</td>
+              <td>@Address(url)</td>
             </tr>
           }
         </Rows>
       </PimTable>
     }
-    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani medijev" />
+    <PimPager Skip="Skip" Take="PageSize" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani medijev" />
   </PimState>
 </section>
+
+@if (Selected is MediaRow selected)
+{
+  var selectedUrl = MediaUrlPolicy.Normalize(selected.Url);
+  <div class="media-lightbox" role="dialog" aria-modal="true" aria-label="Predogled medija" @onclick="Close">
+    <div class="media-lightbox-panel" @onclick="Keep" @onclick:stopPropagation="true">
+      <header>
+        <div>
+          <strong>@selected.ItemId</strong>
+          <span>@selected.Role · #@selected.SortOrder · @selected.Kind@(string.IsNullOrWhiteSpace(selected.Title) ? "" : " · " + selected.Title)</span>
+        </div>
+        <button type="button" class="ghost-button" @onclick="Close">Zapri</button>
+      </header>
+      <div class="media-lightbox-body">
+        @if (selected.Kind == MediaKindPolicy.ImageCode && selectedUrl.Href is not null && !Failed.Contains(selected.Key))
+        {
+          <img src="@selectedUrl.Href" alt="Medij artikla @selected.ItemId" loading="lazy" @onerror="() => Failed.Add(selected.Key)" />
+        }
+        else if (selected.Kind == MediaKindPolicy.VideoCode && MediaKindPolicy.VideoPoster(selected.Url) is string poster)
+        {
+          <img src="@poster" alt="Predogled videa artikla @selected.ItemId" loading="lazy" />
+        }
+        else
+        {
+          <p class="media-lightbox-fallback">Predogleda ni mogoče prikazati v aplikaciji — odpri izvirnik v novem zavihku.</p>
+        }
+      </div>
+      <footer>
+        <span class="media-address" title="@selectedUrl.Display">@selectedUrl.Display</span>
+        @if (selectedUrl.Href is not null)
+        {
+          <a href="@selectedUrl.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a>
+        }
+        <a href="izdelki/@selected.ProductId">Odpri izdelek</a>
+        @if (selectedUrl.Note is not null) { <span class="media-note">@selectedUrl.Note</span> }
+      </footer>
+    </div>
+  </div>
+}
 
 @code {
   [SupplyParameterFromQuery(Name = "naslov")] public string? QueryAddressState { get; set; }
   [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
+
   IReadOnlyList<MediaRow> Rows = [];
   IReadOnlyList<PimOption> Roles = [];
+  IReadOnlyList<MediaKindCount> KindCounts = [];
   MediaSummary? Summary;
-  readonly HashSet<long> Failed = [];
+  MediaRow? Selected;
+  readonly HashSet<string> Failed = [];
+  CancellationTokenSource? Debounce;
   long Total;
   bool Loading = true;
-  bool GridView;
+  bool GridView = true;
   string? Error;
   string Search = "";
   string Role = "";
   string AddressState = "";
+  string Kind = "";
+  string Sort = "";
   int Skip;
-  const int Take = 50;
   int? OrganizationId;
+  int PageSize => GridView ? 48 : 50;
 
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Slika"), new("Artikel"), new("Vloga"), new("Vrstni red", true), new("Naslov medija")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+    [new("Predogled"), new("Artikel"), new("Vrsta"), new("Vloga"), new("Naziv"), new("Vrstni red", true), new("Naslov medija")];
+
+  static readonly string[] KindOrder = [MediaKindPolicy.ImageCode, MediaKindPolicy.VideoCode, MediaKindPolicy.DocumentCode, MediaKindPolicy.OtherCode];
+
+  record KindOption(string Code, string Label, long Count);
+
+  IReadOnlyList<KindOption> KindOptions
+  {
+    get
+    {
+      var options = new List<KindOption> { new("", "Vse", KindCounts.Sum(count => count.RowCount)) };
+      foreach (var code in KindOrder)
+      {
+        var count = KindCounts.FirstOrDefault(row => row.Kind == code)?.RowCount ?? 0;
+        if (count > 0 || Kind == code) options.Add(new(code, MediaKindPolicy.Label(code), count));
+      }
+      return options;
+    }
+  }
+
+  bool HasFilters => Search.Length > 0 || Role.Length > 0 || AddressState.Length > 0 || Kind.Length > 0 || Sort.Length > 0;
 
   protected override async Task OnInitializedAsync()
   {
     AddressState = QueryAddressState ?? "";
     Search = QueryProduct ?? "";
+    Kind = QueryKind ?? "";
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
@@ -101,39 +250,121 @@
   async Task LoadAsync()
   {
     if (OrganizationId is null) return;
-    Loading = true; Error = null;
-    try { (Rows, Total) = await Catalog.GetMediaAsync(OrganizationId.Value, Search, Role, AddressState, Skip, Take); }
-    catch { Error = "Medijev trenutno ni mogoče naložiti."; }
+    Loading = true; Error = null; Failed.Clear();
+    try
+    {
+      var rowsTask = Catalog.GetMediaAsync(OrganizationId.Value, Search, Role, AddressState, Kind, Sort, Skip, PageSize);
+      var countsTask = Catalog.GetMediaKindCountsAsync(OrganizationId.Value, Search, Role, AddressState);
+      await Task.WhenAll(rowsTask, countsTask);
+      (Rows, Total) = await rowsTask;
+      KindCounts = await countsTask;
+    }
+    catch { Error = "Medijev trenutno ni mogoče naložiti."; Rows = []; }
     finally { Loading = false; }
   }
 
-  RenderFragment MediaCard(MediaRow row) => builder =>
+  /// <summary>Iskanje se sproži samo, z zamikom — brez gumba in brez poizvedbe na vsak pritisk.</summary>
+  async Task OnSearchInputAsync(ChangeEventArgs args)
   {
-    var url = MediaUrlPolicy.Normalize(row.Url);
-    builder.OpenElement(0, "article"); builder.AddAttribute(1, "class", "media-grid-card");
-    builder.AddContent(2, MediaImage(row, url));
-    builder.OpenElement(3, "strong"); builder.AddContent(4, row.ItemId); builder.CloseElement();
-    builder.OpenElement(5, "span"); builder.AddContent(6, $"{row.Role} · #{row.SortOrder}"); builder.CloseElement();
-    builder.AddContent(7, MediaAddress(url)); builder.CloseElement();
+    Search = args.Value?.ToString() ?? "";
+    Debounce?.Cancel();
+    Debounce = new CancellationTokenSource();
+    var token = Debounce.Token;
+    try { await Task.Delay(350, token); }
+    catch (OperationCanceledException) { return; }
+    if (token.IsCancellationRequested) return;
+    await ApplyAsync();
+  }
+
+  RenderFragment Preview(MediaRow row, MediaUrl url, bool small) => __builder =>
+  {
+    <span class="preview-frame">
+      @if (row.Kind == MediaKindPolicy.ImageCode && url.Href is not null && !Failed.Contains(row.Key))
+      {
+        <img src="@url.Href" alt="Medij artikla @row.ItemId" loading="lazy" @onerror="() => Failed.Add(row.Key)" />
+      }
+      else if (row.Kind == MediaKindPolicy.VideoCode && MediaKindPolicy.VideoPoster(row.Url) is string poster && !Failed.Contains(row.Key))
+      {
+        <img src="@poster" alt="Predogled videa artikla @row.ItemId" loading="lazy" @onerror="() => Failed.Add(row.Key)" />
+        <span class="play-mark" aria-hidden="true"></span>
+      }
+      else
+      {
+        <span class="preview-fallback @(small ? "small" : null)">
+          @KindGlyph(row.Kind)
+          @if (!small)
+          {
+            <span class="preview-extension">@ExtensionLabel(row)</span>
+          }
+        </span>
+      }
+    </span>
   };
-  RenderFragment MediaImage(MediaRow row, MediaUrl url) => builder =>
+
+  RenderFragment Address(MediaUrl url) => __builder =>
   {
-    if (url.Href is null || Failed.Contains(row.ProductMediaId)) { builder.OpenElement(0, "span"); builder.AddContent(1, "Brez slike"); builder.CloseElement(); return; }
-    builder.OpenElement(0, "img"); builder.AddAttribute(1, "src", url.Href); builder.AddAttribute(2, "alt", $"Medij artikla {row.ItemId}");
-    builder.AddAttribute(3, "loading", "lazy"); builder.AddAttribute(4, "onerror", EventCallback.Factory.Create(this, () => Failed.Add(row.ProductMediaId))); builder.CloseElement();
+    @if (url.Href is not null)
+    {
+      <a href="@url.Href" target="_blank" rel="noopener noreferrer">@Shorten(url.Display)</a>
+    }
+    else
+    {
+      <span class="muted" title="@url.Note">@Shorten(url.Display)</span>
+    }
+    @if (url.Note is not null)
+    {
+      <small class="address-note">@url.Note</small>
+    }
   };
-  RenderFragment MediaAddress(MediaUrl url) => builder =>
+
+  static RenderFragment KindGlyph(string? kind) => __builder =>
   {
-    if (url.Href is not null) { builder.OpenElement(0, "a"); builder.AddAttribute(1, "href", url.Href); builder.AddAttribute(2, "target", "_blank"); builder.AddAttribute(3, "rel", "noopener noreferrer"); builder.AddContent(4, Shorten(url.Display)); builder.CloseElement(); }
-    else { builder.OpenElement(5, "span"); builder.AddAttribute(6, "class", "muted"); builder.AddAttribute(7, "title", url.Note); builder.AddContent(8, Shorten(url.Display)); builder.CloseElement(); }
-    if (url.Note is not null) { builder.OpenElement(9, "small"); builder.AddAttribute(10, "class", "address-note"); builder.AddContent(11, url.Note); builder.CloseElement(); }
+    <svg class="kind-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      @switch (kind)
+      {
+        case MediaKindPolicy.VideoCode:
+          <path d="M4 6h11v12H4z" /><path d="M15 10.5 20 7.5v9l-5-3z" />
+          break;
+        case MediaKindPolicy.DocumentCode:
+          <path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4" /><path d="M9 13h6M9 17h6" />
+          break;
+        case MediaKindPolicy.OtherCode:
+          <path d="M10 13a4 4 0 0 0 6 .6l2-2a4 4 0 0 0-5.7-5.7l-1 1" />
+          <path d="M14 11a4 4 0 0 0-6-.6l-2 2A4 4 0 0 0 11.7 18l1-1" />
+          break;
+        case MediaKindPolicy.ImageCode:
+          <path d="M3 5h18v14H3z" /><circle cx="8.5" cy="10" r="1.6" /><path d="m4 18 5.5-5.5L13 16l3-3 4 5" />
+          break;
+        default:
+          <path d="M4 6h16M4 12h16M4 18h10" />
+          break;
+      }
+    </svg>
   };
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
-  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task SelectKindAsync(string kind) { Kind = kind; await ApplyAsync(); }
+  async Task ClearAsync() { Search = ""; Role = ""; AddressState = ""; Kind = ""; Sort = ""; await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
-  void ToggleView() => GridView = !GridView;
+  async Task SetView(bool grid) { if (GridView == grid) return; GridView = grid; Skip = 0; await LoadAsync(); }
+  void Open(MediaRow row) => Selected = row;
+  void Close() => Selected = null;
+  /// <summary>Klik znotraj panela ne sme zapreti predogleda; ustavitev se veze na ta prazen odziv.</summary>
+  static void Keep() { }
+
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zapisov";
+  static string KindTone(string kind) => kind switch
+  {
+    MediaKindPolicy.ImageCode => "kind-image",
+    MediaKindPolicy.VideoCode => "kind-video",
+    MediaKindPolicy.DocumentCode => "kind-document",
+    _ => "kind-other"
+  };
+  static string ExtensionLabel(MediaRow row)
+  {
+    var extension = MediaKindPolicy.Extension(row.Url);
+    return extension.Length > 1 ? extension[1..].ToUpperInvariant() : row.Kind;
+  }
   static string Number(long? value) => value?.ToString("N0") ?? "—";
   static string Shorten(string value) => value.Length <= 72 ? value : value[..36] + " … " + value[^30..];
 }

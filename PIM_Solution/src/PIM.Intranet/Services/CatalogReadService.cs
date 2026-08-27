@@ -2,7 +2,12 @@ using Microsoft.Data.SqlClient;
 
 namespace PIM.Intranet.Services;
 
-public sealed record MediaRow(long ProductMediaId, long ProductId, string ItemId, string Url, string Role, int SortOrder);
+public sealed record MediaRow(string Source, long SourceId, long ProductId, string ItemId, string Url, string Role, int SortOrder, string? Title, string Kind)
+{
+  /// <summary>Enolicen kljuc cez oba vira; sam ProductMediaId bi trcil z ProductDocumentId.</summary>
+  public string Key => Source + "-" + SourceId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+public sealed record MediaKindCount(string Kind, long RowCount);
 public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia, long SchemeLessCount);
 public sealed record PriceRow(long ProductPriceId, long ProductId, string ItemId, string PriceList, decimal Net, decimal VatRate, DateTime ValidFrom, bool IsActive);
 public sealed record PartnerRow(string Name, long ProductCount, long ActiveCount);
@@ -25,54 +30,140 @@ public sealed class CatalogReadService(PimDb database)
   // Uporabnik je odlocil, da medij za zdaj ostane naslov v bazi; datotecno skladisce pride
   // pozneje. Stran zato prikazuje povezavo, vlogo in vrstni red, ne pa nalaganja datotek.
   public Task<(IReadOnlyList<MediaRow> Rows, long TotalCount)> GetMediaAsync(
-    int organizationId, string? search, string? role, string? addressState, int skip, int take,
-    CancellationToken cancellationToken = default) =>
-    database.PageAsync("""
-      SELECT media.ProductMediaId, media.ProductId, product.ItemID, media.Url, media.Role, media.SortOrder
-      FROM canon.ProductMedia media
-      INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%' OR media.Url LIKE '%' + @Search + '%' OR media.Role LIKE '%' + @Search + '%')
-        AND (@Role IS NULL OR media.Role = @Role)
-        AND (@AddressState IS NULL
-          OR (@AddressState = N'OK' AND media.Url LIKE N'https://%')
-          OR (@AddressState = N'CORRECTED' AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
-          OR (@AddressState = N'HTTP' AND media.Url LIKE N'http://%')
-          OR (@AddressState = N'INVALID' AND media.Url NOT LIKE N'https://%' AND media.Url NOT LIKE N'http://%'
-              AND media.Url NOT LIKE N'//%' AND media.Url NOT LIKE N'www.%'))
-      ORDER BY product.ItemID, media.Role, media.SortOrder
+    int organizationId, string? search, string? role, string? addressState, string? kind, string? sort,
+    int skip, int take, CancellationToken cancellationToken = default)
+  {
+    var terms = SearchTerms(search);
+    var source = MediaSource(terms);
+    return database.PageAsync($"""
+      {source}
+      SELECT Source, SourceId, ProductId, ItemID, Url, Role, SortOrder, Title, Kind
+      FROM medij
+      WHERE (@Kind IS NULL OR Kind = @Kind)
+      ORDER BY {MediaOrderBy(sort)}
       OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
 
-      SELECT COUNT_BIG(*)
-      FROM canon.ProductMedia media
-      INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%' OR media.Url LIKE '%' + @Search + '%' OR media.Role LIKE '%' + @Search + '%')
-        AND (@Role IS NULL OR media.Role = @Role)
-        AND (@AddressState IS NULL
-          OR (@AddressState = N'OK' AND media.Url LIKE N'https://%')
-          OR (@AddressState = N'CORRECTED' AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
-          OR (@AddressState = N'HTTP' AND media.Url LIKE N'http://%')
-          OR (@AddressState = N'INVALID' AND media.Url NOT LIKE N'https://%' AND media.Url NOT LIKE N'http://%'
-              AND media.Url NOT LIKE N'//%' AND media.Url NOT LIKE N'www.%'));
+      {source}
+      SELECT COUNT_BIG(*) FROM medij WHERE (@Kind IS NULL OR Kind = @Kind);
       """,
       reader => new MediaRow(
-        PimDb.Int64(reader, "ProductMediaId"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
-        PimDb.TextOrEmpty(reader, "Url"), PimDb.TextOrEmpty(reader, "Role"), PimDb.Int32(reader, "SortOrder")),
-      command =>
-      {
-        Bind(command, organizationId, search, skip, take);
-        command.Parameters.AddWithValue("@Role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role);
-        command.Parameters.AddWithValue("@AddressState", string.IsNullOrWhiteSpace(addressState) ? DBNull.Value : addressState);
-      }, cancellationToken);
+        PimDb.TextOrEmpty(reader, "Source"), PimDb.Int64(reader, "SourceId"), PimDb.Int64(reader, "ProductId"),
+        PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "Url"), PimDb.TextOrEmpty(reader, "Role"),
+        PimDb.Int32(reader, "SortOrder"), PimDb.Text(reader, "Title"), PimDb.TextOrEmpty(reader, "Kind")),
+      command => BindMedia(command, organizationId, terms, role, addressState, kind, skip, take), cancellationToken);
+  }
 
+  /// <summary>
+  /// Stevci po vrsti medija za isto zozitev, brez filtra vrste. Stran jih pokaze kot filtre,
+  /// zato morajo povedati, koliko zapisov bo klik dejansko prinesel.
+  /// </summary>
+  public Task<IReadOnlyList<MediaKindCount>> GetMediaKindCountsAsync(
+    int organizationId, string? search, string? role, string? addressState, CancellationToken cancellationToken = default)
+  {
+    var terms = SearchTerms(search);
+    return database.QueryAsync($"""
+      {MediaSource(terms)}
+      SELECT Kind, COUNT_BIG(*) AS RowCountValue FROM medij GROUP BY Kind;
+      """,
+      reader => new MediaKindCount(PimDb.TextOrEmpty(reader, "Kind"), PimDb.Int64(reader, "RowCountValue")),
+      command => BindMedia(command, organizationId, terms, role, addressState, null, 0, 0), cancellationToken);
+  }
+
+  /// <summary>
+  /// Skupni izvor vseh poizvedb medijev.
+  ///
+  /// Dve odlocitvi sta tu namerni. Prva: slike (<c>canon.ProductMedia</c>) in dokumenti
+  /// (<c>canon.ProductDocument</c>) sta dve tabeli, uporabnik pa ju vidi kot en predal —
+  /// zato <c>UNION ALL</c> in stolpec <c>Source</c>, ne dve locni strani. Druga: vrsta se
+  /// izracuna v skupnem izrazu <see cref="MediaKindPolicy.SqlKindExpression"/>, ki nastane iz
+  /// istih seznamov kot razvrstitev v C#, da se ploscica in filter ne moreta raziti.
+  /// </summary>
+  static string MediaSource(IReadOnlyList<string> terms)
+  {
+    var kind = MediaKindPolicy.SqlKindExpression("Url", "Role");
+    var search = terms.Count == 0
+      ? string.Empty
+      : string.Concat(terms.Select((_, index) =>
+          $"\n          AND (ItemID LIKE @Term{index} OR Url LIKE @Term{index} OR Role LIKE @Term{index}"
+          + $" OR (Title IS NOT NULL AND Title LIKE @Term{index}))"));
+
+    return $"""
+      WITH vsi AS (
+        SELECT N'MEDIJ' AS Source, media.ProductMediaId AS SourceId, media.ProductId, product.ItemID,
+               media.Url, media.Role, media.SortOrder, CONVERT(nvarchar(400), NULL) AS Title
+        FROM canon.ProductMedia media
+        INNER JOIN canon.Product product ON product.ProductId = media.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+        UNION ALL
+        SELECT N'DOKUMENT', document.ProductDocumentId, document.ProductId, product.ItemID,
+               document.Url, document.Role, document.SortOrder, CONVERT(nvarchar(400), document.Title)
+        FROM canon.ProductDocument document
+        INNER JOIN canon.Product product ON product.ProductId = document.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+      ), medij AS (
+        SELECT Source, SourceId, ProductId, ItemID, Url, Role, SortOrder, Title, {kind} AS Kind
+        FROM vsi
+        WHERE (@Role IS NULL OR Role = @Role)
+          AND (@AddressState IS NULL
+            OR (@AddressState = N'OK' AND Url LIKE N'https://%')
+            OR (@AddressState = N'CORRECTED' AND (Url LIKE N'//%' OR Url LIKE N'www.%'))
+            OR (@AddressState = N'HTTP' AND Url LIKE N'http://%')
+            OR (@AddressState = N'INVALID' AND Url NOT LIKE N'https://%' AND Url NOT LIKE N'http://%'
+                AND Url NOT LIKE N'//%' AND Url NOT LIKE N'www.%')){search}
+      )
+      """;
+  }
+
+  static string MediaOrderBy(string? sort) => sort switch
+  {
+    "ARTIKEL_DESC" => "ItemID DESC, Kind, Role, SortOrder",
+    "VLOGA" => "Role, ItemID, SortOrder",
+    "VRSTA" => "Kind, ItemID, Role, SortOrder",
+    "NASLOV" => "Url, ItemID",
+    _ => "ItemID, Kind, Role, SortOrder"
+  };
+
+  /// <summary>Vzorec LIKE nastane v kodi, zato morajo nadomestni znaki iz vnosa ostati navadni znaki.</summary>
+  static string LikeSafe(string value) => value.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
+
+  /// <summary>Vsaka beseda vnosa je svoja zahteva — »203 navodila« najde dokument artikla 203.</summary>
+  static IReadOnlyList<string> SearchTerms(string? search)
+  {
+    if (string.IsNullOrWhiteSpace(search)) return [];
+    return search.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+      .Take(6).ToArray();
+  }
+
+  static void BindMedia(SqlCommand command, int organizationId, IReadOnlyList<string> terms,
+    string? role, string? addressState, string? kind, int skip, int take)
+  {
+    command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    command.Parameters.AddWithValue("@Role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role);
+    command.Parameters.AddWithValue("@AddressState", string.IsNullOrWhiteSpace(addressState) ? DBNull.Value : addressState);
+    command.Parameters.AddWithValue("@Kind", string.IsNullOrWhiteSpace(kind) ? DBNull.Value : kind);
+    command.Parameters.AddWithValue("@Skip", skip);
+    command.Parameters.AddWithValue("@Take", take);
+    for (var index = 0; index < terms.Count; index++)
+      command.Parameters.AddWithValue($"@Term{index}", "%" + LikeSafe(terms[index]) + "%");
+  }
+
+  /// <summary>Vloge obeh virov v enem sifrantu — dokumenti nosijo vecino pomenljivih vlog.</summary>
   public Task<IReadOnlyList<PimOption>> GetMediaRolesAsync(int organizationId, CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
-      SELECT media.Role, COUNT_BIG(*) AS RowCountValue
-      FROM canon.ProductMedia media
-      INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-      GROUP BY media.Role ORDER BY media.Role;
+      SELECT Role, SUM(RowCountValue) AS RowCountValue FROM (
+        SELECT media.Role, COUNT_BIG(*) AS RowCountValue
+        FROM canon.ProductMedia media
+        INNER JOIN canon.Product product ON product.ProductId = media.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+        GROUP BY media.Role
+        UNION ALL
+        SELECT document.Role, COUNT_BIG(*)
+        FROM canon.ProductDocument document
+        INNER JOIN canon.Product product ON product.ProductId = document.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+        GROUP BY document.Role
+      ) AS vloge
+      GROUP BY Role ORDER BY Role;
       """,
       reader => new PimOption(PimDb.TextOrEmpty(reader, "Role"),
         $"{PimDb.TextOrEmpty(reader, "Role")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
@@ -94,7 +185,11 @@ public sealed class CatalogReadService(PimDb database)
         (SELECT COUNT_BIG(*) FROM canon.ProductMedia media
          INNER JOIN canon.Product product ON product.ProductId = media.ProductId
          WHERE product.OrganizationId = @OrganizationId
-           AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%')) AS SchemeLessCount;
+           AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
+        + (SELECT COUNT_BIG(*) FROM canon.ProductDocument document
+           INNER JOIN canon.Product product ON product.ProductId = document.ProductId
+           WHERE product.OrganizationId = @OrganizationId
+             AND (document.Url LIKE N'//%' OR document.Url LIKE N'www.%')) AS SchemeLessCount;
       """,
       reader => new MediaSummary(PimDb.Int64(reader, "WithMedia"), PimDb.Int64(reader, "WithoutMedia"),
         PimDb.Int64(reader, "TotalMedia"), PimDb.Int64(reader, "SchemeLessCount")),
