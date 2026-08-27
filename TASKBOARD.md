@@ -176,6 +176,89 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Kartica izdelka postane urejiva — migracija 111** — kdo: Claude Code — ozemlje: BAZA
+  — končano 2026-08-27.
+
+  Seznam izdelkov je pisal »urejanje polja je na kartici izdelka«, kartica pa ni imela nobene
+  zapisovalne poti. Migracija doda tisto, kar za to manjka, in nič več:
+
+  1. `val.RunValidation` dobi `@ProductId`. Prej je znala samo celo podjetje — nad podjetjem 1
+     merjeno 26 s. Po popravku enega polja tega ni mogoče čakati. Filter je dodan na istih petih
+     mestih kot `@OrganizationId`; brez `@ProductId` se obnaša natanko kot prej.
+  2. `pim.SaveProductTexts` in `pim.SaveProductAttributes` pišeta podatek, ki je last PIM.
+     Kar potuje v SAOP, je **zavrnjeno z napako 52402**, ne tiho preskočeno — ločnico določa
+     register `out.SaopXmlField`, ne ime polja. Zgodovino zapišejo obstoječi sprožilci, zato
+     obe proceduri nastavita `pim.SetChangeContext` (kdo, od kod, zakaj).
+
+  **Dokaz — merjeno nad razvojno bazo:**
+
+  ```
+  pim.SaveProductTexts + revalidacija enega izdelka   228 ms   (org-wide validacija je 26 s)
+  pim.SaveProductAttributes + revalidacija             63 ms
+  zapis WEB_TITLE + DESCRIPTION → zgodovina z avtorjem in razlogom: 4 vrstice
+  prazna vrednost izbriše vrstico:                     PoIzbrisu = 0
+  TITLE_ERP mimo odhodne vrste:                        zavrnjeno (52402)
+  popolnost izdelka 90 % → 100 % po izpolnitvi zahteve
+  ```
+
+  ```
+  dotnet run --project src\PIM.Migrator            → Uporabljena migracija: 111_ProductCardEditing.sql
+  ```
+
+- **[DOMENA] Izvoz je delovni zvezek Excel, ne CSV — PIM.Operations.WorkbookWriter** —
+  kdo: Claude Code — ozemlje: DOMENA — končano 2026-08-27.
+
+  Uporabnikova zahteva: »izvoz mora biti v Excelu«. CSV je za Excel dvoumen — ločilo, kodna
+  stran in vodilne ničle v šifri artikla so odvisni od nastavitev računalnika, ki datoteko odpre;
+  `0000000000001` je postal `1`. Zvezek nosi tip vsake celice s sabo.
+
+  Brez zunanje knjižnice, iz istega razloga kot pri branju (`WorkbookTable`): zvezek je stisnjena
+  mapa datotek XML. Zapisovalnik doda krepko glavo, zamrznjeno naslovno vrstico, samodejni filter,
+  širine stolpcev ter obliko za datum in odstotek.
+
+  **Dokaz:** kar zapiše, prebere nazaj ista pot, ki bere Excel dobaviteljev.
+
+  ```
+  tests\PIM.F8.BulkOutboundTests  → PASS (krožni preizkus zapis → branje, znaki XML v nazivu,
+                                          vodilne ničle, da/ne, prazna celica, opomba o odrezanem izvozu)
+  ```
+
+- **[INTRANET] Seznam izdelkov: filtri v plošči, izvoz v Excel; kartica: vidni zavihki in
+  urejanje polj** — kdo: Claude Code — ozemlje: INTRANET — končano 2026-08-27.
+
+  Trije popravki po uporabnikovih pripombah na zaslonske slike:
+
+  1. **Filtri so bili natrpani, gumbi čudno postavljeni.** Orodna vrstica ima zdaj dve ravni:
+     vedno vidno iskanje z gumbom »Filtri (N)« in dejanji desno, ter ploščo z enajstimi filtri,
+     ki se odpre na zahtevo. Vsak filter ima vidno oznako, ne samo skrite. Plošča je odprta,
+     kadar je kaj aktivnega.
+  2. **Izvoz je Excel** (`/izvoz/izdelki.xlsx`); CSV pot ostaja za skripte, ki jo že uporabljajo.
+  3. **Kartica**: aktivni zavihek je razpoznaven po podlagi, krepki pisavi in črti — ne samo po
+     barvi — vrstica zavihkov pa je lepljiva. Kanalske kartice so izgubile okrasno barvno črto;
+     stanje nosi čip. Polja kanala niso več tabela vrednosti, ampak obrazec.
+
+  **Urejanje na kartici** ima dve poti in nobena ne prevzame druge:
+  - polje, ki ga PIM piše nazaj v SAOP (20 polj iz registra), gre v odhodno vrsto in čaka odobritev;
+  - besedilo in lastnost, ki sta last PIM, gresta naravnost v katalog in **takoj revalidirata**.
+
+  **Manjkajoča polja**, ki jih je uporabnik pogrešal, so dodana: mere in volumen paketa, enota mer,
+  ERP nazivi po jezikih (doslej so bili pomotoma med spletnimi besedili), spletna besedila po
+  vrstah in jezikih ter lastnosti izdelka. Vsaka **manjkajoča obvezna zahteva je zdaj vnosno
+  mesto** — doslej je kartica povedala, da polje manjka, ni pa ga bilo mogoče izpolniti.
+
+  **Dokaz:**
+
+  ```
+  scripts\run_tests.ps1 -Filter F10  → uspeli 13, padli 0
+  dotnet build PIM_Solution\PIM.sln  → 0 Warning(s), 0 Error(s)
+  ```
+
+  Zapisovalna pot preverjena skozi servis proti razvojni bazi, nad izdelkom podjetja 2:
+  spletni naziv → popolnost 0 % → 10 %, težav 46 → 43; lastnost → 20 %, težav 41;
+  `TITLE_ERP` zavrnjen z 52402; čiščenje vrne izdelek v izhodiščno stanje.
+
+  **Česa nisem preveril:** strani v brskalniku — nimam prijavnih poverilnic za lokalni intranet.
+
 - **[BAZA + INTRANET] Drevo kategorij z zamikom, prevodi v vseh jezikih in uporabni filtri — migracija 110** —
   kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-27.
 

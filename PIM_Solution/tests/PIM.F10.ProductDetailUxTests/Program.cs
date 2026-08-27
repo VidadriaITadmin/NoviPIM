@@ -2,6 +2,12 @@ using System.Text.RegularExpressions;
 
 // Pogodba kartice po prenovi 2026-08-27. Preverja uporabnikovo poslovno razdelitev,
 // podatkovne vire, varno prikazovanje medijev in dostopnost; ne zaklepa notranjega HTML-ja.
+//
+// Sprememba dogovora 2026-08-27 (drugi krog): kartica ni vec bralna. Uporabnik je zahteval
+// urejanje polj in lastnosti na kartici, zato prejsnja prepoved besede »Shrani« ni vec pogodba,
+// ki bi karkoli varovala. Namesto nje je zaostrena zahteva, ki dejansko steje: **sprememba sme
+// v katalog samo po pravi poti** — kar potuje v SAOP, gre skozi odhodno vrsto z odobritvijo,
+// last PIM pa naravnost v katalog prek oznacene migracije. Prepoved HttpClient ostaja.
 var root = FindRoot();
 var pages = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 var cardPath = Path.Combine(pages, "ProductCard.razor");
@@ -59,6 +65,15 @@ foreach (var field in new[] { "Davčna stopnja", "Planiranje in rezervacija", "K
   Assert(card.Contains(field, StringComparison.Ordinal), "Manjkajoče polje mora ostati vidno: " + field + ".");
 Assert(channel.Contains("ni v bralnem modelu", StringComparison.Ordinal), "Kanalski gradnik mora pošteno označiti polja zunaj modela.");
 
+// Polja, ki jih je uporabnik pogresal: mere paketa, volumen, enota, ERP nazivi po jezikih.
+foreach (var field in new[] { "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth",
+  "ProductCommercial.PackageHeight", "ProductCommercial.Volume", "ProductCommercial.DimensionUnit" })
+  Assert(card.Contains(field, StringComparison.Ordinal), "Komerciala mora pokrivati " + field + ".");
+Assert(card.Contains("TITLE_ERP", StringComparison.Ordinal) && card.Contains("ErpLanguages", StringComparison.Ordinal),
+  "ERP nazivi sodijo v zavihek ERP, po jezikih — ne med spletna besedila.");
+Assert(card.Contains("WebTextTypes", StringComparison.Ordinal) && card.Contains("WebLanguages", StringComparison.Ordinal),
+  "Spletna besedila morajo biti ponujena po vrstah in jezikih, tudi kjer jih se ni.");
+
 Assert(card.Contains("ValidationLayer.Resolve", StringComparison.Ordinal), "Kartica mora nivoje dobiti iz skupnega razvrščevalnika.");
 Assert(card.Contains("SKUPNO", StringComparison.Ordinal), "Skupne zahteve morajo biti označene.");
 Assert(card.Contains("SelectedSite", StringComparison.Ordinal) && card.Contains("Spletno mesto", StringComparison.Ordinal), "Spletni kanal mora podpirati spletno mesto.");
@@ -71,8 +86,41 @@ foreach (var call in new[] { "GetProductCardAsync", "GetProductOriginAsync" })
 foreach (var call in new[] { "GetPriceChecksAsync", "GetStockChecksAsync" })
   Assert(card.Contains("Features." + call, StringComparison.Ordinal), "Kartica mora klicati " + call + ".");
 Assert(card.Contains("<PimMissing", StringComparison.Ordinal), "Manjkajoče preverbe morajo imeti viden PimMissing.");
-foreach (var forbidden in new[] { "Shrani", "Izbriši", "Revalidiraj", "HttpClient" })
-  Assert(!card.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Bralna kartica ne sme ponujati ali izvajati: " + forbidden);
+foreach (var forbidden in new[] { "HttpClient", "new SqlCommand", "SELECT ", "UPDATE ", "DELETE " })
+  Assert(!card.Contains(forbidden, StringComparison.Ordinal), "Kartica ne sme sama do baze ali v svet: " + forbidden);
+
+// Urejanje: dve poti, vsaka po svojem servisu, in nobena mimo druge.
+Assert(card.Contains("Edits.SaveTextsAsync", StringComparison.Ordinal) && card.Contains("Edits.SaveAttributesAsync", StringComparison.Ordinal),
+  "Besedila in lastnosti, ki so last PIM, morajo iti skozi ProductEditService (migracija 111).");
+Assert(card.Contains("SaopWrite.EnqueueAsync", StringComparison.Ordinal),
+  "Polje, ki ga PIM pise nazaj v SAOP, mora iti v odhodno vrsto, ne naravnost v katalog.");
+Assert(card.Contains("ProductFieldEdit.Saop", StringComparison.Ordinal) && card.Contains("ProductFieldEdit.Text", StringComparison.Ordinal)
+  && card.Contains("ProductFieldEdit.Attribute", StringComparison.Ordinal),
+  "Vsako urejivo polje mora povedati, kam gre njegova sprememba.");
+Assert(card.Contains("WritableSaopFields", StringComparison.Ordinal) && card.Contains("GetWritableFieldsAsync", StringComparison.Ordinal),
+  "Kateri polja so pisljiva v SAOP, mora povedati register, ne seznam v strani.");
+Assert(Regex.IsMatch(card, @"Writable\(fieldKey\)"),
+  "Odlocitev o poti mora izhajati iz registra pisljivih polj.");
+Assert(card.Contains("MissingRequired", StringComparison.Ordinal),
+  "Manjkajoce obvezno polje mora biti vnosno mesto, ne samo obvestilo, da manjka.");
+Assert(card.Contains("52401 or 52402", StringComparison.Ordinal),
+  "Zavrnitev iz baze (tuje podjetje, besedilo v lasti SAOP) mora priti do uporabnika, ne v splosno napako.");
+
+// Panel kanala je obrazec z oznakami, ne tabela vrednosti.
+Assert(channel.Contains("<label for=\"@controlId\">", StringComparison.Ordinal), "Vsako polje mora imeti povezano oznako.");
+foreach (var control in new[] { "<input id=\"@controlId\"", "<textarea id=\"@controlId\"", "<select id=\"@controlId\"" })
+  Assert(channel.Contains(control, StringComparison.Ordinal), "Panel mora znati urejati polje s kontrolo " + control + ".");
+Assert(channel.Contains("disabled=\"@row.Pending\"", StringComparison.Ordinal),
+  "Polje, ki ze caka potrditev SAOP, se ne sme urejati naprej.");
+Assert(channel.Contains("Drafts", StringComparison.Ordinal) && channel.Contains("FieldChanged", StringComparison.Ordinal),
+  "Neshranjena sprememba mora ziveti v kartici, ne v panelu.");
+Assert(css.Contains(".field.missing .field-input", StringComparison.Ordinal),
+  "Manjkajoce obvezno polje mora biti vidno tudi v obrazcu.");
+Assert(css.Contains(".product-tabs button.active", StringComparison.Ordinal)
+  && Regex.IsMatch(css, @"\.product-tabs button\.active\s*\{[^}]*font-weight"),
+  "Aktivni zavihek mora biti razpoznaven tudi brez barve (pisava, podlaga, crta).");
+Assert(Regex.IsMatch(css, @"\.product-tabs\s*\{[^}]*position: sticky"),
+  "Vrstica zavihkov mora ostati vidna med drsenjem, sicer se izgubi, kje si.");
 
 Assert(css.Contains(".product-tabs button:focus-visible", StringComparison.Ordinal), "Zavihki morajo imeti viden fokus.");
 Assert(css.Contains("@media (max-width: 900px)", StringComparison.Ordinal), "Kartica mora biti odzivna.");

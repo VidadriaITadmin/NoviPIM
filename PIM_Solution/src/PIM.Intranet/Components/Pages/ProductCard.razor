@@ -6,6 +6,9 @@
 @inject ProductWorkbenchService Workbench
 @inject IntranetFeatureReadService Features
 @inject CatalogReadService Catalog
+@inject ProductEditService Edits
+@inject SaopWriteService SaopWrite
+@inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
 
 <PageTitle>@(Detail?.Header.Name ?? "Izdelek")</PageTitle>
@@ -40,6 +43,20 @@
         <strong>@Detail.Header.Completeness.ToString("0.#") %</strong>
         <span>skupna popolnost</span>
         <PimBar Percent="Detail.Header.Completeness" Label="Popolnost izdelka" />
+      </div>
+    </section>
+
+    <section class="ui-card edit-bar" aria-label="Urejanje izdelka">
+      <div class="edit-state" role="status" aria-live="polite">
+        @if (Busy) { <span>Shranjujem …</span> }
+        else if (SaveError is not null) { <span class="edit-error">@SaveError</span> }
+        else if (SaveMessage is not null) { <span class="edit-ok">@SaveMessage</span> }
+        else if (Drafts.Count > 0) { <span>@Drafts.Count sprememb še ni shranjenih.</span> }
+        else { <span class="muted">Polja urejaš neposredno v zavihkih. Kar piše SAOP, gre v vrsto z odobritvijo.</span> }
+      </div>
+      <div class="edit-actions">
+        <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči spremembe</button>
+        <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">Shrani in preveri (@Drafts.Count)</button>
       </div>
     </section>
 
@@ -90,19 +107,22 @@
                          StatusText="@StatusLabel(ErpStatus)" StatusTone="@Tone(ErpStatus)"
                          BlockingCount="@ErpIssues.Count(row => row.Severity == "ERROR")"
                          WarningCount="@ErpIssues.Count(row => row.Severity == "WARNING")"
-                         LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues" />
+                         LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues"
+                         Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Osnovna polja za ERP" />
 
     <ProductChannelPanel PanelId="panel-komerciala" TabId="tab-komerciala" Title="Komerciala" Hidden="@(Tab != "komerciala")"
                          StatusText="@(CommercialIssues.Count == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")"
                          StatusTone="@(CommercialIssues.Count == 0 ? "good" : "warn")" BlockingCount="0"
                          WarningCount="@CommercialIssues.Count" LastValidatedUtc="@Detail.Header.LastValidatedUtc"
-                         Fields="@CommercialFields" Issues="@CommercialIssues" />
+                         Fields="@CommercialFields" Issues="@CommercialIssues"
+                         Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Trgovinski podatki" />
 
     <ProductChannelPanel PanelId="panel-splet" TabId="tab-splet" Title="Splet" Hidden="@(Tab != "splet")"
                          StatusText="@StatusLabel(WebStatus)" StatusTone="@Tone(WebStatus)"
                          BlockingCount="@WebIssues.Count(row => row.Severity == "ERROR")"
                          WarningCount="@WebIssues.Count(row => row.Severity == "WARNING")"
-                         LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@WebFields" Issues="@WebIssues">
+                         LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@WebFields" Issues="@WebIssues"
+                         Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Spletna polja">
       <Toolbar>
         <label for="product-site">Spletno mesto</label>
         <select id="product-site" class="filter-select" @bind="SelectedSite">
@@ -176,6 +196,17 @@
   string Tab = "overview";
   string SelectedSite = "";
 
+  int OrganizationId;
+  IReadOnlyList<WritableFieldRow> WritableSaopFields = [];
+
+  /// <summary>Nepotrjene spremembe: kljuc polja → nova vrednost. Zivijo, dokler jih uporabnik
+  /// ne shrani ali preklice; zavihek jih ne izgubi, ker je kartica en obrazec.</summary>
+  readonly Dictionary<string, string?> Drafts = new(StringComparer.OrdinalIgnoreCase);
+  readonly Dictionary<string, ProductChannelField> DraftFields = new(StringComparer.OrdinalIgnoreCase);
+  bool Busy;
+  string? SaveMessage;
+  string? SaveError;
+
   static readonly IReadOnlyList<PimCrumb> ProductCrumbs = [new("Izdelki", "izdelki"), new("Kartica")];
   static readonly IReadOnlyList<PimColumn> OverviewColumns = [new("Polje"), new("Ključ"), new("Kanonična vrednost"), new("Lastnik"), new("Čaka potrditev")];
   static readonly IReadOnlyList<PimColumn> PriceColumns = [new("Cenik"), new("Neto", true), new("DDV", true), new("Bruto", true), new("Velja od"), new("Stanje")];
@@ -193,44 +224,269 @@
   string ErpStatus => StatusFor([PimValidationLayer.ErpSlo, PimValidationLayer.ErpEuThird], Detail?.Header.ErpStatus ?? "PENDING");
   string WebStatus => StatusFor([PimValidationLayer.Splet], Detail?.Header.WebStatus ?? "PENDING", SelectedSite);
 
-  IReadOnlyList<ProductChannelField> ErpFields =>
-  [
-    Field("ItemID", "Product.ItemID", Detail?.Header.ItemId), Field("EAN", "Product.EAN", Detail?.Header.Ean),
-    Field("Naziv", "Product.Name", Detail?.Header.Name), Field("Enota mere", "Product.UoM", Detail?.Header.Uom),
-    Field("Skupina artikla", "Product.ItemGroup", Detail?.Header.ItemGroup), Field("Oddelek", "Product.Department", Detail?.Header.Department),
-    Field("Davčna stopnja", "Product.VatRate", null, false), Field("Aktiven", "Product.IsActive", YesNo(Detail?.Header.IsActive ?? false)),
-    Field("Skupina popusta", "Product.DiscountGroup", Detail?.Header.DiscountGroup),
-    Field("Planiranje in rezervacija", "ProductPlanning", null, false),
-    Field("Knjigovodske šifre", "ProductStockAccounting", Detail?.Header.AccountingGroup),
-  ];
+  /* Polja kanala nastanejo iz treh virov, da na kartici ni vec praznega mesta:
+       1. kar je v bralnem modelu (vrednosti izdelka),
+       2. kar je pisljivo v SAOP (register out.SaopXmlField) — to je urejivo prek odhodne vrste,
+       3. kar validacija pogresa (odprte tezave) — polje se pokaze, tudi ce vrstice v katalogu ni.
+     Tretja tocka je bistvo: doslej je kartica povedala, da polje manjka, ni pa ga bilo mogoce
+     izpolniti; zdaj je manjkajoce polje vnosno mesto. */
 
-  IReadOnlyList<ProductChannelField> CommercialFields =>
-  [
-    Field("Neto teža", "ProductCommercial.NetWeight", Measure(Detail?.Commercial?.NetWeight, "kg")),
-    Field("Bruto teža", "ProductCommercial.GrossWeight", Measure(Detail?.Commercial?.GrossWeight, "kg")),
-    Field("Dimenzije", "ProductCommercial.Dimensions", Detail?.Commercial?.Dimensions),
-    Field("Pakiranje 1", "ProductCommercial.Pak1", Number(Detail?.Commercial?.Pak1)),
-    Field("Pakiranje 2", "ProductCommercial.Pak2", Number(Detail?.Commercial?.Pak2)),
-    Field("Kosov v paketu", "Product.PiecesInPackage", null, false),
-    Field("Carinska tarifa", "ProductCommercial.CustomsTariff", Detail?.Commercial?.CustomsTariff),
-    Field("Država porekla", "ProductCommercial.CountryOfOrigin", Detail?.Commercial?.CountryOfOrigin),
-    Field("Dobavitelj", "Product.Supplier", Detail?.Header.Supplier), Field("Proizvajalec", "Product.Manufacturer", Detail?.Header.Manufacturer),
-    Field("Nabavni podatki", "ProductCommercial.Purchase", null, false),
-  ];
+  WritableFieldRow? Writable(string fieldKey) =>
+    WritableSaopFields.FirstOrDefault(row => string.Equals(row.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
+
+  static string FormatOf(WritableFieldRow? writable) => writable?.ValueFormat switch
+  {
+    "bool" => "bool",
+    "decimal4" or "decimal8" => "decimal",
+    _ => "text",
+  };
+
+  bool RequiredField(string fieldKey) => Detail?.Issues.Any(issue =>
+    string.Equals(issue.FieldCode, fieldKey, StringComparison.OrdinalIgnoreCase)) == true;
+
+  /// <summary>Polje kanala; ce je pisljivo v SAOP, je urejivo prek odhodne vrste, sicer samo prikaz.</summary>
+  ProductChannelField Channel(string label, string fieldKey, string? value, string group, bool inReadModel = true)
+  {
+    var writable = Writable(fieldKey);
+    var stored = Detail?.Fields.FirstOrDefault(row => row.FieldKey == fieldKey);
+    var resolved = value ?? stored?.Value;
+    return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "—" : "PIM"), null, null,
+      Pending(fieldKey), inReadModel,
+      writable is null ? ProductFieldEdit.None : ProductFieldEdit.Saop, FormatOf(writable),
+      RequiredField(fieldKey), string.IsNullOrWhiteSpace(resolved),
+      Hint: group);
+  }
+
+  /// <summary>Besedilo izdelka. ERP nazive pise SAOP, zato so ta med pisljivimi polji SAOP.</summary>
+  ProductChannelField TextField(string label, string textType, string language, string? value, string group)
+  {
+    var fieldKey = $"ProductText.{textType}.{language}";
+    var writable = Writable(fieldKey);
+    var stored = Detail?.Texts.FirstOrDefault(row => row.TextType == textType && row.Language == language);
+    var resolved = value ?? stored?.Value;
+    var multiline = textType.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase);
+    return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "PIM" : "SAOP"), null, null,
+      Pending(fieldKey), true,
+      writable is null ? ProductFieldEdit.Text : ProductFieldEdit.Saop,
+      writable is null && multiline ? "multiline" : FormatOf(writable),
+      RequiredField(fieldKey), string.IsNullOrWhiteSpace(resolved),
+      Language: language, TextType: textType, Hint: group);
+  }
+
+  ProductChannelField AttributeField(string attributeCode, string? value, string group)
+  {
+    var fieldKey = $"ProductAttribute.{attributeCode}";
+    return new(attributeCode, fieldKey, value, "PIM", null, null, false, true,
+      ProductFieldEdit.Attribute, "text", RequiredField(fieldKey), string.IsNullOrWhiteSpace(value),
+      AttributeCode: attributeCode, Hint: group);
+  }
+
+  /// <summary>Manjkajoca obvezna polja tega kanala, ki jih seznam zgoraj se ne pokriva.</summary>
+  IEnumerable<ProductChannelField> MissingRequired(IReadOnlyList<ProductChannelField> known, string prefix, string group)
+  {
+    if (Detail is null) yield break;
+    foreach (var code in Detail.Issues
+      .Select(issue => issue.FieldCode)
+      .Where(code => code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .OrderBy(code => code, StringComparer.OrdinalIgnoreCase))
+    {
+      if (known.Any(row => string.Equals(row.FieldKey, code, StringComparison.OrdinalIgnoreCase))) continue;
+      var parts = code.Split('.');
+      if (code.StartsWith("ProductText.", StringComparison.OrdinalIgnoreCase) && parts.Length >= 3)
+        yield return TextField($"{TextLabel(parts[1])} ({parts[2]})", parts[1], parts[2], null, group);
+      else if (code.StartsWith("ProductAttribute.", StringComparison.OrdinalIgnoreCase) && parts.Length >= 2)
+        yield return AttributeField(string.Join('.', parts.Skip(1)), null, group);
+      else
+        yield return Channel(FieldLabel(code), code, null, group);
+    }
+  }
+
+  static string TextLabel(string textType) => textType switch
+  {
+    "WEB_TITLE" => "Spletni naziv",
+    "TITLE_ERP" => "ERP naziv",
+    "TITLE_ERP2" => "ERP naziv 2",
+    "DESCRIPTION" => "Spletni opis",
+    "DESCRIPTION_K" => "Kratek opis",
+    "DESCRIPTION_KD" => "Kratek opis (dodatni)",
+    "DESCRIPTION_KK" => "Ključne lastnosti",
+    "DESCRIPTION_O" => "Opomba",
+    _ => textType,
+  };
+
+  static string FieldLabel(string fieldKey) => fieldKey switch
+  {
+    "Product.ItemID" => "Šifra artikla",
+    "Product.EAN" => "EAN",
+    "Product.UoM" => "Merska enota",
+    "Product.ItemGroup" => "Skupina artikla",
+    "Product.Department" => "Oddelek",
+    "Product.DiscountGroup" => "Skupina popusta",
+    "Product.AccountingGroup" => "Knjižna skupina",
+    "Product.Supplier" => "Koda dobavitelja",
+    "Product.Manufacturer" => "Koda proizvajalca",
+    "Product.IsActive" => "Aktiven",
+    "Product.WebPublish" => "Objava na spletu",
+    "ProductCommercial.NetWeight" => "Neto teža",
+    "ProductCommercial.GrossWeight" => "Bruto teža",
+    "ProductCommercial.CustomsTariff" => "Carinska tarifa",
+    "ProductCommercial.CountryOfOrigin" => "Država porekla",
+    "ProductCommercial.Dimensions" => "Dimenzije",
+    "ProductCommercial.Volume" => "Volumen",
+    "ProductCommercial.PackageLength" => "Dolžina paketa",
+    "ProductCommercial.PackageWidth" => "Širina paketa",
+    "ProductCommercial.PackageHeight" => "Višina paketa",
+    "ProductCommercial.DimensionUnit" => "Enota mer",
+    "ProductCommercial.Pak1" => "Pakiranje 1",
+    "ProductCommercial.Pak2" => "Pakiranje 2",
+    _ => fieldKey,
+  };
+
+  IReadOnlyList<ProductChannelField> ErpFields
+  {
+    get
+    {
+      if (Detail is null) return [];
+      const string identity = "Identiteta artikla";
+      const string classification = "Uvrstitev in šifranti";
+      const string names = "Nazivi za ERP";
+      var rows = new List<ProductChannelField>
+      {
+        Channel("Šifra artikla", "Product.ItemID", Detail.Header.ItemId, identity),
+        Channel("EAN", "Product.EAN", Detail.Header.Ean, identity),
+        Channel("Merska enota", "Product.UoM", Detail.Header.Uom, identity),
+        Channel("Aktiven", "Product.IsActive", YesNo(Detail.Header.IsActive), identity),
+        Channel("Skupina artikla", "Product.ItemGroup", Detail.Header.ItemGroup, classification),
+        Channel("Oddelek", "Product.Department", Detail.Header.Department, classification),
+        Channel("Knjižna skupina", "Product.AccountingGroup", Detail.Header.AccountingGroup, classification),
+        Channel("Skupina popusta", "Product.DiscountGroup", Detail.Header.DiscountGroup, classification),
+        Channel("Koda dobavitelja", "Product.Supplier", Detail.Header.Supplier, classification),
+        Channel("Koda proizvajalca", "Product.Manufacturer", Detail.Header.Manufacturer, classification),
+        Channel("Davčna stopnja", "Product.VatRate", null, classification, inReadModel: false),
+        Channel("Planiranje in rezervacija", "ProductPlanning", null, classification, inReadModel: false),
+        Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, classification),
+      };
+
+      foreach (var language in ErpLanguages)
+      {
+        rows.Add(TextField($"ERP naziv ({language})", "TITLE_ERP", language, null, names));
+        rows.Add(TextField($"ERP naziv 2 ({language})", "TITLE_ERP2", language, null, names));
+      }
+
+      rows.AddRange(MissingRequired(rows, "Product.", "Manjka za ERP"));
+      return rows;
+    }
+  }
+
+  IReadOnlyList<ProductChannelField> CommercialFields
+  {
+    get
+    {
+      if (Detail is null) return [];
+      const string weights = "Teže in mere";
+      const string packaging = "Pakiranje";
+      const string origin = "Poreklo in tarifa";
+      const string partners = "Partnerji";
+      var commercial = Detail.Commercial;
+      var rows = new List<ProductChannelField>
+      {
+        Channel("Neto teža", "ProductCommercial.NetWeight", Number(commercial?.NetWeight), weights),
+        Channel("Bruto teža", "ProductCommercial.GrossWeight", Number(commercial?.GrossWeight), weights),
+        Channel("Dolžina paketa", "ProductCommercial.PackageLength", Number(commercial?.PackageLength), weights),
+        Channel("Širina paketa", "ProductCommercial.PackageWidth", Number(commercial?.PackageWidth), weights),
+        Channel("Višina paketa", "ProductCommercial.PackageHeight", Number(commercial?.PackageHeight), weights),
+        Channel("Enota mer", "ProductCommercial.DimensionUnit", commercial?.DimensionUnit, weights),
+        Channel("Dimenzije", "ProductCommercial.Dimensions", commercial?.Dimensions, weights),
+        Channel("Volumen", "ProductCommercial.Volume", Number(commercial?.Volume), weights),
+        Channel("Pakiranje 1", "ProductCommercial.Pak1", Number(commercial?.Pak1), packaging),
+        Channel("Pakiranje 2", "ProductCommercial.Pak2", Number(commercial?.Pak2), packaging),
+        Channel("Kosov v paketu", "Product.PiecesInPackage", null, packaging, inReadModel: false),
+        Channel("Carinska tarifa", "ProductCommercial.CustomsTariff", commercial?.CustomsTariff, origin),
+        Channel("Država porekla", "ProductCommercial.CountryOfOrigin", commercial?.CountryOfOrigin, origin),
+        Channel("Dobavitelj", "Product.Supplier", Detail.Header.Supplier, partners),
+        Channel("Proizvajalec", "Product.Manufacturer", Detail.Header.Manufacturer, partners),
+        Channel("Nabavni podatki", "ProductCommercial.Purchase", null, partners, inReadModel: false),
+      };
+
+      rows.AddRange(MissingRequired(rows, "ProductCommercial.", "Manjka za komercialo"));
+      return rows;
+    }
+  }
 
   IReadOnlyList<ProductChannelField> WebFields
   {
     get
     {
       if (Detail is null) return [];
-      var rows = new List<ProductChannelField> { Field("Objava na spletu", "Product.WebPublish", YesNo(Detail.Header.WebPublish)) };
-      rows.AddRange(Detail.Texts.Select(row => new ProductChannelField($"{row.TextType} ({row.Language})", row.FieldKey, row.Value, row.Owner, null, null, Pending(row.FieldKey))));
-      rows.AddRange(Detail.Categories.Where(row => string.IsNullOrWhiteSpace(SelectedSite) || string.Equals(row.WebSite, SelectedSite, StringComparison.OrdinalIgnoreCase))
-        .Select(row => new ProductChannelField($"Kategorija ({row.WebSite})", $"ProductCategory.{row.WebSite}", row.CategoryPath, row.Owner, null, null, false)));
-      rows.AddRange(Detail.Attributes.Select(row => new ProductChannelField($"Atribut {row.AttributeCode}", row.FieldKey, row.Value, row.Owner, null, null, Pending(row.FieldKey))));
-      rows.Add(new("Slike za splet", "ProductMedia", Detail.Media.Count.ToString("N0"), "—", null, null, false));
-      rows.Add(new("Spletni kanali", "canon.WebSite", string.Join(", ", WebSites), "—", null, null, false));
+      const string publication = "Objava";
+      const string titles = "Nazivi in opisi";
+      const string categories = "Kategorije";
+      const string attributes = "Lastnosti izdelka";
+      var rows = new List<ProductChannelField>
+      {
+        Channel("Objava na spletu", "Product.WebPublish", YesNo(Detail.Header.WebPublish), publication),
+      };
+
+      // Nazivi in opisi po jezikih: prikazani so vsi jeziki spletnih kanalov, tudi tam, kjer
+      // besedila se ni — sicer manjkajocega prevoda ni mogoce vpisati.
+      foreach (var textType in WebTextTypes)
+        foreach (var language in WebLanguages)
+          rows.Add(TextField($"{TextLabel(textType)} ({language})", textType, language, null, titles));
+
+      rows.AddRange(Detail.Categories
+        .Where(row => string.IsNullOrWhiteSpace(SelectedSite) || string.Equals(row.WebSite, SelectedSite, StringComparison.OrdinalIgnoreCase))
+        .Select(row => new ProductChannelField($"Kategorija ({row.WebSite})", $"ProductCategory.{row.WebSite}",
+          row.CategoryPath, row.Owner, null, null, false, true, ProductFieldEdit.None, "text", false, false,
+          Hint: categories)));
+      rows.Add(new("Slike za splet", "ProductMedia", Detail.Media.Count.ToString("N0"), "—", null, null, false, true,
+        ProductFieldEdit.None, "text", false, false, Hint: categories));
+      rows.Add(new("Spletni kanali", "canon.WebSite", string.Join(", ", WebSites), "—", null, null, false, true,
+        ProductFieldEdit.None, "text", false, false, Hint: categories));
+
+      rows.AddRange(Detail.Attributes
+        .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
+        .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
+
+      rows.AddRange(MissingRequired(rows, "ProductText.", "Manjka za splet"));
+      rows.AddRange(MissingRequired(rows, "ProductAttribute.", "Manjka za splet"));
       return rows;
+    }
+  }
+
+  /// <summary>Jeziki, ki jih kartica ponudi za vnos: tisti, ki so ze v izdelku, in tisti, ki jih zahteva validacija.</summary>
+  IReadOnlyList<string> WebLanguages => LanguagesFor("WEB_TITLE");
+  IReadOnlyList<string> ErpLanguages => LanguagesFor("TITLE_ERP");
+
+  IReadOnlyList<string> LanguagesFor(string textType)
+  {
+    if (Detail is null) return ["sl"];
+    var languages = Detail.Texts.Where(row => row.TextType == textType).Select(row => row.Language)
+      .Concat(Detail.Issues.Select(issue => issue.FieldCode)
+        .Where(code => code.StartsWith($"ProductText.{textType}.", StringComparison.OrdinalIgnoreCase))
+        .Select(code => code.Split('.').Last()))
+      .Append("sl")
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .OrderBy(language => language == "sl" ? 0 : 1).ThenBy(language => language, StringComparer.Ordinal)
+      .ToList();
+    return languages;
+  }
+
+  /// <summary>Vrste spletnih besedil, ki jih izdelek ze ima ali jih zahteva validacija; brez ERP nazivov.</summary>
+  IReadOnlyList<string> WebTextTypes
+  {
+    get
+    {
+      if (Detail is null) return ["WEB_TITLE"];
+      return Detail.Texts.Select(row => row.TextType)
+        .Concat(Detail.Issues.Select(issue => issue.FieldCode)
+          .Where(code => code.StartsWith("ProductText.", StringComparison.OrdinalIgnoreCase))
+          .Select(code => code.Split('.').Skip(1).FirstOrDefault() ?? ""))
+        .Where(type => type.Length > 0 && !type.StartsWith("TITLE_ERP", StringComparison.OrdinalIgnoreCase))
+        .Append("WEB_TITLE")
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(type => type == "WEB_TITLE" ? 0 : 1).ThenBy(type => type, StringComparer.Ordinal)
+        .ToList();
     }
   }
 
@@ -238,7 +494,9 @@
     Detail.Issues.SelectMany(issue => ProfileLayers(issue.ProfileCode).Select(layer => (layer, issue, IsShared(issue.ProfileCode))))
       .OrderBy(row => row.layer).ThenByDescending(row => row.issue.Severity == "ERROR").ThenBy(row => row.issue.ProfileCode);
 
-  protected override async Task OnParametersSetAsync()
+  protected override Task OnParametersSetAsync() => LoadAsync();
+
+  async Task LoadAsync()
   {
     Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
     try
@@ -247,19 +505,114 @@
       // privzeto podjetje bi tuji izdelek prikazalo kot neobstojec.
       var organization = await Data.GetProductOrganizationAsync(ProductId);
       if (organization is null) { Error = "Izdelek s to oznako ne obstaja."; return; }
+      OrganizationId = organization.OrganizationId;
       var cardTask = Workbench.GetProductCardAsync(organization.OrganizationId, ProductId, "sl");
       var originTask = Workbench.GetProductOriginAsync(organization.OrganizationId, ProductId);
       var priceTask = Features.GetPriceChecksAsync(organization.OrganizationId, ProductId);
       var stockTask = Features.GetStockChecksAsync(organization.OrganizationId, ProductId);
       var sitesTask = Catalog.GetWebSitesAsync();
-      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask);
+      var writableTask = SaopWrite.GetWritableFieldsAsync(organization.OrganizationId);
+      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, writableTask);
       Detail = await cardTask; Origins = await originTask; PriceChecks = await priceTask; StockChecks = await stockTask;
-      Sites = await sitesTask;
+      Sites = await sitesTask; WritableSaopFields = await writableTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Tabs.Contains(fragment)) Tab = fragment;
     }
     catch { Error = "Kartice izdelka trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  /* Urejanje ima dve poti in ena ne sme prevzeti druge:
+       - polje, ki ga PIM pise nazaj v SAOP, gre v odhodno vrsto in caka odobritev,
+       - besedilo in lastnost, ki sta last PIM, gresta naravnost v katalog in takoj revalidirata.
+     Kartica zbere oboje v en gumb, izid pa pove loceno, da uporabnik ve, kaj je ze veljavno
+     in kaj se caka. */
+
+  void OnFieldChanged((ProductChannelField Field, string? Value) change)
+  {
+    SaveMessage = null;
+    SaveError = null;
+    var current = change.Value?.Trim();
+    var original = change.Field.Value?.Trim();
+    if (string.Equals(current ?? "", original ?? "", StringComparison.Ordinal))
+    {
+      Drafts.Remove(change.Field.FieldKey);
+      DraftFields.Remove(change.Field.FieldKey);
+      return;
+    }
+
+    Drafts[change.Field.FieldKey] = current;
+    DraftFields[change.Field.FieldKey] = change.Field;
+  }
+
+  void DiscardChanges()
+  {
+    Drafts.Clear();
+    DraftFields.Clear();
+    SaveMessage = null;
+    SaveError = null;
+  }
+
+  async Task SaveChangesAsync()
+  {
+    if (Drafts.Count == 0 || Detail is null || Busy) return;
+    Busy = true;
+    SaveMessage = null;
+    SaveError = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var note = $"Kartica izdelka {Detail.Header.ItemId}";
+      var outcome = new List<string>();
+
+      var texts = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Text).ToList();
+      if (texts.Count > 0)
+      {
+        var result = await Edits.SaveTextsAsync(OrganizationId, ProductId,
+          texts.Select(field => new ProductTextEdit(field.Language!, field.TextType!, Drafts[field.FieldKey])), actor, note);
+        outcome.Add($"{result.ChangedCount:N0} besedil shranjenih");
+      }
+
+      var attributes = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute).ToList();
+      if (attributes.Count > 0)
+      {
+        var result = await Edits.SaveAttributesAsync(OrganizationId, ProductId,
+          attributes.Select(field => new ProductAttributeEdit(field.AttributeCode!, Drafts[field.FieldKey])), actor, note);
+        outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih");
+      }
+
+      var saop = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Saop).ToList();
+      if (saop.Count > 0)
+      {
+        var result = await SaopWrite.EnqueueAsync(OrganizationId,
+          saop.Select(field => (Detail.Header.ItemId, field.FieldKey, Drafts[field.FieldKey])), actor, "CARD", note);
+        outcome.Add(result.Rejected == 0
+          ? $"{result.Queued:N0} polj uvrščenih v vrsto za SAOP (skupina {result.OutboundBatchId})"
+          : $"{result.Queued:N0} polj v vrsti za SAOP, {result.Rejected:N0} zavrnjenih (skupina {result.OutboundBatchId})");
+      }
+
+      Drafts.Clear();
+      DraftFields.Clear();
+      SaveMessage = string.Join(" · ", outcome) + ".";
+      await LoadAsync();
+    }
+    catch (Exception exception)
+    {
+      // Procedura zavrne zapis, ki bi sel mimo SAOP, z govorno napako; ta mora priti do uporabnika.
+      SaveError = exception is Microsoft.Data.SqlClient.SqlException sql && sql.Number is 52401 or 52402
+        ? sql.Message
+        : "Sprememb ni bilo mogoče shraniti.";
+    }
+    finally
+    {
+      Busy = false;
+    }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
   }
 
   static readonly string[] Tabs = ["overview", "erp", "komerciala", "splet", "media", "prices", "stock", "quality", "saop", "history", "origin"];

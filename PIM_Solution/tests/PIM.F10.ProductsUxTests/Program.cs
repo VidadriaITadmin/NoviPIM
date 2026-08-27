@@ -111,8 +111,19 @@ Assert(markup.Contains("SelectionSpansOrganizations", StringComparison.Ordinal),
 Assert(Regex.IsMatch(markup, "izvozi/mnozicno\\?items=[^\"]*podjetje="),
   "Mnozicno urejanje mora dobiti podjetje izbranih izdelkov, ne privzetega.");
 
-// 9. Izvoz pogleda uporabi iste filtre kot pogled.
-Assert(markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda.");
+// 8.2 Filtri se odprejo na zahtevo in povedo, koliko jih je aktivnih; sicer je vrstica natrpana.
+var filterToggle = Regex.Match(markup, "<button[^>]*class=\"[^\"]*filter-toggle[^\"]*\"[^>]*>", RegexOptions.Singleline);
+Assert(filterToggle.Success, "Filtri morajo biti za gumbom, ne vsi hkrati v orodni vrstici.");
+Assert(filterToggle.Value.Contains("aria-expanded", StringComparison.Ordinal), "Gumb za filtre mora povedati, ali je plosca odprta (aria-expanded).");
+Assert(Regex.IsMatch(filterToggle.Value, "aria-controls=\"([^\"]+)\""), "Gumb za filtre mora kazati na plosco (aria-controls).");
+var panelId = Regex.Match(filterToggle.Value, "aria-controls=\"([^\"]+)\"").Groups[1].Value;
+Assert(Regex.IsMatch(markup, "id=\"" + Regex.Escape(panelId) + "\"[^>]*class=\"filter-panel\""), "Plosca s filtri mora obstajati z id " + panelId + ".");
+Assert(Regex.IsMatch(markup, "<div class=\"filter-field\">\\s*<label for=\"product-organization\">"),
+  "Vsak filter mora imeti vidno oznako, ne samo skrite; natrpana vrstica brez oznak je bila prav to, kar je bilo narobe.");
+
+// 9. Izvoz pogleda uporabi iste filtre kot pogled in je delovni zvezek, ne CSV.
+Assert(markup.Contains("izvoz/izdelki.xlsx", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda v Excel.");
+Assert(!markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Gumb za izvoz mora dati zvezek; CSV pot ostaja samo za skripte.");
 Assert(Regex.IsMatch(markup, "string ExportHref\\(\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
 
@@ -129,7 +140,7 @@ foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img
 foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "ApproveBatchAsync", "UndoProduct" })
   Assert(!markup.Contains(writeSurface, StringComparison.Ordinal), "Seznam izdelkov ne sme sam pisati: " + writeSurface + ".");
 Assert(markup.Contains("izvozi/mnozicno", StringComparison.Ordinal), "Izbrani izdelki morajo voditi na stran za mnozicno urejanje.");
-var allowedHandlers = new[] { "ApplyFiltersAsync", "EditSelectedAsync" };
+var allowedHandlers = new[] { "ApplyFiltersAsync", "EditSelectedAsync", "ToggleFilters" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
@@ -143,7 +154,7 @@ foreach (var fabricated in new[] { "Cena", "Zaloga", "Nov izdelek", "Uvozi", "Iz
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmisljene vsebine: " + fabricated + ".");
 
 // 13. Slog: fokus, prelivanje in odzivnost; brez uhajanja z ::deep.
-foreach (var selector in new[] { ".search-input", ".filter-select", ".filter-button", ".filter-chip", ".table-scroll", ".data-table a", ".open-link", ".select-cell input" })
+foreach (var selector in new[] { ".search-input", ".filter-select", ".ghost-button", ".link-button", ".filter-chip", ".table-scroll", ".data-table a", ".open-link", ".select-cell input" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");

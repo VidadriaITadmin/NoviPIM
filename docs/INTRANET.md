@@ -28,6 +28,7 @@ Ne-Razor končne točke:
 | POST | `/auth/prijava` | `AllowAnonymous`, obvezen antiforgery token | prevzame `uporabniskoIme`, `geslo`, neobvezno `zapomniMe`; ob uspehu prijavi in preusmeri na `{PathBase}/nadzorna-plosca`, sicer na `{PathBase}/prijava?napaka=1` |
 | POST | `/odjava` | zahteva sejo (velja `FallbackPolicy`) | odjava iz piškotne sheme, preusmeritev na `{PathBase}/prijava` |
 | GET | `/health` | `AllowAnonymous` | vrne `{ "stanje": "zdravo" }` |
+| GET | `/izvoz/izdelki.xlsx` | zahteva sejo (velja `FallbackPolicy`) | **izvoz, ki ga ponuja stran**: isti filtri kot `/izdelki`, delovni zvezek Excel (`PIM.Operations.WorkbookWriter`, brez zunanje knjižnice), zamrznjena naslovna vrstica in samodejni filter; šifra artikla ostane besedilo (vodilne ničle), popolnost in datumi imajo obliko. Zgornja meja 20.000 vrstic je zapisana v datoteko |
 | GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki` (vključno s `podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), brez `podjetje` zajame vsa podjetja, prvi stolpec je podjetje; CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
 
 Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` in
@@ -128,6 +129,9 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); `@OrganizationId` je neobvezen — `NULL` pomeni **vsa podjetja**, neznano podjetje vrne prazen nabor; filtri iskanje, shranjen pogled, podjetje, proizvajalec, dobavitelj, skupina, oddelek, ERP/spletni status, aktivnost, zastavica za splet, razred popolnosti, razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
 | `ProductWorkbenchService.GetProductListViewsAsync` | `intranet.GetProductListViews` (števci osmih shranjenih pogledov); `NULL` podjetje pomeni vsa | `/izdelki` |
 | `ProductWorkbenchService.GetProductListFacetsAsync` | `intranet.GetProductListFilters` (4 nabori: proizvajalci, dobavitelji, skupine, oddelki); `NULL` podjetje pomeni vsa | `/izdelki` |
+| `ProductEditService.SaveTextsAsync` | `pim.SaveProductTexts` (migracija 111) — piše besedila, ki so last PIM, sproži zgodovino prek sprožilcev in **takoj revalidira ta en izdelek**; besedilo, ki ga piše SAOP, zavrne z napako 52402 | `/izdelki/{id}` |
+| `ProductEditService.SaveAttributesAsync` | `pim.SaveProductAttributes` (migracija 111) — enako za lastnosti izdelka | `/izdelki/{id}` |
+| `SaopWriteService.EnqueueAsync` | `out.EnqueueSaopItemChanges` — polje, ki ga PIM piše nazaj v SAOP, gre v odhodno vrsto in čaka odobritev | `/izdelki/{id}`, `/izvozi/mnozicno` |
 | `GetProductOrganizationAsync` | `SELECT TOP (1) OrganizationId … FROM canon.Product WHERE ProductId = @ProductId` — kartica izdelka dobi obseg iz izdelka, ker je dosegljiva iz seznama vseh podjetij | `/izdelki/{id}` |
 | `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | zapuščinska pot; seznam je od migracije 101 na `GetProductList` |
 | `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |
@@ -375,6 +379,12 @@ Za preverjanje obeh načinov gostovanja se ista instanca odziva na `/…` in `/P
       pove na glas; izbira iz enega podjetja odpre množično urejanje tega podjetja.
 - [ ] `/izdelki/{id}`: glava, profili in odprte težave se ujemajo z bazo; neobstoječ
       ID ne vrže napake strežnika.
+- [ ] `/izdelki/{id}`: aktivni zavihek je razpoznaven (podlaga, krepka pisava, črta) tudi
+      med drsenjem; vrstica zavihkov je lepljiva.
+- [ ] `/izdelki/{id}`: sprememba spletnega naziva ali lastnosti se po »Shrani in preveri«
+      pozna takoj — popolnost in število težav se spremenita v isti zahtevi.
+- [ ] `/izdelki/{id}`: sprememba polja, ki ga piše SAOP (npr. merska enota), **ne** spremeni
+      kataloga takoj, ampak ustvari skupino v `/outbound`, ki čaka odobritev.
 - [ ] `/zaloge`, `/napake-validacije`, `/karantena`, `/teki-obdelave`: podatki,
       prazno stanje in stanje napake so slovenski in razumljivi.
 - [ ] `/stranke` → odpri stranko → spremeni spletni profil → Shrani; sprememba je

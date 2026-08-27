@@ -1,5 +1,6 @@
 using PIM.Intranet.Components;
 using PIM.Intranet.Services;
+using PIM.Operations;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
@@ -32,6 +33,7 @@ builder.Services.AddScoped<IntranetDataService>();
 builder.Services.AddScoped<PimDb>();
 builder.Services.AddScoped<CatalogReadService>();
 builder.Services.AddScoped<ProductWorkbenchService>();
+builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
 builder.Services.AddScoped<StockReadService>();
@@ -154,6 +156,72 @@ app.MapGet("/izvoz/izdelki.csv", async (
     var cleaned = value.Replace('\r', ' ').Replace('\n', ' ').Replace(';', ',');
     return cleaned.Replace("\"", "\"\"");
   }
+});
+
+// Izvoz istega pogleda v delovni zvezek. Excel je oblika, ki jo uporabnik dejansko odpre:
+// CSV je pri sifri 0000000000001 in slovenskih crkah odvisen od nastavitev racunalnika,
+// zvezek pa nosi tip vsake celice s sabo. CSV pot ostaja za skripte, ki jo ze uporabljajo.
+app.MapGet("/izvoz/izdelki.xlsx", async (
+  HttpContext context, ProductWorkbenchService workbench, CancellationToken cancellationToken) =>
+{
+  var query = context.Request.Query;
+  string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
+  int? organizationId = int.TryParse(Value("podjetje"), out var parsedOrganization) ? parsedOrganization : null;
+
+  const int pageSize = 200;
+  const int maximumRows = 20_000;
+  var rows = new List<ProductListRow>();
+  long total = 0;
+
+  while (rows.Count < maximumRows)
+  {
+    var page = await workbench.GetProductListAsync(new ProductListFilter(
+      organizationId, rows.Count, pageSize, Value("isci"), Value("pogled"),
+      Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
+      Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
+      "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost")),
+      cancellationToken);
+
+    total = page.TotalCount;
+    if (page.Rows.Count == 0) break;
+    rows.AddRange(page.Rows);
+    if (page.Rows.Count < pageSize) break;
+  }
+
+  WorkbookColumn[] columns =
+  [
+    new("Podjetje"), new("Šifra artikla"), new("EAN"), new("Naziv", Width: 46), new("Proizvajalec"),
+    new("Dobavitelj"), new("Skupina"), new("Oddelek"), new("ERP"), new("Splet"),
+    new("Popolnost", WorkbookCellKind.Percent), new("Odprte težave", WorkbookCellKind.Number),
+    new("Mediji", WorkbookCellKind.Number), new("Kategorije", WorkbookCellKind.Number),
+    new("Čaka SAOP", WorkbookCellKind.Number), new("Objavljen"), new("Aktiven"), new("Za splet"),
+    new("Zadnja sprememba", WorkbookCellKind.DateTime),
+  ];
+
+  var cells = rows.Select(row => new object?[]
+  {
+    row.OrganizationName, row.ItemId, row.Ean, row.Name, row.Manufacturer, row.Supplier,
+    row.ItemGroup, row.Department, StatusText(row.ErpStatus), StatusText(row.WebStatus),
+    row.Completeness, row.OpenIssueCount, row.MediaCount, row.CategoryCount,
+    row.PendingOutboundCount, row.IsPromoted, row.IsActive, row.WebPublish, row.LastChangedUtc,
+  }).ToArray();
+
+  // Odrezan izvoz mora biti zapisan v datoteki, ne samo na zaslonu, sicer nihce ne ve zanj.
+  var notes = new List<string>();
+  if (total > rows.Count)
+    notes.Add($"Izvoženih {rows.Count:N0} od {total:N0} vrstic pogleda; zgornja meja izvoza je {maximumRows:N0}.");
+
+  var bytes = WorkbookWriter.Write("Izdelki", columns, cells, notes);
+  return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "izdelki.xlsx");
+
+  static string StatusText(string status) => status switch
+  {
+    "VALID" => "pripravljen",
+    "INVALID" => "blokiran",
+    "PENDING" => "čaka validacijo",
+    "NOT_CONFIGURED" => "ni profila",
+    _ => status,
+  };
 });
 
 app.MapRazorComponents<App>()

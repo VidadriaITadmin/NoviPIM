@@ -19,106 +19,150 @@
 
 <section class="ui-card toolbar" role="search" aria-labelledby="products-filter-title">
   <h2 id="products-filter-title" class="visually-hidden">Filtriranje izdelkov</h2>
-  <label class="visually-hidden" for="product-search">Išči po artiklu ali EAN</label>
-  <input id="product-search" type="search" class="search-input" placeholder="Išči po artiklu ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
 
-  <label class="visually-hidden" for="product-organization">Podjetje</label>
-  <select id="product-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationDraftChanged">
-    <option value="">Vsa podjetja</option>
-    @foreach (var organization in Organizations)
-    {
-      <option value="@organization.OrganizationId">@organization.Name</option>
-    }
-  </select>
+  <div class="toolbar-row">
+    <div class="search-field">
+      <span class="search-icon" aria-hidden="true"></span>
+      <label class="visually-hidden" for="product-search">Išči po artiklu ali EAN</label>
+      <input id="product-search" type="search" class="search-input" placeholder="Išči po šifri artikla ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+    </div>
 
-  <label class="visually-hidden" for="product-manufacturer">Proizvajalec</label>
-  <select id="product-manufacturer" class="filter-select" @bind="ManufacturerDraft">
-    <option value="">Vsi proizvajalci</option>
-    @foreach (var facet in Facets.Where(row => row.FacetKind == "MANUFACTURER"))
-    {
-      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
-    }
-  </select>
+    <button type="button" class="ghost-button filter-toggle @(FiltersOpen ? "open" : null)" aria-expanded="@FiltersOpen.ToString().ToLowerInvariant()" aria-controls="products-filter-panel" @onclick="ToggleFilters">
+      <span class="funnel" aria-hidden="true"></span>Filtri
+      @if (ActiveChips.Count > 0) { <span class="filter-badge">@ActiveChips.Count</span> }
+    </button>
 
-  <label class="visually-hidden" for="product-supplier">Dobavitelj</label>
-  <select id="product-supplier" class="filter-select" @bind="SupplierDraft">
-    <option value="">Vsi dobavitelji</option>
-    @foreach (var facet in Facets.Where(row => row.FacetKind == "SUPPLIER"))
-    {
-      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
-    }
-  </select>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 
-  <label class="visually-hidden" for="product-group">Skupina</label>
-  <select id="product-group" class="filter-select" @bind="GroupDraft">
-    <option value="">Vse skupine</option>
-    @foreach (var facet in Facets.Where(row => row.FacetKind == "ITEM_GROUP"))
-    {
-      <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
-    }
-  </select>
+    <div class="toolbar-actions">
+      <a class="ghost-button" href="@ExportHref()">Izvozi Excel</a>
+      <button type="button" class="primary-button" disabled="@(Selected.Count == 0 || SelectionSpansOrganizations)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
+    </div>
+  </div>
 
-  <label class="visually-hidden" for="product-department">Oddelek</label>
-  <select id="product-department" class="filter-select" @bind="DepartmentDraft">
-    <option value="">Vsi oddelki</option>
-    @foreach (var facet in Facets.Where(row => row.FacetKind == "DEPARTMENT"))
-    {
-      <option value="@facet.FacetValue">Oddelek @facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
-    }
-  </select>
+  <div id="products-filter-panel" class="filter-panel" hidden="@(!FiltersOpen)">
+    <div class="filter-grid">
+      <div class="filter-field">
+        <label for="product-organization">Podjetje</label>
+        <select id="product-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationDraftChanged">
+          <option value="">Vsa podjetja</option>
+          @foreach (var organization in Organizations)
+          {
+            <option value="@organization.OrganizationId">@organization.Name</option>
+          }
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-erp">Pripravljenost za ERP</label>
-  <select id="product-erp" class="filter-select" @bind="ErpDraft">
-    <option value="">ERP: vsi</option>
-    <option value="VALID">ERP: pripravljeni</option>
-    <option value="INVALID">ERP: blokirani</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-manufacturer">Proizvajalec</label>
+        <select id="product-manufacturer" class="filter-select" @bind="ManufacturerDraft">
+          <option value="">Vsi proizvajalci</option>
+          @foreach (var facet in Facets.Where(row => row.FacetKind == "MANUFACTURER"))
+          {
+            <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+          }
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-web">Pripravljenost za splet</label>
-  <select id="product-web" class="filter-select" @bind="WebDraft">
-    <option value="">Splet: vsi</option>
-    <option value="VALID">Splet: pripravljeni</option>
-    <option value="INVALID">Splet: blokirani</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-supplier">Dobavitelj</label>
+        <select id="product-supplier" class="filter-select" @bind="SupplierDraft">
+          <option value="">Vsi dobavitelji</option>
+          @foreach (var facet in Facets.Where(row => row.FacetKind == "SUPPLIER"))
+          {
+            <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+          }
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-activity">Aktivnost artikla</label>
-  <select id="product-activity" class="filter-select" @bind="ActivityDraft">
-    <option value="">Aktivnost: vsi</option>
-    <option value="ACTIVE">Samo aktivni</option>
-    <option value="INACTIVE">Samo neaktivni</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-group">Skupina artikla</label>
+        <select id="product-group" class="filter-select" @bind="GroupDraft">
+          <option value="">Vse skupine</option>
+          @foreach (var facet in Facets.Where(row => row.FacetKind == "ITEM_GROUP"))
+          {
+            <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+          }
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-webpublish">Zastavica za objavo na spletu</label>
-  <select id="product-webpublish" class="filter-select" @bind="WebPublishDraft">
-    <option value="">Za splet: vsi</option>
-    <option value="YES">Označeni za splet</option>
-    <option value="NO">Neoznačeni za splet</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-department">Oddelek</label>
+        <select id="product-department" class="filter-select" @bind="DepartmentDraft">
+          <option value="">Vsi oddelki</option>
+          @foreach (var facet in Facets.Where(row => row.FacetKind == "DEPARTMENT"))
+          {
+            <option value="@facet.FacetValue">@facet.FacetValue (@facet.ProductCount.ToString("N0"))</option>
+          }
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-completeness">Razred popolnosti</label>
-  <select id="product-completeness" class="filter-select" @bind="CompletenessDraft">
-    <option value="">Popolnost: vsa</option>
-    <option value="EMPTY">Popolnost 0 %</option>
-    <option value="LOW">Popolnost pod 50 %</option>
-    <option value="MID">Popolnost 50–99 %</option>
-    <option value="FULL">Popolnost 100 %</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-erp">Pripravljenost za ERP</label>
+        <select id="product-erp" class="filter-select" @bind="ErpDraft">
+          <option value="">Vsi</option>
+          <option value="VALID">Pripravljeni za ERP</option>
+          <option value="INVALID">Blokirani za ERP</option>
+        </select>
+      </div>
 
-  <label class="visually-hidden" for="product-sort">Razvrstitev</label>
-  <select id="product-sort" class="filter-select" @bind="SortDraft">
-    <option value="ITEM">Razvrsti po šifri</option>
-    <option value="ITEM:desc">Šifra padajoče</option>
-    <option value="COMPLETENESS:desc">Najbolj popolni</option>
-    <option value="COMPLETENESS">Najmanj popolni</option>
-    <option value="CHANGED:desc">Nazadnje spremenjeni</option>
-    <option value="CHANGED">Najdlje nespremenjeni</option>
-    <option value="ORGANIZATION">Razvrsti po podjetju</option>
-  </select>
+      <div class="filter-field">
+        <label for="product-web">Pripravljenost za splet</label>
+        <select id="product-web" class="filter-select" @bind="WebDraft">
+          <option value="">Vsi</option>
+          <option value="VALID">Pripravljeni za splet</option>
+          <option value="INVALID">Blokirani za splet</option>
+        </select>
+      </div>
 
-  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
-  <button type="button" class="primary-button" disabled="@(Selected.Count == 0 || SelectionSpansOrganizations)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
-  <a class="filter-button" href="@ExportHref()">Izvozi pogled (CSV)</a>
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+      <div class="filter-field">
+        <label for="product-activity">Aktivnost artikla</label>
+        <select id="product-activity" class="filter-select" @bind="ActivityDraft">
+          <option value="">Vsi</option>
+          <option value="ACTIVE">Samo aktivni</option>
+          <option value="INACTIVE">Samo neaktivni</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-webpublish">Zastavica za splet</label>
+        <select id="product-webpublish" class="filter-select" @bind="WebPublishDraft">
+          <option value="">Vsi</option>
+          <option value="YES">Označeni za splet</option>
+          <option value="NO">Neoznačeni za splet</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-completeness">Popolnost</label>
+        <select id="product-completeness" class="filter-select" @bind="CompletenessDraft">
+          <option value="">Vsa</option>
+          <option value="EMPTY">0 %</option>
+          <option value="LOW">Pod 50 %</option>
+          <option value="MID">50–99 %</option>
+          <option value="FULL">100 %</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-sort">Razvrstitev</label>
+        <select id="product-sort" class="filter-select" @bind="SortDraft">
+          <option value="ITEM">Šifra naraščajoče</option>
+          <option value="ITEM:desc">Šifra padajoče</option>
+          <option value="COMPLETENESS:desc">Najbolj popolni</option>
+          <option value="COMPLETENESS">Najmanj popolni</option>
+          <option value="CHANGED:desc">Nazadnje spremenjeni</option>
+          <option value="CHANGED">Najdlje nespremenjeni</option>
+          <option value="ORGANIZATION">Po podjetju</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-actions">
+      <button type="button" class="primary-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+      <a class="link-button" href="izdelki">Počisti vse</a>
+    </div>
+  </div>
 </section>
 
 @if (ActiveChips.Count > 0)
@@ -182,7 +226,7 @@ else if (SelectionOverflow)
 
 <p class="muted source-note">
   Vir: <span class="code-value">intranet.GetProductList</span>, <span class="code-value">intranet.GetProductListViews</span> in
-  <span class="code-value">intranet.GetProductListFilters</span> (migraciji 101 in 108). Stran je bralna — urejanje polja je na kartici izdelka.
+  <span class="code-value">intranet.GetProductListFilters</span> (migraciji 101 in 108). Urejanje polja je na kartici izdelka; izvoz pogleda je delovni zvezek Excel.
   Števci zavihkov in vrednosti spustnih seznamov se ravnajo po izbranem podjetju, ne po preostalih filtrih.
 </p>
 
@@ -231,6 +275,10 @@ else if (SelectionOverflow)
   string WebPublishDraft = "";
   string CompletenessDraft = "";
   string SortDraft = "ITEM";
+
+  // Enajst filtrov v eni vrsti je bilo natrpano in nepregledno. Odprejo se na zahtevo in
+  // ostanejo odprti, dokler je kaj izbrano — sicer bi uporabnik izgubil sled, kaj je nastavil.
+  bool? FiltersOpenOverride;
 
   const int Take = 50;
   const int MaxSelectionInUrl = 200;
@@ -409,11 +457,12 @@ else if (SelectionOverflow)
   string ViewHref(string code) => Href(view: code == "ALL" ? "" : code, page: 1);
 
   // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi.
+  // Oblika je delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz.
   string ExportHref()
   {
     var listHref = Href(page: 1);
     var separatorIndex = listHref.IndexOf('?');
-    return separatorIndex < 0 ? "izvoz/izdelki.csv" : "izvoz/izdelki.csv" + listHref[separatorIndex..];
+    return separatorIndex < 0 ? "izvoz/izdelki.xlsx" : "izvoz/izdelki.xlsx" + listHref[separatorIndex..];
   }
 
   Task ApplyFiltersAsync()
@@ -430,6 +479,10 @@ else if (SelectionOverflow)
   // Proizvajalci, dobavitelji, skupine in oddelki so vrednosti izbranega podjetja. Ko se
   // podjetje spremeni, stara izbira v novem podjetju najpogosteje ne obstaja in bi vrnila
   // prazen seznam brez pojasnila, zato se ob zamenjavi sprosti.
+  bool FiltersOpen => FiltersOpenOverride ?? ActiveChips.Count > 0;
+
+  void ToggleFilters() => FiltersOpenOverride = !FiltersOpen;
+
   void OrganizationDraftChanged()
   {
     ManufacturerDraft = "";
