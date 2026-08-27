@@ -76,7 +76,7 @@ $izvajalec = $ukaz.Source
 if (-not (Test-Path $izvajalec)) { throw "Izvajalca $izvajalec ni mogoce najti." }
 
 function Registriraj([string]$ime, [string]$skripta, [string[]]$dodatni, $prozilec) {
-  $argumenti = (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$skripta`"",
+  $argumenti = (@('-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', "`"$skripta`"",
                   '-KorenRepozitorija', "`"$koren`"") + $dodatni) -join ' '
 
   $akcija = New-ScheduledTaskAction -Execute $izvajalec -Argument $argumenti -WorkingDirectory $koren
@@ -87,6 +87,11 @@ function Registriraj([string]$ime, [string]$skripta, [string[]]$dodatni, $prozil
     -DontStopIfGoingOnBatteries `
     -AllowStartIfOnBatteries
 
+  # LogonType S4U (tece tudi brez prijavljenega uporabnika, brez shranjenega gesla) bi okno
+  # odpravil najciseje, a ga Windows brez skrbniskih pravic zavrne z "Access is denied" —
+  # zahteva pravico "Log on as a batch job". Zato ostane Interactive, okno pa skrije
+  # -WindowStyle Hidden v argumentih (glej Registriraj). Otroski procesi dotet run podedujejo
+  # isto skrito konzolo in svojega okna ne odprejo.
   if ($PSCmdlet.ShouldProcess($ime, 'Registriraj nacrtovano nalogo')) {
     Register-ScheduledTask -TaskName $ime -Action $akcija -Trigger $prozilec `
       -Settings $nastavitve -User $env:USERNAME -RunLevel Limited -Force | Out-Null

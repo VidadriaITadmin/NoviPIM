@@ -17,6 +17,7 @@ using PIM.SourceFetchWorker;
 string? onlySource = null;
 string? targetOverride = null;
 var onlySettings = false;
+var bySchedule = false;
 
 for (var index = 0; index < args.Length; index++)
 {
@@ -32,6 +33,9 @@ for (var index = 0; index < args.Length; index++)
       break;
     case "--samo-nastavitve":
       onlySettings = true;
+      break;
+    case "--po-urniku":
+      bySchedule = true;
       break;
     default:
       return Napaka($"Neznan argument: {args[index]}.");
@@ -81,6 +85,12 @@ if (organizationId is null)
 {
   Console.Error.WriteLine("Za pipeline SOURCE_FETCH ni omogocenega razporeda v ops.ScheduleProfile; nic ni bilo prevzeto.");
   return 1;
+}
+
+if (bySchedule && !await OperationsRun.IsDueAsync(connectionString, organizationId.Value, "SOURCE_FETCH"))
+{
+  Console.WriteLine("SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.");
+  return 0;
 }
 
 using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };

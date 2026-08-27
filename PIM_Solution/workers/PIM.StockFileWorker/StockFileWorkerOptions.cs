@@ -13,7 +13,9 @@ public sealed record StockFileWorkerOptions(
   int OrganizationId,
   string Endpoint,
   string DateFormat,
-  bool ReadOnly)
+  bool ReadOnly,
+  /// <summary>Nacrtovani zagon spostuje razpored iz baze; rocni ga namenoma obide.</summary>
+  bool BySchedule = false)
 {
   public const int DefaultOrganizationId = 2;
 
@@ -30,6 +32,7 @@ public sealed record StockFileWorkerOptions(
     string? file = null, source = null, endpoint = null, dateFormat = null;
     var organizationId = DefaultOrganizationId;
     var readOnly = false;
+    var bySchedule = false;
 
     for (var index = 0; index < args.Count; index++)
     {
@@ -57,6 +60,9 @@ public sealed record StockFileWorkerOptions(
         case "--samo-preberi":
           readOnly = true;
           break;
+        case "--po-urniku":
+          bySchedule = true;
+          break;
         default:
           throw new ArgumentException($"Neznan argument: {args[index]}.");
       }
@@ -66,7 +72,7 @@ public sealed record StockFileWorkerOptions(
     source ??= SourceFromExtension(file);
     dateFormat ??= DefaultDateFormat(source);
     endpoint ??= $"file://{Path.GetFileName(file)}";
-    return new(Path.GetFullPath(file), source, organizationId, endpoint, dateFormat, readOnly);
+    return new(Path.GetFullPath(file), source, organizationId, endpoint, dateFormat, readOnly, bySchedule);
   }
 
   static string Next(IReadOnlyList<string> args, ref int index, string name)

@@ -20,6 +20,30 @@ public sealed class OperationsRun : IAsyncDisposable
   public string Pipeline { get; }
   public Guid RunId { get; }
 
+  /// <summary>
+  /// Ali je postopek na vrsti po razporedu iz baze.
+  ///
+  /// Nacrtovano opravilo Windows je ura, ki tiktaka na 5 minut in nima poslovne vednosti; ritem
+  /// posameznega postopka je vrstica v <c>ops.ScheduleProfile</c>, ki jo skrbnik ureja na strani
+  /// /sistem/urniki. Brez tega bi bila edina pot do spremembe ritma poseg v sistemske nastavitve
+  /// streznika, do katerih uporabnik PIM-a nima dostopa.
+  ///
+  /// Klicejo jo samo nacrtovani zagoni (stikalo <c>--po-urniku</c>). Rocni zagon iz ukazne
+  /// vrstice razpored namenoma obide, da se da stvar preizkusiti takoj.
+  /// </summary>
+  public static async Task<bool> IsDueAsync(string connectionString, int organizationId, string pipeline, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.IsPipelineDue", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@Pipeline", SqlDbType.NVarChar, 100).Value = pipeline;
+
+    // Manjkajoca vrstica pomeni, da razporeda ni; takrat ne tece nic — enako kot IsEnabled = 0.
+    var value = await command.ExecuteScalarAsync(cancellationToken);
+    return value is bool due && due;
+  }
+
   public static async Task<OperationsRun> BeginAsync(string connectionString, int organizationId, string pipeline, string workerId, CancellationToken cancellationToken = default)
   {
     var connection = new SqlConnection(connectionString);

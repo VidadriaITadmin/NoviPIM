@@ -29,6 +29,15 @@ public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string
 public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string Operation, string EntityType, string EntityKey,
   string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
   int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc);
+/// <param name="IntervalSeconds">Kako pogosto naj postopek tece; ura v Windows tiktaka na 5 minut.</param>
+/// <param name="NextScheduledUtc">Kdaj je postopek naslednjic na vrsti; null pomeni takoj.</param>
+public sealed record ScheduleRow(
+  int OrganizationId, string OrganizationName, string Provider, string Pipeline,
+  bool IsEnabled, int IntervalSeconds, int StaleAfterSeconds, DateTime? NextScheduledUtc,
+  DateTime? UpdatedUtc, string? UpdatedBy, string? Status,
+  DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc,
+  string? LastErrorRedacted);
+
 public sealed record SystemIntegrationRow(int OrganizationId, string OrganizationCode, string Provider, string Pipeline, bool IsEnabled,
   string? Status, DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc, DateTime? WatermarkUtc,
   DateTime? NextScheduledUtc, int OpenAlerts, int OutboxDeadCount, int OutboxDriftCount);
@@ -349,6 +358,46 @@ public sealed class IntranetDataService(IConfiguration configuration)
     await reader.NextResultAsync(cancellationToken);var alerts=new List<SystemAlertRow>();
     while(await reader.ReadAsync(cancellationToken))alerts.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetInt32(6),reader.GetDateTime(7),reader.GetDateTime(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetString(10),reader.IsDBNull(11)?null:reader.GetDateTime(11),reader.IsDBNull(12)?null:reader.GetString(12)));
     return new(integrations,alerts);
+  }
+
+  /// <summary>
+  /// Urniki vseh podjetij. Nacrtovano opravilo Windows je samo ura, ki tiktaka; ali postopek sme
+  /// teci in kako pogosto je zares na vrsti, pove ta vrstica v bazi.
+  /// </summary>
+  public async Task<IReadOnlyList<ScheduleRow>> GetSchedulesAsync(CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetSchedules", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<ScheduleRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+        reader.GetBoolean(4), reader.GetInt32(5), reader.GetInt32(6),
+        reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+        reader.IsDBNull(8) ? null : reader.GetDateTime(8),
+        reader.IsDBNull(9) ? null : reader.GetString(9),
+        reader.IsDBNull(10) ? null : reader.GetString(10),
+        reader.IsDBNull(11) ? null : reader.GetDateTime(11),
+        reader.IsDBNull(12) ? null : reader.GetDateTime(12),
+        reader.IsDBNull(13) ? null : reader.GetDateTime(13),
+        reader.IsDBNull(14) ? null : reader.GetString(14)));
+
+    return rows;
+  }
+
+  public async Task SaveScheduleAsync(int organizationId, string pipeline, bool isEnabled, int intervalSeconds, string actor, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.SaveSchedule", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    command.Parameters.AddWithValue("@Pipeline", pipeline);
+    command.Parameters.AddWithValue("@IsEnabled", isEnabled);
+    command.Parameters.AddWithValue("@IntervalSeconds", intervalSeconds);
+    command.Parameters.AddWithValue("@Actor", actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
   public Task AcknowledgeAlertAsync(int organizationId,long alertId,string actor,CancellationToken cancellationToken=default) => ExecuteAlertActionAsync("intranet.AcknowledgeAlert",organizationId,alertId,actor,cancellationToken);

@@ -56,6 +56,12 @@ const string Pipeline = "STOCK_FILE";
 
 // Zagon se odpre prek ops.BeginRun, da dobaviteljeva zaloga tece pod istim razporedom in isto
 // sledjo kot ostali vhodi. Doslej je to varovalko obhajala in je zato ni bilo v /zajem/teki.
+if (options.BySchedule && !await OperationsRun.IsDueAsync(connectionString, options.OrganizationId, Pipeline))
+{
+  Console.WriteLine($"{Pipeline} pri podjetju {options.OrganizationId}: se ni na vrsti po razporedu; preskoceno.");
+  return 0;
+}
+
 OperationsRun run;
 try
 {

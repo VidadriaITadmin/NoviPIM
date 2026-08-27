@@ -19,6 +19,7 @@ var organizations = new List<int>();
 int? pageSize = null;
 string? baseUrlOverride = null;
 var onlySettings = false;
+var bySchedule = false;
 
 for (var index = 0; index < args.Length; index++)
 {
@@ -39,6 +40,10 @@ for (var index = 0; index < args.Length; index++)
       break;
     case "--samo-nastavitve":
       onlySettings = true;
+      break;
+    case "--po-urniku":
+      // Nacrtovani zagon spostuje razpored iz baze; rocni ga namenoma obide.
+      bySchedule = true;
       break;
     default:
       return Napaka($"Neznan argument: {args[index]}.");
@@ -81,6 +86,12 @@ var runner = new SaopStockRunner(settings.ConnectionString, http, new Uri(settin
 var napake = 0;
 foreach (var organizationId in organizations)
 {
+  if (bySchedule && !await OperationsRun.IsDueAsync(settings.ConnectionString, organizationId, Pipeline))
+  {
+    Console.WriteLine($"[{organizationId}] {Pipeline}: se ni na vrsti po razporedu; preskoceno.");
+    continue;
+  }
+
   // Zagon se odpre prek ops.BeginRun, da zaloga tece pod istim razporedom in isto sledjo kot
   // ostali vhodi: brez omogocene vrstice v ops.ScheduleProfile vrze 51100 in podjetje se
   // preskoci. Doslej je zaloga to varovalko obhajala in je zato ni bilo v /zajem/teki.

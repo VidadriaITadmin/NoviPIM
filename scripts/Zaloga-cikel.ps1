@@ -89,7 +89,7 @@ if ($Kaj -in @('Dobavitelji', 'Vse')) {
   # Samo zalogovna vira. Prevzem in branje gresta skupaj, da zaloga ne caka na naslednji cikel.
   foreach ($vir in @('NW_STOCK', 'BT_STOCK')) {
     Korak "Zaloga $vir" {
-      PozeniWorker 'workers\PIM.SourceFetchWorker' @('--source', $vir)
+      PozeniWorker 'workers\PIM.SourceFetchWorker' @('--source', $vir, '--po-urniku')
 
       $mapa = Join-Path $resitev "data\prevzem\$vir"
       if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; return }
@@ -99,7 +99,7 @@ if ($Kaj -in @('Dobavitelji', 'Vse')) {
 
       foreach ($d in $datoteke) {
         foreach ($o in $Podjetja) {
-          PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $d.FullName, '--source', $vir, '--organization-id', "$o")
+          PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $d.FullName, '--source', $vir, '--organization-id', "$o", '--po-urniku')
         }
       }
     }
@@ -111,7 +111,7 @@ if ($Kaj -in @('Saop', 'Vse')) {
     # Ziv klic je odlocitev cloveka (AGENTS.md #4.5). Vklopljen je zavestno: nalogo registrira
     # clovek z Namesti-opravila.ps1 in s tem privoli v ponavljajoc se klic na ERP.
     $env:PIM_SAOP_MODE = 'Live'
-    PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','))
+    PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','), '--po-urniku')
   }
 }
 

@@ -1,0 +1,160 @@
+@page "/sistem/urniki"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Urniki obdelav</PageTitle>
+<PimPage Title="Urniki obdelav"
+         Subtitle="Kaj se izvaja samo od sebe in kako pogosto. Načrtovano opravilo Windows je samo ura, ki tiktaka na 5 minut; ali postopek sme teči in kdaj je zares na vrsti, je zapisano tu."
+         Crumbs="Crumbs" />
+
+<div class="message-state info-message">
+  Izklop tu ustavi postopek takoj — worker brez omogočenega razporeda zavrne zagon in ne prevzame
+  ničesar. Ročni zagon iz ukazne vrstice ta urnik namenoma obide, da se da stvar preizkusiti.
+</div>
+
+@if (Message is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Message</p> }
+
+<section class="ui-card data-card section-gap" aria-label="Urniki obdelav">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="Ni nastavljenih urnikov." LoadingText="Nalaganje urnikov …">
+    <PimTable Caption="Postopki, njihov razmik in dejansko stanje" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          var kljuc = $"{row.OrganizationId}|{row.Pipeline}";
+          <tr>
+            <td><span class="code-value">@row.Pipeline</span><div class="tree-path">@Opis(row.Pipeline)</div></td>
+            <td>@row.OrganizationName</td>
+            <td>
+              <PimChip Text="@(row.IsEnabled ? "Vklopljen" : "Izklopljen")" Tone="@(row.IsEnabled ? "good" : "bad")" />
+            </td>
+            <td>
+              <label class="visually-hidden" for="@($"razmik-{kljuc}")">Razmik v minutah za @row.Pipeline</label>
+              <input id="@($"razmik-{kljuc}")" type="number" min="1" max="1440" class="filter-select interval-input"
+                     value="@Minute(row, kljuc)" @onchange="@(e => NastaviMinute(kljuc, e.Value?.ToString()))" />
+              <span class="muted"> min</span>
+            </td>
+            <td><PimChip Text="@StatusLabel(row.Status)" Tone="@StatusTone(row.Status)" /></td>
+            <td>@Cas(row.NextScheduledUtc, "takoj")</td>
+            <td>@Cas(row.LastSuccessfulRunUtc, "nikoli")</td>
+            <td>
+              @if (row.LastErrorRedacted is { Length: > 0 } napaka) { <span class="drift-flag">@napaka</span> }
+              else { <span class="muted">—</span> }
+            </td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="small-action @(row.IsEnabled ? "warn-action" : "good-action")"
+                        disabled="@Busy" @onclick="() => Preklopi(row)">
+                  @(row.IsEnabled ? "Izklopi" : "Vklopi")
+                </button>
+                <button type="button" class="small-action" disabled="@(Busy || !Spremenjen(row, kljuc))"
+                        @onclick="() => Shrani(row, kljuc)">Shrani razmik</button>
+              </div>
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.ScheduleRow> Rows = [];
+  readonly Dictionary<string, int> Urejeni = [];
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Urniki obdelav")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Postopek"), new("Podjetje"), new("Stanje"), new("Razmik"), new("Zdravje"),
+    new("Naslednjič"), new("Zadnji uspeh"), new("Zadnja napaka"), new("Dejanja"),
+  ];
+
+  protected override async Task OnInitializedAsync() => await NaloziAsync();
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      Rows = await Data.GetSchedulesAsync();
+      Urejeni.Clear();
+    }
+    catch { Error = "Urnikov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  // Razmik je v bazi v sekundah, uporabnik pa razmišlja v minutah; pretvorba je tu in nikjer drugje.
+  int Minute(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
+    Urejeni.TryGetValue(kljuc, out var vrednost) ? vrednost : Math.Max(1, row.IntervalSeconds / 60);
+
+  bool Spremenjen(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
+    Urejeni.TryGetValue(kljuc, out var vrednost) && vrednost != Math.Max(1, row.IntervalSeconds / 60);
+
+  void NastaviMinute(string kljuc, string? vnos)
+  {
+    if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) Urejeni[kljuc] = minute;
+  }
+
+  async Task Preklopi(PIM.Intranet.Services.ScheduleRow row) =>
+    await ShraniAsync(row, !row.IsEnabled, row.IntervalSeconds,
+      row.IsEnabled ? $"{row.Pipeline} je izklopljen." : $"{row.Pipeline} je vklopljen.");
+
+  async Task Shrani(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
+    await ShraniAsync(row, row.IsEnabled, Minute(row, kljuc) * 60,
+      $"Razmik za {row.Pipeline} je {Minute(row, kljuc)} min.");
+
+  async Task ShraniAsync(PIM.Intranet.Services.ScheduleRow row, bool vklopljen, int sekunde, string uspeh)
+  {
+    Busy = true;
+    Error = null;
+    Message = null;
+    try
+    {
+      var state = await Authentication.GetAuthenticationStateAsync();
+      await Data.SaveScheduleAsync(row.OrganizationId, row.Pipeline, vklopljen, sekunde,
+        state.User.Identity?.Name ?? "neznan");
+      Message = uspeh;
+      await NaloziAsync();
+    }
+    catch
+    {
+      // Sporocilo iz baze lahko nosi ime objekta; uporabniku povemo, da sprememba ni potrjena.
+      Error = "Spremembe urnika ni bilo mogoče shraniti. Stanje ostaja nespremenjeno.";
+    }
+    finally { Busy = false; }
+  }
+
+  static string Opis(string pipeline) => pipeline switch
+  {
+    "SAOP_STOCK" => "količine zaloge iz ERP",
+    "STOCK_FILE" => "zaloga iz dobaviteljeve datoteke",
+    "SOURCE_FETCH" => "prevzem dobaviteljevih datotek",
+    "SAOP_PRODUCTS" => "katalog artiklov iz ERP",
+    "GENERIC_XML" => "dobaviteljev XML",
+    "OUTBOUND" => "odhodna pošta v SAOP",
+    "ALERT_DISPATCH" => "razpošiljanje opozoril",
+    "WATCHDOG" => "nadzor zastalih izvajanj",
+    _ => "—",
+  };
+
+  static string StatusLabel(string? value) => value switch
+  {
+    "Healthy" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja",
+    null or "" => "Še brez teka", _ => value,
+  };
+
+  static string? StatusTone(string? value) => value switch
+  {
+    "Healthy" => "good", "Stale" => "warn", "Failed" => "bad", _ => null,
+  };
+
+  static string Cas(DateTime? value, string kadarNiVrednosti) =>
+    value is null ? kadarNiVrednosti : value.Value.ToLocalTime().ToString("g");
+}
