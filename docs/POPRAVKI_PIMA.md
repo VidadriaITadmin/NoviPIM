@@ -123,14 +123,14 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
 | K1 | Preimenuj „lastnost" → „atribut". | INTRANET | NAREJENO |
-| K2 | Boljša tabela atributov: slovenski atributi, prevodi, preslikave. | INTRANET | TODO |
-| K3 | Kategorije: privzeto prikaži slovenske, ne italijanskih. | INTRANET | TODO |
-| K4 | Imena kategorij po jezikih v vrstnem redu: sl, en, de, hr, it. | INTRANET | TODO |
-| K5 | V tabeli kategorij dodaj imena polj (glave stolpcev). | INTRANET | TODO |
-| K6 | Dokončaj „Povezave izdelkov". | INTRANET | TODO |
+| K2 | Boljša tabela atributov: slovenski atributi, prevodi, preslikave. | INTRANET | NAREJENO |
+| K3 | Kategorije: privzeto prikaži slovenske, ne italijanskih. | INTRANET | NAREJENO |
+| K4 | Imena kategorij po jezikih v vrstnem redu: sl, en, de, hr, it. | INTRANET | NAREJENO |
+| K5 | V tabeli kategorij dodaj imena polj (glave stolpcev). | INTRANET | NAREJENO |
+| K6 | Dokončaj „Povezave izdelkov". | INTRANET | NAREJENO |
 | K7 | Spletni kanali so samo za prikaz — kaj se doda? | — | VPRAŠANJE |
 | K8 | Jeziki so samo za prikaz — kaj se doda? | — | VPRAŠANJE |
-| K9 | Odstrani oblaček „Pravila in preslikave" v nastavitvah kataloga. | INTRANET | TODO |
+| K9 | Odstrani oblaček „Pravila in preslikave" v nastavitvah kataloga. | INTRANET | NAREJENO |
 
 ## L. Upravljanje — Pravila in izvor
 

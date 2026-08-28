@@ -34,6 +34,7 @@ builder.Services.AddScoped<PimDb>();
 builder.Services.AddScoped<CatalogReadService>();
 builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
+builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
 builder.Services.AddScoped<PipelineReadService>();

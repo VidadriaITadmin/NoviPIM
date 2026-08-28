@@ -12,7 +12,12 @@ if(!csv.StartsWith("ProductKey,EAN,Quantity,AvailabilityDate,IncomingQuantity,So
 if(!csv.Contains("NW.10168,5903139101684,0,2026-11-04,1000,NW_STOCK,,2026-07-31T09:00:00.0000000Z",StringComparison.Ordinal))throw new InvalidOperationException("STOCK CSV podatki niso realno generirani.");
 File.Delete(csvPath);
 var page=File.ReadAllText(Path.Combine(root,"src/PIM.Intranet/Components/Pages/Stocks.razor"));
-foreach(var label in new[]{"Zaloge","Vir","Čas posnetka","Količina","Pričakovana dobava","Prihodna količina","Ujemanje","Svežina"})if(!page.Contains(label,StringComparison.Ordinal))throw new InvalidOperationException("Manjka slovenska oznaka "+label);
+// Oznaki »Pricakovana dobava« in »Ujemanje« sta 2026-08-28 odpadli po zahtevi uporabnika:
+// stolpec prihoda se imenuje »Prihod« in pove tudi, kadar vir javi kolicino brez datuma,
+// kontrola »ujemanje« pa je odpadla, ker na isto vprasanje odgovarja klikljiva kartica
+// povzetka. Test drzi zahtevo, ki je bila vedno njegova — da je stran v slovenscini in da
+// stolpci nosijo imena — ne pa dveh konkretnih besedil, ki ju je uporabnik zavrnil.
+foreach(var label in new[]{"Zaloge","Vir","Čas posnetka","Količina","Prihod","Prihodna količina","Svežina"})if(!page.Contains(label,StringComparison.Ordinal))throw new InvalidOperationException("Manjka slovenska oznaka "+label);
 Console.WriteLine("F6 integration (brez DB): realni STOCK CSV in slovenska stran PASS.");
 
 var pim=Connection("PIM_CONNECTION_STRING","Pim");

@@ -5,22 +5,23 @@
 @inject PIM.Intranet.Services.CategoryTreeService Tree
 @inject AuthenticationStateProvider Authentication
 
-@* Šifrant lastnosti. Prej je imela ta stran tri filtre, onemogočene z besedilom »bralni model
+@* Šifrant atributov (uporabnik 2026-08-28: »Atribute preimenuj lastnost v atribute«).
+   Prej je imela ta stran tri filtre, onemogočene z besedilom »bralni model
    manjka«, in seznam brez virov in prevodov. Bralna modela sta prišla z migracijama 123 in 125. *@
 
-<PageTitle>Lastnosti</PageTitle>
-<PimPage Title="Lastnosti"
-         Subtitle="Šifrant s stalnimi kodami. Ime je prevod med drugimi — isto pravilo kot pri kategorijah."
+<PageTitle>Atributi</PageTitle>
+<PimPage Title="Atributi"
+         Subtitle="Šifrant s stalnimi kodami: slovensko ime, prevodi in preslikave virov, ki atribut polnijo. Koda se ne spreminja, ime je prevod med drugimi — isto pravilo kot pri kategorijah."
          Crumbs="Crumbs" />
 
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 
 <section class="ui-card toolbar" role="search" aria-labelledby="def-filter-title">
-  <h2 id="def-filter-title" class="visually-hidden">Filtriranje lastnosti</h2>
+  <h2 id="def-filter-title" class="visually-hidden">Filtriranje atributov</h2>
 
   <label class="visually-hidden" for="def-search">Iskanje</label>
-  <input id="def-search" class="form-input" type="search" placeholder="Išči po imenu ali kodi"
+  <input id="def-search" class="form-input" type="search" placeholder="Išči po imenu ali kodi atributa"
          @bind="Search" @bind:after="LoadAsync" />
 
   <label class="filter-check">
@@ -41,15 +42,17 @@
 
 <section class="ui-card data-card section-gap" aria-label="Šifrant lastnosti">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
-            EmptyText="Za te filtre ni nobene lastnosti." LoadingText="Nalaganje šifranta …">
-    <PimTable Caption="Lastnosti s stalno kodo, imeni po jezikih in viri, ki jih polnijo" Columns="Columns">
+            EmptyText="Za te filtre ni nobenega atributa." LoadingText="Nalaganje šifranta …">
+    <PimTable Caption="Atributi s stalno kodo, slovenskim imenom, prevodi in viri, ki jih polnijo" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
           <tr>
+            @* Uporabnik 2026-08-28: »hocem da vidim nase slovenske atribute in da vidim prevode
+               in da vidim katere mappinge imamo«. Slovensko ime je zato svoj stolpec, prevodi
+               so izpisani z besedilom in ne le s sifro jezika, viri pa nasteti poimensko. *@
             <td>
-              <strong>@(row.AttributeName ?? row.AttributeCode)</strong>
-              <div class="row-note code-value">@row.AttributeCode</div>
+              <strong>@Slovene(row)</strong>
               @if (row.IsUnitCandidate)
               {
                 @if (row.UnitOfAttributeCode is null)
@@ -61,20 +64,31 @@
                   <div class="row-note">enota za @row.UnitOfAttributeCode</div>
                 }
               }
+              @if (!row.IsActive) { <PimChip Text="neaktiven" Tone="neutral" /> }
             </td>
             <td>
-              <span class="node-langs">
-                @foreach (var language in Languages)
+              <span class="code-value">@row.AttributeCode</span>
+              <div class="row-note">@row.DataType@(row.Unit is null ? "" : " · " + row.Unit)</div>
+            </td>
+            <td>
+              <ul class="translation-list">
+                @foreach (var language in Languages.Where(language => !string.Equals(language.LanguageCode, "sl", StringComparison.OrdinalIgnoreCase)))
                 {
                   var has = row.Translations.TryGetValue(language.LanguageCode, out var name);
-                  <span class="lang @(has ? "is-set" : "is-missing")"
-                        title="@(has ? language.LanguageCode + ": " + name : language.LanguageCode + ": ime manjka")">@language.LanguageCode</span>
+                  <li class="@(has ? null : "is-missing")">
+                    <span class="translation-code">@language.LanguageCode</span>
+                    <span class="translation-name">@(has ? name : "ime manjka")</span>
+                  </li>
                 }
-              </span>
+              </ul>
             </td>
             <td>
               @if (row.SourceCount == 0) { <PimChip Text="brez vira" Tone="bad" /> }
-              else { <span class="row-note">@row.SourceList</span> }
+              else
+              {
+                <span class="source-count">@row.SourceCount</span>
+                <div class="row-note">@row.SourceList</div>
+              }
             </td>
             <td class="numeric">@row.ProductCount.ToString("N0")</td>
             <td>
@@ -142,19 +156,27 @@
   string? Editing;
   string ChosenPair = "";
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Lastnosti")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Lastnost"), new("Jeziki"), new("Viri"), new("Izdelkov", Numeric: true), new("Urejanje")
+    new("Slovensko ime"), new("Koda"), new("Prevodi"), new("Preslikave iz virov"),
+    new("Izdelkov", Numeric: true), new("Urejanje")
   ];
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Rows.Count:N0} lastnosti";
+    : $"{Rows.Count:N0} atributov";
+
+  /// <summary>Slovensko ime atributa; kadar ga ni, ostane koda — izmisljati ga ne gre.</summary>
+  static string Slovene(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) =>
+    row.Translations.TryGetValue("sl", out var name) && !string.IsNullOrWhiteSpace(name)
+      ? name
+      : row.AttributeName ?? row.AttributeCode;
 
   protected override async Task OnInitializedAsync()
   {
-    try { Languages = await Tree.GetLanguagesAsync(); }
+    // Red jezikov je dogovorjen (sl, en, de, hr, it) in isti povsod — glej PimLanguages.
+    try { Languages = PIM.Intranet.Services.PimLanguages.OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray(); }
     catch (Exception exception) { Error = exception.Message; }
     await LoadAsync();
   }

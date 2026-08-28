@@ -23,7 +23,7 @@
     <span class="coverage-total">@TranslatedTotal.ToString("N0") od @NeededTotal.ToString("N0") zapisanih</span>
   </div>
   <div class="coverage-rows">
-    @foreach (var row in Coverage)
+    @foreach (var row in OrderedCoverage)
     {
       <button type="button" class="coverage-row @(Language == row.LanguageCode ? "is-active" : null)"
               @onclick="() => FocusLanguageAsync(row.LanguageCode)"
@@ -102,11 +102,16 @@
     <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
   </div>
 
+  <div class="tree-head" role="row">
+    <span class="tree-head-name" role="columnheader">Kategorija</span>
+    <span class="tree-head-langs" role="columnheader">Imena po jezikih (@string.Join(", ", Languages.Select(language => language.LanguageCode)))</span>
+    <span class="tree-head-count" role="columnheader" title="Izdelkov neposredno v tej kategoriji">Izdelkov</span>
+    <span class="tree-head-count" role="columnheader" title="Izdelkov s podkategorijami vred">S podkategorijami</span>
+  </div>
+
   <div class="tree-legend" aria-hidden="true">
     <span class="tree-legend-item"><span class="lang is-set">xx</span> ime je zapisano</span>
     <span class="tree-legend-item"><span class="lang is-missing">xx</span> ime manjka</span>
-    <span class="tree-legend-item"><span class="node-count">0</span> neposredno</span>
-    <span class="tree-legend-item"><span class="node-count is-deep">0</span> s podkategorijami</span>
   </div>
 
   <PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)"
@@ -199,6 +204,10 @@
   IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.TreeRow> Roots = [];
   IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CoverageRow> Coverage = [];
   IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.LanguageOptionRow> Languages = [];
+
+  /// <summary>Pokritost v istem redu kot jeziki: sl, en, de, hr, it.</summary>
+  IEnumerable<PIM.Intranet.Services.CategoryTreeService.CoverageRow> OrderedCoverage =>
+    PIM.Intranet.Services.PimLanguages.OrderBy(Coverage, row => row.LanguageCode);
   IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
   IReadOnlyList<string> Trees = [];
 
@@ -210,7 +219,7 @@
   string? Error;
   string? Message;
   string TreeCode = "";
-  string Language = "en";
+  string Language = "sl";
   string OrganizationFilter = "";
   string Branch = "";
   string Level = "";
@@ -257,13 +266,19 @@
   {
     try
     {
-      Languages = await Tree.GetLanguagesAsync();
+      // Red jezikov je dogovorjen (sl, en, de, hr, it) in isti povsod — glej PimLanguages.
+      Languages = PIM.Intranet.Services.PimLanguages
+        .OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray();
       Trees = await Tree.GetTreeCodesAsync();
       Organizations = await Data.GetOrganizationsAsync();
-      // Privzeti jezik je tisti z najvec manjkajocimi imeni: stran naj se odpre tam, kjer je delo.
       Coverage = await Tree.GetCoverageAsync(null);
-      Language = Coverage.OrderByDescending(row => row.Missing).FirstOrDefault()?.LanguageCode
-        ?? Languages.FirstOrDefault()?.LanguageCode ?? "en";
+      // Uporabnik 2026-08-28: »ko odprem naj mi najprej prikaze slovenske kategorije, ne
+      // italijanske«. Prej se je stran odprla v jeziku z najvec manjkajocimi imeni — to je bila
+      // italijanscina, torej jezik, ki ga skoraj nihce ne uporablja. Slovenscina je izhodisce
+      // kataloga; kdor dela na prevodu, ga izbere sam, pokritost pa je vidna nad drevesom.
+      Language = Languages.Any(row => string.Equals(row.LanguageCode, "sl", StringComparison.OrdinalIgnoreCase))
+        ? "sl"
+        : Languages.FirstOrDefault()?.LanguageCode ?? "sl";
     }
     catch (Exception exception) { Error = exception.Message; }
     await LoadAsync();

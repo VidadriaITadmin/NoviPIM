@@ -1,91 +1,139 @@
 @page "/nastavitve/povezave-izdelkov"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
 @rendermode InteractiveServer
-@inject IntranetFeatureReadService Features
-@inject IntranetDataService Data
+@inject PIM.Intranet.Services.ProductLinkReadService Links
+@inject PIM.Intranet.Services.IntranetDataService Data
+
+@* Uporabnik 2026-08-28: »Dokoncaj povezave izdelkov«.
+
+   Prej stran ni delala iz dveh razlogov hkrati: bralne procedure intranet.GetProductLinks ni
+   bilo, tabela pa je obljubljala stolpce (vloga, variantna skupina, vodilni izdelek, slika
+   obeh izdelkov), za katere v sistemu ni nobenega vira. Zdaj procedura obstaja (migracija 131)
+   in stran kaze natanko to, kar v podatkih je: iz katerega izdelka povezava izhaja, katero
+   sifro kaze, katere vrste je in ali se ta sifra ujame z obstojecim izdelkom.
+
+   Merjeno 2026-08-28: v canon.ProductAttribute ni nobenega atributa vrste povezave, zato je
+   nabor prazen. To ni okvara strani — je stanje podatkov, in stran ga pove naravnost, namesto
+   da bi risala prazno tabelo z devetimi stolpci, ki jih nihce ne polni. *@
 
 <PageTitle>Povezave izdelkov</PageTitle>
-<PimPage Title="Povezave izdelkov" Subtitle="Variante, podobni in povezani izdelki. Stran je do odločitve o smernosti in virih samo bralna." Crumbs="Crumbs" />
+<PimPage Title="Povezave izdelkov"
+         Subtitle="Nadomestni, sorodni izdelki in pribor, kot jih pošlje dobavitelj v atributih izdelka. Bralna stran: svojega registra povezav sistem še nima."
+         Crumbs="Crumbs" />
 
-<section class="ui-card toolbar" role="search" aria-label="Filtri povezav izdelkov">
-  <select class="filter-select" disabled><option>@(OrganizationName ?? "Aktivna organizacija")</option></select>
-  <select class="filter-select" @bind="Source" @bind:after="LoadAsync"><option value="">Vsi viri</option><option value="MANUAL">Ročno</option><option value="FEED">Dobaviteljski vir</option><option value="DERIVED">Izpeljano iz atributa</option></select>
-  <input class="search-input" type="search" placeholder="Šifra ali naziv izdelka …" @bind="Search" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
-  <button type="button" class="filter-button" @onclick="LoadAsync">Uporabi filtre</button>
-</section>
+<section class="ui-card data-card" aria-label="Povezave izdelkov">
+  <div class="card-toolbar" role="search" aria-labelledby="links-filter-title">
+    <h2 id="links-filter-title" class="visually-hidden">Filtriranje povezav</h2>
 
-@if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
+    <label class="visually-hidden" for="link-organization">Podjetje</label>
+    <select id="link-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationChangedAsync">
+      @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+    </select>
 
-@if (Result?.IsMissing == true)
-{
-  <PimMissing Object="@(Result.MissingObject!)" What="pare izdelkov vrste VARIANT, SIMILAR in RELATED z vlogo, skupino, virom ter revizijskimi podatki" Needs="predlagano tabelo pim.ProductLink in primarni medij obeh izdelkov" />
-}
+    <label class="visually-hidden" for="link-type">Vrsta povezave</label>
+    <select id="link-type" class="filter-select" @bind="LinkType" @bind:after="LoadAsync">
+      <option value="">Vse vrste</option>
+      @foreach (var type in Types) { <option value="@type">@type</option> }
+    </select>
 
-@foreach (var section in Sections)
-{
-  var rows = RowsFor(section.Code);
-  <section class="ui-card data-card section-gap" aria-labelledby="@($"links-{section.Code}")">
-    <h2 id="@($"links-{section.Code}")">@section.Title</h2>
-    <p class="muted">@section.Description</p>
-    <PimTable Caption="@($"{section.Title}: izdelek in povezani izdelek")" Columns="Columns">
+    <label class="visually-hidden" for="link-search">Iskanje</label>
+    <input id="link-search" class="search-input" type="search" placeholder="Šifra izdelka ali cilja …" @bind="Search" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+    <button type="button" class="filter-button" @onclick="LoadAsync">Uporabi filtre</button>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  </div>
+
+  <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Rows.Count == 0)"
+            EmptyText="Za izbrane filtre ni povezav. V katalogu ni nobenega atributa vrste povezave — dokler ga dobavitelj ne pošlje ali dokler ne nastane svoj register povezav, tu ni česa prikazati."
+            LoadingText="Nalaganje povezav …">
+    <PimTable Caption="Povezave med izdelki, kot jih pošilja vir" AriaLabel="Tabela povezav izdelkov" Columns="Columns">
       <Rows>
-        @foreach (var row in rows)
+        @foreach (var row in Rows)
         {
           <tr>
-            <td>@Thumbnail(row.ProductLinkId * 2, row.ProductImageUrl, row.ProductName)<a href="izdelki/@row.ProductId"><strong>@row.ProductName</strong><div class="tree-path">@row.ItemId</div></a></td>
-            <td class="link-arrow">→</td>
-            <td>@Thumbnail(row.ProductLinkId * 2 + 1, row.LinkedImageUrl, row.LinkedProductName)<a href="izdelki/@row.LinkedProductId"><strong>@row.LinkedProductName</strong><div class="tree-path">@row.LinkedItemId</div></a></td>
-            <td><PimChip Text="@row.LinkType" Tone="info" /></td><td>@(row.LinkRole ?? "—")</td><td>@(row.GroupKey ?? "—")</td><td>@(row.IsPrimary ? "Vodilni" : "—")</td>
-            <td>@row.Source</td><td>@row.CreatedBy<div class="tree-path">@row.CreatedUtc.ToLocalTime().ToString("g")</div></td>
+            <td><a href="izdelki/@row.SourceProductId"><span class="code-value">@row.SourceItemId</span></a></td>
+            <td><PimChip Text="@row.LinkType" Tone="info" /></td>
+            <td>
+              @if (row.TargetProductId is long target)
+              {
+                <a href="izdelki/@target"><span class="code-value">@row.TargetItemId</span></a>
+              }
+              else
+              {
+                <span class="code-value">@row.TargetKey</span>
+              }
+            </td>
+            <td>
+              @* Neujeta sifra ni napaka strani: dobavitelj je poslal kodo, ki je v nasem
+                 katalogu ni. Povedati je treba prav to, ne skriti vrstice. *@
+              <PimChip Text="@(row.IsResolved ? "ujeto z izdelkom" : "šifre ni v katalogu")" Tone="@(row.IsResolved ? "good" : "warn")" />
+            </td>
           </tr>
         }
       </Rows>
     </PimTable>
-    @if (rows.Count == 0) { <div class="note-panel">Podatkov za ta razdelek ni.</div> }
-  </section>
-}
+    <PimPager Skip="Skip" Take="Take" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani povezav" />
+  </PimState>
+</section>
 
-<div class="note-panel section-gap"><strong>Odprto:</strong> smernost podobnih izdelkov, nosilec variantne skupine in dovoljeni viri povezav zahtevajo poslovno odločitev. Vmesnik zato ne ponuja navideznega urejanja.</div>
+<div class="note-panel section-gap">
+  <strong>Kaj tu še ni:</strong> variantne skupine, vodilni izdelek skupine in smernost podobnih
+  izdelkov. Za vse troje ni vira — potrebna je odločitev, ali povezave nastanejo iz dobaviteljevih
+  atributov, iz SAOP ali ročno v PIM. Dokler odločitve ni, stran ne ponuja navideznega urejanja.
+</div>
 
 @code {
-  sealed record LinkSection(string Code, string Title, string Description);
-  static readonly LinkSection[] Sections =
-  [new("VARIANT", "Variante", "Skupina izvedb z vodilnim izdelkom in razlikovalnim atributom."), new("SIMILAR", "Podobni", "Zamenljive alternative; smernost še ni odločena."), new("RELATED", "Povezani", "Usmerjene povezave na pribor, dodatke in rezervne dele.")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Izdelek"), new(""), new("Povezani izdelek"), new("Vrsta"), new("Vloga / atribut"), new("Skupina"), new("Vodilni"), new("Vir"), new("Ustvaril")];
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Povezave izdelkov")];
-  PimReadResult<ProductLinkRow>? Result;
-  int? OrganizationId;
-  string? OrganizationName;
-  string Source = "", Search = "";
+  IReadOnlyList<ProductLinkEntry> Rows = [];
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  long Total;
+  bool Loading = true;
   string? Error;
-  readonly HashSet<long> FailedImages = [];
+  string LinkType = "", Search = "", OrganizationDraft = "";
+  int Skip;
+  const int Take = 50;
+  int? OrganizationId;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Povezave izdelkov")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Izdelek"), new("Vrsta povezave"), new("Cilj"), new("Stanje")];
+
+  // Vrste povezav, ki jih bralna procedura pozna; seznam je isti kot v migraciji 131.
+  static readonly string[] Types = ["RELATED", "SUBSTITUTE", "ACCESSORY", "SPARE", "NADOMESTNI", "SORODNI", "DODATEK"];
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Total:N0} povezav";
 
   protected override async Task OnInitializedAsync()
   {
-    var org = await Data.GetCurrentOrganizationAsync();
-    if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-    OrganizationId = org.OrganizationId; OrganizationName = org.Name; await LoadAsync();
+    try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+    OrganizationId = Organizations.FirstOrDefault()?.OrganizationId;
+    if (OrganizationId is null) { Error = "Nobeno podjetje ni aktivno."; Loading = false; return; }
+    OrganizationDraft = OrganizationId.Value.ToString();
+    await LoadAsync();
   }
 
   async Task LoadAsync()
   {
     if (OrganizationId is null) return;
-    try { Result = await Features.GetProductLinksAsync(OrganizationId.Value, source: Source, search: Search); }
-    catch { Error = "Povezav izdelkov trenutno ni mogoče naložiti."; }
-  }
-  IReadOnlyList<ProductLinkRow> RowsFor(string type) => Result?.Rows.Where(row => row.LinkType.Equals(type, StringComparison.OrdinalIgnoreCase)).ToArray() ?? [];
-  Task SearchKeyAsync(KeyboardEventArgs args) => args.Key == "Enter" ? LoadAsync() : Task.CompletedTask;
-
-  RenderFragment Thumbnail(long key, string? rawUrl, string name) => builder =>
-  {
-    var url = MediaUrlPolicy.Normalize(rawUrl);
-    builder.OpenElement(0, "span"); builder.AddAttribute(1, "class", "link-thumb");
-    if (url.Href is not null && !FailedImages.Contains(key))
+    Loading = true;
+    Error = null;
+    try
     {
-      builder.OpenElement(2, "img"); builder.AddAttribute(3, "src", url.Href); builder.AddAttribute(4, "alt", name); builder.AddAttribute(5, "loading", "lazy");
-      builder.AddAttribute(6, "onerror", EventCallback.Factory.Create(this, () => FailedImages.Add(key))); builder.CloseElement();
+      var result = await Links.GetAsync(OrganizationId.Value, LinkType, Search, Skip, Take);
+      Rows = result.Rows;
+      Total = result.TotalCount;
     }
-    else builder.AddContent(7, "Brez slike");
-    builder.CloseElement();
-  };
+    catch { Error = "Povezav izdelkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task OrganizationChangedAsync()
+  {
+    OrganizationId = int.TryParse(OrganizationDraft, out var parsed) ? parsed : OrganizationId;
+    Skip = 0;
+    await LoadAsync();
+  }
+
+  Task SearchKeyAsync(KeyboardEventArgs args) => args.Key == "Enter" ? LoadAsync() : Task.CompletedTask;
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
 }

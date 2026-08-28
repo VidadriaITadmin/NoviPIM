@@ -8,11 +8,6 @@ public sealed record BusinessCheckRow(
   string Detail, DateTime? ObservedUtc, decimal? SalesPrice, decimal? PurchasePrice,
   decimal? MarginFactor, string? UnitBasis);
 
-public sealed record ProductLinkRow(
-  long ProductLinkId, long ProductId, string ItemId, string ProductName, string? ProductImageUrl,
-  long LinkedProductId, string LinkedItemId, string LinkedProductName, string? LinkedImageUrl,
-  string LinkType, string? LinkRole, string? GroupKey, bool IsPrimary, int SortOrder,
-  string Source, string CreatedBy, DateTime CreatedUtc);
 
 public sealed record AttributeValueRow(
   string AttributeCode, string Value, long ProductCount, string? Translation,
@@ -67,38 +62,6 @@ public sealed class IntranetFeatureReadService(IConfiguration configuration)
     catch (SqlException error) when (PimReadModel.IsMissingReadModel(error))
     {
       return PimReadResult<BusinessCheckRow>.Missing(procedure);
-    }
-  }
-
-  public async Task<PimReadResult<ProductLinkRow>> GetProductLinksAsync(
-    int organizationId, string? linkType = null, string? source = null, string? search = null,
-    int skip = 0, int take = 50, CancellationToken cancellationToken = default)
-  {
-    const string procedure = "intranet.GetProductLinks";
-    try
-    {
-      await using var connection = await OpenAsync(cancellationToken);
-      await using var command = Procedure(procedure, connection);
-      command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-      command.Parameters.Add("@LinkType", SqlDbType.NVarChar, 20).Value = Optional(linkType);
-      command.Parameters.Add("@Source", SqlDbType.NVarChar, 40).Value = Optional(source);
-      command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(search);
-      command.Parameters.Add("@Skip", SqlDbType.Int).Value = skip;
-      command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
-      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-      var rows = await ReadAsync(reader, row => new ProductLinkRow(
-        PimDb.Int64(row, "ProductLinkId"), PimDb.Int64(row, "ProductId"), PimDb.TextOrEmpty(row, "ItemID"),
-        PimDb.TextOrEmpty(row, "ProductName"), PimDb.Text(row, "ProductImageUrl"),
-        PimDb.Int64(row, "LinkedProductId"), PimDb.TextOrEmpty(row, "LinkedItemID"),
-        PimDb.TextOrEmpty(row, "LinkedProductName"), PimDb.Text(row, "LinkedImageUrl"),
-        PimDb.TextOrEmpty(row, "LinkType"), PimDb.Text(row, "LinkRole"), PimDb.Text(row, "GroupKey"),
-        PimDb.Bool(row, "IsPrimary"), PimDb.Int32(row, "SortOrder"), PimDb.TextOrEmpty(row, "Source"),
-        PimDb.TextOrEmpty(row, "CreatedBy"), PimDb.DateTimeValue(row, "CreatedUtc")), cancellationToken);
-      return new(rows, await ReadTotalAsync(reader, cancellationToken));
-    }
-    catch (SqlException error) when (PimReadModel.IsMissingReadModel(error))
-    {
-      return PimReadResult<ProductLinkRow>.Missing(procedure);
     }
   }
 
