@@ -25,8 +25,16 @@ Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(summaryLabel.Groups[1].V
 Assert(Regex.Matches(markup, "class=\"metric-card ").Count == 5, "Povzetek mora imeti natanko pet kartic.");
 
 // 2. Vsak panel je poimenovana regija, vezana na svoj vidni naslov.
+// Panelov je po popravku 2026-08-28 pet, ne sest: „Moja opravila" je ponavljal dve kartici
+// povzetka in priznaval, da drugih opravil v modelu ni, „Hitri dostopi" pa je podvajal levo
+// navigacijo. Uporabnik je oboje oznacil za nepametno vsebino; namesto tega je prisel panel
+// „Po podjetjih" s celotno tabelo.
 var panels = Regex.Matches(markup, "<section[^>]*class=\"dashboard-panel[^\"]*\"[^>]*>");
-Assert(panels.Count >= 6, "Nadzorna plošča mora ohraniti vse obstoječe panele.");
+Assert(panels.Count == 5, "Nadzorna plošča ima pet panelov: podjetja, kakovost, procesi, opozorila, integracije.");
+Assert(markup.Contains("class=\"dashboard-panel companies-panel\"", StringComparison.Ordinal),
+  "Plošča mora imeti panel z razčlenitvijo po podjetjih.");
+foreach (var retired in new[] { "tasks-panel", "quick-panel", "quick-links", "unavailable-note" })
+  Assert(!markup.Contains(retired, StringComparison.Ordinal), "Odpisani sklop se ne sme vrniti: " + retired + ".");
 foreach (Match panel in panels)
 {
   var label = Regex.Match(panel.Value, "aria-labelledby=\"([^\"]+)\"");
@@ -56,12 +64,20 @@ Assert(Regex.IsMatch(markup, "class=\"ui-card error-state\"[^>]*role=\"alert\"")
 Assert(Regex.IsMatch(markup, "class=\"loading-state\"[^>]*role=\"status\""), "Stanje nalaganja mora biti razglašeno kot role=\"status\".");
 
 // 7. Tipkovnični fokus mora biti viden na vseh interaktivnih elementih plošče.
-foreach (var selector in new[] { ".metric-card", ".list-row", ".quality-row", ".process-row", ".alert-row", ".integration-row", ".quick-links a", ".panel-title a", ".panel-link" })
+foreach (var selector in new[] { ".metric-card", ".company-row", ".quality-row", ".process-row", ".alert-row", ".integration-row", ".panel-title a", ".panel-link" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 
 // 8. Varovalka: plošča ostane vezana na obstoječe resnične poizvedbe.
-var allowedCalls = new[] { "GetCurrentOrganizationAsync", "GetDashboardAsync", "GetValidationIssuesAsync", "GetPipelineRunsAsync", "GetSystemIntegrationsAsync" };
+// GetCurrentOrganizationAsync je namenoma prepovedan: vrne vedno prvo podjetje po sifri, zato
+// je plošča kazala samo DEMO. Zahteva uporabnika 2026-08-28 je celotna tabela, torej vsa podjetja.
+Assert(!markup.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal),
+  "Plošča ne sme računati iz enega samega podjetja — številke morajo zajeti vsa aktivna podjetja.");
+Assert(markup.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal),
+  "Obseg plošče mora priti iz seznama vseh aktivnih podjetij.");
+Assert(Regex.IsMatch(markup, "companies\\.Sum\\(company => company\\.Metrics\\.\\w+\\)"),
+  "Skupne številke morajo biti vsota podjetij, ne vrednost enega.");
+var allowedCalls = new[] { "GetOrganizationsAsync", "GetDashboardAsync", "GetValidationIssuesAsync", "GetPipelineRunsAsync", "GetSystemIntegrationsAsync" };
 foreach (var call in allowedCalls)
   Assert(markup.Contains("Data." + call, StringComparison.Ordinal), "Nadzorna plošča mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "Data\\.(\\w+)"))

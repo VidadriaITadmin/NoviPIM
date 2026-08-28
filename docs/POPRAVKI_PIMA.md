@@ -11,8 +11,8 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| A1 | Številke na nadzorni plošči kažejo samo DEMO organizacijo — kazati morajo celotno tabelo (vse organizacije). | INTRANET | TODO |
-| A2 | Uporabna sta „skupaj izdelkov" in „ERP veljavni"; ostalo ni pametno — pregledati in odstraniti neuporabne kazalnike. | INTRANET | TODO |
+| A1 | Številke na nadzorni plošči kažejo samo DEMO organizacijo — kazati morajo celotno tabelo (vse organizacije). | INTRANET | NAREJENO |
+| A2 | Uporabna sta „skupaj izdelkov" in „ERP veljavni"; ostalo ni pametno — pregledati in odstraniti neuporabne kazalnike. | INTRANET | NAREJENO |
 
 ## B. Vhodni podatki
 
