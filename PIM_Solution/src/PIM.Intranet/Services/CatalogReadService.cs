@@ -10,6 +10,20 @@ public sealed record MediaRow(string Source, long SourceId, long ProductId, stri
 public sealed record MediaKindCount(string Kind, long RowCount);
 public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia, long SchemeLessCount);
 public sealed record PriceRow(long ProductPriceId, long ProductId, string ItemId, string PriceList, decimal Net, decimal VatRate, DateTime ValidFrom, bool IsActive);
+
+/// <summary>
+/// Ena vrstica na izdelek, ne na ceno.
+///
+/// Uporabnik 2026-08-28: »mogoce bi bilo bolje, da bi bil samo en artikel in potem v tabeli
+/// stevilo cenikov ali pa napis max treh cenikov, potem se doda pluse, ker je prevec potem
+/// artiklov«. Merjeno: 300.197 cenovnih vrstic pri 157.216 izdelkih — seznam po cenah je isti
+/// izdelek ponovil do dvajsetkrat.
+/// </summary>
+/// <param name="PriceListCount">Koliko cenikov ima izdelek; iz njega nastane napis »+N«.</param>
+/// <param name="PriceListPreview">Prvi trije ceniki po abecedi, loceni z vejico.</param>
+public sealed record ProductPriceGroupRow(
+  long ProductId, string ItemId, string? Name, int PriceListCount, string PriceListPreview,
+  decimal? MinNet, decimal? MaxNet, DateTime? LastValidFrom, int ActiveCount);
 public sealed record PartnerRow(string Name, long ProductCount, long ActiveCount);
 public sealed record AttributeRow(string AttributeCode, long ProductCount, long ValueCount, string? SampleValue);
 public sealed record CategoryRow(int CategoryId, string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath, bool IsActive, long ProductCount, long DescendantProductCount);
@@ -239,6 +253,87 @@ public sealed class CatalogReadService(PimDb database)
         Bind(command, organizationId, search, skip, take);
         command.Parameters.AddWithValue("@PriceList", string.IsNullOrWhiteSpace(priceList) ? DBNull.Value : priceList);
       }, cancellationToken);
+
+  /// <summary>Cene, zgoscene na izdelek. Podrobnost cenikov se odpre v vrstici, brez odhoda s strani.</summary>
+  /// <param name="minPriceLists">Zozi na izdelke z vsaj toliko ceniki; 0 pomeni brez omejitve.</param>
+  public Task<(IReadOnlyList<ProductPriceGroupRow> Rows, long TotalCount)> GetProductPriceGroupsAsync(
+    int organizationId, string? priceList, string? search, int minPriceLists, int skip, int take,
+    CancellationToken cancellationToken = default) =>
+    database.PageAsync("""
+      WITH grouped AS
+      (
+        SELECT price.ProductId,
+          PriceListCount = COUNT(DISTINCT price.PriceList),
+          ActiveCount = COUNT(DISTINCT CASE WHEN price.IsActive = 1 THEN price.PriceList END),
+          MinNet = MIN(price.Net), MaxNet = MAX(price.Net), LastValidFrom = MAX(price.ValidFrom)
+        FROM canon.ProductPrice price
+        INNER JOIN canon.Product product ON product.ProductId = price.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
+          AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%')
+        GROUP BY price.ProductId
+        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
+      )
+      SELECT grouped.ProductId, product.ItemID, Name = title.Value,
+        grouped.PriceListCount, grouped.ActiveCount, grouped.MinNet, grouped.MaxNet, grouped.LastValidFrom,
+        PriceListPreview = STUFF((
+          SELECT TOP (3) ', ' + preview.PriceList
+          FROM (SELECT DISTINCT inner_price.PriceList FROM canon.ProductPrice inner_price WHERE inner_price.ProductId = grouped.ProductId) AS preview
+          ORDER BY preview.PriceList
+          FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, '')
+      FROM grouped
+      INNER JOIN canon.Product product ON product.ProductId = grouped.ProductId
+      OUTER APPLY
+      (
+        SELECT TOP (1) textValue.Value
+        FROM canon.ProductText textValue
+        WHERE textValue.ProductId = grouped.ProductId AND textValue.TextType IN ('WEB_TITLE', 'TITLE_ERP')
+        ORDER BY CASE WHEN textValue.TextType = 'WEB_TITLE' THEN 0 ELSE 1 END,
+          CASE WHEN textValue.Lang = 'sl' THEN 0 ELSE 1 END, textValue.Lang
+      ) AS title
+      ORDER BY product.ItemID
+      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
+
+      SELECT COUNT_BIG(*) FROM
+      (
+        SELECT price.ProductId
+        FROM canon.ProductPrice price
+        INNER JOIN canon.Product product ON product.ProductId = price.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
+          AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%')
+        GROUP BY price.ProductId
+        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
+      ) AS counted;
+      """,
+      reader => new ProductPriceGroupRow(
+        PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"), PimDb.Text(reader, "Name"),
+        PimDb.Int32(reader, "PriceListCount"), PimDb.TextOrEmpty(reader, "PriceListPreview"),
+        PimDb.Decimal(reader, "MinNet"), PimDb.Decimal(reader, "MaxNet"),
+        PimDb.NullableDateTime(reader, "LastValidFrom"), PimDb.Int32(reader, "ActiveCount")),
+      command =>
+      {
+        Bind(command, organizationId, search, skip, take);
+        command.Parameters.AddWithValue("@PriceList", string.IsNullOrWhiteSpace(priceList) ? DBNull.Value : priceList);
+        command.Parameters.AddWithValue("@MinPriceLists", Math.Max(1, minPriceLists));
+      }, cancellationToken);
+
+  /// <summary>Vsi ceniki enega izdelka; odpre se v vrstici seznama, ne na drugi strani.</summary>
+  public Task<IReadOnlyList<PriceRow>> GetPricesForProductAsync(
+    long productId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync("""
+      SELECT price.ProductPriceId, price.ProductId, product.ItemID, price.PriceList,
+        price.Net, price.VatRate, price.ValidFrom, price.IsActive
+      FROM canon.ProductPrice price
+      INNER JOIN canon.Product product ON product.ProductId = price.ProductId
+      WHERE price.ProductId = @ProductId
+      ORDER BY price.PriceList, price.ValidFrom DESC;
+      """,
+      reader => new PriceRow(
+        PimDb.Int64(reader, "ProductPriceId"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
+        PimDb.TextOrEmpty(reader, "PriceList"), PimDb.Decimal(reader, "Net"), PimDb.Decimal(reader, "VatRate"),
+        PimDb.DateTimeValue(reader, "ValidFrom"), PimDb.Bool(reader, "IsActive")),
+      command => command.Parameters.AddWithValue("@ProductId", productId), cancellationToken);
 
   // ─── Partnerji ────────────────────────────────────────────────────────────
   // Dobavitelj in proizvajalec sta danes polji na izdelku, ne svoja sifranta. Stran zato

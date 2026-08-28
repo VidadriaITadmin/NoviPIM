@@ -3,64 +3,107 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CatalogReadService Catalog
 @inject PIM.Intranet.Services.IntranetDataService Data
-@inject PIM.Intranet.Services.IntranetFeatureReadService Features
 
 <PageTitle>Cene in ceniki</PageTitle>
-<PimPage Title="Cene in ceniki" Subtitle="Cene izdelkov po cenikih, kot so prišle iz vira. Bruto je izračunan iz neto in stopnje DDV, ne hranjen posebej." />
+<PimPage Title="Cene in ceniki" Subtitle="@Subtitle" />
 
-<section class="kpi-grid" aria-label="Povzetek cenovnih preverb">
-  <PimStat Label="Brez B2C cene" Value="@Kpi(PimCheckCode.CENA_MANJKA_B2C)" Href="cene?stanje=CENA_MANJKA_B2C" />
-  <PimStat Label="Faktor pod pragom" Value="@Kpi(PimCheckCode.FAKTOR_MARZE)" Href="cene?stanje=FAKTOR_MARZE" />
-  <PimStat Label="Podvojen zapis" Value="@Kpi(PimCheckCode.PODVOJEN_ZAPIS)" Href="cene?stanje=PODVOJEN_ZAPIS" />
-  <PimStat Label="Vse preverbe" Value="→" Note="Cene in zaloge" Href="preverbe" />
-</section>
+@* Popravki 2026-08-28. Prej je bila ena vrstica na ceno: isti izdelek se je ponovil do
+   dvajsetkrat in seznama ni bilo mogoce brati. Zdaj je ena vrstica na izdelek, ceniki so
+   zgosceni v napis »prvi trije + N«, klik na vrstico pa odpre cenike te vrstice — v vrstici,
+   ne na kartici izdelka. Kartice preverb so odpadle: iste stevilke so na strani Preverbe,
+   kamor vodi ena povezava. *@
 
-<section class="ui-card toolbar" role="search" aria-labelledby="price-filter-title">
-  <h2 id="price-filter-title" class="visually-hidden">Filtriranje cen</h2>
-  <label class="visually-hidden" for="price-search">Išči po šifri artikla</label>
-  <input id="price-search" type="search" class="search-input" placeholder="Išči po šifri artikla …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
-  <label class="visually-hidden" for="price-list">Cenik</label>
-  <select id="price-list" class="filter-select" @bind="PriceList" @bind:after="ApplyAsync">
-    <option value="">Vsi ceniki</option>
-    @foreach (var option in PriceLists)
-    {
-      <option value="@option.Value">@option.Label</option>
-    }
-  </select>
-  <label class="visually-hidden" for="price-state">Stanje cene</label>
-  <select id="price-state" class="filter-select" @bind="CheckCode" @bind:after="ApplyAsync">
-    <option value="">Vsa stanja cen</option>
-    @foreach (var code in PriceCheckCodes)
-    {
-      <option value="@(code.ToString())">@(PimCheckCodes.Description(code))</option>
-    }
-  </select>
-  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
-</section>
+<section class="ui-card data-card" aria-label="Cene po izdelkih">
+  <div class="card-toolbar" role="search" aria-labelledby="price-filter-title">
+    <h2 id="price-filter-title" class="visually-hidden">Filtriranje cen</h2>
 
-@if (PriceChecks?.IsMissing == true)
-{
-  <PimMissing Object="@(PriceChecks.MissingObject!)" What="cenovne preverbe, prevzemno ceno in faktor na isti merski osnovi" Needs="canon.ProductPrice, identiteto cenikov po organizaciji in canon.ProductCommercial" />
-}
+    <label class="visually-hidden" for="price-search">Išči po šifri artikla</label>
+    <input id="price-search" type="search" class="search-input" placeholder="Išči po šifri artikla …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
 
-<section class="ui-card data-card" aria-label="Seznam cen">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni cen." LoadingText="Nalaganje cen …">
-    <PimTable Caption="Cene izdelkov po cenikih" Columns="Columns">
+    <label class="visually-hidden" for="price-organization">Podjetje</label>
+    <select id="price-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationChangedAsync">
+      @foreach (var organization in Organizations)
+      {
+        <option value="@organization.OrganizationId">@organization.Name</option>
+      }
+    </select>
+
+    <label class="visually-hidden" for="price-list">Cenik</label>
+    <select id="price-list" class="filter-select" @bind="PriceList" @bind:after="ApplyAsync">
+      <option value="">Vsi ceniki</option>
+      @foreach (var option in PriceLists) { <option value="@option.Value">@option.Label</option> }
+    </select>
+
+    @* Pametna filtra, ki ju je zahteval uporabnik: koliko cenikov ima izdelek in ali cena velja.
+       Oba odgovarjata na vprasanje, ki ga pri 300.000 cenovnih vrsticah kdo res ima. *@
+    <label class="visually-hidden" for="price-lists-min">Število cenikov</label>
+    <select id="price-lists-min" class="filter-select" @bind="MinPriceLists" @bind:after="ApplyAsync">
+      <option value="1">Vsi izdelki s ceno</option>
+      <option value="2">Vsaj 2 cenika</option>
+      <option value="4">Vsaj 4 ceniki</option>
+      <option value="8">Vsaj 8 cenikov</option>
+    </select>
+
+    <label class="visually-hidden" for="price-validity">Veljavnost</label>
+    <select id="price-validity" class="filter-select" @bind="Validity" @bind:after="ApplyAsync">
+      <option value="">Veljavne in neveljavne</option>
+      <option value="ACTIVE">Ima vsaj eno veljavno ceno</option>
+      <option value="INACTIVE">Brez veljavne cene</option>
+    </select>
+
+    <a class="ghost-button" href="preverbe">Preverbe cen in zaloge</a>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  </div>
+
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni izdelkov s ceno." LoadingText="Nalaganje cen …">
+    <PimTable Caption="Izdelki in njihovi ceniki" AriaLabel="Tabela cen po izdelkih" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
-          <tr>
-            <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
-            <td><span class="code-value">@row.PriceList</span></td>
-            <td class="numeric">@row.Net.ToString("N2")</td>
-            <td class="numeric">@row.VatRate.ToString("N1") %</td>
-            <td class="numeric">@Gross(row).ToString("N2")</td>
-            <td class="numeric">@(CheckFor(row)?.PurchasePrice?.ToString("N2") ?? "—")</td>
-            <td class="numeric">@(CheckFor(row)?.MarginFactor?.ToString("N2") ?? "—")</td>
-            <td>@row.ValidFrom.ToLocalTime().ToString("d")</td>
-            <td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          var open = Expanded == row.ProductId;
+          <tr class="row-link @(open ? "open" : null)" tabindex="0" @onclick="() => ToggleAsync(row)" @onkeydown="args => ToggleKeyAsync(args, row)"
+              aria-expanded="@open.ToString().ToLowerInvariant()" aria-label="Pokaži cenike izdelka @row.ItemId">
+            <td>
+              <span class="product-name">@(row.Name ?? row.ItemId)</span>
+              <span class="product-meta"><span class="code-value">@row.ItemId</span></span>
+            </td>
+            <td>
+              <span class="price-lists">@row.PriceListPreview</span>
+              @if (row.PriceListCount > 3) { <span class="more-badge">+@(row.PriceListCount - 3)</span> }
+            </td>
+            <td class="numeric">@row.PriceListCount</td>
+            <td class="numeric">@(row.MinNet?.ToString("N2") ?? "—")</td>
+            <td class="numeric">@(row.MaxNet?.ToString("N2") ?? "—")</td>
+            <td>@(row.LastValidFrom?.ToLocalTime().ToString("d") ?? "—")</td>
+            <td><PimChip Text="@(row.ActiveCount > 0 ? $"{row.ActiveCount} veljavnih" : "brez veljavne")" Tone="@(row.ActiveCount > 0 ? "good" : "warn")" /></td>
           </tr>
+          @if (open)
+          {
+            <tr class="detail-row">
+              <td colspan="7">
+                @* Odpre se samo o cenikih, ne kartica izdelka: uporabnik je izrecno povedal,
+                   da ga moti, ko klik odnese na izdelek. *@
+                <PimState Loading="DetailLoading" Empty="@(!DetailLoading && Detail.Count == 0)" EmptyText="Izdelek nima cen." LoadingText="Nalaganje cenikov …">
+                  <PimTable Caption="@($"Ceniki izdelka {row.ItemId}")" AriaLabel="Tabela cenikov izdelka" Columns="DetailColumns">
+                    <Rows>
+                      @foreach (var price in Detail)
+                      {
+                        <tr>
+                          <td><span class="code-value">@price.PriceList</span></td>
+                          <td class="numeric">@price.Net.ToString("N2")</td>
+                          <td class="numeric">@price.VatRate.ToString("N1") %</td>
+                          <td class="numeric">@Gross(price).ToString("N2")</td>
+                          <td>@price.ValidFrom.ToLocalTime().ToString("d")</td>
+                          <td><PimChip Text="@(price.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(price.IsActive ? "good" : null)" /></td>
+                        </tr>
+                      }
+                    </Rows>
+                  </PimTable>
+                </PimState>
+                <p class="detail-actions"><a href="izdelki/@row.ProductId">Odpri kartico izdelka</a></p>
+              </td>
+            </tr>
+          }
         }
       </Rows>
     </PimTable>
@@ -68,42 +111,70 @@
   </PimState>
 </section>
 
+<p class="muted source-note">
+  Vir: <span class="code-value">canon.ProductPrice</span> — cene, kot so prišle iz vira po ceniku.
+  Bruto je izračunan iz neto in stopnje DDV, ne hranjen posebej.
+</p>
+
 @code {
-  [SupplyParameterFromQuery(Name = "stanje")] public string CheckCode { get; set; } = "";
   [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
-  IReadOnlyList<PIM.Intranet.Services.PriceRow> Rows = [];
-  IReadOnlyList<PIM.Intranet.Services.PimOption> PriceLists = [];
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
+
+  IReadOnlyList<ProductPriceGroupRow> Rows = [];
+  IReadOnlyList<PriceRow> Detail = [];
+  IReadOnlyList<PimOption> PriceLists = [];
+  IReadOnlyList<OrganizationContext> Organizations = [];
   long Total;
   bool Loading = true;
+  bool DetailLoading;
   string? Error;
   string Search = "";
   string PriceList = "";
+  string MinPriceLists = "1";
+  string Validity = "";
+  string OrganizationDraft = "";
+  long? Expanded;
   int Skip;
   const int Take = 50;
   int? OrganizationId;
-  string LoadedCheckCode = "";
-  PIM.Intranet.Services.PimReadResult<PIM.Intranet.Services.BusinessCheckRow>? PriceChecks;
-  readonly Dictionary<PIM.Intranet.Services.PimCheckCode, long?> KpiCounts = [];
-  static readonly PIM.Intranet.Services.PimCheckCode[] PriceCheckCodes =
-  [PimCheckCode.CENA_MANJKA_B2C, PimCheckCode.CENA_MANJKA_B2B, PimCheckCode.CENA_NIC,
-    PimCheckCode.DDV_MANJKA, PimCheckCode.CENIK_POTEKEL, PimCheckCode.PODVOJEN_ZAPIS,
-    PimCheckCode.FAKTOR_MARZE, PimCheckCode.CENA_POD_NABAVNO];
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Artikel"), new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true),
-    new("Bruto", Numeric: true), new("Prevzemna cena", Numeric: true), new("Faktor", Numeric: true), new("Velja od"), new("Stanje")
+    new("Izdelek"), new("Ceniki"), new("Cenikov", Numeric: true), new("Najnižja neto", Numeric: true),
+    new("Najvišja neto", Numeric: true), new("Zadnja veljavnost"), new("Stanje"),
   ];
+
+  static readonly IReadOnlyList<PimColumn> DetailColumns =
+  [
+    new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true), new("Bruto", Numeric: true),
+    new("Velja od"), new("Stanje"),
+  ];
+
+  string Subtitle => Organizations.Count == 0
+    ? "Cene izdelkov po cenikih, kot so prišle iz vira."
+    : $"Cene izdelkov po cenikih, kot so prišle iz vira. Ena vrstica je en izdelek; klik odpre njegove cenike. Podjetje izbereš v filtru ({Organizations.Count} na voljo).";
 
   protected override async Task OnInitializedAsync()
   {
-    var organization = await Data.GetCurrentOrganizationAsync();
-    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
-    OrganizationId = organization.OrganizationId;
+    try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+
+    var organization = int.TryParse(QueryOrganization, out var requested)
+      && Organizations.Any(row => row.OrganizationId == requested)
+      ? requested
+      : Organizations.FirstOrDefault()?.OrganizationId;
+
+    if (organization is null) { Error = "Nobeno podjetje ni aktivno."; Loading = false; return; }
+    OrganizationId = organization;
+    OrganizationDraft = organization.Value.ToString();
     Search = QueryProduct ?? Search;
-    LoadedCheckCode = CheckCode;
-    try { PriceLists = await Catalog.GetPriceListsAsync(OrganizationId.Value); } catch { PriceLists = []; }
+    await LoadListsAsync();
     await LoadAsync();
+  }
+
+  async Task LoadListsAsync()
+  {
+    if (OrganizationId is null) return;
+    try { PriceLists = await Catalog.GetPriceListsAsync(OrganizationId.Value); } catch { PriceLists = []; }
   }
 
   async Task LoadAsync()
@@ -111,42 +182,57 @@
     if (OrganizationId is null) return;
     Loading = true;
     Error = null;
+    Expanded = null;
     try
     {
-      var pricesTask = Catalog.GetPricesAsync(OrganizationId.Value, PriceList, Search, Skip, Take);
-      var checksTask = Features.GetPriceChecksAsync(OrganizationId.Value, checkCode: CheckCode, context: PriceList, search: Search, skip: Skip, take: Take);
-      var result = await pricesTask;
-      PriceChecks = await checksTask;
-      Rows = string.IsNullOrWhiteSpace(CheckCode) || PriceChecks.IsMissing
-        ? result.Rows
-        : result.Rows.Where(row => PriceChecks.Rows.Any(check => check.ProductId == row.ProductId && (string.IsNullOrWhiteSpace(check.Context) || check.Context == row.PriceList))).ToArray();
-      Total = string.IsNullOrWhiteSpace(CheckCode) || PriceChecks.IsMissing ? result.TotalCount : PriceChecks.Total;
-      var kpiTasks = new[] { PimCheckCode.CENA_MANJKA_B2C, PimCheckCode.FAKTOR_MARZE, PimCheckCode.PODVOJEN_ZAPIS }
-        .Select(async code => (Code: code, Result: await Features.GetPriceChecksAsync(OrganizationId.Value, checkCode: code.ToString(), take: 1)));
-      foreach (var item in await Task.WhenAll(kpiTasks)) KpiCounts[item.Code] = item.Result.IsMissing ? null : item.Result.Total;
+      var minimum = int.TryParse(MinPriceLists, out var parsed) ? parsed : 1;
+      var result = await Catalog.GetProductPriceGroupsAsync(OrganizationId.Value, PriceList, Search, minimum, Skip, Take);
+      // Veljavnost je lastnost zgoscene vrstice, ne cene; filtrira se nad ze zozanim naborom
+      // ene strani, zato ne skriva vrstic, ki jih stevec obljublja — stevec to izrecno pove.
+      Rows = Validity switch
+      {
+        "ACTIVE" => result.Rows.Where(row => row.ActiveCount > 0).ToArray(),
+        "INACTIVE" => result.Rows.Where(row => row.ActiveCount == 0).ToArray(),
+        _ => result.Rows,
+      };
+      Total = result.TotalCount;
     }
     catch { Error = "Cen trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
-  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
-  protected override async Task OnParametersSetAsync()
+  async Task ToggleAsync(ProductPriceGroupRow row)
   {
-    if (OrganizationId is not null && !string.Equals(LoadedCheckCode, CheckCode, StringComparison.Ordinal))
-    {
-      LoadedCheckCode = CheckCode; Skip = 0; await LoadAsync();
-    }
+    if (Expanded == row.ProductId) { Expanded = null; Detail = []; return; }
+    Expanded = row.ProductId;
+    Detail = [];
+    DetailLoading = true;
+    try { Detail = await Catalog.GetPricesForProductAsync(row.ProductId); }
+    catch { Detail = []; }
+    finally { DetailLoading = false; }
   }
+
+  Task ToggleKeyAsync(KeyboardEventArgs args, ProductPriceGroupRow row) =>
+    args.Key is "Enter" or " " ? ToggleAsync(row) : Task.CompletedTask;
+
+  async Task OrganizationChangedAsync()
+  {
+    OrganizationId = int.TryParse(OrganizationDraft, out var parsed) ? parsed : OrganizationId;
+    PriceList = "";
+    Skip = 0;
+    await LoadListsAsync();
+    await LoadAsync();
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
 
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zapisov";
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : Validity.Length == 0 ? $"{Total:N0} izdelkov s ceno"
+    : $"{Rows.Count:N0} od {Total:N0} izdelkov na tej strani";
 
   // Bruto ni v bazi; izracun je isti kot v canon.FieldValue, da se stran in izvoz ne razideta.
-  static decimal Gross(PIM.Intranet.Services.PriceRow row) => Math.Round(row.Net * (1 + row.VatRate / 100), 2);
-
-  PIM.Intranet.Services.BusinessCheckRow? CheckFor(PIM.Intranet.Services.PriceRow row) => PriceChecks?.Rows.FirstOrDefault(check =>
-    check.ProductId == row.ProductId && (string.IsNullOrWhiteSpace(check.Context) || check.Context == row.PriceList));
-
-  string Kpi(PIM.Intranet.Services.PimCheckCode code) => KpiCounts.TryGetValue(code, out var value) && value is not null ? value.Value.ToString("N0") : "—";
+  static decimal Gross(PriceRow row) => Math.Round(row.Net * (1 + row.VatRate / 100), 2);
 }

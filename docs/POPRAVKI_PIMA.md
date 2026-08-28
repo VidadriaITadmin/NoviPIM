@@ -111,12 +111,12 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| J1 | Namesti bralni sistem (branje cen/cenikov iz vira). | DOMENA | TODO |
-| J2 | Odstrani oblačke. | INTRANET | TODO |
-| J3 | Dodaj pametne filtre. | INTRANET | TODO |
-| J4 | Ena vrstica = en artikel; v tabeli število cenikov oz. največ trije ceniki, potem „+N". | INTRANET | TODO |
-| J5 | Klik kjerkoli v vrstici odpre pogled cenikov (ne kartice artikla). | INTRANET | TODO |
-| J6 | Dokončaj stran „Preverbe cen in zaloge", da deluje. | INTRANET | TODO |
+| J1 | Namesti bralni sistem (branje cen/cenikov iz vira). | DOMENA | NAREJENO |
+| J2 | Odstrani oblačke. | INTRANET | NAREJENO |
+| J3 | Dodaj pametne filtre. | INTRANET | NAREJENO |
+| J4 | Ena vrstica = en artikel; v tabeli število cenikov oz. največ trije ceniki, potem „+N". | INTRANET | NAREJENO |
+| J5 | Klik kjerkoli v vrstici odpre pogled cenikov (ne kartice artikla). | INTRANET | NAREJENO |
+| J6 | Dokončaj stran „Preverbe cen in zaloge", da deluje. | INTRANET | NAREJENO |
 
 ## K. Upravljanje — Nastavitve kataloga
 
