@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-// Pogodba kartice po prenovi 2026-08-27. Preverja uporabnikovo poslovno razdelitev,
+// Pogodba kartice po prenovi 2026-08-28. Preverja uporabnikovo poslovno razdelitev,
 // podatkovne vire, varno prikazovanje medijev in dostopnost; ne zaklepa notranjega HTML-ja.
 //
 // Sprememba dogovora 2026-08-27 (drugi krog): kartica ni vec bralna. Uporabnik je zahteval
@@ -45,33 +45,41 @@ foreach (var channelName in new[] { "ERP (SAOP)", "Komerciala", "Splet" })
 Assert(Regex.Matches(card, "class=\"ui-card channel-card").Count == 3, "Glava mora imeti natanko tri klikljive kanalske kartice.");
 Assert(card.Contains("nikoli ne blokira", StringComparison.Ordinal), "Komercialna opozorila morajo izrecno povedati, da ne blokirajo.");
 
-var expectedTabs = new Dictionary<string, string>
+var expectedSections = new Dictionary<string, string>
 {
-  ["overview"] = "Pregled", ["erp"] = "ERP", ["komerciala"] = "Komerciala", ["splet"] = "Splet",
-  ["media"] = "Mediji", ["prices"] = "Cene", ["stock"] = "Zaloga", ["quality"] = "Kakovost",
-  ["saop"] = "SAOP", ["history"] = "Zgodovina", ["origin"] = "Izvor",
+  ["overview"] = "Pregled",
+  ["core"] = "Osnovni podatki",
+  ["sales"] = "Prodaja in kanali",
+  ["media-stock"] = "Mediji in zaloga",
+  ["quality-history"] = "Kakovost in zgodovina",
 };
-Assert(Regex.Matches(card, "new\\(\"(overview|erp|komerciala|splet|media|prices|stock|quality|saop|history|origin)\", ").Count == 11,
-  "Kartica mora imeti natanko 11 dogovorjenih zavihkov.");
-foreach (var tab in expectedTabs)
-  Assert(Regex.IsMatch(card, "new\\(\"" + tab.Key + "\", \"" + Regex.Escape(tab.Value)), "Manjka zavihek " + tab.Value + ".");
+Assert(Regex.Matches(card, "new\\(\"(overview|core|sales|media-stock|quality-history)\", ").Count == 5,
+  "Kartica mora imeti natanko pet uporabnisko razumljivih sklopov.");
+foreach (var section in expectedSections)
+  Assert(Regex.IsMatch(card, "new\\(\"" + section.Key + "\", \"" + Regex.Escape(section.Value)), "Manjka sklop " + section.Value + ".");
+Assert(card.Contains("Tone: \"bad\"", StringComparison.Ordinal) && card.Contains("Tone: \"warn\"", StringComparison.Ordinal),
+  "Stevci v navigaciji smejo poudariti samo blokade in opozorila.");
 
 // Zavihki morajo biti oznaka, ne sestavljeni v RenderTreeBuilder: izoliran slog Blazorja doda
 // oznako obsega samo elementom iz datoteke .razor, zato so bili zavihki iz kode brez sloga in
 // so bili videti kot goli gumbi brskalnika. To je pogodba, ker se je napaka ze zgodila.
 Assert(Regex.IsMatch(card, "<button type=\"button\" role=\"tab\""),
-  "Zavihki morajo biti zapisani kot oznaka, sicer ostanejo brez izoliranega sloga.");
+  "Sklopi morajo biti zapisani kot oznaka, sicer ostanejo brez izoliranega sloga.");
 Assert(!card.Contains("builder.OpenElement", StringComparison.Ordinal),
   "Vidnih elementov kartice se ne sestavlja v kodi; izoliran slog jih ne doseze.");
-Assert(card.Contains("role=\"tablist\"", StringComparison.Ordinal), "Zavihki morajo biti ARIA tablist.");
-foreach (var key in expectedTabs.Keys)
-  Assert(card.Contains("panel-" + key, StringComparison.Ordinal), "Manjka panel zavihka " + key + ".");
-Assert(card.Contains("aria-selected", StringComparison.Ordinal) && card.Contains("aria-controls", StringComparison.Ordinal), "Zavihki morajo povezati gumb in panel.");
-Assert(card.Contains("Navigation.NavigateTo($\"izdelki/{ProductId}#{tab}\"", StringComparison.Ordinal), "Izbrani zavihek mora biti del deljivega URL-ja.");
+Assert(card.Contains("role=\"tablist\"", StringComparison.Ordinal), "Sklopi morajo biti ARIA tablist.");
+foreach (var key in expectedSections.Keys)
+  Assert(card.Contains("panel-" + key, StringComparison.Ordinal), "Manjka panel sklopa " + key + ".");
+Assert(card.Contains("aria-selected", StringComparison.Ordinal) && card.Contains("aria-controls", StringComparison.Ordinal), "Navigacija mora povezati gumb in panel.");
+Assert(card.Contains("Navigation.NavigateTo($\"izdelki/{ProductId}#{section}\"", StringComparison.Ordinal), "Izbrani sklop mora biti del deljivega URL-ja.");
 
 Assert(Regex.Matches(card, "<ProductChannelPanel").Count == 3, "Trije kanali morajo uporabljati isti gradnik.");
-foreach (var heading in new[] { "Kanonična vrednost", "Lastnik", "Čaka potrditev" })
-  Assert(card.Contains(heading, StringComparison.Ordinal), "Pregled mora vsebovati stolpec " + heading + ".");
+foreach (var heading in new[] { "Ključni podatki", "Odprte naloge", "Prikaži vse podrobnosti" })
+  Assert(card.Contains(heading, StringComparison.Ordinal), "Pregled mora vsebovati " + heading + ".");
+Assert(!card.Contains("Caption=\"Kanonična vrednost, lastnik in čakajoča sprememba\"", StringComparison.Ordinal),
+  "Pregled ne sme biti velika tehnicna tabela.");
+Assert(card.Contains("napak blokira ERP", StringComparison.Ordinal) && card.Contains("Odpri kakovost", StringComparison.Ordinal),
+  "Pregled mora jasno povedati blokado in naslednje dejanje.");
 foreach (var field in new[] { "Davčna stopnja", "Planiranje in rezervacija", "Knjigovodske šifre", "Kosov v paketu", "Nabavni podatki" })
   Assert(card.Contains(field, StringComparison.Ordinal), "Manjkajoče polje mora ostati vidno: " + field + ".");
 Assert(channel.Contains("ni v bralnem modelu", StringComparison.Ordinal), "Kanalski gradnik mora pošteno označiti polja zunaj modela.");
@@ -135,15 +143,17 @@ foreach (var selector in new[] { ".field-grid", ".field-input" })
     "Slog obrazca ne sme biti v ProductCard.razor.css — do otroske komponente ne sega: " + selector + ".");
 Assert(channelCss.Contains(".field.needs-value .field-input", StringComparison.Ordinal),
   "Manjkajoce obvezno polje mora biti vidno tudi v obrazcu.");
-Assert(css.Contains(".product-tabs button.active", StringComparison.Ordinal)
-  && Regex.IsMatch(css, @"\.product-tabs button\.active\s*\{[^}]*font-weight"),
-  "Aktivni zavihek mora biti razpoznaven tudi brez barve (pisava, podlaga, crta).");
-Assert(Regex.IsMatch(css, @"\.card-bar\s*\{[^}]*position: sticky"),
-  "Vrstica z zavihki in dejanji mora ostati vidna med drsenjem, sicer se izgubi, kje si.");
-Assert(Regex.IsMatch(card, "<div class=\"card-bar\">"),
-  "Zavihki in dejanja sodijo v eno vrstico; tri nalozene vrstice nad vsakim zavihkom so bile prevec.");
+Assert(css.Contains(".product-section-nav button.active", StringComparison.Ordinal)
+  && Regex.IsMatch(css, @"\.product-section-nav button\.active\s*\{[^}]*font-weight"),
+  "Aktivni sklop mora biti razpoznaven tudi brez barve (pisava, podlaga, crta).");
+Assert(Regex.IsMatch(css, @"\.section-nav-card\s*\{[^}]*position: sticky"),
+  "Lokalna navigacija mora ostati vidna med drsenjem dolgega obrazca.");
+foreach (var selector in new[] { ".product-workspace", ".blocking-banner", ".overview-grid", ".task-list" })
+  Assert(css.Contains(selector, StringComparison.Ordinal), "Prenovljeni pregled potrebuje slog " + selector + ".");
+Assert(card.Contains("<Actions>", StringComparison.Ordinal) && card.Contains("Shrani spremembe", StringComparison.Ordinal),
+  "Dejanji kartice sodita ob naslov strani in morata jasno poimenovati shranjevanje.");
 
-Assert(css.Contains(".product-tabs button:focus-visible", StringComparison.Ordinal), "Zavihki morajo imeti viden fokus.");
+Assert(css.Contains(".product-section-nav button:focus-visible", StringComparison.Ordinal), "Navigacija sklopov mora imeti viden fokus.");
 Assert(css.Contains("@media (max-width: 900px)", StringComparison.Ordinal), "Kartica mora biti odzivna.");
 Assert(gallery.Contains("loading=\"lazy\"", StringComparison.Ordinal) && gallery.Contains("@onerror", StringComparison.Ordinal), "Galerija mora leno nalagati in obravnavati nedosegljive slike.");
 
