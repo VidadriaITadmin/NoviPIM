@@ -105,8 +105,16 @@ foreach (var pageName in new[] { "Customers.razor", "PipelineRuns.razor", "Outbo
 foreach (var pageName in new[] { "DiscountRules.razor", "CustomerDetail.razor", "SystemUsers.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
-  foreach (var designClass in new[] { "page-header", "ui-card", "data-table" })
-    Assert(pageText.Contains(designClass, StringComparison.Ordinal), pageName + " mora uporabljati PIM razred " + designClass + ".");
+  // Razred sme priti tudi iz skupnega gradnika: <PimPage> izrise page-header, <PimTable> pa
+  // data-table. Zahteva je bila vedno "uporabi PIM oblikovanje, ne Bootstrap", ne "prepisi
+  // razred na roko" - gradnik je celo bolj zanesljiv, ker je razred zapisan na enem mestu.
+  foreach (var (designClass, sharedComponent) in new[]
+    { ("page-header", "<PimPage"), ("ui-card", (string?)null), ("data-table", "<PimTable") })
+  {
+    var present = pageText.Contains(designClass, StringComparison.Ordinal)
+      || (sharedComponent is not null && pageText.Contains(sharedComponent, StringComparison.Ordinal));
+    Assert(present, pageName + " mora uporabljati PIM razred " + designClass + " ali ustrezen skupni gradnik.");
+  }
   foreach (var bootstrapClass in new[] { "row", "col", "card", "table", "form-control", "form-select", "form-check", "btn" })
     Assert(!HasCssClass(pageText, bootstrapClass), pageName + " ne sme uporabljati Bootstrap razreda " + bootstrapClass + ".");
 }

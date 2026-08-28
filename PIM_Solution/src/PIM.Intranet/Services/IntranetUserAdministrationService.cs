@@ -53,6 +53,94 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
   }
 
   /// <summary>
+  /// Nov lokalni racun. Geslo se zgosti tu in v bazo gre samo zgoscena vrednost — procedura
+  /// sprejme <c>@PasswordHash</c>, ne gesla, zato cistopis nikoli ne zapusti tega procesa.
+  /// </summary>
+  public async Task CreateLocalUserAsync(string userName, string displayName, string password, string roleCode, string? email, CancellationToken cancellationToken = default)
+  {
+    ValidatePassword(password);
+    var normalizedUser = (userName ?? "").Trim();
+    var normalizedName = (displayName ?? "").Trim();
+    if (normalizedUser.Length == 0 || normalizedName.Length == 0)
+      throw new InvalidOperationException("Uporabniško ime in ime sta obvezna.");
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using (var command = new SqlCommand("sec.CreateLocalUser", connection) { CommandType = System.Data.CommandType.StoredProcedure })
+    {
+      command.Parameters.AddWithValue("@UserName", normalizedUser);
+      command.Parameters.AddWithValue("@DisplayName", normalizedName);
+      command.Parameters.AddWithValue("@PasswordHash", PasswordHasher.Hash(password));
+      command.Parameters.AddWithValue("@RoleCode", roleCode);
+      await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    if (!string.IsNullOrWhiteSpace(email)) await SetEmailAsync(normalizedUser, email, cancellationToken);
+  }
+
+  /// <summary>
+  /// Novo geslo lokalnega racuna. Domenskih gesel PIM ne hrani in jih zato ne more spremeniti —
+  /// prijava takega uporabnika gre v Active Directory in tam tudi ostane.
+  /// </summary>
+  public async Task ResetPasswordAsync(string userName, string password, CancellationToken cancellationToken = default)
+  {
+    ValidatePassword(password);
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      UPDATE sec.LocalUser SET PasswordHash = @PasswordHash
+      WHERE UserName = @UserName AND AuthSource = N'LOCAL';
+      """, connection);
+    command.Parameters.AddWithValue("@PasswordHash", PasswordHasher.Hash(password));
+    command.Parameters.AddWithValue("@UserName", userName);
+    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+      throw new InvalidOperationException("Geslo je mogoče spremeniti samo lokalnemu uporabniku.");
+  }
+
+  /// <summary>Prikazno ime; velja za lokalne in domenske racune, ker je nase in ne AD-jevo.</summary>
+  public async Task SetDisplayNameAsync(string userName, string displayName, CancellationToken cancellationToken = default)
+  {
+    var normalized = (displayName ?? "").Trim();
+    if (normalized.Length == 0) throw new InvalidOperationException("Ime ne sme biti prazno.");
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "UPDATE sec.LocalUser SET DisplayName = @DisplayName WHERE UserName = @UserName;", connection);
+    command.Parameters.AddWithValue("@DisplayName", normalized);
+    command.Parameters.AddWithValue("@UserName", userName);
+    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+      throw new InvalidOperationException("Uporabnika ni bilo mogoče najti.");
+  }
+
+  /// <summary>
+  /// Vklop ali izklop racuna. Racunov ne brisemo: uporabnik je podpisan pod spremembami v
+  /// zgodovini in pod odobritvami odhodne poti, zato mora ostati berljiv tudi potem, ko odide.
+  /// </summary>
+  public async Task SetEnabledAsync(string userName, bool enabled, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "UPDATE sec.LocalUser SET IsEnabled = @IsEnabled WHERE UserName = @UserName;", connection);
+    command.Parameters.AddWithValue("@IsEnabled", enabled);
+    command.Parameters.AddWithValue("@UserName", userName);
+    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+      throw new InvalidOperationException("Uporabnika ni bilo mogoče najti.");
+  }
+
+  /// <summary>
+  /// Najmanjsa zahteva za geslo. Namenoma kratka in razumljiva: dolzina je edina lastnost, ki
+  /// zanesljivo dela razliko, zapleteno pravilo pa ljudi prisili v zapisovanje na listek.
+  /// </summary>
+  static void ValidatePassword(string password)
+  {
+    if (string.IsNullOrWhiteSpace(password) || password.Trim().Length < 10)
+      throw new InvalidOperationException("Geslo mora imeti vsaj 10 znakov.");
+  }
+
+  /// <summary>
   /// Zapise ali pobrise naslov za opozorila. Prazen naslov je dovoljen in pomeni, da uporabnik
   /// e-poste ne prejema; to je odlocitev, ne napaka, zato se ne zavrne.
   /// </summary>
