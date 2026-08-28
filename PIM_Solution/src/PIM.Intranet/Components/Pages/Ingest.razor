@@ -8,56 +8,6 @@
 <PimPage Title="Vhodni podatki" Subtitle="Vsi registrirani vhodi vseh podjetij na enem mestu: kaj beremo, od kod, kdaj nazadnje in s kakšnim izidom. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
 <IngestTabs Active="overview" />
 
-<section class="ui-card toolbar" role="search" aria-labelledby="ingest-filter-title">
-  <h2 id="ingest-filter-title" class="visually-hidden">Filtriranje vhodnih tokov</h2>
-
-  <label class="visually-hidden" for="ingest-organization">Podjetje</label>
-  <select id="ingest-organization" class="filter-select" @bind="Organization" @bind:after="ReloadAsync">
-    <option value="">Vsa podjetja</option>
-    @foreach (var organization in Organizations)
-    {
-      <option value="@organization.OrganizationId">@organization.Name</option>
-    }
-  </select>
-
-  <label class="visually-hidden" for="ingest-source">Vir</label>
-  <select id="ingest-source" class="filter-select" @bind="Source">
-    <option value="">Vsi viri</option>
-    @foreach (var source in Sources)
-    {
-      <option value="@source">@source</option>
-    }
-  </select>
-
-  <label class="visually-hidden" for="ingest-kind">Vrsta vhoda</label>
-  <select id="ingest-kind" class="filter-select" @bind="Kind">
-    <option value="">Vse vrste</option>
-    <option value="SAOP">SAOP API</option>
-    <option value="XML">Dobaviteljev XML</option>
-    <option value="STOCK">Zaloga</option>
-    <option value="WORKBOOK">Ročni uvoz</option>
-  </select>
-
-  <label class="visually-hidden" for="ingest-health">Stanje</label>
-  <select id="ingest-health" class="filter-select" @bind="Health">
-    <option value="">Vsa stanja</option>
-    <option value="Healthy">V redu</option>
-    <option value="Stale">Zamuja</option>
-    <option value="Failed">Neuspešno</option>
-    <option value="Running">V teku</option>
-    <option value="NeverRun">Še brez teka</option>
-  </select>
-
-  <label class="visually-hidden" for="ingest-activity">Aktivnost</label>
-  <select id="ingest-activity" class="filter-select" @bind="Activity">
-    <option value="">Aktivni in ustavljeni</option>
-    <option value="ACTIVE">Samo aktivni</option>
-    <option value="STOPPED">Samo ustavljeni</option>
-  </select>
-
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
-</section>
-
 <PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)" EmptyText="Za izbrane filtre ni registriranih vhodnih tokov." LoadingText="Sestavljanje pregleda vseh vhodov …">
   @if (Summary is not null)
   {
@@ -72,6 +22,55 @@
   }
 
   <section class="ui-card data-card" aria-label="Vhodni tokovi">
+    <div class="card-toolbar" role="search" aria-labelledby="ingest-filter-title">
+    <h2 id="ingest-filter-title" class="visually-hidden">Filtriranje vhodnih tokov</h2>
+
+    <label class="visually-hidden" for="ingest-organization">Podjetje</label>
+    <select id="ingest-organization" class="filter-select" @bind="Organization" @bind:after="ReloadAsync">
+      <option value="">Vsa podjetja</option>
+      @foreach (var organization in Organizations)
+      {
+        <option value="@organization.OrganizationId">@organization.Name</option>
+      }
+    </select>
+
+    <label class="visually-hidden" for="ingest-source">Vir</label>
+    <select id="ingest-source" class="filter-select" @bind="Source">
+      <option value="">Vsi viri</option>
+      @foreach (var source in Sources)
+      {
+        <option value="@source">@source</option>
+      }
+    </select>
+
+    <label class="visually-hidden" for="ingest-kind">Vrsta vhoda</label>
+    <select id="ingest-kind" class="filter-select" @bind="Kind">
+      <option value="">Vse vrste</option>
+      <option value="SAOP">SAOP API</option>
+      <option value="XML">Dobaviteljev XML</option>
+      <option value="STOCK">Zaloga</option>
+      <option value="WORKBOOK">Ročni uvoz</option>
+    </select>
+
+    <label class="visually-hidden" for="ingest-health">Stanje</label>
+    <select id="ingest-health" class="filter-select" @bind="Health">
+      <option value="">Vsa stanja</option>
+      <option value="Healthy">V redu</option>
+      <option value="Stale">Zamuja</option>
+      <option value="Failed">Neuspešno</option>
+      <option value="Running">V teku</option>
+      <option value="NeverRun">Še brez teka</option>
+    </select>
+
+    <label class="visually-hidden" for="ingest-activity">Aktivnost</label>
+    <select id="ingest-activity" class="filter-select" @bind="Activity">
+      <option value="">Aktivni in ustavljeni</option>
+      <option value="ACTIVE">Samo aktivni</option>
+      <option value="STOPPED">Samo ustavljeni</option>
+    </select>
+
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+    </div>
     <PimTable Caption="Registrirani vhodi — kaj beremo, od kod, kdaj in s kakšnim izidom" Columns="Columns">
       <Rows>
         @foreach (var flow in Visible)

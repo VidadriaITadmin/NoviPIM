@@ -5,7 +5,7 @@
 @inject IntranetDataService Data
 
 <PageTitle>Težave vhodnih podatkov</PageTitle>
-<PimPage Title="Težave vhodnih podatkov" Subtitle="En delovni seznam čakalnih strani, karantene, zavrnjene zaloge, mrtvih pisem in sistemskih napak. Ponavljajoči vzroki so združeni, ne prikazani tisočkrat." Crumbs="Crumbs" />
+<PimPage Title="Težave vhodnih podatkov" Subtitle="Tehnične napake zajema na enem delovnem seznamu: čakalne strani, karantena, zavrnjena zaloga, mrtva pisma in sistemske napake. Ponavljajoči vzroki so združeni, ne prikazani tisočkrat." Crumbs="Crumbs" />
 <IngestTabs Active="issues" />
 
 <section class="ui-card toolbar" role="search" aria-labelledby="ingest-issues-filter-title">
@@ -41,13 +41,6 @@
   <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
-
-<div class="message-state info-message">
-  Tu so tehnične napake zajema. Nerazvrščene vrednosti so v
-  <a href="zajem/neujemanja">neujemanjih</a>, manjkajoči <a href="kakovost/prevodi">prevodi</a> in
-  <a href="kakovost/kategorije">dobaviteljeve kategorije</a> pa v kakovosti — zahtevajo vsebinsko
-  odločitev in niso okvara.
-</div>
 
 <section class="ui-card data-card section-gap" aria-label="Seznam težav vhodnih podatkov">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni težav." LoadingText="Nalaganje težav …">

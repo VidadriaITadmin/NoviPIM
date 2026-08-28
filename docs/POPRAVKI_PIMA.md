@@ -20,10 +20,10 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 |---|---|---|---|
 | B1 | Navigacijsko drevo: ime „Zajem in preslikava" ni všeč — preimenovati. | INTRANET | NAREJENO |
 | B2 | Vhodi: ostane kot je (pohvala) — brez spremembe. | — | NAREJENO |
-| B3 | Tabela virov naj bo skupaj s filtri (en blok, ne ločena bloka). | INTRANET | TODO |
+| B3 | Tabela virov naj bo skupaj s filtri (en blok, ne ločena bloka). | INTRANET | NAREJENO |
 | B4 | Klik na worker → izpis zanj: ostane (pohvala). | — | NAREJENO |
 | B5 | Teki: ostane (pohvala). | — | NAREJENO |
-| B6 | Težave: odstrani besedilo, ki napotuje na neujemanja/prevode/dobavitelje/kategorije — to so druge strani. | INTRANET | TODO |
+| B6 | Težave: odstrani besedilo, ki napotuje na neujemanja/prevode/dobavitelje/kategorije — to so druge strani. | INTRANET | NAREJENO |
 
 ## C. Izdelki
 
