@@ -56,7 +56,7 @@ else if (Preview is not null)
   bool Loading = true;
   string? Error;
 
-  IReadOnlyList<PimCrumb> Crumbs => [new("Izvozi", "izvozi"), new(Profile?.Name ?? "Profil")];
+  IReadOnlyList<PimCrumb> Crumbs => [new("Izhod na splet", "splet"), new(Profile?.Name ?? "Profil")];
   static readonly IReadOnlyList<PimColumn> TableColumns =
   [
     new("Vrstni red", Numeric: true), new("Koda"), new("Izhodno ime"), new("Kanonično polje"), new("Zahteva"), new("Stanje")

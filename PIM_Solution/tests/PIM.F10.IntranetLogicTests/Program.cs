@@ -52,6 +52,23 @@ Expect(QualityFieldPolicy.FixTarget("Cudno.Polje").Href is null, "Za neznano pol
 Expect(QualityFieldPolicy.IssuesHref("ProductText.WEB_TITLE.sl") == "kakovost/napake?polje=ProductText.WEB_TITLE.sl",
   "Napake polja se odprejo z obstojecim filtrom.");
 
+// ─── Navigacija po popravkih 2026-08-28 ───────────────────────────────────
+// Uporabnik je odpisal dve postavki menija in preimenoval stiri. Test drzi odlocitev na mestu,
+// da se stara imena in odpisani strani ne vrnejo tiho nazaj.
+var navItems = PimNavigation.Sections.SelectMany(section => section.Items).ToList();
+var navRoutes = navItems.Select(item => item.Route).ToList();
+var navLabels = navItems.Select(item => item.Label).ToList();
+
+Expect(!navRoutes.Contains("izvozi"), "»Izvozni profili in datoteke« je podvajal »Izhod na splet« in ne sodi vec v meni.");
+Expect(!navRoutes.Contains("partnerji"), "Partnerji odpadejo: stranke se locijo po vrsti (kupec, dobavitelj, proizvajalec).");
+Expect(navRoutes.Distinct().Count() == navRoutes.Count, "Vsaka destinacija sme biti v meniju natanko enkrat.");
+
+foreach (var retired in new[] { "Zajem in preslikave", "Validacija in vrzeli", "SAOP — pisanje nazaj", "Splet — kaj gre ven", "Izvozni profili in datoteke", "Partnerji" })
+  Expect(!navLabels.Contains(retired), $"Ime »{retired}« je uporabnik zavrnil in se ne sme vrniti.");
+
+foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v SAOP", "Izhod na splet" })
+  Expect(navLabels.Contains(expected), $"V meniju manjka postavka »{expected}«.");
+
 Console.WriteLine("F10 intranet logic PASS.");
 
 static void AssertLayers(string code, string scope, bool blocksErp, bool blocksWeb, params PimValidationLayer[] expected)

@@ -1,0 +1,22 @@
+@* Zavihki znotraj enega podrocja. Zamenjujejo mrezo kartic-oblackov na razdelilnih straneh:
+   uporabnik je povedal, da je kartic prevec in da hoèe le nekaj zavihkov, ki se res rabijo.
+   Vsak zavihek je ena delovna stran; stevilo ob njem je vedno iz baze, nikoli vpisano. *@
+<nav class="pim-tabs" aria-label="@Label">
+  @foreach (var tab in Tabs)
+  {
+    <a class="pim-tab @(tab.Key == Active ? "active" : null)" href="@tab.Href"
+       aria-current="@(tab.Key == Active ? "page" : null)">
+      <span class="pim-tab-copy">
+        <strong>@tab.Label</strong>
+        @if (!string.IsNullOrWhiteSpace(tab.Description)) { <small>@tab.Description</small> }
+      </span>
+      @if (!string.IsNullOrWhiteSpace(tab.Count)) { <span class="pim-tab-count">@tab.Count</span> }
+    </a>
+  }
+</nav>
+
+@code {
+  [Parameter, EditorRequired] public required string Active { get; set; }
+  [Parameter, EditorRequired] public required IReadOnlyList<PimTab> Tabs { get; set; }
+  [Parameter] public string Label { get; set; } = "Zavihki";
+}

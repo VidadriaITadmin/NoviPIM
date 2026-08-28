@@ -68,7 +68,7 @@ public static class PimNavigation
     ]),
     new(PimLifecycle.Inputs.Label,
     [
-      new("Zajem in preslikave", "zajem", "icon-import", "Viri, teki, čakalne vrste in neujemanja.", IsHub: true),
+      new("Zajem podatkov", "zajem", "icon-import", "Viri, teki, čakalne vrste in neujemanja.", IsHub: true),
     ]),
     new(PimLifecycle.Catalog.Label,
     [
@@ -77,18 +77,16 @@ public static class PimNavigation
     ]),
     new(PimLifecycle.Quality.Label,
     [
-      new("Validacija in vrzeli", "kakovost", "icon-quality", "Napake, karantena, prevodi in kategorije.", IsHub: true),
+      new("Kakovost podatkov", "kakovost", "icon-quality", "Kaj manjka, kaj blokira izhod in kje se popravi.", IsHub: true),
     ]),
     new(PimLifecycle.Outputs.Label,
     [
-      new("SAOP — pisanje nazaj", "saop", "icon-export", "Kaj gre nazaj v ERP, v kakšnem stanju in kaj je ERP potrdil.", IsHub: true),
-      new("Splet — kaj gre ven", "splet", "icon-export", "Po spletnem mestu: kaj gre v datoteko, kaj ne in zakaj.", IsHub: true),
-      new("Izvozni profili in datoteke", "izvozi", "icon-export", "Profili, pokritost stolpcev in spletne datoteke.", IsHub: true),
+      new("Izhod v SAOP", "saop", "icon-export", "Kaj gre nazaj v ERP, v kakšnem stanju in kaj je ERP potrdil.", IsHub: true),
+      new("Izhod na splet", "splet", "icon-export", "Datoteke za splet: artikli in stranke, predogled in prenos.", IsHub: true),
     ]),
     new(PimLifecycle.Business.Label,
     [
-      new("Stranke", "stranke", "icon-users", "Spletni profili, skupine in popusti."),
-      new("Partnerji", "partnerji", "icon-partners"),
+      new("Stranke", "stranke", "icon-users", "Kupci, dobavitelji in proizvajalci."),
       new("Zaloga", "zaloge", "icon-stock"),
       new("Cene in ceniki", "cene", "icon-price"),
       new("Preverbe cen in zaloge", "preverbe", "icon-quality", "Opozorila o cenah, maržah in zalogi — ne blokirajo izvoza."),

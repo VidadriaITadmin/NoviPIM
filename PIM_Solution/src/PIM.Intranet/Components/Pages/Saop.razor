@@ -3,26 +3,19 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 
-<PageTitle>SAOP — pisanje nazaj</PageTitle>
-<PimPage Title="SAOP — pisanje nazaj" Subtitle="Vsak zapis nazaj v ERP: stanje odobritve in dostave, odgovor ERP ter potrditev pri naslednji sinhronizaciji." />
+<PageTitle>Izhod v SAOP</PageTitle>
+<PimPage Title="Izhod v SAOP" Subtitle="Vsak zapis nazaj v ERP: stanje odobritve in dostave, odgovor ERP ter potrditev pri naslednji sinhronizaciji." />
+
+<PimTabs Active="overview" Tabs="Tabs" Label="Pogledi izhoda v SAOP" />
 
 <PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje izhodov SAOP …">
   <section class="kpi-grid" aria-label="Stanje zapisov v SAOP">
     <PimStat Label="Čaka odobritev" Value="@Count("PendingApproval")" Href="outbound" />
     <PimStat Label="V vrsti" Value="@Count("Pending", "Retry")" Href="outbound" />
-    <PimStat Label="Poslano, nepotrjeno" Value="@Count("Sent")" Note="HTTP uspeh še ni potrditev" Href="saop/zgodovina?stanje=Sent" />
+    <PimStat Label="Poslano, nepotrjeno" Value="@Count("Sent")" Note="HTTP uspeh ni potrditev — zeleno je šele Potrjeno" Href="saop/zgodovina?stanje=Sent" />
     <PimStat Label="Potrjeno" Value="@Count("Verified", "Succeeded")" Href="saop/zgodovina?stanje=Verified" />
     <PimStat Label="Napake" Value="@Count("Error", "Dead")" Href="outbound" />
     <PimStat Label="Odkloni" Value="@Rows.Count(row => row.DriftDetail is not null).ToString("N0")" Href="saop/odkloni" />
-  </section>
-
-  <section class="hub-grid section-gap" aria-label="Delovne strani SAOP">
-    <PimHubCard Title="Čakalna vrsta" Href="outbound" Description="Odobritev, preklic in ponovni poskus odhodnih sporočil." Count="@Count("PendingApproval", "Pending", "Retry")" />
-    <PimHubCard Title="Zgodovina" Href="saop/zgodovina" Description="Ena vrstica na operacijo in odgovor ERP." />
-    <PimHubCard Title="Odkloni" Href="saop/odkloni" Description="Poslana vrednost se ne ujema s tem, kar je vrnil ERP." Count="@Rows.Count(row => row.DriftDetail is not null).ToString("N0")" />
-    <PimHubCard Title="Kaj sme nazaj" Href="saop/polja" Description="Bralni pregled dovoljenih polj in varnosti pisanja." />
-    <PimHubCard Title="Množično urejanje" Href="izvozi/mnozicno" Description="Nadzorovano naročilo več sprememb z odobritvijo." />
-    <PimHubCard Title="Obvestila" Href="izvozi/obvestila" Description="Napake in opozorila odhodnega toka." />
   </section>
 
   <section class="ui-card data-card section-gap" aria-label="SAOP po entitetah">
@@ -47,9 +40,17 @@
   </section>
 </PimState>
 
-<div class="note-panel section-gap"><strong>Pomembno:</strong> stanje <span class="code-value">Sent</span> pomeni poslano, nepotrjeno. Zeleno je šele <span class="code-value">Verified</span> oziroma potrjen uspeh.</div>
-
 @code {
+  // Zavihki namesto mreze kartic: uporabnik je povedal, da je gumbov-oblackov prevec.
+  // Mnozicno urejanje in obvestila ostaneta dosegljiva s svojih strani, ne iz tega menija.
+  static readonly IReadOnlyList<PimTab> Tabs =
+  [
+    new("overview", "Pregled", "saop", "Stanje po entitetah"),
+    new("queue", "Čakalna vrsta", "outbound", "Odobritev in ponovni poskus"),
+    new("history", "Zgodovina", "saop/zgodovina", "Operacija in odgovor ERP"),
+    new("drifts", "Odkloni", "saop/odkloni", "Poslano se ne ujema z ERP"),
+  ];
+
   sealed record EntityDefinition(string Label, string[] Keys);
   static readonly EntityDefinition[] Entities =
   [new("Artikli", ["PRODUCT", "ITEM", "ARTICLE"]), new("Cene", ["PRICE"]), new("Ceniki", ["PRICELIST", "PRICE_LIST"]), new("Stranke", ["CUSTOMER"]), new("Dokumenti", ["DOCUMENT", "ORDER"] )];

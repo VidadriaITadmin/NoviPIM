@@ -42,10 +42,6 @@
 .flow-context small { color: #94a3b8; font-size: .58rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .flow-context strong { color: #334155; font-size: .78rem; font-weight: 650; margin-top: .08rem; white-space: nowrap; }
 
-.global-search { align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: var(--pim-radius-sm); color: #64748b; display: flex; font-size: .875rem; gap: .65rem; height: var(--pim-control-height); max-width: 24rem; padding: 0 .8rem; text-decoration: none; width: 100%; }
-.global-search:hover { border-color: #94a3b8; color: #334155; }
-.search-icon { border: 1.6px solid #94a3b8; border-radius: 50%; height: 11px; position: relative; width: 11px; }
-.search-icon::after { background: #94a3b8; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
 .topbar-spacer { flex: 1; }
 
 /* --- Opozorila in uporabnik --------------------------------------------- */
@@ -61,7 +57,6 @@
 .logout-button:hover { background: #f1f5f9; color: #334155; }
 .app-content { padding: 1.75rem clamp(1.25rem, 2.5vw, 2.75rem) 3rem; }
 
-@media (max-width: 1180px) { .global-search { display: none; } }
 @media (max-width: 900px) {
   .app-sidebar { height: 100vh; left: 0; position: fixed; top: 0; transform: translateX(-102%); transition: transform .18s ease; width: min(20rem, 88vw); z-index: 100; }
   .menu-glyph { display: inline-flex; }

@@ -5,8 +5,8 @@
 @inject CatalogReadService Catalog
 @inject IntranetDataService Data
 
-<PageTitle>Splet — kaj gre ven</PageTitle>
-<PimPage Title="Splet — kaj gre ven" Subtitle="Po spletnem mestu: kaj gre v datoteko, kaj ne, zakaj in ali imajo stolpci podatkovni vir." />
+<PageTitle>Izhod na splet</PageTitle>
+<PimPage Title="Izhod na splet" Subtitle="Datoteke, ki gredo na spletna mesta: kaj je v njih, kaj ne pride skozi in zakaj." />
 
 <div class="filter-bar section-gap">
   <label class="field-control"><span>Spletno mesto</span><select value="@SelectedSite" @onchange="SiteChangedAsync"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
@@ -17,7 +17,7 @@
     <PimStat Label="Gre na splet" Value="@ValidWeb.ToString("N0")" Note="brez blokirajoče spletne napake" />
     <PimStat Label="Ne gre" Value="@WebSummary.AffectedProductCount.ToString("N0")" Note="ista množica kot nivo SPLET na Kakovosti" Href="@IssueHref()" />
     <PimStat Label="Gre, a z odprto težavo" Value="@Number(Readiness?.Totals.PublishedWithOpenIssues)" Href="kakovost/napake?nivo=SPLET&resnost=WARNING" />
-    <PimStat Label="Stolpcev brez vira" Value="@FilteredCoverage.Sum(profile => profile.UnmappedColumnCount).ToString("N0")" Href="izvozi" />
+    <PimStat Label="Stolpcev brez vira" Value="@FilteredCoverage.Sum(profile => profile.UnmappedColumnCount).ToString("N0")" Note="stolpec brez vira ostane prazen" />
   </section>
 
   <h2 class="section-title">Zakaj izdelek ne pride do datoteke</h2>
