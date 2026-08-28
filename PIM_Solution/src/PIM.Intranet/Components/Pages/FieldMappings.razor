@@ -3,9 +3,19 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.GovernanceReadService Governance
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.RulesWriteService Rules
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Preslikave polj</PageTitle>
-<PimPage Title="Preslikave polj" Subtitle="Povezava med elementom vira in kanoničnim poljem. Obveznost tukaj pomeni, da brez elementa zapisa ni mogoče zajeti; poslovna obveznost sodi v validacijo." Crumbs="Crumbs" />
+@* L3: uporabnik 2026-08-28 — »Ni to misljeno da vemo od kje je polje prislo in kam se pise v
+   PIM?« Prav to je zdaj glavna os tabele: en stolpec »od kod« (vir in element) in en stolpec
+   »kam« (polje v PIM), med njima pusica. Vrstica se ureja na mestu. *@
+<PimPage Title="Preslikave polj"
+         Subtitle="Od kod polje pride in kam se zapiše v PIM. Obveznost tukaj pomeni, da brez elementa zapisa ni mogoče zajeti; poslovna obveznost sodi v validacijo."
+         Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
 
 <section class="ui-card toolbar" role="search" aria-labelledby="mapping-filter-title">
   <h2 id="mapping-filter-title" class="visually-hidden">Filtriranje preslikav</h2>
@@ -26,13 +36,55 @@
       <Rows>
         @foreach (var row in Rows)
         {
-          <tr>
-            <td><span class="code-value">@row.SourceCode</span></td>
-            <td>@row.EntityType</td>
-            <td class="tree-path">@row.SourceElement</td>
-            <td><span class="code-value">@row.TargetFieldCode</span></td>
-            <td><PimChip Text="@(row.IsRequired ? "Obvezno pri zajemu" : "Neobvezno")" Tone="@(row.IsRequired ? "warn" : null)" Prefix="Zahteva: " /></td>
-            <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          var editing = Editing == row.FieldMappingId;
+          <tr class="@(editing ? "is-editing" : null)">
+            <td>
+              <span class="code-value">@row.SourceCode</span>
+              <div class="tree-path">@row.EntityType · @row.SourceElement</div>
+            </td>
+            <td class="map-arrow" aria-hidden="true">→</td>
+            <td>
+              @if (editing)
+              {
+                <label class="visually-hidden" for="@("target-" + row.FieldMappingId)">Ciljno polje v PIM</label>
+                <input id="@("target-" + row.FieldMappingId)" class="form-input" @bind="TargetDraft" />
+              }
+              else
+              {
+                <span class="code-value">@row.TargetFieldCode</span>
+              }
+            </td>
+            <td>
+              @if (editing)
+              {
+                <label class="check-field"><input type="checkbox" @bind="RequiredDraft" />Obvezno pri zajemu</label>
+              }
+              else
+              {
+                <PimChip Text="@(row.IsRequired ? "Obvezno pri zajemu" : "Neobvezno")" Tone="@(row.IsRequired ? "warn" : null)" Prefix="Zahteva: " />
+              }
+            </td>
+            <td>
+              @if (editing)
+              {
+                <label class="check-field"><input type="checkbox" @bind="ActiveDraft" />Aktivna</label>
+              }
+              else
+              {
+                <PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" />
+              }
+            </td>
+            <td>
+              @if (editing)
+              {
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => SaveAsync(row)">Shrani</button>
+                <button type="button" class="small-action" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+              }
+              else
+              {
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => StartEdit(row)">Uredi</button>
+              }
+            </td>
           </tr>
         }
       </Rows>
@@ -51,9 +103,18 @@
   const int Take = 50;
   long Total;
   bool Loading = true;
+  bool Busy;
   string? Error;
+  string? Message;
+  string? SaveError;
+
+  /// <summary>Vrstica, ki se ureja; null pomeni, da se ne ureja nobena.</summary>
+  long? Editing;
+  string TargetDraft = "";
+  bool RequiredDraft;
+  bool ActiveDraft;
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Preslikave polj")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Vir"), new("Entiteta"), new("Element vira"), new("Ciljno polje"), new("Obveznost"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Od kod (vir in element)"), new(""), new("Kam v PIM"), new("Obveznost"), new("Stanje"), new("Dejanje")];
 
   protected override async Task OnInitializedAsync()
   {
@@ -72,6 +133,35 @@
     try { (Rows, Total) = await Governance.GetFieldMappingsAsync(OrganizationId.Value, EntityType, Search, Skip, Take); }
     catch { Error = "Preslikav trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  void StartEdit(PIM.Intranet.Services.FieldMappingRow row)
+  {
+    Editing = row.FieldMappingId;
+    TargetDraft = row.TargetFieldCode;
+    RequiredDraft = row.IsRequired;
+    ActiveDraft = row.IsActive;
+    Message = null;
+    SaveError = null;
+  }
+
+  void CancelEdit() => Editing = null;
+
+  async Task SaveAsync(PIM.Intranet.Services.FieldMappingRow row)
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      await Rules.SaveMappingAsync(row.FieldMappingId, OrganizationId.Value, row.SourceCode, row.EntityType,
+        row.SourceElement, TargetDraft.Trim(), RequiredDraft, ActiveDraft, actor);
+      Editing = null;
+      Message = $"Preslikava {row.SourceElement} → {TargetDraft.Trim()} je shranjena.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Preslikave ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
   }
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }

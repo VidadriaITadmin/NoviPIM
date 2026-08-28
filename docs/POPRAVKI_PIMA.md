@@ -136,6 +136,6 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| L1 | Validacijski profil: način je v redu, dizajn ne; omogoči urejanje — uporabniki dodajajo napake in opozorila. | BAZA + INTRANET | TODO |
+| L1 | Validacijski profil: način je v redu, dizajn ne; omogoči urejanje — uporabniki dodajajo napake in opozorila. | BAZA + INTRANET | NAREJENO |
 | L2 | Slovar vrednosti — zakaj prevajamo vrednosti? | — | VPRAŠANJE |
-| L3 | Preslikave polj: zamisel je dobra, dizajn ne; omogoči urejanje in jasno pokaži od kod polje pride in kam se piše v PIM. | INTRANET | TODO |
+| L3 | Preslikave polj: zamisel je dobra, dizajn ne; omogoči urejanje in jasno pokaži od kod polje pride in kam se piše v PIM. | INTRANET | NAREJENO |

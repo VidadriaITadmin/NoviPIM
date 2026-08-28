@@ -3,9 +3,45 @@
 @rendermode InteractiveServer
 @inject GovernanceReadService Governance
 @inject IntranetDataService Data
+@inject RulesWriteService Rules
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Validacijski profili</PageTitle>
-<PimPage Title="Validacijski profili" Subtitle="Zahteve so razvrščene po istem poslovnem nivoju kot kartica izdelka in seznam napak. Neaktivne zahteve ostanejo vidne kot delovni seznam." Crumbs="Crumbs" />
+<PimPage Title="Validacijski profili" Subtitle="Zahteve so razvrščene po istem poslovnem nivoju kot kartica izdelka in seznam napak. Vsako zahtevo lahko urediš tu: validacija se ravna po tem, kar tu piše." Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+
+@* L1: uporabnik 2026-08-28 — »to bi bilo misljeno da uporabniki spreminjajo in da se potem
+   validacija na podlagi tega dela; treba je omogocit da dodajajo napake in opozorila«.
+   Zahteva se ne brise, ker odprte napake kazejo nanjo; umik je preklop v neaktivno. *@
+<section class="ui-card panel section-gap" aria-labelledby="new-rule-title">
+  <h2 id="new-rule-title">Dodaj zahtevo</h2>
+  <div class="form-grid">
+    <label class="form-field">Profil
+      <select class="filter-select" @bind="NewProfileId">
+        <option value="0">Izberi profil</option>
+        @foreach (var profile in Profiles) { <option value="@profile.ValidationProfileId">@profile.ProfileCode — @profile.Name</option> }
+      </select>
+    </label>
+    <label class="form-field">Polje (koda iz canon.FieldValue)
+      <input class="form-input" placeholder="npr. Product.EAN" @bind="NewFieldCode" />
+    </label>
+    <label class="form-field">Resnost
+      <select class="filter-select" @bind="NewSeverity">
+        <option value="ERROR">Napaka — blokira</option>
+        <option value="WARNING">Opozorilo — ne blokira</option>
+      </select>
+    </label>
+    <div class="form-action">
+      <button type="button" class="primary-button" disabled="@(Busy || NewProfileId == 0 || NewFieldCode.Trim().Length == 0)" @onclick="AddRequirementAsync">Dodaj</button>
+    </div>
+  </div>
+  <p class="card-note">
+    Zahteva nad kodo, ki je katalog ne pozna, se zapiše kot neaktivna in pristane na delovnem
+    seznamu spodaj — taka zahteva ne bi nikoli nastala kot napaka, zato je poštena samo tam.
+  </p>
+</section>
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje profilov in zahtev …">
   @foreach (var layer in Layers)
@@ -20,11 +56,23 @@
             <tr>
               <td><strong>@row.Profile.Name</strong><div class="tree-path">@row.Profile.ProfileCode</div></td>
               <td><span class="code-value">@row.Requirement.FieldCode</span></td>
-              <td><PimChip Text="@(row.Requirement.Severity ?? "—")" Tone="@(row.Requirement.Severity == "ERROR" ? "bad" : "warn")" /></td>
+              <td>
+                <label class="visually-hidden" for="@("sev-" + row.Requirement.FieldRequirementId)">Resnost zahteve @row.Requirement.FieldCode</label>
+                <select id="@("sev-" + row.Requirement.FieldRequirementId)" class="filter-select severity-select" disabled="@Busy"
+                        value="@(row.Requirement.Severity ?? "ERROR")"
+                        @onchange="args => ChangeSeverityAsync(row, args.Value?.ToString())">
+                  <option value="ERROR">Napaka</option>
+                  <option value="WARNING">Opozorilo</option>
+                </select>
+              </td>
               <td>@(row.Requirement.IsRequired ? "Obvezno" : "Neobvezno")</td>
               <td>@Blocks(row.Profile)</td>
               <td>@if (ValidationLayer.IsShared(row.Profile.Scope)) { <PimChip Text="Skupno" Tone="info" /> }</td>
               <td class="numeric">@row.Requirement.OpenIssueCount.ToString("N0")</td>
+              <td>
+                @* Umik zahteve ni brisanje: odprte napake kazejo nanjo. *@
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, false)">Umakni</button>
+              </td>
             </tr>
           }
         </Rows>
@@ -47,6 +95,7 @@
             <td>@(row.Requirement.Severity ?? "—")</td>
             <td>@(row.Requirement.IsRequired ? "Obvezno" : "Neobvezno")</td>
             <td class="numeric">@row.Requirement.OpenIssueCount.ToString("N0")</td>
+            <td><button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, true)">Vklopi</button></td>
           </tr>
         }
       </Rows>
@@ -62,16 +111,25 @@
   IReadOnlyList<ValidationProfileRow> Profiles = [];
   IReadOnlyList<RequirementWithProfile> AllRows = [];
   bool Loading = true;
+  bool Busy;
   string? Error;
+  string? Message;
+  string? SaveError;
+  int NewProfileId;
+  string NewFieldCode = "";
+  string NewSeverity = "ERROR";
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Validacijski profili")];
   static readonly IReadOnlyList<PimColumn> RequirementColumns =
-  [new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Vpliv"), new("Vrsta"), new("Odprtih", Numeric: true)];
+  [new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Vpliv"), new("Vrsta"), new("Odprtih", Numeric: true), new("Dejanje")];
   static readonly IReadOnlyList<PimColumn> WaitingColumns =
-  [new("Nivo"), new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Odprtih", Numeric: true)];
+  [new("Nivo"), new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Odprtih", Numeric: true), new("Dejanje")];
 
-  protected override async Task OnInitializedAsync()
+  protected override Task OnInitializedAsync() => ReloadAsync();
+
+  async Task ReloadAsync()
   {
+    Loading = true;
     try
     {
       var organization = await Data.GetCurrentOrganizationAsync();
@@ -84,6 +142,49 @@
     }
     catch { Error = "Validacijskih profilov in zahtev trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task AddRequirementAsync()
+  {
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      var saved = await Rules.SaveRequirementAsync(NewProfileId, NewFieldCode.Trim(), NewSeverity, true, true, await ActorAsync());
+      Message = saved.FieldKnown
+        ? "Zahteva je dodana; velja ob naslednji validaciji."
+        : $"Polje {NewFieldCode.Trim()} ni v katalogu, zato je zahteva zapisana kot neaktivna in čaka na polje.";
+      NewFieldCode = "";
+      await ReloadAsync();
+    }
+    catch { SaveError = "Zahteve ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  async Task ChangeSeverityAsync(RequirementWithProfile row, string? severity)
+  {
+    if (string.IsNullOrWhiteSpace(severity) || severity == row.Requirement.Severity) return;
+    await SaveAsync(row, severity, row.Requirement.IsActive, $"Resnost zahteve {row.Requirement.FieldCode} je spremenjena.");
+  }
+
+  Task SetActiveAsync(RequirementWithProfile row, bool active) =>
+    SaveAsync(row, row.Requirement.Severity ?? "ERROR", active,
+      active ? $"Zahteva {row.Requirement.FieldCode} je vklopljena." : $"Zahteva {row.Requirement.FieldCode} je umaknjena; odprte napake se zaprejo ob naslednji validaciji.");
+
+  async Task SaveAsync(RequirementWithProfile row, string severity, bool active, string message)
+  {
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Rules.SaveRequirementAsync(row.Profile.ValidationProfileId, row.Requirement.FieldCode,
+        severity, row.Requirement.IsRequired, active, await ActorAsync());
+      Message = message;
+      await ReloadAsync();
+    }
+    catch { SaveError = "Spremembe ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
   }
 
   IReadOnlyList<RequirementWithProfile> RowsFor(PimValidationLayer layer, bool active) => AllRows

@@ -1,0 +1,9 @@
+/* Izoliran slog strani /pravila/preslikave. Os tabele je »od kod → kam«: puscica med
+   stolpcema je nosilec pomena, ne okras. */
+.map-arrow { color: var(--pim-text-muted); font-size: 1.1rem; text-align: center; width: 2rem; }
+.is-editing { background: #eef2ff; }
+.is-editing .form-input { max-width: 18rem; }
+.check-field { align-items: center; display: inline-flex; font-size: .8rem; gap: .35rem; }
+.small-action:focus-visible,
+.form-input:focus-visible,
+.filter-select:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
