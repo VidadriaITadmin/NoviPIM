@@ -139,3 +139,60 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | L1 | Validacijski profil: način je v redu, dizajn ne; omogoči urejanje — uporabniki dodajajo napake in opozorila. | BAZA + INTRANET | NAREJENO |
 | L2 | Slovar vrednosti — zakaj prevajamo vrednosti? | — | VPRAŠANJE |
 | L3 | Preslikave polj: zamisel je dobra, dizajn ne; omogoči urejanje in jasno pokaži od kod polje pride in kam se piše v PIM. | INTRANET | NAREJENO |
+
+---
+
+## Kaj čaka tvojo odločitev
+
+Pet postavk iz dokumenta ni popravkov, ampak vprašanj. Spodaj je, kar sem lahko ugotovil iz
+podatkov, in kaj natanko je treba odločiti. Dokler odločitve ni, vmesnik nikjer ne izmišlja
+vsebine — povsod pove, česa ni in zakaj.
+
+### C6 — kateri atributi gredo v spletni izvoz
+
+**Kaj je danes:** izvoz v Excel ima skupino SPLET z nazivi, opisi, kategorijo in sliko, atributov
+pa ne. `canon.ProductAttribute` ima 312.136 vrednosti pri ~400 različnih kodah atributov —
+vseh v en list ni mogoče dati, ker bi imel list več sto stolpcev, večino praznih.
+
+**Kaj je treba odločiti:** rekel si, da se atributi določijo po kategorijah. Potrebujem seznam
+»kategorija → obvezni atributi« (lahko za nekaj kategorij za začetek). Registra te povezave v
+bazi še ni; ko bo, izvoz doda točno tiste stolpce, ki jih kategorija izbranih izdelkov zahteva.
+
+### H7 — dokumenti in finančni podatki stranke
+
+**Kaj je danes:** zavihek »Dokumenti in finance« obstaja in pove, da vira še ni.
+
+**Kaj je treba odločiti:** ali dokumenti in finančni podatki (odprte postavke, limit, plačilna
+disciplina) pridejo iz SAOP finančnih modulov ali iz ločenega zajema. Od tega je odvisno, ali
+gre za bralni pogled ali za lastne podatke PIM.
+
+### K7 in K8 — spletni kanali in jeziki so samo za prikaz
+
+**Kaj je danes:** oba šifranta sta bralna. `canon.WebSite` ima kanale z jezikom, kategorijskim
+drevesom in ciljnim poljem; `canon.Language` ima pet jezikov po podjetju (sl, en, de, hr, it),
+vse aktivne pri vseh štirih podjetjih.
+
+**Kaj je treba odločiti:** kaj bi na teh dveh straneh sploh dodajal. Nov spletni kanal pomeni
+novo ciljno datoteko in nov izvozni profil — to ni vnos v šifrant, ampak nova pot v sistemu.
+Nov jezik pomeni nov stolpec v vsakem izvozu in novo vrzel v vseh prevodih. Če je mišljeno
+urejanje obstoječih (npr. preimenovanje kanala, izklop jezika), to naredim takoj; če je
+mišljeno dodajanje novih, potrebujem vedeti, kateri kanal oziroma jezik.
+
+### L2 — zakaj prevajamo vrednosti
+
+**Kaj je danes:** slovar `map.ValueLookup` ima 6.503 vrstic. Ne prevaja med jeziki — **prevaja
+dobaviteljev zapis v naš zapis**. Merjeni primeri:
+
+| Domena | Vrstic | Primer |
+|---|---|---|
+| `*` (splošno) | 6.316 | čiščenje praznih in nadomestnih vrednosti |
+| Prevladujoč material SLO | 66 | `304 SS` → `nerjavno jeklo 304` |
+| Prevladujoča barva SLO | 49 | `Amber` → `jantarna` |
+| Način montaže SLO | 16 | `Bracket + cable with plug` → `nosilec s kablom in vtičem` |
+| SAOP jezik | 14 | `ANGLESCINA` → `en` |
+
+Brez slovarja bi na spletu pisalo `Amber` in `304 SS`, filter po barvi pa bi imel dve vrednosti
+za isto barvo, ker jo vsak dobavitelj zapiše po svoje.
+
+**Kaj je treba odločiti:** nič — razen če želiš, da se stran preimenuje v nekaj razumljivejšega
+(npr. »Poenotenje vrednosti dobaviteljev«). To naredim takoj, ko rečeš.
