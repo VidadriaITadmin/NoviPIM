@@ -29,7 +29,15 @@ Assert(quality.Contains("Enum.GetValues<PIM.Intranet.Services.PimValidationLayer
 Assert(quality.Contains("GetValidationLayerSummariesAsync", StringComparison.Ordinal), "Števci morajo prihajati iz skupne storitve.");
 Assert(quality.Contains("AffectedProductCount", StringComparison.Ordinal), "Stran mora prikazati natančen števec prizadetih izdelkov iz storitve.");
 Assert(quality.Contains("ne blokirajo", StringComparison.OrdinalIgnoreCase), "Komercialni nivo mora izrecno povedati, da ne blokira.");
-Assert(quality.Contains("Spletno mesto", StringComparison.Ordinal) && quality.Contains("SelectedWebSite", StringComparison.Ordinal), "Spletni nivo mora biti zožljiv po spletnem mestu.");
+// Filter po spletnem mestu je uporabnik 2026-08-28 zavrnil: stran hkrati pokriva ERP,
+// komercialo in splet, spletno mesto pa zozi samo enega od stirih nivojev. Zozevanje po
+// spletnem mestu ostane na strani z napakami, kjer je izbrani nivo ze znan.
+Assert(!quality.Contains("SelectedWebSite", StringComparison.Ordinal),
+  "Filtra po spletnem mestu na pregledu kakovosti ni vec.");
+Assert(!quality.Contains("Vsa spletna mesta", StringComparison.Ordinal),
+  "Napis »Vsa spletna mesta« je na pregledu odpisan.");
+Assert(issues.Contains("spletisce", StringComparison.Ordinal),
+  "Zozevanje po spletnem mestu mora ostati na strani z napakami.");
 Assert(quality.Contains("kakovost/napake?nivo=", StringComparison.Ordinal), "Vsaka kartica nivoja mora voditi na filtrirane napake.");
 Assert(quality.Contains("ValidationLayer.IsShared", StringComparison.Ordinal) && quality.Contains("Skupna", StringComparison.Ordinal), "Skupni profil mora imeti značko.");
 foreach (var hub in new[] { "Napake validacije", "Karantena", "Manjkajoči prevodi", "Nepreslikane kategorije" })
@@ -69,11 +77,16 @@ Assert(quality.Contains("GetFieldGapsAsync", StringComparison.Ordinal),
   "Pregled mora imeti razclenitev po polju — to je edina razseznost, po kateri se delo res deli.");
 Assert(governanceService.Contains("GetFieldGapsAsync", StringComparison.Ordinal),
   "Razclenitev po polju mora prihajati iz bralnega modela, ne iz strani.");
+// Razdelek »Nacrt odblokiranja« je uporabnik 2026-08-28 razglasil za nesmiselnega in ga je
+// zahteval odstraniti. Bralni model ostane: stran iz njega se vedno vzame stevilo aktivnih
+// izdelkov in izdelkov s tezavo — to sta imenovalca delezev v tabeli vrzeli.
+Assert(!quality.Contains("plan-title", StringComparison.Ordinal) && !quality.Contains("Načrt odblokiranja", StringComparison.Ordinal),
+  "Nacrta odblokiranja na strani ni vec.");
+Assert(!quality.Contains("plan-chart", StringComparison.Ordinal) && !quality.Contains("BestStep", StringComparison.Ordinal),
+  "Z nacrtom odpade tudi njegov graf.");
 Assert(quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal)
   && governanceService.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
-  "Stran mora povedati, kaj se odblokira, ce polja popravljas po vrsti.");
-Assert(governanceService.Contains("CumulativeValid", StringComparison.Ordinal),
-  "Nacrt brez kumulativnega ucinka je samo se en seznam.");
+  "Stevila aktivnih izdelkov in izdelkov s tezavo morajo se naprej priti iz bralnega modela.");
 
 // Odstotek na nivoju je delez izdelkov BREZ napake. Prej je stala gola stevilka »18,1 %«
 // in iz strani ni bilo mogoce ugotoviti, cesa je to odstotek.
@@ -90,6 +103,32 @@ Assert(quality.Contains("QualityFieldPolicy", StringComparison.Ordinal),
 Assert(fieldPolicy.Contains("kakovost/napake?polje=", StringComparison.Ordinal)
   && quality.Contains("QualityFieldPolicy.IssuesHref", StringComparison.Ordinal),
   "Vsaka vrstica polja mora voditi na svoje napake, naslov pa sestavi politika in ne stran.");
+
+// ─── Popravki kakovosti 2026-08-28 ────────────────────────────────────────────────────────
+
+// F2: kakovost je vprasanje celotnega kataloga. Prej je racunala iz prvega podjetja po sifri
+// in je kazala samo DEMO.
+Assert(!quality.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal),
+  "Kakovost ne sme racunati iz enega samega podjetja.");
+Assert(quality.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal),
+  "Obseg kakovosti mora zajeti vsa aktivna podjetja.");
+foreach (var merge in new[] { "MergeProfiles", "MergeSummaries", "MergeGaps" })
+  Assert(quality.Contains(merge, StringComparison.Ordinal), "Manjka zdruzevanje cez podjetja: " + merge + ".");
+
+// F5: karantena in napaka validacije nista isto in ne nastaneta na istem mestu v toku.
+Assert(quality.Contains("Karantena je pred PIM-om", StringComparison.Ordinal)
+  && quality.Contains("Napaka validacije je za PIM-om", StringComparison.Ordinal),
+  "Stran mora povedati, kaj loci karanteno od napake validacije.");
+
+// F6: stolpec »Kje se popravi« mora povedati, kaj uporabnik na cilju dejansko naredi.
+Assert(fieldPolicy.Contains("string Explanation", StringComparison.Ordinal),
+  "Cilj popravka mora nositi razlago, ne samo imena strani.");
+Assert(quality.Contains("@target.Explanation", StringComparison.Ordinal),
+  "Razlaga cilja mora biti vidna v tabeli, ne samo v namigu.");
+foreach (var explained in new[] { "dodaj sliko ali dokument", "poveži dobaviteljevo pot", "vpiši prevod besedila", "popravi se v ERP" })
+  Assert(fieldPolicy.Contains(explained, StringComparison.Ordinal), "Manjka razlaga cilja: " + explained + ".");
+Assert(!fieldPolicy.Contains("new(\"Lastnosti\"", StringComparison.Ordinal),
+  "Pri spletu se lastnosti imenujejo atributi; ime je poenoteno povsod.");
 
 Console.WriteLine("F10 quality UX contract PASS.");
 

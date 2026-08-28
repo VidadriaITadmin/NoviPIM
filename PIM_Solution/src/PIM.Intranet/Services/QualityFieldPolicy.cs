@@ -2,7 +2,12 @@ namespace PIM.Intranet.Services;
 
 /// <param name="Label">Kratko ime cilja, kot ga uporabnik pozna iz menija.</param>
 /// <param name="Href">Base-relativna pot ali <c>null</c>, kadar posebne strani za to polje ni.</param>
-public sealed record QualityFixTarget(string Label, string? Href);
+/// <param name="Label">Ime ciljne strani.</param>
+/// <param name="Href">Pot do nje; null pomeni, da cilj ni dolocen.</param>
+/// <param name="Explanation">Kaj uporabnik tam dejansko naredi. Uporabnik je 2026-08-28
+/// zahteval, da stolpec »Kje se popravi« razlozi pomen vsakega vnosa — samo ime strani pove,
+/// kam pelje povezava, ne pa, kaj tam naredis.</param>
+public sealed record QualityFixTarget(string Label, string? Href, string Explanation = "");
 
 /// <summary>
 /// Kako se koda polja pokaze cloveku in kam ga posljemo, da jo popravi.
@@ -50,19 +55,24 @@ public static class QualityFieldPolicy
     var entity = Entity(value);
     var name = FieldName(value);
 
-    if (entity == "ProductMedia" || entity == "ProductDocument") return new("Mediji", "mediji");
-    if (entity == "ProductCategory") return new("Nepreslikane kategorije", "kakovost/kategorije");
-    if (value.Contains("Category", StringComparison.OrdinalIgnoreCase)) return new("Nepreslikane kategorije", "kakovost/kategorije");
+    if (entity == "ProductMedia" || entity == "ProductDocument")
+      return new("Mediji", "mediji", "dodaj sliko ali dokument temu izdelku");
+    if (entity == "ProductCategory" || value.Contains("Category", StringComparison.OrdinalIgnoreCase))
+      return new("Nepreslikane kategorije", "kakovost/kategorije", "poveži dobaviteljevo pot z našo kategorijo");
 
     // Besedilo v tujem jeziku je manjkajoc prevod; besedilo v slovenscini je manjkajoc vnos.
     if (entity == "ProductText")
-      return IsForeignLanguage(name) ? new("Manjkajoči prevodi", "kakovost/prevodi") : new("Množično urejanje", "izvozi/mnozicno");
+      return IsForeignLanguage(name)
+        ? new("Manjkajoči prevodi", "kakovost/prevodi", "vpiši prevod besedila v ta jezik")
+        : new("Množično urejanje", "izvozi/mnozicno", "izvozi izdelke v Excel, dopolni stolpec in vrni datoteko");
 
-    if (entity == "ProductAttribute") return new("Lastnosti", "nastavitve/atributi");
-    if (entity == "ProductPrice") return new("Cene", "cene");
-    if (entity == "ProductStock") return new("Zaloge", "zaloge");
-    if (entity == "Product" || entity == "ProductCommercial") return new("Polja SAOP", "saop/polja");
-    return new("—", null);
+    // 2026-08-28: pri spletu se lastnosti imenujejo atributi; ime je poenoteno povsod.
+    if (entity == "ProductAttribute") return new("Atributi", "nastavitve/atributi", "vpiši vrednost atributa oziroma dodaj atribut v register");
+    if (entity == "ProductPrice") return new("Cene", "cene", "uredi ceno oziroma cenik izdelka");
+    if (entity == "ProductStock") return new("Zaloge", "zaloge", "preveri zalogovni vir in preslikavo skladišča");
+    if (entity == "Product" || entity == "ProductCommercial")
+      return new("Polja SAOP", "saop/polja", "vrednost je last SAOP; popravi se v ERP in pride nazaj z zajemom");
+    return new("—", null, "za to polje ciljna stran še ni določena");
   }
 
   /// <summary>Napake tega polja, kot jih razume obstojeci filter na strani napak.</summary>

@@ -65,11 +65,11 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
 | F1 | Naslov „Validacija in vrzeli" ni všeč — preimenuj. | INTRANET | NAREJENO |
-| F2 | Kakovost kaže samo DEMO artikle — mora kazati vse. | INTRANET | TODO |
-| F3 | Filter „spletna mesta" ni relevanten — odstrani (gre za ERP, komercialo in splet hkrati). | INTRANET | TODO |
-| F4 | Odstrani „načrt odblokiranja". | INTRANET | TODO |
-| F5 | Razloži/poenoti razliko med karanteno in napakami validacije; poenostavi razdelitev. | INTRANET | TODO |
-| F6 | Polje „kje popraviti" — vsak pomen mora biti razložen. | INTRANET | TODO |
+| F2 | Kakovost kaže samo DEMO artikle — mora kazati vse. | INTRANET | NAREJENO |
+| F3 | Filter „spletna mesta" ni relevanten — odstrani (gre za ERP, komercialo in splet hkrati). | INTRANET | NAREJENO |
+| F4 | Odstrani „načrt odblokiranja". | INTRANET | NAREJENO |
+| F5 | Razloži/poenoti razliko med karanteno in napakami validacije; poenostavi razdelitev. | INTRANET | NAREJENO |
+| F6 | Polje „kje popraviti" — vsak pomen mora biti razložen. | INTRANET | NAREJENO |
 
 ## G. Izhodi ERP in splet
 
@@ -122,7 +122,7 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| K1 | Preimenuj „lastnost" → „atribut". | INTRANET | TODO |
+| K1 | Preimenuj „lastnost" → „atribut". | INTRANET | NAREJENO |
 | K2 | Boljša tabela atributov: slovenski atributi, prevodi, preslikave. | INTRANET | TODO |
 | K3 | Kategorije: privzeto prikaži slovenske, ne italijanskih. | INTRANET | TODO |
 | K4 | Imena kategorij po jezikih v vrstnem redu: sl, en, de, hr, it. | INTRANET | TODO |
