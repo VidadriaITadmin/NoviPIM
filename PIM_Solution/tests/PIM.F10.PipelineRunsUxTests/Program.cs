@@ -22,14 +22,12 @@ Assert(markup.Contains("@page \"/teki-obdelave\"", StringComparison.Ordinal), "P
 Assert(markup.Contains("@attribute [Authorize]", StringComparison.Ordinal), "Avtorizacija strani se ne sme spremeniti.");
 Assert(Regex.IsMatch(markup, "<h1>Uvozi</h1>"), "Stran mora ohraniti vidni naslov <h1>Uvozi</h1>.");
 
-// 2. Kontekstni zavihki so navigacijski sklop; aktivni zavihek se sporoči bralcu zaslona.
-var tabs = Regex.Match(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>");
-Assert(tabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
-Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki morajo imeti aria-label.");
-Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 2,
-  "Stran ima dva podatkovno podprta zavihka; »Viri«, »Novi izdelki« in »Excel« iz reference nimajo vira.");
-Assert(Regex.IsMatch(markup, "class=\"page-tab active\"[^>]*aria-current=\"page\""), "Aktivni zavihek mora imeti aria-current=\"page\".");
-Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"outbound\">Izvozi</a>"), "Povezava na izvoze mora ostati nespremenjena.");
+// 2. Zavihkov cez strani ni. Odlocitev uporabnika 2026-08-28: vrstica zavihkov, v kateri
+// povezava odnese na drugo pot, je past — videti je kot preklop pogleda, v resnici pa zamenja
+// stran in z njo celo navigacijsko drevo. Prejsnja pogodba je tak vzorec zahtevala; zahteva je
+// odpravljena, prepoved cez vse strani pa je zdaj v PIM.F10.AuthTests.
+Assert(!Regex.IsMatch(markup, "<nav[^>]*class=\"page-tabs\"", RegexOptions.IgnoreCase),
+  "Vrstice zavihkov, ki vodi na druge strani, tu ne sme biti.");
 
 // 3. Kartice virov so poimenovan sklop z naslovom vira; vsaka vrednost izhaja iz zadnjega teka.
 var sourceGrid = Regex.Match(markup, "<section[^>]*class=\"source-grid\"[^>]*>");

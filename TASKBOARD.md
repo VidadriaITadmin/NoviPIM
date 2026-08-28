@@ -181,6 +181,42 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[INTRANET] Zavihek ostane na svoji strani — odprava zavihkov čez strani** — kdo: Claude Code
+  — ozemlje: INTRANET — končano 2026-08-28.
+
+  Uporabnik: »ko kliknem karanteno gre kar na drugo stran in drugo navigacijsko drevo, tega mi
+  nikoli več ne delaj; če je zavihek, ga tle prikaži, če ne, ne dodaj zavihka.«
+
+  Napako sem naredil na `/kakovost`: dva zavihka sta prikazala vsebino na strani, štirje pa so
+  odnesli drugam. Isti vzorec je bil že prej na petih straneh in ga je celo zahtevala pogodba.
+
+  1. **`/kakovost`** obdrži samo prava zavihka (Pregled, Profili in zahteve — ista pot, drug
+     poizvedbeni parameter). Štiri delovne povezave so se vrnile v razdelek »Kje popraviti«
+     kot kartice, kjer so bile pred prenovo.
+  2. **Odstranjene vrstice zavihkov čez strani** na `Outbound`, `OutboundEvents`,
+     `BulkOutbound`, `PipelineRuns` in `RawQuarantine`. Vse te poti ostajajo dosegljive iz
+     leve navigacije (`outbound`, `teki-obdelave`, `napake-validacije`, `karantena`) oziroma
+     iz vozlišča `izvozi`. Kaj naj na posamezni strani pride namesto njih, pregleda uporabnik.
+  3. **Prepoved je zdaj pogodba čez vso aplikacijo.** `PIM.F10.AuthTests` prebere vsako
+     `Pages/*.razor`, poišče vrstice `page-tabs` in zahteva, da noben dobesedni `href` v njih
+     ne vodi na drugo pot od `@page` te strani. Računani naslovi so izvzeti; preveril sem vse
+     tri (`Products`, `IngestSourceDetail`, `Quality`) in vsi ostanejo na svoji poti.
+
+  **Dokaz:**
+
+  ```
+  scripts\run_tests.ps1 -Filter F10  → uspeli 14, padli 0, REZULTAT: VSE OK
+  ```
+
+  Nova trditev najprej pade (RED) na `BulkOutbound.razor` in po odstranitvi drži.
+
+  **Kaj sem spremenil v obstoječih testih in zakaj:** `PIM.F10.OutboundUxTests` in
+  `PIM.F10.PipelineRunsUxTests` sta stari vzorec **zahtevala** (»Zavihek Množično urejanje mora
+  biti povezava na /izvozi/mnozicno«). Ta zahteva je z uporabnikovo odločitvijo odpravljena;
+  trditvi sta zamenjani z obratno — vrstice zavihkov na teh straneh ne sme biti. Testa nisem
+  prilagodil zato, da bi šel skozi: spremenila se je odločitev o izdelku in to je zapisano tu,
+  v testu in v `docs/INTRANET.md` §13.
+
 - **[BAZA] Jezik z imena atributa na svoj stolpec — migracija 124 (korak 3a)** —
   kdo: Claude Code — ozemlje: BAZA — končano 2026-08-28.
 

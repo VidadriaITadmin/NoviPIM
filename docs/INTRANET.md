@@ -341,17 +341,23 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
     kot nadomestna vsebina, in ne samo v nogi okna. Vgrajujemo le, kar brskalnik res zna
     pokazati (`MediaKindPolicy.IsInlineViewable` — danes samo PDF); `.rar`, `.dwg` in `.ldt`
     ostanejo povezava.
-13. **Delo se deli po polju, ne po profilu.** Isto polje zahteva več profilov, zato razdelitev
+13. **Zavihek ostane na svoji strani.** Vrstica `page-tabs` sme vsebovati samo postavke, ki
+    prikažejo vsebino na isti poti (gumb ali povezava na isti `@page` z drugim poizvedbenim
+    parametrom). Povezava na drugo pot v vrstici zavihkov je past: videti je kot preklop
+    pogleda, v resnici pa zamenja stran in z njo celo navigacijsko drevo. Take povezave sodijo
+    med kartice (`PimHubCard`) ali navadne povezave. Prepoved velja za vse strani in jo
+    preverja `PIM.F10.AuthTests` nad dobesednimi naslovi v vsaki `page-tabs` vrstici.
+14. **Delo se deli po polju, ne po profilu.** Isto polje zahteva več profilov, zato razdelitev
     po profilih isto delo prikaže večkrat: merjeno je 340.227 odprtih napak izviralo iz 16 polj,
     stran pa je imela štiri zaporedne tabele profilov. Pregledi kakovosti se zato združujejo po
     `FieldCode`; profili ostanejo dosegljivi v svojem zavihku (`kakovost?pogled=profili`).
-14. **Ob vsakem odstotku piše, česa je odstotek.** Delež na nivoju validacije je delež izdelkov
+15. **Ob vsakem odstotku piše, česa je odstotek.** Delež na nivoju validacije je delež izdelkov
     **brez** odprte zahteve; gola številka »18,1 %« je bila neberljiva.
-15. **Imena polj se ne prevajajo iz slovarja.** `QualityFieldPolicy` prevede samo predpono
+16. **Imena polj se ne prevajajo iz slovarja.** `QualityFieldPolicy` prevede samo predpono
     entitete (`ProductMedia` → »Medij«), ki pride iz imena kanonične tabele; ime polja ostane
     tako, kot je v registru. Register izvoznih stolpcev ima imena samo za del polj in so to
     imena stolpcev v CSV (`ean`, `images`, `name`), zato za to niso uporabna.
-16. **Predogled slike ima vedno svoje razmerje in omejeno sliko.** Elementi, sestavljeni prek
+17. **Predogled slike ima vedno svoje razmerje in omejeno sliko.** Elementi, sestavljeni prek
     `RenderTreeBuilder` v `@code`, **ne dobijo oznake obsegnega CSS** (`b-…`), zato jih
     `<Stran>.razor.css` ne more omejiti — slika pride v naravni velikosti in razbije stran.
     Predogledi se zato pišejo kot razčlenjevalni izpis (`RenderFragment … => __builder => { … }`

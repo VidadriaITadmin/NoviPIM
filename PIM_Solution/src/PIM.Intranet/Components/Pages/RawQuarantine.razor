@@ -5,7 +5,8 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Karantena</PageTitle>
 <div class="page-header"><div><h1>Karantena</h1><p>Zapisi, izločeni med podatkovno obdelavo.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi kakovosti"><a class="page-tab" href="napake-validacije">Pregled kakovosti</a><span class="page-tab active" aria-current="page">Karantena</span></nav>
+@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
+   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
 <section class="ui-card toolbar" role="search" aria-labelledby="quarantine-filter-title">
   <h2 id="quarantine-filter-title" class="visually-hidden">Iskanje karantenskih zapisov</h2>
   <label class="visually-hidden" for="quarantine-search">Poišči karantenski zapis</label><input id="quarantine-search" type="search" class="search-input" placeholder="Poišči po viru, entiteti ali razlogu …" @bind="Search" @bind:event="oninput" />

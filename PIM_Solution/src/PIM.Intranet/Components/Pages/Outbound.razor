@@ -5,7 +5,8 @@
 @inject AuthenticationStateProvider Authentication
 <PageTitle>Izvozi</PageTitle>
 <div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev sporočilo samo uvrsti v čakalno vrsto.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi izmenjave podatkov"><a class="page-tab" href="teki-obdelave">Uvozi</a><span class="page-tab active" aria-current="page">Vsi izvozi</span><a class="page-tab" href="izvozi/mnozicno">Množično urejanje</a><a class="page-tab" href="izvozi/obvestila">Obvestila</a></nav>
+@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
+   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
 @if (Rows is not null) {
   <section class="kpi-grid" aria-labelledby="outbound-kpi-title">
     <h2 id="outbound-kpi-title" class="visually-hidden">Hitri pregled izvozov</h2>

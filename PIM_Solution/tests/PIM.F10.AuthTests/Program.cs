@@ -124,6 +124,37 @@ Assert(discountRulesPage.Contains("GetValueTiersAsync", StringComparison.Ordinal
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Counter.razor")).Contains("@page", StringComparison.Ordinal), "Counter ne sme biti javna PIM stran.");
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Weather.razor")).Contains("@page", StringComparison.Ordinal), "Weather ne sme biti javna PIM stran.");
 
+// ─── Zavihek ostane na svoji strani, 2026-08-28 ────────────────────────────
+// Uporabnikova zahteva, dobesedno: »ce je zavihek, ga tle prikazi; ce ne, ne dodaj zavihka«.
+// Vrstica zavihkov, v kateri povezava odnese na drugo pot, je past: videti je kot preklop
+// pogleda, v resnici pa zamenja stran in z njo celo navigacijsko drevo. Take povezave sodijo
+// med kartice ali navadne povezave, ne med zavihke.
+//
+// Preverjamo samo dobesedne naslove; racunani (`href="@(...)"`) se staticno ne dajo razresiti
+// in so v tej resitvi vedno na isto stran s poizvedbenim parametrom.
+var pagesDirectory = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
+foreach (var razorPage in Directory.EnumerateFiles(pagesDirectory, "*.razor", SearchOption.AllDirectories))
+{
+  var markup = File.ReadAllText(razorPage);
+  var routes = System.Text.RegularExpressions.Regex.Matches(markup, "@page \"/([^\"{]*)")
+    .Select(match => match.Groups[1].Value.Trim('/')).ToArray();
+  if (routes.Length == 0) continue;
+
+  foreach (System.Text.RegularExpressions.Match strip in
+    System.Text.RegularExpressions.Regex.Matches(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>(.*?)</nav>",
+      System.Text.RegularExpressions.RegexOptions.Singleline))
+  {
+    foreach (System.Text.RegularExpressions.Match link in
+      System.Text.RegularExpressions.Regex.Matches(strip.Groups[1].Value, "href=\"([^\"@]+)\""))
+    {
+      var target = link.Groups[1].Value.Split('?')[0].Trim('/');
+      Assert(routes.Any(route => string.Equals(route, target, StringComparison.OrdinalIgnoreCase)),
+        $"Zavihek na strani {Path.GetFileName(razorPage)} vodi na tujo pot »{target}«. "
+        + "Zavihek mora prikazati vsebino na isti strani; povezava na drugo stran ne sme biti zavihek.");
+    }
+  }
+}
+
 Console.WriteLine("F10 auth contract PASS.");
 
 static void Assert(bool condition, string message)

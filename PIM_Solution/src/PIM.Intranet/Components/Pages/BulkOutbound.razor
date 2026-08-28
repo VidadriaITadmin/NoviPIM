@@ -15,11 +15,8 @@
     <p>Spremembe se uvrstijo v vrsto za SAOP@(OrganizationName is null ? "" : " podjetja " + OrganizationName). Nič ne odide, dokler skupine ne odobriš.</p>
   </div>
 </div>
-<nav class="page-tabs" aria-label="Pogledi izvozov">
-  <a class="page-tab" href="outbound">Vsi izvozi</a>
-  <span class="page-tab active" aria-current="page">Množično urejanje</span>
-  <a class="page-tab" href="izvozi/obvestila">Obvestila</a>
-</nav>
+@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
+   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 

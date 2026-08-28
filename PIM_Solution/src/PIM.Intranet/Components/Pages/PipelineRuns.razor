@@ -4,7 +4,8 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 <PageTitle>Uvozi</PageTitle>
 <div class="page-header"><div><h1>Uvozi</h1><p>Viri in zgodovina procesnih tekov iz PIM baze.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi uvozov in izvozov"><span class="page-tab active" aria-current="page">Zgodovina uvozov</span><a class="page-tab" href="outbound">Izvozi</a></nav>
+@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
+   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
 @if (Rows is not null) {
   <section class="source-grid" aria-label="Zadnji tek po virih">
   @foreach (var source in Sources) { var last = source.First();

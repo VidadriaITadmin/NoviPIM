@@ -26,21 +26,12 @@ Assert(markup.Contains("@attribute [Authorize(Roles = \"ADMIN,CATALOG_EDITOR,COM
   "Izvozi morajo ostati omejeni na obstoječe vloge.");
 Assert(markup.Contains("<h1>Izvozi</h1>", StringComparison.Ordinal), "Stran mora ohraniti vidni naslov <h1>Izvozi</h1>.");
 
-// 2. Kontekstni zavihki so navigacijski sklop, ne le vrsta škatel.
-var tabs = Regex.Match(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>");
-Assert(tabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
-Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki izvozov morajo imeti aria-label.");
-// Zavihki so stirje: Uvozi, Vsi izvozi, Mnozicno urejanje in Obvestila. Vsak od njih ima svojo
-// stran s podatki; kanalskih zavihkov iz reference se se vedno ne sme izmisljati.
-Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 4,
-  "Izvozi imajo stiri podatkovno podprte zavihke.");
-Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"izvozi/mnozicno\">"),
-  "Zavihek Mnozicno urejanje mora biti povezava na /izvozi/mnozicno.");
-Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"izvozi/obvestila\">"),
-  "Zavihek Obvestila mora biti povezava na /izvozi/obvestila.");
-Assert(Regex.IsMatch(markup, "<a class=\"page-tab\" href=\"teki-obdelave\">"), "Zavihek Uvozi mora ostati povezava na /teki-obdelave.");
-Assert(markup.Contains("<span class=\"page-tab active\" aria-current=\"page\">", StringComparison.Ordinal),
-  "Aktivni zavihek mora imeti aria-current=\"page\".");
+// 2. Zavihkov cez strani ni. Odlocitev uporabnika 2026-08-28: vrstica zavihkov, v kateri
+// povezava odnese na drugo pot, je past — videti je kot preklop pogleda, v resnici pa zamenja
+// stran in z njo celo navigacijsko drevo. Prejsnja pogodba je tak vzorec zahtevala; zahteva je
+// odpravljena, prepoved cez vse strani pa je zdaj v PIM.F10.AuthTests.
+Assert(!Regex.IsMatch(markup, "<nav[^>]*class=\"page-tabs\"", RegexOptions.IgnoreCase),
+  "Vrstice zavihkov, ki vodi na druge strani, tu ne sme biti.");
 
 // 3. »Hitri pregled« je poimenovan sklop, vsaka vrednost pa izpeljana iz dejansko naloženih vrstic.
 var kpiGrid = Regex.Match(markup, "<section[^>]*class=\"kpi-grid\"[^>]*>");
