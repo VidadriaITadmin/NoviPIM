@@ -181,6 +181,66 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA + DOMENA] Atributi dobijo register in šifrant s stalnimi kodami — migracije 121–123** —
+  kdo: Claude Code — ozemlje: BAZA + DOMENA — končano 2026-08-28.
+
+  **Merjeno stanje pred posegom.** 164 različnih atributov, 312.257 vrstic. Preslikav 158
+  ciljev: **26 skupnih** obema dobaviteljema, 82 samo Nowodvorski, 50 samo Braytron. Dva
+  dobavitelja istega blaga si delita šestino atributov — ne ker bi bila različna, ampak ker
+  registra ni bilo in si je vsak izmislil svoja imena.
+
+  Tri napake v poimenovanju, vse izmerjene:
+
+  | Vzorec | Kod | Vrstic |
+  |---|---|---|
+  | jezik v imenu (`… SLO` / `… ANG`) | 33 za 17 lastnosti | 97.244 |
+  | enota kot svoj atribut (`Enota …`) | 34 | 58.002 |
+  | zaporedna številka (`… I/II/III`, `… (2)`) | 23 | — |
+
+  **155.246 od 312.257 vrstic — polovica vseh podatkov o atributih — obstaja samo zato, ker sta
+  jezik in enota zapisana v ime.** Braytronova »Neto teža (2)« je trenutek, ko je nekdo videl,
+  da ime že obstaja, in dodal drugo.
+
+  **121 — register izvornih atributov.** `map.SourceAttribute` + `map.SourceAttributeDiscovery`
+  + `map.RegisterSourceAttributes`. Zajem odslej prebere **vse** atribute strani, tudi tiste brez
+  preslikave. Odkrivanje je vrstica registra in ne pogoj v programu, ker oba dobavitelja nosita
+  atribute drugače: Nowodvorski en element na atribut (ime = ime elementa, otroci `_name`,
+  `_value`, `_unit`), Braytron eno obliko z razločevalnim `slug`.
+
+  **122 — šifrant s stalnimi kodami.** `canon.AttributeDefinition` (stalna koda, tip, enota,
+  prevedljivost), `canon.AttributeTranslation` + zgodovina, `map.AttributeMap` + zgodovina.
+  Napolnjeno iz današnjega stanja: **149 definicij** (33 jezikovnih kod se zloži v 17
+  prevedljivih), 149 slovenskih imen, **93 preslikav** izpeljanih iz obstoječih pravil.
+  Ujemanje je po celi besedi — `type` se ne sme ujeti na `type_of_cable`, sicer bi nepreslikan
+  atribut izgledal preslikan.
+
+  **Enote so namenoma prepuščene človeku.** »Enota napetosti« pripada »Napetosti«, »Enota
+  dolžine paketa II« pa »Dolžini paketa II«; ta pretvorba v slovenščini ni mehanska in ugibanje
+  bi dalo napačne pare, ki bi izgledali pravilni. 34 takih vrstic ima `IsUnitCandidate = 1`.
+
+  **123 — bralna modela** `intranet.GetSourceAttributes` in `intranet.GetAttributeDefinitions`.
+  To sta postopka, ki ju pogreša stran `/nastavitve/atributi` s tremi onemogočenimi filtri.
+
+  **Kaj se je takoj pokazalo.** Register je našel **101 izvornih atributov** (BT 66, NW 35 iz ene
+  strani; polna datoteka jih ima 64) in **8 brez preslikave** — `main_family`, `sub_family`,
+  `ean`, `type` (2.726 izdelkov), `weight` (2.540), `led_quantity`, `sensor_type`,
+  `capacity_watt`. Štirje so v uporabnikovem slovarju poimenovani. Sistem tega ne bi javil nikoli.
+
+  **Dokaz:** migrator prvi in drugi zagon ter `--verify` → izhod 0;
+  `dotnet build PIM.sln` → 0 napak; `scripts\run_tests.ps1 -Filter F5` → **6 uspelih /
+  0 preskočenih / 0 padlih**, vključno z novim `PIM.F5.AttributeDiscoveryTests`, ki teče nad
+  pravima datotekama obeh dobaviteljev in najde Braytron 66, Nowodvorski 64 atributov.
+
+  **Popravek napačne razlage.** Ob prvem zagonu je register dobil en atribut namesto šestdesetih.
+  Pripisal sem to vgnezdenemu `XPathNodeIterator.Current` in dodal `Clone()`. **To ni bil vzrok** —
+  test je zelen tudi brez klona. Prava napaka je bila zastarela knjižnica: worker je tekel z
+  `--no-build`, prevedena pa je bila samo `PIM.XmlMapping`. Klon ostaja kot previdnost, komentar
+  pa to zdaj pove pošteno.
+
+  **Kar ta paket namenoma NE naredi:** ne dotakne se `canon.ProductAttribute`. Nobena vrednost se
+  ne premakne, noben izvoz in nobena validacija ne spremenita vedenja. Zlaganje jezika in enote
+  z imena na vrednost je korak 3 z lastnim dokazom pred in po; vmesnik za urejanje je korak 4.
+
 - **[INTRANET] Kakovost: pregled po polju, načrt odblokiranja, profili v svoj zavihek** — kdo: Claude Code
   — ozemlje: INTRANET — končano 2026-08-28.
 

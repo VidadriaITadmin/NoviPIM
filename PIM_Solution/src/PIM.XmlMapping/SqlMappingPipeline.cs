@@ -45,6 +45,11 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
         }
       }
 
+      // Register izvornih atributov (121). Tece nad istimi stranmi, a bere VSE atribute, tudi
+      // tiste brez preslikave: Extract prebere natanko to, kar je v map.FieldMapping, zato
+      // nepreslikan atribut ni napaka in ni opozorilo - preprosto ga ni.
+      await RegisterSourceAttributesAsync(connection, inboxes, sourceCode, cancellationToken);
+
       // Pretvorbe (map.FieldTransform) in slovar vrednosti (map.ValueLookup) tečejo med
       // izluščanjem in prenosom v katalog: izluščena vrednost je še surova, ProcessRawInbox
       // pa naprej dobi že poenoteno. Postopek je množičen in nad zapisom brez pretvorb ne
@@ -119,6 +124,101 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
     }
   }
 
+  /// <summary>
+  /// Prebere vse atribute zajetih strani in jih zapise v <c>map.SourceAttribute</c>.
+  ///
+  /// Odkrivanje je neobvezno: vir brez vrstice v <c>map.SourceAttributeDiscovery</c> se preskoci
+  /// in cevovod tece naprej. Register je delovni seznam, ne pogoj za zajem - ce bi njegova
+  /// napaka ustavila preslikavo, bi bila cena vednosti visja od koristi.
+  /// </summary>
+  private async Task RegisterSourceAttributesAsync(
+    SqlConnection connection,
+    IReadOnlyList<InboxMapping> inboxes,
+    string sourceCode,
+    CancellationToken cancellationToken)
+  {
+    var discovery = await ReadDiscoveryAsync(connection, sourceCode, cancellationToken);
+    if (discovery.Count == 0) return;
+
+    // Meja, ki jo je posteno povedati: odkrivanje vidi samo strani, ki jih je ReadInboxesAsync
+    // sploh vrnil, ta pa preskoci entitete brez ene same aktivne preslikave. Entiteta, ki ni
+    // preslikana v nicemer, zato v registru ne bo - za atribute to danes ne velja, ker imata
+    // oba dobavitelja preslikave, velja pa vedeti pri novem viru.
+
+    var found = new Dictionary<string, DiscoveredAttribute>(StringComparer.Ordinal);
+    foreach (var inbox in inboxes)
+    {
+      if (!discovery.TryGetValue(inbox.EntityType, out var config)) continue;
+      try
+      {
+        foreach (var attribute in extractor.Discover(inbox.PayloadXml, inbox.RecordXPath, config))
+        {
+          if (!found.TryGetValue(attribute.Name, out var known))
+          {
+            found[attribute.Name] = attribute;
+            continue;
+          }
+          found[attribute.Name] = known with
+          {
+            Label = known.Label ?? attribute.Label,
+            Value = known.Value ?? attribute.Value,
+            Unit = known.Unit ?? attribute.Unit,
+            ProductCount = known.ProductCount + attribute.ProductCount
+          };
+        }
+      }
+      // Pokvarjena stran je ze karantenirana pri izluscanju; register zaradi nje ne sme pasti.
+      catch (XmlException) { }
+      catch (XPathException) { }
+    }
+
+    if (found.Count == 0) return;
+
+    var payload = System.Text.Json.JsonSerializer.Serialize(found.Values.Select(attribute => new
+    {
+      name = attribute.Name,
+      label = attribute.Label,
+      value = attribute.Value,
+      unit = attribute.Unit,
+      count = attribute.ProductCount
+    }));
+
+    await using var command = new SqlCommand(
+      "EXEC map.RegisterSourceAttributes @SourceCode,@FoundJson;", connection)
+    {
+      CommandTimeout = ApplyCommandTimeoutSeconds
+    };
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+    command.Parameters.Add("@FoundJson", SqlDbType.NVarChar, -1).Value = payload;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  private static async Task<Dictionary<string, AttributeDiscovery>> ReadDiscoveryAsync(
+    SqlConnection connection,
+    string sourceCode,
+    CancellationToken cancellationToken)
+  {
+    const string sql = """
+      SELECT EntityType,NodeXPath,NameXPath,LabelXPath,ValueXPath,UnitXPath
+      FROM map.SourceAttributeDiscovery
+      WHERE SourceCode=@SourceCode AND IsActive=1;
+      """;
+    await using var command = new SqlCommand(sql, connection);
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new Dictionary<string, AttributeDiscovery>(StringComparer.OrdinalIgnoreCase);
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      rows[reader.GetString(0)] = new AttributeDiscovery(
+        reader.GetString(1),
+        reader.IsDBNull(2) ? null : reader.GetString(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3),
+        reader.IsDBNull(4) ? null : reader.GetString(4),
+        reader.IsDBNull(5) ? null : reader.GetString(5));
+    }
+    return rows;
+  }
+
   private static async Task SetChangeContextAsync(SqlConnection connection, Guid runId, string sourceCode, CancellationToken cancellationToken)
   {
     await using var command = new SqlCommand("pim.SetChangeContext", connection) { CommandType = CommandType.StoredProcedure };
@@ -171,7 +271,7 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
       // Stran entitete brez aktivnih preslikav se preskoci in ostane Pending — enako kot prej,
       // ko je INNER JOIN tako vrstico izpustil. Podatek zato pocaka na preslikavo, ne izgine.
       if (!mappingsByEntity.TryGetValue(entityType, out var mappings) || mappings.Count == 0) continue;
-      pages.Add(new InboxMapping(reader.GetInt64(0), reader.GetString(2), reader.GetString(3), mappings));
+      pages.Add(new InboxMapping(reader.GetInt64(0), entityType, reader.GetString(2), reader.GetString(3), mappings));
     }
     return pages;
   }
@@ -305,6 +405,7 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
 
   private sealed record InboxMapping(
     long InboxId,
+    string EntityType,
     string PayloadXml,
     string RecordXPath,
     List<FieldMapping> Mappings);
