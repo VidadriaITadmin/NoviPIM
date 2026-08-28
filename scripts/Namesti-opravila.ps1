@@ -6,10 +6,14 @@
   Nacrtovana opravila so po AGENTS.md #4.7 sistemska nastavitev. Ta skripta obstaja zato, da je
   ukaz zapisan, ponovljiv in odstranljiv - ne zato, da bi jo pognal kdorkoli.
 
-  Registrira dve nalogi pod tvojim racunom:
+  Registrira tri naloge pod tvojim racunom:
 
     PIM nocni tok   vsak dan ob $Ura   cel tok: katalog, XML, zaloga, validacija, izvoz
     PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP in Braytron XML
+    PIM nadzor      vsakih 5 minut     nadzornik zastalih obdelav in razposiljanje alarmov
+
+  Nadzor je edini del, ki pove, da se je nekaj ustavilo. Brez njega odpoved ostane tiha -
+  izmerjeno 28. 8. 2026 je zaloga padla 18-krat zapored in tega ni izvedel nihce.
 
   Zaloga je ena sama naloga, ker se vsak vir v istem prehodu prevzame in prebere. Loceno
   opravilo za prevzem in loceno za branje je zalogo drzalo en cikel zadaj.
@@ -48,10 +52,11 @@ $mestoSkripte = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $
 $koren = Split-Path -Parent $mestoSkripte
 $nocno  = Join-Path $mestoSkripte 'Nocno-vse.ps1'
 $cikel  = Join-Path $mestoSkripte 'Zaloga-cikel.ps1'
+$nadzor = Join-Path $mestoSkripte 'Nadzor.ps1'
 
 # Stari imeni sta v seznamu zato, da jih -Odstrani pospravi tudi pri tistih, ki so ju ze imeli
 # registrirani; nova namestitev ju ne ustvari vec.
-$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
+$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM nadzor', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
 
 if ($Odstrani) {
   foreach ($ime in $imena) {
@@ -64,7 +69,7 @@ if ($Odstrani) {
   return
 }
 
-foreach ($pot in @($nocno, $cikel)) {
+foreach ($pot in @($nocno, $cikel, $nadzor)) {
   if (-not (Test-Path $pot)) { throw "Ni najdena skripta $pot." }
 }
 
@@ -121,6 +126,10 @@ if (-not $BrezZaloge) {
   }
 
   Registriraj 'PIM zaloga' $cikel @('-Kaj', 'Vse') (Ponavljajoc 5 2)
+
+  # Nadzor je zamaknjen za dve minuti od zaloge: ce bi tekla hkrati, bi nadzornik lahko razglasil
+  # za zastalo izvajanje, ki se je pravkar zacelo.
+  Registriraj 'PIM nadzor' $nadzor @() (Ponavljajoc 5 4)
 }
 
 Write-Output ''
