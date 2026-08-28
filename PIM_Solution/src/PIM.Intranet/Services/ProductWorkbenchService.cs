@@ -73,7 +73,8 @@ public sealed record ProductListFilter(
   string? Manufacturer = null, string? Supplier = null, string? ItemGroup = null,
   string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
   bool SortDescending = false, string Language = "sl", string? Department = null,
-  string? Activity = null, string? WebPublish = null, string? CompletenessBand = null);
+  string? Activity = null, string? WebPublish = null, string? CompletenessBand = null,
+  string? HasImage = null);
 
 public sealed record ProductListViewCounts(
   long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
@@ -286,6 +287,7 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     command.Parameters.Add("@Activity", SqlDbType.NVarChar, 20).Value = Optional(filter.Activity);
     command.Parameters.Add("@WebPublish", SqlDbType.NVarChar, 20).Value = Optional(filter.WebPublish);
     command.Parameters.Add("@Completeness", SqlDbType.NVarChar, 20).Value = Optional(filter.CompletenessBand);
+    command.Parameters.Add("@HasImage", SqlDbType.NVarChar, 20).Value = Optional(filter.HasImage);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new ProductListRow(

@@ -118,7 +118,7 @@ app.MapGet("/izvoz/izdelki.csv", async (
       organizationId, rows.Count, pageSize, Value("isci"), Value("pogled"),
       Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
       Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
-      "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost")),
+      "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika")),
       cancellationToken);
 
     total = page.TotalCount;
@@ -128,7 +128,7 @@ app.MapGet("/izvoz/izdelki.csv", async (
   }
 
   var builderCsv = new System.Text.StringBuilder();
-  builderCsv.AppendLine("Podjetje;Sifra;EAN;Naziv;Proizvajalec;Dobavitelj;Skupina;Oddelek;ERP;Splet;Popolnost;OdprteTezave;Mediji;Kategorije;CakaSAOP;Objavljen;ZadnjaSprememba");
+  builderCsv.AppendLine("Podjetje;Sifra;EAN;Naziv;Proizvajalec;Dobavitelj;Skupina;ABCKlasifikacija;ERP;Splet;Popolnost;OdprteTezave;Mediji;Kategorije;CakaSAOP;Objavljen;ZadnjaSprememba");
   foreach (var row in rows)
   {
     builderCsv.AppendLine(string.Join(';', new[]
@@ -180,7 +180,7 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     organizationId, 0, ProductExportService.MaxRows, Value("isci"), Value("pogled"),
     Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
     Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
-    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"));
+    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika"));
 
   var bytes = await export.BuildAsync(filter, template, selected, cancellationToken);
   return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

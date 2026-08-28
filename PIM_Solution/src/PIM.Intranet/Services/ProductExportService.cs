@@ -70,7 +70,7 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
     WorkbookColumn[] columns =
     [
       new("Podjetje"), new("Šifra artikla"), new("EAN"), new("Naziv", Width: 46),
-      new("Proizvajalec", Width: 26), new("Dobavitelj", Width: 26), new("Skupina"), new("Oddelek"),
+      new("Proizvajalec", Width: 26), new("Dobavitelj", Width: 26), new("Skupina"), new("ABC klasifikacija"),
       new("ERP"), new("Splet"), new("Popolnost", WorkbookCellKind.Percent),
       new("Odprte težave", WorkbookCellKind.Number), new("Mediji", WorkbookCellKind.Number),
       new("Kategorije", WorkbookCellKind.Number), new("Čaka SAOP", WorkbookCellKind.Number),

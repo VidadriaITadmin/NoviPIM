@@ -108,8 +108,21 @@ Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"Page
 Assert(Regex.IsMatch(markup, "aria-label=\"Izberi izdelek @row.ItemId\""), "Vsaka kljukica mora povedati, kateri izdelek izbira.");
 
 // 6.1 Cela vrstica vodi na kartico; naziv zato ni povezava, kljukica pa ne sme odpirati kartice.
-Assert(Regex.IsMatch(markup, @"<tr class=""row-link""[^>]*@onclick=""\(\) => OpenAsync\(row\)"""),
+Assert(Regex.IsMatch(markup, @"<tr class=""row-link[^""]*""[^>]*@onclick=""\(\) => OpenAsync\(row\)"""),
   "Klik na vrstico mora odpreti kartico izdelka.");
+
+// 6.2 Kartica se nalaga vec kot trenutek. Uporabnik 2026-08-28: »rabi nekaj casa da nalozi
+// kartico artikla, in se vmes kar pokaze stran izdelki«. Seznam mora zato takoj povedati, da
+// se kartica odpira, sicer je videti, kot da klik ni bil zaznan.
+Assert(markup.Contains("class=\"opening-overlay\"", StringComparison.Ordinal),
+  "Med odpiranjem kartice mora seznam pokazati, da se nekaj dogaja.");
+Assert(Regex.IsMatch(markup, "<div class=\"opening-overlay\"[^>]*role=\"status\"[^>]*aria-live="),
+  "Prekrivalo odpiranja mora biti razglaseno kot role=\"status\" z aria-live.");
+Assert(Regex.IsMatch(markup, @"Opening = row\.ProductId;\s*\r?\n\s*StateHasChanged\(\);"),
+  "Prekrivalo se mora izrisati, preden se navigacija zacne.");
+Assert(css.Contains(".opening-spinner", StringComparison.Ordinal), "Prekrivalo mora imeti viden znak nalaganja.");
+Assert(css.Contains("prefers-reduced-motion", StringComparison.Ordinal),
+  "Vrtenje mora upostevati nastavitev zmanjsanega gibanja.");
 Assert(markup.Contains("@onkeydown=\"args => OpenKeyAsync(args, row)\"", StringComparison.Ordinal),
   "Vrstica mora biti dosegljiva tudi s tipkovnico (Enter ali preslednica).");
 Assert(markup.Contains("@onclick:stopPropagation=\"true\"", StringComparison.Ordinal),
@@ -153,15 +166,39 @@ Assert(Regex.IsMatch(markup, "<div class=\"filter-field\">\\s*<label for=\"produ
 // 9. Izvoz pogleda uporabi iste filtre kot pogled in je delovni zvezek, ne CSV.
 Assert(markup.Contains("izvoz/izdelki.xlsx", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda v Excel.");
 Assert(!markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Gumb za izvoz mora dati zvezek; CSV pot ostaja samo za skripte.");
-Assert(Regex.IsMatch(markup, "string ExportHref\\(\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
+Assert(Regex.IsMatch(markup, "string ExportHref\\(bool saopTemplate\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
-Assert(Regex.IsMatch(markup, "id=\"product-export\""), "Uporabnik mora izbrati, kaj se izvozi.");
-foreach (var choice in new[] { "POGLED", "POGLED_SAOP", "IZBRANI", "IZBRANI_SAOP" })
-  Assert(markup.Contains("value=\"" + choice + "\"", StringComparison.Ordinal), "Manjka izbira izvoza " + choice + ".");
+// Uporabnik 2026-08-28: »Kaj je point polja Pregled – cel pregled, ker ko spreminjam se nic ne
+// zgodi tako da odstrani.« Spustni seznam obsega je zato odpravljen: obseg pove izbira v tabeli
+// in gumb ga izpise. Predloga SAOP ostane, a kot svoja povezava, ne kot skrita izbira.
+Assert(!markup.Contains("id=\"product-export\"", StringComparison.Ordinal),
+  "Spustnega seznama obsega izvoza ni vec — spreminjal se je brez vidnega ucinka.");
+foreach (var retired in new[] { "POGLED_SAOP", "IZBRANI_SAOP", "ExportChoice", "ExportDisabled" })
+  Assert(!markup.Contains(retired, StringComparison.Ordinal), "Odpisani mehanizem izvoza se ne sme vrniti: " + retired + ".");
+Assert(markup.Contains("ExportScopeLabel", StringComparison.Ordinal),
+  "Gumb za izvoz mora povedati, ali gre cel pogled ali samo izbrani.");
 Assert(markup.Contains("predloga=saop", StringComparison.Ordinal),
-  "Predloga SAOP mora biti izbirna; njeni stolpci so register out.SaopXmlField, ne seznam v strani.");
-Assert(markup.Contains("ExportDisabled", StringComparison.Ordinal),
-  "Izvoz izbranih brez izbire ni dejanje, ampak past; gumb mora biti onemogocen.");
+  "Predloga SAOP mora ostati na voljo; njeni stolpci so register out.SaopXmlField, ne seznam v strani.");
+
+// 9.1 Novi filtri iz popravkov 2026-08-28: slika in preimenovana ABC klasifikacija.
+Assert(Regex.IsMatch(markup, "<label for=\"product-image\">Slika</label>"),
+  "Filter »ima sliko / brez slike« manjka.");
+Assert(markup.Contains("QueryImage", StringComparison.Ordinal) && markup.Contains("ImageDraft", StringComparison.Ordinal),
+  "Filter slike mora ziveti v naslovu, kot vsi ostali.");
+Assert(Regex.IsMatch(markup, "<label for=\"product-department\">ABC klasifikacija</label>"),
+  "Oddelek se povsod imenuje ABC klasifikacija.");
+Assert(!Regex.IsMatch(markup, ">Oddelek<|Oddelek: |Vsi oddelki"),
+  "Beseda »Oddelek« je nadomescena z »ABC klasifikacija«.");
+
+// 9.2 Razvrstitev ni filter: stoji nad tabelo in ucinkuje takoj, brez gumba Uporabi.
+Assert(Regex.IsMatch(markup, "<div class=\"table-toolbar\">\\s*<label for=\"product-sort\">"),
+  "Razvrstitev mora stati nad tabelo, ne v panelu filtrov.");
+Assert(markup.IndexOf("class=\"table-toolbar\"", StringComparison.Ordinal) < markup.IndexOf("aria-label=\"Seznam izdelkov\"", StringComparison.Ordinal),
+  "Razvrstitev mora biti pred tabelo.");
+Assert(markup.IndexOf("product-sort", StringComparison.Ordinal) > markup.IndexOf("id=\"products-filter-panel\"", StringComparison.Ordinal),
+  "Razvrstitve ne sme biti vec v panelu filtrov.");
+Assert(markup.Contains("@bind:after=\"ApplySortAsync\"", StringComparison.Ordinal),
+  "Razvrstitev mora ucinkovati takoj ob izbiri.");
 
 // 10. Varovalka: stran ostane vezana na dejanske bralne procedure.
 var allowedCalls = new[] { "GetOrganizationsAsync", "GetProductListAsync", "GetProductListViewsAsync", "GetProductListFacetsAsync" };

@@ -35,15 +35,11 @@
     <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 
     <div class="toolbar-actions">
-      <label class="visually-hidden" for="product-export">Kaj izvoziti</label>
-      <select id="product-export" class="filter-select export-choice" @bind="ExportChoice">
-        <option value="POGLED">Pregled — cel pogled</option>
-        <option value="POGLED_SAOP">Predloga SAOP — cel pogled</option>
-        <option value="IZBRANI">Pregled — izbrani</option>
-        <option value="IZBRANI_SAOP">Predloga SAOP — izbrani</option>
-      </select>
-      <a class="ghost-button @(ExportDisabled ? "disabled" : null)" href="@ExportHref()"
-         aria-disabled="@ExportDisabled.ToString().ToLowerInvariant()">Izvozi Excel</a>
+      @* Obseg izvoza ni vec izbira v spustnem seznamu: ta se je dalo spremeniti, ne da bi se na
+         zaslonu karkoli zgodilo. Obseg zdaj pove izbira v tabeli — ce je kaj izbrano, gredo ven
+         izbrani, sicer cel pogled — in gumb to prebere na glas. *@
+      <a class="ghost-button" href="@ExportHref(saopTemplate: false)">Izvozi Excel @ExportScopeLabel</a>
+      <a class="ghost-button" href="@ExportHref(saopTemplate: true)">Predloga SAOP @ExportScopeLabel</a>
       <button type="button" class="primary-button" disabled="@(Selected.Count == 0 || SelectionSpansOrganizations)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
     </div>
   </div>
@@ -95,9 +91,18 @@
       </div>
 
       <div class="filter-field">
-        <label for="product-department">Oddelek</label>
+        <label for="product-image">Slika</label>
+        <select id="product-image" class="filter-select" @bind="ImageDraft">
+          <option value="">Vsi</option>
+          <option value="YES">Ima sliko</option>
+          <option value="NO">Brez slike</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-department">ABC klasifikacija</label>
         <select id="product-department" class="filter-select" @bind="DepartmentDraft">
-          <option value="">Vsi oddelki</option>
+          <option value="">Vse klasifikacije</option>
           @foreach (var facet in Facets.Where(row => row.FacetKind == "DEPARTMENT"))
           {
             <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
@@ -151,19 +156,6 @@
           <option value="FULL">100 %</option>
         </select>
       </div>
-
-      <div class="filter-field">
-        <label for="product-sort">Razvrstitev</label>
-        <select id="product-sort" class="filter-select" @bind="SortDraft">
-          <option value="ITEM">Šifra naraščajoče</option>
-          <option value="ITEM:desc">Šifra padajoče</option>
-          <option value="COMPLETENESS:desc">Najbolj popolni</option>
-          <option value="COMPLETENESS">Najmanj popolni</option>
-          <option value="CHANGED:desc">Nazadnje spremenjeni</option>
-          <option value="CHANGED">Najdlje nespremenjeni</option>
-          <option value="ORGANIZATION">Po podjetju</option>
-        </select>
-      </div>
     </div>
 
     <div class="filter-actions">
@@ -193,7 +185,26 @@ else if (SelectionOverflow)
   <p class="notice" role="status">Izbranih je @Selected.Count izdelkov, v množično urejanje jih gre prvih @MaxSelectionInUrl. Preostale uredi v naslednjem paketu.</p>
 }
 
-<section class="ui-card data-card" aria-label="Seznam izdelkov">
+@* Razvrstitev ni filter — ne zozi nabora, samo obrne vrstni red — zato stoji nad tabelo,
+   kjer ucinkuje, in ne v panelu filtrov. Deluje takoj ob izbiri, brez gumba Uporabi. *@
+<div class="table-toolbar">
+  <label for="product-sort">Razvrstitev</label>
+  <select id="product-sort" class="filter-select" @bind="SortDraft" @bind:after="ApplySortAsync">
+    <option value="ITEM">Šifra naraščajoče</option>
+    <option value="ITEM:desc">Šifra padajoče</option>
+    <option value="COMPLETENESS:desc">Najbolj popolni</option>
+    <option value="COMPLETENESS">Najmanj popolni</option>
+    <option value="CHANGED:desc">Nazadnje spremenjeni</option>
+    <option value="CHANGED">Najdlje nespremenjeni</option>
+    <option value="ORGANIZATION">Po podjetju</option>
+  </select>
+</div>
+
+<section class="ui-card data-card @(Opening is null ? null : "opening-card")" aria-label="Seznam izdelkov">
+  @if (Opening is not null)
+  {
+    <div class="opening-overlay" role="status" aria-live="assertive"><span class="opening-spinner" aria-hidden="true"></span><span>Odpiram kartico izdelka …</span></div>
+  }
   <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)"
             EmptyText="Za izbrane filtre ni izdelkov." LoadingText="Nalaganje izdelkov …">
     @if (Page is not null)
@@ -203,8 +214,8 @@ else if (SelectionOverflow)
           @foreach (var row in Page.Rows)
           {
             var thumbnail = MediaUrlPolicy.Normalize(row.ThumbnailUrl);
-            <tr class="row-link" tabindex="0" @onclick="() => OpenAsync(row)" @onkeydown="args => OpenKeyAsync(args, row)"
-                aria-label="Odpri izdelek @row.ItemId">
+            <tr class="row-link @(Opening == row.ProductId ? "opening" : null)" tabindex="0" @onclick="() => OpenAsync(row)" @onkeydown="args => OpenKeyAsync(args, row)"
+                aria-label="Odpri izdelek @row.ItemId" aria-busy="@(Opening == row.ProductId ? "true" : null)">
               @* Klikanje po vrstici ne sme prekljukati izbire, zato ima celica izbire svojo ustavitev. *@
               <td class="select-cell" @onclick:stopPropagation="true">
                 <input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selected.ContainsKey(SelectionKey(row))" @onchange="e => Toggle(row, e)" />
@@ -268,6 +279,7 @@ else if (SelectionOverflow)
   [SupplyParameterFromQuery(Name = "aktivnost")] public string? QueryActivity { get; set; }
   [SupplyParameterFromQuery(Name = "objava")] public string? QueryWebPublish { get; set; }
   [SupplyParameterFromQuery(Name = "popolnost")] public string? QueryCompleteness { get; set; }
+  [SupplyParameterFromQuery(Name = "slika")] public string? QueryImage { get; set; }
   [SupplyParameterFromQuery(Name = "sort")] public string? QuerySort { get; set; }
   [SupplyParameterFromQuery(Name = "smer")] public string? QueryDirection { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
@@ -299,8 +311,8 @@ else if (SelectionOverflow)
   string ActivityDraft = "";
   string WebPublishDraft = "";
   string CompletenessDraft = "";
+  string ImageDraft = "";
   string SortDraft = "ITEM";
-  string ExportChoice = "POGLED";
 
   // Enajst filtrov v eni vrsti je bilo natrpano in nepregledno. Odprejo se na zahtevo in
   // ostanejo odprti, dokler je kaj izbrano — sicer bi uporabnik izgubil sled, kaj je nastavil.
@@ -367,6 +379,7 @@ else if (SelectionOverflow)
     ActivityDraft = QueryActivity ?? "";
     WebPublishDraft = QueryWebPublish ?? "";
     CompletenessDraft = QueryCompleteness ?? "";
+    ImageDraft = QueryImage ?? "";
     SortDraft = string.IsNullOrWhiteSpace(QuerySort) ? "ITEM"
       : string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase) ? QuerySort + ":desc" : QuerySort;
 
@@ -389,7 +402,7 @@ else if (SelectionOverflow)
         scope, Skip, Take, QuerySearch, ActiveView,
         QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
         QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
-        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness));
+        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage));
     }
     catch
     {
@@ -433,12 +446,13 @@ else if (SelectionOverflow)
       if (!string.IsNullOrWhiteSpace(QueryManufacturer)) chips.Add(new($"Proizvajalec: {QueryManufacturer}", Href(manufacturer: "")));
       if (!string.IsNullOrWhiteSpace(QuerySupplier)) chips.Add(new($"Dobavitelj: {QuerySupplier}", Href(supplier: "")));
       if (!string.IsNullOrWhiteSpace(QueryGroup)) chips.Add(new($"Skupina: {QueryGroup}", Href(group: "")));
-      if (!string.IsNullOrWhiteSpace(QueryDepartment)) chips.Add(new($"Oddelek: {QueryDepartment}", Href(department: "")));
+      if (!string.IsNullOrWhiteSpace(QueryDepartment)) chips.Add(new($"ABC klasifikacija: {QueryDepartment}", Href(department: "")));
       if (!string.IsNullOrWhiteSpace(QueryErp)) chips.Add(new($"ERP: {StatusLabel(QueryErp)}", Href(erp: "")));
       if (!string.IsNullOrWhiteSpace(QueryWeb)) chips.Add(new($"Splet: {StatusLabel(QueryWeb)}", Href(web: "")));
       if (!string.IsNullOrWhiteSpace(QueryActivity)) chips.Add(new($"Aktivnost: {ActivityLabel(QueryActivity)}", Href(activity: "")));
       if (!string.IsNullOrWhiteSpace(QueryWebPublish)) chips.Add(new($"Za splet: {WebPublishLabel(QueryWebPublish)}", Href(webPublish: "")));
       if (!string.IsNullOrWhiteSpace(QueryCompleteness)) chips.Add(new($"Popolnost: {CompletenessLabel(QueryCompleteness)}", Href(completeness: "")));
+      if (!string.IsNullOrWhiteSpace(QueryImage)) chips.Add(new($"Slika: {ImageLabel(QueryImage)}", Href(image: "")));
       return chips;
     }
   }
@@ -447,7 +461,7 @@ else if (SelectionOverflow)
   // pa dela. Sentinel "" pomeni "odstrani ta filter", null pomeni "ohrani obstojecega".
   string Href(string? view = null, string? search = null, string? organization = null, string? manufacturer = null,
     string? supplier = null, string? group = null, string? department = null, string? erp = null, string? web = null,
-    string? activity = null, string? webPublish = null, string? completeness = null,
+    string? activity = null, string? webPublish = null, string? completeness = null, string? image = null,
     string? sort = null, string? direction = null, int? page = null)
   {
     var parameters = new List<string>();
@@ -463,11 +477,12 @@ else if (SelectionOverflow)
     Add("aktivnost", Resolve(activity, QueryActivity));
     Add("objava", Resolve(webPublish, QueryWebPublish));
     Add("popolnost", Resolve(completeness, QueryCompleteness));
+    Add("slika", Resolve(image, QueryImage));
     Add("sort", Resolve(sort, QuerySort));
     Add("smer", Resolve(direction, QueryDirection));
     var resolvedPage = page ?? (view is null && search is null && organization is null && manufacturer is null
       && supplier is null && group is null && department is null && erp is null && web is null && activity is null
-      && webPublish is null && completeness is null && sort is null && direction is null ? QueryPage : null);
+      && webPublish is null && completeness is null && image is null && sort is null && direction is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "izdelki" : "izdelki?" + string.Join('&', parameters);
@@ -482,22 +497,22 @@ else if (SelectionOverflow)
 
   string ViewHref(string code) => Href(view: code == "ALL" ? "" : code, page: 1);
 
-  bool ExportOnlySelected => ExportChoice.StartsWith("IZBRANI", StringComparison.Ordinal);
-  bool ExportDisabled => ExportOnlySelected && Selected.Count == 0;
+  // Obseg izvoza pove izbira v tabeli, ne skrit spustni seznam: ce je kaj izbrano, gredo ven
+  // izbrani, sicer cel pogled. Gumb to izpise, da uporabniku ni treba ugibati.
+  string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Math.Min(Selected.Count, MaxSelectionInUrl)})";
 
   // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi. Oblika je
   // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz; predloga SAOP ima
   // stolpce iz registra, zato jo je mogoce urediti in vrniti nazaj.
-  string ExportHref()
+  string ExportHref(bool saopTemplate)
   {
     var listHref = Href(page: 1);
     var separatorIndex = listHref.IndexOf('?');
     var parameters = separatorIndex < 0 ? "" : listHref[(separatorIndex + 1)..];
 
-    if (ExportChoice.EndsWith("SAOP", StringComparison.Ordinal))
-      parameters = Append(parameters, "predloga=saop");
+    if (saopTemplate) parameters = Append(parameters, "predloga=saop");
 
-    if (ExportOnlySelected && Selected.Count > 0)
+    if (Selected.Count > 0)
       parameters = Append(parameters, "items=" + Uri.EscapeDataString(
         string.Join(',', Selected.Values.Take(MaxSelectionInUrl).Select(item => item.ItemId))));
 
@@ -514,7 +529,16 @@ else if (SelectionOverflow)
       search: SearchDraft.Trim(), organization: OrganizationDraft, manufacturer: ManufacturerDraft,
       supplier: SupplierDraft, group: GroupDraft, department: DepartmentDraft, erp: ErpDraft, web: WebDraft,
       activity: ActivityDraft, webPublish: WebPublishDraft, completeness: CompletenessDraft,
+      image: ImageDraft,
       sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1));
+    return Task.CompletedTask;
+  }
+
+  // Razvrstitev ucinkuje takoj: ni filter in ne potrebuje gumba Uporabi.
+  Task ApplySortAsync()
+  {
+    var sort = SortDraft.Split(':');
+    Navigation.NavigateTo(Href(sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1));
     return Task.CompletedTask;
   }
 
@@ -544,14 +568,22 @@ else if (SelectionOverflow)
 
   // Cela vrstica je povezava do kartice. Naziv zato ni <a> — podcrtan naziv sredi vrstice, ki
   // je vsa klikljiva, obljublja dve razlicni dejanji, pa je le eno.
-  Task OpenAsync(ProductListRow row)
+  async Task OpenAsync(ProductListRow row)
   {
+    // Kartica se nalaga vec kot trenutek. Brez tega je uporabnik ostal na seznamu brez znaka,
+    // da se karkoli dogaja, in je klikal znova. Prekrivalo se izrise, preden se navigacija
+    // zacne — StateHasChanged in prepustitev niti sta zato nujna, ne okras.
+    Opening = row.ProductId;
+    StateHasChanged();
+    await Task.Yield();
     Navigation.NavigateTo($"izdelki/{row.ProductId}");
-    return Task.CompletedTask;
   }
 
   Task OpenKeyAsync(KeyboardEventArgs args, ProductListRow row) =>
     args.Key is "Enter" or " " ? OpenAsync(row) : Task.CompletedTask;
+
+  // Izdelek, ki se odpira; null pomeni, da se nic ne odpira.
+  long? Opening;
 
   void Toggle(ProductListRow row, ChangeEventArgs args)
   {
@@ -580,6 +612,13 @@ else if (SelectionOverflow)
   {
     "ACTIVE" => "samo aktivni",
     "INACTIVE" => "samo neaktivni",
+    _ => value ?? "",
+  };
+
+  static string ImageLabel(string? value) => value switch
+  {
+    "YES" => "ima sliko",
+    "NO" => "brez slike",
     _ => value ?? "",
   };
 
