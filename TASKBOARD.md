@@ -181,6 +181,64 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Jezik z imena atributa na svoj stolpec — migracija 124 (korak 3a)** —
+  kdo: Claude Code — ozemlje: BAZA — končano 2026-08-28.
+
+  `canon.ProductAttribute` ni imel stolpca za jezik, zato je jezik pristal v imenu lastnosti:
+  »Prevladujoč material SLO« in »Prevladujoč material ANG« sta bila dva atributa za eno lastnost.
+
+  **Dokaz, merjeno pred in po:**
+
+  | Kaj | Prej | Potem |
+  |---|---|---|
+  | različnih kod atributov | 164 | **148** |
+  | vrstic v `canon.ProductAttribute` | 312.257 | **312.257** |
+  | vrstic s pripono `SLO`/`ANG` v imenu | 97.244 | **0** |
+  | vrstic z jezikom v stolpcu | 0 | **45.450 sl + 51.794 en** |
+  | vrstic v `pim.ProductAttribute` | 251.088 | 251.088 |
+  | atributnih vrstic v `canon.FieldValue` | 312.257 | **409.501** |
+  | vrstic v `pim.ProductFieldHistory` | 2.267.962 | **2.267.962** |
+
+  **Nobena vrstica ni izgubljena.** Zgodovina se ni povečala, ker sprožilec
+  `TR_ProductAttribute_FieldHistory` piše samo ob spremembi *vrednosti*; preimenovanje kode
+  vrednosti ne spremeni. `canon.FieldValue` je zrasel za natanko 97.244 — toliko je jezikovnih
+  oblik `ProductAttribute.<koda>.<jezik>`, ki so dodane poleg gole kode.
+
+  **Žive reference se niso spremenile.** Edine tri zahteve, ki berejo atribut
+  (`ProductAttribute.CategoryRequired`, `ProductAttribute.Garancija` ×2) in edini izvozni
+  stolpec (`KEY_CATEGORY_ATTRIBUTES`) nimajo jezikovne pripone. Preverjeno po migraciji:
+  `Garancija` 1.725 vrstic, `CategoryRequired` 6.261 — enako kot prej.
+
+  **Enota namenoma ostaja prazna.** Stolpec `Unit` je dodan, a nič ni preneseno: »Enota
+  napetosti« pripada »Napetosti«, »Enota dolžine paketa II« pa »Dolžini paketa II«, in ta
+  pretvorba v slovenščini ni mehanska. 34 takih kod je v šifrantu označenih z
+  `IsUnitCandidate` in čakajo človeka. To je korak 3b.
+
+  **Dve napaki na poti, obe zapisani:**
+
+  1. **Napačen vrstni red.** Prvi poskus je odrezal pripono, preden je razširil enolični ključ,
+     in padel z napako 2627 — »X SLO« in »X ANG« imata po odrezu isto kodo pri istem izdelku.
+     Migracija se je v celoti povrnila (0 stolpcev dodanih, 0 vrstic spremenjenih, brez zapisa
+     v `dbo.SchemaMigration`). Popravljen vrstni red: jezik → širši ključ → odrez.
+  2. **`PIM.F2.Integration` je padel z »Poln izdelek ima aktivne napake«.** To ni posledica 124,
+     ampak **moje opustitve pri migraciji 105**: dodal sem zahtevo `ProductAttribute.Garancija`
+     in nisem dopolnil fixtura. Test sam dokumentira to načelo in je bil tako dopolnjen že pri
+     047 in 057. Fixture zdaj vstavi tudi `Garancija`. Napake nisem odkril prej, ker sem po 105
+     pognal samo ciljne filtre, ne polnega paketa.
+
+  **Zamenjana sta dva enolična ključa** (`ProductId, AttributeCode` → `+ LanguageCode`, enako v
+  `pim`). To je edini DROP v migraciji in ne izgubi nobene vrstice — ključ se v isti transakciji
+  ustvari znova, širši. Pred pisanjem preverjeno: po zložitvi ni nobenega podvojenega para, ne v
+  `canon` (0 od 312.257) ne v `pim` (0 od 251.088).
+
+  **Dokaz:** migrator prvi in drugi zagon ter `--verify` → izhod 0.
+  **`scripts\run_tests.ps1` (polni paket) → 55 uspelih / 0 preskočenih / 0 padlih.**
+  `PIM.B2bWorker --export-magento --organization-id 2` → datoteka s 43.508 vrsticami, izhod 0.
+
+  Znana posledica za kartico izdelka: prevedljiva lastnost ima odslej dve vrstici namesto dveh
+  različnih imen. `intranet.GetProductCard` odda stolpca `LanguageCode` in `Unit`, da ju stran
+  lahko pokaže; prikaz je naloga strani.
+
 - **[BAZA + DOMENA] Atributi dobijo register in šifrant s stalnimi kodami — migracije 121–123** —
   kdo: Claude Code — ozemlje: BAZA + DOMENA — končano 2026-08-28.
 

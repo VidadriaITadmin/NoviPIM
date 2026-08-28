@@ -37,7 +37,10 @@ UPDATE canon.Product SET EAN=N'3830000000001', UoM=N'KOS', Supplier=N'Dobavitelj
 INSERT canon.ProductCommercial (ProductId,NetWeight,GrossWeight,CustomsTariff,CountryOfOrigin,Pak1,Pak2,Volume,PackageLength,PackageWidth,PackageHeight,DimensionUnit)
   VALUES (@ProductId,1.5,2.0,N'94051140',N'SI',1,6,0.0125,250,120,90,N'mm');
 INSERT canon.ProductText (ProductId,Lang,TextType,Value) VALUES (@ProductId,N'sl',N'TITLE_ERP',N'ERP naziv'),(@ProductId,N'sl',N'WEB_TITLE',N'Spletni naziv'),(@ProductId,N'en',N'WEB_TITLE',N'Web title');
-INSERT canon.ProductAttribute (ProductId,AttributeCode,Value) VALUES (@ProductId,N'CategoryRequired',N'Vrednost');
+-- Od migracije 105 je aktivna tudi zahteva ProductAttribute.Garancija (WARNING v obeh spletnih
+-- profilih). Ista logika kot pri 047 in 057: nova aktivna zahteva pomeni, da mora biti fixture
+-- dopolnjen, sicer "poln izdelek" ni vec poln in trditev spodaj ne drzi.
+INSERT canon.ProductAttribute (ProductId,AttributeCode,Value) VALUES (@ProductId,N'CategoryRequired',N'Vrednost'),(@ProductId,N'Garancija',N'24 mesecev');
 -- Spletna stran mora biti koda iz registra canon.WebSite (migracija 063); 'svetila.si' s piko
 -- ni bila nikoli registrirana in taka vrstica ne bi mogla priti v noben izvoz.
 INSERT canon.ProductCategory (ProductId,WebSite,CategoryPath) VALUES (@ProductId,N'svetila_si',N'Svetila/Test');
