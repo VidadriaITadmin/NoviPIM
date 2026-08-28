@@ -181,6 +181,52 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA + INTRANET] Atributi so urejivi: delovni seznam, šifrant in par za enoto — migracija 125 (korak 4)** —
+  kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-28.
+
+  Register (121) in šifrant (122) sta pokazala, kaj je in kaj manjka; ta korak da človeku pot,
+  da to popravi iz vmesnika. Ista oblika kot pri kategorijah: postopek s pravili in zgodovino,
+  stran brez lastne presoje.
+
+  **Dve strani.** `/zajem/atributi` je delovni seznam izvornih atributov — kaj je vir poslal, pri
+  koliko izdelkih, vzorec vrednosti, in v katero našo lastnost gre. Privzeti filter je
+  **Nepreslikano**, ker stran obstaja zaradi tega dela. `/nastavitve/atributi` je šifrant: imena
+  v vseh jezikih hkrati, viri, ki lastnost polnijo, in par za enoto.
+
+  **Par za enoto (korak 3b) je s tem mogoč.** Migracija 124 je dodala stolpec `Unit`, a ga je
+  pustila praznega, ker pretvorba »Enota napetosti« → »Napetost« v slovenščini ni mehanska.
+  Zdaj obstaja `UnitOfAttributeCode`: človek pove, čigava enota je. Filter »enote brez para«
+  je delovni seznam za teh 34 kod. **Zapisan par sam po sebi ne premakne nobene vrednosti** —
+  prenos je naslednji korak in bo mehanski šele, ko pari obstajajo.
+
+  **Zavrne (vse preizkušene v živo):**
+
+  | Napaka | Kdaj |
+  |---|---|
+  | `125001` | brez akterja |
+  | `125002` | ciljna lastnost ni v šifrantu ali ni aktivna |
+  | `125003` | jezik ni v šifrantu |
+  | `125004` | izvorni atribut, ki ga register ne pozna — vir ga še ni poslal |
+  | `125006` | neznan tip podatka |
+  | `125007` | lastnost ne more biti enota same sebe |
+  | `125009` | veriga enot (enota enote) |
+
+  `125004` je bistvena: preslikava na izvorni atribut, ki ga register ne pozna, je ugibanje.
+  Register je edini dokaz, kaj je res prišlo.
+
+  **Stara stran je imela tri filtre, onemogočene z besedilom »bralni model manjka«**, in oznako
+  `PimMissing`. Oboje je odstranjeno; test to drži, da se ne prikrade nazaj.
+
+  **Dokaz:** migrator prvi in drugi zagon ter `--verify` → izhod 0;
+  `dotnet build PIM.Intranet` → 0 opozoril, 0 napak;
+  **`scripts\run_tests.ps1` (polni paket) → 56 uspelih / 0 preskočenih / 0 padlih**, vključno z
+  novim `PIM.F10.AttributeUxTests`. Živ preizkus para: `ENOTA_NAPETOSTI` → `NAPETOST` zapisan,
+  veriga zavrnjena z `125009`, par povrnjen na prazno.
+
+  Znana posledica: `CatalogAttributeDetail.razor` (`/nastavitve/atributi/{koda}`) je ostal iz
+  prejšnje izvedbe in nanj ne kaže nobena povezava več. Dosegljiv je še po naslovu; ali ga
+  prenoviti ali umakniti, je ločena odločitev.
+
 - **[INTRANET] Zavihek ostane na svoji strani — odprava zavihkov čez strani** — kdo: Claude Code
   — ozemlje: INTRANET — končano 2026-08-28.
 

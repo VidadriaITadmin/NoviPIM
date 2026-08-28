@@ -45,6 +45,7 @@ builder.Services.AddScoped<IntranetUserAdministrationService>();
 builder.Services.AddScoped<SaopWriteService>();
 builder.Services.AddScoped<CategoryMappingService>();
 builder.Services.AddScoped<CategoryTreeService>();
+builder.Services.AddScoped<AttributeMappingService>();
 
 var app = builder.Build();
 

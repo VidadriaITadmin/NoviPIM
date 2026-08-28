@@ -1,0 +1,255 @@
+@page "/zajem/atributi"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.AttributeMappingService Attributes
+@inject PIM.Intranet.Services.CategoryTreeService Tree
+@inject AuthenticationStateProvider Authentication
+
+@* Delovni seznam izvornih atributov. Pred migracijo 121 tega seznama ni bilo: izluščilo se je
+   natanko tisto, kar je bilo v preslikavah, nepreslikan atribut pa ni bil ne napaka ne
+   opozorilo — preprosto ga ni bilo. *@
+
+<PageTitle>Atributi iz virov</PageTitle>
+<PimPage Title="Atributi iz virov"
+         Subtitle="Kaj je dobavitelj poslal in v katero našo lastnost to gre. Vrstica brez cilja ni napaka, ampak naloga."
+         Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card toolbar" role="search" aria-labelledby="attr-filter-title">
+  <h2 id="attr-filter-title" class="visually-hidden">Filtriranje atributov</h2>
+
+  <label class="visually-hidden" for="attr-source">Vir</label>
+  <select id="attr-source" class="filter-select" @bind="Source" @bind:after="LoadAsync">
+    <option value="">Vsi viri</option>
+    @foreach (var source in Sources) { <option value="@source">@source</option> }
+  </select>
+
+  <label class="visually-hidden" for="attr-state">Stanje</label>
+  <select id="attr-state" class="filter-select" @bind="State" @bind:after="LoadAsync">
+    <option value="">Vsa stanja</option>
+    <option value="Nepreslikano">Nepreslikano</option>
+    <option value="Preslikano">Preslikano</option>
+    <option value="Ugasnjeno">Ugasnjeno</option>
+  </select>
+
+  <label class="visually-hidden" for="attr-search">Iskanje</label>
+  <input id="attr-search" class="form-input" type="search" placeholder="Išči po imenu ali oznaki"
+         @bind="Search" @bind:after="LoadAsync" />
+
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card section-gap" aria-label="Izvorni atributi">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="Za te filtre ni nobenega atributa." LoadingText="Nalaganje atributov …">
+    <PimTable Caption="Atributi iz virov, razvrščeni po številu izdelkov za njimi" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          var key = row.SourceCode + "|" + row.SourceAttributeName;
+          <tr>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td>
+              <strong>@(row.SourceLabel ?? row.SourceAttributeName)</strong>
+              <div class="row-note code-value">@row.SourceAttributeName</div>
+              @if (row.SampleValue is not null)
+              {
+                <div class="row-note">npr. @row.SampleValue@(row.SampleUnit is null ? "" : " " + row.SampleUnit)</div>
+              }
+            </td>
+            <td class="numeric">@row.ProductCount.ToString("N0")</td>
+            <td>
+              <PimChip Text="@row.State" Tone="@StateTone(row.State)" />
+              @if (row.UpdatedBy is not null)
+              {
+                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToLocalTime().ToString("g"))</div>
+              }
+            </td>
+            <td>
+              @if (Editing == key)
+              {
+                <div class="form-grid">
+                  <label class="form-field" for="@("target-" + key)">
+                    Naša lastnost
+                    <select id="@("target-" + key)" class="filter-select" @bind="ChosenCode">
+                      <option value="">— izberi lastnost —</option>
+                      @foreach (var definition in Definitions)
+                      {
+                        <option value="@definition.AttributeCode">@(definition.AttributeName ?? definition.AttributeCode)</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="form-field" for="@("lang-" + key)">
+                    Jezik vrednosti
+                    <select id="@("lang-" + key)" class="filter-select" @bind="ChosenLanguage">
+                      <option value="">brez jezika</option>
+                      @foreach (var language in Languages) { <option value="@language.LanguageCode">@language.LanguageCode</option> }
+                    </select>
+                  </label>
+                  <label class="filter-check" for="@("unit-" + key)">
+                    <input id="@("unit-" + key)" type="checkbox" @bind="ChosenIsUnit" />
+                    Vir nosi enoto te lastnosti, ne vrednosti
+                  </label>
+                </div>
+                <div class="page-actions">
+                  <button type="button" class="button-primary" disabled="@Busy" @onclick="() => SaveAsync(row)">Shrani</button>
+                  <button type="button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                  @if (row.State == "Preslikano")
+                  {
+                    <button type="button" disabled="@Busy" @onclick="() => DeactivateAsync(row)">Ugasni preslikavo</button>
+                  }
+                </div>
+              }
+              else
+              {
+                <div>@(row.AttributeName ?? row.AttributeCode ?? "—")</div>
+                @if (row.LanguageCode is not null) { <span class="row-note">jezik @row.LanguageCode</span> }
+                @if (row.IsUnit) { <span class="row-note">enota</span> }
+                <button type="button" @onclick="() => BeginEditAsync(row)">
+                  @(row.State == "Nepreslikano" ? "Preslikaj" : "Uredi")
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+<div class="hub-grid section-gap">
+  <PimHubCard Title="Šifrant lastnosti" Href="nastavitve/atributi"
+              Description="Imena po jezikih, tip podatka in kateri enoti pripada katera lastnost." />
+</div>
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.SourceAttributeRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.DefinitionRow> Definitions = [];
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.LanguageOptionRow> Languages = [];
+  IReadOnlyList<string> Sources = [];
+
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+  string Source = "";
+  string State = "Nepreslikano";
+  string Search = "";
+  string? Editing;
+  string ChosenCode = "";
+  string ChosenLanguage = "";
+  bool ChosenIsUnit;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Atributi")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Vir"), new("Atribut pri viru"), new("Izdelkov", Numeric: true), new("Stanje"), new("Naša lastnost")
+  ];
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Rows.Count:N0} atributov";
+
+  static string StateTone(string state) => state switch
+  {
+    "Preslikano" => "good",
+    "Ugasnjeno" => "warn",
+    _ => "bad"
+  };
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Sources = await Attributes.GetSourceCodesAsync();
+      Languages = await Tree.GetLanguagesAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    Editing = null;
+    try { Rows = await Attributes.GetSourceAttributesAsync(Source, State, Search); }
+    catch (Exception exception) { Error = exception.Message; Rows = []; }
+    finally { Loading = false; }
+  }
+
+  async Task BeginEditAsync(PIM.Intranet.Services.AttributeMappingService.SourceAttributeRow row)
+  {
+    Message = null;
+    Error = null;
+    Editing = row.SourceCode + "|" + row.SourceAttributeName;
+    ChosenCode = row.AttributeCode ?? "";
+    ChosenLanguage = row.LanguageCode ?? "";
+    ChosenIsUnit = row.IsUnit;
+    // Sifrant naložimo enkrat na sejo: sto petinstirideset lastnosti je premalo za stranjenje
+    // in preveč za obisk baze ob vsakem kliku.
+    if (Definitions.Count == 0)
+    {
+      try { Definitions = await Attributes.GetDefinitionsAsync(null, false, false, false); }
+      catch (Exception exception) { Error = exception.Message; }
+    }
+  }
+
+  void CancelEdit()
+  {
+    Editing = null;
+    ChosenCode = "";
+    ChosenLanguage = "";
+    ChosenIsUnit = false;
+  }
+
+  async Task SaveAsync(PIM.Intranet.Services.AttributeMappingService.SourceAttributeRow row)
+  {
+    if (string.IsNullOrWhiteSpace(ChosenCode)) { Error = "Izberi našo lastnost."; return; }
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Attributes.SaveMapAsync(
+        row.SourceCode, row.SourceAttributeName, ChosenCode,
+        string.IsNullOrWhiteSpace(ChosenLanguage) ? null : ChosenLanguage,
+        ChosenIsUnit, await ActorAsync(), null);
+      Message = outcome == "Unchanged"
+        ? "Preslikava je bila že takšna; nič se ni spremenilo."
+        : $"Preslikava je zapisana. Velja ob naslednji preslikavi vira za {row.ProductCount:N0} izdelkov.";
+      CancelEdit();
+      await LoadAsync();
+    }
+    // Postopek zavrne neznano lastnost, neznan jezik in izvorni atribut, ki ga register ne
+    // pozna. Sporočilo pride iz baze, ker je pravilo tam.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task DeactivateAsync(PIM.Intranet.Services.AttributeMappingService.SourceAttributeRow row)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var outcome = await Attributes.DeactivateMapAsync(row.SourceCode, row.SourceAttributeName, await ActorAsync(), null);
+      Message = outcome == "Deactivated"
+        ? "Preslikava je ugasnjena. Vrstica ostane, da se vidi, da je bila odločitev sprejeta in preklicana."
+        : "Preslikava je bila že ugasnjena.";
+      CancelEdit();
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}
