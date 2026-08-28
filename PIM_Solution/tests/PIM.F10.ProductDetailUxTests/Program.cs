@@ -45,16 +45,21 @@ foreach (var channelName in new[] { "ERP (SAOP)", "Komerciala", "Splet" })
 Assert(Regex.Matches(card, "class=\"ui-card channel-card").Count == 3, "Glava mora imeti natanko tri klikljive kanalske kartice.");
 Assert(card.Contains("nikoli ne blokira", StringComparison.Ordinal), "Komercialna opozorila morajo izrecno povedati, da ne blokirajo.");
 
+// Uporabnik 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«. Nista isto: mediji so
+// vsebina izdelka, zaloga trenutno stanje iz drugega vira. Sklopov je zato sest, ne pet.
 var expectedSections = new Dictionary<string, string>
 {
   ["overview"] = "Pregled",
   ["core"] = "Osnovni podatki",
   ["sales"] = "Prodaja in kanali",
-  ["media-stock"] = "Mediji in zaloga",
+  ["media"] = "Mediji",
+  ["stock"] = "Zaloga",
   ["quality-history"] = "Kakovost in zgodovina",
 };
-Assert(Regex.Matches(card, "new\\(\"(overview|core|sales|media-stock|quality-history)\", ").Count == 5,
-  "Kartica mora imeti natanko pet uporabnisko razumljivih sklopov.");
+Assert(Regex.Matches(card, "new\\(\"(overview|core|sales|media|stock|quality-history)\", ").Count == 6,
+  "Kartica mora imeti sest uporabnisko razumljivih sklopov; mediji in zaloga sta locena.");
+Assert(!card.Contains("media-stock", StringComparison.Ordinal),
+  "Skupnega sklopa »Mediji in zaloga« ni vec.");
 foreach (var section in expectedSections)
   Assert(Regex.IsMatch(card, "new\\(\"" + section.Key + "\", \"" + Regex.Escape(section.Value)), "Manjka sklop " + section.Value + ".");
 Assert(card.Contains("Tone: \"bad\"", StringComparison.Ordinal) && card.Contains("Tone: \"warn\"", StringComparison.Ordinal),
@@ -156,6 +161,47 @@ Assert(card.Contains("<Actions>", StringComparison.Ordinal) && card.Contains("Sh
 Assert(css.Contains(".product-section-nav button:focus-visible", StringComparison.Ordinal), "Navigacija sklopov mora imeti viden fokus.");
 Assert(css.Contains("@media (max-width: 900px)", StringComparison.Ordinal), "Kartica mora biti odzivna.");
 Assert(gallery.Contains("loading=\"lazy\"", StringComparison.Ordinal) && gallery.Contains("@onerror", StringComparison.Ordinal), "Galerija mora leno nalagati in obravnavati nedosegljive slike.");
+
+// ─── Popravki kartice 2026-08-28 ───────────────────────────────────────────────────────────
+
+// D1: dobavitelj in proizvajalec z imenom in sifro. Sifra ostane, ker gre nazaj v SAOP.
+Assert(Regex.IsMatch(card, @"static string\? PartnerValue\(string\? code, string\? name\)"),
+  "Partner mora imeti eno mesto, kjer se sestavita ime in sifra.");
+Assert(card.Contains("PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName)", StringComparison.Ordinal),
+  "Dobavitelj mora pokazati ime in sifro.");
+Assert(card.Contains("PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName)", StringComparison.Ordinal),
+  "Proizvajalec mora pokazati ime in sifro.");
+Assert(!card.Contains("\"Koda dobavitelja\"", StringComparison.Ordinal) && !card.Contains("\"Koda proizvajalca\"", StringComparison.Ordinal),
+  "Oznaki »Koda dobavitelja« in »Koda proizvajalca« odpadeta: polje nosi ime in sifro.");
+
+// D2: nazivi v vseh jezikih registra, ne samo v tistih, ki jih izdelek ze ima.
+Assert(card.Contains("Catalog.GetLanguagesAsync", StringComparison.Ordinal),
+  "Jeziki nazivov morajo priti iz registra canon.Language, ne iz obstojecih besedil izdelka.");
+Assert(card.Contains("RegisteredLanguages", StringComparison.Ordinal) && card.Contains("PimLanguages.Order", StringComparison.Ordinal),
+  "Jeziki morajo biti urejeni po dogovorjenem redu sl, en, de, hr, it.");
+
+// D3: pri spletu se lastnosti imenujejo atributi.
+Assert(card.Contains("const string attributes = \"Atributi\";", StringComparison.Ordinal),
+  "Pri spletu se skupina imenuje Atributi, ne Lastnosti izdelka.");
+Assert(!card.Contains("Lastnosti izdelka", StringComparison.Ordinal), "Izraz »Lastnosti izdelka« je odpisan.");
+
+// C8: pakiranje in dimenzije pakiranja stojijo pod ERP, ne pod komercialo.
+Assert(card.Contains("const string packaging = \"Pakiranje in dimenzije\";", StringComparison.Ordinal),
+  "ERP mora imeti skupino »Pakiranje in dimenzije«.");
+var erpBlock = card[card.IndexOf("IReadOnlyList<ProductChannelField> ErpFields", StringComparison.Ordinal)..
+  card.IndexOf("IReadOnlyList<ProductChannelField> CommercialFields", StringComparison.Ordinal)];
+var commercialBlock = card[card.IndexOf("IReadOnlyList<ProductChannelField> CommercialFields", StringComparison.Ordinal)..
+  card.IndexOf("IReadOnlyList<ProductChannelField> WebFields", StringComparison.Ordinal)];
+foreach (var moved in new[] { "ProductCommercial.Pak1", "ProductCommercial.Pak2", "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth", "ProductCommercial.PackageHeight", "ProductCommercial.DimensionUnit", "ProductCommercial.Volume" })
+{
+  Assert(erpBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " mora biti pod ERP.");
+  Assert(!commercialBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " ne sme vec biti pod komercialo.");
+}
+
+// D5: galerija mora povedati, da so prikazane vse slike, in katera je glavna.
+Assert(gallery.Contains("Vse slike izdelka (@Media.Count", StringComparison.Ordinal),
+  "Galerija mora povedati, da prikazuje vse slike, in koliko jih je.");
+Assert(gallery.Contains("Glavna slika", StringComparison.Ordinal), "Glavna slika mora biti oznacena kot glavna.");
 
 Console.WriteLine("F10 product detail UX contract PASS.");
 

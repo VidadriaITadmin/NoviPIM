@@ -1,7 +1,7 @@
 @namespace PIM.Intranet.Components.Pages.ProductCardParts
 
 <section class="media-section" aria-labelledby="media-gallery-title">
-  <h2 id="media-gallery-title">Slike in povezani mediji</h2>
+  <h2 id="media-gallery-title">Vse slike izdelka (@Media.Count.ToString("N0"))</h2>
   <PimState Empty="@(Media.Count == 0)" EmptyText="Artikel nima nobenega medija.">
     <div class="media-gallery">
       @foreach (var row in OrderedMedia)
@@ -18,7 +18,7 @@
               <span>@(url.Href is null ? "Brez slike" : "Slike ni mogoče naložiti")</span>
             }
           </div>
-          <strong>@row.Role · #@row.SortOrder</strong>
+          <strong>@(IsPrimary(row) ? "Glavna slika" : row.Role) · #@row.SortOrder</strong>
           <span class="media-address" title="@url.Display">@Shorten(url.Display)</span>
           @if (url.Href is not null) { <a href="@url.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a> }
           @if (url.Note is not null) { <span class="media-note">@url.Note</span> }

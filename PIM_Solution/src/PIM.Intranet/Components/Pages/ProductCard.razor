@@ -207,14 +207,17 @@
           </section>
         </section>
 
-        <section id="panel-media-stock" role="tabpanel" aria-labelledby="tab-media-stock" tabindex="0" class="section-panel section-stack" hidden="@(Section != "media-stock")">
-          <header class="section-heading"><h2>Mediji in zaloga</h2><p>Gradiva izdelka in trenutno stanje razpoložljivosti.</p></header>
-          <section id="panel-media" class="ui-card tab-panel">
-            <div class="subsection-head"><h2>Mediji</h2><a href="mediji?izdelek=@Detail.Header.ItemId">Vsi mediji tega izdelka</a></div>
+        <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" tabindex="0" class="section-panel section-stack" hidden="@(Section != "media")">
+          <header class="section-heading"><h2>Mediji</h2><p>Vse slike in dokumenti izdelka, ne samo glavna slika.</p></header>
+          <section class="ui-card tab-panel">
+            <div class="subsection-head"><h2>Gradiva</h2><a href="mediji?izdelek=@Detail.Header.ItemId">Vsi mediji tega izdelka</a></div>
             <ProductMediaGallery ProductName="@Detail.Header.Name" Media="@Detail.Media" Documents="@Detail.Documents" />
           </section>
+        </section>
 
-          <section id="panel-stock" class="ui-card data-card tab-panel">
+        <section id="panel-stock" role="tabpanel" aria-labelledby="tab-stock" tabindex="0" class="section-panel section-stack" hidden="@(Section != "stock")">
+          <header class="section-heading"><h2>Zaloga</h2><p>Trenutno stanje razpoložljivosti po skladiščih in virih.</p></header>
+          <section class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Zaloga</h2><a href="zaloge?isci=@Uri.EscapeDataString(Detail.Header.ItemId)">Odpri poslovni pogled</a></div>
             @if (StockChecks?.IsMissing == true) { <PimMissing Object="intranet.GetStockChecks" What="preverbe zaloge tega artikla" Needs="stock.Snapshot, stock.Position, stock.UnmatchedPosition in potrjene pragove" /> }
             <PimState Empty="@(Detail.Stock.Count == 0)" EmptyText="Izdelek nima aktivnega zalogovnega posnetka.">
@@ -266,6 +269,7 @@
   ProductCardView? Detail;
   IReadOnlyList<ProductOriginRow> Origins = [];
   IReadOnlyList<WebSiteRow> Sites = [];
+  IReadOnlyList<LanguageRow> Languages = [];
   PimReadResult<BusinessCheckRow>? PriceChecks;
   PimReadResult<BusinessCheckRow>? StockChecks;
   bool Loading = true;
@@ -379,6 +383,16 @@
     }
   }
 
+  /// <summary>
+  /// Partner na kartici: ime in sifra skupaj. Uporabnik 2026-08-28: »treba se dodati ime
+  /// dobavitleja in proizvajalca, da se oboje vidi ime in kodo«. Sifra ostane, ker gre ona
+  /// nazaj v SAOP; kadar imena za sifro ni, ostane sama sifra — izmisljati je ne gre.
+  /// </summary>
+  static string? PartnerValue(string? code, string? name) =>
+    string.IsNullOrWhiteSpace(code) ? null
+    : string.IsNullOrWhiteSpace(name) ? code
+    : $"{name} ({code})";
+
   static string TextLabel(string textType) => textType switch
   {
     "WEB_TITLE" => "Spletni naziv",
@@ -401,8 +415,8 @@
     "Product.Department" => "ABC klasifikacija",
     "Product.DiscountGroup" => "Skupina popusta",
     "Product.AccountingGroup" => "Knjižna skupina",
-    "Product.Supplier" => "Koda dobavitelja",
-    "Product.Manufacturer" => "Koda proizvajalca",
+    "Product.Supplier" => "Dobavitelj",
+    "Product.Manufacturer" => "Proizvajalec",
     "Product.IsActive" => "Aktiven",
     "Product.WebPublish" => "Objava na spletu",
     "ProductCommercial.NetWeight" => "Neto teža",
@@ -428,6 +442,7 @@
       const string identity = "Identiteta artikla";
       const string classification = "Uvrstitev in šifranti";
       const string names = "Nazivi za ERP";
+      const string packaging = "Pakiranje in dimenzije";
       var rows = new List<ProductChannelField>
       {
         Channel("Šifra artikla", "Product.ItemID", Detail.Header.ItemId, identity),
@@ -438,11 +453,22 @@
         Channel("ABC klasifikacija", "Product.Department", Detail.Header.Department, classification),
         Channel("Knjižna skupina", "Product.AccountingGroup", Detail.Header.AccountingGroup, classification),
         Channel("Skupina popusta", "Product.DiscountGroup", Detail.Header.DiscountGroup, classification),
-        Channel("Koda dobavitelja", "Product.Supplier", Detail.Header.Supplier, classification),
-        Channel("Koda proizvajalca", "Product.Manufacturer", Detail.Header.Manufacturer, classification),
+        Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), classification),
+        Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), classification),
         Channel("Davčna stopnja", "Product.VatRate", null, classification, inReadModel: false),
         Channel("Planiranje in rezervacija", "ProductPlanning", null, classification, inReadModel: false),
         Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, classification),
+        // Pakiranje in dimenzije prideta iz istega dokumenta SAOP kot polja zgoraj; uporabnik
+        // je 2026-08-28 povedal, da spadata sem in ne pod komercialo.
+        Channel("Pakiranje 1", "ProductCommercial.Pak1", Number(Detail.Commercial?.Pak1), packaging),
+        Channel("Pakiranje 2", "ProductCommercial.Pak2", Number(Detail.Commercial?.Pak2), packaging),
+        Channel("Kosov v paketu", "Product.PiecesInPackage", null, packaging, inReadModel: false),
+        Channel("Dolžina paketa", "ProductCommercial.PackageLength", Number(Detail.Commercial?.PackageLength), packaging),
+        Channel("Širina paketa", "ProductCommercial.PackageWidth", Number(Detail.Commercial?.PackageWidth), packaging),
+        Channel("Višina paketa", "ProductCommercial.PackageHeight", Number(Detail.Commercial?.PackageHeight), packaging),
+        Channel("Enota mer", "ProductCommercial.DimensionUnit", Detail.Commercial?.DimensionUnit, packaging),
+        Channel("Dimenzije", "ProductCommercial.Dimensions", Detail.Commercial?.Dimensions, packaging),
+        Channel("Volumen", "ProductCommercial.Volume", Number(Detail.Commercial?.Volume), packaging),
       };
 
       foreach (var language in ErpLanguages)
@@ -461,28 +487,21 @@
     get
     {
       if (Detail is null) return [];
-      const string weights = "Teže in mere";
-      const string packaging = "Pakiranje";
+      const string weights = "Teže";
       const string origin = "Poreklo in tarifa";
       const string partners = "Partnerji";
       var commercial = Detail.Commercial;
+      // Pakiranja in dimenzij tu ni: uporabnik je 2026-08-28 povedal, da »pakiranje in
+      // dimenzije pakiranja pašejo pod ERP podatke«. Prideta iz istega dokumenta SAOP kot
+      // ostala ERP polja, zato sta zdaj v skupini »Pakiranje in dimenzije« na panelu ERP.
       var rows = new List<ProductChannelField>
       {
         Channel("Neto teža", "ProductCommercial.NetWeight", Number(commercial?.NetWeight), weights),
         Channel("Bruto teža", "ProductCommercial.GrossWeight", Number(commercial?.GrossWeight), weights),
-        Channel("Dolžina paketa", "ProductCommercial.PackageLength", Number(commercial?.PackageLength), weights),
-        Channel("Širina paketa", "ProductCommercial.PackageWidth", Number(commercial?.PackageWidth), weights),
-        Channel("Višina paketa", "ProductCommercial.PackageHeight", Number(commercial?.PackageHeight), weights),
-        Channel("Enota mer", "ProductCommercial.DimensionUnit", commercial?.DimensionUnit, weights),
-        Channel("Dimenzije", "ProductCommercial.Dimensions", commercial?.Dimensions, weights),
-        Channel("Volumen", "ProductCommercial.Volume", Number(commercial?.Volume), weights),
-        Channel("Pakiranje 1", "ProductCommercial.Pak1", Number(commercial?.Pak1), packaging),
-        Channel("Pakiranje 2", "ProductCommercial.Pak2", Number(commercial?.Pak2), packaging),
-        Channel("Kosov v paketu", "Product.PiecesInPackage", null, packaging, inReadModel: false),
         Channel("Carinska tarifa", "ProductCommercial.CustomsTariff", commercial?.CustomsTariff, origin),
         Channel("Država porekla", "ProductCommercial.CountryOfOrigin", commercial?.CountryOfOrigin, origin),
-        Channel("Dobavitelj", "Product.Supplier", Detail.Header.Supplier, partners),
-        Channel("Proizvajalec", "Product.Manufacturer", Detail.Header.Manufacturer, partners),
+        Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), partners),
+        Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), partners),
         Channel("Nabavni podatki", "ProductCommercial.Purchase", null, partners, inReadModel: false),
       };
 
@@ -499,7 +518,7 @@
       const string publication = "Objava";
       const string titles = "Nazivi in opisi";
       const string categories = "Kategorije";
-      const string attributes = "Lastnosti izdelka";
+      const string attributes = "Atributi";
       var rows = new List<ProductChannelField>
       {
         Channel("Objava na spletu", "Product.WebPublish", YesNo(Detail.Header.WebPublish), publication),
@@ -535,19 +554,27 @@
   IReadOnlyList<string> WebLanguages => LanguagesFor("WEB_TITLE");
   IReadOnlyList<string> ErpLanguages => LanguagesFor("TITLE_ERP");
 
+  /// <summary>
+  /// Jeziki, ki jih kartica ponudi za vnos. Uporabnik 2026-08-28: »Nazivi tako spletni kot ERP
+  /// morajo imati vse jezike.« Prej so bili ponujeni samo jeziki, ki jih je izdelek ze imel ali
+  /// jih je zahtevala validacija — manjkajocega prevoda zato ni bilo mogoce dodati tam, kjer ga
+  /// nihce ni zahteval. Zdaj je izhodisce register canon.Language za to podjetje; kar je v
+  /// izdelku poleg registra, se ne izgubi. Red je sl, en, de, hr, it (PimLanguages).
+  /// </summary>
   IReadOnlyList<string> LanguagesFor(string textType)
   {
     if (Detail is null) return ["sl"];
-    var languages = Detail.Texts.Where(row => row.TextType == textType).Select(row => row.Language)
+    return PimLanguages.Order(RegisteredLanguages
+      .Concat(Detail.Texts.Where(row => row.TextType == textType).Select(row => row.Language))
       .Concat(Detail.Issues.Select(issue => issue.FieldCode)
         .Where(code => code.StartsWith($"ProductText.{textType}.", StringComparison.OrdinalIgnoreCase))
         .Select(code => code.Split('.').Last()))
-      .Append("sl")
-      .Distinct(StringComparer.OrdinalIgnoreCase)
-      .OrderBy(language => language == "sl" ? 0 : 1).ThenBy(language => language, StringComparer.Ordinal)
-      .ToList();
-    return languages;
+      .Append("sl"));
   }
+
+  /// <summary>Jeziki iz registra tega podjetja; prazen seznam pomeni, da register ni dosegljiv.</summary>
+  IReadOnlyList<string> RegisteredLanguages =>
+    Languages.Where(row => row.IsActive).Select(row => row.LanguageCode).ToArray();
 
   /// <summary>Vrste spletnih besedil, ki jih izdelek ze ima ali jih zahteva validacija; brez ERP nazivov.</summary>
   IReadOnlyList<string> WebTextTypes
@@ -588,10 +615,12 @@
       var priceTask = Features.GetPriceChecksAsync(organization.OrganizationId, ProductId);
       var stockTask = Features.GetStockChecksAsync(organization.OrganizationId, ProductId);
       var sitesTask = Catalog.GetWebSitesAsync();
+      // Register jezikov, ne samo jeziki, ki jih izdelek ze ima: nazivi morajo imeti vse jezike.
+      var languagesTask = Catalog.GetLanguagesAsync(organization.OrganizationId);
       var writableTask = SaopWrite.GetWritableFieldsAsync(organization.OrganizationId);
-      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, writableTask);
+      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask);
       Detail = await cardTask; Origins = await originTask; PriceChecks = await priceTask; StockChecks = await stockTask;
-      Sites = await sitesTask; WritableSaopFields = await writableTask;
+      Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
     }
@@ -692,7 +721,7 @@
     return state.User.Identity?.Name ?? "neznan";
   }
 
-  static readonly string[] Sections = ["overview", "core", "sales", "media-stock", "quality-history"];
+  static readonly string[] Sections = ["overview", "core", "sales", "media", "stock", "quality-history"];
 
   /// <param name="Count">Samo stevilo tezav, pri katerih uporabnika caka dejanje.</param>
   sealed record CardSection(string Key, string Label, int? Count, string? Tone = null);
@@ -706,7 +735,10 @@
     new("overview", "Pregled", null),
     new("core", "Osnovni podatki", null),
     new("sales", "Prodaja in kanali", CommercialIssues.Count + WebIssues.Count(row => row.Severity == "ERROR"), Tone: "warn"),
-    new("media-stock", "Mediji in zaloga", null),
+    // Uporabnik 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«. Nista isto:
+    // mediji so vsebina izdelka, zaloga je trenutno stanje iz drugega vira. Locena sklopa.
+    new("media", "Mediji", Detail.Media.Count + Detail.Documents.Count),
+    new("stock", "Zaloga", Detail.Stock.Count),
     new("quality-history", "Kakovost in zgodovina", Detail.Issues.Count(row => row.Severity == "ERROR"), Tone: "bad"),
   ];
 

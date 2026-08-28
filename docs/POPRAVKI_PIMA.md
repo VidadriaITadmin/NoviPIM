@@ -36,7 +36,7 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | C5 | Izvoz v Excel mora vsebovati ERP, komerciala in SPLET podatke; odvečna polja odstrani. | DOMENA/IZVOZ | NAREJENO |
 | C6 | Atributi za SPLET v izvozu — odprto vprašanje: atributi se določijo po kategorijah. | — | VPRAŠANJE |
 | C7 | Odstrani polje/izbiro „Pregled – cel pregled" (sprememba nima učinka). | INTRANET | NAREJENO |
-| C8 | Komercialni podatki: „pakiranje" in „dimenzije pakiranja" premakni pod ERP podatke. | INTRANET | TODO |
+| C8 | Komercialni podatki: „pakiranje" in „dimenzije pakiranja" premakni pod ERP podatke. | INTRANET | NAREJENO |
 | C9 | Filtri: dodaj filter „ima sliko / nima slike". | INTRANET | NAREJENO |
 | C10 | Povsod preimenuj „Oddelek" → „ABC klasifikacija" (kjer gre za A/B/C podatke). | INTRANET | NAREJENO |
 | C11 | „Razvrstitev" premakni nad tabelo (ločeno od filtrov). | INTRANET | NAREJENO |
@@ -46,11 +46,11 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| D1 | Dobavitelji in proizvajalci: prikaži ime **in** kodo, ne samo kode. | INTRANET | TODO |
-| D2 | Nazivi (spletni in ERP) morajo imeti vse jezike. | INTRANET | TODO |
-| D3 | „Lastnosti izdelka" pri spletu preimenuj v „Atributi". | INTRANET | TODO |
-| D4 | Medij in zaloga sta v istem zavihku — loči ju. | INTRANET | TODO |
-| D5 | Pri medijih razjasni ali prikazujemo vse slike ali samo glavno; prikaži vse. | INTRANET | TODO |
+| D1 | Dobavitelji in proizvajalci: prikaži ime **in** kodo, ne samo kode. | INTRANET | NAREJENO |
+| D2 | Nazivi (spletni in ERP) morajo imeti vse jezike. | INTRANET | NAREJENO |
+| D3 | „Lastnosti izdelka" pri spletu preimenuj v „Atributi". | INTRANET | NAREJENO |
+| D4 | Medij in zaloga sta v istem zavihku — loči ju. | INTRANET | NAREJENO |
+| D5 | Pri medijih razjasni ali prikazujemo vse slike ali samo glavno; prikaži vse. | INTRANET | NAREJENO |
 
 ## E. Medij
 

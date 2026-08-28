@@ -8,7 +8,8 @@ public sealed record ProductCardHeader(
   bool IsActive, bool WebPublish, bool IsPromoted, string ErpStatus, string WebStatus,
   string ValidationStatus, decimal Completeness, string? Uom, string? ItemGroup,
   string? Department, string? Manufacturer, string? Supplier, string? DiscountGroup,
-  string? AccountingGroup, DateTime? LastValidatedUtc, long OpenIssueCount);
+  string? AccountingGroup, DateTime? LastValidatedUtc, long OpenIssueCount,
+  string? SupplierName = null, string? ManufacturerName = null);
 
 public sealed record ProductCardField(string FieldKey, string Label, string? Value, string Owner);
 public sealed record ProductPendingOverlay(
@@ -136,7 +137,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       PimDb.Text(reader, "UoM"), PimDb.Text(reader, "ItemGroup"), PimDb.Text(reader, "Department"),
       PimDb.Text(reader, "Manufacturer"), PimDb.Text(reader, "Supplier"), PimDb.Text(reader, "DiscountGroup"),
       PimDb.Text(reader, "AccountingGroup"), PimDb.NullableDateTime(reader, "LastValidatedUtc"),
-      PimDb.Int64(reader, "OpenIssueCount"));
+      PimDb.Int64(reader, "OpenIssueCount"),
+      PimDb.Text(reader, "SupplierName"), PimDb.Text(reader, "ManufacturerName"));
 
     await NextAsync(reader, cancellationToken);
     var fields = await ReadAsync(reader, row => new ProductCardField(
