@@ -1,68 +1,17 @@
 @page "/partnerji"
 @attribute [Authorize]
-@rendermode InteractiveServer
-@inject PIM.Intranet.Services.CatalogReadService Catalog
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject NavigationManager Navigation
 
-<PageTitle>Partnerji</PageTitle>
-<PimPage Title="Partnerji" Subtitle="Dobavitelji in proizvajalci, kot jih pozna katalog. Danes sta to polji na izdelku in ne svoja šifranta, zato je merilo število izdelkov za imenom." />
+@* Ta stran je nastevala dobavitelje in proizvajalce iz polj na izdelku, ker svojega sifranta
+   nista imela. Uporabnik jo je 2026-08-28 odpisal: »Partnerji – to stran pomoje ne rabimo, ker
+   bomo ze stranke locili po dobavitelj in proizvajalec.« Vrsta stranke zdaj pozna kupca,
+   kupca in dobavitelja, dobavitelja in proizvajalca (migracija 129), imena partnerjev pa so
+   na seznamu izdelkov in na kartici izdelka ob sifri (migraciji 115 in 128).
 
-<nav class="page-tabs" aria-label="Partnerji: vrsta partnerja">
-  <button type="button" class="page-tab @(Suppliers ? "active" : null)" aria-current="@(Suppliers ? "page" : null)" @onclick="() => Suppliers = true">
-    Dobavitelji (@SupplierRows.Count)
-  </button>
-  <button type="button" class="page-tab @(Suppliers ? null : "active")" aria-current="@(Suppliers ? null : "page")" @onclick="() => Suppliers = false">
-    Proizvajalci (@ManufacturerRows.Count)
-  </button>
-</nav>
+   Datoteke ne brisem (AGENTS.md §4.1); stran je preusmeritev, da stari zaznamki ne obvisijo. *@
 
-<section class="ui-card data-card" aria-label="Seznam partnerjev">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)" EmptyText="Katalog nima zapisanih partnerjev te vrste." LoadingText="Nalaganje partnerjev …">
-    <PimTable Caption="@(Suppliers ? "Dobavitelji izbrane organizacije" : "Proizvajalci izbrane organizacije")" Columns="Columns">
-      <Rows>
-        @foreach (var row in Visible)
-        {
-          <tr>
-            <td>@row.Name</td>
-            <td class="numeric">@row.ProductCount.ToString("N0")</td>
-            <td class="numeric">@row.ActiveCount.ToString("N0")</td>
-            <td><PimBar Percent="@Share(row)" Label="@($"Delež aktivnih pri {row.Name}")" /></td>
-          </tr>
-        }
-      </Rows>
-    </PimTable>
-  </PimState>
-</section>
+<PageTitle>Stranke</PageTitle>
 
 @code {
-  IReadOnlyList<PIM.Intranet.Services.PartnerRow> SupplierRows = [];
-  IReadOnlyList<PIM.Intranet.Services.PartnerRow> ManufacturerRows = [];
-  bool Loading = true;
-  string? Error;
-  bool Suppliers = true;
-
-  // Obeh seznamov je nekaj sto vrstic in oba prideta iz istega obiska baze; preklop zavihka
-  // zato ne sprozi nove poizvedbe.
-  IReadOnlyList<PIM.Intranet.Services.PartnerRow> Visible => Suppliers ? SupplierRows : ManufacturerRows;
-
-  static readonly IReadOnlyList<PimColumn> Columns =
-  [
-    new("Ime"), new("Izdelkov", Numeric: true), new("Aktivnih", Numeric: true), new("Delež aktivnih")
-  ];
-
-  protected override async Task OnInitializedAsync()
-  {
-    try
-    {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      SupplierRows = await Catalog.GetPartnersAsync(organization.OrganizationId, suppliers: true);
-      ManufacturerRows = await Catalog.GetPartnersAsync(organization.OrganizationId, suppliers: false);
-    }
-    catch { Error = "Partnerjev trenutno ni mogoče naložiti."; }
-    finally { Loading = false; }
-  }
-
-  static decimal Share(PIM.Intranet.Services.PartnerRow row) =>
-    row.ProductCount == 0 ? 0 : 100m * row.ActiveCount / row.ProductCount;
+  protected override void OnInitialized() => Navigation.NavigateTo("stranke", replace: true);
 }

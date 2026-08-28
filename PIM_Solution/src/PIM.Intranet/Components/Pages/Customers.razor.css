@@ -1,12 +1,15 @@
 /* Izoliran slog strani /stranke. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
-.toolbar { flex-wrap: wrap; row-gap: 10px; }
-.result-count { font-variant-numeric: tabular-nums; }
+.result-count { font-variant-numeric: tabular-nums; margin-left: auto; }
 
-/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
-.table-scroll { overflow-x: auto; }
-.row-action { text-align: right; width: 44px; }
-.open-link { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
-.chevron { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
+/* Filtri stojijo v isti kartici kot tabela, loceni samo s crto — isto kot pri vhodnih podatkih. */
+.card-toolbar { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin: -.25rem -.25rem .75rem; padding: 0 .25rem .75rem; }
+.card-toolbar .filter-select { max-width: 12rem; }
+.card-toolbar .search-input { max-width: 20rem; }
+
+/* Cela vrstica je ena poteza: odpre stranko. Zato kazalec in poudarek na celi vrstici,
+   ne povezava v celici — podcrtano besedilo sredi klikljive vrstice obljublja dve dejanji. */
+.row-link { cursor: pointer; }
+.row-link:hover { background: var(--pim-surface-hover); }
 .page-position { color: var(--pim-text-soft); font-size: 13px; }
 
 /* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
@@ -14,11 +17,9 @@
 .search-input:focus-visible,
 .filter-select:focus-visible,
 .pagination button:focus-visible,
-.table-scroll:focus-visible,
-.data-table a:focus-visible,
-.open-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.row-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: -2px; }
 
-/* Sedem podatkovnih stolpcev in stolpec dejanja se na telefonu ne smejo stisniti. */
+/* Sedem podatkovnih stolpcev se na telefonu ne sme stisniti. */
 @media (max-width: 900px) {
   .data-table { min-width: 760px; }
 }

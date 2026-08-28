@@ -99,8 +99,13 @@ foreach (var pageName in new[] { "Customers.razor", "CustomerDetail.razor", "Pip
 foreach (var pageName in new[] { "Customers.razor", "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
-  Assert(pageText.Contains("data-table", StringComparison.Ordinal), pageName + " mora uporabljati skupni tabelarični UX.");
-  Assert(pageText.Contains("error-state", StringComparison.Ordinal), pageName + " mora imeti pošteno stanje napake.");
+  // Isto pravilo kot spodaj: razred sme priti iz skupnega gradnika. <PimTable> izrise
+  // data-table, <PimState> pa error-state. Zahteva je bila vedno "uporabi skupni PIM UX",
+  // ne "prepisi razred na roko" — gradnik je celo bolj zanesljiv, ker je razred na enem mestu.
+  Assert(pageText.Contains("data-table", StringComparison.Ordinal) || pageText.Contains("<PimTable", StringComparison.Ordinal),
+    pageName + " mora uporabljati skupni tabelarični UX.");
+  Assert(pageText.Contains("error-state", StringComparison.Ordinal) || pageText.Contains("<PimState", StringComparison.Ordinal),
+    pageName + " mora imeti pošteno stanje napake.");
 }
 foreach (var pageName in new[] { "DiscountRules.razor", "CustomerDetail.razor", "SystemUsers.razor" })
 {

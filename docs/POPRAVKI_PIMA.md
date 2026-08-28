@@ -88,15 +88,15 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| H1 | Dodaj vrsto stranke: kupec, kupec+dobavitelj, dobavitelj, proizvajalec. | BAZA + INTRANET | TODO |
-| H2 | Klik na celotno vrstico odpre stranko; odstrani povezave (naj bo navadno besedilo) in puščico na koncu. | INTRANET | TODO |
-| H3 | Kartica stranke v zavihkih; prvi zavihek „Splošni podatki" z osnovnimi podatki. | INTRANET | TODO |
-| H4 | Zavihek „Komercialni podatki": B2B spletne nastavitve, skupine popusta, tip stranke, vrsta stranke, popust na polno pakiranje, vrednostni rabat, B2B, popust NW, posebni popusti za stranke. | BAZA + INTRANET | TODO |
-| H5 | Zavihek „Poslovne enote in tranziti" — dodajanje PE iz seznama ali na novo, in tranzitov. | BAZA + INTRANET | TODO |
-| H6 | Zavihek „Zaznamki" — prosto besedilo, vidno med uporabniki, z imenom avtorja. | BAZA + INTRANET | TODO |
-| H7 | Zavihek „Dokumenti" (kasneje), „Finančni podatki" (kasneje). | — | VPRAŠANJE |
-| H8 | Zgodovina sprememb stranke. | BAZA + INTRANET | TODO |
-| H9 | Stran „Partnerji" odstrani — stranke bodo ločene po dobavitelj/proizvajalec. | INTRANET | TODO |
+| H1 | Dodaj vrsto stranke: kupec, kupec+dobavitelj, dobavitelj, proizvajalec. | BAZA + INTRANET | NAREJENO |
+| H2 | Klik na celotno vrstico odpre stranko; odstrani povezave (naj bo navadno besedilo) in puščico na koncu. | INTRANET | NAREJENO |
+| H3 | Kartica stranke v zavihkih; prvi zavihek „Splošni podatki" z osnovnimi podatki. | INTRANET | NAREJENO |
+| H4 | Zavihek „Komercialni podatki": B2B spletne nastavitve, skupine popusta, tip stranke, vrsta stranke, popust na polno pakiranje, vrednostni rabat, B2B, popust NW, posebni popusti za stranke. | BAZA + INTRANET | NAREJENO |
+| H5 | Zavihek „Poslovne enote in tranziti" — dodajanje PE iz seznama ali na novo, in tranzitov. | BAZA + INTRANET | NAREJENO |
+| H6 | Zavihek „Zaznamki" — prosto besedilo, vidno med uporabniki, z imenom avtorja. | BAZA + INTRANET | NAREJENO |
+| H7 | Zavihek „Dokumenti" (kasneje), „Finančni podatki" (kasneje). | — | VPRAŠANJE — zavihek obstaja in pošteno pove, da vira še ni; potrebna je odločitev, kateri vir jih prinese. |
+| H8 | Zgodovina sprememb stranke. | BAZA + INTRANET | NAREJENO |
+| H9 | Stran „Partnerji" odstrani — stranke bodo ločene po dobavitelj/proizvajalec. | INTRANET | NAREJENO |
 
 ## I. Poslovanje — Zaloga
 

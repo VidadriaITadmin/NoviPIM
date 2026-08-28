@@ -2,31 +2,446 @@
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.CustomerCardService Cards
 @inject AuthenticationStateProvider Authentication
 
-<PageTitle>Stranka</PageTitle>
-@if (Row is null) { <div class="ui-card loading-state">Stranka ni najdena ali se nalaga.</div> }
-else
-{
-  <div class="page-header"><div><p><a href="stranke">Stranke</a> › @Row.CustomerKey</p><h1>@Row.Name</h1><p>Šifra: @Row.CustomerKey</p></div></div>
-  <section class="ui-card data-card"><table class="data-table"><caption>Podatki iz SAOP (samo za branje)</caption><tbody><tr><th>Plačnik</th><td>@Row.PayerCode — @Row.PayerName</td></tr><tr><th>Cenik</th><td>@Row.PriceListCode</td></tr><tr><th>Rabatni cenik</th><td>@Row.DiscountPriceListCode</td></tr></tbody></table></section>
-  <EditForm Model="Row" OnValidSubmit="Save" class="ui-card panel section-gap">
-    <h2>Spletni profil stranke</h2>
-    <div class="form-grid">
-      <label class="form-field">Tip stranke<select class="filter-select" @bind="TypeCode"><option value="">Ni določen</option>@foreach(var type in Types){<option value="@type.CustomerTypeCode">@type.Name</option>}</select></label>
-      <label class="form-field">Vrsta stranke<select class="filter-select" @bind="Kind"><option value="">Ni določena</option><option value="CUSTOMER">Kupec</option><option value="SUPPLIER">Dobavitelj</option><option value="BOTH">Kupec in dobavitelj</option></select></label>
-      <label class="form-field">B2B+ velja od<input type="date" class="form-input" @bind="PlusFrom" /></label>
-      <label class="form-field">B2B+ velja do<input type="date" class="form-input" @bind="PlusTo" /></label>
-    </div>
-    <div class="check-grid"><label class="check-field"><input type="checkbox" @bind="Pack" />Popust na polno pakiranje</label><label class="check-field"><input type="checkbox" @bind="Value" />Vrednostni rabat</label><label class="check-field"><input type="checkbox" @bind="Plus" />B2B+ ugodnost</label><label class="check-field"><input type="checkbox" @bind="Web" />Splet omogočen</label></div>
-    <div class="panel-actions"><button class="primary-button" type="submit">Shrani profil</button></div>
-  </EditForm>
-  <section class="ui-card panel section-gap"><h2>Vrednostni prag stranke</h2><div class="form-grid"><label class="form-field">Stopnja (1–3)<input type="number" class="form-input" @bind="TierNumber" /></label><label class="form-field">Prag bruto brez DDV<input type="number" class="form-input" @bind="TierThreshold" /></label><label class="form-field">Popust %<input type="number" class="form-input" @bind="TierPercent" /></label><div class="form-action"><button class="primary-button" @onclick="SaveTier">Shrani prag stranke</button></div></div></section>
-  @if (!string.IsNullOrEmpty(Message)) { <p class="message-state info-message" role="status">@Message</p> }
-}
+@* Kartica stranke po popravkih 2026-08-28. Prej je bila ena stran z dvema tabelama in enim
+   obrazcem; uporabnik je zahteval zavihke in sest sklopov: splosni podatki, komercialni
+   podatki, poslovne enote in tranziti, zaznamki, dokumenti in finance (se pridejo) ter
+   zgodovina sprememb. Vsi podatki pridejo iz enega bralnega klica (migracija 129). *@
+
+<PageTitle>@(Card?.General.Name ?? "Stranka")</PageTitle>
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Card is null)"
+          EmptyText="Stranke s to oznako ni." LoadingText="Nalaganje kartice stranke …">
+  @if (Card is not null)
+  {
+    var general = Card.General;
+    <PimPage Title="@general.Name" Subtitle="@($"Šifra {general.CustomerKey} · {KindLabel(general.CustomerKind)}")" Crumbs="Crumbs" />
+
+    <nav class="page-tabs" role="tablist" aria-label="Sklopi kartice stranke">
+      @foreach (var tab in Tabs)
+      {
+        <button type="button" role="tab" id="tab-@tab.Key" aria-controls="panel-@tab.Key"
+                aria-selected="@((Section == tab.Key).ToString().ToLowerInvariant())"
+                class="page-tab @(Section == tab.Key ? "active" : null)" @onclick="() => Section = tab.Key">
+          @tab.Label
+          @if (tab.Count is > 0) { <span class="tab-count">@tab.Count</span> }
+        </button>
+      }
+    </nav>
+
+    <section id="panel-general" role="tabpanel" aria-labelledby="tab-general" hidden="@(Section != "general")">
+      <section class="ui-card data-card">
+        <PimTable Caption="Splošni podatki stranke — vir SAOP, samo za branje" Columns="PairColumns">
+          <Rows>
+            @foreach (var pair in GeneralPairs(general))
+            {
+              <tr><th scope="row">@pair.Label</th><td>@pair.Value</td></tr>
+            }
+          </Rows>
+        </PimTable>
+      </section>
+    </section>
+
+    <section id="panel-commercial" role="tabpanel" aria-labelledby="tab-commercial" hidden="@(Section != "commercial")">
+      <EditForm Model="Draft" OnValidSubmit="SaveProfileAsync" class="ui-card panel">
+        <h2>B2B spletne nastavitve</h2>
+        <div class="form-grid">
+          <label class="form-field">Tip stranke
+            <select class="filter-select" @bind="Draft.TypeCode">
+              <option value="">Ni določen</option>
+              @foreach (var type in Types) { <option value="@type.CustomerTypeCode">@type.Name</option> }
+            </select>
+          </label>
+          <label class="form-field">Vrsta stranke
+            <select class="filter-select" @bind="Draft.Kind">
+              <option value="">Ni določena</option>
+              @foreach (var kind in Kinds) { <option value="@kind.Code">@kind.Label</option> }
+            </select>
+          </label>
+          <label class="form-field">B2B+ velja od<input type="date" class="form-input" @bind="Draft.PlusFrom" /></label>
+          <label class="form-field">B2B+ velja do<input type="date" class="form-input" @bind="Draft.PlusTo" /></label>
+        </div>
+        <div class="check-grid">
+          <label class="check-field"><input type="checkbox" @bind="Draft.Packaging" />Popust na polno pakiranje</label>
+          <label class="check-field"><input type="checkbox" @bind="Draft.ValueDiscount" />Vrednostni rabat</label>
+          <label class="check-field"><input type="checkbox" @bind="Draft.Plus" />B2B+ (brezplačna poštnina)</label>
+          <label class="check-field"><input type="checkbox" @bind="Draft.Web" />Splet omogočen</label>
+        </div>
+        <p class="card-note">
+          Magento skupina: <span class="code-value">@(general.MagentoGroupKey ?? "ni preslikave za ta tip")</span>.
+          Skupina strank je nosilna vez — nanjo so vezane cene in popusti, ne na posamezno stranko.
+        </p>
+        <div class="panel-actions"><button class="primary-button" type="submit" disabled="@Busy">Shrani nastavitve</button></div>
+      </EditForm>
+
+      <section class="ui-card data-card section-gap">
+        <div class="subsection-head"><h2>Skupine popustov</h2><span>kataložni popust po skupini artiklov</span></div>
+        <PimState Empty="@(Card.GroupDiscounts.Count == 0)"
+                  EmptyText="Za skupino te stranke ni zapisanih skupinskih popustov. Prazno pomeni tranzit — poslovna enota jih podeduje od plačnika.">
+          <PimTable Caption="Skupine popustov, ki veljajo za skupino te stranke" Columns="GroupColumns">
+            <Rows>
+              @foreach (var row in Card.GroupDiscounts)
+              {
+                <tr><td><span class="code-value">@row.ItemGroupCode</span></td><td class="numeric">@row.DiscountPercent.ToString("N2") %</td><td class="numeric">@(row.MinQuantity?.ToString("N0") ?? "—")</td><td>@Day(row.ValidFrom) – @Day(row.ValidTo)</td><td>@row.CustomerGroupCode</td></tr>
+              }
+            </Rows>
+          </PimTable>
+        </PimState>
+      </section>
+
+      <section class="ui-card data-card section-gap">
+        <div class="subsection-head"><h2>Vrednostni rabat</h2><span>prag na vrednost košarice, bruto brez DDV</span></div>
+        <PimState Empty="@(Card.ValueTiers.Count == 0)" EmptyText="Stranka nima svojih pragov; velja splošna lestvica.">
+          <PimTable Caption="Vrednostni pragovi stranke" Columns="TierColumns">
+            <Rows>
+              @foreach (var row in Card.ValueTiers)
+              {
+                <tr><td class="numeric">@row.TierNumber</td><td class="numeric">@row.ThresholdGrossExVat.ToString("N2") €</td><td class="numeric">@row.PercentValue.ToString("N2") %</td><td><PimChip Text="@(row.IsActive ? "Velja" : "Ne velja")" Tone="@(row.IsActive ? "good" : null)" /></td></tr>
+              }
+            </Rows>
+          </PimTable>
+        </PimState>
+        <div class="form-grid section-gap">
+          <label class="form-field">Stopnja (1–3)<input type="number" class="form-input" @bind="TierNumber" /></label>
+          <label class="form-field">Prag bruto brez DDV<input type="number" class="form-input" @bind="TierThreshold" /></label>
+          <label class="form-field">Popust %<input type="number" class="form-input" @bind="TierPercent" /></label>
+          <div class="form-action"><button type="button" class="primary-button" disabled="@Busy" @onclick="SaveTierAsync">Shrani prag</button></div>
+        </div>
+      </section>
+
+      <section class="ui-card data-card section-gap">
+        <div class="subsection-head"><h2>Posebni popusti za stranko</h2><span>odstopanje od popusta na polno pakiranje pri posameznem izdelku</span></div>
+        <PimState Empty="@(Card.SpecialDiscounts.Count == 0)" EmptyText="Stranka nima posebnih popustov na izdelek.">
+          <PimTable Caption="Posebni popusti stranke po izdelku" Columns="SpecialColumns">
+            <Rows>
+              @foreach (var row in Card.SpecialDiscounts)
+              {
+                <tr><td><span class="code-value">@(row.ItemId ?? "—")</span></td><td>@row.DiscountCode</td><td>@Day(row.ValidFrom) – @Day(row.ValidTo)</td><td><PimChip Text="@(row.IsActive ? "Velja" : "Ne velja")" Tone="@(row.IsActive ? "good" : null)" /></td></tr>
+              }
+            </Rows>
+          </PimTable>
+        </PimState>
+      </section>
+    </section>
+
+    <section id="panel-branches" role="tabpanel" aria-labelledby="tab-branches" hidden="@(Section != "branches")">
+      <section class="ui-card data-card">
+        <div class="subsection-head">
+          <h2>Poslovne enote in tranziti</h2>
+          <span>poslovna enota podeduje skupinske popuste od plačnika, tranzit jih nima</span>
+        </div>
+        <PimState Empty="@(Card.Branches.Count == 0)" EmptyText="Stranka nima zapisanih poslovnih enot ali tranzitov.">
+          <PimTable Caption="Poslovne enote in tranziti stranke" Columns="BranchColumns">
+            <Rows>
+              @foreach (var row in Card.Branches)
+              {
+                <tr>
+                  <td><PimChip Text="@(row.BranchKind == "PE" ? "Poslovna enota" : "Tranzit")" Tone="@(row.BranchKind == "PE" ? "info" : "warn")" /></td>
+                  <td>
+                    @if (row.BranchCustomerId is long id) { <a href="stranke/@id">@row.BranchName</a> }
+                    else { <span>@row.BranchName</span> }
+                    <div class="tree-path"><span class="code-value">@(row.BranchCode ?? "brez šifre")</span> · @(row.FromCatalog ? "iz šifranta strank" : "ročno vpisana")</div>
+                  </td>
+                  <td>@(row.Note ?? "—")</td>
+                  <td>@row.CreatedBy</td>
+                  <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td>
+                </tr>
+              }
+            </Rows>
+          </PimTable>
+        </PimState>
+      </section>
+
+      <section class="ui-card panel section-gap">
+        <h2>Dodaj enoto</h2>
+        <div class="form-grid">
+          <label class="form-field">Vrsta
+            <select class="filter-select" @bind="BranchKind">
+              <option value="PE">Poslovna enota</option>
+              <option value="TRANZIT">Tranzit</option>
+            </select>
+          </label>
+          <label class="form-field">Iz šifranta strank
+            <select class="filter-select" @bind="BranchCustomerKey">
+              <option value="">— vpiši na novo —</option>
+              @foreach (var candidate in BranchCandidates)
+              {
+                <option value="@candidate.CustomerId">@candidate.Name (@candidate.CustomerKey)</option>
+              }
+            </select>
+          </label>
+          <label class="form-field">Šifra (ročni vnos)<input class="form-input" @bind="BranchCode" disabled="@(BranchCustomerKey.Length > 0)" /></label>
+          <label class="form-field">Naziv (ročni vnos)<input class="form-input" @bind="BranchName" disabled="@(BranchCustomerKey.Length > 0)" /></label>
+          <label class="form-field">Opomba<input class="form-input" @bind="BranchNote" /></label>
+          <div class="form-action"><button type="button" class="primary-button" disabled="@Busy" @onclick="SaveBranchAsync">Dodaj</button></div>
+        </div>
+      </section>
+    </section>
+
+    <section id="panel-notes" role="tabpanel" aria-labelledby="tab-notes" hidden="@(Section != "notes")">
+      <section class="ui-card panel">
+        <h2>Nov zaznamek</h2>
+        <p class="card-note">Zaznamki so vidni vsem uporabnikom skupaj z imenom avtorja. Zapisanega zaznamka ni mogoče spremeniti.</p>
+        <textarea class="form-input note-input" rows="4" placeholder="Opomba o stranki …" @bind="NoteBody"></textarea>
+        <div class="panel-actions"><button type="button" class="primary-button" disabled="@(Busy || NoteBody.Trim().Length == 0)" @onclick="AddNoteAsync">Zapiši zaznamek</button></div>
+      </section>
+
+      <section class="ui-card data-card section-gap">
+        <PimState Empty="@(Card.Notes.Count == 0)" EmptyText="Za to stranko še ni zaznamkov.">
+          <ul class="note-list">
+            @foreach (var note in Card.Notes)
+            {
+              <li class="note-entry">
+                <div class="note-head"><strong>@note.CreatedBy</strong><span>@note.CreatedUtc.ToLocalTime().ToString("g")</span></div>
+                <p>@note.Body</p>
+              </li>
+            }
+          </ul>
+        </PimState>
+      </section>
+    </section>
+
+    <section id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden="@(Section != "history")">
+      <section class="ui-card data-card">
+        <PimState Empty="@(Card.History.Count == 0)" EmptyText="Za to stranko še ni zabeleženih sprememb.">
+          <PimTable Caption="Revizijska sled sprememb stranke" Columns="HistoryColumns">
+            <Rows>
+              @foreach (var row in Card.History)
+              {
+                <tr><td>@row.EntityType</td><td>@row.ActionCode</td><td class="wrap-cell">@Short(row.OldValueJson)</td><td class="wrap-cell">@Short(row.NewValueJson)</td><td>@row.ChangedBy</td><td>@row.ChangedUtc.ToLocalTime().ToString("g")</td></tr>
+              }
+            </Rows>
+          </PimTable>
+        </PimState>
+      </section>
+    </section>
+
+    <section id="panel-documents" role="tabpanel" aria-labelledby="tab-documents" hidden="@(Section != "documents")">
+      <PimMissing Object="pim.CustomerDocument in pim.CustomerFinance"
+                  What="dokumenti stranke (pogodbe, izjave) ter finančni podatki (odprte postavke, limit, plačilna disciplina)"
+                  Needs="odločitev, kateri vir jih prinese — SAOP finančni moduli ali ločen zajem" />
+    </section>
+
+    @if (Message is not null) { <p class="message-state info-message" role="status">@Message</p> }
+    @if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+  }
+</PimState>
+
 @code {
-  [Parameter] public long CustomerId {get;set;} PIM.Intranet.Services.CustomerDetailRow? Row;IReadOnlyList<PIM.Intranet.Services.CustomerTypeRow> Types=[];string? TypeCode,Kind,Message;bool Pack,Value,Plus,Web;DateTime? PlusFrom,PlusTo;int TierNumber=1;decimal TierThreshold,TierPercent;int? OrganizationId;
-  protected override async Task OnParametersSetAsync(){var org=await Data.GetCurrentOrganizationAsync();if(org is null)return;OrganizationId=org.OrganizationId;Types=await Data.GetCustomerTypesAsync();Row=await Data.GetCustomerDetailAsync(org.OrganizationId,CustomerId);if(Row is null)return;TypeCode=Row.CustomerTypeCode;Kind=Row.CustomerKind;Pack=Row.PackagingDiscountEnabled;Value=Row.ValueDiscountEnabled;Plus=Row.B2bPlusEnabled;Web=Row.WebEnabled;PlusFrom=Row.B2bPlusValidFrom;PlusTo=Row.B2bPlusValidTo;}
-  async Task Save(){if(Row is null||OrganizationId is null)return;var auth=await Authentication.GetAuthenticationStateAsync();var actor=auth.User.Identity?.Name??"neznan";Row=Row with{CustomerTypeCode=TypeCode,CustomerKind=Kind,PackagingDiscountEnabled=Pack,ValueDiscountEnabled=Value,B2bPlusEnabled=Plus,WebEnabled=Web,B2bPlusValidFrom=PlusFrom,B2bPlusValidTo=PlusTo};await Data.SaveCustomerWebProfileAsync(OrganizationId.Value,Row,actor);Message="Profil stranke je shranjen in revizijsko zabeležen.";}
-  async Task SaveTier(){if(OrganizationId is null)return;var auth=await Authentication.GetAuthenticationStateAsync();await Data.SaveCustomerValueTierAsync(OrganizationId.Value,CustomerId,TierNumber,TierThreshold,TierPercent,auth.User.Identity?.Name??"neznan");Message="Prag stranke je shranjen in revizijsko zabeležen.";}
+  [Parameter] public long CustomerId { get; set; }
+
+  sealed record Tab(string Key, string Label, int? Count = null);
+  sealed record Pair(string Label, string Value);
+  sealed record KindOption(string Code, string Label);
+
+  /// <summary>Nepotrjene spremembe spletnega profila; obrazec ne piše v bralni model.</summary>
+  sealed class ProfileDraft
+  {
+    public string? TypeCode { get; set; }
+    public string? Kind { get; set; }
+    public bool Packaging { get; set; }
+    public bool ValueDiscount { get; set; }
+    public bool Plus { get; set; }
+    public bool Web { get; set; }
+    public DateTime? PlusFrom { get; set; }
+    public DateTime? PlusTo { get; set; }
+  }
+
+  CustomerCard? Card;
+  IReadOnlyList<PIM.Intranet.Services.CustomerTypeRow> Types = [];
+  IReadOnlyList<PIM.Intranet.Services.CustomerRow> AllCustomers = [];
+  ProfileDraft Draft = new();
+  int? OrganizationId;
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+  string? SaveError;
+  string Section = "general";
+  string NoteBody = "";
+  string BranchKind = "PE";
+  string BranchCustomerKey = "";
+  string BranchCode = "";
+  string BranchName = "";
+  string BranchNote = "";
+  int TierNumber = 1;
+  decimal TierThreshold;
+  decimal TierPercent;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Stranke", "stranke"), new("Kartica")];
+  static readonly IReadOnlyList<PimColumn> PairColumns = [new("Podatek"), new("Vrednost")];
+  static readonly IReadOnlyList<PimColumn> GroupColumns = [new("Skupina artiklov"), new("Popust", true), new("Najmanj kos", true), new("Velja"), new("Skupina strank")];
+  static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja", true), new("Prag", true), new("Popust", true), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> SpecialColumns = [new("Izdelek"), new("Koda popusta"), new("Velja"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> BranchColumns = [new("Vrsta"), new("Enota"), new("Opomba"), new("Dodal"), new("Dodano")];
+  static readonly IReadOnlyList<PimColumn> HistoryColumns = [new("Entiteta"), new("Dejanje"), new("Stara vrednost"), new("Nova vrednost"), new("Spremenil"), new("Čas")];
+
+  /// <summary>Uporabnik 2026-08-28: kupci, kupci in dobavitelji, dobavitelji, proizvajalci.</summary>
+  static readonly IReadOnlyList<KindOption> Kinds =
+  [
+    new("CUSTOMER", "Kupec"),
+    new("BOTH", "Kupec in dobavitelj"),
+    new("SUPPLIER", "Dobavitelj"),
+    new("MANUFACTURER", "Proizvajalec"),
+  ];
+
+  IReadOnlyList<Tab> Tabs =>
+  [
+    new("general", "Splošni podatki"),
+    new("commercial", "Komercialni podatki"),
+    new("branches", "Poslovne enote in tranziti", Card?.Branches.Count),
+    new("notes", "Zaznamki", Card?.Notes.Count),
+    new("documents", "Dokumenti in finance"),
+    new("history", "Zgodovina sprememb", Card?.History.Count),
+  ];
+
+  // Enota je lahko katerakoli druga stranka istega podjetja; sebe za svojo enoto ni mogoce izbrati.
+  IReadOnlyList<PIM.Intranet.Services.CustomerRow> BranchCandidates =>
+    AllCustomers.Where(row => row.CustomerId != CustomerId)
+      .OrderBy(row => row.Name, StringComparer.CurrentCulture).Take(500).ToArray();
+
+  public static string KindLabel(string? value) =>
+    Kinds.FirstOrDefault(kind => string.Equals(kind.Code, value, StringComparison.Ordinal))?.Label ?? "vrsta ni določena";
+
+  protected override Task OnParametersSetAsync() => LoadAsync();
+
+  async Task LoadAsync()
+  {
+    Loading = true; Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      Types = await Data.GetCustomerTypesAsync();
+      AllCustomers = await Data.GetCustomersAsync(organization.OrganizationId);
+      Card = await Cards.GetAsync(organization.OrganizationId, CustomerId);
+      if (Card is null) return;
+      Draft = new()
+      {
+        TypeCode = Card.General.CustomerTypeCode,
+        Kind = Card.General.CustomerKind,
+        Packaging = Card.General.PackagingDiscountEnabled,
+        ValueDiscount = Card.General.ValueDiscountEnabled,
+        Plus = Card.General.B2bPlusEnabled,
+        Web = Card.General.WebEnabled,
+        PlusFrom = Card.General.B2bPlusValidFrom,
+        PlusTo = Card.General.B2bPlusValidTo,
+      };
+    }
+    catch { Error = "Kartice stranke trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task SaveProfileAsync()
+  {
+    if (Card is null || OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      var general = Card.General;
+      var row = new PIM.Intranet.Services.CustomerDetailRow(
+        general.CustomerId, general.CustomerKey, general.Name, general.PayerCode, general.PayerName,
+        general.PriceListCode, general.DiscountPriceListCode, Draft.TypeCode, Draft.Kind,
+        Draft.Packaging, Draft.ValueDiscount, Draft.Plus, Draft.PlusFrom, Draft.PlusTo, Draft.Web,
+        general.MagentoGroupKey);
+      await Data.SaveCustomerWebProfileAsync(OrganizationId.Value, row, await ActorAsync());
+      Message = "Nastavitve stranke so shranjene in revizijsko zabeležene.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Nastavitev ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  async Task SaveTierAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Data.SaveCustomerValueTierAsync(OrganizationId.Value, CustomerId, TierNumber, TierThreshold, TierPercent, await ActorAsync());
+      Message = "Prag stranke je shranjen in revizijsko zabeležen.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Praga ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  async Task AddNoteAsync()
+  {
+    if (OrganizationId is null || NoteBody.Trim().Length == 0) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Cards.AddNoteAsync(OrganizationId.Value, CustomerId, NoteBody.Trim(), await ActorAsync());
+      NoteBody = "";
+      Message = "Zaznamek je zapisan.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Zaznamka ni bilo mogoče zapisati."; }
+    finally { Busy = false; }
+  }
+
+  async Task SaveBranchAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      long? branchCustomerId = long.TryParse(BranchCustomerKey, out var parsed) ? parsed : null;
+      await Cards.SaveBranchAsync(OrganizationId.Value, CustomerId, BranchKind, branchCustomerId,
+        branchCustomerId is null ? BranchCode : null, branchCustomerId is null ? BranchName : null,
+        BranchNote, await ActorAsync());
+      BranchCustomerKey = ""; BranchCode = ""; BranchName = ""; BranchNote = "";
+      Message = "Enota je dodana.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Enote ni bilo mogoče dodati. Enota iz šifranta mora biti stranka tega podjetja, ročna enota pa mora imeti naziv."; }
+    finally { Busy = false; }
+  }
+
+  // Prikazi se samo tisto, kar je zapisano: prazna vrstica na kartici ne pove nicesar.
+  static IReadOnlyList<Pair> GeneralPairs(CustomerGeneral general)
+  {
+    var pairs = new List<Pair>
+    {
+      new("Šifra stranke", general.CustomerKey),
+      new("Naziv", general.Name),
+      new("Vrsta stranke", KindLabel(general.CustomerKind)),
+      new("Tip stranke", general.CustomerTypeName ?? general.CustomerTypeCode ?? "—"),
+    };
+
+    void Add(string label, string? value) { if (!string.IsNullOrWhiteSpace(value)) pairs.Add(new(label, value!)); }
+
+    Add("Naslov", string.Join(", ", new[] { general.Street ?? general.Address, general.HouseNumber }.Where(part => !string.IsNullOrWhiteSpace(part))));
+    Add("Kraj", string.Join(" ", new[] { general.PostalCode, general.City }.Where(part => !string.IsNullOrWhiteSpace(part))));
+    Add("Država", general.Country);
+    Add("Davčna številka", general.TaxNumber);
+    Add("Matična številka", general.RegistrationNumber);
+    Add("Šifra dejavnosti", general.ActivityCode);
+    Add("Plačnik", general.PayerCode is null ? null : $"{general.PayerCode}{(general.PayerName is null ? "" : " — " + general.PayerName)}");
+    Add("Vrsta plačnika", general.PayerKind switch { "PE" => "poslovna enota", "TRANZIT" => "tranzit", _ => null });
+    Add("Cenik", general.PriceListCode);
+    Add("Rabatni cenik", general.DiscountPriceListCode);
+    Add("Valuta", general.CurrencyCode);
+    Add("Jezik", general.LanguageId);
+    Add("Plačilni rok", general.PaymentDays is null ? null : general.PaymentDays + " dni");
+    Add("Rabat", general.RebatePercent is null or 0 ? null : general.RebatePercent.Value.ToString("N2") + " %");
+    Add("Zavezanec za DDV", Flag(general.SubjectToVat));
+    Add("Plačilo vnaprej", Flag(general.UpfrontPayment));
+    Add("Neplačnik", Flag(general.IsDefaulter));
+    Add("Aktivna", Flag(general.IsActive));
+    pairs.Add(new("Zadnja sprememba iz vira", general.UpdatedUtc.ToLocalTime().ToString("g")));
+    return pairs;
+  }
+
+  static string? Flag(bool? value) => value is null ? null : value.Value ? "da" : "ne";
+  static string Day(DateTime? value) => value?.ToLocalTime().ToString("d") ?? "—";
+  static string Short(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? "—" : value.Length <= 160 ? value : value[..160] + " …";
 }

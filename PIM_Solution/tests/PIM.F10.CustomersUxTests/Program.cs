@@ -1,159 +1,158 @@
 using System.Text.RegularExpressions;
 
-// Pogodbeni test UX skladnosti seznama strank.
-// Obseg je namenoma ozek: samo predstavitev in dostopnost strani /stranke.
-// Test ne sme zahtevati novih poizvedb, novih stolpcev, novih vrednosti ali akcij pisanja.
-// Referenca `../PIM_test/UX_pictures/Stranke.png` prikazuje tudi plačnika, cenik, status,
-// čas posodobitve, množično izbiro in izvoz; za te ni read modela, zato niso del pogodbe.
+// Pogodbeni test UX skladnosti strank: seznam /stranke in kartica /stranke/{id}.
+//
+// Pogodba je bila 2026-08-28 predelana po zahtevah uporabnika. Prejsnja razlicica je opisovala
+// stran, ki jo je uporabnik zavrnil: stiri zavihke brez proizvajalca, povezave v celicah in
+// puscico na koncu vrstice, kartico brez zavihkov. Nova pogodba drzi to, kar je zahteval:
+//
+//   H1  vrste stranke so kupec, kupec in dobavitelj, dobavitelj, proizvajalec
+//   H2  klik kjerkoli v vrstici odpre stranko; povezav in puscice v vrstici ni
+//   H3  kartica ima zavihke, prvi je »Splosni podatki«
+//   H4  zavihek »Komercialni podatki« zbere B2B nastavitve, skupine popustov, vrednostni
+//       rabat in posebne popuste
+//   H5  zavihek »Poslovne enote in tranziti« z dodajanjem iz sifranta ali na novo
+//   H6  zavihek »Zaznamki« s prostim besedilom in vidnim avtorjem
+//   H7  dokumenti in financni podatki se pridejo — stran to pove, ne izmislja
+//   H8  zavihek »Zgodovina sprememb«
 
 var root = FindRoot();
-var razorPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Customers.razor");
-var cssPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Customers.razor.css");
+var pages = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
+var listPath = Path.Combine(pages, "Customers.razor");
+var cardPath = Path.Combine(pages, "CustomerDetail.razor");
+var cssPath = Path.Combine(pages, "Customers.razor.css");
 
-Assert(File.Exists(razorPath), "Manjka stran strank: " + razorPath);
-Assert(File.Exists(cssPath), "Manjka izoliran slog strank: " + cssPath);
+foreach (var path in new[] { listPath, cardPath, cssPath })
+  Assert(File.Exists(path), "Manjka datoteka: " + path);
 
-var markup = File.ReadAllText(razorPath);
+var markup = File.ReadAllText(listPath);
+var card = File.ReadAllText(cardPath);
 var css = File.ReadAllText(cssPath);
+var service = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "CustomerCardService.cs"));
 
-// 1. Pot, avtorizacija in naslov strani ostanejo nespremenjeni.
+/* --- Seznam strank ------------------------------------------------------------------- */
+
+// 1. Pot, avtorizacija in naslov ostanejo nespremenjeni.
 Assert(markup.Contains("@page \"/stranke\"", StringComparison.Ordinal), "Pot strani /stranke se ne sme spremeniti.");
 Assert(markup.Contains("@attribute [Authorize(Roles = \"ADMIN,CATALOG_EDITOR,COMMERCIAL\")]", StringComparison.Ordinal),
   "Avtorizacijske vloge strani se ne smejo spremeniti.");
-Assert(Regex.IsMatch(markup, "<h1>Stranke</h1>"), "Stran mora ohraniti vidni naslov <h1>Stranke</h1>.");
+Assert(markup.Contains("<PimPage Title=\"Stranke\"", StringComparison.Ordinal), "Stran mora ohraniti vidni naslov Stranke.");
 
-// 2. Kontekstni zavihki so navigacijski sklop; aktivni zavihek se sporoči bralcu zaslona.
+// 2. H1: pet pogledov — vsi, kupci, kupci in dobavitelji, dobavitelji, proizvajalci.
 var tabs = Regex.Match(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>");
 Assert(tabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
 Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki morajo imeti aria-label.");
-Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 4,
-  "Stran ima štiri zavihke, podprte z obstoječim CustomerKind; dodatnih zavihkov brez podatkovnega vira ni dovoljeno ustvariti.");
-var tabElements = Regex.Matches(markup, "<button[^>]*class=\"page-tab.*?</button>", RegexOptions.Singleline);
-Assert(tabElements.Count == 4, "Vsak zavihek mora ostati gumb <button class=\"page-tab …\">.");
-foreach (Match tab in tabElements)
-{
-  Assert(tab.Value.Contains("type=\"button\"", StringComparison.Ordinal), "Zavihek mora biti type=\"button\": " + tab.Value);
-  Assert(tab.Value.Contains("aria-current=", StringComparison.Ordinal), "Zavihek mora sporočati aria-current: " + tab.Value);
-  Assert(Regex.IsMatch(tab.Value, "aria-current=\"@\\("), "aria-current mora slediti dejansko izbranemu zavihku: " + tab.Value);
-  Assert(tab.Value.Contains("@onclick=", StringComparison.Ordinal), "Zavihek mora ostati interaktiven: " + tab.Value);
-}
+foreach (var kind in new[] { "\"CUSTOMER\", \"Kupci\"", "\"BOTH\", \"Kupci in dobavitelji\"", "\"SUPPLIER\", \"Dobavitelji\"", "\"MANUFACTURER\", \"Proizvajalci\"" })
+  Assert(markup.Contains(kind, StringComparison.Ordinal), "Manjka pogled po vrsti stranke: " + kind + ".");
+Assert(markup.Contains("\"MANUFACTURER\" => \"Proizvajalec\"", StringComparison.Ordinal),
+  "Proizvajalec mora imeti oznako tudi v stolpcu vrste.");
 
-// 3. Števci zavihkov izhajajo iz naloženih vrstic, ne iz vpisanih vrednosti.
-Assert(Regex.Matches(markup, "@KindCount\\(").Count == 4, "Vsak zavihek mora izpisati števec iz dejanskih vrstic.");
-Assert(Regex.IsMatch(markup, "int KindCount\\(string [A-Za-z]+\\)=>\\(Rows\\?\\?\\[\\]\\)\\.Count\\("),
-  "Števec zavihka se mora izračunati iz naloženih strank, ne iz ločene poizvedbe.");
-Assert(!Regex.IsMatch(markup, "class=\"page-tab[^>]*>[^<]*\\(\\s*\\d"), "Števci zavihkov ne smejo biti vpisane vrednosti.");
+// 3. Stevci zavihkov izhajajo iz nalozenih vrstic, ne iz vpisanih vrednosti.
+Assert(markup.Contains("@KindCount(view.Code)", StringComparison.Ordinal), "Vsak zavihek mora izpisati stevec iz dejanskih vrstic.");
+Assert(Regex.IsMatch(markup, @"int KindCount\(string kind\) => \(Rows \?\? \[\]\)\.Count\("),
+  "Stevec zavihka se mora izracunati iz nalozenih strank, ne iz locene poizvedbe.");
 
-// 4. Orodna vrstica je poimenovan iskalni sklop, vsaka kontrola pa ima svojo oznako.
-var toolbar = Regex.Match(markup, "<section[^>]*class=\"ui-card toolbar\"[^>]*>");
-Assert(toolbar.Success, "Orodna vrstica mora ostati <section class=\"ui-card toolbar\">.");
-Assert(toolbar.Value.Contains("role=\"search\"", StringComparison.Ordinal), "Orodna vrstica mora biti razglašena kot role=\"search\".");
-var toolbarLabel = Regex.Match(toolbar.Value, "aria-labelledby=\"([^\"]+)\"");
-Assert(toolbarLabel.Success, "Iskalni sklop mora imeti aria-labelledby.");
-Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(toolbarLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
-  "Naslov iskalnega sklopa mora ostati bralcem zaslona dostopen in vizualno skrit.");
+// 4. H2: cela vrstica odpre stranko; povezave in puscice v vrstici ni.
+Assert(Regex.IsMatch(markup, "<tr class=\"row-link\"[^>]*@onclick=\"\\(\\) => Open\\(row\\)\""),
+  "Klik kjerkoli v vrstici mora odpreti stranko.");
+Assert(markup.Contains("@onkeydown=\"args => OpenKey(args, row)\"", StringComparison.Ordinal),
+  "Vrstica mora biti dosegljiva tudi s tipkovnico.");
+Assert(!markup.Contains("class=\"chevron\"", StringComparison.Ordinal), "Puscice na koncu vrstice ni vec.");
+Assert(!markup.Contains("class=\"open-link\"", StringComparison.Ordinal), "Locene povezave za odpiranje ni vec.");
+Assert(!Regex.IsMatch(markup, "<td>\\s*<a href=\"stranke/"), "V celicah seznama ni vec povezav; cela vrstica je ena poteza.");
+Assert(!markup.Contains('›'), "Unicode nadomestne ikone niso dovoljene.");
+
+// 5. Iskalni sklop, oznake in zivo stanje ostanejo.
 foreach (var control in new[] { "customer-search", "customer-type" })
   Assert(Regex.IsMatch(markup, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
 Assert(Regex.IsMatch(markup, "<input id=\"customer-search\"[^>]*type=\"search\""), "Iskalno polje mora biti type=\"search\".");
-
-// 5. Število rezultatov oziroma stanje nalaganja/napake se mora sporočati v živo.
 var count = Regex.Match(markup, "<span class=\"result-count\"[^>]*>");
-Assert(count.Success, "Orodna vrstica mora ohraniti izpis števila rezultatov.");
+Assert(count.Success, "Orodna vrstica mora ohraniti izpis stevila rezultatov.");
 foreach (var attribute in new[] { "role=\"status\"", "aria-live=\"polite\"" })
-  Assert(count.Value.Contains(attribute, StringComparison.Ordinal), "Izpis rezultatov nima " + attribute + ": " + count.Value);
-Assert(Regex.IsMatch(markup, "string ResultSummary=>Loading\\?"), "Izpis rezultatov mora pošteno ločiti nalaganje, napako in dejansko število.");
-Assert(Regex.IsMatch(markup, "class=\"loading-state\"[^>]*role=\"status\""), "Stanje nalaganja mora biti razglašeno kot role=\"status\".");
-Assert(Regex.IsMatch(markup, "class=\"error-state\"[^>]*role=\"alert\""), "Stanje napake mora biti razglašeno kot role=\"alert\".");
-Assert(markup.Contains("class=\"empty-state\"", StringComparison.Ordinal), "Stran mora ohraniti prazno stanje.");
+  Assert(count.Value.Contains(attribute, StringComparison.Ordinal), "Izpis rezultatov nima " + attribute + ".");
+Assert(markup.Contains("EmptyText=\"Za izbrane filtre ni strank.\"", StringComparison.Ordinal), "Stran mora ohraniti posteno prazno stanje.");
 
-// 6. Statusni čipi ne smejo biti razločljivi samo po barvi.
-var chipCount = Regex.Matches(markup, "class=\"status-chip ").Count;
-Assert(chipCount == 2, "Seznam mora ohraniti obstoječa čipa B2B+ in Splet, brez novih statusov.");
-Assert(Regex.Matches(markup, "class=\"status-chip [^>]*><span class=\"visually-hidden\">[^<]+</span>").Count == chipCount,
-  "Vsak statusni čip mora imeti bralcem zaslona namenjeno besedilno oznako stolpca.");
-
-// 7. Ikona odpiranja vrstice mora biti nadzorovana CSS oblika, ne Unicode nadomestek.
-Assert(Regex.IsMatch(markup, "<span class=\"chevron\" aria-hidden=\"true\"></span>"),
-  "Ikona odpiranja vrstice mora biti nadzorovana CSS oblika z aria-hidden.");
-Assert(!markup.Contains('\u203A'), "Unicode nadomestne ikone niso dovoljene; uporabi CSS obliko.");
-Assert(Regex.IsMatch(markup, "<a class=\"open-link\"[^>]*aria-label=\"[^\"]+\""), "Povezava za odpiranje vrstice mora imeti aria-label.");
-
-// 8. Tabela mora ostati berljiva in se na ozkih zaslonih vodoravno pomikati.
-var scroll = Regex.Match(markup, "<div class=\"table-scroll\"[^>]*>");
-Assert(scroll.Success, "Tabela mora biti v ovoju <div class=\"table-scroll\"> zaradi prelivanja.");
-foreach (var attribute in new[] { "role=\"region\"", "tabindex=\"0\"", "aria-label=" })
-  Assert(scroll.Value.Contains(attribute, StringComparison.Ordinal), "Pomični ovoj tabele nima " + attribute + ": " + scroll.Value);
-Assert(Regex.IsMatch(markup, "<caption>"), "Tabela mora ohraniti napis <caption>.");
-Assert(Regex.Matches(markup, "<th scope=\"col\">").Count == 8, "Tabela mora ohraniti natanko osem obstoječih stolpcev z scope=\"col\".");
-Assert(Regex.IsMatch(css, "\\.table-scroll\\s*\\{[^}]*overflow-x:\\s*auto"), "Ovoj tabele mora imeti overflow-x: auto.");
-Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
-Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zaslonih se tabela ne sme stiskati; potrebna je min-width.");
-
-// 9. Paginacija mora ostati vidna in dostopna.
+// 6. Paginacija ostane vidna in dostopna.
 var pagination = Regex.Match(markup, "<nav class=\"pagination\"[^>]*>");
 Assert(pagination.Success, "Paginacija mora ostati <nav class=\"pagination\">.");
 Assert(Regex.IsMatch(pagination.Value, "aria-label=\"[^\"]+\""), "Paginacija mora imeti aria-label.");
-Assert(Regex.Matches(markup, "<button type=\"button\"").Count == 6,
-  "Štirje zavihki in obe strani morajo biti izrecni gumbi type=\"button\" brez oddajanja obrazca.");
+foreach (var behavior in new[] { "const int PageSize = 25", "Skip(Page * PageSize).Take(PageSize)" })
+  Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstojece ravnanje s stranmi je spremenjeno; manjka: " + behavior);
 
-// 10. Tipkovnični fokus mora biti viden na vseh interaktivnih elementih strani.
-foreach (var selector in new[] { ".page-tab", ".search-input", ".filter-select", ".pagination button", ".table-scroll", ".data-table a", ".open-link" })
+// 7. Varovalka: seznam ostane vezan na obstojeci resnicni poizvedbi.
+var allowedCalls = new[] { "GetCurrentOrganizationAsync", "GetCustomersAsync" };
+foreach (Match call in Regex.Matches(markup, @"Data\.(\w+)"))
+  Assert(allowedCalls.Contains(call.Groups[1].Value, StringComparer.Ordinal), "Nova podatkovna poizvedba ni v obsegu: " + call.Value);
+foreach (Match link in Regex.Matches(markup, "href=\"([^\"]*)\""))
+  Assert(!link.Groups[1].Value.StartsWith('/'), "Povezava mora ostati base-relativna: " + link.Value);
+Assert(!markup.Contains("Async(2,", StringComparison.Ordinal), "Stran ne sme uporabljati hardkodirane organizacije 2.");
+
+// 8. Fokus tipkovnice mora biti viden.
+foreach (var selector in new[] { ".page-tab", ".search-input", ".filter-select", ".pagination button" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");
 
-// 11. Varovalka: stran ostane vezana na obstoječi resnični poizvedbi.
-var allowedCalls = new[] { "GetCurrentOrganizationAsync", "GetCustomersAsync" };
-foreach (var call in allowedCalls)
-  Assert(markup.Contains("Data." + call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
-foreach (Match call in Regex.Matches(markup, "Data\\.(\\w+)"))
-  Assert(allowedCalls.Contains(call.Groups[1].Value, StringComparer.Ordinal), "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
-Assert(!markup.Contains("Async(2,", StringComparison.Ordinal), "Stran ne sme uporabljati hardkodirane organizacije 2.");
+/* --- Kartica stranke ----------------------------------------------------------------- */
 
-// 12. Varovalka: obstoječe ravnanje s filtri in paginacijo ostane nedotaknjeno.
-foreach (var behavior in new[]
+// 9. H3–H8: sest zavihkov, prvi so splosni podatki.
+Assert(card.Contains("@page \"/stranke/{CustomerId:long}\"", StringComparison.Ordinal), "Pot kartice se ne sme spremeniti.");
+var expectedTabs = new (string Key, string Label)[]
 {
-  "const int PageSize=25",
-  "Skip(Page*PageSize).Take(PageSize)",
-  "void SetKind(string value){Kind=value;Page=0;}",
-  "void Previous()=>Page=Math.Max(0,Page-1);",
-  "void Next()=>Page=Math.Min(PageCount-1,Page+1);",
-  "(Kind==\"\"||x.CustomerKind==Kind)&&(Type==\"\"||x.CustomerType==Type)",
-  "x.CustomerKey.Contains(Search,StringComparison.OrdinalIgnoreCase)",
-  "x.Name.Contains(Search,StringComparison.OrdinalIgnoreCase)",
-  "Rows=await Data.GetCustomersAsync(org.OrganizationId);",
-  "Error=\"Aktivna organizacija ni na voljo.\"",
-  "Error=\"Strank trenutno ni mogoče naložiti.\"",
-  "\"CUSTOMER\"=>\"Kupec\"",
-  "\"SUPPLIER\"=>\"Dobavitelj\"",
-  "\"BOTH\"=>\"Kupec in dobavitelj\"",
-})
-  Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstoječe ravnanje strani je spremenjeno; manjka: " + behavior);
-var allowedHandlers = new[] { "SetKind", "Previous", "Next" };
-foreach (Match handler in Regex.Matches(markup, "@onclick=['\"](?:\\(\\)=>)?(\\w+)"))
-  Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
-Assert(Regex.Matches(markup, "@onclick=").Count == 6, "Število dejanj na strani se ne sme spremeniti.");
-
-// 13. Varovalka: gre za predstavitveni sklop brez akcij pisanja in brez nepodprtih kontrol.
-foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"checkbox\"", "type=\"file\"", "<dialog", "contenteditable", "Save", "Delete" })
-  Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Predstavitveni sklop ne sme uvesti " + forbidden + ".");
-
-// 14. Varovalka: povezave ostanejo base-relativne, da delujejo tudi pod virtualno potjo /PIM.
-foreach (Match link in Regex.Matches(markup, "href=\"([^\"]*)\""))
-  Assert(!link.Groups[1].Value.StartsWith('/'), "Povezava mora ostati base-relativna: " + link.Value);
-
-// 15. Varovalka: nobenega novega stolpca ali izmišljene vsebine brez podatkovnega vira.
-// Vse našteto je vidno na referenčni sliki, a nima read modela.
-// Ujemanje je po celi besedi, da dostopnostne oznake (npr. »Filtriranje strank«,
-// »Pogledi strank«) ne štejejo za referenčne kontrole »Filtri« oziroma »Pogled«.
-foreach (var fabricated in new[]
+  ("general", "Splošni podatki"),
+  ("commercial", "Komercialni podatki"),
+  ("branches", "Poslovne enote in tranziti"),
+  ("notes", "Zaznamki"),
+  ("documents", "Dokumenti in finance"),
+  ("history", "Zgodovina sprememb"),
+};
+foreach (var (key, label) in expectedTabs)
 {
-  "Plačnik", "Cenik", "Posodobljeno", "Akcije", "Status", "Aktiven", "Neaktiven", "Neaktivni",
-  "Nova stranka", "Filtri", "Stolpci", "Izvozi", "Uvozi", "Počisti vse", "Vrstic na stran",
-  "Izbranih", "Davčna", "Pogled", "PAK2", "Vrednostni rabat", "Brez tipa",
-})
-  Assert(!Regex.IsMatch(markup, "\\b" + Regex.Escape(fabricated) + "\\b"),
-    "Stran ne sme prikazovati izmišljene vsebine: " + fabricated + ".");
+  Assert(card.Contains($"new(\"{key}\", \"{label}\"", StringComparison.Ordinal), "Manjka zavihek kartice: " + label + ".");
+  Assert(card.Contains("id=\"panel-" + key + "\"", StringComparison.Ordinal), "Manjka panel zavihka " + key + ".");
+}
+Assert(card.Contains("Section = \"general\"", StringComparison.Ordinal), "Prvi zavihek kartice so splosni podatki.");
+Assert(card.Contains("role=\"tablist\"", StringComparison.Ordinal) && card.Contains("aria-selected=", StringComparison.Ordinal)
+  && card.Contains("aria-controls=", StringComparison.Ordinal), "Zavihki kartice morajo biti povezani s paneli po ARIA.");
+
+// 10. H1 na kartici: vrsta stranke ponudi vse stiri vrste.
+foreach (var kind in new[] { "new(\"CUSTOMER\", \"Kupec\")", "new(\"BOTH\", \"Kupec in dobavitelj\")", "new(\"SUPPLIER\", \"Dobavitelj\")", "new(\"MANUFACTURER\", \"Proizvajalec\")" })
+  Assert(card.Contains(kind, StringComparison.Ordinal), "Kartici manjka vrsta stranke: " + kind + ".");
+
+// 11. H4: komercialni zavihek pokrije vse, kar je nastel uporabnik.
+foreach (var heading in new[] { "B2B spletne nastavitve", "Skupine popustov", "Vrednostni rabat", "Posebni popusti za stranko", "Popust na polno pakiranje" })
+  Assert(card.Contains(heading, StringComparison.Ordinal), "Komercialnemu zavihku manjka: " + heading + ".");
+Assert(card.Contains("Tip stranke", StringComparison.Ordinal) && card.Contains("Vrsta stranke", StringComparison.Ordinal),
+  "Tip in vrsta stranke morata biti med komercialnimi nastavitvami.");
+
+// 12. H5: enota se doda iz sifranta ali na novo, PE in tranzit sta loceni vrsti.
+Assert(card.Contains("Iz šifranta strank", StringComparison.Ordinal) && card.Contains("— vpiši na novo —", StringComparison.Ordinal),
+  "Enoto mora biti mogoce izbrati iz sifranta ali vpisati na novo.");
+Assert(card.Contains("<option value=\"PE\">Poslovna enota</option>", StringComparison.Ordinal)
+  && card.Contains("<option value=\"TRANZIT\">Tranzit</option>", StringComparison.Ordinal),
+  "Poslovna enota in tranzit sta loceni vrsti enote.");
+Assert(card.Contains("Cards.SaveBranchAsync", StringComparison.Ordinal), "Dodajanje enote mora iti skozi pisljivo pot.");
+
+// 13. H6: zaznamek je prosto besedilo z vidnim avtorjem in se ne popravlja.
+Assert(card.Contains("Cards.AddNoteAsync", StringComparison.Ordinal), "Zaznamek mora iti skozi pisljivo pot.");
+Assert(card.Contains("<textarea", StringComparison.Ordinal), "Zaznamek je prosto besedilo.");
+Assert(card.Contains("@note.CreatedBy", StringComparison.Ordinal), "Ob zaznamku mora pisati, kdo ga je napisal.");
+Assert(card.Contains("Zapisanega zaznamka ni mogoče spremeniti", StringComparison.Ordinal),
+  "Stran mora povedati, da je zaznamek zapis in ne polje.");
+
+// 14. H7: dokumenti in finance se pridejo — stran to pove in nicesar ne izmislja.
+Assert(Regex.IsMatch(card, "<PimMissing[^>]*Object=\"pim\\.CustomerDocument"),
+  "Manjkajoci sklop mora biti izrecno oznacen kot manjkajoc, ne prazna tabela.");
+
+// 15. H8: zgodovina bere obstojeco revizijsko sled; nove tabele ni.
+Assert(card.Contains("Revizijska sled sprememb stranke", StringComparison.Ordinal), "Kartici manjka zgodovina sprememb.");
+Assert(service.Contains("b2b.AuditLog", StringComparison.Ordinal) || service.Contains("CustomerHistoryEntry", StringComparison.Ordinal),
+  "Zgodovina mora priti iz obstojece revizijske sledi.");
+
+// 16. Varovalka: vsi podatki kartice pridejo iz enega bralnega klica.
+Assert(service.Contains("intranet.GetCustomerCard", StringComparison.Ordinal),
+  "Kartica mora brati iz ene procedure, ne iz sedmih klicev.");
+Assert(card.Contains("Cards.GetAsync", StringComparison.Ordinal), "Kartica mora uporabiti bralni servis.");
 
 Console.WriteLine("F10 customers UX contract PASS.");
 
@@ -162,7 +161,6 @@ static void Assert(bool condition, string message)
   if (!condition) throw new InvalidOperationException(message);
 }
 
-// Koren se poišče iz delovne mape in iz mape sestave, da je test neodvisen od načina zagona.
 static string FindRoot()
 {
   foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
@@ -174,6 +172,5 @@ static string FindRoot()
       current = current.Parent;
     }
   }
-
   throw new InvalidOperationException("PIM_Solution ni najden.");
 }

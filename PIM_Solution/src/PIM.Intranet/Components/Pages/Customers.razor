@@ -2,32 +2,132 @@
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject NavigationManager Navigation
+
 <PageTitle>Stranke</PageTitle>
-<div class="page-header"><div><h1>Stranke</h1><p>Pregled strank in njihovih B2B nastavitev v aktivni organizaciji.</p></div></div>
-<nav class="page-tabs" aria-label="Pogledi strank">
-  <button type="button" class="page-tab @(Kind==""?"active":null)" aria-current="@(Kind==""?"page":null)" @onclick='()=>SetKind("")'>Vse stranke (@KindCount(""))</button>
-  <button type="button" class="page-tab @(Kind=="CUSTOMER"?"active":null)" aria-current="@(Kind=="CUSTOMER"?"page":null)" @onclick='()=>SetKind("CUSTOMER")'>Kupci (@KindCount("CUSTOMER"))</button>
-  <button type="button" class="page-tab @(Kind=="SUPPLIER"?"active":null)" aria-current="@(Kind=="SUPPLIER"?"page":null)" @onclick='()=>SetKind("SUPPLIER")'>Dobavitelji (@KindCount("SUPPLIER"))</button>
-  <button type="button" class="page-tab @(Kind=="BOTH"?"active":null)" aria-current="@(Kind=="BOTH"?"page":null)" @onclick='()=>SetKind("BOTH")'>Oboje (@KindCount("BOTH"))</button>
+<PimPage Title="Stranke" Subtitle="Kupci, dobavitelji in proizvajalci aktivne organizacije z njihovimi B2B nastavitvami." />
+
+@* Vrsta stranke je zavihek, ker je to prvo vprasanje pri iskanju stranke. Uporabnik je
+   2026-08-28 dodal proizvajalca in odpisal locno stran »Partnerji«: dobavitelj in proizvajalec
+   sta vrsti stranke, ne svoja entiteta. *@
+<nav class="page-tabs" aria-label="Vrsta stranke">
+  @foreach (var view in Views)
+  {
+    <button type="button" class="page-tab @(Kind == view.Code ? "active" : null)" aria-current="@(Kind == view.Code ? "page" : null)" @onclick="() => SetKind(view.Code)">
+      @view.Label (@KindCount(view.Code))
+    </button>
+  }
 </nav>
-<section class="ui-card toolbar" role="search" aria-labelledby="customers-filter-title">
-  <h2 id="customers-filter-title" class="visually-hidden">Filtriranje strank</h2>
-  <label class="visually-hidden" for="customer-search">Poišči stranko</label><input id="customer-search" type="search" class="search-input" placeholder="Poišči po šifri ali nazivu …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="customer-type">Tip stranke</label><select id="customer-type" class="filter-select" @bind="Type"><option value="">Vsi tipi</option>@foreach(var type in Types){<option value="@type">@type</option>}</select>
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
-</section>
+
 <section class="ui-card data-card" aria-label="Seznam strank">
-@if(Loading){<div class="loading-state" role="status">Nalaganje strank …</div>}
-else if(Error is not null){<div class="error-state" role="alert">@Error</div>}
-else if(Filtered.Count==0){<div class="empty-state">Za izbrane filtre ni strank.</div>}
-else{
-  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela strank">
-    <table class="data-table"><caption>Stranke v aktivni organizaciji</caption><thead><tr><th scope="col">Šifra</th><th scope="col">Naziv</th><th scope="col">Vrsta</th><th scope="col">Tip stranke</th><th scope="col">Magento skupina</th><th scope="col">B2B+</th><th scope="col">Splet</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach(var row in PageRows){<tr><td><a href="stranke/@row.CustomerId">@row.CustomerKey</a></td><td>@row.Name</td><td>@KindLabel(row.CustomerKind)</td><td>@(row.CustomerType??"—")</td><td>@(row.MagentoGroupKey??"—")</td><td><span class="status-chip @(row.B2bPlusEnabled?"good":null)"><span class="visually-hidden">B2B+: </span>@(row.B2bPlusEnabled?"Da":"Ne")</span></td><td><span class="status-chip @(row.WebEnabled?"good":null)"><span class="visually-hidden">Splet: </span>@(row.WebEnabled?"Omogočen":"Onemogočen")</span></td><td class="row-action"><a class="open-link" href="stranke/@row.CustomerId" aria-label="Odpri stranko @row.Name"><span class="chevron" aria-hidden="true"></span></a></td></tr>}</tbody></table>
+  <div class="card-toolbar" role="search" aria-labelledby="customers-filter-title">
+    <h2 id="customers-filter-title" class="visually-hidden">Filtriranje strank</h2>
+    <label class="visually-hidden" for="customer-search">Poišči stranko</label>
+    <input id="customer-search" type="search" class="search-input" placeholder="Poišči po šifri ali nazivu …" @bind="Search" @bind:event="oninput" />
+    <label class="visually-hidden" for="customer-type">Tip stranke</label>
+    <select id="customer-type" class="filter-select" @bind="Type">
+      <option value="">Vsi tipi</option>
+      @foreach (var type in Types) { <option value="@type">@type</option> }
+    </select>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
   </div>
-  <nav class="pagination" aria-label="Strani naloženih strank"><button type="button" disabled="@(Page==0)" @onclick="Previous">Prejšnja</button><span class="page-position">Stran @(Page+1) od @PageCount</span><button type="button" disabled="@(Page+1>=PageCount)" @onclick="Next">Naslednja</button></nav>}
+
+  <PimState Loading="Loading" Error="@Error" Empty="@(Filtered.Count == 0)" EmptyText="Za izbrane filtre ni strank." LoadingText="Nalaganje strank …">
+    <PimTable Caption="Stranke v aktivni organizaciji" Columns="Columns">
+      <Rows>
+        @* Cela vrstica odpre stranko. Povezave v celicah zato ni: podcrtano besedilo sredi
+           vrstice, ki je vsa klikljiva, obljublja dve razlicni dejanji, pa je le eno. Iz istega
+           razloga je odpadla puscica na koncu vrstice. *@
+        @foreach (var row in PageRows)
+        {
+          <tr class="row-link" tabindex="0" @onclick="() => Open(row)" @onkeydown="args => OpenKey(args, row)" aria-label="Odpri stranko @row.Name">
+            <td><span class="code-value">@row.CustomerKey</span></td>
+            <td>@row.Name</td>
+            <td>@KindLabel(row.CustomerKind)</td>
+            <td>@(row.CustomerType ?? "—")</td>
+            <td>@(row.MagentoGroupKey ?? "—")</td>
+            <td><PimChip Text="@(row.B2bPlusEnabled ? "Da" : "Ne")" Tone="@(row.B2bPlusEnabled ? "good" : null)" Prefix="B2B+: " /></td>
+            <td><PimChip Text="@(row.WebEnabled ? "Omogočen" : "Onemogočen")" Tone="@(row.WebEnabled ? "good" : null)" Prefix="Splet: " /></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <nav class="pagination" aria-label="Strani naloženih strank">
+      <button type="button" disabled="@(Page == 0)" @onclick="Previous">Prejšnja</button>
+      <span class="page-position">Stran @(Page + 1) od @PageCount</span>
+      <button type="button" disabled="@(Page + 1 >= PageCount)" @onclick="Next">Naslednja</button>
+    </nav>
+  </PimState>
 </section>
-@code{IReadOnlyList<PIM.Intranet.Services.CustomerRow>? Rows;bool Loading=true;string? Error;string Search="",Kind="",Type="";int Page;const int PageSize=25;IEnumerable<string> Types=>(Rows??[]).Select(x=>x.CustomerType).Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x!).Distinct().Order();IReadOnlyList<PIM.Intranet.Services.CustomerRow> Filtered=>(Rows??[]).Where(x=>(Kind==""||x.CustomerKind==Kind)&&(Type==""||x.CustomerType==Type)&&(Search==""||x.CustomerKey.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.Name.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList();IEnumerable<PIM.Intranet.Services.CustomerRow> PageRows=>Filtered.Skip(Page*PageSize).Take(PageSize);int PageCount=>Math.Max(1,(int)Math.Ceiling(Filtered.Count/(decimal)PageSize));protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetCustomersAsync(org.OrganizationId);}catch{Error="Strank trenutno ni mogoče naložiti.";}finally{Loading=false;}}void SetKind(string value){Kind=value;Page=0;}void Previous()=>Page=Math.Max(0,Page-1);void Next()=>Page=Math.Min(PageCount-1,Page+1);static string KindLabel(string? value)=>value switch{"CUSTOMER"=>"Kupec","SUPPLIER"=>"Dobavitelj","BOTH"=>"Kupec in dobavitelj",_=>"—"};
-  // Števci zavihkov izhajajo iz že naloženih vrstic; nove poizvedbe za to niso potrebne.
-  int KindCount(string kind)=>(Rows??[]).Count(x=>kind==""||x.CustomerKind==kind);
-  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary=>Loading?"Nalaganje …":Error is not null?"Rezultati niso na voljo":$"{Filtered.Count} rezultatov";}
+
+@code {
+  sealed record KindView(string Code, string Label);
+
+  IReadOnlyList<PIM.Intranet.Services.CustomerRow>? Rows;
+  bool Loading = true;
+  string? Error;
+  string Search = "", Kind = "", Type = "";
+  int Page;
+  const int PageSize = 25;
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+    [new("Šifra"), new("Naziv"), new("Vrsta"), new("Tip stranke"), new("Magento skupina"), new("B2B+"), new("Splet")];
+
+  // Vrste, ki jih je nastel uporabnik 2026-08-28. Proizvajalec je nov.
+  static readonly IReadOnlyList<KindView> Views =
+  [
+    new("", "Vse stranke"),
+    new("CUSTOMER", "Kupci"),
+    new("BOTH", "Kupci in dobavitelji"),
+    new("SUPPLIER", "Dobavitelji"),
+    new("MANUFACTURER", "Proizvajalci"),
+  ];
+
+  IEnumerable<string> Types => (Rows ?? [])
+    .Select(row => row.CustomerType).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!)
+    .Distinct().Order();
+
+  IReadOnlyList<PIM.Intranet.Services.CustomerRow> Filtered => (Rows ?? [])
+    .Where(row => (Kind == "" || row.CustomerKind == Kind)
+      && (Type == "" || row.CustomerType == Type)
+      && (Search == "" || row.CustomerKey.Contains(Search, StringComparison.OrdinalIgnoreCase)
+        || row.Name.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+    .ToList();
+
+  IEnumerable<PIM.Intranet.Services.CustomerRow> PageRows => Filtered.Skip(Page * PageSize).Take(PageSize);
+  int PageCount => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (decimal)PageSize));
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      Rows = await Data.GetCustomersAsync(organization.OrganizationId);
+    }
+    catch { Error = "Strank trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  void SetKind(string value) { Kind = value; Page = 0; }
+  void Previous() => Page = Math.Max(0, Page - 1);
+  void Next() => Page = Math.Min(PageCount - 1, Page + 1);
+  void Open(PIM.Intranet.Services.CustomerRow row) => Navigation.NavigateTo($"stranke/{row.CustomerId}");
+  void OpenKey(KeyboardEventArgs args, PIM.Intranet.Services.CustomerRow row) { if (args.Key is "Enter" or " ") Open(row); }
+
+  static string KindLabel(string? value) => value switch
+  {
+    "CUSTOMER" => "Kupec",
+    "SUPPLIER" => "Dobavitelj",
+    "BOTH" => "Kupec in dobavitelj",
+    "MANUFACTURER" => "Proizvajalec",
+    _ => "—",
+  };
+
+  // Stevci zavihkov izhajajo iz ze nalozenih vrstic; nove poizvedbe za to niso potrebne.
+  int KindCount(string kind) => (Rows ?? []).Count(row => kind == "" || row.CustomerKind == kind);
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Filtered.Count} rezultatov";
+}

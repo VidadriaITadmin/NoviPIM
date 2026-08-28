@@ -1,0 +1,26 @@
+/* Izoliran slog kartice stranke. */
+
+/* Stevec ob zavihku pove, koliko je za njim, ne da bi ga bilo treba odpreti. */
+.tab-count { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
+
+.subsection-head { align-items: baseline; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .75rem; }
+.subsection-head h2 { font-size: 1rem; margin: 0; }
+.subsection-head span { color: var(--pim-text-muted); font-size: .78rem; }
+
+/* Zaznamek je zapis, ne polje: seznam je berljiv, avtor in cas sta nad besedilom. */
+.note-input { min-height: 5.5rem; resize: vertical; width: 100%; }
+.note-list { display: flex; flex-direction: column; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.note-entry { background: var(--pim-surface-hover); border-left: 3px solid var(--pim-accent); border-radius: var(--pim-radius-xs); padding: .6rem .8rem; }
+.note-head { align-items: baseline; color: var(--pim-text-muted); display: flex; font-size: .75rem; gap: .6rem; justify-content: space-between; }
+.note-entry p { margin: .35rem 0 0; white-space: pre-wrap; }
+
+/* Revizijska sled nosi cel JSON; brez preloma bi ena vrstica raztegnila tabelo cez zaslon. */
+.wrap-cell { max-width: 22rem; overflow-wrap: anywhere; }
+
+.page-tab:focus-visible,
+.form-input:focus-visible,
+.filter-select:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .subsection-head { flex-direction: column; gap: .2rem; }
+}

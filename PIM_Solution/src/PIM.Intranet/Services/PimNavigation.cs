@@ -25,7 +25,7 @@ public static class PimLifecycle
   public static PimLifecycleArea Catalog { get; } = new("PIM", "PIM katalog", "Kanonični in PIM-lastni podatki kataloga.", ["izdelki", "mediji", "nastavitve/atributi", "nastavitve/kategorije", "nastavitve/povezave-izdelkov", "nastavitve/jeziki", "nastavitve/skladisca", "nastavitve/kanali"]);
   public static PimLifecycleArea Quality { get; } = new("KAKOVOST", "Kakovost", "Validacija, vrzeli, prevodi, kategorije in karantena.", ["kakovost", "napake-validacije", "karantena"]);
   public static PimLifecycleArea Outputs { get; } = new("IZHODI", "Izhodi ERP in splet", "Nadzorovani zapisi v SAOP ter profili in datoteke za splet.", ["saop", "splet", "izvozi", "outbound"]);
-  public static PimLifecycleArea Business { get; } = new("POSLOVANJE", "Poslovanje", "Stranke, partnerji, popusti, cene, ceniki in zaloga.", ["stranke", "partnerji", "zaloge", "cene", "preverbe", "pravila-popustov"]);
+  public static PimLifecycleArea Business { get; } = new("POSLOVANJE", "Poslovanje", "Stranke, popusti, cene, ceniki in zaloga.", ["stranke", "partnerji", "zaloge", "cene", "preverbe", "pravila-popustov"]);
   public static PimLifecycleArea Governance { get; } = new("UPRAVLJANJE", "Upravljanje", "Pravila, lastništvo in izvor podatkov ter nastavitve kataloga.", ["nastavitve", "pravila"]);
   public static PimLifecycleArea Administration { get; } = new("ADMIN", "Administracija", "Uporabniki, vloge, integracije, alarmi in tehnično zdravje.", ["sistem", "system"]);
 
