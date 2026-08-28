@@ -5,3 +5,7 @@ appsettings.*.Local.json
 TestResults/
 fixtures/
 data/
+
+# Izvozene datoteke za splet (WebExport:Directory). Nastanejo iz kataloga in ne sodijo
+# v repozitorij: vsebujejo cene in podatke strank.
+exports/

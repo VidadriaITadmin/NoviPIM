@@ -36,6 +36,7 @@ builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
+builder.Services.AddScoped<WebExportFileService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
 builder.Services.AddScoped<PipelineReadService>();
@@ -189,6 +190,17 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
   return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ProductExportService.FileName(template, DateTime.UtcNow));
 });
+
+// Prenos datoteke, ki dejansko gre na splet. Ime se ne sestavlja iz uporabnikovega niza:
+// WebExportFileService sprejme samo imena, ki jih je sam nasel v nastavljeni mapi, zato pot
+// z dvema pikama nikoli ne postane veljavna.
+app.MapGet("/izvoz/splet/{fileName}", (string fileName, WebExportFileService exports) =>
+{
+  var path = exports.Resolve(fileName);
+  return path is null
+    ? Results.NotFound()
+    : Results.File(File.ReadAllBytes(path), "text/csv; charset=utf-8", fileName);
+}).RequireAuthorization();
 
 app.MapRazorComponents<App>()
   .AddInteractiveServerRenderMode();

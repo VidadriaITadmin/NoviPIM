@@ -4,6 +4,7 @@
 @inject GovernanceReadService Governance
 @inject CatalogReadService Catalog
 @inject IntranetDataService Data
+@inject WebExportFileService Exports
 
 <PageTitle>Izhod na splet</PageTitle>
 <PimPage Title="Izhod na splet" Subtitle="Datoteke, ki gredo na spletna mesta: kaj je v njih, kaj ne pride skozi in zakaj." />
@@ -57,6 +58,79 @@
     </PimTable>
   </section>
 
+  @* G6 in G7: uporabnik 2026-08-28 — »bi oni dejansko CSV videli, ki ga bomo dali za splet in
+     da si ga lahko potegnejo dol«, in »imeli bomo vec CSVjev za splet, artikli in pa stranke,
+     tako da bi mogli oba omogociti za pogled«. Prikazana je datoteka z diska, ki jo izdela
+     PIM.B2bWorker in ki dejansko odide — ne drugi izvoz, sestavljen tu, ki bi lahko kazal
+     drugacno vsebino od tiste, ki je odsla. *@
+  <h2 class="section-title">Datoteke za splet</h2>
+  <section class="ui-card data-card">
+    @if (ExportDirectory is null)
+    {
+      <PimMissing Object="WebExport:Directory"
+                  What="mapo, v katero PIM.B2bWorker zapiše magento-products.csv in magento-customers.csv"
+                  Needs="nastavitev WebExport:Directory v appsettings.Local.json; dokler je ni, intranet ne ve, kje datoteke so" />
+    }
+    else if (ExportFiles.Count == 0)
+    {
+      <div class="note-panel">
+        V mapi <span class="code-value">@ExportDirectory</span> ni nobene datoteke CSV.
+        Izvoz izdela <span class="code-value">PIM.B2bWorker --export-magento</span>; dokler ne teče, tu ni česa prikazati.
+      </div>
+    }
+    else
+    {
+      <PimTable Caption="Datoteke, ki gredo na spletno mesto" Columns="FileColumns">
+        <Rows>
+          @foreach (var file in ExportFiles)
+          {
+            <tr class="@(SelectedFile == file.FileName ? "is-open" : null)">
+              <td><PimChip Text="@file.Kind" Tone="@(file.Kind == "Izdelki" ? "info" : null)" /></td>
+              <td><span class="code-value">@file.FileName</span></td>
+              <td class="numeric">@(file.RowCount < 0 ? "—" : file.RowCount.ToString("N0"))</td>
+              <td class="numeric">@WebExportFileService.Size(file.SizeBytes)</td>
+              <td>@file.ModifiedUtc.ToLocalTime().ToString("g")</td>
+              <td>
+                <button type="button" class="small-action" @onclick="() => TogglePreview(file.FileName)">
+                  @(SelectedFile == file.FileName ? "Skrij" : "Poglej")
+                </button>
+                <a class="small-action" href="@($"izvoz/splet/{Uri.EscapeDataString(file.FileName)}")">Prenesi</a>
+              </td>
+            </tr>
+            @if (SelectedFile == file.FileName && Preview is not null)
+            {
+              <tr class="preview-row">
+                <td colspan="6">
+                  <div class="csv-preview" role="region" tabindex="0" aria-label="@($"Predogled datoteke {file.FileName}")">
+                    <table class="data-table csv-table">
+                      <caption>Prvih @Preview.Rows.Count vrstic datoteke @file.FileName</caption>
+                      <thead><tr>@foreach (var column in Preview.Columns) { <th scope="col">@column</th> }</tr></thead>
+                      <tbody>
+                        @foreach (var row in Preview.Rows)
+                        {
+                          <tr>@foreach (var value in row) { <td>@value</td> }</tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  @if (Preview.Truncated)
+                  {
+                    <p class="card-note">Predogled je odrezan pri @WebExportFileService.PreviewRows vrsticah. Celo datoteko dobiš s prenosom.</p>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </Rows>
+      </PimTable>
+      <p class="card-note">
+        Urejanje datoteke tukaj še ni mogoče: sprememba v CSV bi se ob naslednjem izvozu prepisala,
+        ker CSV nastane iz kataloga. Popravek zato sodi na kartico izdelka ali stranke, od koder
+        pride v naslednjo datoteko.
+      </p>
+    }
+  </section>
+
   <h2 class="section-title">Zgodovina dostav</h2>
   <PimMissing Object="intranet.GetWebExportDeliveries" What="čas izdelave, profil, število vrstic, velikost, rezultat in cilj vsake spletne dostave" Needs="evidence iz PIM.B2bWorker in dostavnega transporta" />
 </PimState>
@@ -65,6 +139,13 @@
   static readonly IReadOnlyList<PimColumn> ReasonColumns = [new("Zahteva"), new("Profil"), new("Blokira"), new("Izdelkov", true)];
   static readonly IReadOnlyList<PimColumn> CoverageColumns = [new("Profil"), new("Stolpcev", true), new("Z virom", true), new("Brez vira", true), new("Pokritost")];
   static readonly IReadOnlyList<PimColumn> ProfileColumns = [new("Profil"), new("Stolpcev", true), new("Pokritih", true), new("Zadnja datoteka"), new("Vrstic"), new("Podrobnost")];
+  static readonly IReadOnlyList<PimColumn> FileColumns =
+    [new("Vsebina"), new("Datoteka"), new("Vrstic", true), new("Velikost", true), new("Nastala"), new("Dejanje")];
+
+  IReadOnlyList<WebExportFile> ExportFiles = [];
+  string? ExportDirectory;
+  string? SelectedFile;
+  WebExportPreview? Preview;
   IReadOnlyList<WebSiteRow> Sites = [];
   IReadOnlyList<ExportProfileRow> Profiles = [];
   IReadOnlyList<ValidationProfileRow> ValidationProfiles = [];
@@ -92,6 +173,8 @@
       var validationTask = Governance.GetValidationProfilesAsync(org.OrganizationId);
       var readinessTask = Governance.GetExportReadinessAsync(org.OrganizationId);
       Sites = await sitesTask; Profiles = await profilesTask; ValidationProfiles = await validationTask; Readiness = await readinessTask;
+      ExportDirectory = Exports.Directory;
+      ExportFiles = Exports.List();
       await LoadSummaryAsync();
     }
     catch { Error = "Spletnih izhodov trenutno ni mogoče naložiti."; }
@@ -119,6 +202,13 @@
     if (reason is not null) { values.Add("profil=" + Uri.EscapeDataString(reason.ProfileCode)); values.Add("polje=" + Uri.EscapeDataString(reason.FieldCode)); }
     return "kakovost/napake?" + string.Join('&', values);
   }
+  void TogglePreview(string fileName)
+  {
+    if (SelectedFile == fileName) { SelectedFile = null; Preview = null; return; }
+    SelectedFile = fileName;
+    Preview = Exports.Preview(fileName);
+  }
+
   static decimal Coverage(ExportProfileCoverage profile) => profile.ColumnCount == 0 ? 0 : Math.Round(100m * profile.MappedColumnCount / profile.ColumnCount, 1);
   static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
 }

@@ -30,7 +30,7 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
 | C1 | Odstrani globalni iskalnik v glavi strani (podvaja iskalnik na Izdelkih). | INTRANET | NAREJENO |
-| C2 | Zavihki (vse / za uredit / brez slike …) so manj pomembni — glavni poudarek na dobre filtre, da uporabnik vidi izdelke v napaki. | INTRANET | TODO |
+| C2 | Zavihki (vse / za uredit / brez slike …) so manj pomembni — glavni poudarek na dobre filtre, da uporabnik vidi izdelke v napaki. | INTRANET | NAREJENO |
 | C3 | Izvoz v Excel: polja, ki manjkajo, obarvaj blago rdeče. | DOMENA/IZVOZ | NAREJENO |
 | C4 | Izvoz v Excel: polja, ki so nujna za validacijo, obarvaj rumenkasto. | DOMENA/IZVOZ | NAREJENO |
 | C5 | Izvoz v Excel mora vsebovati ERP, komerciala in SPLET podatke; odvečna polja odstrani. | DOMENA/IZVOZ | NAREJENO |
@@ -80,8 +80,8 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 | G3 | Preveč gumbov v obliki oblačkov — zamenjaj z nekaj zavihki, ki se res rabijo. | INTRANET | NAREJENO |
 | G4 | Tabela stanja ostane (pohvala). | — | NAREJENO |
 | G5 | Preimenuj „Splet – kar gre ven". | INTRANET | NAREJENO |
-| G6 | Na strani za splet naj se vidi dejanski CSV s prenosom; urejanje mora priti nazaj v izvozni CSV. | INTRANET + IZVOZ | TODO |
-| G7 | Več CSV-jev za splet (artikli in stranke) — oba morata biti na voljo za pogled. | INTRANET + IZVOZ | TODO |
+| G6 | Na strani za splet naj se vidi dejanski CSV s prenosom; urejanje mora priti nazaj v izvozni CSV. | INTRANET + IZVOZ | NAREJENO |
+| G7 | Več CSV-jev za splet (artikli in stranke) — oba morata biti na voljo za pogled. | INTRANET + IZVOZ | NAREJENO |
 | G8 | Stran „Izvozni profili in datoteke" podvaja „Splet – kaj gre ven" — odstrani. | INTRANET | NAREJENO |
 
 ## H. Poslovanje — Stranke
