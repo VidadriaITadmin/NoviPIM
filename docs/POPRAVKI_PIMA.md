@@ -56,9 +56,9 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| E1 | Dokumenti: namesto napisa „PDF" in ikone mape prikaži predogled prve strani PDF-ja. | INTRANET | TODO |
-| E2 | Odstrani naslov „Filter vs stanja" (nesmiseln). | INTRANET | TODO |
-| E3 | Odstrani opombe pri dodanem `https:` — uporabnika ne zanima. | INTRANET | TODO |
+| E1 | Dokumenti: namesto napisa „PDF" in ikone mape prikaži predogled prve strani PDF-ja. | INTRANET | NAREJENO |
+| E2 | Odstrani naslov „Filter vs stanja" (nesmiseln). | INTRANET | NAREJENO |
+| E3 | Odstrani opombe pri dodanem `https:` — uporabnika ne zanima. | INTRANET | NAREJENO |
 
 ## F. Kakovost
 

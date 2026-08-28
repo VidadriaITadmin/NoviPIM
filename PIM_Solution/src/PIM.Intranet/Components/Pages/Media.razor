@@ -14,10 +14,6 @@
     <div class="media-meta">
       <span class="media-meta-item"><strong>@Number(Summary?.ProductsWithMedia)</strong> izdelkov ima medij</span>
       <a class="media-meta-item warn" href="izdelki?pogled=BREZ_SLIKE"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
-      @if (Summary is not null && Summary.SchemeLessCount > 0)
-      {
-        <a class="media-meta-item warn" href="mediji?naslov=CORRECTED"><strong>@Number(Summary.SchemeLessCount)</strong> naslovov brez sheme</a>
-      }
     </div>
   </Actions>
 </PimPage>
@@ -37,15 +33,6 @@
   <select id="media-role" class="filter-select" @bind="Role" @bind:after="ApplyAsync">
     <option value="">Vse vloge</option>
     @foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }
-  </select>
-
-  <label class="visually-hidden" for="media-address">Stanje naslova</label>
-  <select id="media-address" class="filter-select" @bind="AddressState" @bind:after="ApplyAsync">
-    <option value="">Vsa stanja naslovov</option>
-    <option value="OK">V redu (https)</option>
-    <option value="CORRECTED">Popravljen (dodan https:)</option>
-    <option value="HTTP">Nešifrirano (http)</option>
-    <option value="INVALID">Neveljaven naslov</option>
   </select>
 
   <label class="visually-hidden" for="media-sort">Razvrstitev</label>
@@ -92,7 +79,7 @@
             <button type="button" class="media-preview" title="@(MediaKindPolicy.IsInlineViewable(row.Url) ? "Pokaži prvo stran dokumenta" : "Povečaj predogled")" @onclick="() => Open(row)">
               @Preview(row, url, false)
               <span class="kind-badge @KindTone(row.Kind)">@row.Kind</span>
-              @if (url.Note is not null) { <span class="note-badge" title="@url.Note">!</span> }
+              @if (MediaUrlPolicy.VisibleNote(url) is string warning) { <span class="note-badge" title="@warning">!</span> }
             </button>
             <div class="media-tile-body">
               <a class="media-item" href="izdelki/@row.ProductId">@row.ItemId</a>
@@ -106,9 +93,9 @@
               {
                 <a class="media-open" href="@url.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a>
               }
-              else
+              else if (MediaUrlPolicy.VisibleNote(url) is string tileWarning)
               {
-                <span class="media-note">@url.Note</span>
+                <span class="media-note">@tileWarning</span>
               }
             </div>
           </article>
@@ -188,13 +175,16 @@
           <a href="@selectedUrl.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a>
         }
         <a href="izdelki/@selected.ProductId">Odpri izdelek</a>
-        @if (selectedUrl.Note is not null) { <span class="media-note">@selectedUrl.Note</span> }
+        @if (MediaUrlPolicy.VisibleNote(selectedUrl) is string warning) { <span class="media-note">@warning</span> }
       </footer>
     </div>
   </div>
 }
 
 @code {
+  // Kontrole za stanje naslova na zaslonu ni vec: uporabnik jo je 2026-08-28 zavrnil, ker
+  // ne pove nicesar, kar bi kdo popravljal. Parameter v naslovu ostane, ker je poceni in
+  // uporaben pri iskanju napake (mediji?naslov=INVALID).
   [SupplyParameterFromQuery(Name = "naslov")] public string? QueryAddressState { get; set; }
   [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
@@ -302,6 +292,20 @@
         <img src="@poster" alt="Predogled videa artikla @row.ItemId" loading="lazy" @onerror="() => Failed.Add(row.Key)" />
         <span class="play-mark" aria-hidden="true"></span>
       }
+      else if (!small && MediaKindPolicy.IsInlineViewable(row.Url) && url.Href is not null)
+      {
+        @* Uporabnik 2026-08-28: »pri dokumentih da ne bi pisalo PDF pa ikono mape, da imava
+           prvo stran PDFja, da ze od dalec vidijo, kaksen PDF je«. Prve strani ne rise streznik
+           — vgrajen je izvirni dokument, prikaz pa prevzame brskalnik. Ce tuj streznik
+           vgrajevanje zavrne, <object> izrise nadomestno vsebino: isto, kar je bilo prej. *@
+        <object class="preview-document" data="@MediaKindPolicy.InlineViewerHref(url.Href)"
+                type="application/pdf" aria-label="Prva stran dokumenta @(row.Title ?? row.Role)">
+          <span class="preview-fallback">
+            @KindGlyph(row.Kind)
+            <span class="preview-extension">@ExtensionLabel(row)</span>
+          </span>
+        </object>
+      }
       else
       {
         <span class="preview-fallback @(small ? "small" : null)">
@@ -325,9 +329,9 @@
     {
       <span class="muted" title="@url.Note">@Shorten(url.Display)</span>
     }
-    @if (url.Note is not null)
+    @if (MediaUrlPolicy.VisibleNote(url) is string warning)
     {
-      <small class="address-note">@url.Note</small>
+      <small class="address-note">@warning</small>
     }
   };
 

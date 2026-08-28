@@ -39,6 +39,17 @@ public static class MediaUrlPolicy
     return new(parsed.AbsoluteUri, parsed.AbsoluteUri, note);
   }
 
+  /// <summary>
+  /// Opomba, ki jo je vredno pokazati uporabniku.
+  ///
+  /// »Dodan https:« je sled popravka, ne tezava: naslov dela in uporabnika ne zanima, da smo
+  /// mu spredaj dodali shemo. Uporabnik je to 2026-08-28 povedal naravnost. <see cref="MediaUrl.Note"/>
+  /// ostane cel, ker se po njem se vedno filtrira in ker je pri iskanju napake pomemben;
+  /// na zaslonu se izpisejo samo opozorila, ki od nekoga zahtevajo dejanje.
+  /// </summary>
+  public static string? VisibleNote(MediaUrl url) =>
+    string.Equals(url.Note, AddedHttpsNote, StringComparison.Ordinal) ? null : url.Note;
+
   static string TrimEdges(string? raw)
   {
     if (string.IsNullOrEmpty(raw)) return string.Empty;

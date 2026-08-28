@@ -75,6 +75,10 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
 /* Predogled: fiksno razmerje in omejena slika — brez tega slika zraste čez stran. */
 .preview-frame { align-items: center; aspect-ratio: 1; display: flex; justify-content: center; overflow: hidden; position: relative; width: 100%; }
 .preview-frame img { display: block; height: 100%; object-fit: contain; width: 100%; }
+/* Prva stran dokumenta namesto ikone in napisa PDF. Dokument rise brskalnik; kadar tuj
+   streznik vgrajevanje zavrne, <object> izrise svojo nadomestno vsebino (ikono). Kazalec
+   dogodkov je izklopljen, da klik odpre lightbox in ne notranjega bralnika PDF. */
+.preview-document { background: #fff; border: 0; display: block; height: 100%; pointer-events: none; width: 100%; }
 .preview-fallback { align-items: center; color: var(--pim-text-muted); display: flex; flex-direction: column; gap: .35rem; }
 .preview-fallback .kind-glyph { height: 2.2rem; width: 2.2rem; }
 .preview-fallback.small .kind-glyph { height: 1.3rem; width: 1.3rem; }

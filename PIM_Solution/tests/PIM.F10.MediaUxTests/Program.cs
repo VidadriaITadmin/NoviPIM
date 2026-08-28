@@ -96,6 +96,41 @@ Assert(objectStart > 0 && objectEnd > objectStart
   "Ce streznik dobavitelja vgrajevanje zavrne, mora znotraj <object> ostati povezava na izvirnik.");
 Assert(page.Contains("[Authorize", StringComparison.Ordinal), "Stran medijev zahteva prijavo.");
 
+// ─── Popravki medijev 2026-08-28 ──────────────────────────────────────────────────────────
+
+// E1: dokument pokaze prvo stran, ne ikone in napisa PDF. Prve strani ne rise streznik —
+// vgrajen je izvirni dokument, prikaz prevzame brskalnik, nadomestna vsebina ostane ikona.
+Assert(page.Contains("class=\"preview-document\"", StringComparison.Ordinal),
+  "Dokument v mrezi mora pokazati prvo stran, ne ikone.");
+Assert(page.Contains("MediaKindPolicy.InlineViewerHref(url.Href)", StringComparison.Ordinal),
+  "Predogled dokumenta mora uporabiti isti naslov kot lightbox.");
+Assert(page.Contains("type=\"application/pdf\"", StringComparison.Ordinal),
+  "Predogled mora povedati vrsto vsebine, sicer brskalnik ne ve, kaj rise.");
+Assert(pageCss.Contains(".preview-document", StringComparison.Ordinal), "Manjka slog predogleda dokumenta.");
+Assert(pageCss.Contains("pointer-events: none", StringComparison.Ordinal),
+  "Klik na predogled mora odpreti lightbox, ne notranjega bralnika PDF.");
+
+// E2: kontrola »Stanje naslova« odpade — uporabnik je povedal, da ne pove nicesar uporabnega.
+Assert(!page.Contains("id=\"media-address\"", StringComparison.Ordinal),
+  "Filtra stanja naslova na zaslonu ni vec.");
+Assert(!page.Contains("Vsa stanja naslovov", StringComparison.Ordinal), "Napis »Vsa stanja naslovov« je odpisan.");
+
+// E3: »Dodan https:« je sled popravka, ne tezava; na zaslon ne sodi.
+Assert(!page.Contains("naslovov brez sheme", StringComparison.Ordinal),
+  "Stevec naslovov brez sheme je odpisan: uporabnika ne zanima, da smo dodali shemo.");
+// Namig ob prehodu z misko (title) sme nositi celo opombo; izpisana vsebina ne.
+foreach (var raw in new[] { ">@url.Note<", ">@selectedUrl.Note<" })
+  Assert(!page.Contains(raw, StringComparison.Ordinal),
+    "Opomba naslova se ne izpisuje surovo; skozi MediaUrlPolicy.VisibleNote gre: " + raw);
+Assert(System.Text.RegularExpressions.Regex.Matches(page, @"MediaUrlPolicy\.VisibleNote\(").Count >= 4,
+  "Vsa mesta, ki izpisujejo opombo naslova, morajo iti skozi VisibleNote.");
+
+var urlPolicy = Read(Path.Combine(root, "src", "PIM.Intranet", "Services", "MediaUrlPolicy.cs"));
+Assert(urlPolicy.Contains("public static string? VisibleNote(MediaUrl url)", StringComparison.Ordinal),
+  "Politika mora imeti eno mesto, ki odloci, katera opomba gre na zaslon.");
+Assert(urlPolicy.Contains("AddedHttpsNote", StringComparison.Ordinal) && urlPolicy.Contains("MediaUrl.Note", StringComparison.Ordinal),
+  "Opomba mora ostati v modelu za filtriranje, tudi ce se ne izpise.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 
