@@ -181,6 +181,34 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA + INTRANET + IZVOZ] Popravki iz `Popravki_PIMa.docx` — 47 od 52 postavk** —
+  kdo: Claude Code — ozemlja: BAZA, INTRANET, DOMENA/IZVOZ — končano 2026-08-28.
+
+  Uporabnik je 2026-08-28 predal dokument s pripombami po celotnem vmesniku. Vse postavke so
+  prepisane v [`docs/POPRAVKI_PIMA.md`](docs/POPRAVKI_PIMA.md) z oznako stanja; tam je tudi
+  poglavje **Kaj čaka tvojo odločitev** s petimi vprašanji, ki niso popravki (C6, H7, K7, K8, L2).
+
+  **Ena napaka se je ponovila povsod:** stran je računala iz `GetCurrentOrganizationAsync`, ki
+  vrne vedno prvo podjetje po šifri — zato so nadzorna plošča, kakovost, cene in zaloga kazale
+  samo DEMO. Popravljeno na nadzorni plošči (vsota vseh podjetij + razčlenitev), kakovosti
+  (seštevek nivojev in vrzeli), cenah in zalogi (izbira podjetja).
+
+  **Migracije 126–133:** filter »ima sliko« (126), bralna podlaga izvoza z ERP/komercialo/
+  spletom in registrom zahtevanih polj (127), ime dobavitelja in proizvajalca na kartici (128),
+  kartica stranke — vrsta, poslovne enote, zaznamki, zgodovina (129), ločitev ERP in
+  dobaviteljeve zaloge (130), preverbe cen in zaloge ter povezave izdelkov (131), popravek
+  števca preverb (132), urejanje validacijskih zahtev in preslikav polj (133).
+
+  **Dokaz:** `scripts\run_tests.ps1` = **58 uspeli, 0 padli, 0 preskočeni**;
+  `dotnet build PIM_Solution\PIM.sln` = 0 napak, 0 opozoril; migrator prvi in drugi zagon ter
+  `--verify` uspešni. Dva nova testna projekta: `PIM.F7.ProductExportTests` (zvezek iz razvojne
+  baze) in `PIM.F7.WebExportTests` (branje in varna razrešitev imena datoteke za splet).
+
+  **Kar ni preverjeno:** živ izris strani v brskalniku. Prijava zahteva geslo lokalnega
+  uporabnika `admin`, ki ga nimam; preizkusil sem samo, da se aplikacija zažene in da
+  `/health` odgovarja. Vse ostalo je pokrito s pogodbenimi testi nad označbo.
+
+
 - **[BAZA + INTRANET] Atributi so urejivi: delovni seznam, šifrant in par za enoto — migracija 125 (korak 4)** —
   kdo: Claude Code — ozemlje: BAZA + INTRANET — končano 2026-08-28.
 

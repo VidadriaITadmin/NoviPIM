@@ -1,11 +1,39 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-27
+Posodobljeno: 2026-08-28
+
+## Popravki po pregledu uporabnika 2026-08-28
+
+Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;
+pet je vprašanj, ki čakajo njegovo odločitev. Celoten seznam s stanjem je v
+[`docs/POPRAVKI_PIMA.md`](docs/POPRAVKI_PIMA.md).
+
+**Kar se je spremenilo v obnašanju sistema:**
+
+- **Številke niso več samo DEMO.** Nadzorna plošča sešteje vsa aktivna podjetja in pokaže
+  razčlenitev po podjetjih; kakovost sešteje nivoje in vrzeli čez vsa podjetja; cene in zaloga
+  imata izbiro podjetja. Vzrok je bil povsod isti: `GetCurrentOrganizationAsync` vrne prvo
+  podjetje po šifri.
+- **Izvoz v Excel je postal delovno orodje.** List »pregled« je bil prepis zaslonskega seznama;
+  zdaj nosi skupine ERP, Komerciala in Splet, nazive v petih jezikih, rumeno označene zahteve
+  validacije in rdeče označena prazna zahtevana polja.
+- **Stran »Preverbe cen in zaloge« dela.** Bralnih procedur `intranet.GetPriceChecks` in
+  `intranet.GetStockChecks` prej ni bilo. Merjeno pri organizaciji 1: 20.964 cenovnih in
+  536 zalogovnih preverb, med njimi 578 izdelkov s faktorjem marže pod 2,00.
+- **Kartica stranke ima zavihke** (splošni podatki, komercialni podatki, poslovne enote in
+  tranziti, zaznamki, dokumenti in finance, zgodovina) in vrsto stranke z proizvajalcem.
+  Stran »Partnerji« je odpadla — dobavitelj in proizvajalec sta vrsti stranke.
+- **Validacijski profil in preslikave polj se dajo urejati** iz vmesnika, z revizijo v
+  `b2b.AuditLog`. Zahteva se ne briše, ker odprte napake kažejo nanjo; umik je izklop.
+- **Splet pokaže dejanski CSV**, ki gre ven — predogled in prenos, ločeno za artikle in
+  stranke. Mapa se nastavi z `WebExport:Directory`.
+
+Migracije: **126–133**. Testi: `scripts\run_tests.ps1` = 58 uspeli, 0 padli.
 
 ## Intranet — kanalska kartica, nivoji kakovosti in skupne strehe 2026-08-27
 
-Kartica izdelka je razdeljena na **11** sklopov: Pregled, ERP, Komerciala, Splet, Mediji,
-Cene, Zaloga, Kakovost, SAOP, Zgodovina in Izvor. Glava ter galerija prikazujeta dejanske
+Kartica izdelka je razdeljena na sklope (po popravku 2026-08-28 jih je šest: Pregled,
+Osnovni podatki, Prodaja in kanali, Mediji, Zaloga, Kakovost in zgodovina). Glava ter galerija prikazujeta dejanske
 slike; skupni `MediaUrlPolicy` varno normalizira tudi Nowodvorskega `//...` naslove. ERP,
 komerciala in splet imajo enako tabelo polj, lastništva, izvora, svežine in odprtih težav.
 
