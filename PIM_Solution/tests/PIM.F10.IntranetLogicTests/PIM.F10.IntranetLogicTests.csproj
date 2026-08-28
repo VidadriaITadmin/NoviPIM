@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\PIM.Intranet\Services\MediaUrlPolicy.cs" Link="MediaUrlPolicy.cs" />
     <Compile Include="..\..\src\PIM.Intranet\Services\PimFormat.cs" Link="PimFormat.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\QualityFieldPolicy.cs" Link="QualityFieldPolicy.cs" />
     <Compile Include="..\..\src\PIM.Intranet\Services\ValidationLayer.cs" Link="ValidationLayer.cs" />
   </ItemGroup>
 </Project>

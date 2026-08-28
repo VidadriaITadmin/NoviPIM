@@ -1,11 +1,66 @@
-.toolbar { margin-bottom: var(--space-5); }
-.validation-level-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
-.level-card { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
-.level-card h2 { margin: .2rem 0 .35rem; font-size: 1.05rem; }
-.level-card p { margin: 0; color: var(--text-muted); }
-.metric-row { display: grid; gap: .1rem; }
-.metric-row strong { font-size: 1.65rem; }
-.metric-row span { color: var(--text-muted); font-size: .85rem; }
-.level-card .button-link { margin-top: auto; }
-@media (max-width: 1050px) { .validation-level-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 650px) { .validation-level-grid { grid-template-columns: 1fr; } }
+/* Pregled kakovosti. Odločitev prenove: pregled je urejen po polju, ker se delo deli po
+   polju — isto polje zahteva več profilov in je v prejšnji razdelitvi nastopilo trikrat. */
+
+.card-caption {
+  align-items: baseline; background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border);
+  color: var(--pim-text-strong); display: flex; font-size: .875rem; font-weight: 600;
+  gap: .75rem; justify-content: space-between; margin: 0; padding: .85rem 1.25rem;
+}
+.card-caption-note { color: var(--pim-text-muted); font-size: .8rem; font-weight: 400; }
+.card-note { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .78rem; line-height: 1.55; padding: .7rem 1.25rem; }
+.card-note-inline { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: .75rem 0 0; }
+
+/* ─── Pripravljenost ─────────────────────────────────────────────────────── */
+.readiness-row {
+  align-items: center; border-top: 1px solid var(--pim-border-soft); display: grid;
+  gap: 1rem; grid-template-columns: minmax(0, 1fr) 8rem 15rem 7rem; padding: .8rem 1.25rem;
+}
+.readiness-row:first-of-type { border-top: 0; }
+.readiness-row.muted-row { background: var(--pim-surface-subtle); }
+.readiness-name strong { color: var(--pim-text-strong); display: block; font-size: .9375rem; }
+.readiness-name .code-value { color: var(--pim-text-muted); font-size: .72rem; }
+.readiness-count { color: var(--pim-bad-strong); font-size: 1.25rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.muted-row .readiness-count { color: var(--pim-warn-text); }
+.readiness-bar { align-items: center; display: flex; gap: .55rem; }
+.readiness-unit { color: var(--pim-text-soft); font-size: .8125rem; white-space: nowrap; }
+.readiness-open { text-align: right; }
+.site-filter { align-items: center; display: inline-flex; flex: 0 0 auto; gap: .5rem; }
+.site-filter span { color: var(--pim-text-soft); font-size: .75rem; font-weight: 600; }
+
+/* ─── Načrt odblokiranja ─────────────────────────────────────────────────── */
+.plan-grid { display: grid; gap: 1.75rem; grid-template-columns: minmax(0, 1fr) 22rem; padding: 1.15rem 1.25rem 1.25rem; }
+.plan-lead { color: var(--pim-text-strong); font-size: .875rem; line-height: 1.55; margin: 0 0 1.1rem; }
+.plan-chart { display: grid; gap: .5rem; grid-template-columns: 2.6rem minmax(0, 1fr); }
+.plan-axis { color: #94a3b8; display: flex; flex-direction: column; font-size: .68rem; height: 190px; justify-content: space-between; padding-bottom: 1px; text-align: right; }
+.plan-plot { align-items: flex-end; border-bottom: 1px solid var(--pim-border); display: flex; gap: .8rem; height: 190px; }
+.plan-bar { background: #c7d2fe; border-radius: 4px 4px 0 0; flex: 1; min-height: 2px; position: relative; }
+.plan-bar.peak { background: var(--pim-primary); }
+.plan-peak-value { color: var(--pim-primary); font-size: .8125rem; font-weight: 700; left: 50%; position: absolute; top: -1.25rem; transform: translateX(-50%); white-space: nowrap; }
+.plan-ticks { display: flex; gap: .8rem; padding-top: .35rem; }
+.plan-ticks span { color: #94a3b8; flex: 1; font-size: .72rem; text-align: center; }
+.plan-ticks span.peak { color: var(--pim-primary); font-weight: 700; }
+.plan-caption { color: #94a3b8; font-size: .72rem; padding-top: .25rem; }
+.plan-list-title { color: #64748b; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding-bottom: .6rem; text-transform: uppercase; }
+.plan-step { align-items: center; border-bottom: 1px solid var(--pim-border-soft); display: grid; gap: .6rem; grid-template-columns: 1.25rem minmax(0, 1fr) 3.75rem; padding: .45rem 0; }
+.plan-step.peak { background: var(--pim-accent-ring); border-bottom-color: transparent; border-radius: var(--pim-radius-xs); padding: .5rem; }
+.plan-step-no { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.plan-step.peak .plan-step-no, .plan-step.peak .plan-step-share { color: var(--pim-primary); font-weight: 700; }
+.plan-step-name { color: var(--pim-text-strong); font-size: .8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-step.peak .plan-step-name { color: #312e81; font-weight: 700; }
+.plan-step-share { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ─── Tabela polj ────────────────────────────────────────────────────────── */
+/* Merilnik vrzeli ni statusni: visoka vrednost je slaba, zato brez zelene in oranzne. */
+.gap-share { align-items: center; display: flex; gap: .65rem; }
+.gap-count { color: var(--pim-text-strong); font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3.5rem; text-align: right; }
+.gap-track { background: #edf2f7; border-radius: 999px; display: block; height: .4rem; overflow: hidden; width: 4.75rem; }
+.gap-track i { background: var(--pim-primary); border-radius: 999px; display: block; height: 100%; }
+.gap-percent { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; min-width: 2.75rem; }
+.orphan-row { background: var(--pim-warn-bg); }
+.muted { color: var(--pim-text-muted); }
+
+@media (max-width: 1100px) {
+  .plan-grid { grid-template-columns: 1fr; }
+  .readiness-row { grid-template-columns: minmax(0, 1fr) 6rem; row-gap: .5rem; }
+  .readiness-bar, .readiness-open { grid-column: 1 / -1; text-align: left; }
+}

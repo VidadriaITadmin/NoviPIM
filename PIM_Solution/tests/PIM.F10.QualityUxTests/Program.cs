@@ -12,6 +12,7 @@ var quarantine = Read(Path.Combine(pages, "RawQuarantine.razor"));
 var layer = Read(Path.Combine(services, "ValidationLayer.cs"));
 var qualityService = Read(Path.Combine(services, "QualityReadService.cs"));
 var governanceService = Read(Path.Combine(services, "GovernanceReadService.cs"));
+var fieldPolicy = Read(Path.Combine(services, "QualityFieldPolicy.cs"));
 
 foreach (var markup in new[] { quality, issues, rules, quarantine })
   Assert(markup.Contains("[Authorize", StringComparison.Ordinal), "Vse strani kakovosti morajo zahtevati prijavo.");
@@ -57,6 +58,38 @@ Assert(rules.Contains("GetFieldRequirementsAsync", StringComparison.Ordinal), "Z
 foreach (var stateClass in new[] { "loading-state", "error-state", "empty-state" })
   Assert(quarantine.Contains(stateClass, StringComparison.Ordinal), "Karantena mora ohraniti stanje " + stateClass + ".");
 Assert(!Regex.IsMatch(quality + issues + rules, "<form|@onsubmit|method=\"post\"", RegexOptions.IgnoreCase), "Pregledi kakovosti ostajajo bralni.");
+
+// ─── Prenova pregleda kakovosti, 2026-08-28 ────────────────────────────────
+// Uporabnik je stran razglasil za nepregledno. Razlog je merljiv: vseh 340.227 odprtih
+// napak povzroca 16 polj, stran pa jih je razbijala po profilih, zato se je isto polje
+// pojavilo v treh razdelkih. Pregled je zdaj urejen po POLJU, tabele profilov pa so
+// odmaknjene v svoj zavihek. Te trditve drzijo tisto odlocitev.
+
+Assert(quality.Contains("GetFieldGapsAsync", StringComparison.Ordinal),
+  "Pregled mora imeti razclenitev po polju — to je edina razseznost, po kateri se delo res deli.");
+Assert(governanceService.Contains("GetFieldGapsAsync", StringComparison.Ordinal),
+  "Razclenitev po polju mora prihajati iz bralnega modela, ne iz strani.");
+Assert(quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal)
+  && governanceService.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
+  "Stran mora povedati, kaj se odblokira, ce polja popravljas po vrsti.");
+Assert(governanceService.Contains("CumulativeValid", StringComparison.Ordinal),
+  "Nacrt brez kumulativnega ucinka je samo se en seznam.");
+
+// Odstotek na nivoju je delez izdelkov BREZ napake. Prej je stala gola stevilka »18,1 %«
+// in iz strani ni bilo mogoce ugotoviti, cesa je to odstotek.
+Assert(quality.Contains("pripravljenih", StringComparison.Ordinal),
+  "Ob odstotku mora pisati, cesa je odstotek.");
+
+// Stiri visoke kartice in stirje zaporedni razdelki profilov so bili glavni vir nepreglednosti.
+Assert(!quality.Contains("validation-level-grid", StringComparison.Ordinal),
+  "Stirih visokih kartic nad seznamom ni vec.");
+Assert(quality.Contains("page-tabs", StringComparison.Ordinal) && quality.Contains("pogled=profili", StringComparison.Ordinal),
+  "Profili in zahteve morajo dobiti svoj zavihek, ne cetrtega zaporednega razdelka na pregledu.");
+Assert(quality.Contains("QualityFieldPolicy", StringComparison.Ordinal),
+  "Ime polja in cilj popravka morata biti skupna politika, ne besedilo v strani.");
+Assert(fieldPolicy.Contains("kakovost/napake?polje=", StringComparison.Ordinal)
+  && quality.Contains("QualityFieldPolicy.IssuesHref", StringComparison.Ordinal),
+  "Vsaka vrstica polja mora voditi na svoje napake, naslov pa sestavi politika in ne stran.");
 
 Console.WriteLine("F10 quality UX contract PASS.");
 

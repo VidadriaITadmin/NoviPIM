@@ -142,6 +142,11 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
+- **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
+  ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet
+  nalogovno usmerjenih sklopov, jasen prikaz blokad in odprtih nalog ter manj tehnična
+  predstavitev ključnih podatkov; obstoječe bralne in zapisovalne poti ostanejo nespremenjene.
+
 ## BLOKIRANO
 
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
@@ -175,6 +180,52 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+- **[INTRANET] Kakovost: pregled po polju, načrt odblokiranja, profili v svoj zavihek** — kdo: Claude Code
+  — ozemlje: INTRANET — končano 2026-08-28.
+
+  Uporabnik je stran razglasil za nepregledno. Razlog je merljiv in ni bil stvar okusa:
+  **vseh 340.227 odprtih napak povzroča 16 polj**, stran pa jih je razbijala po profilih.
+  Ker isto polje zahteva več profilov, se je `ProductMedia.Url` pojavil v treh razdelkih,
+  pod štirimi visokimi karticami in štirimi zaporednimi tabelami.
+
+  1. **Pregled je urejen po polju.** `GetFieldGapsAsync` združi odprte zahteve po `FieldCode`
+     in pove, koliko aktivnih izdelkov polje ustavi, katere nivoje blokira, kako je resno in
+     kje se popravi. Popravek enega polja zapre isto napako v vseh profilih hkrati.
+  2. **Načrt odblokiranja.** `GetUnblockPlanAsync` odgovori na vprašanje, ki ga stran prej ni
+     mogla: kaj se dejansko odblokira. Povprečen izdelek ustavi 6,7–8,3 polj hkrati, zato
+     posamezen popravek ne naredi nobenega izdelka veljavnega. Račun je zaporeden, z bitno
+     masko na izdelek, v enem obhodu baze.
+  3. **Odstotek pove, česa je odstotek.** »18,1 %« je delež izdelkov **brez** odprte zahteve;
+     zdaj piše »18,1 % pripravljenih« in poleg stoji število izdelkov, ki jih nivo ustavi.
+  4. **Profili so dobili svoj zavihek** (`kakovost?pogled=profili`), v eni tabeli z nivojem kot
+     stolpcem. Tam se vidi, da `ERP_L1` in `WEB_B2C` (obseg `LEGACY`) nosita 15.686 in 16.269
+     neveljavnih izdelkov, a ne blokirata ne ERP ne spleta — čisti šum.
+  5. **Imena polj se ne prevajajo iz slovarja.** `QualityFieldPolicy` prevede samo predpono
+     entitete; ime polja ostane iz registra. Izmišljen slovar bi se z registrom razšel.
+
+  **Dokaz — merjeno nad razvojno bazo `PIM`, prek pravih metod storitve:**
+
+  ```
+  org 1:  17.414 od 17.414 aktivnih ima odprto zahtevo, povprečno 7,8 polj, 18 polj — 341 ms
+  org 2:  98.245 od 98.260, povprečno 8,3 polj, 26 polj                              — 1.345 ms
+  org 3:  22.813 od 22.828, povprečno 6,8 polj, 18 polj                              —  269 ms
+  org 4:  39.132 od 39.132, povprečno 6,7 polj, 18 polj                              —  391 ms
+
+  načrt org 1:  1.–7. polje → 2,4 %      8. polje (EAN) → 57,2 %      9. → 72,9 %
+  načrt org 2:  1.–5. polje → 4,2 %      6. polje (WEB_TITLE.sl) → 38,9 %   8. → 58,0 %
+  ```
+
+  ```
+  scripts\run_tests.ps1 -Filter F10  → uspeli 13, padli 0, REZULTAT: VSE OK
+  ```
+
+  **Kaj sem spremenil v obstoječem testu in zakaj:** dve trditvi v `PIM.F10.QualityUxTests` sta
+  preverjali staro postavitev — literal `kakovost/napake?polje=` v strani in zavihek profilov.
+  Naslov napak zdaj sestavi `QualityFieldPolicy`, zato trditev preverja politiko. Vse ostale
+  trditve tega projekta so ostale nespremenjene in držijo.
+
+  **Česa nisem preveril:** strani nisem videl v brskalniku.
 
 - **[BAZA] Dobavitelj in proizvajalec dobita ime, izvoz gre v enem klicu (115) in enotna
   predloga SAOP (117)** — kdo: Claude Code — ozemlje: BAZA — končano 2026-08-27.
