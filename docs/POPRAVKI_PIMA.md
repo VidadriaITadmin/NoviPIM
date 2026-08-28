@@ -102,10 +102,10 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| I1 | Prikazuje samo dobaviteljsko zalogo — dodaj SAOP zalogo. | INTRANET + DOMENA | TODO |
-| I2 | Prikaži datume v prihodu. | INTRANET + DOMENA | TODO |
-| I3 | Odstrani oblačke. | INTRANET | TODO |
-| I4 | Odstrani filtra „vsa razpoložljivo" in „ujemanje". | INTRANET | TODO |
+| I1 | Prikazuje samo dobaviteljsko zalogo — dodaj SAOP zalogo. | INTRANET + DOMENA | NAREJENO |
+| I2 | Prikaži datume v prihodu. | INTRANET + DOMENA | NAREJENO |
+| I3 | Odstrani oblačke. | INTRANET | NAREJENO |
+| I4 | Odstrani filtra „vsa razpoložljivo" in „ujemanje". | INTRANET | NAREJENO |
 
 ## J. Poslovanje — Cene in ceniki
 

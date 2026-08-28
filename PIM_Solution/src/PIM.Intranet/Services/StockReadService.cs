@@ -6,7 +6,7 @@ namespace PIM.Intranet.Services;
 public sealed record StockPositionRow(
   long PositionId, string? NormalizedItemId, string? Ean, decimal Quantity,
   DateTime? AvailabilityDate, decimal? IncomingQuantity, string? MatchKey, long? MatchedProductId,
-  string? ProductName, string? ProductItemId, string SourceCode, string? ProviderKind,
+  string? ProductName, string? ProductItemId, string SourceCode, string? SourceKind, string? ProviderKind,
   string? Endpoint, DateTime SnapshotUtc, int FreshnessMinutes,
   decimal? MinimumStock, decimal? MaximumStock, string? WarehouseCode);
 
@@ -14,7 +14,8 @@ public sealed record StockPositionPage(IReadOnlyList<StockPositionRow> Rows, lon
 
 public sealed record StockPositionFilter(
   int OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? SourceCode = null,
-  string? Availability = null, string? Matched = null, int? MaxAgeHours = null, string Language = "sl");
+  string? Availability = null, string? Matched = null, int? MaxAgeHours = null, string Language = "sl",
+  string? SourceKind = null);
 
 public sealed record StockTotals(
   long PositionCount, long MatchedCount, long UnmatchedCount, long InStockCount,
@@ -60,6 +61,7 @@ public sealed class StockReadService(IConfiguration configuration)
     command.Parameters.Add("@Matched", SqlDbType.NVarChar, 20).Value = Optional(filter.Matched);
     command.Parameters.Add("@MaxAgeHours", SqlDbType.Int).Value = filter.MaxAgeHours is null ? DBNull.Value : filter.MaxAgeHours.Value;
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+    command.Parameters.Add("@SourceKind", SqlDbType.NVarChar, 20).Value = Optional(filter.SourceKind);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new StockPositionRow(
@@ -67,7 +69,7 @@ public sealed class StockReadService(IConfiguration configuration)
       PimDb.Decimal(row, "Quantity"), PimDb.NullableDateTime(row, "AvailabilityDate"),
       PimDb.NullableDecimal(row, "IncomingQuantity"), PimDb.Text(row, "MatchKey"),
       PimDb.NullableInt64(row, "MatchedProductId"), PimDb.Text(row, "ProductName"),
-      PimDb.Text(row, "ProductItemId"), PimDb.TextOrEmpty(row, "SourceCode"),
+      PimDb.Text(row, "ProductItemId"), PimDb.TextOrEmpty(row, "SourceCode"), PimDb.Text(row, "SourceKind"),
       PimDb.Text(row, "ProviderKind"), PimDb.Text(row, "Endpoint"),
       PimDb.DateTimeValue(row, "SnapshotUtc"), PimDb.Int32(row, "FreshnessMinutes"),
       PimDb.NullableDecimal(row, "MinimumStock"), PimDb.NullableDecimal(row, "MaximumStock"),

@@ -16,6 +16,8 @@
   <PimStat Label="Brez zaloge" Value="@Number(Overview?.Totals.OutOfStockCount)" Note="pozicij s količino nič ali manj" Href="zaloge?razpolozljivost=OUT_OF_STOCK" />
   <PimStat Label="Prihaja" Value="@Number(Overview?.Totals.IncomingCount)" Note="pozicij z napovedano dobavo" Href="zaloge?razpolozljivost=INCOMING" />
   <PimStat Label="Brez artikla" Value="@Number(Overview?.Totals.UnmatchedCount)" Note="pozicij, ki jih ni mogoče pripeti na artikel" Href="zaloge?ujemanje=UNMATCHED" />
+  <PimStat Label="ERP (SAOP)" Value="@Number(ErpPositions)" Note="pozicij iz ERP" Href="zaloge?vrsta=ERP" />
+  <PimStat Label="Dobaviteljeva" Value="@Number(SupplierPositions)" Note="pozicij iz dobaviteljevih virov" Href="zaloge?vrsta=DOBAVITELJ" />
 </section>
 
 <section class="ui-card toolbar" role="search" aria-labelledby="stocks-filter-title">
@@ -32,19 +34,15 @@
     }
   </select>
 
-  <label class="visually-hidden" for="stock-availability">Razpoložljivost</label>
-  <select id="stock-availability" class="filter-select" @bind="AvailabilityDraft">
-    <option value="">Vsa razpoložljivost</option>
-    <option value="IN_STOCK">Na zalogi</option>
-    <option value="OUT_OF_STOCK">Brez zaloge</option>
-    <option value="INCOMING">Prihaja</option>
-  </select>
-
-  <label class="visually-hidden" for="stock-matched">Ujemanje z artiklom</label>
-  <select id="stock-matched" class="filter-select" @bind="MatchedDraft">
-    <option value="">Ujemanje: vseeno</option>
-    <option value="MATCHED">Pripeto na artikel</option>
-    <option value="UNMATCHED">Brez artikla</option>
+  @* Uporabnik 2026-08-28: filtra »vsa razpoložljivost« in »ujemanje« sta odpadla — na obe
+     vprašanji odgovarjajo že kartice povzetka nad tabelo, ki so klikljive. Namesto njiju je
+     prišla vrsta vira: SAOP zaloga je bila v seznamu, a je ni bilo mogoče ločiti od
+     dobaviteljeve. *@
+  <label class="visually-hidden" for="stock-kind">Vrsta vira</label>
+  <select id="stock-kind" class="filter-select" @bind="KindDraft">
+    <option value="">Vsi viri zaloge</option>
+    <option value="ERP">ERP (SAOP)</option>
+    <option value="DOBAVITELJ">Dobaviteljeva zaloga</option>
   </select>
 
   <label class="visually-hidden" for="stock-age">Svežina posnetka</label>
@@ -59,17 +57,9 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
-@if (ActiveChips.Count > 0)
-{
-  <section class="ui-card active-filters" aria-label="Aktivni filtri">
-    @foreach (var chip in ActiveChips)
-    {
-      <a class="filter-chip" href="@chip.RemoveHref" aria-label="Odstrani filter @chip.Label">@chip.Label<span class="chip-remove" aria-hidden="true"></span></a>
-    }
-    <a class="filter-chip clear-all" href="zaloge">Počisti vse</a>
-  </section>
-}
-
+@* Vrstica oblačkov z aktivnimi filtri je odpadla: uporabnik jih je 2026-08-28 označil za
+   moteče. Kaj je nastavljeno, se vidi v samih kontrolah nad tabelo, poleg njih pa stoji
+   »Počisti«, ki je edino dejanje, ki ga je vrstica oblačkov res ponujala. *@
 <section class="ui-card data-card" aria-label="Zalogovne pozicije">
   <PimState Loading="Loading" Error="@Error" Empty="@(PageData is not null && PageData.Rows.Count == 0)"
             EmptyText="Za izbrane filtre ni zalogovnih pozicij." LoadingText="Nalaganje zaloge …">
@@ -97,11 +87,15 @@
               </td>
               <td class="numeric">@row.Quantity.ToString("N2")</td>
               <td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td>
-              <td>@(row.AvailabilityDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+              <td>
+                @if (row.AvailabilityDate is { } arrival) { <span>@arrival.ToString("dd.MM.yyyy")</span> }
+                else if (row.IncomingQuantity > 0) { <span class="muted" title="Vir je javil količino, datuma pa ne.">datuma ni</span> }
+                else { <span class="muted">—</span> }
+              </td>
               <td class="numeric">@Limits(row)</td>
               <td>
-                <span class="source-code">@row.SourceCode</span>
-                @if (row.ProviderKind is not null) { <span class="product-meta">@row.ProviderKind</span> }
+                <PimChip Text="@KindLabel(row.SourceKind)" Tone="@(row.SourceKind == "ERP" ? "info" : null)" />
+                <span class="product-meta"><span class="source-code">@row.SourceCode</span></span>
               </td>
               <td>
                 @row.SnapshotUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
@@ -187,6 +181,9 @@
   [SupplyParameterFromQuery(Name = "razpolozljivost")] public string? QueryAvailability { get; set; }
   [SupplyParameterFromQuery(Name = "ujemanje")] public string? QueryMatched { get; set; }
   [SupplyParameterFromQuery(Name = "starost")] public int? QueryAge { get; set; }
+  // Kontrol za razpolozljivost in ujemanje na zaslonu ni vec (uporabnik 2026-08-28), parametra
+  // pa ostaneta: nanju kazejo klikljive kartice povzetka nad tabelo.
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
 
   StockPositionPage? PageData;
@@ -199,6 +196,7 @@
   string AvailabilityDraft = "";
   string MatchedDraft = "";
   string AgeDraft = "";
+  string KindDraft = "";
 
   const int Take = 50;
   const int StaleAfterMinutes = 24 * 60;
@@ -208,7 +206,7 @@
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new("Artikel"), new("Količina", Numeric: true), new("Prihodna količina", Numeric: true),
-    new("Pričakovana dobava"), new("Min / max", Numeric: true), new("Vir"),
+    new("Prihod"), new("Min / max", Numeric: true), new("Vir"),
     new("Čas posnetka"), new("Stanje"),
   ];
 
@@ -223,8 +221,6 @@
     new("Razlog"), new("Pozicij", Numeric: true), new("Prvič"), new("Nazadnje"), new("Primer"),
   ];
 
-  sealed record FilterChip(string Label, string RemoveHref);
-
   IReadOnlyList<string> SourceCodes => Overview is null ? []
     : Overview.Sources.Select(source => source.SourceCode).Distinct().OrderBy(code => code).ToList();
 
@@ -235,6 +231,7 @@
     AvailabilityDraft = QueryAvailability ?? "";
     MatchedDraft = QueryMatched ?? "";
     AgeDraft = QueryAge?.ToString() ?? "";
+    KindDraft = QueryKind ?? "";
 
     Loading = true;
     Error = null;
@@ -251,7 +248,7 @@
 
       PageData = await Stock.GetPositionsAsync(new StockPositionFilter(
         organization.OrganizationId, Skip, Take, QuerySearch, QuerySource,
-        QueryAvailability, QueryMatched, QueryAge));
+        QueryAvailability, QueryMatched, QueryAge, "sl", QueryKind));
     }
     catch
     {
@@ -286,23 +283,9 @@
       ? "—"
       : $"{row.MinimumStock?.ToString("N0") ?? "—"} / {row.MaximumStock?.ToString("N0") ?? "—"}";
 
-  List<FilterChip> ActiveChips
-  {
-    get
-    {
-      var chips = new List<FilterChip>();
-      if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
-      if (!string.IsNullOrWhiteSpace(QuerySource)) chips.Add(new($"Vir: {QuerySource}", Href(source: "")));
-      if (!string.IsNullOrWhiteSpace(QueryAvailability)) chips.Add(new($"Razpoložljivost: {AvailabilityLabel(QueryAvailability)}", Href(availability: "")));
-      if (!string.IsNullOrWhiteSpace(QueryMatched)) chips.Add(new($"Ujemanje: {MatchedLabel(QueryMatched)}", Href(matched: "")));
-      if (QueryAge is > 0) chips.Add(new($"Svežina: do {QueryAge} h", Href(age: "")));
-      return chips;
-    }
-  }
-
   // Filtri in stran zivijo v naslovu; "" pomeni odstrani, null ohrani obstojecega.
   string Href(string? search = null, string? source = null, string? availability = null,
-    string? matched = null, string? age = null, int? page = null)
+    string? matched = null, string? age = null, string? kind = null, int? page = null)
   {
     var parameters = new List<string>();
     Add("isci", Resolve(search, QuerySearch));
@@ -310,8 +293,9 @@
     Add("razpolozljivost", Resolve(availability, QueryAvailability));
     Add("ujemanje", Resolve(matched, QueryMatched));
     Add("starost", Resolve(age, QueryAge?.ToString()));
+    Add("vrsta", Resolve(kind, QueryKind));
     var resolvedPage = page ?? (search is null && source is null && availability is null
-      && matched is null && age is null ? QueryPage : null);
+      && matched is null && age is null && kind is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "zaloge" : "zaloge?" + string.Join('&', parameters);
@@ -328,7 +312,7 @@
   {
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), source: SourceDraft, availability: AvailabilityDraft,
-      matched: MatchedDraft, age: AgeDraft, page: 1));
+      matched: MatchedDraft, age: AgeDraft, kind: KindDraft, page: 1));
     return Task.CompletedTask;
   }
 
@@ -342,6 +326,21 @@
   }
 
   static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+
+  /// <summary>Vrsta vira, kot jo bere clovek. ERP je SAOP, vse ostalo je dobaviteljev vir.</summary>
+  static string KindLabel(string? value) => value switch
+  {
+    "ERP" => "ERP (SAOP)",
+    "DOBAVITELJ" => "dobavitelj",
+    _ => "neznan vir",
+  };
+
+  // Povzetek po vrsti vira izhaja iz ze nalozenih virov; nove poizvedbe za to ni.
+  long? ErpPositions => Overview is null ? null : Overview.Sources.Where(IsErpSource).Sum(source => source.PositionCount);
+  long? SupplierPositions => Overview is null ? null : Overview.Sources.Where(source => !IsErpSource(source)).Sum(source => source.PositionCount);
+
+  // Ista meja kot v proceduri (migracija 130): SAOP konektor je ERP, vsak drug je dobaviteljev.
+  static bool IsErpSource(StockSourceRow source) => source.SourceCode.Contains("SAOP", StringComparison.OrdinalIgnoreCase);
 
   static string AvailabilityLabel(string? value) => value switch
   {
