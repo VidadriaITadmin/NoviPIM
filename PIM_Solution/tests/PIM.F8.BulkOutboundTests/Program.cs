@@ -89,6 +89,54 @@ Throws<WorkbookReadException>(() =>
   Assert(sheetXml.Contains("<autoFilter", StringComparison.Ordinal), "Tabela mora imeti samodejni filter");
 }
 
+/* --- 1c) Skupine stolpcev in barvne oznake ------------------------------------------- */
+
+// Zahteva uporabnika 2026-08-28: v izvozu morajo biti podatki ERP, komerciala in splet, polja,
+// ki pri izdelku manjkajo, morajo biti blago rdeca, polja, ki so pogoj za validacijo, pa
+// rumenkasta. Brez tega je treba vsak stolpec preverjati rocno.
+{
+  var written = WorkbookWriter.Write(
+    "Izdelki",
+    [
+      new("Sifra", WorkbookCellKind.Text, 0, "Istovetnost"),
+      new("EAN", WorkbookCellKind.Text, 0, "ERP", WorkbookCellTone.Required),
+      new("Enota mere", WorkbookCellKind.Text, 0, "ERP"),
+      new("Spletni naziv", WorkbookCellKind.Text, 0, "Splet", WorkbookCellTone.Required),
+    ],
+    [
+      ["0000000000001", new WorkbookCell("3830000000001"), new WorkbookCell("KOS"), new WorkbookCell(null, WorkbookCellTone.Missing)],
+    ]);
+
+  // Skupine dobi samo list »pregled«, ki ga bere clovek. Predloga SAOP, ki se ureja in vraca
+  // skozi WorkbookTable.Read, ostane brez skupin — tam je prva vrstica ime stolpca in nic
+  // drugega. Tu se to izrecno preveri, da nihce ne doda skupin v predlogo za vracanje.
+  using var reread = new MemoryStream(written);
+  var sheet = WorkbookTable.Read(reread);
+  Equal("Istovetnost", sheet.Headers[0], "Bralec vzame prvo vrstico; grupiran list zato ni pot za vracanje");
+  Equal("Sifra", sheet.Rows[0][0], "Imena stolpcev so v drugi vrstici, takoj pod skupinami");
+  Equal("3830000000001", sheet.Rows[1][1], "Vrednost v oznaceni celici mora priti nazaj nespremenjena");
+
+  using var archive = new ZipArchive(new MemoryStream(written), ZipArchiveMode.Read);
+  using var sheetPart = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+  var sheetXml = sheetPart.ReadToEnd();
+  Assert(sheetXml.Contains("<t xml:space=\"preserve\">Istovetnost</t>", StringComparison.Ordinal),
+    "Nad stolpci mora stati vrstica s skupinami");
+  Assert(sheetXml.Contains("ySplit=\"2\"", StringComparison.Ordinal),
+    "Pri dveh naslovnih vrsticah morata biti zamrznjeni obe");
+  Assert(sheetXml.Contains("<autoFilter ref=\"A2:", StringComparison.Ordinal),
+    "Samodejni filter mora stati na vrstici z imeni stolpcev, ne na skupinah");
+  // Slog 11 je rumena glava, slog 4 rdeca prazna celica; brez njiju oznake v Excelu ni.
+  Assert(sheetXml.Contains(" s=\"11\"", StringComparison.Ordinal),
+    "Zahtevano polje mora imeti rumeno glavo");
+  Assert(sheetXml.Contains(" s=\"4\"", StringComparison.Ordinal),
+    "Manjkajoca vrednost mora imeti rdeco podlago");
+
+  using var stylesPart = new StreamReader(archive.GetEntry("xl/styles.xml")!.Open());
+  var stylesXml = stylesPart.ReadToEnd();
+  foreach (var fill in new[] { "FFF6D6D6", "FFFCEFC0" })
+    Assert(stylesXml.Contains(fill, StringComparison.Ordinal), "Manjka polnilo " + fill);
+}
+
 /* --- 2) Preslikava zvezka na pisljiva polja ------------------------------------------ */
 
 var writable = new[]

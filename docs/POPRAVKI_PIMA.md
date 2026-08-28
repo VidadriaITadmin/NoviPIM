@@ -18,7 +18,7 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| B1 | Navigacijsko drevo: ime „Zajem in preslikava" ni všeč — preimenovati. | INTRANET | TODO |
+| B1 | Navigacijsko drevo: ime „Zajem in preslikava" ni všeč — preimenovati. | INTRANET | NAREJENO |
 | B2 | Vhodi: ostane kot je (pohvala) — brez spremembe. | — | NAREJENO |
 | B3 | Tabela virov naj bo skupaj s filtri (en blok, ne ločena bloka). | INTRANET | TODO |
 | B4 | Klik na worker → izpis zanj: ostane (pohvala). | — | NAREJENO |
@@ -29,18 +29,18 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| C1 | Odstrani globalni iskalnik v glavi strani (podvaja iskalnik na Izdelkih). | INTRANET | TODO |
+| C1 | Odstrani globalni iskalnik v glavi strani (podvaja iskalnik na Izdelkih). | INTRANET | NAREJENO |
 | C2 | Zavihki (vse / za uredit / brez slike …) so manj pomembni — glavni poudarek na dobre filtre, da uporabnik vidi izdelke v napaki. | INTRANET | TODO |
-| C3 | Izvoz v Excel: polja, ki manjkajo, obarvaj blago rdeče. | DOMENA/IZVOZ | TODO |
-| C4 | Izvoz v Excel: polja, ki so nujna za validacijo, obarvaj rumenkasto. | DOMENA/IZVOZ | TODO |
-| C5 | Izvoz v Excel mora vsebovati ERP, komerciala in SPLET podatke; odvečna polja odstrani. | DOMENA/IZVOZ | TODO |
+| C3 | Izvoz v Excel: polja, ki manjkajo, obarvaj blago rdeče. | DOMENA/IZVOZ | NAREJENO |
+| C4 | Izvoz v Excel: polja, ki so nujna za validacijo, obarvaj rumenkasto. | DOMENA/IZVOZ | NAREJENO |
+| C5 | Izvoz v Excel mora vsebovati ERP, komerciala in SPLET podatke; odvečna polja odstrani. | DOMENA/IZVOZ | NAREJENO |
 | C6 | Atributi za SPLET v izvozu — odprto vprašanje: atributi se določijo po kategorijah. | — | VPRAŠANJE |
-| C7 | Odstrani polje/izbiro „Pregled – cel pregled" (sprememba nima učinka). | INTRANET | TODO |
+| C7 | Odstrani polje/izbiro „Pregled – cel pregled" (sprememba nima učinka). | INTRANET | NAREJENO |
 | C8 | Komercialni podatki: „pakiranje" in „dimenzije pakiranja" premakni pod ERP podatke. | INTRANET | TODO |
-| C9 | Filtri: dodaj filter „ima sliko / nima slike". | INTRANET | TODO |
-| C10 | Povsod preimenuj „Oddelek" → „ABC klasifikacija" (kjer gre za A/B/C podatke). | INTRANET | TODO |
-| C11 | „Razvrstitev" premakni nad tabelo (ločeno od filtrov). | INTRANET | TODO |
-| C12 | Klik na izdelek: kartica se dolgo nalaga in vmes se pokaže seznam izdelkov — dodaj takojšen prikaz s kolescem nalaganja in/ali pohitri. | INTRANET | TODO |
+| C9 | Filtri: dodaj filter „ima sliko / nima slike". | INTRANET | NAREJENO |
+| C10 | Povsod preimenuj „Oddelek" → „ABC klasifikacija" (kjer gre za A/B/C podatke). | INTRANET | NAREJENO |
+| C11 | „Razvrstitev" premakni nad tabelo (ločeno od filtrov). | INTRANET | NAREJENO |
+| C12 | Klik na izdelek: kartica se dolgo nalaga in vmes se pokaže seznam izdelkov — dodaj takojšen prikaz s kolescem nalaganja in/ali pohitri. | INTRANET | NAREJENO |
 
 ## D. Kartica artikla
 
@@ -64,7 +64,7 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| F1 | Naslov „Validacija in vrzeli" ni všeč — preimenuj. | INTRANET | TODO |
+| F1 | Naslov „Validacija in vrzeli" ni všeč — preimenuj. | INTRANET | NAREJENO |
 | F2 | Kakovost kaže samo DEMO artikle — mora kazati vse. | INTRANET | TODO |
 | F3 | Filter „spletna mesta" ni relevanten — odstrani (gre za ERP, komercialo in splet hkrati). | INTRANET | TODO |
 | F4 | Odstrani „načrt odblokiranja". | INTRANET | TODO |
@@ -75,14 +75,14 @@ Stanje: `TODO` / `DELAM` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev člove
 
 | # | Zahteva | Ozemlje | Stanje |
 |---|---|---|---|
-| G1 | Preimenuj „SAOP – pisanje nazaj". | INTRANET | TODO |
-| G2 | Odstrani oblačke (tooltipe/obvestilne bloke) na strani SAOP. | INTRANET | TODO |
-| G3 | Preveč gumbov v obliki oblačkov — zamenjaj z nekaj zavihki, ki se res rabijo. | INTRANET | TODO |
+| G1 | Preimenuj „SAOP – pisanje nazaj". | INTRANET | NAREJENO |
+| G2 | Odstrani oblačke (tooltipe/obvestilne bloke) na strani SAOP. | INTRANET | NAREJENO |
+| G3 | Preveč gumbov v obliki oblačkov — zamenjaj z nekaj zavihki, ki se res rabijo. | INTRANET | NAREJENO |
 | G4 | Tabela stanja ostane (pohvala). | — | NAREJENO |
-| G5 | Preimenuj „Splet – kar gre ven". | INTRANET | TODO |
+| G5 | Preimenuj „Splet – kar gre ven". | INTRANET | NAREJENO |
 | G6 | Na strani za splet naj se vidi dejanski CSV s prenosom; urejanje mora priti nazaj v izvozni CSV. | INTRANET + IZVOZ | TODO |
 | G7 | Več CSV-jev za splet (artikli in stranke) — oba morata biti na voljo za pogled. | INTRANET + IZVOZ | TODO |
-| G8 | Stran „Izvozni profili in datoteke" podvaja „Splet – kaj gre ven" — odstrani. | INTRANET | TODO |
+| G8 | Stran „Izvozni profili in datoteke" podvaja „Splet – kaj gre ven" — odstrani. | INTRANET | NAREJENO |
 
 ## H. Poslovanje — Stranke
 

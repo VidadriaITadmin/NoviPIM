@@ -14,8 +14,34 @@ public enum WorkbookCellKind
   DateTime,
 }
 
+/// <summary>
+/// Barva ozadja celice. Ni okras: uporabnik je 2026-08-28 zahteval, da se v Excelu vidi,
+/// katero polje pri izdelku manjka in katero polje sploh je pogoj za validacijo — brez tega
+/// je treba vsak stolpec preverjati rocno.
+/// </summary>
+public enum WorkbookCellTone
+{
+  /// <summary>Brez podlage.</summary>
+  None,
+
+  /// <summary>Blaga vinsko rdeca: vrednost manjka, pa bi morala biti.</summary>
+  Missing,
+
+  /// <summary>Rumenkasta: polje je pogoj za validacijo.</summary>
+  Required,
+}
+
+/// <param name="Value">Vrednost celice; enaka pravila kot pri golih vrednostih.</param>
+/// <param name="Tone">Podlaga celice.</param>
+public sealed record WorkbookCell(object? Value, WorkbookCellTone Tone = WorkbookCellTone.None);
+
 /// <param name="Width">Širina stolpca v znakih; 0 pomeni privzeto.</param>
-public sealed record WorkbookColumn(string Header, WorkbookCellKind Kind = WorkbookCellKind.Text, double Width = 0);
+/// <param name="Group">Naslov skupine nad stolpcem; kadar ga ima vsaj en stolpec, dobi list
+/// dve naslovni vrstici — skupine in imena stolpcev.</param>
+/// <param name="HeaderTone">Podlaga naslovne celice; z njo se oznaci zahtevano polje.</param>
+public sealed record WorkbookColumn(
+  string Header, WorkbookCellKind Kind = WorkbookCellKind.Text, double Width = 0,
+  string? Group = null, WorkbookCellTone HeaderTone = WorkbookCellTone.None);
 
 /// <summary>
 /// Zapis delovnega zvezka (.xlsx) — nasprotna smer <see cref="WorkbookTable"/>.
@@ -55,8 +81,12 @@ public static class WorkbookWriter
     sheet.Append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""");
     sheet.Append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
 
+    // Kadar stolpci nosijo skupine, ima list dve naslovni vrstici: skupine in imena.
+    var hasGroups = columns.Any(column => !string.IsNullOrWhiteSpace(column.Group));
+    var headerRows = hasGroups ? 2 : 1;
+
     // Zamrznjena naslovna vrstica: pri 20.000 vrsticah je brez tega že tretja stran ugibanje.
-    sheet.Append("""<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>""");
+    sheet.Append(CultureInfo.InvariantCulture, $"""<sheetViews><sheetView workbookViewId="0"><pane ySplit="{headerRows}" topLeftCell="A{headerRows + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>""");
 
     sheet.Append("<cols>");
     for (var index = 0; index < columns.Count; index++)
@@ -66,20 +96,40 @@ public static class WorkbookWriter
     }
     sheet.Append("</cols><sheetData>");
 
-    sheet.Append("""<row r="1">""");
+    if (hasGroups)
+    {
+      sheet.Append("""<row r="1">""");
+      for (var index = 0; index < columns.Count; index++)
+      {
+        // Skupina se izpise samo nad prvim stolpcem skupine; sicer bi se ime ponavljalo
+        // pri vsakem stolpcu in bi vrstica postala hrup namesto orientacije.
+        var group = columns[index].Group;
+        var repeats = index > 0 && string.Equals(columns[index - 1].Group, group, StringComparison.Ordinal);
+        AppendCell(sheet, Reference(index, 1), repeats ? null : group, WorkbookCellKind.Text, styleIndex: 1);
+      }
+      sheet.Append("</row>");
+    }
+
+    sheet.Append(CultureInfo.InvariantCulture, $"""<row r="{headerRows}">""");
     for (var index = 0; index < columns.Count; index++)
-      AppendCell(sheet, Reference(index, 1), columns[index].Header, WorkbookCellKind.Text, styleIndex: 1);
+      AppendCell(sheet, Reference(index, headerRows), columns[index].Header, WorkbookCellKind.Text,
+        styleIndex: columns[index].HeaderTone == WorkbookCellTone.Required ? 11 : 1);
     sheet.Append("</row>");
 
-    var rowNumber = 1;
+    var rowNumber = headerRows;
     var truncated = false;
     foreach (var row in rows)
     {
-      if (rowNumber - 1 >= MaxRows) { truncated = true; break; }
+      if (rowNumber - headerRows >= MaxRows) { truncated = true; break; }
       rowNumber++;
       sheet.Append(CultureInfo.InvariantCulture, $"""<row r="{rowNumber}">""");
       for (var index = 0; index < columns.Count && index < row.Count; index++)
-        AppendCell(sheet, Reference(index, rowNumber), row[index], columns[index].Kind, StyleOf(columns[index].Kind));
+      {
+        var raw = row[index];
+        var tone = raw is WorkbookCell toned ? toned.Tone : WorkbookCellTone.None;
+        if (raw is WorkbookCell cell) raw = cell.Value;
+        AppendCell(sheet, Reference(index, rowNumber), raw, columns[index].Kind, StyleOf(columns[index].Kind, tone));
+      }
       sheet.Append("</row>");
     }
 
@@ -98,7 +148,7 @@ public static class WorkbookWriter
     }
 
     sheet.Append("</sheetData>");
-    sheet.Append(CultureInfo.InvariantCulture, $"""<autoFilter ref="A1:{ColumnName(columns.Count - 1)}1"/>""");
+    sheet.Append(CultureInfo.InvariantCulture, $"""<autoFilter ref="A{headerRows}:{ColumnName(columns.Count - 1)}{headerRows}"/>""");
     sheet.Append("</worksheet>");
 
     var stream = new MemoryStream();
@@ -144,7 +194,8 @@ public static class WorkbookWriter
     return stream.ToArray();
   }
 
-  /* Slog: 0 privzeto, 1 glava (krepko, siva podlaga, črta), 2 datum, 3 odstotek. */
+  /* Slog: 0 privzeto, 1 glava, 2 datum, 3 odstotek; 4–6 manjkajoca vrednost (vinsko rdeca)
+     v istih treh oblikah, 7–9 zahtevano polje (rumenkasta), 11 zahtevana glava. */
   const string Styles =
     """
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -157,31 +208,46 @@ public static class WorkbookWriter
         <font><sz val="11"/><name val="Calibri"/></font>
         <font><b/><sz val="11"/><name val="Calibri"/></font>
       </fonts>
-      <fills count="3">
+      <fills count="5">
         <fill><patternFill patternType="none"/></fill>
         <fill><patternFill patternType="gray125"/></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFEEF1F6"/><bgColor indexed="64"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFF6D6D6"/><bgColor indexed="64"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFFCEFC0"/><bgColor indexed="64"/></patternFill></fill>
       </fills>
       <borders count="2">
         <border><left/><right/><top/><bottom/><diagonal/></border>
         <border><left/><right/><top/><bottom style="thin"><color rgb="FFBFC7D2"/></bottom><diagonal/></border>
       </borders>
       <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-      <cellXfs count="4">
+      <cellXfs count="12">
         <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
         <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
         <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
         <xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+        <xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/>
+        <xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+        <xf numFmtId="165" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+        <xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/>
+        <xf numFmtId="164" fontId="0" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+        <xf numFmtId="165" fontId="0" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+        <xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
       </cellXfs>
     </styleSheet>
     """;
 
-  static int StyleOf(WorkbookCellKind kind) => kind switch
+  static int StyleOf(WorkbookCellKind kind, WorkbookCellTone tone = WorkbookCellTone.None)
   {
-    WorkbookCellKind.DateTime => 2,
-    WorkbookCellKind.Percent => 3,
-    _ => 0,
-  };
+    var offset = kind switch { WorkbookCellKind.DateTime => 1, WorkbookCellKind.Percent => 2, _ => 0 };
+    return tone switch
+    {
+      WorkbookCellTone.Missing => 4 + offset,
+      WorkbookCellTone.Required => 7 + offset,
+      // Brez podlage ostane stara razporeditev slogov: 0 besedilo in stevilo, 2 datum, 3 odstotek.
+      _ => offset == 0 ? 0 : offset + 1,
+    };
+  }
 
   static double DefaultWidth(WorkbookColumn column) => column.Kind switch
   {
@@ -195,6 +261,7 @@ public static class WorkbookWriter
     var style = styleIndex == 0 ? "" : $" s=\"{styleIndex}\"";
     if (value is null || (value is string empty && empty.Length == 0))
     {
+      // Prazna celica obdrzi svoj slog: prav pri njej podlaga nekaj pove — vrednost manjka.
       sheet.Append(CultureInfo.InvariantCulture, $"""<c r="{reference}"{style}/>""");
       return;
     }
