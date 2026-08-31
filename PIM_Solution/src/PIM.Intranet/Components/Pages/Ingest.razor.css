@@ -1,8 +1,5 @@
 /* Uporabnik 2026-08-28: »tabela bi lahko bila skupa js filtri in pa sama tabela«. Filtri zato
    niso vec svoja kartica nad tabelo, ampak vrstica v isti kartici, locena samo s crto. */
-.card-toolbar { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin: -.25rem -.25rem .75rem; padding: 0 .25rem .75rem; }
-.card-toolbar .filter-select { max-width: 12rem; }
-.card-toolbar .result-count { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; }
 .ingest-scope { align-items: center; display: flex; justify-content: space-between; margin-bottom: 1rem; padding: .8rem 1rem; }
 .ingest-scope div { display: flex; flex-direction: column; }
 .ingest-scope strong { color: var(--pim-text-strong); font-size: .85rem; }

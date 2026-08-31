@@ -1,8 +1,5 @@
 /* Izoliran slog strani /cene. */
 
-.card-toolbar { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin: -.25rem -.25rem .75rem; padding: 0 .25rem .75rem; }
-.card-toolbar .filter-select { max-width: 13rem; }
-.card-toolbar .search-input { max-width: 18rem; }
 .result-count { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; }
 
 /* Cela vrstica odpre cenike te vrstice — v vrstici, ne na kartici izdelka. */

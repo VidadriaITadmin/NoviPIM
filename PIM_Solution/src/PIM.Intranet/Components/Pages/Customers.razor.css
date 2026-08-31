@@ -2,9 +2,6 @@
 .result-count { font-variant-numeric: tabular-nums; margin-left: auto; }
 
 /* Filtri stojijo v isti kartici kot tabela, loceni samo s crto — isto kot pri vhodnih podatkih. */
-.card-toolbar { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin: -.25rem -.25rem .75rem; padding: 0 .25rem .75rem; }
-.card-toolbar .filter-select { max-width: 12rem; }
-.card-toolbar .search-input { max-width: 20rem; }
 
 /* Cela vrstica je ena poteza: odpre stranko. Zato kazalec in poudarek na celi vrstici,
    ne povezava v celici — podcrtano besedilo sredi klikljive vrstice obljublja dve dejanji. */
