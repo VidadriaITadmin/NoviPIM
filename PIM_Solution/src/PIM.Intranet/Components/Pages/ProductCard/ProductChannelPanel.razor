@@ -24,7 +24,7 @@
     @foreach (var group in Fields.GroupBy(row => row.Hint ?? DefaultGroup))
     {
       var missing = group.Count(row => row.Missing && row.Required);
-      <section class="field-group">
+      <section class="field-group @(TwoColumnGroups?.Contains(group.Key, StringComparer.Ordinal) == true ? "two-columns" : null)">
         <h3 class="group-title">
           @group.Key
           @if (missing > 0) { <span class="group-count">@missing brez vrednosti</span> }
@@ -114,6 +114,9 @@
   [Parameter, EditorRequired] public required IReadOnlyList<ProductCardIssue> Issues { get; set; }
   [Parameter] public bool Hidden { get; set; }
   [Parameter] public RenderFragment? Toolbar { get; set; }
+
+  /// <summary>Skupine, ki se izrisejo v natanko dveh stolpcih namesto v samodejni mrezi.</summary>
+  [Parameter] public IReadOnlyList<string>? TwoColumnGroups { get; set; }
   [Parameter] public string DefaultGroup { get; set; } = "Polja kanala";
 
   /// <summary>Nepotrjene spremembe kartice; ključ je <see cref="ProductChannelField.FieldKey"/>.</summary>

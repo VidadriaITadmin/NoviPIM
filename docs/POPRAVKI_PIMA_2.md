@@ -11,13 +11,13 @@ Stanje: `TODO` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev človeka).
 
 | # | Zahteva | Stanje |
 |---|---|---|
-| A1 | Izpisati **vsa** polja, ki jih artikel ima, in omogočiti spremembo. | TODO |
-| A2 | ERP nazivi po dva stolpca. | TODO |
+| A1 | Izpisati **vsa** polja, ki jih artikel ima, in omogočiti spremembo. | NAREJENO |
+| A2 | ERP nazivi po dva stolpca. | NAREJENO |
 | A3 | Kategorije ločene od ERP polj — kot spletna polja; uporabnik mora kategorijo popravljati. | TODO |
 | A4 | Pri izvozu v Excel najprej okno, kjer uporabnik izbere, kaj bo urejal. | TODO |
-| A5 | Prikaže samo glavno sliko — pokazati mora **vse** slike in **vse** dokumente. | TODO |
-| A6 | Nikjer se ne vidi, iz katere organizacije je artikel. | TODO |
-| A7 | Komercialne in spletne podatke ločiti. | TODO |
+| A5 | Prikaže samo glavno sliko — pokazati mora **vse** slike in **vse** dokumente. | NAREJENO |
+| A6 | Nikjer se ne vidi, iz katere organizacije je artikel. | NAREJENO |
+| A7 | Komercialne in spletne podatke ločiti. | NAREJENO |
 
 ## B. Mediji
 

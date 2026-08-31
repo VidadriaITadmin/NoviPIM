@@ -68,10 +68,19 @@ var uxMigration = File.ReadAllText(Path.Combine(root, "sql", "migrations", "027_
 foreach (var value in new[] { "TotalCount", "@Search", "@Status", "AverageCompleteness", "OccurrenceCount", "FirstDetectedUtc" })
   Assert(uxMigration.Contains(value, StringComparison.Ordinal), "UX read-model migracija ne vsebuje: " + value);
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ValidationErrors.razor")).Contains(">Napaka</span>", StringComparison.Ordinal), "UI ne sme izmišljati resnosti validacijske težave.");
+// Zahteva je bila vedno: organizacija pride iz baze in ni vpisana v stran. Bralni poti sta
+// dve — GetCurrentOrganizationAsync (ena organizacija) in GetOrganizationsAsync (vse) — in
+// obe izpolnita zahtevo. Nadzorna plosca in zaloga sta 2026-08-28 oziroma 2026-08-31 presli
+// na drugo, ker sta kazali samo prvo podjetje po sifri.
+//
+// Trditev je namenoma vezana na KLIC (Data.…), ne na golo besedo: prej je test zadoscala
+// omemba imena v komentarju, zato je nadzorna plosca ostala zelena, ceprav klica ni imela vec.
 foreach (var pageName in new[] { "Dashboard.razor", "ProductDetail.razor", "Stocks.razor", "ValidationErrors.razor", "RawQuarantine.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
-  Assert(pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " mora uporabljati aktivno organizacijo iz baze.");
+  Assert(pageText.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal)
+      || pageText.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal),
+    pageName + " mora dobiti organizacijo iz baze, ne iz vpisane vrednosti.");
 }
 
 // Seznam izdelkov je vecorganizacijski: privzeto pokaze vsa podjetja, filter zozi na eno.

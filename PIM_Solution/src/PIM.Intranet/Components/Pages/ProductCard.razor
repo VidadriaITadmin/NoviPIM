@@ -21,7 +21,7 @@
     var erpBlockingCount = ErpIssues.Count(row => row.Severity == "ERROR");
     var webBlockingCount = WebIssues.Count(row => row.Severity == "ERROR");
     var commercialWarningCount = CommercialIssues.Count;
-    <PimPage Title="@Detail.Header.Name" Subtitle="@($"Artikel {Detail.Header.ItemId} · EAN {Detail.Header.Ean ?? "—"}")" Crumbs="ProductCrumbs">
+    <PimPage Title="@Detail.Header.Name" Subtitle="@($"{OrganizationName} · artikel {Detail.Header.ItemId} · EAN {Detail.Header.Ean ?? "—"}")" Crumbs="ProductCrumbs">
       <Actions>
         <div class="card-actions">
           <span class="save-state" role="status" aria-live="polite">
@@ -49,7 +49,11 @@
 
       <div class="product-identity">
         <h2 id="product-identity-title" class="visually-hidden">Identiteta izdelka</h2>
+        @* A6, uporabnik 2026-08-31: »na kartici artikla se nikjer ne vidi iz katere organizacije
+           je artikel«. Sifra artikla je enolicna samo znotraj podjetja — 0000000000001 obstaja
+           v DEMO in v Vidadrii — zato podjetje stoji takoj ob njej. *@
         <p class="identity-line">
+          <span class="organization-badge">@OrganizationName</span>
           <span class="code-value">@Detail.Header.ItemId</span>
           @if (Detail.Header.Ean is not null) { <span>EAN @Detail.Header.Ean</span> }
           @if (Detail.Header.ItemGroup is not null) { <span>@Detail.Header.ItemGroup</span> }
@@ -107,12 +111,12 @@
               <PimChip Text="@StatusLabel(ErpStatus)" Tone="@Tone(ErpStatus)" />
               <small>@erpBlockingCount.ToString("N0") blokirajočih napak</small>
             </button>
-            <button type="button" class="ui-card channel-card" @onclick='() => SelectSection("sales")'>
+            <button type="button" class="ui-card channel-card" @onclick='() => SelectSection("commercial")'>
               <span class="channel-name">Komerciala</span>
               <PimChip Text="@(commercialWarningCount == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")" Tone="@(commercialWarningCount == 0 ? "good" : "warn")" />
               <small>@commercialWarningCount.ToString("N0") opozoril · nikoli ne blokira</small>
             </button>
-            <button type="button" class="ui-card channel-card" @onclick='() => SelectSection("sales")'>
+            <button type="button" class="ui-card channel-card" @onclick='() => SelectSection("web")'>
               <span class="channel-name">Splet</span>
               <PimChip Text="@StatusLabel(WebStatus)" Tone="@Tone(WebStatus)" />
               <small>@(string.IsNullOrWhiteSpace(SelectedSite) ? "vsa spletna mesta" : SelectedSite)</small>
@@ -148,13 +152,13 @@
                   }
                   @if (webBlockingCount > 0)
                   {
-                    <button type="button" class="task-item" @onclick='() => SelectSection("sales")'>
+                    <button type="button" class="task-item" @onclick='() => SelectSection("web")'>
                       <span class="task-mark bad" aria-hidden="true">!</span><span>Dopolni spletne podatke</span><span class="task-status bad">Blokira</span><span aria-hidden="true">›</span>
                     </button>
                   }
                   @if (commercialWarningCount > 0)
                   {
-                    <button type="button" class="task-item" @onclick='() => SelectSection("sales")'>
+                    <button type="button" class="task-item" @onclick='() => SelectSection("commercial")'>
                       <span class="task-mark warn" aria-hidden="true">!</span><span>Preglej komercialne podatke</span><span class="task-status warn">Opozorilo</span><span aria-hidden="true">›</span>
                     </button>
                   }
@@ -174,16 +178,29 @@
                                Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Osnovna polja za ERP" />
         </section>
 
-        <section id="panel-sales" role="tabpanel" aria-labelledby="tab-sales" tabindex="0" class="section-panel section-stack" hidden="@(Section != "sales")">
-          <header class="section-heading"><h2>Prodaja in kanali</h2><p>Komercialni podatki, spletna objava in cene na enem delovnem mestu.</p></header>
-          <ProductChannelPanel PanelId="panel-komerciala" TabId="tab-sales" Title="Komerciala"
+        @* A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
+           Cene ostanejo pri komercialni strani — so komercialen podatek, ne spletna vsebina. *@
+        <section id="panel-commercial" role="tabpanel" aria-labelledby="tab-commercial" tabindex="0" class="section-panel section-stack" hidden="@(Section != "commercial")">
+          <header class="section-heading"><h2>Komerciala</h2><p>Teže, poreklo, partnerji in cene po cenikih.</p></header>
+          <ProductChannelPanel PanelId="panel-komerciala" TabId="tab-commercial" Title="Komerciala"
                                StatusText="@(commercialWarningCount == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")"
                                StatusTone="@(commercialWarningCount == 0 ? "good" : "warn")" BlockingCount="0"
                                WarningCount="@commercialWarningCount" LastValidatedUtc="@Detail.Header.LastValidatedUtc"
                                Fields="@CommercialFields" Issues="@CommercialIssues"
                                Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Trgovinski podatki" />
 
-          <ProductChannelPanel PanelId="panel-splet" TabId="tab-sales" Title="Splet"
+          <section id="panel-prices" class="ui-card data-card tab-panel">
+            <div class="subsection-head"><h2>Cene</h2><a href="cene?izdelek=@Detail.Header.ItemId">Odpri poslovni pogled</a></div>
+            @if (PriceChecks?.IsMissing == true) { <PimMissing Object="intranet.GetPriceChecks" What="preverbe cen tega artikla po ceniku" Needs="canon.ProductPrice + šifrant preverb + prag marže" /> }
+            <PimState Empty="@(Detail.Prices.Count == 0)" EmptyText="Izdelek nima cene.">
+              <PimTable Caption="Cene izdelka po cenikih" Columns="PriceColumns"><Rows>@foreach (var row in Detail.Prices) { <tr><td>@row.PriceList</td><td class="numeric">@row.Net.ToString("N2")</td><td class="numeric">@row.VatRate.ToString("N1") %</td><td class="numeric">@row.Gross.ToString("N2")</td><td>@row.ValidFrom.ToLocalTime().ToString("d")</td><td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td></tr> }</Rows></PimTable>
+            </PimState>
+          </section>
+        </section>
+
+        <section id="panel-web" role="tabpanel" aria-labelledby="tab-web" tabindex="0" class="section-panel section-stack" hidden="@(Section != "web")">
+          <header class="section-heading"><h2>Splet</h2><p>Objava, nazivi in opisi po jezikih, kategorije in atributi.</p></header>
+          <ProductChannelPanel PanelId="panel-splet" TabId="tab-web" Title="Splet"
                                StatusText="@StatusLabel(WebStatus)" StatusTone="@Tone(WebStatus)"
                                BlockingCount="@webBlockingCount"
                                WarningCount="@WebIssues.Count(row => row.Severity == "WARNING")"
@@ -198,13 +215,6 @@
             </Toolbar>
           </ProductChannelPanel>
 
-          <section id="panel-prices" class="ui-card data-card tab-panel">
-            <div class="subsection-head"><h2>Cene</h2><a href="cene?izdelek=@Detail.Header.ItemId">Odpri poslovni pogled</a></div>
-            @if (PriceChecks?.IsMissing == true) { <PimMissing Object="intranet.GetPriceChecks" What="preverbe cen tega artikla po ceniku" Needs="canon.ProductPrice + šifrant preverb + prag marže" /> }
-            <PimState Empty="@(Detail.Prices.Count == 0)" EmptyText="Izdelek nima cene.">
-              <PimTable Caption="Cene izdelka po cenikih" Columns="PriceColumns"><Rows>@foreach (var row in Detail.Prices) { <tr><td>@row.PriceList</td><td class="numeric">@row.Net.ToString("N2")</td><td class="numeric">@row.VatRate.ToString("N1") %</td><td class="numeric">@row.Gross.ToString("N2")</td><td>@row.ValidFrom.ToLocalTime().ToString("d")</td><td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td></tr> }</Rows></PimTable>
-            </PimState>
-          </section>
         </section>
 
         <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" tabindex="0" class="section-panel section-stack" hidden="@(Section != "media")">
@@ -279,6 +289,7 @@
   string SelectedSite = "";
 
   int OrganizationId;
+  string OrganizationName = "";
   IReadOnlyList<WritableFieldRow> WritableSaopFields = [];
 
   /// <summary>Nepotrjene spremembe: kljuc polja → nova vrednost. Zivijo, dokler jih uporabnik
@@ -360,6 +371,27 @@
     return new(attributeCode, fieldKey, value, "PIM", null, null, false, true,
       ProductFieldEdit.Attribute, "text", RequiredField(fieldKey), string.IsNullOrWhiteSpace(value),
       AttributeCode: attributeCode, Hint: group);
+  }
+
+  /// <summary>
+  /// Polja, ki jih izdelek DEJANSKO ima, pa jih pripravljen seznam kanala ne nasteje.
+  ///
+  /// Uporabnik 2026-08-31: »Treba bo izpisati vsa polja ki jih ima in potem omogociti
+  /// spremembo.« Prej je kartica kazala pripravljen seznam polj in manjkajoce zahteve; kar je
+  /// vir poslal poleg tega, je bilo v bazi, na zaslonu pa ne. Zdaj se vsako shranjeno polje
+  /// kanala pokaze — tudi tisto, ki ga nihce ni predvidel. Urejanje ostane po istem pravilu
+  /// kot pri ostalih poljih: kar je pisljivo v SAOP, je urejivo prek odhodne vrste.
+  /// </summary>
+  IEnumerable<ProductChannelField> StoredFields(IReadOnlyList<ProductChannelField> known, string prefix, string group)
+  {
+    if (Detail is null) yield break;
+    foreach (var stored in Detail.Fields
+      .Where(row => row.FieldKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+      .OrderBy(row => row.FieldKey, StringComparer.OrdinalIgnoreCase))
+    {
+      if (known.Any(row => string.Equals(row.FieldKey, stored.FieldKey, StringComparison.OrdinalIgnoreCase))) continue;
+      yield return Channel(FieldLabel(stored.FieldKey), stored.FieldKey, stored.Value, group);
+    }
   }
 
   /// <summary>Manjkajoca obvezna polja tega kanala, ki jih seznam zgoraj se ne pokriva.</summary>
@@ -477,6 +509,7 @@
         rows.Add(TextField($"ERP naziv 2 ({language})", "TITLE_ERP2", language, null, names));
       }
 
+      rows.AddRange(StoredFields(rows, "Product.", "Druga polja iz vira"));
       rows.AddRange(MissingRequired(rows, "Product.", "Manjka za ERP"));
       return rows;
     }
@@ -505,6 +538,8 @@
         Channel("Nabavni podatki", "ProductCommercial.Purchase", null, partners, inReadModel: false),
       };
 
+      rows.AddRange(StoredFields(rows, "ProductCommercial.", "Druga polja iz vira"));
+      rows.AddRange(StoredFields(rows, "ProductPrice.", "Cenovna polja"));
       rows.AddRange(MissingRequired(rows, "ProductCommercial.", "Manjka za komercialo"));
       return rows;
     }
@@ -544,6 +579,7 @@
         .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
         .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
 
+      rows.AddRange(StoredFields(rows, "ProductText.", "Druga besedila iz vira"));
       rows.AddRange(MissingRequired(rows, "ProductText.", "Manjka za splet"));
       rows.AddRange(MissingRequired(rows, "ProductAttribute.", "Manjka za splet"));
       return rows;
@@ -610,6 +646,7 @@
       var organization = await Data.GetProductOrganizationAsync(ProductId);
       if (organization is null) { Error = "Izdelek s to oznako ne obstaja."; return; }
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
       var cardTask = Workbench.GetProductCardAsync(organization.OrganizationId, ProductId, "sl");
       var originTask = Workbench.GetProductOriginAsync(organization.OrganizationId, ProductId);
       var priceTask = Features.GetPriceChecksAsync(organization.OrganizationId, ProductId);
@@ -721,7 +758,14 @@
     return state.User.Identity?.Name ?? "neznan";
   }
 
-  static readonly string[] Sections = ["overview", "core", "sales", "media", "stock", "quality-history"];
+  /// <summary>
+  /// Skupine, ki se izrisejo v natanko dveh stolpcih. Uporabnik 2026-08-31: »ERP nazive bi dal
+  /// po dva stolpca«. Nazivi so po jezikih pari (naziv in naziv 2), zato dva stolpca postavita
+  /// par v isto vrstico; samodejna mreza jih je razbila po sirini zaslona.
+  /// </summary>
+  static readonly string[] TwoColumnGroups = ["Nazivi za ERP"];
+
+  static readonly string[] Sections = ["overview", "core", "commercial", "web", "media", "stock", "quality-history"];
 
   /// <param name="Count">Samo stevilo tezav, pri katerih uporabnika caka dejanje.</param>
   sealed record CardSection(string Key, string Label, int? Count, string? Tone = null);
@@ -734,7 +778,9 @@
   [
     new("overview", "Pregled", null),
     new("core", "Osnovni podatki", null),
-    new("sales", "Prodaja in kanali", CommercialIssues.Count + WebIssues.Count(row => row.Severity == "ERROR"), Tone: "warn"),
+    // A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
+    new("commercial", "Komerciala", CommercialIssues.Count, Tone: "warn"),
+    new("web", "Splet", WebIssues.Count(row => row.Severity == "ERROR"), Tone: "bad"),
     // Uporabnik 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«. Nista isto:
     // mediji so vsebina izdelka, zaloga je trenutno stanje iz drugega vira. Locena sklopa.
     new("media", "Mediji", Detail.Media.Count + Detail.Documents.Count),

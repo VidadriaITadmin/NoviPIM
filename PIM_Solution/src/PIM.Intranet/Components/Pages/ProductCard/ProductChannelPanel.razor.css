@@ -58,6 +58,10 @@
 
 /* Dve koloni na namizju; dolgo besedilo vzame celo vrstico. */
 .field-grid { display: grid; gap: 1.1rem 1.75rem; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+/* Skupina, ki jo je treba brati po parih (ERP naziv in naziv 2 za isti jezik), dobi natanko
+   dva stolpca. Samodejna mreza jih je razbila po sirini zaslona in par se je razsel. */
+.field-group.two-columns .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .field-group.two-columns .field-grid { grid-template-columns: 1fr; } }
 
 .field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
 .field.wide { grid-column: 1 / -1; }

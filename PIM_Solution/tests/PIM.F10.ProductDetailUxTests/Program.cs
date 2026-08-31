@@ -45,21 +45,23 @@ foreach (var channelName in new[] { "ERP (SAOP)", "Komerciala", "Splet" })
 Assert(Regex.Matches(card, "class=\"ui-card channel-card").Count == 3, "Glava mora imeti natanko tri klikljive kanalske kartice.");
 Assert(card.Contains("nikoli ne blokira", StringComparison.Ordinal), "Komercialna opozorila morajo izrecno povedati, da ne blokirajo.");
 
-// Uporabnik 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«. Nista isto: mediji so
-// vsebina izdelka, zaloga trenutno stanje iz drugega vira. Sklopov je zato sest, ne pet.
+// Sklopi so nastali v dveh korakih. 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«
+// (mediji in zaloga sta se locila). 2026-08-31: »komercialne podatke in pa splet podatke bi
+// locili« — skupni sklop »Prodaja in kanali« se je razdelil na Komercialo in Splet.
 var expectedSections = new Dictionary<string, string>
 {
   ["overview"] = "Pregled",
   ["core"] = "Osnovni podatki",
-  ["sales"] = "Prodaja in kanali",
+  ["commercial"] = "Komerciala",
+  ["web"] = "Splet",
   ["media"] = "Mediji",
   ["stock"] = "Zaloga",
   ["quality-history"] = "Kakovost in zgodovina",
 };
-Assert(Regex.Matches(card, "new\\(\"(overview|core|sales|media|stock|quality-history)\", ").Count == 6,
-  "Kartica mora imeti sest uporabnisko razumljivih sklopov; mediji in zaloga sta locena.");
-Assert(!card.Contains("media-stock", StringComparison.Ordinal),
-  "Skupnega sklopa »Mediji in zaloga« ni vec.");
+Assert(Regex.Matches(card, "new\\(\"(overview|core|commercial|web|media|stock|quality-history)\", ").Count == 7,
+  "Kartica ima sedem sklopov; komerciala in splet sta locena.");
+foreach (var retired in new[] { "media-stock", "panel-sales", "tab-sales" })
+  Assert(!card.Contains(retired, StringComparison.Ordinal), "Odpisani skupni sklop se ne sme vrniti: " + retired + ".");
 foreach (var section in expectedSections)
   Assert(Regex.IsMatch(card, "new\\(\"" + section.Key + "\", \"" + Regex.Escape(section.Value)), "Manjka sklop " + section.Value + ".");
 Assert(card.Contains("Tone: \"bad\"", StringComparison.Ordinal) && card.Contains("Tone: \"warn\"", StringComparison.Ordinal),
@@ -202,6 +204,29 @@ foreach (var moved in new[] { "ProductCommercial.Pak1", "ProductCommercial.Pak2"
 Assert(gallery.Contains("Vse slike izdelka (@Media.Count", StringComparison.Ordinal),
   "Galerija mora povedati, da prikazuje vse slike, in koliko jih je.");
 Assert(gallery.Contains("Glavna slika", StringComparison.Ordinal), "Glavna slika mora biti oznacena kot glavna.");
+
+// ─── Popravki kartice 2026-08-31 ───────────────────────────────────────────────────────────
+
+// A6: sifra artikla je enolicna samo znotraj podjetja, zato mora kartica povedati, cigav je.
+Assert(card.Contains("organization-badge", StringComparison.Ordinal),
+  "Kartica mora povedati, iz katerega podjetja je artikel.");
+Assert(card.Contains("OrganizationName = organization.Name", StringComparison.Ordinal),
+  "Ime podjetja mora priti iz istega klica, ki doloci obseg kartice.");
+
+// A1: kar je izdelek shranil, mora biti na zaslonu — tudi polje, ki ga nihce ni predvidel.
+Assert(card.Contains("IEnumerable<ProductChannelField> StoredFields(", StringComparison.Ordinal),
+  "Kartica mora izpisati tudi polja, ki jih pripravljen seznam ne nasteje.");
+Assert(System.Text.RegularExpressions.Regex.Matches(card, @"StoredFields\(rows,").Count >= 4,
+  "Vsak kanal mora dodati svoja shranjena polja.");
+
+// A2: ERP nazivi so pari (naziv in naziv 2) in se berejo po jezikih.
+Assert(card.Contains("TwoColumnGroups", StringComparison.Ordinal), "ERP nazivi morajo biti v dveh stolpcih.");
+var panelPath = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "ProductCard", "ProductChannelPanel.razor");
+var panel = File.ReadAllText(panelPath);
+Assert(panel.Contains("two-columns", StringComparison.Ordinal), "Gradnik mora znati skupino v dveh stolpcih.");
+var panelCss = File.ReadAllText(panelPath + ".css");
+Assert(panelCss.Contains(".field-group.two-columns .field-grid", StringComparison.Ordinal),
+  "Manjka slog za skupino v dveh stolpcih.");
 
 Console.WriteLine("F10 product detail UX contract PASS.");
 
