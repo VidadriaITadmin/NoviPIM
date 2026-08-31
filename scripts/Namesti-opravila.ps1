@@ -125,7 +125,7 @@ if (-not $BrezZaloge) {
     }
   }
 
-  Registriraj 'PIM zaloga' $cikel @('-Kaj', 'Vse') (Ponavljajoc 5 2)
+  Registriraj 'PIM zaloga' $cikel @('-Kaj', 'Vse', '-PoUrniku') (Ponavljajoc 5 2)
 
   # Nadzor je zamaknjen za dve minuti od zaloge: ce bi tekla hkrati, bi nadzornik lahko razglasil
   # za zastalo izvajanje, ki se je pravkar zacelo.

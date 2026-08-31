@@ -24,6 +24,10 @@
 .PARAMETER Kaj
   Kateri del cikla naj tece: Saop, Dobavitelji ali Vse. Za rocno rabo; opravilo pozene Vse.
 
+.PARAMETER PoUrniku
+  Spostuj razpored iz baze in preskoci, kar se ni na vrsti. To poda nacrtovano opravilo.
+  Brez tega stikala se vse pozene takoj - tako je rocni zagon uporaben za preizkus.
+
 .PARAMETER Podjetja
   Podjetja, ki jih obdelamo. Privzeto vsa stiri.
 
@@ -34,7 +38,11 @@
 param(
   [ValidateSet('Saop', 'Dobavitelji', 'Vse')] [string]$Kaj = 'Vse',
   [int[]]$Podjetja = @(1, 2, 3, 4),
-  [string]$KorenRepozitorija = ''
+  [string]$KorenRepozitorija = '',
+
+  # Spostuj razpored iz ops.ScheduleProfile in preskoci, kar se ni na vrsti. Poda ga nacrtovano
+  # opravilo. Clovek, ki skripto pozene sam, hoce videti izid zdaj - zato privzeto ni vklopljeno.
+  [switch]$PoUrniku
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,6 +63,10 @@ function Zapisi([string]$vrstica) {
 }
 
 $padli = 0
+
+# Stikalo se doda samo, kadar tece po urniku. Zapisano na enem mestu, da se trije klici workerjev
+# ne razidejo.
+$urnik = if ($PoUrniku) { @('--po-urniku') } else { @() }
 
 function PozeniWorker([string]$projekt, [string[]]$argumenti) {
   $prej = Get-Location
@@ -89,7 +101,7 @@ if ($Kaj -in @('Dobavitelji', 'Vse')) {
   # Samo zalogovna vira. Prevzem in branje gresta skupaj, da zaloga ne caka na naslednji cikel.
   foreach ($vir in @('NW_STOCK', 'BT_STOCK')) {
     Korak "Zaloga $vir" {
-      PozeniWorker 'workers\PIM.SourceFetchWorker' @('--source', $vir, '--po-urniku')
+      PozeniWorker 'workers\PIM.SourceFetchWorker' (@('--source', $vir) + $urnik)
 
       $mapa = Join-Path $resitev "data\prevzem\$vir"
       if (-not (Test-Path $mapa)) { Zapisi "   preskoceno: mape $mapa ni"; return }
@@ -99,7 +111,7 @@ if ($Kaj -in @('Dobavitelji', 'Vse')) {
 
       foreach ($d in $datoteke) {
         foreach ($o in $Podjetja) {
-          PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $d.FullName, '--source', $vir, '--organization-id', "$o", '--po-urniku')
+          PozeniWorker 'workers\PIM.StockFileWorker' (@('--file', $d.FullName, '--source', $vir, '--organization-id', "$o") + $urnik)
         }
       }
     }
@@ -111,7 +123,7 @@ if ($Kaj -in @('Saop', 'Vse')) {
     # Ziv klic je odlocitev cloveka (AGENTS.md #4.5). Vklopljen je zavestno: nalogo registrira
     # clovek z Namesti-opravila.ps1 in s tem privoli v ponavljajoc se klic na ERP.
     $env:PIM_SAOP_MODE = 'Live'
-    PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','), '--po-urniku')
+    PozeniWorker 'workers\PIM.SaopStockWorker' (@('--organizations', ($Podjetja -join ',')) + $urnik)
   }
 }
 
