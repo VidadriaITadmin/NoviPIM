@@ -1,5 +1,8 @@
 # Prenos in namestitev celotnega PIM na laptop
 
+> **Zastarelo.** Ta zapis navaja .NET 8 in je nastal pred workerji, urniki in prevzemnikom
+> datotek. Uporabi [`PRENOS_NA_SLUZBENI_RACUNALNIK.md`](PRENOS_NA_SLUZBENI_RACUNALNIK.md).
+
 To navodilo je za nov Windows laptop in razvojno/testno okolje. Cilj je lokalni dokaz sistema nad bazo `PIM`, ne produkcijska objava in ne živa integracija.
 
 ## 0. Varnostna pravila

@@ -119,6 +119,33 @@ Kaj mora pisati:
 
 Če drugi zagon karkoli spremeni, je migracija napisana napačno — javi, ne nadaljuj.
 
+> ### ⚠ To trenutno NE deluje — preizkušeno 31. 8. 2026
+>
+> Prazne baze **ni mogoče sestaviti**. Preizkusil sem na resnično prazni bazi in migracije
+> padejo na `070_GenericXmlScheduleForAllOrganizations.sql`:
+>
+> ```
+> Uporabljena migracija: 069_SupplierConnectorsForAllOrganizations.sql
+> Napaka 52701: Razpored za dobaviteljev XML ni omogocen pri vseh stirih podjetjih.
+> ```
+>
+> **Vzrok.** Migracija 070 vstavi urnik `GENERIC_XML` za podjetja 1, 3 in 4 ter nato preveri, da
+> so štirje. Vrstice za podjetje 2 ne vstavi nobena migracija — na razvojnem računalniku je
+> nastala ročno in v migracijah ni bila nikoli zajeta. Preverba zato pade.
+>
+> **Posledica.** Migrator vse izvede v eni transakciji, zato se ob padcu razveljavi *vse*:
+> v preizkusni bazi je ostala ena sama tabela `dbo.SchemaMigration` in nič drugega. To je čisto
+> obnašanje, a pomeni, da koraka 4 danes ni mogoče dokončati.
+>
+> **Kako naprej.** Popravek je enovrstičen — 070 mora vstaviti vsa štiri podjetja, ne treh. Ker je
+> 070 na obstoječih bazah že nameščena in migrator preverja kontrolno vsoto, bi sprememba tam
+> sprožila *»Vsebina že uporabljene migracije je bila spremenjena«*. Zato je treba hkrati
+> posodobiti shranjeno vsoto te ene vrstice na vsaki obstoječi bazi. To je odločitev, ki jo
+> mora potrditi človek — `AGENTS.md` pravi, da se nameščenih migracij ne ureja.
+>
+> Dokler to ni urejeno, na novem računalniku ni druge poti kot obnovitev varnostne kopije,
+> kar pa pomeni, da dobiš tudi vsebino tabel.
+
 ---
 
 ## 5. Prvi skrbnik
