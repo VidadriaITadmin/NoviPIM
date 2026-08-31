@@ -27,19 +27,14 @@ Assert(markup.Contains("nikoli ne piše nazaj v ERP", StringComparison.Ordinal),
   "Stran mora povedati, da je zaloga samo bralna; to je meja sistema, ne pomanjkljivost.");
 
 // 2. KPI kartice izhajajo iz agregata v bazi in vodijo na svoj filtriran seznam.
-var kpiGrid = Regex.Match(markup, "<section class=\"kpi-grid\"[^>]*>");
-Assert(kpiGrid.Success, "KPI kartice morajo biti v poimenovanem sklopu <section class=\"kpi-grid\">.");
-var kpiLabel = Regex.Match(kpiGrid.Value, "aria-labelledby=\"([^\"]+)\"");
-Assert(kpiLabel.Success, "Sklop KPI kartic mora imeti aria-labelledby.");
-Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(kpiLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
-  "Naslov KPI sklopa mora ostati bralcem zaslona dostopen in vizualno skrit.");
-// Uporabnik 2026-08-28: »kje je pa se SAOP zaloga«. SAOP zaloga JE bila v seznamu (16 pozicij
-// pri organizaciji 1), a je med 4.155 dobaviteljevimi vrsticami ni bilo mogoce lociti. Povzetek
-// zato loci ERP od dobavitelja; kartic je sedem.
-Assert(Regex.Matches(markup, "<PimStat ").Count == 7, "Povzetek ima sedem kartic; zadnji dve locita ERP zalogo od dobaviteljeve.");
-foreach (var target in new[] { "zaloge?razpolozljivost=IN_STOCK", "zaloge?razpolozljivost=OUT_OF_STOCK", "zaloge?razpolozljivost=INCOMING", "zaloge?ujemanje=UNMATCHED", "zaloge?vrsta=ERP", "zaloge?vrsta=DOBAVITELJ" })
-  Assert(markup.Contains(target, StringComparison.Ordinal), "Stevilka mora voditi na filtriran seznam, ki jo pojasni: " + target);
-Assert(markup.Contains("Overview?.Totals", StringComparison.Ordinal), "KPI vrednost mora izhajati iz agregata v bazi, ne iz preSteVanja vrstic v pomnilniku.");
+// Kartic povzetka ni vec: uporabnik jih je 2026-08-31 odpisal z besedami »odstrani te oblacke
+// ker tabel bo dovolj«. Iste stevilke nosi tabela virov, ki ima zdaj vrstico Skupaj.
+Assert(!markup.Contains("kpi-grid", StringComparison.Ordinal), "Kartic povzetka na zalogi ni vec.");
+Assert(!markup.Contains("<PimStat ", StringComparison.Ordinal), "Z oblacki odpade tudi gradnik PimStat.");
+Assert(markup.Contains("class=\"total-row\"", StringComparison.Ordinal),
+  "Povzetek mora nositi vrstica Skupaj v tabeli virov.");
+Assert(markup.Contains("Overview.Totals.PositionCount", StringComparison.Ordinal),
+  "Vrstica Skupaj mora izhajati iz agregata v bazi, ne iz prestevanja vrstic v pomnilniku.");
 
 // 3. Orodna vrstica je poimenovan iskalni sklop, vsaka kontrola pa ima svojo oznako.
 var toolbar = Regex.Match(markup, "<section class=\"ui-card toolbar\"[^>]*>");
@@ -54,7 +49,14 @@ Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(toolbarLabel.Groups[1].V
 // vrsta vira. Parametra v naslovu ostaneta, ker nanju kazejo kartice.
 foreach (var retired in new[] { "id=\"stock-availability\"", "id=\"stock-matched\"", "Vsa razpoložljivost", "Ujemanje: vseeno" })
   Assert(!markup.Contains(retired, StringComparison.Ordinal), "Odpisana kontrola se ne sme vrniti: " + retired + ".");
-foreach (var control in new[] { "stock-search", "stock-source", "stock-kind", "stock-age" })
+// G1: SAOP zaloga obstaja pri vseh stirih podjetjih (DEMO 16, IQ 8.719, VID 7.002,
+// Ediito 3.105 pozicij), stran pa je videla samo prvo po sifri. Podjetje je zato filter,
+// privzeto vsa, in stolpec v vrstici.
+Assert(Regex.IsMatch(markup, "<option value=\"\">Vsa podjetja</option>"),
+  "Privzeti obseg zaloge so vsa podjetja.");
+Assert(markup.Contains("@row.OrganizationName", StringComparison.Ordinal),
+  "Pri vec podjetjih mora vrstica povedati, cigava zaloga je.");
+foreach (var control in new[] { "stock-search", "stock-source", "stock-kind", "stock-age", "stock-organization" })
 {
   Assert(Regex.IsMatch(markup, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
   Assert(Regex.IsMatch(markup, "id=\"" + control + "\""), "Kontrola " + control + " ne obstaja.");
@@ -81,7 +83,7 @@ Assert(markup.Contains("FreshnessLabel(", StringComparison.Ordinal), "Starost po
 // 6. Stranicenje je streznisko in izhaja iz istega stetja kot seznam.
 Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"PageData\\.TotalCount\""),
   "Seznam mora biti strezniski; 379.610 pozicij se ne nalaga v pomnilnik.");
-foreach (var parameter in new[] { "isci", "vir", "razpolozljivost", "ujemanje", "starost", "stran" })
+foreach (var parameter in new[] { "isci", "vir", "starost", "stran", "podjetje" })
   Assert(Regex.IsMatch(markup, "SupplyParameterFromQuery\\(Name = \"" + parameter + "\"\\)"),
     "Filter " + parameter + " mora ziveti v naslovu URL.");
 Assert(!markup.Contains("Rows?.Where(", StringComparison.Ordinal), "Odjemalskega filtriranja ne sme biti vec.");
@@ -103,11 +105,11 @@ Assert(Regex.IsMatch(css, "\\.data-table\\s*\\{[^}]*min-width:"), "Na ozkih zasl
 Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pravilo za ozke zaslone.");
 
 // 9. Varovalka: stran ostane vezana na dejanski bralni proceduri in nicesar ne pise.
-Assert(markup.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal), "Stran mora prevzeti aktivno organizacijo.");
+Assert(markup.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal), "Stran mora poznati vsa podjetja, ne le prvega po sifri.");
 foreach (var call in new[] { "Stock.GetPositionsAsync", "Stock.GetOverviewAsync" })
   Assert(markup.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "(?<![A-Za-z0-9_])(?:Data|Stock)\\.(\\w+)"))
-  Assert(new[] { "GetCurrentOrganizationAsync", "GetPositionsAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
+  Assert(new[] { "GetOrganizationsAsync", "GetPositionsAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
     "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
 Assert(markup.Contains("intranet.GetStockPositions", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
 var allowedHandlers = new[] { "ApplyFiltersAsync" };

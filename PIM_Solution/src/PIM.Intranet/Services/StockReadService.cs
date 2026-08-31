@@ -6,14 +6,16 @@ namespace PIM.Intranet.Services;
 public sealed record StockPositionRow(
   long PositionId, string? NormalizedItemId, string? Ean, decimal Quantity,
   DateTime? AvailabilityDate, decimal? IncomingQuantity, string? MatchKey, long? MatchedProductId,
-  string? ProductName, string? ProductItemId, string SourceCode, string? SourceKind, string? ProviderKind,
+  string? ProductName, string? ProductItemId, string SourceCode, string? SourceKind,
+  int OrganizationId, string OrganizationName, string? ProviderKind,
   string? Endpoint, DateTime SnapshotUtc, int FreshnessMinutes,
   decimal? MinimumStock, decimal? MaximumStock, string? WarehouseCode);
 
 public sealed record StockPositionPage(IReadOnlyList<StockPositionRow> Rows, long TotalCount);
 
+/// <param name="OrganizationId">null pomeni vsa podjetja (migracija 134).</param>
 public sealed record StockPositionFilter(
-  int OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? SourceCode = null,
+  int? OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? SourceCode = null,
   string? Availability = null, string? Matched = null, int? MaxAgeHours = null, string Language = "sl",
   string? SourceKind = null);
 
@@ -52,7 +54,7 @@ public sealed class StockReadService(IConfiguration configuration)
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
     };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = filter.OrganizationId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
     command.Parameters.Add("@Take", SqlDbType.Int).Value = filter.Take;
     command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(filter.Search);
@@ -70,6 +72,7 @@ public sealed class StockReadService(IConfiguration configuration)
       PimDb.NullableDecimal(row, "IncomingQuantity"), PimDb.Text(row, "MatchKey"),
       PimDb.NullableInt64(row, "MatchedProductId"), PimDb.Text(row, "ProductName"),
       PimDb.Text(row, "ProductItemId"), PimDb.TextOrEmpty(row, "SourceCode"), PimDb.Text(row, "SourceKind"),
+      PimDb.Int32(row, "OrganizationId"), PimDb.TextOrEmpty(row, "OrganizationName"),
       PimDb.Text(row, "ProviderKind"), PimDb.Text(row, "Endpoint"),
       PimDb.DateTimeValue(row, "SnapshotUtc"), PimDb.Int32(row, "FreshnessMinutes"),
       PimDb.NullableDecimal(row, "MinimumStock"), PimDb.NullableDecimal(row, "MaximumStock"),
@@ -82,8 +85,9 @@ public sealed class StockReadService(IConfiguration configuration)
     return new(rows, total);
   }
 
+  /// <param name="organizationId">null pomeni vsa podjetja (migracija 134).</param>
   public async Task<StockOverview> GetOverviewAsync(
-    int organizationId, CancellationToken cancellationToken = default)
+    int? organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
@@ -92,7 +96,7 @@ public sealed class StockReadService(IConfiguration configuration)
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
     };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var totals = new StockTotals(0, 0, 0, 0, 0, 0, null, null);

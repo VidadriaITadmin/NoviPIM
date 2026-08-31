@@ -17,6 +17,22 @@ var verifyOnly = args.Contains("--verify", StringComparer.OrdinalIgnoreCase);
 var createDatabase = args.Contains("--create-database", StringComparer.OrdinalIgnoreCase);
 var showMigrations = args.Contains("--show-migrations", StringComparer.OrdinalIgnoreCase);
 var showOutputContract = args.Contains("--show-output-contract", StringComparer.OrdinalIgnoreCase);
+
+// Prvega skrbnika na novem racunalniku ni komu ustvariti: strani za uporabnike ni mogoce odpreti
+// brez prijave, prijave pa ni brez racuna. Migrator je edino orodje, ki se na prazni bazi ze
+// zaganja, zato zna racun ustvariti. Geslo se ne podaja kot argument - v zgodovini ukazov bi
+// ostalo v cistopisu.
+var adminIndex = Array.FindIndex(args, argument => argument.Equals("--ustvari-admina", StringComparison.OrdinalIgnoreCase));
+if (adminIndex >= 0)
+{
+  if (adminIndex + 1 >= args.Length)
+  {
+    Console.Error.WriteLine("--ustvari-admina potrebuje uporabnisko ime, na primer: --ustvari-admina david");
+    return 2;
+  }
+
+  return await UstvariAdminaAsync(connectionString!, args[adminIndex + 1]);
+}
 var migrationsDirectory = ResolveMigrationsDirectory(args);
 
 if (!Directory.Exists(migrationsDirectory))
@@ -495,6 +511,75 @@ static async Task AssertAtLeastAsync(SqlConnection connection,string sql,int exp
   await using var command=new SqlCommand(sql,connection);
   var count=Convert.ToInt32(await command.ExecuteScalarAsync());
   if(count<expected)throw new InvalidOperationException(failureMessage);
+}
+static async Task<int> UstvariAdminaAsync(string connectionString, string uporabniskoIme)
+{
+  var ime = uporabniskoIme.Trim();
+  if (ime.Length == 0)
+  {
+    Console.Error.WriteLine("Uporabnisko ime ne sme biti prazno.");
+    return 2;
+  }
+
+  Console.Write($"Prikazno ime za {ime}: ");
+  var prikazno = (Console.ReadLine() ?? "").Trim();
+  if (prikazno.Length == 0) prikazno = ime;
+
+  var geslo = PreberiGeslo("Geslo (vsaj 10 znakov): ");
+  if (geslo.Length < 10)
+  {
+    Console.Error.WriteLine("Geslo mora imeti vsaj 10 znakov.");
+    return 2;
+  }
+
+  if (geslo != PreberiGeslo("Ponovi geslo: "))
+  {
+    Console.Error.WriteLine("Gesli se ne ujemata.");
+    return 2;
+  }
+
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  await using var command = new SqlCommand("sec.CreateLocalUser", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+  command.Parameters.AddWithValue("@UserName", ime);
+  command.Parameters.AddWithValue("@DisplayName", prikazno);
+  command.Parameters.AddWithValue("@PasswordHash", PIM.Operations.PasswordHash.Create(geslo));
+  command.Parameters.AddWithValue("@RoleCode", "ADMIN");
+
+  try
+  {
+    await command.ExecuteNonQueryAsync();
+  }
+  catch (SqlException exception)
+  {
+    Console.Error.WriteLine($"Racuna ni bilo mogoce ustvariti: {exception.Message}");
+    return 1;
+  }
+
+  Console.WriteLine($"Skrbnik {ime} je ustvarjen. Prijavi se na /prijava in geslo takoj spremeni na /sistem/uporabniki.");
+  return 0;
+}
+
+/// <summary>Vnos brez odmeva; geslo se ne sme izpisati na zaslon niti med tipkanjem.</summary>
+static string PreberiGeslo(string poziv)
+{
+  Console.Write(poziv);
+  var znaki = new System.Text.StringBuilder();
+  while (true)
+  {
+    var tipka = Console.ReadKey(intercept: true);
+    if (tipka.Key == ConsoleKey.Enter) break;
+    if (tipka.Key == ConsoleKey.Backspace)
+    {
+      if (znaki.Length > 0) znaki.Length--;
+      continue;
+    }
+
+    if (!char.IsControl(tipka.KeyChar)) znaki.Append(tipka.KeyChar);
+  }
+
+  Console.WriteLine();
+  return znaki.ToString();
 }
 
 internal sealed record Migration(string Name, string Script);

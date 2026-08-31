@@ -62,8 +62,8 @@ Stanje: `TODO` / `NAREJENO` / `VPRAŠANJE` (potrebna odločitev človeka).
 
 | # | Zahteva | Stanje |
 |---|---|---|
-| G1 | Prikazuje samo dobavitelja in SAOP DEMO — dodati SAOP IQ, VID, Ediito. | TODO |
-| G2 | Odstrani oblačke; tabele so dovolj. | TODO |
+| G1 | Prikazuje samo dobavitelja in SAOP DEMO — dodati SAOP IQ, VID, Ediito. | NAREJENO |
+| G2 | Odstrani oblačke; tabele so dovolj. | NAREJENO |
 | G3 | V vseh tabelah so imena stolpcev in vrednosti zamaknjeni — popraviti po celi aplikaciji. | NAREJENO |
 
 ## H. Cene in ceniki

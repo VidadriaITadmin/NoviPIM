@@ -10,5 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PIM.Operations\PIM.Operations.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -9,21 +9,20 @@
 
 <PimPage Title="Zaloga" Subtitle="Kaj je na zalogi, kdaj je bil posnetek narejen in katera pozicija nima svojega artikla. Zaloga je samo za branje — PIM je nikoli ne piše nazaj v ERP." />
 
-<section class="kpi-grid" aria-labelledby="stock-kpi-title">
-  <h2 id="stock-kpi-title" class="visually-hidden">Povzetek stanja zaloge</h2>
-  <PimStat Label="Pozicij skupaj" Value="@Number(Overview?.Totals.PositionCount)" Note="@FreshnessNote()" />
-  <PimStat Label="Na zalogi" Value="@Number(Overview?.Totals.InStockCount)" Note="pozicij s količino nad nič" Href="zaloge?razpolozljivost=IN_STOCK" />
-  <PimStat Label="Brez zaloge" Value="@Number(Overview?.Totals.OutOfStockCount)" Note="pozicij s količino nič ali manj" Href="zaloge?razpolozljivost=OUT_OF_STOCK" />
-  <PimStat Label="Prihaja" Value="@Number(Overview?.Totals.IncomingCount)" Note="pozicij z napovedano dobavo" Href="zaloge?razpolozljivost=INCOMING" />
-  <PimStat Label="Brez artikla" Value="@Number(Overview?.Totals.UnmatchedCount)" Note="pozicij, ki jih ni mogoče pripeti na artikel" Href="zaloge?ujemanje=UNMATCHED" />
-  <PimStat Label="ERP (SAOP)" Value="@Number(ErpPositions)" Note="pozicij iz ERP" Href="zaloge?vrsta=ERP" />
-  <PimStat Label="Dobaviteljeva" Value="@Number(SupplierPositions)" Note="pozicij iz dobaviteljevih virov" Href="zaloge?vrsta=DOBAVITELJ" />
-</section>
 
 <section class="ui-card toolbar" role="search" aria-labelledby="stocks-filter-title">
   <h2 id="stocks-filter-title" class="visually-hidden">Filtriranje zaloge</h2>
   <label class="visually-hidden" for="stock-search">Poišči po artiklu ali EAN</label>
   <input id="stock-search" type="search" class="search-input" placeholder="Poišči po artiklu ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+  @* Uporabnik 2026-08-31: »zakaj zalogo prikazuje samo dobavitelja in SAOP DEMO, dej da bo se
+     ostale zaloge prikazovalo od SAOP (IQ, VID, Ediito)«. Privzeto so zato vsa podjetja;
+     SAOP zaloga obstaja pri vseh stirih. *@
+  <label class="visually-hidden" for="stock-organization">Podjetje</label>
+  <select id="stock-organization" class="filter-select" @bind="OrganizationDraft">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+  </select>
 
   <label class="visually-hidden" for="stock-source">Vir</label>
   <select id="stock-source" class="filter-select" @bind="SourceDraft">
@@ -93,6 +92,7 @@
                 else { <span class="muted">—</span> }
               </td>
               <td class="numeric">@Limits(row)</td>
+              <td>@row.OrganizationName</td>
               <td>
                 <PimChip Text="@KindLabel(row.SourceKind)" Tone="@(row.SourceKind == "ERP" ? "info" : null)" />
                 <span class="product-meta"><span class="source-code">@row.SourceCode</span></span>
@@ -140,6 +140,19 @@
               </td>
             </tr>
           }
+          @if (Overview is not null && Overview.Sources.Count > 0)
+          {
+            @* Vrstica Skupaj nadomesti kartice povzetka, ki jih je uporabnik odpisal. *@
+            <tr class="total-row">
+              <td><strong>Skupaj</strong></td>
+              <td>@Overview.Sources.Count vir(ov)</td>
+              <td class="numeric">@Overview.Totals.PositionCount.ToString("N0")</td>
+              <td class="numeric">@Overview.Totals.MatchedCount.ToString("N0")</td>
+              <td class="numeric">@Overview.Totals.InStockCount.ToString("N0")</td>
+              <td>@(Overview.Totals.NewestSnapshotUtc?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+              <td>@Overview.Totals.UnmatchedCount.ToString("N0") brez artikla</td>
+            </tr>
+          }
         </Rows>
       </PimTable>
     }
@@ -178,25 +191,26 @@
 @code {
   [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
   [SupplyParameterFromQuery(Name = "vir")] public string? QuerySource { get; set; }
-  [SupplyParameterFromQuery(Name = "razpolozljivost")] public string? QueryAvailability { get; set; }
-  [SupplyParameterFromQuery(Name = "ujemanje")] public string? QueryMatched { get; set; }
   [SupplyParameterFromQuery(Name = "starost")] public int? QueryAge { get; set; }
-  // Kontrol za razpolozljivost in ujemanje na zaslonu ni vec (uporabnik 2026-08-28), parametra
-  // pa ostaneta: nanju kazejo klikljive kartice povzetka nad tabelo.
+  // Razpolozljivost in ujemanje sta odpadla v dveh korakih: kontroli 2026-08-28, parametra pa
+  // 2026-08-31 skupaj s karticami povzetka, ki sta bila edina, kar je nanju kazalo.
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
 
   StockPositionPage? PageData;
   StockOverview? Overview;
   bool Loading = true;
   string? Error;
-  int? OrganizationId;
   string SearchDraft = "";
   string SourceDraft = "";
-  string AvailabilityDraft = "";
-  string MatchedDraft = "";
   string AgeDraft = "";
   string KindDraft = "";
+  string OrganizationDraft = "";
+  IReadOnlyList<OrganizationContext> Organizations = [];
+
+  /// <summary>Obseg, za katerega je prebran povzetek; prazen niz je veljaven obseg (vsa podjetja).</summary>
+  string? LoadedScope;
 
   const int Take = 50;
   const int StaleAfterMinutes = 24 * 60;
@@ -206,7 +220,7 @@
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new("Artikel"), new("Količina", Numeric: true), new("Prihodna količina", Numeric: true),
-    new("Prihod"), new("Min / max", Numeric: true), new("Vir"),
+    new("Prihod"), new("Min / max", Numeric: true), new("Podjetje"), new("Vir"),
     new("Čas posnetka"), new("Stanje"),
   ];
 
@@ -228,27 +242,27 @@
   {
     SearchDraft = QuerySearch ?? "";
     SourceDraft = QuerySource ?? "";
-    AvailabilityDraft = QueryAvailability ?? "";
-    MatchedDraft = QueryMatched ?? "";
     AgeDraft = QueryAge?.ToString() ?? "";
     KindDraft = QueryKind ?? "";
+    OrganizationDraft = QueryOrganization ?? "";
 
     Loading = true;
     Error = null;
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      if (Organizations.Count == 0) Organizations = await Data.GetOrganizationsAsync();
 
-      if (OrganizationId != organization.OrganizationId)
+      // Prazno podjetje pomeni vsa; neveljavna stevilka v naslovu ne sme tiho pomeniti vseh.
+      var scope = int.TryParse(QueryOrganization, out var parsed) ? parsed : (int?)null;
+      if (LoadedScope != (scope?.ToString() ?? ""))
       {
-        OrganizationId = organization.OrganizationId;
-        Overview = await Stock.GetOverviewAsync(organization.OrganizationId);
+        LoadedScope = scope?.ToString() ?? "";
+        Overview = await Stock.GetOverviewAsync(scope);
       }
 
       PageData = await Stock.GetPositionsAsync(new StockPositionFilter(
-        organization.OrganizationId, Skip, Take, QuerySearch, QuerySource,
-        QueryAvailability, QueryMatched, QueryAge, "sl", QueryKind));
+        scope, Skip, Take, QuerySearch, QuerySource,
+        null, null, QueryAge, "sl", QueryKind));
     }
     catch
     {
@@ -284,18 +298,17 @@
       : $"{row.MinimumStock?.ToString("N0") ?? "—"} / {row.MaximumStock?.ToString("N0") ?? "—"}";
 
   // Filtri in stran zivijo v naslovu; "" pomeni odstrani, null ohrani obstojecega.
-  string Href(string? search = null, string? source = null, string? availability = null,
-    string? matched = null, string? age = null, string? kind = null, int? page = null)
+  string Href(string? search = null, string? source = null,
+    string? age = null, string? kind = null, string? organization = null, int? page = null)
   {
     var parameters = new List<string>();
     Add("isci", Resolve(search, QuerySearch));
     Add("vir", Resolve(source, QuerySource));
-    Add("razpolozljivost", Resolve(availability, QueryAvailability));
-    Add("ujemanje", Resolve(matched, QueryMatched));
     Add("starost", Resolve(age, QueryAge?.ToString()));
     Add("vrsta", Resolve(kind, QueryKind));
-    var resolvedPage = page ?? (search is null && source is null && availability is null
-      && matched is null && age is null && kind is null ? QueryPage : null);
+    Add("podjetje", Resolve(organization, QueryOrganization));
+    var resolvedPage = page ?? (search is null && source is null
+      && age is null && kind is null && organization is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "zaloge" : "zaloge?" + string.Join('&', parameters);
@@ -311,8 +324,8 @@
   Task ApplyFiltersAsync()
   {
     Navigation.NavigateTo(Href(
-      search: SearchDraft.Trim(), source: SourceDraft, availability: AvailabilityDraft,
-      matched: MatchedDraft, age: AgeDraft, kind: KindDraft, page: 1));
+      search: SearchDraft.Trim(), source: SourceDraft,
+      age: AgeDraft, kind: KindDraft, organization: OrganizationDraft, page: 1));
     return Task.CompletedTask;
   }
 
@@ -325,7 +338,6 @@
     return Task.CompletedTask;
   }
 
-  static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
 
   /// <summary>Vrsta vira, kot jo bere clovek. ERP je SAOP, vse ostalo je dobaviteljev vir.</summary>
   static string KindLabel(string? value) => value switch
@@ -335,20 +347,6 @@
     _ => "neznan vir",
   };
 
-  // Povzetek po vrsti vira izhaja iz ze nalozenih virov; nove poizvedbe za to ni.
-  long? ErpPositions => Overview is null ? null : Overview.Sources.Where(IsErpSource).Sum(source => source.PositionCount);
-  long? SupplierPositions => Overview is null ? null : Overview.Sources.Where(source => !IsErpSource(source)).Sum(source => source.PositionCount);
-
-  // Ista meja kot v proceduri (migracija 130): SAOP konektor je ERP, vsak drug je dobaviteljev.
-  static bool IsErpSource(StockSourceRow source) => source.SourceCode.Contains("SAOP", StringComparison.OrdinalIgnoreCase);
-
-  static string AvailabilityLabel(string? value) => value switch
-  {
-    "IN_STOCK" => "na zalogi",
-    "OUT_OF_STOCK" => "brez zaloge",
-    "INCOMING" => "prihaja",
-    _ => value ?? "—",
-  };
 
   static string MatchedLabel(string? value) => value switch
   {
