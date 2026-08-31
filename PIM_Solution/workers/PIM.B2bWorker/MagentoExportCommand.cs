@@ -372,7 +372,7 @@ public static class MagentoExportCommand
         }
 
         await using (var cmd = new SqlCommand("""
-            SELECT p.ItemID, pa.AttributeCode, pa.Value
+            SELECT p.ItemID, pa.AttributeCode, pa.LanguageCode, pa.Value
             FROM pim.Product p
             JOIN pim.ProductAttribute pa ON pa.PimProductId = p.PimProductId
             WHERE p.OrganizationId = @OrgId;
@@ -385,13 +385,36 @@ public static class MagentoExportCommand
                 var itemId = reader["ItemID"] as string ?? "";
                 if (!products.TryGetValue(itemId, out var row)) continue;
                 var attrCode = reader["AttributeCode"] as string ?? "";
+                var language = reader["LanguageCode"] as string;
                 var value = reader["Value"] as string;
+
                 row["Attr." + attrCode] = value;
+
+                // Do migracije 124 je bil jezik del imena atributa in glava v datoteki se
+                // vedno je: stolpec se imenuje "Prevladujoc material SLO", ker je to pogodba
+                // do Magenta in ne nas notranji zapis. Baza je ocisena, datoteka pa mora
+                // ostati enaka, zato tu jezik znova zlozimo v glavo.
+                //
+                // Brez tega je posledica tiha: stolpec ostane v datoteki, a je prazen pri vseh
+                // vrsticah - kar se prebere kot "dobavitelj tega ne poslje", ne kot okvara.
+                var suffix = MagentoLanguageSuffix(language);
+                if (suffix is not null) row["Attr." + attrCode + " " + suffix] = value;
             }
         }
 
         return products.Values.OrderBy(r => r.TryGetValue("Product.ItemID", out var id) ? id : "").ToList();
     }
+
+    /// <summary>
+    /// Pripona jezika v glavi Magento datoteke. Ni splosno pravilo o jezikih, ampak oblika
+    /// stolpcev v tej datoteki; zato je tu in ne v sifrantu jezikov.
+    /// </summary>
+    public static string? MagentoLanguageSuffix(string? languageCode) => languageCode switch
+    {
+        "sl" => "SLO",
+        "en" => "ANG",
+        _ => null
+    };
 
     private static async Task<List<Dictionary<string, string?>>> LoadCustomerRowsAsync(SqlConnection connection, int organizationId, CancellationToken ct)
     {

@@ -181,6 +181,38 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[DOMENA] Magento izvoz spet polni jezikovne stolpce — regresija iz migracije 124** —
+  kdo: Claude Code — ozemlje: DOMENA — končano 2026-08-31.
+
+  **Napaka je bila moja in je bila tiha.** Migracija 124 je jezik prestavila z imena atributa v
+  svoj stolpec. V opisu commita sem zapisal, da se noben izvoz ne spremeni, ker sem preveril
+  `out.ExportColumn.CanonicalFieldCode LIKE 'ProductAttribute.%'` — to je ena sama vrstica.
+  **Preveril sem napačno mesto:** Magento izvoz atributnih stolpcev ne bere prek
+  `CanonicalFieldCode`, ampak ključ zgradi kar iz imena atributa
+  (`row["Attr." + attrCode]`) in ga ujame z glavo v datoteki.
+
+  Posledica: glava »Prevladujoč material SLO« po 124 ni imela para, ker se atribut zdaj imenuje
+  »Prevladujoč material« z jezikom v stolpcu. **31 stolpcev je ostalo praznih.**
+
+  | Kaj | Prej | Po 124 | Po popravku |
+  |---|---|---|---|
+  | polnih stolpcev v `magento-products.csv` | 152 | **136** | **167** |
+
+  Popravek je v izvozu, ne v bazi: glave v datoteki so pogodba do Magenta in morajo ostati
+  takšne, kot so. Izvoz zdaj jezik zloži nazaj v glavo (`sl` → `SLO`, `en` → `ANG`) in poleg
+  tega ohrani jezikovno nevtralni ključ.
+
+  **Zakaj tega ni ujel noben test.** Datoteka je nastala, imela je vseh 213 glav in pravilno
+  število vrstic — samo prazna je bila tam, kjer prej ni bila. Prazen stolpec se prebere kot
+  »dobavitelj tega ne pošlje«, ne kot okvara, in tak podatek lahko teče mesece. Polni testni
+  paket je bil ves čas zelen.
+
+  `PIM.F7.MagentoExportTests` ima odslej razdelek 2b, ki to drži. Preverjeno občutljiv: ob
+  spremembi `"sl" => null` pade z »Slovenscina je v glavi SLO: pričakovano SLO, dejansko«.
+
+  **Dokaz:** `scripts\run_tests.ps1` (polni paket) → **58 uspelih / 0 preskočenih / 0 padlih**;
+  izvoz org 2 pognan v živo → 43.504 vrstic, 167 od 213 stolpcev z vsaj eno vrednostjo.
+
 - **[BAZA + INTRANET + IZVOZ] Popravki iz `Popravki_PIMa.docx` — 47 od 52 postavk** —
   kdo: Claude Code — ozemlja: BAZA, INTRANET, DOMENA/IZVOZ — končano 2026-08-28.
 

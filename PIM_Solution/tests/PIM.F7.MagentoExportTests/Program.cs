@@ -42,6 +42,27 @@ Equal(true, MagentoCustomerSchema.Headers.SequenceEqual(MagentoCsvContract.Custo
 // ni ujemala z nicimer: glavna slika je ostala prazna, vse slike pa so pristale med ostalimi.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 2b. Jezik v glavi datoteke.
+//
+// Do migracije 124 je bil jezik del imena atributa in izvoz je kljuc gradil kar iz njega.
+// Po 124 je jezik svoj stolpec, glava v datoteki pa se vedno je "Prevladujoc material SLO",
+// ker je to pogodba do Magenta in ne nas notranji zapis.
+//
+// Zakaj to potrebuje test: ko se je 124 uporabila, je izvoz nehal polniti 31 stolpcev in
+// noben test tega ni ujel. Datoteka je nastala, imela je vseh 213 glav in pravilno stevilo
+// vrstic - samo prazna je bila tam, kjer prej ni bila. Prazen stolpec se prebere kot
+// "dobavitelj tega ne poslje", ne kot okvara, in tak podatek lahko tece mesece.
+Equal("SLO", MagentoExportCommand.MagentoLanguageSuffix("sl"), "Slovenscina je v glavi SLO.");
+Equal("ANG", MagentoExportCommand.MagentoLanguageSuffix("en"), "Anglescina je v glavi ANG.");
+Equal(null, MagentoExportCommand.MagentoLanguageSuffix(null), "Brez jezika ni pripone.");
+Equal(null, MagentoExportCommand.MagentoLanguageSuffix("de"), "Jezik brez stolpca v datoteki nima pripone.");
+
+// Pogodba mora imeti obe obliki para, sicer zlaganje jezika nazaj v glavo nima cilja.
+Equal(true, MagentoCsvContract.ProductHeaders.Contains("Prevladujoč material SLO", StringComparer.Ordinal)
+         && MagentoCsvContract.ProductHeaders.Contains("Prevladujoč material ANG", StringComparer.Ordinal),
+  "Glava mora imeti obe jezikovni obliki, sicer se prevod nima kam izpisati.");
+
 Equal(true, MagentoExportCommand.IsPrimaryMediaRole("PRIMARY"), "PRIMARY je glavna vloga.");
 Equal(true, MagentoExportCommand.IsPrimaryMediaRole("Primary"), "Primary je glavna vloga.");
 Equal(true, MagentoExportCommand.IsPrimaryMediaRole("primary"), "primary je glavna vloga.");
