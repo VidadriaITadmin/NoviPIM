@@ -12,6 +12,12 @@ public sealed record StockFieldContract
   public string QuantityField { get; init; } = "Quantity";
   public string AvailabilityDateField { get; init; } = "AvailabilityDate";
   public string IncomingQuantityField { get; init; } = "IncomingQuantity";
+  // Dodatne kolicine registriranega pogleda SAOP (migracija 145). Viri, ki jih ne poznajo
+  // (GetStocks, NW, BT), teh kljucev v vrstici nimajo in stolpci ostanejo NULL.
+  public string OrderedQuantityField { get; init; } = "OrderedQuantity";
+  public string ForShipmentQuantityField { get; init; } = "ForShipmentQuantity";
+  public string AvailableQuantityField { get; init; } = "AvailableQuantity";
+  public string SupplierOrderedQuantityField { get; init; } = "SupplierOrderedQuantity";
 }
 public sealed record NormalizedStockPosition(string? NormalizedItemId, string? Ean, decimal Quantity, DateOnly? AvailabilityDate, decimal? IncomingQuantity, string PreferredMatchKey);
 public sealed record StockQuarantine(string ReasonCode, string Detail);
