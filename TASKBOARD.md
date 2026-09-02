@@ -18,6 +18,17 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## TODO (čaka)
 
+- **[WORKERJI + BAZA + INTRANET] Razporejevalnik: en dolgoživ proces namesto načrtovanih opravil** —
+  načrt: [`docs/NACRT_RAZPOREJEVALNIK.md`](docs/NACRT_RAZPOREJEVALNIK.md) — **čaka tvojo potrditev**.
+
+  Ciljno okolje je strežnik z IIS, kjer ni prijavljenega uporabnika. Vsa tri današnja opravila so
+  `InteractiveToken` (»Run only when user is logged on«), zato se tam **ne bi zagnala nikoli** in
+  tega ne bi javila. Načrt uvede `PIM.Scheduler` kot Windows storitev, ki bere ritem iz
+  `ops.ScheduleProfile` in poganja zgrajene worker `.exe` brez `dotnet run`.
+
+  Odprto zate: ali nočni tok postane vrstica v urniku ali ostane ločeno opravilo; servisni račun
+  na strežniku; potrditev vrstnega reda (§7 in §8 načrta).
+
 > **2026-08-24: uporabnik je odgovoril na vseh devet odprtih vprašanj.** Odgovori in kaj iz njih
 > sledi so v [`docs/TVOJE_NALOGE.md`](docs/TVOJE_NALOGE.md). Na kratko, kaj se je s tem spremenilo:
 >
