@@ -1,4 +1,5 @@
 var root = FindRoot();
+var pagesDirectory = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 var migration = Path.Combine(root, "sql", "migrations", "026_AddIntranetUserAdministration.sql");
 var auth = Path.Combine(root, "src", "PIM.Intranet", "Services", "LocalUserAuthenticationService.cs");
 var activeDirectory = Path.Combine(root, "src", "PIM.Intranet", "Services", "ActiveDirectoryService.cs");
@@ -9,6 +10,7 @@ var migrator = Path.Combine(root, "src", "PIM.Migrator", "Program.cs");
 var intranetProgram = Path.Combine(root, "src", "PIM.Intranet", "Program.cs");
 var loginPage = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Login.razor");
 var intranetData = Path.Combine(root, "src", "PIM.Intranet", "Services", "IntranetDataService.cs");
+var saopWrite = Path.Combine(root, "src", "PIM.Intranet", "Services", "SaopWriteService.cs");
 
 foreach (var path in new[] { migration, auth, activeDirectory, administration, usersPage, provisioner })
   Assert(File.Exists(path), "Manjka zahtevan artefakt: " + path);
@@ -138,6 +140,32 @@ Assert(discountRulesPage.Contains("GetValueTiersAsync", StringComparison.Ordinal
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Counter.razor")).Contains("@page", StringComparison.Ordinal), "Counter ne sme biti javna PIM stran.");
 Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Weather.razor")).Contains("@page", StringComparison.Ordinal), "Weather ne sme biti javna PIM stran.");
 
+// Ponovni poskus je zapisovalna pot v ERP: obe strani morata imeti enako ozko avtorizacijo,
+// dejanje pa sme biti vidno samo pri neuspelem sporocilu. Skupinska pot mora uporabljati
+// atomsko bazno proceduro, ne zanke posameznih klicev brez skupnega izida.
+foreach (var pageName in new[] { "Saop.razor", "SaopHistory.razor" })
+{
+  var pageText = File.ReadAllText(Path.Combine(pagesDirectory, pageName));
+  Assert(pageText.Contains("@attribute [Authorize(Roles = \"ADMIN,CATALOG_EDITOR\")]", StringComparison.Ordinal),
+    pageName + " mora zapisovanje omejiti na ADMIN in CATALOG_EDITOR.");
+  Assert(pageText.Contains("row.Status is \"Error\" or \"Dead\"", StringComparison.Ordinal),
+    pageName + " sme gumb Pošlji znova pokazati samo pri Error ali Dead.");
+  Assert(pageText.Contains("Pošlji znova", StringComparison.Ordinal),
+    pageName + " mora imeti jasno poimenovano vrstično dejanje.");
+  Assert(pageText.Contains("Write.RequeueMessageAsync", StringComparison.Ordinal),
+    pageName + " mora klicati novo varno zapisovalno pot.");
+  Assert(pageText.Contains("Authentication", StringComparison.Ordinal),
+    pageName + " mora izvajalca vzeti iz prijavljene seje.");
+}
+var saopPage = File.ReadAllText(Path.Combine(pagesDirectory, "Saop.razor"));
+Assert(saopPage.Contains("Pošlji znova vse neuspele", StringComparison.Ordinal),
+  "Pregled SAOP mora ponuditi skupinski ponovni poskus.");
+Assert(saopPage.Contains("Write.RequeueBatchAsync", StringComparison.Ordinal),
+  "Skupinski gumb mora uporabiti atomsko bazno proceduro.");
+var saopWriteText = File.ReadAllText(saopWrite);
+foreach (var contract in new[] { "RequeueMessageAsync", "out.RequeueOutboxMessage", "RequeueBatchAsync", "out.RequeueOutboundBatch" })
+  Assert(saopWriteText.Contains(contract, StringComparison.Ordinal), "SaopWriteService nima pogodbe: " + contract);
+
 // ─── Zavihek ostane na svoji strani, 2026-08-28 ────────────────────────────
 // Uporabnikova zahteva, dobesedno: »ce je zavihek, ga tle prikazi; ce ne, ne dodaj zavihka«.
 // Vrstica zavihkov, v kateri povezava odnese na drugo pot, je past: videti je kot preklop
@@ -146,7 +174,6 @@ Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components",
 //
 // Preverjamo samo dobesedne naslove; racunani (`href="@(...)"`) se staticno ne dajo razresiti
 // in so v tej resitvi vedno na isto stran s poizvedbenim parametrom.
-var pagesDirectory = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 foreach (var razorPage in Directory.EnumerateFiles(pagesDirectory, "*.razor", SearchOption.AllDirectories))
 {
   var markup = File.ReadAllText(razorPage);

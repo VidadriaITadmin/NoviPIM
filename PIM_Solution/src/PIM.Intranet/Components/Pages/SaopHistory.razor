@@ -1,7 +1,9 @@
 @page "/saop/zgodovina"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
 @rendermode InteractiveServer
 @inject IntranetDataService Data
+@inject SaopWriteService Write
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Zgodovina zapisov v SAOP</PageTitle>
 <PimPage Title="Zgodovina zapisov v SAOP" Subtitle="Ena vrstica predstavlja poslovno operacijo. Posamezni poskusi zahtevajo dodaten bralni model." Crumbs="Crumbs" />
@@ -17,6 +19,11 @@
 
 <PimMissing Object="intranet.GetOutboundMessages" What="odobritelja, čas pošiljanja, staro in novo vrednost ter razčlenitev out.OutboxAttempt" Needs="out.OutboxMessage, out.OutboxAttempt in posnetek dejansko poslanih polj" />
 
+@if (Message is not null)
+{
+  <p class="message-state success-message" role="status">@Message</p>
+}
+
 <section class="ui-card data-card section-gap" aria-label="Zgodovina operacij SAOP">
   <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Filtered.Count == 0)" EmptyText="Za izbrane filtre ni operacij." LoadingText="Nalaganje zgodovine …">
     <PimTable Caption="Operacije zapisa v SAOP" Columns="Columns">
@@ -27,6 +34,12 @@
             <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td><td>@row.Operation</td>
             <td>@row.FieldSummary</td><td>—</td><td>@(row.Status == "Sent" ? "Da, nepotrjeno" : "—")</td><td>@Response(row)</td>
             <td>@(row.Status is "Verified" or "Succeeded" ? "Da" : "—")</td><td><PimChip Text="@Label(row.Status)" Tone="@Tone(row.Status)" /></td>
+            <td>@if (row.Status is "Error" or "Dead")
+              {
+                <button type="button" class="small-action warn-action" disabled="@ActionBusy"
+                  aria-label="Pošlji znova @row.EntityType @row.EntityKey"
+                  @onclick="() => RequeueMessageAsync(row)">Pošlji znova</button>
+              }</td>
           </tr>
         }
       </Rows>
@@ -37,10 +50,12 @@
 @code {
   [SupplyParameterFromQuery(Name = "stanje")] public string Status { get; set; } = "";
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Zgodovina")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat"), new("Dejanje")];
   IReadOnlyList<OutboundRow> Rows = [];
   bool Loading = true;
+  bool ActionBusy;
   string? Error;
+  string? Message;
   string Entity = "", Search = "", Period = "30";
   IReadOnlyList<string> Entities => Rows.Select(row => row.EntityType).Distinct().Order().ToArray();
   IReadOnlyList<string> Statuses => Rows.Select(row => row.Status).Distinct().Order().ToArray();
@@ -52,9 +67,29 @@
 
   protected override async Task OnInitializedAsync()
   {
-    try { var org = await Data.GetCurrentOrganizationAsync(); if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; } Rows = await Data.GetOutboundAsync(org.OrganizationId); }
+    try { await ReloadAsync(); }
     catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+  async Task ReloadAsync()
+  {
+    var org = await Data.GetCurrentOrganizationAsync();
+    if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+    Rows = await Data.GetOutboundAsync(org.OrganizationId);
+  }
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+  async Task RequeueMessageAsync(OutboundRow row)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var count = await Write.RequeueMessageAsync(row.OutboxMessageId, await ActorAsync());
+      Message = $"Znova poslanih v čakalno vrsto: {count}.";
+      await ReloadAsync();
+    }
+    catch { Error = "Sporočila ni bilo mogoče varno poslati znova. Stanje ni bilo spremenjeno."; }
+    finally { ActionBusy = false; }
   }
   static string Response(OutboundRow row) => row.ResponseStatusCode is null && row.ResponseCorrelationId is null ? "—" : $"{row.ResponseStatusCode} {row.ResponseCorrelationId}".Trim();
   static string Label(string status) => status == "Sent" ? "Poslano, nepotrjeno" : status;

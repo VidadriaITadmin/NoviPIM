@@ -160,7 +160,13 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   F8.BulkOutboundTests` = 1 uspešen, 0 padlih, `Build OK`. Posamična in skupinska pot
   vrneta samo `Error`/`Dead` v `Pending`, ohranita `AttemptCount` in `OutboxAttempt`,
   počistita `LastError` ter zapišeta tihi dogodek `REQUEUE`/`INFO`; dokaz izrecno zavrne
-  `Sending` in `Sent`. Sledi intranetni del Naloge 2.
+  `Sending` in `Sent`. **Naloga 2 — INTRANET je KONČANA:** RED `PIM.F10.AuthTests` =
+  izhod 1 zaradi preširoke avtorizacije; GREEN `run_tests.ps1 -Filter F10` = 14 uspešnih,
+  0 preskočenih, 0 padlih in `Build OK`. `/saop` ter `/saop/zgodovina` pokažeta vrstični
+  gumb »Pošlji znova« samo za `Error`/`Dead`; pregled dodatno pokaže skupine in atomski
+  gumb »Pošlji znova vse neuspele«. Obe poti osvežita stanje, pokažeta dejansko število
+  vrnjenih sporočil in sta omejeni na `ADMIN,CATALOG_EDITOR`. Sledi Naloga 3 — spletni
+  izvoz na zahtevo.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet

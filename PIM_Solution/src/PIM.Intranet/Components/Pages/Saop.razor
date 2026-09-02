@@ -1,12 +1,19 @@
 @page "/saop"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
 @rendermode InteractiveServer
 @inject IntranetDataService Data
+@inject SaopWriteService Write
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Izhod v SAOP</PageTitle>
 <PimPage Title="Izhod v SAOP" Subtitle="Vsak zapis nazaj v ERP: stanje odobritve in dostave, odgovor ERP ter potrditev pri naslednji sinhronizaciji." />
 
 <PimTabs Active="overview" Tabs="Tabs" Label="Pogledi izhoda v SAOP" />
+
+@if (Message is not null)
+{
+  <p class="message-state success-message" role="status">@Message</p>
+}
 
 <PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje izhodov SAOP …">
   <section class="kpi-grid" aria-label="Stanje zapisov v SAOP">
@@ -38,6 +45,48 @@
       </Rows>
     </PimTable>
   </section>
+
+  @if (FailedRows.Count > 0)
+  {
+    <section class="ui-card data-card section-gap" aria-label="Neuspela sporočila SAOP">
+      <PimTable Caption="Neuspela sporočila, ki jih je mogoče varno poslati znova" Columns="FailedColumns">
+        <Rows>
+          @foreach (var row in FailedRows)
+          {
+            <tr>
+              <td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td>
+              <td>@row.FieldSummary</td>
+              <td><PimChip Text="@row.Status" Tone="bad" /></td>
+              <td><button type="button" class="small-action warn-action" disabled="@ActionBusy"
+                aria-label="Pošlji znova @row.EntityType @row.EntityKey"
+                @onclick="() => RequeueMessageAsync(row)">Pošlji znova</button></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+  }
+
+  @if (FailedBatches.Count > 0)
+  {
+    <section class="ui-card data-card section-gap" aria-label="Neuspele skupine SAOP">
+      <PimTable Caption="Skupine z neuspelimi sporočili" Columns="BatchColumns">
+        <Rows>
+          @foreach (var batch in FailedBatches)
+          {
+            <tr>
+              <td>@batch.OutboundBatchId</td>
+              <td>@batch.Source<div class="tree-path">@batch.Note</div></td>
+              <td class="numeric">@batch.Failed.ToString("N0")</td>
+              <td><button type="button" class="small-action warn-action" disabled="@ActionBusy"
+                aria-label="Pošlji znova vsa neuspešna sporočila skupine @batch.OutboundBatchId"
+                @onclick="() => RequeueBatchAsync(batch)">Pošlji znova vse neuspele</button></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+  }
 </PimState>
 
 @code {
@@ -55,20 +104,62 @@
   static readonly EntityDefinition[] Entities =
   [new("Artikli", ["PRODUCT", "ITEM", "ARTICLE"]), new("Cene", ["PRICE"]), new("Ceniki", ["PRICELIST", "PRICE_LIST"]), new("Stranke", ["CUSTOMER"]), new("Dokumenti", ["DOCUMENT", "ORDER"] )];
   static readonly IReadOnlyList<PimColumn> Columns = [new("Entiteta"), new("Čaka", true), new("V vrsti", true), new("Poslano", true), new("Potrjeno", true), new("Napake", true), new("Zadnji zapis")];
+  static readonly IReadOnlyList<PimColumn> FailedColumns = [new("Entiteta / ključ"), new("Polje"), new("Stanje"), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> BatchColumns = [new("Skupina"), new("Vir"), new("Neuspelih", true), new("Dejanje")];
   IReadOnlyList<OutboundRow> Rows = [];
+  IReadOnlyList<OutboundBatchRow> Batches = [];
   bool Loading = true;
+  bool ActionBusy;
   string? Error;
+  string? Message;
+  IReadOnlyList<OutboundRow> FailedRows => Rows.Where(row => row.Status is "Error" or "Dead").OrderByDescending(row => row.CreatedUtc).ToArray();
+  IReadOnlyList<OutboundBatchRow> FailedBatches => Batches.Where(batch => batch.Failed > 0).OrderByDescending(batch => batch.CreatedUtc).ToArray();
 
   protected override async Task OnInitializedAsync()
   {
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      Rows = await Data.GetOutboundAsync(organization.OrganizationId);
+      await ReloadAsync();
     }
     catch { Error = "Stanja zapisov v SAOP trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  async Task ReloadAsync()
+  {
+    var organization = await Data.GetCurrentOrganizationAsync();
+    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+    Rows = await Data.GetOutboundAsync(organization.OrganizationId);
+    Batches = await Write.GetBatchesAsync(organization.OrganizationId);
+  }
+
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task RequeueMessageAsync(OutboundRow row)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var count = await Write.RequeueMessageAsync(row.OutboxMessageId, await ActorAsync());
+      Message = $"Znova poslanih v čakalno vrsto: {count}.";
+      await ReloadAsync();
+    }
+    catch { Error = "Sporočila ni bilo mogoče varno poslati znova. Stanje ni bilo spremenjeno."; }
+    finally { ActionBusy = false; }
+  }
+
+  async Task RequeueBatchAsync(OutboundBatchRow batch)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var count = await Write.RequeueBatchAsync(batch.OutboundBatchId, await ActorAsync());
+      Message = $"Znova poslanih v čakalno vrsto: {count}.";
+      await ReloadAsync();
+    }
+    catch { Error = "Neuspelih sporočil skupine ni bilo mogoče varno poslati znova. Stanje ni bilo spremenjeno."; }
+    finally { ActionBusy = false; }
   }
 
   string Count(params string[] statuses) => Rows.LongCount(row => statuses.Contains(row.Status, StringComparer.OrdinalIgnoreCase)).ToString("N0");

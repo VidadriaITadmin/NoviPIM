@@ -119,6 +119,12 @@ public sealed class SaopWriteService(IConfiguration configuration)
   public async Task<int> CancelBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
     await ScalarIntAsync("EXEC out.CancelOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
 
+  public async Task<int> RequeueMessageAsync(long messageId, string actor, CancellationToken cancellationToken = default) =>
+    await ScalarIntAsync("EXEC out.RequeueOutboxMessage @Batch, @Actor;", messageId, actor, cancellationToken);
+
+  public async Task<int> RequeueBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
+    await ScalarIntAsync("EXEC out.RequeueOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+
   async Task<int> ScalarIntAsync(string sql, long batchId, string actor, CancellationToken cancellationToken)
   {
     await using var connection = await OpenAsync(cancellationToken);

@@ -18,7 +18,11 @@ Migracija **138** je dodala varen ponovni poskus neuspelih odhodnih sporočil: p
 `Error`/`Dead` v `Pending`. `Sending` in `Sent` ostaneta nedotaknjena, zgodovina poskusov se
 ne prepisuje, `LastError` se počisti, dejanje pa ostane v obstoječem dnevniku kot
 `REQUEUE`/`INFO`. Ciljni dokaz `PIM.F8.BulkOutboundTests` je zelen (1/0/0, `Build OK`).
-Uporabniška gumba na straneh SAOP sta naslednji del iste naloge in še nista dodana.
+Na `/saop` in `/saop/zgodovina` je vrstični gumb »Pošlji znova« viden samo za `Error` ali
+`Dead`; `/saop` ima še atomsko dejanje »Pošlji znova vse neuspele« po skupini. Po dejanju
+se pogled osveži in pokaže dejansko število vrnjenih sporočil. Zapisovalni strani sta
+omejeni na vlogi `ADMIN,CATALOG_EDITOR`. Dokaz: `run_tests.ps1 -Filter F10` = 14/0/0 in
+`Build OK`.
 
 ## Popravki po pregledu uporabnika 2026-08-28
 
