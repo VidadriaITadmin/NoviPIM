@@ -3,7 +3,34 @@ using Microsoft.Data.SqlClient;
 
 namespace PIM.Intranet.Services;
 
-public sealed record ExportProfileRow(int ExportProfileId, string ProfileCode, string Name, string ChannelCode, string EntityType, bool IsActive, long ColumnCount, long MappedColumnCount, DateTime UpdatedUtc);
+/// <param name="ValueSourceCode">
+/// Iz katerega vira profil dobi vrednosti (migracija 142): <c>CANON</c>, <c>PIM_PRODUCT</c>
+/// ali <c>PIM_CUSTOMER</c>. Pove, ali zanj izvoz na zahtevo sploh zna sestaviti vrstice.
+/// </param>
+public sealed record ExportProfileRow(int ExportProfileId, string ProfileCode, string Name, string ChannelCode, string EntityType, bool IsActive, long ColumnCount, long MappedColumnCount, DateTime UpdatedUtc, string ValueSourceCode)
+{
+  /// <summary>
+  /// Ali zna <c>out.GetExportRows</c> za ta profil sestaviti vrstice. Kanonicni vir zna samo
+  /// izdelke; profila strank ali postnin iz kanonicnega sloja procedura zavrne, zato zanju
+  /// gumba za pripravo ne ponudimo — raje brez gumba kot gumb, ki vrze napako.
+  /// </summary>
+  public bool CanBuildOnDemand =>
+    ValueSourceCode is "PIM_PRODUCT" or "PIM_CUSTOMER"
+    || (ValueSourceCode == "CANON" && EntityType.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase));
+
+  /// <summary>
+  /// Ali izvoz zajame samo objavljeno. Pri izdelkih za Magento je <c>false</c>: datoteka, ki
+  /// dejansko odide, je od nekdaj vseboval ves katalog podjetja in predogled mora pokazati
+  /// isto. Pri strankah pomeni WebEnabled, pri kanonicnih izdelkih pa WebPublish — tam je
+  /// omejitev na objavljeno pravi privzetek.
+  /// </summary>
+  public bool OnlyPublishedDefault => ValueSourceCode != "PIM_PRODUCT";
+
+  /// <summary>Kaj je v datoteki, povedano cloveku: izdelki ali stranke.</summary>
+  public string ContentKind => EntityType.Contains("CUSTOMER", StringComparison.OrdinalIgnoreCase) ? "Stranke"
+    : EntityType.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase) ? "Izdelki"
+    : EntityType;
+}
 public sealed record ExportColumnRow(int ExportColumnId, string ColumnCode, string OutputColumnName, string? CanonicalFieldCode, int SortOrder, bool IsRequired, bool IsActive);
 public sealed record ValidationProfileRow(int ValidationProfileId, string ProfileCode, string Name, string? Scope, bool BlocksErp, bool BlocksWeb, bool IsActive, long RequirementCount, long ValidCount, long InvalidCount);
 public sealed record ValidationLayerSummary(PimValidationLayer Layer, long ProductCount, long AffectedProductCount)
@@ -54,7 +81,7 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
   public Task<IReadOnlyList<ExportProfileRow>> GetExportProfilesAsync(CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT profile.ExportProfileId, profile.ProfileCode, profile.Name, profile.ChannelCode, profile.EntityType,
-             profile.IsActive, profile.UpdatedUtc,
+             profile.IsActive, profile.UpdatedUtc, profile.ValueSourceCode,
              (SELECT COUNT_BIG(*) FROM out.ExportColumn column1
               WHERE column1.ExportProfileId = profile.ExportProfileId AND column1.IsActive = 1) AS ColumnCount,
              (SELECT COUNT_BIG(*) FROM out.ExportColumn column2
@@ -66,7 +93,7 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       reader => new ExportProfileRow(PimDb.Int32(reader, "ExportProfileId"), PimDb.TextOrEmpty(reader, "ProfileCode"),
         PimDb.TextOrEmpty(reader, "Name"), PimDb.TextOrEmpty(reader, "ChannelCode"), PimDb.TextOrEmpty(reader, "EntityType"),
         PimDb.Bool(reader, "IsActive"), PimDb.Int64(reader, "ColumnCount"), PimDb.Int64(reader, "MappedColumnCount"),
-        PimDb.DateTimeValue(reader, "UpdatedUtc")),
+        PimDb.DateTimeValue(reader, "UpdatedUtc"), PimDb.TextOrEmpty(reader, "ValueSourceCode")),
       cancellationToken: cancellationToken);
 
   public Task<IReadOnlyList<ExportColumnRow>> GetExportColumnsAsync(int exportProfileId, bool onlyUnmapped, CancellationToken cancellationToken = default) =>

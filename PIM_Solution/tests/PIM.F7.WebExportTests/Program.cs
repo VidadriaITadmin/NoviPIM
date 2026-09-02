@@ -29,54 +29,27 @@ Assert(programText.Split("GetProductListAsync", StringSplitOptions.None).Length 
     && !programText.Contains("while (rows.Count", StringComparison.Ordinal),
   "/izvoz/izdelki.csv mora nabor prebrati z enim klicem do 20.000, ne s 100 zaporednimi stranmi.");
 
-// Datoteke, ki gredo na splet: branje, predogled in varna razresitev imena.
+// Datoteke, ki gredo na splet, ne cakajo vec v mapi na disku (migracija 142). Datoteko in
+// predogled sestavi ista procedura out.GetExportRows, ki jo uporabi tudi PIM.B2bWorker.
 //
 // Uporabnik 2026-08-28: »bi oni dejansko CSV videli, ki ga bomo dali za splet in da si ga
 // lahko potegnejo dol«, ter »imeli bomo vec CSVjev za splet — artikli in pa stranke«.
-//
-// Test si mapo naredi sam in jo za sabo pospravi; ne potrebuje ne baze ne workerja.
 
-var sandbox = Path.Combine(Path.GetTempPath(), "pim-web-export-" + Guid.NewGuid().ToString("N"));
-Directory.CreateDirectory(sandbox);
-try
+Assert(!File.Exists(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Services", "WebExportFileService.cs")),
+  "Branja datotek z diska v intranetu ne sme vec biti; CSV nastane iz tabel.");
+// Iscemo registracijo poti in servisa, ne omembe imena: zgodovinsko pojasnilo v komentarju
+// (»prej je bila tu mapa WebExport:Directory«) je koristno in ne sme podreti testa.
+Assert(!programText.Contains("MapGet(\"/izvoz/splet/{fileName}\"", StringComparison.Ordinal)
+    && !programText.Contains("AddScoped<WebExportFileService>", StringComparison.Ordinal),
+  "Program.cs ne sme imeti ne prenosa datoteke z diska ne servisa, ki jo bere.");
+Assert(!File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "appsettings.json"))
+    .Contains("WebExport", StringComparison.Ordinal),
+  "Nastavitve intraneta ne smejo vec obljubljati mape s spletnimi izvozi.");
+foreach (var contract in new[] { "izvoz/splet-na-zahtevo", "TogglePreviewAsync", "DownloadHref", "OnlyPublishedDefault" })
+  Assert(webPageText.Contains(contract, StringComparison.Ordinal),
+    "Stran /splet mora izvoz pripraviti iz registra, ne z diska: manjka " + contract);
+
 {
-  File.WriteAllText(Path.Combine(sandbox, "magento-products.csv"),
-    "Šifra artikla,EAN,Naziv artikla\nBA.BC15.00310,5949097729164,\"Sijalka, \"\"E14\"\", bela\"\nNW.10168,5903139101684,Svetilka\n");
-  File.WriteAllText(Path.Combine(sandbox, "magento-customers.csv"),
-    "Šifra stranke,Naziv,Skupina\n888,ITI ELEKT d.o.o.,b2b_trgovec\n");
-  // Datoteka, ki ni CSV, ne sme priti v seznam.
-  File.WriteAllText(Path.Combine(sandbox, "magento-export.complete"), "ok");
-
-  var service = new WebExportFileService(new ConfigurationBuilder()
-    .AddInMemoryCollection(new Dictionary<string, string?> { ["WebExport:Directory"] = sandbox })
-    .Build());
-
-  var files = service.List();
-  Assert(files.Count == 2, "V seznamu morata biti natanko dve datoteki CSV; oznaka .complete ni izvoz.");
-  Assert(files.Any(file => file.Kind == "Izdelki"), "Datoteka izdelkov mora biti prepoznana kot Izdelki.");
-  Assert(files.Any(file => file.Kind == "Stranke"), "Datoteka strank mora biti prepoznana kot Stranke.");
-  Assert(files.Single(file => file.Kind == "Izdelki").RowCount == 2, "Stevilo vrstic je brez glave.");
-  Assert(files.Single(file => file.Kind == "Stranke").RowCount == 1, "Stevilo vrstic je brez glave.");
-
-  var preview = service.Preview("magento-products.csv");
-  Assert(preview is not null, "Predogled datoteke izdelkov mora obstajati.");
-  Assert(preview!.Columns.Count == 3, "Glava mora imeti tri stolpce.");
-  Assert(preview.Columns[0] == "Šifra artikla", "Glava mora priti nazaj nespremenjena.");
-  Assert(preview.Rows.Count == 2, "Predogled mora vrniti obe vrstici.");
-  // Vejica in narekovaji v nazivu so v izvozih pravilo, ne izjema; brez tega bi se stolpci zamaknili.
-  Assert(preview.Rows[0][2] == "Sijalka, \"E14\", bela", "Narekovaji in vejica v vrednosti ne smejo razbiti stolpcev.");
-  Assert(!preview.Truncated, "Dve vrstici nista odrezan predogled.");
-
-  Assert(service.Resolve("magento-products.csv") is not null, "Datoteka iz mape se mora razresiti.");
-  // Ime se ne sestavlja iz uporabnikovega niza: sprejeta so samo imena, ki jih je servis nasel.
-  foreach (var attack in new[] { "../appsettings.Local.json", "..\\appsettings.Local.json", "magento-export.complete", "", "magento-PRODUCTS.csv" })
-    Assert(service.Resolve(attack) is null, "Neveljavno ime se ne sme razresiti: " + attack);
-
-  var empty = new WebExportFileService(new ConfigurationBuilder().Build());
-  Assert(empty.Directory is null && empty.List().Count == 0,
-    "Brez nastavljene mape servis vrne prazen seznam; stran to pove naravnost.");
-
-  // Predogled na zahtevo mora obliko dobiti iz registra, ne iz seznama v aplikaciji.
   var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString();
   if (!string.IsNullOrWhiteSpace(connectionString))
   {
@@ -86,9 +59,11 @@ try
 
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync();
+
+    // --- Kanonicni profil: oblika pride iz registra, kot od migracije 139 --------------
     var profileId = await ProfileIdAsync(connection, "WEB_B2C_PRODUCTS");
     var expectedColumns = await ColumnNamesAsync(connection, profileId);
-    var previewPage = await ReadWebExportAsync(connection, profileId, onlyPublished: false, take: 2);
+    var previewPage = await ReadWebExportAsync(connection, "intranet.GetWebExportRows", 2, profileId, onlyPublished: false, take: 2);
 
     Assert(expectedColumns.Count > 0, "Obstoječi spletni profil mora imeti aktivne stolpce.");
     Assert(previewPage.Columns.SequenceEqual(expectedColumns),
@@ -96,10 +71,57 @@ try
     Assert(previewPage.Rows <= 2, "Predogled mora upoštevati @Take.");
     Assert(previewPage.Total >= previewPage.Rows, "@TotalCount ne sme biti manjši od vrnjene strani.");
 
-    var published = await ReadWebExportAsync(connection, profileId, onlyPublished: true, take: 1);
+    var published = await ReadWebExportAsync(connection, "intranet.GetWebExportRows", 2, profileId, onlyPublished: true, take: 1);
     Assert(published.Total <= previewPage.Total,
       "Filter samo objavljeni ne sme razširiti nabora.");
 
+    // --- Magento izdelki: vrednosti pridejo iz sloja pim, ne iz canon.FieldValue -------
+    //
+    // Zakaj to potrebuje test: profil MAGENTO_PRODUCTS ima 213 stolpcev, od katerih jih
+    // 186 od 191 preslikanih v canon.FieldValue nima nobene vrstice (kanonicni sloj
+    // uporablja druge kode). Ce bi ta profil kdaj spet bral kanonicni vir, bi datoteka
+    // nastala, imela vse glave in bila skoraj prazna — kar se prebere kot »dobavitelj
+    // tega ne poslje«, ne kot okvara.
+    var magentoProductProfileId = await ProfileIdAsync(connection, "MAGENTO_PRODUCTS");
+    var magentoProductColumns = await ColumnNamesAsync(connection, magentoProductProfileId);
+    var magentoProducts = await ReadWebExportAsync(connection, "out.GetExportRows", 2, magentoProductProfileId, onlyPublished: false, take: 5);
+    Assert(magentoProducts.Columns.SequenceEqual(magentoProductColumns),
+      "Stolpci izvoza izdelkov za Magento morajo priti iz out.ExportColumn.");
+    Assert(magentoProducts.Total > 0 && magentoProducts.Rows > 0,
+      "Izvoz izdelkov za Magento mora vrniti vrstice; brez njih SQL ni tekel.");
+    Assert(magentoProducts.FirstValues.Count > 0 && !string.IsNullOrWhiteSpace(magentoProducts.FirstValues[0]),
+      "Prvi stolpec (šifra artikla) ne sme biti prazen — brez nje vrstica ni uvozljiva.");
+    Assert(magentoProducts.FirstValues.Count(value => !string.IsNullOrWhiteSpace(value)) > 5,
+      "Vrstica z eno samo izpolnjeno vrednostjo pomeni, da vir vrednosti ni pravi.");
+
+    // --- Magento stranke: profil, ki ga je 139 se zavracala --------------------------
+    var magentoCustomerProfileId = await ProfileIdAsync(connection, "MAGENTO_CUSTOMERS");
+    var magentoCustomerColumns = await ColumnNamesAsync(connection, magentoCustomerProfileId);
+    // onlyPublished = false: razvojna baza nima nobene stranke z WebEnabled = 1, zato bi
+    // sicer nabor bil prazen in oblika ne bi bila dokazana nad resnicnimi vrsticami.
+    var magentoCustomers = await ReadWebExportAsync(connection, "out.GetExportRows", 2, magentoCustomerProfileId, onlyPublished: false, take: 3);
+    Assert(magentoCustomers.Columns.SequenceEqual(magentoCustomerColumns),
+      "Stolpci izvoza strank morajo priti iz out.ExportColumn.");
+    Assert(magentoCustomers.Total > 0 && magentoCustomers.Rows > 0,
+      "Izvoz strank mora vrniti vrstice; profil strank ni vec zavrnjen.");
+    Assert(!string.IsNullOrWhiteSpace(magentoCustomers.FirstValues[0]),
+      "Prvi stolpec (šifra stranke) ne sme biti prazen.");
+
+    var webEnabledOnly = await ReadWebExportAsync(connection, "out.GetExportRows", 2, magentoCustomerProfileId, onlyPublished: true, take: 1);
+    Assert(webEnabledOnly.Total <= magentoCustomers.Total,
+      "Omejitev na spletne stranke ne sme razširiti nabora.");
+
+    // Kontakti iz migracije 140 morajo imeti vir; brez tega trije stolpci ostanejo prazni.
+    foreach (var pair in new[] { ("CUC03", "Customer.Email"), ("CUC04", "Customer.Phone"), ("CUC05", "Customer.Persons") })
+      Assert(await FieldCodeAsync(connection, magentoCustomerProfileId, pair.Item1) == pair.Item2,
+        $"Stolpec {pair.Item1} mora brati {pair.Item2}.");
+
+    // Zapis stevila je pogodba do Magenta in ne stvar jezikovnih nastavitev seje.
+    foreach (var pair in new[] { ("12.34", "12.34"), ("12", "12"), ("0", "0"), ("-0.5", "-0.5"), ("1.23456", "1.2346") })
+      Assert(await MagentoNumberAsync(connection, pair.Item1) == pair.Item2,
+        $"out.MagentoNumber({pair.Item1}) mora dati {pair.Item2}.");
+
+    // --- Servis intraneta: brez preoblikovanja vrne registrski predogled --------------
     var configuration = new ConfigurationBuilder()
       .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Pim"] = connectionString })
       .Build();
@@ -107,6 +129,10 @@ try
     var servicePreview = await build.PreviewAsync(2, profileId, null, false, null, take: 2);
     Assert(servicePreview.Columns.SequenceEqual(expectedColumns) && servicePreview.Rows.Count == previewPage.Rows,
       "Servis mora brez preoblikovanja vrniti registrski predogled.");
+
+    var customerPreview = await build.PreviewAsync(2, magentoCustomerProfileId, null, false, null, take: 2);
+    Assert(customerPreview.Columns.SequenceEqual(magentoCustomerColumns) && customerPreview.Rows.Count > 0,
+      "Isti servis mora znati pripraviti tudi predogled strank.");
 
     var itemId = await FirstItemIdAsync(connection, 2);
     await using var csv = new MemoryStream();
@@ -122,15 +148,10 @@ try
     Assert(WebExportBuildService.FileName("WEB_B2C_PRODUCTS", new DateTime(2026, 9, 2, 14, 5, 0))
       == "PIM_splet_WEB_B2C_PRODUCTS_20260902_1405.csv", "Ime datoteke mora vsebovati profil in minuto nastanka.");
   }
+}
 
-  Console.WriteLine("F7 spletne datoteke: seznam, predogled, varna razresitev imena in registrski izvoz na zahtevo PASS.");
-  return 0;
-}
-finally
-{
-  // Pospravimo samo to, kar je test ustvaril.
-  if (Directory.Exists(sandbox)) Directory.Delete(sandbox, recursive: true);
-}
+Console.WriteLine("F7 spletni izvoz: register, izdelki in stranke iz tabel, brez datoteke na disku PASS.");
+return 0;
 
 static void Assert(bool condition, string message)
 {
@@ -156,15 +177,15 @@ static async Task<IReadOnlyList<string>> ColumnNamesAsync(SqlConnection connecti
   return names;
 }
 
-static async Task<(IReadOnlyList<string> Columns, int Rows, int Total)> ReadWebExportAsync(
-  SqlConnection connection, int profileId, bool onlyPublished, int take)
+static async Task<(IReadOnlyList<string> Columns, int Rows, int Total, IReadOnlyList<string?> FirstValues)> ReadWebExportAsync(
+  SqlConnection connection, string procedure, int organizationId, int profileId, bool onlyPublished, int take)
 {
-  await using var command = new SqlCommand("intranet.GetWebExportRows", connection)
+  await using var command = new SqlCommand(procedure, connection)
   {
     CommandType = CommandType.StoredProcedure,
     CommandTimeout = 600,
   };
-  command.Parameters.AddWithValue("@OrganizationId", 2);
+  command.Parameters.AddWithValue("@OrganizationId", organizationId);
   command.Parameters.AddWithValue("@ExportProfileId", profileId);
   command.Parameters.AddWithValue("@WebSite", DBNull.Value);
   command.Parameters.AddWithValue("@OnlyPublished", onlyPublished);
@@ -176,12 +197,35 @@ static async Task<(IReadOnlyList<string> Columns, int Rows, int Total)> ReadWebE
 
   var rows = 0;
   string[] columns;
+  string?[] firstValues = [];
   await using (var reader = await command.ExecuteReaderAsync())
   {
     columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
-    while (await reader.ReadAsync()) rows++;
+    while (await reader.ReadAsync())
+    {
+      if (rows == 0)
+        firstValues = Enumerable.Range(0, reader.FieldCount)
+          .Select(index => reader.IsDBNull(index) ? null : reader.GetString(index)).ToArray();
+      rows++;
+    }
   }
-  return (columns, rows, Convert.ToInt32(total.Value));
+  return (columns, rows, Convert.ToInt32(total.Value), firstValues);
+}
+
+static async Task<string?> FieldCodeAsync(SqlConnection connection, int profileId, string columnCode)
+{
+  await using var command = new SqlCommand(
+    "SELECT CanonicalFieldCode FROM out.ExportColumn WHERE ExportProfileId=@Profile AND ColumnCode=@Code AND IsActive=1;", connection);
+  command.Parameters.AddWithValue("@Profile", profileId);
+  command.Parameters.AddWithValue("@Code", columnCode);
+  return await command.ExecuteScalarAsync() as string;
+}
+
+static async Task<string?> MagentoNumberAsync(SqlConnection connection, string value)
+{
+  await using var command = new SqlCommand("SELECT out.MagentoNumber(CONVERT(decimal(38,6), @Value));", connection);
+  command.Parameters.AddWithValue("@Value", value);
+  return await command.ExecuteScalarAsync() as string;
 }
 
 static async Task<string> FirstItemIdAsync(SqlConnection connection, int organizationId)

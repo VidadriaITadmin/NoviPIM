@@ -3,6 +3,9 @@ using PIM.B2b;
 
 namespace PIM.B2bWorker;
 
+/// <param name="ExportProfileId">Ključ profila; procedura out.GetExportRows ga potrebuje.</param>
+public sealed record ExportProfileDefinition(int ExportProfileId, string ProfileCode, IReadOnlyList<ExportColumnDefinition> Columns);
+
 /// <summary>
 /// Bere izvozni profil iz registra <c>out.ExportProfile</c> / <c>out.ExportColumn</c>.
 ///
@@ -11,13 +14,23 @@ namespace PIM.B2bWorker;
 /// Nov spletni kanal ali premaknjen stolpec sta zato zahtevala novo namestitev programa.
 /// Zdaj je oblika vrstica v bazi, koda pa pove samo, <em>kateri</em> profil naj prebere.
 ///
-/// Kar ostane v kodi, so poizvedbe, ki kanonične vrednosti proizvedejo
-/// (<c>Product.ItemID</c>, <c>Product.PriceB2C</c>, <c>Attr.&lt;koda&gt;</c>). Register pove,
-/// kam gredo, ne kako nastanejo.
+/// Od migracije 142 tudi poizvedbe, ki kanonične vrednosti proizvedejo, niso več v kodi:
+/// zanje skrbi <c>out.GetExportRows</c>, ki bere isti register. Tu ostane samo branje
+/// profila — kateri profil, koliko stolpcev in kateri od njih so obvezni.
 /// </summary>
 public static class ExportProfileRegistry
 {
     public static async Task<IReadOnlyList<ExportColumnDefinition>> LoadColumnsAsync(
+        SqlConnection connection,
+        string profileCode,
+        CancellationToken cancellationToken = default)
+        => (await LoadProfileAsync(connection, profileCode, cancellationToken)).Columns;
+
+    /// <summary>
+    /// Profil s ključem in stolpci. Ključ potrebuje <c>out.GetExportRows</c>, ki po istem
+    /// registru sestavi tudi vrstice — glava in vsebina zato ne moreta priti iz dveh profilov.
+    /// </summary>
+    public static async Task<ExportProfileDefinition> LoadProfileAsync(
         SqlConnection connection,
         string profileCode,
         CancellationToken cancellationToken = default)
@@ -26,9 +39,11 @@ public static class ExportProfileRegistry
         ArgumentException.ThrowIfNullOrWhiteSpace(profileCode, nameof(profileCode));
 
         var columns = new List<ExportColumnDefinition>();
+        var exportProfileId = 0;
 
         await using (var command = new SqlCommand("""
-            SELECT exportColumn.ColumnCode, exportColumn.OutputColumnName, exportColumn.CanonicalFieldCode,
+            SELECT profile.ExportProfileId,
+                   exportColumn.ColumnCode, exportColumn.OutputColumnName, exportColumn.CanonicalFieldCode,
                    exportColumn.SortOrder, exportColumn.IsRequired
             FROM out.ExportColumn exportColumn
             INNER JOIN out.ExportProfile profile ON profile.ExportProfileId = exportColumn.ExportProfileId
@@ -39,13 +54,16 @@ public static class ExportProfileRegistry
             command.Parameters.AddWithValue("@ProfileCode", profileCode);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
+            {
+                exportProfileId = reader.GetInt32(0);
                 columns.Add(new ExportColumnDefinition(
-                    reader.GetString(0),
                     reader.GetString(1),
                     reader.GetString(2),
-                    reader.GetInt32(3),
-                    reader.GetBoolean(4),
+                    reader.GetString(3),
+                    reader.GetInt32(4),
+                    reader.GetBoolean(5),
                     true));
+            }
         }
 
         // Prazen profil ni "izvoz brez stolpcev", ampak manjkajoča ali izklopljena
@@ -56,6 +74,6 @@ public static class ExportProfileRegistry
                 $"Izvozni profil {profileCode} v out.ExportProfile / out.ExportColumn nima nobenega aktivnega stolpca. "
                 + "Preveri, ali je profil aktiven in ali so bile migracije uporabljene.");
 
-        return columns;
+        return new ExportProfileDefinition(exportProfileId, profileCode, columns);
     }
 }

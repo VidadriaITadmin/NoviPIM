@@ -9,7 +9,7 @@ Vse navedbe so povzete iz SQL migracij, izvorne kode in testnih projektov v tem
 repozitoriju. Dokument ne vsebuje povezovalnih nizov, gesel, tokenov ali vsebine
 `appsettings*.json` in ne opisuje želenega stanja — samo tisto, kar je v kodi.
 
-Zadnji pregled kode: 2026-08-09. Migracije 001–027.
+Zadnji pregled kode: 2026-09-02. Migracije 001–142.
 
 ---
 
@@ -179,6 +179,7 @@ od devetih.
 | `B2bProductCsvGenerator` | `CustomerCsvGenerator.cs:89` | zavrne `Pak2 <= 0` in neusklajeno S-šifro/odstotek |
 | `ShippingPolicyCsvGenerator` | `CustomerCsvGenerator.cs:117` | urejeno po `Priority` |
 | `ConfiguredCsvWriter` | `CustomerCsvGenerator.cs:133` | skupni pisalec za vse tri |
+| `RegistryCsvWriter` | `CustomerCsvGenerator.cs:138` | pretočni pisalec za vrstice, ki jih po registru zloži že baza (`out.GetExportRows`); vrstice ne postanejo slovarji v pomnilniku |
 | `StockCsvGenerator` | `src/PIM.StockMapping/StockCsvGenerator.cs:8` | **fiksna** glava, brez konfiguriranih stolpcev |
 
 `ConfiguredCsvWriter` je pogodbena varovalka izvoza
@@ -242,9 +243,8 @@ Od zdaj velja:
 | drug vir za stolpec | `UPDATE CanonicalFieldCode` |
 | stolpec ven iz izvoza | `UPDATE IsActive = 0` |
 
-Nič od tega ni sprememba kode. V kodi ostanejo poizvedbe, ki kanonične vrednosti
-*proizvedejo* (`Product.ItemID`, `Product.PriceB2C`, `Attr.<koda>`); register pove,
-kam gredo, ne kako nastanejo. Nov kanonični podatek je torej še vedno koda.
+Nič od tega ni sprememba kode. **Od migracije `142` tudi poizvedbe, ki kanonične
+vrednosti *proizvedejo*, niso več v kodi** — glej razdelek 3.4.
 
 `MagentoCsvContract` v `PIM.B2b` ostaja kot **predloga Magenta** — zunanja pogodba, s
 katero `PIM.F7.MagentoExportTests` preveri, da se register in predloga nista razšla
@@ -314,10 +314,70 @@ zamenjava pade in se prejšnji par vrne, se vrne tudi oznaka — velja spet za v
 
 **Kaj je dokazano.** `PIM.F7.MagentoExportTests` ukaz dejansko izvede proti razvojni
 bazi `PIM`: preveri, da se poizvedba prevede in vrne vrstice, da imata datoteki 213
-oziroma 19 stolpcev (razčlenjeno po RFC 4180), in da se medij z vlogo `PRIMARY`
-pojavi v stolpcu `Glavna slika`. Zadnja meritev: 18 izdelkov. Pot za stranke je
-izvedena, a na razvojnih podatkih ni dokazana — `pim.CustomerWebProfile` nima
-vrstice z `WebEnabled=1`, zato je strank 0.
+oziroma 19 stolpcev (razčlenjeno po RFC 4180), in da se medij z vlogo `Primary`
+pojavi v stolpcu `Glavna slika` (namenoma z malimi črkami — primerjava vloge ne sme
+biti občutljiva na velikost črk). Test sam poseje stranko z `WebEnabled = 1`, zato so
+robni primeri strank dokazani; **v sami razvojni bazi pa ni nobene stranke z
+`WebEnabled = 1` v nobeni organizaciji** (izmerjeno 2026-09-02: 4.390 strank s
+spletnim profilom, od tega 0 odprtih za splet), zato je `magento-customers.csv` v
+resničnem zagonu prazna datoteka z glavo. To je podatek, ne okvara kode.
+
+### 3.4 Izvoz nastane iz tabel, ne iz datoteke na disku (migracija `142`)
+
+Do 2026-09-02 je bilo tako: `MagentoExportCommand` je imel osem poizvedb nad `pim.*` in
+`b2b.*`, iz njih sestavil slovar kanoničnih vrednosti in zapisal datoteki v mapo; intranet
+je isti datoteki bral z diska (`WebExportFileService`, nastavitev `WebExport:Directory`).
+Kdor ni imel dostopa do mape, ni videl ničesar.
+
+Migracija `142` te poizvedbe preseli v bazo:
+
+| Objekt | Kaj naredi |
+|---|---|
+| `out.ExportProfile.ValueSourceCode` | pove, iz katerega vira profil dobi vrednosti: `CANON`, `PIM_PRODUCT` ali `PIM_CUSTOMER` |
+| `out.GetExportRows` | za profil sestavi vrstice po registru; parametri `@OrganizationId`, `@ExportProfileId`, `@WebSite`, `@OnlyPublished`, `@Search`, `@Skip`, `@Take`, `@TotalCount OUTPUT` |
+| `out.MagentoNumber` | zapis števila kot `ToString("0.####")`: največ štiri decimalke, brez končnih ničel, vedno s piko |
+| `intranet.GetWebExportRows` | ime iz migracije `139` ostane, izvedba se preseli — tanka preusmeritev na `out.GetExportRows` |
+
+Posledice:
+
+- **En sam vir resnice.** `PIM.B2bWorker` in intranet bereta isto proceduro, zato predogled
+  v intranetu in datoteka, ki odide na splet, ne moreta pokazati različne vsebine.
+- **Profil strank ni več zavrnjen.** Migracija `139` je izvoz na zahtevo dovolila samo
+  produktnim profilom; zdaj `out.GetExportRows` pozna tudi stranke.
+- **Kanonični vir ostane nedotaknjen.** `WEB_B2C_PRODUCTS` in `ERP_L1` še naprej berejo
+  `canon.FieldValue` po pravilih iz `139` (več vrednosti združi z `" | "`).
+- **Mape `WebExport:Directory` ni več.** Pot `/izvoz/splet/{fileName}` je odstranjena;
+  ostane `/izvoz/splet-na-zahtevo`, ki piše naravnost v `Response.Body`.
+- **Kontakti stranke imajo vir.** Stolpci `E-pošta`, `Tel. številko` in `Uporabniki`
+  (`CUC03`–`CUC05`) so bili brez kanonične kode; zdaj berejo `pim.CustomerContact` iz
+  migracije `140`. Ker ima predloga en sam telefonski stolpec, gre vanj `Phone`, ob prazni
+  vrednosti pa `Mobile` — prazen stolpec ob vpisanem mobitelu bi bil izguba podatka.
+
+Zakaj `MAGENTO_PRODUCTS` ne more brati kanoničnega sloja: profil ima 213 stolpcev, od
+191 preslikanih pa jih **186 v `canon.FieldValue` nima nobene vrstice** (izmerjeno
+2026-09-02). Kanonični sloj uporablja druge kode — `ProductCommercial.GrossWeight`,
+`ProductText.WEB_TITLE.sl`, `ProductAttribute.<ime>` — Magento register pa
+`Product.GrossWeight`, `Product.WebTitleSl` in `Attr.<koda>`.
+
+**Dve namerni razliki proti prejšnji kodi:**
+
+1. Kadar ima ista lastnost slovensko in angleško vrstico, je stolpec brez jezikovne pripone
+   (`Attr.<koda>`) v C# dobil vrednost tiste, ki jo je načrt poizvedbe prebral zadnjo —
+   torej ni bila ponovljiva. Zdaj zmaga zadnji zapisani zapis (najvišji
+   `PimProductAttributeId`): isto pravilo, a vedno isti rezultat.
+2. Vrstni red vrstic je zdaj ureditev baze in ne .NET-ova kulturna primerjava nizov. Na
+   43.504 izdelkih organizacije 2 se je premaknil **en par** (`TL.8911211-32` proti
+   `TL.8911211.07`, vezaj proti piki); vsebina vrstic je nespremenjena. Magento uvaža po
+   glavi in ne po zaporedju vrstic.
+
+**Kaj to dokazuje.** Izvoz je bil pognan po stari in po novi poti nad istima podjetjema:
+organizacija 3 (10.595 izdelkov) je dala **znak za znak enaki** datoteki, organizacija 2
+(43.504 izdelkov) pa enaki razen zgoraj opisanega premika ene vrstice.
+
+> **Past, ki jo je vredno poznati.** Začasna tabela prevzame ureditev `tempdb`, ta pa je na
+> razvojnem strežniku `Slovenian_CI_AS`, medtem ko je baza `PIM` v
+> `SQL_Latin1_General_CP1_CI_AS`. Brez izrecnega `COLLATE DATABASE_DEFAULT` na stolpcih
+> začasnih tabel vsak stik s tabelo baze pade z napako 468.
 
 ---
 

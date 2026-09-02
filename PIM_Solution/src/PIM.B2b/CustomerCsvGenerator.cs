@@ -130,13 +130,59 @@ public static class ShippingPolicyCsvGenerator
   };
 }
 
+/// <summary>
+/// Zapis vrstic, ki jih je po registru zložila že baza: vrednost na mestu <c>i</c> pripada
+/// stolpcu na mestu <c>i</c>. Vrstice tečejo skozi, zato izvoz s 100.000 vrsticami nikoli
+/// ne stoji cel v pomnilniku — prej je vsaka vrstica najprej postala slovar z 213 vnosi.
+/// </summary>
+public static class RegistryCsvWriter
+{
+  /// <returns>Število zapisanih vrstic brez glave.</returns>
+  public static async Task<int> WriteAsync(
+    string path,
+    IEnumerable<ExportColumnDefinition> definitions,
+    IAsyncEnumerable<IReadOnlyList<string?>> rows,
+    CancellationToken cancellationToken = default)
+  {
+    ArgumentNullException.ThrowIfNull(rows);
+    var columns = ConfiguredCsvWriter.Ordered(definitions);
+
+    await using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
+    await writer.WriteLineAsync(string.Join(',', columns.Select(column => ConfiguredCsvWriter.Escape(column.OutputColumnName))));
+
+    var written = 0;
+    await foreach (var row in rows.WithCancellation(cancellationToken))
+    {
+      // Vrstica pride iz procedure, ki bere isti register kot glava. Ce se stevili razideta,
+      // je datoteka premaknjena za en stolpec in tega Magento ne bi opazil — zato pade tu.
+      if (row.Count != columns.Length)
+        throw new ExportContractException($"Vrstica ima {row.Count} vrednosti, izvozni profil pa {columns.Length} stolpcev.");
+
+      for (var index = 0; index < columns.Length; index++)
+        if (columns[index].IsRequired && string.IsNullOrWhiteSpace(row[index]))
+          throw new ExportContractException($"Obvezna vrednost {columns[index].CanonicalFieldCode} je prazna.");
+
+      await writer.WriteLineAsync(string.Join(',', row.Select(ConfiguredCsvWriter.Escape)));
+      written++;
+    }
+
+    return written;
+  }
+}
+
 internal static class ConfiguredCsvWriter
 {
-  public static async Task WriteAsync(string path, IEnumerable<ExportColumnDefinition> definitions, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken cancellationToken)
+  public static ExportColumnDefinition[] Ordered(IEnumerable<ExportColumnDefinition> definitions)
   {
     var columns = definitions.Where(column => column.IsActive).OrderBy(column => column.SortOrder).ThenBy(column => column.ColumnCode, StringComparer.Ordinal).ToArray();
     if (columns.Length == 0 || columns.Select(column => column.SortOrder).Distinct().Count() != columns.Length)
       throw new ExportContractException("Izvozni profil nima enoličnih aktivnih stolpcev.");
+    return columns;
+  }
+
+  public static async Task WriteAsync(string path, IEnumerable<ExportColumnDefinition> definitions, IEnumerable<IReadOnlyDictionary<string, string?>> rows, CancellationToken cancellationToken)
+  {
+    var columns = Ordered(definitions);
     await using var writer = new StreamWriter(path, false, new UTF8Encoding(false)) { NewLine = "\n" };
     await writer.WriteLineAsync(string.Join(',', columns.Select(column => Escape(column.OutputColumnName))));
     foreach (var row in rows)
@@ -155,7 +201,7 @@ internal static class ConfiguredCsvWriter
     }
   }
 
-  private static string Escape(string? value)
+  public static string Escape(string? value)
   {
     value ??= "";
     return value.IndexOfAny([',', '"', '\r', '\n']) < 0 ? value : '"' + value.Replace("\"", "\"\"") + '"';

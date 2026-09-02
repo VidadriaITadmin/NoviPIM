@@ -36,7 +36,6 @@ builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
-builder.Services.AddScoped<WebExportFileService>();
 builder.Services.AddScoped<WebExportBuildService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
@@ -184,19 +183,13 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     ProductExportService.FileName(template, DateTime.UtcNow));
 });
 
-// Prenos datoteke, ki dejansko gre na splet. Ime se ne sestavlja iz uporabnikovega niza:
-// WebExportFileService sprejme samo imena, ki jih je sam nasel v nastavljeni mapi, zato pot
-// z dvema pikama nikoli ne postane veljavna.
-app.MapGet("/izvoz/splet/{fileName}", (string fileName, WebExportFileService exports) =>
-{
-  var path = exports.Resolve(fileName);
-  return path is null
-    ? Results.NotFound()
-    : Results.File(File.ReadAllBytes(path), "text/csv; charset=utf-8", fileName);
-}).RequireAuthorization();
-
-// Izvoz trenutnega kanonicnega stanja po registrskem profilu. Vsebina gre neposredno iz
-// SqlDataReader v odziv; tudi 100.000 vrstic zato ne postane en velik byte[] v pomnilniku.
+// Izvoz trenutnega stanja po registrskem profilu. Vsebina gre neposredno iz SqlDataReader
+// v odziv; tudi 100.000 vrstic zato ne postane en velik byte[] v pomnilniku.
+//
+// Do migracije 142 je poleg tega obstajala se pot /izvoz/splet/{fileName}, ki je datoteko
+// brala z diska iz mape WebExport:Directory. Mape ni vec: datoteko in predogled sestavi
+// ista procedura, ki jo uporabi tudi PIM.B2bWorker, zato razhajanja med tem, kar uporabnik
+// vidi, in tem, kar odide na splet, ne more biti.
 app.MapGet("/izvoz/splet-na-zahtevo", async (
   HttpContext context, WebExportBuildService export, CancellationToken cancellationToken) =>
 {

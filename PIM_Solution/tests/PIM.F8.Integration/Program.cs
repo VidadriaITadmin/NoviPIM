@@ -258,6 +258,13 @@ finally
     DELETE delivery FROM ops.AlertDelivery delivery INNER JOIN ops.Alert alert ON alert.AlertId=delivery.AlertId WHERE alert.OrganizationId=@Org;
     DELETE ops.Alert WHERE OrganizationId=@Org;
     DELETE ops.IntegrationHealth WHERE OrganizationId=@Org;
+    -- ops.PipelineRun je manjkal do 2026-09-02. Dokler je zagon tekel do konca, se ni poznalo;
+    -- ob prekinjenem zagonu pa je ostala vrstica in naslednje ciscenje je padlo na tujem kljucu
+    -- FK_PipelineRun_OrganizationConfig (SQL 547). Test se je s tem trajno zaklenil in ga ni
+    -- odklenil noben ponoven zagon. ops.ErrorLog kaze na zagon (FK_ErrorLog_PipelineRun), zato
+    -- gre prvi.
+    DELETE ops.ErrorLog WHERE RunId IN(SELECT RunId FROM ops.PipelineRun WHERE OrganizationId=@Org);
+    DELETE ops.PipelineRun WHERE OrganizationId=@Org;
     DELETE ops.ScheduleProfile WHERE OrganizationId=@Org;
     DELETE FROM canon.Product WHERE OrganizationId=@Org;
     DELETE dbo.IntegrationProfile WHERE OrganizationId=@Org;

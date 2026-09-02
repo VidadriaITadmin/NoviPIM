@@ -53,23 +53,14 @@ Equal(true, MagentoCustomerSchema.Headers.SequenceEqual(MagentoCsvContract.Custo
 // noben test tega ni ujel. Datoteka je nastala, imela je vseh 213 glav in pravilno stevilo
 // vrstic - samo prazna je bila tam, kjer prej ni bila. Prazen stolpec se prebere kot
 // "dobavitelj tega ne poslje", ne kot okvara, in tak podatek lahko tece mesece.
-Equal("SLO", MagentoExportCommand.MagentoLanguageSuffix("sl"), "Slovenscina je v glavi SLO.");
-Equal("ANG", MagentoExportCommand.MagentoLanguageSuffix("en"), "Anglescina je v glavi ANG.");
-Equal(null, MagentoExportCommand.MagentoLanguageSuffix(null), "Brez jezika ni pripone.");
-Equal(null, MagentoExportCommand.MagentoLanguageSuffix("de"), "Jezik brez stolpca v datoteki nima pripone.");
-
+// Od migracije 142 pravilo ni vec v C#, ampak v out.GetExportRows. Enotski preizkus pripone
+// zato ni vec mogoc in tudi ne bi nicesar dokazal — dokaz je nizje, nad bazo: atribut z
+// jezikom 'sl' mora pristati v stolpcu s pripono SLO (razdelek 5).
+//
 // Pogodba mora imeti obe obliki para, sicer zlaganje jezika nazaj v glavo nima cilja.
 Equal(true, MagentoCsvContract.ProductHeaders.Contains("Prevladujoč material SLO", StringComparer.Ordinal)
          && MagentoCsvContract.ProductHeaders.Contains("Prevladujoč material ANG", StringComparer.Ordinal),
   "Glava mora imeti obe jezikovni obliki, sicer se prevod nima kam izpisati.");
-
-Equal(true, MagentoExportCommand.IsPrimaryMediaRole("PRIMARY"), "PRIMARY je glavna vloga.");
-Equal(true, MagentoExportCommand.IsPrimaryMediaRole("Primary"), "Primary je glavna vloga.");
-Equal(true, MagentoExportCommand.IsPrimaryMediaRole("primary"), "primary je glavna vloga.");
-Equal(true, MagentoExportCommand.IsPrimaryMediaRole("MAIN"), "MAIN ostane podprt.");
-Equal(false, MagentoExportCommand.IsPrimaryMediaRole("GALLERY"), "GALLERY ni glavna vloga.");
-Equal(false, MagentoExportCommand.IsPrimaryMediaRole(""), "Prazna vloga ni glavna.");
-Equal(false, MagentoExportCommand.IsPrimaryMediaRole(null), "Manjkajoča vloga ni glavna.");
 
 // ---------------------------------------------------------------------------
 // 3. Zapis CSV — kodiranje, LF, escape.
@@ -283,7 +274,11 @@ try
   await using (var seed = new SqlCommand("""
     INSERT pim.ProductMedia (PimProductId, Url, Role, SortOrder)
     OUTPUT INSERTED.PimProductMediaId
-    VALUES (@PimProductId, @PrimaryUrl, N'PRIMARY', 901),
+    -- 'Primary' namenoma ni zapisan z velikimi crkami: kanonicni sloj pise PRIMARY,
+    -- starejse vrstice Primary, Magento pravi MAIN. Ce bi primerjava vloge v
+    -- out.GetExportRows postala obcutljiva na velikost crk, bi glavna slika izginila
+    -- in ta izdelek bi jo dobil med ostale slike.
+    VALUES (@PimProductId, @PrimaryUrl, N'Primary', 901),
            (@PimProductId, @GalleryUrl, N'GALLERY', 902);
     """, connection))
   {
@@ -370,6 +365,20 @@ try
     while (await attributeReader.ReadAsync()) seededAttributeIds.Add(attributeReader.GetInt64(0));
   }
 
+  // Jezik v glavi: atribut ima jezik 'sl', glava v datoteki pa pripono SLO. Do migracije 124
+  // je bil jezik del imena atributa; ko se je 124 uporabila, je izvoz nehal polniti 31
+  // stolpcev in noben test tega ni ujel — datoteka je bila polna glav in prazna vrednosti.
+  await using (var seedLanguageAttribute = new SqlCommand("""
+    INSERT pim.ProductAttribute (PimProductId, AttributeCode, LanguageCode, Value)
+    OUTPUT INSERTED.PimProductAttributeId
+    VALUES (@PimProductId, N'Prevladujoč material', N'sl', N'Kovina');
+    """, connection))
+  {
+    seedLanguageAttribute.Parameters.AddWithValue("@PimProductId", pimProductId);
+    await using var languageReader = await seedLanguageAttribute.ExecuteReaderAsync();
+    while (await languageReader.ReadAsync()) seededAttributeIds.Add(languageReader.GetInt64(0));
+  }
+
   // ---------------------------------------------------------------------------
   // Testna stranka. Razvojna baza nima nobene stranke z WebEnabled=1, zato brez tega
   // izvoz strank ostane prazen in trije robni primeri niso dokazani:
@@ -452,6 +461,16 @@ try
   Equal("222.22", row[27],
     "Cena B2B mora priti iz cenika, ki ga doloca out.ExportPriceList — sifre F7_CENIK v programu ni.");
   Equal("E27", row[53], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
+
+  var slovenianColumn = MagentoCsvContract.ProductHeaders
+    .Select((header, index) => (header, index))
+    .Where(pair => pair.header == "Prevladujoč material SLO")
+    .Select(pair => pair.index)
+    .DefaultIfEmpty(-1)
+    .First();
+  Equal(true, slovenianColumn >= 0, "Predloga mora imeti stolpec 'Prevladujoč material SLO'.");
+  Equal("Kovina", row[slovenianColumn],
+    "Atribut z jezikom 'sl' mora pristati v stolpcu s pripono SLO — jezik se v glavo zlozi nazaj.");
 
   // Kategorije: WebSite B2C -> slovenski stolpec, B2C_EN -> angleski.
   if (seededCategoryIds.Count > 0)
@@ -653,7 +672,7 @@ return 0;
 
 static void Equal<T>(T expected, T actual, string message) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: pričakovano {expected}, dejansko {actual}."); }
 
-/// <summary>Ista oblika, kot jo izvoz zapise v CSV (FormatDecimalString: "0.####", invariant).</summary>
+/// <summary>Ista oblika, kot jo izvoz zapise v CSV (out.MagentoNumber: "0.####", invariant).</summary>
 static string Decimal(decimal value) => value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
 static void Contains(string actual, string expected, string message) { if (!actual.Contains(expected, StringComparison.Ordinal)) throw new InvalidOperationException($"{message}: manjka {expected}."); }
 

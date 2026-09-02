@@ -8,7 +8,7 @@
 
 <PageTitle>Pripravi spletni izvoz</PageTitle>
 <PimPage Title="Pripravi spletni izvoz"
-         Subtitle="Predogled trenutnih kanoničnih podatkov po stolpcih izbranega izvoznega profila."
+         Subtitle="Predogled trenutnih podatkov po stolpcih izbranega izvoznega profila — izdelki ali stranke."
          Crumbs="Crumbs" />
 
 <section class="ui-card toolbar section-gap" role="search" aria-label="Filtri spletnega izvoza">
@@ -21,8 +21,10 @@
       }
     </select>
   </label>
+  @* Spletno mesto in objava sta filtra izdelkov. Pri strankah nimata pomena — spletno mesto
+     bi izvoz izpraznilo, objava pa pomeni WebEnabled in jo doloca profil sam. *@
   <label class="field-control"><span>Spletno mesto</span>
-    <select @bind="SelectedSite">
+    <select @bind="SelectedSite" disabled="@(!IsProductProfile)">
       <option value="">Vsa spletna mesta</option>
       @foreach (var site in Sites)
       {
@@ -31,10 +33,10 @@
     </select>
   </label>
   <label class="field-control"><span>Iskanje</span>
-    <input class="search-input" type="search" placeholder="Šifra, EAN ali naziv …" @bind="Search" @bind:event="oninput" />
+    <input class="search-input" type="search" placeholder="@(IsProductProfile ? "Šifra, EAN ali naziv …" : "Šifra ali naziv stranke …")" @bind="Search" @bind:event="oninput" />
   </label>
   <label class="field-control checkbox-control">
-    <input type="checkbox" @bind="OnlyPublished" /> <span>Samo objavljeni</span>
+    <input type="checkbox" @bind="OnlyPublished" disabled="@(!IsProductProfile)" /> <span>Samo objavljeni</span>
   </label>
   <button type="button" class="primary-button" disabled="@(Loading || SelectedProfileId == 0)" @onclick="ShowAsync">Prikaži</button>
 </section>
@@ -83,16 +85,22 @@
 
   IReadOnlyList<PimColumn> PreviewColumns => Preview?.Columns.Select(column => new PimColumn(column)).ToArray() ?? [];
   ExportProfileRow? SelectedProfile => Profiles.SingleOrDefault(profile => profile.ExportProfileId == SelectedProfileId);
-  string FilterSummary =>
-    $"Filter zajema {(OnlyPublished ? "samo objavljene" : "vse")} izdelke"
-    + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SelectedSite}")
-    + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
-    + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic.";
+  bool IsProductProfile => SelectedProfile is null || SelectedProfile.ContentKind == "Izdelki";
+  string EffectiveSite => IsProductProfile ? SelectedSite : "";
+  bool EffectiveOnlyPublished => IsProductProfile ? OnlyPublished : SelectedProfile!.OnlyPublishedDefault;
+  string FilterSummary => IsProductProfile
+    ? $"Filter zajema {(OnlyPublished ? "samo objavljene" : "vse")} izdelke"
+      + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SelectedSite}")
+      + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
+      + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic."
+    : $"Filter zajema {(EffectiveOnlyPublished ? "samo stranke, odprte za splet" : "vse stranke")}"
+      + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
+      + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic.";
   string DownloadHref => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
   {
     $"podjetje={OrganizationId}", $"profil={SelectedProfileId}", $"koda={Uri.EscapeDataString(SelectedProfile?.ProfileCode ?? string.Empty)}",
-    $"objavljeni={OnlyPublished.ToString().ToLowerInvariant()}",
-    $"spletisce={Uri.EscapeDataString(SelectedSite)}", $"isci={Uri.EscapeDataString(Search)}"
+    $"objavljeni={EffectiveOnlyPublished.ToString().ToLowerInvariant()}",
+    $"spletisce={Uri.EscapeDataString(EffectiveSite)}", $"isci={Uri.EscapeDataString(Search)}"
   });
 
   protected override async Task OnInitializedAsync()
@@ -103,9 +111,12 @@
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       OrganizationId = organization.OrganizationId;
       Sites = await Catalog.GetWebSitesAsync();
+      // Do migracije 142 so bili tu samo produktni profili, ker jih je procedura edine
+      // podpirala. Zdaj je merilo, ali zna out.GetExportRows za profil sestaviti vrstice —
+      // to pove register (ValueSourceCode), ne seznam v kodi.
       Profiles = (await Governance.GetExportProfilesAsync())
         .Where(profile => profile.IsActive
-          && profile.EntityType.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase)
+          && profile.CanBuildOnDemand
           && !profile.ChannelCode.Contains("SAOP", StringComparison.OrdinalIgnoreCase)
           && !profile.ChannelCode.Contains("ERP", StringComparison.OrdinalIgnoreCase))
         .OrderBy(profile => profile.Name).ToArray();
@@ -122,7 +133,7 @@
     try
     {
       Preview = await Export.PreviewAsync(OrganizationId.Value, SelectedProfileId,
-        SelectedSite, OnlyPublished, Search, skip: 0, take: 200);
+        EffectiveSite, EffectiveOnlyPublished, Search, skip: 0, take: 200);
     }
     catch { Error = "Predogleda trenutno ni mogoče pripraviti. Preveri profil in filtre."; }
     finally { Loading = false; }
