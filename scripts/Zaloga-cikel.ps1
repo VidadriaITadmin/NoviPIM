@@ -81,6 +81,14 @@ $padli = 0
 # ne razidejo.
 $urnik = if ($PoUrniku) { @('--po-urniku') } else { @() }
 
+# --- povezava: PIM.B2bWorker bere samo PIM_CONNECTION_STRING (ista pot kot v Nocno-vse.ps1) ---
+if ([string]::IsNullOrWhiteSpace($env:PIM_CONNECTION_STRING)) {
+  $lokalne = Join-Path $koren 'appsettings.Local.json'
+  if (Test-Path $lokalne) {
+    $env:PIM_CONNECTION_STRING = (Get-Content $lokalne -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+  }
+}
+
 function PozeniWorker([string]$projekt, [string[]]$argumenti) {
   $prej = Get-Location
   try {
@@ -137,6 +145,20 @@ if ($Kaj -in @('Saop', 'Vse')) {
     # clovek z Namesti-opravila.ps1 in s tem privoli v ponavljajoc se klic na ERP.
     $env:PIM_SAOP_MODE = 'Live'
     PozeniWorker 'workers\PIM.SaopStockWorker' (@('--organizations', ($Podjetja -join ',')) + $urnik)
+  }
+}
+
+# --- Hitra osvezitev cen in zaloge za splet ------------------------------------------------
+# Profil MAGENTO_STOCK_PRICES (migracija 146): sifra, EAN, ceni, DDV in zaloga. Namenoma ne gre
+# skozi validacijo — vsebuje samo izdelke, ki so ze na spletu. Uporabnik 2026-09-02: "zaloge in
+# cene morajo biti zelo redno osvezene". Datoteka: izvoz\magento\<podjetje>\magento-stock-prices.csv.
+if ($Kaj -eq 'Vse') {
+  Korak 'Izvoz cen in zaloge za splet' {
+    foreach ($o in $Podjetja) {
+      $izhod = Join-Path $koren "izvoz\magento\$o"
+      if (-not (Test-Path $izhod)) { New-Item -ItemType Directory -Path $izhod -Force | Out-Null }
+      PozeniWorker 'workers\PIM.B2bWorker' @('--export-profile', 'MAGENTO_STOCK_PRICES', '--organization-id', "$o", '--output-dir', $izhod, '--file-name', 'magento-stock-prices.csv')
+    }
   }
 }
 
