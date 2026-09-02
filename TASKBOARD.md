@@ -147,10 +147,14 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   po uporabnikovi odločitvi »naredi vse«. Najprej nastaneta manjkajoči vhodni SAOP
   preslikavi in kanonični kodi za `ItemSearchName` ter `Warranty`, nato po vrsti ponovno
   pošiljanje, spletni izvoz na zahtevo, kontakti stranke in posnetek SAOP endpointa.
-  **Naloga 1 / BAZA je zelena:** RED `PIM.F8.SaopDocumentIntegration` = izhod 1 na 0/8
+  **Naloga 1 je KONČANA:** RED `PIM.F8.SaopDocumentIntegration` = izhod 1 na 0/8
   preslikav; migracija `137_SaopSearchNameAndWarranty.sql` = prvi zagon uporabljen, drugi
   preskočen, `--verify` = »Preverjanje F0–F10 baze je uspešno.«; `run_tests.ps1
-  -Filter F8.Saop` = 2 uspešna, 0 padlih, `Build OK`. Sledi INTRANET del kartice.
+  -Filter F8.Saop` = 2 uspešna, 0 padlih. RED `PIM.F10.ProductDetailUxTests` = izhod 1,
+  nato GREEN = 1/0/0. Polni `scripts/run_tests.ps1` = **58 uspešnih, 0 preskočenih,
+  0 padlih**, `Build OK`, izhod 0. Kartica pokaže »Ime za iskanje« v identiteti in
+  »Garancijo« v skupini »Prodaja«; obe spremembi gresta v odhodno vrsto SAOP.
+  Sledi Naloga 2 — ponovno pošiljanje neuspelega zapisa.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet

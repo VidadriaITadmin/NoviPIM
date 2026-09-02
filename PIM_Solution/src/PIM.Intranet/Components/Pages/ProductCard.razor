@@ -430,6 +430,7 @@
     "WEB_TITLE" => "Spletni naziv",
     "TITLE_ERP" => "ERP naziv",
     "TITLE_ERP2" => "ERP naziv 2",
+    "SEARCH_NAME" => "Ime za iskanje",
     "DESCRIPTION" => "Spletni opis",
     "DESCRIPTION_K" => "Kratek opis",
     "DESCRIPTION_KD" => "Kratek opis (dodatni)",
@@ -451,6 +452,7 @@
     "Product.Manufacturer" => "Proizvajalec",
     "Product.IsActive" => "Aktiven",
     "Product.WebPublish" => "Objava na spletu",
+    "ProductAttribute.Garancija" => "Garancija",
     "ProductCommercial.NetWeight" => "Neto teža",
     "ProductCommercial.GrossWeight" => "Bruto teža",
     "ProductCommercial.CustomsTariff" => "Carinska tarifa",
@@ -474,6 +476,7 @@
       const string identity = "Identiteta artikla";
       const string classification = "Uvrstitev in šifranti";
       const string names = "Nazivi za ERP";
+      const string sales = "Prodaja";
       const string packaging = "Pakiranje in dimenzije";
       var rows = new List<ProductChannelField>
       {
@@ -481,6 +484,7 @@
         Channel("EAN", "Product.EAN", Detail.Header.Ean, identity),
         Channel("Merska enota", "Product.UoM", Detail.Header.Uom, identity),
         Channel("Aktiven", "Product.IsActive", YesNo(Detail.Header.IsActive), identity),
+        TextField("Ime za iskanje", "SEARCH_NAME", "sl", null, identity),
         Channel("Skupina artikla", "Product.ItemGroup", Detail.Header.ItemGroup, classification),
         Channel("ABC klasifikacija", "Product.Department", Detail.Header.Department, classification),
         Channel("Knjižna skupina", "Product.AccountingGroup", Detail.Header.AccountingGroup, classification),
@@ -490,6 +494,9 @@
         Channel("Davčna stopnja", "Product.VatRate", null, classification, inReadModel: false),
         Channel("Planiranje in rezervacija", "ProductPlanning", null, classification, inReadModel: false),
         Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, classification),
+        Channel("Garancija", "ProductAttribute.Garancija",
+          Detail.Attributes.FirstOrDefault(row => string.Equals(
+            row.AttributeCode, "Garancija", StringComparison.OrdinalIgnoreCase))?.Value, sales),
         // Pakiranje in dimenzije prideta iz istega dokumenta SAOP kot polja zgoraj; uporabnik
         // je 2026-08-28 povedal, da spadata sem in ne pod komercialo.
         Channel("Pakiranje 1", "ProductCommercial.Pak1", Number(Detail.Commercial?.Pak1), packaging),

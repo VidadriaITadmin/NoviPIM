@@ -199,6 +199,11 @@ foreach (var moved in new[] { "ProductCommercial.Pak1", "ProductCommercial.Pak2"
   Assert(erpBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " mora biti pod ERP.");
   Assert(!commercialBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " ne sme vec biti pod komercialo.");
 }
+Assert(erpBlock.Contains("TextField(\"Ime za iskanje\", \"SEARCH_NAME\", \"sl\"", StringComparison.Ordinal),
+  "Ime za iskanje mora biti vedno vidno v identiteti artikla, tudi ko je prazno.");
+Assert(erpBlock.Contains("const string sales = \"Prodaja\";", StringComparison.Ordinal)
+  && erpBlock.Contains("Channel(\"Garancija\", \"ProductAttribute.Garancija\"", StringComparison.Ordinal),
+  "Garancija mora biti vedno vidna v svoji skupini Prodaja.");
 
 // D5: galerija mora povedati, da so prikazane vse slike, in katera je glavna.
 Assert(gallery.Contains("Vse slike izdelka (@Media.Count", StringComparison.Ordinal),

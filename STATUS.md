@@ -9,7 +9,9 @@ Migracija **137** je dodala povratni SAOP preslikavi in odhodno pogodbo za
 Ime za iskanje uporablja generični kanonični model `ProductText.SEARCH_NAME.sl`, garancija
 pa že obstoječo `ProductAttribute.Garancija`. Lastništvo `PIM` je izpeljano iz poti, ki
 ju migracija 068 že označuje kot pisljivi po potrjeni preglednici; drugih politik migracija
-ne spreminja. Baza in F8 pogodba sta zeleni, prikaz na kartici artikla pa je naslednji korak.
+ne spreminja. Kartica artikla obe polji vedno pokaže: ime za iskanje v identiteti, garancijo
+v skupini »Prodaja«. Zapis gre skozi obstoječo odhodno vrsto in odobritev SAOP. Dokaz:
+polni `scripts/run_tests.ps1` = 58/0/0 in `Build OK`.
 
 ## Popravki po pregledu uporabnika 2026-08-28
 
