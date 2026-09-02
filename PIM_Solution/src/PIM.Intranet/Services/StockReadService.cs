@@ -9,7 +9,10 @@ public sealed record StockPositionRow(
   string? ProductName, string? ProductItemId, string SourceCode, string? SourceKind,
   int OrganizationId, string OrganizationName, string? ProviderKind,
   string? Endpoint, DateTime SnapshotUtc, int FreshnessMinutes,
-  decimal? MinimumStock, decimal? MaximumStock, string? WarehouseCode);
+  decimal? MinimumStock, decimal? MaximumStock, string? WarehouseCode,
+  // Registrirani pogled SAOP (migracija 145); NULL pri virih, ki teh kolicin ne poznajo.
+  decimal? OrderedQuantity = null, decimal? ForShipmentQuantity = null,
+  decimal? AvailableQuantity = null, decimal? SupplierOrderedQuantity = null);
 
 public sealed record StockPositionPage(IReadOnlyList<StockPositionRow> Rows, long TotalCount);
 
@@ -76,7 +79,9 @@ public sealed class StockReadService(IConfiguration configuration)
       PimDb.Text(row, "ProviderKind"), PimDb.Text(row, "Endpoint"),
       PimDb.DateTimeValue(row, "SnapshotUtc"), PimDb.Int32(row, "FreshnessMinutes"),
       PimDb.NullableDecimal(row, "MinimumStock"), PimDb.NullableDecimal(row, "MaximumStock"),
-      PimDb.Text(row, "WarehouseCode")), cancellationToken);
+      PimDb.Text(row, "WarehouseCode"),
+      PimDb.NullableDecimal(row, "OrderedQuantity"), PimDb.NullableDecimal(row, "ForShipmentQuantity"),
+      PimDb.NullableDecimal(row, "AvailableQuantity"), PimDb.NullableDecimal(row, "SupplierOrderedQuantity")), cancellationToken);
 
     long total = 0;
     if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))

@@ -85,6 +85,17 @@
                 </span>
               </td>
               <td class="numeric">@row.Quantity.ToString("N2")</td>
+              <td class="numeric">
+                @* Registrirani pogled SAOP (145): razpolozljiva kolicina = trenutna minus rezervirano.
+                   Vira brez teh kolicin (GetStocks, dobavitelji) pokazeta pomisljaj, ne nicle. *@
+                @(row.AvailableQuantity?.ToString("N2") ?? "—")
+                @if (row.OrderedQuantity > 0 || row.ForShipmentQuantity > 0 || row.SupplierOrderedQuantity > 0)
+                {
+                  <span class="product-meta" title="naročeno · za odpremo · naročeno dobaviteljem">
+                    @($"{row.OrderedQuantity ?? 0:N0} · {row.ForShipmentQuantity ?? 0:N0} · {row.SupplierOrderedQuantity ?? 0:N0}")
+                  </span>
+                }
+              </td>
               <td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td>
               <td>
                 @if (row.AvailabilityDate is { } arrival) { <span>@arrival.ToString("dd.MM.yyyy")</span> }
@@ -219,7 +230,7 @@
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Artikel"), new("Količina", Numeric: true), new("Prihodna količina", Numeric: true),
+    new("Artikel"), new("Količina", Numeric: true), new("Razpoložljivo", Numeric: true), new("Prihodna količina", Numeric: true),
     new("Prihod"), new("Min / max", Numeric: true), new("Podjetje"), new("Vir"),
     new("Čas posnetka"), new("Stanje"),
   ];
