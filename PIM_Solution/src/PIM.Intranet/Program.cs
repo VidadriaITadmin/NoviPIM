@@ -36,6 +36,7 @@ builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
+builder.Services.AddScoped<TitleRuleService>();
 builder.Services.AddScoped<WebExportBuildService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();

@@ -1,0 +1,243 @@
+@page "/pravila/nazivi"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject TitleRuleService Titles
+@inject IntranetDataService Data
+@inject CatalogReadService Catalog
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Pravila za nazive</PageTitle>
+<PimPage Title="Pravila za nazive"
+         Subtitle="Kako se iz podatkov izdelka sestavi spletni naziv v posameznem jeziku. Pravilo velja za kategorijo in njene podkategorije; najbližje zmaga."
+         Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+@* Stran je namenoma ena sama: seznam pravil, urejevalnik in predogled na istem mestu — uporabnik
+   vidi, kaj bo pravilo naredilo, preden ga zapise (uporabnik 2026-09-02: stran mora biti pregledna). *@
+
+<section class="ui-card panel section-gap" aria-labelledby="rule-editor-title">
+  <h2 id="rule-editor-title">@(EditingId is null ? "Novo pravilo" : $"Pravilo {Draft.RuleCode}")</h2>
+  <div class="form-grid">
+    <label class="form-field">Koda pravila
+      <input class="form-input" placeholder="npr. SVETILA_VISECA" @bind="Draft.RuleCode" disabled="@(EditingId is not null)" />
+    </label>
+    <label class="form-field">Ime
+      <input class="form-input" @bind="Draft.Name" />
+    </label>
+    <label class="form-field">Drevo (spletna stran)
+      <select class="filter-select" @bind="Draft.CategoryTreeCode" @bind:after="() => Draft.CategoryCode = string.Empty">
+        <option value="">— vse —</option>
+        @foreach (var tree in Trees) { <option value="@tree">@tree</option> }
+      </select>
+    </label>
+    <label class="form-field">Kategorija (prazno = privzeto za drevo)
+      <select class="filter-select" @bind="Draft.CategoryCode" disabled="@string.IsNullOrEmpty(Draft.CategoryTreeCode)">
+        <option value="">— privzeto za drevo —</option>
+        @foreach (var category in Categories.Where(category => category.CategoryTreeCode == Draft.CategoryTreeCode))
+        {
+          <option value="@category.CategoryCode">@category.CategoryPath</option>
+        }
+      </select>
+    </label>
+    <label class="form-field">Jezik (prazno = vsi)
+      <select class="filter-select" @bind="Draft.LanguageCode">
+        <option value="">— vsi jeziki —</option>
+        @foreach (var language in Languages) { <option value="@language">@language</option> }
+      </select>
+    </label>
+    <label class="form-field">Vrstni red
+      <input class="form-input" type="number" @bind="Draft.SortOrder" />
+    </label>
+  </div>
+  <label class="form-field">Predloga
+    <input class="form-input template-input" @bind="Draft.Template" placeholder="{ErpName} {Category:2} {Attr:Nazivna moč|unit:W} {Attr:Garancija|years}" />
+  </label>
+  <details class="card-note">
+    <summary>Žetoni in modifikatorji</summary>
+    <p><code>{ItemID}</code> <code>{ErpName}</code> <code>{WebName}</code> <code>{Manufacturer}</code> <code>{Category}</code> (list) <code>{Category:2}</code> (nivo) <code>{Attr:Ime atributa}</code></p>
+    <p>Za <code>|</code>: <code>omitIf:niz</code> <code>onlyIf:niz</code> <code>omitIfAttr:Atribut~niz</code> <code>onlyIfAttr:Atribut~niz</code> <code>unit:W</code> <code>years</code> (sklanjatev let) <code>lower</code> <code>upper</code> <code>prefix:niz</code> <code>suffix:niz</code></p>
+    <p>Prazen žeton izpade, presledki se strnejo, vrednost, ki je že v nazivu, se ne ponovi, prva črka je velika. Vrednosti atributov pridejo v jeziku predloge; kjer ni prevoda v slovarju (Pravila → Slovar), ostane angleška vrednost — to je vidno v predogledu.</p>
+  </details>
+  <div class="form-grid">
+    <label class="filter-check"><input type="checkbox" @bind="Draft.IsActive" /> Pravilo je aktivno (neaktivno se v predogledu še vedno da preizkusiti)</label>
+    <label class="form-field">Opomba <input class="form-input" @bind="Draft.Note" /></label>
+  </div>
+  <div class="form-action">
+    <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(Draft.RuleCode) || string.IsNullOrWhiteSpace(Draft.Template))" @onclick="SaveAsync">Shrani pravilo</button>
+    <button type="button" disabled="@Busy" @onclick="PreviewDraftAsync">Predogled te predloge</button>
+    @if (EditingId is not null) { <button type="button" disabled="@Busy" @onclick="NewRule">Novo pravilo</button> }
+  </div>
+</section>
+
+<section class="ui-card panel section-gap" aria-labelledby="preview-title">
+  <h2 id="preview-title">Predogled</h2>
+  <div class="form-grid">
+    <label class="form-field">Podjetje
+      <select class="filter-select" @bind="PreviewOrganizationId">
+        @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+      </select>
+    </label>
+    <label class="form-field">Jezik
+      <select class="filter-select" @bind="PreviewLanguage">
+        @foreach (var language in Languages) { <option value="@language">@language</option> }
+      </select>
+    </label>
+    <label class="filter-check"><input type="checkbox" @bind="OnlyMissing" /> Samo izdelki brez spletnega naziva v tem jeziku</label>
+    <div class="form-action">
+      <button type="button" disabled="@Busy" @onclick="PreviewDraftAsync">Osveži predogled</button>
+      <button type="button" class="primary-button" disabled="@(Busy || EditingId is null || !Draft.IsActive)" title="Zapiše sestavljene nazive v izbranem jeziku za izdelke, ki jih pravilo doseže"
+              @onclick="ApplyAsync">Zapiši nazive (@(OnlyMissing ? "samo manjkajoče" : "tudi prepis obstoječih"))</button>
+    </div>
+  </div>
+  <PimState Loading="PreviewLoading" Error="@PreviewError" Empty="@(Preview.Count == 0)" EmptyText="Predogled je prazen: pravilo ne doseže nobenega izdelka ali pa vsi že imajo naziv." LoadingText="Sestavljanje nazivov …">
+    <PimTable Caption="Sestavljeni nazivi (vzorec)" Columns="PreviewColumns">
+      <Rows>
+        @foreach (var row in Preview)
+        {
+          <tr>
+            <td><a href="izdelki/@row.ProductId">@row.ItemID</a></td>
+            <td>@(row.ErpTitle ?? "—")</td>
+            <td>@(row.CurrentTitle ?? "—")</td>
+            <td><strong>@(row.ComposedTitle ?? "—")</strong></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+<section class="ui-card data-card section-gap">
+  <PimTable Caption="Pravila" Columns="RuleColumns">
+    <Rows>
+      @foreach (var rule in Rules)
+      {
+        <tr class="@(rule.IsActive ? null : "is-inactive")">
+          <td><button type="button" class="link-button" @onclick="() => Edit(rule)">@rule.RuleCode</button><div class="tree-path">@rule.Name</div></td>
+          <td>@(rule.CategoryTreeCode ?? "vsa drevesa")<div class="tree-path">@(rule.CategoryPath ?? "privzeto za drevo")</div></td>
+          <td>@(rule.LanguageCode ?? "vsi")</td>
+          <td><code class="template">@rule.Template</code></td>
+          <td><PimChip Text="@(rule.IsActive ? "aktivno" : "neaktivno")" Tone="@(rule.IsActive ? "good" : null)" /></td>
+          <td>@rule.UpdatedUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")<div class="tree-path">@rule.UpdatedBy</div></td>
+        </tr>
+      }
+    </Rows>
+  </PimTable>
+</section>
+
+@code {
+  sealed class RuleDraft
+  {
+    public string RuleCode { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string CategoryTreeCode { get; set; } = "";
+    public string CategoryCode { get; set; } = "";
+    public string LanguageCode { get; set; } = "";
+    public string Template { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+    public int SortOrder { get; set; } = 100;
+    public string? Note { get; set; }
+  }
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Nazivi")];
+  static readonly IReadOnlyList<PimColumn> RuleColumns =
+    [new("Pravilo"), new("Obseg"), new("Jezik"), new("Predloga"), new("Stanje"), new("Spremenjeno")];
+  static readonly IReadOnlyList<PimColumn> PreviewColumns =
+    [new("Artikel"), new("ERP naziv"), new("Trenutni spletni naziv"), new("Sestavljen naziv")];
+
+  IReadOnlyList<TitleRuleService.RuleRow> Rules = [];
+  IReadOnlyList<TitleRuleService.CategoryOption> Categories = [];
+  IReadOnlyList<string> Trees = [];
+  IReadOnlyList<string> Languages = ["sl", "en", "de", "hr", "it"];
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  IReadOnlyList<TitleRuleService.PreviewRow> Preview = [];
+
+  RuleDraft Draft = new();
+  int? EditingId;
+  int PreviewOrganizationId;
+  string PreviewLanguage = "sl";
+  bool OnlyMissing = true;
+  bool Busy;
+  bool PreviewLoading;
+  string? PreviewError;
+  string? Message;
+  string? Error;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Organizations = await Data.GetOrganizationsAsync();
+      PreviewOrganizationId = Organizations.FirstOrDefault(organization => organization.OrganizationId == 3)?.OrganizationId
+        ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+      Categories = await Titles.GetCategoriesAsync();
+      Trees = Categories.Select(category => category.CategoryTreeCode).Distinct().OrderBy(tree => tree).ToArray();
+      Rules = await Titles.GetRulesAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  void Edit(TitleRuleService.RuleRow rule)
+  {
+    EditingId = rule.TitleRuleId;
+    Draft = new()
+    {
+      RuleCode = rule.RuleCode, Name = rule.Name, CategoryTreeCode = rule.CategoryTreeCode ?? "", CategoryCode = rule.CategoryCode ?? "",
+      LanguageCode = rule.LanguageCode ?? "", Template = rule.Template, IsActive = rule.IsActive, SortOrder = rule.SortOrder, Note = rule.Note,
+    };
+    if (!string.IsNullOrEmpty(rule.LanguageCode)) PreviewLanguage = rule.LanguageCode;
+    Message = null; Error = null;
+  }
+
+  void NewRule() { EditingId = null; Draft = new(); Preview = []; }
+
+  async Task SaveAsync()
+  {
+    Busy = true; Message = null; Error = null;
+    try
+    {
+      var id = await Titles.SaveRuleAsync(Draft.RuleCode, string.IsNullOrWhiteSpace(Draft.Name) ? Draft.RuleCode : Draft.Name,
+        Draft.CategoryTreeCode, Draft.CategoryCode, Draft.LanguageCode, Draft.Template, " ", Draft.IsActive, Draft.SortOrder, Draft.Note, await ActorAsync());
+      EditingId = id;
+      Rules = await Titles.GetRulesAsync();
+      Message = $"Pravilo {Draft.RuleCode.ToUpperInvariant()} je shranjeno. Nazivi se ne spremenijo, dokler jih ne zapišeš spodaj.";
+      Draft.RuleCode = Draft.RuleCode.ToUpperInvariant();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task PreviewDraftAsync()
+  {
+    PreviewLoading = true; PreviewError = null;
+    try
+    {
+      Preview = await Titles.PreviewAsync(PreviewOrganizationId, PreviewLanguage, EditingId,
+        string.IsNullOrWhiteSpace(Draft.Template) ? null : Draft.Template, Draft.CategoryTreeCode, Draft.CategoryCode, OnlyMissing, 25);
+    }
+    catch (Exception exception) { PreviewError = exception.Message; Preview = []; }
+    finally { PreviewLoading = false; }
+  }
+
+  async Task ApplyAsync()
+  {
+    if (EditingId is null) return;
+    Busy = true; Message = null; Error = null;
+    try
+    {
+      var result = await Titles.ApplyAsync(PreviewOrganizationId, PreviewLanguage, EditingId, Draft.CategoryTreeCode, Draft.CategoryCode,
+        OnlyMissing, await ActorAsync(), $"pravilo {Draft.RuleCode}");
+      Message = $"Zapisanih nazivov ({PreviewLanguage}): {result.Written:N0} od {result.Candidates:N0} kandidatov. Validacija je ponovljena, zgodovina je v kartici izdelka.";
+      await PreviewDraftAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}
