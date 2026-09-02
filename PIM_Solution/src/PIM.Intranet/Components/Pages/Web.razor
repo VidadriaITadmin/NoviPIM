@@ -16,9 +16,12 @@
 
 <PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje spletnih izhodov …">
   <section class="kpi-grid" aria-label="Pripravljenost spletnega izvoza">
-    <PimStat Label="Gre na splet" Value="@ValidWeb.ToString("N0")" Note="brez blokirajoče spletne napake" />
-    <PimStat Label="Ne gre" Value="@WebSummary.AffectedProductCount.ToString("N0")" Note="ista množica kot nivo SPLET na Kakovosti" Href="@IssueHref()" />
-    <PimStat Label="Gre, a z odprto težavo" Value="@Number(Readiness?.Totals.PublishedWithOpenIssues)" Href="kakovost/napake?nivo=SPLET&resnost=WARNING" />
+    @* Pravilo od migracije 146: v datoteko gre objavljen izdelek s spletno stranjo, veljaven za to
+       stran. Tri stevilke povedo, koliko jih gre in zakaj ostali ne. *@
+    <PimStat Label="V datoteki" Value="@Number(Readiness?.Totals.WebExportableCount)" Note="objavljen, s spletno stranjo in veljaven za splet" />
+    <PimStat Label="Brez spletne strani" Value="@Number(Readiness?.Totals.WebSiteMissingCount)" Note="objavljen, a stolpec Spletne strani je prazen — na splet ne gre" Href="izdelki/kategorije" />
+    <PimStat Label="S stranjo, a neveljaven" Value="@Number(Readiness?.Totals.WebInvalidCount)" Note="blokira ga spletna zahteva" Href="@IssueHref()" />
+    <PimStat Label="Gre, a z opozorilom" Value="@Number(Readiness?.Totals.PublishedWithOpenIssues)" Href="kakovost/napake?nivo=SPLET&resnost=WARNING" />
     <PimStat Label="Stolpcev brez vira" Value="@FilteredCoverage.Sum(profile => profile.UnmappedColumnCount).ToString("N0")" Note="stolpec brez vira ostane prazen" />
   </section>
 
@@ -165,7 +168,6 @@
   IReadOnlyList<ExportProfileRow> BuildableProfiles => FilteredProfiles.Where(profile => profile.IsActive && profile.CanBuildOnDemand).ToArray();
   IReadOnlyList<ExportProfileCoverage> FilteredCoverage => (Readiness?.Profiles ?? []).Where(profile => IsWebProfile(profile.ChannelCode)).Where(profile => SiteMatches(profile.ProfileCode, profile.ChannelCode)).ToArray();
   IReadOnlyList<ExportBlockingReason> FilteredReasons => (Readiness?.Reasons ?? []).Where(reason => reason.BlocksWeb).Where(reason => SiteMatches(reason.ProfileCode, "")).ToArray();
-  long ValidWeb => Math.Max(0, WebSummary.ProductCount - WebSummary.AffectedProductCount);
 
   protected override async Task OnInitializedAsync()
   {

@@ -60,7 +60,9 @@ public sealed record AlertRow(long AlertId, string Pipeline, string AlertKind, s
 public sealed record RoleRow(int RoleId, string RoleCode, string Name, long UserCount);
 public sealed record ExportReadinessTotals(
   long CanonicalCount, long ActiveCount, long PublishedCount, long NotPublishedCount,
-  long WebFlaggedCount, long PublishedWithOpenIssues);
+  long WebFlaggedCount, long PublishedWithOpenIssues,
+  // Migracija 146: pravilo spletne strani in veljavnosti — kar iz datoteke izpade in kar gre vanjo.
+  long WebSiteMissingCount = 0, long WebInvalidCount = 0, long WebExportableCount = 0);
 public sealed record ExportBlockingReason(
   string FieldCode, string ProfileCode, bool BlocksErp, bool BlocksWeb, string Severity, long ProductCount);
 public sealed record ExportProfileCoverage(
@@ -478,7 +480,8 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       totals = new(
         PimDb.Int64(reader, "CanonicalCount"), PimDb.Int64(reader, "ActiveCount"),
         PimDb.Int64(reader, "PublishedCount"), PimDb.Int64(reader, "NotPublishedCount"),
-        PimDb.Int64(reader, "WebFlaggedCount"), PimDb.Int64(reader, "PublishedWithOpenIssues"));
+        PimDb.Int64(reader, "WebFlaggedCount"), PimDb.Int64(reader, "PublishedWithOpenIssues"),
+        PimDb.Int64(reader, "WebSiteMissingCount"), PimDb.Int64(reader, "WebInvalidCount"), PimDb.Int64(reader, "WebExportableCount"));
 
     var reasons = new List<ExportBlockingReason>();
     if (await reader.NextResultAsync(cancellationToken))
