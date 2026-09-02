@@ -254,6 +254,27 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-03 — celoten cikel SAOP → PIM → splet (Claude, veja `feature/izhodi-erp-01-saop-polji`)
+
+Zahteva uporabnika 2026-09-02 (pregled celotnega PIM, manjkajoče do »popolnosti«, delujoč sistem
+brez slabih podatkov v spletnem izvozu, IQL Brnčičeva prišteta k VID zalogi, VID iz registriranega
+pogleda). Ozemlja in commiti:
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | 145 registrirani pogled (pet količin, vklop za org 3); 146 pravila spletnega izvoza + `out.ExportStockSource` + hitri profil; 147/148 `canon.CategoryAttributeSet`, zahteve z obsegom; 149 `pim.TitleRule` + `pim.ComposeTitle`; 150 `pim.CheckThreshold`, `out.GetStockExportRows`, `intranet.GetPriceListSheet` | migrator 1./2. zagon in `--verify` izhod 0 za vsako; funkcionalni dokazi v glavah commitov |
+| DOMENA | `PIM.StockMapping`: štiri dodatne količine v pisalni poti | del F6 |
+| WORKERJI | `PIM.SaopStockWorker` POST + strani + shema `<Row>`; `PIM.B2bWorker --export-profile`, izvoz samo objavljenih | `run_tests.ps1 -Filter F6` = 6/0/0, `-Filter F7` = 7/0/0 |
+| INTRANET | `/zaloge` (količine, prenos CSV), `/splet` (števci), `/nastavitve/kategorije` (Atributi), kartica izdelka (nabor), `/pravila/nazivi`, `/preverbe` (prag), `/cene/tisk`, `/izdelki` (povezava na SAOP uvoz) | `run_tests.ps1 -Filter F10` = 15/0/0 |
+| skripte | `Nocno-vse.ps1` ne bere `*.pocakaj`; `Zaloga-cikel.ps1` izvozi `MAGENTO_STOCK_PRICES` in nastavi povezavo | `logs\zaloga-2026-09-02.log`: korak »Izvoz cen in zaloge za splet« 0 padlih |
+| dokumentacija | `docs/SISTEM_PIM.md`, `docs/UPORABNISKI_PRIROCNIK.md`, `docs/STANJE_OKOLIJ.md`, `docs/PRENOS_NA_TEST.md`; posodobljeni `EXPORTS.md`, `WORKERS.md`, `VALIDACIJA.md`, `STATUS.md` | — |
+
+Spremembe testov, ki niso »da bi šel skozi«: `PIM.F6.SaopProviderTests` (pogodba GET → POST po
+zahtevi uporabnika), `PIM.F6.SaopStockIntegration` (nov scenarij + premor zaradi ključa posnetka
+na sekundo), `PIM.F7.MagentoExportTests` (izbere izdelek, ki na splet sme; medij pred njegovimi
+slikami). Polni paket 2026-09-03 00:35: `scripts\run_tests.ps1` → **60 uspeli / 0 preskočeni / 0 padli**, `REZULTAT: VSE OK`, `Build OK`; `PIM.Migrator --verify` → izhod 0 (migracija 150).
+
+
 - **[OPERATIVA] Kanal `SAOP_PRODUCT` je odprt v razvojni bazi (ročno, ne z migracijo)** —
   kdo: Claude Code na zahtevo uporabnika — končano 2026-09-02.
 

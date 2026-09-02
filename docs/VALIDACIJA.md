@@ -77,6 +77,27 @@ jih prej ni videl: `Product.ItemGroup`, `Product.Department`, `Product.IsActive`
 zahteva zanju ne more sprožiti pomanjkljivosti. Vseeno sta zapisani, ker bi bil profil brez
 njiju druga stvar kot dogovorjeni model.
 
+## Zahteva z obsegom in nabor atributov po kategoriji (migraciji 146–148, 2026-09-03)
+
+- `val.ValidationProfile.CategoryTreeCode` veže spletni profil na drevo (`WEB_svetila_si` →
+  `svetila_si`, `WEB_videlektro` → `videlektro`). Spletni izvoz zahteva `VALID` v vseh profilih z
+  `BlocksWeb = 1`, ki veljajo za stran (brez drevesa = vse strani).
+- `val.FieldRequirement` ima obseg `CategoryTreeCode`, `CategoryCode`: zahteva brez obsega velja
+  za vse izdelke profila (kot doslej), zahteva z obsegom samo za izdelke v tej kategoriji ali pod
+  njo. Enoličnost je (profil, polje, drevo, kategorija).
+- Register `canon.CategoryAttributeSet` (drevo, kategorija, koda atributa iz
+  `canon.AttributeDefinition`, raven `REQUIRED` / `RECOMMENDED` / `EXCLUDED`) se deduje navzdol;
+  najbližja vrstica zmaga, `EXCLUDED` pri otroku razveljavi `REQUIRED` pri staršu
+  (`canon.CategoryAttributeEffective`). `canon.SaveCategoryAttributeSet` sam vzdržuje zahteve:
+  REQUIRED → `ERROR`, RECOMMENDED → `WARNING`, EXCLUDED/odstranitev → zahteva ugasne. Polje
+  zahteve je `ProductAttribute.<slovensko ime atributa>`, ker artikli nosijo ime, register kodo.
+- `val.RunValidation` upošteva obseg pri napakah, stanju profila in statusu artikla. Vse, kar
+  bere `val.ProductIssue` (`/kakovost`, kartica izdelka, pripravljenost izvoza), dela
+  nespremenjeno. Urejanje: `/nastavitve/kategorije` → gumb **Atributi** pri kategoriji.
+- Dokaz 2026-09-02: REQUIRED `GARANCIJA` na `notranja_svetila` → izdelek 541 (Viseča svetila,
+  brez garancije) dobi `MISSING_REQUIRED_FIELD` `ERROR`, `WEB_svetila_si` postane `INVALID`; po
+  odstranitvi iz nabora napaka ugasne.
+
 ## Devet zahtev, ki čakajo na polje
 
 Te zahteve so zapisane z `IsActive = 0`, da je model viden v celoti in se vidi, kaj manjka.

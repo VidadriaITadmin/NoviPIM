@@ -1,6 +1,30 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-09-02
+Posodobljeno: 2026-09-03
+
+## Celoten cikel SAOP → PIM → splet je postavljen — 2026-09-03
+
+Uporabnikova zahteva 2026-09-02 (»jutri zjutraj delujoč sistem brez napak in brez slabih podatkov
+v izvozu splet«) je pokrita z migracijami **145–150** in popravki skript. Vse je commitano na veji
+`feature/izhodi-erp-01-saop-polji`; polni `scripts\run_tests.ps1` in `--verify` sta zapisana v
+`TASKBOARD.md` pod KONČANO. Pregled po področjih z dokazi in odprtimi odločitvami:
+[`docs/STANJE_OKOLIJ.md`](docs/STANJE_OKOLIJ.md). Celotna dokumentacija sistema:
+[`docs/SISTEM_PIM.md`](docs/SISTEM_PIM.md), uporabniški priročnik
+[`docs/UPORABNISKI_PRIROCNIK.md`](docs/UPORABNISKI_PRIROCNIK.md), prenos na TEST
+[`docs/PRENOS_NA_TEST.md`](docs/PRENOS_NA_TEST.md).
+
+| Migracija | Kaj | Izmerjeno |
+|---|---|---|
+| 145 | zaloga Vidadrie iz registriranega pogleda SAOP (POST, strani, pet količin); IQL ostaja GetStocks Brnčičeva | 3.156 vrstic, 0 v karanteni |
+| 146 | spletni izvoz: samo objavljen izdelek s spletno stranjo, veljaven za splet; zaloga VID + IQL Brnčičeva sešteta po šifri; dobaviteljeva zaloga; skladišče; hitri profil `MAGENTO_STOCK_PRICES` na 5 min | org 3: 2.368 vrstic (prej 10.595), org 2: 1.957 (prej 43.504); `NW.10157` 2 + 1 = 3 |
+| 147/148 | nabor atributov po kategoriji z dedovanjem, zahteve z obsegom, filter atributov v izvozu | izdelek 541 brez garancije → ERROR, INVALID |
+| 149 | pravila za sestavo spletnih nazivov (predloge z žetoni, slovnica let, prevodi prek slovarja), predogled in zapis | »ML300 stropna svetilka Stropna svetila LED 15 W 4000K bela« / »… white« / »… weiß« |
+| 150 | nastavljiv prag faktorja marže, izvoz zaloge SAOP/dobavitelj/oboje, cenik za tisk | 448 preverb FAKTOR_MARZE pri pragu 2,00 |
+
+**Kar tudi po tem ostaja odprto in čaka odločitev:** pisanje cen/cenikov/strank v SAOP
+(lastništvo), dostava datotek Magentu, združen katalog čez podjetja, migracija 070 na prazni
+bazi, SMTP za alarme, servisni račun za opravila na strežniku (`docs/STANJE_OKOLIJ.md` §3).
+
 
 ## Zaloga iz SAOP je spet v pogonu — 2026-09-02 20:22
 

@@ -210,6 +210,32 @@ odgovor in posname zahtevo — preverjeno je, da gre na `GetStocks`, da nosi ši
 glavo `OrganisationId`, da se znan artikel ujame v pozicijo zaloge in da neznan ne izgine
 (pozicija brez izdelka, `MatchKey = 'Unmatched'`).
 
+## Registrirani pogled SAOP za Vidadrio (migracija 145, 2026-09-02)
+
+Uporabnik: »zaloga VID se bere iz registriranega pogleda, IQ pa iz GetStocks, ker SAOP pogleda za
+IQ ni omogočil«. Profil `SAOP_REGISTERED_VIEW` (podjetje 3, `RegisteredViewId
+16c34ea5-b65d-4954-a699-40f47af11243`, Priority 5) je vklopljen in zmaga pred `SAOP_GETSTOCKS`
+(Priority 10). Pogodba je **POST** `api/registeredviews/data` z XML telesom
+`GetDataFromRegisteredViewRequest` (RegisteredViewID, ResultPageNumber, ResultPageSize 1000,
+prazna Filter/OrderBy), odgovor je stranjen — worker bere, dokler stran ni krajša od zahtevane.
+Vsaka vrstica `<Row>` nosi pet količin: `TrenutnaZalogaL` → `Quantity`, `NarocenaKolicina` →
+`OrderedQuantity`, `ZaOdpremoKolicina` → `ForShipmentQuantity`, `RazpolozljivaKolicina` →
+`AvailableQuantity`, `NarocenaKolicinaDobaviteljem` → `SupplierOrderedQuantity`
+(`stock.LandingRecord` besedilo, `stock.Position` število; drugi viri imajo tam NULL). Šifra
+»NW. 1234« se ob zajemu popravi v »NW.1234«. Prejšnja izvedba je pošiljala GET `?viewId=`, ki ga
+API ne pozna; napaka je bila nevidna, ker je bil profil izklopljen. Živi zajem 2026-09-02: 3.156
+vrstic, 21 neujetih, 0 v karanteni. Dokaz: `run_tests.ps1 -Filter F6` (lokalni strežnik posname
+POST telesa in dve strani).
+
+## Petminutni cikel izvozi tudi cene in zalogo za splet (2026-09-03)
+
+`scripts\Zaloga-cikel.ps1` po zajemu zaloge požene `PIM.B2bWorker --export-profile
+MAGENTO_STOCK_PRICES` za vsa podjetja v `izvoz\magento\<podjetje>\magento-stock-prices.csv`
+(glej `docs/EXPORTS.md` §3z). Skripta si povezavo vzame iz `appsettings.Local.json`, ker
+`PIM.B2bWorker` bere samo `PIM_CONNECTION_STRING`. Nočni tok (`Nocno-vse.ps1`) od 2026-09-03 ne
+bere več označevalnih datotek `*.pocakaj` in `*.prenos` kot zalogo — to je bil vzrok, da je korak
+»Zaloge dobaviteljev« 2026-09-02 padel z eno vrstico v karanteni.
+
 ## Nočno opravilo — vsi vhodi na en zagon (2026-08-23)
 
 Do zdaj je načrtovana naloga poganjala samo zajem iz SAOP (`scripts\Nocni-zajem.ps1`). Vse

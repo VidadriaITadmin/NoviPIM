@@ -381,6 +381,58 @@ organizacija 3 (10.595 izdelkov) je dala **znak za znak enaki** datoteki, organi
 
 ---
 
+## 3z. Pravila spletnega izvoza in zaloga v datoteki (migracija 146, 2026-09-03)
+
+**Kaj gre v datoteko.** Od migracije 146 `out.GetExportRows` za profile z virom `PIM_PRODUCT`
+vzame izdelek samo, če:
+
+1. ima vsaj eno vrstico v `pim.ProductCategory` — stolpec **Spletne strani** ni prazen
+   (uporabnik 2026-09-02: »na splet ne gredo artikli, če imajo prazen stolpec svetila/videlektro«);
+2. je objavljen (`canon.Product.WebPublish = 1`);
+3. kadar ima profil `out.ExportProfile.RequireWebValid = 1`: je `VALID` v vsakem validacijskem
+   profilu, ki blokira splet (`BlocksWeb = 1`) in velja za stran — profil brez drevesa
+   (`SHARED_CORE`) za vse strani, profil z `val.ValidationProfile.CategoryTreeCode` samo za svoje
+   drevo (`WEB_svetila_si` → `svetila_si`, `WEB_videlektro` → `videlektro`).
+
+Stolpec »Spletne strani« in stolpci kategorij nosijo samo strani, za katere je izdelek veljaven.
+Worker `PIM.B2bWorker --export-magento` kliče proceduro z `@OnlyPublished = 1`. Izmerjeno po
+migraciji: podjetje 3 = **2.368** vrstic (prej 10.595 objavljenih), podjetje 2 = **1.957**
+(prej 43.504). `/splet` pokaže tri števce: *V datoteki*, *Brez spletne strani*, *S stranjo, a
+neveljaven* (`intranet.GetExportReadiness`).
+
+**Zaloga v datoteki.** Register `out.ExportStockSource` pove, iz katerih aktivnih posnetkov
+`stock.Snapshot` se sestavi zaloga v izvozu podjetja:
+
+| Podjetje izvoza | Prispevek | Vir zaloge | Oznaka skladišča |
+|---|---|---|---|
+| 3 Vidadria | BASE | 3 / `SAOP_VIDADRIA_STOCK` (registrirani pogled, 145) | Glavno skladišče Rakovnik 9a |
+| 3 Vidadria | ADD | 2 / `SAOP_IQLIGHTING_STOCK` (GetStocks, skladišče 0000001) | Glavno skladišče Brnčičeva 13 |
+| 2 IQLighting | BASE / ADD | simetrično | |
+| vsa | SUPPLIER | `NW_STOCK`, `BT_STOCK` istega podjetja | — |
+
+Seštevek je po šifri artikla (`ItemID`) prek `stock.Position.MatchedProductId`. Stolpci:
+`Stock.ErpCurrent` (vsota `Quantity`), `Stock.ErpAvailable` (vsota `COALESCE(AvailableQuantity,
+Quantity)`), `Stock.ErpOrdered`, `Stock.ErpForShipment`, `Stock.ErpSupplierOrdered`,
+`Stock.SupplierQuantity`, `Stock.SupplierIncoming`, `Stock.SupplierDate` (dd.MM.yyyy),
+`Stock.Warehouse` (oznake, ločene s » + «). Negativna ERP zaloga gre ven kot 0. Stolpca *VID datum
+dobave* in *VID koli. prihodnjih dobav* (COL048/049) ostajata brez vira: končna točka
+`GetItemDeliveryDate` v NoviPIM ni zajeta. **Seštevanje velja samo v izvozu**; `/zaloge` kaže
+vire ločeno.
+
+**Hitri profil `MAGENTO_STOCK_PRICES`** (14 stolpcev: šifra, EAN, cena B2B, cena B2C, DDV in
+stolpci zaloge; `RequireWebValid = 0`) nastane vsakih pet minut iz `scripts\Zaloga-cikel.ps1`:
+`PIM.B2bWorker --export-profile MAGENTO_STOCK_PRICES --organization-id <n> --output-dir
+izvoz\magento\<n> --file-name magento-stock-prices.csv`. Vsebuje samo izdelke, ki so že na
+spletu (spletna stran + objava), in namenoma ne gre skozi validacijo.
+
+**Nabor atributov (147).** Kadar katera od dovoljenih kategorij izdelka (ali njen prednik) določa
+nabor v `canon.CategoryAttributeSet`, gredo v datoteko samo atributi iz nabora (REQUIRED,
+RECOMMENDED); EXCLUDED izpade; izdelek brez nabora obdrži vse atribute.
+
+**Izvoz zaloge z izbiro vira (150).** `out.GetStockExportRows @OrganizationId, @Source
+(ERP|DOBAVITELJ|VSE), @OnlyWeb` → intranetni prenos `/izvoz/zaloge.csv?podjetje=&vir=&splet=`,
+gumbi na `/zaloge`.
+
 ## 4. B) Odhodna sporočila (outbox)
 
 ### 4.1 Tabele in profili
