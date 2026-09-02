@@ -86,7 +86,98 @@ Tik je privzeto vsakih 30 sekund. Tik sam po sebi ne pomeni dela — pomeni pogl
 
 ---
 
-## 3. Kaj se spremeni v intranetu
+## 3. Sled izvajanja: ena vrstica na zagon
+
+Vprašanje je bilo, ali razporejevalnik ob vsakem zagonu workerja zapiše vrstico v bazo —
+začetek, konec, status, prebrano, zapisano, napaka — in ali `OperationsRun` to že zna.
+
+**Ne zna.** Tabela s točno temi stolpci obstaja, a `OperationsRun` je ne uporablja.
+
+### 3.1 Kaj je danes
+
+| Kaj | Kje | Kdo piše | Kaj manjka |
+|---|---|---|---|
+| **Stanje** postopka | `ops.IntegrationHealth` | `ops.BeginRun` / `ops.CompleteRun`, torej **vsi** workerji | **ena sama vrstica na (podjetje, postopek)**, ki se ob vsakem zagonu prepiše. Ni zgodovine, ni števcev, prejšnja napaka se ob uspehu izbriše. |
+| **Zgodovina** teka | `ops.PipelineRun` — ima `StartedUtc`, `EndedUtc`, `Status`, `RowsRead`, `RowsSucceeded`, `RowsFailed` | samo `PIM.KatalogWorker` in `PIM.XmlFileWorker`, vsak s svojim `INSERT` | ostalih pet postopkov je tam **ni** |
+| **Zgodovina** zaloge | `stock.SyncRun` — `RecordsRead`, `RecordsApplied`, `RecordsQuarantined` | zalogovna workerja | vzporedna, drugačna oblika; `/zajem` je ne bere |
+| **Napake** teka | `ops.ErrorLog`, procedura `ops.LogError` obstaja od migracije 003 | **nihče** | intranet jo bere na petih mestih, a je vedno prazna |
+
+Merjeno v bazi `PIM` 2026-09-02:
+
+```
+ops.PipelineRun po postopkih:   SAOP_PRODUCTS 57, GENERIC_XML 74, testni 7
+                                SOURCE_FETCH, STOCK_FILE, SAOP_STOCK, WATCHDOG,
+                                ALERT_DISPATCH:  0 vrstic — a vsi so v IntegrationHealth
+ops.ErrorLog:                   0 vrstic
+ops.Heartbeat:                  0 vrstic (mrtva tabela, nasledila jo je IntegrationHealth)
+ops.PipelineRun brez EndedUtc:  19  (od tega 5 še vedno v stanju 'Running')
+stock.SyncRun:                  512 vrstic
+```
+
+Dvoje od tega je treba brati počasi.
+
+**Prvič: `ops.ErrorLog` je prazna, intranet pa jo bere.** `PipelineReadService.cs` na štirih
+mestih šteje napake na tek in na petem izpiše seznam napak teka. Ker vanjo nihče ne piše, je
+stolpec »napake« v vmesniku strukturno vedno nič — ne zato, ker napak ne bi bilo, ampak ker jih
+nihče ne zapiše. To ni okvara razporejevalnika, je pa razlog, zakaj tega vprašanja ni odkril
+prej nihče.
+
+**Drugič: tudi tam, kjer se zgodovina piše, RunId ni isti.** `PIM.KatalogWorker/Program.cs:57`
+naredi `var runId = Guid.NewGuid()` za `ops.PipelineRun`, vrstico kasneje pa `OperationsRun.BeginAsync`
+ustvari **svoj** `RunId` za `ops.IntegrationHealth`. Dve identiteti istega teka, ki se ne dasta
+sestaviti nazaj. Enako v `PIM.XmlFileWorker`.
+
+In 19 vrstic brez `EndedUtc` pove, da tudi obstoječi `UPDATE` na koncu ni zanesljiv: če worker
+pade vmes, vrstica ostane večno »Running«, ker jo zapre samo srečen konec.
+
+### 3.2 Kaj naredimo
+
+**Vrstico piše `ops.BeginRun` / `ops.CompleteRun`, ne razporejevalnik.** To je ključna odločitev
+in je vredna razlage: če bi jo pisal razporejevalnik, bi ročni zagon `Zaloga-cikel.ps1` ali
+nočnega toka ne pustil nobene sledi. Točno ta razcep je zalogo do migracije 106 držal nevidno v
+`/zajem`. Ker `BeginRun` že danes dobi podjetje, postopek in `WorkerId` ter vrne `RunId`, je
+zapis zgodovine njegov naravni posel — in **vseh sedem postopkov ga dobi hkrati, brez posega v
+posameznega workerja**.
+
+Razporejevalnik doda tisto, kar ve samo on: izhodno kodo procesa, dejstvo, da ga je ubila meja,
+in to, da je zagon sprožil on in ne človek.
+
+**Migracija 142** torej ni samo utrip in pavza, ampak:
+
+| # | Sprememba | Zakaj |
+|---|---|---|
+| 1 | `ops.BeginRun` poleg `IntegrationHealth` vstavi še vrstico v `ops.PipelineRun` z istim `RunId` | ena identiteta teka namesto dveh |
+| 2 | `ops.CompleteRun` isto vrstico zapre: `EndedUtc`, `Status` = `Succeeded`/`Failed` | konec je zapisan tudi takrat, ko tek pade |
+| 3 | `ops.CompleteRun` ob napaki pokliče `ops.LogError` z istim `RunId` | `ops.ErrorLog` se končno polni; stolpci v intranetu nehajo lagati |
+| 4 | novi stolpci na `ops.PipelineRun`: `WorkerId nvarchar(200)`, `ExitCode int`, `TriggeredBy nvarchar(30)` (`Scheduler` / `Human` / `Task`) | brez tega ni razvidno, kdo je zagnal in s čim je končal |
+| 5 | `CK_PipelineRun_Status` dobi `N'TimedOut'` | ubit po meji ni isto kot padel |
+| 6 | nova procedura `ops.RecordRunCounts @RunId, @RowsRead, @RowsSucceeded, @RowsFailed`; ovoj `OperationsRun.ReportCountsAsync` | števci so danes stvar vsakega workerja posebej |
+| 7 | `PIM.KatalogWorker` in `PIM.XmlFileWorker` opustita svoj `INSERT` in preideta na `operationsRun.RunId` | sicer nastaneta dve vrstici na tek |
+| 8 | nadzornik zapre osirotele vrstice: `Status = 'Running'` brez utripa dlje od `StaleAfterSeconds` → `Cancelled` | tistih 19 odprtih vrstic je dokaz, da se to zgodi |
+
+Točka 7 je edina, ki se dotakne obstoječih workerjev. Varna je, ker ima `raw.Inbox.RunId` tuji
+ključ na `ops.PipelineRun` (migracija 007) in `BeginRun` vrstico ustvari **prej** kot worker piše
+v `raw.Inbox` — vrstni red torej drži tudi po zamenjavi.
+
+**Česa migracija 142 ne naredi:** `stock.SyncRun` pusti pri miru. Tam je zapis bogatejši
+(`Endpoint`, `HttpStatus`, `QueryParametersHash`) in ima 512 vrstic zgodovine, ki je ne bomo
+prelivali. Ko bo `/zajem` pokazal tudi zalogo, se poveže prek novega stolpca `RunId` na
+`stock.SyncRun` — to je ločena naloga, ne pogoj za razporejevalnik.
+
+### 3.3 Kaj bo torej v bazi po enem zagonu workerja
+
+```
+ops.PipelineRun     RunId, Pipeline, OrganizationId, SourceCode,
+                    StartedUtc, EndedUtc, Status, RowsRead, RowsSucceeded, RowsFailed,
+                    WorkerId, ExitCode, TriggeredBy          <- ena vrstica na zagon
+ops.ErrorLog        RunId, OccurredUtc, Severity, ErrorCode, Message, Detail
+                                                             <- ena ali več, samo ob napaki
+ops.IntegrationHealth                                        <- stanje, prepisano (kot doslej)
+```
+
+Testi 8–11 v §7 to držijo.
+
+## 4. Kaj se spremeni v intranetu
 
 `/sistem/urniki` (`SystemSchedules.razor`, vloga ADMIN) dobi:
 
@@ -97,18 +188,18 @@ Tik je privzeto vsakih 30 sekund. Tik sam po sebi ne pomeni dela — pomeni pogl
 Obstoječa gumba »Izklopi« in »Shrani razmik« ostaneta nespremenjena; razporejevalnik ju bo
 upošteval takoj ob naslednjem tiku, torej najkasneje v 30 sekundah namesto v petih minutah.
 
-**Migracija 142:** vrstica za utrip razporejevalnika in globalno stikalo pavze. Idempotentna,
-po pravilu iz `AGENTS.md`.
+**Migracija 142** poleg utripa razporejevalnika in globalnega stikala pavze nosi še sled
+izvajanja iz §3.2. Idempotentna, po pravilu iz `AGENTS.md`.
 
 ---
 
-## 4. Kaj se odstrani in kaj ostane
+## 5. Kaj se odstrani in kaj ostane
 
 | Danes | Po tem načrtu |
 |---|---|
 | opravilo `PIM zaloga` (5 min) | odpade — postopek je vrstica v urniku |
 | opravilo `PIM nadzor` (5 min) | odpade — enako |
-| opravilo `PIM nocni tok` (02:30) | **odločitev, glej §7** |
+| opravilo `PIM nocni tok` (02:30) | **odločitev, glej §8** |
 | `scripts/Zaloga-cikel.ps1`, `Nadzor.ps1` | **ostaneta** za ročni zagon; sta tudi zapis ritma in edini način, da človek stvar požene takoj |
 | `scripts/Tiho.vbs`, `Izvajalec.ps1` | ostaneta; na strežniku nista potrebna (seja 0 okna nima), na prenosniku sta |
 | `deploy/Configure-ScheduledTasks.ps1` | odpade |
@@ -116,7 +207,7 @@ po pravilu iz `AGENTS.md`.
 
 ---
 
-## 5. Namestitev na strežnik
+## 6. Namestitev na strežnik
 
 `deploy/Install-Scheduler.ps1` po vzoru obstoječe skripte, s `-WhatIf` in `-DryRun`:
 
@@ -134,7 +225,7 @@ seznam tvojih nalog, ne mojih.
 
 ---
 
-## 6. Testi — najprej rdeči
+## 7. Testi — najprej rdeči
 
 Nov konzolni testni projekt `PIM.F11.SchedulerTests` (kot ostali; `dotnet test` ga ne bi pognal,
 zato gre v `scripts/run_tests.ps1`). Namesto pravih workerjev kliče kratek lažni program, da
@@ -149,25 +240,30 @@ noben test ne kliče ERP ali dobavitelja.
 | 5 | vsak tik zapiše utrip | »ne teče« je vidno |
 | 6 | ustavitev med tekočim workerjem → čist izhod pred mejo | storitev se da ustaviti |
 | 7 | pavza → tiki tečejo, zagonov ni | varovalka drži |
+| 8 | vsak zagon workerja pusti **eno** vrstico v `ops.PipelineRun` z `StartedUtc`, `EndedUtc`, `Status`, `ExitCode` | odgovor na vprašanje iz §3 |
+| 9 | padel worker → vrstica zaprta s `Failed` **in** zapis v `ops.ErrorLog` z istim `RunId` | napaka ima ime in mesto |
+| 10 | ubit po meji → `Status = 'TimedOut'`, ne `Failed` | ubit ni isto kot padel |
+| 11 | worker ubit brez zaključka → nadzornik vrstico zapre s `Cancelled` | osirotelih vrstic ne pušča več |
+| 12 | ročni zagon iz ukazne vrstice pusti vrstico s `TriggeredBy = 'Human'` | sled ni odvisna od tega, kdo je zagnal |
 
 ---
 
-## 7. Kaj potrebujem od tebe
+## 8. Kaj potrebujem od tebe
 
 1. **Nočni tok:** naj postane navadna vrstica v urniku (dnevni ritem, isti razporejevalnik), ali
    naj ostane ločeno načrtovano opravilo ob 02:30? Priporočam prvo — ena pot, en dnevnik, en
    nadzor. Proti govori le to, da je poln zajem dolg in ga je lažje ločeno ubiti.
 2. **Servisni račun na strežniku** — ime in geslo, ko bo namestitev na vrsti. Zunanji svet in
    sistemske nastavitve sta na zaprtem seznamu (`AGENTS.md` §4.5, §4.7), zato tega ne postavim sam.
-3. **Potrditev vrstnega reda** iz §8.
+3. **Potrditev vrstnega reda** iz §9.
 
 ---
 
-## 8. Vrstni red dela
+## 9. Vrstni red dela
 
 | # | Korak | Ozemlje | Dokaz ob koncu |
 |---|---|---|---|
-| 1 | migracija 142 (utrip + pavza) | BAZA | migrator 1. in 2. zagon + `--verify` |
+| 1 | migracija 142 (utrip, pavza, sled izvajanja iz §3.2) | BAZA | migrator 1. in 2. zagon + `--verify`; pred in po: `SELECT COUNT(*) FROM ops.PipelineRun` po enem zagonu watchdoga |
 | 2 | `PIM.Scheduler` + `PIM.F11.SchedulerTests` | WORKERJI | `scripts\run_tests.ps1` zelen |
 | 3 | `/sistem/urniki`: stanje, »Zaženi zdaj«, pavza | INTRANET | `PIM.F10.*UxTests` + build |
 | 4 | `Install-Scheduler.ps1` + dokumentacija | WORKERJI | `-WhatIf` izpis |
@@ -177,7 +273,7 @@ Ocena: dva dneva dela. Koraka 1 in 2 sta odvisna zaporedno, 3 lahko počaka.
 
 ---
 
-## 9. Kar ta načrt namenoma ne rešuje
+## 10. Kar ta načrt namenoma ne rešuje
 
 - **Vsebine workerjev.** Kdo kaj bere in kam piše, ostane natanko tako, kot je.
 - **Ritma.** Pet minut ostane pet minut; sprememba je, da ga po novem res drži urnik iz baze.
