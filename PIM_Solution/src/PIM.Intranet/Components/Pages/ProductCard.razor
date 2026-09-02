@@ -170,25 +170,25 @@
         </section>
 
         <section id="panel-core" role="tabpanel" aria-labelledby="tab-core" tabindex="0" class="section-panel section-stack" hidden="@(Section != "core")">
-          <header class="section-heading"><h2>Osnovni podatki</h2><p>Identiteta, šifranti in podatki, ki jih PIM nadzorovano izmenjuje z ERP.</p></header>
+          <header class="section-heading"><h2>ERP (SAOP)</h2><p>Identiteta, šifranti ERP, partnerja, nazivi za ERP ter logistika, ki jo zahteva izvoz.</p></header>
           <ProductChannelPanel PanelId="panel-erp" TabId="tab-core" Title="ERP (SAOP)"
                                StatusText="@StatusLabel(ErpStatus)" StatusTone="@Tone(ErpStatus)"
                                BlockingCount="@erpBlockingCount"
                                WarningCount="@ErpIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Osnovna polja za ERP" />
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="ERP — Slovenija" />
         </section>
 
         @* A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
            Cene ostanejo pri komercialni strani — so komercialen podatek, ne spletna vsebina. *@
         <section id="panel-commercial" role="tabpanel" aria-labelledby="tab-commercial" tabindex="0" class="section-panel section-stack" hidden="@(Section != "commercial")">
-          <header class="section-heading"><h2>Komerciala</h2><p>Teže, poreklo, partnerji in cene po cenikih.</p></header>
+          <header class="section-heading"><h2>Komerciala</h2><p>Uvrstitev artikla, aktivnost, nabavni pogoji in cene po cenikih.</p></header>
           <ProductChannelPanel PanelId="panel-komerciala" TabId="tab-commercial" Title="Komerciala"
                                StatusText="@(commercialWarningCount == 0 ? "Brez odprtih opozoril" : "Potrebuje pregled")"
                                StatusTone="@(commercialWarningCount == 0 ? "good" : "warn")" BlockingCount="0"
                                WarningCount="@commercialWarningCount" LastValidatedUtc="@Detail.Header.LastValidatedUtc"
                                Fields="@CommercialFields" Issues="@CommercialIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Trgovinski podatki" />
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Klasifikacija in objava" />
 
           <section id="panel-prices" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Cene</h2><a href="cene?izdelek=@Detail.Header.ItemId">Odpri poslovni pogled</a></div>
@@ -543,86 +543,105 @@
     _ => fieldKey,
   };
 
+  /// <summary>
+  /// ERP kanal — kar gre v SAOP. Razdelitev na kanale je prevzeta iz starega intraneta
+  /// PIM_test (`ProductCatalogEditorSections.razor`, kartice »ERP — Slovenija«,
+  /// »ERP — EU / tretje države«, »Pakiranje«, »Dimenzije pakiranja«), ker je bila tam
+  /// poslovno preverjena: ERP nosi identiteto, sifrante ERP, partnerja, davek, nazive za
+  /// ERP ter logistiko, ki jo zahteva izvoz (teze, tarifa, poreklo, pakiranje, dimenzije).
+  /// Uvrstitev artikla in objava sta komercialni odlocitvi in sta zato na svojem kanalu.
+  /// </summary>
   IReadOnlyList<ProductChannelField> ErpFields
   {
     get
     {
       if (Detail is null) return [];
-      const string identity = "Identiteta artikla";
-      const string classification = "Uvrstitev in šifranti";
-      const string names = "Nazivi za ERP";
-      const string sales = "Prodaja";
-      const string packaging = "Pakiranje in dimenzije";
+      const string slovenia = "ERP — Slovenija";
+      const string extra = "Dodatno (ERP iskanje, drugi naziv)";
+      const string names = "Nazivi za ERP po jezikih";
+      const string export = "ERP — EU / tretje države";
+      const string packaging = "Pakiranje";
+      const string dimensions = "Dimenzije pakiranja";
+      var commercial = Detail.Commercial;
       var rows = new List<ProductChannelField>
       {
-        Channel("Šifra artikla", "Product.ItemID", Detail.Header.ItemId, identity),
-        Channel("EAN", "Product.EAN", Detail.Header.Ean, identity),
-        Channel("Merska enota", "Product.UoM", Detail.Header.Uom, identity),
-        Channel("Aktiven", "Product.IsActive", YesNo(Detail.Header.IsActive), identity),
-        TextField("Ime za iskanje", "SEARCH_NAME", "sl", null, identity),
-        Channel("Skupina artikla", "Product.ItemGroup", Detail.Header.ItemGroup, classification),
-        Channel("ABC klasifikacija", "Product.Department", Detail.Header.Department, classification),
-        Channel("Knjižna skupina", "Product.AccountingGroup", Detail.Header.AccountingGroup, classification),
-        Channel("Skupina popusta", "Product.DiscountGroup", Detail.Header.DiscountGroup, classification),
-        Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), classification),
-        Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), classification),
-        Channel("Davčna stopnja", "Product.VatRate", null, classification, inReadModel: false),
-        Channel("Planiranje in rezervacija", "ProductPlanning", null, classification, inReadModel: false),
-        Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, classification),
+        Channel("Šifra artikla", "Product.ItemID", Detail.Header.ItemId, slovenia),
+        Channel("EAN", "Product.EAN", Detail.Header.Ean, slovenia),
+        TextField("ERP naziv (sl)", "TITLE_ERP", "sl", null, slovenia),
+        Channel("Knjižna skupina", "Product.AccountingGroup", Detail.Header.AccountingGroup, slovenia),
+        Channel("Skupina popusta", "Product.DiscountGroup", Detail.Header.DiscountGroup, slovenia),
+        Channel("Merska enota", "Product.UoM", Detail.Header.Uom, slovenia),
+        Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), slovenia),
+        Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), slovenia),
+        Channel("Davčna stopnja", "Product.VatRate", null, slovenia, inReadModel: false),
+        Channel("Izloči iz rezervacije zaloge", "ProductPlanning", null, slovenia, inReadModel: false),
         Channel("Garancija", "ProductAttribute.Garancija",
           Detail.Attributes.FirstOrDefault(row => string.Equals(
-            row.AttributeCode, "Garancija", StringComparison.OrdinalIgnoreCase))?.Value, sales),
-        // Pakiranje in dimenzije prideta iz istega dokumenta SAOP kot polja zgoraj; uporabnik
-        // je 2026-08-28 povedal, da spadata sem in ne pod komercialo.
-        Channel("Pakiranje 1", "ProductCommercial.Pak1", Number(Detail.Commercial?.Pak1), packaging),
-        Channel("Pakiranje 2", "ProductCommercial.Pak2", Number(Detail.Commercial?.Pak2), packaging),
+            row.AttributeCode, "Garancija", StringComparison.OrdinalIgnoreCase))?.Value, slovenia),
+
+        TextField("ERP naziv 2 (sl)", "TITLE_ERP2", "sl", null, extra),
+        TextField("Ime za iskanje", "SEARCH_NAME", "sl", null, extra),
+
+        // Za izvoz so obvezna se logisticna polja — v PIM_test svoja kartica, tu svoja skupina.
+        Channel("Neto teža", "ProductCommercial.NetWeight", Number(commercial?.NetWeight), export),
+        Channel("Bruto teža", "ProductCommercial.GrossWeight", Number(commercial?.GrossWeight), export),
+        Channel("Carinska / tarifna oznaka", "ProductCommercial.CustomsTariff", commercial?.CustomsTariff, export),
+        Channel("Država porekla", "ProductCommercial.CountryOfOrigin", commercial?.CountryOfOrigin, export),
+
+        Channel("Količina pakiranja", "ProductCommercial.Pak1", Number(commercial?.Pak1), packaging),
+        Channel("Količina pakiranja (2)", "ProductCommercial.Pak2", Number(commercial?.Pak2), packaging),
         Channel("Kosov v paketu", "Product.PiecesInPackage", null, packaging, inReadModel: false),
-        Channel("Dolžina paketa", "ProductCommercial.PackageLength", Number(Detail.Commercial?.PackageLength), packaging),
-        Channel("Širina paketa", "ProductCommercial.PackageWidth", Number(Detail.Commercial?.PackageWidth), packaging),
-        Channel("Višina paketa", "ProductCommercial.PackageHeight", Number(Detail.Commercial?.PackageHeight), packaging),
-        Channel("Enota mer", "ProductCommercial.DimensionUnit", Detail.Commercial?.DimensionUnit, packaging),
-        Channel("Dimenzije", "ProductCommercial.Dimensions", Detail.Commercial?.Dimensions, packaging),
-        Channel("Volumen", "ProductCommercial.Volume", Number(Detail.Commercial?.Volume), packaging),
+
+        Channel("Dolžina", "ProductCommercial.PackageLength", Number(commercial?.PackageLength), dimensions),
+        Channel("Širina", "ProductCommercial.PackageWidth", Number(commercial?.PackageWidth), dimensions),
+        Channel("Višina", "ProductCommercial.PackageHeight", Number(commercial?.PackageHeight), dimensions),
+        Channel("Enota mer", "ProductCommercial.DimensionUnit", commercial?.DimensionUnit, dimensions),
+        Channel("Prostornina", "ProductCommercial.Volume", Number(commercial?.Volume), dimensions),
+        Channel("Dimenzije artikla", "ProductCommercial.Dimensions", commercial?.Dimensions, dimensions),
       };
 
-      foreach (var language in ErpLanguages)
+      // Slovenski naziv in naziv 2 sta ze zgoraj; tu so preostali jeziki, da se manjkajoc
+      // prevod da vpisati tudi tam, kjer ga nihce ne zahteva.
+      foreach (var language in ErpLanguages.Where(code => !string.Equals(code, "sl", StringComparison.OrdinalIgnoreCase)))
       {
         rows.Add(TextField($"ERP naziv ({language})", "TITLE_ERP", language, null, names));
         rows.Add(TextField($"ERP naziv 2 ({language})", "TITLE_ERP2", language, null, names));
       }
 
+      // Kanonicne kode ProductCommercial.* zdaj zivijo tu, zato se tu tudi dopolnita
+      // seznam shranjenih polj in seznam manjkajocih zahtev.
       rows.AddRange(StoredFields(rows, "Product.", "Druga polja iz vira"));
+      rows.AddRange(StoredFields(rows, "ProductCommercial.", "Druga polja iz vira"));
       rows.AddRange(MissingRequired(rows, "Product.", "Manjka za ERP"));
+      rows.AddRange(MissingRequired(rows, "ProductCommercial.", "Manjka za ERP"));
       return rows;
     }
   }
 
+  /// <summary>
+  /// Komercialni kanal — uvrstitev artikla, objava in nabavni pogoji. V PIM_test je bila to
+  /// kartica »Komerciala — klasifikacija in objava«: ABC klasifikacija in skupina artikla sta
+  /// komercialni razvrstitvi, ne sifranta ERP, aktivnost pa je prodajna odlocitev. Cene in
+  /// zaloga imata v tem intranetu svoje strani in svoj zavihek, zato ju tu ni.
+  /// </summary>
   IReadOnlyList<ProductChannelField> CommercialFields
   {
     get
     {
       if (Detail is null) return [];
-      const string weights = "Teže";
-      const string origin = "Poreklo in tarifa";
-      const string partners = "Partnerji";
-      var commercial = Detail.Commercial;
-      // Pakiranja in dimenzij tu ni: uporabnik je 2026-08-28 povedal, da »pakiranje in
-      // dimenzije pakiranja pašejo pod ERP podatke«. Prideta iz istega dokumenta SAOP kot
-      // ostala ERP polja, zato sta zdaj v skupini »Pakiranje in dimenzije« na panelu ERP.
+      const string classification = "Klasifikacija in objava";
+      const string purchase = "Nabava";
+      const string accounting = "Zaloga in knjiženje";
       var rows = new List<ProductChannelField>
       {
-        Channel("Neto teža", "ProductCommercial.NetWeight", Number(commercial?.NetWeight), weights),
-        Channel("Bruto teža", "ProductCommercial.GrossWeight", Number(commercial?.GrossWeight), weights),
-        Channel("Carinska tarifa", "ProductCommercial.CustomsTariff", commercial?.CustomsTariff, origin),
-        Channel("Država porekla", "ProductCommercial.CountryOfOrigin", commercial?.CountryOfOrigin, origin),
-        Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), partners),
-        Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), partners),
-        Channel("Nabavni podatki", "ProductCommercial.Purchase", null, partners, inReadModel: false),
+        Channel("ABC klasifikacija", "Product.Department", Detail.Header.Department, classification),
+        Channel("Rabatna / skupina artikla", "Product.ItemGroup", Detail.Header.ItemGroup, classification),
+        Channel("Aktivnost", "Product.IsActive", YesNo(Detail.Header.IsActive), classification),
+        Channel("Nabavni podatki", "ProductCommercial.Purchase", null, purchase, inReadModel: false),
+        Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, accounting),
       };
 
-      rows.AddRange(StoredFields(rows, "ProductCommercial.", "Druga polja iz vira"));
       rows.AddRange(StoredFields(rows, "ProductPrice.", "Cenovna polja"));
-      rows.AddRange(MissingRequired(rows, "ProductCommercial.", "Manjka za komercialo"));
       return rows;
     }
   }
@@ -861,7 +880,7 @@
   IReadOnlyList<CardSection> SectionList => Detail is null ? [] :
   [
     new("overview", "Pregled", null),
-    new("core", "Osnovni podatki", null),
+    new("core", "ERP", null),
     // A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
     new("commercial", "Komerciala", CommercialIssues.Count, Tone: "warn"),
     new("web", "Splet", WebIssues.Count(row => row.Severity == "ERROR"), Tone: "bad"),

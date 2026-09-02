@@ -54,7 +54,7 @@ Assert(card.Contains("nikoli ne blokira", StringComparison.Ordinal), "Komercialn
 var expectedSections = new Dictionary<string, string>
 {
   ["overview"] = "Pregled",
-  ["core"] = "Osnovni podatki",
+  ["core"] = "ERP",
   ["commercial"] = "Komerciala",
   ["web"] = "Splet",
   ["media"] = "Mediji",
@@ -90,14 +90,83 @@ Assert(!card.Contains("Caption=\"Kanonična vrednost, lastnik in čakajoča spre
   "Pregled ne sme biti velika tehnicna tabela.");
 Assert(card.Contains("napak blokira ERP", StringComparison.Ordinal) && card.Contains("Odpri kakovost", StringComparison.Ordinal),
   "Pregled mora jasno povedati blokado in naslednje dejanje.");
-foreach (var field in new[] { "Davčna stopnja", "Planiranje in rezervacija", "Knjigovodske šifre", "Kosov v paketu", "Nabavni podatki" })
+foreach (var field in new[] { "Davčna stopnja", "Izloči iz rezervacije zaloge", "Knjigovodske šifre", "Kosov v paketu", "Nabavni podatki" })
   Assert(card.Contains(field, StringComparison.Ordinal), "Manjkajoče polje mora ostati vidno: " + field + ".");
 Assert(channel.Contains("ni v bralnem modelu", StringComparison.Ordinal), "Kanalski gradnik mora pošteno označiti polja zunaj modela.");
+
+/* --- Razdelitev na kanale je prevzeta iz PIM_test -------------------------------------
+   Uporabnik 2026-09-02: »razporedi podatke tako kot so pri starem PIM_test intranetu.
+   Kar se tice kaj je pod ERP, kaj je pod komercialo in kaj je pod splet.«
+
+   Merilo ni videz, ampak KATERO polje je na katerem kanalu. Test zato preverja, da so
+   polja v pravem bloku ErpFields / CommercialFields / WebFields — ne kje na zaslonu so.
+   Pogodba je zapisana, ker se je razdelitev ze dvakrat premaknila. */
+
+static string BlockOf(string card, string name)
+{
+  var start = card.IndexOf("IReadOnlyList<ProductChannelField> " + name, StringComparison.Ordinal);
+  Assert(start >= 0, "Manjka blok " + name + ".");
+  var next = card.IndexOf("IReadOnlyList<ProductChannelField> ", start + 40, StringComparison.Ordinal);
+  return next > 0 ? card[start..next] : card[start..];
+}
+
+var erpBlock = BlockOf(card, "ErpFields");
+var comBlock = BlockOf(card, "CommercialFields");
+var webBlock = BlockOf(card, "WebFields");
+
+// ERP nosi identiteto, sifrante ERP, partnerja, davek in logistiko za izvoz (PIM_test:
+// kartice »ERP — Slovenija«, »ERP — EU / tretje države«, »Pakiranje«, »Dimenzije pakiranja«).
+foreach (var key in new[]
+{
+  "Product.ItemID", "Product.EAN", "Product.UoM", "Product.AccountingGroup", "Product.DiscountGroup",
+  "Product.Supplier", "Product.Manufacturer", "Product.VatRate", "ProductPlanning",
+  "ProductAttribute.Garancija", "SEARCH_NAME", "TITLE_ERP", "TITLE_ERP2",
+  "ProductCommercial.NetWeight", "ProductCommercial.GrossWeight",
+  "ProductCommercial.CustomsTariff", "ProductCommercial.CountryOfOrigin",
+  "ProductCommercial.Pak1", "ProductCommercial.Pak2", "Product.PiecesInPackage",
+  "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth", "ProductCommercial.PackageHeight",
+  "ProductCommercial.DimensionUnit", "ProductCommercial.Volume", "ProductCommercial.Dimensions",
+})
+{
+  Assert(erpBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu ERP: " + key);
+  Assert(!comBlock.Contains(key, StringComparison.Ordinal), "Polje ne sme biti tudi na komerciali: " + key);
+}
+
+// Komerciala nosi uvrstitev artikla, aktivnost in nabavne pogoje (PIM_test: kartica
+// »Komerciala — klasifikacija in objava«). ABC klasifikacija in skupina artikla sta
+// komercialni razvrstitvi, ne sifranta ERP.
+foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.IsActive",
+                            "ProductCommercial.Purchase", "ProductStockAccounting" })
+{
+  Assert(comBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Komerciala: " + key);
+  Assert(!erpBlock.Contains(key, StringComparison.Ordinal), "Polje ne sme biti tudi na ERP: " + key);
+}
+
+// Splet nosi objavo, spletna besedila, kategorije in atribute.
+foreach (var key in new[] { "Product.WebPublish", "WEB_TITLE", "ProductCategory.", "canon.WebSite" })
+{
+  Assert(webBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Splet: " + key);
+  Assert(!erpBlock.Contains(key, StringComparison.Ordinal) && !comBlock.Contains(key, StringComparison.Ordinal),
+    "Spletno polje ne sme biti na ERP ali komerciali: " + key);
+}
+
+// Imena skupin so prevzeta iz PIM_test, da je razdelitev prepoznavna.
+foreach (var group in new[] { "ERP — Slovenija", "Dodatno (ERP iskanje, drugi naziv)",
+                              "ERP — EU / tretje države", "Pakiranje", "Dimenzije pakiranja" })
+  Assert(erpBlock.Contains(group, StringComparison.Ordinal), "ERP mora ohraniti skupino iz PIM_test: " + group);
+Assert(comBlock.Contains("Klasifikacija in objava", StringComparison.Ordinal),
+  "Komerciala mora ohraniti skupino »Klasifikacija in objava« iz PIM_test.");
+
+// Isto kanonicno polje ne sme viseti na dveh kanalih hkrati — sicer se dve polji urejata
+// ena vrednost in uporabnik ne ve, katera velja.
+foreach (Match m in Regex.Matches(erpBlock, "\"(Product(?:Commercial|Text|Attribute)?\\.[A-Za-z0-9_]+)\""))
+  Assert(!comBlock.Contains("\"" + m.Groups[1].Value + "\"", StringComparison.Ordinal),
+    "Polje je na dveh kanalih hkrati: " + m.Groups[1].Value);
 
 // Polja, ki jih je uporabnik pogresal: mere paketa, volumen, enota, ERP nazivi po jezikih.
 foreach (var field in new[] { "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth",
   "ProductCommercial.PackageHeight", "ProductCommercial.Volume", "ProductCommercial.DimensionUnit" })
-  Assert(card.Contains(field, StringComparison.Ordinal), "Komerciala mora pokrivati " + field + ".");
+  Assert(card.Contains(field, StringComparison.Ordinal), "Kartica mora pokrivati " + field + ".");
 Assert(card.Contains("TITLE_ERP", StringComparison.Ordinal) && card.Contains("ErpLanguages", StringComparison.Ordinal),
   "ERP nazivi sodijo v zavihek ERP, po jezikih — ne med spletna besedila.");
 Assert(card.Contains("WebTextTypes", StringComparison.Ordinal) && card.Contains("WebLanguages", StringComparison.Ordinal),
@@ -191,22 +260,20 @@ Assert(card.Contains("const string attributes = \"Atributi\";", StringComparison
 Assert(!card.Contains("Lastnosti izdelka", StringComparison.Ordinal), "Izraz »Lastnosti izdelka« je odpisan.");
 
 // C8: pakiranje in dimenzije pakiranja stojijo pod ERP, ne pod komercialo.
-Assert(card.Contains("const string packaging = \"Pakiranje in dimenzije\";", StringComparison.Ordinal),
-  "ERP mora imeti skupino »Pakiranje in dimenzije«.");
-var erpBlock = card[card.IndexOf("IReadOnlyList<ProductChannelField> ErpFields", StringComparison.Ordinal)..
-  card.IndexOf("IReadOnlyList<ProductChannelField> CommercialFields", StringComparison.Ordinal)];
-var commercialBlock = card[card.IndexOf("IReadOnlyList<ProductChannelField> CommercialFields", StringComparison.Ordinal)..
-  card.IndexOf("IReadOnlyList<ProductChannelField> WebFields", StringComparison.Ordinal)];
-foreach (var moved in new[] { "ProductCommercial.Pak1", "ProductCommercial.Pak2", "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth", "ProductCommercial.PackageHeight", "ProductCommercial.DimensionUnit", "ProductCommercial.Volume" })
-{
-  Assert(erpBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " mora biti pod ERP.");
-  Assert(!commercialBlock.Contains(moved, StringComparison.Ordinal), "Polje " + moved + " ne sme vec biti pod komercialo.");
-}
+// Od 2026-09-02 sta to dve loceni skupini z imeni iz PIM_test (»Pakiranje« in
+// »Dimenzije pakiranja«); kje katero polje visi, preverja pogodba o kanalih zgoraj.
+Assert(erpBlock.Contains("const string packaging = \"Pakiranje\";", StringComparison.Ordinal)
+  && erpBlock.Contains("const string dimensions = \"Dimenzije pakiranja\";", StringComparison.Ordinal),
+  "ERP mora imeti loceni skupini »Pakiranje« in »Dimenzije pakiranja«.");
 Assert(erpBlock.Contains("TextField(\"Ime za iskanje\", \"SEARCH_NAME\", \"sl\"", StringComparison.Ordinal),
-  "Ime za iskanje mora biti vedno vidno v identiteti artikla, tudi ko je prazno.");
-Assert(erpBlock.Contains("const string sales = \"Prodaja\";", StringComparison.Ordinal)
-  && erpBlock.Contains("Channel(\"Garancija\", \"ProductAttribute.Garancija\"", StringComparison.Ordinal),
-  "Garancija mora biti vedno vidna v svoji skupini Prodaja.");
+  "Ime za iskanje mora biti vedno vidno, tudi ko je prazno.");
+Assert(erpBlock.Contains("Channel(\"Garancija\", \"ProductAttribute.Garancija\"", StringComparison.Ordinal),
+  "Garancija mora biti vedno vidna, tudi ko je prazna.");
+// Slovenski ERP naziv stoji med osnovnimi polji, preostali jeziki v svoji skupini —
+// sicer se slovenski naziv izgubi med petimi jeziki.
+Assert(erpBlock.Contains("TextField(\"ERP naziv (sl)\", \"TITLE_ERP\", \"sl\"", StringComparison.Ordinal)
+  && erpBlock.Contains("!string.Equals(code, \"sl\"", StringComparison.Ordinal),
+  "Slovenski ERP naziv sodi med osnovna polja, ostali jeziki v svojo skupino.");
 
 // D5: galerija mora povedati, da so prikazane vse slike, in katera je glavna.
 Assert(gallery.Contains("Vse slike izdelka (@Media.Count", StringComparison.Ordinal),
