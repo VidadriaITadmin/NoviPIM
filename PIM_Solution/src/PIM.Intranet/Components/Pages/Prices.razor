@@ -17,6 +17,7 @@
   <div class="card-toolbar" role="search" aria-labelledby="price-filter-title">
     <h2 id="price-filter-title" class="visually-hidden">Filtriranje cen</h2>
 
+    <a class="filter-button" href="cene/tisk" title="Digitalni cenik iz kategorije ali izbranih artiklov; natisni ali shrani kot PDF">Cenik za tisk</a>
     <label class="visually-hidden" for="price-search">Išči po šifri artikla</label>
     <input id="price-search" type="search" class="search-input" placeholder="Išči po šifri artikla …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
 

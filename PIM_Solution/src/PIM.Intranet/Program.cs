@@ -37,6 +37,7 @@ builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
 builder.Services.AddScoped<TitleRuleService>();
+builder.Services.AddScoped<PriceSheetService>();
 builder.Services.AddScoped<WebExportBuildService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
@@ -104,6 +105,22 @@ app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymou
 // Izvoz trenutnega pogleda seznama izdelkov. Bralna pot: uporabi isto proceduro in iste
 // filtre kot stran, zato je datoteka natanko to, kar uporabnik vidi. Zgornja meja je
 // izrecna in zapisana v datoteko — tiho odrezan izvoz je huje kot majhen izvoz.
+// Izvoz zaloge z izbiro vira (migracija 150): SAOP (ERP), dobavitelj ali oboje; gumb je na /zaloge.
+app.MapGet("/izvoz/zaloge.csv", async (HttpContext context, StockReadService stocks, CancellationToken cancellationToken) =>
+{
+  var query = context.Request.Query;
+  if (!int.TryParse(query["podjetje"], out var organizationId) || organizationId <= 0)
+    return Results.BadRequest("Izberi podjetje: izvoz zaloge je po podjetju.");
+  var source = (query["vir"].ToString() ?? "VSE").ToUpperInvariant();
+  if (source is not ("ERP" or "DOBAVITELJ" or "VSE")) source = "VSE";
+  var onlyWeb = string.Equals(query["splet"], "1", StringComparison.Ordinal);
+  context.Response.ContentType = "text/csv; charset=utf-8";
+  context.Response.Headers.ContentDisposition =
+    $"attachment; filename=\"PIM_zaloga_{organizationId}_{source.ToLowerInvariant()}_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv\"";
+  await stocks.WriteStockCsvAsync(organizationId, source, onlyWeb, context.Response.Body, cancellationToken);
+  return Results.Empty;
+}).RequireAuthorization();
+
 app.MapGet("/izvoz/izdelki.csv", async (
   HttpContext context, ProductWorkbenchService workbench,
   CancellationToken cancellationToken) =>

@@ -1,0 +1,119 @@
+@page "/cene/tisk"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PriceSheetService Sheet
+@inject IntranetDataService Data
+@inject CatalogReadService Catalog
+@inject IJSRuntime Js
+
+<PageTitle>Cenik za tisk</PageTitle>
+<div class="no-print">
+  <PimPage Title="Cenik za tisk" Subtitle="Digitalni cenik iz kategorije ali izbranih artiklov. Natisni ali shrani kot PDF z ukazom brskalnika (Ctrl+P → Shrani kot PDF)." Crumbs="Crumbs" />
+
+  <section class="ui-card toolbar section-gap" role="search" aria-label="Izbira cenika">
+    <label class="visually-hidden" for="sheet-organization">Podjetje</label>
+    <select id="sheet-organization" class="filter-select" @bind="OrganizationId">
+      @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+    </select>
+    <label class="visually-hidden" for="sheet-pricelist">Cenik</label>
+    <select id="sheet-pricelist" class="filter-select" @bind="PriceList">
+      <option value="B2C">B2C (maloprodaja)</option>
+      <option value="B2B">B2B (veleprodaja)</option>
+    </select>
+    <label class="visually-hidden" for="sheet-language">Jezik</label>
+    <select id="sheet-language" class="filter-select" @bind="Language">
+      <option value="sl">sl</option><option value="en">en</option><option value="de">de</option><option value="hr">hr</option><option value="it">it</option>
+    </select>
+    <label class="visually-hidden" for="sheet-site">Spletno mesto</label>
+    <select id="sheet-site" class="filter-select" @bind="WebSite">
+      <option value="">Vsa spletna mesta</option>
+      @foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }
+    </select>
+    <label class="visually-hidden" for="sheet-category">Kategorija (pot)</label>
+    <input id="sheet-category" class="form-input" placeholder="Kategorija, npr. Notranja svetila > Viseča svetila" @bind="CategoryPath" />
+    <label class="visually-hidden" for="sheet-items">Šifre artiklov</label>
+    <input id="sheet-items" class="form-input" placeholder="Ali šifre, ločene z vejico ali novo vrstico" @bind="ItemIdsText" />
+    <label class="filter-check"><input type="checkbox" @bind="OnlyPublished" /> samo objavljeni</label>
+    <label class="filter-check"><input type="checkbox" @bind="ShowImages" /> s slikami</label>
+    <button type="button" class="filter-button" @onclick="LoadAsync">Pripravi cenik</button>
+    <button type="button" class="primary-button" disabled="@(Rows.Count == 0)" @onclick="PrintAsync">Natisni / PDF</button>
+  </section>
+</div>
+
+<section class="ui-card data-card price-sheet" aria-label="Cenik">
+  <header class="sheet-head">
+    <h2>@(Organizations.FirstOrDefault(organization => organization.OrganizationId == OrganizationId)?.Name) — cenik @PriceList</h2>
+    <span>@DateTime.Now.ToString("dd.MM.yyyy") · @Rows.Count.ToString("N0") artiklov · cene v EUR @(PriceList == "B2C" ? "z DDV" : "brez DDV")</span>
+  </header>
+  <PimState Loading="Loading" Error="@Error" Empty="@(Loaded && Rows.Count == 0)" EmptyText="Za to izbiro ni artiklov s ceno." LoadingText="Priprava cenika …">
+    @foreach (var group in Rows.GroupBy(row => row.CategoryPath ?? "Brez kategorije"))
+    {
+      <h3 class="sheet-category">@group.Key</h3>
+      <table class="sheet-table">
+        <thead><tr>@if (ShowImages) { <th></th> }<th>Šifra</th><th>Naziv</th><th>Proizvajalec</th><th class="numeric">Cena brez DDV</th><th class="numeric">DDV %</th><th class="numeric">Cena z DDV</th><th class="numeric">Zaloga</th></tr></thead>
+        <tbody>
+          @foreach (var row in group)
+          {
+            <tr>
+              @if (ShowImages) { <td class="sheet-image">@if (row.ImageUrl is not null) { <img src="@(MediaUrlPolicy.Normalize(row.ImageUrl).Href ?? row.ImageUrl)" alt="" loading="lazy" /> }</td> }
+              <td class="code-value">@row.ItemID<div class="tree-path">@row.EAN</div></td>
+              <td>@row.Title</td>
+              <td>@row.Manufacturer</td>
+              <td class="numeric">@(row.Net?.ToString("N2") ?? "—")</td>
+              <td class="numeric">@(row.VatRate?.ToString("N0") ?? "—")</td>
+              <td class="numeric"><strong>@(row.Gross?.ToString("N2") ?? "—")</strong></td>
+              <td class="numeric">@(row.Stock?.ToString("N0") ?? "—")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </PimState>
+</section>
+
+@code {
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Cene in ceniki", "cene"), new("Cenik za tisk")];
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  IReadOnlyList<WebSiteRow> Sites = [];
+  IReadOnlyList<PriceSheetService.SheetRow> Rows = [];
+  int OrganizationId;
+  string PriceList = "B2C";
+  string Language = "sl";
+  string WebSite = "";
+  string CategoryPath = "";
+  string ItemIdsText = "";
+  bool OnlyPublished = true;
+  bool ShowImages;
+  bool Loading;
+  bool Loaded;
+  string? Error;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Organizations = await Data.GetOrganizationsAsync();
+      OrganizationId = Organizations.FirstOrDefault(organization => organization.OrganizationId == 3)?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+      Sites = await Catalog.GetWebSitesAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true; Error = null;
+    try
+    {
+      var items = ItemIdsText.Split([',', ';', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+      Rows = await Sheet.GetSheetAsync(OrganizationId, PriceList, Language, WebSite, CategoryPath, items, OnlyPublished, 2000);
+      Loaded = true;
+    }
+    catch (Exception exception) { Error = exception.Message; Rows = []; }
+    finally { Loading = false; }
+  }
+
+  async Task PrintAsync()
+  {
+    try { await Js.InvokeVoidAsync("window.print"); } catch { }
+  }
+}

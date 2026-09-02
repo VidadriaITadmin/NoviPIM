@@ -1,0 +1,13 @@
+.price-sheet .sheet-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .5rem 0 1rem; }
+.price-sheet .sheet-head h2 { margin: 0; font-size: 1.2rem; }
+.price-sheet .sheet-category { margin: 1.2rem 0 .4rem; font-size: 1rem; border-bottom: 2px solid var(--pim-accent, #f97316); padding-bottom: .2rem; page-break-after: avoid; }
+.price-sheet .sheet-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.price-sheet .sheet-table th, .price-sheet .sheet-table td { padding: .3rem .5rem; border-bottom: 1px solid var(--pim-border, #e4e4e7); text-align: left; vertical-align: top; }
+.price-sheet .sheet-table th.numeric, .price-sheet .sheet-table td.numeric { text-align: right; white-space: nowrap; }
+.price-sheet .sheet-image img { width: 48px; height: 48px; object-fit: contain; }
+.price-sheet tr { page-break-inside: avoid; }
+@media print {
+  ::deep .no-print, .no-print { display: none !important; }
+  .price-sheet { box-shadow: none; border: none; }
+  .price-sheet .sheet-table { font-size: 10pt; }
+}

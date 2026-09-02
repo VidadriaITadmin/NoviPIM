@@ -6,6 +6,7 @@
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
+@inject RulesWriteService Rules
 
 <PageTitle>Preverbe cen in zaloge</PageTitle>
 <PimPage Title="Preverbe cen in zaloge" Subtitle="Opozorila, ne napake. Nič od tega ne ustavi izvoza — pove, kje je vredno pogledati." />
@@ -17,7 +18,33 @@
   }
 </section>
 
-<div class="note-panel section-gap"><strong>Faktor marže:</strong> prag 2,00 je privzet; nastavljiv prag po organizaciji in kategoriji še ni v bazi.</div>
+@* Prag faktorja marze je od migracije 150 vrstica registra (pim.CheckThreshold): privzeti in po
+   podjetju. Uporabnik 2026-09-02: "prepracunanje cen s faktorjem 2 mora imeti uporabnik pod
+   nadzorom". Prag ureja ADMIN ali COMMERCIAL; preverbe ga preberejo ob naslednjem nalaganju. *@
+<section class="ui-card panel section-gap threshold-panel" aria-labelledby="threshold-title">
+  <h2 id="threshold-title">Faktor marže — prag</h2>
+  <p class="card-note">Prodajna cena deljeno z nabavno (cenik NAB). Izdelek pod pragom pride v preverbo FAKTOR_MARZE; predlagana prodajna cena je nabavna × prag.</p>
+  <div class="form-grid">
+    @foreach (var threshold in Thresholds.Where(row => row.CheckCode == "FAKTOR_MARZE"))
+    {
+      <label class="form-field">@(threshold.OrganizationName ?? "Privzeto (vsa podjetja)")
+        <input class="form-input" type="number" step="0.01" min="0.01" value="@threshold.Threshold.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+               disabled="@(!CanEditThreshold)" @onchange="args => ThresholdDraft[threshold.OrganizationId ?? 0] = args.Value?.ToString() ?? string.Empty" />
+      </label>
+    }
+    @if (CanEditThreshold && OrganizationId is { } current && Thresholds.All(row => row.CheckCode != "FAKTOR_MARZE" || row.OrganizationId != current))
+    {
+      <label class="form-field">@OrganizationName (lasten prag)
+        <input class="form-input" type="number" step="0.01" min="0.01" placeholder="npr. 2.00"
+               @onchange="args => ThresholdDraft[current] = args.Value?.ToString() ?? string.Empty" />
+      </label>
+    }
+    <div class="form-action">
+      <button type="button" class="primary-button" disabled="@(!CanEditThreshold || ThresholdBusy || ThresholdDraft.Count == 0)" @onclick="SaveThresholdsAsync">Shrani prag</button>
+    </div>
+  </div>
+  @if (ThresholdMessage is not null) { <p class="message-state" role="status">@ThresholdMessage</p> }
+</section>
 
 <section class="ui-card toolbar checks-toolbar" role="search" aria-label="Filtri preverb">
   <input type="search" class="search-input" placeholder="Šifra, EAN ali naziv …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
@@ -94,6 +121,50 @@
 </section>
 
 @code {
+  // Prag faktorja (150).
+  IReadOnlyList<CheckThresholdRow> Thresholds = [];
+  readonly Dictionary<int, string> ThresholdDraft = new();
+  bool CanEditThreshold;
+  bool ThresholdBusy;
+  string? ThresholdMessage;
+  string OrganizationName = "";
+
+  async Task LoadThresholdsAsync()
+  {
+    try
+    {
+      Thresholds = await Rules.GetCheckThresholdsAsync();
+      var state = await Authentication.GetAuthenticationStateAsync();
+      CanEditThreshold = state.User.IsInRole("ADMIN") || state.User.IsInRole("COMMERCIAL");
+    }
+    catch { Thresholds = []; }
+  }
+
+  async Task SaveThresholdsAsync()
+  {
+    ThresholdBusy = true; ThresholdMessage = null;
+    try
+    {
+      var state = await Authentication.GetAuthenticationStateAsync();
+      var actor = state.User.Identity?.Name ?? "neznan";
+      var saved = 0;
+      foreach (var pair in ThresholdDraft)
+      {
+        if (!decimal.TryParse(pair.Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value)
+          && !decimal.TryParse(pair.Value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out value))
+          continue;
+        await Rules.SaveCheckThresholdAsync("FAKTOR_MARZE", pair.Key == 0 ? null : pair.Key, value, actor);
+        saved++;
+      }
+      ThresholdDraft.Clear();
+      await LoadThresholdsAsync();
+      ThresholdMessage = saved == 0 ? "Vpiši številko, npr. 2,00." : $"Prag je shranjen ({saved}). Preverbe ga upoštevajo ob naslednjem nalaganju strani.";
+      await LoadAsync();
+    }
+    catch (Exception exception) { ThresholdMessage = exception.Message; }
+    finally { ThresholdBusy = false; }
+  }
+
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryCodes { get; set; }
   [SupplyParameterFromQuery(Name = "kontekst")] public string? QueryContext { get; set; }
   [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
@@ -142,6 +213,8 @@
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
+      await LoadThresholdsAsync();
       var codes = SelectedCodes.Count == 0 ? null : SelectedCodes;
       var priceTasks = (codes?.Where(PimCheckCodes.IsPrice).Cast<PimCheckCode>() ?? []).Select(code => Features.GetPriceChecksAsync(organization.OrganizationId, checkCode: code.ToString(), context: QueryContext, search: QuerySearch));
       var stockTasks = (codes?.Where(code => !PimCheckCodes.IsPrice(code)).Cast<PimCheckCode>() ?? []).Select(code => Features.GetStockChecksAsync(organization.OrganizationId, checkCode: code.ToString(), context: QueryContext, search: QuerySearch));

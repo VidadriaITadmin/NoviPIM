@@ -56,6 +56,27 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
+@* Izvoz zaloge z izbiro vira (migracija 150). Uporabnik 2026-09-02: "izvoz zalog mora imeti
+   uporabnik omogocen in lahko izbere SAOP ali dobavitelj". Datoteka je po podjetju. *@
+<section class="ui-card toolbar stock-export section-gap" aria-label="Prenos zaloge v CSV">
+  <span class="toolbar-label">Prenesi zalogo (CSV):</span>
+  @if (string.IsNullOrWhiteSpace(OrganizationDraft))
+  {
+    <span class="muted">najprej izberi podjetje zgoraj</span>
+  }
+  else
+  {
+    <a class="filter-button" href="@StockExportHref("ERP")" target="_blank">SAOP (ERP)</a>
+    <a class="filter-button" href="@StockExportHref("DOBAVITELJ")" target="_blank">Dobavitelj</a>
+    <a class="filter-button" href="@StockExportHref("VSE")" target="_blank">Oboje</a>
+    <label class="visually-hidden" for="stock-export-scope">Obseg izvoza</label>
+    <select id="stock-export-scope" class="filter-select" @bind="ExportScope">
+      <option value="0">Vsi izdelki podjetja</option>
+      <option value="1">Samo izdelki na spletu</option>
+    </select>
+  }
+</section>
+
 @* Vrstica oblačkov z aktivnimi filtri je odpadla: uporabnik jih je 2026-08-28 označil za
    moteče. Kaj je nastavljeno, se vidi v samih kontrolah nad tabelo, poleg njih pa stoji
    »Počisti«, ki je edino dejanje, ki ga je vrstica oblačkov res ponujala. *@
@@ -225,6 +246,10 @@
 
   const int Take = 50;
   const int StaleAfterMinutes = 24 * 60;
+
+  string ExportScope = "0";
+  string StockExportHref(string source) =>
+    $"izvoz/zaloge.csv?podjetje={Uri.EscapeDataString(OrganizationDraft)}&vir={source}&splet={ExportScope}";
 
   int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
 

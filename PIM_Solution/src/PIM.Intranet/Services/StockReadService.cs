@@ -90,6 +90,42 @@ public sealed class StockReadService(IConfiguration configuration)
     return new(rows, total);
   }
 
+  /// <summary>
+  /// Pretocno zapise CSV zaloge podjetja iz out.GetStockExportRows (migracija 150): vir ERP,
+  /// DOBAVITELJ ali VSE, po zelji samo izdelki na spletu. Glava je iz imen stolpcev procedure.
+  /// </summary>
+  public async Task<int> WriteStockCsvAsync(int organizationId, string source, bool onlyWeb, Stream body, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("out.GetStockExportRows", connection)
+    {
+      CommandType = CommandType.StoredProcedure, CommandTimeout = 300,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@Source", SqlDbType.NVarChar, 20).Value = source;
+    command.Parameters.Add("@OnlyWeb", SqlDbType.Bit).Value = onlyWeb;
+    command.Parameters.Add("@Skip", SqlDbType.Int).Value = 0;
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = 0;
+    command.Parameters.Add("@TotalCount", SqlDbType.Int).Direction = ParameterDirection.Output;
+
+    await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
+    await using var writer = new StreamWriter(body, new System.Text.UTF8Encoding(true), leaveOpen: true);
+    var headers = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
+    await writer.WriteLineAsync(string.Join(';', headers.Select(WebExportBuildService.Escape)));
+    var written = 0;
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var values = new string?[reader.FieldCount];
+      for (var index = 0; index < values.Length; index++)
+        values[index] = await reader.IsDBNullAsync(index, cancellationToken) ? null : Convert.ToString(reader.GetValue(index), System.Globalization.CultureInfo.InvariantCulture);
+      await writer.WriteLineAsync(string.Join(';', values.Select(WebExportBuildService.Escape)));
+      written++;
+    }
+    await writer.FlushAsync(cancellationToken);
+    return written;
+  }
+
   /// <param name="organizationId">null pomeni vsa podjetja (migracija 134).</param>
   public async Task<StockOverview> GetOverviewAsync(
     int? organizationId, CancellationToken cancellationToken = default)
