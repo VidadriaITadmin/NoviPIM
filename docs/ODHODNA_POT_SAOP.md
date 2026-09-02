@@ -50,6 +50,34 @@ popravi **zdaj** — ne po prvem pošiljanju.
 
 ---
 
+## 1a. Isto iz intraneta: stran `/saop/artikli`
+
+Dodano 2026-09-02. Kar je spodaj napisano s SQL-om, je od zdaj na strani
+**Izhod v SAOP → Artikli** (`Pages/SaopItems.razor`, vloge `ADMIN, CATALOG_EDITOR`).
+
+Kaj stran naredi in česa **ne**:
+
+| Naredi | Ne naredi |
+|---|---|
+| za vsako šifro prebere `out.GetSaopItemWriteState` in pokaže, ali gre **POST (nov)** ali **PATCH (sprememba)** — z razlogom | ne ponuja preklopnika metode; ADD/PATCH ni izbira uporabnika |
+| sestavi dokument z `SaopItemPlanner` (isti `SaopDocumentBuilder` in `SaopIntentResolver` kot pošiljatelj) in ga pokaže z metodo in potjo | ne uporablja `out.ClaimItemDocument` — prevzem bi porabil poskus in postavil lease (migracija 086) |
+| uvrsti spremembe v vrsto prek `SaopWriteService.EnqueueAsync` → `out.EnqueueSaopItemChanges` | ne piše v bazo mimo te poti in ničesar ne pošlje v SAOP |
+| ponudi samo polja iz `intranet.GetWritableSaopFields` (23 od 26 elementov pogodbe) | ne ponudi polja, ki bi ga `out.EnqueueMessage` zavrnil z 51010 |
+| prebere delovni zvezek (isti stolpci kot `izvoz/izdelki.xlsx?predloga=saop`) | prazne celice ne pošlje — prazno pomeni »tega polja se ne dotakni«, ne »izprazni ga« |
+| piše dnevnik: v okno (**Dnevnik seje**) in v dnevnik strežnika (`SaopItemWriteService`) | ne skriva zavrnitev — vsaka je v izidu skupine in v dnevniku |
+
+**Zakaj metoda ni izbira uporabnika.** V stari vrsti (`..\PIM_test`,
+`pim.SaopItemOutboundQueue`) je bilo 118 od 130 napak natanko ta ena ročna odločitev:
+poslan ADD, kjer bi moral biti PATCH, in obratno. Zato sta stari strani
+`/export/saop-item-new` in `/export/saop-item-edit` tu **ena** stran.
+
+**Pogoj, da se da uvrstiti v vrsto.** `dbo.IntegrationProfile` mora imeti omogočeno vrstico
+za `SAOP_PRODUCT` in to organizacijo. Dokler je nima, stran to pove takoj in v vrsto ne gre
+nič (`51001`). Vnos, predogled in dokument delujejo tudi brez profila — to je namenoma, da se
+da vse pripraviti in pogledati, preden se kanal odpre.
+
+---
+
 ## 2. Naroči spremembo (v vrsto, ne v SAOP)
 
 Sprememba mora najprej nastati kot naročilo. Brez omogočenega integracijskega profila naročilo

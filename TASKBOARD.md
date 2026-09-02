@@ -254,6 +254,42 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[DOMENA + INTRANET] Vnos artiklov v SAOP: ADD in PATCH v enem obrazcu (`/saop/artikli`)** —
+  kdo: Claude Code — ozemlje: zaporedno DOMENA (`src\PIM.Outbound`) → INTRANET
+  (`src\PIM.Intranet`) — končano 2026-09-02.
+
+  Zahteva uporabnika: pisanje artiklov v SAOP, kot ga je imel stari sistem (`..\PIM_test`,
+  strani `/export/saop-item-new` in `/export/saop-item-edit`), a **v enem pogledu in bolj
+  pregledno**, z dnevnikom, kaj se je zgodilo.
+
+  **Kaj je narejeno.** `PIM.Outbound.SaopItemPlanner` (čista logika, brez baze) za en artikel
+  odloči metodo prek `SaopIntentResolver` in sestavi dokument prek `SaopDocumentBuilder` — ista
+  gradnika, kot ju uporabi pošiljatelj (`SaopDocumentRunner.Assemble`), zato je predogled enak
+  poslanemu. `SaopItemWriteService` bere pogodbo (`out.GetSaopXmlContract`), lastništvo
+  (`intranet.GetWritableSaopFields`), stanje artikla (`out.GetSaopItemWriteState`) in stanje
+  kanala (`dbo.IntegrationProfile`). Stran `SaopItems.razor` je ena tabela: vrstica = artikel z
+  značko **NOV — POST** ali **SPREMEMBA — PATCH** in razlogom, stolpci so izbrana polja, vsaka
+  vrstica ima predogled dokumenta, uvoz zvezka je ista predloga kot `izvoz/izdelki.xlsx?predloga=saop`.
+  Uvrstitev gre skozi obstoječo varovano pot `SaopWriteService.EnqueueAsync` →
+  `out.EnqueueSaopItemChanges`. Nobene nove migracije, nobene nove zapisovalne poti.
+
+  **Zakaj ADD/PATCH ni izbira uporabnika:** v stari vrsti je 118 od 130 napak natanko ta ena
+  ročna odločitev. Test `PIM.F10.SaopItemsUxTests` to izrecno prepove.
+
+  **Dokaz.** `dotnet build PIM_Solution\PIM.sln` = 0 napak, 0 opozoril.
+  `scripts\run_tests.ps1` = **60 uspešnih, 0 preskočenih, 0 padlih**, `REZULTAT: VSE OK`
+  (prej 58 + 2 nova projekta: `PIM.F8.SaopItemPlannerTests`, `PIM.F10.SaopItemsUxTests`).
+  Pogodbo in stanje artikla sem preveril tudi neposredno nad razvojno bazo
+  (`EXEC out.GetSaopXmlContract` = 26 elementov, `EXEC out.GetSaopItemWriteState 2,
+  N'BA.BP07.20380'` = `ExistsInSaop = 1` in 19 kanoničnih vrednosti; ista procedura za
+  neobstoječo šifro = `ExistsInSaop = 0` in samo trije privzetki).
+
+  **Česa nisem preveril in zakaj:** uvrstitve v vrsto iz brskalnika. `dbo.IntegrationProfile`
+  je v razvojni bazi **prazna**, zato bi vsako naročilo padlo z `51001`. Omogočiti profil
+  pomeni odpreti pot, po kateri worker lahko pokliče živi SAOP — to je po `AGENTS.md` §4.4
+  in §4.5 odločitev človeka, ne agenta. Stran to stanje pove sama, vnos in predogled pa
+  delujeta tudi brez profila.
+
 - **[WORKERJI] Načrtovana opravila tečejo brez okna; obtičala instanca ne blokira več ritma** —
   kdo: Claude Code — ozemlje: WORKERJI (`scripts\`) — končano 2026-09-02.
 

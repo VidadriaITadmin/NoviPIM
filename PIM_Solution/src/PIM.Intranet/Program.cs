@@ -49,6 +49,7 @@ builder.Services.AddScoped<IntranetFeatureReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
 builder.Services.AddScoped<SaopWriteService>();
+builder.Services.AddScoped<SaopItemWriteService>();
 builder.Services.AddScoped<CategoryMappingService>();
 builder.Services.AddScoped<CategoryTreeService>();
 builder.Services.AddScoped<AttributeMappingService>();

@@ -1,0 +1,833 @@
+@page "/saop/artikli"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using PIM.Intranet.Services
+@using PIM.Outbound
+@inject SaopItemWriteService Documents
+@inject SaopWriteService Write
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+@inject ILogger<SaopItems> Log
+
+<PageTitle>Artikli v SAOP</PageTitle>
+
+<PimPage Title="Artikli v SAOP"
+         Subtitle="Nov artikel in sprememba obstoječega sta ista pot. Za vsako šifro PIM sam ugotovi, ali gre POST (nov) ali PATCH (sprememba), in pokaže točno tisti dokument, ki bo poslan."
+         Crumbs="Crumbs">
+  <Actions>
+    <a class="secondary" href="@TemplateHref">Prenesi predlogo (XLSX)</a>
+    <a class="secondary" href="saop/zgodovina">Zgodovina pošiljanja</a>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="items" Tabs="Tabs" Label="Pogledi izhoda v SAOP" />
+
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<PimState Loading="Loading" Error="@LoadError" Empty="false" LoadingText="Nalaganje pogodbe dokumenta …">
+
+  @if (Channel is { Exists: true, IsEnabled: true })
+  {
+    <p class="message-state info-message" role="status">
+      Kanal je odprt: nov artikel gre <strong>POST @Channel.AddPath</strong>, sprememba
+      <strong>PATCH @Channel.UpdatePath</strong>@(Channel.NeedsApproval ? ". Sporočila čakajo na odobritev skupine." : ". Odobritev je samodejna — skupina odide brez dodatnega klika.")
+    </p>
+  }
+  else
+  {
+    <p class="message-state warn-message" role="alert">
+      @(Channel is { Exists: false }
+        ? "Za to podjetje ni integracijskega profila SAOP_PRODUCT. Sporočila ni mogoče uvrstiti v vrsto — baza ga zavrne z napako 51001."
+        : "Integracijski profil SAOP_PRODUCT je izklopljen. Vnos lahko pripraviš in si ogledaš dokument, uvrstitev v vrsto pa bo zavrnjena, dokler profila ne omogočiš.")
+    </p>
+  }
+
+  @* ============================ 1. ARTIKLI ============================ *@
+  <section class="ui-card panel section-gap" aria-labelledby="saop-items-step1">
+    <h2 id="saop-items-step1">1. Katere artikle urejaš</h2>
+
+    <div class="form-grid">
+      <label class="form-field" for="saop-items-org">
+        Podjetje
+        <select id="saop-items-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">
+          @foreach (var organization in Organizations)
+          {
+            <option value="@organization.OrganizationId">@organization.Name</option>
+          }
+        </select>
+      </label>
+      <label class="form-field saop-items-codes" for="saop-items-codes">
+        Šifre artiklov — ena na vrstico ali ločene z vejico
+        <textarea id="saop-items-codes" class="form-input" rows="3" @bind="CodesText"
+                  placeholder="NW.12603&#10;BA.BH85.00040&#10;NOVA.0001"></textarea>
+      </label>
+      <div class="form-action">
+        <button type="button" class="primary-button" disabled="@(Busy || CodesText.Trim().Length == 0)"
+                @onclick="AddCodesAsync">Dodaj v tabelo</button>
+      </div>
+    </div>
+
+    <div class="saop-items-import">
+      <label class="form-field" for="saop-items-file">
+        Ali uvozi izpolnjeno predlogo (XLSX) — glava stolpca je ime polja SAOP ali njegov ključ
+        <InputFile id="saop-items-file" OnChange="OnFileAsync" accept=".xlsx" class="form-input" />
+      </label>
+      <p class="hint">
+        Prazna celica pomeni <strong>tega polja se ne dotakni</strong>, ne izprazni ga. Šifre iz
+        datoteke se dodajo v tabelo spodaj; ničesar ne pošlje sam.
+      </p>
+      @if (ImportNote is not null) { <p class="message-state @(ImportOk ? "info-message" : "error-message")" role="status">@ImportNote</p> }
+    </div>
+
+    @if (Rows.Count > 0)
+    {
+      <p class="saop-items-summary" role="status">
+        V tabeli je <strong>@Rows.Count</strong> artiklov:
+        <PimChip Text="@($"{NewCount} novih (POST)")" Tone="@(NewCount > 0 ? "warn" : null)" Prefix="Novih: " />
+        <PimChip Text="@($"{UpdateCount} sprememb (PATCH)")" Tone="good" Prefix="Sprememb: " />
+        <button type="button" class="small-action" disabled="@Busy" @onclick="ClearRows">Počisti tabelo</button>
+      </p>
+    }
+  </section>
+
+  @* ============================ 2. POLJA ============================= *@
+  <section class="ui-card panel section-gap" aria-labelledby="saop-items-step2">
+    <h2 id="saop-items-step2">2. Katera polja spreminjaš</h2>
+    <p class="hint">
+      Stolpec tabele nastane s klikom na polje. Polja z zvezdico so ob <strong>novem</strong>
+      artiklu obvezna. Polja brez gumba so v lasti SAOP ali pa jih PIM ne hrani — vanje se ne
+      piše, v dokumentu pa se vidijo (pri novem artiklu se vzamejo iz privzetkov).
+    </p>
+
+    @foreach (var section in SectionOrder)
+    {
+      var fields = Contract!.Fields.Where(field => field.Section == section).ToArray();
+      if (fields.Length == 0) { continue; }
+      <div class="saop-items-fieldgroup">
+        <span class="saop-items-fieldgroup-title">@SaopFieldLabels.Section(section)</span>
+        <div class="saop-items-chips">
+          @foreach (var field in fields)
+          {
+            @if (field.IsEditable)
+            {
+              <button type="button"
+                      class="saop-items-chip @(Columns.Contains(field.ElementName) ? "picked" : null)"
+                      aria-pressed="@(Columns.Contains(field.ElementName) ? "true" : "false")"
+                      title="@field.ElementName (@field.FieldKey)"
+                      @onclick="() => ToggleColumn(field)">
+                @field.Label@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
+              </button>
+            }
+            else
+            {
+              <span class="saop-items-chip locked" title="@Locked(field)">
+                @field.Label@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
+              </span>
+            }
+          }
+        </div>
+      </div>
+    }
+  </section>
+
+  @* ============================ 3. VREDNOSTI ========================= *@
+  @if (Rows.Count > 0)
+  {
+    <section class="ui-card data-card section-gap" aria-labelledby="saop-items-step3">
+      <h2 id="saop-items-step3" class="saop-items-cardtitle">3. Vrednosti</h2>
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Vrednosti polj po artiklih">
+        <table class="data-table saop-items-grid">
+          <caption>Vsaka vrstica je en artikel; prazna celica pomeni, da polja ne spreminjamo</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="saop-items-sticky">Šifra artikla</th>
+              <th scope="col">Metoda</th>
+              @foreach (var field in SelectedFields)
+              {
+                <th scope="col">
+                  @field.Label
+                  <span class="saop-items-element">@field.ElementName</span>
+                  @if (Twin(field) is { } twin)
+                  {
+                    <span class="saop-items-element" title="Isti podatek v PIM; dokument ga nosi v obeh elementih.">= @twin</span>
+                  }
+                </th>
+              }
+              <th scope="col">Dokument</th>
+            </tr>
+            @if (SelectedFields.Count > 0)
+            {
+              <tr class="saop-items-fillrow">
+                <th scope="row" class="saop-items-sticky">Velja za vse</th>
+                <td></td>
+                @foreach (var field in SelectedFields)
+                {
+                  var key = field.ElementName;
+                  <td>
+                    <div class="saop-items-fill">
+                      @if (field.ValueFormat == "bool")
+                      {
+                        <select class="table-input compact" aria-label="@($"Skupna vrednost za {field.Label}")"
+                                value="@FillValue(key)" @onchange="args => SetFill(key, args.Value?.ToString())">
+                          <option value=""></option>
+                          <option value="da">Da</option>
+                          <option value="ne">Ne</option>
+                        </select>
+                      }
+                      else
+                      {
+                        <input class="table-input compact" aria-label="@($"Skupna vrednost za {field.Label}")"
+                               value="@FillValue(key)" @onchange="args => SetFill(key, args.Value?.ToString())" />
+                      }
+                      <button type="button" class="small-action" disabled="@Busy"
+                              aria-label="@($"Vpiši skupno vrednost v vse vrstice za {field.Label}")"
+                              @onclick="() => ApplyFill(field)">↓</button>
+                    </div>
+                  </td>
+                }
+                <td></td>
+              </tr>
+            }
+          </thead>
+          <tbody>
+            @foreach (var row in Rows)
+            {
+              var plan = row.Plan;
+              <tr class="@(row.ShowXml ? "saop-items-open" : null)">
+                <td class="saop-items-sticky">
+                  <span class="code-value">@row.ItemId</span>
+                  <button type="button" class="small-action saop-items-remove" disabled="@Busy"
+                          aria-label="@($"Odstrani {row.ItemId} iz tabele")" @onclick="() => RemoveRow(row)">×</button>
+                </td>
+                <td>
+                  @if (plan is null)
+                  {
+                    <PimChip Text="ni preverjeno" />
+                  }
+                  else
+                  {
+                    <PimChip Text="@(plan.IsNew ? "NOV — POST" : "SPREMEMBA — PATCH")" Tone="@(plan.IsNew ? "warn" : "good")" Prefix="Metoda: " />
+                    <span class="tree-path">@plan.Reason</span>
+                  }
+                </td>
+                @foreach (var field in SelectedFields)
+                {
+                  var fieldKey = field.FieldKey!;
+                  var current = row.Current(fieldKey);
+                  <td>
+                    @if (field.ValueFormat == "bool")
+                    {
+                      <select class="table-input compact @(row.HasValue(fieldKey) ? "saop-items-changed" : null)"
+                              aria-label="@($"{field.Label} za {row.ItemId}")"
+                              value="@row.Value(fieldKey)" @onchange="args => SetValue(row, fieldKey, args.Value?.ToString())">
+                        <option value=""></option>
+                        <option value="da">Da</option>
+                        <option value="ne">Ne</option>
+                      </select>
+                    }
+                    else
+                    {
+                      <input class="table-input @(row.HasValue(fieldKey) ? "saop-items-changed" : null)"
+                             aria-label="@($"{field.Label} za {row.ItemId}")" placeholder="@current"
+                             value="@row.Value(fieldKey)" @onchange="args => SetValue(row, fieldKey, args.Value?.ToString())" />
+                    }
+                    @if (current is { Length: > 0 })
+                    {
+                      <span class="saop-items-current" title="Trenutna vrednost v PIM">@current</span>
+                    }
+                  </td>
+                }
+                <td class="saop-items-doccell">
+                  @if (plan is null)
+                  {
+                    <span class="muted">—</span>
+                  }
+                  else if (plan.Error is not null)
+                  {
+                    <PimChip Text="napaka" Tone="bad" Prefix="Dokument: " />
+                  }
+                  else if (plan.MissingMandatory.Count > 0)
+                  {
+                    <PimChip Text="@($"manjka {plan.MissingMandatory.Count}")" Tone="bad" Prefix="Dokument: " />
+                  }
+                  else if (plan.ChangeCount == 0)
+                  {
+                    <PimChip Text="nič za poslati" Tone="warn" Prefix="Dokument: " />
+                  }
+                  else
+                  {
+                    <PimChip Text="@($"{plan.ChangeCount} polj")" Tone="good" Prefix="Dokument: " />
+                  }
+                  <button type="button" class="small-action" @onclick="() => row.ShowXml = !row.ShowXml">
+                    @(row.ShowXml ? "Skrij XML" : "Poglej XML")
+                  </button>
+                </td>
+              </tr>
+
+              @if (row.ShowXml && plan is not null)
+              {
+                <tr class="saop-items-xmlrow">
+                  <td colspan="@(SelectedFields.Count + 3)">
+                    <p class="saop-items-xmlhead">
+                      <strong>@plan.Operation @plan.Path</strong>
+                      <span class="tree-path">@plan.ElementCount elementov v dokumentu, @plan.ChangeCount vpisanih polj</span>
+                    </p>
+                    @if (plan.Error is not null)
+                    {
+                      <p class="message-state error-message">@plan.Error</p>
+                    }
+                    @if (plan.MissingMandatory.Count > 0)
+                    {
+                      <p class="message-state warn-message">
+                        Za nov artikel manjka: @MissingText(plan).
+                        Dokument s tem ne odide — pošiljatelj ga ustavi, da ga SAOP ne zavrne z 409.
+                      </p>
+                    }
+                    @if (plan.Xml.Length > 0)
+                    {
+                      <pre class="saop-items-xml">@plan.Xml</pre>
+                    }
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @* ============================ 4. POŠILJANJE ======================== *@
+  @if (Rows.Count > 0)
+  {
+    <section class="ui-card panel section-gap" aria-labelledby="saop-items-step4">
+      <h2 id="saop-items-step4">4. Uvrstitev v vrsto</h2>
+      <p role="status">
+        Pripravljenih je <strong>@ReadyCount</strong> artiklov s skupno <strong>@ChangeCount</strong> polji.
+        @if (BlockedCount > 0)
+        {
+          <span class="saop-items-blocked">Ustavljenih @BlockedCount (manjka obvezno polje ali napaka v vrednosti).</span>
+        }
+      </p>
+      <div class="table-actions">
+        <button type="button" class="primary-button" disabled="@(Busy || ChangeCount == 0)" @onclick="EnqueueAsync">
+          Uvrsti @ChangeCount sprememb v vrsto
+        </button>
+        @if (Outcome is not null && Outcome.Queued > 0 && Channel?.NeedsApproval == true)
+        {
+          <button type="button" class="small-action good-action" disabled="@Busy" @onclick="ApproveAsync">Odobri skupino @Outcome.OutboundBatchId</button>
+          <button type="button" class="small-action warn-action" disabled="@Busy" @onclick="CancelAsync">Prekliči skupino</button>
+        }
+      </div>
+      <p class="hint">
+        Uvrstitev v vrsto ničesar ne pošlje. Dokument sestavi in odda odhodni worker; do takrat
+        je vsako sporočilo mogoče preklicati.
+      </p>
+
+      @if (Outcome is not null)
+      {
+        <p role="status" class="saop-items-outcome">
+          Skupina <strong>@Outcome.OutboundBatchId</strong> — uvrščenih <strong>@Outcome.Queued</strong>,
+          že v vrsti <strong>@Outcome.Duplicates</strong>, zavrnjenih <strong>@Outcome.Rejected</strong>.
+        </p>
+        @if (Outcome.Rejected > 0)
+        {
+          <PimTable Caption="Zavrnjene vrstice in razlog" Columns="RejectedColumns">
+            <Rows>
+              @foreach (var rejected in Outcome.Rows.Where(row => row.Status == "Rejected"))
+              {
+                <tr><td>@rejected.ItemId</td><td>@Element(rejected.FieldKey)</td><td>@rejected.Reason</td></tr>
+              }
+            </Rows>
+          </PimTable>
+        }
+      }
+    </section>
+  }
+
+  @* ============================ DNEVNIK ============================== *@
+  <section class="ui-card panel section-gap" aria-labelledby="saop-items-journal">
+    <h2 id="saop-items-journal">Dnevnik seje</h2>
+    <p class="hint">
+      Kaj se je zgodilo v tem oknu, po vrsti. Isti zapisi gredo v dnevnik strežnika
+      (<code>SaopItemWriteService</code>), da jih je mogoče najti tudi po zaprtju strani.
+    </p>
+    @if (Journal.Count == 0)
+    {
+      <p class="muted">Zaenkrat nič — dnevnik se napolni ob prvem dejanju.</p>
+    }
+    else
+    {
+      <ol class="saop-items-journal">
+        @foreach (var entry in Journal)
+        {
+          <li class="@entry.Tone"><span class="saop-items-time">@entry.At.ToString("HH:mm:ss")</span> @entry.Text</li>
+        }
+      </ol>
+    }
+  </section>
+</PimState>
+
+@code {
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod v SAOP", "saop"), new("Artikli")];
+
+  static readonly IReadOnlyList<PimTab> Tabs =
+  [
+    new("overview", "Pregled", "saop", "Stanje po entitetah"),
+    new("items", "Artikli", "saop/artikli", "Nov artikel in sprememba"),
+    new("queue", "Čakalna vrsta", "outbound", "Odobritev in ponovni poskus"),
+    new("history", "Zgodovina", "saop/zgodovina", "Operacija in odgovor ERP"),
+    new("drifts", "Odkloni", "saop/odkloni", "Poslano se ne ujema z ERP"),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> RejectedColumns = [new("Artikel"), new("Polje"), new("Razlog")];
+
+  static readonly string[] SectionOrder = ["Item", "GeneralData", "SalesData", "StockData", "PropertiesData"];
+
+  /// <summary>Zvezek gre v pomnilnik; meja je varovalka pred datoteko, ki bi pojedla strežnik.</summary>
+  const long MaxUploadBytes = 8 * 1024 * 1024;
+
+  /// <summary>Ena vrstica obrazca: artikel, njegovo stanje v SAOP in vpisane vrednosti.</summary>
+  sealed class ItemRow(SaopItemState state)
+  {
+    public SaopItemState State { get; set; } = state;
+    public string ItemId => State.ItemId;
+
+    /// <summary>Vpisano po ključu polja; prazno pomeni »tega polja se ne dotakni«.</summary>
+    public Dictionary<string, string?> Edited { get; } = new(StringComparer.Ordinal);
+
+    public SaopItemPlan? Plan { get; set; }
+    public bool ShowXml { get; set; }
+
+    public string Value(string fieldKey) => Edited.TryGetValue(fieldKey, out var value) ? value ?? "" : "";
+    public bool HasValue(string fieldKey) => !string.IsNullOrWhiteSpace(Value(fieldKey));
+    public string Current(string fieldKey) => State.Values.TryGetValue(fieldKey, out var value) ? value ?? "" : "";
+  }
+
+  sealed record JournalEntry(DateTime At, string Text, string Tone);
+
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  int OrganizationId;
+  SaopItemContract? Contract;
+  SaopChannelState? Channel;
+
+  readonly List<ItemRow> Rows = [];
+  readonly HashSet<string> Columns = new(StringComparer.OrdinalIgnoreCase);
+  readonly Dictionary<string, string> Fills = new(StringComparer.OrdinalIgnoreCase);
+  readonly List<JournalEntry> Journal = [];
+
+  string CodesText = "";
+  bool Loading = true;
+  bool Busy;
+  bool FromWorkbook;
+  bool ImportOk;
+  string? LoadError;
+  string? Error;
+  string? Message;
+  string? ImportNote;
+  BulkChangeOutcome? Outcome;
+
+  IReadOnlyList<SaopItemFieldRow> SelectedFields =>
+    Contract is null ? [] : Contract.Fields.Where(polje => Columns.Contains(polje.ElementName)).ToArray();
+
+  int NewCount => Rows.Count(row => row.Plan?.IsNew ?? !row.State.ExistsInSaop);
+  int UpdateCount => Rows.Count - NewCount;
+  int ChangeCount => Rows.Where(row => row.Plan?.CanSend == true).Sum(row => row.Plan!.ChangeCount);
+  int ReadyCount => Rows.Count(row => row.Plan?.CanSend == true);
+  int BlockedCount => Rows.Count(row => row.Plan is { ChangeCount: > 0, CanSend: false });
+
+  string TemplateHref
+  {
+    get
+    {
+      var codes = string.Join(',', Rows.Select(row => row.ItemId));
+      var query = $"izvoz/izdelki.xlsx?predloga=saop&podjetje={OrganizationId}";
+      return codes.Length == 0 ? query : query + "&items=" + Uri.EscapeDataString(codes);
+    }
+  }
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Organizations = await Data.GetOrganizationsAsync();
+      var current = await Data.GetCurrentOrganizationAsync();
+      OrganizationId = current?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+      if (OrganizationId == 0) { LoadError = "Aktivna organizacija ni na voljo."; return; }
+      await LoadOrganizationAsync();
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: pogodbe dokumenta ni bilo mogoče naložiti.");
+      LoadError = "Pogodbe dokumenta SAOP trenutno ni mogoče naložiti.";
+    }
+    finally { Loading = false; }
+  }
+
+  async Task LoadOrganizationAsync()
+  {
+    Contract = await Documents.GetContractAsync(OrganizationId);
+    Channel = await Documents.GetChannelStateAsync(OrganizationId);
+
+    // Privzeti stolpci so tisti, brez katerih nov artikel ne more nastati, in naziv — to je
+    // najkrajša pot do prvega uporabnega dokumenta. Vse ostalo si uporabnik doda sam.
+    Columns.Clear();
+    foreach (var field in Contract.Fields.Where(field => field.IsEditable && (field.IsAddMandatory || field.ElementName is "ItemTitle1" or "ItemEANCode")))
+      Columns.Add(field.ElementName);
+
+    Note($"Naložena pogodba: {Contract.Fields.Count} elementov, {Contract.Fields.Count(field => field.IsEditable)} pisljivih. "
+      + (Channel is { IsEnabled: true } ? "Kanal je omogočen." : "Kanal ni omogočen."),
+      Channel is { IsEnabled: true } ? "info" : "warn");
+  }
+
+  async Task OnOrganizationChangedAsync(ChangeEventArgs args)
+  {
+    if (!int.TryParse(args.Value?.ToString(), out var organizationId) || organizationId == OrganizationId) return;
+    OrganizationId = organizationId;
+    Rows.Clear();
+    Outcome = null;
+    Error = null; Message = null;
+    Busy = true;
+    try
+    {
+      await LoadOrganizationAsync();
+      Note($"Podjetje zamenjano na {organizationId}; tabela je počiščena, ker je šifra artikla enolična samo znotraj podjetja.", "info");
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: menjava podjetja ni uspela.");
+      Error = "Podjetja trenutno ni mogoče zamenjati.";
+    }
+    finally { Busy = false; }
+  }
+
+  /* --- vnos artiklov ---------------------------------------------------- */
+
+  async Task AddCodesAsync()
+  {
+    var codes = CodesText
+      .Split([',', '\n', '\r', ';', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .ToArray();
+
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var added = await AddRowsAsync(codes);
+      CodesText = "";
+      FromWorkbook = false;
+      Recompute();
+      Message = added == 0 ? "Nobene nove šifre ni bilo za dodati." : $"Dodanih {added} artiklov.";
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: šifer ni bilo mogoče dodati.");
+      Error = "Šifer trenutno ni mogoče dodati — stanja artikla ni bilo mogoče prebrati.";
+    }
+    finally { Busy = false; }
+  }
+
+  /// <summary>Doda šifre, ki jih v tabeli še ni, in za vsako prebere stanje v SAOP.</summary>
+  async Task<int> AddRowsAsync(IReadOnlyList<string> codes)
+  {
+    var added = 0;
+    var skipped = 0;
+    foreach (var code in codes)
+    {
+      if (Rows.Count >= SaopItemWriteService.MaxRows) { skipped++; continue; }
+      if (Rows.Any(row => string.Equals(row.ItemId, code, StringComparison.OrdinalIgnoreCase))) continue;
+      var state = await Documents.GetItemStateAsync(OrganizationId, code);
+      Rows.Add(new ItemRow(state));
+      added++;
+    }
+
+    if (added > 0)
+    {
+      var novih = Rows.TakeLast(added).Count(row => !row.State.ExistsInSaop);
+      Note($"Dodanih {added} artiklov ({novih} novih, {added - novih} obstoječih).", "info");
+    }
+    if (skipped > 0)
+      Note($"Izpuščenih {skipped} šifer: tabela je omejena na {SaopItemWriteService.MaxRows} vrstic. Za več uporabi uvoz po delih.", "warn");
+    return added;
+  }
+
+  void RemoveRow(ItemRow row)
+  {
+    Rows.Remove(row);
+    Note($"Artikel {row.ItemId} odstranjen iz tabele.", "info");
+    Recompute();
+  }
+
+  void ClearRows()
+  {
+    var count = Rows.Count;
+    Rows.Clear();
+    Outcome = null;
+    Note($"Tabela počiščena ({count} artiklov).", "info");
+  }
+
+  /* --- polja in vrednosti ----------------------------------------------- */
+
+  void ToggleColumn(SaopItemFieldRow field)
+  {
+    if (!Columns.Remove(field.ElementName))
+    {
+      Columns.Add(field.ElementName);
+      Note($"Dodan stolpec {field.Label} ({field.ElementName}).", "info");
+    }
+    else
+    {
+      // Skrit stolpec ne sme tiho ostati v naročilu: kar ni vidno, se ne pošlje.
+      foreach (var row in Rows) row.Edited.Remove(field.FieldKey!);
+      Note($"Odstranjen stolpec {field.Label}; vpisane vrednosti tega polja so izbrisane.", "warn");
+    }
+    Recompute();
+  }
+
+  void SetValue(ItemRow row, string fieldKey, string? value)
+  {
+    row.Edited[fieldKey] = value;
+    Recompute();
+  }
+
+  string FillValue(string elementName) => Fills.TryGetValue(elementName, out var value) ? value : "";
+
+  void SetFill(string elementName, string? value) => Fills[elementName] = value ?? "";
+
+  void ApplyFill(SaopItemFieldRow field)
+  {
+    var value = FillValue(field.ElementName);
+    foreach (var row in Rows) row.Edited[field.FieldKey!] = value;
+    Note(value.Length == 0
+      ? $"Polje {field.Label} izpraznjeno v vseh {Rows.Count} vrsticah."
+      : $"Polje {field.Label} = »{value}« vpisano v vseh {Rows.Count} vrsticah.", "info");
+    Recompute();
+  }
+
+  /// <summary>
+  /// Za vsako vrstico znova sestavi dokument. Gradnja je čista in brez baze, zato se sme
+  /// zgoditi ob vsaki spremembi — predogled, ki bi zaostajal za vnosom, bi bil past.
+  /// </summary>
+  void Recompute()
+  {
+    if (Contract is null) return;
+    foreach (var row in Rows)
+    {
+      var changes = row.Edited
+        .Where(pair => Contract.Fields.Any(field => field.FieldKey == pair.Key && Columns.Contains(field.ElementName)))
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+      row.Plan = SaopItemWriteService.BuildPlan(Contract, row.State, changes);
+    }
+  }
+
+  /* --- uvoz zvezka ------------------------------------------------------- */
+
+  async Task OnFileAsync(InputFileChangeEventArgs args)
+  {
+    if (Contract is null) return;
+    Busy = true; Error = null; Message = null; ImportNote = null;
+    try
+    {
+      var file = args.File;
+      if (file.Size > MaxUploadBytes)
+      {
+        ImportOk = false;
+        ImportNote = "Datoteka je večja od 8 MB. Razdeli jo na več datotek.";
+        return;
+      }
+
+      using var buffer = new MemoryStream();
+      await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
+      buffer.Position = 0;
+
+      var writable = Contract.Fields
+        .Where(field => field.IsEditable)
+        .Select(field => new WritableFieldRow(field.FieldKey!, field.ElementName, field.Section,
+          field.ValueFormat, field.TrueValue, field.FalseValue, field.IsAddMandatory, field.SortOrder))
+        .ToArray();
+
+      var preview = Write.PreviewWorkbook(buffer, writable);
+
+      // Stolpec, ki je v datoteki, mora postati viden stolpec tabele — sicer bi vrednost
+      // obstajala v naročilu, uporabnik pa je ne bi videl.
+      foreach (var fieldKey in preview.Rows.SelectMany(row => row.Values.Keys).Distinct(StringComparer.Ordinal))
+        if (Contract.Fields.FirstOrDefault(field => field.FieldKey == fieldKey) is { } field)
+          Columns.Add(field.ElementName);
+
+      await AddRowsAsync(preview.Rows.Select(row => row.ItemId).ToArray());
+
+      var filled = 0;
+      foreach (var imported in preview.Rows)
+      {
+        var row = Rows.FirstOrDefault(candidate => string.Equals(candidate.ItemId, imported.ItemId, StringComparison.OrdinalIgnoreCase));
+        if (row is null) continue;
+        foreach (var (fieldKey, value) in imported.Values) { row.Edited[fieldKey] = value; filled++; }
+      }
+
+      FromWorkbook = true;
+      Recompute();
+      ImportOk = true;
+      ImportNote = $"Prebranih {preview.Rows.Count} vrstic, prevzetih {filled} vrednosti."
+        + (preview.Unmapped.Count > 0 ? $" Stolpci brez ustreznega polja (prezrti): {string.Join(", ", preview.Unmapped)}." : "")
+        + (preview.Problems.Count > 0 ? " " + string.Join(" ", preview.Problems) : "");
+      Note($"Uvoz zvezka {file.Name}: {preview.Rows.Count} vrstic, {filled} vrednosti.", "info");
+    }
+    catch (PIM.Operations.WorkbookReadException exception)
+    {
+      ImportOk = false;
+      ImportNote = exception.Message;
+      Note($"Uvoz zvezka zavrnjen: {exception.Message}", "warn");
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: uvoz zvezka ni uspel.");
+      ImportOk = false;
+      ImportNote = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel.";
+      Note("Uvoz zvezka ni uspel — datoteka ni berljiv zvezek.", "warn");
+    }
+    finally { Busy = false; }
+  }
+
+  /* --- uvrstitev v vrsto -------------------------------------------------- */
+
+  async Task EnqueueAsync()
+  {
+    if (Contract is null) return;
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      Recompute();
+
+      var sendable = Rows.Where(row => row.Plan?.CanSend == true).ToArray();
+      var changes = sendable
+        .SelectMany(row => row.Edited
+          .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
+          .Where(pair => Contract.Fields.Any(field => field.FieldKey == pair.Key && Columns.Contains(field.ElementName)))
+          .Select(pair => (row.ItemId, pair.Key, pair.Value)))
+        .ToArray();
+
+      if (changes.Length == 0)
+      {
+        Error = "Ni nobene vrednosti za pošiljanje. Prazna celica pomeni, da se polja ne dotaknemo.";
+        Note("Uvrstitev ustavljena: ni nobene vrednosti za pošiljanje.", "warn");
+        return;
+      }
+
+      var novih = sendable.Count(row => row.Plan!.IsNew);
+      var source = FromWorkbook ? "EXCEL" : sendable.Length == 1 ? "SINGLE" : "BULK";
+      var note = $"Artikli v SAOP: {novih} novih (POST), {sendable.Length - novih} sprememb (PATCH), {changes.Length} polj.";
+
+      Log.LogInformation(
+        "SAOP artikli: uvrščam {Polj} polj za {Artiklov} artiklov (organizacija {Organizacija}, vir {Vir}).",
+        changes.Length, sendable.Length, OrganizationId, source);
+
+      Outcome = await Write.EnqueueAsync(OrganizationId, changes, await ActorAsync(), source, note);
+
+      Message = $"Skupina {Outcome.OutboundBatchId}: uvrščenih {Outcome.Queued}, že v vrsti {Outcome.Duplicates}, zavrnjenih {Outcome.Rejected}.";
+      Note(Message, Outcome.Rejected > 0 ? "warn" : "good");
+
+      foreach (var rejected in Outcome.Rows.Where(row => row.Status == "Rejected"))
+      {
+        Log.LogWarning("SAOP artikli: zavrnjeno {Artikel} / {Polje} — {Razlog}.", rejected.ItemId, rejected.FieldKey, rejected.Reason);
+        Note($"Zavrnjeno {rejected.ItemId} / {Element(rejected.FieldKey)}: {rejected.Reason}", "warn");
+      }
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: uvrstitev v vrsto ni uspela.");
+      Error = "Sprememb trenutno ni mogoče uvrstiti v vrsto. Stanje se ni spremenilo.";
+      Note("Uvrstitev v vrsto ni uspela; stanje se ni spremenilo.", "warn");
+    }
+    finally { Busy = false; }
+  }
+
+  async Task ApproveAsync()
+  {
+    if (Outcome is null) return;
+    Busy = true;
+    try
+    {
+      var approved = await Write.ApproveBatchAsync(Outcome.OutboundBatchId, await ActorAsync());
+      Message = $"Odobrenih sporočil: {approved}.";
+      Note($"Skupina {Outcome.OutboundBatchId} odobrena — {approved} sporočil čaka na worker.", "good");
+      Log.LogInformation("SAOP artikli: skupina {Skupina} odobrena, {Odobrenih} sporočil.", Outcome.OutboundBatchId, approved);
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: skupine ni bilo mogoče odobriti.");
+      Error = "Skupine trenutno ni mogoče odobriti.";
+      Note("Odobritev skupine ni uspela.", "warn");
+    }
+    finally { Busy = false; }
+  }
+
+  async Task CancelAsync()
+  {
+    if (Outcome is null) return;
+    Busy = true;
+    try
+    {
+      var cancelled = await Write.CancelBatchAsync(Outcome.OutboundBatchId, await ActorAsync());
+      Message = $"Preklicanih sporočil: {cancelled}.";
+      Note($"Skupina {Outcome.OutboundBatchId} preklicana — {cancelled} sporočil ne bo odšlo.", "warn");
+      Log.LogInformation("SAOP artikli: skupina {Skupina} preklicana, {Preklicanih} sporočil.", Outcome.OutboundBatchId, cancelled);
+    }
+    catch (Exception exception)
+    {
+      Log.LogError(exception, "SAOP artikli: skupine ni bilo mogoče preklicati.");
+      Error = "Skupine trenutno ni mogoče preklicati.";
+      Note("Preklic skupine ni uspel.", "warn");
+    }
+    finally { Busy = false; }
+  }
+
+  /* --- pomožno ------------------------------------------------------------ */
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  string Element(string? fieldKey) =>
+    Contract?.Fields.FirstOrDefault(field => field.FieldKey == fieldKey)?.ElementName ?? fieldKey ?? "—";
+
+  /// <summary>
+  /// Drugi elementi dokumenta, ki nosijo isti podatek PIM. Register jih ima: <c>Product.Department</c>
+  /// gre hkrati v <c>ItemDepartment</c> in <c>AdditionalProperty1ID</c>. Vpis v en stolpec zato
+  /// spremeni oba elementa — brez te oznake bi bilo videti kot napaka vmesnika.
+  /// </summary>
+  string? Twin(SaopItemFieldRow polje)
+  {
+    if (Contract is null || polje.FieldKey is null) return null;
+    var others = Contract.Fields
+      .Where(other => other.FieldKey == polje.FieldKey && other.ElementName != polje.ElementName)
+      .Select(other => other.ElementName)
+      .ToArray();
+    return others.Length == 0 ? null : string.Join(", ", others);
+  }
+
+  /// <summary>Manjkajoča polja v jeziku urednika: »Naziv 1 (ItemTitle1)«, ne »Item/ItemTitle1«.</summary>
+  static string MissingText(SaopItemPlan plan) => string.Join(", ", plan.MissingMandatory.Select(missing =>
+  {
+    var element = missing.Split('/').Last();
+    var label = SaopFieldLabels.For(element);
+    return string.Equals(label, element, StringComparison.Ordinal) ? element : $"{label} ({element})";
+  }));
+
+  string Locked(SaopItemFieldRow field) => field.IsKey
+    ? "Ključ dokumenta: vrednost je šifra artikla."
+    : field.FieldKey is null
+      ? "PIM te vrednosti ne hrani; pri novem artiklu jo doda privzetek iz out.SaopAddDefault."
+      : "Polje je v lasti SAOP; PIM ga ne piše nazaj.";
+
+  /// <summary>Zapis v dnevnik seje in v dnevnik strežnika hkrati.</summary>
+  void Note(string text, string tone)
+  {
+    Journal.Insert(0, new JournalEntry(DateTime.Now, text, tone));
+    if (Journal.Count > 200) Journal.RemoveAt(Journal.Count - 1);
+    Log.LogInformation("SAOP artikli ({Ton}): {Sporocilo}", tone, text);
+  }
+}

@@ -16,6 +16,9 @@
   <ItemGroup>
     <!-- WorkbookTable: branje delovnega zvezka pri uvozu mnozicnih sprememb. -->
     <ProjectReference Include="..\PIM.Operations\PIM.Operations.csproj" />
+    <!-- SaopDocumentBuilder in SaopIntentResolver: predogled mora sestaviti isti dokument,
+         kot ga sestavi posiljatelj. Predogled z lastnim gradnikom bi lagal. -->
+    <ProjectReference Include="..\PIM.Outbound\PIM.Outbound.csproj" />
   </ItemGroup>
 
 </Project>

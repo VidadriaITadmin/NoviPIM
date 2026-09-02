@@ -66,6 +66,8 @@ Zahtevki (claims) po prijavi: `ClaimTypes.Name` (uporabniško ime),
 | `/izvozi`, `/izvozi/profili/{id}` | profili in stolpci izvoza | `[Authorize]` | `MainLayout` |
 | `/izvozi/mnozicno`, `/izvozi/obvestila` | odhodna množična obdelava in dogodki | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/outbound` | `Pages/Outbound.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
+| `/saop`, `/saop/zgodovina`, `/saop/odkloni`, `/saop/polja` | pregled, zgodovina, odkloni in šifrant polj izhoda v SAOP | `ADMIN, CATALOG_EDITOR` (`/saop/polja` `[Authorize]`) | `MainLayout` |
+| `/saop/artikli` | `Pages/SaopItems.razor` — **vnos novih artiklov in sprememb v enem obrazcu**; metoda (POST/PATCH) ni izbira uporabnika, ampak izpeljava iz tega, ali je artikel v `canon.Product` | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
 | `/stranke` | `Pages/Customers.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/stranke/{CustomerId:long}` | `Pages/CustomerDetail.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/pravila-popustov` | `Pages/DiscountRules.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
@@ -133,7 +135,11 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `ProductExportService.BuildAsync` | `intranet.GetProductList` (en klic, `@Take` do 20.000) + `intranet.GetProductFieldValues` in `intranet.GetSaopTemplateColumns` (migracija 117) | `/izvoz/izdelki.xlsx` |
 | `ProductEditService.SaveTextsAsync` | `pim.SaveProductTexts` (migracija 111) — piše besedila, ki so last PIM, sproži zgodovino prek sprožilcev in **takoj revalidira ta en izdelek**; besedilo, ki ga piše SAOP, zavrne z napako 52402 | `/izdelki/{id}` |
 | `ProductEditService.SaveAttributesAsync` | `pim.SaveProductAttributes` (migracija 111) — enako za lastnosti izdelka | `/izdelki/{id}` |
-| `SaopWriteService.EnqueueAsync` | `out.EnqueueSaopItemChanges` — polje, ki ga PIM piše nazaj v SAOP, gre v odhodno vrsto in čaka odobritev | `/izdelki/{id}`, `/izvozi/mnozicno` |
+| `SaopWriteService.EnqueueAsync` | `out.EnqueueSaopItemChanges` — polje, ki ga PIM piše nazaj v SAOP, gre v odhodno vrsto in čaka odobritev | `/izdelki/{id}`, `/izvozi/mnozicno`, `/saop/artikli` |
+| `SaopItemWriteService.GetContractAsync` | `out.GetSaopXmlContract` (oblika dokumenta + 26 elementov) in `intranet.GetWritableSaopFields` (23 od njih je v lasti PIM) — vmesnik ponudi samo polja, ki jih baza dovoli, sicer bi jih `out.EnqueueMessage` zavrnil z 51010 | `/saop/artikli` |
+| `SaopItemWriteService.GetItemStateAsync` | `out.GetSaopItemWriteState` (3 nabori: `ExistsInSaop` in izvor, kanonične vrednosti, privzetki iz `out.SaopAddDefault`) | `/saop/artikli` |
+| `SaopItemWriteService.GetChannelStateAsync` | `SELECT … FROM dbo.IntegrationProfile WHERE TargetKind = 'SAOP_PRODUCT'` — brez omogočenega profila baza zavrne vsako sporočilo z 51001; stran to pove **pred** vnosom | `/saop/artikli` |
+| `SaopItemWriteService.BuildPlan` → `PIM.Outbound.SaopItemPlanner.Plan` | brez baze: `SaopIntentResolver` izbere POST ali PATCH, `SaopDocumentBuilder` sestavi dokument — ista gradnika kot pošiljatelj (`SaopDocumentRunner.Assemble`), zato je predogled enak poslanemu | `/saop/artikli` |
 | `GetProductOrganizationAsync` | `SELECT TOP (1) OrganizationId … FROM canon.Product WHERE ProductId = @ProductId` — kartica izdelka dobi obseg iz izdelka, ker je dosegljiva iz seznama vseh podjetij | `/izdelki/{id}` |
 | `GetProductsAsync` | `intranet.GetProducts @OrganizationId, @Skip, @Take, @Search, @Status` (2 nabora: vrstice + `TotalCount`) | zapuščinska pot; seznam je od migracije 101 na `GetProductList` |
 | `ProductWorkbenchService.GetProductCardAsync` | `intranet.GetProductCard` (15 naborov: glava, polja z lastništvom, čakajoče prekrivke, besedila, lastnosti, kategorije, mediji, dokumenti, cene, zaloga, trgovinski podatki, profili, težave, odhodna pot in zgodovina) | `/izdelki/{id}` |

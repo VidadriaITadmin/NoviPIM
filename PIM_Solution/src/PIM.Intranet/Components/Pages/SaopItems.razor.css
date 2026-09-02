@@ -1,0 +1,58 @@
+/* Vnos artiklov v SAOP: mreza vrednosti, izbirniki polj in dnevnik seje.
+   Barve in oblike so iz app.css (spremenljivke --pim-*), da stran ne uvaja svojega sistema. */
+
+.saop-items-codes { grid-column: span 2; }
+
+.saop-items-import { border-top: 1px solid var(--pim-border-soft); margin-top: 1rem; padding-top: 1rem; }
+.saop-items-import .hint { color: var(--pim-text-muted); font-size: .8rem; margin: .4rem 0 0; }
+
+.saop-items-summary { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 0; }
+
+/* --- izbirniki polj ------------------------------------------------------ */
+.saop-items-fieldgroup { border-top: 1px solid var(--pim-border-soft); padding: .7rem 0 .2rem; }
+.saop-items-fieldgroup:first-of-type { border-top: 0; }
+.saop-items-fieldgroup-title { color: var(--pim-text-muted); display: block; font-size: .72rem; font-weight: 700; letter-spacing: .04em; margin-bottom: .45rem; text-transform: uppercase; }
+.saop-items-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+.saop-items-chip { background: var(--pim-surface); border: 1px solid var(--pim-border-strong); border-radius: 999px; color: var(--pim-text-soft); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 600; padding: .28rem .7rem; }
+.saop-items-chip:hover:not(.locked) { border-color: #c7d2fe; }
+.saop-items-chip.picked { background: #eef2ff; border-color: var(--pim-accent); color: var(--pim-accent); }
+.saop-items-chip.locked { background: var(--pim-neutral-bg); border-style: dashed; color: var(--pim-text-muted); cursor: default; }
+.saop-items-required { color: var(--pim-bad-text); margin-left: .15rem; }
+
+/* --- mreza vrednosti ----------------------------------------------------- */
+.saop-items-cardtitle { border-bottom: 1px solid var(--pim-border); font-size: 1rem; margin: 0; padding: 1rem 1.15rem; }
+
+.saop-items-grid th { vertical-align: bottom; }
+.saop-items-element { color: var(--pim-text-muted); display: block; font-size: .68rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* Sifra ostane vidna tudi pri dvajsetih stolpcih; brez tega se ne ve, katero vrstico ureja. */
+.saop-items-sticky { background: var(--pim-surface); left: 0; position: sticky; z-index: 2; }
+thead .saop-items-sticky { background: #f8fafc; }
+.saop-items-grid tbody tr:hover .saop-items-sticky { background: var(--pim-surface-hover); }
+
+.saop-items-fillrow th, .saop-items-fillrow td { background: var(--pim-surface-subtle); border-top: 1px solid var(--pim-border); padding: .45rem .85rem; }
+.saop-items-fillrow th { color: var(--pim-text-muted); font-size: .7rem; }
+.saop-items-fill { align-items: center; display: flex; gap: .25rem; }
+
+.saop-items-changed { background: #fffdf5; border-color: var(--pim-warn-border); }
+.saop-items-current { color: var(--pim-text-muted); display: block; font-size: .7rem; margin-top: .2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12rem; }
+.saop-items-remove { margin-left: .4rem; }
+.saop-items-doccell { white-space: nowrap; }
+.saop-items-doccell .small-action { margin-left: .4rem; }
+
+.saop-items-open td { background: #f8fafc; }
+.saop-items-xmlrow td { background: var(--pim-surface-subtle); }
+.saop-items-xmlhead { align-items: baseline; display: flex; gap: .75rem; margin: 0 0 .5rem; }
+.saop-items-xml { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); font-family: Consolas, "Cascadia Mono", monospace; font-size: .75rem; margin: 0; max-height: 22rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }
+
+.saop-items-blocked { color: var(--pim-bad-text); margin-left: .5rem; }
+.saop-items-outcome { margin-top: .75rem; }
+
+/* --- dnevnik ------------------------------------------------------------- */
+.saop-items-journal { list-style: none; margin: .5rem 0 0; max-height: 20rem; overflow: auto; padding: 0; }
+.saop-items-journal li { border-left: 3px solid var(--pim-neutral-border); font-size: .82rem; margin-bottom: .3rem; padding: .3rem .6rem; }
+.saop-items-journal li.good { border-color: var(--pim-good-bar); }
+.saop-items-journal li.warn { border-color: var(--pim-warn-bar); }
+.saop-items-journal li.info { border-color: var(--pim-info-border); }
+.saop-items-time { color: var(--pim-text-muted); font-family: Consolas, "Cascadia Mono", monospace; font-size: .75rem; margin-right: .5rem; }
