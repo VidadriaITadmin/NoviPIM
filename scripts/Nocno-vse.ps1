@@ -336,7 +336,10 @@ Korak 'Zaloge dobaviteljev' {
   foreach ($par in @(@($MapaZalogNw, 'NW_STOCK'), @($MapaZalogBt, 'BT_STOCK'))) {
     $mapa = $par[0]; $vir = $par[1]
     if (-not (Test-Path $mapa)) { Zapisi "   preskočeno: mape $mapa ni"; continue }
-    foreach ($datoteka in Get-ChildItem $mapa -File | Where-Object { $_.Name -notlike '~$*' }) {
+    # Prevzemnik pusti ob datoteki oznaki .prenos (prenos tece) in .pocakaj (razmik dobavitelja).
+    # To nista zalogi: 2026-09-02 je nocni tok .pocakaj prebral kot zalogo, dobil eno vrstico v
+    # karanteni in korak oznacil kot padel. Isti filter kot v Zaloga-cikel.ps1.
+    foreach ($datoteka in Get-ChildItem $mapa -File | Where-Object { $_.Name -notlike '~$*' -and $_.Extension -notin @('.prenos', '.pocakaj') }) {
       foreach ($o in $Podjetja) {
         PozeniWorker 'workers\PIM.StockFileWorker' @('--file', $datoteka.FullName, '--source', $vir, '--organization-id', "$o")
       }
