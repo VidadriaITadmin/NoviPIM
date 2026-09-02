@@ -36,10 +36,23 @@ $dnevnik = Join-Path $koren 'logs'
 if (-not (Test-Path $dnevnik)) { New-Item -ItemType Directory -Path $dnevnik | Out-Null }
 $datotekaDnevnika = Join-Path $dnevnik ("nadzor-{0:yyyy-MM-dd}.log" -f (Get-Date))
 
+# --- kodne strani ------------------------------------------------------------
+# Worker pise UTF-8, konzola pa je na tem racunalniku v kodni strani 852. PowerShell izpis
+# zunanjega programa dekodira po [Console]::OutputEncoding, zato je "Watchdog pregled je
+# koncan" v dnevniku pristal kot "kon-Zcan". Dnevnik pri tem ni bil pokvarjen: bil je
+# pravilen UTF-8, ki je posteno shranil ze pokvarjene znake. Napaka nastane na meji med
+# dotnetom in PowerShellom, zato mora biti odpravljena tu, preden preberemo prvo vrstico.
+# Isto je ze v Nocno-vse.ps1; tu je manjkalo.
+$utf8BrezBom = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8BrezBom
+$OutputEncoding = $utf8BrezBom
+
 function Zapisi([string]$vrstica) {
   $z = "{0:HH:mm:ss}  {1}" -f (Get-Date), $vrstica
   Write-Output $z
-  Add-Content -Path $datotekaDnevnika -Value $z -Encoding UTF8
+  # Add-Content -Encoding UTF8 v PowerShell 5.1 datoteko zacne z BOM. Dnevnik bereta clovek
+  # in grep, zato gre ven kot UTF-8 brez BOM.
+  [System.IO.File]::AppendAllText($datotekaDnevnika, $z + [Environment]::NewLine, $utf8BrezBom)
 }
 
 # PIM.AlertDispatcher bere povezavo samo iz okoljske spremenljivke in brez nje konca z 2.

@@ -282,6 +282,15 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   Prevedene kode se ta sprememba ne dotakne (samo `scripts\` in `docs\`), zato build in testni
   paket nista bila ponovno pognana; merilo so izhodne kode nalog in dnevniki zgoraj.
 
+  **Dodano isti dan:** dnevnika zaloge in nadzora sta izgubljala šumnike (`Watchdog pregled je
+  kon─Źan`). Vzrok je isti, ki ga `Nocno-vse.ps1` že rešuje: worker piše UTF-8, konzola je v
+  kodni strani 852, PowerShell pa izpis zunanjega programa dekodira po
+  `[Console]::OutputEncoding`. `Nadzor.ps1` in `Zaloga-cikel.ps1` te nastavitve nista imela.
+  Dnevnik gre odslej ven kot UTF-8 brez BOM prek `File::AppendAllText`, tako kot nočni tok.
+  **Dokaz:** `logs\nadzor-2026-09-02.log` ob 19:13:21 → »Watchdog pregled je **končan**«,
+  »Dostava opozoril je privzeto **izključena**; **omrežni** klic ni bil izveden«;
+  `PIM zaloga` ob 19:13:54 → `Last Result: 0`, `padlih korakov: 0`.
+
 - **[DOMENA] Magento izvoz spet polni jezikovne stolpce — regresija iz migracije 124** —
   kdo: Claude Code — ozemlje: DOMENA — končano 2026-08-31.
 
