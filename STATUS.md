@@ -13,6 +13,13 @@ ne spreminja. Kartica artikla obe polji vedno pokaže: ime za iskanje v identite
 v skupini »Prodaja«. Zapis gre skozi obstoječo odhodno vrsto in odobritev SAOP. Dokaz:
 polni `scripts/run_tests.ps1` = 58/0/0 in `Build OK`.
 
+Migracija **138** je dodala varen ponovni poskus neuspelih odhodnih sporočil: posamična
+`out.RequeueOutboxMessage` in skupinska `out.RequeueOutboundBatch` smeta vrniti samo stanji
+`Error`/`Dead` v `Pending`. `Sending` in `Sent` ostaneta nedotaknjena, zgodovina poskusov se
+ne prepisuje, `LastError` se počisti, dejanje pa ostane v obstoječem dnevniku kot
+`REQUEUE`/`INFO`. Ciljni dokaz `PIM.F8.BulkOutboundTests` je zelen (1/0/0, `Build OK`).
+Uporabniška gumba na straneh SAOP sta naslednji del iste naloge in še nista dodana.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;

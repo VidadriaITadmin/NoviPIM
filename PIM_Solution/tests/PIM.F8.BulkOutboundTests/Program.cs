@@ -265,6 +265,58 @@ try
   await SqlAsync($"EXEC intranet.AcknowledgeOutboundEvent {open[0].EventId}, N'F8B';");
   Equal(0, (await ReadOpenEventsAsync()).Count, "Potrjena napaka izgine iz odprtega pogleda");
 
+  /* --- varen ponovni poskus neuspelih SAOP sporocil -------------------------------- */
+
+  var messageIds = await ReadMessageIdsAsync(batchId);
+  Equal(2, messageIds.Count, "Dokaz ponovnega poskusa potrebuje obe sporocili skupine");
+  await SqlAsync($"""
+    UPDATE out.OutboxMessage
+       SET Status = CASE WHEN OutboxMessageId={messageIds[0]} THEN N'Error' ELSE N'Dead' END,
+           AttemptCount = 1,
+           LastError = N'F8B namerna napaka',
+           LeaseOwner = NULL,
+           LeaseUntilUtc = NULL
+     WHERE OrganizationId=@Org AND OutboundBatchId={batchId};
+    INSERT out.OutboxAttempt(OutboxMessageId,AttemptNumber,WorkerId,CompletedUtc,Outcome,FailureReason)
+    SELECT OutboxMessageId,1,N'F8B-requeue',SYSUTCDATETIME(),N'Dead',N'F8B namerna napaka'
+      FROM out.OutboxMessage
+     WHERE OrganizationId=@Org AND OutboundBatchId={batchId};
+    """);
+
+  await ExpectSqlFailureAsync(
+    async () =>
+    {
+      await SqlAsync($"UPDATE out.OutboxMessage SET Status=N'Sent' WHERE OutboxMessageId={messageIds[0]} AND OrganizationId=@Org;");
+      await RequeueMessageAsync(messageIds[0]);
+    },
+    "Poslanega sporocila ni dovoljeno vrniti v vrsto");
+  Equal("Sent", await ReadMessageStatusAsync(messageIds[0]), "Neuspel ponovni poskus ne sme spremeniti statusa Sent");
+  await SqlAsync($"UPDATE out.OutboxMessage SET Status=N'Error' WHERE OutboxMessageId={messageIds[0]} AND OrganizationId=@Org;");
+
+  await ExpectSqlFailureAsync(
+    async () =>
+    {
+      await SqlAsync($"UPDATE out.OutboxMessage SET Status=N'Sending',LeaseOwner=N'F8B',LeaseUntilUtc=DATEADD(minute,5,SYSUTCDATETIME()) WHERE OutboxMessageId={messageIds[1]} AND OrganizationId=@Org;");
+      await RequeueMessageAsync(messageIds[1]);
+    },
+    "Sporocila, ki ga worker posilja, ni dovoljeno vrniti v vrsto");
+  Equal("Sending", await ReadMessageStatusAsync(messageIds[1]), "Neuspel ponovni poskus ne sme spremeniti statusa Sending");
+  await SqlAsync($"UPDATE out.OutboxMessage SET Status=N'Dead',LeaseOwner=NULL,LeaseUntilUtc=NULL WHERE OutboxMessageId={messageIds[1]} AND OrganizationId=@Org;");
+
+  Equal(1, await RequeueMessageAsync(messageIds[0]), "Posamezen ponovni poskus mora vrniti eno sporocilo");
+  Equal("Pending", await ReadMessageStatusAsync(messageIds[0]), "Sporocilo Error se mora vrniti v Pending");
+  Equal(0, await ScalarIntAsync($"SELECT COUNT(*) FROM out.OutboxMessage WHERE OutboxMessageId={messageIds[0]} AND LastError IS NOT NULL;"),
+    "Ob ponovnem poskusu se mora pobrisati zadnja napaka");
+  Equal(1, await ScalarIntAsync($"SELECT AttemptCount FROM out.OutboxMessage WHERE OutboxMessageId={messageIds[0]};"),
+    "Stevec poskusov mora ostati nedotaknjen");
+
+  Equal(1, await RequeueBatchAsync(batchId), "Skupinski ponovni poskus mora zajeti samo preostalo sporocilo Dead");
+  Equal("Pending", await ReadMessageStatusAsync(messageIds[1]), "Sporocilo Dead se mora vrniti v Pending");
+  Equal(2, await ScalarIntAsync($"SELECT COUNT(*) FROM out.OutboxAttempt WHERE OutboxMessageId IN ({messageIds[0]},{messageIds[1]});"),
+    "Zgodovina poskusov mora ostati nedotaknjena");
+  Equal(2, await ScalarIntAsync($"SELECT COUNT(*) FROM ops.OutboundEvent WHERE OrganizationId=@Org AND OutboundBatchId={batchId} AND Step=N'REQUEUE' AND Severity=N'INFO';"),
+    "Vsak ponovni poskus mora biti viden v obstojecem dnevniku dogodkov");
+
   Equal(2, await ScalarIntAsync($"EXEC out.CancelOutboundBatch {batchId}, N'F8B';"),
     "Preklic velja za celo skupino, ne za eno sporočilo");
 
@@ -376,6 +428,51 @@ async Task<List<(long EventId, string? Detail)>> ReadOpenEventsAsync()
     rows.Add((reader.GetInt64(reader.GetOrdinal("OutboundEventId")),
       reader.IsDBNull(reader.GetOrdinal("Detail")) ? null : reader.GetString(reader.GetOrdinal("Detail"))));
   return rows;
+}
+
+async Task<List<long>> ReadMessageIdsAsync(long batchId)
+{
+  await using var command = new SqlCommand(
+    "SELECT OutboxMessageId FROM out.OutboxMessage WHERE OrganizationId=@Org AND OutboundBatchId=@Batch ORDER BY OutboxMessageId;",
+    connection);
+  command.Parameters.AddWithValue("@Org", organizationId);
+  command.Parameters.AddWithValue("@Batch", batchId);
+  await using var reader = await command.ExecuteReaderAsync();
+  var ids = new List<long>();
+  while (await reader.ReadAsync()) ids.Add(reader.GetInt64(0));
+  return ids;
+}
+
+async Task<string> ReadMessageStatusAsync(long messageId)
+{
+  await using var command = new SqlCommand(
+    "SELECT Status FROM out.OutboxMessage WHERE OrganizationId=@Org AND OutboxMessageId=@Message;", connection);
+  command.Parameters.AddWithValue("@Org", organizationId);
+  command.Parameters.AddWithValue("@Message", messageId);
+  return Convert.ToString(await command.ExecuteScalarAsync()) ?? string.Empty;
+}
+
+async Task<int> RequeueMessageAsync(long messageId)
+{
+  await using var command = new SqlCommand("EXEC out.RequeueOutboxMessage @Message, N'F8B';", connection);
+  command.Parameters.AddWithValue("@Message", messageId);
+  var value = await command.ExecuteScalarAsync();
+  return value is null or DBNull ? 0 : Convert.ToInt32(value);
+}
+
+async Task<int> RequeueBatchAsync(long batchId)
+{
+  await using var command = new SqlCommand("EXEC out.RequeueOutboundBatch @Batch, N'F8B';", connection);
+  command.Parameters.AddWithValue("@Batch", batchId);
+  var value = await command.ExecuteScalarAsync();
+  return value is null or DBNull ? 0 : Convert.ToInt32(value);
+}
+
+async Task ExpectSqlFailureAsync(Func<Task> action, string message)
+{
+  try { await action(); }
+  catch (SqlException) { return; }
+  throw new InvalidOperationException(message);
 }
 
 async Task RecordEventAsync(string step, string severity, string title, string? detail)

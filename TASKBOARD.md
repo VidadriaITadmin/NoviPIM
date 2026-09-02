@@ -154,7 +154,13 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   nato GREEN = 1/0/0. Polni `scripts/run_tests.ps1` = **58 uspešnih, 0 preskočenih,
   0 padlih**, `Build OK`, izhod 0. Kartica pokaže »Ime za iskanje« v identiteti in
   »Garancijo« v skupini »Prodaja«; obe spremembi gresta v odhodno vrsto SAOP.
-  Sledi Naloga 2 — ponovno pošiljanje neuspelega zapisa.
+  **Naloga 2 — BAZA je KONČANA:** RED `PIM.F8.BulkOutboundTests` = izhod 1, SQL 2812
+  zaradi manjkajoče procedure; migracija `138_RequeueOutboxMessage.sql` = prvi zagon
+  uporabljen, drugi preskočen, `--verify` uspešen; GREEN `run_tests.ps1 -Filter
+  F8.BulkOutboundTests` = 1 uspešen, 0 padlih, `Build OK`. Posamična in skupinska pot
+  vrneta samo `Error`/`Dead` v `Pending`, ohranita `AttemptCount` in `OutboxAttempt`,
+  počistita `LastError` ter zapišeta tihi dogodek `REQUEUE`/`INFO`; dokaz izrecno zavrne
+  `Sending` in `Sent`. Sledi intranetni del Naloge 2.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet
