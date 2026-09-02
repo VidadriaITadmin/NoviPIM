@@ -121,6 +121,90 @@ try
     """, ("@OrganizationId", organizationId)), "Profil ni zabelezil uspesnega zajema.");
 
   Console.WriteLine("F6 SAOP zaloga: profil, sifre skladisc, glava podjetja, ujet in neujet artikel PASS.");
+
+  // --- Registrirani pogled (migracija 145) -----------------------------------------------
+  // Vidadria bere zalogo iz registriranega pogleda: POST z XML telesom, odgovor je stranjen,
+  // vsaka vrstica nosi pet kolicin. Lokalni streznik vrne dve strani po dve vrstici (druga je
+  // kratka, zato se branje ustavi) in posname telesa zahtev.
+  await ExecuteAsync(connection, """
+    INSERT stock.SaopProviderProfile(OrganizationId,ProfileCode,ProviderKind,Priority,Enabled,RegisteredViewId,WarehouseSelectionMode)
+    VALUES(@OrganizationId,N'SAOP_TEST_RV',N'RegisteredViewData',5,1,N'11111111-2222-3333-4444-555555555555',N'List');
+    """, ("@OrganizationId", organizationId));
+  using var rvListener = new HttpListener();
+  var rvPort = FreePort();
+  var rvPrefix = $"http://127.0.0.1:{rvPort}/";
+  rvListener.Prefixes.Add(rvPrefix);
+  rvListener.Start();
+  var telesa = new List<string>();
+  var metode = new List<string>();
+  var rvStreznik = Task.Run(async () =>
+  {
+    for (var zahteva = 0; zahteva < 2; zahteva++)
+    {
+      var context = await rvListener.GetContextAsync();
+      metode.Add(context.Request.HttpMethod);
+      using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+      var telo = await reader.ReadToEndAsync();
+      telesa.Add(telo);
+      var stran = telo.Contains("<ResultPageNumber>1</ResultPageNumber>", StringComparison.Ordinal) ? 1 : 2;
+      var odgovor = stran == 1
+        ? $"""
+          <?xml version="1.0" encoding="utf-8"?>
+          <RegisteredViewData><Rows>
+            <Row><SifraArtikla>NW. {znanItemId}</SifraArtikla><TrenutnaZalogaL>7.5</TrenutnaZalogaL><NarocenaKolicina>1</NarocenaKolicina><ZaOdpremoKolicina>2.5</ZaOdpremoKolicina><RazpolozljivaKolicina>5</RazpolozljivaKolicina><NarocenaKolicinaDobaviteljem>40</NarocenaKolicinaDobaviteljem></Row>
+            <Row><SifraArtikla>{neznanItemId}</SifraArtikla><TrenutnaZalogaL>0</TrenutnaZalogaL><NarocenaKolicina>0</NarocenaKolicina><ZaOdpremoKolicina>0</ZaOdpremoKolicina><RazpolozljivaKolicina>0</RazpolozljivaKolicina><NarocenaKolicinaDobaviteljem>0</NarocenaKolicinaDobaviteljem></Row>
+          </Rows></RegisteredViewData>
+          """
+        : $"""
+          <?xml version="1.0" encoding="utf-8"?>
+          <RegisteredViewData><Rows>
+            <Row><SifraArtikla>F6-RV-TRETJI</SifraArtikla><TrenutnaZalogaL>1</TrenutnaZalogaL><RazpolozljivaKolicina>1</RazpolozljivaKolicina></Row>
+          </Rows></RegisteredViewData>
+          """;
+      var bytes = Encoding.UTF8.GetBytes(odgovor);
+      context.Response.ContentType = "application/xml";
+      context.Response.ContentLength64 = bytes.Length;
+      await context.Response.OutputStream.WriteAsync(bytes);
+      context.Response.Close();
+    }
+  });
+  // Znan artikel tokrat nosi predpono NW., kot jo imajo Nowodvorskega artikli v SAOP.
+  await ExecuteAsync(connection, "UPDATE canon.Product SET ItemID=N'NW.'+ItemID WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID;",
+    ("@OrganizationId", organizationId), ("@ItemID", znanItemId));
+  // Posnetek je kljuc (podjetje, konektor, cas na sekundo); drugi posnetek istega konektorja v
+  // isti sekundi bi bil po zasnovi "ze v bazi" (StockLandingWriter). Pocakamo na naslednjo sekundo.
+  await Task.Delay(1100);
+  using var rvHttp = new HttpClient();
+  var rvIzid = await new SaopStockRunner(connectionString, rvHttp, new Uri(rvPrefix)).RunAsync(organizationId, pageSize: 2);
+  await rvStreznik;
+  rvListener.Stop();
+  Equal("SAOP_TEST_RV", rvIzid.ProfileCode, "Registrirani pogled (Priority 5) mora zmagati pred GetStocks (10).");
+  Equal("RegisteredViewData", rvIzid.ProviderKind, "Uporabljen je bil napacen vmesnik.");
+  Equal(3, rvIzid.RecordsRead, "Vrstice obeh strani niso prebrane.");
+  Equal(2, telesa.Count, "Streznik mora dobiti natanko dve zahtevi (druga stran je kratka).");
+  if (metode.Any(metoda => metoda != "POST")) throw new InvalidOperationException("Registrirani pogled se bere s POST, ne z GET.");
+  if (!telesa[0].Contains("<RegisteredViewID>11111111-2222-3333-4444-555555555555</RegisteredViewID>", StringComparison.Ordinal))
+    throw new InvalidOperationException("Telo zahteve ne nosi ID-ja pogleda iz profila.");
+  if (!telesa[1].Contains("<ResultPageNumber>2</ResultPageNumber>", StringComparison.Ordinal))
+    throw new InvalidOperationException("Druga zahteva ne prosi za drugo stran.");
+  Equal(1, await ScalarAsync<int>(connection, """
+    SELECT COUNT(*) FROM stock.Position pozicija
+    INNER JOIN canon.Product product ON product.ProductId=pozicija.MatchedProductId
+    INNER JOIN stock.Snapshot snapshot ON snapshot.SnapshotId=pozicija.SnapshotId
+    WHERE product.OrganizationId=@OrganizationId AND product.ItemID=N'NW.'+@ItemID AND snapshot.IsActive=1
+      AND pozicija.Quantity=7.5 AND pozicija.OrderedQuantity=1 AND pozicija.ForShipmentQuantity=2.5
+      AND pozicija.AvailableQuantity=5 AND pozicija.SupplierOrderedQuantity=40
+      AND snapshot.Endpoint LIKE N'%registeredviews/data%';
+    """, ("@OrganizationId", organizationId), ("@ItemID", znanItemId)),
+    "Sifra 'NW. …' se ni normalizirala v 'NW.…' ali pet kolicin ni v poziciji.");
+  Equal(1, await ScalarAsync<int>(connection, """
+    SELECT COUNT(*) FROM stock.Position pozicija
+    INNER JOIN stock.LandingRecord landing ON landing.LandingRecordId=pozicija.LandingRecordId
+    WHERE landing.OrganizationId=@OrganizationId AND landing.SourceItemId=N'F6-RV-TRETJI'
+      AND pozicija.AvailableQuantity=1 AND pozicija.OrderedQuantity IS NULL;
+    """, ("@OrganizationId", organizationId)),
+    "Vrstica z druge strani ni v bazi ali manjkajoca kolicina ni NULL.");
+  Console.WriteLine("F6 SAOP zaloga: registrirani pogled (POST, dve strani, pet kolicin, NW. normalizacija) PASS.");
 }
 finally
 {

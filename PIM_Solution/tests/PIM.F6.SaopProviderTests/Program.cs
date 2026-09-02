@@ -1,9 +1,22 @@
 using PIM.SaopStockWorker;
 
 var registry = SaopStockProviderRegistry.CreateDefault();
-var registered = registry.CreateRequest(new("RegisteredViewData","rv-stock",[]), new Uri("https://example.invalid/"));
+
+// Registrirani pogled je POST z XML telesom in stranjenjem (Swagger: ApiRegisteredView_GetDataFromRegisteredView).
+// Do 2026-09-02 je test zahteval GET ?viewId=…, ki ga API ne pozna; zahteva se je spremenila, ker je
+// uporabnik zalogo Vidadrie preusmeril na registrirani pogled (migracija 145).
+var registered = registry.CreateRequest(new("RegisteredViewData","rv-stock",[], PageSize: 250, Page: 3), new Uri("https://example.invalid/"));
 Equal("api/registeredviews/data", registered.RequestUri!.AbsolutePath.TrimStart('/'), "RegisteredView endpoint");
-if (!registered.RequestUri.Query.Contains("viewId=rv-stock", StringComparison.Ordinal)) throw new InvalidOperationException("RegisteredViewId ni v zahtevi.");
+Equal(HttpMethod.Post, registered.Method, "RegisteredView mora biti POST");
+var body = await registered.Content!.ReadAsStringAsync();
+if (!body.Contains("<RegisteredViewID>rv-stock</RegisteredViewID>", StringComparison.Ordinal)) throw new InvalidOperationException("RegisteredViewId ni v telesu zahteve.");
+if (!body.Contains("<ResultPageNumber>3</ResultPageNumber>", StringComparison.Ordinal)) throw new InvalidOperationException("Stran ni v telesu zahteve.");
+if (!body.Contains("<ResultPageSize>250</ResultPageSize>", StringComparison.Ordinal)) throw new InvalidOperationException("Velikost strani ni v telesu zahteve.");
+if (!body.Contains("<Filter />", StringComparison.Ordinal) || !body.Contains("<OrderBy />", StringComparison.Ordinal)) throw new InvalidOperationException("Prazna Filter/OrderBy morata biti samozakljucena, kot v delujoci zahtevi.");
+Equal("application/xml", registered.Content.Headers.ContentType?.MediaType, "Telo mora biti application/xml");
+// Brez izrecne velikosti strani velja privzeta 1000 (enako kot stari sistem).
+var privzeta = await registry.CreateRequest(new("RegisteredViewData","rv-stock",[]), new Uri("https://example.invalid/")).Content!.ReadAsStringAsync();
+if (!privzeta.Contains("<ResultPageSize>1000</ResultPageSize>", StringComparison.Ordinal)) throw new InvalidOperationException("Privzeta velikost strani ni 1000.");
 Throws(() => registry.CreateRequest(new("RegisteredViewData",null,[]), new("https://example.invalid/")), "RegisteredViewId");
 Throws(() => registry.CreateRequest(new("StockAdvance",null,[]), new("https://example.invalid/")), "warehouse");
 Throws(() => registry.CreateRequest(new("GetStocks",null,[]), new("https://example.invalid/")), "warehouse");
@@ -15,6 +28,7 @@ Equal("api/Stock/GetStockAdvance",advance.RequestUri!.AbsolutePath.TrimStart('/'
 var stocks=registry.CreateRequest(new("GetStocks",null,["0000003","0000112"]),new("https://example.invalid/"));
 if (!stocks.RequestUri!.Query.Contains("0000003", StringComparison.Ordinal))
   throw new InvalidOperationException("Vodilne nicle sifre skladisca so izgubljene.");
+Equal(HttpMethod.Get, stocks.Method, "GetStocks ostane GET");
 if (typeof(SaopStockProviderRegistry).GetMethods().Any(m=>m.Name.Contains("Organization",StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("Registry vsebuje org vejo.");
 Console.WriteLine("F6 SAOP: konfiguracijska izbira providerja in zahtev PASS.");
 

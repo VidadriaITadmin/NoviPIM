@@ -27,48 +27,117 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
     ["Quantity"] = new(SelectorKind.XPath, "Qty/text()")
   });
 
+  // Registrirani pogled (migracija 145). Oblika vrstice je prepisana iz delujocega starega
+  // sistema (PIM_test SaopStockWorker, EndpointXmlParser.ParseRegisteredViewStockRows): element
+  // <Row>, pet kolicin kot podelementi. Glavna kolicina je TrenutnaZalogaL; ostale stiri gredo
+  // v stock.Position kot dodatne kolicine in v spletni izvoz kot stolpci 44-47.
+  static readonly XmlStockSchema RegisteredViewSchema = new("//*[local-name()='Row']", new Dictionary<string, FieldSelector>
+  {
+    ["SourceItemId"] = new(SelectorKind.XPath, "*[local-name()='SifraArtikla']/text()"),
+    ["Quantity"] = new(SelectorKind.XPath, "*[local-name()='TrenutnaZalogaL']/text()"),
+    ["OrderedQuantity"] = new(SelectorKind.XPath, "*[local-name()='NarocenaKolicina']/text()"),
+    ["ForShipmentQuantity"] = new(SelectorKind.XPath, "*[local-name()='ZaOdpremoKolicina']/text()"),
+    ["AvailableQuantity"] = new(SelectorKind.XPath, "*[local-name()='RazpolozljivaKolicina']/text()"),
+    ["SupplierOrderedQuantity"] = new(SelectorKind.XPath, "*[local-name()='NarocenaKolicinaDobaviteljem']/text()")
+  });
+
+  /// <summary>Najvec strani registriranega pogleda v enem zajemu; enako kot stari MaxPagesPerEndpoint.</summary>
+  const int RegisteredViewMaxPages = 100;
+
   static readonly SaopStockProviderRegistry Registry = SaopStockProviderRegistry.CreateDefault();
 
   public async Task<SaopStockOutcome> RunAsync(int organizationId, int? pageSize = null, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync(cancellationToken);
-
     var profile = await ReadProfileAsync(connection, organizationId, cancellationToken)
       ?? throw new InvalidOperationException(
         $"Podjetje {organizationId} nima vklopljenega profila v stock.SaopProviderProfile.");
 
-    var warehouses = profile.SelectionMode == "List"
-      ? ParseWarehouseList(profile.WarehouseIdsJson)
-      : await ReadActiveWarehousesAsync(connection, organizationId, cancellationToken);
+    var isRegisteredView = string.Equals(profile.ProviderKind, "RegisteredViewData", StringComparison.Ordinal);
+    // Registrirani pogled ne pozna skladisc: pogled sam pove, kaj steje. Seznam skladisc
+    // potrebujeta samo GetStocks in GetStockAdvance.
+    var warehouses = isRegisteredView
+      ? Array.Empty<string>()
+      : profile.SelectionMode == "List"
+        ? ParseWarehouseList(profile.WarehouseIdsJson)
+        : await ReadActiveWarehousesAsync(connection, organizationId, cancellationToken);
 
-    var request = Registry.CreateRequest(
-      new(profile.ProviderKind, profile.RegisteredViewId, warehouses, pageSize), baseUrl);
+    var payloads = new StringBuilder();
+    var records = new List<ExtractedStockRow>();
+    string endpointForSnapshot;
 
+    if (isRegisteredView)
+    {
+      // Odgovor je stranjen: beremo, dokler stran ni krajsa od zahtevane. Vrstice vseh strani
+      // so en posnetek (ena vrstica stock.SyncRun), zato zaporedne stevilke tecejo naprej —
+      // SourceRecordKey mora biti enolicen znotraj posnetka.
+      var size = pageSize is > 0 ? pageSize.Value : SaopStockProviderRegistry.RegisteredViewDefaultPageSize;
+      endpointForSnapshot = $"{SaopStockProviderRegistry.RegisteredViewPath}?viewId={profile.RegisteredViewId}";
+      for (var page = 1; page <= RegisteredViewMaxPages; page++)
+      {
+        var request = Registry.CreateRequest(new(profile.ProviderKind, profile.RegisteredViewId, warehouses, size, page), baseUrl);
+        var payload = await SendAsync(request, organizationId, cancellationToken);
+        payloads.Append(payload);
+        var pageRows = new StockMappingExtractor().ExtractXml(payload, RegisteredViewSchema);
+        foreach (var row in pageRows)
+          records.Add(new(records.Count + 1, NormalizeRegisteredViewValues(row.Values)));
+        if (pageRows.Count < size) break;
+        if (page == RegisteredViewMaxPages)
+          throw new InvalidOperationException(
+            $"Registrirani pogled ima vec kot {RegisteredViewMaxPages} strani po {size} vrstic; povecaj --page-size.");
+      }
+    }
+    else
+    {
+      var request = Registry.CreateRequest(new(profile.ProviderKind, profile.RegisteredViewId, warehouses, pageSize), baseUrl);
+      endpointForSnapshot = request.RequestUri!.PathAndQuery;
+      var payload = await SendAsync(request, organizationId, cancellationToken);
+      payloads.Append(payload);
+      records.AddRange(new StockMappingExtractor().ExtractXml(payload, Schema));
+    }
+
+    var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(payloads.ToString()))).ToLowerInvariant();
+    // Posnetek je trenutek klica: zaloga velja za takrat, ne za trenutek zapisa v bazo.
+    var snapshotUtc = DateTime.UtcNow;
+    var sourceCode = await ReadStockSourceCodeAsync(connection, organizationId, cancellationToken);
+    var (runId, applied, quarantined, _) = await new StockLandingWriter(connectionString).PersistAsync(
+      organizationId, sourceCode, "SAOP", endpointForSnapshot, snapshotUtc, hash, records,
+      "yyyy-MM-dd", cancellationToken: cancellationToken);
+    await MarkSuccessAsync(connection, profile.ProfileId, cancellationToken);
+    return new(profile.ProfileCode, profile.ProviderKind, warehouses.Count, records.Count, applied, quarantined, runId);
+  }
+
+  async Task<string> SendAsync(HttpRequestMessage request, int organizationId, CancellationToken cancellationToken)
+  {
     // Brez glave OrganisationId vrne SAOP podatke napacnega podjetja ali 401 — enako kot pri
     // katalogu (PIM.KatalogWorker.SaopApiClient). Glava sodi na zahtevo, ne na odjemalca, ker
     // isti odjemalec obdela vec podjetij zapored.
     request.Headers.Remove("OrganisationId");
     request.Headers.Add("OrganisationId", organizationId.ToString(CultureInfo.InvariantCulture));
-
     using var response = await http.SendAsync(request, cancellationToken);
     var payload = await response.Content.ReadAsStringAsync(cancellationToken);
     if (!response.IsSuccessStatusCode)
       throw new InvalidOperationException(
         $"SAOP je vrnil {(int)response.StatusCode}: {payload[..Math.Min(payload.Length, 300)]}");
+    return payload;
+  }
 
-    var records = new StockMappingExtractor().ExtractXml(payload, Schema);
-    var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
-
-    // Posnetek je trenutek klica: zaloga velja za takrat, ne za trenutek zapisa v bazo.
-    var snapshotUtc = DateTime.UtcNow;
-    var sourceCode = await ReadStockSourceCodeAsync(connection, organizationId, cancellationToken);
-    var (runId, applied, quarantined, _) = await new StockLandingWriter(connectionString).PersistAsync(
-      organizationId, sourceCode, "SAOP", request.RequestUri!.PathAndQuery, snapshotUtc, hash, records,
-      "yyyy-MM-dd", cancellationToken: cancellationToken);
-
-    await MarkSuccessAsync(connection, profile.ProfileId, cancellationToken);
-    return new(profile.ProfileCode, profile.ProviderKind, warehouses.Count, records.Count, applied, quarantined, runId);
+  /// <summary>
+  /// Sifra iz registriranega pogleda vcasih pride kot "NW. 1234" (presledek za predpono).
+  /// Stari izvoz je to popravljal ob vsakem branju; tu se popravi enkrat, ob zajemu, da se
+  /// vrstica ujame z canon.Product.ItemID = "NW.1234".
+  /// </summary>
+  static IReadOnlyDictionary<string, string?> NormalizeRegisteredViewValues(IReadOnlyDictionary<string, string?> values)
+  {
+    if (!values.TryGetValue("SourceItemId", out var code) || code is null) return values;
+    var trimmed = code.Trim();
+    var dot = trimmed.IndexOf('.');
+    if (dot is > 0 and <= 3 && dot + 1 < trimmed.Length && char.IsWhiteSpace(trimmed[dot + 1]))
+      trimmed = trimmed[..(dot + 1)] + trimmed[(dot + 1)..].TrimStart();
+    if (string.Equals(trimmed, code, StringComparison.Ordinal)) return values;
+    var copy = new Dictionary<string, string?>(values, StringComparer.Ordinal) { ["SourceItemId"] = trimmed };
+    return copy;
   }
 
   sealed record Profile(int ProfileId, string ProfileCode, string ProviderKind, string? RegisteredViewId, string? SelectionMode, string? WarehouseIdsJson);
