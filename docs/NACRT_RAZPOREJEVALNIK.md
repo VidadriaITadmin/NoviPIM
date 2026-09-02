@@ -152,8 +152,9 @@ in to, da je zagon sprožil on in ne človek.
 | 4 | novi stolpci na `ops.PipelineRun`: `WorkerId nvarchar(200)`, `ExitCode int`, `TriggeredBy nvarchar(30)` (`Scheduler` / `Human` / `Task`) | brez tega ni razvidno, kdo je zagnal in s čim je končal |
 | 5 | `CK_PipelineRun_Status` dobi `N'TimedOut'` | ubit po meji ni isto kot padel |
 | 6 | nova procedura `ops.RecordRunCounts @RunId, @RowsRead, @RowsSucceeded, @RowsFailed`; ovoj `OperationsRun.ReportCountsAsync` | števci so danes stvar vsakega workerja posebej |
-| 7 | `PIM.KatalogWorker` in `PIM.XmlFileWorker` opustita svoj `INSERT` in preideta na `operationsRun.RunId` | sicer nastaneta dve vrstici na tek |
-| 8 | nadzornik zapre osirotele vrstice: `Status = 'Running'` brez utripa dlje od `StaleAfterSeconds` → `Cancelled` | tistih 19 odprtih vrstic je dokaz, da se to zgodi |
+| 7 | `PIM.KatalogWorker` in `PIM.XmlFileWorker` opustita svoj `INSERT` in preideta na `operationsRun.RunId`; `FinishRunAsync` **ostane** (glej §3.4 C) | sicer nastaneta dve vrstici na tek |
+| 8 | osirotele vrstice se zaprejo v `Abandoned`: ob **zagonu razporejevalnika** vse tuje `Running`, med tekom pa nadzornik po `StaleAfterSeconds` | tistih 19 odprtih vrstic je dokaz, da se to zgodi |
+| 9 | `ops.Heartbeat` se spusti; odstrani se tudi iz `expectedObjects` v `PIM.Migrator` | prazna tabela je past (§3.5) |
 
 Točka 7 je edina, ki se dotakne obstoječih workerjev. Varna je, ker ima `raw.Inbox.RunId` tuji
 ključ na `ops.PipelineRun` (migracija 007) in `BeginRun` vrstico ustvari **prej** kot worker piše
@@ -175,7 +176,93 @@ ops.ErrorLog        RunId, OccurredUtc, Severity, ErrorCode, Message, Detail
 ops.IntegrationHealth                                        <- stanje, prepisano (kot doslej)
 ```
 
-Testi 8–11 v §7 to držijo.
+Testi 8–12 v §7 to držijo.
+
+### 3.4 Kaj so pokazala preverjanja pred izvedbo
+
+Tri stvari je bilo treba preveriti, preden se migracije dotaknem. Dve sta se izšli drugače, kot
+je bilo pričakovati.
+
+**A. Slepa pega pri zalogi ne nastane — ker alarm sploh ne bere `ops.PipelineRun`.**
+
+`ops.RunWatchdog` (migracija 025, vrstice 190–223) dela **izključno** nad `ops.IntegrationHealth`
+in `ops.ScheduleProfile`. Zastarel utrip, mirujoč vodni žig, odhodna sporočila — vse troje bere
+stanje, ne zgodovine. In v `ops.IntegrationHealth` zaloga **je**: `SAOP_STOCK` za štiri podjetja
+in `STOCK_FILE` za štiri podjetja, izmerjeno 2026-09-02.
+
+Zato dodajanje vrstic v `ops.PipelineRun` alarma ne premakne in najpogostejšega postopka ne
+skrije. Nevarnost je obrnjena od pričakovane: nastala bi šele, če bi kdo alarm **preselil** na
+`ops.PipelineRun`, ker se zdi bogatejši. Zato pravilo, zapisano tu in ne prepuščeno spominu:
+
+> **`ops.IntegrationHealth` je stanje in edini vir alarma. `ops.PipelineRun` je zgodovina in
+> forenzika. Alarm se nanjo ne seli.** Vsak nov pogled »zadnji teki« mora zalogo pobrati iz
+> `stock.SyncRun` z unijo, ne samo iz `ops.PipelineRun`.
+
+Unija ni nova iznajdba: `PipelineReadService.cs` jo ima že danes na šestih mestih (vrstice 134,
+141, 172, 292, 352, 812 — zadnja doda celo `N'STOCK_SYNC'` kot samostojen postopek). Nov pogled
+v `/sistem/urniki` uporabi isti vzorec.
+
+**B. Osirotele vrstice se zaprejo ob zagonu razporejevalnika, ne po urniku.**
+
+Pometanje samo po času pomeni, da sesut tek visi kot `Running` do naslednjega pometanja. Zato
+dvoje:
+
+1. **ob zagonu razporejevalnika** — vsaka vrstica v stanju `Running`, ki je ni zapisal ta proces,
+   dobi status takoj; razporejevalnik ve, da je nov, in da nihče od prejšnjih ne teče več;
+2. **med tekom** — nadzornik zapre vrstice brez utripa dlje od `StaleAfterSeconds`, za primer,
+   ko pade worker in ne razporejevalnik.
+
+Status je `Abandoned`, izrecno in ločeno od `Failed` in od `Cancelled`. Tri stanja, tri različne
+zgodbe: *padlo je* (`Failed`), *nekdo ga je ustavil* (`Cancelled`), *nikoli se ni zaprlo*
+(`Abandoned`). Zlivanje teh treh je natanko tisto, zaradi česar tišina izgleda kot zdravje.
+
+**Glede zaprtega seznama:** `Status` že **je** zaprt seznam — `CK_PipelineRun_Status` iz
+migracije 002 dovoli `Pending`, `Running`, `Succeeded`, `Failed`, `Cancelled`. Zato ga ne
+preimenujem v `Success`/`Error`, ampak razširim. Razlog je merljiv: v bazi je 138 vrstic z
+obstoječimi vrednostmi, `PipelineReadService.cs` pa se na imena naslanja na enajstih mestih —
+med drugim `CASE lastPipeline.Status WHEN N'Succeeded' THEN N'Healthy'` (vrstica 85) in filtra v
+vrsticah 120 in 128. Preimenovanje bi bila migracija podatkov in sprememba vmesnika zaradi
+besede. Seznam po migraciji 142:
+
+```
+Pending | Running | Succeeded | Warning | Failed | TimedOut | Cancelled | Abandoned
+```
+
+`Warning` je nov in pokriva delni uspeh (del vrstic v karanteni) — danes se tak tek zapiše kot
+`Succeeded` in se ne loči od čistega.
+
+**C. Poti brez `BeginRun` obstajajo — tri. Ena od njih se `ops.PipelineRun` dotika.**
+
+To je bilo edino mesto s tveganjem in tveganje je resnično:
+
+| Pot | Kliče `BeginRun`? | Se dotika `ops.PipelineRun`? | Posledica |
+|---|---|---|---|
+| `PIM.XmlFileWorker --map-run <RunId>` (`Program.cs:42–65`) | **ne** | **da** — `FinishRunAsync(mapConnection, existingRunId)` | če bi `FinishRunAsync` odstranil, bi ponovno preslikan zagon ostal odprt |
+| `PIM.KatalogWorker --map-run <RunId>` (`Program.cs:184–213`) | ne | ne | preslikava ne pusti nobene sledi |
+| `PIM.KatalogWorker --preslikaj-zaostanek` (`Program.cs:116–149`) | ne | ne | isto; in prav ta gre čez **vse** zaostale zagone naenkrat |
+
+Zato se točka 7 iz §3.2 popravi: **odstrani se `InsertRunAsync` / `InsertPipelineRunAsync`,
+`FinishRunAsync` pa ostane.** Vstavljanje prevzame `ops.BeginRun`; zapiranje ostane tam, kjer je,
+ker ima svojo pot brez zagona.
+
+Drugi dve poti nista pokvarjeni in jih ta migracija ne popravlja, sta pa zapisani: preslikava
+zaostanka je danes nevidna. Ko bo `TriggeredBy` na mestu, je pravi popravek zanju vrstica s
+`Pipeline = 'REMAP'` in `TriggeredBy = 'Human'` — ločena naloga, ne pogoj za razporejevalnik.
+
+### 3.5 Mrtve tabele gredo v isti migraciji
+
+`ops.Heartbeat` ima 0 vrstic in nobenega pisca; nasledila jo je `ops.IntegrationHealth`. Prazna
+tabela je past — naslednji, ki jo najde, bo domneval, da nekaj pomeni. Zato jo migracija 142
+spusti, skupaj z dvema mestoma, ki jo držita pri življenju:
+
+- `src/PIM.Migrator/Program.cs:304` jo našteva med obveznimi objekti v `--verify` in bi po
+  spustu padel;
+- `tests/PIM.F0.Tests/Program.cs:30` preverja **besedilo migracije 002**, ne baze, zato ostane
+  zelen — 002 se ne spreminja.
+
+`ops.PipelineStepLog` in `ops.RecordPipelineStep` ostaneta: prva ima svoj tuji ključ na
+`ops.PipelineRun` in svoj namen (koraki znotraj teka), četudi je danes prazna. Če se izkaže, da
+je tudi ta mrtva, gre ven ločeno in zavestno, ne mimogrede.
 
 ## 4. Kaj se spremeni v intranetu
 
@@ -245,6 +332,9 @@ noben test ne kliče ERP ali dobavitelja.
 | 10 | ubit po meji → `Status = 'TimedOut'`, ne `Failed` | ubit ni isto kot padel |
 | 11 | worker ubit brez zaključka → nadzornik vrstico zapre s `Cancelled` | osirotelih vrstic ne pušča več |
 | 12 | ročni zagon iz ukazne vrstice pusti vrstico s `TriggeredBy = 'Human'` | sled ni odvisna od tega, kdo je zagnal |
+| 13 | ob zagonu razporejevalnika tuje vrstice `Running` → `Abandoned`, ne `Failed` | »nikoli se ni zaprlo« ni »padlo« |
+| 14 | `--map-run` v `PIM.XmlFileWorker` še vedno zapre svoj tek | §3.4 C: `FinishRunAsync` ostane |
+| 15 | pogled zadnjih tekov pokaže tudi `STOCK_FILE` in `SAOP_STOCK` | unija s `stock.SyncRun` drži |
 
 ---
 
