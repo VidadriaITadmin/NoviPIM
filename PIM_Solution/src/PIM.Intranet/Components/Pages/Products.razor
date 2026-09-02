@@ -40,6 +40,9 @@
          izbrani, sicer cel pogled — in gumb to prebere na glas. *@
       <a class="ghost-button" href="@ExportHref(saopTemplate: false)">Izvozi Excel @ExportScopeLabel</a>
       <a class="ghost-button" href="@ExportHref(saopTemplate: true)">Predloga SAOP @ExportScopeLabel</a>
+      @* Pametni prenos artiklov v SAOP: ista predloga, izpolnjena v Excelu, gre na /saop/artikli,
+         kjer se za vsako vrstico sama doloci ADD (nov artikel) ali PATCH in caka odobritev. *@
+      <a class="ghost-button" href="saop/artikli" title="Excel po predlogi SAOP prebere stran Artikli v SAOP: novi artikli gredo na čakalno listo za odobritev, obstoječi kot sprememba.">Excel → čakalna lista SAOP</a>
       <button type="button" class="primary-button" disabled="@(Selected.Count == 0 || SelectionSpansOrganizations)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
     </div>
   </div>
