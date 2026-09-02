@@ -11,6 +11,7 @@
 
 <div class="filter-bar section-gap">
   <label class="field-control"><span>Spletno mesto</span><select value="@SelectedSite" @onchange="SiteChangedAsync"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
+  <div class="page-actions"><a href="splet/izvoz">Pripravi izvoz</a></div>
 </div>
 
 <PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje spletnih izhodov …">

@@ -29,7 +29,13 @@ Dinamični rezultat dobi glave, vrstni red in kanonične kode iz registra
 `out.ExportProfile/out.ExportColumn`; podpira spletno mesto, samo objavljene, iskanje,
 strani in `@Take=0` za celoten nabor. Več vrednosti združi, nepovezan registrski stolpec pa
 ostane prazen. Bazni dokaz `PIM.F7.WebExportTests` je zelen (1/0/0, `Build OK`). Servis,
-pretočni HTTP prenos in uporabniška stran so še naslednji del iste naloge.
+pretočni HTTP prenos in uporabniška stran so dodani: `/splet` vodi na `/splet/izvoz`, kjer
+uporabnik izbere produktni profil, spletno mesto, samo objavljene in iskanje. Predogled je
+omejen na 200 vrstic; prenos celoten filtrirani nabor piše neposredno iz `SqlDataReader` v
+`Response.Body` kot UTF-8 z BOM, `;` in pravilnimi narekovaji. Ime je
+`PIM_splet_{profil}_{yyyyMMdd_HHmm}.csv`. Stari `/izvoz/izdelki.csv` zdaj naredi en SQL klic
+do 20.000 vrstic namesto 100 zaporednih strani. Dokaz: F7 = 7/0/0, F10 = 14/0/0, oba
+`Build OK`.
 
 ## Popravki po pregledu uporabnika 2026-08-28
 

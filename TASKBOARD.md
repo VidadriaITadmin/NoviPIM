@@ -171,7 +171,14 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   GREEN istega testa = 1/0/0 in `Build OK`. `intranet.GetWebExportRows` bere glave,
   vrstni red in kanonične kode iz `out.ExportProfile/out.ExportColumn`, podpira filtre,
   strani in `@Take=0` za celoten pretočni nabor. Stolpec registra brez kanonične kode
-  ostane pošteno prazen. Sledi servis, prenos in stran Naloge 3.
+  ostane pošteno prazen. **Naloga 3 — INTRANET je KONČANA:** RED
+  `PIM.F7.WebExportTests` = izhod 1 zaradi manjkajočega `WebExportBuildService`; GREEN
+  `run_tests.ps1 -Filter F7` = 7/0/0, `run_tests.ps1 -Filter F10` = 14/0/0, oba z
+  `Build OK`. `/splet` ima edini vhod »Pripravi izvoz« na `/splet/izvoz`; predogled
+  pokaže največ 200 vrstic in skupno število, prenos pa `SqlDataReader` pretočno piše
+  naravnost v `Response.Body` kot UTF-8 z BOM in podpičjem. Test preveri BOM, glavo,
+  ubežne narekovaje in ime datoteke. Stari `/izvoz/izdelki.csv` namesto do 100 klicev
+  izvede en klic z mejo 20.000. Sledi Naloga 4 — kontakti stranke.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet

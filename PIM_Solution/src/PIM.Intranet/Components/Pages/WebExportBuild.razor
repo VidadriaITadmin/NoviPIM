@@ -1,0 +1,130 @@
+@page "/splet/izvoz"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IntranetDataService Data
+@inject GovernanceReadService Governance
+@inject CatalogReadService Catalog
+@inject WebExportBuildService Export
+
+<PageTitle>Pripravi spletni izvoz</PageTitle>
+<PimPage Title="Pripravi spletni izvoz"
+         Subtitle="Predogled trenutnih kanoničnih podatkov po stolpcih izbranega izvoznega profila."
+         Crumbs="Crumbs" />
+
+<section class="ui-card toolbar section-gap" role="search" aria-label="Filtri spletnega izvoza">
+  <label class="field-control"><span>Izvozni profil</span>
+    <select @bind="SelectedProfileId">
+      <option value="0">Izberi profil</option>
+      @foreach (var profile in Profiles)
+      {
+        <option value="@profile.ExportProfileId">@profile.Name (@profile.ProfileCode)</option>
+      }
+    </select>
+  </label>
+  <label class="field-control"><span>Spletno mesto</span>
+    <select @bind="SelectedSite">
+      <option value="">Vsa spletna mesta</option>
+      @foreach (var site in Sites)
+      {
+        <option value="@site.WebSiteCode">@site.WebSiteName</option>
+      }
+    </select>
+  </label>
+  <label class="field-control"><span>Iskanje</span>
+    <input class="search-input" type="search" placeholder="Šifra, EAN ali naziv …" @bind="Search" @bind:event="oninput" />
+  </label>
+  <label class="field-control checkbox-control">
+    <input type="checkbox" @bind="OnlyPublished" /> <span>Samo objavljeni</span>
+  </label>
+  <button type="button" class="primary-button" disabled="@(Loading || SelectedProfileId == 0)" @onclick="ShowAsync">Prikaži</button>
+</section>
+
+<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje nastavitev izvoza …">
+  @if (Preview is null)
+  {
+    <div class="note-panel">Izberi profil in filtre, nato klikni »Prikaži«. Predogled pokaže največ 200 vrstic.</div>
+  }
+  else
+  {
+    <section class="ui-card data-card section-gap" aria-label="Predogled spletnega izvoza">
+      <PimTable Caption="Prvih 200 vrstic spletnega izvoza" Columns="PreviewColumns">
+        <Rows>
+          @foreach (var row in Preview.Rows)
+          {
+            <tr>@foreach (var value in row) { <td>@(value ?? "—")</td> }</tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (Preview.Rows.Count == 0)
+      {
+        <div class="note-panel">Za izbrane filtre ni nobene vrstice.</div>
+      }
+    </section>
+
+    <section class="ui-card section-gap" aria-label="Prenos spletnega izvoza">
+      <p>@FilterSummary</p>
+      <div class="page-actions"><a href="@DownloadHref">Prenesi CSV</a></div>
+    </section>
+  }
+</PimState>
+
+@code {
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod na splet", "splet"), new("Pripravi izvoz")];
+  IReadOnlyList<ExportProfileRow> Profiles = [];
+  IReadOnlyList<WebSiteRow> Sites = [];
+  WebExportPage? Preview;
+  int? OrganizationId;
+  int SelectedProfileId;
+  string SelectedSite = "";
+  string Search = "";
+  bool OnlyPublished = true;
+  bool Loading = true;
+  string? Error;
+
+  IReadOnlyList<PimColumn> PreviewColumns => Preview?.Columns.Select(column => new PimColumn(column)).ToArray() ?? [];
+  ExportProfileRow? SelectedProfile => Profiles.SingleOrDefault(profile => profile.ExportProfileId == SelectedProfileId);
+  string FilterSummary =>
+    $"Filter zajema {(OnlyPublished ? "samo objavljene" : "vse")} izdelke"
+    + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SelectedSite}")
+    + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
+    + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic.";
+  string DownloadHref => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
+  {
+    $"podjetje={OrganizationId}", $"profil={SelectedProfileId}", $"koda={Uri.EscapeDataString(SelectedProfile?.ProfileCode ?? string.Empty)}",
+    $"objavljeni={OnlyPublished.ToString().ToLowerInvariant()}",
+    $"spletisce={Uri.EscapeDataString(SelectedSite)}", $"isci={Uri.EscapeDataString(Search)}"
+  });
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      Sites = await Catalog.GetWebSitesAsync();
+      Profiles = (await Governance.GetExportProfilesAsync())
+        .Where(profile => profile.IsActive
+          && profile.EntityType.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase)
+          && !profile.ChannelCode.Contains("SAOP", StringComparison.OrdinalIgnoreCase)
+          && !profile.ChannelCode.Contains("ERP", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(profile => profile.Name).ToArray();
+      SelectedProfileId = Profiles.FirstOrDefault()?.ExportProfileId ?? 0;
+    }
+    catch { Error = "Nastavitev spletnega izvoza trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ShowAsync()
+  {
+    if (OrganizationId is null || SelectedProfileId == 0) return;
+    Loading = true; Error = null;
+    try
+    {
+      Preview = await Export.PreviewAsync(OrganizationId.Value, SelectedProfileId,
+        SelectedSite, OnlyPublished, Search, skip: 0, take: 200);
+    }
+    catch { Error = "Predogleda trenutno ni mogoče pripraviti. Preveri profil in filtre."; }
+    finally { Loading = false; }
+  }
+}

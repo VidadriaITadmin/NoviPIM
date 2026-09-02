@@ -1,7 +1,33 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Data.SqlClient;
 using System.Data;
+using System.Text;
 using PIM.Intranet.Services;
+
+var repositoryRoot = FindRoot();
+var buildServicePath = Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Services", "WebExportBuildService.cs");
+var buildPagePath = Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Components", "Pages", "WebExportBuild.razor");
+Assert(File.Exists(buildServicePath), "Manjka pretočni servis WebExportBuildService.");
+Assert(File.Exists(buildPagePath), "Manjka stran /splet/izvoz.");
+
+var buildServiceText = File.ReadAllText(buildServicePath);
+foreach (var contract in new[] { "PreviewAsync", "WriteCsvAsync", "SqlDataReader", "StreamWriter", "UTF8Encoding(true)", "CommandTimeout = 600", "@Take", "PIM_splet_" })
+  Assert(buildServiceText.Contains(contract, StringComparison.Ordinal), "Pretočni servis nima pogodbe: " + contract);
+var buildPageText = File.ReadAllText(buildPagePath);
+foreach (var contract in new[] { "@page \"/splet/izvoz\"", "Samo objavljeni", "Prikaži", "Prenesi CSV", "200", "PreviewAsync" })
+  Assert(buildPageText.Contains(contract, StringComparison.Ordinal), "Stran izvoza nima: " + contract);
+var webPageText = File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Components", "Pages", "Web.razor"));
+Assert(webPageText.Contains("href=\"splet/izvoz\"", StringComparison.Ordinal)
+    && webPageText.Contains("Pripravi izvoz", StringComparison.Ordinal),
+  "/splet mora biti edina vstopna točka do nove strani.");
+var programText = File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Program.cs"));
+Assert(programText.Contains("WebExportBuildService", StringComparison.Ordinal)
+    && programText.Contains("Response.Body", StringComparison.Ordinal)
+    && programText.Contains("WriteCsvAsync", StringComparison.Ordinal),
+  "Minimalni API mora CSV pisati naravnost v Response.Body.");
+Assert(programText.Split("GetProductListAsync", StringSplitOptions.None).Length - 1 == 1
+    && !programText.Contains("while (rows.Count", StringComparison.Ordinal),
+  "/izvoz/izdelki.csv mora nabor prebrati z enim klicem do 20.000, ne s 100 zaporednimi stranmi.");
 
 // Datoteke, ki gredo na splet: branje, predogled in varna razresitev imena.
 //
@@ -73,6 +99,28 @@ try
     var published = await ReadWebExportAsync(connection, profileId, onlyPublished: true, take: 1);
     Assert(published.Total <= previewPage.Total,
       "Filter samo objavljeni ne sme razširiti nabora.");
+
+    var configuration = new ConfigurationBuilder()
+      .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Pim"] = connectionString })
+      .Build();
+    var build = new WebExportBuildService(configuration);
+    var servicePreview = await build.PreviewAsync(2, profileId, null, false, null, take: 2);
+    Assert(servicePreview.Columns.SequenceEqual(expectedColumns) && servicePreview.Rows.Count == previewPage.Rows,
+      "Servis mora brez preoblikovanja vrniti registrski predogled.");
+
+    var itemId = await FirstItemIdAsync(connection, 2);
+    await using var csv = new MemoryStream();
+    await build.WriteCsvAsync(2, profileId, null, false, itemId, csv);
+    var bytes = csv.ToArray();
+    Assert(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
+      "CSV mora imeti UTF-8 BOM za Excel in slovenske znake.");
+    var csvText = new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
+    Assert(csvText.StartsWith(string.Join(';', expectedColumns) + Environment.NewLine, StringComparison.Ordinal),
+      "CSV glava mora ohraniti registrski vrstni red in podpičje.");
+    Assert(WebExportBuildService.Escape("a;\"b") == "\"a;\"\"b\"",
+      "Podpičje in dvojni narekovaj morata biti pravilno ubežana.");
+    Assert(WebExportBuildService.FileName("WEB_B2C_PRODUCTS", new DateTime(2026, 9, 2, 14, 5, 0))
+      == "PIM_splet_WEB_B2C_PRODUCTS_20260902_1405.csv", "Ime datoteke mora vsebovati profil in minuto nastanka.");
   }
 
   Console.WriteLine("F7 spletne datoteke: seznam, predogled, varna razresitev imena in registrski izvoz na zahtevo PASS.");
@@ -136,6 +184,15 @@ static async Task<(IReadOnlyList<string> Columns, int Rows, int Total)> ReadWebE
   return (columns, rows, Convert.ToInt32(total.Value));
 }
 
+static async Task<string> FirstItemIdAsync(SqlConnection connection, int organizationId)
+{
+  await using var command = new SqlCommand(
+    "SELECT TOP(1) ItemID FROM canon.Product WHERE OrganizationId=@Org ORDER BY ItemID;", connection);
+  command.Parameters.AddWithValue("@Org", organizationId);
+  return Convert.ToString(await command.ExecuteScalarAsync())
+    ?? throw new InvalidOperationException("Organizacija za test nima izdelka.");
+}
+
 static string? LocalConnectionString()
 {
   var current = new DirectoryInfo(Directory.GetCurrentDirectory());
@@ -147,4 +204,18 @@ static string? LocalConnectionString()
     current = current.Parent;
   }
   return null;
+}
+
+static string FindRoot()
+{
+  foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+  {
+    var current = new DirectoryInfo(start);
+    while (current is not null)
+    {
+      if (File.Exists(Path.Combine(current.FullName, "PIM.sln"))) return current.FullName;
+      current = current.Parent;
+    }
+  }
+  throw new InvalidOperationException("PIM_Solution ni najden.");
 }
