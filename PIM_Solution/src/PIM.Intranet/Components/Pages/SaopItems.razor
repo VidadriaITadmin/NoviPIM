@@ -579,9 +579,15 @@
     }
     else
     {
-      // Skrit stolpec ne sme tiho ostati v naročilu: kar ni vidno, se ne pošlje.
-      foreach (var row in Rows) row.Edited.Remove(field.FieldKey!);
-      Note($"Odstranjen stolpec {field.Label}; vpisane vrednosti tega polja so izbrisane.", "warn");
+      // Skrit stolpec ne sme tiho ostati v naročilu: kar ni vidno, se ne pošlje. Vrednost pa
+      // ostane, kadar isti podatek PIM nosi še kakšen viden stolpec (Product.Department gre
+      // hkrati v ItemDepartment in AdditionalProperty1ID) — sicer bi skritje enega izpraznilo drugega.
+      var stillShown = Contract!.Fields.Any(other =>
+        other.FieldKey == field.FieldKey && other.ElementName != field.ElementName && Columns.Contains(other.ElementName));
+      if (!stillShown) foreach (var row in Rows) row.Edited.Remove(field.FieldKey!);
+      Note(stillShown
+        ? $"Odstranjen stolpec {field.Label}; vrednost ostane, ker isti podatek nosi še en viden stolpec."
+        : $"Odstranjen stolpec {field.Label}; vpisane vrednosti tega polja so izbrisane.", "warn");
     }
     Recompute();
   }
