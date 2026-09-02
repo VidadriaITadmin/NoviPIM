@@ -1,6 +1,42 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-08-28
+Posodobljeno: 2026-09-02
+
+## Zaloga iz SAOP je spet v pogonu — 2026-09-02 20:22
+
+Zaloga iz SAOP je stala **šest dni** in tega ni javil nihče. Ni bila pokvarjena, **izklopljena**
+je bila: 28. 8. med 07:40 in 07:51 se je pet zaporednih klicev na ERP izteklo v časovno omejitev
+(*»A connection attempt failed because the connected party did not properly respond«* — omrežje
+oziroma VPN, ne PIM), zato je pravilo iz migracije 118 (»pet zamahov in povej«) postopek samo
+izklopilo pri vseh štirih podjetjih. V `ops.ScheduleProfile` je ostal zapis
+`UpdatedBy = samodejni izklop po napakah`. Zadnji uspešen zajem pred tem: **27. 8. ob 16:43**.
+
+Alarm o izklopu je **nastal** (`PipelineDisabled`, Critical, trije še danes odprti), a ni odšel
+nikamor: `ops.AlertRecipientConfig` je bil prazen, zato tudi `ops.AlertDelivery` ni imela nobene
+vrstice. Poleg tega `PIM.AlertDispatcher` od 1. 9. ni tekel, ker je nadzor visel.
+Ista bolezen kot pri oknu in pri mrtvem nadzorniku: **privzeto stanje je tišina, tišina pa se
+bere kot zdravje.**
+
+Vklopljeno nazaj 2026-09-02 ob 20:18 na uporabnikovo zahtevo, skupaj s števcem zaporednih napak
+nazaj na nič — sicer bi prvi naslednji spodrsljaj takoj spet prekoračil prag petih. Trije odprti
+alarmi so zaprti. Prvi cikel po vklopu (20:22) je uspel pri vseh štirih podjetjih:
+
+| Podjetje | Skladišč | Zapisov | V karanteni |
+|---|---|---|---|
+| 1 | 4 | 16 | 0 |
+| 2 | 1 | 8.734 | 0 |
+| 3 | 1 | 7.016 | 0 |
+| 4 | 14 | 3.113 | 0 |
+
+`ops.IntegrationHealth` je za vsa štiri podjetja `Healthy`. In prvič sploh ima `SAOP_STOCK`
+tudi štiri vrstice v `ops.PipelineRun` — sled iz migracije 144 drži tudi za najpomembnejši
+postopek.
+
+Prejemnik alarmov je vpisan (`ADMIN`, e-pošta, stopnja `Critical`, vsa štiri podjetja).
+**Pošta še ne odide**: `PIM.AlertDispatcher` bere nastavitve iz okolja in manjkajo
+`PIM_ALERT_DELIVERY_ENABLED`, `PIM_ALERT_EMAIL_ENABLED`, `PIM_SMTP_HOST`, `PIM_SMTP_PORT`,
+`PIM_SMTP_STARTTLS`, `PIM_SMTP_USERNAME`, `PIM_SMTP_PASSWORD` in `PIM_SMTP_FROM`. To so
+poverilnice in sistemska nastavitev, zato čakajo človeka.
 
 ## Dopolnitve po primerjavi PIM/PIM_test — v delu 2026-09-02
 
@@ -69,6 +105,33 @@ ista stvar, ki je v TODO kot naloga 1 za workerje (`--map-run` oziroma `--full`)
 Dokaz: migrator prvi/drugi zagon in `--verify` uspešni; polni `scripts/run_tests.ps1` =
 58/0/0 in `Build OK`.
 
+Migracija **142** je spletni CSV — katalog in stranke — preselila iz datoteke na disku v
+tabele. Doslej je `MagentoExportCommand` imel osem poizvedb nad `pim.*` in `b2b.*`, iz njih
+sestavil slovar kanoničnih vrednosti in zapisal datoteki v mapo, intranet pa je isti datoteki
+bral z diska (`WebExport:Directory`). Zdaj vrstice sestavi `out.GetExportRows`: obliko vzame iz
+registra `out.ExportProfile/out.ExportColumn`, vir vrednosti pa pove nov stolpec
+`ValueSourceCode` (`CANON`, `PIM_PRODUCT`, `PIM_CUSTOMER`). Isto proceduro bereta worker in
+intranet, zato predogled in datoteka, ki odide, ne moreta pokazati različne vsebine.
+Profil strank, ki ga je migracija 139 še zavračala, je zdaj podprt; kanonična pot za
+`WEB_B2C_PRODUCTS` in `ERP_L1` ostaja nespremenjena. Zapis števila je dobil svojo funkcijo
+`out.MagentoNumber`, ker je oblika `0.####` pogodba do Magenta in ne stvar jezikovnih
+nastavitev seje. Trije stolpci izvoza strank (`E-pošta`, `Tel. številko`, `Uporabniki`) so
+bili brez kanonične kode; zdaj berejo `pim.CustomerContact` iz migracije 140. V intranetu je
+odpadel `WebExportFileService` in pot `/izvoz/splet/{fileName}`; stran `/splet` ponudi
+predogled in prenos za vsak profil, ki ga register zna sestaviti, `/splet/izvoz` pa poleg
+izdelkov sprejme tudi stranke.
+
+**Dokaz, da datoteka ostaja ista:** izvoz je bil pognan po stari in po novi poti nad istima
+podjetjema. Organizacija 3 (10.595 izdelkov): datoteki znak za znak enaki. Organizacija 2
+(43.504 izdelkov): enaki razen enega premika vrstice — `TL.8911211-32` in `TL.8911211.07` sta
+zamenjala mesti, ker vrstni red zdaj določa ureditev baze in ne .NET-ova kulturna primerjava
+nizov. Vsebina vrstic je nespremenjena in Magento uvaža po glavi, ne po zaporedju.
+
+**Kar se je pri tem videlo in ni okvara kode:** v razvojni bazi nima nobena stranka
+`WebEnabled = 1` (4.390 strank s spletnim profilom, 0 odprtih za splet), zato je
+`magento-customers.csv` v resničnem zagonu prazna datoteka z glavo. Dokler kdo strank ne
+odpre za splet, bo tako tudi po tej migraciji.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;
@@ -93,7 +156,7 @@ pet je vprašanj, ki čakajo njegovo odločitev. Celoten seznam s stanjem je v
 - **Validacijski profil in preslikave polj se dajo urejati** iz vmesnika, z revizijo v
   `b2b.AuditLog`. Zahteva se ne briše, ker odprte napake kažejo nanjo; umik je izklop.
 - **Splet pokaže dejanski CSV**, ki gre ven — predogled in prenos, ločeno za artikle in
-  stranke. Mapa se nastavi z `WebExport:Directory`.
+  stranke. Od migracije 142 nastane iz tabel ob kliku; mape ni več treba nastavljati.
 
 Migracije: **126–133**. Testi: `scripts\run_tests.ps1` = 58 uspeli, 0 padli.
 
