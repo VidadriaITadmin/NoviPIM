@@ -37,6 +37,20 @@ omejen na 200 vrstic; prenos celoten filtrirani nabor piše neposredno iz `SqlDa
 do 20.000 vrstic namesto 100 zaporednih strani. Dokaz: F7 = 7/0/0, F10 = 14/0/0, oba
 `Build OK`.
 
+Migracija **140** je dala stranki kontakte: e-pošto, telefon, mobitel in osebe. Ročni vnos
+ima svojo tabelo `pim.CustomerContact` in svojo pisljivo pot `b2b.SaveCustomerContact`, ki
+piše v `b2b.AuditLog`. `intranet.GetCustomerCard` je dobila osmi nabor na koncu; efektivna
+vrednost je ročni prepis, sicer izvor, značka pa pove, kateri je obveljal. **Zajema kontaktov
+iz SAOP v NoviPIM-u ni** in migracija si ga ni izmislila: PIM ne kliče endpointa
+`GetCustomerContacts`, zato zanj ni ne vrstice v `map.EntityMapping` ne preslikav
+`CustomerContact.*` v `map.FieldMapping` ne zapisov v `raw.Inbox`; zajeti `GetCustomers`
+kontaktov ne nosi. Bralni model to pove s `SourceAvailable` in `SourceNote`, kartica pa iz
+tega nariše `<PimMissing>` in vseeno ponudi ročni vnos, ki ga izvoz za Magento potrebuje
+danes. Pravilo »ročna vrednost, enaka izvoru, se ne shrani kot prepis« je v proceduri, ne v
+vmesniku. Dokaz: migrator prvi/drugi zagon in `--verify` uspešni; `run_tests.ps1 -Filter F10`
+= 14/0/0 in `Build OK`, med njimi test, ki nad bazo prešteje osem naborov, shrani in umakne
+ročni prepis ter preveri obe revizijski sledi.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;

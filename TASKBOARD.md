@@ -178,7 +178,16 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   pokaže največ 200 vrstic in skupno število, prenos pa `SqlDataReader` pretočno piše
   naravnost v `Response.Body` kot UTF-8 z BOM in podpičjem. Test preveri BOM, glavo,
   ubežne narekovaje in ime datoteke. Stari `/izvoz/izdelki.csv` namesto do 100 klicev
-  izvede en klic z mejo 20.000. Sledi Naloga 4 — kontakti stranke.
+  izvede en klic z mejo 20.000. **Naloga 4 — BAZA je KONČANA:** migracija
+  `140_CustomerContacts.sql` = prvi zagon uporabljen, drugi preskočen, `--verify` =
+  »Preverjanje F0–F10 baze je uspešno.« Tabela `pim.CustomerContact` in procedura
+  `b2b.SaveCustomerContact` (MERGE + `b2b.AuditLog`, `EntityType='CustomerContact'`)
+  sta nova; `intranet.GetCustomerCard` ima osmi nabor s kontakti na koncu, zato se
+  obstoječih sedem branj ne premakne. **Zajema kontaktov iz SAOP ni** — preverjeno nad
+  bazo: `map.EntityMapping` pozna 21 entitet in med njimi ni kontaktne, `map.FieldMapping`
+  nima nobene preslikave z elementom Mail/Phone/Telefon, `raw.Inbox` nima take entitete,
+  zajeti zapis `GetCustomers` (`/ArrayOfCustomer/Customer`) pa kontaktov sploh ne nosi.
+  Bralni model to pove s `SourceAvailable=0` in `SourceNote`. Sledi Naloga 4 — INTRANET.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet
