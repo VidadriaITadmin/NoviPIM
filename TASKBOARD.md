@@ -254,6 +254,62 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[BAZA] Migracija 144: sled izvajanja — ena vrstica na zagon workerja** —
+  kdo: Claude Code — ozemlje: BAZA — končano 2026-09-02.
+
+  Prvi korak načrta [`docs/NACRT_RAZPOREJEVALNIK.md`](docs/NACRT_RAZPOREJEVALNIK.md) §9.
+  Številka je 144 in ne 142, ker sta 142 in 143 medtem nastali v vzporednem delu na isti veji
+  in sta že zapisani v `dbo.SchemaMigration`.
+
+  **Kaj je bilo narobe.** `ops.BeginRun` in `ops.CompleteRun` sta vzdrževala samo
+  `ops.IntegrationHealth` — eno vrstico na (podjetje, postopek), ki se ob vsakem zagonu prepiše.
+  Zgodovinska tabela `ops.PipelineRun` s stolpci `StartedUtc`, `EndedUtc`, `Status`, `RowsRead`,
+  `RowsSucceeded`, `RowsFailed` obstaja od migracije 002, a sta vanjo pisala samo
+  `PIM.KatalogWorker` in `PIM.XmlFileWorker`, vsak s svojim `INSERT` in **svojim `RunId`**, ki
+  ni bil isti kot tisti iz `BeginRun`. `ops.ErrorLog` je bila prazna, čeprav jo intranet bere
+  na petih mestih — stolpec »napake« je bil strukturno vedno nič.
+
+  **Popravek je v ozkem grlu, ne pri klicateljih.** Vrstico zdaj odpre `ops.BeginRun` in zapre
+  `ops.CompleteRun`, z istim `RunId`, ki ga klicatelj že dobi. Ker gre skozi `BeginRun` vsak
+  zagon — tudi ročni iz `Zaloga-cikel.ps1` — sled dobi vseh sedem postopkov naenkrat, brez
+  spremembe v posameznem workerju.
+
+  Poleg tega: `ops.PipelineRun` dobi `WorkerId`, `ExitCode` in `TriggeredBy`
+  (`Scheduler`/`Human`/`Task`); zaprt seznam stanj se razširi z `Warning`, `TimedOut` in
+  `Abandoned` (imen `Succeeded`/`Failed` nisem preimenoval — 138 obstoječih vrstic in enajst
+  mest v `PipelineReadService`); `ops.CompleteRun` ob napaki pokliče `ops.LogError`; novi sta
+  `ops.RecordRunCounts` in `ops.AbandonOrphanRuns`. Mrtva `ops.Heartbeat` (0 vrstic, brez pisca)
+  je spuščena skupaj z omembo v `expectedObjects` v `PIM.Migrator`.
+
+  **Dokaz:**
+
+  | Kaj | Izid |
+  |---|---|
+  | migrator 1. zagon | `Uporabljena migracija: 144_RunTrail.sql` |
+  | migrator 2. zagon | `Preskočena že uporabljena migracija: 144_RunTrail.sql` |
+  | `--verify` | `Preverjanje F0–F10 baze je uspešno.` |
+  | idempotentnost | skripta 144 pognana še enkrat neposredno s `sqlcmd -b` → izhodna koda 0 |
+  | `PIM.F0.Tests` | `F0 izhodiščni migracijski kontrakt je izpolnjen.`, izhodna koda 0 |
+
+  **Pred in po pri `WATCHDOG`,** ki v `ops.PipelineRun` ni imel še nikoli nobene vrstice:
+  po enem zagonu `Succeeded`, `WorkerId=DESKTOP-TONVQHJ:22964`, `TriggeredBy=Human`, začetek
+  17:57:44.842, konec 17:57:44.878. Padel tek zapiše `Failed` + `ExitCode 1` + vrstico v
+  `ops.ErrorLog`; `@Status=TimedOut` se loči od `Failed`; sirota v `Running` gre prek
+  `ops.AbandonOrphanRuns` v `Abandoned` z `EndedUtc`.
+
+  **Že tečeta v živo:** petminutno opravilo `PIM zaloga` je medtem zapisalo prvi vrstici za
+  `SOURCE_FETCH` in `STOCK_FILE` — dva postopka, ki v zgodovini nista bila nikoli.
+
+  **Česa ta migracija ni popravila.** V `ops.PipelineRun` je 14 starih vrstic s končnim
+  statusom, a brez `EndedUtc`. Pometanje cilja na `Status = 'Running'` in jih zato ne zajame;
+  novi teki te napake nimajo, ker `CompleteRun` postavi oboje hkrati. Če jih hočemo pospraviti,
+  je to ločena migracija 145.
+
+  **Build celotne rešitve ni bil pognan:** `dotnet build PIM.sln` je padel z MSB3027 —
+  `PIM.KatalogWorker (36908)`, živ proces vzporednega dela (`--znova-preslikaj ... --organizations 3`,
+  zagnan 20:00:42, 16 s procesorja), drži svojo `.exe` zaklenjeno. Procesa nisem ustavil, ker ni
+  moj. `src/PIM.Migrator` in `PIM.F0.Tests` sta se prevedla in pognala.
+
 - **[DOMENA + INTRANET] Vnos artiklov v SAOP: ADD in PATCH v enem obrazcu (`/saop/artikli`)** —
   kdo: Claude Code — ozemlje: zaporedno DOMENA (`src\PIM.Outbound`) → INTRANET
   (`src\PIM.Intranet`) — končano 2026-09-02.

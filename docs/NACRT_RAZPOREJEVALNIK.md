@@ -142,7 +142,9 @@ posameznega workerja**.
 Razporejevalnik doda tisto, kar ve samo on: izhodno kodo procesa, dejstvo, da ga je ubila meja,
 in to, da je zagon sprožil on in ne človek.
 
-**Migracija 142** torej ni samo utrip in pavza, ampak:
+**Migracija 144** torej ni samo utrip in pavza, ampak (številka je 144 in ne 142, ker sta
+142 in 143 medtem nastali v vzporednem delu na isti veji in sta že zapisani v
+`dbo.SchemaMigration`):
 
 | # | Sprememba | Zakaj |
 |---|---|---|
@@ -160,7 +162,7 @@ Točka 7 je edina, ki se dotakne obstoječih workerjev. Varna je, ker ima `raw.I
 ključ na `ops.PipelineRun` (migracija 007) in `BeginRun` vrstico ustvari **prej** kot worker piše
 v `raw.Inbox` — vrstni red torej drži tudi po zamenjavi.
 
-**Česa migracija 142 ne naredi:** `stock.SyncRun` pusti pri miru. Tam je zapis bogatejši
+**Česa migracija 144 ne naredi:** `stock.SyncRun` pusti pri miru. Tam je zapis bogatejši
 (`Endpoint`, `HttpStatus`, `QueryParametersHash`) in ima 512 vrstic zgodovine, ki je ne bomo
 prelivali. Ko bo `/zajem` pokazal tudi zalogo, se poveže prek novega stolpca `RunId` na
 `stock.SyncRun` — to je ločena naloga, ne pogoj za razporejevalnik.
@@ -222,7 +224,7 @@ preimenujem v `Success`/`Error`, ampak razširim. Razlog je merljiv: v bazi je 1
 obstoječimi vrednostmi, `PipelineReadService.cs` pa se na imena naslanja na enajstih mestih —
 med drugim `CASE lastPipeline.Status WHEN N'Succeeded' THEN N'Healthy'` (vrstica 85) in filtra v
 vrsticah 120 in 128. Preimenovanje bi bila migracija podatkov in sprememba vmesnika zaradi
-besede. Seznam po migraciji 142:
+besede. Seznam po migraciji 144:
 
 ```
 Pending | Running | Succeeded | Warning | Failed | TimedOut | Cancelled | Abandoned
@@ -252,7 +254,7 @@ zaostanka je danes nevidna. Ko bo `TriggeredBy` na mestu, je pravi popravek zanj
 ### 3.5 Mrtve tabele gredo v isti migraciji
 
 `ops.Heartbeat` ima 0 vrstic in nobenega pisca; nasledila jo je `ops.IntegrationHealth`. Prazna
-tabela je past — naslednji, ki jo najde, bo domneval, da nekaj pomeni. Zato jo migracija 142
+tabela je past — naslednji, ki jo najde, bo domneval, da nekaj pomeni. Zato jo migracija 144
 spusti, skupaj z dvema mestoma, ki jo držita pri življenju:
 
 - `src/PIM.Migrator/Program.cs:304` jo našteva med obveznimi objekti v `--verify` in bi po
@@ -275,7 +277,7 @@ je tudi ta mrtva, gre ven ločeno in zavestno, ne mimogrede.
 Obstoječa gumba »Izklopi« in »Shrani razmik« ostaneta nespremenjena; razporejevalnik ju bo
 upošteval takoj ob naslednjem tiku, torej najkasneje v 30 sekundah namesto v petih minutah.
 
-**Migracija 142** poleg utripa razporejevalnika in globalnega stikala pavze nosi še sled
+**Migracija 144** poleg utripa razporejevalnika in globalnega stikala pavze nosi še sled
 izvajanja iz §3.2. Idempotentna, po pravilu iz `AGENTS.md`.
 
 ---
@@ -353,7 +355,7 @@ noben test ne kliče ERP ali dobavitelja.
 
 | # | Korak | Ozemlje | Dokaz ob koncu |
 |---|---|---|---|
-| 1 | migracija 142 (utrip, pavza, sled izvajanja iz §3.2) | BAZA | migrator 1. in 2. zagon + `--verify`; pred in po: `SELECT COUNT(*) FROM ops.PipelineRun` po enem zagonu watchdoga |
+| 1 | migracija 144 (utrip, pavza, sled izvajanja iz §3.2) | BAZA | migrator 1. in 2. zagon + `--verify`; pred in po: `SELECT COUNT(*) FROM ops.PipelineRun` po enem zagonu watchdoga |
 | 2 | `PIM.Scheduler` + `PIM.F11.SchedulerTests` | WORKERJI | `scripts\run_tests.ps1` zelen |
 | 3 | `/sistem/urniki`: stanje, »Zaženi zdaj«, pavza | INTRANET | `PIM.F10.*UxTests` + build |
 | 4 | `Install-Scheduler.ps1` + dokumentacija | WORKERJI | `-WhatIf` izpis |

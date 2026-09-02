@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -301,7 +301,10 @@ static async Task VerifyF0Async(SqlConnection connection, IReadOnlyCollection<Mi
 
   var expectedObjects = new[]
   {
-    "ops.PipelineRun", "ops.PipelineStepLog", "ops.DeadLetterQueue", "ops.ErrorLog", "ops.Heartbeat", "dbo.OrganizationConfig",
+    // ops.Heartbeat je spuscena v migraciji 144: imela je nic vrstic in nobenega pisca,
+    // nasledila jo je ops.IntegrationHealth. Prazna tabela je past — naslednji, ki jo najde,
+    // domneva, da nekaj pomeni.
+    "ops.PipelineRun", "ops.PipelineStepLog", "ops.DeadLetterQueue", "ops.ErrorLog", "dbo.OrganizationConfig",
     "ops.LogError", "ops.EnqueueDeadLetter", "ops.RecordPipelineStep"
   };
   foreach (var expectedObject in expectedObjects)
@@ -439,10 +442,20 @@ static async Task VerifyF7Async(SqlConnection connection)
     "pim.ValueDiscountTier", "pim.ShippingRuleCatalog", "b2b.GroupDiscountOverride", "b2b.AuditLog",
     "b2b.LandingRecord", "map.B2bFieldMapping", "b2b.MappingRejection", "b2b.ApplyLandingRecord",
     "b2b.ReplayLandingRecord", "out.ExportB2bCustomersCsv", "out.ExportB2bProductsCsv",
-    "out.ExportPriceList"
+    "out.ExportPriceList",
+    // 142: spletni CSV (katalog in stranke) nastane iz tabel, ne iz datoteke na disku.
+    "out.MagentoNumber", "out.GetExportRows", "intranet.GetWebExportRows"
   };
   foreach (var expectedObject in expectedObjects)
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F7 objekt {expectedObject}.");
+
+  // Brez vira vrednosti profil ne more roditi vrstic: izvoz bi vrgel napako sele ob kliku.
+  await AssertCountAsync(connection,
+    "SELECT COUNT(*) FROM out.ExportProfile WHERE ProfileCode=N'MAGENTO_PRODUCTS' AND IsActive=1 AND ValueSourceCode=N'PIM_PRODUCT';",
+    null, 1, "Profil MAGENTO_PRODUCTS mora brati vrednosti iz sloja pim.");
+  await AssertCountAsync(connection,
+    "SELECT COUNT(*) FROM out.ExportProfile WHERE ProfileCode=N'MAGENTO_CUSTOMERS' AND IsActive=1 AND ValueSourceCode=N'PIM_CUSTOMER';",
+    null, 1, "Profil MAGENTO_CUSTOMERS mora brati vrednosti iz sloja b2b in pim.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.CustomerTypeCatalog WHERE IsActive=1;", null, 18, "F7 mora imeti 18 aktivnih tipov strank.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.PackagingDiscountCatalog WHERE IsActive=1 AND DiscountCode IN(N'S1',N'S2',N'S3',N'S4');", null, 4, "Manjkajo F7 S-stopnje.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM pim.ValueDiscountTier WHERE IsActive=1;", null, 3, "F7 mora imeti tri vrednostne pragove.");
