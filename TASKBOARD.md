@@ -254,6 +254,100 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[OPERATIVA] Kanal `SAOP_PRODUCT` je odprt v razvojni bazi (ročno, ne z migracijo)** —
+  kdo: Claude Code na zahtevo uporabnika — končano 2026-09-02.
+
+  Uporabnik je zahteval vklop, da lahko preizkusi stran `/saop/artikli`. Vrstice v
+  `dbo.IntegrationProfile` za vsa štiri podjetja: TEST naslov (`…:82/iCenterAPI/`, vrata 81 so
+  produkcija), `ApprovalMode = ManualApproval`, `IsEnabled = 1`. Zavestno **ni** migracija —
+  `docs/EXPORTS.md` §410 pravi, da migracije v to tabelo ne zasejejo ničesar, sicer bi se kanal
+  odprl v vsakem okolju.
+
+  **Dokaz, da odprt kanal ne pošilja:** `--send` + tri okoljske poverilnice sta pogoja za pot
+  dokumenta; `ops.ScheduleProfile` nima vrstice `OUTBOUND`, zato stara pot ne prevzame ničesar;
+  nobeno načrtovano opravilo ne poganja `PIM.OutboxDispatcher`.
+
+  **Dokaz, da naročilo zdaj gre skozi:** `out.EnqueueSaopItemChanges` za `BA.BP07.20380` v
+  transakciji = `Queued`, sporočilo `PendingApproval`; po `ROLLBACK` 0 preostalih vrstic.
+
+  **Stranski učinek, ki sem ga povzročil in odpravil:** vklop je najprej zajel tudi testni
+  organizaciji 9808 in 9909 (pogoj `IsActive = 1`); vrstici sem odstranil, ker testi profil
+  vstavijo sami z `INSERT` in bi padli na unikatnem ključu. Ob tem se je pokazalo, da je
+  `PIM.F8.Integration` pustil za sabo podjetje 9808 (pospravljanje je padlo na FK 547 zaradi
+  `ops.PipelineRun`); leftover vrstico sem po uporabnikovi odobritvi odstranil, sam popravek
+  pospravljanja pa je vzporedno vnesla druga seja. Test po tem teče: PASS.
+
+- **[BAZA → DOMENA → INTRANET] Spletni CSV (katalog in stranke) nastane iz tabel, ne iz
+  datoteke na disku** — kdo: Claude Code — ozemlje: zaporedno BAZA (`sql/migrations`) →
+  DOMENA (`src\PIM.B2b`, `workers\PIM.B2bWorker`) → INTRANET (`src\PIM.Intranet`) —
+  končano 2026-09-02.
+
+  Zahteva uporabnika: »midva morava omogočiti, da select naredi izvoz iz tabel … kreirati ta
+  CSV katalog in pa stranke, da bo potem nekdo, ki dela spletne strani, znal prebrati te
+  podatke«, po vzoru selecta v bazi `PIM_test`.
+
+  **Izhodišče, izmerjeno pred delom.** `MagentoExportCommand` je imel osem poizvedb nad
+  `pim.*` in `b2b.*`, iz njih sestavil slovar kanoničnih vrednosti in zapisal
+  `magento-products.csv` ter `magento-customers.csv` v mapo; intranet je isti datoteki bral
+  z diska (`WebExportFileService`, `WebExport:Directory`). Izvoz na zahtevo iz migracije
+  `139` je obstajal, a bere samo `canon.FieldValue` — od 191 preslikanih stolpcev profila
+  `MAGENTO_PRODUCTS` jih **186 tam nima nobene vrstice**, ker kanonični sloj uporablja druge
+  kode; profil strank je `139` celo izrecno zavračala. Predogled bi bil torej skoraj prazna
+  datoteka.
+
+  **Kaj je narejeno.** Migracija `142_WebExportFromTables.sql` doda `out.GetExportRows`, ki
+  za profil sestavi vrstice po registru `out.ExportProfile`/`out.ExportColumn`, in nov
+  stolpec `out.ExportProfile.ValueSourceCode` (`CANON`, `PIM_PRODUCT`, `PIM_CUSTOMER`), ki
+  pove, iz katerega vira profil bere — nov kanal je še vedno vrstica v bazi, ne veja v
+  proceduri. Zapis števila je dobil `out.MagentoNumber` (`0.####`, invariantno), ker je
+  oblika pogodba do Magenta in ne stvar jezikovnih nastavitev seje.
+  `intranet.GetWebExportRows` obdrži ime iz `139` in postane tanka preusmeritev. Worker
+  vrstice bere iz iste procedure in jih pretočno piše z novim `RegistryCsvWriter` — 213
+  vrednosti na izdelek ne postane več slovar v pomnilniku. V intranetu sta odpadla
+  `WebExportFileService` in pot `/izvoz/splet/{fileName}`; `/splet` ponudi predogled in
+  prenos za vsak profil, ki ga register zna sestaviti, `/splet/izvoz` pa poleg izdelkov
+  sprejme tudi stranke. Trije stolpci izvoza strank (`E-pošta`, `Tel. številko`,
+  `Uporabniki`) so bili brez kanonične kode — zdaj berejo `pim.CustomerContact` iz
+  migracije `140`.
+
+  **Dokaz.** Migracija: prvi zagon uporabljen, drugi preskočen, `--verify` = »Preverjanje
+  F0–F10 baze je uspešno.« Izvoz pognan po **stari in po novi poti** nad istima podjetjema:
+  organizacija 3 (10.595 izdelkov) je dala **znak za znak enaki** datoteki
+  (`diff` brez razlike), organizacija 2 (43.504 izdelkov) enaki razen **enega premika
+  vrstice** (`TL.8911211-32` proti `TL.8911211.07`) — vrstni red zdaj določa ureditev baze
+  in ne .NET-ova kulturna primerjava nizov; vsebina vrstic je nespremenjena, Magento pa
+  uvaža po glavi in ne po zaporedju. Testi: `PIM.F7.MagentoExportTests` = PASS
+  (43.507 izdelkov, 1 stranka, glavna slika za `07U222410IN.5`), `PIM.F7.WebExportTests` =
+  PASS, `PIM.F7.ProductExportTests` = PASS. Polni `scripts/run_tests.ps1` ob 19:39 = 58
+  uspešnih, 1 preskočen, 1 padel — padla je bila **moja lastna preveč stroga trditev** v
+  `PIM.F7.WebExportTests` (iskala je niz `WebExport:Directory` tudi v komentarju, ki
+  pojasnjuje, da mape ni več); popravljena in ponovno zelena.
+
+  **Česar ta vnos ne trdi:** čistega polnega zagona po popravku ni, ker je v istem
+  računalniku vzporedno tekla druga seja — `PIM.KatalogWorker`, `PIM.SaopStockWorker` in njen
+  lasten testni nabor nad isto razvojno bazo. Build je zato padal na zaklenjenih DLL-jih,
+  integracijski testi pa na kršitvah tujega ključa iz sočasnega sejanja. Polni zagon je treba
+  ponoviti, ko je računalnik prost: `scripts\run_tests.ps1`.
+
+  **Kar je bilo ob tem najdeno in popravljeno (tuje ozemlje, a kvarilo je vsak zagon):**
+  `PIM.F8.Integration` in `PIM.F9.Integration` v svojem čiščenju nista brisala `ops.PipelineRun`
+  (in `ops.ErrorLog`, ki nanj kaže). Dokler je zagon tekel do konca, se ni poznalo; ob
+  prekinjenem zagonu je vrstica ostala in **vsak naslednji zagon je padel** na
+  `FK_PipelineRun_OrganizationConfig` (SQL 547) — testa se ni odklenilo z nobenim ponovnim
+  zagonom, samo z ročnim posegom v bazo. Po popravku oba znova prehajata sama.
+  `PIM.F10.ProductDetailUxTests` še vedno pade s »Instance failure« pri branju posnetka SAOP
+  endpointa; to je odpoved povezave pod obremenitvijo vzporednih workerjev, ne trditev testa —
+  ob mirnem računalniku ob 19:39 je bil zelen.
+
+  **Kaj je delo pokazalo in ni okvara kode:** v razvojni bazi nima nobena stranka
+  `WebEnabled = 1` (4.390 strank s spletnim profilom, 0 odprtih za splet), zato je
+  `magento-customers.csv` v resničnem zagonu prazna datoteka z glavo. `pim.CustomerContact`
+  je prazna, zato so trije kontaktni stolpci prazni, čeprav zdaj imajo vir.
+
+  **Past za naslednjič:** začasna tabela prevzame ureditev `tempdb` (`Slovenian_CI_AS`),
+  baza `PIM` pa je `SQL_Latin1_General_CP1_CI_AS`; brez `COLLATE DATABASE_DEFAULT` na
+  stolpcih začasnih tabel vsak stik s tabelo baze pade z napako 468.
+
 - **[BAZA] Migracija 144: sled izvajanja — ena vrstica na zagon workerja** —
   kdo: Claude Code — ozemlje: BAZA — končano 2026-09-02.
 

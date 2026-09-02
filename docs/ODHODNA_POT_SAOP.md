@@ -76,6 +76,25 @@ za `SAOP_PRODUCT` in to organizacijo. Dokler je nima, stran to pove takoj in v v
 nič (`51001`). Vnos, predogled in dokument delujejo tudi brez profila — to je namenoma, da se
 da vse pripraviti in pogledati, preden se kanal odpre.
 
+> **Stanje razvojne baze 2026-09-02: kanal je odprt.** Na uporabnikovo zahtevo je
+> `dbo.IntegrationProfile` dobila vrstico za `SAOP_PRODUCT` pri vseh štirih podjetjih
+> (1 DEMO, 2 IQLighting, 3 Vidadria, 4 Ediito): `EndpointTemplate` =
+> `https://192.168.178.12:82/iCenterAPI/` (**vrata 82 = TEST**), `ApprovalMode` =
+> `ManualApproval`, `IsEnabled = 1`.
+>
+> **To ni migracija in ne sme postati migracija.** `docs/EXPORTS.md` §410: migracije ne
+> zasejejo nobene vrstice v `dbo.IntegrationProfile`. Naslov SAOP je okoljska nastavitev;
+> migracija bi kanal odprla v vsakem okolju, kjer se požene.
+>
+> **Odprt kanal še vedno ne pošilja.** Preverjeno ob vklopu, trije neodvisni razlogi:
+> pot dokumenta zahteva `--send` **in** `SAOP_BASE_URL`/`SAOP_USERNAME`/`SAOP_PASSWORD`
+> (`workers/PIM.OutboxDispatcher/Program.cs`); stara pot po enem sporočilu zahteva omogočen
+> razpored `OUTBOUND` v `ops.ScheduleProfile`, ta pa je **prazen**; nobeno načrtovano
+> opravilo (`PIM nadzor`, `PIM nocni tok`, `PIM zaloga`) dispatcherja ne poganja.
+>
+> Zapiranje kanala je ena vrstica:
+> `UPDATE dbo.IntegrationProfile SET IsEnabled = 0 WHERE TargetKind = N'SAOP_PRODUCT';`
+
 ---
 
 ## 2. Naroči spremembo (v vrsto, ne v SAOP)
