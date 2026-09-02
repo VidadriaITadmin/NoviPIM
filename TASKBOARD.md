@@ -149,6 +149,22 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## BLOKIRANO
 
+- **[BAZA → INTRANET] Dve manjkajoči pisljivi polji SAOP (Naloga 1 primerjave PIM/PIM_test)**
+  — kdo: Codex — ozemlje: BAZA, nato INTRANET — blokirano 2026-09-02.
+
+  Specifikacija zahteva, da se kanonični kodi za `GeneralData/ItemSearchName` in
+  `SalesData/Warranty` prebereta iz `map.FieldMapping.TargetFieldCode`; če preslikave ni,
+  polj ne smemo dodati. Bralna poizvedba nad preverjeno lokalno bazo `PIM` je za obe točni
+  poti vrnila **0 preslikav**, `out.SaopXmlField` **0 vrstic** in `out.OwnershipPolicy`
+  **0 vrstic**. Tudi širše iskanje po `ItemSearch`/`Warranty` ni našlo SAOP preslikave;
+  našlo je le dobaviteljski `ProductAttribute.Garancija` iz `BT_XML` in `NW_XML`, ki ni
+  dokaz za SAOP kanonično polje. Vsi štirje aktivni SAOP konektorji imajo sicer po 119
+  preslikav. Migracije 137 in spremembe kartice zato nisem ustvaril, `out.OwnershipPolicy`
+  nisem spreminjal, Naloge 2 pa zaradi zahtevanega zaporedja nisem začel.
+
+  **Potrebujem:** potrjeno kanonično kodo in vhodno preslikavo za vsako od obeh SAOP poti
+  (oziroma odločitev, naj se Naloga 1 opusti in nadaljuje z Nalogo 2).
+
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
 > Vse je držala ena in ista stvar — polni paket je imel en nepovezan padec
 > (`PIM.F3.Integration`, zastarel primer `GetItemsPlanningData`). Commit `b91bc40` je ta test
