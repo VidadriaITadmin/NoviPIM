@@ -1,4 +1,7 @@
 using System.Text.RegularExpressions;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
+using PIM.Intranet.Services;
 
 // Pogodba kartice po prenovi 2026-08-28. Preverja uporabnikovo poslovno razdelitev,
 // podatkovne vire, varno prikazovanje medijev in dostopnost; ne zaklepa notranjega HTML-ja.
@@ -233,6 +236,106 @@ var panelCss = File.ReadAllText(panelPath + ".css");
 Assert(panelCss.Contains(".field-group.two-columns .field-grid", StringComparison.Ordinal),
   "Manjka slog za skupino v dveh stolpcih.");
 
+/* --- Zavihek »SAOP endpoint« (migracija 141) ------------------------------------------ */
+
+// Ko se PIM in SAOP ne ujemata, mora biti mogoce videti, kaj ima ERP — vkljucno s polji,
+// ki jih PIM ne hrani. Zapis pride iz zajetega odgovora, ne iz novega klica v SAOP.
+
+Assert(card.Contains("new(\"saop-endpoint\", \"SAOP endpoint\"", StringComparison.Ordinal),
+  "Kartici manjka zavihek »SAOP endpoint«.");
+Assert(card.IndexOf("new(\"saop-endpoint\"", StringComparison.Ordinal) > card.IndexOf("new(\"web\", \"Splet\"", StringComparison.Ordinal),
+  "Zavihek »SAOP endpoint« stoji za zavihkom »Splet«.");
+Assert(card.Contains("id=\"panel-saop-endpoint\"", StringComparison.Ordinal), "Manjka panel zavihka SAOP endpoint.");
+Assert(card.Contains("SaopSnapshot.GetAsync", StringComparison.Ordinal), "Zavihek mora brati skozi bralni servis.");
+Assert(!card.Contains("SqlCommand", StringComparison.Ordinal) && !card.Contains("SELECT ", StringComparison.Ordinal),
+  "V .razor ni inline SQL.");
+// Posnetek se isce po zajetih straneh odgovora in traja nekaj sekund; kartica se zato zaradi
+// zavihka, ki ga nihce ne odpre, ne sme upocasniti.
+Assert(card.Contains("if (section == \"saop-endpoint\") _ = LoadSnapshotAsync();", StringComparison.Ordinal),
+  "Posnetek se mora nalozit sele ob odprtju zavihka.");
+foreach (var column in new[] { "Vrednost v SAOP", "Vrednost v PIM", "Ujemanje" })
+  Assert(card.Contains(column, StringComparison.Ordinal), "Tabela posnetka nima stolpca: " + column + ".");
+Assert(card.Contains("row-different", StringComparison.Ordinal) && css.Contains(".row-different", StringComparison.Ordinal),
+  "Vrstica z odklonom mora biti oznacena.");
+Assert(card.Contains("Odklon", StringComparison.Ordinal) && card.Contains("PIM ne hrani", StringComparison.Ordinal),
+  "Oznaka odklona ne sme biti samo barva; stolpec mora nositi tudi besedo.");
+Assert(card.Contains("head.Explanation", StringComparison.Ordinal),
+  "Kadar posnetka ni, mora kartica izpisati pojasnilo iz bralnega modela, ne prazne tabele.");
+Assert(card.Contains("head.SourceTable", StringComparison.Ordinal) && card.Contains("head.LastModifiedAtUtc", StringComparison.Ordinal),
+  "V glavi zavihka mora pisati, iz katere tabele je posnetek in kdaj je bil narejen.");
+
+// Dokaz nad razvojno bazo. Test samo bere.
+var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.WriteLine("OPOZORILO: brez PIM_CONNECTION_STRING je dokaz posnetka SAOP nad bazo preskocen.");
+}
+else
+{
+  var settings = new SqlConnectionStringBuilder(connectionString);
+  if (!string.Equals(settings.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Dokaz posnetka SAOP je dovoljen samo v razvojni bazi PIM.");
+
+  var service = new SaopEndpointSnapshotService(new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Pim"] = connectionString })
+    .Build());
+
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+
+  // Artikel podjetja z virom SAOP, ki je v zajemu res prisel.
+  var probe = await ProbeAsync(connection);
+  Assert(probe is not null, "Za dokaz posnetka je potreben artikel podjetja z zajetim zapisom SAOP.");
+  var (organizationId, itemId) = probe!.Value;
+
+  var snapshot = await service.GetAsync(organizationId, itemId);
+  Assert(snapshot.Head.HasSnapshot, "Artikel iz zajema mora imeti posnetek: " + itemId);
+  Assert(snapshot.Head.SourceTable == "raw.Inbox", "Posnetek mora povedati, iz katere tabele je.");
+  Assert(snapshot.Head.Explanation is null, "Kadar posnetek obstaja, pojasnila ni.");
+  Assert(snapshot.Rows.Count > 20, "Posnetek mora vrniti celoten zapis, ne samo polj, ki jih PIM hrani.");
+
+  // Dolga oblika: sklopi iz registra, neznano v »Ostalo«, in nobenega praznega imena.
+  var known = new[] { "Item", "GeneralData", "SalesData", "StockData", "PropertiesData", "Ostalo" };
+  foreach (var row in snapshot.Rows)
+  {
+    Assert(known.Contains(row.Section, StringComparer.Ordinal), "Neznan sklop v posnetku: " + row.Section);
+    Assert(row.ElementName.Length > 0, "Element brez imena ni element.");
+    Assert(row.HasCanonical || (row.FieldKey is null && !row.IsDifferent),
+      "Polje brez kanonicne ustreznice ne more biti odklon: " + row.ElementName);
+  }
+  Assert(snapshot.Rows.Any(row => !row.HasCanonical),
+    "Posnetek mora pokazati tudi polja, ki jih PIM ne hrani; sicer ne pove nic novega.");
+  Assert(snapshot.Rows.Any(row => row.HasCanonical),
+    "Polja s kanonicno ustreznico morajo biti prepoznana, sicer primerjave ni.");
+  // Vrstni red je registrski: sklopi po SectionSort, znotraj sklopa po SortOrder.
+  Assert(snapshot.Rows.Select(row => (row.SectionSort, row.SortOrder, row.ElementName))
+    .SequenceEqual(snapshot.Rows.Select(row => (row.SectionSort, row.SortOrder, row.ElementName))
+      .OrderBy(key => key.SectionSort).ThenBy(key => key.SortOrder).ThenBy(key => key.ElementName, StringComparer.Ordinal)),
+    "Vrstni red posnetka mora priti iz registra out.SaopXmlField.");
+
+  // Stevilke se primerjajo kot stevilke: SAOP posilja '0.000000' tam, kjer ima PIM 0.0000.
+  var numeric = snapshot.Rows.FirstOrDefault(row =>
+    row.HasCanonical && row.Value is not null && row.PimValue is not null
+    && decimal.TryParse(row.Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)
+    && decimal.TryParse(row.PimValue, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _));
+  if (numeric is not null)
+  {
+    var left = decimal.Parse(numeric.Value!, System.Globalization.CultureInfo.InvariantCulture);
+    var right = decimal.Parse(numeric.PimValue!, System.Globalization.CultureInfo.InvariantCulture);
+    Assert(numeric.IsDifferent == (left != right),
+      "Stevilcno polje se mora primerjati kot stevilo, ne kot niz: " + numeric.ElementName);
+  }
+
+  // Artikel, ki ga v zajemu ni: pojasnilo, ne napaka in ne prazna tabela brez besede.
+  var missing = await service.GetAsync(organizationId, "NE.OBSTAJA." + Guid.NewGuid().ToString("N")[..8]);
+  Assert(!missing.Head.HasSnapshot && missing.Rows.Count == 0, "Artikla brez zajema ni mogoce imeti posnetka.");
+  Assert(!string.IsNullOrWhiteSpace(missing.Head.Explanation), "Odsotnost posnetka mora biti pojasnjena.");
+
+  // Posebni znaki v sifri ne smejo postati vzorec LIKE.
+  var escaped = await service.GetAsync(organizationId, "100%_[x]");
+  Assert(!escaped.Head.HasSnapshot, "Sifra s posebnimi znaki ne sme ujeti tujega zapisa.");
+}
+
 Console.WriteLine("F10 product detail UX contract PASS.");
 
 static void Assert(bool condition, string message)
@@ -252,4 +355,39 @@ static string FindRoot()
     }
   }
   throw new InvalidOperationException("PIM_Solution ni najden.");
+}
+
+static string? LocalConnectionString(string root)
+{
+  foreach (var candidate in new[] { Path.Combine(root, "appsettings.Local.json"), Path.Combine(root, "..", "appsettings.Local.json") })
+  {
+    if (!File.Exists(candidate)) continue;
+    var match = Regex.Match(File.ReadAllText(candidate), "\"Pim\"\\s*:\\s*\"([^\"]+)\"");
+    if (match.Success) return match.Groups[1].Value;
+  }
+  return null;
+}
+
+/// <summary>
+/// Artikel, ki je v zajetem odgovoru SAOP res prisel. Vzet je iz najnovejse zajete strani,
+/// da dokaz ne visi na tem, kateri artikli so trenutno v katalogu.
+/// </summary>
+static async Task<(int OrganizationId, string ItemId)?> ProbeAsync(SqlConnection connection)
+{
+  const string sql = @"
+    SELECT TOP (1) inbox.OrganizationId,
+      SUBSTRING(inbox.PayloadXml,
+        CHARINDEX(N'<ItemID>', inbox.PayloadXml) + 8,
+        CHARINDEX(N'</ItemID>', inbox.PayloadXml) - CHARINDEX(N'<ItemID>', inbox.PayloadXml) - 8)
+    FROM raw.Inbox AS inbox
+    INNER JOIN map.SourceConnector AS connector
+      ON connector.OrganizationId = inbox.OrganizationId AND connector.SourceCode = inbox.SourceCode
+     AND connector.ConnectorType = N'SAOP' AND connector.IsActive = 1
+    WHERE inbox.EntityType = N'ItemGeneralData'
+      AND CHARINDEX(N'<ItemID>', inbox.PayloadXml) > 0
+    ORDER BY inbox.InboxId DESC;";
+  await using var command = new SqlCommand(sql, connection) { CommandTimeout = 300 };
+  await using var reader = await command.ExecuteReaderAsync();
+  if (!await reader.ReadAsync()) return null;
+  return (reader.GetInt32(0), reader.GetString(1));
 }

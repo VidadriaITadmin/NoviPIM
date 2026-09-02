@@ -8,6 +8,7 @@
 @inject CatalogReadService Catalog
 @inject ProductEditService Edits
 @inject SaopWriteService SaopWrite
+@inject SaopEndpointSnapshotService SaopSnapshot
 @inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
 
@@ -215,6 +216,80 @@
             </Toolbar>
           </ProductChannelPanel>
 
+        </section>
+
+        @* Zavihek »SAOP endpoint«: celoten zapis, kot ga je poslal ERP, tudi polja, ki jih PIM
+           ne hrani. Nabor stolpcev se med podjetji razlikuje, zato je oblika dolga in ne siroka,
+           razvrstitev v sklope pa pride iz registra out.SaopXmlField (migracija 141).
+           Posnetek se isce po zajetih straneh odgovora in traja nekaj sekund, zato se nalozi
+           sele ob odprtju zavihka in ne ob vsakem odprtju kartice. *@
+        <section id="panel-saop-endpoint" role="tabpanel" aria-labelledby="tab-saop-endpoint" tabindex="0" class="section-panel section-stack" hidden="@(Section != "saop-endpoint")">
+          <header class="section-heading">
+            <h2>SAOP endpoint</h2>
+            <p>Zapis, kot ga ima ERP. Označene vrstice so odkloni od PIM-a.</p>
+          </header>
+
+          <section class="ui-card data-card tab-panel">
+            <PimState Loading="SnapshotLoading" Error="@SnapshotError" Empty="false"
+                      LoadingText="Iščem zajeti zapis SAOP …">
+              @if (Snapshot is not null)
+              {
+                var head = Snapshot.Head;
+                <div class="subsection-head">
+                  <h2>Posnetek</h2>
+                  <span>
+                    @if (head.HasSnapshot)
+                    {
+                      <text>
+                        @head.SourceTable · vir @head.SourceCode · @head.EntityType, stran @head.PageNumber ·
+                        prevzeto @(head.ReceivedUtc?.ToLocalTime().ToString("g") ?? "—")
+                        @if (head.LastModifiedAtUtc is DateTime changed)
+                        {
+                          <text>· v SAOP nazadnje spremenjen @changed.ToLocalTime().ToString("g")</text>
+                        }
+                      </text>
+                    }
+                    else { <text>posnetka ni</text> }
+                  </span>
+                </div>
+
+                @if (!head.HasSnapshot)
+                {
+                  @* Prazna tabela ne pove nicesar; pojasnilo pride iz bralnega modela. *@
+                  <p class="card-note">@head.Explanation</p>
+                }
+                else
+                {
+                  <p class="card-note">
+                    @SnapshotDifferenceCount.ToString("N0") od @Snapshot.Rows.Count.ToString("N0") polj se razlikuje od PIM-a.
+                    Polja brez kanonične ustreznice PIM ne hrani; prikazana so, ker so v zapisu ERP-ja.
+                  </p>
+
+                  @foreach (var group in Snapshot.Rows.GroupBy(row => row.Section))
+                  {
+                    <div class="subsection-head snapshot-group"><h3>@group.Key</h3><span>@group.Count().ToString("N0") polj</span></div>
+                    <PimTable Caption="@($"Zapis SAOP — sklop {group.Key}")" Columns="SnapshotColumns">
+                      <Rows>
+                        @foreach (var row in group)
+                        {
+                          <tr class="@(row.IsDifferent ? "row-different" : null)">
+                            <td><span class="code-value">@row.ElementName</span></td>
+                            <td>@(row.Value ?? "—")</td>
+                            <td>@(row.HasCanonical ? row.PimValue ?? "—" : "")</td>
+                            <td>
+                              @if (!row.HasCanonical) { <span class="muted">PIM ne hrani</span> }
+                              else if (row.IsDifferent) { <PimChip Text="Odklon" Tone="bad" /> }
+                              else { <PimChip Text="Se ujema" Tone="good" /> }
+                            </td>
+                          </tr>
+                        }
+                      </Rows>
+                    </PimTable>
+                  }
+                }
+              }
+            </PimState>
+          </section>
         </section>
 
         <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" tabindex="0" class="section-panel section-stack" hidden="@(Section != "media")">
@@ -646,6 +721,7 @@
   async Task LoadAsync()
   {
     Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
+    Snapshot = null; SnapshotError = null;
     try
     {
       // Kartica je dosegljiva iz seznama vseh podjetij, zato obseg dolocì izdelek sam;
@@ -667,6 +743,7 @@
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
+      if (Section == "saop-endpoint") _ = LoadSnapshotAsync();
     }
     catch { Error = "Kartice izdelka trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -772,7 +849,7 @@
   /// </summary>
   static readonly string[] TwoColumnGroups = ["Nazivi za ERP"];
 
-  static readonly string[] Sections = ["overview", "core", "commercial", "web", "media", "stock", "quality-history"];
+  static readonly string[] Sections = ["overview", "core", "commercial", "web", "saop-endpoint", "media", "stock", "quality-history"];
 
   /// <param name="Count">Samo stevilo tezav, pri katerih uporabnika caka dejanje.</param>
   sealed record CardSection(string Key, string Label, int? Count, string? Tone = null);
@@ -788,6 +865,9 @@
     // A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
     new("commercial", "Komerciala", CommercialIssues.Count, Tone: "warn"),
     new("web", "Splet", WebIssues.Count(row => row.Severity == "ERROR"), Tone: "bad"),
+    // Kaj ima ERP v resnici. Stevec je stevilo odklonov, in sicer sele takrat, ko je posnetek
+    // nalozen — pred tem ni podatka in izmisljene nicle ne kazemo.
+    new("saop-endpoint", "SAOP endpoint", Snapshot is null ? (int?)null : SnapshotDifferenceCount, Tone: "bad"),
     // Uporabnik 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«. Nista isto:
     // mediji so vsebina izdelka, zaloga je trenutno stanje iz drugega vira. Locena sklopa.
     new("media", "Mediji", Detail.Media.Count + Detail.Documents.Count),
@@ -795,7 +875,35 @@
     new("quality-history", "Kakovost in zgodovina", Detail.Issues.Count(row => row.Severity == "ERROR"), Tone: "bad"),
   ];
 
-  void SelectSection(string section) { Section = section; Navigation.NavigateTo($"izdelki/{ProductId}#{section}", replace: true); }
+  SaopEndpointSnapshot? Snapshot;
+  bool SnapshotLoading;
+  string? SnapshotError;
+
+  int SnapshotDifferenceCount => Snapshot?.Rows.Count(row => row.IsDifferent) ?? 0;
+
+  static readonly IReadOnlyList<PimColumn> SnapshotColumns =
+    [new("Element"), new("Vrednost v SAOP"), new("Vrednost v PIM"), new("Ujemanje")];
+
+  void SelectSection(string section)
+  {
+    Section = section;
+    Navigation.NavigateTo($"izdelki/{ProductId}#{section}", replace: true);
+    if (section == "saop-endpoint") _ = LoadSnapshotAsync();
+  }
+
+  /// <summary>Posnetek se isce po zajetih straneh odgovora, zato se nalozi na zahtevo in samo enkrat.</summary>
+  async Task LoadSnapshotAsync()
+  {
+    if (Snapshot is not null || SnapshotLoading || Detail is null) return;
+    SnapshotLoading = true; SnapshotError = null;
+    StateHasChanged();
+    try
+    {
+      Snapshot = await SaopSnapshot.GetAsync(OrganizationId, Detail.Header.ItemId);
+    }
+    catch { SnapshotError = "Posnetka zapisa iz SAOP trenutno ni mogoče prebrati."; }
+    finally { SnapshotLoading = false; StateHasChanged(); }
+  }
   void HeroFailed() => HeroImageFailed = true;
   ProductChannelField Field(string label, string key, string? value, bool inModel = true)
   {

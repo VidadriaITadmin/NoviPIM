@@ -51,6 +51,24 @@ vmesniku. Dokaz: migrator prvi/drugi zagon in `--verify` uspešni; `run_tests.ps
 = 14/0/0 in `Build OK`, med njimi test, ki nad bazo prešteje osem naborov, shrani in umakne
 ročni prepis ter preveri obe revizijski sledi.
 
+Migracija **141** je dala kartici artikla zavihek »SAOP endpoint«: celoten zajeti zapis
+ERP-ja, tudi polja, ki jih PIM ne hrani. NoviPIM nima tabel `raw.{Org}_data_current` kot stari
+sistem — vhodni sloj je `raw.Inbox` s celotnim odgovorom endpointa — zato se vir razreši iz
+registra (`map.SourceConnector` → SAOP, `map.EntityMapping.RecordXPath` → kje stoji zapis,
+`map.FieldMapping` → kateri element nosi šifro artikla) in ne iz sestavljenega imena.
+Oblika je dolga (`Section`, `ElementName`, `Value`), ker se nabor elementov med podjetji
+razlikuje; razvrstitev v sklope bere `out.SaopXmlField`, neznano pade v `Ostalo`, zato se nov
+element endpointa pojavi sam. Primerjava s PIM-om je tipizirana: `'0.000000'` in `0.0000` sta
+ista vrednost, `bit` se pokaže v črki, ki jo uporablja SAOP. Organizacija brez vira SAOP in
+artikel, ki ga v zajemu ni, dobita pojasnilo, ne napake.
+
+**Kaj je zavihek takoj pokazal:** pri artiklu `3F.58616` (IQLighting) ima SAOP izpolnjena
+`GeneralData/ItemSearchName` in `SalesData/Warranty`, PIM pa obeh nima. Migracija 137 je
+preslikavi dodala, zajete strani pa so že `Processed`, zato jih nova preslikava ne vidi —
+ista stvar, ki je v TODO kot naloga 1 za workerje (`--map-run` oziroma `--full`).
+Dokaz: migrator prvi/drugi zagon in `--verify` uspešni; polni `scripts/run_tests.ps1` =
+58/0/0 in `Build OK`.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;

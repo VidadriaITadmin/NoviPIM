@@ -38,6 +38,7 @@ builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
 builder.Services.AddScoped<WebExportFileService>();
 builder.Services.AddScoped<WebExportBuildService>();
+builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
 builder.Services.AddScoped<PipelineReadService>();

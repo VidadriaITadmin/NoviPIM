@@ -225,6 +225,13 @@
   .data-table { min-width: 42rem; }
 }
 
+/* Zavihek »SAOP endpoint«. Odklon mora biti viden na prvi pogled, a ne samo po barvi:
+   stolpec »Ujemanje« nosi tudi besedo, ker barva sama za dostopnost ni dovolj. */
+.snapshot-group { margin-top: 1rem; }
+.snapshot-group h3 { font-size: .9rem; margin: 0; }
+.row-different { background: var(--pim-warn-surface, #fff7ed); }
+.row-different td:first-child { box-shadow: inset 3px 0 0 var(--pim-bad, #dc2626); }
+
 @media (max-width: 540px) {
   .card-actions { align-items: stretch; flex-direction: column; width: 100%; }
   .blocking-banner { align-items: start; grid-template-columns: auto 1fr; }

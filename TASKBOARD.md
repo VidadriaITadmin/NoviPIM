@@ -187,7 +187,22 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   bazo: `map.EntityMapping` pozna 21 entitet in med njimi ni kontaktne, `map.FieldMapping`
   nima nobene preslikave z elementom Mail/Phone/Telefon, `raw.Inbox` nima take entitete,
   zajeti zapis `GetCustomers` (`/ArrayOfCustomer/Customer`) pa kontaktov sploh ne nosi.
-  Bralni model to pove s `SourceAvailable=0` in `SourceNote`. Sledi Naloga 4 — INTRANET.
+  Bralni model to pove s `SourceAvailable=0` in `SourceNote`. **Naloga 4 — INTRANET je
+  KONČANA:** `run_tests.ps1 -Filter F10` = 14/0/0 in `Build OK`. Zavihek »Splošni podatki«
+  ima kartico »Kontakti« s štirimi polji, značko izvora, gumboma »Shrani kontakte« in
+  »Počisti ročni prepis« ter `<PimMissing>`, ki pove, da zajema ni. Test nad bazo prešteje
+  osem naborov, shrani in umakne ročni prepis ter preveri obe revizijski sledi.
+  **Naloga 5 — BAZA je KONČANA:** migracija `141_SaopEndpointSnapshot.sql` = prvi zagon
+  uporabljen, drugi preskočen, `--verify` uspešen. `intranet.GetSaopEndpointSnapshot` vrne
+  glavo (`raw.Inbox`, vir, stran, prevzeto, `LastModifiedAtUtc`, `HasSnapshot`, pojasnilo)
+  in dolgo obliko zapisa (`Section`, `ElementName`, `Value`) s primerjavo s PIM-om. Vir se
+  razreši iz registra `map.SourceConnector` + `map.EntityMapping` + `map.FieldMapping`
+  (`Product.ItemID`), sklopi iz `out.SaopXmlField`, neznano pade v `Ostalo`. Primerjava je
+  tipizirana: `'0.000000'` in `0.0000` sta isto, `bit` se pokaže v črki, ki jo uporablja
+  SAOP. **Naloga 5 — INTRANET je KONČANA:** polni `scripts/run_tests.ps1` = **58 uspešnih,
+  0 preskočenih, 0 padlih**, `Build OK`. Nov zavihek »SAOP endpoint« stoji za »Splet«, se
+  naloži šele ob odprtju (iskanje po zajetih straneh traja nekaj sekund) in označi odkloni
+  z besedo, ne samo z barvo. **S tem je vseh pet nalog iz primerjave PIM/PIM_test končanih.**
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet
