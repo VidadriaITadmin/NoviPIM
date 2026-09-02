@@ -73,10 +73,12 @@ public static class MagentoExportCommand
 
         try
         {
-            // Izdelki nimajo filtra objave: izvoz za Magento je od nekdaj jemal ves katalog
-            // podjetja. Stranke ga imajo — brez WebEnabled stranka na splet ne sodi.
+            // Od migracije 146 gre v datoteko samo, kar na splet sodi: objavljen izdelek s spletno
+            // stranjo, veljaven za to stran (pravilo je v out.GetExportRows in registru profila).
+            // Do takrat je izvoz jemal ves katalog podjetja (43.504 vrstic namesto 1.957 pri
+            // podjetju 2) — uporabnik 2026-09-02: "v izvozu morajo biti cisti podatki".
             var productCount = await RegistryCsvWriter.WriteAsync(productTempPath, productProfile.Columns,
-                ReadExportRowsAsync(connection, productProfile.ExportProfileId, organizationId, onlyPublished: false, ct), ct);
+                ReadExportRowsAsync(connection, productProfile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
             var customerCount = await RegistryCsvWriter.WriteAsync(customerTempPath, customerProfile.Columns,
                 ReadExportRowsAsync(connection, customerProfile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
 
@@ -133,6 +135,43 @@ public static class MagentoExportCommand
                 DeleteIfExists(customerBackupPath);
                 DeleteIfExists(markerBackupPath);
             }
+        }
+    }
+
+    /// <summary>
+    /// En sam profil iz registra v eno datoteko — za hitro osvezitev cen in zaloge
+    /// (MAGENTO_STOCK_PRICES, migracija 146), ki tece vsakih pet minut iz Zaloga-cikel.ps1.
+    /// Datoteka nastane ob strani in se zamenja sele, ko je cela; bralec nikoli ne vidi
+    /// polovicne. Vrne stevilo zapisanih vrstic.
+    /// </summary>
+    public static async Task<int> ExportProfileAsync(string profileCode, int organizationId, string outputDir, string? fileName, string connectionString, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(profileCode, nameof(profileCode));
+        if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDir, nameof(outputDir));
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException("Manjka PIM_CONNECTION_STRING. Nastavite okoljsko spremenljivko PIM_CONNECTION_STRING.");
+
+        Directory.CreateDirectory(outputDir);
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+
+        var profile = await ExportProfileRegistry.LoadProfileAsync(connection, profileCode, ct);
+        var targetPath = Path.Combine(outputDir, fileName ?? $"magento-{profileCode.ToLowerInvariant().Replace('_', '-')}.csv");
+        var tempPath = $"{targetPath}.{Guid.NewGuid():N}.tmp";
+        using var directoryLock = MagentoExportLock.Acquire(outputDir);
+        try
+        {
+            // Samo objavljeni izdelki s spletno stranjo; ali je zahtevana tudi veljavnost za splet,
+            // pove profil (RequireWebValid) — hitri profil je namenoma ne zahteva.
+            var count = await RegistryCsvWriter.WriteAsync(tempPath, profile.Columns,
+                ReadExportRowsAsync(connection, profile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
+            File.Move(tempPath, targetPath, overwrite: true);
+            return count;
+        }
+        finally
+        {
+            DeleteIfExists(tempPath);
         }
     }
 

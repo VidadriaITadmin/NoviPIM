@@ -242,14 +242,34 @@ await Throws<ExportContractException>(
 
 // Vzamemo obstojec promoviran izdelek in mu zacasno dodamo dva medija. Novega izdelka
 // ne ustvarjamo - manj posega v skupno stanje, in test brise samo svoji dve vrstici.
+//
+// Od migracije 146 gre v datoteko samo objavljen izdelek, veljaven v vseh profilih, ki
+// blokirajo splet in veljajo za njegovo stran (tu B2C = drevo videlektro). Izbira zato ni vec
+// "prvi po sifri", ampak "prvi, ki na splet sploh sme" — sicer bi test dokazoval izvoz
+// izdelka, ki ga pravilo iz datoteke izloci.
 long pimProductId;
 string itemId;
-await using (var pick = new SqlCommand(
-  "SELECT TOP(1) PimProductId, ItemID FROM pim.Product WHERE OrganizationId=@OrgId ORDER BY ItemID;", connection))
+await using (var pick = new SqlCommand("""
+  SELECT TOP(1) promoted.PimProductId, promoted.ItemID
+  FROM pim.Product AS promoted
+  INNER JOIN canon.Product AS product
+    ON product.OrganizationId = promoted.OrganizationId AND product.ItemID = promoted.ItemID
+  WHERE promoted.OrganizationId = @OrgId AND product.WebPublish = 1
+    AND NOT EXISTS
+    (
+      SELECT 1 FROM val.ValidationProfile AS profile
+      LEFT JOIN val.ProductValidationState AS state
+        ON state.ProductId = product.ProductId AND state.ValidationProfileId = profile.ValidationProfileId
+      WHERE profile.IsActive = 1 AND profile.BlocksWeb = 1
+        AND (profile.CategoryTreeCode IS NULL OR profile.CategoryTreeCode = N'videlektro')
+        AND ISNULL(state.Status, N'INVALID') <> N'VALID'
+    )
+  ORDER BY promoted.ItemID;
+  """, connection))
 {
   pick.Parameters.AddWithValue("@OrgId", organizationId);
   await using var reader = await pick.ExecuteReaderAsync();
-  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni izdelka organizacije 2 za dokaz izvoza.");
+  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni objavljenega in za splet veljavnega izdelka organizacije 2 za dokaz izvoza.");
   pimProductId = reader.GetInt64(0);
   itemId = reader.GetString(1);
 }
@@ -278,8 +298,11 @@ try
     -- starejse vrstice Primary, Magento pravi MAIN. Ce bi primerjava vloge v
     -- out.GetExportRows postala obcutljiva na velikost crk, bi glavna slika izginila
     -- in ta izdelek bi jo dobil med ostale slike.
-    VALUES (@PimProductId, @PrimaryUrl, N'Primary', 901),
-           (@PimProductId, @GalleryUrl, N'GALLERY', 902);
+    -- Negativen vrstni red: izbrani izdelek je za splet veljaven, torej ima svoje slike (spletni
+    -- profil jih zahteva). Testni glavni medij mora biti pred njimi, sicer bi zmagala njegova
+    -- lastna glavna slika in test bi dokazoval nekaj drugega.
+    VALUES (@PimProductId, @PrimaryUrl, N'Primary', -901),
+           (@PimProductId, @GalleryUrl, N'GALLERY', -902);
     """, connection))
   {
     seed.Parameters.AddWithValue("@PimProductId", pimProductId);
