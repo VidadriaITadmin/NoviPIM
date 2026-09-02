@@ -482,6 +482,12 @@ Registrira tri opravila:
 | **PIM nadzor** | 5 minut | preveri, ali se je kaj ustavilo, in pošlje opozorila |
 | **PIM nocni tok** | vsak dan 02:30 | cel katalog |
 
+Opravila tečejo **brez okna**. Ne poženejo PowerShella naravnost, ampak prek
+`scripts\Tiho.vbs`: `wscript.exe` konzole nima in otroka požene s skritim oknom že ob
+nastanku. Prej je bilo v ukazu `-WindowStyle Hidden`, a to ne zaleže — konzolo alocira
+Windows, preden jo PowerShell utegne skriti, pri Store aliasu `pwsh.exe` pa vedno. Posledica
+je bila okno, ki je vsakih pet minut utripnilo in pobralo fokus sredi tipkanja.
+
 ## Korak 8.2 — Preveri, da so registrirana
 
 ```powershell

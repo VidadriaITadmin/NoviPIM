@@ -243,6 +243,45 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+- **[WORKERJI] Načrtovana opravila tečejo brez okna; obtičala instanca ne blokira več ritma** —
+  kdo: Claude Code — ozemlje: WORKERJI (`scripts\`) — končano 2026-09-02.
+
+  Uporabnik je javil, da mu v ozadju nekaj vsakih nekaj minut odpre in zapre terminal in mu
+  pobere fokus sredi tipkanja. Vzroka sta bila dva in sta se seštevala.
+
+  **1. `pwsh.exe` v opravilu ni bil PowerShell.** Naloge so kazale na
+  `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` — to je **dvobajtni skrbnik Trgovine**
+  (app execution alias), ki gre skozi AppX aktivacijo. Ta si konzolo vzame vedno in za
+  `-WindowStyle Hidden` ne ve, zato je bilo skritje vedno prepozno. Komentar v
+  `Namesti-opravila.ps1` je `Hidden` navajal kot rešitev za zavrnjeni S4U; ni bila.
+
+  **2. Ritem.** `PIM zaloga` (zamik 2 min) in `PIM nadzor` (zamik 4 min) vsak na 5 minut
+  pomenita zagon **povprečno vsake 2,5 minute**, oba v `InteractiveToken`, torej na uporabnikovem
+  namizju.
+
+  Popravek: opravilo ne požene PowerShella naravnost, ampak prek novega `scripts\Tiho.vbs`.
+  `wscript.exe` je program grafične podsistemske vrste in konzole nima; otroka požene s skritim
+  oknom **že ob nastanku** (`Run(ukaz, 0, True)`) in počaka nanj, zato izhodna koda ostane merilo
+  in `IgnoreNew` še vedno drži. Pot do pravega `pwsh.exe` in gradnja ukaza sta v novem
+  `scripts\Izvajalec.ps1`, ki ga vključujeta obe namestitveni skripti — prej je vsaka gradila
+  ukaz po svoje in popravek v eni bi drugo pustil po starem.
+
+  **Ob poti se je našla tišja okvara.** `PIM nadzor` je od **1. 9. 2026 20:31** visel: en
+  `pwsh.exe` (PID 19708) s **1,5 sekunde procesorja v 22 urah**, brez otrok. Ker naloga nosi
+  `MultipleInstances IgnoreNew`, je vsak petminutni tik od takrat vrnil `0x800710E0` (zavrnjeno,
+  ker prejšnji še teče) in `logs\nadzor-2026-09-02.log` sploh ni nastal. Watchdog — edini del,
+  ki naj bi povedal, da se je nekaj ustavilo — je bil dan mrtev in tega ni povedal nihče.
+  Proces je ustavljen; meja izvajanja je odslej **PT30M za zalogo in PT15M za nadzor** namesto
+  osmih ur, tako da obtičala instanca zapre samo svoj tik, ne celega dneva.
+
+  **Dokaz:** `schtasks /query /xml` po registraciji kaže
+  `<Command>C:\WINDOWS\System32\wscript.exe</Command>` in `ExecutionTimeLimit` PT30M / PT15M /
+  PT8H; `PIM zaloga` ob 18:56:00 → `Last Result: 0`, dnevnik `logs\zaloga-2026-09-02.log` ima
+  poln cikel (NW_STOCK, BT_STOCK, SAOP) brez okna na zaslonu.
+
+  Prevedene kode se ta sprememba ne dotakne (samo `scripts\` in `docs\`), zato build in testni
+  paket nista bila ponovno pognana; merilo so izhodne kode nalog in dnevniki zgoraj.
+
 - **[DOMENA] Magento izvoz spet polni jezikovne stolpce — regresija iz migracije 124** —
   kdo: Claude Code — ozemlje: DOMENA — končano 2026-08-31.
 

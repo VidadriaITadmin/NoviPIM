@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Registrira nacrtovano nalogo Windows, ki vsako noc pozene scripts\Nocno-vse.ps1.
 
@@ -51,19 +51,21 @@ if ($Odstrani) {
   return
 }
 
+. (Join-Path $mestoSkripte 'Izvajalec.ps1')
+
 # Argumenti naloge. Tu je edino mesto, kjer se ritem in obseg nocnega opravila nastavita:
 # kateri dan v mesecu je poln zajem, koliko podjetij hkrati in katera podjetja.
-$argumenti = @(
-  '-NoProfile', '-ExecutionPolicy', 'Bypass',
-  '-File', "`"$nocno`"",
+#
+# Ukaz zgradi Izvajalec.ps1, isti kot pri Namesti-opravila.ps1: naloga tece prek Tiho.vbs, da
+# konzolnega okna ni niti za trenutek. Ko je vsaka skripta gradila svoj ukaz, je popravek v eni
+# pustil drugo po starem in okno se je vrnilo.
+$ukaz = TihiUkaz -Skripta $nocno -MapaSkript $mestoSkripte -Argumenti @(
   '-KorenRepozitorija', "`"$koren`"",
   '-DanPolnegaZajema', '1',
   '-HkratnihPodjetij', '4'
-) -join ' '
+)
 
-$izvajalec = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { 'pwsh.exe' } else { 'powershell.exe' }
-
-$akcija   = New-ScheduledTaskAction -Execute $izvajalec -Argument $argumenti -WorkingDirectory $koren
+$akcija   = New-ScheduledTaskAction -Execute $ukaz.Program -Argument $ukaz.Argumenti -WorkingDirectory $koren
 $prozilec = New-ScheduledTaskTrigger -Daily -At $Ura
 $nastavitve = New-ScheduledTaskSettingsSet `
   -StartWhenAvailable `
@@ -76,6 +78,6 @@ Register-ScheduledTask -TaskName $ImeNaloge -Action $akcija -Trigger $prozilec `
   -Settings $nastavitve -User $env:USERNAME -RunLevel Limited -Force | Out-Null
 
 Write-Output "Naloga '$ImeNaloge' je registrirana; zagon vsak dan ob $Ura."
-Write-Output "Ukaz: $izvajalec $argumenti"
+Write-Output "Ukaz: $($ukaz.Program) $($ukaz.Argumenti)"
 Write-Output 'Preveri z: Get-ScheduledTask -TaskName "PIM nocno opravilo" | Get-ScheduledTaskInfo'
 Write-Output 'Zivi klic na SAOP za zalogo ni vklopljen; za vklop dodaj -ZalogaIzSaop v $argumenti.'
