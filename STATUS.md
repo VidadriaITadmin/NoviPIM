@@ -2,6 +2,15 @@
 
 Posodobljeno: 2026-08-28
 
+## Dopolnitve po primerjavi PIM/PIM_test — v delu 2026-09-02
+
+Migracija **137** je dodala povratni SAOP preslikavi in odhodno pogodbo za
+`GeneralData/ItemSearchName` (»Ime za iskanje«) ter `SalesData/Warranty` (»Garancija«).
+Ime za iskanje uporablja generični kanonični model `ProductText.SEARCH_NAME.sl`, garancija
+pa že obstoječo `ProductAttribute.Garancija`. Lastništvo `PIM` je izpeljano iz poti, ki
+ju migracija 068 že označuje kot pisljivi po potrjeni preglednici; drugih politik migracija
+ne spreminja. Baza in F8 pogodba sta zeleni, prikaz na kartici artikla pa je naslednji korak.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;

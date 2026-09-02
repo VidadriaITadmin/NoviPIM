@@ -39,6 +39,38 @@ await connection.OpenAsync();
 
 try
 {
+  /* --- 0) Register dveh pisljivih polj iz preglednice ------------------------------ */
+
+  var saopOrganizations = await SaopOrganizationIdsAsync();
+  Equal(true, saopOrganizations.Count > 0, "Vsaj en aktivni SAOP konektor mora obstajati");
+  Equal(saopOrganizations.Count * 2, await ScalarIntAsync("""
+    SELECT COUNT(*)
+    FROM map.FieldMapping AS mapping
+    INNER JOIN map.SourceConnector AS connector
+      ON connector.SourceConnectorId = mapping.SourceConnectorId
+    WHERE connector.IsActive = 1
+      AND connector.SourceCode LIKE N'SAOP[_]%'
+      AND connector.SourceCode NOT LIKE N'%[_]STOCK'
+      AND mapping.IsActive = 1
+      AND
+      (
+        (mapping.SourceElement = N'GeneralData/ItemSearchName/text()[1]'
+          AND mapping.TargetFieldCode = N'ProductText.SEARCH_NAME.sl')
+        OR
+        (mapping.SourceElement = N'SalesData/Warranty/text()[1]'
+          AND mapping.TargetFieldCode = N'ProductAttribute.Garancija')
+      );
+    """), "Vsak aktivni SAOP konektor mora brati ime za iskanje in garancijo");
+
+  foreach (var saopOrganizationId in saopOrganizations)
+  {
+    var writable = await WritableFieldsAsync(saopOrganizationId);
+    Equal(true, writable.Contains("ProductText.SEARCH_NAME.sl", StringComparer.OrdinalIgnoreCase),
+      $"Organizacija {saopOrganizationId} mora ponujati Ime za iskanje");
+    Equal(true, writable.Contains("ProductAttribute.Garancija", StringComparer.OrdinalIgnoreCase),
+      $"Organizacija {saopOrganizationId} mora ponujati Garancijo");
+  }
+
   await SetupAsync();
 
   /* --- 1) Naročilo spremembe --------------------------------------------------------- */
@@ -284,6 +316,33 @@ async Task<int> ScalarIntAsync(string sql)
   await using var command = new SqlCommand(sql, connection);
   var value = await command.ExecuteScalarAsync();
   return value is null or DBNull ? 0 : Convert.ToInt32(value);
+}
+
+async Task<List<int>> SaopOrganizationIdsAsync()
+{
+  await using var command = new SqlCommand("""
+    SELECT DISTINCT connector.OrganizationId
+    FROM map.SourceConnector AS connector
+    WHERE connector.IsActive = 1
+      AND connector.SourceCode LIKE N'SAOP[_]%'
+      AND connector.SourceCode NOT LIKE N'%[_]STOCK'
+    ORDER BY connector.OrganizationId;
+    """, connection);
+  await using var reader = await command.ExecuteReaderAsync();
+  var result = new List<int>();
+  while (await reader.ReadAsync()) result.Add(reader.GetInt32(0));
+  return result;
+}
+
+async Task<List<string>> WritableFieldsAsync(int writableOrganizationId)
+{
+  await using var command = new SqlCommand(
+    "EXEC intranet.GetWritableSaopFields @OrganizationId, N'SAOP_PRODUCT';", connection);
+  command.Parameters.AddWithValue("@OrganizationId", writableOrganizationId);
+  await using var reader = await command.ExecuteReaderAsync();
+  var result = new List<string>();
+  while (await reader.ReadAsync()) result.Add(reader.GetString(reader.GetOrdinal("FieldKey")));
+  return result;
 }
 
 async Task<string?> ScalarStringAsync(string sql)

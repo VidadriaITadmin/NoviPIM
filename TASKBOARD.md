@@ -142,28 +142,22 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## DELAM (v teku)
 
+- **[BAZA → INTRANET] Pet dopolnitev po primerjavi PIM/PIM_test** — kdo: Codex —
+  ozemlje: zaporedno BAZA → INTRANET → BAZA → INTRANET — nadaljevano 2026-09-02
+  po uporabnikovi odločitvi »naredi vse«. Najprej nastaneta manjkajoči vhodni SAOP
+  preslikavi in kanonični kodi za `ItemSearchName` ter `Warranty`, nato po vrsti ponovno
+  pošiljanje, spletni izvoz na zahtevo, kontakti stranke in posnetek SAOP endpointa.
+  **Naloga 1 / BAZA je zelena:** RED `PIM.F8.SaopDocumentIntegration` = izhod 1 na 0/8
+  preslikav; migracija `137_SaopSearchNameAndWarranty.sql` = prvi zagon uporabljen, drugi
+  preskočen, `--verify` = »Preverjanje F0–F10 baze je uspešno.«; `run_tests.ps1
+  -Filter F8.Saop` = 2 uspešna, 0 padlih, `Build OK`. Sledi INTRANET del kartice.
+
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet
   nalogovno usmerjenih sklopov, jasen prikaz blokad in odprtih nalog ter manj tehnična
   predstavitev ključnih podatkov; obstoječe bralne in zapisovalne poti ostanejo nespremenjene.
 
 ## BLOKIRANO
-
-- **[BAZA → INTRANET] Dve manjkajoči pisljivi polji SAOP (Naloga 1 primerjave PIM/PIM_test)**
-  — kdo: Codex — ozemlje: BAZA, nato INTRANET — blokirano 2026-09-02.
-
-  Specifikacija zahteva, da se kanonični kodi za `GeneralData/ItemSearchName` in
-  `SalesData/Warranty` prebereta iz `map.FieldMapping.TargetFieldCode`; če preslikave ni,
-  polj ne smemo dodati. Bralna poizvedba nad preverjeno lokalno bazo `PIM` je za obe točni
-  poti vrnila **0 preslikav**, `out.SaopXmlField` **0 vrstic** in `out.OwnershipPolicy`
-  **0 vrstic**. Tudi širše iskanje po `ItemSearch`/`Warranty` ni našlo SAOP preslikave;
-  našlo je le dobaviteljski `ProductAttribute.Garancija` iz `BT_XML` in `NW_XML`, ki ni
-  dokaz za SAOP kanonično polje. Vsi štirje aktivni SAOP konektorji imajo sicer po 119
-  preslikav. Migracije 137 in spremembe kartice zato nisem ustvaril, `out.OwnershipPolicy`
-  nisem spreminjal, Naloge 2 pa zaradi zahtevanega zaporedja nisem začel.
-
-  **Potrebujem:** potrjeno kanonično kodo in vhodno preslikavo za vsako od obeh SAOP poti
-  (oziroma odločitev, naj se Naloga 1 opusti in nadaljuje z Nalogo 2).
 
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
 > Vse je držala ena in ista stvar — polni paket je imel en nepovezan padec

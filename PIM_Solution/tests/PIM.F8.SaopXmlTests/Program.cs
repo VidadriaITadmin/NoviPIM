@@ -112,6 +112,17 @@ Equal(true, patch.Xml.Contains("<ItemEANCode>5903139126038</ItemEANCode>"), "Spr
 Equal(2, patch.ElementCount, "PATCH z eno spremembo nosi samo šifro in to polje");
 Equal(0, patch.MissingMandatory.Count, "Za PATCH obveznost ADD polj ne velja");
 
+var iskanjeInGarancija = builder.Build(SaopIntent.Update, "NW.12603",
+  new Dictionary<string, string?>
+  {
+    ["ProductText.SEARCH_NAME.sl"] = "Saturn stropna svetilka",
+    ["ProductAttribute.Garancija"] = "24 mesecev"
+  }, defaults, stamp);
+Equal(true, iskanjeInGarancija.Xml.Contains("<ItemSearchName>Saturn stropna svetilka</ItemSearchName>"),
+  "Ime za iskanje mora biti v GeneralData");
+Equal(true, iskanjeInGarancija.Xml.Contains("<Warranty>24 mesecev</Warranty>"),
+  "Garancija mora biti v SalesData");
+
 // --- 3) ADK brez obveznih polj se ne pretvarja, da je v redu ------------------------
 
 var prazen = builder.Build(SaopIntent.Add, "NW.99999", new Dictionary<string, string?>(), defaults, stamp);
@@ -351,7 +362,9 @@ static SaopXmlField[] Contract() =>
   new("GeneralData", "CustomsTariffNo", "ProductCommercial.CustomsTariff", 170, false, "text", null, null),
   new("GeneralData", "ItemDepartment", "Product.Department", 180, true, "text", null, null),
   new("GeneralData", "ItemEANCode", "Product.EAN", 190, false, "text", null, null),
+  new("GeneralData", "ItemSearchName", "ProductText.SEARCH_NAME.sl", 195, false, "text", null, null),
   new("SalesData", "DiscountGroup1ID", "Product.DiscountGroup", 210, true, "text", null, null),
+  new("SalesData", "Warranty", "ProductAttribute.Garancija", 215, false, "text", null, null),
   new("SalesData", "IsActive", "Product.IsActive", 220, true, "bool", "D", "N"),
   new("SalesData", "AdditionalProperty1ID", "Product.Department", 230, false, "text", null, null),
   new("SalesData", "AdditionalProperty4ID", null, 240, false, "text", null, null),
