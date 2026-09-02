@@ -319,3 +319,15 @@
 .node-original::before { content: "· "; }
 
 .editor-origin { color: var(--pim-text-soft); font-weight: 600; }
+
+/* Nabor atributov po kategoriji (147) */
+.node-attributes { margin-left: .5rem; font-size: .8rem; padding: .1rem .5rem; border-radius: .35rem; border: 1px solid var(--pim-border, #d4d4d8); background: transparent; cursor: pointer; }
+.node-attributes.is-active { background: var(--pim-accent, #f97316); color: #fff; border-color: transparent; }
+.attribute-editor .attribute-set { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .9rem; }
+.attribute-editor .attribute-set th, .attribute-editor .attribute-set td { padding: .3rem .5rem; border-bottom: 1px solid var(--pim-border, #e4e4e7); text-align: left; }
+.attribute-editor .attribute-set td.numeric, .attribute-editor .attribute-set th.numeric { text-align: right; }
+.attribute-editor .attribute-set tr.is-inherited td { color: var(--pim-muted, #52525b); }
+.attribute-editor .code-value { margin-left: .4rem; font-size: .75rem; opacity: .7; }
+.attribute-suggestions { margin-top: .5rem; }
+.attribute-suggestions ul { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .25rem; }
+.attribute-suggestions li { display: flex; gap: .6rem; align-items: center; font-size: .85rem; }

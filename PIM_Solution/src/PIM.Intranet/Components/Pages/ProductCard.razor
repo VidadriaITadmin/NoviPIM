@@ -408,6 +408,8 @@
     _ => "text",
   };
 
+  IReadOnlyList<ProductAttributeSetRow> AttributeSet = [];
+
   bool RequiredField(string fieldKey) => Detail?.Issues.Any(issue =>
     string.Equals(issue.FieldCode, fieldKey, StringComparison.OrdinalIgnoreCase)) == true;
 
@@ -676,9 +678,35 @@
       rows.Add(new("Spletni kanali", "canon.WebSite", string.Join(", ", WebSites), "—", null, null, false, true,
         ProductFieldEdit.None, "text", false, false, Hint: categories));
 
-      rows.AddRange(Detail.Attributes
-        .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
-        .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
+      // Nabor atributov po kategoriji (147). Ce kategorija izdelka nabor doloca, so atributi iz
+      // nabora v svoji skupini (tudi tisti brez vrednosti, da jih je mogoce vpisati), ostali pa
+      // ostanejo vidni v skupini "izven nabora" — na splet ne gredo (out.GetExportRows).
+      var inSet = AttributeSet
+        .Where(row => row.Level != "EXCLUDED")
+        .GroupBy(row => row.AttributeName, StringComparer.OrdinalIgnoreCase)
+        .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+      if (inSet.Count > 0)
+      {
+        const string categorySet = "Atributi kategorije (nabor)";
+        const string outsideSet = "Atributi izven nabora — ne gredo na splet";
+        foreach (var setRow in inSet.Values.OrderBy(row => row.Level == "REQUIRED" ? 0 : 1).ThenBy(row => row.AttributeName, StringComparer.CurrentCulture))
+        {
+          var stored = Detail.Attributes.FirstOrDefault(row => string.Equals(row.AttributeCode, setRow.AttributeName, StringComparison.OrdinalIgnoreCase));
+          var attributeField = AttributeField(setRow.AttributeName, stored?.Value, categorySet);
+          rows.Add(attributeField with { Label = $"{setRow.AttributeName} ({(setRow.Level == "REQUIRED" ? "obvezen" : "priporočen")})",
+            Required = attributeField.Required || setRow.Level == "REQUIRED" });
+        }
+        rows.AddRange(Detail.Attributes
+          .Where(row => !inSet.ContainsKey(row.AttributeCode))
+          .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
+          .Select(row => AttributeField(row.AttributeCode, row.Value, outsideSet)));
+      }
+      else
+      {
+        rows.AddRange(Detail.Attributes
+          .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
+          .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
+      }
 
       rows.AddRange(StoredFields(rows, "ProductText.", "Druga besedila iz vira"));
       rows.AddRange(MissingRequired(rows, "ProductText.", "Manjka za splet"));
@@ -757,9 +785,12 @@
       // Register jezikov, ne samo jeziki, ki jih izdelek ze ima: nazivi morajo imeti vse jezike.
       var languagesTask = Catalog.GetLanguagesAsync(organization.OrganizationId);
       var writableTask = SaopWrite.GetWritableFieldsAsync(organization.OrganizationId);
-      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask);
+      // Nabor atributov po kategoriji (147): kateri atributi sodijo k izdelku in kateri manjkajo.
+      var attributeSetTask = Workbench.GetProductAttributeSetAsync(ProductId);
+      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask);
       Detail = await cardTask; Origins = await originTask; PriceChecks = await priceTask; StockChecks = await stockTask;
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
+      AttributeSet = await attributeSetTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
       if (Section == "saop-endpoint") _ = LoadSnapshotAsync();

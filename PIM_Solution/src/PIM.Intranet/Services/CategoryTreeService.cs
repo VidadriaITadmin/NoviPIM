@@ -130,6 +130,79 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return value is null or DBNull ? 0 : Convert.ToInt32(value);
   }
 
+  // --- Nabor atributov po kategoriji (migracija 147) -------------------------------------
+
+  /// <param name="IsInherited">Vrstica je podedovana od prednika (DefinedAtCategoryCode).</param>
+  public sealed record AttributeSetRow(
+    string AttributeCode, string AttributeName, string Level, int SortOrder, string? Note,
+    string DefinedAtCategoryCode, string? DefinedAtCategoryName, bool IsInherited,
+    long ProductCount, long ProductsWithValue);
+
+  /// <summary>Atribut, ki ga izdelki kategorije ze nosijo, a ga nabor ne omenja — predlog za dodajanje.</summary>
+  public sealed record AttributeSuggestionRow(string AttributeCode, string AttributeName, long ProductsWithValue, bool InRegister);
+
+  public sealed record AttributeOptionRow(string AttributeCode, string Name);
+
+  public sealed record AttributeSetView(IReadOnlyList<AttributeSetRow> Rows, IReadOnlyList<AttributeSuggestionRow> Suggestions);
+
+  public async Task<AttributeSetView> GetAttributeSetAsync(
+    string categoryTreeCode, string categoryCode, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetCategoryAttributeSet", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure, CommandTimeout = 60,
+    };
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@CategoryCode", categoryCode);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<AttributeSetRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "AttributeName"),
+        PimDb.TextOrEmpty(reader, "Level"), PimDb.Int32(reader, "SortOrder"), PimDb.Text(reader, "Note"),
+        PimDb.TextOrEmpty(reader, "DefinedAtCategoryCode"), PimDb.Text(reader, "DefinedAtCategoryName"),
+        PimDb.Bool(reader, "IsInherited"), PimDb.Int64(reader, "ProductCount"), PimDb.Int64(reader, "ProductsWithValue")));
+    var suggestions = new List<AttributeSuggestionRow>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        suggestions.Add(new(
+          PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "AttributeName"),
+          PimDb.Int64(reader, "ProductsWithValue"), PimDb.Bool(reader, "InRegister")));
+    return new(rows, suggestions);
+  }
+
+  public Task<IReadOnlyList<AttributeOptionRow>> GetAttributeOptionsAsync(CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      """
+      SELECT definition.AttributeCode, Name = COALESCE(translation.Name, definition.AttributeCode)
+      FROM canon.AttributeDefinition AS definition
+      LEFT JOIN canon.AttributeTranslation AS translation
+        ON translation.AttributeCode = definition.AttributeCode AND translation.LanguageCode = N'sl'
+      WHERE definition.IsActive = 1
+      ORDER BY Name;
+      """,
+      reader => new AttributeOptionRow(PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "Name")),
+      null, cancellationToken);
+
+  /// <summary>Raven null odstrani atribut iz nabora te kategorije. Pravilo in revizija sta v proceduri.</summary>
+  public async Task SaveAttributeSetAsync(
+    string categoryTreeCode, string categoryCode, string attributeCode, string? level, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.SaveCategoryAttributeSet @CategoryTreeCode, @CategoryCode, @AttributeCode, @Level, @Actor, NULL;", connection);
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@CategoryCode", categoryCode);
+    command.Parameters.AddWithValue("@AttributeCode", attributeCode);
+    command.Parameters.AddWithValue("@Level", Nullable(level));
+    command.Parameters.AddWithValue("@Actor", actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
   static IReadOnlyDictionary<string, string> ParseTranslations(string? json)
   {
     if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

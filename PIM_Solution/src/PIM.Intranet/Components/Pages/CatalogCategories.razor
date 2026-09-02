@@ -155,7 +155,101 @@
 
             <span class="node-count" title="Izdelkov neposredno v tej kategoriji">@row.ProductCount.ToString("N0")</span>
             <span class="node-count is-deep" title="Izdelkov s podkategorijami vred">@row.DescendantProductCount.ToString("N0")</span>
+            <button type="button" class="node-attributes @(AttributeEditing == row.CategoryCode ? "is-active" : null)"
+                    title="Kateri atributi veljajo za izdelke te kategorije (podedujejo jih podkategorije)"
+                    @onclick="() => ToggleAttributesAsync(row)">Atributi</button>
           </div>
+
+          @if (AttributeEditing == row.CategoryCode)
+          {
+            @* Nabor atributov (migracija 147): REQUIRED blokira splet, RECOMMENDED opozori,
+               EXCLUDED izloci podedovanega. Podkategorije nabor podedujejo; najblizja vrstica zmaga. *@
+            <div class="node-editor attribute-editor" aria-label="@($"Nabor atributov za {row.CategoryName}")">
+              <div class="editor-head">
+                <span class="editor-origin">Atributi za: @row.CategoryName</span>
+                <span class="editor-path">@row.CategoryPath</span>
+                <span class="editor-note">Obvezen atribut blokira splet, priporočen opozori, izločen razveljavi podedovanega. Velja tudi za podkategorije.</span>
+              </div>
+              @if (AttributeSetLoading) { <p class="message-state">Nalaganje nabora …</p> }
+              else
+              {
+                <table class="attribute-set">
+                  <thead><tr><th>Atribut</th><th>Raven</th><th>Določen na</th><th class="numeric">Ima vrednost</th><th></th></tr></thead>
+                  <tbody>
+                    @if (AttributeSet.Rows.Count == 0)
+                    {
+                      <tr><td colspan="5" class="muted">Nabor še ni določen — v izvoz gredo vsi atributi izdelka. Dodaj prvega spodaj.</td></tr>
+                    }
+                    @foreach (var setRow in AttributeSet.Rows)
+                    {
+                      <tr class="@(setRow.IsInherited ? "is-inherited" : null)">
+                        <td>@setRow.AttributeName <span class="code-value">@setRow.AttributeCode</span></td>
+                        <td>
+                          <select class="filter-select" value="@setRow.Level" disabled="@Busy"
+                                  @onchange="args => SetAttributeLevelAsync(row, setRow.AttributeCode, args.Value?.ToString())">
+                            <option value="REQUIRED">obvezen</option>
+                            <option value="RECOMMENDED">priporočen</option>
+                            <option value="EXCLUDED">izločen</option>
+                          </select>
+                        </td>
+                        <td>@(setRow.IsInherited ? $"podedovan: {setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}" : "tu")</td>
+                        <td class="numeric" title="Izdelki v tej kategoriji in pod njo, ki atribut imajo / vsi">@setRow.ProductsWithValue.ToString("N0") / @setRow.ProductCount.ToString("N0")</td>
+                        <td>
+                          @if (!setRow.IsInherited)
+                          {
+                            <button type="button" disabled="@Busy" @onclick="() => SetAttributeLevelAsync(row, setRow.AttributeCode, null)">Odstrani</button>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <div class="editor-actions">
+                  <label class="editor-field" for="@("attr-add-" + row.CategoryCode)">
+                    <span class="editor-label">Dodaj atribut</span>
+                    <select id="@("attr-add-" + row.CategoryCode)" class="filter-select" @bind="NewAttributeCode">
+                      <option value="">— izberi —</option>
+                      @foreach (var option in AttributeOptions.Where(option => AttributeSet.Rows.All(existing => existing.AttributeCode != option.AttributeCode)))
+                      {
+                        <option value="@option.AttributeCode">@option.Name</option>
+                      }
+                    </select>
+                  </label>
+                  <label class="editor-field" for="@("attr-level-" + row.CategoryCode)">
+                    <span class="editor-label">Raven</span>
+                    <select id="@("attr-level-" + row.CategoryCode)" class="filter-select" @bind="NewAttributeLevel">
+                      <option value="REQUIRED">obvezen</option>
+                      <option value="RECOMMENDED">priporočen</option>
+                      <option value="EXCLUDED">izločen</option>
+                    </select>
+                  </label>
+                  <button type="button" class="button-primary" disabled="@(Busy || string.IsNullOrWhiteSpace(NewAttributeCode))"
+                          @onclick="() => AddAttributeAsync(row)">Dodaj v nabor</button>
+                </div>
+                @if (AttributeSet.Suggestions.Count > 0)
+                {
+                  <details class="attribute-suggestions">
+                    <summary>Atributi, ki jih izdelki te kategorije že nosijo, a niso v naboru (@AttributeSet.Suggestions.Count)</summary>
+                    <ul>
+                      @foreach (var suggestion in AttributeSet.Suggestions)
+                      {
+                        <li>
+                          <span>@suggestion.AttributeName</span>
+                          <span class="muted">@suggestion.ProductsWithValue.ToString("N0") izdelkov</span>
+                          @if (suggestion.InRegister)
+                          {
+                            <button type="button" disabled="@Busy" @onclick='() => QuickAddAsync(row, suggestion.AttributeCode, "RECOMMENDED")'>priporočen</button>
+                            <button type="button" disabled="@Busy" @onclick='() => QuickAddAsync(row, suggestion.AttributeCode, "REQUIRED")'>obvezen</button>
+                          }
+                          else { <span class="muted">ni v registru atributov</span> }
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
+              }
+            </div>
+          }
 
           @if (Editing == row.CategoryCode)
           {
@@ -227,6 +321,14 @@
   bool OnlyMissing;
   bool OnlyWithProducts;
   string? Editing;
+
+  // Nabor atributov po kategoriji (147).
+  string? AttributeEditing;
+  bool AttributeSetLoading;
+  PIM.Intranet.Services.CategoryTreeService.AttributeSetView AttributeSet = new([], []);
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.AttributeOptionRow> AttributeOptions = [];
+  string NewAttributeCode = "";
+  string NewAttributeLevel = "REQUIRED";
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Kategorije")];
 
@@ -394,4 +496,60 @@
     var state = await Authentication.GetAuthenticationStateAsync();
     return state.User.Identity?.Name ?? "neznan";
   }
+
+  async Task ToggleAttributesAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    if (AttributeEditing == row.CategoryCode) { AttributeEditing = null; return; }
+    Message = null;
+    Error = null;
+    Editing = null;
+    AttributeEditing = row.CategoryCode;
+    NewAttributeCode = "";
+    await LoadAttributeSetAsync(row);
+  }
+
+  async Task LoadAttributeSetAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    AttributeSetLoading = true;
+    try
+    {
+      if (AttributeOptions.Count == 0) AttributeOptions = await Tree.GetAttributeOptionsAsync();
+      AttributeSet = await Tree.GetAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode);
+    }
+    catch (Exception exception) { Error = exception.Message; AttributeSet = new([], []); }
+    finally { AttributeSetLoading = false; }
+  }
+
+  Task AddAttributeAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    QuickAddAsync(row, NewAttributeCode, NewAttributeLevel);
+
+  async Task QuickAddAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row, string attributeCode, string level)
+  {
+    if (string.IsNullOrWhiteSpace(attributeCode)) return;
+    await SetAttributeLevelAsync(row, attributeCode, level);
+    NewAttributeCode = "";
+  }
+
+  /// <summary>Raven null odstrani atribut iz nabora te kategorije (podedovanega se ne da odstraniti tu, le izlociti).</summary>
+  async Task SetAttributeLevelAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row, string attributeCode, string? level)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await Tree.SaveAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode, attributeCode, level, await ActorAsync());
+      Message = level is null
+        ? $"Atribut {attributeCode} je odstranjen iz nabora kategorije »{row.CategoryName}«."
+        : $"Atribut {attributeCode} je v naboru kategorije »{row.CategoryName}« kot {LevelLabel(level)}. Validacija ga upošteva ob naslednjem teku.";
+      await LoadAttributeSetAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  static string LevelLabel(string level) => level switch
+  {
+    "REQUIRED" => "obvezen", "RECOMMENDED" => "priporočen", "EXCLUDED" => "izločen", _ => level,
+  };
 }

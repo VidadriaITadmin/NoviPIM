@@ -106,10 +106,36 @@ public sealed record ProductCardView(
 /// <c>intranet.GetProductCard</c> in <c>intranet.GetProductOrigin</c> ter vse stolpce
 /// preslika po imenu.
 /// </summary>
+/// <summary>Atribut iz nabora kategorije izdelka (migracija 147): kaj sodi k izdelku in ali ima vrednost.</summary>
+public sealed record ProductAttributeSetRow(
+  string AttributeCode, string AttributeName, string Level, bool IsInherited,
+  string CategoryTreeCode, string CategoryCode, string? CategoryName, bool HasValue);
+
 public sealed class ProductWorkbenchService(IConfiguration configuration)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
+
+  public async Task<IReadOnlyList<ProductAttributeSetRow>> GetProductAttributeSetAsync(
+    long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductAttributeSet", connection)
+    {
+      CommandType = CommandType.StoredProcedure, CommandTimeout = 30,
+    };
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<ProductAttributeSetRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "AttributeName"),
+        PimDb.TextOrEmpty(reader, "Level"), PimDb.Bool(reader, "IsInherited"),
+        PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"),
+        PimDb.Text(reader, "CategoryName"), PimDb.Bool(reader, "HasValue")));
+    return rows;
+  }
 
   public async Task<ProductCardView?> GetProductCardAsync(
     int organizationId, long productId, string language = "sl", CancellationToken cancellationToken = default)
