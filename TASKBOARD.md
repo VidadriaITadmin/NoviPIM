@@ -165,8 +165,13 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   0 preskočenih, 0 padlih in `Build OK`. `/saop` ter `/saop/zgodovina` pokažeta vrstični
   gumb »Pošlji znova« samo za `Error`/`Dead`; pregled dodatno pokaže skupine in atomski
   gumb »Pošlji znova vse neuspele«. Obe poti osvežita stanje, pokažeta dejansko število
-  vrnjenih sporočil in sta omejeni na `ADMIN,CATALOG_EDITOR`. Sledi Naloga 3 — spletni
-  izvoz na zahtevo.
+  vrnjenih sporočil in sta omejeni na `ADMIN,CATALOG_EDITOR`. **Naloga 3 — BAZA je
+  KONČANA:** RED `PIM.F7.WebExportTests` = izhod 1, SQL 2812; migracija
+  `139_WebExportOnDemand.sql` = uporabljena, drugi zagon preskočen, `--verify` uspešen;
+  GREEN istega testa = 1/0/0 in `Build OK`. `intranet.GetWebExportRows` bere glave,
+  vrstni red in kanonične kode iz `out.ExportProfile/out.ExportColumn`, podpira filtre,
+  strani in `@Take=0` za celoten pretočni nabor. Stolpec registra brez kanonične kode
+  ostane pošteno prazen. Sledi servis, prenos in stran Naloge 3.
 
 - **[INTRANET] Pregledna kartica izdelka s petimi vsebinskimi sklopi** — kdo: Codex —
   ozemlje: INTRANET — začeto 2026-08-28. Prenova obstoječih 11 zavihkov v pet

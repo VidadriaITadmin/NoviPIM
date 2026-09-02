@@ -24,6 +24,13 @@ se pogled osveži in pokaže dejansko število vrnjenih sporočil. Zapisovalni s
 omejeni na vlogi `ADMIN,CATALOG_EDITOR`. Dokaz: `run_tests.ps1 -Filter F10` = 14/0/0 in
 `Build OK`.
 
+Migracija **139** je dodala `intranet.GetWebExportRows` za produktne izvozne profile.
+Dinamični rezultat dobi glave, vrstni red in kanonične kode iz registra
+`out.ExportProfile/out.ExportColumn`; podpira spletno mesto, samo objavljene, iskanje,
+strani in `@Take=0` za celoten nabor. Več vrednosti združi, nepovezan registrski stolpec pa
+ostane prazen. Bazni dokaz `PIM.F7.WebExportTests` je zelen (1/0/0, `Build OK`). Servis,
+pretočni HTTP prenos in uporabniška stran so še naslednji del iste naloge.
+
 ## Popravki po pregledu uporabnika 2026-08-28
 
 Uporabnik je pregledal cel vmesnik in predal seznam pripomb. Popravljenih je **47 postavk**;

@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Data.SqlClient;
+using System.Data;
 using PIM.Intranet.Services;
 
 // Datoteke, ki gredo na splet: branje, predogled in varna razresitev imena.
@@ -48,7 +50,32 @@ try
   Assert(empty.Directory is null && empty.List().Count == 0,
     "Brez nastavljene mape servis vrne prazen seznam; stran to pove naravnost.");
 
-  Console.WriteLine("F7 spletne datoteke: seznam, predogled in varna razresitev imena PASS.");
+  // Predogled na zahtevo mora obliko dobiti iz registra, ne iz seznama v aplikaciji.
+  var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString();
+  if (!string.IsNullOrWhiteSpace(connectionString))
+  {
+    var settings = new SqlConnectionStringBuilder(connectionString);
+    if (!string.Equals(settings.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase))
+      throw new InvalidOperationException("F7 spletni izvoz je dovoljen samo v razvojni bazi PIM.");
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync();
+    var profileId = await ProfileIdAsync(connection, "WEB_B2C_PRODUCTS");
+    var expectedColumns = await ColumnNamesAsync(connection, profileId);
+    var previewPage = await ReadWebExportAsync(connection, profileId, onlyPublished: false, take: 2);
+
+    Assert(expectedColumns.Count > 0, "Obstoječi spletni profil mora imeti aktivne stolpce.");
+    Assert(previewPage.Columns.SequenceEqual(expectedColumns),
+      "Stolpci in vrstni red predogleda morajo priti iz out.ExportColumn.");
+    Assert(previewPage.Rows <= 2, "Predogled mora upoštevati @Take.");
+    Assert(previewPage.Total >= previewPage.Rows, "@TotalCount ne sme biti manjši od vrnjene strani.");
+
+    var published = await ReadWebExportAsync(connection, profileId, onlyPublished: true, take: 1);
+    Assert(published.Total <= previewPage.Total,
+      "Filter samo objavljeni ne sme razširiti nabora.");
+  }
+
+  Console.WriteLine("F7 spletne datoteke: seznam, predogled, varna razresitev imena in registrski izvoz na zahtevo PASS.");
   return 0;
 }
 finally
@@ -60,4 +87,64 @@ finally
 static void Assert(bool condition, string message)
 {
   if (!condition) throw new InvalidOperationException(message);
+}
+
+static async Task<int> ProfileIdAsync(SqlConnection connection, string code)
+{
+  await using var command = new SqlCommand(
+    "SELECT ExportProfileId FROM out.ExportProfile WHERE ProfileCode=@Code AND IsActive=1;", connection);
+  command.Parameters.AddWithValue("@Code", code);
+  return Convert.ToInt32(await command.ExecuteScalarAsync());
+}
+
+static async Task<IReadOnlyList<string>> ColumnNamesAsync(SqlConnection connection, int profileId)
+{
+  await using var command = new SqlCommand(
+    "SELECT OutputColumnName FROM out.ExportColumn WHERE ExportProfileId=@Profile AND IsActive=1 ORDER BY SortOrder;", connection);
+  command.Parameters.AddWithValue("@Profile", profileId);
+  await using var reader = await command.ExecuteReaderAsync();
+  var names = new List<string>();
+  while (await reader.ReadAsync()) names.Add(reader.GetString(0));
+  return names;
+}
+
+static async Task<(IReadOnlyList<string> Columns, int Rows, int Total)> ReadWebExportAsync(
+  SqlConnection connection, int profileId, bool onlyPublished, int take)
+{
+  await using var command = new SqlCommand("intranet.GetWebExportRows", connection)
+  {
+    CommandType = CommandType.StoredProcedure,
+    CommandTimeout = 600,
+  };
+  command.Parameters.AddWithValue("@OrganizationId", 2);
+  command.Parameters.AddWithValue("@ExportProfileId", profileId);
+  command.Parameters.AddWithValue("@WebSite", DBNull.Value);
+  command.Parameters.AddWithValue("@OnlyPublished", onlyPublished);
+  command.Parameters.AddWithValue("@Search", DBNull.Value);
+  command.Parameters.AddWithValue("@Skip", 0);
+  command.Parameters.AddWithValue("@Take", take);
+  var total = command.Parameters.Add("@TotalCount", SqlDbType.Int);
+  total.Direction = ParameterDirection.Output;
+
+  var rows = 0;
+  string[] columns;
+  await using (var reader = await command.ExecuteReaderAsync())
+  {
+    columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
+    while (await reader.ReadAsync()) rows++;
+  }
+  return (columns, rows, Convert.ToInt32(total.Value));
+}
+
+static string? LocalConnectionString()
+{
+  var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+  while (current is not null)
+  {
+    var candidate = Path.Combine(current.FullName, "src", "PIM.Intranet", "appsettings.Local.json");
+    if (File.Exists(candidate))
+      return new ConfigurationBuilder().AddJsonFile(candidate).Build().GetConnectionString("Pim");
+    current = current.Parent;
+  }
+  return null;
 }
