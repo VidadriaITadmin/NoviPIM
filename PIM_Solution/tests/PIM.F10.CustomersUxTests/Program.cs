@@ -1,4 +1,6 @@
+using System.Data;
 using System.Text.RegularExpressions;
+using Microsoft.Data.SqlClient;
 
 // Pogodbeni test UX skladnosti strank: seznam /stranke in kartica /stranke/{id}.
 //
@@ -154,6 +156,102 @@ Assert(service.Contains("intranet.GetCustomerCard", StringComparison.Ordinal),
   "Kartica mora brati iz ene procedure, ne iz sedmih klicev.");
 Assert(card.Contains("Cards.GetAsync", StringComparison.Ordinal), "Kartica mora uporabiti bralni servis.");
 
+/* --- Kontakti stranke (migracija 140) ------------------------------------------------- */
+
+// H-magento: e-posta, telefon, mobitel in osebe so obvezni stolpci izvoza strank za Magento.
+// Zajema kontaktov iz SAOP v NoviPIM-u ni; kartica mora to povedati in vseeno ponuditi rocni vnos.
+
+Assert(card.Contains("<h2>Kontakti</h2>", StringComparison.Ordinal), "Kartici manjka sklop Kontakti.");
+foreach (var label in new[] { "E-pošta", "Telefon", "Mobitel", "Uporabniki oziroma osebe" })
+  Assert(card.Contains(label, StringComparison.Ordinal), "Kontaktom manjka polje: " + label + ".");
+Assert(card.Contains("Shrani kontakte", StringComparison.Ordinal) && card.Contains("Počisti ročni prepis", StringComparison.Ordinal),
+  "Kontakti morajo imeti gumb za shranjevanje in za umik rocnega prepisa.");
+Assert(card.Contains("Cards.SaveContactAsync", StringComparison.Ordinal), "Kontakti morajo iti skozi pisljivo pot servisa.");
+Assert(Regex.IsMatch(card, "<PimMissing[^>]*Object=\"zajem SAOP GetCustomerContacts"),
+  "Kadar zajema kontaktov ni, mora kartica to izrecno povedati, ne pokazati praznih polj.");
+// Obrazec ureja rocni prepis; ce bi urejal ucinkovito vrednost, bi prvo shranjevanje
+// posnetek iz SAOP zabetoniralo kot rocno vrednost.
+foreach (var manual in new[] { "Card.Contacts.ManualEmail", "Card.Contacts.ManualPhone", "Card.Contacts.ManualMobile", "Card.Contacts.ManualPersons" })
+  Assert(card.Contains(manual, StringComparison.Ordinal), "Obrazec kontaktov mora izhajati iz rocnega prepisa: " + manual + ".");
+Assert(card.Contains("@OriginLabel(contacts.EmailSource)", StringComparison.Ordinal),
+  "Ob vsakem polju mora biti znacka, ali je vrednost rocna ali iz SAOP.");
+Assert(service.Contains("b2b.SaveCustomerContact", StringComparison.Ordinal),
+  "Pisljiva pot kontaktov mora klicati proceduro, ne pisati inline SQL.");
+Assert(!card.Contains("SELECT ", StringComparison.Ordinal) && !card.Contains("SqlCommand", StringComparison.Ordinal),
+  "V .razor ni inline SQL.");
+
+// Dokaz nad razvojno bazo: osem naborov, pisljiva pot in revizijska sled.
+// Migracija sama tega ne more dokazati — T-SQL naborov tuje procedure ne zna presteti.
+var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+  Console.WriteLine("OPOZORILO: brez PIM_CONNECTION_STRING je dokaz kontaktov nad bazo preskocen.");
+}
+else
+{
+  var settings = new SqlConnectionStringBuilder(connectionString);
+  if (!string.Equals(settings.InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Test kontaktov je dovoljen samo v razvojni bazi PIM.");
+
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+
+  // Stranka brez rocnega prepisa: test pise samo vrstico, ki jo ustvari sam, in jo za sabo pobrise.
+  var target = await ScalarPairAsync(connection, @"
+    SELECT TOP (1) customer.OrganizationId, customer.CustomerId
+    FROM b2b.Customer AS customer
+    WHERE NOT EXISTS (SELECT 1 FROM pim.CustomerContact AS contact
+                      WHERE contact.OrganizationId = customer.OrganizationId AND contact.CustomerId = customer.CustomerId)
+    ORDER BY customer.CustomerId;");
+  Assert(target is not null, "Za dokaz kontaktov je potrebna vsaj ena stranka brez rocnega prepisa.");
+  var (organizationId, customerId) = target!.Value;
+
+  try
+  {
+    // 1. Kartica vrne osem naborov in osmi je kontaktni.
+    await using (var command = new SqlCommand("intranet.GetCustomerCard", connection) { CommandType = CommandType.StoredProcedure })
+    {
+      command.Parameters.AddWithValue("@OrganizationId", organizationId);
+      command.Parameters.AddWithValue("@CustomerId", customerId);
+      await using var reader = await command.ExecuteReaderAsync();
+      var sets = 1;
+      while (await reader.NextResultAsync()) sets++;
+      Assert(sets == 8, $"intranet.GetCustomerCard mora vrniti osem naborov, vrnila jih je {sets}.");
+    }
+
+    var before = await ContactAsync(connection, organizationId, customerId);
+    Assert(before.EmailSource is null, "Stranka brez prepisa in brez izvora ne sme imeti oznacenega izvora.");
+    Assert(!before.SourceAvailable && before.SourceNote is not null,
+      "Kadar zajema kontaktov ni, mora bralni model povedati, kaj natanko manjka.");
+
+    // 2. Rocni vnos obvelja in je oznacen kot rocni.
+    await SaveContactAsync(connection, organizationId, customerId, "test.f10@primer.si", "01 234 5678", null, "Ana Test | Bojan Test");
+    var saved = await ContactAsync(connection, organizationId, customerId);
+    Assert(saved.Email == "test.f10@primer.si" && saved.EmailSource == "PIM", "Rocna e-posta mora obveljati z znacko PIM.");
+    Assert(saved.Persons == "Ana Test | Bojan Test", "Vec oseb gre v eno celico, loceno z ' | '.");
+    Assert(saved.MobileSource is null, "Polje brez vrednosti nima izvora.");
+
+    // 3. Umik rocnega prepisa pusti vrstico in revizijsko sled, ne pobrise podatka.
+    await SaveContactAsync(connection, organizationId, customerId, null, null, null, null);
+    var cleared = await ContactAsync(connection, organizationId, customerId);
+    Assert(cleared.Email is null && cleared.EmailSource is null, "Po umiku prepisa velja vrednost izvora, danes torej nobena.");
+    Assert(cleared.UpdatedBy is not null, "Vrstica mora ostati, da se vidi, kdo je prepis umaknil.");
+
+    var auditCount = await CountAsync(connection,
+      "SELECT COUNT(*) FROM b2b.AuditLog WHERE EntityType = N'CustomerContact' AND EntityKey = @key AND ChangedBy = N'test-f10';",
+      customerId);
+    Assert(auditCount == 2, $"Vsako shranjevanje kontaktov mora pustiti sled; sledi je {auditCount}, pricakovani sta 2.");
+  }
+  finally
+  {
+    // Pospravljanje: samo vrstice, ki jih je ustvaril ta test (AGENTS.md §4.1).
+    await ExecuteAsync(connection,
+      "DELETE FROM b2b.AuditLog WHERE EntityType = N'CustomerContact' AND EntityKey = @key AND ChangedBy = N'test-f10';", customerId);
+    await ExecuteAsync(connection,
+      "DELETE FROM pim.CustomerContact WHERE CustomerId = @key AND UpdatedBy = N'test-f10';", customerId);
+  }
+}
+
 Console.WriteLine("F10 customers UX contract PASS.");
 
 static void Assert(bool condition, string message)
@@ -174,3 +272,74 @@ static string FindRoot()
   }
   throw new InvalidOperationException("PIM_Solution ni najden.");
 }
+
+static string? LocalConnectionString(string root)
+{
+  foreach (var candidate in new[] { Path.Combine(root, "appsettings.Local.json"), Path.Combine(root, "..", "appsettings.Local.json") })
+  {
+    if (!File.Exists(candidate)) continue;
+    var match = Regex.Match(File.ReadAllText(candidate), "\"Pim\"\\s*:\\s*\"([^\"]+)\"");
+    if (match.Success) return match.Groups[1].Value;
+  }
+  return null;
+}
+
+static async Task<(int OrganizationId, long CustomerId)?> ScalarPairAsync(SqlConnection connection, string sql)
+{
+  await using var command = new SqlCommand(sql, connection);
+  await using var reader = await command.ExecuteReaderAsync();
+  if (!await reader.ReadAsync()) return null;
+  return (reader.GetInt32(0), reader.GetInt64(1));
+}
+
+static async Task<ContactRow> ContactAsync(SqlConnection connection, int organizationId, long customerId)
+{
+  await using var command = new SqlCommand("intranet.GetCustomerCard", connection) { CommandType = CommandType.StoredProcedure };
+  command.Parameters.AddWithValue("@OrganizationId", organizationId);
+  command.Parameters.AddWithValue("@CustomerId", customerId);
+  await using var reader = await command.ExecuteReaderAsync();
+  for (var skipped = 0; skipped < 7; skipped++)
+    if (!await reader.NextResultAsync()) throw new InvalidOperationException("Kartica nima osmega nabora.");
+  if (!await reader.ReadAsync()) throw new InvalidOperationException("Nabor s kontakti mora vrniti natanko eno vrstico.");
+  return new ContactRow(
+    Text(reader, "Email"), Text(reader, "Persons"), Text(reader, "EmailSource"), Text(reader, "MobileSource"),
+    reader.GetBoolean(reader.GetOrdinal("SourceAvailable")), Text(reader, "SourceNote"), Text(reader, "UpdatedBy"));
+
+  static string? Text(SqlDataReader reader, string name)
+  {
+    var ordinal = reader.GetOrdinal(name);
+    return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+  }
+}
+
+static async Task SaveContactAsync(SqlConnection connection, int organizationId, long customerId,
+  string? email, string? phone, string? mobile, string? persons)
+{
+  await using var command = new SqlCommand("b2b.SaveCustomerContact", connection) { CommandType = CommandType.StoredProcedure };
+  command.Parameters.AddWithValue("@OrganizationId", organizationId);
+  command.Parameters.AddWithValue("@CustomerId", customerId);
+  command.Parameters.AddWithValue("@Email", (object?)email ?? DBNull.Value);
+  command.Parameters.AddWithValue("@Phone", (object?)phone ?? DBNull.Value);
+  command.Parameters.AddWithValue("@Mobile", (object?)mobile ?? DBNull.Value);
+  command.Parameters.AddWithValue("@Persons", (object?)persons ?? DBNull.Value);
+  command.Parameters.AddWithValue("@ChangedBy", "test-f10");
+  await command.ExecuteNonQueryAsync();
+}
+
+static async Task<int> CountAsync(SqlConnection connection, string sql, long key)
+{
+  await using var command = new SqlCommand(sql, connection);
+  command.Parameters.AddWithValue("@key", key.ToString());
+  return Convert.ToInt32(await command.ExecuteScalarAsync());
+}
+
+static async Task ExecuteAsync(SqlConnection connection, string sql, long key)
+{
+  await using var command = new SqlCommand(sql, connection);
+  command.Parameters.AddWithValue("@key", key.ToString());
+  await command.ExecuteNonQueryAsync();
+}
+
+internal sealed record ContactRow(
+  string? Email, string? Persons, string? EmailSource, string? MobileSource,
+  bool SourceAvailable, string? SourceNote, string? UpdatedBy);

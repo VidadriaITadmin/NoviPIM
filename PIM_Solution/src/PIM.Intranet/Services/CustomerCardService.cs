@@ -24,6 +24,21 @@ public sealed record CustomerBranch(long CustomerBranchId, string BranchKind, bo
 public sealed record CustomerNote(long CustomerNoteId, string Body, string CreatedBy, DateTime CreatedUtc);
 public sealed record CustomerHistoryEntry(long AuditLogId, string EntityType, string ActionCode, string? OldValueJson, string? NewValueJson, string ChangedBy, DateTime ChangedUtc);
 
+/// <summary>
+/// Kontakti stranke (migracija 140). Ucinkovita vrednost je rocni prepis, sicer izvor;
+/// <c>*Source</c> pove, kateri od obeh je obveljal, in je <c>null</c>, kadar vrednosti ni.
+/// <c>Manual*</c> je tisto, kar ureja obrazec — obrazec nikoli ne ureja ucinkovite vrednosti,
+/// sicer bi prvo shranjevanje posnetek izvora zapisalo kot rocni prepis.
+/// </summary>
+/// <param name="SourceAvailable">Ali zajem kontaktov v tej organizaciji sploh obstaja.</param>
+/// <param name="SourceNote">Kadar zajema ni: kaj natanko manjka. Vmesnik to izpise, ne ugiba.</param>
+public sealed record CustomerContact(
+  string? Email, string? Phone, string? Mobile, string? Persons,
+  string? EmailSource, string? PhoneSource, string? MobileSource, string? PersonsSource,
+  string? ManualEmail, string? ManualPhone, string? ManualMobile, string? ManualPersons,
+  string? SourceEmail, string? SourcePhone, string? SourceMobile, string? SourcePersons,
+  bool SourceAvailable, string? SourceNote, string? UpdatedBy, DateTime? UpdatedUtc);
+
 public sealed record CustomerCard(
   CustomerGeneral General,
   IReadOnlyList<CustomerGroupDiscount> GroupDiscounts,
@@ -31,7 +46,8 @@ public sealed record CustomerCard(
   IReadOnlyList<CustomerSpecialDiscount> SpecialDiscounts,
   IReadOnlyList<CustomerBranch> Branches,
   IReadOnlyList<CustomerNote> Notes,
-  IReadOnlyList<CustomerHistoryEntry> History);
+  IReadOnlyList<CustomerHistoryEntry> History,
+  CustomerContact Contacts);
 
 /// <summary>
 /// Kartica stranke v enem bralnem klicu (<c>intranet.GetCustomerCard</c>, migracija 129) ter
@@ -108,8 +124,47 @@ public sealed class CustomerCardService(IConfiguration configuration)
       PimDb.Text(row, "OldValueJson"), PimDb.Text(row, "NewValueJson"),
       PimDb.TextOrEmpty(row, "ChangedBy"), row.GetDateTime(row.GetOrdinal("ChangedUtc"))), cancellationToken);
 
-    return new(general, groupDiscounts, valueTiers, specials, branches, notes, history);
+    // Osmi nabor je namenoma na koncu (migracija 140) in vrne natanko eno vrstico, tudi ko
+    // stranka nima ne rocnega prepisa ne izvora — takrat so vse vrednosti prazne.
+    var contacts = await NextAsync(reader, row => new CustomerContact(
+      PimDb.Text(row, "Email"), PimDb.Text(row, "Phone"), PimDb.Text(row, "Mobile"), PimDb.Text(row, "Persons"),
+      PimDb.Text(row, "EmailSource"), PimDb.Text(row, "PhoneSource"),
+      PimDb.Text(row, "MobileSource"), PimDb.Text(row, "PersonsSource"),
+      PimDb.Text(row, "ManualEmail"), PimDb.Text(row, "ManualPhone"),
+      PimDb.Text(row, "ManualMobile"), PimDb.Text(row, "ManualPersons"),
+      PimDb.Text(row, "SourceEmail"), PimDb.Text(row, "SourcePhone"),
+      PimDb.Text(row, "SourceMobile"), PimDb.Text(row, "SourcePersons"),
+      PimDb.Bool(row, "SourceAvailable"), PimDb.Text(row, "SourceNote"),
+      PimDb.Text(row, "UpdatedBy"), PimDb.NullableDateTime(row, "UpdatedUtc")), cancellationToken);
+
+    return new(general, groupDiscounts, valueTiers, specials, branches, notes, history,
+      contacts.Count > 0 ? contacts[0] : EmptyContact);
   }
+
+  /// <summary>
+  /// Rocni prepis kontaktov. Prazno polje pomeni »rocnega prepisa ni« in vrne vrednost izvora;
+  /// pravilo, da se rocna vrednost, enaka izvoru, ne shrani kot prepis, je v proceduri.
+  /// </summary>
+  public async Task SaveContactAsync(
+    int organizationId, long customerId,
+    string? email, string? phone, string? mobile, string? persons, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("b2b.SaveCustomerContact", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@CustomerId", SqlDbType.BigInt).Value = customerId;
+    command.Parameters.Add("@Email", SqlDbType.NVarChar, 400).Value = Trimmed(email);
+    command.Parameters.Add("@Phone", SqlDbType.NVarChar, 200).Value = Trimmed(phone);
+    command.Parameters.Add("@Mobile", SqlDbType.NVarChar, 200).Value = Trimmed(mobile);
+    command.Parameters.Add("@Persons", SqlDbType.NVarChar, 1000).Value = Trimmed(persons);
+    command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  static object Trimmed(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 
   /// <summary>Zaznamek uporabnika. Besedilo brez vsebine procedura zavrne.</summary>
   public async Task AddNoteAsync(int organizationId, long customerId, string body, string actor, CancellationToken cancellationToken = default)
@@ -143,6 +198,11 @@ public sealed class CustomerCardService(IConfiguration configuration)
     command.Parameters.Add("@CreatedBy", SqlDbType.NVarChar, 200).Value = actor;
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
+
+  /// <summary>Stranka brez kontaktov: kartica mora imeti kaj izrisati tudi takrat.</summary>
+  static readonly CustomerContact EmptyContact = new(
+    null, null, null, null, null, null, null, null, null, null, null, null,
+    null, null, null, null, false, null, null, null);
 
   static async Task<IReadOnlyList<T>> NextAsync<T>(SqlDataReader reader, Func<SqlDataReader, T> map, CancellationToken cancellationToken)
   {

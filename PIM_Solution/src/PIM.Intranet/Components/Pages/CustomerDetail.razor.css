@@ -14,6 +14,10 @@
 .note-head { align-items: baseline; color: var(--pim-text-muted); display: flex; font-size: .75rem; gap: .6rem; justify-content: space-between; }
 .note-entry p { margin: .35rem 0 0; white-space: pre-wrap; }
 
+/* Znacka pod poljem pove, od kod vrednost je: rocno, iz SAOP ali je sploh ni.
+   Brez tega uporabnik ne ve, ali bo njegov vnos kaj prepisal. */
+.field-origin { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .01em; margin-top: .2rem; text-transform: lowercase; }
+
 /* Revizijska sled nosi cel JSON; brez preloma bi ena vrstica raztegnila tabelo cez zaslon. */
 .wrap-cell { max-width: 22rem; overflow-wrap: anywhere; }
 

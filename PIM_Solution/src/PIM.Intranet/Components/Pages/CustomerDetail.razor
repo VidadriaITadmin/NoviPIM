@@ -42,6 +42,57 @@
           </Rows>
         </PimTable>
       </section>
+
+      @{ var contacts = Card.Contacts; }
+      <section class="ui-card panel section-gap">
+        <div class="subsection-head">
+          <h2>Kontakti</h2>
+          <span>obvezni stolpci izvoza strank za Magento; ročni vnos prevlada nad vrednostjo iz SAOP</span>
+        </div>
+
+        @if (!contacts.SourceAvailable)
+        {
+          @* Zajema kontaktov ni (migracija 140). Prazna polja brez pojasnila bi izgledala kot
+             napaka strani; povemo, kaj natanko manjka, in ročni vnos vseeno ponudimo. *@
+          <PimMissing Object="zajem SAOP GetCustomerContacts"
+                      What="e-pošta, telefon, mobitel in osebe iz ERP"
+                      Needs="vrstico za ta endpoint v map.EntityMapping in preslikave CustomerContact.* v map.FieldMapping; endpoint GetCustomers, ki ga PIM zajema danes, kontaktov ne nosi" />
+          <p class="card-note">@contacts.SourceNote</p>
+        }
+
+        <div class="form-grid">
+          <label class="form-field">E-pošta
+            <input class="form-input" type="email" @bind="ContactEmail" placeholder="prodaja@primer.si" />
+            <span class="field-origin">@OriginLabel(contacts.EmailSource)</span>
+          </label>
+          <label class="form-field">Telefon
+            <input class="form-input" @bind="ContactPhone" />
+            <span class="field-origin">@OriginLabel(contacts.PhoneSource)</span>
+          </label>
+          <label class="form-field">Mobitel
+            <input class="form-input" @bind="ContactMobile" />
+            <span class="field-origin">@OriginLabel(contacts.MobileSource)</span>
+          </label>
+          <label class="form-field">Uporabniki oziroma osebe
+            <input class="form-input" @bind="ContactPersons" placeholder="Ana Novak | Bojan Kos" />
+            <span class="field-origin">@OriginLabel(contacts.PersonsSource)</span>
+          </label>
+        </div>
+
+        <p class="card-note">
+          Več oseb ločite z znakom <span class="code-value">|</span> — tako jih pričakuje izvoz za Magento.
+          Prazno polje pomeni, da ročnega prepisa ni; takrat obvelja vrednost iz SAOP, če obstaja.
+          @if (contacts.UpdatedUtc is DateTime touched)
+          {
+            <text>Zadnji ročni popravek: @contacts.UpdatedBy, @touched.ToLocalTime().ToString("g").</text>
+          }
+        </p>
+
+        <div class="panel-actions">
+          <button type="button" class="primary-button" disabled="@Busy" @onclick="SaveContactsAsync">Shrani kontakte</button>
+          <button type="button" class="ghost-button" disabled="@(Busy || !HasManualContact)" @onclick="ClearContactsAsync">Počisti ročni prepis</button>
+        </div>
+      </section>
     </section>
 
     <section id="panel-commercial" role="tabpanel" aria-labelledby="tab-commercial" hidden="@(Section != "commercial")">
@@ -261,6 +312,10 @@
   string? SaveError;
   string Section = "general";
   string NoteBody = "";
+  string ContactEmail = "";
+  string ContactPhone = "";
+  string ContactMobile = "";
+  string ContactPersons = "";
   string BranchKind = "PE";
   string BranchCustomerKey = "";
   string BranchCode = "";
@@ -330,6 +385,12 @@
         PlusFrom = Card.General.B2bPlusValidFrom,
         PlusTo = Card.General.B2bPlusValidTo,
       };
+      // Obrazec ureja rocni prepis, ne ucinkovite vrednosti: sicer bi prvo shranjevanje
+      // posnetek iz SAOP zapisalo kot rocno vrednost in izvor ne bi mogel vec popravljati.
+      ContactEmail = Card.Contacts.ManualEmail ?? "";
+      ContactPhone = Card.Contacts.ManualPhone ?? "";
+      ContactMobile = Card.Contacts.ManualMobile ?? "";
+      ContactPersons = Card.Contacts.ManualPersons ?? "";
     }
     catch { Error = "Kartice stranke trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -369,6 +430,46 @@
       await LoadAsync();
     }
     catch { SaveError = "Praga ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  bool HasManualContact => Card is not null &&
+    (Card.Contacts.ManualEmail ?? Card.Contacts.ManualPhone ?? Card.Contacts.ManualMobile ?? Card.Contacts.ManualPersons) is not null;
+
+  static string OriginLabel(string? source) => source switch
+  {
+    "PIM" => "ročno",
+    "SAOP" => "iz SAOP",
+    _ => "ni vrednosti",
+  };
+
+  async Task SaveContactsAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Cards.SaveContactAsync(OrganizationId.Value, CustomerId,
+        ContactEmail, ContactPhone, ContactMobile, ContactPersons, await ActorAsync());
+      Message = "Kontakti so shranjeni in revizijsko zabeleženi.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Kontaktov ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  /// <summary>Umik rocnega prepisa. Vrstica ostane, da se vidi, kdo in kdaj ga je umaknil.</summary>
+  async Task ClearContactsAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Cards.SaveContactAsync(OrganizationId.Value, CustomerId, null, null, null, null, await ActorAsync());
+      Message = "Ročni prepis je umaknjen; velja vrednost iz SAOP, če obstaja.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Ročnega prepisa ni bilo mogoče umakniti."; }
     finally { Busy = false; }
   }
 
