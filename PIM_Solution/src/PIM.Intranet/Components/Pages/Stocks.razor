@@ -36,12 +36,25 @@
   @* Uporabnik 2026-08-28: filtra »vsa razpoložljivost« in »ujemanje« sta odpadla — na obe
      vprašanji odgovarjajo že kartice povzetka nad tabelo, ki so klikljive. Namesto njiju je
      prišla vrsta vira: SAOP zaloga je bila v seznamu, a je ni bilo mogoče ločiti od
-     dobaviteljeve. *@
+     dobaviteljeve. Vrsta vira ne sešteva: če je isti artikel na zalogi pri SAOP in pri
+     dobavitelju hkrati, sta v tabeli dve ločeni vrstici, ne ena s seštevkom — »vsi viri
+     zaloge« je zato unija vrstic, ne seštevek količin. *@
   <label class="visually-hidden" for="stock-kind">Vrsta vira</label>
-  <select id="stock-kind" class="filter-select" @bind="KindDraft">
-    <option value="">Vsi viri zaloge</option>
+  <select id="stock-kind" class="filter-select" @bind="KindDraft"
+    title="Prikaže vsak vir kot svojo vrstico. Če je artikel na zalogi pri SAOP in pri dobavitelju hkrati, se količini ne seštevata.">
+    <option value="">Vsi viri zaloge (ločeno po viru)</option>
     <option value="ERP">ERP (SAOP)</option>
     <option value="DOBAVITELJ">Dobaviteljeva zaloga</option>
+  </select>
+
+  @* Uporabnik 2026-09-03: manjkal je filter »ima zalogo ali ne«. Uporablja isti @Availability,
+     ki ga intranet.GetStockPositions ze pozna (migracija 134) — samo dvoje smiselnih vrednosti
+     za to stran, INCOMING ostane brez kontrole na UI. *@
+  <label class="visually-hidden" for="stock-instock">Ima zalogo</label>
+  <select id="stock-instock" class="filter-select" @bind="InStockDraft">
+    <option value="">Zaloga: vseeno</option>
+    <option value="IN_STOCK">Na zalogi</option>
+    <option value="OUT_OF_STOCK">Brez zaloge</option>
   </select>
 
   <label class="visually-hidden" for="stock-age">Svežina posnetka</label>
@@ -56,8 +69,11 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
-@* Izvoz zaloge z izbiro vira (migracija 150). Uporabnik 2026-09-02: "izvoz zalog mora imeti
-   uporabnik omogocen in lahko izbere SAOP ali dobavitelj". Datoteka je po podjetju. *@
+@* Izvoz zaloge z izbiro vira (migracija 150, razsirjena v 151). Uporabnik 2026-09-03: »bi bilo
+   vbolje da filtre nastaviš in potem predlogo prenesš ne pa da imaš filtre in nato lahko kar
+   vse preneseš« — trije loceni gumbi (ERP/DOBAVITELJ/VSE) in Obseg izvoza sta odpadla, ker so
+   prenos vodili mimo filtrov nad tabelo. En gumb zdaj prenese natanko to, kar je filtrirano
+   zgoraj: podjetje, vir, vrsta vira, ima zalogo, svezina in iskanje. *@
 <section class="ui-card toolbar stock-export section-gap" aria-label="Prenos zaloge v CSV">
   <span class="toolbar-label">Prenesi zalogo (CSV):</span>
   @if (string.IsNullOrWhiteSpace(OrganizationDraft))
@@ -66,14 +82,8 @@
   }
   else
   {
-    <a class="filter-button" href="@StockExportHref("ERP")" target="_blank">SAOP (ERP)</a>
-    <a class="filter-button" href="@StockExportHref("DOBAVITELJ")" target="_blank">Dobavitelj</a>
-    <a class="filter-button" href="@StockExportHref("VSE")" target="_blank">Oboje</a>
-    <label class="visually-hidden" for="stock-export-scope">Obseg izvoza</label>
-    <select id="stock-export-scope" class="filter-select" @bind="ExportScope">
-      <option value="0">Vsi izdelki podjetja</option>
-      <option value="1">Samo izdelki na spletu</option>
-    </select>
+    <a class="filter-button" href="@StockExportHref" target="_blank">Prenesi zalogo po zgornjih filtrih</a>
+    <span class="muted">@ExportFilterSummary</span>
   }
 </section>
 
@@ -226,7 +236,10 @@
   [SupplyParameterFromQuery(Name = "starost")] public int? QueryAge { get; set; }
   // Razpolozljivost in ujemanje sta odpadla v dveh korakih: kontroli 2026-08-28, parametra pa
   // 2026-08-31 skupaj s karticami povzetka, ki sta bila edina, kar je nanju kazalo.
+  // Ima zalogo (Razpolozljivost) se je vrnila 2026-09-03, a samo kot kontrola na strani; parameter
+  // v proceduri ni bil nikoli odstranjen.
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
+  [SupplyParameterFromQuery(Name = "zaloga")] public string? QueryInStock { get; set; }
   [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
 
@@ -238,6 +251,7 @@
   string SourceDraft = "";
   string AgeDraft = "";
   string KindDraft = "";
+  string InStockDraft = "";
   string OrganizationDraft = "";
   IReadOnlyList<OrganizationContext> Organizations = [];
 
@@ -247,9 +261,38 @@
   const int Take = 50;
   const int StaleAfterMinutes = 24 * 60;
 
-  string ExportScope = "0";
-  string StockExportHref(string source) =>
-    $"izvoz/zaloge.csv?podjetje={Uri.EscapeDataString(OrganizationDraft)}&vir={source}&splet={ExportScope}";
+  /// <summary>
+  /// Prenos CSV (migracija 151) natancno sledi filtrom nad tabelo: podjetje je obvezno, ostalo
+  /// (vir, vrsta vira, ima zalogo, svezina, iskanje) gre skozi, ce je nastavljeno. Uporabnik
+  /// 2026-09-03: prenos naj bo odvisen od filtrov, ne locen od njih.
+  /// </summary>
+  string StockExportHref
+  {
+    get
+    {
+      var kind = KindDraft switch { "ERP" => "ERP", "DOBAVITELJ" => "DOBAVITELJ", _ => "VSE" };
+      var parameters = new List<string> { "podjetje=" + Uri.EscapeDataString(OrganizationDraft), "vir=" + kind };
+      if (!string.IsNullOrWhiteSpace(SourceDraft)) parameters.Add("virsifra=" + Uri.EscapeDataString(SourceDraft));
+      if (!string.IsNullOrWhiteSpace(SearchDraft)) parameters.Add("isci=" + Uri.EscapeDataString(SearchDraft.Trim()));
+      if (!string.IsNullOrWhiteSpace(InStockDraft)) parameters.Add("zaloga=" + InStockDraft);
+      if (!string.IsNullOrWhiteSpace(AgeDraft)) parameters.Add("starost=" + AgeDraft);
+      return "izvoz/zaloge.csv?" + string.Join('&', parameters);
+    }
+  }
+
+  string ExportFilterSummary
+  {
+    get
+    {
+      var parts = new List<string>();
+      if (!string.IsNullOrWhiteSpace(SourceDraft)) parts.Add("vir " + SourceDraft);
+      if (!string.IsNullOrWhiteSpace(KindDraft)) parts.Add(KindLabel(KindDraft));
+      if (!string.IsNullOrWhiteSpace(InStockDraft)) parts.Add(InStockDraft == "IN_STOCK" ? "na zalogi" : "brez zaloge");
+      if (!string.IsNullOrWhiteSpace(AgeDraft)) parts.Add("posnetek do " + AgeDraft + " ur");
+      if (!string.IsNullOrWhiteSpace(SearchDraft)) parts.Add("iskanje »" + SearchDraft.Trim() + "«");
+      return parts.Count == 0 ? "brez dodatnih filtrov" : string.Join(", ", parts);
+    }
+  }
 
   int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
 
@@ -280,6 +323,7 @@
     SourceDraft = QuerySource ?? "";
     AgeDraft = QueryAge?.ToString() ?? "";
     KindDraft = QueryKind ?? "";
+    InStockDraft = QueryInStock ?? "";
     OrganizationDraft = QueryOrganization ?? "";
 
     Loading = true;
@@ -298,7 +342,7 @@
 
       PageData = await Stock.GetPositionsAsync(new StockPositionFilter(
         scope, Skip, Take, QuerySearch, QuerySource,
-        null, null, QueryAge, "sl", QueryKind));
+        QueryInStock, null, QueryAge, "sl", QueryKind));
     }
     catch
     {
@@ -335,16 +379,17 @@
 
   // Filtri in stran zivijo v naslovu; "" pomeni odstrani, null ohrani obstojecega.
   string Href(string? search = null, string? source = null,
-    string? age = null, string? kind = null, string? organization = null, int? page = null)
+    string? age = null, string? kind = null, string? inStock = null, string? organization = null, int? page = null)
   {
     var parameters = new List<string>();
     Add("isci", Resolve(search, QuerySearch));
     Add("vir", Resolve(source, QuerySource));
     Add("starost", Resolve(age, QueryAge?.ToString()));
     Add("vrsta", Resolve(kind, QueryKind));
+    Add("zaloga", Resolve(inStock, QueryInStock));
     Add("podjetje", Resolve(organization, QueryOrganization));
-    var resolvedPage = page ?? (search is null && source is null
-      && age is null && kind is null && organization is null ? QueryPage : null);
+    var resolvedPage = page ?? (search is null && source is null && age is null
+      && kind is null && inStock is null && organization is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "zaloge" : "zaloge?" + string.Join('&', parameters);
@@ -360,8 +405,8 @@
   Task ApplyFiltersAsync()
   {
     Navigation.NavigateTo(Href(
-      search: SearchDraft.Trim(), source: SourceDraft,
-      age: AgeDraft, kind: KindDraft, organization: OrganizationDraft, page: 1));
+      search: SearchDraft.Trim(), source: SourceDraft, age: AgeDraft,
+      kind: KindDraft, inStock: InStockDraft, organization: OrganizationDraft, page: 1));
     return Task.CompletedTask;
   }
 

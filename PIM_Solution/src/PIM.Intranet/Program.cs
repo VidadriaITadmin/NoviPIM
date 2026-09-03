@@ -105,7 +105,10 @@ app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymou
 // Izvoz trenutnega pogleda seznama izdelkov. Bralna pot: uporabi isto proceduro in iste
 // filtre kot stran, zato je datoteka natanko to, kar uporabnik vidi. Zgornja meja je
 // izrecna in zapisana v datoteko — tiho odrezan izvoz je huje kot majhen izvoz.
-// Izvoz zaloge z izbiro vira (migracija 150): SAOP (ERP), dobavitelj ali oboje; gumb je na /zaloge.
+// Izvoz zaloge z izbiro vira (migracija 150, filtri iz migracije 151): SAOP (ERP), dobavitelj
+// ali oboje, po zelji se dolocen vir, iskanje, ima zalogo in svezina — isti filtri kot na
+// tabeli /zaloge, ker gumb ne sme prenesti vec, kot je uporabnik filtriral. "splet" ostane brez
+// kontrole na strani (dropdown Obseg izvoza je odpadel 2026-09-03), a ostaja veljaven parameter.
 app.MapGet("/izvoz/zaloge.csv", async (HttpContext context, StockReadService stocks, CancellationToken cancellationToken) =>
 {
   var query = context.Request.Query;
@@ -114,10 +117,16 @@ app.MapGet("/izvoz/zaloge.csv", async (HttpContext context, StockReadService sto
   var source = (query["vir"].ToString() ?? "VSE").ToUpperInvariant();
   if (source is not ("ERP" or "DOBAVITELJ" or "VSE")) source = "VSE";
   var onlyWeb = string.Equals(query["splet"], "1", StringComparison.Ordinal);
+  var sourceCode = query["virsifra"].ToString();
+  var search = query["isci"].ToString();
+  var availability = query["zaloga"].ToString();
+  var maxAgeHours = int.TryParse(query["starost"], out var age) ? age : (int?)null;
   context.Response.ContentType = "text/csv; charset=utf-8";
   context.Response.Headers.ContentDisposition =
     $"attachment; filename=\"PIM_zaloga_{organizationId}_{source.ToLowerInvariant()}_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv\"";
-  await stocks.WriteStockCsvAsync(organizationId, source, onlyWeb, context.Response.Body, cancellationToken);
+  await stocks.WriteStockCsvAsync(
+    organizationId, source, onlyWeb, sourceCode, search, availability, maxAgeHours,
+    context.Response.Body, cancellationToken);
   return Results.Empty;
 }).RequireAuthorization();
 

@@ -91,10 +91,14 @@ public sealed class StockReadService(IConfiguration configuration)
   }
 
   /// <summary>
-  /// Pretocno zapise CSV zaloge podjetja iz out.GetStockExportRows (migracija 150): vir ERP,
-  /// DOBAVITELJ ali VSE, po zelji samo izdelki na spletu. Glava je iz imen stolpcev procedure.
+  /// Pretocno zapise CSV zaloge podjetja iz out.GetStockExportRows (migracija 150, filtri
+  /// razsirjeni v 151): vir ERP, DOBAVITELJ ali VSE, po zelji samo izdelki na spletu, dolocen
+  /// vir, iskanje, ima zalogo in svezina posnetka — isti filtri, ki jih pozna tudi tabela na
+  /// /zaloge. Glava je iz imen stolpcev procedure.
   /// </summary>
-  public async Task<int> WriteStockCsvAsync(int organizationId, string source, bool onlyWeb, Stream body, CancellationToken cancellationToken = default)
+  public async Task<int> WriteStockCsvAsync(
+    int organizationId, string source, bool onlyWeb, string? sourceCode, string? search,
+    string? availability, int? maxAgeHours, Stream body, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
@@ -105,6 +109,10 @@ public sealed class StockReadService(IConfiguration configuration)
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
     command.Parameters.Add("@Source", SqlDbType.NVarChar, 20).Value = source;
     command.Parameters.Add("@OnlyWeb", SqlDbType.Bit).Value = onlyWeb;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(sourceCode);
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(search);
+    command.Parameters.Add("@Availability", SqlDbType.NVarChar, 20).Value = Optional(availability);
+    command.Parameters.Add("@MaxAgeHours", SqlDbType.Int).Value = maxAgeHours is null ? DBNull.Value : maxAgeHours.Value;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = 0;
     command.Parameters.Add("@Take", SqlDbType.Int).Value = 0;
     command.Parameters.Add("@TotalCount", SqlDbType.Int).Direction = ParameterDirection.Output;

@@ -254,6 +254,22 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-03 — filtri zaloge in prenos CSV po filtrih (Claude, veja `feature/izhodi-erp-ux-saop-artikli`)
+
+Zahteva uporabnika: filtri na `/zaloge` niso jasni (vir vs. vrsta vira, kaj se zgodi, ko ima
+artikel zalogo pri SAOP in pri dobavitelju hkrati), manjka filter »ima zalogo«, prenos CSV je
+šel mimo filtrov nad tabelo (šlo je prenesti vse, čeprav so bili filtri nastavljeni).
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `151_StockExportMatchesTableFilters.sql`: `out.GetStockExportRows` dobi `@SourceCode`, `@Search`, `@Availability`, `@MaxAgeHours` — ista polja kot `intranet.GetStockPositions` (134) | migrator 1./2. zagon + `--verify` = izhod 0; ročni smoke test proti dev bazi (org 2): ERP 8.734 + DOBAVITELJ 4.159 = VSE 12.893; na zalogi 4.356 + brez zaloge 8.537 = 12.893 |
+| INTRANET | `Stocks.razor`: nov filter »Ima zalogo« (`stock-instock`, IN_STOCK/OUT_OF_STOCK), pojasnilo ob »Vrsta vira« da se viri ne seštevajo; prenos CSV je zdaj en gumb, ki uporabi vse trenutne filtre (vir, vrsta, ima zalogo, svežina, iskanje) namesto treh ločenih gumbov + Obseg izvoza; `Program.cs` in `StockReadService.WriteStockCsvAsync` prenašata nove parametre | `run_tests.ps1 -Filter F10` = 15/0/0, `Build OK` |
+
+Namerna odločitev, potrjena z uporabnikom: viri se pri »vsi viri zaloge« še vedno ne seštevajo
+(ostanejo ločene vrstice po viru) — samo pojasnjeno v UI; možnost »samo izdelki na spletu« je
+skupaj z ločenimi gumbi odpadla iz `/zaloge`, ostaja pa v `out.GetStockExportRows` kot parameter
+za morebitno prihodnjo rabo.
+
 ### 2026-09-03 — uporabniku prijaznejši potek `/saop/artikli` (Codex)
 
 - **[INTRANET] Končano.** Stran vodi skozi štiri vidne korake, loči ročni vnos in Excel,
