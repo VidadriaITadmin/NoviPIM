@@ -4,18 +4,23 @@
 @inject TitleRuleService Titles
 @inject IntranetDataService Data
 @inject CatalogReadService Catalog
+@inject CategoryTreeService CategoryTree
+@inject AttributeMappingService Attributes
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Pravila za nazive</PageTitle>
 <PimPage Title="Pravila za nazive"
-         Subtitle="Kako se iz podatkov izdelka sestavi spletni naziv v posameznem jeziku. Pravilo velja za kategorijo in njene podkategorije; najbližje zmaga."
+         Subtitle="Izberi, iz česa naj se sestavi spletni naziv izdelka. En sam izbor da naziv v vseh jezikih hkrati."
          Crumbs="Crumbs" />
 
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 
-@* Stran je namenoma ena sama: seznam pravil, urejevalnik in predogled na istem mestu — uporabnik
-   vidi, kaj bo pravilo naredilo, preden ga zapise (uporabnik 2026-09-02: stran mora biti pregledna). *@
+@* Stran je namenoma ena sama: seznam pravil, izbirnik sestavnih delov in predogled na istem
+   mestu (uporabnik 2026-09-02: stran mora biti pregledna). Prenova 2026-09-03: uporabnik ne
+   tipka vec {zetonov} in |modifikatorjev — izbira sestavne dele iz seznama, stran sama sestavi
+   pravilno predlogo za pim.ComposeTitle (TitleTemplateBuilder). Surova predloga ostane vidna
+   samo v "Napredno", za tista redka pravila, ki jih izbirnik ne zna razclaniti nazaj. *@
 
 <section class="ui-card panel section-gap" aria-labelledby="rule-editor-title">
   <h2 id="rule-editor-title">@(EditingId is null ? "Novo pravilo" : $"Pravilo {Draft.RuleCode}")</h2>
@@ -27,13 +32,13 @@
       <input class="form-input" @bind="Draft.Name" />
     </label>
     <label class="form-field">Drevo (spletna stran)
-      <select class="filter-select" @bind="Draft.CategoryTreeCode" @bind:after="() => Draft.CategoryCode = string.Empty">
+      <select class="filter-select" @bind="Draft.CategoryTreeCode" @bind:after="OnTreeChangedAsync">
         <option value="">— vse —</option>
         @foreach (var tree in Trees) { <option value="@tree">@tree</option> }
       </select>
     </label>
     <label class="form-field">Kategorija (prazno = privzeto za drevo)
-      <select class="filter-select" @bind="Draft.CategoryCode" disabled="@string.IsNullOrEmpty(Draft.CategoryTreeCode)">
+      <select class="filter-select" @bind="Draft.CategoryCode" @bind:after="OnScopeChangedAsync" disabled="@string.IsNullOrEmpty(Draft.CategoryTreeCode)">
         <option value="">— privzeto za drevo —</option>
         @foreach (var category in Categories.Where(category => category.CategoryTreeCode == Draft.CategoryTreeCode))
         {
@@ -41,32 +46,182 @@
         }
       </select>
     </label>
-    <label class="form-field">Jezik (prazno = vsi)
+    <label class="form-field">Vrstni red
+      <input class="form-input" type="number" @bind="Draft.SortOrder" />
+    </label>
+  </div>
+  <details class="card-note">
+    <summary>Jezik: privzeto se en naziv prevede v vse jezike @(string.IsNullOrEmpty(Draft.LanguageCode) ? "(trenutno: vsi jeziki)" : $"(trenutno: samo {Draft.LanguageCode})")</summary>
+    <p>Vrednosti atributov in ime kategorije se za vsak jezik same poiščejo v pravem jeziku (slovar
+      prevodov, Pravila → Slovar); kjer prevoda ni, ostane angleška vrednost in to je vidno spodaj v
+      predogledu. Zato en sam izbor sestavnih delov navadno zadošča za vse jezike. Samo če mora ta
+      naziv v enem jeziku izgledati drugače kot v drugih, mu tu omeji jezik:</p>
+    <label class="form-field">Jezik pravila
       <select class="filter-select" @bind="Draft.LanguageCode">
         <option value="">— vsi jeziki —</option>
         @foreach (var language in Languages) { <option value="@language">@language</option> }
       </select>
     </label>
-    <label class="form-field">Vrstni red
-      <input class="form-input" type="number" @bind="Draft.SortOrder" />
-    </label>
-  </div>
-  <label class="form-field">Predloga
-    <input class="form-input template-input" @bind="Draft.Template" placeholder="{ErpName} {Category:2} {Attr:Nazivna moč|unit:W} {Attr:Garancija|years}" />
-  </label>
-  <details class="card-note">
-    <summary>Žetoni in modifikatorji</summary>
-    <p><code>{ItemID}</code> <code>{ErpName}</code> <code>{WebName}</code> <code>{Manufacturer}</code> <code>{Category}</code> (list) <code>{Category:2}</code> (nivo) <code>{Attr:Ime atributa}</code></p>
-    <p>Za <code>|</code>: <code>omitIf:niz</code> <code>onlyIf:niz</code> <code>omitIfAttr:Atribut~niz</code> <code>onlyIfAttr:Atribut~niz</code> <code>unit:W</code> <code>years</code> (sklanjatev let) <code>lower</code> <code>upper</code> <code>prefix:niz</code> <code>suffix:niz</code></p>
-    <p>Prazen žeton izpade, presledki se strnejo, vrednost, ki je že v nazivu, se ne ponovi, prva črka je velika. Vrednosti atributov pridejo v jeziku predloge; kjer ni prevoda v slovarju (Pravila → Slovar), ostane angleška vrednost — to je vidno v predogledu.</p>
   </details>
+
+  <h3 class="block-list-title">Sestavni deli naziva</h3>
+  @if (Draft.RawMode)
+  {
+    <p class="card-note">Tega pravila izbirnik ne zna prikazati kot sestavne dele (predloga je bila
+      urejena ročno ali uporablja nekaj, česar izbirnik še ne pozna). Uredi jo neposredno spodaj, ali
+      poskusi pretvorbo nazaj v sestavne dele.</p>
+    <label class="form-field">Predloga (napredno)
+      <input class="form-input template-input" @bind="Draft.RawTemplate" placeholder="{ErpName} {Category:2} {Attr:Nazivna moč|unit:W}" />
+    </label>
+    <div class="form-action">
+      <button type="button" @onclick="TryConvertRawToBlocks">Poskusi prikazati kot sestavne dele</button>
+    </div>
+  }
+  else
+  {
+    @if (Draft.Blocks.Count == 0)
+    {
+      <p class="card-note">Naziv je še prazen. Dodaj spodaj prvi sestavni del — npr. ERP naziv ali
+        kategorijo — nato dodajaj atribute, ki naj bodo v nazivu.</p>
+    }
+    <ol class="block-list">
+      @for (var index = 0; index < Draft.Blocks.Count; index++)
+      {
+        var i = index;
+        var block = Draft.Blocks[i];
+        <li class="block-card">
+          <div class="block-head">
+            <span class="block-icon" aria-hidden="true">@BlockIcon(block.Kind)</span>
+            <span class="block-name">@DisplayNameFor(block)</span>
+            @if (block.Kind == "Category")
+            {
+              <select class="filter-select block-level" @bind="block.Arg" @bind:after="PreviewDraftAsync">
+                <option value="">najgloblja raven</option>
+                @for (var level = 1; level <= 6; level++) { <option value="@level">raven @level</option> }
+              </select>
+            }
+            <span class="block-spacer"></span>
+            <button type="button" class="icon-button" title="Premakni gor" disabled="@(i == 0)" @onclick="async () => { MoveUp(i); await PreviewDraftAsync(); }">▲</button>
+            <button type="button" class="icon-button" title="Premakni dol" disabled="@(i == Draft.Blocks.Count - 1)" @onclick="async () => { MoveDown(i); await PreviewDraftAsync(); }">▼</button>
+            <button type="button" class="icon-button remove" title="Odstrani" @onclick="async () => { RemoveBlock(i); await PreviewDraftAsync(); }">×</button>
+          </div>
+          <button type="button" class="link-button" @onclick="() => block.ShowMore = !block.ShowMore">
+            @(block.ShowMore ? "Skrij nastavitve" : "Več nastavitev")
+          </button>
+          @if (block.ShowMore)
+          {
+            <div class="block-options">
+              @if (block.Kind == "Attr")
+              {
+                <label class="filter-check"><input type="checkbox" @bind="block.UnitEnabled" @bind:after="PreviewDraftAsync" /> Dodaj enoto</label>
+                @if (block.UnitEnabled)
+                {
+                  <input class="form-input unit-input" placeholder="npr. W" @bind="block.UnitText" @bind:after="PreviewDraftAsync" />
+                }
+                <label class="filter-check"><input type="checkbox" @bind="block.YearsEnabled" @bind:after="PreviewDraftAsync" /> Pravilno sklanjaj kot leta (1 leto, 2 leti, 3 leta, 5 let)</label>
+              }
+              <label class="form-field">Velikost črk
+                <select class="filter-select" @bind="block.CaseMode" @bind:after="PreviewDraftAsync">
+                  <option value="none">brez spremembe</option>
+                  <option value="lower">male črke</option>
+                  <option value="upper">VELIKE ČRKE</option>
+                </select>
+              </label>
+              <div class="form-grid two-col">
+                <label class="form-field">Besedilo pred <input class="form-input" @bind="block.PrefixText" @bind:after="PreviewDraftAsync" /></label>
+                <label class="form-field">Besedilo za <input class="form-input" @bind="block.SuffixText" @bind:after="PreviewDraftAsync" /></label>
+              </div>
+              <label class="filter-check"><input type="checkbox" @bind="block.ConditionEnabled" @bind:after="PreviewDraftAsync" /> Dodaj pogoj (prikaži ali izpusti glede na vrednost)</label>
+              @if (block.ConditionEnabled)
+              {
+                <div class="condition-row">
+                  <select class="filter-select" @bind="block.ConditionMode" @bind:after="PreviewDraftAsync">
+                    <option value="onlyIf">Prikaži samo, če</option>
+                    <option value="omitIf">Izpusti, če</option>
+                  </select>
+                  <select class="filter-select" value="@(block.ConditionUsesOtherAttribute ? "other" : "self")"
+                          @onchange="e => OnConditionScopeChangedAsync(block, e)">
+                    <option value="self">ta vrednost</option>
+                    <option value="other">izbran atribut</option>
+                  </select>
+                  @if (block.ConditionUsesOtherAttribute)
+                  {
+                    <select class="filter-select" @bind="block.ConditionAttributeCode" @bind:after="PreviewDraftAsync">
+                      <option value="">— izberi atribut —</option>
+                      @foreach (var candidate in AllAttributes.OrderBy(a => a.AttributeName ?? a.AttributeCode))
+                      {
+                        <option value="@candidate.AttributeCode">@(candidate.AttributeName ?? candidate.AttributeCode)</option>
+                      }
+                    </select>
+                  }
+                  <input class="form-input" placeholder="vsebuje besedilo …" @bind="block.ConditionText" @bind:after="PreviewDraftAsync" />
+                </div>
+              }
+            </div>
+          }
+        </li>
+      }
+    </ol>
+
+    <div class="add-block">
+      <button type="button" @onclick="() => ShowPicker = !ShowPicker">+ Dodaj sestavni del</button>
+      @if (ShowPicker)
+      {
+        <div class="picker">
+          <div class="picker-quick">
+            @if (!HasFixed("ErpName")) { <button type="button" @onclick="AddErpNameAsync">ERP naziv</button> }
+            @if (!HasFixed("WebName")) { <button type="button" @onclick="AddWebNameAsync">Trenutni spletni naziv</button> }
+            @if (!HasFixed("ItemID")) { <button type="button" @onclick="AddItemIdAsync">Šifra artikla</button> }
+            @if (!HasFixed("Manufacturer")) { <button type="button" @onclick="AddManufacturerAsync">Proizvajalec</button> }
+            <button type="button" @onclick="AddCategoryAsync">Kategorija</button>
+          </div>
+          <input class="form-input search-input" placeholder="Išči atribut po imenu …" @bind="PickerSearch" @bind:event="oninput" />
+          @if (Draft.CategoryTreeCode is { Length: > 0 } && Draft.CategoryCode is { Length: > 0 } && CategoryAttributes is not null)
+          {
+            var scoped = CategoryScopedResults().ToArray();
+            if (scoped.Length > 0)
+            {
+              <p class="picker-section">Atributi te kategorije</p>
+              <ul class="picker-list">
+                @foreach (var item in scoped)
+                {
+                  <li>
+                    <button type="button" @onclick="async () => await AddAttributeAsync(item.Code, item.Unit)">
+                      @item.Name @(item.Suggested ? " (predlagano)" : "")
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          }
+          <p class="picker-section">Vsi atributi</p>
+          <ul class="picker-list">
+            @foreach (var item in GlobalResults())
+            {
+              <li>
+                <button type="button" @onclick="async () => await AddAttributeAsync(item.AttributeCode, item.Unit)">
+                  @(item.AttributeName ?? item.AttributeCode)
+                </button>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+
+    <details class="card-note">
+      <summary>Napredno — kako je to zapisano</summary>
+      <p>Sestavni deli se za bazo zapišejo kot ena vrstica: <code class="template">@GeneratedTemplate()</code></p>
+    </details>
+  }
+
   <div class="form-grid">
     <label class="filter-check"><input type="checkbox" @bind="Draft.IsActive" /> Pravilo je aktivno (neaktivno se v predogledu še vedno da preizkusiti)</label>
     <label class="form-field">Opomba <input class="form-input" @bind="Draft.Note" /></label>
   </div>
   <div class="form-action">
-    <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(Draft.RuleCode) || string.IsNullOrWhiteSpace(Draft.Template))" @onclick="SaveAsync">Shrani pravilo</button>
-    <button type="button" disabled="@Busy" @onclick="PreviewDraftAsync">Predogled te predloge</button>
+    <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(Draft.RuleCode) || !HasContent())" @onclick="SaveAsync">Shrani pravilo</button>
+    <button type="button" disabled="@Busy" @onclick="PreviewDraftAsync">Osveži predogled</button>
     @if (EditingId is not null) { <button type="button" disabled="@Busy" @onclick="NewRule">Novo pravilo</button> }
   </div>
 </section>
@@ -75,18 +230,20 @@
   <h2 id="preview-title">Predogled</h2>
   <div class="form-grid">
     <label class="form-field">Podjetje
-      <select class="filter-select" @bind="PreviewOrganizationId">
+      <select class="filter-select" @bind="PreviewOrganizationId" @bind:after="PreviewDraftAsync">
         @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
       </select>
     </label>
     <label class="form-field">Jezik
-      <select class="filter-select" @bind="PreviewLanguage">
-        @foreach (var language in Languages) { <option value="@language">@language</option> }
-      </select>
+      <div class="lang-chips">
+        @foreach (var language in Languages)
+        {
+          <button type="button" class="@(language == PreviewLanguage ? "lang-chip active" : "lang-chip")" @onclick="async () => { PreviewLanguage = language; await PreviewDraftAsync(); }">@language</button>
+        }
+      </div>
     </label>
-    <label class="filter-check"><input type="checkbox" @bind="OnlyMissing" /> Samo izdelki brez spletnega naziva v tem jeziku</label>
+    <label class="filter-check"><input type="checkbox" @bind="OnlyMissing" @bind:after="PreviewDraftAsync" /> Samo izdelki brez spletnega naziva v tem jeziku</label>
     <div class="form-action">
-      <button type="button" disabled="@Busy" @onclick="PreviewDraftAsync">Osveži predogled</button>
       <button type="button" class="primary-button" disabled="@(Busy || EditingId is null || !Draft.IsActive)" title="Zapiše sestavljene nazive v izbranem jeziku za izdelke, ki jih pravilo doseže"
               @onclick="ApplyAsync">Zapiši nazive (@(OnlyMissing ? "samo manjkajoče" : "tudi prepis obstoječih"))</button>
     </div>
@@ -117,7 +274,7 @@
           <td><button type="button" class="link-button" @onclick="() => Edit(rule)">@rule.RuleCode</button><div class="tree-path">@rule.Name</div></td>
           <td>@(rule.CategoryTreeCode ?? "vsa drevesa")<div class="tree-path">@(rule.CategoryPath ?? "privzeto za drevo")</div></td>
           <td>@(rule.LanguageCode ?? "vsi")</td>
-          <td><code class="template">@rule.Template</code></td>
+          <td>@Summarize(rule)</td>
           <td><PimChip Text="@(rule.IsActive ? "aktivno" : "neaktivno")" Tone="@(rule.IsActive ? "good" : null)" /></td>
           <td>@rule.UpdatedUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")<div class="tree-path">@rule.UpdatedBy</div></td>
         </tr>
@@ -127,6 +284,24 @@
 </section>
 
 @code {
+  sealed class BlockDraft
+  {
+    public required string Kind { get; init; }
+    public string? Arg { get; set; }
+    public bool ShowMore { get; set; }
+    public bool UnitEnabled { get; set; }
+    public string UnitText { get; set; } = "";
+    public bool YearsEnabled { get; set; }
+    public string CaseMode { get; set; } = "none";
+    public string PrefixText { get; set; } = "";
+    public string SuffixText { get; set; } = "";
+    public bool ConditionEnabled { get; set; }
+    public string ConditionMode { get; set; } = "onlyIf";
+    public bool ConditionUsesOtherAttribute { get; set; }
+    public string ConditionAttributeCode { get; set; } = "";
+    public string ConditionText { get; set; } = "";
+  }
+
   sealed class RuleDraft
   {
     public string RuleCode { get; set; } = "";
@@ -134,24 +309,32 @@
     public string CategoryTreeCode { get; set; } = "";
     public string CategoryCode { get; set; } = "";
     public string LanguageCode { get; set; } = "";
-    public string Template { get; set; } = "";
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; } = 100;
     public string? Note { get; set; }
+    public List<BlockDraft> Blocks { get; set; } = [];
+    public bool RawMode { get; set; }
+    public string RawTemplate { get; set; } = "";
   }
+
+  static readonly string[] KnownBaseKinds = ["ItemID", "ErpName", "WebName", "Manufacturer", "Category", "Attr"];
+  static readonly string[] KnownModifierKinds =
+    ["omitIf", "onlyIf", "omitIfAttr", "onlyIfAttr", "unit", "years", "lower", "upper", "prefix", "suffix"];
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Nazivi")];
   static readonly IReadOnlyList<PimColumn> RuleColumns =
-    [new("Pravilo"), new("Obseg"), new("Jezik"), new("Predloga"), new("Stanje"), new("Spremenjeno")];
+    [new("Pravilo"), new("Obseg"), new("Jezik"), new("Sestavljeno iz"), new("Stanje"), new("Spremenjeno")];
   static readonly IReadOnlyList<PimColumn> PreviewColumns =
     [new("Artikel"), new("ERP naziv"), new("Trenutni spletni naziv"), new("Sestavljen naziv")];
 
   IReadOnlyList<TitleRuleService.RuleRow> Rules = [];
   IReadOnlyList<TitleRuleService.CategoryOption> Categories = [];
   IReadOnlyList<string> Trees = [];
-  IReadOnlyList<string> Languages = ["sl", "en", "de", "hr", "it"];
+  IReadOnlyList<string> Languages = PimLanguages.Preferred;
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<TitleRuleService.PreviewRow> Preview = [];
+  IReadOnlyList<AttributeMappingService.DefinitionRow> AllAttributes = [];
+  CategoryTreeService.AttributeSetView? CategoryAttributes;
 
   RuleDraft Draft = new();
   int? EditingId;
@@ -160,6 +343,8 @@
   bool OnlyMissing = true;
   bool Busy;
   bool PreviewLoading;
+  bool ShowPicker;
+  string PickerSearch = "";
   string? PreviewError;
   string? Message;
   string? Error;
@@ -174,23 +359,254 @@
       Categories = await Titles.GetCategoriesAsync();
       Trees = Categories.Select(category => category.CategoryTreeCode).Distinct().OrderBy(tree => tree).ToArray();
       Rules = await Titles.GetRulesAsync();
+      AllAttributes = await Attributes.GetDefinitionsAsync(null, false, false, false);
     }
     catch (Exception exception) { Error = exception.Message; }
   }
 
-  void Edit(TitleRuleService.RuleRow rule)
+  // --- Sestavni deli: pretvorba med TitleBlock (baza) in BlockDraft (izbirnik) ------------
+
+  static TitleBlock ToTitleBlock(BlockDraft draft)
+  {
+    var modifiers = new List<TitleModifier>();
+    if (draft.ConditionEnabled && !string.IsNullOrWhiteSpace(draft.ConditionText))
+    {
+      if (draft.ConditionUsesOtherAttribute && !string.IsNullOrWhiteSpace(draft.ConditionAttributeCode))
+        modifiers.Add(new TitleModifier(draft.ConditionMode == "onlyIf" ? "onlyIfAttr" : "omitIfAttr",
+          draft.ConditionAttributeCode + "~" + draft.ConditionText));
+      else
+        modifiers.Add(new TitleModifier(draft.ConditionMode, draft.ConditionText));
+    }
+    if (draft.UnitEnabled && !string.IsNullOrWhiteSpace(draft.UnitText)) modifiers.Add(new TitleModifier("unit", draft.UnitText.Trim()));
+    if (draft.YearsEnabled) modifiers.Add(new TitleModifier("years"));
+    if (draft.CaseMode == "lower") modifiers.Add(new TitleModifier("lower"));
+    else if (draft.CaseMode == "upper") modifiers.Add(new TitleModifier("upper"));
+    if (!string.IsNullOrEmpty(draft.PrefixText)) modifiers.Add(new TitleModifier("prefix", draft.PrefixText));
+    if (!string.IsNullOrEmpty(draft.SuffixText)) modifiers.Add(new TitleModifier("suffix", draft.SuffixText));
+    return new TitleBlock(draft.Kind, draft.Arg, modifiers);
+  }
+
+  /// <summary>Vrne false, ce blok uporablja kaj, cesar izbirnik ne pozna — takrat gre celo pravilo v "Napredno".</summary>
+  static bool TryBuildDraft(TitleBlock block, out BlockDraft draft)
+  {
+    draft = null!;
+    if (!KnownBaseKinds.Contains(block.Kind)) return false;
+    var result = new BlockDraft { Kind = block.Kind, Arg = block.Arg };
+    foreach (var modifier in block.Modifiers)
+    {
+      if (!KnownModifierKinds.Contains(modifier.Kind)) return false;
+      switch (modifier.Kind)
+      {
+        case "unit": result.UnitEnabled = true; result.UnitText = modifier.Arg ?? ""; break;
+        case "years": result.YearsEnabled = true; break;
+        case "lower": result.CaseMode = "lower"; break;
+        case "upper": result.CaseMode = "upper"; break;
+        case "prefix": result.PrefixText = modifier.Arg ?? ""; break;
+        case "suffix": result.SuffixText = modifier.Arg ?? ""; break;
+        case "onlyIf" or "omitIf":
+          if (result.ConditionEnabled) return false; // ze en pogoj — vec jih izbirnik ne zna prikazati
+          result.ConditionEnabled = true; result.ConditionMode = modifier.Kind; result.ConditionText = modifier.Arg ?? "";
+          break;
+        case "onlyIfAttr" or "omitIfAttr":
+          if (result.ConditionEnabled) return false;
+          var tilde = (modifier.Arg ?? "").IndexOf('~');
+          if (tilde < 0) return false;
+          result.ConditionEnabled = true; result.ConditionUsesOtherAttribute = true;
+          result.ConditionMode = modifier.Kind == "onlyIfAttr" ? "onlyIf" : "omitIf";
+          result.ConditionAttributeCode = modifier.Arg![..tilde];
+          result.ConditionText = modifier.Arg[(tilde + 1)..];
+          break;
+      }
+    }
+    draft = result;
+    return true;
+  }
+
+  string GeneratedTemplate() => TitleTemplateBuilder.Build(Draft.Blocks.Select(ToTitleBlock).ToArray());
+
+  bool HasContent() => Draft.RawMode ? !string.IsNullOrWhiteSpace(Draft.RawTemplate) : Draft.Blocks.Count > 0;
+
+  string CurrentTemplate() => Draft.RawMode ? Draft.RawTemplate : GeneratedTemplate();
+
+  void TryConvertRawToBlocks()
+  {
+    if (TitleTemplateBuilder.TryParse(Draft.RawTemplate, out var parsed) && TryBuildDrafts(parsed, out var drafts))
+    {
+      Draft.Blocks = drafts;
+      Draft.RawMode = false;
+      Message = "Predloga je zdaj prikazana kot sestavni deli.";
+    }
+    else
+    {
+      Error = "Te predloge še vedno ni mogoče prikazati kot sestavne dele.";
+    }
+  }
+
+  static bool TryBuildDrafts(IReadOnlyList<TitleBlock> blocks, out List<BlockDraft> drafts)
+  {
+    drafts = [];
+    foreach (var block in blocks)
+    {
+      if (!TryBuildDraft(block, out var draft)) { drafts = []; return false; }
+      drafts.Add(draft);
+    }
+    return true;
+  }
+
+  // --- Prikaz -------------------------------------------------------------------------------
+
+  static string BlockIcon(string kind) => kind switch
+  {
+    "ItemID" => "🔑", "ErpName" => "🏷", "WebName" => "🏷", "Manufacturer" => "🏭", "Category" => "📁", "Attr" => "🔢", _ => "•",
+  };
+
+  string DisplayNameFor(BlockDraft block) => block.Kind switch
+  {
+    "ItemID" => "Šifra artikla",
+    "ErpName" => "ERP naziv",
+    "WebName" => "Trenutni spletni naziv",
+    "Manufacturer" => "Proizvajalec",
+    "Category" => "Kategorija",
+    "Attr" => AttributeDisplayName(block.Arg ?? ""),
+    _ => block.Kind,
+  };
+
+  string AttributeDisplayName(string code)
+  {
+    var definition = AllAttributes.FirstOrDefault(a => string.Equals(a.AttributeCode, code, StringComparison.OrdinalIgnoreCase));
+    if (definition is null) return code;
+    if (!string.Equals(PreviewLanguage, "sl", StringComparison.OrdinalIgnoreCase)
+        && definition.Translations.TryGetValue(PreviewLanguage, out var translated) && !string.IsNullOrWhiteSpace(translated))
+      return translated;
+    return definition.AttributeName ?? code;
+  }
+
+  string Summarize(TitleRuleService.RuleRow rule)
+  {
+    if (TitleTemplateBuilder.TryParse(rule.Template, out var parsed) && TryBuildDrafts(parsed, out var drafts))
+      return string.Join(" · ", drafts.Select(DisplayNameFor));
+    return rule.Template.Length > 60 ? rule.Template[..60] + "…" : rule.Template;
+  }
+
+  // --- Izbirnik atributov --------------------------------------------------------------------
+
+  bool HasFixed(string kind) => Draft.Blocks.Any(b => b.Kind == kind);
+
+  HashSet<string> UsedAttributeCodes() =>
+    Draft.Blocks.Where(b => b.Kind == "Attr" && b.Arg is not null).Select(b => b.Arg!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+  IEnumerable<AttributeMappingService.DefinitionRow> GlobalResults()
+  {
+    var used = UsedAttributeCodes();
+    return AllAttributes
+      .Where(a => !used.Contains(a.AttributeCode))
+      .Where(a => string.IsNullOrWhiteSpace(PickerSearch)
+        || (a.AttributeName ?? "").Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)
+        || a.AttributeCode.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)
+        || a.Translations.Values.Any(v => v.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)))
+      .OrderBy(a => a.AttributeName ?? a.AttributeCode)
+      .Take(40);
+  }
+
+  IEnumerable<(string Code, string Name, string? Unit, bool Suggested)> CategoryScopedResults()
+  {
+    if (CategoryAttributes is null) yield break;
+    var used = UsedAttributeCodes();
+    foreach (var row in CategoryAttributes.Rows)
+    {
+      if (used.Contains(row.AttributeCode)) continue;
+      if (!string.IsNullOrWhiteSpace(PickerSearch) && !row.AttributeName.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)) continue;
+      yield return (row.AttributeCode, row.AttributeName, AllAttributes.FirstOrDefault(a => a.AttributeCode == row.AttributeCode)?.Unit, false);
+    }
+    foreach (var suggestion in CategoryAttributes.Suggestions)
+    {
+      if (used.Contains(suggestion.AttributeCode) || suggestion.InRegister) continue;
+      if (!string.IsNullOrWhiteSpace(PickerSearch) && !suggestion.AttributeName.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)) continue;
+      yield return (suggestion.AttributeCode, suggestion.AttributeName, AllAttributes.FirstOrDefault(a => a.AttributeCode == suggestion.AttributeCode)?.Unit, true);
+    }
+  }
+
+  async Task OnTreeChangedAsync()
+  {
+    Draft.CategoryCode = "";
+    await OnScopeChangedAsync();
+  }
+
+  async Task OnScopeChangedAsync()
+  {
+    CategoryAttributes = null;
+    if (!string.IsNullOrEmpty(Draft.CategoryTreeCode) && !string.IsNullOrEmpty(Draft.CategoryCode))
+    {
+      try { CategoryAttributes = await CategoryTree.GetAttributeSetAsync(Draft.CategoryTreeCode, Draft.CategoryCode); }
+      catch (Exception exception) { Error = exception.Message; }
+    }
+    await PreviewDraftAsync();
+  }
+
+  async Task AddFixedAsync(string kind)
+  {
+    Draft.Blocks.Add(new BlockDraft { Kind = kind });
+    ShowPicker = false;
+    await PreviewDraftAsync();
+  }
+
+  Task AddErpNameAsync() => AddFixedAsync("ErpName");
+  Task AddWebNameAsync() => AddFixedAsync("WebName");
+  Task AddItemIdAsync() => AddFixedAsync("ItemID");
+  Task AddManufacturerAsync() => AddFixedAsync("Manufacturer");
+  Task AddCategoryAsync() => AddFixedAsync("Category");
+
+  async Task OnConditionScopeChangedAsync(BlockDraft block, ChangeEventArgs e)
+  {
+    block.ConditionUsesOtherAttribute = (string?)e.Value == "other";
+    await PreviewDraftAsync();
+  }
+
+  async Task AddAttributeAsync(string code, string? unit)
+  {
+    Draft.Blocks.Add(new BlockDraft { Kind = "Attr", Arg = code, UnitText = unit ?? "" });
+    PickerSearch = "";
+    await PreviewDraftAsync();
+  }
+
+  void MoveUp(int index)
+  {
+    if (index <= 0) return;
+    (Draft.Blocks[index - 1], Draft.Blocks[index]) = (Draft.Blocks[index], Draft.Blocks[index - 1]);
+  }
+
+  void MoveDown(int index)
+  {
+    if (index >= Draft.Blocks.Count - 1) return;
+    (Draft.Blocks[index + 1], Draft.Blocks[index]) = (Draft.Blocks[index], Draft.Blocks[index + 1]);
+  }
+
+  void RemoveBlock(int index) => Draft.Blocks.RemoveAt(index);
+
+  // --- Nalaganje, shranjevanje, predogled, zapis --------------------------------------------
+
+  async Task Edit(TitleRuleService.RuleRow rule)
   {
     EditingId = rule.TitleRuleId;
     Draft = new()
     {
       RuleCode = rule.RuleCode, Name = rule.Name, CategoryTreeCode = rule.CategoryTreeCode ?? "", CategoryCode = rule.CategoryCode ?? "",
-      LanguageCode = rule.LanguageCode ?? "", Template = rule.Template, IsActive = rule.IsActive, SortOrder = rule.SortOrder, Note = rule.Note,
+      LanguageCode = rule.LanguageCode ?? "", IsActive = rule.IsActive, SortOrder = rule.SortOrder, Note = rule.Note,
     };
+    if (TitleTemplateBuilder.TryParse(rule.Template, out var parsed) && TryBuildDrafts(parsed, out var drafts))
+      Draft.Blocks = drafts;
+    else { Draft.RawMode = true; Draft.RawTemplate = rule.Template; }
+
     if (!string.IsNullOrEmpty(rule.LanguageCode)) PreviewLanguage = rule.LanguageCode;
     Message = null; Error = null;
+    CategoryAttributes = null;
+    if (!string.IsNullOrEmpty(Draft.CategoryTreeCode) && !string.IsNullOrEmpty(Draft.CategoryCode))
+      try { CategoryAttributes = await CategoryTree.GetAttributeSetAsync(Draft.CategoryTreeCode, Draft.CategoryCode); }
+      catch { /* opcijski podatek za izbirnik, napake tu ne blokirajo urejanja */ }
+    await PreviewDraftAsync();
   }
 
-  void NewRule() { EditingId = null; Draft = new(); Preview = []; }
+  void NewRule() { EditingId = null; Draft = new(); Preview = []; CategoryAttributes = null; }
 
   async Task SaveAsync()
   {
@@ -198,7 +614,7 @@
     try
     {
       var id = await Titles.SaveRuleAsync(Draft.RuleCode, string.IsNullOrWhiteSpace(Draft.Name) ? Draft.RuleCode : Draft.Name,
-        Draft.CategoryTreeCode, Draft.CategoryCode, Draft.LanguageCode, Draft.Template, " ", Draft.IsActive, Draft.SortOrder, Draft.Note, await ActorAsync());
+        Draft.CategoryTreeCode, Draft.CategoryCode, Draft.LanguageCode, CurrentTemplate(), " ", Draft.IsActive, Draft.SortOrder, Draft.Note, await ActorAsync());
       EditingId = id;
       Rules = await Titles.GetRulesAsync();
       Message = $"Pravilo {Draft.RuleCode.ToUpperInvariant()} je shranjeno. Nazivi se ne spremenijo, dokler jih ne zapišeš spodaj.";
@@ -210,11 +626,11 @@
 
   async Task PreviewDraftAsync()
   {
+    if (!HasContent()) { Preview = []; return; }
     PreviewLoading = true; PreviewError = null;
     try
     {
-      Preview = await Titles.PreviewAsync(PreviewOrganizationId, PreviewLanguage, EditingId,
-        string.IsNullOrWhiteSpace(Draft.Template) ? null : Draft.Template, Draft.CategoryTreeCode, Draft.CategoryCode, OnlyMissing, 25);
+      Preview = await Titles.PreviewAsync(PreviewOrganizationId, PreviewLanguage, EditingId, CurrentTemplate(), Draft.CategoryTreeCode, Draft.CategoryCode, OnlyMissing, 25);
     }
     catch (Exception exception) { PreviewError = exception.Message; Preview = []; }
     finally { PreviewLoading = false; }
