@@ -1,12 +1,61 @@
-/* Vnos artiklov v SAOP: mreza vrednosti, izbirniki polj in dnevnik seje.
-   Barve in oblike so iz app.css (spremenljivke --pim-*), da stran ne uvaja svojega sistema. */
+/* Voden vnos artiklov v SAOP. Barve in oblike ostajajo del skupnega sistema --pim-*. */
 
-.saop-items-codes { grid-column: span 2; }
+.saop-items-context { align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-left: 4px solid var(--pim-primary); border-radius: var(--pim-radius); display: flex; gap: 1.5rem; justify-content: space-between; margin-bottom: 1rem; padding: .85rem 1rem; }
+.saop-items-context > div { display: flex; flex-direction: column; gap: .2rem; }
+.saop-items-context strong { color: var(--pim-text-strong); font-size: .9rem; }
+.saop-items-context span:not(.status-chip) { color: var(--pim-text-muted); font-size: .75rem; }
+.saop-items-eyebrow { color: var(--pim-primary) !important; font-size: .68rem !important; font-weight: 750; letter-spacing: .08em; }
+.saop-items-context-status { align-items: flex-end; text-align: right; }
 
-.saop-items-import { border-top: 1px solid var(--pim-border-soft); margin-top: 1rem; padding-top: 1rem; }
-.saop-items-import .hint { color: var(--pim-text-muted); font-size: .8rem; margin: .4rem 0 0; }
+.saop-items-progress { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius); box-shadow: var(--pim-shadow); margin-bottom: 1rem; padding: .9rem 1rem; }
+.saop-items-progress ol { display: grid; gap: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.saop-items-progress li { align-items: center; color: var(--pim-text-muted); display: flex; gap: .65rem; min-width: 0; position: relative; }
+.saop-items-progress li:not(:last-child)::after { background: var(--pim-border); content: ""; height: 2px; position: absolute; right: 0; top: 1rem; width: calc(100% - 2rem); z-index: 0; }
+.saop-items-progress li.done:not(:last-child)::after { background: var(--pim-good-bar); }
+.saop-items-progress-no { align-items: center; background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 50%; display: inline-flex; flex: 0 0 2rem; font-size: .76rem; font-weight: 750; height: 2rem; justify-content: center; position: relative; z-index: 1; }
+.saop-items-progress li > span:last-child { background: var(--pim-surface); padding-right: .45rem; position: relative; z-index: 1; }
+.saop-items-progress li.active .saop-items-progress-no { background: var(--pim-primary); border-color: var(--pim-primary); box-shadow: 0 0 0 4px var(--pim-accent-ring); color: #fff; }
+.saop-items-progress li.done .saop-items-progress-no { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
+.saop-items-progress strong, .saop-items-progress small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saop-items-progress strong { color: var(--pim-text-strong); font-size: .78rem; }
+.saop-items-progress small { font-size: .68rem; margin-top: .1rem; }
 
-.saop-items-summary { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 0; }
+.saop-items-channel details { border-top: 1px solid currentColor; margin-top: .6rem; opacity: .9; padding-top: .45rem; }
+.saop-items-channel summary, .warn-message summary { cursor: pointer; font-size: .75rem; font-weight: 650; }
+.warn-message { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
+
+.saop-items-section-heading { align-items: flex-start; display: flex; gap: .75rem; }
+.saop-items-section-heading h2 { margin: 0 0 .2rem; }
+.saop-items-section-heading p { color: var(--pim-text-muted); font-size: .8rem; line-height: 1.45; margin: 0; }
+.saop-items-step-number { align-items: center; background: #eef2ff; border-radius: 50%; color: var(--pim-primary); display: inline-flex; flex: 0 0 1.9rem; font-size: .8rem; font-weight: 750; height: 1.9rem; justify-content: center; }
+.saop-items-org { margin: 1rem 0; max-width: 25rem; }
+.saop-items-control-help { color: var(--pim-text-muted); font-size: .72rem; font-weight: 400; line-height: 1.45; }
+
+.saop-items-entry-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.saop-items-entry-card { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; gap: .7rem; padding: 1rem; }
+.saop-items-entry-card:focus-within { border-color: var(--pim-accent); box-shadow: 0 0 0 3px var(--pim-accent-ring); }
+.saop-items-entry-card h3 { color: var(--pim-text-strong); font-size: .95rem; margin: -.25rem 0 0; }
+.saop-items-entry-card > p { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; margin: 0; }
+.saop-items-entry-card .primary-button { align-self: flex-start; }
+.saop-items-entry-kicker { color: var(--pim-primary); font-size: .68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.saop-items-template-link { align-self: flex-start; font-size: .8rem; font-weight: 650; }
+
+.saop-items-summary { align-items: center; background: var(--pim-neutral-bg); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 0; padding: .65rem .75rem; }
+.saop-items-summary > strong { color: var(--pim-text-strong); font-size: .82rem; margin-right: .25rem; }
+.saop-items-summary .small-action { margin-left: auto; }
+
+.saop-items-field-toolbar { align-items: end; background: var(--pim-surface-subtle); border: 1px solid var(--pim-border-soft); border-radius: var(--pim-radius-sm); display: grid; gap: 1rem; grid-template-columns: minmax(13rem, 1.2fr) minmax(16rem, 1fr) auto; margin: 1rem 0 .75rem; padding: .8rem; }
+.saop-items-field-toolbar .search-input { min-width: 0; width: 100%; }
+.saop-items-check { align-items: center; color: var(--pim-text-soft); display: flex; font-size: .76rem; gap: .55rem; }
+.saop-items-check input { accent-color: var(--pim-primary); height: 1rem; width: 1rem; }
+.saop-items-check strong, .saop-items-check small { display: block; }
+.saop-items-check small { color: var(--pim-text-muted); font-weight: 400; margin-top: .1rem; }
+.saop-items-selected-count { align-items: center; display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
+.saop-items-selected-count span { color: var(--pim-text-muted); font-size: .72rem; }
+.saop-items-selected-count strong { color: var(--pim-text-strong); font-size: 1rem; }
+.saop-items-selected-count .small-action { flex-basis: 100%; }
+.saop-items-legend { color: var(--pim-text-muted); font-size: .75rem; margin: 0 0 .5rem; }
+.saop-items-no-results { background: var(--pim-neutral-bg); border-radius: var(--pim-radius-sm); color: var(--pim-text-muted); font-size: .8rem; padding: 1rem; text-align: center; }
 
 /* --- izbirniki polj ------------------------------------------------------ */
 .saop-items-fieldgroup { border-top: 1px solid var(--pim-border-soft); padding: .7rem 0 .2rem; }
@@ -19,9 +68,11 @@
 .saop-items-chip.picked { background: #eef2ff; border-color: var(--pim-accent); color: var(--pim-accent); }
 .saop-items-chip.locked { background: var(--pim-neutral-bg); border-style: dashed; color: var(--pim-text-muted); cursor: default; }
 .saop-items-required { color: var(--pim-bad-text); margin-left: .15rem; }
+.saop-items-lock-label { font-size: .65rem; font-weight: 500; margin-left: .25rem; opacity: .8; }
 
 /* --- mreza vrednosti ----------------------------------------------------- */
-.saop-items-cardtitle { border-bottom: 1px solid var(--pim-border); font-size: 1rem; margin: 0; padding: 1rem 1.15rem; }
+.saop-items-cardtitle { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; justify-content: space-between; margin: 0; padding: 1rem 1.15rem; }
+.saop-items-cardtitle .saop-items-section-heading { min-width: 0; }
 
 .saop-items-grid th { vertical-align: bottom; }
 .saop-items-element { color: var(--pim-text-muted); display: block; font-size: .68rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -40,19 +91,60 @@ thead .saop-items-sticky { background: #f8fafc; }
 .saop-items-remove { margin-left: .4rem; }
 .saop-items-doccell { white-space: nowrap; }
 .saop-items-doccell .small-action { margin-left: .4rem; }
+.saop-items-row-help { color: var(--pim-bad-text); display: block; font-size: .68rem; margin: .3rem 0; max-width: 18rem; white-space: normal; }
 
 .saop-items-open td { background: #f8fafc; }
 .saop-items-xmlrow td { background: var(--pim-surface-subtle); }
 .saop-items-xmlhead { align-items: baseline; display: flex; gap: .75rem; margin: 0 0 .5rem; }
 .saop-items-xml { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); font-family: Consolas, "Cascadia Mono", monospace; font-size: .75rem; margin: 0; max-height: 22rem; overflow: auto; padding: .75rem; white-space: pre-wrap; }
 
-.saop-items-blocked { color: var(--pim-bad-text); margin-left: .5rem; }
-.saop-items-outcome { margin-top: .75rem; }
+.saop-items-readiness { display: grid; gap: .65rem; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 1rem 0; }
+.saop-items-readiness > div { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); padding: .75rem; }
+.saop-items-readiness > div.good { background: var(--pim-good-bg); border-color: var(--pim-good-border); }
+.saop-items-readiness > div.bad { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); }
+.saop-items-readiness span, .saop-items-readiness small { color: var(--pim-text-muted); display: block; font-size: .7rem; }
+.saop-items-readiness strong { color: var(--pim-text-strong); display: block; font-size: 1.35rem; margin: .15rem 0; }
+.saop-items-readiness .good strong { color: var(--pim-good-text); }
+.saop-items-readiness .bad strong { color: var(--pim-bad-text); }
+.saop-items-submit { align-items: flex-start; background: #f8faff; border: 1px solid #dbe4ff; border-radius: var(--pim-radius-sm); display: flex; gap: 1.25rem; justify-content: space-between; margin-top: 1rem; padding: 1rem; }
+.saop-items-submit p { color: var(--pim-text-muted); font-size: .75rem; line-height: 1.5; margin: .45rem 0 0; max-width: 44rem; }
+.saop-items-approval { border-left: 1px solid #dbe4ff; display: flex; flex-direction: column; gap: .35rem; min-width: 20rem; padding-left: 1rem; }
+.saop-items-approval strong { color: var(--pim-text-strong); font-size: .8rem; }
+.saop-items-approval > span { color: var(--pim-text-muted); font-size: .72rem; }
+.saop-items-outcome { align-items: center; background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); border-radius: var(--pim-radius-sm); color: var(--pim-good-text); display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .75rem; padding: .75rem; }
+.saop-items-outcome strong { flex-basis: 100%; }
+.saop-items-outcome span, .saop-items-outcome a { font-size: .78rem; }
 
 /* --- dnevnik ------------------------------------------------------------- */
+.saop-items-session-details { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius); box-shadow: var(--pim-shadow); margin-top: 1rem; }
+.saop-items-session-details > summary { align-items: center; cursor: pointer; display: flex; justify-content: space-between; list-style-position: inside; padding: .85rem 1rem; }
+.saop-items-session-details > summary span { color: var(--pim-text-strong); font-size: .82rem; font-weight: 650; }
+.saop-items-session-details > summary small { color: var(--pim-text-muted); font-size: .72rem; }
+.saop-items-session-details[open] > summary { border-bottom: 1px solid var(--pim-border); }
+.saop-items-session-details .panel { padding-top: 1rem; }
 .saop-items-journal { list-style: none; margin: .5rem 0 0; max-height: 20rem; overflow: auto; padding: 0; }
 .saop-items-journal li { border-left: 3px solid var(--pim-neutral-border); font-size: .82rem; margin-bottom: .3rem; padding: .3rem .6rem; }
 .saop-items-journal li.good { border-color: var(--pim-good-bar); }
 .saop-items-journal li.warn { border-color: var(--pim-warn-bar); }
 .saop-items-journal li.info { border-color: var(--pim-info-border); }
 .saop-items-time { color: var(--pim-text-muted); font-family: Consolas, "Cascadia Mono", monospace; font-size: .75rem; margin-right: .5rem; }
+
+@media (max-width: 1000px) {
+  .saop-items-progress small { display: none; }
+  .saop-items-field-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .saop-items-selected-count { grid-column: span 2; justify-content: flex-start; }
+  .saop-items-selected-count .small-action { flex-basis: auto; }
+}
+
+@media (max-width: 760px) {
+  .saop-items-context, .saop-items-submit { align-items: stretch; flex-direction: column; }
+  .saop-items-context-status { align-items: flex-start; text-align: left; }
+  .saop-items-progress ol { gap: .55rem; grid-template-columns: 1fr; }
+  .saop-items-progress li:not(:last-child)::after { height: calc(100% + .55rem); left: 1rem; right: auto; top: 2rem; width: 2px; }
+  .saop-items-progress small { display: block; }
+  .saop-items-entry-grid, .saop-items-field-toolbar, .saop-items-readiness { grid-template-columns: 1fr; }
+  .saop-items-selected-count { grid-column: auto; justify-content: flex-start; }
+  .saop-items-approval { border-left: 0; border-top: 1px solid #dbe4ff; min-width: 0; padding-left: 0; padding-top: .8rem; }
+  .saop-items-cardtitle { align-items: flex-start; flex-direction: column; gap: .75rem; }
+  .saop-items-session-details > summary { align-items: flex-start; flex-direction: column; gap: .2rem; }
+}

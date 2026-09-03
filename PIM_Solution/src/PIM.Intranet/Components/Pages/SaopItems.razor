@@ -13,7 +13,7 @@
 <PageTitle>Artikli v SAOP</PageTitle>
 
 <PimPage Title="Artikli v SAOP"
-         Subtitle="Nov artikel in sprememba obstoječega sta ista pot. Za vsako šifro PIM sam ugotovi, ali gre POST (nov) ali PATCH (sprememba), in pokaže točno tisti dokument, ki bo poslan."
+         Subtitle="Na enem mestu pripravi nove artikle in spremembe obstoječih. PIM sam preveri, kaj SAOP že pozna, ter te pred oddajo opozori na manjkajoče podatke."
          Crumbs="Crumbs">
   <Actions>
     <a class="secondary" href="@TemplateHref">Prenesi predlogo (XLSX)</a>
@@ -28,118 +28,192 @@
 
 <PimState Loading="Loading" Error="@LoadError" Empty="false" LoadingText="Nalaganje pogodbe dokumenta …">
 
+  <section class="saop-items-context" aria-label="Kontekst zapisovanja v SAOP">
+    <div>
+      <span class="saop-items-eyebrow">IZHODI ERP · ARTIKLI</span>
+      <strong>@CurrentOrganizationName</strong>
+      <span>Spremembe pripravlja PIM, polja v lasti SAOP pa ostanejo zaklenjena.</span>
+    </div>
+    <div class="saop-items-context-status">
+      <PimChip Text="@(Channel is { Exists: true, IsEnabled: true } ? "Povezava je pripravljena" : "Povezava ni pripravljena")"
+               Tone="@(Channel is { Exists: true, IsEnabled: true } ? "good" : "bad")" Prefix="SAOP: " />
+      <span>Zapis gre najprej v nadzorovano čakalno vrsto.</span>
+    </div>
+  </section>
+
+  <nav class="saop-items-progress" aria-label="Napredek priprave za SAOP">
+    <ol>
+      <li class="@ProgressClass(1)"><span class="saop-items-progress-no">1</span><span><strong>Izberi artikle</strong><small>Ročno ali iz Excela</small></span></li>
+      <li class="@ProgressClass(2)"><span class="saop-items-progress-no">2</span><span><strong>Določi spremembe</strong><small>Izberi polja in vrednosti</small></span></li>
+      <li class="@ProgressClass(3)"><span class="saop-items-progress-no">3</span><span><strong>Preveri pripravljenost</strong><small>PIM pokaže blokade</small></span></li>
+      <li class="@ProgressClass(4)"><span class="saop-items-progress-no">4</span><span><strong>Oddaj v čakalno vrsto</strong><small>Po potrebi odobri</small></span></li>
+    </ol>
+  </nav>
+
   @if (Channel is { Exists: true, IsEnabled: true })
   {
-    <p class="message-state info-message" role="status">
-      Kanal je odprt: nov artikel gre <strong>POST @Channel.AddPath</strong>, sprememba
-      <strong>PATCH @Channel.UpdatePath</strong>@(Channel.NeedsApproval ? ". Sporočila čakajo na odobritev skupine." : ". Odobritev je samodejna — skupina odide brez dodatnega klika.")
-    </p>
+    <div class="message-state info-message saop-items-channel" role="status">
+      <strong>Povezava s SAOP je pripravljena.</strong>
+      @(Channel.NeedsApproval ? "Po pripravi bo treba skupino še odobriti." : "Po pripravi dodatna odobritev ni potrebna.")
+      <details>
+        <summary>Tehnične podrobnosti povezave</summary>
+        Nov artikel uporablja POST @Channel.AddPath, sprememba pa PATCH @Channel.UpdatePath.
+      </details>
+    </div>
   }
   else
   {
-    <p class="message-state warn-message" role="alert">
+    <div class="message-state warn-message" role="alert">
       @(Channel is { Exists: false }
-        ? "Za to podjetje ni integracijskega profila SAOP_PRODUCT. Sporočila ni mogoče uvrstiti v vrsto — baza ga zavrne z napako 51001."
-        : "Integracijski profil SAOP_PRODUCT je izklopljen. Vnos lahko pripraviš in si ogledaš dokument, uvrstitev v vrsto pa bo zavrnjena, dokler profila ne omogočiš.")
-    </p>
+        ? "Za izbrano podjetje povezava za artikle ni nastavljena. Podatke lahko pripraviš in preveriš, oddaja pa trenutno ni mogoča."
+        : "Povezava za artikle je trenutno izklopljena. Podatke lahko pripraviš in preveriš, oddaja pa trenutno ni mogoča.")
+      <details>
+        <summary>Tehnična podrobnost</summary>
+        Profil SAOP_PRODUCT manjka ali je izklopljen; zapisovalna pot zahtevo zavrne z napako 51001.
+      </details>
+    </div>
   }
 
   @* ============================ 1. ARTIKLI ============================ *@
   <section class="ui-card panel section-gap" aria-labelledby="saop-items-step1">
-    <h2 id="saop-items-step1">1. Katere artikle urejaš</h2>
+    <div class="saop-items-section-heading">
+      <span class="saop-items-step-number">1</span>
+      <div><h2 id="saop-items-step1">Izberi artikle</h2><p>Najprej izberi podjetje, nato dodaj eno ali več šifer.</p></div>
+    </div>
 
-    <div class="form-grid">
-      <label class="form-field" for="saop-items-org">
-        Podjetje
-        <select id="saop-items-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">
-          @foreach (var organization in Organizations)
-          {
-            <option value="@organization.OrganizationId">@organization.Name</option>
-          }
-        </select>
-      </label>
-      <label class="form-field saop-items-codes" for="saop-items-codes">
-        Šifre artiklov — ena na vrstico ali ločene z vejico
-        <textarea id="saop-items-codes" class="form-input" rows="3" @bind="CodesText"
-                  placeholder="NW.12603&#10;BA.BH85.00040&#10;NOVA.0001"></textarea>
-      </label>
-      <div class="form-action">
+    <label class="form-field saop-items-org" for="saop-items-org">
+      Podjetje
+      <select id="saop-items-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">
+        @foreach (var organization in Organizations)
+        {
+          <option value="@organization.OrganizationId">@organization.Name</option>
+        }
+      </select>
+      <span class="saop-items-control-help">Menjava podjetja počisti pripravljeno tabelo, ker so šifre vezane na podjetje.</span>
+    </label>
+
+    <div class="saop-items-entry-grid">
+      <section class="saop-items-entry-card" aria-labelledby="saop-manual-title">
+        <span class="saop-items-entry-kicker">Za nekaj artiklov</span>
+        <h3 id="saop-manual-title">Ročni vnos</h3>
+        <p>Prilepi šifre. Vsaka je lahko v svoji vrstici ali ločena z vejico.</p>
+        <label class="form-field" for="saop-items-codes">
+          Šifre artiklov
+          <textarea id="saop-items-codes" class="form-input" rows="4" @bind="CodesText"
+                    placeholder="NW.12603&#10;BA.BH85.00040&#10;NOVA.0001"></textarea>
+        </label>
         <button type="button" class="primary-button" disabled="@(Busy || CodesText.Trim().Length == 0)"
-                @onclick="AddCodesAsync">Dodaj v tabelo</button>
-      </div>
+                @onclick="AddCodesAsync">Preveri in dodaj artikle</button>
+      </section>
+
+      <section class="saop-items-entry-card" aria-labelledby="saop-excel-title">
+        <span class="saop-items-entry-kicker">Za več artiklov</span>
+        <h3 id="saop-excel-title">Uvoz iz Excela</h3>
+        <p>Uporabi predlogo, če želiš hkrati dodati šifre in spremembe več polj.</p>
+        <a class="saop-items-template-link" href="@TemplateHref">1. Prenesi Excel predlogo</a>
+        <label class="form-field" for="saop-items-file">
+          2. Izberi izpolnjeno datoteko XLSX
+          <InputFile id="saop-items-file" OnChange="OnFileAsync" accept=".xlsx" class="form-input" />
+        </label>
+        <p class="saop-items-control-help">
+          Prazna celica pomeni <strong>polja ne spremeni</strong>. Uvoz sam ne pošlje ničesar.
+        </p>
+      </section>
     </div>
 
-    <div class="saop-items-import">
-      <label class="form-field" for="saop-items-file">
-        Ali uvozi izpolnjeno predlogo (XLSX) — glava stolpca je ime polja SAOP ali njegov ključ
-        <InputFile id="saop-items-file" OnChange="OnFileAsync" accept=".xlsx" class="form-input" />
-      </label>
-      <p class="hint">
-        Prazna celica pomeni <strong>tega polja se ne dotakni</strong>, ne izprazni ga. Šifre iz
-        datoteke se dodajo v tabelo spodaj; ničesar ne pošlje sam.
-      </p>
-      @if (ImportNote is not null) { <p class="message-state @(ImportOk ? "info-message" : "error-message")" role="status">@ImportNote</p> }
-    </div>
+    @if (ImportNote is not null) { <p class="message-state @(ImportOk ? "info-message" : "error-message")" role="status">@ImportNote</p> }
 
     @if (Rows.Count > 0)
     {
-      <p class="saop-items-summary" role="status">
-        V tabeli je <strong>@Rows.Count</strong> artiklov:
+      <div class="saop-items-summary" role="status">
+        <strong>@Rows.Count @ArticleLabel(Rows.Count) v pripravi</strong>
         <PimChip Text="@($"{NewCount} novih (POST)")" Tone="@(NewCount > 0 ? "warn" : null)" Prefix="Novih: " />
         <PimChip Text="@($"{UpdateCount} sprememb (PATCH)")" Tone="good" Prefix="Sprememb: " />
         <button type="button" class="small-action" disabled="@Busy" @onclick="ClearRows">Počisti tabelo</button>
-      </p>
+      </div>
     }
   </section>
 
   @* ============================ 2. POLJA ============================= *@
-  <section class="ui-card panel section-gap" aria-labelledby="saop-items-step2">
-    <h2 id="saop-items-step2">2. Katera polja spreminjaš</h2>
-    <p class="hint">
-      Stolpec tabele nastane s klikom na polje. Polja z zvezdico so ob <strong>novem</strong>
-      artiklu obvezna. Polja brez gumba so v lasti SAOP ali pa jih PIM ne hrani — vanje se ne
-      piše, v dokumentu pa se vidijo (pri novem artiklu se vzamejo iz privzetkov).
-    </p>
+  @if (Rows.Count > 0)
+  {
+    <section class="ui-card panel section-gap" aria-labelledby="saop-items-step2">
+      <div class="saop-items-section-heading">
+        <span class="saop-items-step-number">2</span>
+        <div><h2 id="saop-items-step2">Določi, kaj želiš spremeniti</h2><p>Izbrana polja postanejo stolpci v tabeli. Priporočeni izbor je že pripravljen.</p></div>
+      </div>
 
-    @foreach (var section in SectionOrder)
-    {
-      var fields = Contract!.Fields.Where(field => field.Section == section).ToArray();
-      if (fields.Length == 0) { continue; }
-      <div class="saop-items-fieldgroup">
-        <span class="saop-items-fieldgroup-title">@SaopFieldLabels.Section(section)</span>
-        <div class="saop-items-chips">
-          @foreach (var field in fields)
-          {
-            @if (field.IsEditable)
-            {
-              <button type="button"
-                      class="saop-items-chip @(Columns.Contains(field.ElementName) ? "picked" : null)"
-                      aria-pressed="@(Columns.Contains(field.ElementName) ? "true" : "false")"
-                      title="@field.ElementName (@field.FieldKey)"
-                      @onclick="() => ToggleColumn(field)">
-                @field.Label@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
-              </button>
-            }
-            else
-            {
-              <span class="saop-items-chip locked" title="@Locked(field)">
-                @field.Label@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
-              </span>
-            }
-          }
+      <div class="saop-items-field-toolbar">
+        <label class="form-field" for="saop-items-field-search">
+          Poišči polje
+          <input id="saop-items-field-search" class="search-input" placeholder="Npr. naziv, EAN, DDV …"
+                 @bind="FieldSearch" @bind:event="oninput" />
+        </label>
+        <label class="saop-items-check">
+          <input type="checkbox" @bind="ShowLockedFields" />
+          <span><strong>Pokaži tudi polja, ki jih upravlja SAOP</strong><small>Ta polja so samo za vpogled in jih ni mogoče izbrati.</small></span>
+        </label>
+        <div class="saop-items-selected-count">
+          <span>Izbranih polj:</span><strong>@SelectedFields.Count</strong>
+          <button type="button" class="small-action" @onclick="ResetColumns">Ponastavi priporočeni izbor</button>
         </div>
       </div>
-    }
-  </section>
+
+      <p class="saop-items-legend">
+        Klikni polje, da ga dodaš ali odstraniš. <span class="saop-items-required">*</span> pomeni, da je polje obvezno samo pri novem artiklu.
+      </p>
+
+      @foreach (var section in SectionOrder)
+      {
+        var fields = VisibleFields(section);
+        if (fields.Count == 0) { continue; }
+        <div class="saop-items-fieldgroup">
+          <span class="saop-items-fieldgroup-title">@SaopFieldLabels.Section(section)</span>
+          <div class="saop-items-chips">
+            @foreach (var field in fields)
+            {
+              @if (field.IsEditable)
+              {
+                <button type="button"
+                        class="saop-items-chip @(Columns.Contains(field.ElementName) ? "picked" : null)"
+                        aria-pressed="@(Columns.Contains(field.ElementName) ? "true" : "false")"
+                        title="@field.ElementName (@field.FieldKey)"
+                        @onclick="() => ToggleColumn(field)">
+                  @field.Label@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
+                </button>
+              }
+              else
+              {
+                <span class="saop-items-chip locked" title="@Locked(field)">
+                  @field.Label <span class="saop-items-lock-label">upravlja SAOP</span>@if (field.IsAddMandatory) { <span class="saop-items-required" aria-label="obvezno pri novem artiklu">*</span> }
+                </span>
+              }
+            }
+          </div>
+        </div>
+      }
+
+      @if (!SectionOrder.Any(section => VisibleFields(section).Count > 0))
+      {
+        <p class="saop-items-no-results">Za »@FieldSearch« ni najdenega polja. Poskusi krajši izraz.</p>
+      }
+    </section>
+  }
 
   @* ============================ 3. VREDNOSTI ========================= *@
   @if (Rows.Count > 0)
   {
     <section class="ui-card data-card section-gap" aria-labelledby="saop-items-step3">
-      <h2 id="saop-items-step3" class="saop-items-cardtitle">3. Vrednosti</h2>
+      <div class="saop-items-cardtitle">
+        <div class="saop-items-section-heading">
+          <span class="saop-items-step-number">3</span>
+          <div><h2 id="saop-items-step3">Vnesi vrednosti in preveri pripravljenost</h2><p>Vpiši samo podatke, ki jih želiš spremeniti. Trenutna vrednost je prikazana pod vnosom.</p></div>
+        </div>
+        <PimChip Text="@($"{ChangeCount} vpisanih sprememb")" Tone="@(ChangeCount > 0 ? "good" : null)" Prefix="Vnos: " />
+      </div>
       <div class="table-scroll" role="region" tabindex="0" aria-label="Vrednosti polj po artiklih">
         <table class="data-table saop-items-grid">
-          <caption>Vsaka vrstica je en artikel; prazna celica pomeni, da polja ne spreminjamo</caption>
+          <caption>@Rows.Count @ArticleLabel(Rows.Count) · @SelectedFields.Count @FieldLabel(SelectedFields.Count) · prazna celica pomeni »ne spreminjaj«</caption>
           <thead>
             <tr>
               <th scope="col" class="saop-items-sticky">Šifra artikla</th>
@@ -235,7 +309,7 @@
                     }
                     @if (current is { Length: > 0 })
                     {
-                      <span class="saop-items-current" title="Trenutna vrednost v PIM">@current</span>
+                      <span class="saop-items-current" title="Trenutna vrednost v PIM">Trenutno: @current</span>
                     }
                   </td>
                 }
@@ -251,6 +325,7 @@
                   else if (plan.MissingMandatory.Count > 0)
                   {
                     <PimChip Text="@($"manjka {plan.MissingMandatory.Count}")" Tone="bad" Prefix="Dokument: " />
+                    <span class="saop-items-row-help">Dopolni: @MissingText(plan)</span>
                   }
                   else if (plan.ChangeCount == 0)
                   {
@@ -261,7 +336,7 @@
                     <PimChip Text="@($"{plan.ChangeCount} polj")" Tone="good" Prefix="Dokument: " />
                   }
                   <button type="button" class="small-action" @onclick="() => row.ShowXml = !row.ShowXml">
-                    @(row.ShowXml ? "Skrij XML" : "Poglej XML")
+                    @(row.ShowXml ? "Skrij tehnični predogled" : "Tehnični predogled XML")
                   </button>
                 </td>
               </tr>
@@ -303,35 +378,54 @@
   @if (Rows.Count > 0)
   {
     <section class="ui-card panel section-gap" aria-labelledby="saop-items-step4">
-      <h2 id="saop-items-step4">4. Uvrstitev v vrsto</h2>
-      <p role="status">
-        Pripravljenih je <strong>@ReadyCount</strong> artiklov s skupno <strong>@ChangeCount</strong> polji.
-        @if (BlockedCount > 0)
-        {
-          <span class="saop-items-blocked">Ustavljenih @BlockedCount (manjka obvezno polje ali napaka v vrednosti).</span>
-        }
-      </p>
-      <div class="table-actions">
-        <button type="button" class="primary-button" disabled="@(Busy || ChangeCount == 0)" @onclick="EnqueueAsync">
-          Uvrsti @ChangeCount sprememb v vrsto
-        </button>
+      <div class="saop-items-section-heading">
+        <span class="saop-items-step-number">4</span>
+        <div><h2 id="saop-items-step4">Oddaj pripravo v čakalno vrsto</h2><p>Pred oddajo še enkrat preveri povzetek. Artikli z napako ne bodo vključeni.</p></div>
+      </div>
+
+      <div class="saop-items-readiness" role="status" aria-label="Povzetek pripravljenosti">
+        <div><span>V pripravi</span><strong>@Rows.Count</strong><small>@ArticleLabel(Rows.Count)</small></div>
+        <div class="good"><span>Pripravljenih</span><strong>@ReadyCount</strong><small>brez blokad</small></div>
+        <div class="@(BlockedCount > 0 ? "bad" : null)"><span>Za dopolniti</span><strong>@BlockedCount</strong><small>@(BlockedCount == 1 ? "artikel" : "artiklov")</small></div>
+        <div><span>Sprememb</span><strong>@ChangeCount</strong><small>@FieldLabel(ChangeCount)</small></div>
+      </div>
+
+      @if (ChangeCount == 0)
+      {
+        <p class="message-state info-message">Vpiši vsaj eno novo vrednost. Prazna polja se ne pošljejo in obstoječih podatkov ne izbrišejo.</p>
+      }
+      @if (BlockedCount > 0)
+      {
+        <p class="message-state warn-message"><strong>@BlockedCount @ArticleLabel(BlockedCount) potrebuje dopolnitev.</strong> Razlog je v stolpcu »Dokument«; pripravljene vrstice lahko vseeno oddaš.</p>
+      }
+
+      <div class="saop-items-submit">
+        <div>
+          <button type="button" class="primary-button" disabled="@(!CanEnqueue)" @onclick="EnqueueAsync">
+            Pripravi @ChangeCount sprememb za pošiljanje
+          </button>
+          <p><strong>Ta gumb še ne pošlje v SAOP.</strong> Ustvari nadzorovano skupino v čakalni vrsti, kjer jo je mogoče preveriti in preklicati.</p>
+        </div>
         @if (Outcome is not null && Outcome.Queued > 0 && Channel?.NeedsApproval == true)
         {
-          <button type="button" class="small-action good-action" disabled="@Busy" @onclick="ApproveAsync">Odobri skupino @Outcome.OutboundBatchId</button>
-          <button type="button" class="small-action warn-action" disabled="@Busy" @onclick="CancelAsync">Prekliči skupino</button>
+          <div class="saop-items-approval">
+            <strong>Skupina čaka tvojo odločitev</strong>
+            <span>Odobri jo za predajo workerju ali jo varno prekliči.</span>
+            <div class="table-actions">
+              <button type="button" class="small-action good-action" disabled="@Busy" @onclick="ApproveAsync">Odobri skupino @Outcome.OutboundBatchId</button>
+              <button type="button" class="small-action warn-action" disabled="@Busy" @onclick="CancelAsync">Prekliči skupino</button>
+            </div>
+          </div>
         }
       </div>
-      <p class="hint">
-        Uvrstitev v vrsto ničesar ne pošlje. Dokument sestavi in odda odhodni worker; do takrat
-        je vsako sporočilo mogoče preklicati.
-      </p>
 
       @if (Outcome is not null)
       {
-        <p role="status" class="saop-items-outcome">
-          Skupina <strong>@Outcome.OutboundBatchId</strong> — uvrščenih <strong>@Outcome.Queued</strong>,
-          že v vrsti <strong>@Outcome.Duplicates</strong>, zavrnjenih <strong>@Outcome.Rejected</strong>.
-        </p>
+        <div role="status" class="saop-items-outcome">
+          <strong>Priprava je zabeležena v skupini @Outcome.OutboundBatchId.</strong>
+          <span>Uvrščenih @Outcome.Queued · že v vrsti @Outcome.Duplicates · zavrnjenih @Outcome.Rejected</span>
+          <a href="outbound">Odpri čakalno vrsto</a>
+        </div>
         @if (Outcome.Rejected > 0)
         {
           <PimTable Caption="Zavrnjene vrstice in razlog" Columns="RejectedColumns">
@@ -348,26 +442,29 @@
   }
 
   @* ============================ DNEVNIK ============================== *@
-  <section class="ui-card panel section-gap" aria-labelledby="saop-items-journal">
-    <h2 id="saop-items-journal">Dnevnik seje</h2>
-    <p class="hint">
-      Kaj se je zgodilo v tem oknu, po vrsti. Isti zapisi gredo v dnevnik strežnika
-      (<code>SaopItemWriteService</code>), da jih je mogoče najti tudi po zaprtju strani.
-    </p>
-    @if (Journal.Count == 0)
-    {
-      <p class="muted">Zaenkrat nič — dnevnik se napolni ob prvem dejanju.</p>
-    }
-    else
-    {
-      <ol class="saop-items-journal">
-        @foreach (var entry in Journal)
-        {
-          <li class="@entry.Tone"><span class="saop-items-time">@entry.At.ToString("HH:mm:ss")</span> @entry.Text</li>
-        }
-      </ol>
-    }
-  </section>
+  <details class="saop-items-session-details">
+    <summary><span>Dnevnik seje</span><small>@Journal.Count dogodkov · za podporo in preverjanje</small></summary>
+    <section class="panel" aria-labelledby="saop-items-journal">
+      <h2 id="saop-items-journal">Dnevnik seje</h2>
+      <p class="hint">
+        Kaj se je zgodilo v tem oknu, po vrsti. Isti zapisi gredo v dnevnik strežnika
+        (<code>SaopItemWriteService</code>), da jih je mogoče najti tudi po zaprtju strani.
+      </p>
+      @if (Journal.Count == 0)
+      {
+        <p class="muted">Zaenkrat nič — dnevnik se napolni ob prvem dejanju.</p>
+      }
+      else
+      {
+        <ol class="saop-items-journal">
+          @foreach (var entry in Journal)
+          {
+            <li class="@entry.Tone"><span class="saop-items-time">@entry.At.ToString("HH:mm:ss")</span> @entry.Text</li>
+          }
+        </ol>
+      }
+    </section>
+  </details>
 </PimState>
 
 @code {
@@ -419,10 +516,12 @@
   readonly List<JournalEntry> Journal = [];
 
   string CodesText = "";
+  string FieldSearch = "";
   bool Loading = true;
   bool Busy;
   bool FromWorkbook;
   bool ImportOk;
+  bool ShowLockedFields;
   string? LoadError;
   string? Error;
   string? Message;
@@ -435,8 +534,39 @@
   int NewCount => Rows.Count(row => row.Plan?.IsNew ?? !row.State.ExistsInSaop);
   int UpdateCount => Rows.Count - NewCount;
   int ChangeCount => Rows.Where(row => row.Plan?.CanSend == true).Sum(row => row.Plan!.ChangeCount);
+  int EnteredChangeCount => Rows.Sum(row => row.Plan?.ChangeCount ?? 0);
   int ReadyCount => Rows.Count(row => row.Plan?.CanSend == true);
   int BlockedCount => Rows.Count(row => row.Plan is { ChangeCount: > 0, CanSend: false });
+  bool CanEnqueue => !Busy && ChangeCount > 0 && Channel is { Exists: true, IsEnabled: true };
+  string CurrentOrganizationName => Organizations.FirstOrDefault(organization => organization.OrganizationId == OrganizationId)?.Name
+    ?? $"Podjetje {OrganizationId}";
+
+  int CurrentStep => Rows.Count == 0 ? 1
+    : EnteredChangeCount == 0 ? 2
+    : BlockedCount > 0 ? 3
+    : 4;
+
+  string ProgressClass(int step) => Outcome is { Queued: > 0 } && step == 4
+    ? "done"
+    : step < CurrentStep ? "done"
+    : step == CurrentStep ? "active"
+    : "pending";
+
+  IReadOnlyList<SaopItemFieldRow> VisibleFields(string section)
+  {
+    if (Contract is null) return [];
+    return Contract.Fields
+      .Where(field => field.Section == section)
+      .Where(field => field.IsEditable || ShowLockedFields)
+      .Where(field => string.IsNullOrWhiteSpace(FieldSearch)
+        || field.Label.Contains(FieldSearch, StringComparison.CurrentCultureIgnoreCase)
+        || field.ElementName.Contains(FieldSearch, StringComparison.OrdinalIgnoreCase)
+        || (field.FieldKey?.Contains(FieldSearch, StringComparison.OrdinalIgnoreCase) ?? false))
+      .ToArray();
+  }
+
+  static string ArticleLabel(int count) => count == 1 ? "artikel" : count == 2 ? "artikla" : count is 3 or 4 ? "artikli" : "artiklov";
+  static string FieldLabel(int count) => count == 1 ? "polje" : count == 2 ? "polji" : "polj";
 
   string TemplateHref
   {
@@ -473,9 +603,7 @@
 
     // Privzeti stolpci so tisti, brez katerih nov artikel ne more nastati, in naziv — to je
     // najkrajša pot do prvega uporabnega dokumenta. Vse ostalo si uporabnik doda sam.
-    Columns.Clear();
-    foreach (var field in Contract.Fields.Where(field => field.IsEditable && (field.IsAddMandatory || field.ElementName is "ItemTitle1" or "ItemEANCode")))
-      Columns.Add(field.ElementName);
+    SetRecommendedColumns();
 
     Note($"Naložena pogodba: {Contract.Fields.Count} elementov, {Contract.Fields.Count(field => field.IsEditable)} pisljivih. "
       + (Channel is { IsEnabled: true } ? "Kanal je omogočen." : "Kanal ni omogočen."),
@@ -569,6 +697,22 @@
   }
 
   /* --- polja in vrednosti ----------------------------------------------- */
+
+  void SetRecommendedColumns()
+  {
+    Columns.Clear();
+    if (Contract is null) return;
+    foreach (var field in Contract.Fields.Where(field => field.IsEditable && (field.IsAddMandatory || field.ElementName is "ItemTitle1" or "ItemEANCode")))
+      Columns.Add(field.ElementName);
+  }
+
+  void ResetColumns()
+  {
+    SetRecommendedColumns();
+    FieldSearch = "";
+    Recompute();
+    Note("Izbor polj je ponastavljen na priporočena polja za nov artikel.", "info");
+  }
 
   void ToggleColumn(SaopItemFieldRow field)
   {

@@ -283,7 +283,9 @@ nastane, ko naslednja sinhronizacija iz SAOP vrne isto vrednost.
 
 Nov artikel in sprememba obstoječega sta ista pot. Za vsako šifro PIM sam ugotovi: šifre
 **ni** v katalogu → nov artikel (**POST / ADD**); šifra **je** → sprememba (**PATCH**).
-Podrobni koraki so v postopku 8.
+Na vrhu je vedno viden napredek v štirih korakih in stanje povezave. Ročni vnos ter uvoz
+iz Excela sta ločeni izbiri; po dodajanju artiklov se pokažejo samo naslednji potrebni
+koraki. Podrobni koraki so v postopku 8.
 
 ---
 
@@ -609,23 +611,26 @@ Datoteka je po podjetju in vsebuje ločene vire (tu se nič ne sešteva).
 
 **Uvoz (`/saop/artikli`)**
 
-4. Klikni **Excel → čakalna lista SAOP** (odpre `/saop/artikli`). Na vrhu piše, ali je kanal
-   odprt in ali sporočila čakajo odobritev. Če piše, da profil SAOP_PRODUCT ni omogočen ali
-   ne obstaja, uvrstitev ne bo mogoča — obrni se na skrbnika.
-5. **1. Katere artikle urejaš**: izberi **Podjetje**. Nato bodisi vpiši šifre (ena na vrstico
-   ali z vejico) in klikni **Dodaj v tabelo**, bodisi pri **Ali uvozi izpolnjeno predlogo
-   (XLSX)** izberi datoteko. Vrstice se dodajo v tabelo; nič se še ne pošlje.
+4. Klikni **Excel → čakalna lista SAOP** (odpre `/saop/artikli`). V kartici nad koraki piše,
+   za katero podjetje delaš in ali je povezava s SAOP pripravljena. Če ni, lahko pripravo
+   izpolniš in preveriš, oddaja pa ne bo mogoča — obrni se na skrbnika.
+5. **1. Izberi artikle**: izberi **Podjetje**. Za nekaj šifer uporabi kartico **Ročni vnos**,
+   jih prilepi in klikni **Preveri in dodaj artikle**. Za več artiklov uporabi kartico
+   **Uvoz iz Excela**: prenesi predlogo in izberi izpolnjeno datoteko XLSX. Nič se še ne pošlje.
 6. Pod tabelo piše, koliko je artiklov: **N novih (POST)** = šifer še ni v katalogu →
    dodajanje (**ADD**); **N sprememb (PATCH)** = obstoječi artikli → sprememba.
    **Počisti tabelo** začne znova.
-7. **2. Katera polja spreminjaš**: klik na polje ga doda kot stolpec. Polja z zvezdico so
-   **obvezna pri novem artiklu**. Polja brez gumba so v lasti SAOP ali jih PIM ne hrani.
-8. **3. Vrednosti**: vpiši vrednosti po artiklih. Vrstica **Velja za vse** vpiše isto
-   vrednost vsem. Pri vsakem artiklu vidiš **Metodo** (POST/PATCH) in lahko odpreš
-   **Dokument** — natanko to, kar bo poslano.
-9. **4. Uvrstitev v vrsto**: piše »Pripravljenih N artiklov s skupno N polji«; ustavljeni so
-   tisti z manjkajočim obveznim poljem ali napačno vrednostjo. Klikni **Uvrsti N sprememb v
-   vrsto**.
+7. **2. Določi, kaj želiš spremeniti**: priporočena polja so že izbrana. Klik na polje ga
+   doda ali odstrani kot stolpec; z iskanjem hitro najdeš pravo polje. Polja z zvezdico so
+   **obvezna pri novem artiklu**. Polja v lasti SAOP so privzeto skrita; za vpogled označi
+   **Pokaži tudi polja, ki jih upravlja SAOP**. Izbrati jih ni mogoče.
+8. **3. Vnesi vrednosti in preveri pripravljenost**: vpiši vrednosti po artiklih. Vrstica
+   **Velja za vse** vpiše isto vrednost vsem. Pri vsakem artiklu vidiš **Metodo** (POST/PATCH),
+   razlog zanjo, trenutno vrednost in morebitna manjkajoča polja. **Tehnični predogled XML**
+   je na voljo za preverjanje, ni pa potreben za običajno delo.
+9. **4. Oddaj pripravo v čakalno vrsto**: povzetek loči vse artikle, pripravljene in tiste za
+   dopolnitev. Klikni **Pripravi N sprememb za pošiljanje**. Gumb še ne pošlje v SAOP, temveč
+   ustvari nadzorovano skupino v čakalni vrsti.
 
 **Odobritev in pošiljanje**
 
@@ -638,7 +643,8 @@ Datoteka je po podjetju in vsebuje ločene vire (tu se nič ne sešteva).
     Odgovor ERP je v `/saop/zgodovina`.
 13. Če sporočilo pade v **Napake**, na `/saop` klikni **Pošlji znova** pri sporočilu ali
     **Pošlji znova vse neuspele** pri skupini. Razlog zavrnitve je v tabeli **Zavrnjene
-    vrstice in razlog** takoj po uvrstitvi in v **Dnevniku seje** na dnu strani.
+    vrstice in razlog** takoj po uvrstitvi. Zloženi **Dnevnik seje** na dnu odpri samo, ko
+    potrebuješ podrobnosti za preverjanje ali podporo.
 
 ### Postopek 9 — Validacija: kaj je obvezno in kaj blokira
 

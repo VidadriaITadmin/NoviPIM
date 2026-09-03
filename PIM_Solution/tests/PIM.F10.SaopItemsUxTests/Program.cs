@@ -138,6 +138,37 @@ var saopPage = File.ReadAllText(Path.Combine(pages, "Saop.razor"));
 Assert(saopPage.Contains("saop/artikli", StringComparison.Ordinal),
   "Do vnosa artiklov mora biti mogoce priti z razdelilne strani SAOP.");
 
+// --- 13. Voden in razumljiv delovni potek ---------------------------------
+Assert(markup.Contains("aria-label=\"Napredek priprave za SAOP\"", StringComparison.Ordinal),
+  "Uporabnik mora ves cas videti, v katerem koraku priprave je.");
+foreach (var step in new[] { "Izberi artikle", "Določi spremembe", "Preveri pripravljenost", "Oddaj v čakalno vrsto" })
+  Assert(markup.Contains(step, StringComparison.Ordinal), "V napredku manjka uporabnisko poimenovan korak: " + step + ".");
+Assert(markup.Contains("saop-items-entry-card", StringComparison.Ordinal)
+  && markup.Contains("Ročni vnos", StringComparison.Ordinal)
+  && markup.Contains("Uvoz iz Excela", StringComparison.Ordinal),
+  "Rocni vnos in Excel morata biti predstavljena kot dve jasni vstopni poti.");
+
+Assert(markup.Contains("id=\"saop-items-field-search\"", StringComparison.Ordinal)
+  && markup.Contains("@bind:event=\"oninput\"", StringComparison.Ordinal),
+  "Dolg seznam polj potrebuje sprotno iskanje.");
+Assert(markup.Contains("ShowLockedFields", StringComparison.Ordinal)
+  && markup.Contains("Pokaži tudi polja, ki jih upravlja SAOP", StringComparison.Ordinal),
+  "Nepisljiva polja ne smejo ustvarjati hrupa, morajo pa ostati dosegljiva na zahtevo.");
+Assert(markup.Contains("Izbranih polj:", StringComparison.Ordinal),
+  "Uporabnik mora videti obseg tabele, preden se odpre siroka mreza.");
+
+Assert(markup.Contains("Ta gumb še ne pošlje v SAOP", StringComparison.Ordinal),
+  "Glavno dejanje mora neposredno povedati, da gre najprej samo v cakalno vrsto.");
+Assert(markup.Contains("<details class=\"saop-items-session-details\"", StringComparison.Ordinal),
+  "Dnevnik seje mora ostati dosegljiv, vendar ne sme prevladati v osnovnem poteku.");
+Assert(markup.Contains("Tehnični predogled XML", StringComparison.Ordinal),
+  "XML mora biti jasno oznacen kot tehnicna podrobnost, ne kot uporabnikov naslednji korak.");
+
+Assert(css.Contains(".saop-items-progress", StringComparison.Ordinal)
+  && css.Contains(".saop-items-entry-grid", StringComparison.Ordinal)
+  && css.Contains("@media (max-width: 760px)", StringComparison.Ordinal),
+  "Novi potek potrebuje lastno odzivno postavitev za napredek in vstopni poti.");
+
 Console.WriteLine("F10 SAOP artikli contract PASS.");
 
 static void Assert(bool condition, string message)

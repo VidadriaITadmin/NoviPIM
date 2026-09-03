@@ -254,6 +254,19 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-03 — uporabniku prijaznejši potek `/saop/artikli` (Codex)
+
+- **[INTRANET] Končano.** Stran vodi skozi štiri vidne korake, loči ročni vnos in Excel,
+  po dodajanju artiklov ponudi iskana pisljiva polja, zaklenjena polja SAOP skrije do zahteve
+  ter pred oddajo pokaže pripravljene in blokirane artikle. Glavno dejanje izrecno pove, da
+  zapis še ne gre v SAOP; XML in dnevnik sta zloženi tehnični podrobnosti. Zapisovalna pot,
+  vlogi `ADMIN,CATALOG_EDITOR` in samodejna izbira POST/PATCH so ostali isti.
+- **Dokaz:** RED `scripts/run_tests.ps1 -Filter F10.SaopItemsUxTests` = izhod 1, manjkala je
+  orientacija po korakih. GREEN: isti filter = 1/0/0; `scripts/run_tests.ps1 -Filter F10` =
+  15/0/0; polni `scripts/run_tests.ps1` = **60 uspešnih, 0 preskočenih, 0 padlih**,
+  `Build OK`, izhod 0; ločeni `dotnet build PIM_Solution\PIM.sln` = 0 opozoril, 0 napak,
+  izhod 0.
+
 ### 2026-09-03 — celoten cikel SAOP → PIM → splet (Claude, veja `feature/izhodi-erp-01-saop-polji`)
 
 Zahteva uporabnika 2026-09-02 (pregled celotnega PIM, manjkajoče do »popolnosti«, delujoč sistem

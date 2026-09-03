@@ -2,6 +2,15 @@
 
 Posodobljeno: 2026-09-03
 
+## Intranet — voden vnos artiklov v SAOP 2026-09-03
+
+`/saop/artikli` ima štiristopenjski potek **Izberi artikle → Določi spremembe → Preveri
+pripravljenost → Oddaj v čakalno vrsto**. Ročni vnos in uvoz iz Excela sta ločena, dolgi
+register polj ima iskanje, nepisljiva polja SAOP so privzeto skrita, pred oddajo pa je viden
+povzetek pripravljenih in blokiranih artiklov. XML ter dnevnik seje ostajata dosegljiva kot
+zloženi tehnični podrobnosti. Zapisovalna pot, vloge in samodejna izbira POST/PATCH se niso
+spremenile.
+
 ## Celoten cikel SAOP → PIM → splet je postavljen — 2026-09-03
 
 Uporabnikova zahteva 2026-09-02 (»jutri zjutraj delujoč sistem brez napak in brez slabih podatkov
