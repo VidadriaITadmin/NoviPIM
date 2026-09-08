@@ -286,6 +286,30 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-11 (drugi del): `/kakovost` bere podjetja vzporedno (Claude Code)
+
+Branja po podjetjih so med seboj neodvisna, tekla pa so zaporedno: štiri podjetja × ~490 ms je bilo
+blizu dveh sekund golega čakanja. Znotraj podjetja zaporedje ostane, ker obseg in vrzeli potrebujeta
+seznam profilov; podjetja odslej tečejo vzporedno. Vsak klic si odpre svojo povezavo (`PimDb`), zato
+skupnega stanja ni, stanje strani pa se spremeni šele, ko so vsi odgovori tu.
+
+Dokaz (strežniški izris, dva zagona zapored):
+
+| Stran | Pred P2-11 | Po migraciji 183 | Po vzporejanju |
+|---|---:|---:|---:|
+| `/nadzorna-plosca` | 8,84 / 7,08 s | 4,47 / 4,69 s | **3,45 / 2,76 s** |
+| `/kakovost` | 4,65 / 4,43 s | 4,59 / 4,67 s | **3,94 / 3,78 s** |
+| `/zajem` | 8,55 / 8,63 s | 8,56 / 8,70 s | 8,73 / 8,48 s |
+| `/izdelki` | 2,34 / 2,26 s | 2,29 / 2,32 s | 2,24 / 2,23 s |
+
+`scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+
+**Poštena omejitev meritve:** to so časi strežniškega izrisa (`Invoke-WebRequest`), ne časi v
+brskalniku, ki jih navaja pregled (`/zajem` 21,7 s). Primerljivi so med sabo, ne s pregledom.
+Dodatna meritev je pokazala, da `TOP (@Take)` **ni** strošek — `@Take = 200` in `@Take = 0` sta
+enaka (~610 ms) — torej je pridobitev pri plošči prišla iz količine prenesenih vrstic, ne iz sortiranja.
+
+
 ### 2026-09-09 — P2-11: nadzorna plošča 8,84 s → 4,47 s (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §5. Najprej meritev, šele nato popravek.

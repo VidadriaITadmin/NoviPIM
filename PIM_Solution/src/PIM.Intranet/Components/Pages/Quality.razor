@@ -360,28 +360,33 @@
       Trees = await Tree.GetTreeCodesAsync();
       CategoryTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
 
-      var profileGroups = new List<IReadOnlyList<ValidationProfileRow>>();
-      var summaryGroups = new List<IReadOnlyList<ValidationLayerSummary>>();
-      var gapGroups = new List<IReadOnlyList<FieldGapRow>>();
-      var plans = new List<UnblockPlan>();
-      var ingests = new List<IngestSummary>();
-
-      foreach (var organization in Organizations)
+      /* P2-11: branja so tekla zaporedno, podjetje za podjetjem. Merjeno 2026-09-09 je bilo
+         GetQualityOverview 490 ms na podjetje, torej blizu dveh sekund samo cakanja, ceprav so
+         podjetja med seboj neodvisna. Znotraj enega podjetja zaporedje ostane — obseg in vrzeli
+         potrebujeta seznam profilov — podjetja pa tecejo vzporedno. Vsak klic si odpre svojo
+         povezavo (PimDb), zato skupnega stanja ni; stanje strani se spremeni sele, ko so vsi
+         odgovori tu. */
+      var perOrganization = await Task.WhenAll(Organizations.Select(async organization =>
       {
         var profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
-        profileGroups.Add(profiles);
-        summaryGroups.Add(await Governance.GetValidationLayerSummariesAsync(organization.OrganizationId, profiles));
-        gapGroups.Add(await Governance.GetFieldGapsAsync(organization.OrganizationId, profiles));
+        var summaries = await Governance.GetValidationLayerSummariesAsync(organization.OrganizationId, profiles);
+        var gaps = await Governance.GetFieldGapsAsync(organization.OrganizationId, profiles);
         // Nacrta odblokiranja stran ne rise vec (uporabnik ga je 2026-08-28 zavrnil kot
         // nesmiselnega), potrebni pa sta stevili aktivnih izdelkov in izdelkov s tezavo —
         // brez njiju delezi v tabeli vrzeli nimajo imenovalca.
-        try { plans.Add(await Governance.GetUnblockPlanAsync(organization.OrganizationId)); } catch { }
-        try { ingests.Add(await Pipeline.GetSummaryAsync(organization.OrganizationId)); } catch { }
-      }
+        UnblockPlan? plan = null;
+        try { plan = await Governance.GetUnblockPlanAsync(organization.OrganizationId); } catch { }
+        IngestSummary? ingest = null;
+        try { ingest = await Pipeline.GetSummaryAsync(organization.OrganizationId); } catch { }
+        return (Profiles: profiles, Summaries: summaries, Gaps: gaps, Plan: plan, Ingest: ingest);
+      }));
 
-      Profiles = MergeProfiles(profileGroups);
-      Summaries = MergeSummaries(summaryGroups);
-      Gaps = MergeGaps(gapGroups);
+      var plans = perOrganization.Where(row => row.Plan is not null).Select(row => row.Plan!).ToList();
+      var ingests = perOrganization.Where(row => row.Ingest is not null).Select(row => row.Ingest!).ToList();
+
+      Profiles = MergeProfiles(perOrganization.Select(row => row.Profiles).ToList());
+      Summaries = MergeSummaries(perOrganization.Select(row => row.Summaries).ToList());
+      Gaps = MergeGaps(perOrganization.Select(row => row.Gaps).ToList());
       Totals = plans.Count == 0 ? null : new(
         plans.Sum(plan => plan.ProductsWithIssue),
         plans.Sum(plan => plan.ActiveProducts));

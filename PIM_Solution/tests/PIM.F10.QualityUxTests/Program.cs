@@ -152,6 +152,18 @@ var qualityCss = Read(Path.Combine(pages, "Quality.razor.css"));
 Assert(qualityCss.Contains(".lever-note", StringComparison.Ordinal),
   "Ocena mora imeti svoj slog; izolirani slog Blazorja velja samo za oznako svoje komponente.");
 
+
+/* ─── Hitrost strani kakovosti (P2-11) ────────────────────────────────────────
+   Branja po podjetjih so neodvisna, tekla pa so zaporedno: pri stirih podjetjih in 490 ms na
+   klic je bilo to blizu dveh sekund golega cakanja. Znotraj podjetja zaporedje ostane, ker
+   obseg in vrzeli potrebujeta seznam profilov. */
+Assert(quality.Contains("Task.WhenAll(Organizations.Select", StringComparison.Ordinal),
+  "Branja po podjetjih morajo teci vzporedno; zaporedna zanka je bila merjeno ozko grlo strani.");
+Assert(!Regex.IsMatch(quality, @"foreach \(var organization in Organizations\)\s*\{\s*var profiles = await"),
+  "Zaporedna zanka po podjetjih se ne sme vrniti.");
+Assert(quality.Contains("GetValidationLayerSummariesAsync(organization.OrganizationId, profiles)", StringComparison.Ordinal),
+  "Znotraj podjetja mora obseg se vedno dobiti seznam profilov, sicer bi vzporednost spremenila izid.");
+
 Console.WriteLine("F10 quality UX contract PASS.");
 
 static string Read(string path)
