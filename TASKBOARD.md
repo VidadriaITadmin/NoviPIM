@@ -220,6 +220,20 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   nalogovno usmerjenih sklopov, jasen prikaz blokad in odprtih nalog ter manj tehnična
   predstavitev ključnih podatkov; obstoječe bralne in zapisovalne poti ostanejo nespremenjene.
 
+- **[BAZA → INTRANET] P0 iz pregleda 2026-09-08: vloge na zapisovalni meji, padec zgodovine SAOP,
+  seja onemogočenega računa, stran brez dostopa** — kdo: Claude Code — ozemlje: zaporedno
+  BAZA → INTRANET — začeto 2026-09-08. Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8, P0 1–4
+  (ugotovitve A1, A2, A3, A4, A5).
+
+  **BAZA je KONČANA:** migracija `181_LocalUserSecurityStamp.sql` — prvi zagon migratorja
+  `Uporabljena migracija: 181_LocalUserSecurityStamp.sql`, drugi `Preskočena že uporabljena
+  migracija`, `--verify` = »Preverjanje F0–F10 baze je uspešno.« Doda `sec.LocalUser.SecurityStamp`,
+  sprožilca `sec.TR_LocalUser_SecurityStamp` in `sec.TR_LocalUserRole_SecurityStamp` ter
+  `sec.GetUserSecurityState`. Ročna preverba nad začasnim računom `qa_stamp_probe` (sam ustvarjen in
+  pobrisan): sprememba imena žiga ne zavrti, `IsEnabled = 0` ga zavrti, dodana vloga ga zavrti.
+  `--verify` je bilo pognano nad mapo s **sledenimi** migracijami plus 181; nad delovno mapo pade
+  na tujih necommitanih `153/154/169/172/173`, kar je znana postavka P1-9 istega pregleda.
+
 ## BLOKIRANO
 
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**

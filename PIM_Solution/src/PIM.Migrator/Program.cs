@@ -502,6 +502,12 @@ static async Task VerifyF10Async(SqlConnection connection)
   foreach (var expectedObject in new[] { "sec.CreateLocalUser", "sec.CreateDomainUser" })
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F10 postopek {expectedObject}.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sec.NavigationItem itemValue INNER JOIN sec.NavigationItemRole itemRole ON itemRole.NavigationItemId=itemValue.NavigationItemId INNER JOIN sec.Role roleValue ON roleValue.RoleId=itemRole.RoleId WHERE itemValue.ItemCode=N'USERS' AND itemValue.Route=N'/system/uporabniki' AND roleValue.RoleCode=N'ADMIN';", null, 1, "Manjka administratorska F10 navigacija uporabnikov.");
+
+  // Zig seje (migracija 181). Brez stolpca, obeh sprozilcev in bralnega postopka onemogocen
+  // racun ostane prijavljen do izteka piskotka; to je bila ugotovitev A3 pregleda 2026-09-08.
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'sec.LocalUser') AND name=N'SecurityStamp';", null, 1, "Manjka stolpec sec.LocalUser.SecurityStamp za preverjanje seje.");
+  foreach (var expectedObject in new[] { "sec.TR_LocalUser_SecurityStamp", "sec.TR_LocalUserRole_SecurityStamp", "sec.GetUserSecurityState" })
+    await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id=OBJECT_ID(@value);", expectedObject, 1, $"Manjka F10 objekt {expectedObject}.");
 }
 
 static async Task AssertCountAsync(SqlConnection connection, string sql, string? value, int expected, string failureMessage)
