@@ -286,6 +286,35 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-12 in del P2-16: ozka širina, tabela čez rob, nedosegljive slike (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`, ugotovitvi **A6** in **A9**.
+
+- **Iskalno polje pri 800 px** (`Products.razor.css`): pod 900 px `.toolbar-row` postane stolpec,
+  zato je `flex: 1 1 22rem` pomenil **višino** 22 rem — kartica iskanja je bila visoka pol zaslona.
+  V ozkem pogledu polje odslej nima osnove (`flex: 0 0 auto`); širok pogled ostane nespremenjen.
+- **Tabela čez desni rob** (`app.css`): drsnik je obstajal, manjkal je znak, da je še vsebina.
+  Senca na robu je narejena samo s CSS — dva preliva sta pripeta na vsebino (`local`) in dva na
+  okvir (`scroll`), zato se pokaže natanko takrat, kadar je desno še kaj, in izgine na koncu.
+  Drsno območje je dosegljivo s tipkovnico, zato je dobilo tudi viden fokus.
+- **Vrstica filtrov odrezana** (`app.css`): `.toolbar` je bil `display: flex` brez `flex-wrap`.
+- **Surov izbirnik na `/splet`** (`Web.razor`): `class="filter-select"`.
+- **Bele sličice na `/mediji`** (`Media.razor`): »slike ni« in »slike ni bilo mogoče naložiti« sta
+  bili ista veja. Neuspešno naložen medij ima odslej svoj prikaz z imenom gostitelja, ki ne
+  odgovarja — bela sličica je bila past, videti je bila kot izdelek brez medija.
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Pogodbe so v `PIM.F10.ProductsUxTests` (ozka širina, `flex-wrap`, senca, fokus, izbirnik) in
+`PIM.F10.MediaUxTests` (ločena veja za nedosegljiv medij).
+
+**Kar iz A6, A7 in A8 ostaja odprto in zakaj:** odjava pod 900 px, preklop menija kot
+`<button aria-expanded>`, prekrivanje napisa na `/pravila/nazivi` in tretje stanje zvonca so v
+`MainLayout.razor`, `MainLayout.razor.css` in `TitleRules.razor`. Te tri datoteke ima trenutno
+odprte **druga seja** (necommitane spremembe, med njimi prav prenova menija in zvonca), po
+`AGENTS.md` §7 pa vzporedni ozemlji ne smeta segati v iste datoteke. Prevzame naj jih ta seja ali
+pa počakajo, da svoje delo commita.
+
+
 ### 2026-09-09 — P1-7: ocena učinka skupinskega posega na `/kakovost` (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §3.3 / §8 P1-7 — »ob vsakem polju gumb ‚Popravi

@@ -69,7 +69,9 @@ h1:focus { outline: none; }
 
 /* --- Kartice in orodna vrstica ----------------------------------------- */
 .ui-card { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius); box-shadow: var(--pim-shadow); }
-.toolbar { align-items: center; display: flex; gap: .75rem; margin-bottom: 1.25rem; padding: 1rem 1.25rem; }
+/* A9, pregled 2026-09-08: vrstica filtrov je bila na /nastavitve/kategorije odrezana desno.
+   Vzrok ni bilo stevilo filtrov, ampak manjkajoc flex-wrap — vrstica se ni imela kam preliti. */
+.toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1.25rem; padding: 1rem 1.25rem; }
 .search-input, .filter-select { background: var(--pim-surface); border: 1px solid var(--pim-border-strong); border-radius: var(--pim-radius-sm); color: var(--pim-text-strong); font: inherit; font-size: .8125rem; min-height: var(--pim-control-height); padding: .45rem .7rem; }
 .search-input { min-width: 280px; }
 .filter-select { min-width: 150px; }
@@ -86,7 +88,24 @@ h1:focus { outline: none; }
 .card-toolbar .filter-select, .card-toolbar .form-input { max-width: 13rem; }
 .card-toolbar .search-input { max-width: 20rem; }
 .card-toolbar .result-count { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
-.table-scroll { max-width: 100%; overflow: auto; }
+/* A9, pregled 2026-09-08: tabela je tekla cez desni rob brez znaka, da je se vsebina — stolpca
+   »Tezave« in »Stanje« sta bila odrezana in uporabnik ni vedel, da se da drsati. Senca na robu je
+   narejena samo s CSS: dva preliva sta pripeta na vsebino (background-attachment: local) in dva na
+   okvir (scroll), zato se senca pokaze natanko takrat, kadar je na tej strani se kaj vsebine, in
+   izgine, ko prideš do konca. Brez JavaScripta in brez merjenja sirin. */
+.table-scroll {
+  background:
+    linear-gradient(to right, var(--pim-surface) 30%, rgba(255, 255, 255, 0)) left center / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--pim-surface) 30%, rgba(255, 255, 255, 0)) right center / 2.5rem 100% no-repeat local,
+    linear-gradient(to right, rgba(15, 23, 42, .14), rgba(255, 255, 255, 0)) left center / .85rem 100% no-repeat scroll,
+    linear-gradient(to left, rgba(15, 23, 42, .14), rgba(255, 255, 255, 0)) right center / .85rem 100% no-repeat scroll;
+  max-width: 100%;
+  overflow: auto;
+}
+
+/* Drsno obmocje mora biti dosegljivo s tipkovnico; PimTable mu daje tabindex="0" in vlogo region,
+   fokus pa je bil doslej neviden. */
+.table-scroll:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
 .data-table { border-collapse: collapse; font-size: .875rem; width: 100%; }
 .data-table caption { background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border); color: var(--pim-text-strong); font-size: .875rem; font-weight: 600; padding: .85rem; text-align: left; }
 .data-table th { background: #f8fafc; border-bottom: 1px solid var(--pim-border); color: #64748b; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: .65rem .85rem; text-align: left; text-transform: uppercase; white-space: nowrap; }

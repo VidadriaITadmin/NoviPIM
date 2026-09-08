@@ -10,7 +10,7 @@
 <PimPage Title="Izhod na splet" Subtitle="Datoteke, ki gredo na spletna mesta: kaj je v njih, kaj ne pride skozi in zakaj." />
 
 <div class="filter-bar section-gap">
-  <label class="field-control"><span>Spletno mesto</span><select value="@SelectedSite" @onchange="SiteChangedAsync"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
+  <label class="field-control"><span>Spletno mesto</span><select class="filter-select" value="@SelectedSite" @onchange="SiteChangedAsync"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
   <div class="page-actions"><a href="splet/izvoz">Pripravi izvoz</a></div>
 </div>
 

@@ -306,6 +306,21 @@
           </span>
         </object>
       }
+      else if (Failed.Contains(row.Key))
+      {
+        @* A9, pregled 2026-09-08: sličice so bile bele in nič ni povedalo, zakaj. »Slike ni« in
+           »slike ni bilo mogoče naložiti« sta dve različni stvari — prva je manjkajoč podatek,
+           druga nedosegljiv strežnik dobavitelja. Ime gostitelja pove, kateri. *@
+        <span class="preview-fallback preview-broken @(small ? "small" : null)"
+              title="@($"Slike s strežnika {HostOf(row.Url)} ni bilo mogoče naložiti.")">
+          <span class="broken-mark" aria-hidden="true">!</span>
+          @if (!small)
+          {
+            <span class="preview-extension">ni dosegljiva</span>
+            <span class="preview-host">@HostOf(row.Url)</span>
+          }
+        </span>
+      }
       else
       {
         <span class="preview-fallback @(small ? "small" : null)">
@@ -318,6 +333,10 @@
       }
     </span>
   };
+
+  /// <summary>Gostitelj medija; ob neveljavnem naslovu vrne pošteno »neznan vir«.</summary>
+  static string HostOf(string? url) =>
+    Uri.TryCreate(url, UriKind.Absolute, out var parsed) ? parsed.Host : "neznan vir";
 
   RenderFragment Address(MediaUrl url) => __builder =>
   {

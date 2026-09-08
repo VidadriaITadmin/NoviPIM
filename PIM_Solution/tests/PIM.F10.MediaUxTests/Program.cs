@@ -131,6 +131,19 @@ Assert(urlPolicy.Contains("public static string? VisibleNote(MediaUrl url)", Str
 Assert(urlPolicy.Contains("AddedHttpsNote", StringComparison.Ordinal) && urlPolicy.Contains("MediaUrl.Note", StringComparison.Ordinal),
   "Opomba mora ostati v modelu za filtriranje, tudi ce se ne izpise.");
 
+
+/* ─── Nedosegljiva slika ni isto kot manjkajoca (A9, pregled 2026-09-08) ──────
+   Slicice so bile bele in nic ni povedalo, zakaj; videti je bilo, kot da izdelek medija nima. */
+var mediaPage = File.ReadAllText(Path.Combine(pages, "Media.razor"));
+Assert(mediaPage.Contains("Failed.Contains(row.Key)", StringComparison.Ordinal)
+    && mediaPage.Contains("preview-broken", StringComparison.Ordinal),
+  "Medij, ki se ni nalozil, mora imeti svoj prikaz in ne sme pasti v isto vejo kot medij brez naslova.");
+Assert(mediaPage.Contains("HostOf(", StringComparison.Ordinal),
+  "Nedosegljiva slika mora povedati, kateri streznik ne odgovarja.");
+var mediaCss = File.ReadAllText(Path.Combine(pages, "Media.razor.css"));
+Assert(mediaCss.Contains(".preview-fallback.preview-broken", StringComparison.Ordinal),
+  "Nedosegljiv medij mora biti viden tudi brez besedila; bela slicica je bila past.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 

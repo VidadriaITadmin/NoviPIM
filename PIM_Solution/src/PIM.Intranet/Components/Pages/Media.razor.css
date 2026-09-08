@@ -140,3 +140,12 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
   .media-kinds .result-count { margin-left: 0; width: 100%; }
   .media-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); padding: .85rem; }
 }
+
+/* A9: nedosegljiva slika ni isto kot manjkajoča. Bela sličica brez besede je bila past — videti je
+   bila kot izdelek brez medija, čeprav medij obstaja in strežnik dobavitelja ne odgovarja. */
+.preview-fallback.preview-broken { background: #fff7ed; border: 1px dashed #f59e0b; color: #92400e; }
+.preview-fallback .broken-mark {
+  align-items: center; background: #f59e0b; border-radius: 50%; color: #fff; display: inline-flex;
+  font-weight: 700; height: 1.15rem; justify-content: center; width: 1.15rem;
+}
+.preview-fallback .preview-host { font-size: .68rem; opacity: .85; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; white-space: nowrap; }

@@ -220,6 +220,10 @@
 
 @media (max-width: 900px) {
   .toolbar-row { align-items: stretch; flex-direction: column; }
+  /* A6, pregled 2026-09-08: pri 800 px je bilo iskalno polje visoko pol zaslona, lupa pa je
+     lebdela sredi praznine. Vzrok ni bil slog polja, ampak sprememba osi: v stolpcu postane
+     flex-basis: 22rem VISINA in ne sirina. V stolpcu zato polje ne sme imeti osnove. */
+  .search-field { flex: 0 0 auto; min-width: 0; }
   .toolbar-actions { margin-left: 0; }
   .toolbar-actions > * { flex: 1 1 auto; justify-content: center; }
   .filter-grid { grid-template-columns: 1fr; }

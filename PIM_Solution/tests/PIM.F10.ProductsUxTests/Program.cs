@@ -269,6 +269,32 @@ Assert(Regex.IsMatch(markup, "<img src=\"@thumbnail.Href\" alt=\"\""),
 foreach (Match icon in Regex.Matches(markup, "<span class=\"chip-remove\"[^>]*>"))
   Assert(icon.Value.Contains("aria-hidden=\"true\"", StringComparison.Ordinal), "Okrasni krizec mora imeti aria-hidden: " + icon.Value);
 
+
+/* ─── Ozka sirina in tabela cez rob (A6 in A9, pregled 2026-09-08) ────────────
+   Pri 800 px je bilo iskalno polje visoko pol zaslona: v stolpcu postane flex-basis visina.
+   Tabela je tekla cez desni rob brez znaka, da je se vsebina, vrstica filtrov pa se ni imela
+   kam preliti. Vsi trije popravki so v CSS in se dajo preveriti brez brskalnika. */
+var narrow = Regex.Match(css, @"@media \(max-width: 900px\) \{(.*?)\n\}", RegexOptions.Singleline);
+Assert(narrow.Success, "Slog izdelkov mora imeti pravila za ozko sirino.");
+Assert(Regex.IsMatch(narrow.Groups[1].Value, @"\.search-field\s*\{[^}]*flex:\s*0 0 auto"),
+  "Pri ozki sirini iskalno polje ne sme imeti flex-basis - ta postane visina in polje zavzame pol zaslona.");
+Assert(Regex.IsMatch(css, @"\.search-field \{ flex: 1 1 22rem"),
+  "Pri sirokem zaslonu naj iskalno polje ostane raztegljivo; popravek velja samo za ozko sirino.");
+
+var appCss = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "wwwroot", "app.css"));
+Assert(Regex.IsMatch(appCss, @"\.toolbar \{[^}]*flex-wrap: wrap"),
+  "Vrstica filtrov mora imeti flex-wrap, sicer je desni del odrezan.");
+Assert(appCss.Contains("background-attachment", StringComparison.Ordinal) || appCss.Contains("no-repeat local", StringComparison.Ordinal),
+  "Tabela mora pokazati, da je se vsebina desno; senca na robu je pripeta z local/scroll.");
+Assert(Regex.IsMatch(appCss, @"\.table-scroll \{[^}]*overflow: auto", RegexOptions.Singleline),
+  "Tabela mora ostati vodoravno drsna.");
+Assert(appCss.Contains(".table-scroll:focus-visible", StringComparison.Ordinal),
+  "Drsno obmocje je dosegljivo s tipkovnico in mora imeti viden fokus.");
+
+var webPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Web.razor"));
+Assert(Regex.IsMatch(webPage, @"<select class=""filter-select"" value=""@SelectedSite"""),
+  "Izbirnik spletnega mesta na /splet ne sme biti surov element brez razreda.");
+
 Console.WriteLine("F10 products UX contract PASS.");
 
 static void Assert(bool condition, string message)
