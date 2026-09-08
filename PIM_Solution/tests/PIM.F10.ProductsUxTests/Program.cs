@@ -147,21 +147,13 @@ foreach (var parameter in new[] { "pogled", "isci", "podjetje", "proizvajalec", 
 Assert(markup.Contains("SelectionOverflow", StringComparison.Ordinal), "Prekoracena izbira mora biti vidna uporabniku.");
 Assert(Regex.IsMatch(markup, "class=\"notice\"[^>]*role=\"status\""), "Obvestilo o meji izbire mora biti razglaseno kot role=\"status\".");
 
-// 8.1 Mnozicno urejanje pise v eno podjetje: izbira cez vec podjetij mora biti ustavljena in pojasnjena.
-Assert(markup.Contains("SelectionSpansOrganizations", StringComparison.Ordinal),
-  "Izbira cez vec podjetij mora biti prepoznana; sicer bi sifre enega podjetja pisale v drugo.");
-Assert(Regex.IsMatch(markup, "izvozi/mnozicno\\?items=[^\"]*podjetje="),
-  "Mnozicno urejanje mora dobiti podjetje izbranih izdelkov, ne privzetega.");
-
-// 8.2 Filtri se odprejo na zahtevo in povedo, koliko jih je aktivnih; sicer je vrstica natrpana.
-var filterToggle = Regex.Match(markup, "<button[^>]*class=\"[^\"]*filter-toggle[^\"]*\"[^>]*>", RegexOptions.Singleline);
-Assert(filterToggle.Success, "Filtri morajo biti za gumbom, ne vsi hkrati v orodni vrstici.");
-Assert(filterToggle.Value.Contains("aria-expanded", StringComparison.Ordinal), "Gumb za filtre mora povedati, ali je plosca odprta (aria-expanded).");
-Assert(Regex.IsMatch(filterToggle.Value, "aria-controls=\"([^\"]+)\""), "Gumb za filtre mora kazati na plosco (aria-controls).");
-var panelId = Regex.Match(filterToggle.Value, "aria-controls=\"([^\"]+)\"").Groups[1].Value;
-Assert(Regex.IsMatch(markup, "id=\"" + Regex.Escape(panelId) + "\"[^>]*class=\"filter-panel\""), "Plosca s filtri mora obstajati z id " + panelId + ".");
-Assert(Regex.IsMatch(markup, "<div class=\"filter-field\">\\s*<label for=\"product-organization\">"),
-  "Vsak filter mora imeti vidno oznako, ne samo skrite; natrpana vrstica brez oznak je bila prav to, kar je bilo narobe.");
+// 8.1 Sifra artikla je enolicna samo znotraj podjetja, zato mora izbira nositi podjetje.
+// Do 2026-09-08 je to varovala prepoved izbire cez vec podjetij, ker je mnozicno urejanje
+// pisalo v eno samo. Odkar je pot izvoz -> uvoz in delovni list nosi stolpec Podjetje, izbire
+// ni treba omejevati; nositi pa mora podjetje vsake vrstice, sicer bi uvoz vrstico pripisal
+// napacnemu podjetju.
+Assert(markup.Contains("record SelectedItem(int OrganizationId, string OrganizationName, string ItemId)", StringComparison.Ordinal),
+  "Izbrana vrstica mora nositi podjetje; sifra artikla je enolicna samo znotraj njega.");
 
 // 9. Izvoz pogleda uporabi iste filtre kot pogled in je delovni zvezek, ne CSV.
 Assert(markup.Contains("izvoz/izdelki.xlsx", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda v Excel.");
@@ -175,15 +167,34 @@ Assert(Regex.IsMatch(markup, "string ExportHref\\([^)]*\\)\\s*\\{[^}]*Href\\(pag
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
 // Uporabnik 2026-08-28: »Kaj je point polja Pregled – cel pregled, ker ko spreminjam se nic ne
 // zgodi tako da odstrani.« Spustni seznam obsega je zato odpravljen: obseg pove izbira v tabeli
-// in gumb ga izpise. Predloga SAOP ostane, a kot svoja povezava, ne kot skrita izbira.
+// in gumb ga izpise.
 Assert(!markup.Contains("id=\"product-export\"", StringComparison.Ordinal),
   "Spustnega seznama obsega izvoza ni vec — spreminjal se je brez vidnega ucinka.");
 foreach (var retired in new[] { "POGLED_SAOP", "IZBRANI_SAOP", "ExportChoice", "ExportDisabled" })
   Assert(!markup.Contains(retired, StringComparison.Ordinal), "Odpisani mehanizem izvoza se ne sme vrniti: " + retired + ".");
 Assert(markup.Contains("ExportScopeLabel", StringComparison.Ordinal),
   "Gumb za izvoz mora povedati, ali gre cel pogled ali samo izbrani.");
-Assert(markup.Contains("predloga=saop", StringComparison.Ordinal),
-  "Predloga SAOP mora ostati na voljo; njeni stolpci so register out.SaopXmlField, ne seznam v strani.");
+
+// Uporabnik 2026-09-08: »zakaj imava petsto gumbov, naredi samo izvoz in uvoz in to je to,
+// ostalo ne rabiva.« Orodna vrstica ima zato natanko dve dejanji. Do tega dne je zahteva
+// govorila nasprotno — »Predloga SAOP mora ostati na voljo« in »Izbrani izdelki morajo voditi
+// na stran za mnozicno urejanje« — obe sta bili pripeti na gumb na tej strani. Nobena pot ni
+// izginila: predloga SAOP je na /izvoz/izdelki.xlsx?predloga=saop, cakalna lista na
+// /saop/artikli (zavihek v razdelku SAOP), mnozicno urejanje na /izvozi/mnozicno (povezano s
+// /kakovost in s strani uvoza). Zahteva je odslej ta, da tu ni nicesar drugega.
+var actions = Regex.Match(markup, "<div class=\"toolbar-actions\">(.*?)</div>", RegexOptions.Singleline);
+Assert(actions.Success, "Orodna vrstica seznama izdelkov manjka.");
+Assert(Regex.Matches(actions.Groups[1].Value, "<a ").Count == 2,
+  "Orodna vrstica ima natanko dve dejanji: izvoz in uvoz. Vsak nadaljnji gumb je vprasanje namesto odgovora.");
+Assert(!actions.Groups[1].Value.Contains("<button", StringComparison.Ordinal),
+  "V orodni vrstici seznama ni gumbov, ki bi kaj pisali; pisalna pot gre skozi uvoz.");
+Assert(actions.Groups[1].Value.Contains("predloga=delovni", StringComparison.Ordinal),
+  "Izvoz mora dati delovni list — edino datoteko, ki se da vrniti nazaj.");
+Assert(actions.Groups[1].Value.Contains("izdelki/uvoz", StringComparison.Ordinal),
+  "Uvoz urejene datoteke mora biti dosegljiv s seznama.");
+Assert(!actions.Groups[1].Value.Contains("predloga=saop", StringComparison.Ordinal)
+  && !actions.Groups[1].Value.Contains("saop/artikli", StringComparison.Ordinal),
+  "Poti SAOP so v razdelku SAOP, ne kot gumb na seznamu izdelkov.");
 
 // 9.1 Novi filtri iz popravkov 2026-08-28: slika in preimenovana ABC klasifikacija.
 Assert(Regex.IsMatch(markup, "<label for=\"product-image\">Slika</label>"),
@@ -220,8 +231,12 @@ foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "type
   Assert(!markup.Contains(forbidden, StringComparison.OrdinalIgnoreCase), "Bralni seznam ne sme uvesti " + forbidden + ".");
 foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "ApproveBatchAsync", "UndoProduct" })
   Assert(!markup.Contains(writeSurface, StringComparison.Ordinal), "Seznam izdelkov ne sme sam pisati: " + writeSurface + ".");
-Assert(markup.Contains("izvozi/mnozicno", StringComparison.Ordinal), "Izbrani izdelki morajo voditi na stran za mnozicno urejanje.");
-var allowedHandlers = new[] { "ApplyFiltersAsync", "EditSelectedAsync", "ToggleFilters" };
+// Bliznjica na mnozicno urejanje je 2026-09-08 odsla z orodne vrstice (glej razdelek 9); stran
+// je dosegljiva s /kakovost in s strani uvoza, izbira na seznamu pa odslej doloca samo obseg
+// izvoza.
+Assert(!markup.Contains("izvozi/mnozicno", StringComparison.Ordinal),
+  "Seznam izdelkov ne vodi vec na mnozicno urejanje; pot do njega je izvoz in uvoz.");
+var allowedHandlers = new[] { "ApplyFiltersAsync", "ToggleFilters" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
@@ -231,7 +246,9 @@ foreach (var bound in new[] { "row.Name", "row.ItemId", "row.Manufacturer", "row
   "row.IsPromoted", "row.HasWebTitle", "row.LastChangedUtc", "row.OrganizationName" })
   Assert(markup.Contains(bound, StringComparison.Ordinal), "Prikaz mora izhajati iz bralnega modela: " + bound + ".");
 Assert(markup.Contains("intranet.GetProductList", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
-foreach (var fabricated in new[] { "Cena", "Zaloga", "Nov izdelek", "Uvozi", "Izbriši", "Osnutek" })
+// »Uvozi« je s tega seznama odslo 2026-09-08: stran ima zdaj resnicen uvoz na /izdelki/uvoz,
+// zato beseda ne pomeni vec izmisljene vsebine. Ostale ostanejo prepovedane.
+foreach (var fabricated in new[] { "Cena", "Zaloga", "Nov izdelek", "Izbriši", "Osnutek" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmisljene vsebine: " + fabricated + ".");
 
 // 13. Slog: fokus, prelivanje in odzivnost; brez uhajanja z ::deep.

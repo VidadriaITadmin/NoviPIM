@@ -12,7 +12,7 @@ skupini, ker vrednost obstaja, na splet pa ne gre.
 
 ## Izdelki: en delovni list, ki gre ven in se vrne — 2026-09-08
 
-`/izdelki` ima gumba **Delovni list** in **Vrni delovni list**. Ista datoteka nosi ERP polja, spletne
+`/izdelki` ima natanko dva gumba, **Izvozi Excel** in **Uvozi Excel**. Ista datoteka nosi ERP polja, spletne
 nazive in opise po jezikih, spletne strani, kategorije po straneh in atribute; uredi se v Excelu
 in vrne na `/izdelki/uvoz`. Stolpce obeh smeri določa en seznam, zato datoteka med potjo ne
 izgubi pomena. Uvozi se samo tisto, kar se razlikuje od zapisanega. Spletni podatek se zapiše

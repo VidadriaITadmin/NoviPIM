@@ -124,7 +124,7 @@ public sealed class ProductWorkbookService(
     var cells = rows.Select(row => (IReadOnlyList<object?>)definition
       .Select(column => Cell(column, row, sheet, siteNames)).ToArray()).ToArray();
 
-    notes.Add("Ta list gre ven in se vrne nazaj: /izdelki → Vrni delovni list. Naslovov stolpcev ne spreminjaj.");
+    notes.Add("Ta list gre ven in se vrne nazaj: /izdelki → Uvozi Excel. Naslovov stolpcev ne spreminjaj.");
     notes.Add("Podjetje in Šifra artikla sta ključ vrstice; brez njiju uvoz vrstice ne najde.");
     notes.Add("Prazna celica pomeni »tega polja se ne dotakni«, ne »izprazni ga«.");
     notes.Add("Več vrednosti v eni celici loči z znakom | (spletne strani, kategorije, slike).");

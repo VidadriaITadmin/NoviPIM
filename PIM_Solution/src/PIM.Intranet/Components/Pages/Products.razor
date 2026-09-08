@@ -35,20 +35,19 @@
 
     <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 
+    @* Dve dejanji in nic vec. Uporabnik 2026-09-08: »zakaj imava petsto gumbov, naredi samo
+       izvoz in uvoz«. Sest gumbov v vrsti je bilo sest vprasanj namesto enega odgovora.
+
+       Kar je odslo, ni izginilo. Predloga SAOP je se vedno svoja predloga istega izvoza,
+       cakalna lista artiklov je zavihek Artikli v razdelku SAOP, mnozicno urejanje pa je
+       povezano s strani kakovosti in s strani uvoza. Tu ostane samo pot, po kateri se dela
+       vsak dan: datoteka ven, popravljena datoteka nazaj.
+
+       Obseg izvoza pove izbira v tabeli — ce je kaj izbrano, gredo ven izbrani, sicer cel
+       pogled — in gumb to prebere na glas. *@
     <div class="toolbar-actions">
-      @* Obseg izvoza ni vec izbira v spustnem seznamu: ta se je dalo spremeniti, ne da bi se na
-         zaslonu karkoli zgodilo. Obseg zdaj pove izbira v tabeli — ce je kaj izbrano, gredo ven
-         izbrani, sicer cel pogled — in gumb to prebere na glas. *@
-      @* Delovni list je edini izvoz, ki se da vrniti nazaj: izvoz in uvoz bereta isti seznam
-         stolpcev, zato datoteka ne izgubi pomena med potjo. *@
-      <a class="primary-button" href="@ExportHref("predloga=delovni")" title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj.">Delovni list @ExportScopeLabel</a>
-      <a class="ghost-button" href="izdelki/uvoz" title="Urejeni delovni list se vrne v PIM: spletni podatki takoj, ERP polja v vrsto za SAOP.">Vrni delovni list</a>
-      <a class="ghost-button" href="@ExportHref(null)">Izvozi Excel @ExportScopeLabel</a>
-      <a class="ghost-button" href="@ExportHref("predloga=saop")">Predloga SAOP @ExportScopeLabel</a>
-      @* Pametni prenos artiklov v SAOP: ista predloga, izpolnjena v Excelu, gre na /saop/artikli,
-         kjer se za vsako vrstico sama doloci ADD (nov artikel) ali PATCH in caka odobritev. *@
-      <a class="ghost-button" href="saop/artikli" title="Excel po predlogi SAOP prebere stran Artikli v SAOP: novi artikli gredo na čakalno listo za odobritev, obstoječi kot sprememba.">Excel → čakalna lista SAOP</a>
-      <button type="button" class="primary-button" disabled="@(Selected.Count == 0 || SelectionSpansOrganizations)" @onclick="EditSelectedAsync" aria-label="Množično uredi izbrane izdelke">Uredi izbrane (@Selected.Count)</button>
+      <a class="primary-button" href="@ExportHref("predloga=delovni")" title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj.">Izvozi Excel @ExportScopeLabel</a>
+      <a class="ghost-button" href="izdelki/uvoz" title="Urejena datoteka se vrne v PIM: spletni podatki takoj, ERP polja v vrsto za SAOP.">Uvozi Excel</a>
     </div>
   </div>
 
@@ -203,13 +202,11 @@
   </section>
 }
 
-@if (SelectionSpansOrganizations)
+@* Izbira iz vec podjetij ni vec ovira: delovni list nosi stolpec Podjetje, zato uvoz ve, komu
+   vrstica pripada. Ostane samo meja dolzine naslova. *@
+@if (SelectionOverflow)
 {
-  <p class="notice" role="status">Izbrani izdelki so iz več podjetij (@SelectedOrganizationSummary). Množično urejanje piše v eno podjetje, zato izbiro najprej zoži na eno.</p>
-}
-else if (SelectionOverflow)
-{
-  <p class="notice" role="status">Izbranih je @Selected.Count izdelkov, v množično urejanje jih gre prvih @MaxSelectionInUrl. Preostale uredi v naslednjem paketu.</p>
+  <p class="notice" role="status">Izbranih je @Selected.Count izdelkov, v izvoz jih gre prvih @MaxSelectionInUrl. Preostale izvozi v naslednjem paketu ali odstrani izbiro in izvozi cel pogled.</p>
 }
 
 @* Razvrstitev ni filter — ne zozi nabora, samo obrne vrstni red — zato stoji nad tabelo,
@@ -359,11 +356,11 @@ else if (SelectionOverflow)
   // neznano podjetje vrne kot prazen nabor, kar je iskrenejse od tihe razsiritve obsega.
   int? OrganizationScope => int.TryParse(QueryOrganization, out var value) ? value : null;
 
-  IReadOnlyList<int> SelectedOrganizations => Selected.Values.Select(item => item.OrganizationId).Distinct().ToList();
-  bool SelectionSpansOrganizations => SelectedOrganizations.Count > 1;
-  string SelectedOrganizationSummary => string.Join(", ", Selected.Values
-    .Select(item => item.OrganizationName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.CurrentCulture));
-
+  /// <summary>
+  /// Izbrana vrstica. Ime podjetja je tu zato, ker izbira sega cez podjetja: delovni list ima
+  /// stolpec Podjetje in uvoz iz njega ve, komu vrstica pripada, zato izbire ni treba zozevati
+  /// na eno podjetje kot prej pri mnozicnem urejanju.
+  /// </summary>
   sealed record SelectedItem(int OrganizationId, string OrganizationName, string ItemId);
 
   static string SelectionKey(ProductListRow row) => row.OrganizationId + "|" + row.ItemId;
@@ -672,15 +669,6 @@ else if (SelectionOverflow)
 
   // Sifre gredo v naslov skupaj s podjetjem, ker jih mnozicno urejanje pise nazaj v SAOP tega
   // podjetja; dolg seznam se skrajsa, kar stran pove na glas (SelectionOverflow).
-  Task EditSelectedAsync()
-  {
-    if (Selected.Count == 0 || SelectionSpansOrganizations) return Task.CompletedTask;
-    var items = string.Join(',', Selected.Values.Take(MaxSelectionInUrl).Select(item => item.ItemId));
-    var organization = SelectedOrganizations[0];
-    Navigation.NavigateTo($"izvozi/mnozicno?items={Uri.EscapeDataString(items)}&podjetje={organization}");
-    return Task.CompletedTask;
-  }
-
   string OrganizationLabel(string? value) =>
     int.TryParse(value, out var id)
       ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"neznano ({value})"

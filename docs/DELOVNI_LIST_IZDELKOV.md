@@ -18,8 +18,25 @@ uvoziti nikjer. Kdor je hotel dopolniti splet za tisoč izdelkov, je moral odpre
 
 ## Kaj je zdaj
 
-Ena datoteka: `/izvoz/izdelki.xlsx?predloga=delovni`, gumb **Delovni list** na `/izdelki`.
-Vrne se na `/izdelki/uvoz`.
+Ena datoteka: `/izvoz/izdelki.xlsx?predloga=delovni`, gumb **Izvozi Excel** na `/izdelki`.
+Vrne se z gumbom **Uvozi Excel** na `/izdelki/uvoz`.
+
+Orodna vrstica na `/izdelki` ima od 2026-09-08 natanko ti dve dejanji. Uporabnik: »zakaj imava
+petsto gumbov, naredi samo izvoz in uvoz in to je to, ostalo ne rabiva.« Šest gumbov v vrsti je
+bilo šest vprašanj namesto enega odgovora.
+
+Nobena pot ni izginila, le gumba nima več:
+
+| Kaj | Kje je zdaj |
+|---|---|
+| Predloga SAOP | `/izvoz/izdelki.xlsx?predloga=saop` — ista pot izvoza, druga predloga |
+| Izvoz »pregled« (enosmeren) | `/izvoz/izdelki.xlsx` brez parametra |
+| Excel → čakalna lista SAOP | `/saop/artikli`, zavihek **Artikli** v razdelku SAOP |
+| Množično urejanje izbranih | `/izvozi/mnozicno`, povezano s `/kakovost` in s strani uvoza |
+
+Izbira v tabeli ostane: določa obseg izvoza (izbrani ali cel pogled). Ker delovni list nosi
+stolpec Podjetje, izbire ni več treba omejevati na eno podjetje, kot je bilo treba pri
+množičnem urejanju.
 
 Stolpce obeh smeri določa **en sam seznam** — `PIM.Operations.ProductWorkbookContract`. Zato
 stolpec ne more zdrsniti samo na eni strani: kar izvoz izpiše, uvoz prebere.
