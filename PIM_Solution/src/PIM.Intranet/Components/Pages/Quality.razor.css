@@ -83,3 +83,9 @@ tr.level-1 .category-name { font-size: .95rem; }
 .top-fields { display: flex; flex-direction: column; gap: .15rem; font-size: .82rem; }
 .top-field .code-value { margin-left: .3rem; }
 .table-actions { white-space: nowrap; }
+
+/* Ocena učinka skupinskega posega (§3.3 pregleda 2026-09-08). Šibek vzvod mora biti viden na prvi
+   pogled — številka, ki je videti kot vsaka druga, ne prepreči tedna zaman opravljenega dela. */
+.lever-note { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.4; margin: .35rem 0 0; }
+.lever-note strong { color: var(--pim-text); }
+.lever-note.lever-weak { border-left: 3px solid var(--pim-warn, #b8860b); padding-left: .5rem; }

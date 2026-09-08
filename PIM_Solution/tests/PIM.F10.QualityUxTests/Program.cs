@@ -130,6 +130,28 @@ foreach (var explained in new[] { "dodaj sliko ali dokument", "poveži dobavitel
 Assert(!fieldPolicy.Contains("new(\"Lastnosti\"", StringComparison.Ordinal),
   "Pri spletu se lastnosti imenujejo atributi; ime je poenoteno povsod.");
 
+
+/* ─── Ocena ucinka skupinskega posega (P1-7, pregled 2026-09-08 §3.3) ─────────
+   Zahteva pregleda: ob polju mora pisati, koliko izdelkov ta poseg sploh doseze. Ocena mora
+   biti izmerjena in ne domnevana; prav pri kategorijah je razlika bistvena, ker nepreslikane
+   poti pokrijejo le delcek izdelkov brez kategorije. */
+Assert(qualityService.Contains("GetCategoryLeverAsync", StringComparison.Ordinal),
+  "Bralni model mora znati izmeriti ucinek preslikave kategorij.");
+Assert(qualityService.Contains("map.SourceCategoryToMap", StringComparison.Ordinal)
+    && qualityService.Contains("ProductCount", StringComparison.Ordinal),
+  "Ocena mora priti iz registra nepreslikanih poti, ne iz priblizka.");
+Assert(qualityService.Contains("TotalMissingProductCount", StringComparison.Ordinal),
+  "Ocena brez imenovalca (koliko izdelkov je sploh brez kategorije) ne pove nicesar.");
+Assert(quality.Contains("QualityRead.GetCategoryLeverAsync", StringComparison.Ordinal),
+  "Stran kakovosti mora oceno prebrati, ne izracunati sama.");
+Assert(quality.Contains("lever-note", StringComparison.Ordinal) && quality.Contains("lever-weak", StringComparison.Ordinal),
+  "Sibek vzvod mora biti viden; stevilka, ki je videti kot vsaka druga, ne prepreci zaman opravljenega dela.");
+Assert(Regex.IsMatch(quality, @"CategoryLever\.CoverageShare < 5"),
+  "Meja, pod katero je poseg oznacen kot sibek, mora biti v kodi in ne v glavi bralca.");
+var qualityCss = Read(Path.Combine(pages, "Quality.razor.css"));
+Assert(qualityCss.Contains(".lever-note", StringComparison.Ordinal),
+  "Ocena mora imeti svoj slog; izolirani slog Blazorja velja samo za oznako svoje komponente.");
+
 Console.WriteLine("F10 quality UX contract PASS.");
 
 static string Read(string path)

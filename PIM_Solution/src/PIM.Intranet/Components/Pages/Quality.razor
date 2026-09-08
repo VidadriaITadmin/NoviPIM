@@ -205,6 +205,22 @@
                 @if (target.Href is not null) { <a href="@target.Href" title="@target.Explanation">@target.Label →</a> }
                 else { <span class="muted" title="@target.Explanation">@target.Label</span> }
                 <div class="tree-path">@target.Explanation</div>
+                @* Pregled 2026-09-08 (§3.3): ob polju mora pisati, koliko izdelkov ta poseg sploh
+                   doseze. Brez tega urednik ne loci posega, ki resi pol kataloga, od posega, ki
+                   resi pol odstotka — in prav to je danes primer pri kategorijah. *@
+                @if (CategoryLever is not null && target.Href == "kakovost/kategorije")
+                {
+                  <p class="lever-note @(CategoryLever.CoverageShare < 5 ? "lever-weak" : null)">
+                    @CategoryLever.PendingCount.ToString("N0") nepreslikanih poti pokrije
+                    <strong>@CategoryLever.CoveredProductCount.ToString("N0")</strong> izdelkov
+                    od @CategoryLever.TotalMissingProductCount.ToString("N0") brez kategorije
+                    (@CategoryLever.CoverageShare.ToString("0.##") %).
+                    @if (CategoryLever.CoverageShare < 5)
+                    {
+                      <span>Ostalih ta poseg ne doseže — nimajo dobaviteljeve poti, ker zajem zanje še ni tekel.</span>
+                    }
+                  </p>
+                }
               </td>
             </tr>
           }
@@ -373,10 +389,17 @@
         ingests.Sum(row => row.PendingPages), ingests.Sum(row => row.ProcessedPages),
         ingests.Sum(row => row.QuarantinedPages), ingests.Sum(row => row.UnmappedValues),
         ingests.Sum(row => row.MissingTranslations), ingests.Sum(row => row.MissingCategories));
+
+      // Ocena ucinka skupinskega posega (pregled 2026-09-08, §3.3). Seznam nepreslikanih poti je
+      // skupen vsem podjetjem, ker je drevo dobaviteljevo, zato tudi ocena ni po podjetju.
+      try { CategoryLever = await QualityRead.GetCategoryLeverAsync(null); } catch { CategoryLever = null; }
     }
     catch { Error = "Kakovosti trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
+
+  /// <summary>Koliko izdelkov sploh lahko resi preslikava kategorij; null pomeni, da ocene ni.</summary>
+  QualityBulkLever? CategoryLever;
 
   /// <summary>Profil je skupen register; stevila v njem se sestejejo po sifri profila.</summary>
   static IReadOnlyList<ValidationProfileRow> MergeProfiles(IReadOnlyList<IReadOnlyList<ValidationProfileRow>> groups) =>

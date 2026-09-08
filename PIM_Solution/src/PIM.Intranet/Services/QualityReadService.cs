@@ -40,6 +40,26 @@ public sealed record QualityRuleImpact(
 public sealed record QualitySupplierImpact(
   string Supplier, long ProductCount, long WithIssuesCount, long IssueCount);
 
+/// <summary>
+/// Koliko izdelkov reši en skupinski poseg. Pregled 2026-09-08 (§3.3) je zahteval, da stran ob
+/// polju pove oceno učinka: »42 dobaviteljevih poti brez kategorije pokrije 131.000 izdelkov«.
+///
+/// Ocena mora biti izmerjena in ne domnevana. Prav pri kategorijah je razlika bistvena: v razvojni
+/// bazi 2026-09-09 je nepreslikanih poti 53 in za njimi 421 izdelkov, brez kategorije pa je
+/// 171.585 aktivnih izdelkov. Brez te številke bi urednik dneve preslikoval poti in ne bi premaknil
+/// niti odstotka — pravi vzrok je, da dobaviteljev zajem sploh še ni tekel v celoti.
+/// </summary>
+/// <param name="PendingCount">Koliko vnosov čaka na skupinski poseg (npr. nepreslikanih poti).</param>
+/// <param name="CoveredProductCount">Koliko izdelkov ti vnosi skupaj pokrijejo.</param>
+/// <param name="TotalMissingProductCount">Koliko izdelkov je sploh brez te vrednosti.</param>
+public sealed record QualityBulkLever(long PendingCount, long CoveredProductCount, long TotalMissingProductCount)
+{
+  /// <summary>Delež izdelkov brez vrednosti, ki jih ta poseg sploh lahko doseže.</summary>
+  public decimal CoverageShare => TotalMissingProductCount == 0
+    ? 0
+    : Math.Round(100m * CoveredProductCount / TotalMissingProductCount, 2);
+}
+
 public sealed record QualityOverview(
   QualityTotals Totals, IReadOnlyList<QualityRuleImpact> Rules, IReadOnlyList<QualitySupplierImpact> Suppliers);
 
@@ -277,6 +297,34 @@ public sealed class QualityReadService(IConfiguration configuration)
   }
 
   /// <summary>Odprte zahteve po kategorijah drevesa, vecnivojsko (177). Podjetje null = vsa.</summary>
+  /// <summary>
+  /// Učinek preslikave kategorij: koliko poti čaka, koliko izdelkov pokrijejo in koliko izdelkov
+  /// je sploh brez kategorije. Bere <c>map.SourceCategoryToMap</c>, ki nosi <c>ProductCount</c>,
+  /// zato ocena ni izračunana na pamet.
+  /// </summary>
+  public async Task<QualityBulkLever> GetCategoryLeverAsync(int? organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SET NOCOUNT ON;
+      SELECT
+        (SELECT COUNT_BIG(*) FROM map.SourceCategoryToMap) AS PendingCount,
+        (SELECT ISNULL(SUM(CAST(ProductCount AS bigint)), 0) FROM map.SourceCategoryToMap) AS CoveredProductCount,
+        (SELECT COUNT_BIG(*) FROM canon.Product product
+         WHERE product.IsActive = 1
+           AND (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+           AND NOT EXISTS (SELECT 1 FROM canon.ProductCategory category WHERE category.ProductId = product.ProductId)) AS TotalMissingProductCount;
+      """, connection) { CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, 0);
+    return new(
+      PimDb.Int64(reader, "PendingCount"),
+      PimDb.Int64(reader, "CoveredProductCount"),
+      PimDb.Int64(reader, "TotalMissingProductCount"));
+  }
+
   public async Task<IReadOnlyList<QualityCategoryRow>> GetByCategoryAsync(
     string categoryTreeCode, int? organizationId, string? severity, CancellationToken cancellationToken = default)
   {

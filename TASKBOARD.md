@@ -271,6 +271,27 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P1-7: ocena učinka skupinskega posega na `/kakovost` (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §3.3 / §8 P1-7 — »ob vsakem polju gumb ‚Popravi
+skupinsko‘ z oceno, koliko izdelkov reši ena preslikava«.
+
+Stolpec »Kje se popravi« je obstajal že prej; manjkala je **številka**. `/kakovost` odslej ob polju
+kategorij izpiše izmerjeno oceno iz `map.SourceCategoryToMap` (register že nosi `ProductCount`),
+skupaj z imenovalcem — koliko izdelkov je sploh brez kategorije — in deležem. Kadar poseg doseže
+manj kot 5 % teh izdelkov, je označen kot šibek in pove, zakaj.
+
+**Izmerjeno stanje razvojne baze 2026-09-09 je poučno:** »53 nepreslikanih poti pokrije **421**
+izdelkov od **171.585** brez kategorije (0,25 %). Ostalih ta poseg ne doseže — nimajo dobaviteljeve
+poti, ker zajem zanje še ni tekel.« Pregled je predpostavil ravno nasprotno (»42 poti pokrije
+131.000 izdelkov«). Brez te številke bi urednik dneve preslikoval poti in ne bi premaknil odstotka;
+pravi vzrok je postavka **TODO/WORKERJI 3** iste table — poln zajem NW in BT XML.
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Nad tekočo aplikacijo (prijava z začasnim računom `qa_kak_*`, sam pobrisan): `/kakovost` vrne
+`<p class="lever-note lever-weak">` z zgornjim besedilom.
+
+
 ### 2026-09-09 — P1-6: spletišča izdelka namesto `WebPublish` (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P1-6 (ugotovitev D2) **in uporabnikova
