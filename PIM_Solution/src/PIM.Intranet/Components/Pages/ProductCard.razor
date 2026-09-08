@@ -229,6 +229,58 @@
             </Toolbar>
           </ProductChannelPanel>
 
+          @* D2 iz pregleda 2026-09-08 in odločitev uporabnika: kam gre izdelek, ne pove več
+             »Objava na spletu« iz SAOP (`Product.WebPublish`), ampak ta potrditvena polja.
+             Po njih se ravna tudi spletna validacija (migracija 182). *@
+          <section id="panel-spletisca" class="ui-card data-card tab-panel web-shops">
+            <div class="subsection-head">
+              <h2>Spletišča</h2>
+              <span class="muted">Označeno spletišče pomeni, da izdelek tja gre — in da ga spletni profil tega spletišča validira.</span>
+            </div>
+
+            @if (WebShops.Count == 0)
+            {
+              <PimMissing Object="canon.WebSite" What="seznam spletišč" Needs="vsaj eno aktivno spletišče v registru" />
+            }
+            else
+            {
+              <ul class="shop-list">
+                @foreach (var shop in WebShops)
+                {
+                  var shopCode = shop.WebShopCode;
+                  <li>
+                    <label>
+                      <input type="checkbox" disabled="@(!CanEdit || ShopBusy)"
+                             checked="@ShopDraft(shopCode)"
+                             @onchange="args => OnShopChanged(shopCode, args)" />
+                      <span class="shop-name">@shop.WebShopName</span>
+                      <span class="code-value">@shopCode</span>
+                    </label>
+                    @if (shop.ChangedBy is not null)
+                    {
+                      <span class="shop-trace">@shop.ChangedBy · @PimFormat.Ago(shop.ChangedUtc)</span>
+                    }
+                  </li>
+                }
+              </ul>
+
+              @if (CanEdit)
+              {
+                <div class="shop-actions">
+                  <button type="button" class="primary-button" disabled="@(!ShopDirty || ShopBusy)" @onclick="SaveWebShopsAsync">
+                    Shrani spletišča
+                  </button>
+                  @if (ShopMessage is not null) { <span class="save-ok" role="status">@ShopMessage</span> }
+                  @if (ShopError is not null) { <span class="save-error" role="alert">@ShopError</span> }
+                </div>
+              }
+              else
+              {
+                <p class="muted">Spremembo spletišč smeta vpisati vlogi ADMIN in CATALOG_EDITOR.</p>
+              }
+            }
+          </section>
+
         </section>
 
         @* Zavihek »SAOP endpoint«: celoten zapis, kot ga je poslal ERP, tudi polja, ki jih PIM
@@ -381,6 +433,14 @@
 
   /// <summary>Ali sme prijavljena vloga karkoli shraniti. Servisi to preverijo se enkrat sami.</summary>
   bool CanEdit;
+
+  /// <summary>Spletisca in oznake zanje; merilo spletne validacije namesto Product.WebPublish.</summary>
+  IReadOnlyList<ProductWebShopRow> WebShops = [];
+  readonly Dictionary<string, bool> ShopDrafts = new(StringComparer.OrdinalIgnoreCase);
+  bool ShopBusy;
+  string? ShopMessage;
+  string? ShopError;
+  bool ShopDirty => ShopDrafts.Count > 0;
   IReadOnlyList<WritableFieldRow> WritableSaopFields = [];
 
   /// <summary>Nepotrjene spremembe: kljuc polja → nova vrednost. Zivijo, dokler jih uporabnik
@@ -786,6 +846,9 @@
     Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
     Snapshot = null; SnapshotError = null;
     CanEdit = PimPolicies.Allows((await Authentication.GetAuthenticationStateAsync()).User, PimPolicies.CatalogWrite);
+    ShopDrafts.Clear();
+    ShopMessage = null;
+    ShopError = null;
     try
     {
       // Kartica je dosegljiva iz seznama vseh podjetij, zato obseg dolocì izdelek sam;
@@ -804,10 +867,12 @@
       var writableTask = SaopWrite.GetWritableFieldsAsync(organization.OrganizationId);
       // Nabor atributov po kategoriji (147): kateri atributi sodijo k izdelku in kateri manjkajo.
       var attributeSetTask = Workbench.GetProductAttributeSetAsync(ProductId);
-      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask);
+      // Spletisca (182): oznaka na izdelku pove, kam gre in kdo ga validira.
+      var shopTask = Edits.GetWebShopsAsync(ProductId);
+      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask);
       Detail = await cardTask; Origins = await originTask; PriceChecks = await priceTask; StockChecks = await stockTask;
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
-      AttributeSet = await attributeSetTask;
+      AttributeSet = await attributeSetTask; WebShops = await shopTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
       if (Section == "saop-endpoint") _ = LoadSnapshotAsync();
@@ -902,6 +967,53 @@
     finally
     {
       Busy = false;
+    }
+  }
+
+  bool ShopDraft(string code) =>
+    ShopDrafts.TryGetValue(code, out var draft)
+      ? draft
+      : WebShops.FirstOrDefault(shop => string.Equals(shop.WebShopCode, code, StringComparison.OrdinalIgnoreCase))?.IsPublished ?? false;
+
+  void OnShopChanged(string code, ChangeEventArgs args)
+  {
+    if (!CanEdit) return;
+    ShopMessage = null;
+    ShopError = null;
+    var value = args.Value is bool flag && flag;
+    var original = WebShops.FirstOrDefault(shop => string.Equals(shop.WebShopCode, code, StringComparison.OrdinalIgnoreCase))?.IsPublished ?? false;
+    if (value == original) ShopDrafts.Remove(code);
+    else ShopDrafts[code] = value;
+  }
+
+  async Task SaveWebShopsAsync()
+  {
+    if (!CanEdit || ShopDrafts.Count == 0 || Detail is null || ShopBusy) return;
+    ShopBusy = true;
+    ShopMessage = null;
+    ShopError = null;
+    try
+    {
+      var published = await Edits.SaveWebShopsAsync(OrganizationId, ProductId,
+        ShopDrafts.Select(draft => (draft.Key, draft.Value)), await ActorAsync(),
+        $"Kartica izdelka {Detail.Header.ItemId}");
+      ShopDrafts.Clear();
+      ShopMessage = published == 0
+        ? "Izdelek ni na nobenem spletišču; spletni profili ga ne validirajo."
+        : $"Shranjeno. Izdelek gre na {published} spletišč(a); validacija je osvežena.";
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException)
+    {
+      ShopError = "Tvoja vloga ne dovoljuje urejanja spletišč.";
+    }
+    catch
+    {
+      ShopError = "Spletišč ni bilo mogoče shraniti. Stanje ni bilo spremenjeno.";
+    }
+    finally
+    {
+      ShopBusy = false;
     }
   }
 

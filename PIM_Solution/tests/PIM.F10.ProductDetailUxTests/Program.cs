@@ -331,6 +331,34 @@ Assert(card.Contains("head.Explanation", StringComparison.Ordinal),
 Assert(card.Contains("head.SourceTable", StringComparison.Ordinal) && card.Contains("head.LastModifiedAtUtc", StringComparison.Ordinal),
   "V glavi zavihka mora pisati, iz katere tabele je posnetek in kdaj je bil narejen.");
 
+
+/* ─── Spletisca na kartici (D2, migracija 182) ─────────────────────────────────
+   Uporabnikova odlocitev 2026-09-08: Product.WebPublish iz SAOP ni vec merilo za splet.
+   Kam izdelek gre, povedo potrditvena polja po spletiscu in po njih se ravna spletna
+   validacija. Kartica je edino mesto, kjer se to nastavi, zato je pogodba tu. */
+Assert(card.Contains("Edits.GetWebShopsAsync", StringComparison.Ordinal),
+  "Kartica mora prebrati oznake spletisc iz bralnega modela.");
+Assert(card.Contains("Edits.SaveWebShopsAsync", StringComparison.Ordinal),
+  "Oznaka spletisca mora iti skozi ProductEditService, ne mimo njega.");
+Assert(card.Contains("id=\"panel-spletisca\"", StringComparison.Ordinal) && card.Contains("Spletišča", StringComparison.Ordinal),
+  "Kartica mora imeti razdelek Spletisca.");
+Assert(Regex.IsMatch(card, @"type=""checkbox"" disabled=""@\(!CanEdit \|\| ShopBusy\)"""),
+  "Potrditvena polja spletisc morajo biti onemogocena za vlogo brez pravice pisanja.");
+Assert(!Regex.IsMatch(card, @"WebPublish[^\n]*checkbox"),
+  "Objava na splet ne sme biti vezana na Product.WebPublish.");
+
+var webShopMigration = Path.Combine(root, "sql", "migrations", "182_ProductWebShopFlags.sql");
+Assert(File.Exists(webShopMigration), "Manjka migracija 182 z oznakami spletisc.");
+var webShopSql = File.ReadAllText(webShopMigration);
+foreach (var contract in new[]
+  { "pim.ProductWebShop", "pim.SaveProductWebShops", "intranet.GetProductWebShops", "val.RunValidation" })
+  Assert(webShopSql.Contains(contract, StringComparison.Ordinal), "Migracija 182 nima pogodbe: " + contract);
+Assert(Regex.Matches(webShopSql, @"profile\.Scope <> N''WEB'' OR EXISTS").Count >= 4,
+  "Obseg spletnega profila mora veljati na vseh stirih mestih validacije: izbor zahtev, "
+  + "zapiranje zastarelih napak, popolnost po profilu in koncno stanje izdelka.");
+Assert(webShopSql.Contains("WebPublish", StringComparison.Ordinal),
+  "Migracija mora povedati, zakaj WebPublish ni vec merilo.");
+
 // Dokaz nad razvojno bazo. Test samo bere.
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -401,6 +429,37 @@ else
   // Posebni znaki v sifri ne smejo postati vzorec LIKE.
   var escaped = await service.GetAsync(organizationId, "100%_[x]");
   Assert(!escaped.Head.HasSnapshot, "Sifra s posebnimi znaki ne sme ujeti tujega zapisa.");
+
+  /* ─── Spletisca nad bazo (182). Test samo bere. ───────────────────────────── */
+  await using (var shopCommand = new SqlCommand(@"
+    SELECT
+      (SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(N'pim.ProductWebShop')) AS Tabela,
+      (SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(N'pim.SaveProductWebShops')) AS Zapis,
+      (SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(N'intranet.GetProductWebShops')) AS Branje,
+      (SELECT COUNT(*) FROM sys.sql_modules WHERE object_id = OBJECT_ID(N'val.RunValidation')
+        AND definition LIKE N'%pim.ProductWebShop%') AS ValidacijaVeZaSpletisca,
+      (SELECT COUNT(DISTINCT CategoryTreeCode) FROM val.ValidationProfile WHERE Scope = N'WEB' AND CategoryTreeCode IS NOT NULL) AS SpletnihProfilov;", connection))
+  await using (var shopReader = await shopCommand.ExecuteReaderAsync())
+  {
+    Assert(await shopReader.ReadAsync(), "Preverba spletisc ni vrnila vrstice.");
+    Assert(shopReader.GetInt32(0) == 1, "Manjka tabela pim.ProductWebShop.");
+    Assert(shopReader.GetInt32(1) == 1, "Manjka postopek pim.SaveProductWebShops.");
+    Assert(shopReader.GetInt32(2) == 1, "Manjka postopek intranet.GetProductWebShops.");
+    Assert(shopReader.GetInt32(3) == 1, "val.RunValidation ne upošteva oznak spletisc; spletni profil bi spet validiral cel katalog.");
+    Assert(shopReader.GetInt32(4) >= 1, "Spletni profil mora imeti kodo spletisca (CategoryTreeCode).");
+  }
+
+  // Bralni model mora vrniti vsa aktivna spletisca, tudi neoznacena - sicer obrazec nima
+  // praznega potrditvenega polja in izdelka ni mogoce dodati na spletisce.
+  await using (var listCommand = new SqlCommand("intranet.GetProductWebShops", connection) { CommandType = System.Data.CommandType.StoredProcedure })
+  {
+    listCommand.Parameters.AddWithValue("@ProductId", -1L);
+    var shops = new List<string>();
+    await using var listReader = await listCommand.ExecuteReaderAsync();
+    while (await listReader.ReadAsync()) shops.Add(listReader.GetString(0));
+    Assert(shops.Count >= 1, "Register spletisc je prazen; kartica ne bi imela cesa pokazati.");
+    Assert(shops.Distinct(StringComparer.Ordinal).Count() == shops.Count, "Spletisce se ne sme podvajati po jezikovnih razlicicah.");
+  }
 }
 
 Console.WriteLine("F10 product detail UX contract PASS.");

@@ -81,6 +81,22 @@ Kartica izdelka in stran `/preverbe` isti seznam vlog uporabita za izris: brez p
 »Shrani spremembe«, polja kanala se izrišejo kot vrednosti in ob kartici stoji značka
 »Samo za branje«. To je videz; varovalka je v servisu.
 
+### 1.4 Spletišča izdelka namesto »Objava na spletu« (P1-6, 2026-09-09)
+
+Kartica izdelka ima v sklopu **Splet** razdelek »Spletišča« s potrditvenim poljem na spletišče
+(`svetila_si`, `videlektro`). Označeno spletišče pomeni dvoje: izdelek tja gre in spletni profil
+tega spletišča ga validira. `Product.WebPublish` iz SAOP za to **ni** več merilo — odločitev
+uporabnika 2026-09-08; podrobnosti in migracija 182 so v [`DATABASE.md`](DATABASE.md).
+
+- branje: `ProductEditService.GetWebShopsAsync` → `intranet.GetProductWebShops` (vrne tudi
+  neoznačena spletišča, sicer obrazec nima praznega polja);
+- zapis: `ProductEditService.SaveWebShopsAsync` → `pim.SaveProductWebShops`, pod politiko
+  `CatalogWrite`; procedura zapiše zgodovino in izdelek takoj revalidira, zato se stanje kakovosti
+  spremeni v istem klicu;
+- vloga brez pravice pisanja polja vidi onemogočena in namesto gumba dobi pojasnilo.
+
+Dokaz: `docs/pregled-20260909/Preveri-Spletisca.ps1` — 10 preverb, vse OK.
+
 ### 1.3 Zavrnjen dostop in napaka (P0, 2026-09-09)
 
 Popravek ugotovitve **A5**. `/brez-dostopa` (`Pages/AccessDenied.razor`) pove, kdo si, katere

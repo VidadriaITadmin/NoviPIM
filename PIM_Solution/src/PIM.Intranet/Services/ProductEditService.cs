@@ -10,6 +10,12 @@ public sealed record ProductEditOutcome(long ChangedCount, string ValidationStat
 public sealed record ProductTextEdit(string Language, string TextType, string? Value);
 public sealed record ProductAttributeEdit(string AttributeCode, string? Value);
 
+/// <param name="WebShopCode">Koda spletišča (<c>svetila_si</c>, <c>videlektro</c>) — ista kot
+/// <c>canon.WebSite.CategoryTreeCode</c> in <c>val.ValidationProfile.CategoryTreeCode</c>.</param>
+/// <param name="IsPublished">Ali izdelek gre na to spletišče. To je merilo spletne validacije;
+/// <c>Product.WebPublish</c> iz SAOP se za to ne uporablja več (odločitev uporabnika 2026-09-08).</param>
+public sealed record ProductWebShopRow(string WebShopCode, string WebShopName, bool IsPublished, string? ChangedBy, DateTime? ChangedUtc);
+
 /// <summary>
 /// Zapisovalna pot kartice izdelka za podatek, ki je last PIM: spletna besedila in lastnosti.
 ///
@@ -56,6 +62,52 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
         attributeCode = edit.AttributeCode,
         value = edit.Value ?? string.Empty,
       })), actor, note, cancellationToken);
+  }
+
+  /// <summary>
+  /// Spletišča, na katera gre izdelek. Vrne vsa aktivna spletišča, tudi neoznačena, ker mora
+  /// obrazec pokazati tudi prazno potrditveno polje (migracija 182).
+  /// </summary>
+  public async Task<IReadOnlyList<ProductWebShopRow>> GetWebShopsAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    var rows = new List<ProductWebShopRow>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductWebShops", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.TextOrEmpty(reader, "WebShopCode"), PimDb.TextOrEmpty(reader, "WebShopName"),
+        PimDb.Bool(reader, "IsPublished"),
+        PimDb.Text(reader, "ChangedBy"), PimDb.NullableDateTime(reader, "ChangedUtc")));
+    return rows;
+  }
+
+  /// <summary>
+  /// Zapiše oznake spletišč. Procedura sama zapiše zgodovino in izdelek takoj revalidira, zato
+  /// se stanje kakovosti spremeni v istem klicu.
+  /// </summary>
+  public async Task<int> SaveWebShopsAsync(
+    int organizationId, long productId, IEnumerable<(string WebShopCode, bool IsPublished)> shops,
+    string actor, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("pim.SaveProductWebShops", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    command.Parameters.Add("@ChangesJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(
+      shops.Select(shop => new { webShopCode = shop.WebShopCode, isPublished = shop.IsPublished ? "1" : "0" }));
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    return await reader.ReadAsync(cancellationToken) ? (int)PimDb.Int64(reader, "PublishedCount") : 0;
   }
 
   async Task<ProductEditOutcome> SaveAsync(
