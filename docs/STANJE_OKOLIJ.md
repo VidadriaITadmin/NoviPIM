@@ -24,7 +24,7 @@ Navodilo za prenos DEV → TEST: [`docs/PRENOS_NA_TEST.md`](PRENOS_NA_TEST.md).
 | Dobaviteljeva zaloga NW (FTP) in BT (HTTPS) | **dela**, 5 min | `stock.Snapshot` |
 | Dobaviteljev katalog NW/BT XML | **dela**, nočno (NW datoteka ročno v mapo) | `raw.Inbox`, `canon.ProductAttribute` 362.417 |
 | Validacija ERP (SLO/EU/THIRD), Komerciala, Splet | **dela**, po vsakem zajemu in ob shranjevanju | `val.ProductValidationState` |
-| Nabor atributov po kategoriji (obvezen/priporočen/izločen) | **dela** (147/148), register je prazen — uporabnik ga napolni | `/nastavitve/kategorije` → Atributi |
+| Nabor atributov po kategoriji (obvezen/priporočen/izločen) | **dela** (147/148), napolnjen iz mastrov starega PIM-a (173): 484 vrstic v 46 kategorijah; pregled in množično urejanje na `/nastavitve/nabori-atributov` (170) | `/nastavitve/nabori-atributov`, `/nastavitve/kategorije` → Atributi |
 | Pravila za nazive z prevodi | **dela** (149), eno neaktivno predlogo je treba pregledati in vklopiti | `/pravila/nazivi` |
 | Spletni izvoz — čisti podatki (objavljen + spletna stran + veljaven) | **dela** (146) | org 3: 2.368 vrstic, org 2: 1.957 |
 | Zaloga v spletnem izvozu (VID + IQL Brnčičeva, dobavitelj, skladišče) | **dela** (146) | `NW.10157`: 2 + 1 = 3 |
@@ -50,7 +50,7 @@ Testi: `scripts\run_tests.ps1` (60 projektov + xUnit) — rezultat zadnjega zago
 | 4 | Migracija 070 pade na prazni bazi (svež TEST) — popravek ali obnovitev varnostne kopije DEV | `docs/PRENOS_NA_TEST.md` | brez tega TEST ni mogoče postaviti iz nič |
 | 5 | SMTP za alarme (`PIM_SMTP_*`) | `STATUS.md` | alarmi ostanejo samo v aplikaciji |
 | 6 | Servisni račun za načrtovana opravila na strežniku (ali storitev PIM.Scheduler) | `docs/NACRT_RAZPOREJEVALNIK.md` | opravila na strežniku ne tečejo brez prijavljenega uporabnika |
-| 7 | Katere kategorije dobijo kateri nabor atributov in katera pravila za nazive se vklopijo | `/nastavitve/kategorije`, `/pravila/nazivi` | izvoz nosi vse atribute, nazivi ostanejo iz virov |
+| 7 | Pregled naborov iz mastrov (173) — potrditi ali popraviti ravni, dodati atribute, ki jih register še nima (`docs/NABORI_ATRIBUTOV_IZ_MASTROV.md`, razdelek »Kar ni preslikano«); katera pravila za nazive se vklopijo | `/nastavitve/nabori-atributov`, `/nastavitve/atributi`, `/pravila/nazivi` | nabor je izhodišče iz mastrov, ne potrjena odločitev; nazivi ostanejo iz virov |
 
 ## 4. Poročilo po dnevih (vpisuj sproti)
 

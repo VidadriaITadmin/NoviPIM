@@ -266,6 +266,24 @@ nabore po mastrih starega PIM-a — zato stran sprejme prilepljen seznam imen.
 | BAZA | `170_CategoryAttributeSetOverview.sql`: `intranet.GetCategoryAttributeSetTrees`, `intranet.GetCategoryAttributeSetOverview` (vrstica na kategorijo: lastne/učinkovite ravni, imena, izdelki, atributi v rabi izven nabora + povzetek), `canon.SaveCategoryAttributeSetBulk` (JSON, koda ali slovensko ime, neznani zavrnjeni vsi naenkrat), `canon.CopyCategoryAttributeSet`; oba pisalna gresta skozi `canon.SaveCategoryAttributeSet` (147) | migrator 1. zagon `Uporabljena migracija: 170`, 2. zagon `Preskočena`; skript dvakrat brez napake; smoke proti dev bazi: bulk 3 shranjeni + 3 zahteve, neznana (`51703: ... Ne obstaja, XYZ_NEZNAN`) nič ne shrani, napačna raven `51704`, copy svetila→videlektro 3 nato 0, dedovanje na `razsvetljava___luci___stropne_luci`, odstranitev prek `level: null`; testne vrstice pobrisane. `--verify` na tej veji pade že prej na `canon.Product.ErpExistence` (migracija 169, ki ni na tej veji in ni uporabljena) — ni povezano s 170 |
 | INTRANET | `CategoryAttributeSets.razor(.css)` na `/nastavitve/nabori-atributov`, `CategoryTreeService` (+4 metode), kartica na `/nastavitve`, `PimLifecycle.Catalog`; test `PIM.F10.CategoryAttributeSetUxTests` (+ `PIM.sln`); docs `STRANI_PIM`, `INTRANET`, `VALIDACIJA`, `SISTEM_PIM`, `UPORABNISKI_PRIROCNIK` | `scripts\run_tests.ps1 -Filter F10` = `Build OK`, 17 uspelih / 0 padlih (`PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.`); `dotnet build PIM.sln` izhod 0 |
 
+### 2026-09-08 — nabori atributov napolnjeni iz mastrov starega PIM-a (Claude, ista veja)
+
+Zahteva uporabnika: »preberi mastre iz PIM_test in napolni nabore«. Vir: `..\PIM_test\Mastri`
+(Matrika, 53 mastrov) prek izpisa `Seed_CategoryAttributeImport_Mastri.sql` (1058 parov, prag 50 %).
+Stara baza preslikave ni imela (mapa, aliasi in zunanji ključi prazni), zato je narejena tu:
+[`docs/NABORI_ATRIBUTOV_IZ_MASTROV.md`](docs/NABORI_ATRIBUTOV_IZ_MASTROV.md) (master → kategorija,
+ime → koda, pravilo ravni, kaj ni preslikano).
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `173_CategoryAttributeSetsFromMastri.sql`: 484 vrstic (209 obveznih, 275 priporočenih) v 46 kategorijah (svetila_si 13, videlektro 33), zapisane kot vrednosti, skozi `canon.SaveCategoryAttributeSetBulk`; ročno urejena aktivna vrstica preživi ponovni zagon | migrator 1. zagon `Uporabljena`, 2. `Preskočena`; `canon.CategoryAttributeSet` aktivnih 484 (`mastri 2026-09-08`), `val.FieldRequirement` z obsegom 484 (209 ERROR); obvezni danes blokirajo 4 izdelke (`tracni_sistemi` / Prevladujoča barva) |
+| DOMENA | `tools/Mastri/build_category_attribute_sets.py` — generator kandidatov iz Matrike in registra (aliasi in preslikava mastrov v kodi) | zagon nad istim vhodom vrne identičnih 484 kandidatov (`diff` prazen) |
+| INTRANET | `PIM.F10.CategoryAttributeSetUxTests` dodatno drži pogodbo 173 (samo skozi postopek, register nedotaknjen, ravni kot vrednosti, generator v repozitoriju) | `run_tests.ps1 -Filter F10` |
+
+Neujeto: 575 od 1058 parov, večinoma polja izdelka (Proizvajalec, Tip, Ključne besede, nazivi za
+nalepke); pravi atributi brez kode v registru (Vidna dimenzija, Upravljanje, Vključuje napajalnik,
+Število polov, Material pokrova …) so našteti v dokumentu kot delovni seznam za `/nastavitve/atributi`.
+
 Opomba za uporabnika: na tej veji so necommitane tuje migracije `153_ClearanceItem`, `154_ClearanceItemPrecision`
 in `169_ErpExistenceFlag`; v bazi so pod številkama 153/154 uporabljene **druge** datoteke
 (`153_PackagingQuantityWritable`, `154_PreserveValueOnEmptyOverwrite` iz veje `izdelki-saop-polja`).
