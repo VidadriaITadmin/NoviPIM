@@ -91,6 +91,27 @@ foreach (var forbidden in new[] { "<form", "<button", "<input", "@onclick", "@on
 foreach (var fabricated in new[] { "12.480", "Janez Novak", "Ana Kovač", "Miha Kranjec", "AZ_0002", "AZ_0016", "BT_XML_240725", "Magento export", "SAOP katalog", "Nedavne aktivnosti", "pred 15 minutami", "Izdelki brez slik" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Nadzorna plošča ne sme prikazovati izmišljene vsebine iz UX slike: " + fabricated + ".");
 
+
+/* ─── Hitrost nadzorne plosce (P2-11, pregled 2026-09-08 §5) ──────────────────
+   Izmerjeno 2026-09-09: intranet.GetValidationIssues je za eno podjetje tekel 9.788 ms, ker je
+   prvi nabor vracal vse aktivne tezave (za podjetje 2 cez dva milijona vrstic). Plosca iz
+   odgovora bere samo povzetek po profilih. Po omejitvi 714 ms, stran 8,84 s -> 4,47 s.
+   Brez te pogodbe bi meja tiho izpadla ob naslednjem popravku postopka. */
+var migrations = Path.Combine(root, "sql", "migrations");
+var boundedPath = Path.Combine(migrations, "183_ValidationIssuesReadModelBounded.sql");
+Assert(File.Exists(boundedPath), "Manjka migracija 183, ki omeji bralni model tezav.");
+var bounded = File.ReadAllText(boundedPath);
+Assert(bounded.Contains("@Take int = 200", StringComparison.Ordinal),
+  "Prvi nabor mora imeti privzeto mejo, sicer plosca spet povlece cel katalog tezav.");
+Assert(bounded.Contains("SELECT TOP (@Take)", StringComparison.Ordinal),
+  "Meja mora veljati na poizvedbi in ne sele v aplikaciji.");
+Assert(bounded.Contains("issueValue.ProductIssueId DESC", StringComparison.Ordinal),
+  "Ob enakih casih mora biti razvrstitev ponovljiva, sicer meja vsakic odreze drugo mnozico.");
+
+var dataService = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "IntranetDataService.cs"));
+Assert(dataService.Contains("intranet.GetValidationIssues @OrganizationId, @Take", StringComparison.Ordinal),
+  "Servis mora mejo podati izrecno; privzetek v bazi je varovalka, ne pogodba.");
+
 Console.WriteLine("F10 dashboard UX contract PASS.");
 
 static void AssertHeading(string markup, string headingId, string what)

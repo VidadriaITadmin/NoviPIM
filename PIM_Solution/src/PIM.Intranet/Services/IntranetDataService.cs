@@ -183,10 +183,16 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     return new(rows, totalCount, skip, take);
   }
 
-  public async Task<QualityView> GetValidationIssuesAsync(int organizationId, CancellationToken cancellationToken = default)
+  /// <param name="take">
+  /// Zgornja meja vrstic prvega nabora. Do migracije 183 je postopek vrnil **vse** aktivne težave
+  /// podjetja — za podjetje 2 čez dva milijona vrstic in 9.788 ms — čeprav plošča iz odgovora bere
+  /// samo povzetek po profilih. Podrobni seznam s stranmi in filtri je <c>GetQualityIssuesAsync</c>.
+  /// <c>0</c> pomeni »samo povzetka«.
+  /// </param>
+  public async Task<QualityView> GetValidationIssuesAsync(int organizationId, int take = 200, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString); await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("EXEC intranet.GetValidationIssues @OrganizationId;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    await using var command = new SqlCommand("EXEC intranet.GetValidationIssues @OrganizationId, @Take;", connection); command.Parameters.AddWithValue("@OrganizationId", organizationId); command.Parameters.AddWithValue("@Take", take);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken); var rows = new List<ValidationIssueRow>();
     while (await reader.ReadAsync(cancellationToken)) rows.Add(new(reader.GetInt64(reader.GetOrdinal("ProductIssueId")), reader.GetInt64(reader.GetOrdinal("ProductId")), reader.GetString(reader.GetOrdinal("ItemId")), reader.GetString(reader.GetOrdinal("ProfileCode")), reader.GetString(reader.GetOrdinal("IssueCode")), reader.GetString(reader.GetOrdinal("Message")), reader.GetDateTime(reader.GetOrdinal("LastDetectedUtc"))));
     var profiles = new List<QualityProfileRow>();
