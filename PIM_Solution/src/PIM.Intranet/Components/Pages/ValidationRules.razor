@@ -43,10 +43,37 @@
   </p>
 </section>
 
+@* P2-16, pregled 2026-09-08: stran je nosila 623 vrstic s 623 izbirniki resnosti, zato je ena
+   sprememba pomenila iskanje po vsem seznamu. Zahteve ostanejo vse — skrivanje bi bilo laz — dobijo
+   pa filter po profilu, polju in resnosti ter pošteno število »prikazano X od Y«. *@
+<section class="ui-card toolbar section-gap" role="search" aria-labelledby="rules-filter-title">
+  <h2 id="rules-filter-title" class="visually-hidden">Filtriranje zahtev</h2>
+
+  <label class="visually-hidden" for="rules-profile">Profil</label>
+  <select id="rules-profile" class="filter-select" @bind="FilterProfile">
+    <option value="">Vsi profili</option>
+    @foreach (var profile in Profiles) { <option value="@profile.ProfileCode">@profile.ProfileCode</option> }
+  </select>
+
+  <label class="visually-hidden" for="rules-severity">Resnost</label>
+  <select id="rules-severity" class="filter-select" @bind="FilterSeverity">
+    <option value="">Vse resnosti</option>
+    <option value="ERROR">Napaka — blokira</option>
+    <option value="WARNING">Opozorilo — ne blokira</option>
+  </select>
+
+  <label class="visually-hidden" for="rules-search">Iskanje po polju</label>
+  <input id="rules-search" class="form-input" type="search" placeholder="Išči po kodi polja …"
+         @bind="FilterField" @bind:event="oninput" />
+
+  <span class="result-count">prikazano @VisibleCount.ToString("N0") od @ActiveCount.ToString("N0") aktivnih zahtev</span>
+</section>
+
 <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje profilov in zahtev …">
   @foreach (var layer in Layers)
   {
     var rows = RowsFor(layer, true);
+    if (rows.Count == 0 && HasFilter) { continue; }
     <section class="ui-card data-card section-gap" aria-labelledby="@($"rules-{layer}")">
       <h2 id="@($"rules-{layer}")">@ValidationLayer.Label(layer)</h2>
       <PimTable Caption="@($"Aktivne zahteve nivoja {ValidationLayer.Label(layer)}")" Columns="RequirementColumns">
@@ -187,8 +214,21 @@
     finally { Busy = false; }
   }
 
+  string FilterProfile = "", FilterSeverity = "", FilterField = "";
+  bool HasFilter => FilterProfile.Length > 0 || FilterSeverity.Length > 0 || FilterField.Trim().Length > 0;
+
+  /// <summary>Aktivne zahteve, ki ustrezajo filtru; imenovalec za »prikazano X od Y«.</summary>
+  int ActiveCount => AllRows.Count(row => row.Requirement.IsActive);
+  int VisibleCount => AllRows.Count(row => row.Requirement.IsActive && Matches(row));
+
+  bool Matches(RequirementWithProfile row) =>
+    (FilterProfile.Length == 0 || string.Equals(row.Profile.ProfileCode, FilterProfile, StringComparison.OrdinalIgnoreCase))
+    && (FilterSeverity.Length == 0 || string.Equals(row.Requirement.Severity ?? "ERROR", FilterSeverity, StringComparison.OrdinalIgnoreCase))
+    && (FilterField.Trim().Length == 0 || row.Requirement.FieldCode.Contains(FilterField.Trim(), StringComparison.OrdinalIgnoreCase));
+
   IReadOnlyList<RequirementWithProfile> RowsFor(PimValidationLayer layer, bool active) => AllRows
     .Where(row => row.Requirement.IsActive == active)
+    .Where(Matches)
     .Where(row => ValidationLayer.Resolve(row.Profile.ProfileCode, row.Profile.Scope, row.Profile.BlocksErp, row.Profile.BlocksWeb).Contains(layer))
     .OrderBy(row => row.Profile.ProfileCode).ThenBy(row => row.Requirement.FieldCode).ToArray();
 

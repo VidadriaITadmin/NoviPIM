@@ -286,6 +286,29 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-16: dolgi strani dobita filter in eno vrstico (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §7 in §8 P2-16 — »dolge strani (623 vrstic pravil,
+277 napak, 182 atributov s 4 vrsticami prevodov) potrebujejo skupine, strani ali strnjen prikaz«.
+
+- **`/pravila/validacija`**: 623 vrstic s 623 izbirniki resnosti na eni strani, zato je ena
+  sprememba pomenila iskanje po vsem seznamu. Zahteve **ostanejo vse** — skrivanje bi bilo laž —
+  dobijo pa filter po profilu, resnosti in kodi polja ter pošteno število »prikazano X od Y«.
+  Nivo brez zadetkov ob vklopljenem filtru odpade, da stran ne kaže praznih razdelkov.
+- **`/nastavitve/atributi`**: prevodi so bili en pod drugim (`flex-direction: column`), zato je bila
+  vsaka od 182 vrstic visoka štiri vrstice. Isti podatek, druga os: `flex-wrap: wrap`.
+
+Dokaz nad tekočo aplikacijo: `/pravila/validacija` vrne HTTP 200, števec »prikazano 632 od 632
+aktivnih zahtev«, 620 izbirnikov resnosti in vse tri filtre; sveženj `PIM.Intranet.styles.css`, ki
+gre v brskalnik, nosi `.translation-list[b-44ca7qrr06] { display: flex; flex-wrap: wrap; … }`.
+`scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+
+**Pošteno o obsegu dokaza:** sprememba pri atributih je slogovna. Dokazal sem, da pravilo pride v
+brskalnik, ne pa izmerjene višine vrstice — za to bi bil potreben brskalnik (`Inspect-Ui.ps1`).
+Tretja postavka iz P2-16, »napake sistema združene«, ni narejena: `SystemErrors.razor` ima odprt
+druga seja (`AGENTS.md` §7).
+
+
 ### 2026-09-09 — P2-13 in P2-15: tehnični ključi za preklopom, `/nastavitve/atributi/{koda}` dobi vsebino (Claude Code)
 
 **P2-13 (U3).** Pod vsakim poljem kartice je stal tehnični ključ registra

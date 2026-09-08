@@ -164,6 +164,20 @@ Assert(!Regex.IsMatch(quality, @"foreach \(var organization in Organizations\)\s
 Assert(quality.Contains("GetValidationLayerSummariesAsync(organization.OrganizationId, profiles)", StringComparison.Ordinal),
   "Znotraj podjetja mora obseg se vedno dobiti seznam profilov, sicer bi vzporednost spremenila izid.");
 
+
+/* ─── Gostota strani pravil (P2-16, pregled 2026-09-08) ───────────────────────
+   Stran je nosila 623 vrstic s 623 izbirniki resnosti, zato je ena sprememba pomenila iskanje po
+   vsem seznamu. Zahteve ostanejo vse — skrivanje bi bilo laz — dobijo pa filter in posteno stevilo. */
+Assert(rules.Contains("id=\"rules-profile\"", StringComparison.Ordinal)
+    && rules.Contains("id=\"rules-severity\"", StringComparison.Ordinal)
+    && rules.Contains("id=\"rules-search\"", StringComparison.Ordinal),
+  "Stran pravil mora imeti filter po profilu, resnosti in polju.");
+Assert(rules.Contains("prikazano @VisibleCount", StringComparison.Ordinal)
+    && rules.Contains("od @ActiveCount", StringComparison.Ordinal),
+  "Filter brez imenovalca zavaja: stran mora povedati, koliko od vseh zahtev je prikazanih.");
+Assert(rules.Contains(".Where(Matches)", StringComparison.Ordinal),
+  "Filter mora veljati na vrsticah vseh nivojev, ne samo na stevcu.");
+
 Console.WriteLine("F10 quality UX contract PASS.");
 
 static string Read(string path)

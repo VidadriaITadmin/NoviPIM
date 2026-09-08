@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 // Pogodba zapisovalne poti za atribute (migracije 121-125).
 //
 // Stran /nastavitve/atributi je imela pred tem tri filtre, onemogocene z besedilom "bralni model
@@ -104,6 +105,16 @@ Assert(registrySql.Contains("map.FieldMapping", StringComparison.Ordinal)
   "Vir mora priti iz registra preslikav.");
 Assert(registrySql.Contains("OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY", StringComparison.Ordinal),
   "Bralni model mora podpirati strani, ker jih stran uporablja.");
+
+
+/* ─── Prevodi v eni vrstici (P2-16) ───────────────────────────────────────────
+   »182 atributov s 4 vrsticami prevodov«: prevodi so bili en pod drugim, zato je bila vsaka
+   vrstica tabele visoka stiri vrstice. Isti podatek, druga os — nic ni skrito. */
+var attributeCss = File.ReadAllText(Path.Combine(pages, "CatalogAttributes.razor.css"));
+Assert(Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-wrap: wrap"),
+  "Prevodi se morajo prelivati v vrstico in ne zlagati v stolpec.");
+Assert(!Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-direction: column"),
+  "Stolpcni razpored prevodov se ne sme vrniti.");
 
 Console.WriteLine("PIM.F10.AttributeUxTests: vse pogodbe drzijo.");
 return 0;

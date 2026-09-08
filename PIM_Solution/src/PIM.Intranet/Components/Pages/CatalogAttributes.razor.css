@@ -1,9 +1,12 @@
 /* Prevodi so izpisani z besedilom, ne le s sifro jezika: uporabnik 2026-08-28 je zahteval,
    da na tej strani vidi prevode, ne samo tega, da obstajajo. */
-.translation-list { display: flex; flex-direction: column; gap: .15rem; list-style: none; margin: 0; padding: 0; }
-.translation-list li { align-items: baseline; display: flex; font-size: .78rem; gap: .4rem; }
+/* P2-16, pregled 2026-09-08: »182 atributov s 4 vrsticami prevodov«. Prevodi so bili en pod
+   drugim, zato je bila vsaka vrstica tabele visoka stiri vrstice in stran neberljiva. Prevodi so
+   isti podatek, samo v eni vrstici — nic ni skrito, spremenila se je le os. */
+.translation-list { display: flex; flex-wrap: wrap; gap: .15rem .7rem; list-style: none; margin: 0; padding: 0; }
+.translation-list li { align-items: baseline; display: flex; font-size: .78rem; gap: .4rem; min-width: 0; }
 .translation-list li.is-missing .translation-name { color: var(--pim-text-muted); font-style: italic; }
 .translation-code { color: var(--pim-text-muted); font-size: .68rem; font-weight: 600; min-width: 1.4rem; text-transform: uppercase; }
-.translation-name { overflow: hidden; text-overflow: ellipsis; }
+.translation-name { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-count { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .72rem; font-weight: 600; padding: .05rem .45rem; }
 
