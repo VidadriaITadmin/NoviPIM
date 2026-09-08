@@ -286,6 +286,31 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-13 in P2-15: tehnični ključi za preklopom, `/nastavitve/atributi/{koda}` dobi vsebino (Claude Code)
+
+**P2-13 (U3).** Pod vsakim poljem kartice je stal tehnični ključ registra
+(`ProductText.WEB_TITLE.sl`, `Product.WebPublish`). Urednik ga ne potrebuje, razvijalec pa takoj,
+zato ni izbrisan, ampak skrit za enim preklopom »Tehnični ključi« v glavi panela (privzeto izklopljen).
+
+**P2-15 (prazne strani), prva od devetih.** `/nastavitve/atributi/{koda}` je bila brez vsebine, ker
+je manjkal `intranet.GetAttributeValues`; stran sama je bila napisana v celoti. Migracija **184**
+bralni model doda, migracija **185** pa popravi **mojo napako iz 184**, ki jo je razkrila meritev:
+vir posamezne vrednosti je iskala s korelirano podpoizvedbo nad `map.ExtractedValue`
+(**20.252.420 vrstic, brez indeksa na `TargetFieldCode`**) in je pri velikosti strani `@Take = 50`
+tekla **96.506 ms** za podjetje 1 in **271.595 ms** za podjetje 2 — stran je obtičala na 60,1 s.
+Indeksa na vhodno tabelo nisem dodal (zajem vanjo piše v svežnjih); vir odslej pride iz registra
+preslikav. Po popravku **75 ms** in **64 ms**, stran **60,1 s → 0,1 s**, 50 vrstic.
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Migrator: prvi zagon uporabljen, drugi preskočen, `--verify` uspešen. Pogodbi sta v
+`PIM.F10.AttributeUxTests` (prepoved branja iz `map.ExtractedValue`) in `PIM.F10.ProductDetailUxTests`.
+
+**Preostalih osem strani s `<PimMissing>`:** `Checks.razor`, `ExportProfileDetail.razor`,
+`SaopFields.razor`, `Web.razor` (čiste, a manjkajo jim bralni modeli za alarme preverb, poskuse
+pošiljanja in odklone — vsak je svoja naloga), `CustomerDetail.razor`, `ProductCard.razor`,
+`SaopDrifts.razor`, `SaopHistory.razor` (te ima odprte druga seja, `AGENTS.md` §7).
+
+
 ### 2026-09-09 — P2-11 (drugi del): `/kakovost` bere podjetja vzporedno (Claude Code)
 
 Branja po podjetjih so med seboj neodvisna, tekla pa so zaporedno: štiri podjetja × ~490 ms je bilo

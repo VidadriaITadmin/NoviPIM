@@ -83,6 +83,28 @@ Assert(!catalog.Contains("bralni model manjka", StringComparison.OrdinalIgnoreCa
 Assert(!catalog.Contains("PimMissing", StringComparison.Ordinal),
   "Oznake manjkajocega bralnega modela ne sme biti vec.");
 
+
+/* ─── Bralni model vrednosti atributa (P2-15, pregled 2026-09-08) ─────────────
+   Stran /nastavitve/atributi/{koda} je bila brez vsebine, ker je manjkal intranet.GetAttributeValues.
+   Migracija 184 ga je dodala, 185 pa popravila: vir vrednosti je iskala s korelirano podpoizvedbo
+   nad map.ExtractedValue (20,25 mio vrstic, brez indeksa na TargetFieldCode) in je pri @Take = 50
+   tekla 96.506 ms za podjetje 1 in 271.595 ms za podjetje 2. Vir odslej pride iz registra
+   preslikav; merjeno 75 ms oziroma 64 ms, stran 60,1 s -> 0,1 s. */
+var migrations = Path.Combine(root, "sql", "migrations");
+Assert(File.Exists(Path.Combine(migrations, "184_AttributeValuesReadModel.sql")),
+  "Manjka migracija 184 z bralnim modelom vrednosti atributa.");
+var registrySource = Path.Combine(migrations, "185_AttributeValuesSourceFromRegistry.sql");
+Assert(File.Exists(registrySource), "Manjka migracija 185, ki vir vzame iz registra.");
+var registrySql = File.ReadAllText(registrySource);
+Assert(!registrySql.Contains("FROM map.ExtractedValue", StringComparison.Ordinal),
+  "Bralni model vrednosti atributa ne sme brati iz map.ExtractedValue: tabela ima cez 20 milijonov "
+  + "vrstic in nima indeksa na TargetFieldCode, zato je bila stran neuporabna.");
+Assert(registrySql.Contains("map.FieldMapping", StringComparison.Ordinal)
+    && registrySql.Contains("map.SourceConnector", StringComparison.Ordinal),
+  "Vir mora priti iz registra preslikav.");
+Assert(registrySql.Contains("OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY", StringComparison.Ordinal),
+  "Bralni model mora podpirati strani, ker jih stran uporablja.");
+
 Console.WriteLine("PIM.F10.AttributeUxTests: vse pogodbe drzijo.");
 return 0;
 

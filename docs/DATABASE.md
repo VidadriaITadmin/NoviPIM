@@ -224,3 +224,31 @@ migracija`, drugi `Preskočena že uporabljena migracija`, `--verify` uspešen.
 **pogled**, ne tabela. Uporabljajo ga `val.RunValidation`, `intranet.GetProductFieldValues`,
 `out.GetExportRows` in `intranet.GetProductExportSheet`. To je največji posamični strošek v sistemu
 in zasluži svojo nalogo.
+
+## Vrednosti atributa (migraciji 184 in 185)
+
+`/nastavitve/atributi/{koda}` je bila po pregledu 2026-09-08 brez vsebine. Vzrok ni bila stran —
+napisana je v celoti, s tabelo, stranmi in poštenim `<PimMissing>` — ampak manjkajoč bralni model
+`intranet.GetAttributeValues`. Migracija **184** ga doda: po vrstici na različno vrednost atributa
+v podjetju, s številom izdelkov, prevodom iz `map.ValueLookup`, virom, oznako uporabe na spletu in
+številom manjkajočih prevodov, ter drugim naborom s skupnim številom.
+
+Migracija **185** popravi **napako iz 184, ki jo je razkrila meritev.** 184 je vir posamezne
+vrednosti iskala s korelirano podpoizvedbo `TOP (1)` nad `map.ExtractedValue`. Ta tabela ima
+**20.252.420 vrstic** in **nima indeksa na `TargetFieldCode`**, zato je vsaka vrstica strani
+sprožila svoj pregled cele tabele:
+
+| | `@Take = 5` | `@Take = 50` (velikost strani) |
+|---|---:|---:|
+| Podjetje 1 | — | **96.506 ms** |
+| Podjetje 2 | 784 ms | **271.595 ms** |
+
+Indeksa na `map.ExtractedValue` namenoma nisem dodal: to je vhodna tabela, v katero zajem piše v
+velikih svežnjih, indeks nad `TargetFieldCode` z vključenim `Value` pa bi podražil vsak zapis.
+Namesto tega vir pride iz **registra** — kateri konektorji tega podjetja imajo preslikavo za ta
+atribut (`map.FieldMapping` + `map.SourceConnector`). Vir na posamezno vrednost je bila izmišljena
+natančnost: stran ima stolpec »Vir«, ne »Vir te vrednosti«.
+
+Po popravku: **75 ms** (podjetje 1) in **64 ms** (podjetje 2) pri `@Take = 50`; stran **60,1 s →
+0,1 s**, 50 vrstic in naslov »Vrednosti atributa Garancija«. Migrator: prvi zagon uporabljen, drugi
+preskočen, `--verify` uspešen.
