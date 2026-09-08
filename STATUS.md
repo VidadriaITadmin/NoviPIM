@@ -1,6 +1,16 @@
 # NoviPIM — živ status dela
 
-Posodobljeno: 2026-09-03
+Posodobljeno: 2026-09-08
+
+## Izdelki: en delovni list, ki gre ven in se vrne — 2026-09-08
+
+`/izdelki` ima gumba **Delovni list** in **Vrni delovni list**. Ista datoteka nosi ERP polja, spletne
+nazive in opise po jezikih, spletne strani, kategorije po straneh in atribute; uredi se v Excelu
+in vrne na `/izdelki/uvoz`. Stolpce obeh smeri določa en seznam, zato datoteka med potjo ne
+izgubi pomena. Uvozi se samo tisto, kar se razlikuje od zapisanega. Spletni podatek se zapiše
+takoj, ERP polja gredo v vrsto za SAOP in čakajo odobritev. Stolpec »Spletne strani« sprejme
+`Svetila.si | Videlektro`; stran, ki je v celici ni, izgubi kategorije, stran, ki jo dodaš, mora
+kategorijo imeti. Podrobno: [`docs/DELOVNI_LIST_IZDELKOV.md`](docs/DELOVNI_LIST_IZDELKOV.md).
 
 ## Intranet — voden vnos artiklov v SAOP 2026-09-03
 

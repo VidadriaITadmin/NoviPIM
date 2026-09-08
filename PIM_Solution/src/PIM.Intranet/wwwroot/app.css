@@ -156,6 +156,10 @@ h1:focus { outline: none; }
 .info-message { background: var(--pim-info-bg); border-color: var(--pim-info-border); color: var(--pim-info-text); }
 .success-message { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
 .error-message { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); color: var(--pim-bad-strong); }
+/* Opozorilo je bilo doslej definirano samo v SaopItems.razor.css. Ker je Blazor CSS obsegov,
+   je pravilo veljalo na eni strani, na ostalih (mnozicno urejanje, uvoz delovnega lista) pa je
+   bil razred brez ucinka in opozorilo je izgledalo kot navadno besedilo. */
+.warn-message { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
 
 /* --- Kartice virov ------------------------------------------------------ */
 .source-card { padding: 1rem 1.15rem; }

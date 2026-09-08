@@ -38,8 +38,12 @@
       @* Obseg izvoza ni vec izbira v spustnem seznamu: ta se je dalo spremeniti, ne da bi se na
          zaslonu karkoli zgodilo. Obseg zdaj pove izbira v tabeli — ce je kaj izbrano, gredo ven
          izbrani, sicer cel pogled — in gumb to prebere na glas. *@
-      <a class="ghost-button" href="@ExportHref(saopTemplate: false)">Izvozi Excel @ExportScopeLabel</a>
-      <a class="ghost-button" href="@ExportHref(saopTemplate: true)">Predloga SAOP @ExportScopeLabel</a>
+      @* Delovni list je edini izvoz, ki se da vrniti nazaj: izvoz in uvoz bereta isti seznam
+         stolpcev, zato datoteka ne izgubi pomena med potjo. *@
+      <a class="primary-button" href="@ExportHref("predloga=delovni")" title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj.">Delovni list @ExportScopeLabel</a>
+      <a class="ghost-button" href="izdelki/uvoz" title="Urejeni delovni list se vrne v PIM: spletni podatki takoj, ERP polja v vrsto za SAOP.">Vrni delovni list</a>
+      <a class="ghost-button" href="@ExportHref(null)">Izvozi Excel @ExportScopeLabel</a>
+      <a class="ghost-button" href="@ExportHref("predloga=saop")">Predloga SAOP @ExportScopeLabel</a>
       @* Pametni prenos artiklov v SAOP: ista predloga, izpolnjena v Excelu, gre na /saop/artikli,
          kjer se za vsako vrstico sama doloci ADD (nov artikel) ali PATCH in caka odobritev. *@
       <a class="ghost-button" href="saop/artikli" title="Excel po predlogi SAOP prebere stran Artikli v SAOP: novi artikli gredo na čakalno listo za odobritev, obstoječi kot sprememba.">Excel → čakalna lista SAOP</a>
@@ -505,15 +509,17 @@ else if (SelectionOverflow)
   string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Math.Min(Selected.Count, MaxSelectionInUrl)})";
 
   // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi. Oblika je
-  // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz; predloga SAOP ima
-  // stolpce iz registra, zato jo je mogoce urediti in vrniti nazaj.
-  string ExportHref(bool saopTemplate)
+  // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz. Predloge:
+  // "delovni" (ERP + splet + atributi, vracljiv na /izdelki/uvoz), "saop" (samo ERP polja,
+  // vracljiv na /saop/artikli) in brez predloge (pregled, enosmeren).
+  /// <param name="template">Poizvedbeni delcek predloge, npr. »predloga=saop«; null je pregled.</param>
+  string ExportHref(string? template)
   {
     var listHref = Href(page: 1);
     var separatorIndex = listHref.IndexOf('?');
     var parameters = separatorIndex < 0 ? "" : listHref[(separatorIndex + 1)..];
 
-    if (saopTemplate) parameters = Append(parameters, "predloga=saop");
+    if (template is not null) parameters = Append(parameters, template);
 
     if (Selected.Count > 0)
       parameters = Append(parameters, "items=" + Uri.EscapeDataString(

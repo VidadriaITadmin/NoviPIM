@@ -267,6 +267,36 @@ Spletnih nazivov, opisov, kategorij, atributov in spletnih strani ni bilo mogoč
 
 | Ozemlje | Migracija / datoteke | Dokaz |
 |---|---|---|
+| BAZA | `171_ProductWorkbookRoundTrip.sql` (`intranet.GetProductWorkbook` — šest naborov v enem klicu; `pim.SetProductWebPublish`), `173_ProductWorkbookAttributeCatalog.sql` (prazen seznam izdelkov = ves šifrant atributov) | migrator 1. zagon `Uporabljena migracija: 171` / `173`, 2. zagon `Preskočena`; obe uporabljeni prek scratch mape, ker so v delovni mapi tuje necommitane migracije. Popravek je nastal kot 172 in bil pod tem imenom uporabljen; ker je isto številko istega dne vzel `172_AdminConsole.sql` iz vzporednega dela, je preimenovan v 173. V `dbo.SchemaMigration` razvojne baze zato ostane vrstica za `172_ProductWorkbookAttributeCatalog.sql`, ki je ni več; `--verify` teče po datotekah na disku, zato ne moti, brisanje vrstice pa je po `AGENTS.md` §4.1 odločitev človeka |
+| DOMENA | `PIM.Operations`: nov `ProductWorkbookContract` (ena pogodba stolpcev za obe smeri), `WorkbookHeader` (edino pravilo normalizacije naslovov), `WorkbookTable.Read` sprejme namige za naslovno vrstico, `WorkbookWriter` ohrani prelome vrstic | `PIM.F10.ProductWorkbookTests` — glej spodaj |
+| INTRANET | `ProductWorkbookService` (izvoz, predogled, zapis), stran `/izdelki/uvoz` (`ProductImport.razor`), gumba »Delovni list« in »Uvozi Excel« na `/izdelki`, `predloga=delovni` na `/izvoz/izdelki.xlsx`, `.warn-message` v `app.css`; docs `DELOVNI_LIST_IZDELKOV.md`, `INTRANET.md` | `run_tests.ps1 -Filter F10` — glej spodaj |
+
+Ena sprememba obstoječega testa: `PIM.F10.ProductsUxTests` je z vzorcem pripenjal natanko
+`string ExportHref(bool saopTemplate)`. Predloge niso več dve, ampak tri, zato `bool` ni več
+prava oblika. Vzorec je sproščen na poljuben seznam parametrov; trditev, ki jo varuje — naslov
+izvoza mora nastati iz `Href(page: 1)` — ostaja enaka in enako stroga. Razlog je zapisan ob
+vzorcu in v `docs/DELOVNI_LIST_IZDELKOV.md`.
+
+Test je našel tri prave napake, preden je bilo kaj commitano: (1) šifrant atributov je bil pri
+uvozu drugačen kot pri izvozu, zato so vrednosti atributov padle na istoimenska polja SAOP in bi
+uvrstile 20.021 lažnih sprememb v odhodno vrsto; (2) »Objava na spletu« je bila dvakrat — enkrat
+kot lastno polje PIM, enkrat iz registra `out.SaopXmlField` — in je vsaka vrstica javljala
+spremembo; (3) `WorkbookWriter` je prelom vrstice spreminjal v presledek, zato se je večvrstičen
+opis iz zvezka vrnil sploščen.
+
+### 2026-09-08 — delovni list izdelkov: en izvoz in en uvoz, ki se ujameta (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
+
+Zahteva uporabnika: »naredi enoten izvoz in pa uvoz, da bo lahko uporabnik pisal podatke in jih
+uvozil notri, ko jih spremeni in dopolni«; dodati manjkajoča spletna polja in stolpec, na katero
+stran gre artikel (svetila / videlektro / oboje), ločeno z `|`. Atributni šifrant dela uporabnik
+v drugem oknu; tu gre za izvoz in uvoz.
+
+Kaj je bilo narobe: `/izdelki` je imela dva izvoza in noben uvoz. »Pregled« se ni dal vrniti
+(slovenski naslovi se ne ujamejo z nobeno kodo), »Predloga SAOP« pa je nosila samo ERP polja.
+Spletnih nazivov, opisov, kategorij, atributov in spletnih strani ni bilo mogoče uvoziti nikjer.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
 | BAZA | `171_ProductWorkbookRoundTrip.sql` (`intranet.GetProductWorkbook` — šest naborov v enem klicu; `pim.SetProductWebPublish`), `172_ProductWorkbookAttributeCatalog.sql` (prazen seznam izdelkov = ves šifrant atributov) | migrator 1. zagon `Uporabljena migracija: 171` / `172`, 2. zagon `Preskočena`; obe uporabljeni prek scratch mape, ker sta v delovni mapi tuji necommitani migraciji |
 | DOMENA | `PIM.Operations`: nov `ProductWorkbookContract` (ena pogodba stolpcev za obe smeri), `WorkbookHeader` (edino pravilo normalizacije naslovov), `WorkbookTable.Read` sprejme namige za naslovno vrstico, `WorkbookWriter` ohrani prelome vrstic | `PIM.F10.ProductWorkbookTests` — glej spodaj |
 | INTRANET | `ProductWorkbookService` (izvoz, predogled, zapis), stran `/izdelki/uvoz` (`ProductImport.razor`), gumba »Delovni list« in »Uvozi Excel« na `/izdelki`, `predloga=delovni` na `/izvoz/izdelki.xlsx`, `.warn-message` v `app.css`; docs `DELOVNI_LIST_IZDELKOV.md`, `INTRANET.md` | `run_tests.ps1 -Filter F10` — glej spodaj |

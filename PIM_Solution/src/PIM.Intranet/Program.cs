@@ -42,6 +42,7 @@ builder.Services.AddScoped<WebExportBuildService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
+builder.Services.AddScoped<ProductWorkbookService>();
 builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
 builder.Services.AddScoped<StockReadService>();
@@ -183,19 +184,28 @@ app.MapGet("/izvoz/izdelki.csv", async (
   }
 });
 
-// Izvoz pogleda v delovni zvezek. Dve predlogi: pregled (kar je na seznamu) in enotna
-// predloga SAOP (stolpci iz registra out.SaopXmlField), ki jo je mogoce urediti in vrniti.
+// Izvoz pogleda v delovni zvezek. Tri predloge:
+//   predloga=delovni — delovni list izdelkov: ERP, splet, kategorije, spletne strani in
+//     atributi v eni datoteki, ki jo je mogoce urediti in vrniti na /izdelki/uvoz;
+//   predloga=saop    — samo ERP polja iz registra out.SaopXmlField (vrne se na /saop/artikli);
+//   brez predloge    — pregled, enosmeren.
 // Obseg je bodisi cel pogled bodisi samo izbrani izdelki.
 app.MapGet("/izvoz/izdelki.xlsx", async (
-  HttpContext context, ProductExportService export, CancellationToken cancellationToken) =>
+  HttpContext context, ProductExportService export, ProductWorkbookService workbook,
+  CancellationToken cancellationToken) =>
 {
   var query = context.Request.Query;
   string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
   int? organizationId = int.TryParse(Value("podjetje"), out var parsedOrganization) ? parsedOrganization : null;
 
-  var template = string.Equals(Value("predloga"), "saop", StringComparison.OrdinalIgnoreCase)
+  var requested = Value("predloga");
+  var template = string.Equals(requested, "saop", StringComparison.OrdinalIgnoreCase)
     ? ProductExportTemplate.Saop
     : ProductExportTemplate.Overview;
+  // Delovni list je tretja predloga in edina, ki gre ven in se vrne nazaj skozi isto pogodbo
+  // stolpcev (ProductWorkbookContract). Zato ni vejica v ProductExportService, ampak svoj
+  // servis: izvoz in uvoz morata brati isti seznam, sicer se datoteka ne da vrniti.
+  var workbookTemplate = string.Equals(requested, "delovni", StringComparison.OrdinalIgnoreCase);
 
   var selected = Value("items")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -204,6 +214,13 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
     Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
     "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika"));
+
+  if (workbookTemplate)
+  {
+    var workbookBytes = await workbook.BuildAsync(filter, selected, cancellationToken);
+    return Results.File(workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ProductWorkbookService.FileName(DateTime.UtcNow));
+  }
 
   var bytes = await export.BuildAsync(filter, template, selected, cancellationToken);
   return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

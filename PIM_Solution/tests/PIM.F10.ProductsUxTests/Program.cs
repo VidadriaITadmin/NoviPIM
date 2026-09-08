@@ -166,7 +166,12 @@ Assert(Regex.IsMatch(markup, "<div class=\"filter-field\">\\s*<label for=\"produ
 // 9. Izvoz pogleda uporabi iste filtre kot pogled in je delovni zvezek, ne CSV.
 Assert(markup.Contains("izvoz/izdelki.xlsx", StringComparison.Ordinal), "Stran mora ponuditi izvoz trenutnega pogleda v Excel.");
 Assert(!markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Gumb za izvoz mora dati zvezek; CSV pot ostaja samo za skripte.");
-Assert(Regex.IsMatch(markup, "string ExportHref\\(bool saopTemplate\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
+// Preverjamo, da naslov izvoza nastane iz naslova seznama, ne oblike parametra. Do 2026-09-08
+// je vzorec zahteval natanko `ExportHref(bool saopTemplate)`; ko je stran dobila tretjo
+// predlogo (delovni list), je bool prenehal biti prava oblika in test je padel na podpisu,
+// ceprav je trditev — »iz istih filtrov kot seznam« — se vedno drzala. Zahteva ostaja enako
+// stroga v tem, kar res varuje: telo mora izhajati iz Href(page: 1).
+Assert(Regex.IsMatch(markup, "string ExportHref\\([^)]*\\)\\s*\\{[^}]*Href\\(page: 1\\)", RegexOptions.Singleline),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
 // Uporabnik 2026-08-28: »Kaj je point polja Pregled – cel pregled, ker ko spreminjam se nic ne
 // zgodi tako da odstrani.« Spustni seznam obsega je zato odpravljen: obseg pove izbira v tabeli
