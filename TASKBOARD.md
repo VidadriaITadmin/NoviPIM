@@ -222,6 +222,23 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## BLOKIRANO
 
+- **[INTRANET / tuja seja] Veja se iz čistega odjema ne prevede: `ToPimLocal` je commitan, `PimTime.cs` ni.**
+  Najdeno 2026-09-09 (Claude Code, ob dokazovanju P0). Commit `f26c16e` je v **sledene** datoteke
+  vpeljal klic `.ToPimLocal()` — `Components/Pages/IngestAttributes.razor`,
+  `Components/Pages/MissingCategories.razor`, `Components/Pages/ProductCategories.razor` in
+  `Services/ProductWorkbookService.cs` — razširitvena metoda pa živi v
+  `src/PIM.Intranet/Services/PimTime.cs`, ki je **še vedno nesledena** (`git status` → `??`).
+
+  Dokaz: `git archive 990b065 | tar -x` v prazno mapo, nato `dotnet build PIM.sln` →
+  `error CS1061: 'DateTime' does not contain a definition for 'ToPimLocal'` v vseh štirih
+  datotekah. Isti izid velja za `HEAD`. V delovni kopiji se prevede samo zato, ker je nesledena
+  `PimTime.cs` na disku.
+
+  Posledica: CI in vsak nov odjem veje sta rdeča, merge v `master` bi bil pokvarjen.
+  Popravek je en sam korak — commitati `Services/PimTime.cs` (in kar še spada zraven) — a je to
+  necommitano delo **druge seje** in po `AGENTS.md` §4.2 ni moje, da ga commitam. Naj to naredi
+  seja, ki je `PimTime.cs` napisala.
+
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
 > Vse je držala ena in ista stvar — polni paket je imel en nepovezan padec
 > (`PIM.F3.Integration`, zastarel primer `GetItemsPlanningData`). Commit `b91bc40` je ta test
