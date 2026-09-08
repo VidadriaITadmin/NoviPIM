@@ -172,8 +172,58 @@ Vsaka naloga ima: **zakaj**, **koraki**, **kako veš, da je uspelo**, **kaj nare
 | G | Pregled in merge veje (naloga 10) | `git push` in merge sta tvoja |
 | H | Kam se Magento CSV dostavi (naloga 11) | zunanji sistem |
 | I | Namestitev in varnostna kopija (naloga 12) | produkcija |
+| J | **Kateri podjetji imata Braytron in kateri Nowodvorski** — številke spodaj | katero podjetje prodaja katerega dobavitelja, veš samo ti |
+| K | **Testni zapisi v katalogu** — ali jih označimo in privzeto skrijemo | kaj je test in kaj ne, je poslovna odločitev |
+| L | **Kateri izdelki gredo na videlektro** — spletišče je prazno | v drevesu videlektro ni nobene dodeljene kategorije |
+| M | **Ali poženem validacijo nad celotnim katalogom** | zapre ~1,76 milijona spletnih napak naenkrat |
 
 Kar sem naredil po tvojih odgovorih 2026-08-22, je spodaj pri vsaki nalogi.
+
+---
+
+## J, K, L, M — izmerjeno 2026-09-09, da lahko odgovoriš brez brskanja
+
+### J. Dobaviteljeva zaloga se naloži v vsa štiri podjetja
+
+`map.SourceConnector` ima za `BT_STOCK` in `NW_STOCK` po eno vrstico na podjetje in vse štiri so
+aktivne, zato se ista datoteka razpakira štirikrat. Koliko pozicij v posameznem podjetju sploh
+najde svoj artikel, pove, kdo dobavitelja dejansko ima:
+
+| Podjetje | `BT_STOCK` brez artikla / vseh | `NW_STOCK` brez artikla / vseh |
+|---|---:|---:|
+| 1 DEMO | 1.384 / 1.389 | 1.638 / 2.762 |
+| 2 IQLighting | 1.183 / 1.397 | **254 / 2.762** |
+| 3 Vidadria | **116 / 1.389** | 244 / 2.762 |
+| 4 Ediito | 1.349 / 1.389 | 2.632 / 2.762 |
+
+Brati se da tako: Braytron se ujame pri **Vidadrii** (92 % pozicij najde artikel), Nowodvorski pri
+**IQLighting** (91 %) in deloma pri Vidadrii. Pri DEMO in Ediitu se ne ujame skoraj nič.
+**Odločitev je tvoja, ne moja** — številka pove, kje se blago ujame, ne pa, s kom imaš pogodbo.
+Ko odgovoriš, je popravek ena vrstica na podjetje: `IsActive = 0` na odvečnih vrsticah
+`map.SourceConnector`. Do takrat `/zaloge` v dveh podjetjih kaže večinoma tuje pozicije.
+
+### K. Testni zapisi so prvi, kar uporabnik vidi
+
+`ItemID = '0'` (IQLighting), `0000000000001` v treh podjetjih in `00000000000000000003`
+(»TESTNA STORITEV z nazivom ena1«, Vidadria) so vsi `IsActive = 1`. Ker je privzeta razvrstitev
+seznama »Šifra naraščajoče«, so na vrhu `/izdelki`. Vprašanje zate: ali so to res testni zapisi in
+ali jih smem označiti (npr. `IsTest`) ter privzeto skriti — ali pa je DEMO celo podjetje testno in
+ga je treba ločiti od produkcijskih.
+
+### L. Spletišče `videlektro` je prazno
+
+Migracija 182 je uvedla potrditvena polja po spletišču. `svetila_si` je dobil 6.070 izdelkov iz
+dodeljenih kategorij; `videlektro` je ostal prazen, ker v njegovem drevesu **ni nobene dodeljene
+kategorije**. Dokler nekdo ne označi izdelkov, na videlektro ne gre nič in njegov spletni profil
+nima kaj validirati. To ni napaka popravka, ampak posledica tega, da drevo videlektro še ni
+napolnjeno (glej tudi vrstico C).
+
+### M. Množična revalidacija
+
+Migracija 182 spremeni pravilo, ne pa podatkov. Dokler ne steče `EXEC val.RunValidation` brez
+parametrov, `/kakovost` kaže stare številke. Ta zagon zapre ~1,76 milijona spletnih napak na
+izdelkih, ki na splet ne gredo. Ker gre za masovno spremembo v bazi, v kateri hkrati delajo druge
+seje, je čas zagona tvoja odločitev.
 
 ---
 

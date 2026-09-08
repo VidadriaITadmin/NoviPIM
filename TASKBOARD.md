@@ -222,6 +222,21 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## BLOKIRANO
 
+- **[BAZA/DOMENA] P1-8 čaka odločitev uporabnika, ne kode.** Izmerjeno 2026-09-09; številke in
+  vprašanja so v [`docs/TVOJE_NALOGE.md`](docs/TVOJE_NALOGE.md), vrstice **J**, **K**, **L**, **M**.
+
+  **J — dobaviteljeva zaloga (§3.4 pregleda).** `map.SourceConnector` ima za `BT_STOCK` in
+  `NW_STOCK` po eno aktivno vrstico na podjetje, zato se ista datoteka razpakira štirikrat.
+  Ujemanje z artiklom: Braytron 116/1.389 brez artikla pri Vidadrii proti 1.384/1.389 pri DEMO;
+  Nowodvorski 254/2.762 pri IQLighting proti 2.632/2.762 pri Ediitu. Popravek je `IsActive = 0`
+  na odvečnih vrsticah registra, a **katero podjetje prodaja katerega dobavitelja, je poslovni
+  podatek** — enako vprašanje že stoji v `TVOJE_NALOGE.md` kot vrstica D. Ne ugibam ga.
+
+  **K — testni zapisi (§3.5).** `ItemID = '0'` (IQLighting), `0000000000001` v treh podjetjih in
+  `00000000000000000003` (»TESTNA STORITEV z nazivom ena1«) so vsi aktivni in zaradi privzete
+  razvrstitve po šifri prvi na `/izdelki`. Označiti in skriti jih smem šele, ko je potrjeno, kaj
+  je test — sicer bi skril pravo blago.
+
 - **[INTRANET / tuja seja] Veja se iz čistega odjema ne prevede: `ToPimLocal` je commitan, `PimTime.cs` ni.**
   Najdeno 2026-09-09 (Claude Code, ob dokazovanju P0). Commit `f26c16e` je v **sledene** datoteke
   vpeljal klic `.ToPimLocal()` — `Components/Pages/IngestAttributes.razor`,
