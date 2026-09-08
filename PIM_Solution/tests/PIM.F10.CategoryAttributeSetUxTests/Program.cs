@@ -82,6 +82,21 @@ Assert(migration.Contains("EXEC canon.SaveCategoryAttributeSet @", StringCompari
 Assert(migration.Contains("translation.Name = item.Given", StringComparison.Ordinal),
   "Seznam sme navesti slovensko ime atributa, ker ga mastri nosijo tako.");
 
+// --- Polnjenje iz mastrov (173): samo skozi postopek, register nedotaknjen, ravni zapisane -------
+var seed = Read(Path.Combine(root, "sql", "migrations", "173_CategoryAttributeSetsFromMastri.sql"));
+Assert(seed.Contains("EXEC canon.SaveCategoryAttributeSetBulk", StringComparison.Ordinal),
+  "Nabori iz mastrov morajo iti skozi canon.SaveCategoryAttributeSetBulk, ne z INSERT v register.");
+foreach (var forbidden in new[] { "INSERT canon.", "INSERT INTO canon.", "INSERT val.", "canon.AttributeDefinition", "DELETE canon.", "DELETE val." })
+  Assert(!seed.Contains(forbidden, StringComparison.Ordinal),
+    "Migracija 173 ne sme pisati v tabele mimo postopka niti siriti registra atributov: " + forbidden);
+Assert(seed.Contains("N'REQUIRED'", StringComparison.Ordinal) && seed.Contains("N'RECOMMENDED'", StringComparison.Ordinal)
+  && !seed.Contains("WithValue", StringComparison.Ordinal),
+  "Ravni so v migraciji zapisane kot vrednosti, ne izracunane iz stanja baze - rezultat mora biti enak v vsakem okolju.");
+Assert(seed.Contains("existing.IsActive = 1", StringComparison.Ordinal) && seed.Contains("UpdatedBy <> N'mastri 2026-09-08'", StringComparison.Ordinal),
+  "Rocno urejena aktivna vrstica mora preziveti ponovni zagon migracije.");
+Assert(File.Exists(Path.Combine(root, "tools", "Mastri", "build_category_attribute_sets.py")),
+  "Generator preslikave mastrov mora biti v repozitoriju, da je polnjenje ponovljivo.");
+
 Console.WriteLine("PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.");
 return 0;
 
