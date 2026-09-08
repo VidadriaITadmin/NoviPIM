@@ -10,7 +10,7 @@
 
 <section class="ui-card toolbar" role="search" aria-label="Filtri zgodovine SAOP">
   <select class="filter-select" @bind="Entity"><option value="">Vse entitete</option>@foreach (var value in Entities) { <option value="@value">@value</option> }</select>
-  <select class="filter-select" @bind="Status"><option value="">Vsa stanja</option>@foreach (var value in Statuses) { <option value="@value">@value</option> }</select>
+  <select class="filter-select" value="@(Status ?? "")" @onchange="args => Status = args.Value?.ToString()"><option value="">Vsa stanja</option>@foreach (var value in Statuses) { <option value="@value">@value</option> }</select>
   <select class="filter-select" disabled title="Odobritelj ni v bralnem modelu"><option>Uporabnik — ni podatka</option></select>
   <select class="filter-select" @bind="Period"><option value="0">Vse obdobje</option><option value="7">Zadnjih 7 dni</option><option value="30">Zadnjih 30 dni</option><option value="90">Zadnjih 90 dni</option></select>
   <input class="search-input" type="search" placeholder="Ključ, polje ali cilj …" @bind="Search" @bind:event="oninput" />
@@ -48,7 +48,10 @@
 </section>
 
 @code {
-  [SupplyParameterFromQuery(Name = "stanje")] public string Status { get; set; } = "";
+  // A2, pregled 2026-09-08: /saop/zgodovina brez ?stanje= je padel s HTTP 500. Blazor lastnost ob
+  // manjkajocem parametru nastavi na null (privzeta vrednost se ne obdrzi), izraz Filtered pa je
+  // bral Status.Length. Zato je tip nicelen in filter to izrecno prenese.
+  [SupplyParameterFromQuery(Name = "stanje")] public string? Status { get; set; }
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Zgodovina")];
   static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat"), new("Dejanje")];
   IReadOnlyList<OutboundRow> Rows = [];
@@ -60,7 +63,7 @@
   IReadOnlyList<string> Entities => Rows.Select(row => row.EntityType).Distinct().Order().ToArray();
   IReadOnlyList<string> Statuses => Rows.Select(row => row.Status).Distinct().Order().ToArray();
   IReadOnlyList<OutboundRow> Filtered => Rows.Where(row =>
-    (Entity.Length == 0 || row.EntityType == Entity) && (Status.Length == 0 || row.Status == Status)
+    (Entity.Length == 0 || row.EntityType == Entity) && (string.IsNullOrEmpty(Status) || row.Status == Status)
     && (Period == "0" || row.CreatedUtc >= DateTime.UtcNow.AddDays(-int.Parse(Period)))
     && (Search.Length == 0 || row.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.FieldSummary.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.TargetKind.Contains(Search, StringComparison.OrdinalIgnoreCase)))
     .OrderByDescending(row => row.CreatedUtc).ToArray();

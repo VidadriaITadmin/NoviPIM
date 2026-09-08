@@ -55,7 +55,7 @@ public sealed class ShippingRuleRow
   public int Priority { get; set; }
 }
 
-public sealed class IntranetDataService(IConfiguration configuration)
+public sealed class IntranetDataService(IConfiguration configuration, PimWriteGuard guard)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
@@ -400,11 +400,14 @@ public sealed class IntranetDataService(IConfiguration configuration)
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
+  // A4, pregled 2026-09-08: gumba »Potrdi« in »Reši« na /preverbe nista bila vezana na vlogo,
+  // stran pa je odprta vsem prijavljenim. Vloga se zato preveri tu, ne na strani.
   public Task AcknowledgeAlertAsync(int organizationId,long alertId,string actor,CancellationToken cancellationToken=default) => ExecuteAlertActionAsync("intranet.AcknowledgeAlert",organizationId,alertId,actor,cancellationToken);
   public Task ResolveAlertAsync(int organizationId,long alertId,string actor,CancellationToken cancellationToken=default) => ExecuteAlertActionAsync("intranet.ResolveAlert",organizationId,alertId,actor,cancellationToken);
 
   async Task ExecuteAlertActionAsync(string procedure,int organizationId,long alertId,string actor,CancellationToken cancellationToken)
   {
+    await guard.RequireAsync(PimPolicies.AlertWrite);
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
     await using var command=new SqlCommand(procedure,connection){CommandType=System.Data.CommandType.StoredProcedure};
     command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@AlertId",alertId);command.Parameters.AddWithValue("@Actor",actor);

@@ -44,10 +44,12 @@ public sealed record OutboundBatchRow(
 /// spreminja to, kar bo šlo v ERP. Mešanje obojega v en razred je hitro pripeljalo do tega, da
 /// je bralna stran nehote dobila zapisovalne poti.
 ///
-/// Nobene varovalke ne izvaja sama. Vse — lastništvo polja, pripadnost dokumentu, dedup,
-/// odobritev — odloči baza; ta storitev samo pokaže izid.
+/// Poslovne varovalke — lastništvo polja, pripadnost dokumentu, dedup, odobritev — odloči baza;
+/// ta storitev samo pokaže izid. Edino, česar baza ne ve, je **kdo** zapis naroča, zato se vloga
+/// preveri tu (ugotovitev A1, pregled 2026-09-08): <c>@Actor</c> je bil doslej samo revizijski
+/// podatek in ne pogoj.
 /// </summary>
-public sealed class SaopWriteService(IConfiguration configuration)
+public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard guard)
 {
   const string TargetKind = "SAOP_PRODUCT";
 
@@ -83,6 +85,7 @@ public sealed class SaopWriteService(IConfiguration configuration)
     int organizationId, IEnumerable<(string ItemId, string FieldKey, string? Value)> changes,
     string actor, string source, string? note, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.SaopWrite);
     var payload = JsonSerializer.Serialize(changes.Select(change => new
     {
       itemId = change.ItemId,
@@ -114,16 +117,23 @@ public sealed class SaopWriteService(IConfiguration configuration)
   }
 
   public async Task<int> ApproveBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
-    await ScalarIntAsync("EXEC out.ApproveOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+    await GuardedScalarIntAsync("EXEC out.ApproveOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
 
   public async Task<int> CancelBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
-    await ScalarIntAsync("EXEC out.CancelOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+    await GuardedScalarIntAsync("EXEC out.CancelOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
 
   public async Task<int> RequeueMessageAsync(long messageId, string actor, CancellationToken cancellationToken = default) =>
-    await ScalarIntAsync("EXEC out.RequeueOutboxMessage @Batch, @Actor;", messageId, actor, cancellationToken);
+    await GuardedScalarIntAsync("EXEC out.RequeueOutboxMessage @Batch, @Actor;", messageId, actor, cancellationToken);
 
   public async Task<int> RequeueBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
-    await ScalarIntAsync("EXEC out.RequeueOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+    await GuardedScalarIntAsync("EXEC out.RequeueOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+
+  /// <summary>Zapisovalna razlicica: najprej vloga, sele nato baza.</summary>
+  async Task<int> GuardedScalarIntAsync(string sql, long batchId, string actor, CancellationToken cancellationToken)
+  {
+    await guard.RequireAsync(PimPolicies.SaopWrite);
+    return await ScalarIntAsync(sql, batchId, actor, cancellationToken);
+  }
 
   async Task<int> ScalarIntAsync(string sql, long batchId, string actor, CancellationToken cancellationToken)
   {
@@ -223,6 +233,7 @@ public sealed class SaopWriteService(IConfiguration configuration)
 
   public async Task AcknowledgeAsync(long eventId, string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.SaopWrite);
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC intranet.AcknowledgeOutboundEvent @Id, @Actor;", connection);
     command.Parameters.Add("@Id", SqlDbType.BigInt).Value = eventId;
@@ -231,7 +242,7 @@ public sealed class SaopWriteService(IConfiguration configuration)
   }
 
   public async Task<int> AcknowledgeBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
-    await ScalarIntAsync("EXEC intranet.AcknowledgeOutboundBatchEvents @Batch, @Actor;", batchId, actor, cancellationToken);
+    await GuardedScalarIntAsync("EXEC intranet.AcknowledgeOutboundBatchEvents @Batch, @Actor;", batchId, actor, cancellationToken);
 
   /* --- uvoz iz zvezka --------------------------------------------------- */
 

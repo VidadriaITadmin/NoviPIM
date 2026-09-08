@@ -19,7 +19,7 @@ public sealed record CheckThresholdRow(
   int CheckThresholdId, string CheckCode, int? OrganizationId, string? OrganizationName,
   decimal Threshold, bool IsActive, string? Note, DateTime UpdatedUtc, string UpdatedBy);
 
-public sealed class RulesWriteService(IConfiguration configuration)
+public sealed class RulesWriteService(IConfiguration configuration, PimWriteGuard guard)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
@@ -44,6 +44,7 @@ public sealed class RulesWriteService(IConfiguration configuration)
     string checkCode, int? organizationId, decimal threshold, string actor, string? note = null,
     CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.AlertWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("pim.SaveCheckThreshold", connection) { CommandType = CommandType.StoredProcedure };
@@ -59,6 +60,7 @@ public sealed class RulesWriteService(IConfiguration configuration)
     int validationProfileId, string fieldCode, string severity, bool isRequired, bool isActive,
     string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.BusinessWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("intranet.SaveFieldRequirement", connection) { CommandType = CommandType.StoredProcedure };
@@ -81,6 +83,7 @@ public sealed class RulesWriteService(IConfiguration configuration)
     string? sourceElement, string? targetFieldCode, bool isRequired, bool isActive, string actor,
     CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.BusinessWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("intranet.SaveFieldMapping", connection) { CommandType = CommandType.StoredProcedure };

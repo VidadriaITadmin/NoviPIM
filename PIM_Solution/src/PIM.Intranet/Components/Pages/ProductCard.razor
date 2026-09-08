@@ -25,16 +25,26 @@
     <PimPage Title="@Detail.Header.Name" Subtitle="@($"{OrganizationName} · artikel {Detail.Header.ItemId} · EAN {Detail.Header.Ean ?? "—"}")" Crumbs="ProductCrumbs">
       <Actions>
         <div class="card-actions">
-          <span class="save-state" role="status" aria-live="polite">
-            @if (Busy) { <span>Shranjujem …</span> }
-            else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
-            else if (SaveMessage is not null) { <span class="save-ok">@SaveMessage</span> }
-            else if (Drafts.Count > 0) { <span class="save-dirty">@Drafts.Count neshranjenih</span> }
-          </span>
-          <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči</button>
-          <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">
-            Shrani spremembe@(Drafts.Count > 0 ? $" ({Drafts.Count})" : "")
-          </button>
+          @* A1, pregled 2026-09-08: bralna vloga je dobila 14 urejivih polj in gumb »Shrani
+             spremembe«. Kdor ne sme pisati, tu ne dobi gumba, ampak pove, zakaj ga ni. *@
+          @if (!CanEdit)
+          {
+            <PimChip Text="Samo za branje" Tone="warn" />
+            <span class="save-state">Urejanje kartice je omejeno na vlogi ADMIN in CATALOG_EDITOR.</span>
+          }
+          else
+          {
+            <span class="save-state" role="status" aria-live="polite">
+              @if (Busy) { <span>Shranjujem …</span> }
+              else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
+              else if (SaveMessage is not null) { <span class="save-ok">@SaveMessage</span> }
+              else if (Drafts.Count > 0) { <span class="save-dirty">@Drafts.Count neshranjenih</span> }
+            </span>
+            <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči</button>
+            <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">
+              Shrani spremembe@(Drafts.Count > 0 ? $" ({Drafts.Count})" : "")
+            </button>
+          }
         </div>
       </Actions>
     </PimPage>
@@ -176,7 +186,8 @@
                                BlockingCount="@erpBlockingCount"
                                WarningCount="@ErpIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="ERP — Slovenija" />
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="ERP — Slovenija"
+                               ReadOnly="@(!CanEdit)" />
         </section>
 
         @* A7, uporabnik 2026-08-31: »komercialne podatke in pa splet podatke bi locili«.
@@ -188,7 +199,8 @@
                                StatusTone="@(commercialWarningCount == 0 ? "good" : "warn")" BlockingCount="0"
                                WarningCount="@commercialWarningCount" LastValidatedUtc="@Detail.Header.LastValidatedUtc"
                                Fields="@CommercialFields" Issues="@CommercialIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Klasifikacija in objava" />
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Klasifikacija in objava"
+                               ReadOnly="@(!CanEdit)" />
 
           <section id="panel-prices" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Cene</h2><a href="cene?izdelek=@Detail.Header.ItemId">Odpri poslovni pogled</a></div>
@@ -206,7 +218,8 @@
                                BlockingCount="@webBlockingCount"
                                WarningCount="@WebIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@WebFields" Issues="@WebIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Spletna polja">
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Spletna polja"
+                               ReadOnly="@(!CanEdit)">
             <Toolbar>
               <label for="product-site">Spletno mesto</label>
               <select id="product-site" class="filter-select" @bind="SelectedSite">
@@ -365,6 +378,9 @@
 
   int OrganizationId;
   string OrganizationName = "";
+
+  /// <summary>Ali sme prijavljena vloga karkoli shraniti. Servisi to preverijo se enkrat sami.</summary>
+  bool CanEdit;
   IReadOnlyList<WritableFieldRow> WritableSaopFields = [];
 
   /// <summary>Nepotrjene spremembe: kljuc polja → nova vrednost. Zivijo, dokler jih uporabnik
@@ -769,6 +785,7 @@
   {
     Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
     Snapshot = null; SnapshotError = null;
+    CanEdit = PimPolicies.Allows((await Authentication.GetAuthenticationStateAsync()).User, PimPolicies.CatalogWrite);
     try
     {
       // Kartica je dosegljiva iz seznama vseh podjetij, zato obseg dolocì izdelek sam;
@@ -807,6 +824,7 @@
 
   void OnFieldChanged((ProductChannelField Field, string? Value) change)
   {
+    if (!CanEdit) return;
     SaveMessage = null;
     SaveError = null;
     var current = change.Value?.Trim();
@@ -833,6 +851,7 @@
   async Task SaveChangesAsync()
   {
     if (Drafts.Count == 0 || Detail is null || Busy) return;
+    if (!CanEdit) { SaveError = "Tvoja vloga ne dovoljuje urejanja kartice."; return; }
     Busy = true;
     SaveMessage = null;
     SaveError = null;

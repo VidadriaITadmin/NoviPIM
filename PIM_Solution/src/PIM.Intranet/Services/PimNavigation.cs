@@ -81,12 +81,14 @@ public static class PimNavigation
     ]),
     new(PimLifecycle.Outputs.Label,
     [
-      new("Izhod v SAOP", "saop", "icon-export", "Kaj gre nazaj v ERP, v kakšnem stanju in kaj je ERP potrdil.", IsHub: true),
+      // A5, pregled 2026-09-08: meni je bralni vlogi kazal postavki, ki ji vrneta 403. Vloge tu
+      // morajo ustrezati [Authorize] na ciljni strani, sicer je meni obljuba, ki je ne drzi.
+      new("Izhod v SAOP", "saop", "icon-export", "Kaj gre nazaj v ERP, v kakšnem stanju in kaj je ERP potrdil.", [PimRoles.Admin, PimRoles.CatalogEditor], IsHub: true),
       new("Izhod na splet", "splet", "icon-export", "Datoteke za splet: artikli in stranke, predogled in prenos.", IsHub: true),
     ]),
     new(PimLifecycle.Business.Label,
     [
-      new("Stranke", "stranke", "icon-users", "Kupci, dobavitelji in proizvajalci."),
+      new("Stranke", "stranke", "icon-users", "Kupci, dobavitelji in proizvajalci.", [PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial]),
       new("Zaloga", "zaloge", "icon-stock"),
       new("Cene in ceniki", "cene", "icon-price"),
       new("Preverbe cen in zaloge", "preverbe", "icon-quality", "Opozorila o cenah, maržah in zalogi — ne blokirajo izvoza."),

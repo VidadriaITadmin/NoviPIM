@@ -4,6 +4,7 @@ using PIM.Operations;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseStaticWebAssets();
@@ -19,16 +20,53 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
   .AddCookie(options =>
   {
     options.LoginPath = "/prijava";
-    options.AccessDeniedPath = "/prijava";
+    // A5, pregled 2026-09-08: zavrnjen dostop je vodil na prijavni obrazec, zato je prijavljen
+    // uporabnik brez vloge videl prijavo in ni izvedel, da je stran zanj zaprta.
+    options.AccessDeniedPath = "/brez-dostopa";
+    // A3: piskotek se ob vsaki zahtevi primerja z zigom v bazi, zato izklop racuna in odvzem
+    // vloge veljata takoj in ne sele cez 14 dni.
+    options.Events.OnValidatePrincipal = PimSessionValidator.ValidateAsync;
   });
 builder.Services.AddAuthorization(options =>
 {
   options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
     .RequireAuthenticatedUser()
     .Build();
+
+  // Zapisovalne politike (A1, A4). Ena politika = ena poslovna pravica; strani in servisi berejo
+  // isti seznam vlog iz PimPolicies, da se ne razideta.
+  foreach (var policy in PimPolicies.Names)
+    options.AddPolicy(policy, builderPolicy => builderPolicy
+      .RequireAuthenticatedUser()
+      .RequireRole(PimPolicies.RolesFor(policy)));
+});
+
+// A3, drugi del: prijava je bila brez vsakrsne omejitve poskusov. Zunanji obroc je omejevalnik
+// zahtev po naslovu (varovalka pred poplavo), notranji pa PimLoginThrottle, ki steje samo
+// neuspele poskuse na par uporabnisko ime + naslov.
+builder.Services.AddRateLimiter(options =>
+{
+  options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+  options.AddPolicy(PimRateLimits.Login, context => RateLimitPartition.GetFixedWindowLimiter(
+    context.Connection.RemoteIpAddress?.ToString() ?? "neznan",
+    _ => new FixedWindowRateLimiterOptions
+    {
+      PermitLimit = PimRateLimits.LoginRequestsPerWindow,
+      Window = PimRateLimits.Window,
+      QueueLimit = 0,
+    }));
+  options.OnRejected = async (context, cancellationToken) =>
+  {
+    context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+    await context.HttpContext.Response.WriteAsync(
+      "Preveč poskusov prijave s te naprave. Počakaj 15 minut in poskusi znova.", cancellationToken);
+  };
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<LocalUserAuthenticationService>();
+builder.Services.AddScoped<UserSecurityStateService>();
+builder.Services.AddScoped<PimWriteGuard>();
+builder.Services.AddSingleton<PimLoginThrottle>();
 builder.Services.AddScoped<IntranetDataService>();
 builder.Services.AddScoped<PimDb>();
 builder.Services.AddScoped<CatalogReadService>();
@@ -72,30 +110,45 @@ app.UseStaticFiles();
 app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
-app.MapPost("/auth/prijava", async (HttpContext context, LocalUserAuthenticationService authenticationService, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+app.MapPost("/auth/prijava", async (HttpContext context, LocalUserAuthenticationService authenticationService, PimLoginThrottle throttle, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
 {
   await antiforgery.ValidateRequestAsync(context);
   var form = await context.Request.ReadFormAsync();
-  var user = await authenticationService.AuthenticateAsync(form["uporabniskoIme"], form["geslo"], context.RequestAborted);
-  if (user is null) return Results.Redirect($"{context.Request.PathBase}/prijava?napaka=1");
-  var rememberMe = form.ContainsKey("zapomniMe");
-  var claims = new List<Claim>
+  var userName = form["uporabniskoIme"].ToString();
+  var remoteAddress = context.Connection.RemoteIpAddress?.ToString();
+
+  // Ugibanje gesla se ustavi tu in ne v bazi: po desetih neuspelih poskusih v petnajstih minutah
+  // enajsti dobi 429 in do konca okna ne pride vec do preverjanja gesla.
+  var retryAfter = throttle.RetryAfter(userName, remoteAddress);
+  if (retryAfter is not null)
   {
-    new(ClaimTypes.Name, user.UserName),
-    new(ClaimTypes.GivenName, user.DisplayName),
-  };
-  claims.AddRange(user.Roles.Select(role => new Claim(ClaimTypes.Role, role)));
-  await context.SignInAsync(
-    CookieAuthenticationDefaults.AuthenticationScheme,
-    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+    context.Response.Headers.RetryAfter = ((int)retryAfter.Value.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    return Results.Text(
+      $"Preveč neuspelih poskusov prijave. Poskusi znova čez {Math.Ceiling(retryAfter.Value.TotalMinutes)} minut.",
+      "text/plain; charset=utf-8", statusCode: StatusCodes.Status429TooManyRequests);
+  }
+
+  var user = await authenticationService.AuthenticateAsync(userName, form["geslo"], context.RequestAborted);
+  if (user is null)
+  {
+    throttle.RegisterFailure(userName, remoteAddress);
+    return Results.Redirect($"{context.Request.PathBase}/prijava?napaka=1");
+  }
+
+  throttle.RegisterSuccess(userName, remoteAddress);
+  var rememberMe = form.ContainsKey("zapomniMe");
+  var principal = PimSessionValidator.BuildPrincipal(
+    new PimUserSecurityState(user.UserName, user.DisplayName, true, user.SecurityStamp, user.Roles));
+  await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal,
     new AuthenticationProperties
     {
       IsPersistent = rememberMe,
       ExpiresUtc = rememberMe ? DateTimeOffset.UtcNow.AddDays(14) : null,
     });
   return Results.Redirect($"{context.Request.PathBase}/nadzorna-plosca");
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting(PimRateLimits.Login);
 app.MapPost("/odjava", async (HttpContext context) =>
 {
   await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

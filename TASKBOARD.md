@@ -220,20 +220,6 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   nalogovno usmerjenih sklopov, jasen prikaz blokad in odprtih nalog ter manj tehnična
   predstavitev ključnih podatkov; obstoječe bralne in zapisovalne poti ostanejo nespremenjene.
 
-- **[BAZA → INTRANET] P0 iz pregleda 2026-09-08: vloge na zapisovalni meji, padec zgodovine SAOP,
-  seja onemogočenega računa, stran brez dostopa** — kdo: Claude Code — ozemlje: zaporedno
-  BAZA → INTRANET — začeto 2026-09-08. Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8, P0 1–4
-  (ugotovitve A1, A2, A3, A4, A5).
-
-  **BAZA je KONČANA:** migracija `181_LocalUserSecurityStamp.sql` — prvi zagon migratorja
-  `Uporabljena migracija: 181_LocalUserSecurityStamp.sql`, drugi `Preskočena že uporabljena
-  migracija`, `--verify` = »Preverjanje F0–F10 baze je uspešno.« Doda `sec.LocalUser.SecurityStamp`,
-  sprožilca `sec.TR_LocalUser_SecurityStamp` in `sec.TR_LocalUserRole_SecurityStamp` ter
-  `sec.GetUserSecurityState`. Ročna preverba nad začasnim računom `qa_stamp_probe` (sam ustvarjen in
-  pobrisan): sprememba imena žiga ne zavrti, `IsEnabled = 0` ga zavrti, dodana vloga ga zavrti.
-  `--verify` je bilo pognano nad mapo s **sledenimi** migracijami plus 181; nad delovno mapo pade
-  na tujih necommitanih `153/154/169/172/173`, kar je znana postavka P1-9 istega pregleda.
-
 ## BLOKIRANO
 
 > **2026-08-26: pet intranetnih vnosov in odločitev o `PIM.F3.Integration` niso več blokirani.**
@@ -267,6 +253,64 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
   contracta. Implementacija bi te vrednosti izumila, zato je Agent B ne začne.
 
 ## KONČANO
+
+### 2026-09-09 — P0 iz pregleda 2026-09-08: vloge na zapisovalni meji, padec zgodovine SAOP, seja onemogočenega računa, stran brez dostopa (Claude Code)
+
+Vir: [`docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`](docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md) §8, P0 1–4
+(ugotovitve A1, A2, A3, A4, A5). Dve ozemlji, dva commita: BAZA, nato INTRANET.
+
+**BAZA (migracija 181).** `sec.LocalUser.SecurityStamp`, sprožilca `sec.TR_LocalUser_SecurityStamp`
+(izklop, geslo, vir prijave) in `sec.TR_LocalUserRole_SecurityStamp` (vsaka sprememba vlog) ter
+bralni postopek `sec.GetUserSecurityState`. Sprožilca namesto klica iz aplikacije zato, ker se
+račun v praksi izklopi tudi neposredno v bazi — tako je bil narejen dokaz A3.
+Dokaz: prvi zagon migratorja `Uporabljena migracija: 181_LocalUserSecurityStamp.sql`, drugi
+`Preskočena že uporabljena migracija`, `--verify` »Preverjanje F0–F10 baze je uspešno.«
+Ročno nad začasnim računom `qa_stamp_probe` (sam ustvarjen in pobrisan): sprememba imena žiga ne
+zavrti, `IsEnabled = 0` ga zavrti, dodana vloga ga zavrti.
+
+**INTRANET.** `Services/PimAuthorization.cs` uvede štiri politike (`CatalogWrite`, `SaopWrite`,
+`AlertWrite`, `BusinessWrite`) in varovalko `PimWriteGuard`, ki teče **pred** klicem baze v
+`ProductEditService`, `SaopWriteService`, `IntranetDataService` (alarmi) in `RulesWriteService`.
+`Services/PimSessionSecurity.cs` doda preverjanje piškotka ob vsaki zahtevi (`OnValidatePrincipal`),
+omejevalnik zahtev na prijavni poti in `PimLoginThrottle` za neuspele poskuse. Kartica izdelka in
+`/preverbe` bralni vlogi ne ponudita obrazca oziroma gumbov; `/saop/zgodovina` ima `string? Status`;
+`AccessDeniedPath` je `/brez-dostopa` z lastno stranjo; `Error.razor` je slovenska; meni ne kaže
+postavk, ki jih vloga dobi kot 403.
+
+**Dokaz RED → GREEN.** `PIM.F10.AuthTests` je bil razširjen z vlogami na zapisovalni meji in ni več
+samo branje datotek: zapisovalne servise pokliče s prijavljeno vlogo `VIEWER` in zahteva
+`UnauthorizedAccessException`; če bi varovalka manjkala, bi test padel s `SqlException` in prav ta
+razlika je dokaz. Nad drevesom **pred** popravkom (`git archive HEAD~1`) je test zapored ujel deset
+ugotovitev — manjka `PimAuthorization.cs`; manjka `PimSessionSecurity.cs`; kartica pravice ne
+jemlje iz politike; obrazec kanala nima `ReadOnly`; gumba »Potrdi«/»Reši« nista vezana na pravico;
+parameter `stanje` ni ničelen; piškotek se ob zahtevi ne preverja; prijava ne bere žiga; manjka
+stran `/brez-dostopa`; stran napake je angleška predloga — in postal zelen šele, ko so bile v to
+drevo prekopirane vse popravljene datoteke.
+
+**Dokaz nad tekočo aplikacijo.** `docs/pregled-20260909/Preveri-P0.ps1` (ustvari si začasen račun
+`qa_p0_*` z vlogo `VIEWER` in ga na koncu pobriše): 12 preverb, vse OK —
+kartica za `VIEWER` brez gumba »Shrani spremembe« in z **0** urejivimi polji (pregled 2026-09-08:
+14), značka »Samo za branje«; protidokaz z vlogo `ADMIN`: gumb je in urejivih polj je **43**;
+`/saop` za `VIEWER` konča na `/brez-dostopa`; onemogočen račun z istim piškotkom konča na
+`/prijava`; `/saop/zgodovina` brez parametra vrne **HTTP 200** (prej 500); enajsta neuspela prijava
+vrne **429** (kode poskusov 1–11: 200 ×10, 429). `QA_ACCOUNT_CLEANUP_COMPLETE ostanek=0`.
+
+**Testi.** `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Polni `scripts\run_tests.ps1` = 61 uspešnih, 0 preskočenih, **4 padli** — `PIM.F2.Integration`, `PIM.F3.Integration`,
+`PIM.F5.Integration` (vsi s SQL časovnim iztekom, `Error Number:-2`) in `PIM.F7.MagentoExportTests`
+(»Profil MAGENTO_PRODUCTS mora imeti 213 aktivnih stolpcev: dejansko 215«). Nobeden od štirih ne
+referencira `PIM.Intranet` in migracija 181 doda samo objekte v shemi `sec`. Vzrok je tuje
+necommitano delo v skupni razvojni bazi: dodatna stolpca sta `COL216 Količina odprodaje`
+(`Clearance.Quantity`) in `COL217 Popust odprodaje %` (`Clearance.DiscountPercent`) iz migracij
+delovnega drevesa `.worktrees/odprodaja` (172/175/176), ki so v bazi uporabljene, na tej veji pa
+jih ni. Trije časovni izteki so posledica sočasnih zaklepov iste baze.
+
+**Kar ostaja odprto (ni del P0).** Trajna revizijska sled neuspelih prijav (`ops.UserActivity`,
+migracija 172) — ta migracija je delo druge seje in še ni commitana, zato se P0 nanjo ne naslanja;
+omejitev je za zdaj v pomnilniku procesa. `--verify` migratorja nad delovno mapo pade na tujih
+necommitanih migracijah `153/154/169/172/173` (postavka P1-9 istega pregleda); pognan je bil nad
+mapo s sledenimi migracijami plus 181.
+
 
 ### 2026-09-08 — pregled sistema, baze in UX: en dokument z dokazi in načrtom (Codex + Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
 

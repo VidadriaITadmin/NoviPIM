@@ -2,7 +2,10 @@ using Microsoft.Data.SqlClient;
 
 namespace PIM.Intranet.Services;
 
-public sealed record AuthenticatedLocalUser(string UserName, string DisplayName, IReadOnlyList<string> Roles);
+/// <param name="SecurityStamp">Zig seje iz <c>sec.LocalUser</c> (migracija 181). Gre v piskotek in
+/// se ob vsaki zahtevi primerja z bazo; ob izklopu racuna, novem geslu ali spremenjenih vlogah se
+/// zavrti in seja neha veljati.</param>
+public sealed record AuthenticatedLocalUser(string UserName, string DisplayName, IReadOnlyList<string> Roles, Guid SecurityStamp);
 
 public sealed class LocalUserAuthenticationService(IConfiguration configuration, ActiveDirectoryService activeDirectory)
 {
@@ -15,7 +18,7 @@ public sealed class LocalUserAuthenticationService(IConfiguration configuration,
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
-      SELECT localUser.UserName, localUser.DisplayName, localUser.PasswordHash, localUser.AuthSource, localUser.DomainIdentity, roleValue.RoleCode
+      SELECT localUser.UserName, localUser.DisplayName, localUser.PasswordHash, localUser.AuthSource, localUser.DomainIdentity, roleValue.RoleCode, localUser.SecurityStamp
       FROM sec.LocalUser localUser
       LEFT JOIN sec.LocalUserRole userRole ON userRole.LocalUserId = localUser.LocalUserId
       LEFT JOIN sec.Role roleValue ON roleValue.RoleId = userRole.RoleId
@@ -33,8 +36,10 @@ public sealed class LocalUserAuthenticationService(IConfiguration configuration,
     string? authSource = null;
     string? domainIdentity = null;
     var roles = new List<string>();
+    Guid securityStamp = default;
     while (await reader.ReadAsync(cancellationToken))
     {
+      securityStamp = reader.GetGuid(6);
       resolvedUserName ??= reader.GetString(0);
       displayName ??= reader.GetString(1);
       passwordHash ??= reader.IsDBNull(2) ? null : reader.GetString(2);
@@ -47,6 +52,6 @@ public sealed class LocalUserAuthenticationService(IConfiguration configuration,
     var authenticated = authSource == "DOMAIN"
       ? domainIdentity is not null && activeDirectory.Validate(domainIdentity, password)
       : passwordHash is not null && PasswordHasher.Verify(password, passwordHash);
-    return authenticated ? new AuthenticatedLocalUser(resolvedUserName, displayName, roles) : null;
+    return authenticated ? new AuthenticatedLocalUser(resolvedUserName, displayName, roles, securityStamp) : null;
   }
 }

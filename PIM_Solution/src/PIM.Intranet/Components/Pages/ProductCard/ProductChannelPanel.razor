@@ -41,7 +41,7 @@
                 @if (row.Edit == ProductFieldEdit.Saop) { <span class="tag tag-saop">SAOP</span> }
               </label>
 
-              @if (row.Edit == ProductFieldEdit.None)
+              @if (row.Edit == ProductFieldEdit.None || ReadOnly)
               {
                 <output id="@controlId" class="field-value">@Display(row)</output>
               }
@@ -69,6 +69,7 @@
                 <span class="code-value">@row.FieldKey</span>
                 @if (row.Edit == ProductFieldEdit.Saop) { <span>sprememba čaka odobritev</span> }
                 @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <span>ni v bralnem modelu</span> }
+                @if (ReadOnly && row.Edit != ProductFieldEdit.None) { <span>tvoja vloga tega polja ne sme urejati</span> }
               </p>
             </div>
           }
@@ -114,6 +115,12 @@
   [Parameter, EditorRequired] public required IReadOnlyList<ProductCardIssue> Issues { get; set; }
   [Parameter] public bool Hidden { get; set; }
   [Parameter] public RenderFragment? Toolbar { get; set; }
+
+  /// <summary>
+  /// Vloga brez pravice pisanja (A1, pregled 2026-09-08). Obrazec se takrat izrise kot vrednosti
+  /// in ne kot vnosna polja; to je videz, prava varovalka je <c>PimWriteGuard</c> v servisu.
+  /// </summary>
+  [Parameter] public bool ReadOnly { get; set; }
 
   /// <summary>Skupine, ki se izrisejo v natanko dveh stolpcih namesto v samodejni mrezi.</summary>
   [Parameter] public IReadOnlyList<string>? TwoColumnGroups { get; set; }

@@ -20,32 +20,43 @@ public sealed record ProductAttributeEdit(string AttributeCode, string? Value);
 /// SQL ostaja v oštevilčeni migraciji (111): servis kliče <c>pim.SaveProductTexts</c> in
 /// <c>pim.SaveProductAttributes</c>, ki sama poskrbita za zgodovino (sprožilci) in za takojšnjo
 /// ponovno validacijo tega enega izdelka.
+///
+/// Vloga se preveri **tu**, pred klicem baze (ugotovitev A1, pregled 2026-09-08). Prej je bila
+/// urejivost stvar komponente, zato je bralna vloga <c>VIEWER</c> dobila urejiva polja in gumb
+/// »Shrani spremembe«, zapisovalna pot pa vloge sploh ni pogledala; procedure preverijo lastništvo
+/// polja in pripadnost podjetju, ne pa tudi, kdo zapis naroča.
 /// </summary>
-public sealed class ProductEditService(IConfiguration configuration)
+public sealed class ProductEditService(IConfiguration configuration, PimWriteGuard guard)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
-  public Task<ProductEditOutcome> SaveTextsAsync(
+  public async Task<ProductEditOutcome> SaveTextsAsync(
     int organizationId, long productId, IEnumerable<ProductTextEdit> edits,
-    string actor, string? note = null, CancellationToken cancellationToken = default) =>
-    SaveAsync("pim.SaveProductTexts", organizationId, productId,
+    string actor, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await SaveAsync("pim.SaveProductTexts", organizationId, productId,
       JsonSerializer.Serialize(edits.Select(edit => new
       {
         lang = edit.Language,
         textType = edit.TextType,
         value = edit.Value ?? string.Empty,
       })), actor, note, cancellationToken);
+  }
 
-  public Task<ProductEditOutcome> SaveAttributesAsync(
+  public async Task<ProductEditOutcome> SaveAttributesAsync(
     int organizationId, long productId, IEnumerable<ProductAttributeEdit> edits,
-    string actor, string? note = null, CancellationToken cancellationToken = default) =>
-    SaveAsync("pim.SaveProductAttributes", organizationId, productId,
+    string actor, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await SaveAsync("pim.SaveProductAttributes", organizationId, productId,
       JsonSerializer.Serialize(edits.Select(edit => new
       {
         attributeCode = edit.AttributeCode,
         value = edit.Value ?? string.Empty,
       })), actor, note, cancellationToken);
+  }
 
   async Task<ProductEditOutcome> SaveAsync(
     string procedure, int organizationId, long productId, string changesJson,

@@ -31,13 +31,63 @@ Ne-Razor končne točke:
 | GET | `/izvoz/izdelki.xlsx` | zahteva sejo (velja `FallbackPolicy`) | **izvoz, ki ga ponuja stran**: isti filtri kot `/izdelki`, vključno s `kategorija=<drevo>:<koda>`, ki zoži vrstice IN stolpce atributov na nabor kategorije. Tri predloge (`predloga=delovni` — delovni list, ki se vrne na `/izdelki/uvoz`; `predloga=saop`; brez predloge pregled) in dva obsega (cel pogled ali `items=` za izbrane). Predloga SAOP ima stolpce iz registra `out.SaopXmlField` — ista datoteka za izvoz, urejanje in vračanje. Delovni zvezek dela `PIM.Operations.WorkbookWriter` (brez zunanje knjižnice): zamrznjena naslovna vrstica, samodejni filter, šifra artikla ostane besedilo. En klic v bazo, zgornja meja 20.000 vrstic je zapisana v datoteko |
 | GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki` (vključno s `podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), brez `podjetje` zajame vsa podjetja, prvi stolpec je podjetje; CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
 
-Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` in
-`AccessDeniedPath` sta oba `/prijava`. Globalni `FallbackPolicy` zahteva
+Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` je `/prijava`,
+`AccessDeniedPath` pa `/brez-dostopa`. Globalni `FallbackPolicy` zahteva
 prijavljenega uporabnika, zato je vse, kar ni izrecno `AllowAnonymous`, zaprto.
-`zapomniMe` nastavi trajni piškotek z veljavnostjo 14 dni (`Program.cs:67-69`).
+`zapomniMe` nastavi trajni piškotek z veljavnostjo 14 dni.
 
 Zahtevki (claims) po prijavi: `ClaimTypes.Name` (uporabniško ime),
-`ClaimTypes.GivenName` (prikazno ime), po en `ClaimTypes.Role` na vlogo.
+`ClaimTypes.GivenName` (prikazno ime), po en `ClaimTypes.Role` na vlogo in `pim:zig`
+(žig seje iz `sec.LocalUser.SecurityStamp`, migracija 181).
+
+### 1.1 Veljavnost seje in omejitev prijave (P0, 2026-09-09)
+
+Popravek ugotovitve **A3** iz `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`: onemogočen račun je
+ostal prijavljen, ker sta se `IsEnabled` in seznam vlog prebrala samo ob prijavi.
+
+- `Events.OnValidatePrincipal = PimSessionValidator.ValidateAsync` (`Services/PimSessionSecurity.cs`)
+  ob **vsaki** zahtevi s piškotkom prebere `sec.GetUserSecurityState` in primerja žig. Ob
+  neujemanju, izbrisanem ali onemogočenem računu sejo zavrne in odjavi. Prvi poskus je imel
+  petminutni interval; zahtevo »izklop velja takoj« je zgrešil, zato ga ni več. Statične datoteke
+  sem ne pridejo (`UseStaticFiles` stoji pred `UseAuthentication`), vezje Blazor Server pa se
+  overi enkrat ob vzpostavitvi, zato je to ena poizvedba po enoličnem ključu na odprto stran.
+- Spremenjene vloge ne zahtevajo ponovne prijave: piškotek se prepiše z novimi vlogami.
+- Prijava ima dva obroča: `AddRateLimiter` s politiko `PimRateLimits.Login` (30 zahtev na
+  15 minut na naslov, zavrnitev 429 s slovenskim sporočilom) in `PimLoginThrottle`, ki šteje samo
+  **neuspele** poskuse na par uporabniško ime + naslov (10 na 15 minut; enajsti dobi 429 in do
+  konca okna sploh ne pride do preverjanja gesla). Uspešna prijava števec počisti.
+
+### 1.2 Politike zapisovalnih poti (P0, 2026-09-09)
+
+Popravek ugotovitev **A1** in **A4**: vloga je bila preverjena samo z `[Authorize]` na strani,
+urejivost polj pa se je odločala po vrsti polja. Bralna vloga `VIEWER` je na kartici izdelka
+dobila 14 urejivih polj in gumb »Shrani spremembe«, strežniška pot zapisa pa vloge ni pogledala.
+
+`Services/PimAuthorization.cs` uvaja štiri politike in varovalko `PimWriteGuard`:
+
+| Politika | Vloge | Kje se preveri |
+|---|---|---|
+| `CatalogWrite` | `ADMIN`, `CATALOG_EDITOR` | `ProductEditService.SaveTextsAsync/SaveAttributesAsync` |
+| `SaopWrite` | `ADMIN`, `CATALOG_EDITOR` | `SaopWriteService` — uvrstitev v vrsto, odobritev, preklic, ponovno pošiljanje, potrditev dogodkov |
+| `AlertWrite` | `ADMIN`, `COMMERCIAL` | `IntranetDataService.AcknowledgeAlertAsync/ResolveAlertAsync`, `RulesWriteService.SaveCheckThresholdAsync` |
+| `BusinessWrite` | `ADMIN`, `CATALOG_EDITOR`, `COMMERCIAL` | `RulesWriteService.SaveRequirementAsync/SaveMappingAsync` |
+
+Varovalka teče **pred** klicem baze in vrže `UnauthorizedAccessException`. Uporabnika poišče v
+`HttpContext` (minimalni API) oziroma v `AuthenticationStateProvider` (vezje Blazor Server).
+`PimWriteGuard.Trusted(...)` je izhod za procese brez prijavljenega uporabnika (konzolni testi,
+orodja); v `src/PIM.Intranet` ga pogodbeni test `PIM.F10.AuthTests` prepove.
+
+Kartica izdelka in stran `/preverbe` isti seznam vlog uporabita za izris: brez pravice ni gumba
+»Shrani spremembe«, polja kanala se izrišejo kot vrednosti in ob kartici stoji značka
+»Samo za branje«. To je videz; varovalka je v servisu.
+
+### 1.3 Zavrnjen dostop in napaka (P0, 2026-09-09)
+
+Popravek ugotovitve **A5**. `/brez-dostopa` (`Pages/AccessDenied.razor`) pove, kdo si, katere
+vloge imaš, katero pot si zahteval in komu pisati. `Pages/Error.razor` ni več angleška predloga
+(»Error.«, »Development Mode«), ampak slovenska stran z oznako zahteve in potjo nazaj. Meni
+postavk, ki jih vloga ne sme odpreti, ne kaže več: `PimNavigation` ima vloge na postavkah
+`Izhod v SAOP` in `Stranke`, ujemanje z `[Authorize(Roles = …)]` ciljne strani pa preverja test.
 
 ---
 

@@ -109,8 +109,14 @@
             <td><PimChip Text="@alert.AlertKind" Tone="warn" /></td><td>@alert.Title<div class="tree-path">@alert.PayloadSummaryRedacted</div></td>
             <td class="numeric">@alert.OccurrenceCount.ToString("N0")</td><td>@PimFormat.Ago(alert.LastSeenUtc)</td>
             <td>
-              <button class="small-action" disabled="@ActionBusy" @onclick="() => AcknowledgeAsync(alert.AlertId)">Potrdi</button>
-              <button class="small-action" disabled="@ActionBusy" @onclick="() => ResolveAsync(alert.AlertId)">Reši</button>
+              @* A4, pregled 2026-09-08: gumba nista bila vezana na vlogo, stran pa je odprta vsem
+                 prijavljenim. Servis zavrne ostale tudi brez tega pogoja. *@
+              @if (CanActOnAlerts)
+              {
+                <button class="small-action" disabled="@ActionBusy" @onclick="() => AcknowledgeAsync(alert.AlertId)">Potrdi</button>
+                <button class="small-action" disabled="@ActionBusy" @onclick="() => ResolveAsync(alert.AlertId)">Reši</button>
+              }
+              else { <span class="muted">samo za ADMIN in COMMERCIAL</span> }
             </td>
           </tr>
         }
@@ -125,6 +131,9 @@
   IReadOnlyList<CheckThresholdRow> Thresholds = [];
   readonly Dictionary<int, string> ThresholdDraft = new();
   bool CanEditThreshold;
+
+  /// <summary>Ali sme prijavljena vloga potrjevati in resevati alarme (politika AlertWrite).</summary>
+  bool CanActOnAlerts;
   bool ThresholdBusy;
   string? ThresholdMessage;
   string OrganizationName = "";
@@ -135,7 +144,8 @@
     {
       Thresholds = await Rules.GetCheckThresholdsAsync();
       var state = await Authentication.GetAuthenticationStateAsync();
-      CanEditThreshold = state.User.IsInRole("ADMIN") || state.User.IsInRole("COMMERCIAL");
+      CanEditThreshold = PimPolicies.Allows(state.User, PimPolicies.AlertWrite);
+      CanActOnAlerts = CanEditThreshold;
     }
     catch { Thresholds = []; }
   }
@@ -266,7 +276,7 @@
 
   async Task AcknowledgeAsync(long id)
   {
-    if (OrganizationId is null) return;
+    if (OrganizationId is null || !CanActOnAlerts) return;
     ActionBusy = true;
     try { await Data.AcknowledgeAlertAsync(OrganizationId.Value, id, await ActorAsync()); Message = "Obvestilo je potrjeno."; await LoadAsync(); }
     catch { Error = "Obvestila ni bilo mogoče potrditi."; }
@@ -275,7 +285,7 @@
 
   async Task ResolveAsync(long id)
   {
-    if (OrganizationId is null) return;
+    if (OrganizationId is null || !CanActOnAlerts) return;
     ActionBusy = true;
     try { await Data.ResolveAlertAsync(OrganizationId.Value, id, await ActorAsync()); Message = "Obvestilo je rešeno."; await LoadAsync(); }
     catch { Error = "Obvestila ni bilo mogoče rešiti."; }

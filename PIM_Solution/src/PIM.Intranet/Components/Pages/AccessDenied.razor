@@ -1,0 +1,45 @@
+@page "/brez-dostopa"
+@attribute [AllowAnonymous]
+
+@* A5, pregled 2026-09-08: AccessDeniedPath je bil "/prijava", zato je prijavljen uporabnik brez
+   vloge pristal na prijavnem obrazcu — videti je bilo, kot da je seja potekla. Stran mora povedati
+   troje: kdo si, katera vloga manjka in kaj naredis zdaj. *@
+
+<PageTitle>Nimaš dostopa</PageTitle>
+
+<PimPage Title="Nimaš dostopa do te strani" Subtitle="Stran obstaja, tvoja vloga pa je ne sme odpreti." />
+
+<section class="ui-card access-denied">
+  <AuthorizeView>
+    <Authorized>
+      <dl class="access-facts">
+        <div><dt>Prijavljen si kot</dt><dd>@context.User.Identity?.Name</dd></div>
+        <div><dt>Tvoje vloge</dt><dd>@RolesOf(context.User)</dd></div>
+        <div><dt>Zahtevana pot</dt><dd class="code-value">@(Target ?? "—")</dd></div>
+      </dl>
+      <p>
+        Vsaka stran ima svoje vloge; ta ni med tvojimi. Če to potrebuješ za delo, naj ti skrbnik
+        doda ustrezno vlogo na <span class="code-value">/system/uporabniki</span>. Vloge veljajo
+        takoj, brez ponovne prijave.
+      </p>
+    </Authorized>
+    <NotAuthorized>
+      <p>Seja ni več veljavna. Prijavi se znova.</p>
+    </NotAuthorized>
+  </AuthorizeView>
+
+  <div class="access-actions">
+    <a class="primary-button" href="nadzorna-plosca">Nazaj na nadzorno ploščo</a>
+    <a class="secondary-button" href="prijava">Prijavi se z drugim računom</a>
+  </div>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "ReturnUrl")] public string? Target { get; set; }
+
+  static string RolesOf(System.Security.Claims.ClaimsPrincipal user)
+  {
+    var roles = user.FindAll(System.Security.Claims.ClaimTypes.Role).Select(claim => claim.Value).Order().ToArray();
+    return roles.Length == 0 ? "brez vloge" : string.Join(", ", roles);
+  }
+}

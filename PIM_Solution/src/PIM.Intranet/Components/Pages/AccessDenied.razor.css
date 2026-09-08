@@ -1,0 +1,13 @@
+.access-denied { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; }
+
+.access-facts { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); margin: 0; }
+.access-facts div { display: flex; flex-direction: column; gap: 0.15rem; }
+.access-facts dt { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+.access-facts dd { margin: 0; font-weight: 600; }
+
+.access-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.access-actions a { text-decoration: none; }
+
+/* Gumba sta povezavi, zato jima je treba vrniti obliko gumba (globalni razred stavi na <button>). */
+.access-actions .primary-button,
+.access-actions .secondary-button { display: inline-flex; align-items: center; }

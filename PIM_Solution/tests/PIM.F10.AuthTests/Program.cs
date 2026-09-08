@@ -1,3 +1,10 @@
+using System.Security.Claims;
+using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using PIM.Intranet.Components.Pages.ProductCardParts;
+using PIM.Intranet.Services;
+
 var root = FindRoot();
 var pagesDirectory = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 var migration = Path.Combine(root, "sql", "migrations", "026_AddIntranetUserAdministration.sql");
@@ -196,6 +203,200 @@ foreach (var razorPage in Directory.EnumerateFiles(pagesDirectory, "*.razor", Se
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   P0 iz pregleda 2026-09-08 — vloge na zapisovalni meji, padec zgodovine SAOP,
+   seja onemogocenega racuna in stran brez dostopa (A1–A5).
+
+   Ta del ni branje datotek: zapisovalne servise dejansko poklice s prijavljeno
+   bralno vlogo VIEWER in preveri, da zavrnejo **pred** klicem baze.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+var authorizationPath = Path.Combine(root, "src", "PIM.Intranet", "Services", "PimAuthorization.cs");
+var sessionPath = Path.Combine(root, "src", "PIM.Intranet", "Services", "PimSessionSecurity.cs");
+Assert(File.Exists(authorizationPath), "Manjka Services/PimAuthorization.cs — politike zapisovalnih poti (A1, A4).");
+Assert(File.Exists(sessionPath), "Manjka Services/PimSessionSecurity.cs — zig seje in omejitev prijave (A3).");
+var authorizationSource = File.ReadAllText(authorizationPath);
+var sessionSource = File.ReadAllText(sessionPath);
+foreach (var contract in new[] { "CatalogWrite", "SaopWrite", "AlertWrite", "BusinessWrite", "PimWriteGuard", "RequireAsync", "UnauthorizedAccessException" })
+  Assert(authorizationSource.Contains(contract, StringComparison.Ordinal), "PimAuthorization nima pogodbe: " + contract);
+
+// --- A1/A4: politike so ena sama resnica o tem, katera vloga sme pisati -------------------
+Assert(PimPolicies.RolesFor(PimPolicies.CatalogWrite).OrderBy(role => role).SequenceEqual(["ADMIN", "CATALOG_EDITOR"]),
+  "Politika CatalogWrite mora biti ADMIN in CATALOG_EDITOR.");
+Assert(PimPolicies.RolesFor(PimPolicies.SaopWrite).OrderBy(role => role).SequenceEqual(["ADMIN", "CATALOG_EDITOR"]),
+  "Politika SaopWrite mora biti ADMIN in CATALOG_EDITOR.");
+Assert(PimPolicies.RolesFor(PimPolicies.AlertWrite).OrderBy(role => role).SequenceEqual(["ADMIN", "COMMERCIAL"]),
+  "Politika AlertWrite mora biti ADMIN in COMMERCIAL.");
+Assert(PimPolicies.RolesFor(PimPolicies.BusinessWrite).OrderBy(role => role).SequenceEqual(["ADMIN", "CATALOG_EDITOR", "COMMERCIAL"]),
+  "Politika BusinessWrite mora biti ADMIN, CATALOG_EDITOR in COMMERCIAL.");
+
+var viewer = Principal("qa_viewer", "VIEWER");
+var editor = Principal("qa_editor", "CATALOG_EDITOR");
+var commercial = Principal("qa_komerciala", "COMMERCIAL");
+Assert(!PimPolicies.Allows(viewer, PimPolicies.CatalogWrite), "Bralna vloga ne sme izpolnjevati CatalogWrite.");
+Assert(PimPolicies.Allows(editor, PimPolicies.CatalogWrite), "Urednik kataloga mora izpolnjevati CatalogWrite.");
+Assert(!PimPolicies.Allows(editor, PimPolicies.AlertWrite), "Urednik kataloga ne sme potrjevati alarmov.");
+Assert(PimPolicies.Allows(commercial, PimPolicies.AlertWrite), "Komerciala mora smeti potrjevati alarme.");
+Assert(!PimPolicies.Allows(new ClaimsPrincipal(new ClaimsIdentity()), PimPolicies.CatalogWrite),
+  "Neprijavljen uporabnik ne sme izpolnjevati nobene zapisovalne politike.");
+
+// --- A1: zapisovalna pot zavrne bralno vlogo pred klicem baze -----------------------------
+// Povezovalni niz je namenoma neveljaven: ce bi varovalka manjkala, bi test padel s SqlException
+// namesto z UnauthorizedAccessException, in prav ta razlika je dokaz, da se vloga preveri prva.
+var unusableConfiguration = new ConfigurationBuilder()
+  .AddInMemoryCollection(new Dictionary<string, string?>
+  {
+    ["ConnectionStrings:Pim"] = "Server=ta-streznik-ne-obstaja;Database=PIM;Connect Timeout=1;Encrypt=False",
+  })
+  .Build();
+Environment.SetEnvironmentVariable("PIM_CONNECTION_STRING", null);
+
+var viewerGuard = GuardFor(viewer);
+var editorGuard = GuardFor(editor);
+
+await AssertRefusedAsync("ProductEditService.SaveTextsAsync",
+  () => new ProductEditService(unusableConfiguration, viewerGuard)
+    .SaveTextsAsync(1, 1, [new ProductTextEdit("sl", "WEB_TITLE", "x")], "qa_viewer"));
+await AssertRefusedAsync("ProductEditService.SaveAttributesAsync",
+  () => new ProductEditService(unusableConfiguration, viewerGuard)
+    .SaveAttributesAsync(1, 1, [new ProductAttributeEdit("BARVA", "x")], "qa_viewer"));
+await AssertRefusedAsync("SaopWriteService.EnqueueAsync",
+  () => new SaopWriteService(unusableConfiguration, viewerGuard)
+    .EnqueueAsync(1, [("0000000000001", "Product.Name", "x")], "qa_viewer", "CARD", null));
+await AssertRefusedAsync("SaopWriteService.RequeueMessageAsync",
+  () => new SaopWriteService(unusableConfiguration, viewerGuard).RequeueMessageAsync(1, "qa_viewer"));
+await AssertRefusedAsync("SaopWriteService.ApproveBatchAsync",
+  () => new SaopWriteService(unusableConfiguration, viewerGuard).ApproveBatchAsync(1, "qa_viewer"));
+await AssertRefusedAsync("IntranetDataService.AcknowledgeAlertAsync",
+  () => new IntranetDataService(unusableConfiguration, viewerGuard).AcknowledgeAlertAsync(1, 1, "qa_viewer"));
+await AssertRefusedAsync("IntranetDataService.ResolveAlertAsync",
+  () => new IntranetDataService(unusableConfiguration, viewerGuard).ResolveAlertAsync(1, 1, "qa_viewer"));
+await AssertRefusedAsync("RulesWriteService.SaveCheckThresholdAsync",
+  () => new RulesWriteService(unusableConfiguration, viewerGuard).SaveCheckThresholdAsync("PRICE", 1, 1m, "qa_viewer"));
+// Urednik kataloga pride mimo varovalke in obtici sele na bazi — to dokaze, da varovalka
+// ne zavraca vsega po vrsti.
+await AssertReachesDatabaseAsync("ProductEditService.SaveTextsAsync z vlogo CATALOG_EDITOR",
+  () => new ProductEditService(unusableConfiguration, editorGuard)
+    .SaveTextsAsync(1, 1, [new ProductTextEdit("sl", "WEB_TITLE", "x")], "qa_editor"));
+
+// Zadnja vrata za procese brez uporabnika smejo obstajati samo za teste in orodja.
+foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.cs", SearchOption.AllDirectories)
+           .Concat(Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.razor", SearchOption.AllDirectories)))
+{
+  if (Path.GetFileName(file) == "PimAuthorization.cs") continue;
+  Assert(!File.ReadAllText(file).Contains("PimWriteGuard.Trusted", StringComparison.Ordinal),
+    "PimWriteGuard.Trusted so zadnja vrata mimo vseh politik in v intranetu ne smejo biti uporabljena: " + file);
+}
+
+// --- A1: kartica bralni vlogi ne ponudi obrazca -------------------------------------------
+var productCard = File.ReadAllText(Path.Combine(pagesDirectory, "ProductCard.razor"));
+var channelPanel = File.ReadAllText(Path.Combine(pagesDirectory, "ProductCard", "ProductChannelPanel.razor"));
+Assert(productCard.Contains("PimPolicies.Allows(", StringComparison.Ordinal) && productCard.Contains("CanEdit", StringComparison.Ordinal),
+  "Kartica mora pravico do urejanja vzeti iz politike, ne iz vrste polja.");
+Assert(Regex.IsMatch(productCard, @"@if \(!CanEdit\)[\s\S]{0,400}Samo za branje"),
+  "Kartica mora bralni vlogi pokazati znacko »Samo za branje«.");
+Assert(productCard.IndexOf("Shrani spremembe", StringComparison.Ordinal) > productCard.IndexOf("@if (!CanEdit)", StringComparison.Ordinal),
+  "Gumb »Shrani spremembe« mora biti znotraj veje, ki velja samo za vlogo s pravico pisanja.");
+Assert(Regex.Matches(productCard, @"ReadOnly=""@\(!CanEdit\)""").Count == 3,
+  "Vsi trije kanalni obrazci kartice morajo dobiti ReadOnly iz iste pravice.");
+Assert(productCard.Contains("if (!CanEdit) { SaveError", StringComparison.Ordinal),
+  "Shranjevanje kartice mora zavrniti vlogo brez pravice tudi, ce gumb pride do klica.");
+Assert(channelPanel.Contains("ProductFieldEdit.None || ReadOnly", StringComparison.Ordinal),
+  "Obrazec kanala mora ob ReadOnly izrisati vrednost namesto vnosnega polja.");
+
+// --- A4: potrjevanje in resevanje alarmov ni vec odprto vsem prijavljenim ------------------
+var checksPage = File.ReadAllText(Path.Combine(pagesDirectory, "Checks.razor"));
+Assert(checksPage.Contains("CanActOnAlerts", StringComparison.Ordinal)
+    && Regex.IsMatch(checksPage, @"@if \(CanActOnAlerts\)[\s\S]{0,400}Potrdi"),
+  "Gumba »Potrdi« in »Reši« morata biti vezana na pravico do alarmov.");
+Assert(checksPage.Contains("PimPolicies.Allows(state.User, PimPolicies.AlertWrite)", StringComparison.Ordinal),
+  "Stran preverb mora pravico brati iz politike, ne iz seznama vlog v strani.");
+
+// --- A2: /saop/zgodovina brez parametra v naslovu ------------------------------------------
+var saopHistoryPage = File.ReadAllText(Path.Combine(pagesDirectory, "SaopHistory.razor"));
+Assert(saopHistoryPage.Contains("public string? Status", StringComparison.Ordinal),
+  "Parameter »stanje« mora biti nicelen: brez njega Blazor lastnost nastavi na null.");
+// Pojasnilo v komentarju sme omenjati staro napako; prepoved velja za kodo.
+Assert(!WithoutComments(saopHistoryPage).Contains("Status.Length", StringComparison.Ordinal),
+  "Filter zgodovine ne sme brati Status.Length — prav to je padlo s HTTP 500.");
+Assert(saopHistoryPage.Contains("string.IsNullOrEmpty(Status)", StringComparison.Ordinal),
+  "Filter zgodovine mora prazen in manjkajoc parameter obravnavati enako.");
+
+// --- A3: zig seje, preverjanje piskotka in omejitev prijave --------------------------------
+Assert(programText.Contains("OnValidatePrincipal = PimSessionValidator.ValidateAsync", StringComparison.Ordinal),
+  "Piskotek se mora ob zahtevi znova preveriti; brez tega onemogocen racun ostane prijavljen.");
+Assert(sessionSource.Contains("sec.GetUserSecurityState", StringComparison.Ordinal)
+    && sessionSource.Contains("RejectPrincipal", StringComparison.Ordinal)
+    && sessionSource.Contains("SignOutAsync", StringComparison.Ordinal),
+  "Preverjanje seje mora brati stanje iz baze in sejo ob neujemanju zavreci.");
+Assert(programText.Contains("AddRateLimiter", StringComparison.Ordinal)
+    && programText.Contains("UseRateLimiter", StringComparison.Ordinal)
+    && programText.Contains("RequireRateLimiting(PimRateLimits.Login)", StringComparison.Ordinal),
+  "Prijavna pot mora imeti omejitev zahtev.");
+Assert(programText.Contains("PimClaims.SecurityStamp", StringComparison.Ordinal)
+    || sessionSource.Contains("PimClaims.SecurityStamp", StringComparison.Ordinal),
+  "Zig seje mora priti v piskotek, sicer ga ni s cim primerjati.");
+Assert(File.ReadAllText(auth).Contains("SecurityStamp", StringComparison.Ordinal),
+  "Prijava mora prebrati zig seje iz sec.LocalUser.");
+
+var throttle = new PimLoginThrottle();
+for (var attempt = 1; attempt <= PimLoginThrottle.MaxFailures; attempt++)
+{
+  Assert(throttle.RetryAfter("qa_viewer", "10.0.0.1") is null, $"Poskus {attempt} se ne sme biti blokiran.");
+  throttle.RegisterFailure("qa_viewer", "10.0.0.1");
+}
+Assert(throttle.RetryAfter("qa_viewer", "10.0.0.1") is not null,
+  $"Poskus {PimLoginThrottle.MaxFailures + 1} mora biti zavrnjen z 429.");
+Assert(throttle.RetryAfter("qa_viewer", "10.0.0.2") is null,
+  "Omejitev velja na par uporabnisko ime + naslov in ne sme zakleniti druge naprave.");
+Assert(throttle.RetryAfter("qa_editor", "10.0.0.1") is null,
+  "Omejitev ne sme zakleniti drugega uporabnika z istega naslova.");
+throttle.RegisterSuccess("qa_viewer", "10.0.0.1");
+Assert(throttle.RetryAfter("qa_viewer", "10.0.0.1") is null, "Uspesna prijava mora stevec pocistiti.");
+
+// --- A5: stran brez dostopa in slovenska stran napake ---------------------------------------
+Assert(programText.Contains("AccessDeniedPath = \"/brez-dostopa\"", StringComparison.Ordinal),
+  "Zavrnjen dostop ne sme voditi na prijavni obrazec.");
+var accessDeniedPath = Path.Combine(pagesDirectory, "AccessDenied.razor");
+Assert(File.Exists(accessDeniedPath), "Manjka stran /brez-dostopa.");
+var accessDenied = File.ReadAllText(accessDeniedPath);
+foreach (var value in new[] { "@page \"/brez-dostopa\"", "Prijavljen si kot", "Tvoje vloge", "skrbnik" })
+  Assert(accessDenied.Contains(value, StringComparison.Ordinal), "Stran brez dostopa ne pove: " + value);
+
+var errorPage = File.ReadAllText(Path.Combine(pagesDirectory, "Error.razor"));
+foreach (var english in new[] { "Development Mode", "An error occurred while processing your request.", "Request ID:" })
+  Assert(!errorPage.Contains(english, StringComparison.Ordinal), "Stran napake ne sme biti angleska predloga: " + english);
+foreach (var value in new[] { "Nekaj je šlo narobe", "Oznaka zahteve", "nadzorna-plosca" })
+  Assert(errorPage.Contains(value, StringComparison.Ordinal), "Stran napake mora vsebovati: " + value);
+
+// --- A5: meni ne sme kazati poti, ki jo vloga dobi kot 403 ----------------------------------
+// Vloge menija se primerjajo z [Authorize(Roles = ...)] ciljne strani. Tega ni mogoce preveriti
+// z branjem enega mesta: meni je v kodi, avtorizacija pa na strani, zato se razideta tiho.
+var routeRoles = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+foreach (var razorPage in Directory.EnumerateFiles(pagesDirectory, "*.razor", SearchOption.AllDirectories))
+{
+  var markup = File.ReadAllText(razorPage);
+  var authorize = Regex.Match(markup, @"@attribute \[Authorize\(Roles = ""([^""]+)""\)\]");
+  var roles = authorize.Success
+    ? authorize.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    : [];
+  foreach (Match route in Regex.Matches(markup, @"@page ""/([^""{]*)"))
+    routeRoles[route.Groups[1].Value.Trim('/')] = roles;
+}
+
+foreach (var section in PimNavigation.Sections)
+  foreach (var item in section.Items)
+  {
+    if (!routeRoles.TryGetValue(item.Route.Trim('/'), out var pageRoles)) continue;
+    if (pageRoles.Length == 0) continue;
+    Assert(item.Roles is { Length: > 0 },
+      $"Postavka menija »{item.Label}« vodi na stran, omejeno na {string.Join(", ", pageRoles)}, sama pa nima vlog.");
+    foreach (var role in item.Roles!)
+      Assert(pageRoles.Contains(role, StringComparer.Ordinal),
+        $"Postavka menija »{item.Label}« je vidna vlogi {role}, stran {item.Route} pa je zanjo zaprta.");
+  }
+
+
 Console.WriteLine("F10 auth contract PASS.");
 
 static void Assert(bool condition, string message)
@@ -220,4 +421,69 @@ static string FindRoot()
   }
 
   throw new InvalidOperationException("PIM_Solution ni najden.");
+}
+
+/// <summary>Vrstice brez // in @* *@ komentarjev; pogodba velja za kodo, ne za pojasnila.</summary>
+static string WithoutComments(string source) =>
+  Regex.Replace(Regex.Replace(source, @"@\*[\s\S]*?\*@", " "), @"//[^\r\n]*", " ");
+
+static ClaimsPrincipal Principal(string name, params string[] roles)
+{
+  var claims = new List<Claim> { new(ClaimTypes.Name, name) };
+  claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+  return new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+}
+
+// Namenoma NE uporablja HttpContextAccessor: ta hrani kontekst v enem samem staticnem
+// AsyncLocal, zato bi drugi klic povozil prvega in bi varovalka bralne vloge videla urednika.
+static PimWriteGuard GuardFor(ClaimsPrincipal user) =>
+  new(new EmptyServices(), new FixedHttpContext(new DefaultHttpContext { User = user }));
+
+static async Task AssertRefusedAsync(string what, Func<Task> call)
+{
+  try
+  {
+    await call();
+  }
+  catch (UnauthorizedAccessException)
+  {
+    return;
+  }
+  catch (Exception other)
+  {
+    throw new InvalidOperationException(
+      $"{what} je bralno vlogo spustil do baze: pricakovan UnauthorizedAccessException, dobljen {other.GetType().Name}.");
+  }
+
+  throw new InvalidOperationException($"{what} bralne vloge ni zavrnil.");
+}
+
+static async Task AssertReachesDatabaseAsync(string what, Func<Task> call)
+{
+  try
+  {
+    await call();
+  }
+  catch (UnauthorizedAccessException)
+  {
+    throw new InvalidOperationException($"{what} je bil zavrnjen, ceprav ima vlogo s pravico pisanja.");
+  }
+  catch
+  {
+    return;
+  }
+
+  throw new InvalidOperationException($"{what} bi moral obtičati na nedosegljivi bazi, ne uspeti.");
+}
+
+/// <summary>Vsebnik brez storitev: PimWriteGuard mora uporabnika najti v HttpContext.</summary>
+sealed class EmptyServices : IServiceProvider
+{
+  public object? GetService(Type serviceType) => null;
+}
+
+/// <summary>En kontekst na eno varovalko; brez skupnega staticnega AsyncLocal.</summary>
+sealed class FixedHttpContext(HttpContext? context) : IHttpContextAccessor
+{
+  public HttpContext? HttpContext { get; set; } = context;
 }

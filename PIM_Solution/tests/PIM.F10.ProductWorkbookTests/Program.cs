@@ -127,10 +127,14 @@ var Categories = new CategoryTreeService(database, configuration);
 var workbench = new ProductWorkbenchService(configuration);
 var catalog = new CatalogReadService(database);
 var export = new ProductExportService(configuration, workbench);
-var edit = new ProductEditService(configuration);
+// Konzolni test nima prijavljene seje, zato zapisovalnim servisom poda izrecno varovalko za
+// procese brez uporabnika. Vloge preverja PIM.F10.AuthTests; tu je predmet preizkusa krog
+// izvoz -> urejanje -> uvoz delovnega lista.
+var guard = PimWriteGuard.Trusted("konzolni test PIM.F10.ProductWorkbookTests");
+var edit = new ProductEditService(configuration, guard);
 var categoryMapping = new CategoryMappingService(database, configuration);
-var saop = new SaopWriteService(configuration);
-var data = new IntranetDataService(configuration);
+var saop = new SaopWriteService(configuration, guard);
+var data = new IntranetDataService(configuration, guard);
 var workbook = new ProductWorkbookService(configuration, workbench, export, catalog, edit, categoryMapping, saop, data);
 
 byte[] bytes;

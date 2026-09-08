@@ -5,4 +5,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Od P0 2026-09-09 ta test ni vec samo branje datotek: vloge na zapisovalni meji preveri
+         tako, da servis dejansko poklice s prijavljeno bralno vlogo. -->
+    <ProjectReference Include="../../src/PIM.Intranet/PIM.Intranet.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 </Project>
