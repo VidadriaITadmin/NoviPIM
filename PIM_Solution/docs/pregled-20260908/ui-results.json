@@ -1,0 +1,1047 @@
+﻿[
+    {
+        "Name":  "viewer-product",
+        "Path":  "izdelki/3",
+        "Loaded":  true,
+        "Ms":  5179,
+        "Summary":  {
+                        "title":  "LED svetilka, za tračnico",
+                        "path":  "/izdelki/3",
+                        "heading":  "LED svetilka, za tračnico",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  30,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "dashboard",
+        "Path":  "nadzorna-plosca",
+        "Loaded":  true,
+        "Ms":  11698,
+        "Summary":  {
+                        "title":  "Nadzorna plošča",
+                        "path":  "/nadzorna-plosca",
+                        "heading":  "Nadzorna plošča",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "products",
+        "Path":  "izdelki",
+        "Loaded":  true,
+        "Ms":  5503,
+        "Summary":  {
+                        "title":  "Izdelki",
+                        "path":  "/izdelki",
+                        "heading":  "Izdelki",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "product",
+        "Path":  "izdelki/3",
+        "Loaded":  true,
+        "Ms":  3869,
+        "Summary":  {
+                        "title":  "LED svetilka, za tračnico",
+                        "path":  "/izdelki/3",
+                        "heading":  "LED svetilka, za tračnico",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  30,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "ingest",
+        "Path":  "zajem",
+        "Loaded":  true,
+        "Ms":  21697,
+        "Summary":  {
+                        "title":  "Vhodni podatki",
+                        "path":  "/zajem",
+                        "heading":  "Vhodni podatki",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  29,
+                        "editableVisible":  5,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "ingest-runs",
+        "Path":  "zajem/teki",
+        "Loaded":  true,
+        "Ms":  1140,
+        "Summary":  {
+                        "title":  "Teki vhodnih podatkov",
+                        "path":  "/zajem/teki",
+                        "heading":  "Teki vhodnih podatkov",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  5,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "ingest-issues",
+        "Path":  "zajem/tezave",
+        "Loaded":  true,
+        "Ms":  1146,
+        "Summary":  {
+                        "title":  "Težave vhodnih podatkov",
+                        "path":  "/zajem/tezave",
+                        "heading":  "Težave vhodnih podatkov",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  4,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "ingest-queue",
+        "Path":  "zajem/cakalna-vrsta",
+        "Loaded":  true,
+        "Ms":  1104,
+        "Summary":  {
+                        "title":  "Čakalna vrsta zajema",
+                        "path":  "/zajem/cakalna-vrsta",
+                        "heading":  "Čakalna vrsta zajema",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  72,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "unmapped",
+        "Path":  "zajem/neujemanja",
+        "Loaded":  true,
+        "Ms":  1374,
+        "Summary":  {
+                        "title":  "Neujemanja",
+                        "path":  "/zajem/neujemanja",
+                        "heading":  "Neujemanja",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "source-attributes",
+        "Path":  "zajem/atributi",
+        "Loaded":  true,
+        "Ms":  1090,
+        "Summary":  {
+                        "title":  "Atributi iz virov",
+                        "path":  "/zajem/atributi",
+                        "heading":  "Atributi iz virov",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  8,
+                        "editableVisible":  3,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "quality",
+        "Path":  "kakovost",
+        "Loaded":  true,
+        "Ms":  10396,
+        "Summary":  {
+                        "title":  "Kakovost",
+                        "path":  "/kakovost",
+                        "heading":  "Kakovost",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  9,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "validation-errors",
+        "Path":  "kakovost/napake",
+        "Loaded":  true,
+        "Ms":  1929,
+        "Summary":  {
+                        "title":  "Napake validacije",
+                        "path":  "/kakovost/napake",
+                        "heading":  "Napake validacije",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  49,
+                        "editableVisible":  7,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "translations",
+        "Path":  "kakovost/prevodi",
+        "Loaded":  true,
+        "Ms":  1086,
+        "Summary":  {
+                        "title":  "Manjkajoči prevodi",
+                        "path":  "/kakovost/prevodi",
+                        "heading":  "Manjkajoči prevodi",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "category-mapping",
+        "Path":  "kakovost/kategorije",
+        "Loaded":  true,
+        "Ms":  1200,
+        "Summary":  {
+                        "title":  "Preslikave kategorij",
+                        "path":  "/kakovost/kategorije",
+                        "heading":  "Preslikave kategorij",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  4,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "quarantine",
+        "Path":  "karantena",
+        "Loaded":  true,
+        "Ms":  1083,
+        "Summary":  {
+                        "title":  "Karantena",
+                        "path":  "/karantena",
+                        "heading":  "Karantena",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "media",
+        "Path":  "mediji",
+        "Loaded":  true,
+        "Ms":  1954,
+        "Summary":  {
+                        "title":  "Mediji",
+                        "path":  "/mediji",
+                        "heading":  "Mediji",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  0,
+                        "editableVisible":  3,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "prices",
+        "Path":  "cene",
+        "Loaded":  true,
+        "Ms":  1527,
+        "Summary":  {
+                        "title":  "Cene in ceniki",
+                        "path":  "/cene",
+                        "heading":  "Cene in ceniki",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  5,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "stock",
+        "Path":  "zaloge",
+        "Loaded":  true,
+        "Ms":  1331,
+        "Summary":  {
+                        "title":  "Zaloga",
+                        "path":  "/zaloge",
+                        "heading":  "Zaloga",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  58,
+                        "editableVisible":  6,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "checks",
+        "Path":  "preverbe",
+        "Loaded":  true,
+        "Ms":  5139,
+        "Summary":  {
+                        "title":  "Preverbe cen in zaloge",
+                        "path":  "/preverbe",
+                        "heading":  "Preverbe cen in zaloge",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  100,
+                        "editableVisible":  4,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "price-sheet",
+        "Path":  "cene/tisk",
+        "Loaded":  true,
+        "Ms":  1080,
+        "Summary":  {
+                        "title":  "Cenik za tisk",
+                        "path":  "/cene/tisk",
+                        "heading":  "Cenik za tisk",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  6,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "catalog-settings",
+        "Path":  "nastavitve",
+        "Loaded":  true,
+        "Ms":  1053,
+        "Summary":  {
+                        "title":  "Nastavitve kataloga",
+                        "path":  "/nastavitve",
+                        "heading":  "Nastavitve kataloga",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "categories",
+        "Path":  "nastavitve/kategorije",
+        "Loaded":  true,
+        "Ms":  4670,
+        "Summary":  {
+                        "title":  "Kategorije",
+                        "path":  "/nastavitve/kategorije",
+                        "heading":  "Kategorije",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  0,
+                        "editableVisible":  9,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "attribute-sets",
+        "Path":  "nastavitve/nabori-atributov",
+        "Loaded":  true,
+        "Ms":  1982,
+        "Summary":  {
+                        "title":  "Nabori atributov po kategorijah",
+                        "path":  "/nastavitve/nabori-atributov",
+                        "heading":  "Nabori atributov po kategorijah",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  132,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "attributes",
+        "Path":  "nastavitve/atributi",
+        "Loaded":  true,
+        "Ms":  3658,
+        "Summary":  {
+                        "title":  "Atributi",
+                        "path":  "/nastavitve/atributi",
+                        "heading":  "Atributi",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  182,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "channels",
+        "Path":  "nastavitve/kanali",
+        "Loaded":  true,
+        "Ms":  1084,
+        "Summary":  {
+                        "title":  "Spletni kanali",
+                        "path":  "/nastavitve/kanali",
+                        "heading":  "Spletni kanali",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  4,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "languages",
+        "Path":  "nastavitve/jeziki",
+        "Loaded":  true,
+        "Ms":  1082,
+        "Summary":  {
+                        "title":  "Jeziki",
+                        "path":  "/nastavitve/jeziki",
+                        "heading":  "Jeziki",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  5,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "warehouses",
+        "Path":  "nastavitve/skladisca",
+        "Loaded":  true,
+        "Ms":  1088,
+        "Summary":  {
+                        "title":  "Skladišča",
+                        "path":  "/nastavitve/skladisca",
+                        "heading":  "Skladišča",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  7,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "product-links",
+        "Path":  "nastavitve/povezave-izdelkov",
+        "Loaded":  true,
+        "Ms":  1590,
+        "Summary":  {
+                        "title":  "Povezave izdelkov",
+                        "path":  "/nastavitve/povezave-izdelkov",
+                        "heading":  "Povezave izdelkov",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  3,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "rules",
+        "Path":  "pravila",
+        "Loaded":  true,
+        "Ms":  1066,
+        "Summary":  {
+                        "title":  "Pravila",
+                        "path":  "/pravila",
+                        "heading":  "Pravila",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "validation-rules",
+        "Path":  "pravila/validacija",
+        "Loaded":  true,
+        "Ms":  1993,
+        "Summary":  {
+                        "title":  "Validacijski profili",
+                        "path":  "/pravila/validacija",
+                        "heading":  "Validacijski profili",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  623,
+                        "editableVisible":  623,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "dictionary",
+        "Path":  "pravila/slovar",
+        "Loaded":  true,
+        "Ms":  1127,
+        "Summary":  {
+                        "title":  "Slovar vrednosti",
+                        "path":  "/pravila/slovar",
+                        "heading":  "Slovar vrednosti",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "field-mappings",
+        "Path":  "pravila/preslikave",
+        "Loaded":  true,
+        "Ms":  1098,
+        "Summary":  {
+                        "title":  "Preslikave polj",
+                        "path":  "/pravila/preslikave",
+                        "heading":  "Preslikave polj",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  50,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "title-rules",
+        "Path":  "pravila/nazivi",
+        "Loaded":  true,
+        "Ms":  3662,
+        "Summary":  {
+                        "title":  "Pravila za nazive",
+                        "path":  "/pravila/nazivi",
+                        "heading":  "Pravila za nazive",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  0,
+                        "editableVisible":  7,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "saop",
+        "Path":  "saop",
+        "Loaded":  true,
+        "Ms":  1103,
+        "Summary":  {
+                        "title":  "Izhod v SAOP",
+                        "path":  "/saop",
+                        "heading":  "Izhod v SAOP",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  7,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "saop-items",
+        "Path":  "saop/artikli",
+        "Loaded":  true,
+        "Ms":  1166,
+        "Summary":  {
+                        "title":  "Artikli v SAOP",
+                        "path":  "/saop/artikli",
+                        "heading":  "Artikli v SAOP",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  0,
+                        "editableVisible":  3,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "saop-history",
+        "Path":  "saop/zgodovina",
+        "Loaded":  true,
+        "Ms":  1084,
+        "Summary":  {
+                        "title":  "Internal Server Error",
+                        "path":  "/saop/zgodovina",
+                        "heading":  "An unhandled exception occurred while processing the request.",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  32,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  false
+                    }
+    },
+    {
+        "Name":  "saop-drifts",
+        "Path":  "saop/odkloni",
+        "Loaded":  true,
+        "Ms":  1091,
+        "Summary":  {
+                        "title":  "Odkloni SAOP",
+                        "path":  "/saop/odkloni",
+                        "heading":  "Odkloni SAOP",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "saop-fields",
+        "Path":  "saop/polja",
+        "Loaded":  true,
+        "Ms":  1082,
+        "Summary":  {
+                        "title":  "Polja za zapis v SAOP",
+                        "path":  "/saop/polja",
+                        "heading":  "Kaj sme nazaj v SAOP",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  27,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "outbound",
+        "Path":  "outbound",
+        "Loaded":  true,
+        "Ms":  1081,
+        "Summary":  {
+                        "title":  "Izvozi",
+                        "path":  "/outbound",
+                        "heading":  "Izvozi",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  10,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "bulk-outbound",
+        "Path":  "izvozi/mnozicno",
+        "Loaded":  true,
+        "Ms":  1078,
+        "Summary":  {
+                        "title":  "Množično urejanje",
+                        "path":  "/izvozi/mnozicno",
+                        "heading":  "Množično urejanje",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  4,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "outbound-events",
+        "Path":  "izvozi/obvestila",
+        "Loaded":  true,
+        "Ms":  1089,
+        "Summary":  {
+                        "title":  "Obvestila izvozov",
+                        "path":  "/izvozi/obvestila",
+                        "heading":  "Obvestila",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  1,
+                        "editableVisible":  0,
+                        "errors":  [
+                                       "1 obvestil ni bilo potrjenih v dogovorjenem času in so bila poslana po e-pošti. Dokler jih ne potrdiš, se bo opozorilo ponavljalo."
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "web",
+        "Path":  "splet",
+        "Loaded":  true,
+        "Ms":  2099,
+        "Summary":  {
+                        "title":  "Izhod na splet",
+                        "path":  "/splet",
+                        "heading":  "Izhod na splet",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  33,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "web-build",
+        "Path":  "splet/izvoz",
+        "Loaded":  true,
+        "Ms":  1080,
+        "Summary":  {
+                        "title":  "Pripravi spletni izvoz",
+                        "path":  "/splet/izvoz",
+                        "heading":  "Pripravi spletni izvoz",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  3,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "export-profile",
+        "Path":  "izvozi/profili/1",
+        "Loaded":  true,
+        "Ms":  1086,
+        "Summary":  {
+                        "title":  "ERP L1 — osnovni katalog",
+                        "path":  "/izvozi/profili/1",
+                        "heading":  "ERP L1 — osnovni katalog",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  9,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "product-import",
+        "Path":  "izdelki/uvoz",
+        "Loaded":  true,
+        "Ms":  1087,
+        "Summary":  {
+                        "title":  "Uvoz delovnega lista",
+                        "path":  "/izdelki/uvoz",
+                        "heading":  "Uvoz delovnega lista izdelkov",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "product-categories",
+        "Path":  "izdelki/kategorije",
+        "Loaded":  true,
+        "Ms":  1075,
+        "Summary":  {
+                        "title":  "Uvrstitev izdelka",
+                        "path":  "/izdelki/kategorije",
+                        "heading":  "Uvrstitev izdelka",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "system",
+        "Path":  "sistem",
+        "Loaded":  true,
+        "Ms":  2221,
+        "Summary":  {
+                        "title":  "Nadzor sistema",
+                        "path":  "/sistem",
+                        "heading":  "Nadzor sistema",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  53,
+                        "editableVisible":  23,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "integrations",
+        "Path":  "sistem/integracije",
+        "Loaded":  true,
+        "Ms":  1102,
+        "Summary":  {
+                        "title":  "Integracije sistema",
+                        "path":  "/sistem/integracije",
+                        "heading":  "Integracije sistema",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  23,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "schedules",
+        "Path":  "sistem/urniki",
+        "Loaded":  true,
+        "Ms":  1095,
+        "Summary":  {
+                        "title":  "Urniki obdelav",
+                        "path":  "/sistem/urniki",
+                        "heading":  "Urniki obdelav",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  23,
+                        "editableVisible":  23,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "system-errors",
+        "Path":  "sistem/napake",
+        "Loaded":  true,
+        "Ms":  1103,
+        "Summary":  {
+                        "title":  "Dnevnik napak",
+                        "path":  "/sistem/napake",
+                        "heading":  "Dnevnik napak",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  277,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "roles",
+        "Path":  "sistem/vloge",
+        "Loaded":  true,
+        "Ms":  1064,
+        "Summary":  {
+                        "title":  "Vloge",
+                        "path":  "/sistem/vloge",
+                        "heading":  "Vloge",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  4,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "performance",
+        "Path":  "sistem/zmogljivost",
+        "Loaded":  true,
+        "Ms":  1107,
+        "Summary":  {
+                        "title":  "Zmogljivost postopkov",
+                        "path":  "/sistem/zmogljivost",
+                        "heading":  "Zmogljivost postopkov",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  19,
+                        "editableVisible":  1,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "export-runs",
+        "Path":  "sistem/izvozi",
+        "Loaded":  true,
+        "Ms":  1107,
+        "Summary":  {
+                        "title":  "Zagoni izvozov",
+                        "path":  "/sistem/izvozi",
+                        "heading":  "Zagoni izvozov",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  166,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "selftest",
+        "Path":  "sistem/samotest",
+        "Loaded":  true,
+        "Ms":  1081,
+        "Summary":  {
+                        "title":  "Nočni samotest",
+                        "path":  "/sistem/samotest",
+                        "heading":  "Nočni samotest",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  3,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "products-800",
+        "Path":  "izdelki",
+        "Loaded":  true,
+        "Ms":  6797,
+        "Summary":  {
+                        "title":  "Izdelki",
+                        "path":  "/izdelki",
+                        "heading":  "Izdelki",
+                        "viewport":  800,
+                        "bodyWidth":  785,
+                        "rows":  50,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  false
+                    }
+    }
+]

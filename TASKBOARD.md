@@ -254,6 +254,27 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-08 — pregled sistema, baze in UX: en dokument z dokazi in načrtom (Codex + Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
+
+Naročilo: celoten pregled vseh področij, en dokument z dokazi napak, natančnimi rešitvami in
+izboljšavami UX po straneh; brez popravkov kode in brez posegov v poslovne podatke. Codex je začel,
+ob omejitvi obstal; Claude je po naročilu »nadaljuj in dokončaj« pregled zaključil. Rezultat:
+[`PIM_Solution/docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`](PIM_Solution/docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md)
+(delni dokument `…_DELNO.md` je vključen vanj in ostaja samo kot kazalec).
+
+**Dokaz:** skripta `PIM_Solution/docs/pregled-20260908/Inspect-Ui.ps1` (začasni uporabnik `VIEWER`,
+Chrome brez glave, 55 strani, 26 posnetkov, sam pobriše svoj račun — `QA_ACCOUNT_CLEANUP_COMPLETE`);
+`ui-results.json` in `ui-focused-results.json`; bralne poizvedbe `sqlcmd -I` nad razvojno bazo `PIM`.
+Ključni izpisi: `VIEWER_FORM {"webEditable":14,"saveButtonPresent":true}`,
+`DISABLED_ACCOUNT_COOKIE {"Status":200}`, `/saop/zgodovina` brez parametra → `Internal Server Error`,
+`Product.VatRateId IS NULL` pri 177.654 od 177.655 aktivnih izdelkov, spletna profila validirata
+162.669 izdelkov z `WebPublish=0`. Build, `run_tests.ps1` in migrator **niso** bili pognani —
+dokument tega ne trdi.
+
+**Kaj sledi (odločitve uporabnika, glej §8 dokumenta):** P0 vloge na zapisovalni meji, padec
+zgodovine SAOP, seja onemogočenega računa; P1 `VatRateId` (preslikava ali umik zahteve), obseg
+spletnih profilov, kategorije skupinsko. Nič od tega ni bilo implementirano.
+
 ### 2026-09-08 — izvoz izdelkov po kategoriji in stolpci atributov iz nabora (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
 
 Zahteva uporabnika po tem, ko so bili napolnjeni nabori atributov: »nekaj atributov smo dodali,

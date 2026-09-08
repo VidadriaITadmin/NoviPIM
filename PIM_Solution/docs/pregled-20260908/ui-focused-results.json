@@ -1,0 +1,135 @@
+﻿[
+    {
+        "Name":  "viewer-product",
+        "Path":  "izdelki/3",
+        "Loaded":  true,
+        "Ms":  4489,
+        "Summary":  {
+                        "title":  "LED svetilka, za tračnico",
+                        "path":  "/izdelki/3",
+                        "heading":  "LED svetilka, za tračnico",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  30,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "viewer-checks",
+        "Path":  "preverbe",
+        "Loaded":  true,
+        "Ms":  10231,
+        "Summary":  {
+                        "title":  "Preverbe cen in zaloge",
+                        "path":  "/preverbe",
+                        "heading":  "Preverbe cen in zaloge",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  100,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "saop-history-plain",
+        "Path":  "saop/zgodovina",
+        "Loaded":  true,
+        "Ms":  1058,
+        "Summary":  {
+                        "title":  "Internal Server Error",
+                        "path":  "/saop/zgodovina",
+                        "heading":  "An unhandled exception occurred while processing the request.",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  32,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  false
+                    }
+    },
+    {
+        "Name":  "saop-history-filtered",
+        "Path":  "saop/zgodovina?stanje=PendingApproval",
+        "Loaded":  true,
+        "Ms":  1085,
+        "Summary":  {
+                        "title":  "Zgodovina zapisov v SAOP",
+                        "path":  "/saop/zgodovina",
+                        "heading":  "Zgodovina zapisov v SAOP",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  14,
+                        "editableVisible":  4,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "attribute-detail",
+        "Path":  "nastavitve/atributi/GARANCIJA",
+        "Loaded":  true,
+        "Ms":  1080,
+        "Summary":  {
+                        "title":  "Atribut GARANCIJA",
+                        "path":  "/nastavitve/atributi/GARANCIJA",
+                        "heading":  "GARANCIJA",
+                        "viewport":  1440,
+                        "bodyWidth":  1440,
+                        "rows":  0,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "source-detail",
+        "Path":  "zajem/viri/BT_XML",
+        "Loaded":  true,
+        "Ms":  19334,
+        "Summary":  {
+                        "title":  "Vir BT_XML",
+                        "path":  "/zajem/viri/BT_XML",
+                        "heading":  "Vir: BT_XML",
+                        "viewport":  1440,
+                        "bodyWidth":  1425,
+                        "rows":  15,
+                        "editableVisible":  0,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  true
+                    }
+    },
+    {
+        "Name":  "products-800",
+        "Path":  "izdelki",
+        "Loaded":  true,
+        "Ms":  5773,
+        "Summary":  {
+                        "title":  "Izdelki",
+                        "path":  "/izdelki",
+                        "heading":  "Izdelki",
+                        "viewport":  800,
+                        "bodyWidth":  785,
+                        "rows":  50,
+                        "editableVisible":  2,
+                        "errors":  [
+
+                                   ],
+                        "logoutVisible":  false
+                    }
+    }
+]
