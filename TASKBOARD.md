@@ -373,6 +373,16 @@ posebej, ne sedaj«.
 | INTRANET | `CategoryAttributeSets.razor`: ustvari v registru iz iskanja, iz predloga in iz prilepljenega seznama (panel neznanih imen); `Quality.razor`: zavihek **Po kategorijah** (zlaganje vej, filter resnosti, »samo z izdelki«, povezava na napake z obsegom); `ValidationErrors.razor`: filter Drevo + Kategorija (s podkategorijami, ravni z zamikom); `CategoryTreeService` (+3), `QualityReadService` (obseg kategorije v obeh poteh, `GetByCategoryAsync`); test dopolnjen | `run_tests.ps1 -Filter F10` |
 | DOMENA | `tools/Mastri`: aliasi za tri sopomenke | generator z razširjenim registrom vrne 568 kandidatov (484 + 84) |
 
+**Dopolnitev 2026-09-08 (178, izbirnik):** uporabnik: preslikave kategorij in atributov naj bodo »moderne in
+enostavne« — tipkanje s prikazom kategorije in celotne drevesne strukture — in »preverba, da ne bomo
+podvajali atributov in kategorij, mora obstajati opozorilo«. Ugotovljeno: vse strani so imele spustni
+seznam z vsemi možnostmi, kategorij se v aplikaciji ni dalo ustvariti, preverbe podvajanja ni bilo.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `178_SaveCategoryWithDuplicateCheck.sql`: `canon.CategoryCodeFromName` (ista konvencija kot 059/092 — preverjeno na vseh 209 kategorijah), `canon.SaveCategory` (nova kategorija pod starsem, pot, prevod, revizija; isto ime pod istim starsem zavrne 51781, tudi brez šumnikov / velikosti črk) | migrator 1./2. zagon; smoke: ustvari `orodje___testna_kategorija_178` s potjo v vseh jezikih, »testna KATEGORIJA 178« in »Ročno orodje« pod istim starsem zavrnjena (51781), neobstoječ stars 51785; testna pobrisana |
+| INTRANET | `Shared/PimPicker.razor(.css)` + `Services/PimText.cs` (izbirnik s tipkanjem, brez JS: iskanje po imenu/poti/kodi brez šumnikov, zamik po ravni, tipke, `AllowCreate` z opozorilom na isto/podobno ime); uporabljen na `/kakovost/kategorije` (+ ustvari kategorijo z izbiro starsa), `/zajem/atributi` (+ ustvari atribut), `/izdelki/kategorije`, `/kakovost/napake` (filter), `/nastavitve/nabori-atributov` (vir kopiranja); `/nastavitve/kategorije` panel **Nova kategorija** s sprotno preverbo; docs `STRANI_PIM`, `INTRANET` §6 (pravilo 3a), `UPORABNISKI_PRIROCNIK` | `run_tests.ps1 -Filter F10` |
+
 Neujeto: 575 od 1058 parov, večinoma polja izdelka (Proizvajalec, Tip, Ključne besede, nazivi za
 nalepke); pravi atributi brez kode v registru (Vidna dimenzija, Upravljanje, Vključuje napajalnik,
 Število polov, Material pokrova …) so našteti v dokumentu kot delovni seznam za `/nastavitve/atributi`.
