@@ -20,25 +20,26 @@ zapisana v tem dokumentu, da jo je mogoče preveriti in popraviti.
 |---|---|
 | parov master × atribut (prag 50 %) | 1058 |
 | ujetih v register `canon.AttributeDefinition` | 483 |
-| vrstic nabora (`canon.CategoryAttributeSet`) | 484 (209 obveznih, 275 priporočenih) |
+| vrstic nabora (`canon.CategoryAttributeSet`) | 484, vse priporočene (173: 209 obveznih + 275 priporočenih; 174: vse na priporočeno) |
 | kategorij z naborom | 46 (svetila_si 13, videlektro 33) |
-| obvezni atributi, ki so 2026-09-08 blokirali kak izdelek | 1 vrstica, 4 izdelki (`tracni_sistemi` / Prevladujoča barva) |
+| atributi iz mastrov, ki blokirajo splet | 0 (po 174); manjkajoči so opozorila |
 
 Pregled in urejanje: `/nastavitve/nabori-atributov`. Kar tu ni preslikano, uporabnik doda tam
 (prilepi seznam ali kopira nabor).
 
 ## Pravilo za raven
 
-- **REQUIRED**, kadar je zasedenost v mastru ≥ 95 % **in** (v poddrevesu kategorije ni izdelkov
-  **ali** ima atribut vrednost pri ≥ 90 % izdelkov poddrevesa; merjeno 2026-09-08 na razvojni bazi).
-- sicer **RECOMMENDED**.
-- Ravni so v migraciji zapisane kot vrednosti (ne računajo se znova), da je rezultat enak v vsakem
-  okolju. Aktivno vrstico, ki jo je kdo vmes ročno spremenil (`UpdatedBy` ni `mastri 2026-09-08`),
-  migracija pusti pri miru; neaktivno (odstranjeno) master znova vklopi.
+**Odločitev uporabnika 2026-09-08 (migracija 174): nabor iz mastrov opozarja, ne blokira.** Vse vrstice
+iz mastrov so **RECOMMENDED**: manjkajoč atribut je opozorilo (`WARNING`) v spletnem profilu drevesa —
+vidno na `/kakovost` in `/napake-validacije` (filter resnosti »opozorilo«) ter na kartici izdelka —
+izvoza na splet pa ne ustavi. Raven **obvezen** (`ERROR`, blokira splet) ostane na voljo za ročno
+nastavitev na `/nastavitve/nabori-atributov`; taka vrstica ima drugega avtorja in je 173/174 ne
+prepišeta.
 
-Zakaj tako previdno: obvezen atribut je zahteva `ERROR` v spletnem profilu drevesa in izdelek brez
-vrednosti ustavi na poti na splet. Koreni svetil (3.616 in 551 izdelkov) so zato dobili samo
-priporočene atribute; obvezni so tam, kjer podatki že so ali kjer izdelkov še ni (videlektro).
+Zgodovina: 173 je po pravilu zasedenosti (≥ 95 % v mastru in ≥ 90 % pokritost pri izdelkih ali brez
+izdelkov) 209 vrstic zapisala kot REQUIRED; 174 jih je spustila na RECOMMENDED. Vrednosti v 173 se ne
+urejajo (migracije so samo dodajanje); generator `tools/Mastri` od 174 naprej ni več merodajen za
+raven — merodajna je ta odločitev.
 
 ## Master → kategorija
 

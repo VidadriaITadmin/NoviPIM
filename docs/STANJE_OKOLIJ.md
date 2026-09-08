@@ -24,7 +24,7 @@ Navodilo za prenos DEV → TEST: [`docs/PRENOS_NA_TEST.md`](PRENOS_NA_TEST.md).
 | Dobaviteljeva zaloga NW (FTP) in BT (HTTPS) | **dela**, 5 min | `stock.Snapshot` |
 | Dobaviteljev katalog NW/BT XML | **dela**, nočno (NW datoteka ročno v mapo) | `raw.Inbox`, `canon.ProductAttribute` 362.417 |
 | Validacija ERP (SLO/EU/THIRD), Komerciala, Splet | **dela**, po vsakem zajemu in ob shranjevanju | `val.ProductValidationState` |
-| Nabor atributov po kategoriji (obvezen/priporočen/izločen) | **dela** (147/148), napolnjen iz mastrov starega PIM-a (173): 484 vrstic v 46 kategorijah; pregled in množično urejanje na `/nastavitve/nabori-atributov` (170) | `/nastavitve/nabori-atributov`, `/nastavitve/kategorije` → Atributi |
+| Nabor atributov po kategoriji (obvezen/priporočen/izločen) | **dela** (147/148), napolnjen iz mastrov starega PIM-a (173/174): 484 priporočenih vrstic v 46 kategorijah — manjkajoči atribut je opozorilo, ne napaka; pregled in množično urejanje na `/nastavitve/nabori-atributov` (170) | `/nastavitve/nabori-atributov`, `/nastavitve/kategorije` → Atributi |
 | Pravila za nazive z prevodi | **dela** (149), eno neaktivno predlogo je treba pregledati in vklopiti | `/pravila/nazivi` |
 | Spletni izvoz — čisti podatki (objavljen + spletna stran + veljaven) | **dela** (146) | org 3: 2.368 vrstic, org 2: 1.957 |
 | Zaloga v spletnem izvozu (VID + IQL Brnčičeva, dobavitelj, skladišče) | **dela** (146) | `NW.10157`: 2 + 1 = 3 |

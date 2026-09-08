@@ -254,6 +254,31 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-08 — delovni list izdelkov: en izvoz in en uvoz, ki se ujameta (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
+
+Zahteva uporabnika: »naredi enoten izvoz in pa uvoz, da bo lahko uporabnik pisal podatke in jih
+uvozil notri, ko jih spremeni in dopolni«; dodati manjkajoča spletna polja in stolpec, na katero
+stran gre artikel (svetila / videlektro / oboje), ločeno z `|`. Atributni šifrant dela uporabnik
+v drugem oknu; tu gre za izvoz in uvoz.
+
+Kaj je bilo narobe: `/izdelki` je imela dva izvoza in noben uvoz. »Pregled« se ni dal vrniti
+(slovenski naslovi se ne ujamejo z nobeno kodo), »Predloga SAOP« pa je nosila samo ERP polja.
+Spletnih nazivov, opisov, kategorij, atributov in spletnih strani ni bilo mogoče uvoziti nikjer.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `171_ProductWorkbookRoundTrip.sql` (`intranet.GetProductWorkbook` — šest naborov v enem klicu; `pim.SetProductWebPublish`), `172_ProductWorkbookAttributeCatalog.sql` (prazen seznam izdelkov = ves šifrant atributov) | migrator 1. zagon `Uporabljena migracija: 171` / `172`, 2. zagon `Preskočena`; obe uporabljeni prek scratch mape, ker sta v delovni mapi tuji necommitani migraciji |
+| DOMENA | `PIM.Operations`: nov `ProductWorkbookContract` (ena pogodba stolpcev za obe smeri), `WorkbookHeader` (edino pravilo normalizacije naslovov), `WorkbookTable.Read` sprejme namige za naslovno vrstico, `WorkbookWriter` ohrani prelome vrstic | `PIM.F10.ProductWorkbookTests` — glej spodaj |
+| INTRANET | `ProductWorkbookService` (izvoz, predogled, zapis), stran `/izdelki/uvoz` (`ProductImport.razor`), gumba »Delovni list« in »Uvozi Excel« na `/izdelki`, `predloga=delovni` na `/izvoz/izdelki.xlsx`, `.warn-message` v `app.css`; docs `DELOVNI_LIST_IZDELKOV.md`, `INTRANET.md` | `run_tests.ps1 -Filter F10` — glej spodaj |
+
+Test je našel tri prave napake, preden je bilo kaj commitano: (1) šifrant atributov je bil pri
+uvozu drugačen kot pri izvozu, zato so vrednosti atributov padle na istoimenska polja SAOP in bi
+uvrstile 20.021 lažnih sprememb v odhodno vrsto; (2) »Objava na spletu« je bila dvakrat — enkrat
+kot lastno polje PIM, enkrat iz registra `out.SaopXmlField` — in je vsaka vrstica javljala
+spremembo; (3) `WorkbookWriter` je prelom vrstice spreminjal v presledek, zato se je večvrstičen
+opis iz zvezka vrnil sploščen.
+
+
 ### 2026-09-08 — nabori atributov po kategorijah: pregled drevesa in množično urejanje (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
 
 Zahteva uporabnika: nova stran pod nastavitvami, ki po kategorijah (svetila, videlektro) pove,
@@ -279,6 +304,12 @@ ime → koda, pravilo ravni, kaj ni preslikano).
 | BAZA | `173_CategoryAttributeSetsFromMastri.sql`: 484 vrstic (209 obveznih, 275 priporočenih) v 46 kategorijah (svetila_si 13, videlektro 33), zapisane kot vrednosti, skozi `canon.SaveCategoryAttributeSetBulk`; ročno urejena aktivna vrstica preživi ponovni zagon | migrator 1. zagon `Uporabljena`, 2. `Preskočena`; `canon.CategoryAttributeSet` aktivnih 484 (`mastri 2026-09-08`), `val.FieldRequirement` z obsegom 484 (209 ERROR); obvezni danes blokirajo 4 izdelke (`tracni_sistemi` / Prevladujoča barva); `val.RunValidation` nad celo bazo (2 min 57 s): iz zahtev z obsegom 4 napake ERROR na 4 izdelkih in 55.345 opozoril WARNING na 5.126 izdelkih (največ `notranja_svetila`: Senzor gibanja 3.599, Širina 3.469, Dolžina 3.467) |
 | DOMENA | `tools/Mastri/build_category_attribute_sets.py` — generator kandidatov iz Matrike in registra (aliasi in preslikava mastrov v kodi) | zagon nad istim vhodom vrne identičnih 484 kandidatov (`diff` prazen) |
 | INTRANET | `PIM.F10.CategoryAttributeSetUxTests` dodatno drži pogodbo 173 (samo skozi postopek, register nedotaknjen, ravni kot vrednosti, generator v repozitoriju) | `run_tests.ps1 -Filter F10` |
+
+**Dopolnitev 2026-09-08 (174):** uporabnik: manjkajoči atributi iz nabora naj bodo v validaciji
+**opozorilo, ne napaka**. `174_CategoryAttributeSetsWarnOnly.sql` spusti vseh 209 obveznih vrstic iz
+mastrov na priporočene (skozi `canon.SaveCategoryAttributeSet`, zahteve ERROR → WARNING); ročno
+nastavljen »obvezen« ostane. Dokaz: migrator 1./2. zagon; `val.FieldRequirement` z obsegom: 484 WARNING,
+0 ERROR; `val.RunValidation` nad celo bazo: iz naborov 55.349 opozoril na 5.126 izdelkih in **0 napak**; 4 izdelki tračnih sistemov, prej blokirani, so spet VALID (WEB_svetila_si VALID 5.012 → 5.016).
 
 Neujeto: 575 od 1058 parov, večinoma polja izdelka (Proizvajalec, Tip, Ključne besede, nazivi za
 nalepke); pravi atributi brez kode v registru (Vidna dimenzija, Upravljanje, Vključuje napajalnik,
