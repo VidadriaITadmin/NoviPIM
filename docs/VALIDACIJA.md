@@ -93,7 +93,12 @@ njiju druga stvar kot dogovorjeni model.
   zahteve je `ProductAttribute.<slovensko ime atributa>`, ker artikli nosijo ime, register kodo.
 - `val.RunValidation` upošteva obseg pri napakah, stanju profila in statusu artikla. Vse, kar
   bere `val.ProductIssue` (`/kakovost`, kartica izdelka, pripravljenost izvoza), dela
-  nespremenjeno. Urejanje: `/nastavitve/kategorije` → gumb **Atributi** pri kategoriji.
+  nespremenjeno. Urejanje: `/nastavitve/kategorije` → gumb **Atributi** pri kategoriji, ali
+  pregled celega drevesa z množičnim urejanjem na `/nastavitve/nabori-atributov` (migracija 170:
+  `intranet.GetCategoryAttributeSetTrees`, `intranet.GetCategoryAttributeSetOverview`,
+  `canon.SaveCategoryAttributeSetBulk`, `canon.CopyCategoryAttributeSet`; množični vnos in
+  kopiranje gresta vrstico za vrstico skozi `canon.SaveCategoryAttributeSet`, zato zahteve in
+  revizija ostanejo na enem mestu).
 - Dokaz 2026-09-02: REQUIRED `GARANCIJA` na `notranja_svetila` → izdelek 541 (Viseča svetila,
   brez garancije) dobi `MISSING_REQUIRED_FIELD` `ERROR`, `WEB_svetila_si` postane `INVALID`; po
   odstranitvi iz nabora napaka ugasne.

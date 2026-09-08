@@ -506,7 +506,11 @@ spletni profil drevesa. Učinki:
 - `out.GetExportRows` izvozi samo atribute iz nabora, kadar kategorija izdelka nabor določa;
   izdelek brez nabora obdrži vse;
 - kartica izdelka (`/izdelki/{id}`) skupinira lastnosti po naboru
-  (`intranet.GetProductAttributeSet`); stran kategorij bere `intranet.GetCategoryAttributeSet`.
+  (`intranet.GetProductAttributeSet`); stran kategorij bere `intranet.GetCategoryAttributeSet`;
+- pregled celega drevesa (koliko in katere atribute ima katera kategorija, svetila in videlektro
+  posebej) z množičnim urejanjem je na `/nastavitve/nabori-atributov` (170:
+  `intranet.GetCategoryAttributeSetTrees`, `intranet.GetCategoryAttributeSetOverview`,
+  `canon.SaveCategoryAttributeSetBulk` — koda ali slovensko ime, `canon.CopyCategoryAttributeSet`).
 
 Migracija 148 je odstranila stari enolični indeks `UQ_FieldRequirement_ProfileField`, ki je
 prvi vnos v nabor podrl z napako 2601; ostane `UQ_FieldRequirement_ProfileFieldScope`.
