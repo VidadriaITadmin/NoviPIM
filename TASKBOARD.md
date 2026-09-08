@@ -276,7 +276,7 @@ ime → koda, pravilo ravni, kaj ni preslikano).
 
 | Ozemlje | Migracija / datoteke | Dokaz |
 |---|---|---|
-| BAZA | `173_CategoryAttributeSetsFromMastri.sql`: 484 vrstic (209 obveznih, 275 priporočenih) v 46 kategorijah (svetila_si 13, videlektro 33), zapisane kot vrednosti, skozi `canon.SaveCategoryAttributeSetBulk`; ročno urejena aktivna vrstica preživi ponovni zagon | migrator 1. zagon `Uporabljena`, 2. `Preskočena`; `canon.CategoryAttributeSet` aktivnih 484 (`mastri 2026-09-08`), `val.FieldRequirement` z obsegom 484 (209 ERROR); obvezni danes blokirajo 4 izdelke (`tracni_sistemi` / Prevladujoča barva) |
+| BAZA | `173_CategoryAttributeSetsFromMastri.sql`: 484 vrstic (209 obveznih, 275 priporočenih) v 46 kategorijah (svetila_si 13, videlektro 33), zapisane kot vrednosti, skozi `canon.SaveCategoryAttributeSetBulk`; ročno urejena aktivna vrstica preživi ponovni zagon | migrator 1. zagon `Uporabljena`, 2. `Preskočena`; `canon.CategoryAttributeSet` aktivnih 484 (`mastri 2026-09-08`), `val.FieldRequirement` z obsegom 484 (209 ERROR); obvezni danes blokirajo 4 izdelke (`tracni_sistemi` / Prevladujoča barva); `val.RunValidation` nad celo bazo (2 min 57 s): iz zahtev z obsegom 4 napake ERROR na 4 izdelkih in 55.345 opozoril WARNING na 5.126 izdelkih (največ `notranja_svetila`: Senzor gibanja 3.599, Širina 3.469, Dolžina 3.467) |
 | DOMENA | `tools/Mastri/build_category_attribute_sets.py` — generator kandidatov iz Matrike in registra (aliasi in preslikava mastrov v kodi) | zagon nad istim vhodom vrne identičnih 484 kandidatov (`diff` prazen) |
 | INTRANET | `PIM.F10.CategoryAttributeSetUxTests` dodatno drži pogodbo 173 (samo skozi postopek, register nedotaknjen, ravni kot vrednosti, generator v repozitoriju) | `run_tests.ps1 -Filter F10` |
 
