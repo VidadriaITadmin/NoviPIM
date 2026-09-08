@@ -43,7 +43,9 @@ public sealed record WorkbookWebSite(string Code, string Name);
 
 /// <param name="Code">Koda atributa v <c>canon.ProductAttribute</c>.</param>
 /// <param name="Name">Ime za naslov stolpca; kadar prevoda ni, je enako kodi.</param>
-public sealed record WorkbookAttribute(string Code, string Name);
+/// <param name="InSet">Ali atribut sodi v nabor kategorije, po kateri je list narejen.</param>
+/// <param name="SetLevel">REQUIRED ali RECOMMENDED; null, kadar atribut ni v naboru.</param>
+public sealed record WorkbookAttribute(string Code, string Name, bool InSet = false, string? SetLevel = null);
 
 /// <param name="TextTypes">Vrste spletnih besedil brez ERP naziva, npr. WEB_TITLE, DESCRIPTION.</param>
 /// <param name="Languages">Jeziki nazivov in opisov v vrstnem redu lista.</param>
@@ -88,7 +90,11 @@ public static class ProductWorkbookContract
   public const string GroupKey = "Ključ";
   public const string GroupErp = "ERP — gre v vrsto za SAOP";
   public const string GroupWeb = "Splet — zapiše se takoj";
-  public const string GroupAttributes = "Spletni atributi — zapišejo se takoj";
+  /// <summary>Atributi, ki jih kategorija izdelka predpisuje (nabor iz <c>canon.CategoryAttributeSet</c>).</summary>
+  public const string GroupAttributesInSet = "Atributi kategorije — nabor";
+
+  /// <summary>Atributi, ki jih nabor kategorije ne omenja; na splet ne gredo, vrednost pa obstaja.</summary>
+  public const string GroupAttributesOutside = "Atributi izven nabora — ne gredo na splet";
   public const string GroupState = "Stanje — samo za branje";
 
   /// <summary>Naslova, ki povesta, katera vrstica lista je naslovna vrstica.</summary>
@@ -165,8 +171,16 @@ public static class ProductWorkbookContract
       IsMultiValue: true));
 
     // --- Atributi ----------------------------------------------------------------------
-    foreach (var attribute in spec.Attributes)
-      columns.Add(new(GroupAttributes, attribute.Name, AttributeFieldPrefix + attribute.Code,
+    // Dve skupini, ista razdelitev kot na kartici izdelka: kar kategorija predpisuje, in kar
+    // izdelek nosi mimo nabora. Brez te ločnice je list z vsemi 148 atributi za eno svetilko
+    // večinoma hrup — stolpci o preseku kabla pri stropni svetilki niso vprašanje, ampak šum.
+    // Atribut iz nabora dobi stolpec tudi takrat, kadar izdelek zanj še nima vrednosti; ravno
+    // ta je tisti, ki ga je treba vpisati.
+    var inSet = spec.Attributes.Where(attribute => attribute.InSet).ToList();
+    var outside = spec.Attributes.Where(attribute => !attribute.InSet).ToList();
+    foreach (var attribute in inSet.Concat(outside))
+      columns.Add(new(attribute.InSet ? GroupAttributesInSet : GroupAttributesOutside,
+        attribute.Name, AttributeFieldPrefix + attribute.Code,
         ProductWorkbookTarget.Pim, Width: Math.Clamp(attribute.Name.Length + 3, 14, 32),
         Aliases: ["Attr." + attribute.Code]));
 
