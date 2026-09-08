@@ -336,7 +336,14 @@ public static class WorkbookWriter
         case '>': builder.Append("&gt;"); break;
         case '"': builder.Append("&quot;"); break;
         case '\'': builder.Append("&apos;"); break;
-        case '\t' or '\n' or '\r': builder.Append(' '); break;
+        // Prelom vrstice ostane prelom. Doslej je postal presledek in vecvrsticen opis se je
+        // iz zvezka vrnil sploscen — pri listu, ki gre ven in se vrne nazaj, je to izguba
+        // podatka. Excel prelom v <t xml:space="preserve"> pokaze kot prelom v celici.
+        case '\n': builder.Append('\n'); break;
+        // CR se zavrze: CRLF bi sicer dal dva preloma, LF+CR pa vrstni red, ki ga Excel ne
+        // pozna. Zapis je enoten LF.
+        case '\r': break;
+        case '\t': builder.Append(' '); break;
         default:
           if (character >= ' ' || character == '	') builder.Append(character);
           break;

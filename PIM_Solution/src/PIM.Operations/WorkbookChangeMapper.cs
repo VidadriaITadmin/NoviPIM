@@ -90,8 +90,6 @@ public static class WorkbookChangeMapper
     return new(rows, unmapped, problems, changeCount);
   }
 
-  /// <summary>Male črke brez presledkov in šumnikov; »Šifra artikla« in »sifraArtikla« sta isto.</summary>
-  static string Normalize(string value) =>
-    new string(value.Trim().ToLowerInvariant().Where(character => !char.IsWhiteSpace(character)).ToArray())
-      .Replace("š", "s").Replace("č", "c").Replace("ž", "z").Replace("ć", "c").Replace("đ", "d");
+  /// <summary>Pravilo je eno samo in zivi v <see cref="WorkbookHeader"/>; tu je samo krajsi zapis.</summary>
+  static string Normalize(string value) => WorkbookHeader.Normalize(value);
 }

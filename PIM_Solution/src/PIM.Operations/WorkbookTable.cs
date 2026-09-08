@@ -34,7 +34,12 @@ public static class WorkbookTable
   /// <summary>Največ vrstic na list; varovalka pred zvezkom, ki bi pojedel ves pomnilnik.</summary>
   public const int MaxRows = 50_000;
 
-  public static WorkbookSheet Read(Stream stream, string? sheetName = null)
+  /// <param name="headerHints">Naslovi, po katerih se prepozna prava naslovna vrstica. Zvezek,
+  /// ki ga zapiše <see cref="WorkbookWriter"/> s skupinami stolpcev, ima dve naslovni vrstici:
+  /// prva nosi imena skupin (»Ključ«, »ERP«, »Splet«). Brez namiga bi bila prebrana ta in uvoz
+  /// bi videl stolpce, ki jih ni. Kadar namigov ni ali se noben ne ujame, velja staro pravilo:
+  /// prva vrstica z vsaj dvema nepraznima celicama.</param>
+  public static WorkbookSheet Read(Stream stream, string? sheetName = null, IReadOnlyCollection<string>? headerHints = null)
   {
     ArgumentNullException.ThrowIfNull(stream);
     using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
@@ -48,7 +53,14 @@ public static class WorkbookTable
     if (part is null) throw new WorkbookReadException($"Lista '{sheetName}' ni v zvezku.");
 
     var rows = ReadRows(archive, part, shared);
-    var headerIndex = rows.FindIndex(row => row.Count(cell => !string.IsNullOrWhiteSpace(cell)) >= 2);
+    var headerIndex = -1;
+    if (headerHints is { Count: > 0 })
+    {
+      var wanted = headerHints.Select(WorkbookHeader.Normalize).Where(hint => hint.Length > 0).ToHashSet(StringComparer.Ordinal);
+      headerIndex = rows.FindIndex(row => row.Any(cell => wanted.Contains(WorkbookHeader.Normalize(cell))));
+    }
+    if (headerIndex < 0)
+      headerIndex = rows.FindIndex(row => row.Count(cell => !string.IsNullOrWhiteSpace(cell)) >= 2);
     if (headerIndex < 0) throw new WorkbookReadException("Na listu ni vrstice z naslovi stolpcev.");
 
     var headers = rows[headerIndex].Select(cell => cell.Trim()).ToArray();
@@ -69,12 +81,12 @@ public static class WorkbookTable
     return new(name ?? "list1", headers, data);
   }
 
-  public static WorkbookSheet Read(string path, string? sheetName = null)
+  public static WorkbookSheet Read(string path, string? sheetName = null, IReadOnlyCollection<string>? headerHints = null)
   {
     // Zvezek je lahko odprt v Excelu; brez tega načina bi uvoz padel zaradi datoteke, ki jo
     // nekdo ravno gleda.
     using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-    return Read(stream, sheetName);
+    return Read(stream, sheetName, headerHints);
   }
 
   static List<string> ReadSharedStrings(ZipArchive archive)
