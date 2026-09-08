@@ -1,0 +1,564 @@
+@page "/nastavitve/nabori-atributov"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@using PIM.Intranet.Services
+@inject CategoryTreeService Tree
+@inject AuthenticationStateProvider Authentication
+
+@* Uporabnik 2026-09-08: "nova stran pod nastavitve ... da povemo po kategorijah ali od svetil ali
+   od videlektra koliko atributov in katerih ima katera kategorija in na podlagi tega lahko
+   uporabniki spreminjajo in dodajajo po zelji". Register in pravila so iz migracije 147 (isti kot
+   pri gumbu Atributi na /nastavitve/kategorije); ta stran doda pregled celega drevesa naenkrat in
+   mnozicno urejanje (izbira vec atributov, kopiranje nabora, lepljenje seznama iz mastrov). *@
+
+<PageTitle>Nabori atributov po kategorijah</PageTitle>
+<PimPage Title="Nabori atributov po kategorijah"
+         Subtitle="Za vsako drevo (svetila, videlektro) pove, koliko in katere atribute ima katera kategorija. Nabor se deduje na podkategorije; določa, kateri atributi so na kartici izdelka, kaj zahteva spletna validacija in kateri atributi gredo v spletni izvoz."
+         Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card tree-picker" aria-labelledby="tree-picker-title">
+  <h2 id="tree-picker-title" class="visually-hidden">Izbira drevesa</h2>
+  @if (Trees.Count == 0 && !Loading)
+  {
+    <p class="muted">V bazi ni nobenega drevesa kategorij.</p>
+  }
+  <div class="tree-chips" role="tablist" aria-label="Drevesa kategorij">
+    @foreach (var tree in Trees)
+    {
+      <button type="button" role="tab" class="tree-chip @(tree.CategoryTreeCode == TreeCode ? "is-active" : null)"
+              aria-selected="@(tree.CategoryTreeCode == TreeCode ? "true" : "false")"
+              @onclick="() => SelectTreeAsync(tree.CategoryTreeCode)">
+        <strong>@TreeLabel(tree.CategoryTreeCode)</strong>
+        <span class="tree-meta">@tree.CategoriesWithOwnSet.ToString("N0") / @tree.Categories.ToString("N0") kategorij z naborom · @tree.ProductCount.ToString("N0") izdelkov</span>
+        @if (tree.WebProfileCode is null)
+        {
+          <PimChip Text="brez spletnega profila" Tone="bad" />
+        }
+      </button>
+    }
+  </div>
+</section>
+
+@if (Overview is not null)
+{
+  <section class="kpi-grid section-gap" aria-label="Povzetek drevesa">
+    <PimStat Label="Kategorije z lastnim naborom" Value="@Overview.Summary.CategoriesWithOwnSet.ToString("N0")" Note="@($"od {Overview.Summary.Categories:N0}")" />
+    <PimStat Label="Kategorije z učinkovitim naborom" Value="@Overview.Summary.CategoriesWithEffectiveSet.ToString("N0")" Note="lastne in podedovane vrstice" />
+    <PimStat Label="Vrstic nabora" Value="@Overview.Summary.OwnRows.ToString("N0")" Note="obvezni, priporočeni in izločeni" />
+    <PimStat Label="Izdelki pod naborom" Value="@Overview.Summary.ProductsUnderSet.ToString("N0")" Note="@($"od {Overview.Summary.ProductCount:N0} v drevesu")" />
+    <PimStat Label="Atributov v registru" Value="@Overview.Summary.AttributesInRegister.ToString("N0")" Note="@(Overview.Summary.WebProfileCode is null ? "drevo nima spletnega profila" : $"spletni profil {Overview.Summary.WebProfileCode}")" Href="nastavitve/atributi" />
+  </section>
+
+  @if (Overview.Summary.WebProfileCode is null)
+  {
+    <p class="message-state error-message" role="alert">
+      Drevo @TreeLabel(TreeCode) nima aktivnega spletnega validacijskega profila (val.ValidationProfile.CategoryTreeCode), zato nabora ni mogoče shraniti. Profil se doda v pravilih validacije.
+    </p>
+  }
+}
+
+<section class="ui-card toolbar section-gap" role="search" aria-labelledby="set-filter-title">
+  <h2 id="set-filter-title" class="visually-hidden">Filtriranje kategorij</h2>
+
+  <label class="visually-hidden" for="set-search">Iskanje</label>
+  <input id="set-search" class="form-input" type="search" placeholder="Išči po poti ali kodi kategorije"
+         @bind="Search" @bind:after="LoadAsync" />
+
+  <label class="visually-hidden" for="set-level">Raven drevesa</label>
+  <select id="set-level" class="filter-select" @bind="Level" @bind:after="LoadAsync">
+    <option value="">Vse ravni</option>
+    <option value="1">1. raven</option>
+    <option value="2">2. raven</option>
+    <option value="3">3. raven</option>
+    <option value="4">4. raven</option>
+  </select>
+
+  <label class="filter-check">
+    <input type="checkbox" @bind="OnlyWithoutSet" @bind:after="LoadAsync" />
+    Samo brez nabora
+  </label>
+  <label class="filter-check">
+    <input type="checkbox" @bind="OnlyWithProducts" @bind:after="LoadAsync" />
+    Samo z izdelki
+  </label>
+
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+<section class="ui-card data-card section-gap" aria-label="Nabori po kategorijah">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is null || Overview.Rows.Count == 0)"
+            EmptyText="Za te filtre ni nobene kategorije." LoadingText="Nalaganje naborov …">
+    <PimTable Caption="Kategorije drevesa z lastnimi in podedovanimi atributi ter pokritostjo pri izdelkih" Columns="Columns">
+      <Rows>
+        @foreach (var row in Overview!.Rows)
+        {
+          <tr class="@(row.HasOwnSet ? "has-own" : row.HasEffectiveSet ? "has-inherited" : "no-set")">
+            <td>
+              <div class="category-cell" style="@Indent(row.LevelNo)">
+                <span class="category-name">@row.CategoryName</span>
+                <span class="code-value">@row.CategoryCode</span>
+                @if (!row.IsActive) { <PimChip Text="neaktivna" Tone="warn" /> }
+              </div>
+            </td>
+            <td class="numeric" title="Neposredno v kategoriji / v kategoriji in pod njo">@row.ProductCount.ToString("N0") / @row.DescendantProductCount.ToString("N0")</td>
+            <td class="numeric">@Count(row.EffectiveRequired, row.OwnRequired)</td>
+            <td class="numeric">@Count(row.EffectiveRecommended, row.OwnRecommended)</td>
+            <td class="numeric">@Count(row.EffectiveExcluded, row.OwnExcluded)</td>
+            <td>
+              @if (row.HasEffectiveSet)
+              {
+                <span class="names" title="@row.EffectiveNames">@row.EffectiveNames</span>
+                @if (row.InheritedCount > 0 && !row.HasOwnSet) { <PimChip Text="podedovan" Prefix="Nabor: " /> }
+              }
+              else
+              {
+                <span class="muted">brez nabora — na kartici in v izvozu vsi atributi izdelka</span>
+              }
+            </td>
+            <td class="numeric" title="Različni atributi z vrednostjo pri izdelkih poddrevesa; koliko od njih nabor ne omenja">
+              @row.UsedAttributeCount.ToString("N0")
+              @if (row.UsedNotInSetCount > 0 && row.HasEffectiveSet) { <span class="warn-count">(@row.UsedNotInSetCount izven)</span> }
+            </td>
+            <td class="table-actions">
+              <button type="button" class="@(Editing == row.CategoryCode ? "primary-button" : "secondary-button")" disabled="@Busy"
+                      @onclick="() => ToggleEditorAsync(row)">@(Editing == row.CategoryCode ? "Zapri" : "Uredi")</button>
+            </td>
+          </tr>
+
+          @if (Editing == row.CategoryCode)
+          {
+            <tr class="editor-row">
+              <td colspan="8">
+                <div class="set-editor" aria-label="@($"Nabor atributov za {row.CategoryName}")">
+                  <div class="editor-head">
+                    <span class="editor-origin">Nabor za: <strong>@row.CategoryName</strong></span>
+                    <span class="editor-path">@row.CategoryPath</span>
+                    <span class="editor-note">Obvezen atribut blokira splet, priporočen opozori, izločen razveljavi podedovanega. Velja tudi za podkategorije; najbližja vrstica zmaga.</span>
+                  </div>
+
+                  @if (EditorLoading) { <p class="message-state">Nalaganje nabora …</p> }
+                  else
+                  {
+                    <div class="editor-grid">
+                      <div class="editor-block">
+                        <h3>Trenutni nabor (@EditorSet.Rows.Count)</h3>
+                        <table class="attribute-set">
+                          <thead><tr><th>Atribut</th><th>Raven</th><th>Določen na</th><th class="numeric">Ima vrednost</th><th></th></tr></thead>
+                          <tbody>
+                            @if (EditorSet.Rows.Count == 0)
+                            {
+                              <tr><td colspan="5" class="muted">Nabor še ni določen. Dodaj atribute iz registra, jih prilepi ali kopiraj nabor druge kategorije.</td></tr>
+                            }
+                            @foreach (var setRow in EditorSet.Rows)
+                            {
+                              <tr class="@(setRow.IsInherited ? "is-inherited" : null)">
+                                <td>@setRow.AttributeName <span class="code-value">@setRow.AttributeCode</span></td>
+                                <td>
+                                  <select class="filter-select" value="@setRow.Level" disabled="@Busy" aria-label="@($"Raven za {setRow.AttributeName}")"
+                                          @onchange="args => SetLevelAsync(row, setRow.AttributeCode, args.Value?.ToString())">
+                                    <option value="REQUIRED">obvezen</option>
+                                    <option value="RECOMMENDED">priporočen</option>
+                                    <option value="EXCLUDED">izločen</option>
+                                  </select>
+                                </td>
+                                <td>@(setRow.IsInherited ? $"podedovan: {setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}" : "tu")</td>
+                                <td class="numeric" title="Izdelki v tej kategoriji in pod njo, ki atribut imajo / vsi">@setRow.ProductsWithValue.ToString("N0") / @setRow.ProductCount.ToString("N0")</td>
+                                <td>
+                                  @if (!setRow.IsInherited)
+                                  {
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => SetLevelAsync(row, setRow.AttributeCode, null)">Odstrani</button>
+                                  }
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+
+                        @if (EditorSet.Suggestions.Count > 0)
+                        {
+                          <details class="attribute-suggestions" open>
+                            <summary>Atributi, ki jih izdelki te kategorije že nosijo, a niso v naboru (@EditorSet.Suggestions.Count)</summary>
+                            <ul>
+                              @foreach (var suggestion in EditorSet.Suggestions)
+                              {
+                                <li>
+                                  <span>@suggestion.AttributeName</span>
+                                  <span class="muted">@suggestion.ProductsWithValue.ToString("N0") izdelkov</span>
+                                  @if (suggestion.InRegister)
+                                  {
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "RECOMMENDED")'>priporočen</button>
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "REQUIRED")'>obvezen</button>
+                                  }
+                                  else { <span class="muted">ni v registru atributov</span> }
+                                </li>
+                              }
+                            </ul>
+                            @if (EditorSet.Suggestions.Any(suggestion => suggestion.InRegister))
+                            {
+                              <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => AddAllSuggestionsAsync(row)">
+                                Dodaj vse iz registra kot priporočene (@EditorSet.Suggestions.Count(suggestion => suggestion.InRegister))
+                              </button>
+                            }
+                          </details>
+                        }
+                      </div>
+
+                      <div class="editor-block">
+                        <h3>Dodaj iz registra</h3>
+                        <label class="visually-hidden" for="pick-search">Išči atribut</label>
+                        <input id="pick-search" class="form-input search-input" type="search" placeholder="Išči po imenu ali kodi" @bind="PickerSearch" @bind:event="oninput" />
+                        <ul class="picker-list" aria-label="Atributi registra, ki še niso v naboru">
+                          @foreach (var option in PickerOptions)
+                          {
+                            <li>
+                              <label>
+                                <input type="checkbox" checked="@Picked.Contains(option.AttributeCode)" @onchange="args => TogglePick(option.AttributeCode, args.Value)" />
+                                @option.Name <span class="code-value">@option.AttributeCode</span>
+                              </label>
+                            </li>
+                          }
+                          @if (PickerOptions.Count == 0) { <li class="muted">Ni atributa, ki bi ustrezal iskanju in še ne bil v naboru.</li> }
+                        </ul>
+                        <div class="editor-actions">
+                          <label class="editor-field" for="pick-level">
+                            <span class="editor-label">Raven</span>
+                            <select id="pick-level" class="filter-select" @bind="PickLevel">
+                              <option value="REQUIRED">obvezen</option>
+                              <option value="RECOMMENDED">priporočen</option>
+                              <option value="EXCLUDED">izločen</option>
+                            </select>
+                          </label>
+                          <button type="button" class="primary-button" disabled="@(Busy || Picked.Count == 0)" @onclick="() => AddPickedAsync(row)">
+                            Dodaj izbrane (@Picked.Count)
+                          </button>
+                        </div>
+
+                        <h3>Prilepi seznam</h3>
+                        <p class="muted">Ena vrstica na atribut: koda ali slovensko ime, po želji »;raven« (obvezen, priporočen, izločen). Primer: <span class="code-value">Nazivna moč;obvezen</span>. Vrstica brez ravni dobi spodnjo.</p>
+                        <label class="visually-hidden" for="paste-text">Seznam atributov</label>
+                        <textarea id="paste-text" class="form-input paste-area" rows="5" @bind="PasteText" placeholder="Garancija;obvezen&#10;Napetost&#10;IP zaščita"></textarea>
+                        <div class="editor-actions">
+                          <label class="editor-field" for="paste-level">
+                            <span class="editor-label">Privzeta raven</span>
+                            <select id="paste-level" class="filter-select" @bind="PasteLevel">
+                              <option value="REQUIRED">obvezen</option>
+                              <option value="RECOMMENDED">priporočen</option>
+                              <option value="EXCLUDED">izločen</option>
+                            </select>
+                          </label>
+                          <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(PasteText))" @onclick="() => ImportPasteAsync(row)">Uvozi seznam</button>
+                        </div>
+
+                        <h3>Kopiraj nabor druge kategorije</h3>
+                        <div class="editor-actions">
+                          <label class="editor-field" for="copy-tree">
+                            <span class="editor-label">Drevo</span>
+                            <select id="copy-tree" class="filter-select" @bind="CopyTree" @bind:after="LoadCopySourcesAsync">
+                              @foreach (var tree in Trees) { <option value="@tree.CategoryTreeCode">@TreeLabel(tree.CategoryTreeCode)</option> }
+                            </select>
+                          </label>
+                          <label class="editor-field copy-source" for="copy-category">
+                            <span class="editor-label">Kategorija z naborom</span>
+                            <select id="copy-category" class="filter-select" @bind="CopyCategory">
+                              <option value="">— izberi —</option>
+                              @foreach (var source in CopySources.Where(source => !(source.CategoryTreeCode == row.CategoryTreeCode && source.CategoryCode == row.CategoryCode)))
+                              {
+                                <option value="@source.CategoryCode">@source.CategoryPath (@source.EffectiveCount)</option>
+                              }
+                            </select>
+                          </label>
+                        </div>
+                        <div class="editor-actions">
+                          <label class="filter-check"><input type="checkbox" @bind="CopyIncludeInherited" /> tudi podedovane vrstice vira</label>
+                          <label class="filter-check"><input type="checkbox" @bind="CopyOverwrite" /> prepiši raven že obstoječih</label>
+                          <button type="button" class="secondary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(CopyCategory))" @onclick="() => CopyAsync(row)">Kopiraj nabor</button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+<details class="ui-card card-note section-gap">
+  <summary>Kje nabor učinkuje</summary>
+  <ul>
+    <li><strong>Kartica izdelka</strong> (/izdelki/{id}): atributi iz nabora so v svoji skupini (tudi prazni, da jih je mogoče vpisati), ostali so označeni kot »izven nabora«.</li>
+    <li><strong>Validacija</strong>: obvezen atribut je zahteva ERROR v spletnem profilu drevesa, priporočen je WARNING; upošteva jih naslednji tek validacije.</li>
+    <li><strong>Spletni izvoz</strong>: kadar kategorija izdelka nabor določa, gredo v datoteko samo atributi iz nabora; izdelek brez nabora obdrži vse.</li>
+    <li>Isti nabor ureja tudi gumb <strong>Atributi</strong> pri kategoriji na <a href="nastavitve/kategorije">/nastavitve/kategorije</a>; register atributov je na <a href="nastavitve/atributi">/nastavitve/atributi</a>.</li>
+  </ul>
+</details>
+
+@code {
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Nabori atributov po kategorijah")];
+
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Kategorija"), new("Izdelki", Numeric: true), new("Obvezni", Numeric: true), new("Priporočeni", Numeric: true),
+    new("Izločeni", Numeric: true), new("Atributi v naboru"), new("V rabi pri izdelkih", Numeric: true), new(""),
+  ];
+
+  IReadOnlyList<CategoryTreeService.TreeSummaryRow> Trees = [];
+  CategoryTreeService.OverviewView? Overview;
+  IReadOnlyList<CategoryTreeService.AttributeOptionRow> AttributeOptions = [];
+
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+  string TreeCode = "";
+  string Search = "";
+  string Level = "";
+  bool OnlyWithoutSet;
+  bool OnlyWithProducts;
+
+  // Urejevalnik ene kategorije: isti bralni model in isti postopek kot na /nastavitve/kategorije (147).
+  string? Editing;
+  bool EditorLoading;
+  CategoryTreeService.AttributeSetView EditorSet = new([], []);
+  string PickerSearch = "";
+  readonly HashSet<string> Picked = new(StringComparer.OrdinalIgnoreCase);
+  string PickLevel = "RECOMMENDED";
+  string PasteText = "";
+  string PasteLevel = "RECOMMENDED";
+  string CopyTree = "";
+  string CopyCategory = "";
+  bool CopyIncludeInherited = true;
+  bool CopyOverwrite;
+  IReadOnlyList<CategoryTreeService.OverviewRow> CopySources = [];
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : Overview is null ? ""
+    : $"{Overview.Rows.Count:N0} kategorij · {Overview.Rows.Count(row => row.HasOwnSet):N0} z lastnim naborom · {Overview.Rows.Count(row => !row.HasEffectiveSet):N0} brez nabora";
+
+  static string Indent(int level) => $"padding-left:{(level - 1) * 22}px";
+
+  /// <summary>Drevo se imenuje po spletni trgovini, ne po tehnicni kodi.</summary>
+  static string TreeLabel(string treeCode) => treeCode switch
+  {
+    "svetila_si" => "Svetila",
+    "videlektro" => "Videlektro",
+    _ => treeCode,
+  };
+
+  static string Count(int effective, int own) => effective == 0 ? "—" : own == effective ? effective.ToString("N0") : $"{effective:N0} ({own:N0} tu)";
+
+  int? LevelNo => int.TryParse(Level, out var value) ? value : null;
+
+  IReadOnlyList<CategoryTreeService.AttributeOptionRow> PickerOptions =>
+    AttributeOptions
+      .Where(option => EditorSet.Rows.All(existing => !string.Equals(existing.AttributeCode, option.AttributeCode, StringComparison.OrdinalIgnoreCase)))
+      .Where(option => string.IsNullOrWhiteSpace(PickerSearch)
+        || option.Name.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase)
+        || option.AttributeCode.Contains(PickerSearch, StringComparison.OrdinalIgnoreCase))
+      .ToList();
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Trees = await Tree.GetAttributeSetTreesAsync();
+      // Svetila so danes edino drevo z izdelki in nabori; videlektro je izbira ob kliku.
+      TreeCode = Trees.FirstOrDefault(tree => tree.CategoryTreeCode == "svetila_si")?.CategoryTreeCode
+        ?? Trees.FirstOrDefault()?.CategoryTreeCode ?? "";
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      Overview = string.IsNullOrWhiteSpace(TreeCode)
+        ? null
+        : await Tree.GetAttributeSetOverviewAsync(TreeCode, Search, OnlyWithoutSet, OnlyWithProducts, LevelNo);
+    }
+    catch (Exception exception) { Error = exception.Message; Overview = null; }
+    finally { Loading = false; }
+  }
+
+  async Task ReloadTreesAsync()
+  {
+    try { Trees = await Tree.GetAttributeSetTreesAsync(); }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task SelectTreeAsync(string treeCode)
+  {
+    if (treeCode == TreeCode) return;
+    TreeCode = treeCode;
+    Editing = null;
+    Message = null;
+    await LoadAsync();
+  }
+
+  async Task ToggleEditorAsync(CategoryTreeService.OverviewRow row)
+  {
+    if (Editing == row.CategoryCode) { Editing = null; return; }
+    Message = null;
+    Error = null;
+    Editing = row.CategoryCode;
+    Picked.Clear();
+    PickerSearch = "";
+    PasteText = "";
+    CopyCategory = "";
+    if (string.IsNullOrWhiteSpace(CopyTree)) CopyTree = TreeCode;
+    await LoadEditorAsync(row);
+    await LoadCopySourcesAsync();
+  }
+
+  async Task LoadEditorAsync(CategoryTreeService.OverviewRow row)
+  {
+    EditorLoading = true;
+    try
+    {
+      if (AttributeOptions.Count == 0) AttributeOptions = await Tree.GetAttributeOptionsAsync();
+      EditorSet = await Tree.GetAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode);
+    }
+    catch (Exception exception) { Error = exception.Message; EditorSet = new([], []); }
+    finally { EditorLoading = false; }
+  }
+
+  /// <summary>Vir kopiranja je kategorija z ucinkovitim naborom; za izbrano drevo se seznam prebere posebej, ker je lahko drugo od odprtega.</summary>
+  async Task LoadCopySourcesAsync()
+  {
+    CopyCategory = "";
+    try
+    {
+      var view = CopyTree == TreeCode && Overview is not null && string.IsNullOrWhiteSpace(Search) && LevelNo is null && !OnlyWithoutSet && !OnlyWithProducts
+        ? Overview
+        : await Tree.GetAttributeSetOverviewAsync(CopyTree, null, false, false, null);
+      CopySources = view.Rows.Where(source => source.HasEffectiveSet).ToList();
+    }
+    catch (Exception exception) { Error = exception.Message; CopySources = []; }
+  }
+
+  void TogglePick(string attributeCode, object? value)
+  {
+    if (value is true) Picked.Add(attributeCode); else Picked.Remove(attributeCode);
+  }
+
+  /// <summary>Po vsaki spremembi se osvezijo urejevalnik, pregled in stevci dreves — isti podatki na treh mestih ne smejo razhajati.</summary>
+  async Task AfterChangeAsync(CategoryTreeService.OverviewRow row)
+  {
+    await LoadEditorAsync(row);
+    await LoadAsync();
+    await ReloadTreesAsync();
+  }
+
+  /// <summary>Raven null odstrani atribut iz nabora te kategorije (podedovanega se tu ne da odstraniti, le izlociti).</summary>
+  async Task SetLevelAsync(CategoryTreeService.OverviewRow row, string attributeCode, string? level)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await Tree.SaveAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode, attributeCode, level, await ActorAsync());
+      Message = level is null
+        ? $"Atribut {attributeCode} je odstranjen iz nabora kategorije »{row.CategoryName}«."
+        : $"Atribut {attributeCode} je v naboru kategorije »{row.CategoryName}« kot {LevelLabel(level)}. Validacija ga upošteva ob naslednjem teku.";
+      await AfterChangeAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  Task AddPickedAsync(CategoryTreeService.OverviewRow row) =>
+    SaveManyAsync(row, Picked.Select(code => new CategoryTreeService.AttributeSetItem(code, PickLevel)).ToList(), clearPicked: true);
+
+  Task AddAllSuggestionsAsync(CategoryTreeService.OverviewRow row) =>
+    SaveManyAsync(row, EditorSet.Suggestions.Where(suggestion => suggestion.InRegister)
+      .Select(suggestion => new CategoryTreeService.AttributeSetItem(suggestion.AttributeCode, "RECOMMENDED")).ToList(), clearPicked: false);
+
+  /// <summary>Vrstica: »koda ali ime[;raven]«. Raven sme biti slovenska ali angleska; brez nje velja privzeta.</summary>
+  Task ImportPasteAsync(CategoryTreeService.OverviewRow row)
+  {
+    var items = new List<CategoryTreeService.AttributeSetItem>();
+    foreach (var line in PasteText.Split('\n'))
+    {
+      var parts = line.Split([';', '\t'], 2);
+      var name = parts[0].Trim();
+      if (name.Length == 0) continue;
+      var level = parts.Length > 1 ? ParseLevel(parts[1]) : null;
+      if (parts.Length > 1 && level is null)
+      {
+        Error = $"Neznana raven »{parts[1].Trim()}« v vrstici »{line.Trim()}«. Dovoljeno: obvezen, priporočen, izločen.";
+        return Task.CompletedTask;
+      }
+      items.Add(new(name, level ?? PasteLevel));
+    }
+    return SaveManyAsync(row, items, clearPicked: false);
+  }
+
+  static string? ParseLevel(string text) => text.Trim().ToLowerInvariant() switch
+  {
+    "obvezen" or "obvezno" or "required" or "req" or "r" => "REQUIRED",
+    "priporočen" or "priporocen" or "priporočeno" or "priporoceno" or "recommended" or "rec" or "p" => "RECOMMENDED",
+    "izločen" or "izlocen" or "izločeno" or "izloceno" or "excluded" or "exc" or "x" => "EXCLUDED",
+    _ => null,
+  };
+
+  async Task SaveManyAsync(CategoryTreeService.OverviewRow row, IReadOnlyList<CategoryTreeService.AttributeSetItem> items, bool clearPicked)
+  {
+    if (items.Count == 0) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var saved = await Tree.SaveAttributeSetBulkAsync(row.CategoryTreeCode, row.CategoryCode, items, await ActorAsync());
+      Message = $"V nabor kategorije »{row.CategoryName}« je zapisanih {saved} atributov. Validacija jih upošteva ob naslednjem teku.";
+      if (clearPicked) Picked.Clear();
+      PasteText = "";
+      await AfterChangeAsync(row);
+    }
+    // Postopek zavrne neznane atribute vse naenkrat z nastetimi imeni; sporocilo pride iz baze.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task CopyAsync(CategoryTreeService.OverviewRow row)
+  {
+    if (string.IsNullOrWhiteSpace(CopyCategory)) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var copied = await Tree.CopyAttributeSetAsync(CopyTree, CopyCategory, row.CategoryTreeCode, row.CategoryCode, CopyIncludeInherited, CopyOverwrite, await ActorAsync());
+      var source = CopySources.FirstOrDefault(candidate => candidate.CategoryCode == CopyCategory)?.CategoryPath ?? CopyCategory;
+      Message = copied == 0
+        ? $"Iz »{source}« ni bilo česa prepisati: vse vrstice so v naboru kategorije »{row.CategoryName}« že bile."
+        : $"Iz »{source}« je v nabor kategorije »{row.CategoryName}« prepisanih {copied} atributov.";
+      await AfterChangeAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  static string LevelLabel(string level) => level switch
+  {
+    "REQUIRED" => "obvezen", "RECOMMENDED" => "priporočen", "EXCLUDED" => "izločen", _ => level,
+  };
+}

@@ -203,6 +203,130 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
+  // --- Pregled naborov po kategorijah (migracija 170) ------------------------------------
+
+  /// <param name="WebProfileCode">Spletni profil drevesa; brez njega shranjevanje nabora ni mogoce (147).</param>
+  public sealed record TreeSummaryRow(
+    string CategoryTreeCode, long Categories, long CategoriesWithOwnSet, long ProductCount,
+    string? WebSites, string? WebProfileCode);
+
+  /// <param name="EffectiveNames">Imena atributov v ucinkovitem naboru; obvezni imajo zvezdico.</param>
+  /// <param name="UsedNotInSetCount">Razlicni atributi, ki jih izdelki poddrevesa nosijo, nabor pa jih ne omenja.</param>
+  public sealed record OverviewRow(
+    string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo,
+    string CategoryName, string CategoryPath, bool IsActive,
+    long ProductCount, long DescendantProductCount, long ChildCount,
+    int OwnRequired, int OwnRecommended, int OwnExcluded,
+    int EffectiveRequired, int EffectiveRecommended, int EffectiveExcluded, int InheritedCount,
+    string? EffectiveNames, int UsedAttributeCount, int UsedNotInSetCount)
+  {
+    public int OwnCount => OwnRequired + OwnRecommended + OwnExcluded;
+    public int EffectiveCount => EffectiveRequired + EffectiveRecommended;
+    public bool HasOwnSet => OwnCount > 0;
+    public bool HasEffectiveSet => EffectiveCount > 0;
+  }
+
+  public sealed record OverviewSummary(
+    long Categories, long CategoriesWithOwnSet, long CategoriesWithEffectiveSet, long OwnRows,
+    long ProductCount, long ProductsUnderSet, long AttributesInRegister, string? WebProfileCode);
+
+  public sealed record OverviewView(IReadOnlyList<OverviewRow> Rows, OverviewSummary Summary);
+
+  public Task<IReadOnlyList<TreeSummaryRow>> GetAttributeSetTreesAsync(CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      "EXEC intranet.GetCategoryAttributeSetTrees;",
+      reader => new TreeSummaryRow(
+        PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.Int64(reader, "Categories"),
+        PimDb.Int64(reader, "CategoriesWithOwnSet"), PimDb.Int64(reader, "ProductCount"),
+        PimDb.Text(reader, "WebSites"), PimDb.Text(reader, "WebProfileCode")),
+      null, cancellationToken);
+
+  public async Task<OverviewView> GetAttributeSetOverviewAsync(
+    string categoryTreeCode, string? search, bool onlyWithoutSet, bool onlyWithProducts, int? levelNo,
+    CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetCategoryAttributeSetOverview", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure, CommandTimeout = 120,
+    };
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@Search", Nullable(search));
+    command.Parameters.AddWithValue("@OnlyWithoutSet", onlyWithoutSet);
+    command.Parameters.AddWithValue("@OnlyWithProducts", onlyWithProducts);
+    command.Parameters.AddWithValue("@LevelNo", levelNo is null ? DBNull.Value : levelNo.Value);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<OverviewRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"),
+        PimDb.Text(reader, "ParentCategoryCode"), PimDb.Int32(reader, "LevelNo"),
+        PimDb.TextOrEmpty(reader, "CategoryName"), PimDb.TextOrEmpty(reader, "CategoryPath"), PimDb.Bool(reader, "IsActive"),
+        PimDb.Int64(reader, "ProductCount"), PimDb.Int64(reader, "DescendantProductCount"), PimDb.Int64(reader, "ChildCount"),
+        PimDb.Int32(reader, "OwnRequired"), PimDb.Int32(reader, "OwnRecommended"), PimDb.Int32(reader, "OwnExcluded"),
+        PimDb.Int32(reader, "EffectiveRequired"), PimDb.Int32(reader, "EffectiveRecommended"), PimDb.Int32(reader, "EffectiveExcluded"),
+        PimDb.Int32(reader, "InheritedCount"), PimDb.Text(reader, "EffectiveNames"),
+        PimDb.Int32(reader, "UsedAttributeCount"), PimDb.Int32(reader, "UsedNotInSetCount")));
+    var summary = new OverviewSummary(0, 0, 0, 0, 0, 0, 0, null);
+    if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
+      summary = new(
+        PimDb.Int64(reader, "Categories"), PimDb.Int64(reader, "CategoriesWithOwnSet"),
+        PimDb.Int64(reader, "CategoriesWithEffectiveSet"), PimDb.Int64(reader, "OwnRows"),
+        PimDb.Int64(reader, "ProductCount"), PimDb.Int64(reader, "ProductsUnderSet"),
+        PimDb.Int64(reader, "AttributesInRegister"), PimDb.Text(reader, "WebProfileCode"));
+    return new(rows, summary);
+  }
+
+  /// <param name="Level">REQUIRED, RECOMMENDED, EXCLUDED ali null = odstrani iz nabora.</param>
+  /// <param name="CodeOrName">Koda iz registra ali slovensko ime atributa (seznami iz mastrov nosijo imena).</param>
+  public sealed record AttributeSetItem(string CodeOrName, string? Level);
+
+  /// <summary>Vec atributov ene kategorije v enem klicu. Neznane atribute postopek zavrne vse naenkrat, nic se ne shrani.</summary>
+  public async Task<int> SaveAttributeSetBulkAsync(
+    string categoryTreeCode, string categoryCode, IReadOnlyList<AttributeSetItem> items, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    var payload = JsonSerializer.Serialize(items.Select(item => new { code = item.CodeOrName, level = item.Level }));
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.SaveCategoryAttributeSetBulk @CategoryTreeCode, @CategoryCode, @ItemsJson, @Actor, @Saved OUTPUT;", connection)
+    { CommandTimeout = 120 };
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@CategoryCode", categoryCode);
+    command.Parameters.AddWithValue("@ItemsJson", payload);
+    command.Parameters.AddWithValue("@Actor", actor);
+    var saved = command.Parameters.Add("@Saved", System.Data.SqlDbType.Int);
+    saved.Direction = System.Data.ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return saved.Value is int count ? count : 0;
+  }
+
+  /// <summary>Ucinkoviti nabor vira postane lastni nabor cilja. Vrne stevilo prepisanih vrstic.</summary>
+  public async Task<int> CopyAttributeSetAsync(
+    string fromTreeCode, string fromCategoryCode, string toTreeCode, string toCategoryCode,
+    bool includeInherited, bool overwrite, string actor, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.CopyCategoryAttributeSet @FromCategoryTreeCode, @FromCategoryCode, @ToCategoryTreeCode, @ToCategoryCode, @Actor, @IncludeInherited, @Overwrite, @Copied OUTPUT;",
+      connection)
+    { CommandTimeout = 120 };
+    command.Parameters.AddWithValue("@FromCategoryTreeCode", fromTreeCode);
+    command.Parameters.AddWithValue("@FromCategoryCode", fromCategoryCode);
+    command.Parameters.AddWithValue("@ToCategoryTreeCode", toTreeCode);
+    command.Parameters.AddWithValue("@ToCategoryCode", toCategoryCode);
+    command.Parameters.AddWithValue("@Actor", actor);
+    command.Parameters.AddWithValue("@IncludeInherited", includeInherited);
+    command.Parameters.AddWithValue("@Overwrite", overwrite);
+    var copied = command.Parameters.Add("@Copied", System.Data.SqlDbType.Int);
+    copied.Direction = System.Data.ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return copied.Value is int count ? count : 0;
+  }
+
   static IReadOnlyDictionary<string, string> ParseTranslations(string? json)
   {
     if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

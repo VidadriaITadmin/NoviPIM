@@ -73,6 +73,7 @@ Zahtevki (claims) po prijavi: `ClaimTypes.Name` (uporabniško ime),
 | `/pravila-popustov` | `Pages/DiscountRules.razor` | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/pravila`, `/pravila/validacija`, `/pravila/slovar`, `/pravila/preslikave` | registri pravil | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/nastavitve` in `/nastavitve/{atributi,kategorije,skladisca,kanali,jeziki}` | bralni pogledi nastavitev kataloga | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
+| `/nastavitve/nabori-atributov` | `Pages/CategoryAttributeSets.razor` — pregled naborov atributov po kategorijah za vsako drevo (svetila, videlektro) z množičnim urejanjem (izbira več, lepljenje seznama, kopiranje nabora); migracija 170 | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
 | `/sistem`, `/sistem/napake`, `/sistem/vloge` | sistemska razdelilna stran in bralni pogledi | `ADMIN` | `MainLayout` |
 | `/system/integracije` | `Pages/SystemIntegrations.razor` | `ADMIN` | `MainLayout` |
 | `/system/uporabniki` | `Pages/SystemUsers.razor` | `ADMIN` | `MainLayout` |
@@ -293,6 +294,7 @@ izjemo ob kršitvi in izpiše vrstico `… PASS.` ob uspehu. Poganja se jih z
 | `tests/PIM.F10.PipelineRunsUxTests` | `/teki-obdelave` | `F10 pipeline runs UX contract PASS.` |
 | `tests/PIM.F10.OutboundUxTests` | `/outbound` (predstavitveni del) | `F10 outbound UX contract PASS.` |
 | `tests/PIM.F10.SystemIntegrationsUxTests` | `/system/integracije` (predstavitveni del) | `F10 system integrations UX contract PASS.` |
+| `tests/PIM.F10.CategoryAttributeSetUxTests` | `/nastavitve/nabori-atributov`: pot, vloge, akter, napaka iz baze do uporabnika, stran ne pozna tabel in ne piše sama, servis kliče postopke 147/170, izbira drevesa, stolpci »koliko in kateri«, tri množične poti (izbira več, lepljenje, kopiranje), hub in `PimLifecycle`, migracija 170 gre skozi `canon.SaveCategoryAttributeSet` | `PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.` |
 
 Vsi `PIM.F10.*UxTests` imajo isti vzorec: preverijo obstoj `Pages/<Stran>.razor`
 **in** pripadajočega `<Stran>.razor.css`, dostopnostne atribute, sloge fokusa,

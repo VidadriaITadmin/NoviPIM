@@ -22,7 +22,7 @@ public static class PimLifecycle
 {
   public static PimLifecycleArea Oversight { get; } = new("NADZOR", "Nadzor", "Skupni operativni pregled vseh podatkovnih tokov.", ["nadzorna-plosca"]);
   public static PimLifecycleArea Inputs { get; } = new("VHODI", "Vhodni podatki", "Zajem, preslikave in neujemanja iz SAOP, XML-jev in datotek.", ["zajem", "teki-obdelave", "pravila/preslikave", "pravila/slovar"]);
-  public static PimLifecycleArea Catalog { get; } = new("PIM", "PIM katalog", "Kanonični in PIM-lastni podatki kataloga.", ["izdelki", "mediji", "nastavitve/atributi", "nastavitve/kategorije", "nastavitve/povezave-izdelkov", "nastavitve/jeziki", "nastavitve/skladisca", "nastavitve/kanali"]);
+  public static PimLifecycleArea Catalog { get; } = new("PIM", "PIM katalog", "Kanonični in PIM-lastni podatki kataloga.", ["izdelki", "mediji", "nastavitve/atributi", "nastavitve/kategorije", "nastavitve/nabori-atributov", "nastavitve/povezave-izdelkov", "nastavitve/jeziki", "nastavitve/skladisca", "nastavitve/kanali"]);
   public static PimLifecycleArea Quality { get; } = new("KAKOVOST", "Kakovost", "Validacija, vrzeli, prevodi, kategorije in karantena.", ["kakovost", "napake-validacije", "karantena"]);
   public static PimLifecycleArea Outputs { get; } = new("IZHODI", "Izhodi ERP in splet", "Nadzorovani zapisi v SAOP ter profili in datoteke za splet.", ["saop", "splet", "izvozi", "outbound"]);
   public static PimLifecycleArea Business { get; } = new("POSLOVANJE", "Poslovanje", "Stranke, popusti, cene, ceniki in zaloga.", ["stranke", "partnerji", "zaloge", "cene", "preverbe", "pravila-popustov"]);

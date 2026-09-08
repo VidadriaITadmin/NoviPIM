@@ -254,6 +254,23 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-08 — nabori atributov po kategorijah: pregled drevesa in množično urejanje (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
+
+Zahteva uporabnika: nova stran pod nastavitvami, ki po kategorijah (svetila, videlektro) pove,
+koliko in katere atribute ima katera kategorija, uporabniki pa nabor spreminjajo in dodajajo;
+nabor je podlaga za kartico izdelka in spletni izvoz. Naslednji korak (uporabnik): napolniti
+nabore po mastrih starega PIM-a — zato stran sprejme prilepljen seznam imen.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `170_CategoryAttributeSetOverview.sql`: `intranet.GetCategoryAttributeSetTrees`, `intranet.GetCategoryAttributeSetOverview` (vrstica na kategorijo: lastne/učinkovite ravni, imena, izdelki, atributi v rabi izven nabora + povzetek), `canon.SaveCategoryAttributeSetBulk` (JSON, koda ali slovensko ime, neznani zavrnjeni vsi naenkrat), `canon.CopyCategoryAttributeSet`; oba pisalna gresta skozi `canon.SaveCategoryAttributeSet` (147) | migrator 1. zagon `Uporabljena migracija: 170`, 2. zagon `Preskočena`; skript dvakrat brez napake; smoke proti dev bazi: bulk 3 shranjeni + 3 zahteve, neznana (`51703: ... Ne obstaja, XYZ_NEZNAN`) nič ne shrani, napačna raven `51704`, copy svetila→videlektro 3 nato 0, dedovanje na `razsvetljava___luci___stropne_luci`, odstranitev prek `level: null`; testne vrstice pobrisane. `--verify` na tej veji pade že prej na `canon.Product.ErpExistence` (migracija 169, ki ni na tej veji in ni uporabljena) — ni povezano s 170 |
+| INTRANET | `CategoryAttributeSets.razor(.css)` na `/nastavitve/nabori-atributov`, `CategoryTreeService` (+4 metode), kartica na `/nastavitve`, `PimLifecycle.Catalog`; test `PIM.F10.CategoryAttributeSetUxTests` (+ `PIM.sln`); docs `STRANI_PIM`, `INTRANET`, `VALIDACIJA`, `SISTEM_PIM`, `UPORABNISKI_PRIROCNIK` | `scripts\run_tests.ps1 -Filter F10` = `Build OK`, 17 uspelih / 0 padlih (`PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.`); `dotnet build PIM.sln` izhod 0 |
+
+Opomba za uporabnika: na tej veji so necommitane tuje migracije `153_ClearanceItem`, `154_ClearanceItemPrecision`
+in `169_ErpExistenceFlag`; v bazi so pod številkama 153/154 uporabljene **druge** datoteke
+(`153_PackagingQuantityWritable`, `154_PreserveValueOnEmptyOverwrite` iz veje `izdelki-saop-polja`).
+Pred merge-om jih je treba preštevilčiti; 170 se z njimi ne prekriva.
+
 ### 2026-09-03 — filtri zaloge in prenos CSV po filtrih (Claude, veja `feature/izhodi-erp-ux-saop-artikli`)
 
 Zahteva uporabnika: filtri na `/zaloge` niso jasni (vir vs. vrsta vira, kaj se zgodi, ko ima

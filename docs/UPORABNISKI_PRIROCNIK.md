@@ -516,6 +516,27 @@ gredo v izvoz **vsi** atributi izdelka.
 5. Pod tabelo je seznam **Atributi, ki jih izdelki te kategorije že nosijo, a niso v naboru**
    — z gumboma **priporočen** / **obvezen** jih dodaš z enim klikom.
 
+**Pregled celega drevesa in množično urejanje — `/nastavitve/nabori-atributov`**
+
+Ko nabore polniš za več kategorij hkrati (npr. po mastrih starega PIM-a), je hitrejša stran
+`/nastavitve/nabori-atributov` (kartica **Nabori atributov po kategorijah** na `/nastavitve`):
+
+1. Zgoraj izberi drevo: **Svetila** ali **Videlektro**. Pri vsakem piše, koliko kategorij že
+   ima nabor in koliko izdelkov je v drevesu. Drevo brez spletnega profila je označeno rdeče —
+   tam nabora ni mogoče shraniti, dokler profil ne obstaja.
+2. Tabela pokaže vsako kategorijo s številom **obveznih / priporočenih / izločenih** atributov
+   (v oklepaju, koliko jih je določenih »tu« in ne podedovanih), imena atributov (obvezni z
+   zvezdico), izdelke neposredno in v poddrevesu ter koliko različnih atributov izdelki nosijo
+   **izven nabora**. Filtra **Samo brez nabora** in **Samo z izdelki** pokažeta, kje je delo.
+3. **Uredi** pri kategoriji odpre urejevalnik pod vrstico s tremi hitrimi potmi:
+   - **Dodaj iz registra**: poišči in obkljukaj več atributov, izberi raven, **Dodaj izbrane**;
+   - **Prilepi seznam**: ena vrstica na atribut, koda ali slovensko ime, po želji `;obvezen`
+     / `;priporočen` / `;izločen` (primer: `Nazivna moč;obvezen`). Vrstica brez ravni dobi
+     privzeto. Če kakšnega imena ni v registru, se ne shrani nič in stran našteje, katerih;
+   - **Kopiraj nabor druge kategorije** (tudi iz drugega drevesa): učinkoviti nabor vira postane
+     lastni nabor te kategorije; obstoječe vrstice ostanejo, razen če označiš **prepiši raven**.
+   Gumb **Dodaj vse iz registra kot priporočene** vzame vse predloge, ki jih izdelki že nosijo.
+
 **Kaj se zgodi potem**
 
 - **Podkategorije dedujejo** nabor; stolpec **Določen na** pove, ali je vrstica »tu« ali
