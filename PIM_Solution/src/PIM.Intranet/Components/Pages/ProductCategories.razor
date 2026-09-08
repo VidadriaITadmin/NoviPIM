@@ -64,7 +64,7 @@
               @if (site.IsManual)
               {
                 <PimChip Text="ročno" Tone="warn" />
-                <div class="row-note">@site.SetBy · @(site.SetUtc?.ToLocalTime().ToString("g"))</div>
+                <div class="row-note">@site.SetBy · @(site.SetUtc?.ToPimLocal().ToString("g"))</div>
               }
               else
               {
@@ -77,13 +77,8 @@
                 <div class="form-grid">
                   <label class="form-field" for="@($"pick-{site.WebSiteCode}")">
                     Dodaj kategorijo
-                    <select id="@($"pick-{site.WebSiteCode}")" class="filter-select" @bind="PickedPath">
-                      <option value="">— izberi kategorijo —</option>
-                      @foreach (var node in NodesFor(site.CategoryTreeCode).Where(node => node.CategoryPath is not null))
-                      {
-                        <option value="@node.CategoryPath">@node.CategoryPath</option>
-                      }
-                    </select>
+                    <PimPicker Id="@($"pick-{site.WebSiteCode}")" Options="PathOptionsFor(site.CategoryTreeCode)" @bind-Value="PickedPathOrNull"
+                               Placeholder="Vpiši del imena ali poti kategorije …" EmptyText="V tem drevesu ni kategorij." />
                   </label>
                 </div>
                 <div class="page-actions">
@@ -201,6 +196,22 @@
       try { NodeCache[site.CategoryTreeCode] = await Mapping.GetTreeNodesAsync(site.CategoryTreeCode, null); }
       catch (Exception exception) { Error = exception.Message; NodeCache[site.CategoryTreeCode] = []; }
     }
+  }
+
+  string? PickedPathOrNull { get => string.IsNullOrWhiteSpace(PickedPath) ? null : PickedPath; set => PickedPath = value ?? ""; }
+
+  readonly Dictionary<string, IReadOnlyList<PimPickerOption>> PathOptionCache = [];
+
+  /// <summary>Izbirnik s tipkanjem: kljuc je pot (to shrani pim.SetProductCategories), zamik po ravni.</summary>
+  IReadOnlyList<PimPickerOption> PathOptionsFor(string tree)
+  {
+    if (!PathOptionCache.TryGetValue(tree, out var options))
+    {
+      options = NodesFor(tree).Where(node => node.CategoryPath is not null)
+        .Select(node => new PimPickerOption(node.CategoryPath!, node.CategoryName, node.CategoryPath, node.LevelNo - 1)).ToList();
+      PathOptionCache[tree] = options;
+    }
+    return options;
   }
 
   IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode> NodesFor(string tree) =>

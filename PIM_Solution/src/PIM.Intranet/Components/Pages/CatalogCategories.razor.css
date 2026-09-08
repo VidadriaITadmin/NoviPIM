@@ -331,3 +331,11 @@
 .attribute-suggestions { margin-top: .5rem; }
 .attribute-suggestions ul { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .25rem; }
 .attribute-suggestions li { display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
+
+/* 178: nova kategorija */
+.new-category { padding: .9rem 1rem; }
+.new-category .card-caption { font-size: .95rem; margin: 0 0 .6rem; }
+.new-category .editor-actions { align-items: end; display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+.new-category .editor-field { display: flex; flex-direction: column; gap: .2rem; }
+.new-category .parent-field { flex: 1 1 22rem; min-width: 0; }
+.new-category .editor-label { color: var(--pim-text-muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; }

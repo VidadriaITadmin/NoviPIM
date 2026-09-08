@@ -1,0 +1,221 @@
+@using PIM.Intranet.Services
+
+@* Izbirnik s tipkanjem (uporabnik 2026-09-08: »da lahko lepo piše notri in se mu v dropdown meniju
+   začne prikazovati kategorija in celotna drevesna struktura«). Brez JavaScripta: seznam je del
+   vezja, zato dela povsod, kjer dela stran. Isci po imenu, poti in kodi brez sumnikov in velikosti
+   crk; smerne tipke premikajo, Enter izbere, Escape zapre.
+
+   Podvajanje: kadar je ustvarjanje dovoljeno, komponenta pred tem pove, ali z istim imenom (po
+   zlozitvi) kaj ze obstaja — takrat ustvarjanja ne ponudi, ampak izbiro obstojecega — in nasteje
+   podobna imena. Tako stran ne rabi svoje preverbe. *@
+
+<div class="pim-picker @(Open ? "is-open" : null) @(Disabled ? "is-disabled" : null)" @onfocusout="OnFocusOutAsync" @onfocusin="OnFocusIn">
+  <div class="picker-field">
+    <input id="@Id" class="form-input picker-input" type="text" role="combobox" autocomplete="off"
+           aria-expanded="@(Open ? "true" : "false")" aria-controls="@($"{Id}-list")" aria-autocomplete="list"
+           aria-activedescendant="@(Open && ActiveIndex >= 0 ? $"{Id}-opt-{ActiveIndex}" : null)"
+           placeholder="@Placeholder" disabled="@Disabled" value="@Text"
+           @oninput="OnInput" @onkeydown="OnKeyDownAsync" @onfocus="OnInputFocus" @onclick="OnInputFocus" />
+    @if (!string.IsNullOrEmpty(Value) && !Disabled)
+    {
+      <button type="button" class="picker-clear" aria-label="Počisti izbiro" title="Počisti izbiro" @onclick="ClearAsync" @onmousedown:preventDefault>×</button>
+    }
+  </div>
+  @if (!Open && Selected is not null && !string.IsNullOrWhiteSpace(Selected.Detail))
+  {
+    <div class="picker-selected-detail">@Selected.Detail</div>
+  }
+  @if (Open)
+  {
+    <ul id="@($"{Id}-list")" class="picker-list" role="listbox" aria-label="@Placeholder">
+      @{ var index = 0; string? lastGroup = null; }
+      @foreach (var option in Visible)
+      {
+        if (option.Group is not null && option.Group != lastGroup)
+        {
+          lastGroup = option.Group;
+          <li class="picker-group" role="presentation">@option.Group</li>
+        }
+        var current = index;
+        <li id="@($"{Id}-opt-{current}")" class="picker-option @(current == ActiveIndex ? "is-active" : null) @(option.Key == Value ? "is-selected" : null)"
+            role="option" aria-selected="@(option.Key == Value ? "true" : "false")" style="@Indent(option.Level)"
+            @onmousedown:preventDefault @onclick="() => ChooseAsync(option)" @onmouseover="() => ActiveIndex = current">
+          <span class="picker-label">@option.Label</span>
+          @if (!string.IsNullOrWhiteSpace(option.Detail)) { <span class="picker-detail">@option.Detail</span> }
+          @if (!string.IsNullOrWhiteSpace(option.Badge)) { <span class="picker-badge">@option.Badge</span> }
+        </li>
+        index++;
+      }
+      @if (Visible.Count == 0 && !CanOfferCreate)
+      {
+        <li class="picker-empty" role="presentation">@(string.IsNullOrWhiteSpace(Text) ? EmptyText : $"Ni zadetka za »{Text.Trim()}«.")</li>
+      }
+      @if (Hidden > 0)
+      {
+        <li class="picker-empty" role="presentation">… še @Hidden zadetkov; vpiši več črk.</li>
+      }
+      @if (ExactExisting is not null && !string.IsNullOrWhiteSpace(Text) && AllowCreate)
+      {
+        <li class="picker-warning" role="presentation">
+          Z imenom »@Text.Trim()« že obstaja <strong>@ExactExisting.Label</strong>@(string.IsNullOrWhiteSpace(ExactExisting.Detail) ? "" : $" ({ExactExisting.Detail})") — izberi obstoječega, da se ne podvoji.
+        </li>
+      }
+      @if (CanOfferCreate)
+      {
+        @if (Similar.Count > 0)
+        {
+          <li class="picker-warning" role="presentation">
+            Podobno že obstaja: @string.Join(", ", Similar.Take(4).Select(option => option.Label))@(Similar.Count > 4 ? " …" : ""). Preveri, preden ustvariš novo.
+          </li>
+        }
+        <li id="@($"{Id}-opt-{Visible.Count}")" class="picker-option picker-create @(ActiveIndex == Visible.Count ? "is-active" : null)" role="option" aria-selected="false"
+            @onmousedown:preventDefault @onclick="CreateAsync" @onmouseover="() => ActiveIndex = Visible.Count">
+          <span class="picker-label">@CreateLabel »@Text.Trim()«</span>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required IReadOnlyList<PimPickerOption> Options { get; set; }
+
+  /// <summary>Kljuc izbrane moznosti; null = nic ni izbrano.</summary>
+  [Parameter] public string? Value { get; set; }
+  [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+  [Parameter] public string Id { get; set; } = "picker-" + Guid.NewGuid().ToString("N")[..8];
+  [Parameter] public string Placeholder { get; set; } = "Začni tipkati …";
+  [Parameter] public string EmptyText { get; set; } = "Ni možnosti.";
+  [Parameter] public bool Disabled { get; set; }
+  [Parameter] public int MaxResults { get; set; } = 40;
+
+  /// <summary>Ce je vklopljeno, seznam ponudi »ustvari« za ime, ki ga med moznostmi ni (in ni podvojeno).</summary>
+  [Parameter] public bool AllowCreate { get; set; }
+  [Parameter] public string CreateLabel { get; set; } = "Ustvari";
+  /// <summary>Klice se z vpisanim imenom; stran ustvari zapis in po potrebi nastavi Value.</summary>
+  [Parameter] public EventCallback<string> OnCreate { get; set; }
+
+  string Text = "";
+  bool Open;
+  bool FocusWithin;
+  int ActiveIndex = -1;
+  string? LastValue;
+  int Hidden;
+
+  PimPickerOption? Selected => Value is null ? null : Options.FirstOrDefault(option => option.Key == Value);
+
+  IReadOnlyList<PimPickerOption> Visible = [];
+
+  /// <summary>Moznost z istim imenom (po zlozitvi) — ustvarjanje bi podvojilo.</summary>
+  PimPickerOption? ExactExisting => string.IsNullOrWhiteSpace(Text) ? null
+    : Options.FirstOrDefault(option => PimText.SameName(option.Label, Text) || PimText.SameName(option.Key, Text));
+
+  IReadOnlyList<PimPickerOption> Similar => string.IsNullOrWhiteSpace(Text) ? []
+    : Options.Where(option => !PimText.SameName(option.Label, Text) && PimText.SimilarName(option.Label, Text)).Take(6).ToList();
+
+  bool CanOfferCreate => AllowCreate && Text.Trim().Length >= 2 && ExactExisting is null;
+
+  protected override void OnParametersSet()
+  {
+    // Ko stran spremeni Value (npr. po shranjevanju), polje pokaze ime izbrane moznosti.
+    if (Value != LastValue || (!Open && Selected is not null && Text != Selected.Label))
+    {
+      LastValue = Value;
+      if (!Open) Text = Selected?.Label ?? (Value is null ? "" : Text);
+    }
+    if (Open) Recompute();
+  }
+
+  void Recompute()
+  {
+    var search = Selected is not null && Text == Selected.Label ? "" : Text;
+    var matches = Options.Where(option => PimText.Matches(option.Label + " " + option.Detail + " " + option.Key, search)).ToList();
+    Hidden = Math.Max(0, matches.Count - MaxResults);
+    Visible = matches.Take(MaxResults).ToList();
+    if (ActiveIndex >= Visible.Count + (CanOfferCreate ? 1 : 0)) ActiveIndex = Visible.Count == 0 ? (CanOfferCreate ? 0 : -1) : 0;
+  }
+
+  void OnInput(ChangeEventArgs args)
+  {
+    Text = args.Value?.ToString() ?? "";
+    Open = true;
+    ActiveIndex = 0;
+    Recompute();
+  }
+
+  void OnInputFocus()
+  {
+    if (Disabled) return;
+    Open = true;
+    Recompute();
+  }
+
+  void OnFocusIn() => FocusWithin = true;
+
+  async Task OnFocusOutAsync()
+  {
+    // Fokus gre lahko na gumb za brisanje znotraj komponente; klik na moznost fokusa ne premakne
+    // (mousedown je preprecen), zato je izguba fokusa res odhod iz izbirnika.
+    FocusWithin = false;
+    await Task.Delay(120);
+    if (FocusWithin) return;
+    Open = false;
+    Text = Selected?.Label ?? "";
+    StateHasChanged();
+  }
+
+  async Task ChooseAsync(PimPickerOption option)
+  {
+    Open = false;
+    ActiveIndex = -1;
+    Text = option.Label;
+    LastValue = option.Key;
+    if (option.Key != Value) await ValueChanged.InvokeAsync(option.Key);
+  }
+
+  async Task ClearAsync()
+  {
+    Text = "";
+    Open = false;
+    LastValue = null;
+    if (Value is not null) await ValueChanged.InvokeAsync(null);
+  }
+
+  async Task CreateAsync()
+  {
+    if (!CanOfferCreate) return;
+    var name = Text.Trim();
+    Open = false;
+    await OnCreate.InvokeAsync(name);
+  }
+
+  // Privzetega vedenja tipk ni mogoce prepreciti pogojno (Blazor ga doloci ob izrisu); smerni tipki
+  // zato premakneta tudi kazalec v polju, kar ne moti, Enter pa tu ne oddaja nobenega obrazca.
+  async Task OnKeyDownAsync(KeyboardEventArgs args)
+  {
+    var total = Visible.Count + (CanOfferCreate ? 1 : 0);
+    switch (args.Key)
+    {
+      case "ArrowDown":
+        if (!Open) { Open = true; Recompute(); }
+        if (total > 0) ActiveIndex = (ActiveIndex + 1) % total;
+        break;
+      case "ArrowUp":
+        if (total > 0) ActiveIndex = ActiveIndex <= 0 ? total - 1 : ActiveIndex - 1;
+        break;
+      case "Enter":
+        if (!Open) return;
+        if (ActiveIndex >= 0 && ActiveIndex < Visible.Count) await ChooseAsync(Visible[ActiveIndex]);
+        else if (CanOfferCreate && ActiveIndex == Visible.Count) await CreateAsync();
+        else if (Visible.Count == 1) await ChooseAsync(Visible[0]);
+        break;
+      case "Escape":
+        Open = false;
+        Text = Selected?.Label ?? "";
+        break;
+    }
+  }
+
+  static string Indent(int level) => level <= 0 ? "" : $"padding-left:{0.7 + level * 0.9}rem";
+}

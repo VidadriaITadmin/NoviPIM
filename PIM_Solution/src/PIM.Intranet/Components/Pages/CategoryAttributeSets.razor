@@ -287,13 +287,8 @@
                           </label>
                           <label class="editor-field copy-source" for="copy-category">
                             <span class="editor-label">Kategorija z naborom</span>
-                            <select id="copy-category" class="filter-select" @bind="CopyCategory">
-                              <option value="">— izberi —</option>
-                              @foreach (var source in CopySources.Where(source => !(source.CategoryTreeCode == row.CategoryTreeCode && source.CategoryCode == row.CategoryCode)))
-                              {
-                                <option value="@source.CategoryCode">@source.CategoryPath (@source.EffectiveCount)</option>
-                              }
-                            </select>
+                            <PimPicker Id="copy-category" Options="CopySourceOptions(row)" @bind-Value="CopyCategoryOrNull"
+                                       Placeholder="Vpiši ime ali pot kategorije z naborom …" EmptyText="V tem drevesu še ni kategorije z naborom." />
                           </label>
                         </div>
                         <div class="editor-actions">
@@ -364,6 +359,13 @@
   bool CopyIncludeInherited = true;
   bool CopyOverwrite;
   IReadOnlyList<CategoryTreeService.OverviewRow> CopySources = [];
+  string? CopyCategoryOrNull { get => string.IsNullOrWhiteSpace(CopyCategory) ? null : CopyCategory; set => CopyCategory = value ?? ""; }
+
+  IReadOnlyList<PimPickerOption> CopySourceOptions(CategoryTreeService.OverviewRow target) =>
+    CopySources
+      .Where(source => !(source.CategoryTreeCode == target.CategoryTreeCode && source.CategoryCode == target.CategoryCode))
+      .Select(source => new PimPickerOption(source.CategoryCode, source.CategoryName, source.CategoryPath, source.LevelNo - 1, $"{source.EffectiveCount} atributov"))
+      .ToList();
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"

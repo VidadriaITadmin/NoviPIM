@@ -43,6 +43,38 @@
   </div>
 </section>
 
+@* 178. Do zdaj je kategorije vstavljala samo migracija; urednik jih zdaj doda tu. Izbirnik starsa
+   isce po imenu in poti; ime se pred shranjevanjem primerja z obstojecimi (isto ime pod istim starsem
+   ustavi, podobno ime opozori). *@
+<section class="ui-card section-gap new-category" aria-labelledby="new-category-title">
+  <h2 id="new-category-title" class="card-caption">Nova kategorija</h2>
+  <div class="editor-actions">
+    <label class="editor-field" for="new-tree">
+      <span class="editor-label">Drevo</span>
+      <select id="new-tree" class="filter-select" @bind="NewTree" @bind:after="LoadNewParentOptionsAsync">
+        @foreach (var treeOption in Trees) { <option value="@treeOption">@treeOption</option> }
+      </select>
+    </label>
+    <label class="editor-field parent-field" for="new-parent">
+      <span class="editor-label">Nadrejena kategorija (prazno = koren)</span>
+      <PimPicker Id="new-parent" Options="NewParentOptions" @bind-Value="NewParent" Placeholder="Vpiši ime ali pot nadrejene …" />
+    </label>
+    <label class="editor-field" for="new-name">
+      <span class="editor-label">Ime (slovensko)</span>
+      <input id="new-name" class="form-input" @bind="NewName" @bind:event="oninput" placeholder="npr. Pametna svetila" />
+    </label>
+    <button type="button" class="button-primary" disabled="@(Busy || string.IsNullOrWhiteSpace(NewName) || NewSiblingDuplicate is not null)" @onclick="CreateCategoryAsync">Ustvari kategorijo</button>
+  </div>
+  @if (NewSiblingDuplicate is { } duplicate)
+  {
+    <p class="message-state error-message" role="alert">Pod isto nadrejeno kategorijo že obstaja »@duplicate.CategoryName« (@duplicate.CategoryPath) — ne podvoji je.</p>
+  }
+  else if (NewSimilar.Count > 0)
+  {
+    <p class="message-state" role="status">Podobno ime že obstaja: @string.Join("; ", NewSimilar.Take(5).Select(option => option.CategoryPath)). Preveri, preden ustvariš novo.</p>
+  }
+</section>
+
 <section class="ui-card toolbar section-gap" role="search" aria-labelledby="tree-filter-title">
   <h2 id="tree-filter-title" class="visually-hidden">Filtriranje drevesa</h2>
 
@@ -332,6 +364,53 @@
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Kategorije")];
 
+  // 178: nova kategorija.
+  string NewTree = "";
+  string? NewParent;
+  string NewName = "";
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> NewParentNodes = [];
+  IReadOnlyList<PimPickerOption> NewParentOptions = [];
+
+  async Task LoadNewParentOptionsAsync()
+  {
+    NewParent = null;
+    if (string.IsNullOrWhiteSpace(NewTree)) { NewParentNodes = []; NewParentOptions = []; return; }
+    try
+    {
+      NewParentNodes = await Tree.GetCategoryOptionsAsync(NewTree);
+      NewParentOptions = NewParentNodes.Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1)).ToList();
+    }
+    catch (Exception exception) { Error = exception.Message; NewParentNodes = []; NewParentOptions = []; }
+  }
+
+  PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow? NewSiblingDuplicate =>
+    string.IsNullOrWhiteSpace(NewName) ? null
+    : NewParentNodes.FirstOrDefault(node => string.Equals(node.ParentCategoryCode ?? "", NewParent ?? "", StringComparison.OrdinalIgnoreCase)
+        && PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName));
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> NewSimilar =>
+    string.IsNullOrWhiteSpace(NewName) ? []
+    : NewParentNodes.Where(node => PIM.Intranet.Services.PimText.SimilarName(node.CategoryName, NewName) || PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName)).Take(5).ToList();
+
+  async Task CreateCategoryAsync()
+  {
+    if (string.IsNullOrWhiteSpace(NewName) || string.IsNullOrWhiteSpace(NewTree)) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var code = await Tree.CreateCategoryAsync(NewTree, NewParent, NewName.Trim(), await ActorAsync());
+      Message = $"Kategorija »{NewName.Trim()}« je ustvarjena ({code}). Prevode dodaš z gumbom Uredi, nabor atributov z gumbom Atributi.";
+      NewName = "";
+      await LoadNewParentOptionsAsync();
+      await LoadCoverageAsync();
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
   long TranslatedTotal => Coverage.Sum(row => row.Translated);
   long NeededTotal => Coverage.Sum(row => row.Categories);
 
@@ -372,6 +451,8 @@
       Languages = PIM.Intranet.Services.PimLanguages
         .OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray();
       Trees = await Tree.GetTreeCodesAsync();
+      NewTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
+      await LoadNewParentOptionsAsync();
       Organizations = await Data.GetOrganizationsAsync();
       Coverage = await Tree.GetCoverageAsync(null);
       // Uporabnik 2026-08-28: »ko odprem naj mi najprej prikaze slovenske kategorije, ne

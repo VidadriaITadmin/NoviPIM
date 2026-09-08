@@ -126,8 +126,48 @@ Assert(qualityService.Contains("intranet.GetQualityByCategory", StringComparison
   "QualityReadService mora klicati bralni model po kategorijah in prenasati obseg kategorije.");
 Assert(issues.Contains("QueryCategory", StringComparison.Ordinal) && issues.Contains("CategoryTreeCode: QueryTree, CategoryCode: QueryCategory", StringComparison.Ordinal),
   "Napake validacije morajo sprejeti drevo in kategorijo iz naslova in ju prenesti v filter.");
-Assert(issues.Contains("(category.LevelNo - 1) * 3", StringComparison.Ordinal),
+Assert(issues.Contains("option.LevelNo - 1", StringComparison.Ordinal),
   "Izbirnik kategorije mora pokazati ravni z zamikom, sicer vecnivojskost ni vidna.");
+
+// --- Izbirnik s tipkanjem (PimPicker) in preverba podvajanja --------------------------------------
+var shared = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared");
+var picker = Read(Path.Combine(shared, "PimPicker.razor"));
+var text = Read(Path.Combine(services, "PimText.cs"));
+Assert(File.Exists(Path.Combine(shared, "PimPicker.razor.css")), "PimPicker mora imeti svoj CSS (seznam nad vsebino).");
+Assert(picker.Contains("role=\"combobox\"", StringComparison.Ordinal) && picker.Contains("role=\"listbox\"", StringComparison.Ordinal) && picker.Contains("aria-activedescendant", StringComparison.Ordinal),
+  "Izbirnik mora biti dostopen: combobox + listbox + aktivna moznost za bralnike.");
+Assert(picker.Contains("ExactExisting", StringComparison.Ordinal) && picker.Contains("Similar", StringComparison.Ordinal) && picker.Contains("CanOfferCreate", StringComparison.Ordinal),
+  "Pred ustvarjanjem mora izbirnik opozoriti na enako ime (brez ustvarjanja) in na podobna imena.");
+Assert(!picker.Contains("IJSRuntime", StringComparison.Ordinal) && !picker.Contains("<script", StringComparison.Ordinal),
+  "Izbirnik je brez JavaScripta, da dela povsod, kjer dela stran.");
+Assert(text.Contains("public static string Fold", StringComparison.Ordinal) && text.Contains("NormalizationForm.FormD", StringComparison.Ordinal),
+  "Primerjava imen mora biti brez sumnikov in velikosti crk (Fold).");
+foreach (var (file, control) in new[]
+{
+  ("MissingCategories.razor", "<PimPicker"), ("IngestAttributes.razor", "AllowCreate=\"true\""),
+  ("ValidationErrors.razor", "<PimPicker"), ("CategoryAttributeSets.razor", "Id=\"copy-category\" Options=\"CopySourceOptions"),
+})
+  Assert(Read(Path.Combine(pages, file)).Contains(control, StringComparison.Ordinal),
+    "Stran " + file + " mora uporabljati izbirnik s tipkanjem namesto spustnega seznama z vsemi moznostmi: " + control);
+Assert(!Read(Path.Combine(pages, "MissingCategories.razor")).Contains("<option value=\"@node.CategoryCode\">", StringComparison.Ordinal),
+  "Spustni seznam z vsemi kategorijami je zamenjan z izbirnikom.");
+
+// --- 178: nova kategorija iz aplikacije, s preverbo podvajanja ------------------------------------
+var saveCategory = Read(Path.Combine(root, "sql", "migrations", "178_SaveCategoryWithDuplicateCheck.sql"));
+Assert(saveCategory.Contains("CREATE OR ALTER PROCEDURE canon.SaveCategory", StringComparison.Ordinal) && saveCategory.Contains("CREATE OR ALTER FUNCTION canon.CategoryCodeFromName", StringComparison.Ordinal),
+  "Migracija 178 mora dati postopek za novo kategorijo in kodo iz imena.");
+Assert(saveCategory.Contains("THROW 51781", StringComparison.Ordinal) && saveCategory.Contains("canon.CategoryCodeFromName(CategoryName) = @Slug", StringComparison.Ordinal),
+  "Isto ime pod istim starsem (brez sumnikov in velikosti crk) mora postopek zavrniti, ne podvojiti.");
+Assert(service.Contains("CreateCategoryAsync", StringComparison.Ordinal) && service.Contains("canon.SaveCategory", StringComparison.Ordinal),
+  "CategoryTreeService mora klicati canon.SaveCategory.");
+var catalogCategories = Read(Path.Combine(pages, "CatalogCategories.razor"));
+Assert(catalogCategories.Contains("NewSiblingDuplicate", StringComparison.Ordinal) && catalogCategories.Contains("NewSimilar", StringComparison.Ordinal) && catalogCategories.Contains("CreateCategoryAsync", StringComparison.Ordinal),
+  "/nastavitve/kategorije mora omogociti novo kategorijo z opozorilom na isto in podobno ime.");
+var missing = Read(Path.Combine(pages, "MissingCategories.razor"));
+Assert(missing.Contains("CreateLabel=\"Ustvari novo kategorijo\"", StringComparison.Ordinal) && missing.Contains("SiblingDuplicate", StringComparison.Ordinal),
+  "Preslikava kategorij mora ponuditi ustvarjanje manjkajoce kategorije z izbiro starsa in preverbo podvajanja.");
+Assert(Read(Path.Combine(pages, "ProductCategories.razor")).Contains("<PimPicker", StringComparison.Ordinal),
+  "Dodeljevanje kategorij izdelku mora uporabljati izbirnik s tipkanjem.");
 
 Console.WriteLine("PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.");
 return 0;

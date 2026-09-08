@@ -64,7 +64,7 @@
               <PimChip Text="@row.State" Tone="@StateTone(row.State)" />
               @if (row.UpdatedBy is not null)
               {
-                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToLocalTime().ToString("g"))</div>
+                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToPimLocal().ToString("g"))</div>
               }
             </td>
             <td>
@@ -73,13 +73,11 @@
                 <div class="form-grid">
                   <label class="form-field" for="@("target-" + key)">
                     Naša lastnost
-                    <select id="@("target-" + key)" class="filter-select" @bind="ChosenCode">
-                      <option value="">— izberi lastnost —</option>
-                      @foreach (var definition in Definitions)
-                      {
-                        <option value="@definition.AttributeCode">@(definition.AttributeName ?? definition.AttributeCode)</option>
-                      }
-                    </select>
+                    @* Izbirnik s tipkanjem; ime, ki ga register nima, se ustvari tu (177), pri cemer izbirnik
+                       opozori na enako ali podobno ime, da se atribut ne podvoji. *@
+                    <PimPicker Id="@("target-" + key)" Options="DefinitionOptions" @bind-Value="ChosenCodeOrNull"
+                               Placeholder="Vpiši ime ali kodo naše lastnosti …" AllowCreate="true" CreateLabel="Ustvari nov atribut"
+                               OnCreate="CreateDefinitionAsync" />
                   </label>
                   <label class="form-field" for="@("lang-" + key)">
                     Jezik vrednosti
@@ -180,6 +178,32 @@
     finally { Loading = false; }
   }
 
+  string? ChosenCodeOrNull { get => string.IsNullOrWhiteSpace(ChosenCode) ? null : ChosenCode; set => ChosenCode = value ?? ""; }
+
+  IReadOnlyList<PimPickerOption> DefinitionOptions = [];
+
+  void RebuildDefinitionOptions() =>
+    DefinitionOptions = Definitions
+      .Select(definition => new PimPickerOption(definition.AttributeCode, definition.AttributeName ?? definition.AttributeCode, definition.AttributeCode))
+      .ToList();
+
+  /// <summary>Nov atribut po imenu iz izbirnika: register ga dobi takoj, preslikava se nato shrani nanj.</summary>
+  async Task CreateDefinitionAsync(string name)
+  {
+    Busy = true;
+    Error = null;
+    try
+    {
+      var code = await Tree.EnsureAttributeDefinitionAsync(name, await ActorAsync());
+      Definitions = await Attributes.GetDefinitionsAsync(null, false, false, false);
+      RebuildDefinitionOptions();
+      ChosenCode = code;
+      Message = $"Atribut »{name}« je v registru kot {code}. Shrani preslikavo, da ga vir polni.";
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
   async Task BeginEditAsync(PIM.Intranet.Services.AttributeMappingService.SourceAttributeRow row)
   {
     Message = null;
@@ -192,7 +216,7 @@
     // in preveč za obisk baze ob vsakem kliku.
     if (Definitions.Count == 0)
     {
-      try { Definitions = await Attributes.GetDefinitionsAsync(null, false, false, false); }
+      try { Definitions = await Attributes.GetDefinitionsAsync(null, false, false, false); RebuildDefinitionOptions(); }
       catch (Exception exception) { Error = exception.Message; }
     }
   }

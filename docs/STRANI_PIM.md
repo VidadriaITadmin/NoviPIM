@@ -108,6 +108,8 @@ Samo za branje — brez zapisovalnih akcij. Filtri (podjetje/vir/vrsta/stanje/ak
 | "Ugasni preslikavo" | `DeactivateAsync` → `Attributes.DeactivateMapAsync` | `map.DeactivateAttributeMap` | nastavi `map.AttributeMap.IsActive = 0` (vrstica ostane), zapiše `map.AttributeMapHistory` |
 | "Prekliči" | `CancelEdit` | — | brez klica, samo zapre urejevalno vrstico |
 
+
+**Izbira cilja (177):** naša lastnost se izbere v **izbirniku s tipkanjem** (ime in koda); ime, ki ga register nima, se ustvari kar tu (`canon.EnsureAttributeDefinition`) — izbirnik pred tem opozori, če z istim imenom (brez šumnikov in velikosti črk) atribut že obstaja (ustvarjanja ne ponudi) ali če obstaja podoben.
 ---
 
 ### Podrobnosti težave — `/zajem/tezave/{IssueKind}/{IssueId}`
@@ -416,6 +418,8 @@ Samo za branje — brez zapisovalnih akcij. Preklop zavihkov Pregled / Profili n
 | "Ugasni preslikavo" | `DeactivateAsync` | `map.DeactivateCategoryPathMap` | Nastavi `IsActive = 0` v `map.CategoryPathMap` |
 | "Prekliči" | `CancelEdit` | — | Zapre urejevalno vrstico |
 
+
+**Izbira cilja (177/178):** ciljna kategorija se izbere v **izbirniku s tipkanjem** (`PimPicker`): išče po imenu in celotni poti brez šumnikov, prikaže drevo z zamikom in polno pot. Ime, ki ga v drevesu ni, ponudi »Ustvari novo kategorijo« → izbira nadrejene (prazno = koren) → `canon.SaveCategory`; izbirnik pred tem opozori na enako ali podobno ime, stran pa zavrne isto ime pod istim starsem.
 ---
 
 ### Manjkajoči prevodi — `/kakovost/prevodi`
@@ -864,6 +868,7 @@ Hub `/nastavitve` (vloga ADMIN ali CATALOG_EDITOR).
 | Gumb ali akcija | Metoda v @code | Procedura ki jo pokliče | Učinek |
 |---|---|---|---|
 | "Shrani imena" | `SaveAsync` | `canon.SaveCategoryTranslations` | Zapiše prevode v `canon.CategoryTranslation` (+ zgodovina) |
+| "Ustvari kategorijo" (panel **Nova kategorija**: drevo, nadrejena prek izbirnika s tipkanjem, ime) | `CreateCategoryAsync` | `canon.SaveCategory` (178) | Nova kategorija pod starsem (koda iz imena, pot, slovenski prevod, revizija). **Preverba podvajanja:** isto ime pod istim starsem (brez šumnikov in velikosti črk) stran zavrne vnaprej in postopek zavrne (51781); podobno ime kjerkoli v drevesu pokaže kot opozorilo |
 | "Atributi" (na vozlišču) | `ToggleAttributesAsync` | `intranet.GetCategoryAttributeSet` | Prikaže učinkoviti nabor atributov kategorije |
 | Izbira ravni atributa / "Odstrani" / "Dodaj v nabor" / "priporočen"/"obvezen" | `SetAttributeLevelAsync` / `AddAttributeAsync` / `QuickAddAsync` | `canon.SaveCategoryAttributeSet` | Zapiše/deaktivira vrstico v `canon.CategoryAttributeSet`, uskladi `val.FieldRequirement` |
 

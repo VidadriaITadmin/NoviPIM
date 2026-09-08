@@ -1,0 +1,5 @@
+
+/* 178: nova kategorija iz izbirnika */
+.create-panel { background: var(--pim-warn-bg, #fffbeb); border: 1px solid var(--pim-warn-border, #fde68a); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; padding: .6rem .8rem; }
+.create-panel p { font-size: .85rem; margin: 0; }
+.create-warning { color: var(--pim-bad-text, #b91c1c); font-weight: 600; }

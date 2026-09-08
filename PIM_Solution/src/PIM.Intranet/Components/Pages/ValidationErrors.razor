@@ -82,13 +82,10 @@
   @if (!string.IsNullOrWhiteSpace(TreeDraft))
   {
     <label class="visually-hidden" for="issue-category">Kategorija (s podkategorijami)</label>
-    <select id="issue-category" class="filter-select category-select" @bind="CategoryDraft">
-      <option value="">Celo drevo</option>
-      @foreach (var category in CategoryOptions)
-      {
-        <option value="@category.CategoryCode">@(new string('\u00A0', (category.LevelNo - 1) * 3))@category.CategoryName</option>
-      }
-    </select>
+    <div class="category-select">
+      <PimPicker Id="issue-category" Options="CategoryPickerOptions" @bind-Value="CategoryDraftOrNull"
+                 Placeholder="Kategorija (celo drevo) — vpiši ime ali pot …" />
+    </div>
   }
 
   <label class="visually-hidden" for="issue-field">Polje</label>
@@ -258,6 +255,8 @@
   IReadOnlyList<string> Trees = [];
   IReadOnlyList<CategoryTreeService.CategoryOptionRow> CategoryOptions = [];
   string? LoadedOptionsTree;
+  string? CategoryDraftOrNull { get => string.IsNullOrWhiteSpace(CategoryDraft) ? null : CategoryDraft; set => CategoryDraft = value ?? ""; }
+  IReadOnlyList<PimPickerOption> CategoryPickerOptions = [];
 
   const int Take = 25;
   const int VisibleIssuesPerProduct = 4;
@@ -441,6 +440,10 @@
     if (LoadedOptionsTree == TreeDraft) return;
     try { CategoryOptions = await Tree.GetCategoryOptionsAsync(TreeDraft); LoadedOptionsTree = TreeDraft; }
     catch { CategoryOptions = []; }
+    // Vecnivojskost je vidna kot zamik in celotna pot v izbirniku s tipkanjem (LevelNo - 1) * 3 ni vec potrebno racunati v <option>.
+    CategoryPickerOptions = CategoryOptions
+      .Select(option => new PimPickerOption(option.CategoryCode, option.CategoryName, option.CategoryPath, option.LevelNo - 1))
+      .ToList();
     if (CategoryOptions.All(option => option.CategoryCode != CategoryDraft)) CategoryDraft = "";
   }
 

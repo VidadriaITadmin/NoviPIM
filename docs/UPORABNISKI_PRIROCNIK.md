@@ -541,6 +541,17 @@ Ko nabore polniš za več kategorij hkrati (npr. po mastrih starega PIM-a), je h
    našteje neznana imena in ponudi **Ustvari v registru in dodaj vse** ali **Dodaj samo znane**. Novi
    atribut dobi kodo iz imena (npr. »Število polov« → `STEVILO_POLOV`) in slovensko ime.
 
+**Izbira kategorije ali atributa kjerkoli v aplikaciji.** V polje začni tipkati del imena ali poti
+(šumniki in velikost črk niso pomembni); seznam pod poljem pokaže zadetke z zamikom po ravni in celotno
+potjo (npr. »Notranja svetila > Viseča svetila«). S tipkama ↑ ↓ se premikaš, Enter izbere, Esc zapre,
+× počisti. Če imena ni, seznam ponudi **Ustvari …**; če z istim imenom (tudi brez šumnikov) že kaj
+obstaja, ustvarjanja ne ponudi, ampak ti pokaže obstoječega, podobna imena pa našteje kot opozorilo.
+
+**Nova kategorija.** Na `/nastavitve/kategorije` je zgoraj panel **Nova kategorija**: drevo, nadrejena
+kategorija (izbirnik; prazno = koren), ime. Stran sproti pove, če pod isto nadrejeno že obstaja
+kategorija s tem imenom (ne pusti ustvariti) ali če obstaja podobno ime. Isto ponudi izbirnik na
+`/kakovost/kategorije`, ko dobaviteljeva pot nima naše kategorije.
+
 **Kje vidiš, kaj manjka — po kategorijah**
 
 `/kakovost` → zavihek **Po kategorijah**: izberi drevo (Svetila / Videlektro) in resnost. Vsaka vrstica

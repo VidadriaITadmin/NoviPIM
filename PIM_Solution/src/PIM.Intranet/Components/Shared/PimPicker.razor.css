@@ -1,0 +1,47 @@
+.pim-picker { position: relative; min-width: 16rem; }
+
+.picker-field { position: relative; }
+
+.picker-input { padding-right: 2rem; width: 100%; }
+
+.picker-clear {
+  background: none; border: 0; color: var(--pim-text-muted); cursor: pointer; font-size: 1.1rem; line-height: 1;
+  padding: .2rem .4rem; position: absolute; right: .35rem; top: 50%; transform: translateY(-50%);
+}
+
+.picker-clear:hover { color: var(--pim-text-strong); }
+.picker-clear:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 1px; }
+
+.picker-selected-detail { color: var(--pim-text-muted); font-size: .75rem; margin-top: .15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.picker-list {
+  background: var(--pim-surface); border: 1px solid var(--pim-border-strong); border-radius: var(--pim-radius-sm);
+  box-shadow: var(--pim-shadow-hover); left: 0; list-style: none; margin: .25rem 0 0; max-height: 20rem; min-width: 100%;
+  overflow-y: auto; padding: .25rem; position: absolute; top: 100%; width: max-content; max-width: min(40rem, 90vw); z-index: 30;
+}
+
+.picker-group { color: var(--pim-text-muted); font-size: .7rem; font-weight: 700; letter-spacing: .04em; padding: .45rem .6rem .2rem; text-transform: uppercase; }
+
+.picker-option {
+  align-items: baseline; border-radius: var(--pim-radius-xs, 6px); cursor: pointer; display: flex; flex-wrap: wrap; gap: .2rem .6rem;
+  padding: .35rem .6rem;
+}
+
+.picker-option.is-active, .picker-option:hover { background: var(--pim-surface-hover); }
+.picker-option.is-selected .picker-label { color: var(--pim-primary); }
+
+.picker-label { color: var(--pim-text-strong); font-size: .85rem; font-weight: 600; }
+.picker-detail { color: var(--pim-text-muted); font-size: .76rem; }
+.picker-badge { color: var(--pim-text-muted); font-size: .72rem; margin-left: auto; white-space: nowrap; }
+
+.picker-empty { color: var(--pim-text-muted); font-size: .8rem; padding: .45rem .6rem; }
+
+.picker-warning {
+  background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-xs, 6px);
+  color: var(--pim-warn-text); font-size: .78rem; margin: .25rem 0; padding: .4rem .6rem;
+}
+
+.picker-create { border-top: 1px dashed var(--pim-border); margin-top: .25rem; }
+.picker-create .picker-label { color: var(--pim-primary); }
+
+.is-disabled .picker-input { opacity: .6; }

@@ -395,6 +395,22 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return code.Value as string ?? throw new InvalidOperationException($"Atributa »{name}« ni bilo mogoče ustvariti.");
   }
 
+  /// <summary>Nova kategorija pod starsem (null = koren) — 178. Postopek zavrne isto ime pod istim starsem. Vrne kodo.</summary>
+  public async Task<string> CreateCategoryAsync(string categoryTreeCode, string? parentCategoryCode, string name, string actor, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("EXEC canon.SaveCategory @CategoryTreeCode, @ParentCategoryCode, @Name, @Actor, @CategoryCode OUTPUT;", connection);
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@ParentCategoryCode", Nullable(parentCategoryCode));
+    command.Parameters.AddWithValue("@Name", name);
+    command.Parameters.AddWithValue("@Actor", actor);
+    var code = command.Parameters.Add("@CategoryCode", System.Data.SqlDbType.NVarChar, 200);
+    code.Direction = System.Data.ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return code.Value as string ?? throw new InvalidOperationException($"Kategorije »{name}« ni bilo mogoče ustvariti.");
+  }
+
   /// <param name="CategoryPath">Slovenska pot; v izbirniku je zamaknjena po ravni.</param>
   public sealed record CategoryOptionRow(string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath);
 

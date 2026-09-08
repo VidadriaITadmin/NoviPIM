@@ -323,6 +323,12 @@ Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
    imenom, ki se začne z `NOV_UX_` in vsebuje `PREDLOG`.
 3. **Ne prikazujemo kontrol, ki navidezno shranjujejo**, če zapisovalna pot ne obstaja.
    Nove strani nastavitev so zato bralne; globalnih kontekstnih izbirnikov ni.
+3a. **Izbira kategorije ali atributa gre skozi `Components/Shared/PimPicker.razor`** (izbirnik s
+   tipkanjem, brez JavaScripta): išče po imenu, poti in kodi brez šumnikov (`PimText.Fold`), kaže
+   drevo z zamikom in polno pot, tipke ↑ ↓ Enter Esc. Spustni seznam z vsemi 209 kategorijami ali
+   vsemi atributi registra ni več sprejemljiv. Kjer izbirnik dovoli ustvarjanje (`AllowCreate`),
+   pred tem opozori na isto ime (ustvarjanja ne ponudi) in našteje podobna imena — stran ne rabi
+   svoje preverbe podvajanja (uporabnik 2026-09-08).
 4. **Vizualni sistem:** temna leva navigacija 18 rem, svetla vsebina, bela zgornja
    vrstica; indigo za dejanja, oranžna kot identiteta/poudarek, zelena uspeh, rdeča
    napaka; bele kartice s tankim robom in minimalno senco; goste tabele z jasnim

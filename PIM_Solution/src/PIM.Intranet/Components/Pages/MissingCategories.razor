@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CategoryMappingService Mapping
+@inject PIM.Intranet.Services.CategoryTreeService TreeService
 @inject AuthenticationStateProvider Authentication
 
 @* Delovni seznam in urejanje v enem. Do migracije 109 je bila ta stran samo seznam poti brez
@@ -65,7 +66,7 @@
               <PimChip Text="@row.State" Tone="@StateTone(row.State)" />
               @if (row.UpdatedBy is not null)
               {
-                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToLocalTime().ToString("g"))</div>
+                <div class="row-note">@row.UpdatedBy · @(row.UpdatedUtc?.ToPimLocal().ToString("g"))</div>
               }
             </td>
             <td>
@@ -74,13 +75,27 @@
                 <div class="form-grid">
                   <label class="form-field" for="@($"cat-{key}")">
                     Ciljna kategorija
-                    <select id="@($"cat-{key}")" class="filter-select" @bind="ChosenCategory">
-                      <option value="">— izberi kategorijo —</option>
-                      @foreach (var node in NodesFor(row.CategoryTreeCode))
-                      {
-                        <option value="@node.CategoryCode">@(node.CategoryPath ?? node.CategoryName)</option>
-                      }
-                    </select>
+                    @* Izbirnik s tipkanjem (PimPicker): isce po imenu in celotni poti, pokaze drevo z zamikom. *@
+                    <PimPicker Id="@($"cat-{key}")" Options="CategoryOptionsFor(row.CategoryTreeCode)" @bind-Value="ChosenCategoryOrNull"
+                               Placeholder="Vpiši del imena ali poti kategorije …" EmptyText="V tem drevesu ni kategorij."
+                               AllowCreate="true" CreateLabel="Ustvari novo kategorijo" OnCreate="name => BeginCreate(name)" />
+                    @if (CreatingName is not null)
+                    {
+                      @* 178: nova kategorija nastane tu, pod izbranim starsem; izbirnik je ze opozoril na enako ali podobno ime. *@
+                      <div class="create-panel" role="region" aria-label="Nova kategorija">
+                        <p>Nova kategorija <strong>»@CreatingName«</strong> v drevesu <strong>@row.CategoryTreeCode</strong>. Izberi nadrejeno kategorijo (prazno = koren drevesa).</p>
+                        <PimPicker Id="@($"parent-{key}")" Options="CategoryOptionsFor(row.CategoryTreeCode)" @bind-Value="CreateParent"
+                                   Placeholder="Nadrejena kategorija (prazno = koren) …" />
+                        @if (SiblingDuplicate(row.CategoryTreeCode) is { } duplicate)
+                        {
+                          <p class="create-warning">Pod to nadrejeno kategorijo že obstaja »@duplicate.CategoryName« — izberi jo namesto ustvarjanja.</p>
+                        }
+                        <div class="page-actions">
+                          <button type="button" class="button-primary" disabled="@(Busy || SiblingDuplicate(row.CategoryTreeCode) is not null)" @onclick="() => CreateCategoryAsync(row.CategoryTreeCode)">Ustvari in izberi</button>
+                          <button type="button" disabled="@Busy" @onclick="() => CreatingName = null">Prekliči</button>
+                        </div>
+                      </div>
+                    }
                   </label>
                   <label class="form-field" for="@($"note-{key}")">
                     Opomba (neobvezno)
@@ -215,6 +230,55 @@
       try { NodeCache[row.CategoryTreeCode] = await Mapping.GetTreeNodesAsync(row.CategoryTreeCode, null); }
       catch (Exception exception) { Error = exception.Message; NodeCache[row.CategoryTreeCode] = []; }
     }
+  }
+
+  string? ChosenCategoryOrNull { get => string.IsNullOrWhiteSpace(ChosenCategory) ? null : ChosenCategory; set => ChosenCategory = value ?? ""; }
+
+  // 178: ustvarjanje kategorije iz izbirnika.
+  string? CreatingName;
+  string? CreateParent;
+
+  void BeginCreate(string name) { CreatingName = name; CreateParent = null; }
+
+  /// <summary>Isto ime (brez sumnikov, velikosti crk) pod izbranim starsem — postopek bi zavrnil, stran to pove prej.</summary>
+  PIM.Intranet.Services.CategoryMappingService.TreeNode? SiblingDuplicate(string tree) =>
+    CreatingName is null ? null
+    : NodesFor(tree).FirstOrDefault(node => string.Equals(node.ParentCategoryCode ?? "", CreateParent ?? "", StringComparison.OrdinalIgnoreCase)
+        && PIM.Intranet.Services.PimText.SameName(node.CategoryName, CreatingName));
+
+  async Task CreateCategoryAsync(string tree)
+  {
+    if (string.IsNullOrWhiteSpace(CreatingName)) return;
+    Busy = true;
+    Error = null;
+    try
+    {
+      var code = await TreeService.CreateCategoryAsync(tree, CreateParent, CreatingName, await ActorAsync());
+      NodeCache.Remove(tree);
+      PickerCache.Remove(tree);
+      try { NodeCache[tree] = await Mapping.GetTreeNodesAsync(tree, null); }
+      catch (Exception exception) { Error = exception.Message; NodeCache[tree] = []; }
+      ChosenCategory = code;
+      Message = $"Kategorija »{CreatingName}« je ustvarjena ({code}) in izbrana. Shrani preslikavo.";
+      CreatingName = null;
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  readonly Dictionary<string, IReadOnlyList<PimPickerOption>> PickerCache = new(StringComparer.OrdinalIgnoreCase);
+
+  /// <summary>Moznosti izbirnika: ime, celotna pot in zamik po ravni; predpomnjeno na drevo, ker se izrise ob vsakem tipkanju.</summary>
+  IReadOnlyList<PimPickerOption> CategoryOptionsFor(string tree)
+  {
+    if (!PickerCache.TryGetValue(tree, out var options))
+    {
+      options = NodesFor(tree)
+        .Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1))
+        .ToList();
+      PickerCache[tree] = options;
+    }
+    return options;
   }
 
   IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.TreeNode> NodesFor(string tree) =>
