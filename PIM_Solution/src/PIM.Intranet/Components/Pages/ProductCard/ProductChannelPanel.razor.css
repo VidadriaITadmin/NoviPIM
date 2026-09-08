@@ -144,3 +144,7 @@ textarea.field-input { line-height: 1.5; min-height: 6rem; resize: vertical; }
   .panel-tools { margin-left: 0; width: 100%; }
   .field-grid { grid-template-columns: 1fr; }
 }
+
+/* U3: tehnični ključ je razvijalčev podatek, ne urednikov. Preklop stoji v glavi panela, da je
+   dosegljiv, in je privzeto izklopljen, da obrazec ni posut s kodami. */
+.key-toggle { align-items: center; color: var(--pim-text-muted); cursor: pointer; display: inline-flex; font-size: .78rem; gap: .35rem; }

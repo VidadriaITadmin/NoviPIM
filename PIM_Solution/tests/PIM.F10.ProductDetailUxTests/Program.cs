@@ -332,6 +332,16 @@ Assert(card.Contains("head.SourceTable", StringComparison.Ordinal) && card.Conta
   "V glavi zavihka mora pisati, iz katere tabele je posnetek in kdaj je bil narejen.");
 
 
+
+// U3, pregled 2026-09-08: pod vsakim poljem je stal tehnicni kljuc registra
+// (ProductText.WEB_TITLE.sl, Product.WebPublish). Urednik ga ne potrebuje, razvijalec pa takoj -
+// zato ni izbrisan, ampak skrit za enim preklopom na panel.
+Assert(channel.Contains("ShowFieldKeys", StringComparison.Ordinal)
+    && channel.Contains("Tehnični ključi", StringComparison.Ordinal),
+  "Tehnicni kljuc mora biti za preklopom in ne stalno pod poljem.");
+Assert(Regex.IsMatch(channel, @"@if \(ShowFieldKeys\) \{ <span class=""code-value"">@row\.FieldKey"),
+  "Kljuc se sme izrisati samo, kadar je preklop vklopljen.");
+
 /* ─── Spletisca na kartici (D2, migracija 182) ─────────────────────────────────
    Uporabnikova odlocitev 2026-09-08: Product.WebPublish iz SAOP ni vec merilo za splet.
    Kam izdelek gre, povedo potrditvena polja po spletiscu in po njih se ravna spletna

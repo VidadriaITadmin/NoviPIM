@@ -17,7 +17,16 @@
       <div><dt>Opozorila</dt><dd>@WarningCount.ToString("N0")</dd></div>
       <div><dt>Validirano</dt><dd>@PimFormat.Ago(LastValidatedUtc)</dd></div>
     </dl>
-    @if (Toolbar is not null) { <div class="panel-tools">@Toolbar</div> }
+    <div class="panel-tools">
+      @if (Toolbar is not null) { @Toolbar }
+      @* U3, pregled 2026-09-08: pod vsakim poljem je stal tehnicni kljuc (ProductText.WEB_TITLE.sl,
+         Product.WebPublish). Urednik ga ne potrebuje, razvijalec pa ga potrebuje takoj — zato ni
+         izbrisan, ampak skrit za enim preklopom na panel. *@
+      <label class="key-toggle">
+        <input type="checkbox" checked="@ShowFieldKeys" @onchange="args => ShowFieldKeys = args.Value is bool on && on" />
+        <span>Tehnični ključi</span>
+      </label>
+    </div>
   </header>
 
   <div class="panel-body">
@@ -66,7 +75,7 @@
               }
 
               <p class="field-note">
-                <span class="code-value">@row.FieldKey</span>
+                @if (ShowFieldKeys) { <span class="code-value">@row.FieldKey</span> }
                 @if (row.Edit == ProductFieldEdit.Saop) { <span>sprememba čaka odobritev</span> }
                 @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <span>ni v bralnem modelu</span> }
                 @if (ReadOnly && row.Edit != ProductFieldEdit.None) { <span>tvoja vloga tega polja ne sme urejati</span> }
@@ -121,6 +130,9 @@
   /// in ne kot vnosna polja; to je videz, prava varovalka je <c>PimWriteGuard</c> v servisu.
   /// </summary>
   [Parameter] public bool ReadOnly { get; set; }
+
+  /// <summary>Ali so pod polji vidni tehnicni kljuci registra. Privzeto ne (U3).</summary>
+  bool ShowFieldKeys;
 
   /// <summary>Skupine, ki se izrisejo v natanko dveh stolpcih namesto v samodejni mrezi.</summary>
   [Parameter] public IReadOnlyList<string>? TwoColumnGroups { get; set; }
