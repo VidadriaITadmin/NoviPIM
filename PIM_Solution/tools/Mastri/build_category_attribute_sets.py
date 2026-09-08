@@ -61,7 +61,9 @@ ALIAS={
  'Senzor':'SENZOR_GIBANJA','Vključuje sijalko':'SVETILKA_VKLJUCUJE_SVETLOBNI_VIR','SVETLOBNI VIR':'VRSTA_SVETLOBNEGA_VIRA','Tehnologija LED':'VRSTA_SVETLOBNEGA_VIRA','LED':'VRSTA_SVETLOBNEGA_VIRA','Tip svetlobe':'VRSTA_SVETLOBNEGA_VIRA','Tip sijalke':'VRSTA_SVETLOBNEGA_VIRA',
  'Število sijalk':'STEVILO_SVETLOBNIH_VIROV','STIL':'SLOG','Kot zaznavanja':'KOT_DETEKCIJE','Domet':'RAZDALJA_DETEKCIJE',
  'Kompatibilno':'ZDRUZLJIVO_Z','Kompatibilno z':'ZDRUZLJIVO_Z','Višina montaže':'MONTAZNA_VISINA','AVTONOMIJA':'DELOVNI_CAS','Čas delovanja':'DELOVNI_CAS','Polnjenje':'NACIN_POLNJENJA',
- 'Velikost':'VELIKOST','Kabel':'VRSTA_KABLA','Priključni kabel':'VRSTA_KABLA','Klasa':'ELEKTRICNI_RAZRED','Vrsta svetilke':'OBLIKA_SVETILKE','Vrsta svetilke 1':'OBLIKA_SVETILKE','Tip svetilke':'OBLIKA_SVETILKE',
+ 'Velikost':'VELIKOST',
+ # 177: atributi iz mastrov, dodani v register; sopomenke iz Matrike
+ 'Način upravljanja':'UPRAVLJANJE','Presek žice max':'PRESEK_KABLA_MAX','Presek žice min':'PRESEK_KABLA_MIN','Kabel':'VRSTA_KABLA','Priključni kabel':'VRSTA_KABLA','Klasa':'ELEKTRICNI_RAZRED','Vrsta svetilke':'OBLIKA_SVETILKE','Vrsta svetilke 1':'OBLIKA_SVETILKE','Tip svetilke':'OBLIKA_SVETILKE',
 }
 LIGHT_ONLY_ALIAS={'Oblika':'OBLIKA_SVETILKE'}   # v elektro mastrih "Oblika" pomeni obliko doze/uvodnice
 for a,c in list(ALIAS.items())+list(LIGHT_ONLY_ALIAS.items()):
