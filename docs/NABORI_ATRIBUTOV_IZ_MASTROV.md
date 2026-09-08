@@ -19,8 +19,8 @@ zapisana v tem dokumentu, da jo je mogoče preveriti in popraviti.
 | | |
 |---|---|
 | parov master × atribut (prag 50 %) | 1058 |
-| ujetih v register `canon.AttributeDefinition` | 483 |
-| vrstic nabora (`canon.CategoryAttributeSet`) | 484, vse priporočene (173: 209 obveznih + 275 priporočenih; 174: vse na priporočeno) |
+| ujetih v register `canon.AttributeDefinition` | 483 (po 177: 570) |
+| vrstic nabora (`canon.CategoryAttributeSet`) | 484, vse priporočene (173: 209 obveznih + 275 priporočenih; 174: vse na priporočeno); po 177: 568 |
 | kategorij z naborom | 46 (svetila_si 13, videlektro 33) |
 | atributi iz mastrov, ki blokirajo splet | 0 (po 174); manjkajoči so opozorila |
 
@@ -153,7 +153,20 @@ Najprej enako ime (brez šumnikov in velikosti črk), potem izrecni aliasi spoda
 | `ZDRUZLJIVO_Z` | Kompatibilno, Kompatibilno z |
 | `ZIVLJENJSKA_DOBA` | Življenjska doba |
 
-## Kar ni preslikano
+## Register dopolnjen iz mastrov (migracija 177, 2026-09-08)
+
+Uporabnik: »dodaj manjkajoče atribute iz mastrov«. Iz seznama spodaj je v register
+(`canon.AttributeDefinition`, tip TEXT, slovensko ime = ime iz Matrike, `UpdatedBy = mastri 2026-09-08`)
+dodanih **33** atributov: vsi z ≥ 2 pojavitvama razen »Vidna dimenzija« / »Vidna dim.« (sestavljeno polje,
+deli so že preslikani v `VISINA` / `SIRINA` / `DOLZINA`) in treh sopomenk, ki so postale aliasi
+(»Način upravljanja« → `UPRAVLJANJE`, »Presek žice max/min« → `PRESEK_KABLA_MAX/MIN`). Generator je bil
+pognan znova z razširjenim registrom in nabori so dobili **84 novih priporočenih vrstic** v 30 kategorijah
+(skupaj 568). Register je zdaj 182 atributov; ujetih je 570 od 1058 parov.
+
+Isto pot ima odslej uporabnik na `/nastavitve/nabori-atributov`: ime, ki ga register nima, stran ponudi
+za ustvarjanje (`canon.EnsureAttributeDefinition`) in ga takoj da v nabor.
+
+## Kar ni preslikano (stanje pred 177)
 
 575 od 1058 parov. Večina so **polja izdelka**, ne atributi (Proizvajalec, Tip/Tip1–6, Ključne
 besede, IQLSHOP, MIMOVRSTE, nazivi za nalepke, PAK 1/2, Enota mere, Država, PROSTOR, Filter …) —

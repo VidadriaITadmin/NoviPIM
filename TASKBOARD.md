@@ -363,6 +363,16 @@ mastrov na priporočene (skozi `canon.SaveCategoryAttributeSet`, zahteve ERROR �
 nastavljen »obvezen« ostane. Dokaz: migrator 1./2. zagon; `val.FieldRequirement` z obsegom: 484 WARNING,
 0 ERROR; `val.RunValidation` nad celo bazo: iz naborov 55.349 opozoril na 5.126 izdelkih in **0 napak**; 4 izdelki tračnih sistemov, prej blokirani, so spet VALID (WEB_svetila_si VALID 5.012 → 5.016).
 
+**Dopolnitev 2026-09-08 (177):** uporabnik: »naredi tako, da se bo ponudilo tudi ustvarjanje v registru,
+dodaj manjkajoče atribute iz mastrov, dodaj filter … po kategorijah — večnivojsko; atribute v izvozih
+posebej, ne sedaj«.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `177_AttributeRegisterFromSetsAndQualityByCategory.sql`: `canon.EnsureAttributeDefinition` (najdi ali ustvari po imenu), `canon.ResolveAttributeNames`, `intranet.GetQualityByCategory` (večnivojsko po `ParentCategoryCode`, pot v jeziku mesta), `intranet.GetQualityIssues` + `@CategoryTreeCode/@CategoryCode`; register + 33 atributov iz mastrov, nabori + 84 priporočenih vrstic (568 skupaj) | migrator 1./2. zagon; smoke: `ResolveAttributeNames` loči znane/neznane, `EnsureAttributeDefinition` obstoječega vrne, novega ustvari in ob ponovitvi vrne isto kodo (testni pobrisan), `GetQualityByCategory svetila_si` 132 vrstic (notranja_svetila 3.617 izdelkov v poddrevesu, 43.736 opozoril), `GetQualityIssues` z obsegom `notranja_svetila` org 2 = 1.407 izdelkov |
+| INTRANET | `CategoryAttributeSets.razor`: ustvari v registru iz iskanja, iz predloga in iz prilepljenega seznama (panel neznanih imen); `Quality.razor`: zavihek **Po kategorijah** (zlaganje vej, filter resnosti, »samo z izdelki«, povezava na napake z obsegom); `ValidationErrors.razor`: filter Drevo + Kategorija (s podkategorijami, ravni z zamikom); `CategoryTreeService` (+3), `QualityReadService` (obseg kategorije v obeh poteh, `GetByCategoryAsync`); test dopolnjen | `run_tests.ps1 -Filter F10` |
+| DOMENA | `tools/Mastri`: aliasi za tri sopomenke | generator z razširjenim registrom vrne 568 kandidatov (484 + 84) |
+
 Neujeto: 575 od 1058 parov, večinoma polja izdelka (Proizvajalec, Tip, Ključne besede, nazivi za
 nalepke); pravi atributi brez kode v registru (Vidna dimenzija, Upravljanje, Vključuje napajalnik,
 Število polov, Material pokrova …) so našteti v dokumentu kot delovni seznam za `/nastavitve/atributi`.
