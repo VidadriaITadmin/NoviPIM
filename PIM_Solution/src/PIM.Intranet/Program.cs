@@ -213,7 +213,11 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     organizationId, 0, ProductExportService.MaxRows, Value("isci"), Value("pogled"),
     Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
     Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
-    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika"));
+    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika"),
+    // Kategorija pride kot »drevo:koda«, ker sta kodi v dveh drevesih lahko enaki. Poleg vrstic
+    // doloca tudi stolpce atributov: delovni list dobi nabor te kategorije.
+    Value("kategorija")?.Split(':', 2) is { Length: 2 } category ? category[0] : null,
+    Value("kategorija")?.Split(':', 2) is { Length: 2 } code ? code[1] : Value("kategorija"));
 
   if (workbookTemplate)
   {

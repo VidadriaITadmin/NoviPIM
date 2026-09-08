@@ -31,7 +31,8 @@ stolpec ne more zdrsniti samo na eni strani: kar izvoz izpiše, uvoz prebere.
 | Ključ | Podjetje, Šifra artikla, Naziv | nikamor; brez prvih dveh uvoz vrstice ne najde |
 | ERP — gre v vrsto za SAOP | vsa polja z `IsWritable` iz registra `out.SaopXmlField` (tudi »Objava na spletu«) | `out.EnqueueSaopItemChanges` → skupina čaka odobritev |
 | Splet — zapiše se takoj | Spletne strani, Kategorije po straneh, spletni nazivi in opisi po jezikih | `pim.SetProductCategories`, `pim.SaveProductTexts` |
-| Spletni atributi | vrednosti atributov iz `canon.ProductAttribute` in tisti, ki jih zahteva validacija | `pim.SaveProductAttributes` |
+| Atributi kategorije — nabor | kar kategorija predpisuje (`canon.CategoryAttributeSet`, z dedovanjem po drevesu) | `pim.SaveProductAttributes` |
+| Atributi izven nabora | kar izdelek nosi mimo nabora; na splet ne gre, a vrednost obstaja | `pim.SaveProductAttributes` |
 | Stanje — samo za branje | ERP, Splet, Popolnost, Odprte težave, Zadnja sprememba | nikamor |
 
 Naslov stolpca ni edini sprejeti zapis. Uvoz prepozna tudi kanonično kodo (`ProductText.WEB_TITLE.sl`)
@@ -67,6 +68,34 @@ kadar ima na njej kategorijo.** Stolpec je zato ukaz nad kategorijami:
 Vzporedna tabela »na kateri strani je artikel« bi bila drugi vir resnice za isto vprašanje in
 prvi dan, ko bi se razšla s kategorijami, bi se artikel na spletu pojavil ali izginil brez sledi.
 
+## Izvoz po kategoriji
+
+Filter **Kategorija** na `/izdelki` (od migracije 175) zoži dvoje hkrati:
+
+1. **vrstice** — izdelki te kategorije in vseh njenih potomcev. Kdor izbere »Notranja svetila«,
+   dobi tudi »Notranja svetila > Downlights > Vgradne svetilke«, ker se nabor atributov po
+   drevesu deduje navzdol in se mora filter obnašati enako;
+2. **stolpce atributov** — delovni list dobi nabor te kategorije, ne vseh 148 atributov kataloga.
+
+V spustnem seznamu ob vsaki kategoriji stojita število izdelkov pod njo in velikost njenega
+nabora, sicer bi bila izbira ugibanje.
+
+Zakaj to sploh šteje. Do 175 je list dobil stolpce atributov iz dveh virov: kar izdelki že imajo
+zapisano, in kar zahteva validacija. Nabor kategorije v tem ni sodeloval, zato **atributa, ki ga
+kategorija predpisuje, izdelek pa ga še nima, v listu ni bilo** — ravno tistega, ki ga je treba
+vpisati. List je pokazal, kar že obstaja, in zamolčal, kar manjka. Izmerjeno na kategoriji
+»Zunanja svetila > Prenosna svetila« (26 izdelkov, 27 atributov v naboru): devet atributov nabora
+je pri vseh izvoženih izdelkih praznih. Prej ti stolpci ne bi obstajali.
+
+Ključ atributa se pri tem ne spremeni. V naboru je stabilna koda (`IP_STOPNJA_ZASCITE`), v
+`canon.ProductAttribute` pa slovensko ime (`IP stopnja zaščite`). Preslikavo dela
+`canon.AttributeTranslation` v jeziku `sl`, enako kot na kartici izdelka in v validaciji.
+
+Nabor se nastavlja na `/nastavitve/nabori-atributov`. Dedovanje po prednikih je zapisano v
+funkciji `canon.CategoryAttributeEffective` (migracija 147) in se v izvozu ne podvaja.
+
+Meja stolpcev (200) velja **samo za atribute izven nabora**. Nabor kategorije gre v list cel.
+
 ## Objava na spletu
 
 Register `out.SaopXmlField` pozna `Product.WebPublish` kot element `WebPublish`, torej podatek
@@ -83,7 +112,7 @@ brisanje po `AGENTS.md` §4.1 odločitev človeka; je pa zapisano tu, da ni vide
 | Kaj | Meja | Kje je zapisana |
 |---|---|---|
 | Vrstic v izvozu | 20.000 | `ProductWorkbookService.MaxRows`; večji nabor je zapisan v opombo v datoteki |
-| Stolpcev atributov | 200 | `ProductWorkbookService.MaxAttributeColumns`; najprej zahtevani |
+| Stolpcev atributov izven nabora | 200 | `ProductWorkbookService.MaxAttributeColumns`; nabor kategorije ni omejen |
 | Velikost naložene datoteke | 16 MB | `ProductImport.razor` |
 | Vrstic pri branju zvezka | 50.000 | `WorkbookTable.MaxRows` |
 

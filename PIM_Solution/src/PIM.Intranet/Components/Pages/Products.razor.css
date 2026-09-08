@@ -77,6 +77,9 @@
 .filter-grid { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
 
 .filter-field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+/* Kategorija ima dolge poti (»Notranja svetila > Downlights > Vgradne svetilke«) in ob njih
+   se stevila; v en stolpec mreze se ne splaca stlaciti. */
+.filter-field-wide { grid-column: span 2; }
 
 .filter-field label { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 
@@ -220,5 +223,6 @@
   .toolbar-actions { margin-left: 0; }
   .toolbar-actions > * { flex: 1 1 auto; justify-content: center; }
   .filter-grid { grid-template-columns: 1fr; }
+  .filter-field-wide { grid-column: span 1; }
   .row-flags { max-width: none; }
 }

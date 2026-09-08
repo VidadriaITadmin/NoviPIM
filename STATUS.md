@@ -2,6 +2,14 @@
 
 Posodobljeno: 2026-09-08
 
+## Izdelki: delovni list po kategoriji — 2026-09-08
+
+Filter **Kategorija** na `/izdelki` zoži seznam na kategorijo in vse njene potomce, delovni list
+pa dobi natanko atribute te kategorije (nabor iz `/nastavitve/nabori-atributov`, z dedovanjem),
+namesto vseh 148 iz kataloga. Atribut, ki ga kategorija predpisuje, izdelek pa ga še nima, ima
+odslej svoj prazen stolpec — prej ga v listu ni bilo. Atributi mimo nabora ostanejo v svoji
+skupini, ker vrednost obstaja, na splet pa ne gre.
+
 ## Izdelki: en delovni list, ki gre ven in se vrne — 2026-09-08
 
 `/izdelki` ima gumba **Delovni list** in **Vrni delovni list**. Ista datoteka nosi ERP polja, spletne

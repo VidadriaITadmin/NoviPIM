@@ -106,6 +106,67 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
       "SELECT DISTINCT CategoryTreeCode FROM canon.Category ORDER BY CategoryTreeCode;",
       reader => PimDb.TextOrEmpty(reader, "CategoryTreeCode"), null, cancellationToken);
 
+  /// <param name="CategoryPath">Slovenska pot; človek izbira po tem, kar vidi v trgovini.</param>
+  /// <param name="ProductCount">Izdelki v tej kategoriji in pod njo.</param>
+  /// <param name="AttributeCount">Koliko atributov ima učinkovit nabor te kategorije.</param>
+  public sealed record CategoryPickRow(
+    string CategoryTreeCode, string CategoryCode, string CategoryName, int LevelNo,
+    string? CategoryPath, long ProductCount, int AttributeCount);
+
+  /// <summary>
+  /// Izbirnik kategorije za filter na seznamu izdelkov. Poleg imena pove dvoje, kar odloči, ali
+  /// je izbira smiselna: koliko izdelkov je pod kategorijo in koliko atributov ima njen nabor.
+  /// Brez tega bi uporabnik izbiral naslepo in šele po izvozu videl prazno datoteko.
+  /// </summary>
+  public Task<IReadOnlyList<CategoryPickRow>> GetCategoryPickerAsync(
+    string categoryTreeCode, CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      """
+      SELECT
+        node.CategoryTreeCode, node.CategoryCode, node.CategoryName, node.LevelNo,
+        CategoryPath = pot.CategoryPath,
+        ProductCount = ISNULL(izdelki.Stevilo, 0),
+        AttributeCount = ISNULL(nabor.Stevilo, 0)
+      FROM canon.Category AS node
+      OUTER APPLY
+      (
+        SELECT TOP (1) prevod.CategoryPath
+        FROM canon.CategoryPathTranslated AS prevod
+        INNER JOIN canon.WebSite AS spletna
+          ON spletna.CategoryTreeCode = prevod.CategoryTreeCode AND spletna.LanguageCode = prevod.LanguageCode
+        WHERE prevod.CategoryTreeCode = node.CategoryTreeCode AND prevod.CategoryCode = node.CategoryCode
+          AND spletna.IsActive = 1
+        ORDER BY spletna.SortOrder
+      ) AS pot
+      OUTER APPLY
+      (
+        SELECT Stevilo = COUNT_BIG(DISTINCT productCategory.ProductId)
+        FROM canon.ProductCategory AS productCategory
+        INNER JOIN canon.WebSite AS spletna ON spletna.WebSiteCode = productCategory.WebSite
+        INNER JOIN canon.CategoryPathTranslated AS prevod
+          ON prevod.CategoryTreeCode = spletna.CategoryTreeCode AND prevod.LanguageCode = spletna.LanguageCode
+         AND prevod.CategoryPath = productCategory.CategoryPath
+        WHERE prevod.CategoryTreeCode = node.CategoryTreeCode
+          AND (prevod.CategoryCode = node.CategoryCode
+            OR prevod.CategoryPath LIKE pot.CategoryPath + N' > %')
+      ) AS izdelki
+      OUTER APPLY
+      (
+        SELECT Stevilo = COUNT(*)
+        FROM canon.CategoryAttributeEffective(node.CategoryTreeCode, node.CategoryCode) AS ucinkovit
+        WHERE ucinkovit.Level <> N'EXCLUDED'
+      ) AS nabor
+      WHERE node.CategoryTreeCode = @CategoryTreeCode AND node.IsActive = 1
+      ORDER BY pot.CategoryPath, node.CategoryName;
+      """,
+      reader => new CategoryPickRow(
+        PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"),
+        PimDb.TextOrEmpty(reader, "CategoryName"), PimDb.Int32(reader, "LevelNo"),
+        PimDb.Text(reader, "CategoryPath"), PimDb.Int64(reader, "ProductCount"),
+        PimDb.Int32(reader, "AttributeCount")),
+      command => command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode),
+      cancellationToken);
+
   /// <summary>
   /// Zapiše prevode ene kategorije v več jezikih hkrati. Vrne število spremenjenih jezikov.
   /// Če en jezik pade na pravilu, ne obvelja noben — delno shranjen prevod izgleda opravljen.

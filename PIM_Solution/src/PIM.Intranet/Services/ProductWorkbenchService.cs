@@ -69,13 +69,16 @@ public sealed record ProductListPage(IReadOnlyList<ProductListRow> Rows, long To
 /// <param name="Activity">ACTIVE ali INACTIVE; null pomeni oboje.</param>
 /// <param name="WebPublish">YES ali NO; null pomeni oboje.</param>
 /// <param name="CompletenessBand">EMPTY, LOW, MID ali FULL; null pomeni vse razrede.</param>
+/// <param name="CategoryTreeCode">Drevo kategorij (svetila_si, videlektro); brez njega velja koda v vseh drevesih.</param>
+/// <param name="CategoryCode">Koda kategorije. Izbrana kategorija pomeni njo in vse njene
+/// potomce — nabor atributov se po drevesu deduje navzdol, zato se mora tudi filter.</param>
 public sealed record ProductListFilter(
   int? OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? View = null,
   string? Manufacturer = null, string? Supplier = null, string? ItemGroup = null,
   string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
   bool SortDescending = false, string Language = "sl", string? Department = null,
   string? Activity = null, string? WebPublish = null, string? CompletenessBand = null,
-  string? HasImage = null);
+  string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null);
 
 public sealed record ProductListViewCounts(
   long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
@@ -316,6 +319,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     command.Parameters.Add("@WebPublish", SqlDbType.NVarChar, 20).Value = Optional(filter.WebPublish);
     command.Parameters.Add("@Completeness", SqlDbType.NVarChar, 20).Value = Optional(filter.CompletenessBand);
     command.Parameters.Add("@HasImage", SqlDbType.NVarChar, 20).Value = Optional(filter.HasImage);
+    command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value = Optional(filter.CategoryTreeCode);
+    command.Parameters.Add("@CategoryCode", SqlDbType.NVarChar, 200).Value = Optional(filter.CategoryCode);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new ProductListRow(

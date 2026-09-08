@@ -254,6 +254,28 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-08 — izvoz izdelkov po kategoriji in stolpci atributov iz nabora (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
+
+Zahteva uporabnika po tem, ko so bili napolnjeni nabori atributov: »nekaj atributov smo dodali,
+preveri če lahko dodelaš izvoze glede na kategorijo«.
+
+Kaj je bilo narobe. Delovni list (171, 173) je jemal stolpce atributov iz dveh virov: kar izdelki
+že imajo zapisano, in kar zahteva validacija. Nabor kategorije (147, 170, 173, 174) v tem ni
+sodeloval, zato **atributa, ki ga kategorija predpisuje, izdelek pa ga še nima, v listu ni bilo** —
+ravno tistega, ki ga je treba vpisati. Hkrati je vsak izdelek dobil vseh 148 stolpcev, tudi iz
+tujih kategorij. Izbire kategorije ni bilo: `intranet.GetProductList` je ni poznal.
+
+| Ozemlje | Migracija / datoteke | Dokaz |
+|---|---|---|
+| BAZA | `175_ProductWorkbookByCategory.sql`: `intranet.GetProductList` dobi `@CategoryTreeCode`/`@CategoryCode` (kategorija in vsi potomci, pogoj v obeh poizvedbah), `intranet.GetProductWorkbook` ista dva parametra in peti nabor z `InSet`/`SetLevel` iz `canon.CategoryAttributeEffective` | migrator 1. zagon `Uporabljena migracija: 175`, 2. zagon `Preskočena`; nad dev bazo: brez filtra 196.559 vrstic, s kategorijo `notranja_svetila` 4.004; nabor `notranja_svetila` = 23 atributov, podedovan v `notranja_svetila___stropna_svetila` |
+| DOMENA | `ProductWorkbookContract`: atributi v dveh skupinah — »Atributi kategorije — nabor« in »Atributi izven nabora — ne gredo na splet«, ista ločnica kot na kartici izdelka | `PIM.F10.ProductWorkbookTests` (del brez baze) |
+| INTRANET | filter Kategorija na `/izdelki` (spustni seznam z optgroup po drevesih, ob imenu število izdelkov in velikost nabora), `kategorija=<drevo>:<koda>` v naslovu in v izvozu, `CategoryTreeService.GetCategoryPickerAsync`, `ProductListFilter` + 2 polji; docs `DELOVNI_LIST_IZDELKOV`, `INTRANET` | `run_tests.ps1 -Filter F10` — glej spodaj |
+
+Izmerjeno v testu nad kategorijo »Zunanja svetila > Prenosna svetila« (26 izdelkov, 27 atributov
+v naboru): vsak atribut nabora ima stolpec, **devet od njih je pri vseh izvoženih izdelkih
+praznih** — prej ti stolpci sploh ne bi obstajali. Krog se še vedno zapre: nespremenjen list po
+kategoriji ne prinese nobene spremembe in noben stolpec ne ostane neprepoznan.
+
 ### 2026-09-08 — delovni list izdelkov: en izvoz in en uvoz, ki se ujameta (Claude, veja `feature/pravila-nazivi-atributni-izbirnik`)
 
 Zahteva uporabnika: »naredi enoten izvoz in pa uvoz, da bo lahko uporabnik pisal podatke in jih

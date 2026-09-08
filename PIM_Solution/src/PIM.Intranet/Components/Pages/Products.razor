@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 @inject ProductWorkbenchService Workbench
+@inject CategoryTreeService Categories
 @inject NavigationManager Navigation
 
 <PageTitle>Izdelki</PageTitle>
@@ -93,6 +94,25 @@
           @foreach (var facet in Facets.Where(row => row.FacetKind == "ITEM_GROUP"))
           {
             <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
+          }
+        </select>
+      </div>
+
+      @* Kategorija je filter in ne pogled: izbrana kategorija zoži seznam IN določi, katere
+         atribute nosi delovni list. Ob imenu stojita število izdelkov pod kategorijo in
+         velikost njenega nabora, sicer bi uporabnik izbiral naslepo. *@
+      <div class="filter-field filter-field-wide">
+        <label for="product-category">Kategorija</label>
+        <select id="product-category" class="filter-select" @bind="CategoryDraft">
+          <option value="">Vse kategorije</option>
+          @foreach (var tree in CategoryOptions.GroupBy(row => row.CategoryTreeCode).OrderBy(group => group.Key, StringComparer.Ordinal))
+          {
+            <optgroup label="@TreeLabel(tree.Key)">
+              @foreach (var node in tree)
+              {
+                <option value="@($"{node.CategoryTreeCode}:{node.CategoryCode}")">@CategoryOptionLabel(node)</option>
+              }
+            </optgroup>
           }
         </select>
       </div>
@@ -287,6 +307,7 @@ else if (SelectionOverflow)
   [SupplyParameterFromQuery(Name = "objava")] public string? QueryWebPublish { get; set; }
   [SupplyParameterFromQuery(Name = "popolnost")] public string? QueryCompleteness { get; set; }
   [SupplyParameterFromQuery(Name = "slika")] public string? QueryImage { get; set; }
+  [SupplyParameterFromQuery(Name = "kategorija")] public string? QueryCategory { get; set; }
   [SupplyParameterFromQuery(Name = "sort")] public string? QuerySort { get; set; }
   [SupplyParameterFromQuery(Name = "smer")] public string? QueryDirection { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
@@ -319,6 +340,8 @@ else if (SelectionOverflow)
   string WebPublishDraft = "";
   string CompletenessDraft = "";
   string ImageDraft = "";
+  string CategoryDraft = "";
+  IReadOnlyList<CategoryTreeService.CategoryPickRow> CategoryOptions = [];
   string SortDraft = "ITEM";
 
   // Enajst filtrov v eni vrsti je bilo natrpano in nepregledno. Odprejo se na zahtevo in
@@ -387,6 +410,7 @@ else if (SelectionOverflow)
     WebPublishDraft = QueryWebPublish ?? "";
     CompletenessDraft = QueryCompleteness ?? "";
     ImageDraft = QueryImage ?? "";
+    CategoryDraft = QueryCategory ?? "";
     SortDraft = string.IsNullOrWhiteSpace(QuerySort) ? "ITEM"
       : string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase) ? QuerySort + ":desc" : QuerySort;
 
@@ -405,11 +429,21 @@ else if (SelectionOverflow)
         Facets = await Workbench.GetProductListFacetsAsync(scope);
       }
 
+      // Drevesa kategorij se ne spreminjajo med filtriranjem; preberejo se enkrat na sejo strani.
+      if (CategoryOptions.Count == 0)
+      {
+        var picked = new List<CategoryTreeService.CategoryPickRow>();
+        foreach (var treeCode in await Categories.GetTreeCodesAsync())
+          picked.AddRange(await Categories.GetCategoryPickerAsync(treeCode));
+        CategoryOptions = picked;
+      }
+
       Page = await Workbench.GetProductListAsync(new ProductListFilter(
         scope, Skip, Take, QuerySearch, ActiveView,
         QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
         QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
-        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage));
+        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
+        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory)));
     }
     catch
     {
@@ -443,6 +477,38 @@ else if (SelectionOverflow)
     return $"({value:N0})";
   }
 
+  /* --- Kategorija -------------------------------------------------------------------------
+     Vrednost filtra je »drevo:koda«. Dve polji bi pomenili dva spustna seznama in dve stanji v
+     naslovu, uporabnik pa izbira eno stvar: kategorijo. Drevo je v vrednosti zato, ker sta kodi
+     v dveh drevesih lahko enaki. */
+
+  static string? CategoryTreeOf(string? value) =>
+    string.IsNullOrWhiteSpace(value) || !value.Contains(':') ? null : value.Split(':', 2)[0];
+
+  static string? CategoryCodeOf(string? value) =>
+    string.IsNullOrWhiteSpace(value) ? null : value.Contains(':') ? value.Split(':', 2)[1] : value;
+
+  static string TreeLabel(string treeCode) => treeCode switch
+  {
+    "svetila_si" => "Svetila.si",
+    "videlektro" => "Videlektro",
+    _ => treeCode,
+  };
+
+  /// <summary>Pot, izdelki in velikost nabora — troje, po čemer se izbira kategorija za izvoz.</summary>
+  static string CategoryOptionLabel(CategoryTreeService.CategoryPickRow node) =>
+    $"{node.CategoryPath ?? node.CategoryName} — {node.ProductCount:N0} izdelkov, {node.AttributeCount:N0} atributov";
+
+  string CategoryLabel(string value)
+  {
+    var tree = CategoryTreeOf(value);
+    var code = CategoryCodeOf(value);
+    var node = CategoryOptions.FirstOrDefault(row =>
+      string.Equals(row.CategoryCode, code, StringComparison.OrdinalIgnoreCase)
+      && (tree is null || string.Equals(row.CategoryTreeCode, tree, StringComparison.OrdinalIgnoreCase)));
+    return node?.CategoryPath ?? node?.CategoryName ?? code ?? value;
+  }
+
   List<FilterChip> ActiveChips
   {
     get
@@ -460,6 +526,7 @@ else if (SelectionOverflow)
       if (!string.IsNullOrWhiteSpace(QueryWebPublish)) chips.Add(new($"Za splet: {WebPublishLabel(QueryWebPublish)}", Href(webPublish: "")));
       if (!string.IsNullOrWhiteSpace(QueryCompleteness)) chips.Add(new($"Popolnost: {CompletenessLabel(QueryCompleteness)}", Href(completeness: "")));
       if (!string.IsNullOrWhiteSpace(QueryImage)) chips.Add(new($"Slika: {ImageLabel(QueryImage)}", Href(image: "")));
+      if (!string.IsNullOrWhiteSpace(QueryCategory)) chips.Add(new($"Kategorija: {CategoryLabel(QueryCategory)}", Href(category: "")));
       return chips;
     }
   }
@@ -469,7 +536,7 @@ else if (SelectionOverflow)
   string Href(string? view = null, string? search = null, string? organization = null, string? manufacturer = null,
     string? supplier = null, string? group = null, string? department = null, string? erp = null, string? web = null,
     string? activity = null, string? webPublish = null, string? completeness = null, string? image = null,
-    string? sort = null, string? direction = null, int? page = null)
+    string? category = null, string? sort = null, string? direction = null, int? page = null)
   {
     var parameters = new List<string>();
     Add("pogled", Resolve(view, ActiveView == "ALL" ? null : ActiveView));
@@ -485,6 +552,7 @@ else if (SelectionOverflow)
     Add("objava", Resolve(webPublish, QueryWebPublish));
     Add("popolnost", Resolve(completeness, QueryCompleteness));
     Add("slika", Resolve(image, QueryImage));
+    Add("kategorija", Resolve(category, QueryCategory));
     Add("sort", Resolve(sort, QuerySort));
     Add("smer", Resolve(direction, QueryDirection));
     var resolvedPage = page ?? (view is null && search is null && organization is null && manufacturer is null
@@ -539,6 +607,7 @@ else if (SelectionOverflow)
       supplier: SupplierDraft, group: GroupDraft, department: DepartmentDraft, erp: ErpDraft, web: WebDraft,
       activity: ActivityDraft, webPublish: WebPublishDraft, completeness: CompletenessDraft,
       image: ImageDraft,
+      category: CategoryDraft,
       sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1));
     return Task.CompletedTask;
   }

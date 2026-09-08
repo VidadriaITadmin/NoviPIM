@@ -104,11 +104,16 @@ public sealed class ProductWorkbookService(
         && key != ProductWorkbookContract.WebPublishField && key != ProductWorkbookContract.WebSitesField)
       .Distinct(StringComparer.Ordinal).ToList();
 
-    var sheet = await ReadAsync(rows.Select(row => row.ProductId).ToList(), fieldCodes, cancellationToken);
+    var sheet = await ReadAsync(rows.Select(row => row.ProductId).ToList(), fieldCodes,
+      filter.CategoryTreeCode, filter.CategoryCode, cancellationToken);
 
-    var attributes = OrderAttributes(sheet.Attributes).Take(MaxAttributeColumns).ToList();
-    if (sheet.Attributes.Count > attributes.Count)
-      notes.Add($"Stolpcev atributov je {attributes.Count:N0} od {sheet.Attributes.Count:N0}; zgornja meja je {MaxAttributeColumns:N0} (najprej zahtevani).");
+    // Nabor kategorije gre v list cel; meja velja samo za atribute izven nabora, ki jih je pri
+    // izvozu brez izbrane kategorije lahko vseh 148 in so za posamezen izdelek vecinoma prazni.
+    var ordered = OrderAttributes(sheet.Attributes);
+    var attributes = ordered.Where(attribute => attribute.InSet)
+      .Concat(ordered.Where(attribute => !attribute.InSet).Take(MaxAttributeColumns)).ToList();
+    if (ordered.Count > attributes.Count)
+      notes.Add($"Stolpcev atributov izven nabora je {MaxAttributeColumns:N0} od {ordered.Count - attributes.Count + MaxAttributeColumns:N0}; nabor kategorije je izpisan cel.");
 
     var definition = ProductWorkbookContract.Build(new(saopFields, sites, WebTextTypes, languages, attributes));
     var columns = definition.Select(column => new WorkbookColumn(
@@ -128,6 +133,12 @@ public sealed class ProductWorkbookService(
     notes.Add($"Skupina »{ProductWorkbookContract.GroupErp}«: te vrednosti se ne zapišejo takoj, ampak čakajo odobritev na /izvozi/mnozicno.");
     notes.Add($"Skupina »{ProductWorkbookContract.GroupState}« se pri uvozu prezre.");
     notes.Add("Rumena glava: polje je pogoj za validacijo. Rdeča celica: tako polje je pri tem izdelku prazno.");
+
+    var setCount = attributes.Count(attribute => attribute.InSet);
+    if (setCount > 0)
+      notes.Add($"Skupina »{ProductWorkbookContract.GroupAttributesInSet}«: {setCount:N0} atributov, ki jih predpisuje kategorija (nastavi jih na /nastavitve/nabori-atributov). Stolpec je tu tudi, kadar je vrednost prazna — ravno tega je treba vpisati.");
+    else
+      notes.Add("Kategorija ni izbrana ali njen nabor je prazen, zato so atributi izpisani brez nabora. Za ožji list izberi kategorijo v filtru na /izdelki.");
 
     return WorkbookWriter.Write("Izdelki", columns, cells, notes);
   }
@@ -209,7 +220,7 @@ public sealed class ProductWorkbookService(
     // drugim naborom. Sifrant se zato prebere brez omejitve na izdelke — prazen seznam pomeni
     // ves sifrant (migracija 172). Vrstni red je isti kot pri izvozu, sicer bi se stolpca z
     // enakim imenom v obe smeri razresila drugace in vrednost bi pristala na napacnem polju.
-    var attributes = OrderAttributes((await ReadAsync([], [], cancellationToken)).Attributes);
+    var attributes = OrderAttributes((await ReadAsync([], [], null, null, cancellationToken)).Attributes);
 
     var sheet = WorkbookTable.Read(file, sheetName: null, headerHints: ProductWorkbookContract.HeaderHints);
     var definition = ProductWorkbookContract.Build(new(saopFields, sites, WebTextTypes, languages, attributes));
@@ -323,7 +334,7 @@ public sealed class ProductWorkbookService(
 
     var productIds = rows.Where(row => keys.ContainsKey((row.OrganizationId, row.ItemId)))
       .Select(row => keys[(row.OrganizationId, row.ItemId)].ProductId).Distinct().ToList();
-    var current = await ReadAsync(productIds, fieldCodes, cancellationToken);
+    var current = await ReadAsync(productIds, fieldCodes, null, null, cancellationToken);
 
     var result = new List<ProductWorkbookRowChange>(rows.Count);
     foreach (var row in rows)
@@ -414,7 +425,8 @@ public sealed class ProductWorkbookService(
 
     // Kategorije in strani je mogoce pravilno postaviti samo ob znanju, kaj je zdaj zapisano:
     // stran, ki je v celici ni, mora kategorije izgubiti.
-    var current = await ReadAsync(known.Select(row => productIds[(row.OrganizationId, row.ItemId)]).ToList(), [], cancellationToken);
+    var current = await ReadAsync(
+      known.Select(row => productIds[(row.OrganizationId, row.ItemId)]).ToList(), [], null, null, cancellationToken);
 
     var pimChanges = 0;
     var touched = 0;
@@ -626,7 +638,8 @@ public sealed class ProductWorkbookService(
     return ordered.Count > 0 ? ordered : PimLanguages.Preferred;
   }
 
-  sealed record WorkbookAttributeRow(string Code, string Name, bool IsRequired);
+  sealed record WorkbookAttributeRow(
+    string Code, string Name, bool IsRequired, bool InSet, string? SetLevel, int SortOrder);
 
   /// <summary>
   /// Vrstni red stolpcev atributov: najprej zahtevani, potem po imenu. Izvoz in uvoz ga morata
@@ -635,10 +648,12 @@ public sealed class ProductWorkbookService(
   /// </summary>
   static List<WorkbookAttribute> OrderAttributes(IReadOnlyList<WorkbookAttributeRow> attributes) =>
     attributes
-      .OrderByDescending(attribute => attribute.IsRequired)
+      .OrderByDescending(attribute => attribute.InSet)
+      .ThenByDescending(attribute => attribute.IsRequired || attribute.SetLevel == "REQUIRED")
+      .ThenBy(attribute => attribute.SortOrder)
       .ThenBy(attribute => attribute.Name, StringComparer.CurrentCulture)
       .ThenBy(attribute => attribute.Code, StringComparer.Ordinal)
-      .Select(attribute => new WorkbookAttribute(attribute.Code, attribute.Name))
+      .Select(attribute => new WorkbookAttribute(attribute.Code, attribute.Name, attribute.InSet, attribute.SetLevel))
       .ToList();
 
   sealed record WorkbookData(
@@ -675,7 +690,8 @@ public sealed class ProductWorkbookService(
   }
 
   async Task<WorkbookData> ReadAsync(
-    IReadOnlyList<long> productIds, IReadOnlyList<string> fieldCodes, CancellationToken cancellationToken)
+    IReadOnlyList<long> productIds, IReadOnlyList<string> fieldCodes,
+    string? categoryTreeCode, string? categoryCode, CancellationToken cancellationToken)
   {
     var values = new Dictionary<(long, string), string?>();
     var categoryPaths = new Dictionary<(long, string), string>();
@@ -693,6 +709,10 @@ public sealed class ProductWorkbookService(
     };
     command.Parameters.Add("@ProductIdsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(productIds);
     command.Parameters.Add("@FieldCodesJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(fieldCodes);
+    command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value =
+      string.IsNullOrWhiteSpace(categoryTreeCode) ? DBNull.Value : categoryTreeCode;
+    command.Parameters.Add("@CategoryCode", SqlDbType.NVarChar, 200).Value =
+      string.IsNullOrWhiteSpace(categoryCode) ? DBNull.Value : categoryCode;
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     while (await reader.ReadAsync(cancellationToken))
@@ -715,7 +735,8 @@ public sealed class ProductWorkbookService(
     if (await reader.NextResultAsync(cancellationToken))
       while (await reader.ReadAsync(cancellationToken))
         attributes.Add(new(PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "Name"),
-          PimDb.Bool(reader, "IsRequired")));
+          PimDb.Bool(reader, "IsRequired"), PimDb.Bool(reader, "InSet"), PimDb.Text(reader, "SetLevel"),
+          PimDb.Int32(reader, "SortOrder")));
 
     if (await reader.NextResultAsync(cancellationToken))
       while (await reader.ReadAsync(cancellationToken))

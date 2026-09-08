@@ -35,7 +35,7 @@ var spec = new ProductWorkbookSpec(
   WebSites: [new("svetila_si", "Svetila.si"), new("B2C", "Videlektro")],
   TextTypes: ["WEB_TITLE", "DESCRIPTION"],
   Languages: ["sl", "en"],
-  Attributes: [new("Garancija", "Garancija"), new("Barva", "Barva")]);
+  Attributes: [new("Garancija", "Garancija", InSet: true, SetLevel: "REQUIRED"), new("Barva", "Barva")]);
 
 var columns = ProductWorkbookContract.Build(spec);
 
@@ -53,6 +53,10 @@ Check("vsaka spletna stran ima svoj stolpec kategorij",
 Check("spletna besedila so po jezikih",
   columns.Any(column => column.FieldKey == "ProductText.WEB_TITLE.sl")
   && columns.Any(column => column.FieldKey == "ProductText.DESCRIPTION.en"));
+
+Check("atribut iz nabora in atribut izven nabora sta v ločenih skupinah",
+  columns.Any(column => column.FieldKey == "ProductAttribute.Garancija" && column.Group == ProductWorkbookContract.GroupAttributesInSet)
+  && columns.Any(column => column.FieldKey == "ProductAttribute.Barva" && column.Group == ProductWorkbookContract.GroupAttributesOutside));
 
 Check("ERP polja gredo v vrsto za SAOP, ne v katalog",
   columns.Where(column => column.FieldKey.StartsWith("Product.UoM")).All(column => column.Target == ProductWorkbookTarget.Saop));
@@ -119,6 +123,7 @@ var configuration = new ConfigurationBuilder()
   .Build();
 
 var database = new PimDb(configuration);
+var Categories = new CategoryTreeService(database, configuration);
 var workbench = new ProductWorkbenchService(configuration);
 var catalog = new CatalogReadService(database);
 var export = new ProductExportService(configuration, workbench);
@@ -162,6 +167,51 @@ Check("izvoz ima stolpec kategorij vsaj ene strani",
 
 var sites = await workbook.ActiveWebSitesAsync();
 Check("register spletnih strani ni prazen", sites.Count > 0, string.Join(", ", sites.Select(site => site.Name)));
+
+// --- Izvoz po kategoriji ----------------------------------------------------------------
+// Kategorija mora zoziti dvoje hkrati: vrstice (izdelki te kategorije in njenih potomcev) in
+// stolpce atributov (nabor kategorije). Prej je vsak izdelek dobil vseh 148 stolpcev.
+var categoryTree = await Categories.GetTreeCodesAsync();
+var pick = new List<CategoryTreeService.CategoryPickRow>();
+foreach (var treeCode in categoryTree) pick.AddRange(await Categories.GetCategoryPickerAsync(treeCode));
+var chosen = pick.Where(node => node.AttributeCount > 0 && node.ProductCount > 0)
+  .OrderByDescending(node => node.AttributeCount).ThenBy(node => node.ProductCount).FirstOrDefault();
+
+if (chosen is null) Console.WriteLine("  (nobena kategorija nima nabora in izdelkov; preskok preizkusa po kategoriji)");
+else
+{
+  Console.WriteLine($"  (kategorija »{chosen.CategoryPath}«: {chosen.ProductCount:N0} izdelkov, {chosen.AttributeCount:N0} atributov v naboru)");
+  var byCategory = new ProductListFilter(null, 0, 25,
+    CategoryTreeCode: chosen.CategoryTreeCode, CategoryCode: chosen.CategoryCode);
+
+  var listed = await workbench.GetProductListAsync(byCategory with { Take = 5 });
+  Check("filter po kategoriji zoži seznam",
+    listed.TotalCount > 0 && listed.TotalCount < 196_000, $"vrstic {listed.TotalCount:N0}");
+
+  var categorySheet = WorkbookTable.Read(
+    new MemoryStream(await workbook.BuildAsync(byCategory)), null, ProductWorkbookContract.HeaderHints);
+
+  Check("list po kategoriji ima vrstice", categorySheet.Rows.Count > 0, $"vrstic {categorySheet.Rows.Count}");
+
+  var setAttributes = await AttributeSetNamesAsync(database, chosen.CategoryTreeCode, chosen.CategoryCode);
+  var missing = setAttributes.Where(name => !categorySheet.Headers.Any(header => WorkbookHeader.Same(header, name))).ToList();
+  Check("vsak atribut iz nabora kategorije ima stolpec", missing.Count == 0,
+    missing.Count == 0 ? null : string.Join(", ", missing.Take(5)));
+
+  // Stolpec mora biti tudi tam, kjer vrednosti se ni — ravno ta je razlog za izvoz.
+  var praznih = setAttributes.Count(name =>
+  {
+    var index = categorySheet.Headers.ToList().FindIndex(header => WorkbookHeader.Same(header, name));
+    return index >= 0 && categorySheet.Rows.All(row => row[index].Length == 0);
+  });
+  Console.WriteLine($"  (od {setAttributes.Count} atributov nabora jih je {praznih} praznih pri vseh izvoženih izdelkih)");
+
+  var untouchedCategory = await workbook.PreviewAsync(new MemoryStream(await workbook.BuildAsync(byCategory)), null);
+  Check("tudi list po kategoriji se vrne brez sprememb", untouchedCategory.Rows.Count == 0,
+    $"vrstic s spremembo: {untouchedCategory.Rows.Count}");
+  Check("noben stolpec lista po kategoriji ne ostane neprepoznan",
+    untouchedCategory.UnknownColumns.Count == 0, string.Join(", ", untouchedCategory.UnknownColumns));
+}
 
 // Nespremenjena datoteka ne sme uvoziti nicesar. To je pogoj, brez katerega bi uvoz vsakic
 // napolnil odhodno vrsto z niclami sprememb.
@@ -235,6 +285,27 @@ int Report()
   Console.WriteLine($"F10 delovni list izdelkov: PADLO {failures.Count}:");
   foreach (var failure in failures) Console.WriteLine("  - " + failure);
   return 1;
+}
+
+// Slovenska imena atributov iz ucinkovitega nabora kategorije. V naboru je stabilna koda,
+// v canon.ProductAttribute pa slovensko ime; stolpec lista nosi ime, zato ga tudi tu iscemo.
+static async Task<IReadOnlyList<string>> AttributeSetNamesAsync(PimDb database, string tree, string category)
+{
+  var rows = await database.QueryAsync(
+    """
+    SELECT AttributeName = COALESCE(translation.Name, effective.AttributeCode)
+    FROM canon.CategoryAttributeEffective(@Tree, @Category) AS effective
+    LEFT JOIN canon.AttributeTranslation AS translation
+      ON translation.AttributeCode = effective.AttributeCode AND translation.LanguageCode = N'sl'
+    WHERE effective.Level <> N'EXCLUDED';
+    """,
+    reader => PimDb.TextOrEmpty(reader, "AttributeName"),
+    command =>
+    {
+      command.Parameters.AddWithValue("@Tree", tree);
+      command.Parameters.AddWithValue("@Category", category);
+    });
+  return rows;
 }
 
 // Preverjanje gre naravnost v katalog in ne skozi nov izvoz: izvoz vedno prebere cel pogled
