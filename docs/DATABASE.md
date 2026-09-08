@@ -157,3 +157,44 @@ Dokaz nad razvojno bazo `PIM`: prvi zagon migratorja `Uporabljena migracija:
 `Preverjanje F0–F10 baze je uspešno.` Ročna preverba nad začasnim računom `qa_stamp_probe`
 (ustvarjen in pobrisan v istem skriptu): sprememba imena žiga ne zavrti, `IsEnabled = 0` ga zavrti,
 dodana vloga ga zavrti; `sec.GetUserSecurityState` vrne `IsEnabled = 0` in vlogi `ADMIN,VIEWER`.
+
+## Spletišča izdelka (migracija 182)
+
+Pregled 2026-09-08 (ugotovitev **D2**) je izmeril, da spletna profila validirata tudi izdelke, ki na
+splet ne gredo: 883.587 in 873.812 odprtih napak na ~162.000 izdelkih z `WebPublish = 0`. Predlog
+pregleda je bil obseg omejiti na `WebPublish = 1`.
+
+**Uporabnik je to zavrnil** (2026-09-08, dobesedno): »ta webpublish to ne bomo več uporabljali in
+bomo imeli polje oz morajo biti nekje check boxi ki bodo povedali, da gre artikel na svetila ali
+videlektro in to se bo gledalo. Ta webpublish je iz SAOPja in je BV da ga pišemo nazaj lahko pa
+naredimo nek programček, ki gleda in samo postavi na 1, če ima artikel check box označen.«
+
+Migracija `182_ProductWebShopFlags.sql` zato uvede odločitev človeka namesto polja iz ERP:
+
+- `pim.ProductWebShop (ProductId, WebShopCode, IsPublished, ChangedBy, ChangedUtc)` — ena vrstica
+  na izdelek in spletišče. Koda spletišča je `canon.WebSite.CategoryTreeCode` (`svetila_si`,
+  `videlektro`); isti ključ nosi `val.ValidationProfile.CategoryTreeCode` za spletna profila, zato
+  nov register ni potreben in jezikovni različici spletišča (sl/en) delita eno oznako.
+- `intranet.GetProductWebShops @ProductId` vrne **vsa** aktivna spletišča, tudi neoznačena —
+  obrazec mora imeti tudi prazno potrditveno polje.
+- `pim.SaveProductWebShops` zapiše oznake, pusti sled v `pim.ProductFieldHistory`
+  (`FieldKey = ProductWebShop.<koda>`, `Owner = PIM`) in izdelek takoj revalidira.
+- `val.RunValidation` upošteva oznako na **štirih** mestih: izbor zahtev, zapiranje zastarelih
+  napak, izračun popolnosti po profilu in končno stanje izdelka. Pravilo je povsod isto: profil s
+  `Scope = 'WEB'` velja samo za izdelek, ki je za njegovo spletišče označen.
+
+**Začetno stanje.** `svetila_si` je napolnjen iz dodeljenih kategorij tega drevesa — **6.070**
+aktivnih izdelkov. `videlektro` ostane **prazen**, ker v njegovem drevesu ni nobene dodeljene
+kategorije in nihče ne more vedeti, kateri izdelki tja sodijo. To je namerno: dokler nekdo ne
+označi, na videlektro ne gre nič. `WebPublish` se za polnjenje ni uporabil, ker ne loči spletišč.
+
+**Dokaz.** Prvi zagon migratorja `Uporabljena migracija: 182_ProductWebShopFlags.sql`, drugi
+`Preskočena že uporabljena migracija`, `--verify` »Preverjanje F0–F10 baze je uspešno.«
+`docs/pregled-20260909/Preveri-Spletisca.ps1` = 10 preverb, vse OK; med njimi krog nad enim
+izdelkom: 18 odprtih spletnih napak → odvzeta oznaka → **0** → vrnjena oznaka → **18**, z vrstico
+v zgodovini in vrnjenim začetnim stanjem.
+
+**Kar še ni narejeno.** Migracija **ne** požene validacije nad celotnim katalogom; učinek se pri
+posameznem izdelku pokaže ob `pim.SaveProductWebShops`, pri celoti pa šele ob
+`EXEC val.RunValidation` brez parametrov. Ta zagon zapre ~1,76 milijona spletnih napak na izdelkih,
+ki na splet ne gredo, in je zato operativna odločitev, ne del migracije.

@@ -271,6 +271,39 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P1-6: spletišča izdelka namesto `WebPublish` (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P1-6 (ugotovitev D2) **in uporabnikova
+preusmeritev 2026-09-08**: `WebPublish` iz SAOP se ne bo več uporabljal; kam gre izdelek, povedo
+potrditvena polja po spletišču. Predlog pregleda (»validiraj WEB samo za `WebPublish=1`«) je zato
+namerno **ni** izveden — zabetoniral bi polje, ki gre iz uporabe.
+
+**BAZA — migracija `182_ProductWebShopFlags.sql`.** `pim.ProductWebShop`, `pim.SaveProductWebShops`
+(z zgodovino in takojšnjo revalidacijo), `intranet.GetProductWebShops` in obseg spletne validacije
+na štirih mestih `val.RunValidation`. Začetno stanje: `svetila_si` 6.070 izdelkov iz dodeljenih
+kategorij, `videlektro` prazen (v njegovem drevesu ni nobene dodeljene kategorije).
+Dokaz: prvi zagon `Uporabljena migracija`, drugi `Preskočena že uporabljena migracija`,
+`--verify` »Preverjanje F0–F10 baze je uspešno.«
+
+**INTRANET — kartica izdelka.** Razdelek »Spletišča« v sklopu Splet s potrditvenimi polji,
+gumbom »Shrani spletišča« in sledjo, kdo je nazadnje spremenil; za vlogo brez pravice pisanja so
+polja onemogočena in namesto gumba stoji pojasnilo. Zapis gre skozi `ProductEditService`, ki je od
+P0 za politiko `CatalogWrite`.
+
+**Dokaz.** `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+`docs/pregled-20260909/Preveri-Spletisca.ps1` (ustvari in pobriše svoj račun) = 10 preverb, vse OK:
+razdelek je viden, za `VIEWER` sta obe polji onemogočeni in gumba ni, za `CATALOG_EDITOR` sta
+omogočeni in gumb je; nad bazo krog **18 odprtih spletnih napak → odvzeta oznaka → 0 → vrnjena
+oznaka → 18**, z vrstico v `pim.ProductFieldHistory` in vrnjenim začetnim stanjem izdelka.
+
+**Kar ostaja odprto.** Celotnega kataloga nisem revalidiral. `EXEC val.RunValidation` brez
+parametrov zapre ~1,76 milijona spletnih napak na izdelkih, ki na splet ne gredo — to je masovna
+sprememba v skupni razvojni bazi, v kateri hkrati delajo druge seje, zato je operativna odločitev
+in ne del migracije. Dokler ne steče, `/kakovost` kaže stare številke.
+Odprto tudi: **kdo določi izdelke za `videlektro`** — tam ni nobene dodeljene kategorije, zato je
+spletišče prazno in njegov profil nima kaj validirati.
+
+
 ### 2026-09-09 — P0 iz pregleda 2026-09-08: vloge na zapisovalni meji, padec zgodovine SAOP, seja onemogočenega računa, stran brez dostopa (Claude Code)
 
 Vir: [`docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`](docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md) §8, P0 1–4
