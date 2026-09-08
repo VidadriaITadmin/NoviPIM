@@ -286,6 +286,34 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-11: nadzorna plošča 8,84 s → 4,47 s (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §5. Najprej meritev, šele nato popravek.
+
+**Kje je čas.** `intranet.GetValidationIssues` **9.788 ms** za eno podjetje; `GetDashboard` 42 ms,
+`GetPipelineRuns` 2 ms, `GetSystemIntegrations` 1 ms. Plošča postopek kliče enkrat na podjetje.
+Prvi nabor je vračal vse aktivne težave podjetja brez `TOP` — za podjetje 2 čez dva milijona
+vrstic — edini odjemalec pa iz odgovora bere **samo** povzetek po profilih.
+
+**Popravek (BAZA, migracija 183).** `@Take int = 200`, `@Take = 0` pomeni »samo povzetka«,
+razvrstitev dobi še `ProductIssueId` zaradi ponovljivosti. **INTRANET:** servis mejo poda izrecno.
+
+**Dokaz.** Postopek 9.788 ms → **714 ms**; `/nadzorna-plosca` 8,84 s → **4,47 s**, ponovljeno
+(drugi zagon 7,08 s → 4,69 s). Migrator: prvi zagon uporabljen, drugi preskočen, `--verify` uspešen.
+`scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Pogodba je v `PIM.F10.DashboardUxTests`.
+
+**Kar iz P2-11 ostaja odprto.**
+- `/zajem` (8,5 s) **ni** upočasnjen v bazi: najdražja poizvedba te strani je 104 ms. Čas gre v
+  izris, `Ingest.razor` in `IngestSourceDetail.razor` pa ima odprta druga seja (`AGENTS.md` §7).
+- `/kakovost` (4,6 s): `intranet.GetQualityOverview` je 490 ms na podjetje in stran ga kliče
+  zaporedno za vsa štiri. Vzporedno branje je naslednji korak.
+- **Največji posamični strošek v sistemu ni na teh straneh:** `sys.dm_exec_query_stats` kaže
+  **2.866 ms povprečno, 75 zagonov v dvajsetih minutah** za `STRING_AGG` nad `canon.FieldValue` —
+  to je **pogled**, ne tabela, in ga uporabljajo `val.RunValidation`, `intranet.GetProductFieldValues`,
+  `out.GetExportRows` in `intranet.GetProductExportSheet`. Zasluži svojo nalogo.
+
+
 ### 2026-09-09 — P2-12 in del P2-16: ozka širina, tabela čez rob, nedosegljive slike (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`, ugotovitvi **A6** in **A9**.

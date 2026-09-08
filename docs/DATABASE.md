@@ -198,3 +198,29 @@ v zgodovini in vrnjenim začetnim stanjem.
 posameznem izdelku pokaže ob `pim.SaveProductWebShops`, pri celoti pa šele ob
 `EXEC val.RunValidation` brez parametrov. Ta zagon zapre ~1,76 milijona spletnih napak na izdelkih,
 ki na splet ne gredo, in je zato operativna odločitev, ne del migracije.
+
+## Bralni model validacijskih težav je omejen (migracija 183)
+
+Pregled 2026-09-08 (§5) je izmeril počasne strani. Meritev nad razvojno bazo 2026-09-09 je pokazala,
+kje je čas: `intranet.GetValidationIssues` je za **eno** podjetje tekel **9.788 ms**, medtem ko so
+`intranet.GetDashboard` 42 ms, `intranet.GetPipelineRuns` 2 ms in `intranet.GetSystemIntegrations`
+1 ms. Nadzorna plošča postopek kliče enkrat na podjetje.
+
+Vzrok ni bil načrt poizvedbe, ampak obseg: prvi nabor je vračal **vse** aktivne težave podjetja brez
+`TOP` in brez strani — za podjetje 2 čez dva milijona vrstic. Edini odjemalec (`Dashboard.razor`)
+iz odgovora bere samo drugi nabor (povzetek po profilih), zato se je dva milijona vrstic preneslo
+čez povezavo, sestavilo v seznam predmetov in zavrglo.
+
+Migracija `183_ValidationIssuesReadModelBounded.sql` doda `@Take int = 200`; `@Take = 0` pomeni
+»samo povzetka«. Razvrstitev dobi še `ProductIssueId`, sicer meja pri enakih časih ni ponovljiva.
+Podrobni seznam s stranmi in filtri je in ostaja `intranet.GetQualityIssues` (`/kakovost/napake`).
+
+Dokaz: postopek 9.788 ms → **714 ms** (`@Take = 0` → 596 ms, podjetje 1 → 207 ms); nadzorna plošča
+8,84 s → **4,47 s** (strežniški izris, brez brskalnika). Prvi zagon migratorja `Uporabljena
+migracija`, drugi `Preskočena že uporabljena migracija`, `--verify` uspešen.
+
+**Naslednje ozko grlo, še neodpravljeno.** `sys.dm_exec_query_stats` kaže poizvedbo s povprečjem
+**2.866 ms na zagon** in 75 zagoni v dvajsetih minutah: `STRING_AGG` nad `canon.FieldValue`, ki je
+**pogled**, ne tabela. Uporabljajo ga `val.RunValidation`, `intranet.GetProductFieldValues`,
+`out.GetExportRows` in `intranet.GetProductExportSheet`. To je največji posamični strošek v sistemu
+in zasluži svojo nalogo.
