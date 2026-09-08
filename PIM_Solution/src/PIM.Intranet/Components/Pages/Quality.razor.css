@@ -68,3 +68,18 @@
   .readiness-row { grid-template-columns: minmax(0, 1fr) 6rem; row-gap: .5rem; }
   .readiness-bar, .readiness-open { grid-column: 1 / -1; text-align: left; }
 }
+
+/* --- 177: pogled po kategorijah (razredi filtra so ponovljeni zaradi CSS izolacije) ----------- */
+
+.filter-check { align-items: center; color: var(--pim-text-soft); display: inline-flex; font-size: .82rem; gap: .4rem; white-space: nowrap; }
+.filter-check input { accent-color: var(--pim-primary); }
+
+.category-cell { align-items: center; display: flex; gap: .4rem; }
+.category-name { color: var(--pim-text-strong); font-weight: 600; }
+tr.level-1 .category-name { font-size: .95rem; }
+.tree-toggle { background: none; border: 0; color: var(--pim-text-muted); cursor: pointer; font-size: .9rem; line-height: 1; padding: 0 .2rem; width: 1.2rem; }
+.tree-toggle:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.tree-toggle-space { display: inline-block; width: 1.2rem; }
+.top-fields { display: flex; flex-direction: column; gap: .15rem; font-size: .82rem; }
+.top-field .code-value { margin-left: .3rem; }
+.table-actions { white-space: nowrap; }

@@ -89,3 +89,14 @@ tr.editor-row > td { background: var(--pim-surface-subtle); padding: .8rem 1rem 
 .editor-label { color: var(--pim-text-muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; }
 
 .paste-area { font-family: inherit; resize: vertical; width: 100%; }
+
+/* --- 177: ustvarjanje v registru iz nabora --------------------------------------------------- */
+
+.create-hint { align-items: center; margin-top: .3rem; }
+
+.unknown-panel {
+  background: var(--pim-warn-bg, #fffbeb); border: 1px solid var(--pim-warn-border, #f5d78e); border-radius: var(--pim-radius-sm);
+  display: flex; flex-direction: column; gap: .5rem; margin-top: .5rem; padding: .6rem .8rem;
+}
+
+.unknown-panel p { font-size: .85rem; margin: 0; }

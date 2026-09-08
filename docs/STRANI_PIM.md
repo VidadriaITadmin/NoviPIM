@@ -386,11 +386,13 @@ Samo za branje — brez zapisovalnih akcij. Iskanje, filter po statusu in strani
 | `GovernanceReadService.GetFieldGapsAsync` — ni procedura | `val.ProductIssue`, `canon.Product`, `val.FieldRequirement` | Odprte zahteve, združene po polju |
 | `GovernanceReadService.GetUnblockPlanAsync` — ni procedura | `val.ProductIssue`, `canon.Product`, `val.FieldRequirement` | Skupno število prizadetih/aktivnih izdelkov |
 | `PipelineReadService.GetSummaryAsync` — ni procedura | `raw.Inbox`, `map.UnmappedValue`, `map.ExtractedValue`, `map.MissingTranslationOpen`, `map.SourceCategoryToMap`, `map.SourceConnector` | Števci za kartice (manjkajoči prevodi/kategorije, karantena) |
+| `intranet.GetQualityByCategory` (177, zavihek **Po kategorijah**) | `canon.Category`, `canon.CategoryPathTranslated`, `canon.WebSite`, `canon.ProductCategory`, `canon.Product`, `val.ProductIssue`, `val.FieldRequirement` | Vrstica na kategorijo drevesa (svetila / videlektro), **večnivojsko**: izdelki, izdelki z odprto zahtevo, napake, opozorila in tri najpogosteje manjkajoča polja — za kategorijo in vse njene podkategorije; vsa podjetja skupaj |
+| `CategoryTreeService.GetTreeCodesAsync` — ni procedura | `canon.Category` | Izbirnik drevesa za zavihek Po kategorijah |
 
 Storitev `CatalogReadService Catalog` je injicirana, a v `@code` ni uporabljena (mrtev vbrizg).
 
 **Akcije / gumbi:**
-Samo za branje — brez zapisovalnih akcij. Preklop zavihkov ne kliče baze znova. Povezave vodijo na Napake validacije, Karantena, Manjkajoči prevodi, Nepreslikane kategorije.
+Samo za branje — brez zapisovalnih akcij. Preklop zavihkov Pregled / Profili ne kliče baze znova; zavihek **Po kategorijah** (`kakovost?pogled=kategorije`) prebere `intranet.GetQualityByCategory` ob izbiri drevesa in resnosti. Veje se zlagajo (»Samo 1. raven«, »Do 2. ravni«, »Razpri vse«, puščica na vrstici); filter »Samo kategorije z izdelki«. Gumb »Odpri napake« pelje na `kakovost/napake?drevo=…&kategorija=…` (obseg = kategorija s podkategorijami). Povezave vodijo na Napake validacije, Karantena, Manjkajoči prevodi, Nepreslikane kategorije.
 
 ---
 
@@ -440,10 +442,11 @@ Samo za branje — brez zapisovalnih akcij. Preklop zavihkov ne kliče baze znov
 | `intranet.GetQualityOverview` | `val.ProductIssue`, `canon.Product`, `val.ValidationProfile`, `val.FieldRequirement` | KPI kartice, "Katera zahteva ustavi največ izdelkov" |
 | `GovernanceReadService.GetValidationProfilesAsync` — ni procedura | isto kot zgoraj + `val.ProductValidationState` | Seznam profilov za filter/nivo |
 | `CatalogReadService.GetWebSitesAsync` — ni procedura | `canon.WebSite`, `canon.Category` | Spletna mesta za filter (nivo SPLET) |
-| `intranet.GetQualityIssues` (brez filtra "nivo") | `canon.Product`, `val.ProductIssue`, `val.ValidationProfile`, `val.FieldRequirement`, `canon.ProductText` | Stran izdelkov z odprtimi težavami |
-| `QualityReadService.GetIssuesForProfilesAsync` (s filtrom "nivo") — ni procedura | isto, prek začasne tabele `#Page` | Ista stran, omejena na profile izbranega nivoja |
+| `intranet.GetQualityIssues` (brez filtra "nivo") | `canon.Product`, `val.ProductIssue`, `val.ValidationProfile`, `val.FieldRequirement`, `canon.ProductText`; od 177 tudi `canon.Category`, `canon.CategoryPathTranslated`, `canon.ProductCategory` za obseg kategorije | Stran izdelkov z odprtimi težavami |
+| `QualityReadService.GetIssuesForProfilesAsync` (s filtrom "nivo") — ni procedura | isto, prek začasnih tabel `#Page` in `#Scope` | Ista stran, omejena na profile izbranega nivoja |
+| `CategoryTreeService.GetTreeCodesAsync`, `GetCategoryOptionsAsync` — ni procedura (177) | `canon.Category` | Izbirnik drevesa in kategorije (ravni z zamikom) za filter »Kategorija« |
 
-**Akcije / gumbi:** Samo za branje. Filtri in pager samo navigirajo (query string), kar sproži ponovno branje.
+**Akcije / gumbi:** Samo za branje. Filtri in pager samo navigirajo (query string), kar sproži ponovno branje. Filter **Kategorija** (177; parametra `drevo`, `kategorija`) je **večnivojski**: izbrana kategorija zajame tudi vse podkategorije (veriga `ParentCategoryCode`), pot izdelka se ujema v jeziku spletnega mesta.
 
 ---
 
@@ -887,6 +890,8 @@ Hub `/nastavitve` (vloga ADMIN ali CATALOG_EDITOR).
 | "Dodaj izbrane (n)" / "Dodaj vse iz registra kot priporočene" | `AddPickedAsync`, `AddAllSuggestionsAsync` → `SaveManyAsync` | `canon.SaveCategoryAttributeSetBulk` (170) | Več atributov v enem klicu; neznani se zavrnejo vsi naenkrat, nič se ne shrani |
 | "Uvozi seznam" (prilepljeno besedilo: `koda ali ime[;raven]`) | `ImportPasteAsync` → `SaveManyAsync` | `canon.SaveCategoryAttributeSetBulk` (170) | Atribut sme biti naveden s kodo ali slovenskim imenom (seznami iz mastrov); raven v slovenščini ali angleščini, brez nje privzeta |
 | "Kopiraj nabor" | `CopyAsync` | `canon.CopyCategoryAttributeSet` (170) | Učinkoviti nabor izbrane kategorije (tudi iz drugega drevesa) postane lastni nabor te; obstoječe vrstice ostanejo, razen ob »prepiši raven« |
+| "Ustvari v registru in dodaj kot …" (iskanje brez zadetka) / "ustvari v registru in dodaj" (predlog brez kode) | `CreateAndAddAsync` | `canon.EnsureAttributeDefinition` (177) + `canon.SaveCategoryAttributeSet` | Atribut po slovenskem imenu nastane v registru (koda iz `canon.AttributeCodeFromName`, tip TEXT, revizija) in gre takoj v nabor — brez obiska `/nastavitve/atributi` |
+| "Uvozi seznam" z neznanimi imeni → panel "Ustvari v registru in dodaj vse" / "Dodaj samo znane" / "Prekliči" | `ImportResolvedAsync`, `CreateUnknownAndSaveAsync`, `SaveKnownOnlyAsync` | `canon.ResolveAttributeNames` (177), `canon.EnsureAttributeDefinition`, `canon.SaveCategoryAttributeSetBulk` | Seznam se najprej razreši; neznana imena niso napaka, ampak ponudba |
 
 ---
 

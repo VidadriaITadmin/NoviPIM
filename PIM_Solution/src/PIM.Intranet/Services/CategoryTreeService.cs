@@ -364,6 +364,49 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return saved.Value is int count ? count : 0;
   }
 
+  // --- Register iz nabora (migracija 177) -------------------------------------------------
+
+  /// <param name="AttributeCode">Koda v registru; null = imena ni v registru.</param>
+  /// <param name="ProposedCode">Koda, ki bi jo ime dobilo ob ustvarjanju (canon.AttributeCodeFromName).</param>
+  public sealed record ResolvedAttributeName(string Given, string? AttributeCode, string AttributeName, string ProposedCode);
+
+  /// <summary>Katera imena ali kode so v registru in katere ne — pred zapisom, da stran ponudi ustvarjanje.</summary>
+  public Task<IReadOnlyList<ResolvedAttributeName>> ResolveAttributeNamesAsync(
+    IReadOnlyCollection<string> names, CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      "EXEC canon.ResolveAttributeNames @NamesJson;",
+      reader => new ResolvedAttributeName(
+        PimDb.TextOrEmpty(reader, "Given"), PimDb.Text(reader, "AttributeCode"),
+        PimDb.TextOrEmpty(reader, "AttributeName"), PimDb.TextOrEmpty(reader, "ProposedCode")),
+      command => command.Parameters.AddWithValue("@NamesJson", JsonSerializer.Serialize(names)),
+      cancellationToken);
+
+  /// <summary>Atribut po slovenskem imenu: obstojecega vrne, neaktivnega vklopi, novega ustvari. Vrne kodo.</summary>
+  public async Task<string> EnsureAttributeDefinitionAsync(string name, string actor, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("EXEC canon.EnsureAttributeDefinition @Name, @Actor, @AttributeCode OUTPUT;", connection);
+    command.Parameters.AddWithValue("@Name", name);
+    command.Parameters.AddWithValue("@Actor", actor);
+    var code = command.Parameters.Add("@AttributeCode", System.Data.SqlDbType.NVarChar, 200);
+    code.Direction = System.Data.ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return code.Value as string ?? throw new InvalidOperationException($"Atributa »{name}« ni bilo mogoče ustvariti.");
+  }
+
+  /// <param name="CategoryPath">Slovenska pot; v izbirniku je zamaknjena po ravni.</param>
+  public sealed record CategoryOptionRow(string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath);
+
+  /// <summary>Kategorije drevesa po poti — za vecnivojski filter (izbira kategorije zajame tudi podkategorije).</summary>
+  public Task<IReadOnlyList<CategoryOptionRow>> GetCategoryOptionsAsync(string categoryTreeCode, CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      "SELECT CategoryTreeCode, CategoryCode, ParentCategoryCode, LevelNo, CategoryName, CategoryPath FROM canon.Category WHERE CategoryTreeCode = @Tree AND IsActive = 1 ORDER BY CategoryPath;",
+      reader => new CategoryOptionRow(
+        PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"), PimDb.Text(reader, "ParentCategoryCode"),
+        PimDb.Int32(reader, "LevelNo"), PimDb.TextOrEmpty(reader, "CategoryName"), PimDb.TextOrEmpty(reader, "CategoryPath")),
+      command => command.Parameters.AddWithValue("@Tree", categoryTreeCode), cancellationToken);
+
   /// <summary>Ucinkoviti nabor vira postane lastni nabor cilja. Vrne stevilo prepisanih vrstic.</summary>
   public async Task<int> CopyAttributeSetAsync(
     string fromTreeCode, string fromCategoryCode, string toTreeCode, string toCategoryCode,

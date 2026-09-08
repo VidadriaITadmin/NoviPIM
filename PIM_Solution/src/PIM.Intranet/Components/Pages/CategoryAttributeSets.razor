@@ -192,7 +192,10 @@
                                     <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "RECOMMENDED")'>priporočen</button>
                                     <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "REQUIRED")'>obvezen</button>
                                   }
-                                  else { <span class="muted">ni v registru atributov</span> }
+                                  else
+                                  {
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick='() => CreateAndAddAsync(row, suggestion.AttributeName, "RECOMMENDED")'>ustvari v registru in dodaj</button>
+                                  }
                                 </li>
                               }
                             </ul>
@@ -222,6 +225,16 @@
                           }
                           @if (PickerOptions.Count == 0) { <li class="muted">Ni atributa, ki bi ustrezal iskanju in še ne bil v naboru.</li> }
                         </ul>
+                        @if (CanCreateFromSearch)
+                        {
+                          @* 177: atribut, ki ga register se nima, se ustvari tu — brez obiska /nastavitve/atributi. *@
+                          <div class="editor-actions create-hint">
+                            <span class="muted">V registru ni atributa »@PickerSearch.Trim()«.</span>
+                            <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CreateAndAddAsync(row, PickerSearch.Trim(), PickLevel)">
+                              Ustvari v registru in dodaj kot @LevelLabel(PickLevel)
+                            </button>
+                          </div>
+                        }
                         <div class="editor-actions">
                           <label class="editor-field" for="pick-level">
                             <span class="editor-label">Raven</span>
@@ -251,6 +264,18 @@
                           </label>
                           <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(PasteText))" @onclick="() => ImportPasteAsync(row)">Uvozi seznam</button>
                         </div>
+                        @if (PendingUnknown.Count > 0)
+                        {
+                          <div class="unknown-panel" role="region" aria-label="Imena, ki jih register nima">
+                            <p><strong>@PendingUnknown.Count</strong> imen ni v registru atributov:
+                              @string.Join(", ", PendingUnknown.Select(name => $"{name.Given} (koda {name.ProposedCode})"))</p>
+                            <div class="editor-actions">
+                              <button type="button" class="primary-button" disabled="@Busy" @onclick="() => CreateUnknownAndSaveAsync(row)">Ustvari v registru in dodaj vse (@PendingItems.Count)</button>
+                              <button type="button" class="secondary-button" disabled="@(Busy || PendingItems.Count == PendingUnknown.Count)" @onclick="() => SaveKnownOnlyAsync(row)">Dodaj samo znane (@(PendingItems.Count - PendingUnknown.Count))</button>
+                              <button type="button" class="small-action" disabled="@Busy" @onclick="ClearPending">Prekliči</button>
+                            </div>
+                          </div>
+                        }
 
                         <h3>Kopiraj nabor druge kategorije</h3>
                         <div class="editor-actions">
@@ -331,6 +356,9 @@
   string PickLevel = "RECOMMENDED";
   string PasteText = "";
   string PasteLevel = "RECOMMENDED";
+  // 177: prilepljena imena, ki jih register nima — stran ponudi ustvarjanje namesto napake.
+  IReadOnlyList<CategoryTreeService.ResolvedAttributeName> PendingUnknown = [];
+  IReadOnlyList<CategoryTreeService.AttributeSetItem> PendingItems = [];
   string CopyTree = "";
   string CopyCategory = "";
   bool CopyIncludeInherited = true;
@@ -355,6 +383,12 @@
   static string Count(int effective, int own) => effective == 0 ? "—" : own == effective ? effective.ToString("N0") : $"{effective:N0} ({own:N0} tu)";
 
   int? LevelNo => int.TryParse(Level, out var value) ? value : null;
+
+  /// <summary>Iskani niz ni ime ali koda nobenega atributa v registru (tudi ne takega, ki je ze v naboru).</summary>
+  bool CanCreateFromSearch =>
+    PickerSearch.Trim().Length >= 2
+    && !AttributeOptions.Any(option => string.Equals(option.Name, PickerSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+      || string.Equals(option.AttributeCode, PickerSearch.Trim(), StringComparison.OrdinalIgnoreCase));
 
   IReadOnlyList<CategoryTreeService.AttributeOptionRow> PickerOptions =>
     AttributeOptions
@@ -415,6 +449,7 @@
     Picked.Clear();
     PickerSearch = "";
     PasteText = "";
+    ClearPending();
     CopyCategory = "";
     if (string.IsNullOrWhiteSpace(CopyTree)) CopyTree = TreeCode;
     await LoadEditorAsync(row);
@@ -502,7 +537,81 @@
       }
       items.Add(new(name, level ?? PasteLevel));
     }
-    return SaveManyAsync(row, items, clearPicked: false);
+    return ImportResolvedAsync(row, items);
+  }
+
+  /// <summary>Neznana imena niso napaka, ampak ponudba: ustvari jih v registru ali dodaj samo znana.</summary>
+  async Task ImportResolvedAsync(CategoryTreeService.OverviewRow row, IReadOnlyList<CategoryTreeService.AttributeSetItem> items)
+  {
+    if (items.Count == 0) return;
+    Error = null;
+    try
+    {
+      var resolved = await Tree.ResolveAttributeNamesAsync(items.Select(item => item.CodeOrName).ToList());
+      var unknown = resolved.Where(name => name.AttributeCode is null).ToList();
+      if (unknown.Count == 0) { await SaveManyAsync(row, items, clearPicked: false); return; }
+      PendingUnknown = unknown;
+      PendingItems = items;
+      Message = null;
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task CreateUnknownAndSaveAsync(CategoryTreeService.OverviewRow row)
+  {
+    Busy = true;
+    Error = null;
+    try
+    {
+      var actor = await ActorAsync();
+      foreach (var name in PendingUnknown) await Tree.EnsureAttributeDefinitionAsync(name.Given, actor);
+      AttributeOptions = await Tree.GetAttributeOptionsAsync();
+      var items = PendingItems;
+      ClearPending();
+      Busy = false;
+      await SaveManyAsync(row, items, clearPicked: false);
+      Message = $"V register je dodanih {PendingUnknownCountLast} atributov; " + Message;
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  int PendingUnknownCountLast;
+
+  Task SaveKnownOnlyAsync(CategoryTreeService.OverviewRow row)
+  {
+    var unknown = PendingUnknown.Select(name => name.Given).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var known = PendingItems.Where(item => !unknown.Contains(item.CodeOrName)).ToList();
+    ClearPending();
+    return SaveManyAsync(row, known, clearPicked: false);
+  }
+
+  void ClearPending()
+  {
+    PendingUnknownCountLast = PendingUnknown.Count;
+    PendingUnknown = [];
+    PendingItems = [];
+  }
+
+  /// <summary>En atribut, ki ga register se nima: ustvari ga (koda iz imena) in ga takoj da v nabor.</summary>
+  async Task CreateAndAddAsync(CategoryTreeService.OverviewRow row, string name, string level)
+  {
+    if (string.IsNullOrWhiteSpace(name)) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var code = await Tree.EnsureAttributeDefinitionAsync(name.Trim(), actor);
+      AttributeOptions = await Tree.GetAttributeOptionsAsync();
+      await Tree.SaveAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode, code, level, actor);
+      PickerSearch = "";
+      Message = $"Atribut »{name.Trim()}« je v registru kot {code} in v naboru kategorije »{row.CategoryName}« kot {LevelLabel(level)}.";
+      await AfterChangeAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
   }
 
   static string? ParseLevel(string text) => text.Trim().ToLowerInvariant() switch

@@ -7,6 +7,7 @@
 @inject GovernanceReadService Governance
 @inject CatalogReadService Catalog
 @inject NavigationManager Navigation
+@inject CategoryTreeService Tree
 
 <PageTitle>Napake validacije</PageTitle>
 
@@ -71,6 +72,24 @@
     <option value="WEB">Blokira splet</option>
     <option value="NONE">Ne blokira</option>
   </select>
+
+  @* 177: vecnivojski obseg — izbrana kategorija zajame tudi vse podkategorije. *@
+  <label class="visually-hidden" for="issue-tree">Drevo kategorij</label>
+  <select id="issue-tree" class="filter-select" @bind="TreeDraft" @bind:after="LoadCategoryOptionsAsync">
+    <option value="">Vse kategorije</option>
+    @foreach (var tree in Trees) { <option value="@tree">@TreeLabel(tree)</option> }
+  </select>
+  @if (!string.IsNullOrWhiteSpace(TreeDraft))
+  {
+    <label class="visually-hidden" for="issue-category">Kategorija (s podkategorijami)</label>
+    <select id="issue-category" class="filter-select category-select" @bind="CategoryDraft">
+      <option value="">Celo drevo</option>
+      @foreach (var category in CategoryOptions)
+      {
+        <option value="@category.CategoryCode">@(new string('\u00A0', (category.LevelNo - 1) * 3))@category.CategoryName</option>
+      }
+    </select>
+  }
 
   <label class="visually-hidden" for="issue-field">Polje</label>
   <select id="issue-field" class="filter-select" @bind="FieldDraft">
@@ -218,6 +237,8 @@
   [SupplyParameterFromQuery(Name = "resnost")] public string? QuerySeverity { get; set; }
   [SupplyParameterFromQuery(Name = "blokira")] public string? QueryBlocks { get; set; }
   [SupplyParameterFromQuery(Name = "polje")] public string? QueryField { get; set; }
+  [SupplyParameterFromQuery(Name = "drevo")] public string? QueryTree { get; set; }
+  [SupplyParameterFromQuery(Name = "kategorija")] public string? QueryCategory { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
 
   QualityIssuePage? PageData;
@@ -232,6 +253,11 @@
   string SeverityDraft = "";
   string BlocksDraft = "";
   string FieldDraft = "";
+  string TreeDraft = "";
+  string CategoryDraft = "";
+  IReadOnlyList<string> Trees = [];
+  IReadOnlyList<CategoryTreeService.CategoryOptionRow> CategoryOptions = [];
+  string? LoadedOptionsTree;
 
   const int Take = 25;
   const int VisibleIssuesPerProduct = 4;
@@ -280,6 +306,8 @@
     SeverityDraft = QuerySeverity ?? "";
     BlocksDraft = QueryBlocks ?? "";
     FieldDraft = QueryField ?? "";
+    TreeDraft = QueryTree ?? "";
+    CategoryDraft = QueryCategory ?? "";
 
     Loading = true;
     Error = null;
@@ -294,11 +322,14 @@
         Overview = await Quality.GetOverviewAsync(organization.OrganizationId);
         Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
         Sites = await Catalog.GetWebSitesAsync();
+        Trees = await Tree.GetTreeCodesAsync();
       }
+      await LoadCategoryOptionsAsync();
 
       var filter = new QualityIssueFilter(
         organization.OrganizationId, Skip, Take, QuerySearch, QueryProfile,
-        QuerySeverity, QueryBlocks, QueryField);
+        QuerySeverity, QueryBlocks, QueryField,
+        CategoryTreeCode: QueryTree, CategoryCode: QueryCategory);
       var layerProfiles = ProfilesForLayer(QueryLayer, QueryWebSite).Select(profile => profile.ProfileCode).ToArray();
       PageData = string.IsNullOrWhiteSpace(QueryLayer)
         ? await Quality.GetIssuesAsync(filter)
@@ -343,6 +374,7 @@
       if (!string.IsNullOrWhiteSpace(QuerySeverity)) chips.Add(new($"Resnost: {SeverityLabel(QuerySeverity)}", Href(severity: "")));
       if (!string.IsNullOrWhiteSpace(QueryBlocks)) chips.Add(new($"Blokira: {BlocksLabel(QueryBlocks)}", Href(blocks: "")));
       if (!string.IsNullOrWhiteSpace(QueryField)) chips.Add(new($"Polje: {QueryField}", Href(field: "")));
+      if (!string.IsNullOrWhiteSpace(QueryTree)) chips.Add(new($"Kategorija: {CategoryLabel()}", Href(tree: "", category: "")));
       return chips;
     }
   }
@@ -350,10 +382,13 @@
   // Filtri in stran zivijo v naslovu: povezavo je mogoce deliti, gumb Nazaj dela, KPI kartica
   // pa lahko pelje naravnost na svoj filtriran seznam. "" pomeni odstrani, null ohrani.
   string Href(string? search = null, string? profile = null, string? severity = null,
-    string? blocks = null, string? field = null, string? layer = null, string? webSite = null, int? page = null)
+    string? blocks = null, string? field = null, string? layer = null, string? webSite = null, int? page = null,
+    string? tree = null, string? category = null)
   {
     var parameters = new List<string>();
     Add("nivo", Resolve(layer, QueryLayer));
+    Add("drevo", Resolve(tree, QueryTree));
+    Add("kategorija", string.IsNullOrWhiteSpace(Resolve(tree, QueryTree)) ? null : Resolve(category, QueryCategory));
     Add("spletisce", Resolve(webSite, QueryWebSite));
     Add("isci", Resolve(search, QuerySearch));
     Add("profil", Resolve(profile, QueryProfile));
@@ -361,7 +396,7 @@
     Add("blokira", Resolve(blocks, QueryBlocks));
     Add("polje", Resolve(field, QueryField));
     var resolvedPage = page ?? (search is null && profile is null && severity is null
-      && blocks is null && field is null && layer is null && webSite is null ? QueryPage : null);
+      && blocks is null && field is null && layer is null && webSite is null && tree is null && category is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "kakovost/napake" : "kakovost/napake?" + string.Join('&', parameters);
@@ -381,7 +416,8 @@
   {
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
-      blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1));
+      blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1,
+      tree: TreeDraft, category: CategoryDraft));
     return Task.CompletedTask;
   }
 
@@ -395,6 +431,25 @@
   }
 
   static string Number(long? value) => value is null ? "—" : value.Value.ToString("N0");
+
+  static string TreeLabel(string treeCode) => treeCode switch { "svetila_si" => "Svetila", "videlektro" => "Videlektro", _ => treeCode };
+
+  /// <summary>Seznam kategorij se prebere za izbrano drevo; sprememba drevesa pobrise izbiro kategorije.</summary>
+  async Task LoadCategoryOptionsAsync()
+  {
+    if (string.IsNullOrWhiteSpace(TreeDraft)) { CategoryOptions = []; CategoryDraft = ""; LoadedOptionsTree = null; return; }
+    if (LoadedOptionsTree == TreeDraft) return;
+    try { CategoryOptions = await Tree.GetCategoryOptionsAsync(TreeDraft); LoadedOptionsTree = TreeDraft; }
+    catch { CategoryOptions = []; }
+    if (CategoryOptions.All(option => option.CategoryCode != CategoryDraft)) CategoryDraft = "";
+  }
+
+  string CategoryLabel()
+  {
+    if (string.IsNullOrWhiteSpace(QueryCategory)) return TreeLabel(QueryTree ?? "") + " (celo drevo)";
+    var option = CategoryOptions.FirstOrDefault(candidate => candidate.CategoryCode == QueryCategory);
+    return option is null ? QueryCategory : option.CategoryPath + " (s podkategorijami)";
+  }
 
   static string SeverityLabel(string? severity) => severity switch
   {

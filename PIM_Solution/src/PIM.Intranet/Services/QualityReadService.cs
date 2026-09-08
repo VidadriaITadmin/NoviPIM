@@ -16,9 +16,18 @@ public sealed record QualityIssueRow(
 public sealed record QualityIssuePage(
   IReadOnlyList<QualityProductRow> Products, IReadOnlyList<QualityIssueRow> Issues, long TotalCount);
 
+/// <param name="CategoryTreeCode">Drevo za obseg kategorije (177); skupaj s <paramref name="CategoryCode"/>.</param>
+/// <param name="CategoryCode">Kategorija in vse njene podkategorije; null = brez obsega.</param>
 public sealed record QualityIssueFilter(
   int OrganizationId, int Skip = 0, int Take = 25, string? Search = null, string? ProfileCode = null,
-  string? Severity = null, string? Blocks = null, string? FieldCode = null, string Language = "sl");
+  string? Severity = null, string? Blocks = null, string? FieldCode = null, string Language = "sl",
+  string? CategoryTreeCode = null, string? CategoryCode = null);
+
+/// <summary>Kakovost po kategoriji (177): stevila veljajo za kategorijo IN vse njene podkategorije.</summary>
+public sealed record QualityCategoryRow(
+  string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName,
+  string CategoryPath, bool IsActive, long ChildCount, long ProductCount, long SubtreeProductCount,
+  long ProductsWithIssue, long ProductsWithError, long ErrorCount, long WarningCount, string? TopFields);
 
 public sealed record QualityTotals(
   long OpenIssueCount, long ErrorCount, long WarningCount, long BlockingErpCount,
@@ -65,6 +74,8 @@ public sealed class QualityReadService(IConfiguration configuration)
     command.Parameters.Add("@Blocks", SqlDbType.NVarChar, 20).Value = Optional(filter.Blocks);
     command.Parameters.Add("@FieldCode", SqlDbType.NVarChar, 200).Value = Optional(filter.FieldCode);
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+    command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value = Optional(filter.CategoryTreeCode);
+    command.Parameters.Add("@CategoryCode", SqlDbType.NVarChar, 200).Value = Optional(filter.CategoryCode);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var products = await ReadAsync(reader, row => new QualityProductRow(
@@ -138,6 +149,24 @@ public sealed class QualityReadService(IConfiguration configuration)
     await using var command = new SqlCommand($"""
       SET NOCOUNT ON;
       CREATE TABLE #Page (ProductId bigint NOT NULL PRIMARY KEY, ItemID nvarchar(100) NOT NULL);
+      /* 177: vecnivojski obseg kategorije, isto pravilo kot v intranet.GetQualityIssues. */
+      CREATE TABLE #Scope (ProductId bigint NOT NULL PRIMARY KEY);
+      IF @CategoryCode IS NOT NULL
+      BEGIN
+        ;WITH subtree AS
+        (
+          SELECT CategoryCode FROM canon.Category WHERE CategoryTreeCode = @CategoryTreeCode AND CategoryCode = @CategoryCode
+          UNION ALL
+          SELECT child.CategoryCode FROM subtree
+          INNER JOIN canon.Category child ON child.CategoryTreeCode = @CategoryTreeCode AND child.ParentCategoryCode = subtree.CategoryCode
+        )
+        INSERT #Scope (ProductId)
+        SELECT DISTINCT productCategory.ProductId
+        FROM subtree
+        INNER JOIN canon.CategoryPathTranslated translated ON translated.CategoryTreeCode = @CategoryTreeCode AND translated.CategoryCode = subtree.CategoryCode
+        INNER JOIN canon.WebSite site ON site.CategoryTreeCode = @CategoryTreeCode AND site.LanguageCode = translated.LanguageCode
+        INNER JOIN canon.ProductCategory productCategory ON productCategory.WebSite = site.WebSiteCode AND productCategory.CategoryPath = translated.CategoryPath;
+      END;
 
       INSERT #Page (ProductId, ItemID)
       SELECT product.ProductId, product.ItemID
@@ -145,6 +174,7 @@ public sealed class QualityReadService(IConfiguration configuration)
       WHERE product.OrganizationId = @OrganizationId
         AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN LIKE N'%' + @Search + N'%'
           OR EXISTS (SELECT 1 FROM canon.ProductText textValue WHERE textValue.ProductId = product.ProductId AND textValue.Value LIKE N'%' + @Search + N'%'))
+        AND (@CategoryCode IS NULL OR EXISTS (SELECT 1 FROM #Scope scope WHERE scope.ProductId = product.ProductId))
         AND EXISTS
         (
           SELECT 1 FROM val.ProductIssue issue
@@ -202,6 +232,7 @@ public sealed class QualityReadService(IConfiguration configuration)
       WHERE product.OrganizationId = @OrganizationId
         AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN LIKE N'%' + @Search + N'%'
           OR EXISTS (SELECT 1 FROM canon.ProductText textValue WHERE textValue.ProductId = product.ProductId AND textValue.Value LIKE N'%' + @Search + N'%'))
+        AND (@CategoryCode IS NULL OR EXISTS (SELECT 1 FROM #Scope scope WHERE scope.ProductId = product.ProductId))
         AND EXISTS
         (
           SELECT 1 FROM val.ProductIssue issue
@@ -213,6 +244,7 @@ public sealed class QualityReadService(IConfiguration configuration)
             AND (@FieldCode IS NULL OR requirement.FieldCode = @FieldCode)
         ) OPTION (RECOMPILE);
       DROP TABLE #Page;
+      DROP TABLE #Scope;
       """, connection) { CommandTimeout = 60 };
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = filter.OrganizationId;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
@@ -221,6 +253,8 @@ public sealed class QualityReadService(IConfiguration configuration)
     command.Parameters.Add("@Severity", SqlDbType.NVarChar, 20).Value = Optional(filter.Severity);
     command.Parameters.Add("@FieldCode", SqlDbType.NVarChar, 200).Value = Optional(filter.FieldCode);
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+    command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value = Optional(filter.CategoryTreeCode);
+    command.Parameters.Add("@CategoryCode", SqlDbType.NVarChar, 200).Value = Optional(filter.CategoryCode);
     for (var index = 0; index < codes.Length; index++)
       command.Parameters.Add($"@Profile{index}", SqlDbType.NVarChar, 100).Value = codes[index];
 
@@ -240,6 +274,29 @@ public sealed class QualityReadService(IConfiguration configuration)
     await NextAsync(reader, cancellationToken);
     var total = await reader.ReadAsync(cancellationToken) ? Convert.ToInt64(reader.GetValue(0)) : 0;
     return new(products, issues, total);
+  }
+
+  /// <summary>Odprte zahteve po kategorijah drevesa, vecnivojsko (177). Podjetje null = vsa.</summary>
+  public async Task<IReadOnlyList<QualityCategoryRow>> GetByCategoryAsync(
+    string categoryTreeCode, int? organizationId, string? severity, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetQualityByCategory", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value = categoryTreeCode;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId is null ? DBNull.Value : organizationId.Value;
+    command.Parameters.Add("@Severity", SqlDbType.NVarChar, 20).Value = Optional(severity);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    return await ReadAsync(reader, row => new QualityCategoryRow(
+      PimDb.TextOrEmpty(row, "CategoryTreeCode"), PimDb.TextOrEmpty(row, "CategoryCode"), PimDb.Text(row, "ParentCategoryCode"),
+      PimDb.Int32(row, "LevelNo"), PimDb.TextOrEmpty(row, "CategoryName"), PimDb.TextOrEmpty(row, "CategoryPath"), PimDb.Bool(row, "IsActive"),
+      PimDb.Int64(row, "ChildCount"), PimDb.Int64(row, "ProductCount"), PimDb.Int64(row, "SubtreeProductCount"),
+      PimDb.Int64(row, "ProductsWithIssue"), PimDb.Int64(row, "ProductsWithError"), PimDb.Int64(row, "ErrorCount"),
+      PimDb.Int64(row, "WarningCount"), PimDb.Text(row, "TopFields")), cancellationToken);
   }
 
   static object Optional(string? value) =>

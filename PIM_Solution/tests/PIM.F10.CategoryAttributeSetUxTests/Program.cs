@@ -97,6 +97,38 @@ Assert(seed.Contains("existing.IsActive = 1", StringComparison.Ordinal) && seed.
 Assert(File.Exists(Path.Combine(root, "tools", "Mastri", "build_category_attribute_sets.py")),
   "Generator preslikave mastrov mora biti v repozitoriju, da je polnjenje ponovljivo.");
 
+// --- 177: ustvarjanje v registru iz nabora, kakovost po kategorijah (vecnivojsko) ----------------
+var register = Read(Path.Combine(root, "sql", "migrations", "177_AttributeRegisterFromSetsAndQualityByCategory.sql"));
+foreach (var procedure in new[] { "canon.EnsureAttributeDefinition", "canon.ResolveAttributeNames", "intranet.GetQualityByCategory", "intranet.GetQualityIssues" })
+  Assert(register.Contains("CREATE OR ALTER PROCEDURE " + procedure, StringComparison.Ordinal),
+    "Migracija 177 mora ustvariti " + procedure + " (idempotentno).");
+Assert(register.Contains("EXEC canon.SaveCategoryAttributeSetBulk", StringComparison.Ordinal) && register.Contains("EXEC canon.EnsureAttributeDefinition", StringComparison.Ordinal),
+  "Atributi iz mastrov gredo v register in nabore samo skozi postopke.");
+Assert(register.Contains("ParentCategoryCode = subtree.CategoryCode", StringComparison.Ordinal) && register.Contains("parent.CategoryCode = chain.ParentCategoryCode", StringComparison.Ordinal),
+  "Obseg kategorije mora biti vecnivojski po ParentCategoryCode, ne po nizu poti.");
+foreach (var method in new[] { "ResolveAttributeNamesAsync", "EnsureAttributeDefinitionAsync", "GetCategoryOptionsAsync" })
+  Assert(service.Contains(method, StringComparison.Ordinal), "CategoryTreeService mora imeti " + method + ".");
+Assert(page.Contains("CreateAndAddAsync", StringComparison.Ordinal) && page.Contains("CreateUnknownAndSaveAsync", StringComparison.Ordinal) && page.Contains("SaveKnownOnlyAsync", StringComparison.Ordinal),
+  "Neznano ime ni napaka, ampak ponudba: ustvari v registru (eno ali vsa) ali dodaj samo znana.");
+Assert(page.Contains("ResolveAttributeNamesAsync", StringComparison.Ordinal),
+  "Prilepljen seznam se najprej razresi, sele nato zapise.");
+
+var quality = Read(Path.Combine(pages, "Quality.razor"));
+var qualityService = Read(Path.Combine(services, "QualityReadService.cs"));
+var issues = Read(Path.Combine(pages, "ValidationErrors.razor"));
+Assert(quality.Contains("kakovost?pogled=kategorije", StringComparison.Ordinal) && quality.Contains("GetByCategoryAsync", StringComparison.Ordinal),
+  "/kakovost mora imeti zavihek Po kategorijah iz intranet.GetQualityByCategory.");
+Assert(quality.Contains("CollapseTo(", StringComparison.Ordinal) && quality.Contains("Collapsed", StringComparison.Ordinal),
+  "Pogled po kategorijah mora biti vecnivojski: veje se zlagajo po ravneh.");
+Assert(quality.Contains("kakovost/napake?drevo=", StringComparison.Ordinal),
+  "Vrstica kategorije mora voditi na seznam napak z obsegom te kategorije.");
+Assert(qualityService.Contains("intranet.GetQualityByCategory", StringComparison.Ordinal) && qualityService.Contains("@CategoryTreeCode", StringComparison.Ordinal),
+  "QualityReadService mora klicati bralni model po kategorijah in prenasati obseg kategorije.");
+Assert(issues.Contains("QueryCategory", StringComparison.Ordinal) && issues.Contains("CategoryTreeCode: QueryTree, CategoryCode: QueryCategory", StringComparison.Ordinal),
+  "Napake validacije morajo sprejeti drevo in kategorijo iz naslova in ju prenesti v filter.");
+Assert(issues.Contains("(category.LevelNo - 1) * 3", StringComparison.Ordinal),
+  "Izbirnik kategorije mora pokazati ravni z zamikom, sicer vecnivojskost ni vidna.");
+
 Console.WriteLine("PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.");
 return 0;
 

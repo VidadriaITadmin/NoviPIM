@@ -536,6 +536,18 @@ Ko nabore polniš za več kategorij hkrati (npr. po mastrih starega PIM-a), je h
    - **Kopiraj nabor druge kategorije** (tudi iz drugega drevesa): učinkoviti nabor vira postane
      lastni nabor te kategorije; obstoječe vrstice ostanejo, razen če označiš **prepiši raven**.
    Gumb **Dodaj vse iz registra kot priporočene** vzame vse predloge, ki jih izdelki že nosijo.
+4. **Atributa ni v registru?** Ni treba na `/nastavitve/atributi`: če iskanje v »Dodaj iz registra« ne
+   najde ničesar, se pokaže gumb **Ustvari v registru in dodaj**; pri prilepljenem seznamu stran
+   našteje neznana imena in ponudi **Ustvari v registru in dodaj vse** ali **Dodaj samo znane**. Novi
+   atribut dobi kodo iz imena (npr. »Število polov« → `STEVILO_POLOV`) in slovensko ime.
+
+**Kje vidiš, kaj manjka — po kategorijah**
+
+`/kakovost` → zavihek **Po kategorijah**: izberi drevo (Svetila / Videlektro) in resnost. Vsaka vrstica
+šteje izdelke in odprte zahteve **v kategoriji in vseh njenih podkategorijah**; veje zlagaš s puščico
+ali z gumbi »Samo 1. raven« / »Do 2. ravni«. Stolpec »Najpogosteje manjka« pove tri polja, ki v tej veji
+manjkajo največkrat. **Odpri napake** pelje na seznam izdelkov, omejen na to kategorijo s
+podkategorijami; isti filter (Drevo + Kategorija) je tudi na `/kakovost/napake`.
 
 **Kaj se zgodi potem**
 

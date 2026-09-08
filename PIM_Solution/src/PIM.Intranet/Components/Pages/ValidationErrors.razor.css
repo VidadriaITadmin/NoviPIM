@@ -99,3 +99,6 @@
   .result-count { margin-left: 0; }
   .issue-cell { max-width: none; }
 }
+
+/* 177: izbirnik kategorije z zamikom po ravni */
+.category-select { max-width: 24rem; }
