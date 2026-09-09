@@ -71,6 +71,90 @@ foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v
 
 Console.WriteLine("F10 intranet logic PASS.");
 
+/* ─── Kontrast palete po WCAG (P3-23, pregled 2026-09-08) ─────────────────────
+   Pregled zahteva »kontrast z orodjem«. Orodje je to: barve se preberejo iz :root v app.css in
+   razmerje se izracuna po WCAG 2.1 (relativna svetlost + (L1+0.05)/(L2+0.05)). Prag za navadno
+   besedilo je 4,5 : 1.
+
+   Merjeno 2026-09-09 je padlo troje: prigusen tekst na podlagi strani 4,47 : 1, znacka »dobro«
+   3,58 : 1 in znacka »napaka« 4,41 : 1. Znacki sta imeli barvo, izbrano za polno podlago, stali
+   pa sta na svoji bledi. Brez tega testa bi se to vrnilo ob prvi spremembi palete. */
+var cssPath = Path.Combine(FindSolutionRoot(), "src", "PIM.Intranet", "wwwroot", "app.css");
+Assert(File.Exists(cssPath), "Manjka app.css s paleto.");
+var appCss = File.ReadAllText(cssPath);
+
+// Nekatere barve so vzdevki (--pim-accent-link: var(--pim-primary)), zato se sklic razresi.
+// Brez tega bi test preveril samo polovico palete in molcal o drugi.
+string Token(string name)
+{
+  for (var hop = 0; hop < 5; hop++)
+  {
+    var match = System.Text.RegularExpressions.Regex.Match(appCss, @"--" + name + @":\s*(#[0-9a-fA-F]{6}|var\(--[a-z-]+\))");
+    Assert(match.Success, "V paleti manjka barva --" + name + ".");
+    var value = match.Groups[1].Value;
+    if (value.StartsWith("#", StringComparison.Ordinal)) return value;
+    name = value[6..^1];
+  }
+  throw new InvalidOperationException("Barva --" + name + " se sklicuje v krogu.");
+}
+
+foreach (var (label, foreground, background) in new[]
+{
+  ("besedilo na kartici", Token("pim-text"), Token("pim-surface")),
+  ("besedilo na podlagi strani", Token("pim-text"), Token("pim-bg")),
+  ("prigušeno besedilo na kartici", Token("pim-text-muted"), Token("pim-surface")),
+  ("prigušeno besedilo na podlagi strani", Token("pim-text-muted"), Token("pim-bg")),
+  ("mehko besedilo na kartici", Token("pim-text-soft"), Token("pim-surface")),
+  ("povezava na kartici", Token("pim-accent-link"), Token("pim-surface")),
+  ("značka dobro", Token("pim-good-text"), Token("pim-good-bg")),
+  ("značka opozorilo", Token("pim-warn-text"), Token("pim-warn-bg")),
+  ("značka napaka", Token("pim-bad-text"), Token("pim-bad-bg")),
+  ("značka info", Token("pim-info-text"), Token("pim-info-bg")),
+  ("značka nevtralno", Token("pim-neutral-text"), Token("pim-neutral-bg")),
+})
+{
+  var contrast = Contrast(foreground, background);
+  Assert(contrast >= 4.5,
+    $"Kontrast pod pragom WCAG AA: {label} ({foreground} na {background}) = {contrast:0.00} : 1, potrebno 4,5 : 1.");
+}
+
+Console.WriteLine("F10 kontrast palete: vseh 11 parov nad 4,5 : 1.");
+
+static double Contrast(string first, string second)
+{
+  var a = Luminance(first);
+  var b = Luminance(second);
+  var high = Math.Max(a, b);
+  var low = Math.Min(a, b);
+  return (high + 0.05) / (low + 0.05);
+}
+
+static double Luminance(string hex)
+{
+  var value = hex.TrimStart('#');
+  double Channel(int offset)
+  {
+    var raw = Convert.ToInt32(value.Substring(offset, 2), 16) / 255.0;
+    return raw <= 0.03928 ? raw / 12.92 : Math.Pow((raw + 0.055) / 1.055, 2.4);
+  }
+  return 0.2126 * Channel(0) + 0.7152 * Channel(2) + 0.0722 * Channel(4);
+}
+
+static string FindSolutionRoot()
+{
+  foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+  {
+    var current = new DirectoryInfo(start);
+    while (current is not null)
+    {
+      if (File.Exists(Path.Combine(current.FullName, "PIM.sln"))) return current.FullName;
+      current = current.Parent;
+    }
+  }
+  throw new InvalidOperationException("PIM_Solution ni najden.");
+}
+
+
 static void AssertLayers(string code, string scope, bool blocksErp, bool blocksWeb, params PimValidationLayer[] expected)
 {
   var actual = ValidationLayer.Resolve(code, scope, blocksErp, blocksWeb);

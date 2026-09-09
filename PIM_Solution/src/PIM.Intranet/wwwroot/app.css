@@ -20,7 +20,9 @@
   /* Besedilo */
   --pim-text: #111827;
   --pim-text-strong: #1e293b;
-  --pim-text-muted: #6b7280;
+  /* P3-23, dostopnost: izmerjeno po WCAG. #6b7280 na podlagi strani #f4f6f9 da 4,47 : 1 in pade
+     pod prag 4,5 : 1 za navadno besedilo. #666d76 da 4,83 : 1 na strani in 5,23 : 1 na kartici. */
+  --pim-text-muted: #666d76;
   --pim-text-soft: #475569;
 
   /* Dejanja */
@@ -32,9 +34,12 @@
   --pim-accent-ring: rgba(79, 70, 229, .14);
 
   /* Stanja */
-  --pim-good-bg: #ecfdf5; --pim-good-border: #a7f3d0; --pim-good-text: #059669; --pim-good-bar: #22c55e;
+  /* Značke: barva besedila je bila izbrana za polno podlago, stoji pa na svoji bledi podlagi.
+     Izmerjeno: #059669 na #ecfdf5 = 3,58 : 1, #dc2626 na #fef2f2 = 4,41 : 1 — oba pod pragom.
+     Popravljeno na 5,21 : 1 oziroma 5,91 : 1; podlaga in obroba ostaneta enaki. */
+  --pim-good-bg: #ecfdf5; --pim-good-border: #a7f3d0; --pim-good-text: #047857; --pim-good-bar: #22c55e;
   --pim-warn-bg: #fffbeb; --pim-warn-border: #fde68a; --pim-warn-text: #b45309; --pim-warn-bar: #f59e0b;
-  --pim-bad-bg: #fef2f2;  --pim-bad-border: #fecaca;  --pim-bad-text: #dc2626;  --pim-bad-strong: #b91c1c;
+  --pim-bad-bg: #fef2f2;  --pim-bad-border: #fecaca;  --pim-bad-text: #b91c1c;  --pim-bad-strong: #991b1b;
   --pim-info-bg: #eff6ff; --pim-info-border: #bfdbfe; --pim-info-text: #2563eb;
   --pim-neutral-bg: #f1f5f9; --pim-neutral-border: #e2e8f0; --pim-neutral-text: #475569;
 

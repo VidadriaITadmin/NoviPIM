@@ -286,6 +286,37 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P3-23: kontrast izmerjen z orodjem, fokus po shranjevanju (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-23 — »kontrast z orodjem, `aria-*` na menijih
+in tabelah, fokus po shranjevanju«.
+
+**Kontrast.** Orodje je odslej test: `PIM.F10.IntranetLogicTests` prebere barve iz `:root` v
+`app.css`, razreši vzdevke (`var(--pim-primary)`) in izračuna razmerje po WCAG 2.1 za enajst parov.
+Merjeno je padlo **troje**:
+
+| Par | Prej | Zdaj |
+|---|---:|---:|
+| prigušeno besedilo na podlagi strani | 4,47 : 1 | **4,83 : 1** |
+| značka »dobro« (`#059669` na `#ecfdf5`) | 3,58 : 1 | **5,21 : 1** |
+| značka »napaka« (`#dc2626` na `#fef2f2`) | 4,41 : 1 | **5,91 : 1** |
+
+Znački sta imeli barvo, izbrano za polno podlago, stali pa sta na svoji bledi. Podlage in obrobe so
+ostale enake; popravljeno je samo besedilo, in samo toliko, da preseže prag.
+
+**Fokus po shranjevanju.** Gumb »Shrani spremembe« po zapisu postane onemogočen, onemogočen element
+pa fokus izgubi in ta pade na telo strani — bralnik zaslona takrat ne pove ničesar o tem, kaj se je
+zgodilo. Fokus odslej prevzame izid shranjevanja (`role="status"`, `tabindex="-1"`). Napaka pri
+fokusiranju ne sme podreti shranjevanja, ki je že uspelo, zato je ovita.
+
+**Kar iz P3-23 ostaja odprto:** `aria-*` na menijih je v `MainLayout.razor`, ki ga ima odprtega
+druga seja. Tabele so bile že prej v redu (`PimTable`: `role="region"`, `aria-label`, `<caption>`,
+`scope="col"`, dosegljivo drsno območje).
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`;
+test izpiše »F10 kontrast palete: vseh 11 parov nad 4,5 : 1«.
+
+
 ### 2026-09-09 — P3-18: jasen delni izid pri shranjevanju kartice (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-18 — »ena transakcija ali jasen delni izid«.

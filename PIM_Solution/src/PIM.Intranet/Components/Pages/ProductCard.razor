@@ -34,7 +34,9 @@
           }
           else
           {
-            <span class="save-state" role="status" aria-live="polite">
+            @* P3-23, dostopnost: po shranjevanju gumb postane onemogocen in fokus pade v telo
+               strani — bralnik zaslona ostane brez konteksta. Fokus zato prevzame izid. *@
+            <span class="save-state" role="status" aria-live="polite" tabindex="-1" @ref="SaveStatus">
               @if (Busy) { <span>Shranjujem …</span> }
               else if (Conflicts.Count > 0) { <span class="save-error">@Conflicts.Count polj ni bilo shranjenih — nekdo jih je vmes spremenil</span> }
               else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
@@ -479,6 +481,9 @@
   /// <summary>Kaj je slo skozi, preden je shranjevanje padlo (P3-18); za posten delni izid.</summary>
   readonly HashSet<string> SavedBeforeFailure = new(StringComparer.OrdinalIgnoreCase);
   readonly List<string> SavedOutcome = [];
+
+  /// <summary>Izid shranjevanja; po zapisu prevzame fokus, ker gumb takrat ni vec dosegljiv.</summary>
+  ElementReference SaveStatus;
 
   static readonly IReadOnlyList<PimCrumb> ProductCrumbs = [new("Izdelki", "izdelki"), new("Kartica")];
   static readonly IReadOnlyList<PimColumn> PriceColumns = [new("Cenik"), new("Neto", true), new("DDV", true), new("Bruto", true), new("Velja od"), new("Stanje")];
@@ -1002,6 +1007,7 @@
       DraftFields.Clear();
       SaveMessage = string.Join(" · ", outcome) + ".";
       await LoadAsync();
+      await FocusSaveStatusAsync();
     }
     catch (Exception exception)
     {
@@ -1025,6 +1031,8 @@
       {
         SaveError = reason;
       }
+
+      await FocusSaveStatusAsync();
     }
     finally
     {
@@ -1077,6 +1085,16 @@
     {
       ShopBusy = false;
     }
+  }
+
+  /// <summary>
+  /// Fokus na izid shranjevanja. Gumb je po zapisu onemogocen, onemogocen element pa fokus izgubi
+  /// in ta pade na telo strani; bralnik zaslona takrat ne pove nicesar o tem, kaj se je zgodilo.
+  /// Napaka pri fokusiranju ne sme podreti shranjevanja, ki je ze uspelo.
+  /// </summary>
+  async Task FocusSaveStatusAsync()
+  {
+    try { await SaveStatus.FocusAsync(); } catch { }
   }
 
   async Task<string> ActorAsync()
