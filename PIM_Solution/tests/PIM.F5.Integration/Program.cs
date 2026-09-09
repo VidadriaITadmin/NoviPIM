@@ -194,6 +194,12 @@ async Task CleanupAsync(SqlConnection sqlConnection)
     DELETE FROM canon.ProductMedia WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM canon.ProductPrice WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     DELETE FROM canon.ProductCommercial WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
+    /* Migracija 182: oznaka spletisca je osemnajsta tabela s tujim kljucem na canon.Product.
+       Vseh osemnajst je NO_ACTION - konvencija te resitve je, da brisalec pocisti sam - zato
+       mora tudi to cistilo pobrisati, sicer canon.Product ostane in test pade s SQL 547.
+       Vrstica nastane ze ob seedu migracije, ce ima testni izdelek kategorijo tega spletisca. */
+    IF OBJECT_ID(N'pim.ProductWebShop', N'U') IS NOT NULL
+      DELETE FROM pim.ProductWebShop WHERE ProductId IN (SELECT ProductId FROM canon.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID);
     INSERT @TestChangeBatches(ChangeBatchId)
     SELECT DISTINCT history.ChangeBatchId
     FROM pim.ProductFieldHistory history

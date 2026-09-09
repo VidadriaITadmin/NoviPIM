@@ -286,6 +286,43 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — zaključna preverba celotnega paketa in popravek čiščenja F5 (Claude Code)
+
+**Napaka, ki jo je odkrila zaključna preverba, je bila moja.** Migracija 182 je ob začetnem polnjenju
+označila tudi testni izdelek `F5-EAN-ENRICHMENT` (podjetje 2 ima kategorijo drevesa `svetila_si`),
+tuj ključ `FK_ProductWebShop_Product` pa je nato preprečil brisanje izdelka v čiščenju
+`PIM.F5.Integration` — `SQL 547`. Enak vzorec je že zapisan v `AGENTS.md` §12 (2026-08-12, sledenje
+sprememb in F5 cleanup).
+
+Popravek **ni** kaskadno brisanje: vseh **18** tujih ključev na `canon.Product` je `NO_ACTION` in
+konvencija te rešitve je, da brisalec počisti sam. `pim.ProductWebShop` je osemnajsta tabela in je
+čiščenje F5 ni poznalo, ker ob pisanju testa ni obstajala. Dodan je torej en `DELETE`, ovit v
+`IF OBJECT_ID(...) IS NOT NULL`, da test ostane uporaben tudi na bazi brez migracije 182.
+Nobena trditev testa ni spremenjena.
+
+**Zaključna preverba.** Polni `scripts\run_tests.ps1` sta dvakrat pobila nadzornika pomnilnika
+(Windows stran; v WSL je bilo 11 GiB prostega), zato je pognan po kosih:
+
+| Kos | Uspeli | Padli |
+|---|---:|---:|
+| F0, F2, F3, F4 | 8 | 0 |
+| F5 | 6 | 0 |
+| F6 | 7 | 0 |
+| F7 | 6 | **1** |
+| F8, F9 | 18 | 0 |
+| F10 | 19 | 0 |
+| xUnit (`dotnet test`) | OK | 0 |
+| **skupaj** | **64** | **1** |
+
+Edini padli je `PIM.F7.MagentoExportTests` (»profil `MAGENTO_PRODUCTS` mora imeti 213 aktivnih
+stolpcev: dejansko 215«). Dokazano **ni moj**: dodatna stolpca sta `COL216 Količina odprodaje`
+(`Clearance.Quantity`) in `COL217 Popust odprodaje %` (`Clearance.DiscountPercent`) iz necommitanih
+migracij delovnega drevesa `.worktrees/odprodaja` (172/175/176), ki so v skupni razvojni bazi
+uporabljene, na tej veji pa jih ni. Ob prejšnjem polnem zagonu so padli še `F2/F3/F5.Integration` s
+SQL časovnim iztekom (`Error Number:-2`); ob tem zagonu vsi trije uspejo, kar potrjuje, da so bili
+to sočasni zaklepi druge seje in ne napaka.
+
+
 ### 2026-09-09 — P3-23: kontrast izmerjen z orodjem, fokus po shranjevanju (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-23 — »kontrast z orodjem, `aria-*` na menijih
