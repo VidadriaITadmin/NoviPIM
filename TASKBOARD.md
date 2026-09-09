@@ -286,6 +286,29 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P3-17: dva urednika se ne prepišeta več tiho (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-17. To je bila edina preostala točka načrta,
+ki ni kozmetika: doslej je zadnji zapis tiho zmagal in prejšnji urednik za to ni izvedel.
+
+**BAZA, migracija `186_ProductCardConcurrency.sql`.** `pim.SaveProductTexts` in
+`pim.SaveProductAttributes` sprejmeta `expected` in `hasExpected`. Merilo namenoma **ni**
+`rowversion`: ta bi se spremenil ob vsakem zapisu katerekoli vrstice izdelka in bi dajal lažne
+konflikte. Sporne vrstice se preskočijo, ostale zapišejo; drugi nabor vrne polje, izhodiščno in
+**tujo** vrednost. Kdor `hasExpected` ne pošlje, dobi dosedanje vedenje — uvoz delovnega zvezka je
+zato nedotaknjen.
+
+**INTRANET.** Kartica pošlje vrednost, ki jo je urednik videl, in ob konfliktu pokaže razdelek
+»Nekdo je bil hitrejši« z obema vrednostma ter pove, da so ostale spremembe shranjene.
+
+**Dokaz** (izdelek 2, `ProductText.WEB_TITLE.sl`, izhodiščno prazno): urednik B shrani →
+`ChangedCount = 1, ConflictCount = 0`; urednik A nato shrani s `expected = ""` →
+`ChangedCount = 0, ConflictCount = 1`, sporno polje s `TheirValue = Vrednost urednika B`, v
+katalogu ostane B-jeva vrednost. Izhodiščno stanje vrnjeno.
+`scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`; migrator
+prvi zagon uporabljen, drugi preskočen, `--verify` uspešen.
+
+
 ### 2026-09-09 — P2-10: obseg podjetja je viden in resničen (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`, ugotovitev **U1** — »obseg podjetja ni enoten«.

@@ -252,3 +252,29 @@ natančnost: stran ima stolpec »Vir«, ne »Vir te vrednosti«.
 Po popravku: **75 ms** (podjetje 1) in **64 ms** (podjetje 2) pri `@Take = 50`; stran **60,1 s →
 0,1 s**, 50 vrstic in naslov »Vrednosti atributa Garancija«. Migrator: prvi zagon uporabljen, drugi
 preskočen, `--verify` uspešen.
+
+## Sočasnost pri urejanju kartice (migracija 186)
+
+Pregled 2026-09-08 (P3-17): »`rowversion` na `pim.*` in pričakovana vrednost v
+`SaveProductTexts/Attributes`; kartica pokaže konflikt s tujo vrednostjo«. Do te migracije sta se
+dva urednika tiho prepisala — kartica je poslala novo vrednost, procedura jo je zapisala in nihče
+ni izvedel, da je nekdo vmes isto polje že spremenil. Zgodovina je to zabeležila šele potem, ko je
+bilo delo izgubljeno.
+
+**Merilo ni `rowversion`, ampak pričakovana vrednost polja.** `rowversion` na `canon.ProductText`
+bi se spremenil ob vsakem zapisu katerekoli vrstice izdelka, tudi če se polje, ki ga urednik ureja,
+sploh ni dotaknilo — dobili bi lažne konflikte. Vrednost polja pove natanko to, kar urednik vidi.
+
+- `@ChangesJson` sprejme `expected` in `hasExpected`. Kdor ju ne pošlje (`hasExpected` odsoten
+  ali 0), dobi natanko dosedanje vedenje — zato uvoz delovnega zvezka, ki ima svoje pravilo
+  »prazna celica = ne dotakni se«, ostane nespremenjen. Kartica ju pošlje vedno.
+- Konflikt **ni napaka**: sporne vrstice se preskočijo, ostale se zapišejo. Vse ali nič bi
+  pomenilo, da en konflikt zavrže deset dobrih popravkov.
+- Prvi nabor dobi `ConflictCount`, drugi pa `FieldKey`, `Expected` in `TheirValue`.
+
+**Dokaz nad razvojno bazo** (izdelek 2, polje `ProductText.WEB_TITLE.sl`, izhodiščno prazno):
+urednik B shrani »Vrednost urednika B« → `ChangedCount = 1, ConflictCount = 0`. Urednik A nato
+shrani in pošlje `expected = ""` (kar je videl) → `ChangedCount = 0, ConflictCount = 1`, sporno
+polje `ProductText.WEB_TITLE.sl` s `TheirValue = Vrednost urednika B`. V katalogu ostane B-jeva
+vrednost; **A je ne povozi več**. Izhodiščno stanje je bilo po preizkusu vrnjeno.
+Migrator: prvi zagon uporabljen, drugi preskočen, `--verify` uspešen.
