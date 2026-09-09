@@ -36,6 +36,7 @@
           {
             <span class="save-state" role="status" aria-live="polite">
               @if (Busy) { <span>Shranjujem …</span> }
+              else if (Conflicts.Count > 0) { <span class="save-error">@Conflicts.Count polj ni bilo shranjenih — nekdo jih je vmes spremenil</span> }
               else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
               else if (SaveMessage is not null) { <span class="save-ok">@SaveMessage</span> }
               else if (Drafts.Count > 0) { <span class="save-dirty">@Drafts.Count neshranjenih</span> }
@@ -48,6 +49,27 @@
         </div>
       </Actions>
     </PimPage>
+
+    @if (Conflicts.Count > 0)
+    {
+      @* P3-17, pregled 2026-09-08: dva urednika sta se doslej tiho prepisala. Sporna polja se ne
+         zapišejo; tukaj stoji, kaj si videl ti in kaj je v katalogu zdaj, da se odločiš sam. *@
+      <section class="ui-card conflict-card" role="alert" aria-labelledby="conflict-title">
+        <h2 id="conflict-title">Nekdo je bil hitrejši</h2>
+        <p>Ta polja niso bila shranjena, ker jih je med tvojim urejanjem spremenil nekdo drug.
+           Ostale spremembe so shranjene. Preveri in vpiši znova, če tvoja vrednost še velja.</p>
+        <ul class="conflict-list">
+          @foreach (var conflict in Conflicts)
+          {
+            <li>
+              <span class="code-value">@conflict.FieldKey</span>
+              <span class="conflict-mine">tvoja izhodiščna: @(string.IsNullOrEmpty(conflict.Expected) ? "—" : conflict.Expected)</span>
+              <span class="conflict-theirs">v katalogu zdaj: @(string.IsNullOrEmpty(conflict.TheirValue) ? "—" : conflict.TheirValue)</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
 
     <section class="product-hero" aria-labelledby="product-identity-title">
       <div class="media-tile">
@@ -450,6 +472,9 @@
   bool Busy;
   string? SaveMessage;
   string? SaveError;
+
+  /// <summary>Polja, ki jih je nekdo drug spremenil, odkar smo jih prebrali (migracija 186).</summary>
+  readonly List<ProductEditConflict> Conflicts = [];
 
   static readonly IReadOnlyList<PimCrumb> ProductCrumbs = [new("Izdelki", "izdelki"), new("Kartica")];
   static readonly IReadOnlyList<PimColumn> PriceColumns = [new("Cenik"), new("Neto", true), new("DDV", true), new("Bruto", true), new("Velja od"), new("Stanje")];
@@ -920,6 +945,7 @@
     Busy = true;
     SaveMessage = null;
     SaveError = null;
+    Conflicts.Clear();
     try
     {
       var actor = await ActorAsync();
@@ -930,16 +956,20 @@
       if (texts.Count > 0)
       {
         var result = await Edits.SaveTextsAsync(OrganizationId, ProductId,
-          texts.Select(field => new ProductTextEdit(field.Language!, field.TextType!, Drafts[field.FieldKey])), actor, note);
+          texts.Select(field => new ProductTextEdit(field.Language!, field.TextType!, Drafts[field.FieldKey],
+            field.Value, CheckExpected: true)), actor, note);
         outcome.Add($"{result.ChangedCount:N0} besedil shranjenih");
+        Conflicts.AddRange(result.Conflicts);
       }
 
       var attributes = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute).ToList();
       if (attributes.Count > 0)
       {
         var result = await Edits.SaveAttributesAsync(OrganizationId, ProductId,
-          attributes.Select(field => new ProductAttributeEdit(field.AttributeCode!, Drafts[field.FieldKey])), actor, note);
+          attributes.Select(field => new ProductAttributeEdit(field.AttributeCode!, Drafts[field.FieldKey],
+            field.Value, CheckExpected: true)), actor, note);
         outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih");
+        Conflicts.AddRange(result.Conflicts);
       }
 
       var saop = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Saop).ToList();

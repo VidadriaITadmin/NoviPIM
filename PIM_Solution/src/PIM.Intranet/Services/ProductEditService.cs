@@ -5,10 +5,21 @@ using Microsoft.Data.SqlClient;
 namespace PIM.Intranet.Services;
 
 /// <param name="ChangedCount">Koliko polj je šlo skozi; 0 pomeni, da ni bilo česa spremeniti.</param>
-public sealed record ProductEditOutcome(long ChangedCount, string ValidationStatus, decimal Completeness, long OpenIssueCount);
+/// <param name="Conflicts">
+/// Polja, ki jih nekdo drug spremenil, odkar jih je urednik videl (migracija 186). Niso napaka:
+/// ostale spremembe se zapišejo, ta polja pa se preskočijo in kartica pokaže tujo vrednost.
+/// </param>
+public sealed record ProductEditOutcome(
+  long ChangedCount, string ValidationStatus, decimal Completeness, long OpenIssueCount,
+  IReadOnlyList<ProductEditConflict> Conflicts);
 
-public sealed record ProductTextEdit(string Language, string TextType, string? Value);
-public sealed record ProductAttributeEdit(string AttributeCode, string? Value);
+/// <param name="Expected">Vrednost, ki jo je urednik videl.</param>
+/// <param name="TheirValue">Vrednost, ki je v katalogu zdaj.</param>
+public sealed record ProductEditConflict(string FieldKey, string? Expected, string? TheirValue);
+
+/// <param name="Expected">Vrednost, ki jo je urednik videl; <c>null</c> pomeni »ne preverjaj«.</param>
+public sealed record ProductTextEdit(string Language, string TextType, string? Value, string? Expected = null, bool CheckExpected = false);
+public sealed record ProductAttributeEdit(string AttributeCode, string? Value, string? Expected = null, bool CheckExpected = false);
 
 /// <param name="WebShopCode">Koda spletišča (<c>svetila_si</c>, <c>videlektro</c>) — ista kot
 /// <c>canon.WebSite.CategoryTreeCode</c> in <c>val.ValidationProfile.CategoryTreeCode</c>.</param>
@@ -48,6 +59,8 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
         lang = edit.Language,
         textType = edit.TextType,
         value = edit.Value ?? string.Empty,
+        expected = edit.Expected ?? string.Empty,
+        hasExpected = edit.CheckExpected ? 1 : 0,
       })), actor, note, cancellationToken);
   }
 
@@ -61,6 +74,8 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
       {
         attributeCode = edit.AttributeCode,
         value = edit.Value ?? string.Empty,
+        expected = edit.Expected ?? string.Empty,
+        hasExpected = edit.CheckExpected ? 1 : 0,
       })), actor, note, cancellationToken);
   }
 
@@ -129,9 +144,17 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
     command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    if (!await reader.ReadAsync(cancellationToken)) return new(0, "PENDING", 0, 0);
-    return new(
+    if (!await reader.ReadAsync(cancellationToken)) return new(0, "PENDING", 0, 0, []);
+    var outcome = new ProductEditOutcome(
       PimDb.Int64(reader, "ChangedCount"), PimDb.TextOrEmpty(reader, "ValidationStatus"),
-      PimDb.Decimal(reader, "Completeness"), PimDb.Int64(reader, "OpenIssueCount"));
+      PimDb.Decimal(reader, "Completeness"), PimDb.Int64(reader, "OpenIssueCount"), []);
+
+    // Drugi nabor so sporna polja (186). Prazen je najpogostejsi primer in ni izjema.
+    var conflicts = new List<ProductEditConflict>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        conflicts.Add(new(
+          PimDb.TextOrEmpty(reader, "FieldKey"), PimDb.Text(reader, "Expected"), PimDb.Text(reader, "TheirValue")));
+    return outcome with { Conflicts = conflicts };
   }
 }

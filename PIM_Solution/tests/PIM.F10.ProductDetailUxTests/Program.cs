@@ -472,6 +472,35 @@ else
   }
 }
 
+
+/* ─── Socasnost (P3-17, pregled 2026-09-08) ───────────────────────────────────
+   Dva urednika sta se doslej tiho prepisala: kartica je poslala novo vrednost, procedura jo je
+   zapisala in nihce ni izvedel, da je nekdo vmes isto polje ze spremenil. Merilo ni rowversion na
+   tabeli - ta bi se spremenil ob vsakem zapisu katerekoli vrstice izdelka in bi dajal lazne
+   konflikte - ampak pricakovana vrednost polja, torej natanko to, kar je urednik videl. */
+var concurrency = Path.Combine(root, "sql", "migrations", "186_ProductCardConcurrency.sql");
+Assert(File.Exists(concurrency), "Manjka migracija 186 s preverjanjem socasnosti.");
+var concurrencySql = File.ReadAllText(concurrency);
+foreach (var contract in new[] { "hasExpected", "@Conflict", "ConflictCount", "TheirValue" })
+  Assert(concurrencySql.Contains(contract, StringComparison.Ordinal), "Migracija 186 nima pogodbe: " + contract);
+Assert(Regex.Matches(concurrencySql, @"HasExpected = 1").Count == 2,
+  "Preverjanje mora veljati za besedila in za lastnosti, in samo kadar je pricakovana vrednost poslana.");
+
+var editService = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "ProductEditService.cs"));
+Assert(editService.Contains("CheckExpected", StringComparison.Ordinal)
+    && editService.Contains("ProductEditConflict", StringComparison.Ordinal),
+  "Servis mora znati poslati pricakovano vrednost in vrniti sporna polja.");
+Assert(card.Contains("CheckExpected: true", StringComparison.Ordinal),
+  "Kartica mora poslati vrednost, ki jo je urednik videl.");
+Assert(card.Contains("conflict-card", StringComparison.Ordinal) && card.Contains("v katalogu zdaj", StringComparison.Ordinal),
+  "Kartica mora pokazati obe vrednosti; brez tuje se urednik ne more odlociti.");
+
+// Uvoz delovnega zvezka ima svoje pravilo (prazna celica = ne dotakni se) in pricakovane
+// vrednosti ne poslje; ce bi jo, bi vsak uvoz cez tuj popravek postal konflikt.
+var workbook = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "ProductWorkbookService.cs"));
+Assert(!workbook.Contains("CheckExpected", StringComparison.Ordinal),
+  "Uvoz zvezka ne sme uporabljati preverjanja socasnosti kartice.");
+
 Console.WriteLine("F10 product detail UX contract PASS.");
 
 static void Assert(bool condition, string message)

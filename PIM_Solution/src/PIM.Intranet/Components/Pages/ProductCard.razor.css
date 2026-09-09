@@ -249,3 +249,14 @@
 .web-shops .shop-name { font-weight: 600; }
 .web-shops .shop-trace { color: var(--pim-text-muted); font-size: .78rem; }
 .web-shops .shop-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .85rem; }
+
+/* P3-17: sočasnost. Konflikt ni napaka sistema, ampak dejstvo o delu dveh ljudi, zato opozorilna
+   in ne rdeča barva — pove pa obe vrednosti, ker se brez njiju ni mogoče odločiti. */
+.conflict-card { border-left: 4px solid #f59e0b; display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; padding: 1rem 1.25rem; }
+.conflict-card h2 { font-size: 1rem; margin: 0; }
+.conflict-card p { margin: 0; }
+.conflict-list { display: flex; flex-direction: column; gap: .4rem; list-style: none; margin: 0; padding: 0; }
+.conflict-list li { align-items: baseline; display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+.conflict-mine, .conflict-theirs { font-size: .82rem; }
+.conflict-mine { color: var(--pim-text-muted); }
+.conflict-theirs { font-weight: 600; }
