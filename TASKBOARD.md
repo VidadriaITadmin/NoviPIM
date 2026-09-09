@@ -286,6 +286,30 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P3-18: jasen delni izid pri shranjevanju kartice (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-18 — »ena transakcija ali jasen delni izid«.
+
+**Ene transakcije ni mogoče imeti in to ni pomanjkljivost:** besedila in lastnosti gredo naravnost
+v katalog, polja SAOP pa v odhodno vrsto z odobritvijo — druga pot in drug čas. Zato jasen delni
+izid. Doslej je ena napaka na pol poti pobrisala tudi **vednost o tem, kaj je bilo že shranjeno**:
+uporabnik je videl samo »Sprememb ni bilo mogoče shraniti« in ni vedel, ali je pol dela že v bazi.
+
+Odslej ob napaki sporočilo pove, kaj je šlo skozi (»Del je bil shranjen pred napako: …«) in koliko
+polj ni (»Neshranjenih polj: N«). Osnutki neshranjenih polj **ostanejo v obrazcu**, osnutki
+shranjenih se pobrišejo — uporabnik dela ne izgubi in ne ugiba. Osvežitev kartice sme pasti;
+sporočilo o delnem izidu je pomembnejše od svežih vrednosti.
+
+Dokaz: `scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+Pogodba je v `PIM.F10.ProductDetailUxTests`.
+
+**P3-24 (stalna meritev) ni izvedljiv v tej seji:** `tests/PIM.SelfTest.Nightly`,
+`scripts/Nocni-samotest.ps1` in `scripts/Namesti-samotest.ps1` so **nesledene datoteke druge seje**.
+Zaščita pred vrnitvijo A1–A5 medtem obstaja drugje: vse te ugotovitve so pogodbe v
+`PIM.F10.AuthTests`, ki teče v vsakem `run_tests.ps1`, živi dokaz pa je
+`docs/pregled-20260909/Preveri-P0.ps1`.
+
+
 ### 2026-09-09 — P3-17: dva urednika se ne prepišeta več tiho (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §8 P3-17. To je bila edina preostala točka načrta,

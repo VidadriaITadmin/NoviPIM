@@ -476,6 +476,10 @@
   /// <summary>Polja, ki jih je nekdo drug spremenil, odkar smo jih prebrali (migracija 186).</summary>
   readonly List<ProductEditConflict> Conflicts = [];
 
+  /// <summary>Kaj je slo skozi, preden je shranjevanje padlo (P3-18); za posten delni izid.</summary>
+  readonly HashSet<string> SavedBeforeFailure = new(StringComparer.OrdinalIgnoreCase);
+  readonly List<string> SavedOutcome = [];
+
   static readonly IReadOnlyList<PimCrumb> ProductCrumbs = [new("Izdelki", "izdelki"), new("Kartica")];
   static readonly IReadOnlyList<PimColumn> PriceColumns = [new("Cenik"), new("Neto", true), new("DDV", true), new("Bruto", true), new("Velja od"), new("Stanje")];
   static readonly IReadOnlyList<PimColumn> StockColumns = [new("Skladišče"), new("Vir"), new("Količina", true), new("Prihaja", true), new("Razpoložljivo"), new("Svežina"), new("Min/max")];
@@ -950,7 +954,16 @@
     {
       var actor = await ActorAsync();
       var note = $"Kartica izdelka {Detail.Header.ItemId}";
-      var outcome = new List<string>();
+      var outcome = SavedOutcome;
+
+      /* P3-18, pregled 2026-09-08: »ena transakcija ali jasen delni izid«. Ene transakcije ni
+         mogoce imeti — besedila in lastnosti gresta v katalog, polja SAOP pa v odhodno vrsto z
+         odobritvijo, torej v drugo pot in drug cas. Zato jasen delni izid: kar je slo skozi,
+         ostane in se pove; kar ni, obdrzi svoj osnutek, da ga uporabnik ne izgubi in ne ugiba.
+         Doslej je ena napaka pobrisala tudi vednost o tem, kaj je bilo ze shranjeno. */
+      var saved = SavedBeforeFailure;
+      saved.Clear();
+      SavedOutcome.Clear();
 
       var texts = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Text).ToList();
       if (texts.Count > 0)
@@ -960,6 +973,7 @@
             field.Value, CheckExpected: true)), actor, note);
         outcome.Add($"{result.ChangedCount:N0} besedil shranjenih");
         Conflicts.AddRange(result.Conflicts);
+        foreach (var field in texts) saved.Add(field.FieldKey);
       }
 
       var attributes = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute).ToList();
@@ -970,6 +984,7 @@
             field.Value, CheckExpected: true)), actor, note);
         outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih");
         Conflicts.AddRange(result.Conflicts);
+        foreach (var field in attributes) saved.Add(field.FieldKey);
       }
 
       var saop = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Saop).ToList();
@@ -980,6 +995,7 @@
         outcome.Add(result.Rejected == 0
           ? $"{result.Queued:N0} polj uvrščenih v vrsto za SAOP (skupina {result.OutboundBatchId})"
           : $"{result.Queued:N0} polj v vrsti za SAOP, {result.Rejected:N0} zavrnjenih (skupina {result.OutboundBatchId})");
+        foreach (var field in saop) saved.Add(field.FieldKey);
       }
 
       Drafts.Clear();
@@ -990,9 +1006,25 @@
     catch (Exception exception)
     {
       // Procedura zavrne zapis, ki bi sel mimo SAOP, z govorno napako; ta mora priti do uporabnika.
-      SaveError = exception is Microsoft.Data.SqlClient.SqlException sql && sql.Number is 52401 or 52402
+      var reason = exception is Microsoft.Data.SqlClient.SqlException sql && sql.Number is 52401 or 52402
         ? sql.Message
         : "Sprememb ni bilo mogoče shraniti.";
+
+      // Delni izid: kar je slo skozi pred napako, ostane shranjeno in se to pove; osnutki tistega,
+      // kar ni slo skozi, ostanejo v obrazcu, da uporabnik dela ne izgubi.
+      var savedKeys = SavedBeforeFailure;
+      if (savedKeys.Count > 0)
+      {
+        foreach (var key in savedKeys) { Drafts.Remove(key); DraftFields.Remove(key); }
+        SaveError = $"{reason} Del je bil shranjen pred napako: {string.Join(" · ", SavedOutcome)}. "
+          + $"Neshranjenih polj: {Drafts.Count}.";
+        // Osvezitev sme pasti; sporocilo o delnem izidu je pomembnejse od svezih vrednosti.
+        try { await LoadAsync(); } catch { }
+      }
+      else
+      {
+        SaveError = reason;
+      }
     }
     finally
     {

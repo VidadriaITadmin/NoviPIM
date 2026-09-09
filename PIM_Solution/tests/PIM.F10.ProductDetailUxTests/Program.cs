@@ -501,6 +501,20 @@ var workbook = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Servi
 Assert(!workbook.Contains("CheckExpected", StringComparison.Ordinal),
   "Uvoz zvezka ne sme uporabljati preverjanja socasnosti kartice.");
 
+
+/* ─── Jasen delni izid (P3-18) ────────────────────────────────────────────────
+   Ene transakcije ni mogoce imeti: besedila in lastnosti gredo v katalog, polja SAOP pa v odhodno
+   vrsto z odobritvijo - druga pot in drug cas. Zato mora kartica ob napaki povedati, kaj je slo
+   skozi, in osnutke neshranjenega obdrzati. Doslej je ena napaka pobrisala tudi to vednost. */
+Assert(card.Contains("SavedBeforeFailure", StringComparison.Ordinal)
+    && card.Contains("SavedOutcome", StringComparison.Ordinal),
+  "Kartica mora vedeti, kaj je slo skozi pred napako.");
+Assert(card.Contains("Del je bil shranjen pred napako", StringComparison.Ordinal)
+    && card.Contains("Neshranjenih polj", StringComparison.Ordinal),
+  "Ob delnem izidu mora sporocilo povedati oboje: kaj je shranjeno in koliko ni.");
+Assert(Regex.IsMatch(card, @"foreach \(var key in savedKeys\) \{ Drafts\.Remove\(key\)"),
+  "Osnutki neshranjenih polj morajo ostati; pobrisati se smejo samo tisti, ki so sli skozi.");
+
 Console.WriteLine("F10 product detail UX contract PASS.");
 
 static void Assert(bool condition, string message)
