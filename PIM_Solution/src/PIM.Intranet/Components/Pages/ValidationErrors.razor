@@ -25,6 +25,16 @@
 <section class="ui-card toolbar" role="search" aria-labelledby="issues-filter-title">
   <h2 id="issues-filter-title" class="visually-hidden">Iskanje odprtih težav</h2>
 
+  @* U1, pregled 2026-09-08: stran je tiho kazala samo prvo podjetje (17.413 izdelkov proti
+     177.653 na /kakovost), izbirnika pa ni bilo. Obseg mora biti viden in izbirljiv. *@
+  <label class="visually-hidden" for="issue-organization">Podjetje</label>
+  <select id="issue-organization" class="filter-select" @bind="OrganizationDraft">
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
   <label class="visually-hidden" for="issue-layer">Nivo</label>
   <select id="issue-layer" class="filter-select" @bind="LayerDraft">
     <option value="">Vsi nivoji</option>
@@ -227,6 +237,7 @@
 </p>
 
 @code {
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
   [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
   [SupplyParameterFromQuery(Name = "nivo")] public string? QueryLayer { get; set; }
   [SupplyParameterFromQuery(Name = "spletisce")] public string? QueryWebSite { get; set; }
@@ -312,8 +323,17 @@
     Error = null;
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
+      // Seznam podjetij je potreben za izbirnik; brez njega bi bil obseg spet neviden.
+      if (Organizations.Count == 0)
+      {
+        try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+      }
+      var requested = int.TryParse(QueryOrganization, out var parsedOrganization) ? parsedOrganization : (int?)null;
+      var organization = requested is int wanted
+        ? Organizations.FirstOrDefault(row => row.OrganizationId == wanted) ?? await Data.GetCurrentOrganizationAsync()
+        : await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationDraft = organization.OrganizationId.ToString();
 
       if (OrganizationId != organization.OrganizationId)
       {
@@ -382,9 +402,10 @@
   // pa lahko pelje naravnost na svoj filtriran seznam. "" pomeni odstrani, null ohrani.
   string Href(string? search = null, string? profile = null, string? severity = null,
     string? blocks = null, string? field = null, string? layer = null, string? webSite = null, int? page = null,
-    string? tree = null, string? category = null)
+    string? tree = null, string? category = null, string? organization = null)
   {
     var parameters = new List<string>();
+    Add("podjetje", Resolve(organization, QueryOrganization));
     Add("nivo", Resolve(layer, QueryLayer));
     Add("drevo", Resolve(tree, QueryTree));
     Add("kategorija", string.IsNullOrWhiteSpace(Resolve(tree, QueryTree)) ? null : Resolve(category, QueryCategory));
@@ -408,6 +429,9 @@
     static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
   }
 
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  string OrganizationDraft = "";
+
   string RuleHref(QualityRuleImpact rule) =>
     $"kakovost/napake?profil={Uri.EscapeDataString(rule.ProfileCode)}&polje={Uri.EscapeDataString(rule.FieldCode)}";
 
@@ -416,7 +440,7 @@
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
       blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1,
-      tree: TreeDraft, category: CategoryDraft));
+      tree: TreeDraft, category: CategoryDraft, organization: OrganizationDraft));
     return Task.CompletedTask;
   }
 

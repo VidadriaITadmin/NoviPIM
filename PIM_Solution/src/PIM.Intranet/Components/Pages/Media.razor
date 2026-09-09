@@ -29,6 +29,16 @@
            value="@Search" @oninput="OnSearchInputAsync" />
   </div>
 
+  @* U1, pregled 2026-09-08: stran je kazala samo prvo podjetje in tega ni povedala, izbirnika pa
+     ni bilo. Napis tabele je govoril o »izbrani organizaciji«, izbrati je ni bilo mogoce. *@
+  <label class="visually-hidden" for="media-organization">Podjetje</label>
+  <select id="media-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationChangedAsync">
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
   <label class="visually-hidden" for="media-role">Vloga medija</label>
   <select id="media-role" class="filter-select" @bind="Role" @bind:after="ApplyAsync">
     <option value="">Vse vloge</option>
@@ -104,7 +114,7 @@
     }
     else
     {
-      <PimTable Caption="Mediji izdelkov v izbrani organizaciji" Columns="Columns">
+      <PimTable Caption="@($"Mediji izdelkov — {Organizations.FirstOrDefault(row => row.OrganizationId == OrganizationId)?.Name ?? "podjetje ni izbrano"}")" Columns="Columns">
         <Rows>
           @foreach (var row in Rows)
           {
@@ -185,6 +195,9 @@
   // Kontrole za stanje naslova na zaslonu ni vec: uporabnik jo je 2026-08-28 zavrnil, ker
   // ne pove nicesar, kar bi kdo popravljal. Parameter v naslovu ostane, ker je poceni in
   // uporaben pri iskanju napake (mediji?naslov=INVALID).
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  string OrganizationDraft = "";
+
   [SupplyParameterFromQuery(Name = "naslov")] public string? QueryAddressState { get; set; }
   [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
@@ -237,9 +250,18 @@
     AddressState = QueryAddressState ?? "";
     Search = QueryProduct ?? "";
     Kind = QueryKind ?? "";
+    try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
+    OrganizationDraft = organization.OrganizationId.ToString();
+    await LoadScopeAsync();
+  }
+
+  /// <summary>Povzetek in vloge veljajo za eno podjetje, zato se ob menjavi preberejo znova.</summary>
+  async Task LoadScopeAsync()
+  {
+    if (OrganizationId is null) return;
     try
     {
       var summaryTask = Catalog.GetMediaSummaryAsync(OrganizationId.Value);
@@ -249,6 +271,15 @@
     }
     catch { Summary = null; Roles = []; }
     await LoadAsync();
+  }
+
+  async Task OrganizationChangedAsync()
+  {
+    if (!int.TryParse(OrganizationDraft, out var chosen) || chosen == OrganizationId) return;
+    OrganizationId = chosen;
+    Skip = 0;
+    Role = "";
+    await LoadScopeAsync();
   }
 
   async Task LoadAsync()

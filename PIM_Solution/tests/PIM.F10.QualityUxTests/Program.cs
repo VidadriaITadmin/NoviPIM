@@ -178,6 +178,16 @@ Assert(rules.Contains("prikazano @VisibleCount", StringComparison.Ordinal)
 Assert(rules.Contains(".Where(Matches)", StringComparison.Ordinal),
   "Filter mora veljati na vrsticah vseh nivojev, ne samo na stevcu.");
 
+
+/* ─── Izbirnik podjetja na seznamu napak (U1, P2-10) ──────────────────────────
+   Stran je tiho kazala samo prvo podjetje: 17.413 izdelkov proti 177.653 na /kakovost. */
+Assert(issues.Contains("id=\"issue-organization\"", StringComparison.Ordinal),
+  "Seznam napak mora imeti izbirnik podjetja; brez njega je obseg neviden.");
+Assert(issues.Contains("Name = \"podjetje\"", StringComparison.Ordinal),
+  "Izbrano podjetje mora biti v naslovu, sicer povezave in vrnitev nazaj izgubijo obseg.");
+Assert(issues.Contains("Add(\"podjetje\"", StringComparison.Ordinal),
+  "Gradnik naslova mora nositi podjetje skozi vse filtre in strani.");
+
 Console.WriteLine("F10 quality UX contract PASS.");
 
 static string Read(string path)

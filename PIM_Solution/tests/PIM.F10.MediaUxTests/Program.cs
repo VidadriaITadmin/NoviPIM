@@ -144,6 +144,14 @@ var mediaCss = File.ReadAllText(Path.Combine(pages, "Media.razor.css"));
 Assert(mediaCss.Contains(".preview-fallback.preview-broken", StringComparison.Ordinal),
   "Nedosegljiv medij mora biti viden tudi brez besedila; bela slicica je bila past.");
 
+
+/* ─── Izbirnik podjetja na medijih (U1, P2-10) ────────────────────────────────
+   Napis je govoril o »izbrani organizaciji«, izbrati je ni bilo mogoce. */
+Assert(mediaPage.Contains("id=\"media-organization\"", StringComparison.Ordinal),
+  "Mediji morajo imeti izbirnik podjetja.");
+Assert(!mediaPage.Contains("Mediji izdelkov v izbrani organizaciji", StringComparison.Ordinal),
+  "Napis ne sme govoriti o izbiri, ki je ni bilo mogoce narediti.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 

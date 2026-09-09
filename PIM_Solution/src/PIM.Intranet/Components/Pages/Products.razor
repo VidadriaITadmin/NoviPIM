@@ -233,7 +233,7 @@
             EmptyText="Za izbrane filtre ni izdelkov." LoadingText="Nalaganje izdelkov …">
     @if (Page is not null)
     {
-      <PimTable Caption="Izdelki v aktivni organizaciji" AriaLabel="Tabela izdelkov" Columns="Columns">
+      <PimTable Caption="@ScopeCaption" AriaLabel="Tabela izdelkov" Columns="Columns">
         <Rows>
           @foreach (var row in Page.Rows)
           {
@@ -355,6 +355,14 @@
   // Neveljavna stevilka v naslovu ne sme tiho pomeniti vseh podjetij; bralna procedura
   // neznano podjetje vrne kot prazen nabor, kar je iskrenejse od tihe razsiritve obsega.
   int? OrganizationScope => int.TryParse(QueryOrganization, out var value) ? value : null;
+
+  /// <summary>
+  /// U1, pregled 2026-09-08: napis tabele je pisal »Izdelki v aktivni organizaciji«, stran pa je
+  /// privzeto kazala vsa podjetja. Napis odslej pove dejanski obseg, ne domnevnega.
+  /// </summary>
+  string ScopeCaption => OrganizationScope is int scope
+    ? "Izdelki podjetja " + (Organizations.FirstOrDefault(row => row.OrganizationId == scope)?.Name ?? scope.ToString())
+    : $"Izdelki vseh podjetij ({Organizations.Count})";
 
   /// <summary>
   /// Izbrana vrstica. Ime podjetja je tu zato, ker izbira sega cez podjetja: delovni list ima

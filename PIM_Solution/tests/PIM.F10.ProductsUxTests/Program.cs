@@ -295,6 +295,17 @@ var webPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Compon
 Assert(Regex.IsMatch(webPage, @"<select class=""filter-select"" value=""@SelectedSite"""),
   "Izbirnik spletnega mesta na /splet ne sme biti surov element brez razreda.");
 
+
+/* ─── Obseg podjetja je viden in resnicen (U1, P2-10) ─────────────────────────
+   Napis tabele je pisal »Izdelki v aktivni organizaciji«, stran pa je privzeto kazala vsa
+   podjetja. Napis mora povedati dejanski obseg, ne domnevnega. */
+// Prepoved velja za napis v oznaki, ne za pojasnilo v komentarju, ki staro besedilo navaja.
+Assert(!markup.Contains("Caption=\"Izdelki v aktivni organizaciji\"", StringComparison.Ordinal),
+  "Napis tabele ne sme trditi obsega, ki ga stran nima.");
+Assert(markup.Contains("Caption=\"@ScopeCaption\"", StringComparison.Ordinal)
+    && markup.Contains("Izdelki vseh podjetij", StringComparison.Ordinal),
+  "Napis mora izhajati iz izbranega obsega in znati povedati tudi »vsa podjetja«.");
+
 Console.WriteLine("F10 products UX contract PASS.");
 
 static void Assert(bool condition, string message)

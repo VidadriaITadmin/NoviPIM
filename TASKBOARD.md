@@ -286,6 +286,28 @@ Pravila so v [`AGENTS.md`](AGENTS.md); ta tabla jih ne podvaja.
 
 ## KONČANO
 
+### 2026-09-09 — P2-10: obseg podjetja je viden in resničen (Claude Code)
+
+Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md`, ugotovitev **U1** — »obseg podjetja ni enoten«.
+
+- **`/izdelki`**: napis tabele je pisal »Izdelki v aktivni organizaciji«, stran pa je privzeto
+  kazala **vsa** podjetja. Napis odslej pove dejanski obseg: »Izdelki vseh podjetij (4)« oziroma
+  »Izdelki podjetja IQLighting«, ko je filter izbran.
+- **`/kakovost/napake`**: stran je tiho kazala samo **prvo** podjetje — 17.413 izdelkov proti
+  177.653 na `/kakovost` — izbirnika pa ni bilo. Dodan je izbirnik podjetja; izbira gre v naslov
+  (`?podjetje=`), zato jo povezave in vrnitev nazaj ohranijo.
+- **`/mediji`**: napis je govoril o »izbrani organizaciji«, izbrati je ni bilo mogoče. Dodan je
+  izbirnik; ob menjavi se povzetek, vloge in stran preberejo znova.
+
+Dokaz nad tekočo aplikacijo: `/izdelki` → »Izdelki vseh podjetij (4)«; `/izdelki?podjetje=2` →
+»Izdelki podjetja IQLighting«; `/kakovost/napake` in `/mediji` vrneta izbirnik.
+`scripts\run_tests.ps1 -Filter F10` = 19 uspešnih, 0 preskočenih, 0 padlih, `Build OK`.
+
+**Kar iz U1 ostaja odprto:** `/kakovost` še vedno sešteva vsa podjetja, `/kakovost/napake` pa zna
+prikazati eno samo — »vsa podjetja« bi zahtevalo ničelni `OrganizationId` v `intranet.GetQualityIssues`
+in s tem svojo migracijo. `/nadzorna-plosca`, `/zajem` in `/karantena` so v datotekah druge seje.
+
+
 ### 2026-09-09 — P2-16: dolgi strani dobita filter in eno vrstico (Claude Code)
 
 Vir: `docs/PREGLED_SISTEMA_IN_UX_2026-09-08.md` §7 in §8 P2-16 — »dolge strani (623 vrstic pravil,
