@@ -1,22 +1,18 @@
 @page "/izdelki"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
+@using PIM.Operations
 @inject IntranetDataService Data
 @inject ProductWorkbenchService Workbench
 @inject CategoryTreeService Categories
 @inject NavigationManager Navigation
+@inject ExportJobService ExportJobs
+@inject IJSRuntime Js
 
 <PageTitle>Izdelki</PageTitle>
 
 <PimPage Title="Izdelki" Subtitle="Delovni seznam kataloga vseh podjetij: kaj je pripravljeno za ERP, kaj za splet in kaj manjka. Privzeto so vsa podjetja; filter zoži na eno." />
-
-<nav class="page-tabs" aria-label="Shranjeni delovni pogledi">
-  @foreach (var view in Views)
-  {
-    var active = string.Equals(ActiveView, view.Code, StringComparison.OrdinalIgnoreCase);
-    <a class="page-tab @(active ? "active" : null)" aria-current="@(active ? "page" : null)" href="@ViewHref(view.Code)">@view.Label @ViewCount(view.Code)</a>
-  }
-</nav>
 
 <section class="ui-card toolbar" role="search" aria-labelledby="products-filter-title">
   <h2 id="products-filter-title" class="visually-hidden">Filtriranje izdelkov</h2>
@@ -46,7 +42,19 @@
        Obseg izvoza pove izbira v tabeli — ce je kaj izbrano, gredo ven izbrani, sicer cel
        pogled — in gumb to prebere na glas. *@
     <div class="toolbar-actions">
-      <a class="primary-button" href="@ExportHref("predloga=delovni")" title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj.">Izvozi Excel @ExportScopeLabel</a>
+      @* Katere skupine stolpcev gredo v datoteko — uporabnikova zahteva: manj podatkov je manjši
+         izvoz IN hitrejši uvoz nazaj (posodobi se samo, kar je v datoteki). Privzeto vse; ključ
+         (podjetje, šifra, naziv) gre v datoteko vedno in tu ni izbirljiv. *@
+      <button type="button" class="ghost-button" @onclick="OpenColumnPicker"
+              title="Izberi, katere skupine stolpcev gredo v izvoz. Manj stolpcev je manjša datoteka in hitrejši uvoz nazaj — uvoz posodobi samo stolpce, ki so v datoteki.">
+        Stolpci
+        @if (IncludedGroups.Count < AllWorkbookGroups.Length) { <span class="filter-badge">@IncludedGroups.Count</span> }
+      </button>
+      <button type="button" class="primary-button" disabled="@(ExportState is ExportRunStatus.Running or ExportRunStatus.Queued)" @onclick="StartExportAsync"
+              title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj. Gradi se v ozadju, prenos se sproži sam.">
+        @if (ExportState is ExportRunStatus.Running or ExportRunStatus.Queued) { <span class="opening-spinner" aria-hidden="true"></span> }
+        Izvozi Excel @ExportScopeLabel
+      </button>
       <a class="ghost-button" href="izdelki/uvoz" title="Urejena datoteka se vrne v PIM: spletni podatki takoj, ERP polja v vrsto za SAOP.">Uvozi Excel</a>
     </div>
   </div>
@@ -64,37 +72,39 @@
         </select>
       </div>
 
+      @* Napaka nadomesti nekdanjo vrstico zavihkov (Za urediti, Brez slike, …): ista izbira, en
+         filter, brez locenega stetja ob vsaki zamenjavi podjetja. Uporabnik 2026-09-17: »a bi
+         stran kej hitreje delal ce to odstraniva, sej to lahk vse v filtre dodava«. *@
+      <div class="filter-field">
+        <label for="product-view">Napaka</label>
+        <select id="product-view" class="filter-select" @bind="ViewDraft">
+          <option value="">Vse</option>
+          <option value="TO_FIX">Za urediti (katerakoli napaka)</option>
+          <option value="NO_IMAGE">Brez slike</option>
+          <option value="NO_WEB_TITLE">Brez spletnega naziva</option>
+          <option value="NO_CATEGORY">Brez kategorije</option>
+          <option value="NO_EAN">Brez EAN</option>
+          <option value="NOT_PUBLISHED">Neobjavljeni</option>
+          <option value="WAITING_SAOP">Čaka SAOP</option>
+        </select>
+      </div>
+
       <div class="filter-field">
         <label for="product-manufacturer">Proizvajalec</label>
-        <select id="product-manufacturer" class="filter-select" @bind="ManufacturerDraft">
-          <option value="">Vsi proizvajalci</option>
-          @foreach (var facet in Facets.Where(row => row.FacetKind == "MANUFACTURER"))
-          {
-            <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
-          }
-        </select>
+        <PimPicker Id="product-manufacturer" Options="ManufacturerOptions" @bind-Value="ManufacturerDraftOrNull"
+                   Placeholder="Vsi proizvajalci" EmptyText="Ni proizvajalcev." />
       </div>
 
       <div class="filter-field">
         <label for="product-supplier">Dobavitelj</label>
-        <select id="product-supplier" class="filter-select" @bind="SupplierDraft">
-          <option value="">Vsi dobavitelji</option>
-          @foreach (var facet in Facets.Where(row => row.FacetKind == "SUPPLIER"))
-          {
-            <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
-          }
-        </select>
+        <PimPicker Id="product-supplier" Options="SupplierOptions" @bind-Value="SupplierDraftOrNull"
+                   Placeholder="Vsi dobavitelji" EmptyText="Ni dobaviteljev." />
       </div>
 
       <div class="filter-field">
         <label for="product-group">Skupina artikla</label>
-        <select id="product-group" class="filter-select" @bind="GroupDraft">
-          <option value="">Vse skupine</option>
-          @foreach (var facet in Facets.Where(row => row.FacetKind == "ITEM_GROUP"))
-          {
-            <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
-          }
-        </select>
+        <PimPicker Id="product-group" Options="GroupOptions" @bind-Value="GroupDraftOrNull"
+                   Placeholder="Vse skupine" EmptyText="Ni skupin." />
       </div>
 
       @* Kategorija je filter in ne pogled: izbrana kategorija zoži seznam IN določi, katere
@@ -102,18 +112,8 @@
          velikost njenega nabora, sicer bi uporabnik izbiral naslepo. *@
       <div class="filter-field filter-field-wide">
         <label for="product-category">Kategorija</label>
-        <select id="product-category" class="filter-select" @bind="CategoryDraft">
-          <option value="">Vse kategorije</option>
-          @foreach (var tree in CategoryOptions.GroupBy(row => row.CategoryTreeCode).OrderBy(group => group.Key, StringComparer.Ordinal))
-          {
-            <optgroup label="@TreeLabel(tree.Key)">
-              @foreach (var node in tree)
-              {
-                <option value="@($"{node.CategoryTreeCode}:{node.CategoryCode}")">@CategoryOptionLabel(node)</option>
-              }
-            </optgroup>
-          }
-        </select>
+        <PimPicker Id="product-category" Options="CategoryPickerOptions" @bind-Value="CategoryDraftOrNull"
+                   Placeholder="Vse kategorije" EmptyText="Ni kategorij." />
       </div>
 
       <div class="filter-field">
@@ -127,13 +127,8 @@
 
       <div class="filter-field">
         <label for="product-department">ABC klasifikacija</label>
-        <select id="product-department" class="filter-select" @bind="DepartmentDraft">
-          <option value="">Vse klasifikacije</option>
-          @foreach (var facet in Facets.Where(row => row.FacetKind == "DEPARTMENT"))
-          {
-            <option value="@facet.FacetValue">@facet.FacetLabel (@facet.ProductCount.ToString("N0"))</option>
-          }
-        </select>
+        <PimPicker Id="product-department" Options="DepartmentOptions" @bind-Value="DepartmentDraftOrNull"
+                   Placeholder="Vse klasifikacije" EmptyText="Ni klasifikacij." />
       </div>
 
       <div class="filter-field">
@@ -191,6 +186,39 @@
   </div>
 </section>
 
+@* Izbira stolpcev za izvoz. Ključ (podjetje, šifra, naziv) ni na seznamu, ker gre v datoteko
+   vedno — brez njega uvoz vrstice sploh ne bi znal najti. Uvoz sam se ne spremeni: prepozna
+   vsak stolpec, ki je v datoteki, in ostalo pusti pri miru (ProductWorkbookContract.Match), zato
+   manjši izvoz pomeni tudi manjši, hitrejši uvoz nazaj — brez posebne poti zanj. *@
+@if (ColumnPickerOpen)
+{
+  <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Izberi stolpce izvoza" @onclick="CloseColumnPicker">
+    <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
+      <header>
+        <div>
+          <strong>Kateri stolpci gredo v datoteko</strong>
+          <span>Ključ (podjetje, šifra, naziv) je v izvozu vedno. Manj izbranih skupin je manjša datoteka; uvoz nazaj posodobi samo stolpce, ki so v njej.</span>
+        </div>
+        <button type="button" class="small-action" @onclick="CloseColumnPicker">Zapri</button>
+      </header>
+      <div class="xml-lightbox-body">
+        @foreach (var group in AllWorkbookGroups)
+        {
+          <label class="column-picker-row">
+            <input type="checkbox" checked="@IncludedGroups.Contains(group)"
+                   @onchange="@(args => ToggleColumnGroup(group, (bool)(args.Value ?? false)))" />
+            @group
+          </label>
+        }
+      </div>
+      <footer>
+        <button type="button" class="link-button" @onclick="SelectAllColumnGroups">Izberi vse</button>
+        <button type="button" class="primary-button" @onclick="CloseColumnPicker">Uporabi</button>
+      </footer>
+    </div>
+  </div>
+}
+
 @if (ActiveChips.Count > 0)
 {
   <section class="ui-card active-filters" aria-label="Aktivni filtri">
@@ -202,11 +230,31 @@
   </section>
 }
 
-@* Izbira iz vec podjetij ni vec ovira: delovni list nosi stolpec Podjetje, zato uvoz ve, komu
-   vrstica pripada. Ostane samo meja dolzine naslova. *@
-@if (SelectionOverflow)
+@* Izvoz gradi zvezek v ozadju (ExportJobService) — uporabnik 2026-09-17: brez zgornje meje
+   vrstic, klik pa ne sme cakati na odgovor. To sporoca napredek in ob koncu sprozi prenos. *@
+@if (ExportState is not null)
 {
-  <p class="notice" role="status">Izbranih je @Selected.Count izdelkov, v izvoz jih gre prvih @MaxSelectionInUrl. Preostale izvozi v naslednjem paketu ali odstrani izbiro in izvozi cel pogled.</p>
+  <p class="notice export-notice export-notice-@ExportState.ToString()!.ToLowerInvariant()" role="status">
+    @switch (ExportState)
+    {
+      case ExportRunStatus.Queued:
+        <span class="opening-spinner" aria-hidden="true"></span>
+        <span>Izvoz čaka v vrsti (pred tabo: @ExportQueuePosition). Hkrati tečeta največ dva izvoza, da strani ostanejo odzivne; tvoj se začne sam.</span>
+        break;
+      case ExportRunStatus.Running:
+        <span class="opening-spinner" aria-hidden="true"></span>
+        <span>Zvezek se gradi v ozadju@(ExportRowCount is > 0 ? $" — zapisanih {ExportRowCount:N0} vrstic" : "") — lahko nadaljuješ z delom, ko bo gotov, se prenos začne sam.</span>
+        break;
+      case ExportRunStatus.Completed:
+        <span>Izvoz je pripravljen, prenos se je začel. Če se ni, ga <a href="@ExportDownloadUrl">prenesi ročno</a>.</span>
+        <button type="button" class="link-button" @onclick="DismissExportNotice">Skrij</button>
+        break;
+      case ExportRunStatus.Failed:
+        <span>Izvoz ni uspel: @ExportErrorMessage</span>
+        <button type="button" class="link-button" @onclick="DismissExportNotice">Skrij</button>
+        break;
+    }
+  </p>
 }
 
 @* Razvrstitev ni filter — ne zozi nabora, samo obrne vrstni red — zato stoji nad tabelo,
@@ -285,9 +333,9 @@
 </section>
 
 <p class="muted source-note">
-  Vir: <span class="code-value">intranet.GetProductList</span>, <span class="code-value">intranet.GetProductListViews</span> in
+  Vir: <span class="code-value">intranet.GetProductList</span> in
   <span class="code-value">intranet.GetProductListFilters</span> (migraciji 101 in 108). Urejanje polja je na kartici izdelka; izvoz pogleda je delovni zvezek Excel.
-  Števci zavihkov in vrednosti spustnih seznamov se ravnajo po izbranem podjetju, ne po preostalih filtrih.
+  Vrednosti spustnih seznamov se ravnajo po izbranem podjetju, ne po preostalih filtrih.
 </p>
 
 @code {
@@ -316,17 +364,17 @@
   readonly Dictionary<string, SelectedItem> Selected = new(StringComparer.OrdinalIgnoreCase);
 
   ProductListPage? Page;
-  ProductListViewCounts? Counts;
   IReadOnlyList<ProductListFacet> Facets = [];
   IReadOnlyList<OrganizationContext> Organizations = [];
   bool Loading = true;
   string? Error;
 
   // Sentinel za "se nic ni naloženo": prazen niz pomeni vsa podjetja in je veljaven obseg,
-  // zato ga ni mogoce uporabiti kot znak, da stevci in fasete se niso prebrani.
+  // zato ga ni mogoce uporabiti kot znak, da fasete se niso prebrane.
   string? LoadedScope;
   string SearchDraft = "";
   string OrganizationDraft = "";
+  string ViewDraft = "";
   string ManufacturerDraft = "";
   string SupplierDraft = "";
   string GroupDraft = "";
@@ -341,16 +389,62 @@
   IReadOnlyList<CategoryTreeService.CategoryPickRow> CategoryOptions = [];
   string SortDraft = "ITEM";
 
+  // PimPicker izbira niclivo vrednost (null = nic izbranega), Draft polja pa prazen niz zaradi
+  // Href/ApplyFiltersAsync spodaj; ta polja samo prevajajo med obema pomenoma "nic ni izbrano".
+  string? ManufacturerDraftOrNull { get => string.IsNullOrEmpty(ManufacturerDraft) ? null : ManufacturerDraft; set => ManufacturerDraft = value ?? ""; }
+  string? SupplierDraftOrNull { get => string.IsNullOrEmpty(SupplierDraft) ? null : SupplierDraft; set => SupplierDraft = value ?? ""; }
+  string? GroupDraftOrNull { get => string.IsNullOrEmpty(GroupDraft) ? null : GroupDraft; set => GroupDraft = value ?? ""; }
+  string? DepartmentDraftOrNull { get => string.IsNullOrEmpty(DepartmentDraft) ? null : DepartmentDraft; set => DepartmentDraft = value ?? ""; }
+  string? CategoryDraftOrNull { get => string.IsNullOrEmpty(CategoryDraft) ? null : CategoryDraft; set => CategoryDraft = value ?? ""; }
+
+  // Seznami za PimPicker: isce se po imenu, sifra pa je vseeno del iskanega besedila (Key), da
+  // najde tudi tisti, ki pozna samo sifro proizvajalca/dobavitelja, ne njegovega imena.
+  List<PimPickerOption> ManufacturerOptions =>
+    Facets.Where(row => row.FacetKind == "MANUFACTURER")
+      .Select(facet => new PimPickerOption(facet.FacetValue, PartnerLabel(facet), Badge: facet.ProductCount.ToString("N0"))).ToList();
+
+  List<PimPickerOption> SupplierOptions =>
+    Facets.Where(row => row.FacetKind == "SUPPLIER")
+      .Select(facet => new PimPickerOption(facet.FacetValue, PartnerLabel(facet), Badge: facet.ProductCount.ToString("N0"))).ToList();
+
+  // Ime, dolgo do 32 znakov (sicer obrezano z "…"), in nato sifra v oklepaju — ista sifra kot na
+  // strani Stranke (canon.PartnerName.PartnerCode). Ce imena ni (FacetLabel pade nazaj na sifro
+  // samo), se sifra ne podvoji.
+  const int PartnerLabelMaxLength = 32;
+  static string PartnerLabel(ProductListFacet facet)
+  {
+    var name = facet.FacetLabel.Length > PartnerLabelMaxLength
+      ? facet.FacetLabel[..PartnerLabelMaxLength] + "…"
+      : facet.FacetLabel;
+    return string.Equals(facet.FacetLabel, facet.FacetValue, StringComparison.Ordinal)
+      ? name
+      : $"{name} ({facet.FacetValue})";
+  }
+
+  List<PimPickerOption> GroupOptions =>
+    Facets.Where(row => row.FacetKind == "ITEM_GROUP")
+      .Select(facet => new PimPickerOption(facet.FacetValue, facet.FacetLabel, Badge: facet.ProductCount.ToString("N0"))).ToList();
+
+  List<PimPickerOption> DepartmentOptions =>
+    Facets.Where(row => row.FacetKind == "DEPARTMENT")
+      .Select(facet => new PimPickerOption(facet.FacetValue, facet.FacetLabel, Badge: facet.ProductCount.ToString("N0"))).ToList();
+
+  /// <summary>Pot, izdelki in velikost nabora — troje, po čemer se izbira kategorija za izvoz.</summary>
+  List<PimPickerOption> CategoryPickerOptions =>
+    CategoryOptions.GroupBy(row => row.CategoryTreeCode).OrderBy(group => group.Key, StringComparer.Ordinal)
+      .SelectMany(tree => tree.Select(node => new PimPickerOption(
+        $"{node.CategoryTreeCode}:{node.CategoryCode}", node.CategoryPath ?? node.CategoryName,
+        Level: node.LevelNo - 1, Badge: $"{node.ProductCount:N0} izd., {node.AttributeCount:N0} atr.",
+        Group: TreeLabel(node.CategoryTreeCode)))).ToList();
+
   // Enajst filtrov v eni vrsti je bilo natrpano in nepregledno. Odprejo se na zahtevo in
   // ostanejo odprti, dokler je kaj izbrano — sicer bi uporabnik izgubil sled, kaj je nastavil.
   bool? FiltersOpenOverride;
 
   const int Take = 50;
-  const int MaxSelectionInUrl = 200;
 
   int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
   string ActiveView => string.IsNullOrWhiteSpace(QueryView) ? "ALL" : QueryView.Trim().ToUpperInvariant();
-  bool SelectionOverflow => Selected.Count > MaxSelectionInUrl;
 
   // Neveljavna stevilka v naslovu ne sme tiho pomeniti vseh podjetij; bralna procedura
   // neznano podjetje vrne kot prazen nabor, kar je iskrenejse od tihe razsiritve obsega.
@@ -379,24 +473,11 @@
     new("ERP"), new("Splet"), new("Popolnost"), new("Težave", Numeric: true), new("Vrzeli"), new("Zadnja sprememba"),
   ];
 
-  sealed record SavedView(string Code, string Label);
-
-  static readonly IReadOnlyList<SavedView> Views =
-  [
-    new("ALL", "Vsi izdelki"),
-    new("TO_FIX", "Za urediti"),
-    new("NO_IMAGE", "Brez slike"),
-    new("NO_WEB_TITLE", "Brez spletnega naziva"),
-    new("NO_CATEGORY", "Brez kategorije"),
-    new("NO_EAN", "Brez EAN"),
-    new("NOT_PUBLISHED", "Neobjavljeni"),
-    new("WAITING_SAOP", "Čaka SAOP"),
-  ];
-
   sealed record FilterChip(string Label, string RemoveHref);
 
   protected override async Task OnInitializedAsync()
   {
+    ExportJobs.Changed += OnExportJobChanged;
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
   }
@@ -405,6 +486,7 @@
   {
     SearchDraft = QuerySearch ?? "";
     OrganizationDraft = QueryOrganization ?? "";
+    ViewDraft = ActiveView == "ALL" ? "" : ActiveView;
     ManufacturerDraft = QueryManufacturer ?? "";
     SupplierDraft = QuerySupplier ?? "";
     GroupDraft = QueryGroup ?? "";
@@ -423,14 +505,13 @@
     Error = null;
     try
     {
-      // Stevci zavihkov in vrednosti spustnih seznamov so vezani samo na obseg podjetja,
-      // zato se preberejo znova sele ob njegovi spremembi, ne ob vsakem filtru.
+      // Vrednosti spustnih seznamov so vezane samo na obseg podjetja, zato se preberejo znova
+      // sele ob njegovi spremembi, ne ob vsakem filtru.
       var scope = OrganizationScope;
       var scopeKey = scope?.ToString() ?? "";
       if (LoadedScope != scopeKey)
       {
         LoadedScope = scopeKey;
-        Counts = await Workbench.GetProductListViewsAsync(scope);
         Facets = await Workbench.GetProductListFacetsAsync(scope);
       }
 
@@ -464,24 +545,6 @@
     : Error is not null ? "Rezultati niso na voljo"
     : $"{Page?.TotalCount ?? 0:N0} rezultatov";
 
-  string ViewCount(string code)
-  {
-    if (Counts is null) return "";
-    var value = code switch
-    {
-      "ALL" => Counts.TotalCount,
-      "TO_FIX" => Counts.ToFixCount,
-      "NO_IMAGE" => Counts.NoImageCount,
-      "NO_WEB_TITLE" => Counts.NoWebTitleCount,
-      "NO_CATEGORY" => Counts.NoCategoryCount,
-      "NO_EAN" => Counts.NoEanCount,
-      "NOT_PUBLISHED" => Counts.NotPublishedCount,
-      "WAITING_SAOP" => Counts.WaitingSaopCount,
-      _ => 0,
-    };
-    return $"({value:N0})";
-  }
-
   /* --- Kategorija -------------------------------------------------------------------------
      Vrednost filtra je »drevo:koda«. Dve polji bi pomenili dva spustna seznama in dve stanji v
      naslovu, uporabnik pa izbira eno stvar: kategorijo. Drevo je v vrednosti zato, ker sta kodi
@@ -500,10 +563,6 @@
     _ => treeCode,
   };
 
-  /// <summary>Pot, izdelki in velikost nabora — troje, po čemer se izbira kategorija za izvoz.</summary>
-  static string CategoryOptionLabel(CategoryTreeService.CategoryPickRow node) =>
-    $"{node.CategoryPath ?? node.CategoryName} — {node.ProductCount:N0} izdelkov, {node.AttributeCount:N0} atributov";
-
   string CategoryLabel(string value)
   {
     var tree = CategoryTreeOf(value);
@@ -521,6 +580,7 @@
       var chips = new List<FilterChip>();
       if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
       if (!string.IsNullOrWhiteSpace(QueryOrganization)) chips.Add(new($"Podjetje: {OrganizationLabel(QueryOrganization)}", Href(organization: "")));
+      if (ActiveView != "ALL") chips.Add(new($"Napaka: {ViewLabel(ActiveView)}", Href(view: "")));
       if (!string.IsNullOrWhiteSpace(QueryManufacturer)) chips.Add(new($"Proizvajalec: {QueryManufacturer}", Href(manufacturer: "")));
       if (!string.IsNullOrWhiteSpace(QuerySupplier)) chips.Add(new($"Dobavitelj: {QuerySupplier}", Href(supplier: "")));
       if (!string.IsNullOrWhiteSpace(QueryGroup)) chips.Add(new($"Skupina: {QueryGroup}", Href(group: "")));
@@ -575,40 +635,113 @@
     static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
   }
 
-  string ViewHref(string code) => Href(view: code == "ALL" ? "" : code, page: 1);
-
   // Obseg izvoza pove izbira v tabeli, ne skrit spustni seznam: ce je kaj izbrano, gredo ven
-  // izbrani, sicer cel pogled. Gumb to izpise, da uporabniku ni treba ugibati.
-  string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Math.Min(Selected.Count, MaxSelectionInUrl)})";
+  // izbrani, sicer cel pogled. Gumb to izpise, da uporabniku ni treba ugibati. Brez zgornje
+  // meje — uporabnikova zahteva 2026-09-17, ker izbira zdaj potuje v pomnilniku do izvoza v
+  // ozadju (StartExportAsync), ne vec skozi dolzino naslova (ExportJobService).
+  string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Selected.Count:N0})";
+
+  // Stanje trenutnega izvoza v ozadju; null = se ni bilo sproženo (ali je uporabnik skril
+  // sporocilo). JobId sluzi kot filter na dogodku ExportJobs.Changed — nastavljen je PRED
+  // klicem StartWorkbookExport, da noben dogodek (tudi zelo hiter) ne uide (glej OnExportJobChanged).
+  Guid? ExportJobId;
+  ExportRunStatus? ExportState;
+  string? ExportDownloadUrl;
+  string? ExportErrorMessage;
+  // Polozaj v vrsti (Queued) in napredek (Running) — oboje pride z dogodkom ExportJobs.Changed.
+  int ExportQueuePosition;
+  int? ExportRowCount;
+
+  // Skupine stolpcev, ki jih uporabnik lahko izklopi (pojavno okno »Stolpci«). Ključ ni na
+  // seznamu in gre v izvoz vedno — glej ProductWorkbookService.BuildAsync/Included. Privzeto so
+  // izbrane vse; uvoz nazaj potrebuje ta seznam samo posredno (manj stolpcev v datoteki).
+  static readonly string[] AllWorkbookGroups =
+  [
+    ProductWorkbookContract.GroupErp,
+    ProductWorkbookContract.GroupWeb,
+    ProductWorkbookContract.GroupAttributesInSet,
+    ProductWorkbookContract.GroupAttributesOutside,
+    ProductWorkbookContract.GroupState,
+  ];
+  bool ColumnPickerOpen;
+  HashSet<string> IncludedGroups = new(AllWorkbookGroups, StringComparer.Ordinal);
+
+  void OpenColumnPicker() => ColumnPickerOpen = true;
+  void CloseColumnPicker() => ColumnPickerOpen = false;
+  void ToggleColumnGroup(string group, bool included)
+  {
+    if (included) IncludedGroups.Add(group); else IncludedGroups.Remove(group);
+  }
+  void SelectAllColumnGroups() => IncludedGroups = new(AllWorkbookGroups, StringComparer.Ordinal);
 
   // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi. Oblika je
-  // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz. Predloge:
-  // "delovni" (ERP + splet + atributi, vracljiv na /izdelki/uvoz), "saop" (samo ERP polja,
-  // vracljiv na /saop/artikli) in brez predloge (pregled, enosmeren).
-  /// <param name="template">Poizvedbeni delcek predloge, npr. »predloga=saop«; null je pregled.</param>
-  string ExportHref(string? template)
+  // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz.
+  ProductListFilter BuildExportFilter() => new(
+    OrganizationScope, 0, Take, QuerySearch, ActiveView,
+    QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
+    QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
+    "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
+    CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory));
+
+  void StartExportAsync()
   {
-    var listHref = Href(page: 1);
-    var separatorIndex = listHref.IndexOf('?');
-    var parameters = separatorIndex < 0 ? "" : listHref[(separatorIndex + 1)..];
+    ExportErrorMessage = null;
+    ExportDownloadUrl = null;
+    ExportState = ExportRunStatus.Queued;
+    ExportQueuePosition = 0;
+    ExportRowCount = null;
 
-    if (template is not null) parameters = Append(parameters, template);
-
-    if (Selected.Count > 0)
-      parameters = Append(parameters, "items=" + Uri.EscapeDataString(
-        string.Join(',', Selected.Values.Take(MaxSelectionInUrl).Select(item => item.ItemId))));
-
-    return parameters.Length == 0 ? "izvoz/izdelki.xlsx" : "izvoz/izdelki.xlsx?" + parameters;
-
-    static string Append(string current, string addition) =>
-      current.Length == 0 ? addition : current + "&" + addition;
+    var jobId = Guid.NewGuid();
+    ExportJobId = jobId;
+    var selection = Selected.Count > 0
+      ? Selected.Values.Select(item => $"{item.OrganizationId}|{item.ItemId}").ToList()
+      : null;
+    // Vse skupine izbrane = brez omejitve (null); tako izvoz z nespremenjeno izbiro ostane
+    // popolnoma isti kot doslej, brez odvisnosti od vrstnega reda AllWorkbookGroups.
+    var includeGroups = IncludedGroups.Count >= AllWorkbookGroups.Length ? null : (IReadOnlySet<string>)IncludedGroups;
+    ExportJobs.StartWorkbookExport(
+      jobId, ProductWorkbookService.FileName(DateTime.UtcNow), BuildExportFilter(), selection, includeGroups);
   }
+
+  // Dogodek pride iz ExportJobService, torej lahko iz drugega vezja niti (Task.Run v ozadju) —
+  // zato InvokeAsync, ne neposredna sprememba polj. Prenos se sprozi tu, ne v markupu, ker mora
+  // steci natanko enkrat, takoj ko je token znan.
+  void OnExportJobChanged(ExportJobState state)
+  {
+    if (state.JobId != ExportJobId) return;
+    _ = InvokeAsync(async () =>
+    {
+      ExportState = state.Status;
+      ExportErrorMessage = state.Error;
+      ExportQueuePosition = state.QueuePosition;
+      ExportRowCount = state.RowCount;
+      if (state.Status == ExportRunStatus.Completed && state.DownloadToken is { } token)
+      {
+        ExportDownloadUrl = $"izvoz/prenos/{token}";
+        StateHasChanged();
+        await Js.InvokeVoidAsync("pimDownloadFile", ExportDownloadUrl);
+      }
+      else
+      {
+        StateHasChanged();
+      }
+    });
+  }
+
+  void DismissExportNotice()
+  {
+    ExportState = null;
+    ExportDownloadUrl = null;
+    ExportErrorMessage = null;
+  }
+
+  public void Dispose() => ExportJobs.Changed -= OnExportJobChanged;
 
   Task ApplyFiltersAsync()
   {
     var sort = SortDraft.Split(':');
     Navigation.NavigateTo(Href(
-      search: SearchDraft.Trim(), organization: OrganizationDraft, manufacturer: ManufacturerDraft,
+      view: ViewDraft, search: SearchDraft.Trim(), organization: OrganizationDraft, manufacturer: ManufacturerDraft,
       supplier: SupplierDraft, group: GroupDraft, department: DepartmentDraft, erp: ErpDraft, web: WebDraft,
       activity: ActivityDraft, webPublish: WebPublishDraft, completeness: CompletenessDraft,
       image: ImageDraft,
@@ -675,8 +808,7 @@
     else Selected.Remove(key);
   }
 
-  // Sifre gredo v naslov skupaj s podjetjem, ker jih mnozicno urejanje pise nazaj v SAOP tega
-  // podjetja; dolg seznam se skrajsa, kar stran pove na glas (SelectionOverflow).
+  // Sifre gredo skupaj s podjetjem, ker jih mnozicno urejanje pise nazaj v SAOP tega podjetja.
   string OrganizationLabel(string? value) =>
     int.TryParse(value, out var id)
       ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"neznano ({value})"
@@ -686,6 +818,18 @@
   {
     "ACTIVE" => "samo aktivni",
     "INACTIVE" => "samo neaktivni",
+    _ => value ?? "",
+  };
+
+  static string ViewLabel(string? value) => value?.Trim().ToUpperInvariant() switch
+  {
+    "TO_FIX" => "za urediti",
+    "NO_IMAGE" => "brez slike",
+    "NO_WEB_TITLE" => "brez spletnega naziva",
+    "NO_CATEGORY" => "brez kategorije",
+    "NO_EAN" => "brez EAN",
+    "NOT_PUBLISHED" => "neobjavljeni",
+    "WAITING_SAOP" => "čaka SAOP",
     _ => value ?? "",
   };
 

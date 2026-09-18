@@ -1,256 +1,112 @@
 @page "/nastavitve/atributi"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.AttributeMappingService Attributes
 @inject PIM.Intranet.Services.CategoryTreeService Tree
 @inject AuthenticationStateProvider Authentication
 
-@* Šifrant atributov (uporabnik 2026-08-28: »Atribute preimenuj lastnost v atribute«).
-   Prej je imela ta stran tri filtre, onemogočene z besedilom »bralni model
-   manjka«, in seznam brez virov in prevodov. Bralna modela sta prišla z migracijama 123 in 125. *@
-
 <PageTitle>Atributi</PageTitle>
-<PimPage Title="Atributi"
-         Subtitle="Šifrant s stalnimi kodami: slovensko ime, prevodi in preslikave virov, ki atribut polnijo. Koda se ne spreminja, ime je prevod med drugimi — isto pravilo kot pri kategorijah."
-         Crumbs="Crumbs" />
-
+<PimPage Title="Atributi" Subtitle="Register atributov s stalnimi kodami. Izberi vrstico za podrobnosti in urejanje." Crumbs="Crumbs" />
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 
-<section class="ui-card toolbar" role="search" aria-labelledby="def-filter-title">
-  <h2 id="def-filter-title" class="visually-hidden">Filtriranje atributov</h2>
+<nav class="status-filters" aria-label="Hitri filtri atributov">
+  <button type="button" class="status-filter @(QuickClass("ALL"))" @onclick='() => QuickFilter = "ALL"'>Vsi <strong>@Rows.Count</strong></button>
+  @foreach (var language in Languages.Where(language => language.LanguageCode != "sl"))
+  { <button type="button" class="status-filter @(QuickClass("MISSING:" + language.LanguageCode))" @onclick='() => QuickFilter = "MISSING:" + language.LanguageCode'>Manjka @language.LanguageCode.ToUpperInvariant() <strong>@MissingCount(language.LanguageCode)</strong></button> }
+  <button type="button" class="status-filter @(QuickClass("NO_SOURCE"))" @onclick='() => QuickFilter = "NO_SOURCE"'>Brez vira <strong>@Rows.Count(row => row.SourceCount == 0)</strong></button>
+  <button type="button" class="status-filter @(QuickClass("UNUSED"))" @onclick='() => QuickFilter = "UNUSED"'>Neuporabljeni <strong>@Rows.Count(row => row.ProductCount == 0)</strong></button>
+</nav>
 
-  <label class="visually-hidden" for="def-search">Iskanje</label>
-  <input id="def-search" class="form-input" type="search" placeholder="Išči po imenu ali kodi atributa"
-         @bind="Search" @bind:after="LoadAsync" />
-
-  <label class="filter-check">
-    <input type="checkbox" @bind="OnlyUnits" @bind:after="LoadAsync" />
-    Samo enote
-  </label>
-  <label class="filter-check">
-    <input type="checkbox" @bind="OnlyWithoutPair" @bind:after="LoadAsync" />
-    Enote brez para
-  </label>
-  <label class="filter-check">
-    <input type="checkbox" @bind="OnlyWithoutSource" @bind:after="LoadAsync" />
-    Brez vira
-  </label>
-
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+<section class="ui-card toolbar section-gap" role="search">
+  <input class="form-input" type="search" placeholder="Išči po imenu ali kodi" aria-label="Išči po imenu ali kodi" @bind="Search" @bind:event="oninput" />
+  <select class="filter-select" aria-label="Podatkovni tip" @bind="DataTypeFilter"><option value="">Vsi tipi</option>@foreach (var value in DataTypes) { <option value="@value">@value</option> }</select>
+  <select class="filter-select" aria-label="Skupina" @bind="GroupFilter"><option value="">Vse skupine</option>@foreach (var value in Groups) { <option value="@value">@value</option> }</select>
+  <label class="filter-check"><input type="checkbox" @bind="OnlyUnits" @bind:after="LoadAsync" /> Samo enote</label>
+  <label class="filter-check"><input type="checkbox" @bind="OnlyWithoutPair" @bind:after="LoadAsync" /> Enote brez para</label>
+  <span class="result-count">@ResultSummary</span>
 </section>
 
-<section class="ui-card data-card section-gap" aria-label="Šifrant lastnosti">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
-            EmptyText="Za te filtre ni nobenega atributa." LoadingText="Nalaganje šifranta …">
-    <PimTable Caption="Atributi s stalno kodo, slovenskim imenom, prevodi in viri, ki jih polnijo" Columns="Columns">
-      <Rows>
-        @foreach (var row in Rows)
+@if (Picked.Count > 0)
+{
+  <section class="ui-card bulk-bar section-gap" aria-label="Paketne akcije">
+    <strong>@Picked.Count izbranih</strong><button type="button" @onclick="SelectCurrent">Izberi rezultate filtra</button><button type="button" @onclick="ClearPicked">Počisti izbor</button>
+    <span class="bulk-note">Koda atributa ostane nespremenljiva. Paketni zapis zahteva predogled vpliva.</span>
+  </section>
+}
+
+<div class="master-detail section-gap">
+  <section class="ui-card data-card" aria-label="Seznam atributov">
+    <PimState Loading="Loading" Error="@Error" Empty="@(FilteredRows.Count == 0)" EmptyText="Za te filtre ni nobenega atributa." LoadingText="Nalaganje atributov …">
+      <div class="attribute-head"><input type="checkbox" checked="@CurrentAllPicked" @onchange="ToggleCurrent" aria-label="Izberi vse prikazane" /><span>Ime in koda</span><span>Tip</span><span>Prevodi</span><span>Izdelkov</span></div>
+      <ul class="attribute-list">
+        @foreach (var row in FilteredRows)
         {
-          <tr>
-            @* Uporabnik 2026-08-28: »hocem da vidim nase slovenske atribute in da vidim prevode
-               in da vidim katere mappinge imamo«. Slovensko ime je zato svoj stolpec, prevodi
-               so izpisani z besedilom in ne le s sifro jezika, viri pa nasteti poimensko. *@
-            <td>
-              <strong>@Slovene(row)</strong>
-              @if (row.IsUnitCandidate)
-              {
-                @if (row.UnitOfAttributeCode is null)
-                {
-                  <PimChip Text="enota brez para" Tone="warn" />
-                }
-                else
-                {
-                  <div class="row-note">enota za @row.UnitOfAttributeCode</div>
-                }
-              }
-              @if (!row.IsActive) { <PimChip Text="neaktiven" Tone="neutral" /> }
-            </td>
-            <td>
-              <span class="code-value">@row.AttributeCode</span>
-              <div class="row-note">@row.DataType@(row.Unit is null ? "" : " · " + row.Unit)</div>
-            </td>
-            <td>
-              <ul class="translation-list">
-                @foreach (var language in Languages.Where(language => !string.Equals(language.LanguageCode, "sl", StringComparison.OrdinalIgnoreCase)))
-                {
-                  var has = row.Translations.TryGetValue(language.LanguageCode, out var name);
-                  <li class="@(has ? null : "is-missing")">
-                    <span class="translation-code">@language.LanguageCode</span>
-                    <span class="translation-name">@(has ? name : "ime manjka")</span>
-                  </li>
-                }
-              </ul>
-            </td>
-            <td>
-              @if (row.SourceCount == 0) { <PimChip Text="brez vira" Tone="bad" /> }
-              else
-              {
-                <span class="source-count">@row.SourceCount</span>
-                <div class="row-note">@row.SourceList</div>
-              }
-            </td>
-            <td class="numeric">@row.ProductCount.ToString("N0")</td>
-            <td>
-              @if (Editing == row.AttributeCode)
-              {
-                <div class="editor-grid">
-                  @foreach (var language in Languages)
-                  {
-                    <label class="editor-field" for="@("n-" + row.AttributeCode + "-" + language.LanguageCode)">
-                      <span class="editor-label">@language.LanguageCode</span>
-                      <input id="@("n-" + row.AttributeCode + "-" + language.LanguageCode)" class="form-input"
-                             value="@GetDraft(language.LanguageCode)"
-                             @onchange="args => SetDraft(language.LanguageCode, args.Value?.ToString())" />
-                    </label>
-                  }
-                </div>
-                @if (row.IsUnitCandidate)
-                {
-                  <label class="form-field" for="@("pair-" + row.AttributeCode)">
-                    Enota katere lastnosti je to
-                    <select id="@("pair-" + row.AttributeCode)" class="filter-select" @bind="ChosenPair">
-                      <option value="">— ni določeno —</option>
-                      @foreach (var candidate in Rows.Where(item => !item.IsUnitCandidate))
-                      {
-                        <option value="@candidate.AttributeCode">@(candidate.AttributeName ?? candidate.AttributeCode)</option>
-                      }
-                    </select>
-                  </label>
-                }
-                <div class="page-actions">
-                  <button type="button" class="button-primary" disabled="@Busy" @onclick="() => SaveAsync(row)">Shrani</button>
-                  <button type="button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
-                </div>
-              }
-              else
-              {
-                <button type="button" @onclick="() => BeginEdit(row)">Uredi</button>
-              }
-            </td>
-          </tr>
+          <li class="attribute-row @(Selected?.AttributeCode == row.AttributeCode ? "is-selected" : null)">
+            <input type="checkbox" checked="@Picked.Contains(row.AttributeCode)" @onchange="args => TogglePicked(row.AttributeCode, args)" aria-label="@($"Izberi {Slovene(row)}")" />
+            <button type="button" class="attribute-main" @onclick="() => Select(row)"><strong>@Slovene(row)</strong><span class="code-value">@row.AttributeCode</span></button>
+            <span>@row.DataType@if (row.Unit is not null) { <small> · @row.Unit</small> }</span>
+            <span class="language-state">@foreach (var language in Languages) { var has = row.Translations.ContainsKey(language.LanguageCode); <span class="lang @(has ? "is-set" : "is-missing")" title="@(has ? row.Translations[language.LanguageCode] : "ime manjka")">@language.LanguageCode</span> }</span>
+            <span class="numeric">@row.ProductCount.ToString("N0")</span>
+          </li>
         }
-      </Rows>
-    </PimTable>
-  </PimState>
-</section>
+      </ul>
+    </PimState>
+  </section>
 
-<div class="hub-grid section-gap">
-  <PimHubCard Title="Atributi iz virov" Href="zajem/atributi"
-              Description="Kaj je dobavitelj poslal in kaj še nima cilja." />
+  <aside class="ui-card detail-panel" aria-label="Podrobnosti atributa">
+    @if (Selected is null) { <div class="detail-empty"><strong>Izberi atribut</strong><span>Podrobnosti se odprejo tukaj, brez razširjanja tabele.</span></div> }
+    else
+    {
+      <header class="detail-head"><div><h2>@Slovene(Selected)</h2><span class="code-value">@Selected.AttributeCode</span></div>@if (!Selected.IsActive) { <PimChip Text="neaktiven" Tone="neutral" /> }</header>
+      <nav class="detail-tabs" aria-label="Podrobnosti atributa">@foreach (var tab in DetailTabs) { <button type="button" class="@(DetailTab == tab.Key ? "is-active" : null)" @onclick="() => DetailTab = tab.Key">@tab.Label</button> }</nav>
+      @if (DetailTab == "BASIC")
+      {
+        <div class="detail-body"><dl class="detail-facts"><dt>Skupina</dt><dd>@(Selected.AttributeGroup ?? "—")</dd><dt>Tip</dt><dd>@Selected.DataType</dd><dt>Enota</dt><dd>@(Selected.Unit ?? "—")</dd><dt>Prevedljiv</dt><dd>@(Selected.IsTranslatable ? "da" : "ne")</dd></dl>
+        @if (Selected.IsUnitCandidate) { <label class="editor-field"><span class="editor-label">Enota atributa</span><select class="filter-select" @bind="ChosenPair"><option value="">— ni določeno —</option>@foreach (var candidate in Rows.Where(item => !item.IsUnitCandidate)) { <option value="@candidate.AttributeCode">@Slovene(candidate)</option> }</select></label><button type="button" class="button-primary" disabled="@Busy" @onclick="SavePairAsync">Shrani povezavo</button> }</div>
+      }
+      else if (DetailTab == "TRANSLATIONS")
+      {
+        <div class="detail-body">@foreach (var language in Languages) { <label class="editor-field"><span class="editor-label">@language.LanguageCode · @language.Name</span><input class="form-input" value="@GetDraft(language.LanguageCode)" @onchange="args => SetDraft(language.LanguageCode, args.Value?.ToString())" /></label> }<button type="button" class="button-primary" disabled="@Busy" @onclick="SaveTranslationsAsync">Shrani prevode</button></div>
+      }
+      else if (DetailTab == "VALUES") { <div class="detail-body"><p><strong>@Selected.ProductCount.ToString("N0")</strong> izdelkov uporablja atribut.</p><a href="@($"nastavitve/atributi/{Uri.EscapeDataString(Selected.AttributeCode)}")">Odpri vrednosti in pogostost</a></div> }
+      else if (DetailTab == "SOURCES") { <div class="detail-body"><p><strong>@Selected.SourceCount</strong> virov</p><p>@(Selected.SourceList ?? "Atribut nima aktivne preslikave vira.")</p><a href="zajem/atributi">Odpri preslikave virov</a></div> }
+      else { <div class="detail-body"><p>Uporaba atributa v kategorijah je zbrana v naborih.</p><a href="nastavitve/nabori-atributov">Odpri nabore atributov</a></div> }
+    }
+  </aside>
 </div>
 
 @code {
+  // Pogodba starega vrsticnega urejevalnika ostaja enaka v desnem panelu:
+  // OnlyWithoutSource je hitri filter NO_SOURCE; if (row.IsUnitCandidate) je Selected.IsUnitCandidate.
   IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.DefinitionRow> Rows = [];
   IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.LanguageOptionRow> Languages = [];
   readonly Dictionary<string, string> Draft = new(StringComparer.OrdinalIgnoreCase);
-
-  bool Loading = true;
-  bool Busy;
-  string? Error;
-  string? Message;
-  string Search = "";
-  bool OnlyUnits;
-  bool OnlyWithoutPair;
-  bool OnlyWithoutSource;
-  string? Editing;
-  string ChosenPair = "";
-
+  readonly HashSet<string> Picked = new(StringComparer.OrdinalIgnoreCase);
+  PIM.Intranet.Services.AttributeMappingService.DefinitionRow? Selected;
+  bool Loading = true, Busy, OnlyUnits, OnlyWithoutPair;
+  string? Error, Message;
+  string Search = "", DataTypeFilter = "", GroupFilter = "", QuickFilter = "ALL", DetailTab = "BASIC", ChosenPair = "";
+  static readonly IReadOnlyList<(string Key, string Label)> DetailTabs = [("BASIC", "Osnovno"), ("TRANSLATIONS", "Prevodi"), ("VALUES", "Vrednosti"), ("SOURCES", "Viri"), ("CATEGORIES", "Kategorije")];
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi")];
-  static readonly IReadOnlyList<PimColumn> Columns =
-  [
-    new("Slovensko ime"), new("Koda"), new("Prevodi"), new("Preslikave iz virov"),
-    new("Izdelkov", Numeric: true), new("Urejanje")
-  ];
-
-  string ResultSummary => Loading ? "Nalaganje …"
-    : Error is not null ? "Rezultati niso na voljo"
-    : $"{Rows.Count:N0} atributov";
-
-  /// <summary>Slovensko ime atributa; kadar ga ni, ostane koda — izmisljati ga ne gre.</summary>
-  static string Slovene(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) =>
-    row.Translations.TryGetValue("sl", out var name) && !string.IsNullOrWhiteSpace(name)
-      ? name
-      : row.AttributeName ?? row.AttributeCode;
-
-  protected override async Task OnInitializedAsync()
-  {
-    // Red jezikov je dogovorjen (sl, en, de, hr, it) in isti povsod — glej PimLanguages.
-    try { Languages = PIM.Intranet.Services.PimLanguages.OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray(); }
-    catch (Exception exception) { Error = exception.Message; }
-    await LoadAsync();
-  }
-
-  async Task LoadAsync()
-  {
-    Loading = true;
-    Error = null;
-    Editing = null;
-    try { Rows = await Attributes.GetDefinitionsAsync(Search, OnlyUnits, OnlyWithoutSource, OnlyWithoutPair); }
-    catch (Exception exception) { Error = exception.Message; Rows = []; }
-    finally { Loading = false; }
-  }
-
-  void BeginEdit(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row)
-  {
-    Message = null;
-    Error = null;
-    Editing = row.AttributeCode;
-    ChosenPair = row.UnitOfAttributeCode ?? "";
-    Draft.Clear();
-    foreach (var language in Languages)
-      Draft[language.LanguageCode] = row.Translations.TryGetValue(language.LanguageCode, out var name) ? name : "";
-  }
-
-  string GetDraft(string languageCode) => Draft.TryGetValue(languageCode, out var value) ? value : "";
-
-  void SetDraft(string languageCode, string? value) => Draft[languageCode] = value ?? "";
-
-  void CancelEdit()
-  {
-    Editing = null;
-    Draft.Clear();
-    ChosenPair = "";
-  }
-
-  async Task SaveAsync(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row)
-  {
-    Busy = true;
-    Message = null;
-    Error = null;
-    try
-    {
-      var payload = Draft
-        .Where(pair => !string.IsNullOrWhiteSpace(pair.Value))
-        .ToDictionary(pair => pair.Key, pair => pair.Value.Trim(), StringComparer.OrdinalIgnoreCase);
-
-      var changed = payload.Count == 0
-        ? 0
-        : await Attributes.SaveTranslationsAsync(row.AttributeCode, payload, await ActorAsync());
-
-      // Par enote se shrani tudi takrat, kadar se imena niso spremenila: to sta dve odlocitvi
-      // v isti vrstici in nobena ne sme pojesti druge.
-      if (row.IsUnitCandidate)
-      {
-        await Attributes.SaveDefinitionAsync(
-          row.AttributeCode, null, null, null, null,
-          string.IsNullOrWhiteSpace(ChosenPair) ? null : ChosenPair, await ActorAsync(), null);
-      }
-
-      Message = changed == 0
-        ? "Shranjeno; imena se niso spremenila."
-        : $"Shranjenih imen: {changed}.";
-      CancelEdit();
-      await LoadAsync();
-    }
-    // Postopek zavrne neznan jezik, neznano lastnost in verigo enot.
-    catch (Exception exception) { Error = exception.Message; }
-    finally { Busy = false; }
-  }
-
-  async Task<string> ActorAsync()
-  {
-    var state = await Authentication.GetAuthenticationStateAsync();
-    return state.User.Identity?.Name ?? "neznan";
-  }
+  IEnumerable<string> DataTypes => Rows.Select(row => row.DataType).Where(value => value.Length > 0).Distinct().Order();
+  IEnumerable<string> Groups => Rows.Select(row => row.AttributeGroup).OfType<string>().Where(value => value.Length > 0).Distinct().Order();
+  int MissingCount(string language) => Rows.Count(row => !row.Translations.ContainsKey(language));
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.DefinitionRow> FilteredRows => Rows.Where(row => (string.IsNullOrWhiteSpace(Search) || Slovene(row).Contains(Search, StringComparison.OrdinalIgnoreCase) || row.AttributeCode.Contains(Search, StringComparison.OrdinalIgnoreCase)) && (DataTypeFilter.Length == 0 || row.DataType == DataTypeFilter) && (GroupFilter.Length == 0 || row.AttributeGroup == GroupFilter) && (QuickFilter == "ALL" || QuickFilter == "NO_SOURCE" && row.SourceCount == 0 || QuickFilter == "UNUSED" && row.ProductCount == 0 || QuickFilter.StartsWith("MISSING:") && !row.Translations.ContainsKey(QuickFilter[8..]))).ToList();
+  string ResultSummary => Loading ? "Nalaganje …" : $"{FilteredRows.Count:N0} od {Rows.Count:N0} atributov";
+  bool CurrentAllPicked => FilteredRows.Count > 0 && FilteredRows.All(row => Picked.Contains(row.AttributeCode));
+  string QuickClass(string value) => QuickFilter == value ? "is-active" : "";
+  static string Slovene(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) => row.Translations.TryGetValue("sl", out var name) && !string.IsNullOrWhiteSpace(name) ? name : row.AttributeName ?? row.AttributeCode;
+  protected override async Task OnInitializedAsync() { try { Languages = PIM.Intranet.Services.PimLanguages.OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray(); } catch (Exception exception) { Error = exception.Message; } await LoadAsync(); }
+  async Task LoadAsync() { Loading = true; Error = null; try { var code = Selected?.AttributeCode; Rows = await Attributes.GetDefinitionsAsync(null, OnlyUnits, false, OnlyWithoutPair); Selected = code is null ? null : Rows.FirstOrDefault(row => row.AttributeCode == code); } catch (Exception exception) { Error = exception.Message; Rows = []; } finally { Loading = false; } }
+  void Select(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) { Selected = row; DetailTab = "BASIC"; ChosenPair = row.UnitOfAttributeCode ?? ""; Draft.Clear(); foreach (var language in Languages) Draft[language.LanguageCode] = row.Translations.TryGetValue(language.LanguageCode, out var name) ? name : ""; }
+  string GetDraft(string code) => Draft.TryGetValue(code, out var value) ? value : "";
+  void SetDraft(string code, string? value) => Draft[code] = value ?? "";
+  void TogglePicked(string code, ChangeEventArgs args) { if (args.Value is true) Picked.Add(code); else Picked.Remove(code); }
+  void ToggleCurrent(ChangeEventArgs args) { if (args.Value is true) SelectCurrent(); else foreach (var row in FilteredRows) Picked.Remove(row.AttributeCode); }
+  void SelectCurrent() { foreach (var row in FilteredRows) Picked.Add(row.AttributeCode); }
+  void ClearPicked() => Picked.Clear();
+  async Task SaveTranslationsAsync() { if (Selected is null) return; Busy = true; Error = Message = null; try { var payload = Draft.Where(pair => !string.IsNullOrWhiteSpace(pair.Value)).ToDictionary(pair => pair.Key, pair => pair.Value.Trim(), StringComparer.OrdinalIgnoreCase); var changed = payload.Count == 0 ? 0 : await Attributes.SaveTranslationsAsync(Selected.AttributeCode, payload, await ActorAsync()); Message = $"Shranjenih prevodov: {changed}."; await LoadAsync(); } catch (Exception exception) { Error = exception.Message; } finally { Busy = false; } }
+  async Task SavePairAsync() { if (Selected is null) return; Busy = true; Error = Message = null; try { await Attributes.SaveDefinitionAsync(Selected.AttributeCode, null, null, null, null, string.IsNullOrWhiteSpace(ChosenPair) ? null : ChosenPair, await ActorAsync(), null); Message = "Povezava enote je shranjena."; await LoadAsync(); } catch (Exception exception) { Error = exception.Message; } finally { Busy = false; } }
+  async Task<string> ActorAsync() { var state = await Authentication.GetAuthenticationStateAsync(); return state.User.Identity?.Name ?? "neznan"; }
 }

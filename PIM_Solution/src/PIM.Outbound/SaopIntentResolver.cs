@@ -1,9 +1,12 @@
 namespace PIM.Outbound;
 
 /// <param name="ExistsInSaop">
-/// Ali artikel v SAOP že obstaja. V <c>canon.Product</c> artikel lahko ustvari samo konektor
-/// z <c>CanCreateProducts = 1</c>, kar je danes izključno SAOP; dobaviteljevi feedi obstoječe
-/// artikle samo dopolnijo. Prisotnost v kanoničnem modelu je zato dokaz obstoja v SAOP.
+/// Ali artikel v SAOP že obstaja. Izpeljano je iz <c>canon.Product.ErpExistence</c>
+/// (migracija 169): <c>CONFIRMED_IN_ERP</c> pomeni, da ga SAOP pozna, <c>NOT_YET_IN_ERP</c>, da
+/// je artikel zaenkrat samo v PIM. Do 169 je bila merilo prisotnost vrstice v
+/// <c>canon.Product</c>, kar je držalo le, dokler je artikle smel ustvarjati izključno SAOP
+/// (<c>CanCreateProducts = 1</c>); z viri, ki artikle ustvarijo mimo ERP, bi tako merilo za
+/// artikel, ki ga v SAOP ni, izbralo PATCH.
 /// </param>
 /// <param name="PreviousRejection">
 /// Vrsta zavrnitve prejšnjega poskusa, če je bil. SAOP je najzanesljivejši vir resnice o tem,
@@ -36,8 +39,8 @@ public static class SaopIntentResolver
       return new(SaopIntent.Add, "SAOP je pri prejšnjem poskusu odgovoril, da artikla ne pozna.");
 
     return input.ExistsInSaop
-      ? new(SaopIntent.Update, "Artikel je v kanoničnem modelu, kamor pride samo iz zajema SAOP.")
-      : new(SaopIntent.Add, "Artikla v kanoničnem modelu ni, zato ga SAOP še ne pozna.");
+      ? new(SaopIntent.Update, "Artikel je v SAOP potrjen (ErpExistence = CONFIRMED_IN_ERP).")
+      : new(SaopIntent.Add, "Artikla SAOP še ne pozna (ni ga v canon.Product ali je NOT_YET_IN_ERP).");
   }
 
   /// <summary>Končna točka za izbrano metodo; pot je relativna na naslov integracije.</summary>

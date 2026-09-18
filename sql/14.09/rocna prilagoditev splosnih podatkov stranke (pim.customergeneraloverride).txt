@@ -1,0 +1,24 @@
+pim.CustomerGeneralOverride — nova tabela + nova procedura + posodobitev branja
+
+CREATE TABLE pim.CustomerGeneralOverride (OrganizationId, CustomerId, 25 polj Manual* -- ista polja
+kot v b2b.Customer: CustomerKey, Name, PayerCode, PayerName, PriceListCode, DiscountPriceListCode,
+Address, Street, HouseNumber, City, PostalCode, Country, TaxNumber, RegistrationNumber,
+ActivityCode, SubjectToVat, PaymentDays, RebatePercent, IsActive, CustomerType, LegalForm,
+IsDefaulter, UpfrontPayment, LanguageId, CurrencyCode -- , UpdatedBy, UpdatedUtc)
+
+CREATE OR ALTER PROCEDURE b2b.SaveCustomerGeneral (shrani ročni prepis; enako pravilo kot pri
+kontaktih — če je ročna vrednost enaka trenutni SAOP vrednosti, se ne shrani kot prepis, da SAOP
+lahko podatek še vedno popravi)
+
+CREATE OR ALTER PROCEDURE intranet.GetCustomerCard (prvi nabor zdaj vrača COALESCE(ročni prepis,
+SAOP vrednost) za vseh 25 polj namesto golega b2b.Customer)
+
+Kartica stranke (/stranke/{id}, zavihek "Splošni podatki") je bila samo za branje, ker gre neposredno
+iz b2b.Customer, ki ga piše SAOP zajem — direkten zapis vanjo bi naslednja sinhronizacija tiho
+povozila. Rešitev je isti vzorec kot za kontakte stranke (migracija 140): ločena tabela za ročni
+prepis, branje pa vrne COALESCE(ročno, SAOP). Šifra stranke (CustomerKey) je namenoma vključena med
+urejljiva polja na izrecno zahtevo uporabnika kljub opozorilu — SAOP z njo ujema zapise, zato lahko
+ročna sprememba povzroči, da naslednja sinhronizacija ne prepozna več iste stranke.
+
+Vsaka sprememba gre v b2b.AuditLog (EntityType='CustomerGeneral') — isti vir, ki ga zavihek
+"Zgodovina sprememb" že bere, brez dodatnega dela tam.

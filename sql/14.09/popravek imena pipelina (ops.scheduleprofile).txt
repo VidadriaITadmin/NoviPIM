@@ -1,0 +1,5 @@
+ops.ScheduleProfile — popravek imena pipeline-a
+
+UPDATE ops.ScheduleProfile SET Pipeline = 'SAOP_DELIVERY_DATES' WHERE Pipeline = 'SAOP_DELIVERY';
+
+4 vrstice (org 1–4). Prej se pipeline v bazi ni ujemal z imenom, ki ga preverja koda (SAOP_DELIVERY_DATES), zato funkcija "datumi dobave" ni mogla nikoli steči.

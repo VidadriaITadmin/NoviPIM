@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using PIM.Intranet.Services;
 using PIM.Operations;
 
@@ -32,7 +33,7 @@ var spec = new ProductWorkbookSpec(
     // Namenoma ista oznaka kot atribut spodaj: dvoumnost mora pogodba razrešiti sama.
     new("Product.Warranty", "ItemWarranty", "Garancija", "text"),
   ],
-  WebSites: [new("svetila_si", "Svetila.si"), new("B2C", "Videlektro")],
+  WebSites: [new("svetila_si", "Svetila.si", "svetila_si"), new("B2C", "Videlektro", "videlektro")],
   TextTypes: ["WEB_TITLE", "DESCRIPTION"],
   Languages: ["sl", "en"],
   Attributes: [new("Garancija", "Garancija", InSet: true, SetLevel: "REQUIRED"), new("Barva", "Barva")]);
@@ -123,7 +124,6 @@ var configuration = new ConfigurationBuilder()
   .Build();
 
 var database = new PimDb(configuration);
-var Categories = new CategoryTreeService(database, configuration);
 var workbench = new ProductWorkbenchService(configuration);
 var catalog = new CatalogReadService(database);
 var export = new ProductExportService(configuration, workbench);
@@ -131,9 +131,10 @@ var export = new ProductExportService(configuration, workbench);
 // procese brez uporabnika. Vloge preverja PIM.F10.AuthTests; tu je predmet preizkusa krog
 // izvoz -> urejanje -> uvoz delovnega lista.
 var guard = PimWriteGuard.Trusted("konzolni test PIM.F10.ProductWorkbookTests");
+var Categories = new CategoryTreeService(database, configuration, guard);
 var edit = new ProductEditService(configuration, guard);
 var categoryMapping = new CategoryMappingService(database, configuration);
-var saop = new SaopWriteService(configuration, guard);
+var saop = new SaopWriteService(configuration, guard, NullLogger<SaopWriteService>.Instance);
 var data = new IntranetDataService(configuration, guard);
 var workbook = new ProductWorkbookService(configuration, workbench, export, catalog, edit, categoryMapping, saop, data);
 

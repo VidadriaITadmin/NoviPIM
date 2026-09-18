@@ -14,11 +14,52 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Web SDK sicer objavi vsak *.json iz mape projekta. Lokalna nastavitev (povezava, poverilnice)
+         ne sme na strežnik: tam velja tista, ki je že ob objavljenem intranetu (Publish-Intranet.ps1 /
+         Publish-All.ps1 jo ohranita), razvojna pa bi kazala na razvojno bazo. Med razvojem jo intranet
+         bere iz mape projekta (LocalSettings.Sources(ContentRootPath)), ne iz bin\, zato to nič ne spremeni. -->
+    <Content Remove="appsettings.Local.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- WorkbookTable: branje delovnega zvezka pri uvozu mnozicnih sprememb. -->
     <ProjectReference Include="..\PIM.Operations\PIM.Operations.csproj" />
     <!-- SaopDocumentBuilder in SaopIntentResolver: predogled mora sestaviti isti dokument,
          kot ga sestavi posiljatelj. Predogled z lastnim gradnikom bi lagal. -->
     <ProjectReference Include="..\PIM.Outbound\PIM.Outbound.csproj" />
   </ItemGroup>
+
+  <!-- Objava v eno mapo (2026-09-16). `dotnet publish` intraneta objavi zraven še workerje
+       (Workerji\<Worker>\<Worker>.exe, z isto konfiguracijo, RID in self-contained kot intranet) in skripte
+       ciklov (scripts\*.ps1, *.vbs). Intranet (/sistem/workerji, WorkerConsoleLayout) in skripte
+       (Workerji.ps1, Namesti-opravila.ps1) ju najdejo ob sebi brez nastavitev; mapo se v celoti prekopira
+       čez mapo spletnega mesta (docs/PUBLISH.md 1.4). Na strežniku ni Gita in ne PIM.sln, zato mora
+       objava prinesti vse. Hiter popravek samo intraneta: -p:PublishWorkers=false. -->
+  <PropertyGroup>
+    <PublishWorkers Condition="'$(PublishWorkers)' == ''">true</PublishWorkers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PimWorkerProject Include="$(MSBuildProjectDirectory)\..\..\workers\*\*.csproj" />
+    <!-- Nočni samotest teče v ciklu razporejevalnika kot orodje ob workerjih (Workerji\PIM.SelfTest.Nightly\);
+         na strežniku brez izvorne kode ga sicer ne bi imel kdo pognati. -->
+    <PimWorkerProject Include="$(MSBuildProjectDirectory)\..\..\tests\PIM.SelfTest.Nightly\PIM.SelfTest.Nightly.csproj" />
+    <PimCycleScript Include="$(MSBuildProjectDirectory)\..\..\..\scripts\*.ps1;$(MSBuildProjectDirectory)\..\..\..\scripts\*.vbs" />
+  </ItemGroup>
+
+  <Target Name="PimPublishWorkersAndScripts" AfterTargets="Publish" Condition="'$(PublishWorkers)' == 'true'">
+    <PropertyGroup>
+      <_PimPublishDir>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))</_PimPublishDir>
+      <_PimWorkerArgs>-c $(Configuration) --nologo -v q</_PimWorkerArgs>
+      <_PimWorkerArgs Condition="'$(RuntimeIdentifier)' != ''">$(_PimWorkerArgs) -r $(RuntimeIdentifier)</_PimWorkerArgs>
+      <_PimWorkerArgs Condition="'$(SelfContained)' != ''">$(_PimWorkerArgs) --self-contained $(SelfContained)</_PimWorkerArgs>
+    </PropertyGroup>
+    <Message Importance="high" Text="PIM: objavljam workerje v $(_PimPublishDir)Workerji\ ($(_PimWorkerArgs))" />
+    <!-- Ločen proces na worker in ne notranji MSBuild Publish: nested Publish z RID pade na NETSDK1047, ker
+         workerji niso bili obnovljeni (restore) za ta RID; dotnet publish si restore naredi sam. -->
+    <Exec Command="dotnet publish &quot;%(PimWorkerProject.FullPath)&quot; $(_PimWorkerArgs) -o &quot;$(_PimPublishDir)Workerji\%(PimWorkerProject.Filename)&quot;" />
+    <Copy SourceFiles="@(PimCycleScript)" DestinationFolder="$(_PimPublishDir)scripts" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="PIM: intranet, Workerji\ in scripts\ so v $(_PimPublishDir) — mapo prekopiraj čez mapo spletnega mesta (docs/PUBLISH.md 1.4)." />
+  </Target>
 
 </Project>

@@ -32,15 +32,73 @@
     </nav>
 
     <section id="panel-general" role="tabpanel" aria-labelledby="tab-general" hidden="@(Section != "general")">
-      <section class="ui-card data-card">
-        <PimTable Caption="Splošni podatki stranke — vir SAOP, samo za branje" Columns="PairColumns">
-          <Rows>
-            @foreach (var pair in GeneralPairs(general))
-            {
-              <tr><th scope="row">@pair.Label</th><td>@pair.Value</td></tr>
-            }
-          </Rows>
-        </PimTable>
+      <section class="ui-card panel">
+        <div class="subsection-head">
+          <h2>Splošni podatki stranke</h2>
+          <span>ročna vrednost prevlada nad SAOP; prazno polje pomeni brez ročnega prepisa, takrat velja vrednost iz SAOP</span>
+        </div>
+        <div class="form-grid">
+          <label class="form-field">Šifra stranke<input class="form-input" @bind="GeneralDraft.CustomerKey" /></label>
+          <label class="form-field">Naziv<input class="form-input" @bind="GeneralDraft.Name" /></label>
+          <label class="form-field">Ulica<input class="form-input" @bind="GeneralDraft.Street" /></label>
+          <label class="form-field">Hišna številka<input class="form-input" @bind="GeneralDraft.HouseNumber" /></label>
+          <label class="form-field">Poštna številka<input class="form-input" @bind="GeneralDraft.PostalCode" /></label>
+          <label class="form-field">Kraj<input class="form-input" @bind="GeneralDraft.City" /></label>
+          <label class="form-field">Naslov (celoten, če ni razčlenjen)<input class="form-input" @bind="GeneralDraft.Address" /></label>
+          <label class="form-field">Država<input class="form-input" @bind="GeneralDraft.Country" /></label>
+          <label class="form-field">Davčna številka<input class="form-input" @bind="GeneralDraft.TaxNumber" /></label>
+          <label class="form-field">Matična številka<input class="form-input" @bind="GeneralDraft.RegistrationNumber" /></label>
+          <label class="form-field">Šifra dejavnosti<input class="form-input" @bind="GeneralDraft.ActivityCode" /></label>
+          <label class="form-field">Pravna oblika<input class="form-input" @bind="GeneralDraft.LegalForm" /></label>
+          <label class="form-field">Vrsta stranke (šifra iz SAOP)<input class="form-input" @bind="GeneralDraft.CustomerType" /></label>
+          <label class="form-field">Plačnik — šifra<input class="form-input" @bind="GeneralDraft.PayerCode" /></label>
+          <label class="form-field">Plačnik — naziv<input class="form-input" @bind="GeneralDraft.PayerName" /></label>
+          <label class="form-field">Cenik<input class="form-input" @bind="GeneralDraft.PriceListCode" /></label>
+          <label class="form-field">Rabatni cenik<input class="form-input" @bind="GeneralDraft.DiscountPriceListCode" /></label>
+          <label class="form-field">Valuta<input class="form-input" @bind="GeneralDraft.CurrencyCode" /></label>
+          <label class="form-field">Jezik<input class="form-input" @bind="GeneralDraft.LanguageId" /></label>
+          <label class="form-field">Plačilni rok (dni)<input type="number" class="form-input" @bind="GeneralDraft.PaymentDays" /></label>
+          <label class="form-field">Rabat (%)<input type="number" step="0.01" class="form-input" @bind="GeneralDraft.RebatePercent" /></label>
+          <label class="form-field">Zavezanec za DDV
+            <select class="filter-select" @bind="GeneralSubjectToVatText">
+              <option value="">— brez ročnega prepisa —</option>
+              <option value="true">Da</option>
+              <option value="false">Ne</option>
+            </select>
+          </label>
+          <label class="form-field">Plačilo vnaprej
+            <select class="filter-select" @bind="GeneralUpfrontPaymentText">
+              <option value="">— brez ročnega prepisa —</option>
+              <option value="true">Da</option>
+              <option value="false">Ne</option>
+            </select>
+          </label>
+          <label class="form-field">Neplačnik
+            <select class="filter-select" @bind="GeneralIsDefaulterText">
+              <option value="">— brez ročnega prepisa —</option>
+              <option value="true">Da</option>
+              <option value="false">Ne</option>
+            </select>
+          </label>
+          <label class="form-field">Aktivna
+            <select class="filter-select" @bind="GeneralIsActiveText">
+              <option value="">— brez ročnega prepisa —</option>
+              <option value="true">Da</option>
+              <option value="false">Ne</option>
+            </select>
+          </label>
+        </div>
+        <p class="card-note">
+          Zadnja sprememba iz SAOP: @general.UpdatedUtc.ToPimLocal().ToString("g").
+          @if (general.HasManualGeneral)
+          {
+            <text> Ročno prilagojeno: @general.GeneralUpdatedBy, @general.GeneralUpdatedUtc?.ToPimLocal().ToString("g").</text>
+          }
+        </p>
+        <div class="panel-actions">
+          <button type="button" class="primary-button" disabled="@Busy" @onclick="SaveGeneralAsync">Shrani splošne podatke</button>
+          <button type="button" class="ghost-button" disabled="@(Busy || !general.HasManualGeneral)" @onclick="ClearGeneralAsync">Počisti ročne prilagoditve</button>
+        </div>
       </section>
 
       @{ var contacts = Card.Contacts; }
@@ -84,7 +142,7 @@
           Prazno polje pomeni, da ročnega prepisa ni; takrat obvelja vrednost iz SAOP, če obstaja.
           @if (contacts.UpdatedUtc is DateTime touched)
           {
-            <text>Zadnji ročni popravek: @contacts.UpdatedBy, @touched.ToLocalTime().ToString("g").</text>
+            <text>Zadnji ročni popravek: @contacts.UpdatedBy, @touched.ToPimLocal().ToString("g").</text>
           }
         </p>
 
@@ -118,7 +176,7 @@
           <label class="check-field"><input type="checkbox" @bind="Draft.Packaging" />Popust na polno pakiranje</label>
           <label class="check-field"><input type="checkbox" @bind="Draft.ValueDiscount" />Vrednostni rabat</label>
           <label class="check-field"><input type="checkbox" @bind="Draft.Plus" />B2B+ (brezplačna poštnina)</label>
-          <label class="check-field"><input type="checkbox" @bind="Draft.Web" />Splet omogočen</label>
+          @* Oznake Splet pri strankah ni vec (202): v stranke.csv gre vsaka aktivna stranka. *@
         </div>
         <p class="card-note">
           Magento skupina: <span class="code-value">@(general.MagentoGroupKey ?? "ni preslikave za ta tip")</span>.
@@ -197,7 +255,7 @@
                   </td>
                   <td>@(row.Note ?? "—")</td>
                   <td>@row.CreatedBy</td>
-                  <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td>
+                  <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td>
                 </tr>
               }
             </Rows>
@@ -245,7 +303,7 @@
             @foreach (var note in Card.Notes)
             {
               <li class="note-entry">
-                <div class="note-head"><strong>@note.CreatedBy</strong><span>@note.CreatedUtc.ToLocalTime().ToString("g")</span></div>
+                <div class="note-head"><strong>@note.CreatedBy</strong><span>@note.CreatedUtc.ToPimLocal().ToString("g")</span></div>
                 <p>@note.Body</p>
               </li>
             }
@@ -261,7 +319,7 @@
             <Rows>
               @foreach (var row in Card.History)
               {
-                <tr><td>@row.EntityType</td><td>@row.ActionCode</td><td class="wrap-cell">@Short(row.OldValueJson)</td><td class="wrap-cell">@Short(row.NewValueJson)</td><td>@row.ChangedBy</td><td>@row.ChangedUtc.ToLocalTime().ToString("g")</td></tr>
+                <tr><td>@row.EntityType</td><td>@row.ActionCode</td><td class="wrap-cell">@Short(row.OldValueJson)</td><td class="wrap-cell">@Short(row.NewValueJson)</td><td>@row.ChangedBy</td><td>@row.ChangedUtc.ToPimLocal().ToString("g")</td></tr>
               }
             </Rows>
           </PimTable>
@@ -284,7 +342,6 @@
   [Parameter] public long CustomerId { get; set; }
 
   sealed record Tab(string Key, string Label, int? Count = null);
-  sealed record Pair(string Label, string Value);
   sealed record KindOption(string Code, string Label);
 
   /// <summary>Nepotrjene spremembe spletnega profila; obrazec ne piše v bralni model.</summary>
@@ -304,6 +361,7 @@
   IReadOnlyList<PIM.Intranet.Services.CustomerTypeRow> Types = [];
   IReadOnlyList<PIM.Intranet.Services.CustomerRow> AllCustomers = [];
   ProfileDraft Draft = new();
+  PIM.Intranet.Services.CustomerGeneralDraft GeneralDraft = new();
   int? OrganizationId;
   bool Loading = true;
   bool Busy;
@@ -326,7 +384,6 @@
   decimal TierPercent;
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Stranke", "stranke"), new("Kartica")];
-  static readonly IReadOnlyList<PimColumn> PairColumns = [new("Podatek"), new("Vrednost")];
   static readonly IReadOnlyList<PimColumn> GroupColumns = [new("Skupina artiklov"), new("Popust", true), new("Najmanj kos", true), new("Velja"), new("Skupina strank")];
   static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja", true), new("Prag", true), new("Popust", true), new("Stanje")];
   static readonly IReadOnlyList<PimColumn> SpecialColumns = [new("Izdelek"), new("Koda popusta"), new("Velja"), new("Stanje")];
@@ -391,6 +448,27 @@
       ContactPhone = Card.Contacts.ManualPhone ?? "";
       ContactMobile = Card.Contacts.ManualMobile ?? "";
       ContactPersons = Card.Contacts.ManualPersons ?? "";
+      // Obrazec pokaze TRENUTNO (ucinkovito) vrednost, ne praznega polja - uporabnik vidi
+      // podatek tak, kot je, in ga po potrebi popravi. Ce polja ne spremeni in shrani, bo
+      // shranjena vrednost enaka trenutnemu SAOP izvoru in je procedura ne bo zapisala kot
+      // rocni prepis (glej b2b.SaveCustomerGeneral) - obstojeci prepisi na drugih poljih
+      // ostanejo nedotaknjeni, ker gredo skozi isto polje-za-polje primerjavo.
+      var general = Card.General;
+      GeneralDraft = new()
+      {
+        CustomerKey = general.CustomerKey, Name = general.Name,
+        PayerCode = general.PayerCode, PayerName = general.PayerName,
+        PriceListCode = general.PriceListCode, DiscountPriceListCode = general.DiscountPriceListCode,
+        Address = general.Address, Street = general.Street, HouseNumber = general.HouseNumber,
+        City = general.City, PostalCode = general.PostalCode, Country = general.Country,
+        TaxNumber = general.TaxNumber, RegistrationNumber = general.RegistrationNumber,
+        ActivityCode = general.ActivityCode, SubjectToVat = general.SubjectToVat,
+        PaymentDays = general.PaymentDays, RebatePercent = general.RebatePercent,
+        IsActive = general.IsActive, CustomerType = general.SourceCustomerType,
+        LegalForm = general.LegalForm, IsDefaulter = general.IsDefaulter,
+        UpfrontPayment = general.UpfrontPayment, LanguageId = general.LanguageId,
+        CurrencyCode = general.CurrencyCode,
+      };
     }
     catch { Error = "Kartice stranke trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -398,6 +476,45 @@
 
   async Task<string> ActorAsync() =>
     (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  // "Brez prepisa" (null) je tretje stanje poleg da/ne, zato kljukica ne zadostuje - spustni
+  // seznam z izpraznjeno vrednostjo za null je edini nacin, da ostane vidno locljivo od "ne".
+  static string BoolDraftText(bool? value) => value switch { true => "true", false => "false", _ => "" };
+  static bool? ParseBoolDraftText(string value) => value switch { "true" => true, "false" => false, _ => null };
+
+  string GeneralSubjectToVatText { get => BoolDraftText(GeneralDraft.SubjectToVat); set => GeneralDraft.SubjectToVat = ParseBoolDraftText(value); }
+  string GeneralUpfrontPaymentText { get => BoolDraftText(GeneralDraft.UpfrontPayment); set => GeneralDraft.UpfrontPayment = ParseBoolDraftText(value); }
+  string GeneralIsDefaulterText { get => BoolDraftText(GeneralDraft.IsDefaulter); set => GeneralDraft.IsDefaulter = ParseBoolDraftText(value); }
+  string GeneralIsActiveText { get => BoolDraftText(GeneralDraft.IsActive); set => GeneralDraft.IsActive = ParseBoolDraftText(value); }
+
+  async Task SaveGeneralAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Cards.SaveGeneralAsync(OrganizationId.Value, CustomerId, GeneralDraft, await ActorAsync());
+      Message = "Splošni podatki so shranjeni in revizijsko zabeleženi.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Splošnih podatkov ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  /// <summary>Umik vseh rocnih prilagoditev splosnih podatkov; velja izvor iz SAOP, kjer obstaja.</summary>
+  async Task ClearGeneralAsync()
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = null; SaveError = null;
+    try
+    {
+      await Cards.SaveGeneralAsync(OrganizationId.Value, CustomerId, new PIM.Intranet.Services.CustomerGeneralDraft(), await ActorAsync());
+      Message = "Ročne prilagoditve so umaknjene; velja vrednost iz SAOP, kjer obstaja.";
+      await LoadAsync();
+    }
+    catch { SaveError = "Ročnih prilagoditev ni bilo mogoče umakniti."; }
+    finally { Busy = false; }
+  }
 
   async Task SaveProfileAsync()
   {
@@ -506,43 +623,7 @@
     finally { Busy = false; }
   }
 
-  // Prikazi se samo tisto, kar je zapisano: prazna vrstica na kartici ne pove nicesar.
-  static IReadOnlyList<Pair> GeneralPairs(CustomerGeneral general)
-  {
-    var pairs = new List<Pair>
-    {
-      new("Šifra stranke", general.CustomerKey),
-      new("Naziv", general.Name),
-      new("Vrsta stranke", KindLabel(general.CustomerKind)),
-      new("Tip stranke", general.CustomerTypeName ?? general.CustomerTypeCode ?? "—"),
-    };
-
-    void Add(string label, string? value) { if (!string.IsNullOrWhiteSpace(value)) pairs.Add(new(label, value!)); }
-
-    Add("Naslov", string.Join(", ", new[] { general.Street ?? general.Address, general.HouseNumber }.Where(part => !string.IsNullOrWhiteSpace(part))));
-    Add("Kraj", string.Join(" ", new[] { general.PostalCode, general.City }.Where(part => !string.IsNullOrWhiteSpace(part))));
-    Add("Država", general.Country);
-    Add("Davčna številka", general.TaxNumber);
-    Add("Matična številka", general.RegistrationNumber);
-    Add("Šifra dejavnosti", general.ActivityCode);
-    Add("Plačnik", general.PayerCode is null ? null : $"{general.PayerCode}{(general.PayerName is null ? "" : " — " + general.PayerName)}");
-    Add("Vrsta plačnika", general.PayerKind switch { "PE" => "poslovna enota", "TRANZIT" => "tranzit", _ => null });
-    Add("Cenik", general.PriceListCode);
-    Add("Rabatni cenik", general.DiscountPriceListCode);
-    Add("Valuta", general.CurrencyCode);
-    Add("Jezik", general.LanguageId);
-    Add("Plačilni rok", general.PaymentDays is null ? null : general.PaymentDays + " dni");
-    Add("Rabat", general.RebatePercent is null or 0 ? null : general.RebatePercent.Value.ToString("N2") + " %");
-    Add("Zavezanec za DDV", Flag(general.SubjectToVat));
-    Add("Plačilo vnaprej", Flag(general.UpfrontPayment));
-    Add("Neplačnik", Flag(general.IsDefaulter));
-    Add("Aktivna", Flag(general.IsActive));
-    pairs.Add(new("Zadnja sprememba iz vira", general.UpdatedUtc.ToLocalTime().ToString("g")));
-    return pairs;
-  }
-
-  static string? Flag(bool? value) => value is null ? null : value.Value ? "da" : "ne";
-  static string Day(DateTime? value) => value?.ToLocalTime().ToString("d") ?? "—";
+  static string Day(DateTime? value) => value?.ToPimLocal().ToString("d") ?? "—";
   static string Short(string? value) =>
     string.IsNullOrWhiteSpace(value) ? "—" : value.Length <= 160 ? value : value[..160] + " …";
 }

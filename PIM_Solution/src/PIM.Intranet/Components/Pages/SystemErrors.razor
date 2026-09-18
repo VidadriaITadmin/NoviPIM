@@ -26,7 +26,7 @@
         @foreach (var row in Rows)
         {
           <tr>
-            <td>@row.OccurredUtc.ToLocalTime().ToString("g")</td>
+            <td>@row.OccurredUtc.ToPimLocal().ToString("g")</td>
             <td><PimChip Text="@SeverityLabel(row.Severity)" Tone="@SeverityTone(row.Severity)" Prefix="Resnost: " /></td>
             <td><span class="code-value">@row.Layer</span></td>
             <td>@(row.ErrorCode ?? "—")</td>

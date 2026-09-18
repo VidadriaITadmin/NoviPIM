@@ -1,0 +1,56 @@
+# Navodila za izvedbo — 218_ZmogljivostIndeksiDelovniListValidacija.sql (TEST in produkcija)
+
+**Kaj naredi:** ustvari indekse in popravi procedure/pogled, ki so na intranetu odpirali strani v
+desetinah sekund (glej docs/DATABASE.md, razdelek »migracija 218«): delovni list izdelkov 61 s → 2 s,
+nadzorna plošča 16 s → 0,8 s na podjetje, shranjevanje izdelka 10,7 s → 0,2 s, stran /zajem 30 s → 0,2 s,
+izbirnik kategorij 6 s → 5 ms, zaloga 2,7 s → 0,07 s. Nič ne briše in ne spreminja podatkov;
+vsak korak preveri, ali je že narejen, zato je datoteko varno pognati večkrat.
+
+**Kje je:** `PIM_Solution\sql\migrations\218_ZmogljivostIndeksiDelovniListValidacija.sql` (kanonična
+datoteka, ki jo zabeleži migrator). Ta mapa nosi samo navodila in ločeno priporočilo za instanco.
+
+**Pred zagonom:**
+1. `SELECT @@SERVERNAME, DB_NAME();` — prepričaj se, da si na TEST (ali na produkciji, ko je odločeno).
+2. Varnostna kopija po `PIM_Solution\deploy\Backup-PIM.sql` (COPY_ONLY) — običajno pravilo pred migracijo.
+3. Čas: indeksi na `stock.LandingRecord` (4 M vrstic), `stock.Position` (4 M vrstic) in filtriran indeks
+   na `map.ExtractedValue` (78 M vrstic; prebere vso tabelo) skupaj trajajo nekaj minut (lokalno 3 min);
+   med gradnjo držijo bralne zaklepe na teh tabelah (brez ONLINE, ker izdaja strežnika ni znana).
+   Najbolje izven petminutnega cikla zaloge in izven urne validacije (»PIM katalog«), ali z začasno
+   ustavljenima opraviloma.
+
+**Zagon (priporočeno, prek migratorja — zabeleži v dbo.SchemaMigration):**
+```bash
+cd PIM_Solution
+dotnet run --project src\PIM.Migrator -- --migrations "sql\migrations"
+```
+Če migrator pade na checksumu starejše datoteke (znana ovira, glej sql\navodila.txt za 195), poženi
+samo to migracijo izolirano:
+```bash
+mkdir "%TEMP%\pim_migration_218"
+copy "PIM_Solution\sql\migrations\218_ZmogljivostIndeksiDelovniListValidacija.sql" "%TEMP%\pim_migration_218\"
+dotnet run --project src\PIM.Migrator -- --migrations "%TEMP%\pim_migration_218"
+rmdir /s /q "%TEMP%\pim_migration_218"
+```
+
+**Zagon neposredno v SSMS (kadar migratorja ni pri roki):** datoteka je brez ločila GO; odpri jo v SSMS
+nad bazo PIM_TEST in jo poženi celo. Migracija se tako **ne** zabeleži v `dbo.SchemaMigration`; ob
+naslednjem zagonu migratorja jo bo ta pognal še enkrat, kar je neškodljivo (vsi koraki so ponovljivi).
+
+**Preverjanje po zagonu:**
+```sql
+SELECT name FROM sys.indexes WHERE name IN (N'IX_StockLandingRecord_SyncRun', N'IX_StockLandingRecord_Open',
+  N'IX_stock_Position_Snapshot', N'IX_CanonProductText_TextType_Product', N'IX_ProductValidationState_Profile_Status',
+  N'IX_PipelineRun_OrganizationPipelineStartedUtc', N'IX_Alert_Open', N'IX_CanonProductPrice_ListActive',
+  N'IX_PimProductPrice_ListActive', N'IX_CanonProduct_OrgSupplier', N'IX_CanonProduct_OrgManufacturer',
+  N'IX_CanonProduct_OrgItemGroup', N'IX_CanonProduct_OrgActiveDepartment', N'IX_ExtractedValue_Identity');  -- 14 vrstic
+SELECT OBJECT_ID(N'val.RunValidationForProducts'), OBJECT_ID(N'pim.SaveProductTextsBulk'),
+       OBJECT_ID(N'pim.SaveProductAttributesBulk');                                     -- trije ne-NULL
+EXEC intranet.GetDashboard @OrganizationId = 2;                                         -- pod sekundo
+```
+
+**Aplikacija:** intranet, objavljen iz istega commita (HeavyWorkGate, ExportJobService, ProductWorkbookService
+kličejo nove procedure `pim.SaveProductTextsBulk` / `pim.SaveProductAttributesBulk`). Stari intranet z novo
+bazo dela naprej; novi intranet s staro bazo pade pri uvozu delovnega lista (procedure ni).
+
+**Ločeno, ni del migracije:** `instanca_cost_threshold.sql` — priporočilo za `cost threshold for
+parallelism` 5 → 50 (potrebuje sysadmin, odločitev skrbnika instance).

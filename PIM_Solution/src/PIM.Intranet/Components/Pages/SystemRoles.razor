@@ -1,39 +1,445 @@
+@page "/administracija/vloge"
 @page "/sistem/vloge"
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject RoleAdministrationService Roles
 
-<PageTitle>Vloge</PageTitle>
-<PimPage Title="Vloge" Subtitle="Varnostne vloge in število uporabnikov, ki jim je posamezna vloga dodeljena." Crumbs="Crumbs" />
+<PageTitle>Vloge in dostop</PageTitle>
+<PimPage Title="Vloge in dostop"
+         Subtitle="Ustvari vlogo, nato izberi glavne strani in natančno določi posamezne zavihke ali podstrani. Spremembe začnejo veljati ob naslednji zahtevi uporabnika."
+         Crumbs="Crumbs">
+  <Actions>
+    <button type="button" class="primary-button" @onclick="() => ShowCreate = !ShowCreate">
+      @(ShowCreate ? "Zapri obrazec" : "Dodaj vlogo")
+    </button>
+  </Actions>
+</PimPage>
 
-<section class="ui-card data-card" aria-label="Seznam vlog">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Varnostnih vlog ni." LoadingText="Nalaganje vlog …">
-    <PimTable Caption="Vloge iz varnostnega registra" Columns="Columns">
-      <Rows>
-        @foreach (var row in Rows)
-        {
-          <tr>
-            <td><span class="code-value">@row.RoleCode</span></td>
-            <td>@row.Name</td>
-            <td class="numeric">@row.UserCount.ToString("N0")</td>
-          </tr>
-        }
-      </Rows>
-    </PimTable>
-  </PimState>
-</section>
+<PimTabs Active="vloge" Tabs="SistemskeZadeveTabs.Tabs" Label="Sistemske zadeve" />
+
+@if (Message is not null)
+{
+  <p class="message-state @(MessageOk ? "success-message" : "error-message")" role="alert" aria-live="polite">@Message</p>
+}
+
+<div class="role-summary-grid" aria-label="Povzetek vlog">
+  <div class="ui-card role-summary"><span>Vseh vlog</span><strong>@RoleRows.Count</strong></div>
+  <div class="ui-card role-summary"><span>Lastnih vlog</span><strong>@RoleRows.Count(role => !role.IsSystem)</strong></div>
+  <div class="ui-card role-summary"><span>Dodelitev uporabnikom</span><strong>@RoleRows.Sum(role => role.UserCount)</strong></div>
+</div>
+
+@if (ShowCreate)
+{
+  <section class="ui-card create-role-card" aria-labelledby="new-role-title">
+    <div class="section-heading">
+      <div>
+        <span class="eyebrow">Nova vloga</span>
+        <h2 id="new-role-title">Poimenuj vlogo</h2>
+        <p>Dovoljenja ji določiš v naslednjem koraku. Koda je tehnično ime in se pozneje ne spreminja.</p>
+      </div>
+      <span class="step-badge">1 / 2</span>
+    </div>
+    <div class="create-role-grid">
+      <label class="form-field" for="new-role-name">Ime vloge
+        <input id="new-role-name" class="form-input" @bind="NewName" placeholder="npr. Skrbnik spletne trgovine" />
+      </label>
+      <label class="form-field" for="new-role-code">Koda
+        <input id="new-role-code" class="form-input code-input" @bind="NewCode" placeholder="SPLETNI_SKRBNIK" />
+        <small>Velike črke, številke in podčrtaj.</small>
+      </label>
+      <label class="form-field role-description-field" for="new-role-description">Kratek opis
+        <input id="new-role-description" class="form-input" @bind="NewDescription" placeholder="Za kaj je vloga namenjena?" />
+      </label>
+      <button type="button" class="primary-button create-role-action" disabled="@Busy" @onclick="CreateRoleAsync">Ustvari in nastavi dostop</button>
+    </div>
+  </section>
+}
+
+<PimState Loading="Loading" Error="@LoadError" Empty="@(RoleRows.Count == 0)"
+          EmptyText="Varnostnih vlog ni." LoadingText="Nalaganje vlog …">
+  @if (!Loading && RoleRows.Count > 0)
+  {
+    <div class="role-workspace">
+      <aside class="ui-card role-directory" aria-label="Seznam vlog">
+        <div class="role-directory-head">
+          <div><span class="eyebrow">Vloge</span><strong>Izberi vlogo</strong></div>
+          <span class="count-badge">@FilteredRoles.Count</span>
+        </div>
+        <label class="visually-hidden" for="role-search">Poišči vlogo</label>
+        <input id="role-search" type="search" class="search-input role-search" @bind="RoleSearch" @bind:event="oninput" placeholder="Poišči vlogo …" />
+        <div class="role-list">
+          @foreach (var role in FilteredRoles)
+          {
+            <button type="button" class="role-list-item @(role.RoleId == SelectedRoleId ? "is-selected" : null)"
+                    aria-pressed="@(role.RoleId == SelectedRoleId)" @onclick="() => SelectRoleAsync(role.RoleId)">
+              <span class="role-avatar" aria-hidden="true">@Initials(role.Name)</span>
+              <span class="role-list-copy">
+                <strong>@role.Name</strong>
+                <small>@role.RoleCode</small>
+                <span>@role.UserCount @UserLabel(role.UserCount) · @role.PermissionCount dovoljenj</span>
+              </span>
+              @if (role.IsSystem) { <span class="system-badge">Sistemska</span> }
+            </button>
+          }
+        </div>
+      </aside>
+
+      @if (SelectedRole is { } selected)
+      {
+        <section class="ui-card permission-editor" aria-label="@($"Dovoljenja vloge {selected.Name}")">
+          <header class="permission-header">
+            <div class="permission-title">
+              <span class="role-avatar large" aria-hidden="true">@Initials(selected.Name)</span>
+              <div>
+                <div class="permission-title-line">
+                  <h2>@selected.Name</h2>
+                  @if (selected.IsSystem) { <span class="system-badge">Sistemska vloga</span> }
+                </div>
+                <p><span class="code-value">@selected.RoleCode</span> · @selected.UserCount @UserLabel(selected.UserCount)</p>
+              </div>
+            </div>
+            <span class="access-total">@SelectedPermissions.Count / @PimAccessCatalog.All.Count dovoljenj</span>
+          </header>
+
+          <section class="role-meta" aria-labelledby="role-meta-title">
+            <div class="section-heading compact">
+              <div><span class="eyebrow">Podatki vloge</span><h3 id="role-meta-title">Ime in namen</h3></div>
+              <button type="button" class="secondary-button" disabled="@Busy" @onclick="SaveRoleDetailsAsync">Shrani podatke</button>
+            </div>
+            <div class="role-meta-grid">
+              <label class="form-field" for="selected-role-name">Ime
+                <input id="selected-role-name" class="form-input" @bind="SelectedName" />
+              </label>
+              <label class="form-field role-description-field" for="selected-role-description">Opis
+                <input id="selected-role-description" class="form-input" @bind="SelectedDescription" placeholder="Kdaj naj skrbnik izbere to vlogo?" />
+              </label>
+            </div>
+          </section>
+
+          <section class="permission-section" aria-labelledby="permission-title">
+            <div class="section-heading compact permission-section-head">
+              <div>
+                <span class="eyebrow">Dostop</span>
+                <h3 id="permission-title">Strani, zavihki in podstrani</h3>
+                <p>Glavna stran odklene področje; pod njo lahko natančno omejiš posamezne poglede.</p>
+              </div>
+              @if (selected.RoleCode != PimRoles.Admin)
+              {
+                <div class="permission-bulk-actions">
+                  <button type="button" class="small-action" disabled="@Busy" @onclick="SelectAllPermissions">Izberi vse</button>
+                  <button type="button" class="small-action warn-action" disabled="@Busy" @onclick="ClearPermissions">Počisti</button>
+                </div>
+              }
+            </div>
+
+            @if (selected.RoleCode == PimRoles.Admin)
+            {
+              <div class="locked-admin-note">
+                <span aria-hidden="true">✓</span>
+                <div><strong>Skrbnik ima vedno poln dostop.</strong><small>Tega ni mogoče omejiti, da v sistemu vedno ostane vloga za upravljanje dostopa.</small></div>
+              </div>
+            }
+
+            <label class="permission-search-wrap" for="permission-search">
+              <span class="visually-hidden">Poišči stran ali zavihek</span>
+              <input id="permission-search" type="search" class="search-input" @bind="PermissionSearch" @bind:event="oninput"
+                     placeholder="Poišči stran, zavihek ali področje …" />
+              <span>@VisiblePages.Count prikazanih strani</span>
+            </label>
+
+            <div class="permission-groups">
+              @foreach (var group in VisiblePages.GroupBy(page => page.Group))
+              {
+                <section class="permission-group" aria-label="@group.Key">
+                  <h4>@group.Key</h4>
+                  <div class="permission-page-grid">
+                    @foreach (var permissionPage in group)
+                    {
+                      var children = VisibleChildren(permissionPage.Key);
+                      var pageSelected = IsSelected(permissionPage.Key);
+                      <article class="permission-page @(pageSelected ? "is-enabled" : null)">
+                        <label class="permission-page-toggle" for="@($"permission-{permissionPage.Key}")">
+                          <input id="@($"permission-{permissionPage.Key}")" type="checkbox" checked="@pageSelected"
+                                 disabled="@(Busy || selected.RoleCode == PimRoles.Admin)"
+                                 @onchange="args => TogglePage(permissionPage.Key, (bool)(args.Value ?? false))" />
+                          <span class="permission-page-copy">
+                            <strong>@permissionPage.Name</strong>
+                            <small>@permissionPage.Description</small>
+                          </span>
+                          <span class="permission-state">@(pageSelected ? "Dovoljeno" : "Brez dostopa")</span>
+                        </label>
+
+                        @if (children.Count > 0)
+                        {
+                          <div class="permission-children" aria-label="@($"Pogledi strani {permissionPage.Name}")">
+                            <div class="permission-children-head">
+                              <span>Zavihki in podstrani</span>
+                              @if (selected.RoleCode != PimRoles.Admin)
+                              {
+                                <button type="button" class="link-button" disabled="@(!pageSelected || Busy)"
+                                        @onclick="() => ToggleAllChildren(permissionPage.Key)">
+                                  @(AllChildrenSelected(permissionPage.Key) ? "Odstrani vse" : "Izberi vse")
+                                </button>
+                              }
+                            </div>
+                            @foreach (var child in children)
+                            {
+                              <label class="permission-child @(pageSelected ? null : "is-disabled")" for="@($"permission-{child.Key}")">
+                                <input id="@($"permission-{child.Key}")" type="checkbox" checked="@IsSelected(child.Key)"
+                                       disabled="@(!pageSelected || Busy || selected.RoleCode == PimRoles.Admin)"
+                                       @onchange="args => TogglePermission(child.Key, (bool)(args.Value ?? false))" />
+                                <span><strong>@child.Name</strong><small>@child.Description</small></span>
+                                <em>@(child.IsTab ? "Zavihek" : "Podstran")</em>
+                              </label>
+                            }
+                          </div>
+                        }
+                      </article>
+                    }
+                  </div>
+                </section>
+              }
+            </div>
+          </section>
+
+          <footer class="permission-footer">
+            <div>
+              <strong>@ChangedPermissionCount sprememb</strong>
+              <span>Dovoljenja se uporabijo takoj po shranjevanju.</span>
+            </div>
+            <button type="button" class="primary-button" disabled="@(Busy || selected.RoleCode == PimRoles.Admin || ChangedPermissionCount == 0)"
+                    @onclick="SavePermissionsAsync">Shrani dostop</button>
+          </footer>
+
+          @if (!selected.IsSystem)
+          {
+            <section class="danger-zone" aria-labelledby="danger-title">
+              <div><h3 id="danger-title">Izbriši vlogo</h3><p>Brisanje je mogoče samo, ko vloga ni dodeljena nobenemu uporabniku.</p></div>
+              @if (DeleteArmedRoleId == selected.RoleId)
+              {
+                <div class="confirm-delete">
+                  <span>Res izbrišem?</span>
+                  <button type="button" class="small-action warn-action" disabled="@(Busy || selected.UserCount > 0)" @onclick="DeleteRoleAsync">Da, izbriši</button>
+                  <button type="button" class="small-action" @onclick="() => DeleteArmedRoleId = null">Prekliči</button>
+                </div>
+              }
+              else
+              {
+                <button type="button" class="secondary-button danger-button" disabled="@(Busy || selected.UserCount > 0)"
+                        title="@(selected.UserCount > 0 ? "Vloga je še dodeljena uporabnikom." : null)"
+                        @onclick="() => DeleteArmedRoleId = selected.RoleId">Izbriši vlogo</button>
+              }
+            </section>
+          }
+        </section>
+      }
+    </div>
+  }
+</PimState>
 
 @code {
-  IReadOnlyList<PIM.Intranet.Services.RoleRow> Rows = [];
+  IReadOnlyList<ManagedRoleRow> RoleRows = [];
+  readonly HashSet<string> SelectedPermissions = new(StringComparer.Ordinal);
+  readonly HashSet<string> OriginalPermissions = new(StringComparer.Ordinal);
+  int? SelectedRoleId;
+  int? DeleteArmedRoleId;
   bool Loading = true;
-  string? Error;
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Vloge")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Koda"), new("Ime"), new("Uporabnikov", Numeric: true)];
+  bool Busy;
+  bool ShowCreate;
+  bool MessageOk;
+  string? Message;
+  string? LoadError;
+  string RoleSearch = "";
+  string PermissionSearch = "";
+  string NewCode = "";
+  string NewName = "";
+  string NewDescription = "";
+  string SelectedName = "";
+  string SelectedDescription = "";
 
-  protected override async Task OnInitializedAsync()
+  static readonly IReadOnlyList<PimCrumb> Crumbs =
+    [new("Sistemske zadeve", "administracija/uporabniki"), new("Vloge in dostop")];
+
+  ManagedRoleRow? SelectedRole => RoleRows.FirstOrDefault(role => role.RoleId == SelectedRoleId);
+
+  IReadOnlyList<ManagedRoleRow> FilteredRoles => string.IsNullOrWhiteSpace(RoleSearch)
+    ? RoleRows
+    : RoleRows.Where(role => Contains(role.Name, RoleSearch) || Contains(role.RoleCode, RoleSearch)
+      || Contains(role.Description, RoleSearch)).ToArray();
+
+  IReadOnlyList<PimPermissionDefinition> VisiblePages
   {
-    try { Rows = await Governance.GetRolesAsync(); }
-    catch { Error = "Vlog trenutno ni mogoče naložiti."; }
+    get
+    {
+      if (string.IsNullOrWhiteSpace(PermissionSearch)) return PimAccessCatalog.Pages;
+      return PimAccessCatalog.Pages.Where(page =>
+        Contains(page.Name, PermissionSearch) || Contains(page.Description, PermissionSearch)
+        || Contains(page.Group, PermissionSearch)
+        || PimAccessCatalog.ChildrenOf(page.Key).Any(child => Contains(child.Name, PermissionSearch) || Contains(child.Description, PermissionSearch)))
+        .ToArray();
+    }
+  }
+
+  int ChangedPermissionCount => SelectedPermissions.Except(OriginalPermissions).Count()
+    + OriginalPermissions.Except(SelectedPermissions).Count();
+
+  protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+  async Task ReloadAsync(int? selectRoleId = null)
+  {
+    Loading = true;
+    LoadError = null;
+    try
+    {
+      RoleRows = await Roles.GetRolesAsync();
+      var roleId = selectRoleId ?? SelectedRoleId ?? RoleRows.FirstOrDefault()?.RoleId;
+      if (roleId is not null) await SelectRoleAsync(roleId.Value);
+    }
+    catch { LoadError = "Vlog in dovoljenj trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
+
+  async Task SelectRoleAsync(int roleId)
+  {
+    SelectedRoleId = roleId;
+    DeleteArmedRoleId = null;
+    Message = null;
+    var selected = RoleRows.First(role => role.RoleId == roleId);
+    SelectedName = selected.Name;
+    SelectedDescription = selected.Description ?? "";
+    SelectedPermissions.Clear();
+    OriginalPermissions.Clear();
+    var loaded = selected.RoleCode == PimRoles.Admin
+      ? PimAccessCatalog.Keys
+      : await Roles.GetPermissionKeysAsync(roleId);
+    SelectedPermissions.UnionWith(loaded);
+    OriginalPermissions.UnionWith(loaded);
+  }
+
+  async Task ExecuteAsync(Func<Task> action, string success, int? keepRoleId = null)
+  {
+    Busy = true;
+    Message = null;
+    try
+    {
+      await action();
+      MessageOk = true;
+      Message = success;
+      await ReloadAsync(keepRoleId ?? SelectedRoleId);
+    }
+    catch (Exception exception)
+    {
+      MessageOk = false;
+      Message = exception.Message;
+    }
+    finally { Busy = false; }
+  }
+
+  async Task CreateRoleAsync()
+  {
+    var createdId = 0;
+    Busy = true;
+    Message = null;
+    try
+    {
+      createdId = await Roles.CreateRoleAsync(NewCode, NewName, NewDescription);
+      NewCode = ""; NewName = ""; NewDescription = ""; ShowCreate = false;
+      MessageOk = true;
+      Message = "Vloga je ustvarjena. Zdaj izberi strani in zavihke.";
+      await ReloadAsync(createdId);
+    }
+    catch (Exception exception)
+    {
+      MessageOk = false;
+      Message = exception.Message;
+    }
+    finally { Busy = false; }
+  }
+
+  Task SaveRoleDetailsAsync()
+  {
+    if (SelectedRoleId is not int roleId) return Task.CompletedTask;
+    return ExecuteAsync(() => Roles.UpdateRoleAsync(roleId, SelectedName, SelectedDescription),
+      "Ime in opis vloge sta shranjena.", roleId);
+  }
+
+  Task SavePermissionsAsync()
+  {
+    if (SelectedRoleId is not int roleId) return Task.CompletedTask;
+    return ExecuteAsync(() => Roles.SavePermissionsAsync(roleId, SelectedPermissions),
+      "Dostop do strani in zavihkov je shranjen.", roleId);
+  }
+
+  async Task DeleteRoleAsync()
+  {
+    if (SelectedRoleId is not int roleId) return;
+    Busy = true;
+    Message = null;
+    try
+    {
+      await Roles.DeleteRoleAsync(roleId);
+      MessageOk = true;
+      Message = "Vloga je izbrisana.";
+      SelectedRoleId = null;
+      await ReloadAsync();
+    }
+    catch (Exception exception)
+    {
+      MessageOk = false;
+      Message = exception.Message;
+    }
+    finally { Busy = false; }
+  }
+
+  void TogglePage(string pageKey, bool enabled)
+  {
+    var children = PimAccessCatalog.ChildrenOf(pageKey);
+    if (enabled)
+    {
+      SelectedPermissions.Add(pageKey);
+      foreach (var child in children) SelectedPermissions.Add(child.Key);
+    }
+    else
+    {
+      SelectedPermissions.Remove(pageKey);
+      foreach (var child in children) SelectedPermissions.Remove(child.Key);
+    }
+  }
+
+  void TogglePermission(string key, bool enabled)
+  {
+    if (enabled) SelectedPermissions.Add(key);
+    else SelectedPermissions.Remove(key);
+  }
+
+  void ToggleAllChildren(string pageKey)
+  {
+    var children = PimAccessCatalog.ChildrenOf(pageKey);
+    var select = children.Any(child => !SelectedPermissions.Contains(child.Key));
+    foreach (var child in children) TogglePermission(child.Key, select);
+  }
+
+  void SelectAllPermissions()
+  {
+    SelectedPermissions.Clear();
+    SelectedPermissions.UnionWith(PimAccessCatalog.Keys);
+  }
+
+  void ClearPermissions() => SelectedPermissions.Clear();
+  bool IsSelected(string key) => SelectedPermissions.Contains(key);
+  bool AllChildrenSelected(string pageKey) => PimAccessCatalog.ChildrenOf(pageKey).All(child => IsSelected(child.Key));
+
+  IReadOnlyList<PimPermissionDefinition> VisibleChildren(string pageKey)
+  {
+    var children = PimAccessCatalog.ChildrenOf(pageKey);
+    if (string.IsNullOrWhiteSpace(PermissionSearch)) return children;
+    var matching = children.Where(child => Contains(child.Name, PermissionSearch) || Contains(child.Description, PermissionSearch)).ToArray();
+    return matching.Length > 0 ? matching : children;
+  }
+
+  static bool Contains(string? value, string search) =>
+    value?.Contains(search.Trim(), StringComparison.CurrentCultureIgnoreCase) == true;
+  static string Initials(string name) =>
+    string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
+  static string UserLabel(long count) => count == 1 ? "uporabnik" : count == 2 ? "uporabnika" : "uporabnikov";
 }

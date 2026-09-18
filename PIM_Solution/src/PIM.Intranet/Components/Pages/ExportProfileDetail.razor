@@ -6,7 +6,7 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>@(Profile?.Name ?? "Izvozni profil")</PageTitle>
-<PimPage Title="@(Profile?.Name ?? "Izvozni profil")" Subtitle="Stolpci se berejo iz registra. Sprememba profila zato ni skrita veja v izvozni kodi." Crumbs="Crumbs" />
+<PimPage Title="@(Profile?.Name ?? "Izvozni profil")" Subtitle="Stolpci se berejo iz registra, zato sprememba profila takoj velja povsod, kjer se ta profil uporablja." Crumbs="Crumbs" />
 
 <section class="ui-card data-card" aria-label="Stolpci izvoznega profila">
   <PimState Loading="Loading" Error="@Error" Empty="@(Columns.Count == 0)" EmptyText="Profil nima stolpcev." LoadingText="Nalaganje stolpcev …">

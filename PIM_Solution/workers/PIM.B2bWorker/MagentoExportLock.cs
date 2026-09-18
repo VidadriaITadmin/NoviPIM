@@ -3,7 +3,7 @@ namespace PIM.B2bWorker;
 /// <summary>
 /// Ključavnica na izhodni mapi Magento izvoza.
 ///
-/// Zakaj obstaja: <c>magento-products.csv</c> in <c>magento-customers.csv</c> sta par, ki ga
+/// Zakaj obstaja: <c>katalog.csv</c> in <c>stranke.csv</c> sta par, ki ga
 /// Magento uvozi skupaj. Dva sočasna zagona <c>--export-magento</c> v isto mapo bi lahko
 /// prestavila vsak svojo datoteko in objavila par, sestavljen iz dveh različnih zagonov —
 /// izdelke iz enega in stranke iz drugega. Enolična imena začasnih datotek to preprečijo samo

@@ -1,0 +1,93 @@
+@page "/splet/katalog"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@rendermode InteractiveServer
+@inject CatalogControlService Control
+
+<PageTitle>Nadzor kataloga</PageTitle>
+<PimPage Title="Nadzor kataloga" Subtitle="Katalog podjetja 2, skupna lastna zaloga IQ + VID in ločena zaloga dobaviteljev." />
+<p>Artikel izbereš s kljukicama spletnih mest na <a href="izdelki">kartici artikla</a>.
+    Za izvoz mora biti aktiven, imeti kategorijo in opravljeno spletno validacijo.
+    Izključitev spodaj vedno prepreči izvoz. <a href="splet/izvoz">Preveri dejanski CSV</a>.</p>
+<p>Pri oznakah X in O velja vneseni popust samo ob sveži pozitivni lastni zalogi.
+    Ko lastna zaloga poide, gre v CSV popust 0; dobaviteljeva zaloga ostane ločena.
+    Artikel O po porabi zaloge čaka na uredniški pregled.</p>
+<section class="ui-card toolbar section-gap">
+    <label>Šifra ali EAN <input @bind="Search" /></label>
+    <label><input type="checkbox" @bind="ReviewOnly" /> Samo čakalna vrsta O</label>
+    <button disabled="@Busy" @onclick="LoadAsync">Prikaži</button>
+    <button disabled="@Busy" @onclick="RefreshAsync">Osveži čakalno vrsto</button>
+</section>
+@if (Message is not null) { <p role="status">@Message</p> }
+@if (Error is not null) { <p role="alert">@Error</p> }
+<section class="ui-card section-gap">
+<table class="data-table">
+    <caption>Največ 100 artiklov; iskanje po začetku šifre ali celotnem EAN</caption>
+    <thead><tr><th>Artikel</th><th>ABC</th><th>Izbor / aktivnost</th><th>Validacija</th><th>Lastna zaloga</th><th>Dobavitelj</th><th>Rabatna skupina artikla / ERP</th><th>Odprodaja</th><th>Pregled</th></tr></thead>
+    <tbody>@foreach (var row in Rows) {
+        <tr><td><a href="@($"izdelki/{row.ProductId}")">@row.ItemId</a></td><td>@row.Department</td>
+        <td>@(row.Selected ? "Izbran" : "Brez kljukice") / @(row.Active ? "Aktiven" : "Neaktiven") @(row.Excluded ? "/ Izključen" : "")</td>
+        <td>@row.ValidationStatus</td><td>@Quantity(row.OwnAvailable)<br /><small>@Stamp(row.OwnSnapshotUtc)</small></td>
+        <td>@Quantity(row.SupplierAvailable)<br /><small>@Stamp(row.SupplierSnapshotUtc)</small></td>
+        <td>@row.ItemGroup / @row.DiscountGroup</td><td>@row.ClearancePercent % <button disabled="@Busy" @onclick="() => Select(row)">Uredi</button></td>
+        <td>@(row.ReviewPending ? "Potreben pregled" : "—")</td></tr>
+    }</tbody>
+</table>
+</section>
+@if (Selected is not null) {
+    <section class="ui-card section-gap">
+        <h2>@Selected.ItemId</h2>
+        <label><input type="checkbox" @bind="Excluded" /> Izključen iz kataloga</label>
+        <label>Popust odprodaje % <input type="number" min="0" max="100" step="0.01" @bind="Percent" /></label>
+        <button disabled="@Busy" @onclick="SaveAsync">Shrani</button>
+        @if (Selected.ReviewPending) {
+            <p>Najprej na kartici spremeni oznako ali aktivnost oziroma artikel izključi iz kataloga.</p>
+            <label>Opravljen pregled <input maxlength="1000" @bind="Resolution" /></label>
+            <button disabled="@Busy" @onclick="ResolveAsync">Zaključi pregled</button>
+        }
+    </section>
+}
+<section class="ui-card section-gap">
+    <h2>Stolpci brez nastavljenega vira (@Unmapped.Count)</h2>
+    <p>@string.Join(", ", Unmapped)</p>
+    <p>Ti stolpci so prisotni v CSV, vendar ostanejo prazni. Tudi preslikano polje je lahko prazno,
+        če izvor nima vrednosti. Polja, obvezna za posamezno kategorijo, določi v pravilih kakovosti.</p>
+    <p>»Skupina popusta« je skupina pakirnega popusta. »Rabatna skupina artikla« povezuje artikel
+        s skupinskimi rabati v stranke.csv. <a href="pravila-popustov">Uredi pravila popustov</a>.</p>
+</section>
+
+@code {
+    const int OrganizationId = 2;
+    IReadOnlyList<CatalogControlRow> Rows = [];
+    IReadOnlyList<string> Unmapped = [];
+    CatalogControlRow? Selected;
+    string Search = "", Resolution = "";
+    string? Error, Message;
+    bool ReviewOnly = true, Excluded, Busy;
+    decimal Percent;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    async Task RunAsync(Func<Task> work) {
+        Busy = true; Error = null;
+        try { await work(); } catch (Exception e) { Error = e.Message; }
+        finally { Busy = false; }
+    }
+    async Task ReadAsync() {
+        Rows = await Control.ReadAsync(OrganizationId, Search, ReviewOnly);
+        Unmapped = await Control.UnmappedAsync();
+    }
+    Task LoadAsync() => RunAsync(ReadAsync);
+    Task RefreshAsync() => RunAsync(async () => { await Control.RefreshAsync(OrganizationId); await ReadAsync(); });
+    void Select(CatalogControlRow row) { Selected = row; Excluded = row.Excluded; Percent = row.ClearancePercent; Resolution = ""; Message = null; }
+    Task SaveAsync() => RunAsync(async () => {
+        if (Selected is null) return;
+        await Control.SaveAsync(OrganizationId, Selected.ProductId, Excluded, Percent);
+        Message = "Pravilo je shranjeno. Upošteva ga naslednji izvoz.";
+        await ReadAsync();
+    });
+    Task ResolveAsync() => RunAsync(async () => {
+        if (Selected is null) return;
+        await Control.ResolveAsync(OrganizationId, Selected.ProductId, Resolution);
+        Selected = null; Message = "Pregled je zaključen."; await ReadAsync();
+    });
+    static string Quantity(decimal? value) => value?.ToString("N2") ?? "Ni podatka";
+    static string Stamp(DateTime? utc) => utc is null ? "Čas ni znan" : $"{utc.Value.ToPimLocal():g}";
+}

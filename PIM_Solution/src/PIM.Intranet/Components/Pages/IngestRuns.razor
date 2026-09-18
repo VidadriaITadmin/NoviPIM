@@ -60,7 +60,7 @@
         @foreach (var row in Rows)
         {
           <tr>
-            <td><a href="zajem/teki/@row.RunId">@row.StartedUtc.ToLocalTime().ToString("g")</a></td>
+            <td><a href="zajem/teki/@row.RunId">@row.StartedUtc.ToPimLocal().ToString("g")</a></td>
             <td>@row.OrganizationName</td>
             <td><span class="code-value">@row.SourceCode</span></td>
             <td>@row.Pipeline</td>

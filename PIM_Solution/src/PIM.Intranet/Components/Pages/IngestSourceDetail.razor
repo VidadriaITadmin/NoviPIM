@@ -90,7 +90,7 @@
             @foreach (var run in Runs)
             {
               <tr>
-                <td><a href="zajem/teki/@run.RunId">@run.StartedUtc.ToLocalTime().ToString("g")</a></td>
+                <td><a href="zajem/teki/@run.RunId">@run.StartedUtc.ToPimLocal().ToString("g")</a></td>
                 <td>@run.Pipeline</td>
                 <td><PimChip Text="@Status(run.Status)" Tone="@Tone(run.Status)" /></td>
                 <td class="numeric">@run.RowsRead.ToString("N0")</td>
@@ -161,6 +161,6 @@
 
   static string Status(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja", "NeverRun" => "Še brez teka", _ => value };
   static string? Tone(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "good", "Stale" => "warn", "Failed" => "bad", _ => null };
-  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToPimLocal().ToString("g");
   static string Duration(DateTime start, DateTime? end) => end is null ? "V teku" : $"{Math.Max(0, (end.Value - start).TotalSeconds):N0} s";
 }

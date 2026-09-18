@@ -1,0 +1,9 @@
+ops.AlertRecipientConfig — zamenjava prejemnika e-pošte za alarme
+
+UPDATE ops.AlertRecipientConfig SET RecipientKey = 'david@vidadria.com' WHERE RecipientKey = 'david.planinsek1@gmail.com';
+-- 4 vrstice (org 1-4)
+
+UPDATE ops.AlertDelivery SET RecipientKey = 'david@vidadria.com' WHERE RecipientKey = 'david.planinsek1@gmail.com' AND Status = 'Pending';
+-- 6 čakajočih alarmov (isti razlog, ista zamenjava)
+
+Prejemnik alarmov (ADMIN vloga, samo Critical resnost) je bil nastavljen na osebni Gmail naslov; zamenjan na službeni david@vidadria.com. Popravljeno tudi na že čakajočih (Pending) alarmih iz 3.-4. septembra, da gredo ob dostavi na pravi naslov.

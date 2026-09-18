@@ -1,14 +1,34 @@
 @* Kartica na razdelilni strani (Nastavitve, Zajem, Izvozi). Vsaka vodi na eno delovno stran
    in pove, koliko vrstic je za njo — stevilo je vedno iz baze, nikoli vpisano. *@
-<a class="ui-card hub-card" href="@Href">
-  <strong>@Title</strong>
-  <p>@Description</p>
-  <span class="hub-count">@Count</span>
-</a>
+@inject AuthenticationStateProvider Authentication
+@inject RoleAccessService Access
+
+@if (Visible)
+{
+  <a class="ui-card hub-card" href="@Href">
+    <strong>@Title</strong>
+    <p>@Description</p>
+    <span class="hub-count">@Count</span>
+  </a>
+}
 
 @code {
   [Parameter, EditorRequired] public required string Title { get; set; }
   [Parameter, EditorRequired] public required string Href { get; set; }
   [Parameter] public string? Description { get; set; }
   [Parameter] public string? Count { get; set; }
+
+  bool Visible;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    var permission = PimAccessCatalog.Resolve(Href);
+    if (permission is null) { Visible = true; return; }
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      Visible = await Access.CanAccessAsync(user, permission);
+    }
+    catch { Visible = false; }
+  }
 }

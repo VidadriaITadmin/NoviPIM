@@ -1,64 +1,365 @@
 @page "/pravila-popustov"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
 
-<PageTitle>Pravila popustov</PageTitle>
-<div class="page-header"><div><h1>Pravila popustov</h1><p>Upravljanje preslikav, vrednostnih pragov, poštnine in skupinskih popustov.</p></div></div>
+<PageTitle>Komercialna pravila</PageTitle>
+<PimPage Title="Komercialna pravila"
+         Subtitle="Na enem mestu upravljaš preslikavo skupin strank, vrednostne popuste, poštnino in posebne izjeme."
+         Crumbs="Crumbs" />
 
-<section class="ui-card panel section-gap">
-  <h2>Skupina Magento po tipu stranke</h2>
-  <div class="form-grid">
-    <label class="form-field">Tip stranke<select class="filter-select" @bind="TypeCode">@foreach(var type in Types){<option value="@type.CustomerTypeCode">@type.Name</option>}</select></label>
-    <label class="form-field">Ključ skupine Magento<input class="form-input" @bind="GroupKey" /></label>
-    <div class="form-action"><button class="primary-button" @onclick="SaveType">Shrani preslikavo</button></div>
+<PimTabs Active="commercial" Tabs="RulesTabs.Tabs" Label="Pravila in izvor podatkov" />
+
+<section class="ui-card rule-guide" aria-labelledby="commercial-guide-title">
+  <div>
+    <h2 id="commercial-guide-title">Spremeni samo pravilo, ki določa rezultat</h2>
+    <p>Najprej izberi področje. Vsaka sprememba se zapiše v revizijsko sled, zato ni treba voditi ločene evidence.</p>
   </div>
+  <ol class="rule-steps">
+    <li><strong>Izberi področje</strong><span>Skupine, pragovi, poštnina ali izjeme.</span></li>
+    <li><strong>Uredi eno pravilo</strong><span>Obrazec pokaže samo polja, ki so zanj pomembna.</span></li>
+    <li><strong>Shrani</strong><span>Sprememba velja pri naslednjem izračunu ali izvozu.</span></li>
+  </ol>
 </section>
 
-<section class="ui-card data-card section-gap">
-  @if(Tiers.Count==0){<div class="empty-state">V bazi ni vrednostnih pragov.</div>}
-  else{<table class="data-table"><caption>Vrednostni pragovi iz PIM baze</caption><thead><tr><th>Stopnja</th><th>Prag bruto brez DDV</th><th>Popust %</th><th><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach(var tier in Tiers){<tr><td>@tier.TierNumber</td><td>@tier.ThresholdGrossExVat</td><td>@tier.PercentValue</td><td><button class="small-action" @onclick="()=>SelectTier(tier)">Uredi</button></td></tr>}</tbody></table>}
-</section>
-<section class="ui-card panel section-gap">
-  <h2>Uredi vrednostni prag</h2>
-  <div class="form-grid">
-    <label class="form-field">Stopnja<input type="number" min="1" max="3" class="form-input" @bind="TierNumber" /></label>
-    <label class="form-field">Prag bruto brez DDV<input type="number" class="form-input" @bind="TierThreshold" /></label>
-    <label class="form-field">Popust %<input type="number" class="form-input" @bind="TierPercent" /></label>
-    <div class="form-action"><button class="primary-button" @onclick="SaveTier">Shrani prag</button></div>
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+
+@if (!Loading && Error is null)
+{
+  <div class="rule-summary" aria-label="Povzetek komercialnih pravil">
+    <div class="rule-summary-item good"><span>Preslikane skupine strank</span><strong>@MappedTypeCount.ToString("N0") / @Types.Count.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Vrednostni pragovi</span><strong>@Tiers.Count.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Pravila poštnine</span><strong>@((Rows?.Count ?? 0).ToString("N0"))</strong></div>
+    <div class="rule-summary-item warn"><span>Trenutno veljavne izjeme</span><strong>@ActiveOverrideCount.ToString("N0")</strong></div>
   </div>
-</section>
+}
 
-<section class="ui-card data-card section-gap">
-  @if(Rows is null){<div class="loading-state">Nalaganje pravil …</div>}
-  else{<table class="data-table"><caption>Pravila poštnine</caption><thead><tr><th>Pravilo</th><th>Prag</th><th>Dolžina paketa</th><th>Neto poštnina</th><th>Brezplačno</th><th>Prednost</th><th><span class="visually-hidden">Dejanje</span></th></tr></thead><tbody>@foreach(var row in Rows){<tr><td>@row.RuleCode</td><td><input type="number" class="table-input" aria-label="Prag za @row.RuleCode" @bind="row.OrderThreshold" /></td><td><input type="number" class="table-input" aria-label="Dolžina paketa za @row.RuleCode" @bind="row.PackageLengthMeters" /></td><td><input type="number" class="table-input" aria-label="Neto poštnina za @row.RuleCode" @bind="row.ShippingNet" /></td><td><input type="checkbox" aria-label="Brezplačna poštnina za @row.RuleCode" @bind="row.IsFree" /></td><td><input type="number" class="table-input compact" aria-label="Prednost za @row.RuleCode" @bind="row.Priority" /></td><td><button class="small-action good-action" @onclick="()=>Save(row)">Shrani pravilo</button></td></tr>}</tbody></table>}
-</section>
+<nav class="commercial-sections" aria-label="Področja komercialnih pravil">
+  <button type="button" class="@(Section == "types" ? "active" : null)" aria-pressed="@(Section == "types")" @onclick='() => Section = "types"'>
+    <strong>Skupine strank</strong><span>@MappedTypeCount.ToString("N0") preslikanih</span>
+  </button>
+  <button type="button" class="@(Section == "tiers" ? "active" : null)" aria-pressed="@(Section == "tiers")" @onclick='() => Section = "tiers"'>
+    <strong>Vrednostni pragovi</strong><span>@Tiers.Count.ToString("N0") stopenj</span>
+  </button>
+  <button type="button" class="@(Section == "shipping" ? "active" : null)" aria-pressed="@(Section == "shipping")" @onclick='() => Section = "shipping"'>
+    <strong>Poštnina</strong><span>@(Rows?.Count ?? 0) pravil</span>
+  </button>
+  <button type="button" class="@(Section == "overrides" ? "active" : null)" aria-pressed="@(Section == "overrides")" @onclick='() => Section = "overrides"'>
+    <strong>Posebne izjeme</strong><span>@Overrides.Count.ToString("N0") vnosov</span>
+  </button>
+</nav>
 
-<section class="ui-card data-card section-gap">
-  <table class="data-table"><caption>Override skupinskih popustov — prioriteta: stranka, tip stranke, uvoženi SAOP popust</caption><thead><tr><th>Cilj</th><th>Tip ali stranka</th><th>Skupina artiklov</th><th>Popust %</th><th>Velja od</th><th>Velja do</th></tr></thead><tbody>@foreach(var item in Overrides){<tr><td>@(item.TargetKind=="CUSTOMER"?"Stranka":"Tip stranke")</td><td>@(item.CustomerKey??item.CustomerTypeCode)</td><td>@item.ItemGroupCode</td><td>@item.PercentValue</td><td>@item.ValidFrom?.ToString("d")</td><td>@item.ValidTo?.ToString("d")</td></tr>}</tbody></table>
-</section>
-<section class="ui-card panel section-gap">
-  <h2>Dodaj override skupinskega popusta</h2>
-  <div class="form-grid wide-form-grid">
-    <label class="form-field">Cilj<select class="filter-select" @bind="TargetKind"><option value="TYPE">Tip stranke</option><option value="CUSTOMER">Stranka</option></select></label>
-    <label class="form-field">Šifra tipa<input class="form-input" @bind="OverrideType" /></label>
-    <label class="form-field">ID stranke<input type="number" class="form-input" @bind="OverrideCustomer" /></label>
-    <label class="form-field">Skupina artiklov<input class="form-input" @bind="ItemGroup" /></label>
-    <label class="form-field">Popust %<input type="number" class="form-input" @bind="OverridePercent" /></label>
-    <label class="form-field">Velja od<input type="date" class="form-input" @bind="OverrideFrom" /></label>
-    <label class="form-field">Velja do<input type="date" class="form-input" @bind="OverrideTo" /></label>
-    <div class="form-action"><button class="primary-button" @onclick="SaveOverride">Dodaj override</button></div>
-  </div>
-</section>
-@if(!string.IsNullOrEmpty(Message)){<p class="message-state info-message" role="status">@Message</p>}
-@code{
-  IReadOnlyList<PIM.Intranet.Services.ShippingRuleRow>? Rows;IReadOnlyList<PIM.Intranet.Services.CustomerTypeRow> Types=[];IReadOnlyList<PIM.Intranet.Services.ValueTierRow> Tiers=[];IReadOnlyList<PIM.Intranet.Services.GroupOverrideRow> Overrides=[];string? Message;string TypeCode="",GroupKey="",TargetKind="TYPE",OverrideType="",ItemGroup="";int TierNumber=1;decimal TierThreshold,TierPercent,OverridePercent;long? OverrideCustomer;DateTime? OverrideFrom,OverrideTo;int? OrganizationId;
-  protected override async Task OnInitializedAsync(){var org=await Data.GetCurrentOrganizationAsync();if(org is null)return;OrganizationId=org.OrganizationId;Rows=await Data.GetShippingRulesAsync();Types=await Data.GetCustomerTypesAsync();Tiers=await Data.GetValueTiersAsync();Overrides=await Data.GetGroupOverridesAsync(org.OrganizationId);TypeCode=Types.FirstOrDefault()?.CustomerTypeCode??"";}
-  async Task Save(PIM.Intranet.Services.ShippingRuleRow row){if(OrganizationId is null)return;var auth=await Authentication.GetAuthenticationStateAsync();await Data.SaveShippingRuleAsync(OrganizationId.Value,row,auth.User.Identity?.Name??"neznan");Message="Pravilo je shranjeno in revizijsko zabeleženo.";}
-  async Task<string> Actor(){var auth=await Authentication.GetAuthenticationStateAsync();return auth.User.Identity?.Name??"neznan";}
-  async Task SaveType(){if(OrganizationId is null)return;await Data.SaveCustomerTypeMappingAsync(OrganizationId.Value,TypeCode,GroupKey,await Actor());Message="Preslikava je shranjena in revizijsko zabeležena.";}
-  void SelectTier(PIM.Intranet.Services.ValueTierRow tier){TierNumber=tier.TierNumber;TierThreshold=tier.ThresholdGrossExVat;TierPercent=tier.PercentValue;}
-  async Task SaveTier(){if(OrganizationId is null)return;await Data.SaveValueTierAsync(OrganizationId.Value,TierNumber,TierThreshold,TierPercent,await Actor());Tiers=await Data.GetValueTiersAsync();Message="Vrednostni prag je shranjen in revizijsko zabeležen.";}
-  async Task SaveOverride(){if(OrganizationId is null)return;await Data.SaveGroupOverrideAsync(OrganizationId.Value,TargetKind,TargetKind=="CUSTOMER"?OverrideCustomer:null,TargetKind=="TYPE"?OverrideType:null,ItemGroup,OverridePercent,OverrideFrom,OverrideTo,await Actor());Overrides=await Data.GetGroupOverridesAsync(OrganizationId.Value);Message="Override je dodan in revizijsko zabeležen.";}
+<PimState Loading="Loading" Error="@Error" Empty="@(OrganizationId is null)" EmptyText="Aktivna organizacija ni na voljo." LoadingText="Nalaganje komercialnih pravil …">
+  @if (Section == "types")
+  {
+    <section class="ui-card panel" aria-labelledby="customer-group-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="customer-group-title">Skupina Magento po tipu stranke</h2>
+          <p>Izberi tip stranke; trenutna preslikava se izpolni samodejno. Prazen ključ preslikavo odstrani.</p>
+        </div>
+      </div>
+      <div class="form-grid commercial-form">
+        <label class="form-field">Tip stranke
+          <select class="filter-select" @bind="TypeCode" @bind:after="OnTypeChanged">
+            @foreach (var type in Types) { <option value="@type.CustomerTypeCode">@type.Name (@type.CustomerTypeCode)</option> }
+          </select>
+        </label>
+        <label class="form-field">Ključ skupine Magento
+          <input class="form-input" placeholder="Prazno pomeni brez preslikave" @bind="GroupKey" />
+        </label>
+        <div class="form-action"><button type="button" class="primary-button" disabled="@(Busy || TypeCode.Length == 0)" @onclick="SaveTypeAsync">Shrani preslikavo</button></div>
+      </div>
+    </section>
+
+    <section class="ui-card data-card section-gap">
+      <PimTable Caption="Vsi tipi strank in njihove skupine Magento" Columns="TypeColumns">
+        <Rows>
+          @foreach (var type in Types)
+          {
+            <tr>
+              <td><strong>@type.Name</strong><div class="tree-path">@type.CustomerTypeCode</div></td>
+              <td>@(type.MagentoGroupKey ?? "—")</td>
+              <td><PimChip Text="@(string.IsNullOrWhiteSpace(type.MagentoGroupKey) ? "Ni preslikano" : "Preslikano")" Tone="@(string.IsNullOrWhiteSpace(type.MagentoGroupKey) ? "warn" : "good")" /></td>
+              <td><button type="button" class="small-action" @onclick="() => SelectType(type)">Uredi</button></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+  }
+  else if (Section == "tiers")
+  {
+    <section class="commercial-workspace">
+      <section class="ui-card data-card">
+        <PimTable Caption="Vrednostni pragovi — izberi vrstico za urejanje" Columns="TierColumns">
+          <Rows>
+            @foreach (var tier in Tiers)
+            {
+              <tr class="@(tier.TierNumber == TierNumber ? "selected-row" : null)">
+                <td><strong>Stopnja @tier.TierNumber</strong></td>
+                <td class="numeric">@tier.ThresholdGrossExVat.ToString("N2")</td>
+                <td class="numeric">@tier.PercentValue.ToString("N2") %</td>
+                <td><button type="button" class="small-action" @onclick="() => SelectTier(tier)">Uredi</button></td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </section>
+      <section class="ui-card panel">
+        <h2>Uredi stopnjo @TierNumber</h2>
+        <p class="commercial-note">Ko skupna vrednost brez DDV doseže prag, se uporabi izbrani odstotek popusta.</p>
+        <div class="tier-form">
+          <label class="form-field">Prag bruto brez DDV
+            <input type="number" min="0" step="0.01" class="form-input" @bind="TierThreshold" />
+          </label>
+          <label class="form-field">Popust %
+            <input type="number" min="0" max="100" step="0.01" class="form-input" @bind="TierPercent" />
+          </label>
+          <button type="button" class="primary-button" disabled="@(Busy || !CanSaveTier)" @onclick="SaveTierAsync">Shrani stopnjo</button>
+        </div>
+      </section>
+    </section>
+  }
+  else if (Section == "shipping")
+  {
+    <section class="ui-card data-card">
+      @if (Rows is null || Rows.Count == 0)
+      {
+        <div class="empty-state">V bazi ni pravil poštnine.</div>
+      }
+      else
+      {
+        <table class="data-table">
+          <caption>Pravila poštnine — spremeni vrstico in jo shrani</caption>
+          <thead><tr><th>Pravilo</th><th>Prag naročila</th><th>Dolžina paketa (m)</th><th>Neto poštnina</th><th>Brezplačno</th><th>Prednost</th><th><span class="visually-hidden">Dejanje</span></th></tr></thead>
+          <tbody>
+            @foreach (var row in Rows)
+            {
+              <tr>
+                <td><strong>@row.RuleCode</strong></td>
+                <td><input type="number" min="0" step="0.01" class="table-input" aria-label="Prag naročila za @row.RuleCode" @bind="row.OrderThreshold" /></td>
+                <td><input type="number" min="0" step="0.01" class="table-input" aria-label="Dolžina paketa za @row.RuleCode" @bind="row.PackageLengthMeters" /></td>
+                <td><input type="number" min="0" step="0.01" class="table-input" aria-label="Neto poštnina za @row.RuleCode" @bind="row.ShippingNet" /></td>
+                <td><label class="check-field"><input type="checkbox" aria-label="Brezplačna poštnina za @row.RuleCode" @bind="row.IsFree" />Da</label></td>
+                <td><input type="number" min="0" class="table-input compact" aria-label="Prednost za @row.RuleCode" @bind="row.Priority" /></td>
+                <td><button type="button" class="small-action good-action" disabled="@(Busy || !CanSaveShipping(row))" @onclick="() => SaveShippingAsync(row)">Shrani</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+  else
+  {
+    <section class="ui-card panel" aria-labelledby="override-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="override-title">Dodaj posebno izjemo skupinskega popusta</h2>
+          <p>Izjema ima prednost pred uvoženim SAOP popustom. Polje »velja do« lahko pustiš prazno za trajno veljavnost.</p>
+        </div>
+      </div>
+      <div class="form-grid override-form">
+        <label class="form-field">Izjema velja za
+          <select class="filter-select" @bind="TargetKind">
+            <option value="TYPE">Tip stranke</option>
+            <option value="CUSTOMER">Posamezno stranko</option>
+          </select>
+        </label>
+        @if (TargetKind == "TYPE")
+        {
+          <label class="form-field">Tip stranke
+            <select class="filter-select" @bind="OverrideType">
+              @foreach (var type in Types) { <option value="@type.CustomerTypeCode">@type.Name (@type.CustomerTypeCode)</option> }
+            </select>
+          </label>
+        }
+        else
+        {
+          <label class="form-field">ID stranke
+            <input type="number" min="1" class="form-input" placeholder="Interni ID stranke" @bind="OverrideCustomer" />
+          </label>
+        }
+        <label class="form-field">Skupina artiklov
+          <input class="form-input" placeholder="Koda skupine" @bind="ItemGroup" />
+        </label>
+        <label class="form-field">Popust %
+          <input type="number" min="0" max="100" step="0.01" class="form-input" @bind="OverridePercent" />
+        </label>
+        <label class="form-field">Velja od
+          <input type="date" class="form-input" @bind="OverrideFrom" />
+        </label>
+        <label class="form-field">Velja do
+          <input type="date" class="form-input" @bind="OverrideTo" />
+        </label>
+        <div class="form-action"><button type="button" class="primary-button" disabled="@(Busy || !CanSaveOverride)" @onclick="SaveOverrideAsync">Dodaj izjemo</button></div>
+      </div>
+      @if (OverrideDatesInvalid) { <p class="message-state warn-message">Datum »velja do« ne more biti pred datumom »velja od«.</p> }
+    </section>
+
+    <section class="ui-card data-card section-gap">
+      <PimTable Caption="Posebne izjeme — prednost: stranka, tip stranke, nato uvoženi SAOP popust" Columns="OverrideColumns">
+        <Rows>
+          @foreach (var item in Overrides)
+          {
+            <tr>
+              <td>@(item.TargetKind == "CUSTOMER" ? "Stranka" : "Tip stranke")</td>
+              <td><strong>@(item.CustomerKey ?? item.CustomerTypeCode ?? "—")</strong></td>
+              <td>@item.ItemGroupCode</td>
+              <td class="numeric">@item.PercentValue.ToString("N2") %</td>
+              <td>@(item.ValidFrom?.ToString("d") ?? "takoj")</td>
+              <td>@(item.ValidTo?.ToString("d") ?? "brez konca")</td>
+              <td><PimChip Text="@OverrideStatus(item)" Tone="@OverrideTone(item)" /></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (Overrides.Count == 0) { <div class="empty-state">Posebnih izjem še ni.</div> }
+    </section>
+  }
+</PimState>
+
+@code {
+  IReadOnlyList<ShippingRuleRow>? Rows;
+  IReadOnlyList<CustomerTypeRow> Types = [];
+  IReadOnlyList<ValueTierRow> Tiers = [];
+  IReadOnlyList<GroupOverrideRow> Overrides = [];
+  string Section = "types";
+  string? Message;
+  string? SaveError;
+  string? Error;
+  bool Loading = true;
+  bool Busy;
+  string TypeCode = "", GroupKey = "", TargetKind = "TYPE", OverrideType = "", ItemGroup = "";
+  int TierNumber = 1;
+  decimal TierThreshold, TierPercent, OverridePercent;
+  long? OverrideCustomer;
+  DateTime? OverrideFrom, OverrideTo;
+  int? OrganizationId;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Komercialna pravila")];
+  static readonly IReadOnlyList<PimColumn> TypeColumns = [new("Tip stranke"), new("Skupina Magento"), new("Stanje"), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja"), new("Prag brez DDV", Numeric: true), new("Popust", Numeric: true), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> OverrideColumns =
+  [new("Cilj"), new("Stranka ali tip"), new("Skupina artiklov"), new("Popust", Numeric: true), new("Od"), new("Do"), new("Stanje")];
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationId = organization.OrganizationId;
+      await ReloadAllAsync();
+      TypeCode = Types.FirstOrDefault()?.CustomerTypeCode ?? "";
+      OverrideType = TypeCode;
+      OnTypeChanged();
+      var firstTier = Tiers.FirstOrDefault();
+      if (firstTier is not null) SelectTier(firstTier);
+    }
+    catch { Error = "Komercialnih pravil trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ReloadAllAsync()
+  {
+    if (OrganizationId is null) return;
+    var shippingTask = Data.GetShippingRulesAsync();
+    var typesTask = Data.GetCustomerTypesAsync();
+    var tiersTask = Data.GetValueTiersAsync();
+    var overridesTask = Data.GetGroupOverridesAsync(OrganizationId.Value);
+    await Task.WhenAll(shippingTask, typesTask, tiersTask, overridesTask);
+    Rows = await shippingTask;
+    Types = await typesTask;
+    Tiers = await tiersTask;
+    Overrides = await overridesTask;
+  }
+
+  void OnTypeChanged() =>
+    GroupKey = Types.FirstOrDefault(type => type.CustomerTypeCode == TypeCode)?.MagentoGroupKey ?? "";
+
+  void SelectType(CustomerTypeRow type)
+  {
+    TypeCode = type.CustomerTypeCode;
+    GroupKey = type.MagentoGroupKey ?? "";
+  }
+
+  void SelectTier(ValueTierRow tier)
+  {
+    TierNumber = tier.TierNumber;
+    TierThreshold = tier.ThresholdGrossExVat;
+    TierPercent = tier.PercentValue;
+  }
+
+  async Task SaveTypeAsync() => await RunSaveAsync(async () =>
+  {
+    await Data.SaveCustomerTypeMappingAsync(OrganizationId!.Value, TypeCode, GroupKey, await ActorAsync());
+    Types = await Data.GetCustomerTypesAsync();
+    OnTypeChanged();
+  }, "Preslikava skupine stranke je shranjena.");
+
+  async Task SaveTierAsync() => await RunSaveAsync(async () =>
+  {
+    await Data.SaveValueTierAsync(OrganizationId!.Value, TierNumber, TierThreshold, TierPercent, await ActorAsync());
+    Tiers = await Data.GetValueTiersAsync();
+  }, $"Vrednostna stopnja {TierNumber} je shranjena.");
+
+  async Task SaveShippingAsync(ShippingRuleRow row) => await RunSaveAsync(async () =>
+  {
+    await Data.SaveShippingRuleAsync(OrganizationId!.Value, row, await ActorAsync());
+  }, $"Pravilo poštnine {row.RuleCode} je shranjeno.");
+
+  async Task SaveOverrideAsync() => await RunSaveAsync(async () =>
+  {
+    await Data.SaveGroupOverrideAsync(OrganizationId!.Value, TargetKind,
+      TargetKind == "CUSTOMER" ? OverrideCustomer : null,
+      TargetKind == "TYPE" ? OverrideType : null,
+      ItemGroup.Trim(), OverridePercent, OverrideFrom, OverrideTo, await ActorAsync());
+    Overrides = await Data.GetGroupOverridesAsync(OrganizationId.Value);
+    ItemGroup = "";
+    OverridePercent = 0;
+    OverrideCustomer = null;
+    OverrideFrom = OverrideTo = null;
+  }, "Posebna izjema je dodana.");
+
+  async Task RunSaveAsync(Func<Task> action, string message)
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = SaveError = null;
+    try { await action(); Message = message; }
+    catch { SaveError = "Spremembe ni bilo mogoče shraniti. Preveri vnesene vrednosti in poskusi znova."; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  int MappedTypeCount => Types.Count(type => !string.IsNullOrWhiteSpace(type.MagentoGroupKey));
+  int ActiveOverrideCount => Overrides.Count(item =>
+    (item.ValidFrom is null || item.ValidFrom.Value.Date <= DateTime.Today)
+    && (item.ValidTo is null || item.ValidTo.Value.Date >= DateTime.Today));
+  bool CanSaveTier => TierNumber is >= 1 and <= 3 && TierThreshold >= 0 && TierPercent is >= 0 and <= 100;
+  bool CanSaveShipping(ShippingRuleRow row) => row.ShippingNet >= 0 && row.Priority >= 0
+    && (row.OrderThreshold is null || row.OrderThreshold >= 0)
+    && (row.PackageLengthMeters is null || row.PackageLengthMeters >= 0);
+  bool OverrideDatesInvalid => OverrideFrom is not null && OverrideTo is not null && OverrideTo.Value.Date < OverrideFrom.Value.Date;
+  bool CanSaveOverride => ItemGroup.Trim().Length > 0 && OverridePercent is >= 0 and <= 100 && !OverrideDatesInvalid
+    && (TargetKind == "TYPE" ? OverrideType.Length > 0 : OverrideCustomer > 0);
+
+  static string OverrideStatus(GroupOverrideRow row)
+  {
+    if (row.ValidFrom is not null && row.ValidFrom.Value.Date > DateTime.Today) return "Prihodnja";
+    if (row.ValidTo is not null && row.ValidTo.Value.Date < DateTime.Today) return "Potekla";
+    return "Veljavna";
+  }
+
+  static string? OverrideTone(GroupOverrideRow row) => OverrideStatus(row) switch
+  {
+    "Veljavna" => "good",
+    "Prihodnja" => "info",
+    _ => null,
+  };
 }

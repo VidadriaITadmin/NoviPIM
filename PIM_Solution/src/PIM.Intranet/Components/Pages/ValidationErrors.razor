@@ -13,6 +13,8 @@
 
 <PimPage Title="Napake validacije" Subtitle="Kaj izdelku manjka, kateri profil to zahteva in kaj se zaradi tega ustavi. Napake ni mogoče označiti za rešeno — izgine sama, ko je izdelek popravljen in znova validiran." Crumbs="Crumbs" />
 
+<PimTabs Active="napake" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+
 <section class="kpi-grid" aria-labelledby="quality-kpi-title">
   <h2 id="quality-kpi-title" class="visually-hidden">Povzetek odprtih napak</h2>
   <PimStat Label="Odprte težave" Value="@Number(Overview?.Totals.OpenIssueCount)" Note="@($"{Number(Overview?.Totals.ErrorCount)} napak · {Number(Overview?.Totals.WarningCount)} opozoril")" />
@@ -108,6 +110,10 @@
   </select>
 
   <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+  @* Izvoz uporabi natanko iste filtre kot pogled — kar vidis, je to, kar se izvozi (kot na
+     strani Izdelki). Vrstica v zvezku je obarvana po resnosti: rdeca za napako, bleda oranzna
+     za opozorilo. Uporabnikova zahteva 2026-09-10. *@
+  <a class="ghost-button" href="@ExportHref()" title="Izvozi trenutno filtriran seznam napak v Excel; vrstica je obarvana po resnosti.">Izvozi Excel</a>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
@@ -434,6 +440,16 @@
 
   string RuleHref(QualityRuleImpact rule) =>
     $"kakovost/napake?profil={Uri.EscapeDataString(rule.ProfileCode)}&polje={Uri.EscapeDataString(rule.FieldCode)}";
+
+  // Izvoz je isti filter, druga pot. "podjetje" se poda izrecno (ne prek QueryOrganization),
+  // ker je ob prvem nalaganju strani se ni v naslovu — brez tega bi izvoz na prvi obisk manjkal.
+  string ExportHref()
+  {
+    var listHref = Href(organization: OrganizationDraft);
+    var separatorIndex = listHref.IndexOf('?');
+    var parameters = separatorIndex < 0 ? "" : listHref[(separatorIndex + 1)..];
+    return parameters.Length == 0 ? "izvoz/kakovost-napake.xlsx" : "izvoz/kakovost-napake.xlsx?" + parameters;
+  }
 
   Task ApplyFiltersAsync()
   {

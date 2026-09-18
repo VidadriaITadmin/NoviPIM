@@ -1,13 +1,55 @@
 @page "/pravila"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 
-<PageTitle>Pravila</PageTitle>
-<PimPage Title="Pravila" Subtitle="Registri, ki določajo veljavnost, prevode in preslikavo podatkov. Sprememba vrstice je poslovna odločitev; pregled je ločen od zapisovalnih poti." />
+<PageTitle>Pravila in izvor podatkov</PageTitle>
+<PimPage Title="Pravila in izvor podatkov"
+         Subtitle="Tu določiš, kako podatek pride v PIM, kako se poenoti, kaj mora biti izpolnjeno in kako se uporabi na izhodu." />
 
-<section class="hub-grid" aria-label="Področja pravil">
-  <PimHubCard Title="Validacijski profili" Href="pravila/validacija" Description="Obvezna polja, resnost in obseg blokade za ERP ali splet." />
-  <PimHubCard Title="Slovar vrednosti" Href="pravila/slovar" Description="Prevodi in normalizacije izvornih vrednosti v kanonične vrednosti." />
-  <PimHubCard Title="Preslikave polj" Href="pravila/preslikave" Description="Kateri element vira polni katero kanonično polje in ali je pri zajemu obvezen." />
-  <PimHubCard Title="Komercialna pravila" Href="pravila-popustov" Description="Popusti, pragovi in izjeme za stranke ter vrste strank." />
-  <PimHubCard Title="Pravila za nazive" Href="pravila/nazivi" Description="Kako se iz podatkov izdelka sestavi spletni naziv v vsakem jeziku; predogled pred zapisom." />
+<section class="ui-card rules-start" aria-labelledby="rules-start-title">
+  <div class="rules-start-copy">
+    <span class="rules-eyebrow">Začni pri težavi, ki jo želiš odpraviti</span>
+    <h2 id="rules-start-title">Kaj želiš urediti?</h2>
+    <p>Izberi rezultat. Stran te odpre neposredno na registru, ki ga moraš spremeniti.</p>
+  </div>
+  <div class="rules-task-list">
+    <a href="pravila/preslikave">
+      <span class="task-number">1</span>
+      <span><strong>Podatek prihaja iz napačnega polja</strong><small>Preveri vir, element in ciljno polje v PIM.</small></span>
+      <span class="task-arrow" aria-hidden="true">→</span>
+    </a>
+    <a href="pravila/slovar">
+      <span class="task-number">2</span>
+      <span><strong>Vrednost ali prevod ni pravilen</strong><small>Poenoti izvorne vrednosti in jezikovne prevode.</small></span>
+      <span class="task-arrow" aria-hidden="true">→</span>
+    </a>
+    <a href="pravila/validacija">
+      <span class="task-number">3</span>
+      <span><strong>Artikel je neupravičeno blokiran ali gre skozi brez podatka</strong><small>Nastavi obveznost, resnost in vpliv zahteve.</small></span>
+      <span class="task-arrow" aria-hidden="true">→</span>
+    </a>
+    <a href="pravila/nazivi">
+      <span class="task-number">4</span>
+      <span><strong>Spletni naziv se sestavi napačno</strong><small>Izberi sestavne dele, preveri predogled in zapiši nazive.</small></span>
+      <span class="task-arrow" aria-hidden="true">→</span>
+    </a>
+    <a href="pravila-popustov">
+      <span class="task-number">5</span>
+      <span><strong>Popust ali poštnina ni pravilna</strong><small>Uredi skupine strank, pragove, izjeme in pravila poštnine.</small></span>
+      <span class="task-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+</section>
+
+<section class="rules-flow" aria-labelledby="rules-flow-title">
+  <div class="rules-flow-head">
+    <h2 id="rules-flow-title">Kako teče podatek</h2>
+    <p>Če je rezultat napačen, preverjaj od leve proti desni. Tako praviloma najdeš vzrok z najmanj posegi.</p>
+  </div>
+  <ol>
+    <li><strong>Izvor</strong><span>element dobavitelja ali ERP</span></li>
+    <li><strong>Preslikava</strong><span>ciljno polje v PIM</span></li>
+    <li><strong>Slovar</strong><span>enotna vrednost ali prevod</span></li>
+    <li><strong>Validacija</strong><span>obveznost in blokada</span></li>
+    <li><strong>Izhod</strong><span>naziv, splet ali komerciala</span></li>
+  </ol>
 </section>

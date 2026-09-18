@@ -1,5 +1,5 @@
 @page "/nastavitve/povezave-izdelkov"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.ProductLinkReadService Links
 @inject PIM.Intranet.Services.IntranetDataService Data
@@ -18,7 +18,7 @@
 
 <PageTitle>Povezave izdelkov</PageTitle>
 <PimPage Title="Povezave izdelkov"
-         Subtitle="Nadomestni, sorodni izdelki in pribor, kot jih pošlje dobavitelj v atributih izdelka. Bralna stran: svojega registra povezav sistem še nima."
+         Subtitle="Nadomestni, sorodni izdelki in pribor, kot jih pošlje dobavitelj v atributih izdelka. Stran je samo bralna."
          Crumbs="Crumbs" />
 
 <section class="ui-card data-card" aria-label="Povezave izdelkov">

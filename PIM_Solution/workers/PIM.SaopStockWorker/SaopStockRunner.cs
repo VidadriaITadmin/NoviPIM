@@ -1,3 +1,4 @@
+using System.Data;
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.SqlClient;
@@ -8,6 +9,9 @@ namespace PIM.SaopStockWorker;
 /// <summary>Kaj je profil povedal in kaj je iz njega prišlo.</summary>
 public sealed record SaopStockOutcome(
   string ProfileCode, string ProviderKind, int Warehouses, int RecordsRead, int Applied, int Quarantined, Guid RunId);
+
+/// <summary>Izid zajema datumov in kolicin prihoda (migracija 189, GetItemDeliveryDate).</summary>
+public sealed record SaopItemDeliveryOutcome(int ItemsChecked, int ItemsWithDelivery);
 
 /// <summary>
 /// Zaloga iz SAOP: profil iz baze → zahteva → XML → <c>stock.*</c>. Ločeno od <c>Program.cs</c>,
@@ -121,6 +125,147 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
       throw new InvalidOperationException(
         $"SAOP je vrnil {(int)response.StatusCode}: {payload[..Math.Min(payload.Length, 300)]}");
     return payload;
+  }
+
+  /// <summary>
+  /// Datum in kolicina prihoda za do @MaxLookups artiklov (migracija 189, SAOP
+  /// GetItemDeliveryDate — en artikel naenkrat). Kandidati so artikli iz aktivnega SAOP posnetka
+  /// tega podjetja, razvrsceni po tem, kdaj so bili nazadnje vprasani (nikoli vprasani najprej) —
+  /// brez GetStockAdvance kot filtra (uporabnik: "stock advance tega ne rabiva") to enakomerno
+  /// krozi cez cel katalog v vec tekih namesto v enem.
+  /// </summary>
+  public async Task<SaopItemDeliveryOutcome> RunItemDeliveryDatesAsync(
+    int organizationId, int maxLookups, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+
+    var itemIds = await LoadCandidateItemIdsAsync(connection, organizationId, maxLookups, cancellationToken);
+    var checkedUtc = DateTime.UtcNow;
+    var withDelivery = 0;
+
+    foreach (var itemId in itemIds)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      var request = SaopStockProviderRegistry.CreateItemDeliveryDateRequest(itemId, baseUrl);
+      var payload = await SendAsync(request, organizationId, cancellationToken);
+      var deliveries = ParseItemDeliveryDates(payload);
+      if (deliveries.Count > 0) withDelivery++;
+      await SaveItemDeliveryDatesAsync(connection, organizationId, itemId, deliveries, checkedUtc, cancellationToken);
+    }
+
+    return new(itemIds.Count, withDelivery);
+  }
+
+  static async Task<IReadOnlyList<string>> LoadCandidateItemIdsAsync(
+    SqlConnection connection, int organizationId, int maxLookups, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand(
+      """
+      ;WITH candidates AS
+      (
+        SELECT DISTINCT position.NormalizedItemId
+        FROM stock.Position AS position
+        INNER JOIN stock.Snapshot AS snapshot ON snapshot.SnapshotId = position.SnapshotId AND snapshot.IsActive = 1
+        INNER JOIN map.SourceConnector AS connector ON connector.SourceConnectorId = snapshot.SourceConnectorId AND connector.ConnectorType = N'SAOP'
+        WHERE snapshot.OrganizationId = @OrganizationId AND position.NormalizedItemId IS NOT NULL
+      )
+      SELECT TOP (@Max) candidates.NormalizedItemId
+      FROM candidates
+      LEFT JOIN stock.ItemDeliveryCheck AS checkedRow
+        ON checkedRow.OrganizationId = @OrganizationId AND checkedRow.NormalizedItemId = candidates.NormalizedItemId
+      ORDER BY ISNULL(checkedRow.CheckedUtc, CONVERT(datetime2(3), '19000101')) ASC, candidates.NormalizedItemId;
+      """, connection);
+    command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    command.Parameters.AddWithValue("@Max", maxLookups);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var ids = new List<string>();
+    while (await reader.ReadAsync(cancellationToken)) ids.Add(reader.GetString(0));
+    return ids;
+  }
+
+  /// <summary>
+  /// Odziv GetItemDeliveryDate: ponavljajoc element <c>ItemDeliveryDate</c> s podelementi
+  /// <c>ItemID</c>/<c>DeliveryDate</c>/<c>Quantity</c> (referencna oblika: Desktop/PIM_test,
+  /// EndpointXmlParser.ParseItemDeliveryDates). Lokalno ime brez imenskega prostora, ker ga
+  /// SAOP odzivi ne uporabljajo dosledno.
+  /// </summary>
+  static IReadOnlyList<(DateTime? DeliveryDate, decimal? Quantity)> ParseItemDeliveryDates(string xml)
+  {
+    var trimmed = xml.TrimStart('﻿', ' ', '\r', '\n', '\t');
+    if (!trimmed.StartsWith('<')) return [];
+
+    var document = System.Xml.Linq.XDocument.Parse(trimmed);
+    var rows = new List<(DateTime?, decimal?)>();
+    foreach (var element in document.Descendants().Where(e => e.Name.LocalName == "ItemDeliveryDate"))
+    {
+      var deliveryDate = DateTime.TryParse(
+        Child(element, "DeliveryDate"), CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsedDate)
+        ? parsedDate : (DateTime?)null;
+      var quantity = decimal.TryParse(
+        Child(element, "Quantity"), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsedQuantity)
+        ? parsedQuantity : (decimal?)null;
+      rows.Add((deliveryDate, quantity));
+    }
+    return rows;
+
+    static string? Child(System.Xml.Linq.XElement parent, string localName) =>
+      parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value?.Trim();
+  }
+
+  static async Task SaveItemDeliveryDatesAsync(
+    SqlConnection connection, int organizationId, string normalizedItemId,
+    IReadOnlyList<(DateTime? DeliveryDate, decimal? Quantity)> deliveries, DateTime checkedUtc,
+    CancellationToken cancellationToken)
+  {
+    await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+    try
+    {
+      await using (var delete = new SqlCommand(
+        "DELETE FROM stock.ItemDeliveryDate WHERE OrganizationId=@Org AND NormalizedItemId=@Item;", connection, transaction))
+      {
+        delete.Parameters.AddWithValue("@Org", organizationId);
+        delete.Parameters.AddWithValue("@Item", normalizedItemId);
+        await delete.ExecuteNonQueryAsync(cancellationToken);
+      }
+
+      foreach (var delivery in deliveries)
+      {
+        await using var insert = new SqlCommand(
+          """
+          INSERT stock.ItemDeliveryDate (OrganizationId, NormalizedItemId, DeliveryDate, Quantity, CheckedUtc)
+          VALUES (@Org, @Item, @Date, @Qty, @Checked);
+          """, connection, transaction);
+        insert.Parameters.AddWithValue("@Org", organizationId);
+        insert.Parameters.AddWithValue("@Item", normalizedItemId);
+        insert.Parameters.Add("@Date", SqlDbType.DateTime2).Value = (object?)delivery.DeliveryDate ?? DBNull.Value;
+        insert.Parameters.Add("@Qty", SqlDbType.Decimal).Value = (object?)delivery.Quantity ?? DBNull.Value;
+        insert.Parameters.AddWithValue("@Checked", checkedUtc);
+        await insert.ExecuteNonQueryAsync(cancellationToken);
+      }
+
+      await using (var merge = new SqlCommand(
+        """
+        MERGE stock.ItemDeliveryCheck AS target
+        USING (SELECT @Org AS OrganizationId, @Item AS NormalizedItemId) AS source
+          ON target.OrganizationId = source.OrganizationId AND target.NormalizedItemId = source.NormalizedItemId
+        WHEN MATCHED THEN UPDATE SET CheckedUtc = @Checked
+        WHEN NOT MATCHED THEN INSERT (OrganizationId, NormalizedItemId, CheckedUtc) VALUES (source.OrganizationId, source.NormalizedItemId, @Checked);
+        """, connection, transaction))
+      {
+        merge.Parameters.AddWithValue("@Org", organizationId);
+        merge.Parameters.AddWithValue("@Item", normalizedItemId);
+        merge.Parameters.AddWithValue("@Checked", checkedUtc);
+        await merge.ExecuteNonQueryAsync(cancellationToken);
+      }
+
+      await transaction.CommitAsync(cancellationToken);
+    }
+    catch
+    {
+      await transaction.RollbackAsync(cancellationToken);
+      throw;
+    }
   }
 
   /// <summary>

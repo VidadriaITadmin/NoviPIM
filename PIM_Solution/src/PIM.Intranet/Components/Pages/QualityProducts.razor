@@ -1,0 +1,68 @@
+@page "/kakovost/artikli"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using PIM.Intranet.Services
+@inject QualityReadService Quality
+@inject QualityWriteService QualityWrite
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
+
+<PageTitle>Pripravljenost artiklov</PageTitle>
+<PimPage Title="Kakovost podatkov" Subtitle="En artikel, jasna pripravljenost za vsak izhodni kanal in neposredna pot do popravka." />
+<PimTabs Active="artikli" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+
+@if (Page is not null)
+{
+  <div class="kpi-grid">
+    <PimStat Label="Pripravljeni za ERP" Value="@Page.Totals.ErpReadyCount.ToString("N0")" />
+    <PimStat Label="ERP blokirani" Value="@Page.Totals.ErpBlockedCount.ToString("N0")" Href="kakovost/artikli?stanje=ERP_BLOCKED" />
+    <PimStat Label="Splet blokirani" Value="@Page.Totals.WebBlockedCount.ToString("N0")" Href="kakovost/artikli?stanje=WEB_BLOCKED" />
+    <PimStat Label="Ročni zadržki" Value="@Page.Totals.HoldCount.ToString("N0")" Href="kakovost/artikli?stanje=HOLD" />
+    <PimStat Label="Zastarela validacija" Value="@Page.Totals.StaleCount.ToString("N0")" Href="kakovost/artikli?stanje=STALE" Note="starejša od 2 ur" />
+  </div>
+}
+
+<section class="ui-card toolbar section-gap" role="search">
+  <label class="visually-hidden" for="quality-org">Podjetje</label>
+  <select id="quality-org" class="filter-select" @bind="OrganizationDraft"><option value="">Vsa podjetja</option>@foreach (var org in Organizations) { <option value="@org.OrganizationId">@org.Name</option> }</select>
+  <label class="visually-hidden" for="quality-state">Stanje</label>
+  <select id="quality-state" class="filter-select" @bind="StateDraft"><option value="">Vsi artikli</option><option value="ERP_BLOCKED">Blokirani za ERP</option><option value="WEB_BLOCKED">Blokirani za splet</option><option value="READY">Pripravljeni</option><option value="HOLD">Ročno zadržani</option><option value="STALE">Zastarela validacija</option></select>
+  <input class="search-input" type="search" placeholder="Šifra, EAN ali naziv …" @bind="SearchDraft" @bind:event="oninput" />
+  <button type="button" class="filter-button" @onclick="Apply">Uporabi filtre</button>
+  <span class="result-count">@(Page is null ? "—" : $"{Page.Totals.TotalCount:N0} artiklov")</span>
+</section>
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (ActionError is not null) { <p class="message-state error-message" role="alert">@ActionError</p> }
+
+<section class="ui-card data-card section-gap"><PimState Loading="Loading" Error="@Error" Empty="@(Page?.Rows.Count == 0)" EmptyText="Za izbrane filtre ni artiklov.">
+  <div class="table-scroll"><table class="data-table"><caption>Pripravljenost artiklov po kanalih</caption>
+  <thead><tr><th>Artikel</th><th>ERP</th><th>Splet</th><th>Težave</th><th>Validirano</th><th>Ročni zadržek</th><th></th></tr></thead>
+  <tbody>@foreach (var row in Page?.Rows ?? Array.Empty<ProductReadinessRow>()) { <tr>
+    <td><strong>@row.ItemId</strong><div class="tree-path">@row.Name · @(row.Ean ?? "brez EAN")</div></td>
+    <td><PimChip Text="@(row.IsErpReady ? "Pripravljen" : "Blokiran")" Tone="@(row.IsErpReady ? "good" : "bad")" />@if (row.ErpBlockingCount > 0) { <div class="tree-path">@row.ErpBlockingCount.ToString("N0") blokad</div> }</td>
+    <td>@if (!row.WebPublish) { <PimChip Text="Ni za objavo" Tone="neutral" /> } else { <PimChip Text="@(row.IsWebReady ? "Pripravljen" : "Blokiran")" Tone="@(row.IsWebReady ? "good" : "bad")" /> }@if (row.WebBlockingCount > 0) { <div class="tree-path">@row.WebBlockingCount.ToString("N0") blokad</div> }</td>
+    <td>@row.ErrorCount.ToString("N0") napak · @row.WarningCount.ToString("N0") opozoril</td>
+    <td>@(row.LastValidatedUtc?.ToPimLocal().ToString("g") ?? "Nikoli") @if (row.IsValidationStale) { <PimChip Text="Zastarelo" Tone="warn" /> }</td>
+    <td>@if (row.HasGlobalHold || row.HasErpHold || row.HasWebHold) { <PimChip Text="@(row.HasGlobalHold ? "Vsi kanali" : row.HasErpHold ? "ERP" : "Splet")" Tone="bad" /><button class="small-action" disabled="@Busy" @onclick="() => ReleaseAsync(row)">Sprosti</button> } else if (EditingProductId == row.ProductId) { <select class="filter-select" @bind="HoldChannel"><option value="ALL">Vsi kanali</option><option value="ERP">ERP</option><option value="WEB">Splet</option></select><input class="form-input" placeholder="Obvezen razlog …" @bind="HoldReason" /><button class="small-action warn-action" disabled="@(Busy || string.IsNullOrWhiteSpace(HoldReason))" @onclick="() => HoldAsync(row)">Zadrži</button><button class="small-action" @onclick="() => EditingProductId = null">Prekliči</button> } else { <button class="small-action" @onclick="() => BeginHold(row.ProductId)">Zadrži …</button> }</td>
+    <td><a href="@($"izdelki/{row.ProductId}")">Odpri in popravi →</a></td>
+  </tr> }</tbody></table></div>
+  @if (Page is not null) { <PimPager Skip="Skip" Take="Take" Total="Page.Totals.TotalCount" SkipChanged="PageTo" /> }
+</PimState></section>
+
+@code {
+  [SupplyParameterFromQuery(Name="podjetje")] public string? QueryOrganization { get; set; }
+  [SupplyParameterFromQuery(Name="isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name="stanje")] public string? QueryState { get; set; }
+  [SupplyParameterFromQuery(Name="stran")] public int QueryPage { get; set; } = 1;
+  const int Take=50; int Skip => Math.Max(0,QueryPage-1)*Take;
+  IReadOnlyList<OrganizationContext> Organizations=[]; ProductReadinessPage? Page; bool Loading=true,Busy; string? Error,Message,ActionError;
+  string OrganizationDraft="",SearchDraft="",StateDraft="",HoldChannel="ALL",HoldReason=""; long? EditingProductId;
+  protected override async Task OnParametersSetAsync(){ OrganizationDraft=QueryOrganization??"";SearchDraft=QuerySearch??"";StateDraft=QueryState??"";await LoadAsync(); }
+  async Task LoadAsync(){Loading=true;Error=null;try{if(Organizations.Count==0)Organizations=await Data.GetOrganizationsAsync();Page=await Quality.GetProductReadinessAsync(int.TryParse(QueryOrganization,out var id)?id:null,QuerySearch,QueryState,Skip,Take);}catch(Exception ex){Error=ex.Message;}finally{Loading=false;}}
+  void Apply()=>Navigation.NavigateTo(Href(1)); Task PageTo(int skip){Navigation.NavigateTo(Href(skip/Take+1));return Task.CompletedTask;}
+  string Href(int page){var q=new List<string>();if(OrganizationDraft.Length>0)q.Add("podjetje="+Uri.EscapeDataString(OrganizationDraft));if(SearchDraft.Trim().Length>0)q.Add("isci="+Uri.EscapeDataString(SearchDraft.Trim()));if(StateDraft.Length>0)q.Add("stanje="+Uri.EscapeDataString(StateDraft));if(page>1)q.Add("stran="+page);return "kakovost/artikli"+(q.Count==0?"":"?"+string.Join('&',q));}
+  void BeginHold(long id){EditingProductId=id;HoldChannel="ALL";HoldReason="";} async Task<string> ActorAsync()=>(await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name??"neznan";
+  async Task HoldAsync(ProductReadinessRow row){Busy=true;ActionError=null;try{await QualityWrite.SetHoldAsync(row.ProductId,HoldChannel,HoldReason,true,await ActorAsync());Message=$"Artikel {row.ItemId} je zadržan.";EditingProductId=null;await LoadAsync();}catch(Exception ex){ActionError=ex.Message;}finally{Busy=false;}}
+  async Task ReleaseAsync(ProductReadinessRow row){Busy=true;ActionError=null;try{var actor=await ActorAsync();if(row.HasGlobalHold)await QualityWrite.SetHoldAsync(row.ProductId,"ALL",null,false,actor);if(row.HasErpHold)await QualityWrite.SetHoldAsync(row.ProductId,"ERP",null,false,actor);if(row.HasWebHold)await QualityWrite.SetHoldAsync(row.ProductId,"WEB",null,false,actor);Message=$"Zadržek za {row.ItemId} je sproščen.";await LoadAsync();}catch(Exception ex){ActionError=ex.Message;}finally{Busy=false;}}
+}

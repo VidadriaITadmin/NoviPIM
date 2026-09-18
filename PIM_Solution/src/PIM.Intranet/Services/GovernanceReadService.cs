@@ -55,6 +55,7 @@ public sealed record UnblockPlan(
 public sealed record ValueLookupRow(long ValueLookupId, string Domain, string SourceValue, string? Language, string TargetValue, string? Note, bool IsActive);
 public sealed record ValueDomainRow(string Domain, long RowCount, long ActiveCount);
 public sealed record FieldMappingRow(long FieldMappingId, string SourceCode, string EntityType, string SourceElement, string TargetFieldCode, bool IsRequired, bool IsActive);
+public sealed record FieldMappingSummary(long TotalCount, long ActiveCount, long RequiredCount, long InactiveCount);
 public sealed record ErrorLogRow(long ErrorLogId, DateTime OccurredUtc, string Layer, string Severity, string? ErrorCode, string Message, Guid? RunId);
 public sealed record AlertRow(long AlertId, string Pipeline, string AlertKind, string Severity, string Title, string PayloadSummaryRedacted, long OccurrenceCount, DateTime FirstSeenUtc, DateTime LastSeenUtc, DateTime? AcknowledgedUtc, string? AcknowledgedBy, DateTime? ResolvedUtc, string? ResolvedBy);
 public sealed record RoleRow(int RoleId, string RoleCode, string Name, long UserCount);
@@ -338,18 +339,20 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       cancellationToken: cancellationToken);
 
   public Task<(IReadOnlyList<ValueLookupRow> Rows, long TotalCount)> GetValueLookupsAsync(
-    string? domain, string? search, int skip, int take, CancellationToken cancellationToken = default) =>
+    string? domain, string? search, string? state, int skip, int take, CancellationToken cancellationToken = default) =>
     database.PageAsync("""
       SELECT ValueLookupId, Domain, SourceValue, Language, TargetValue, Note, IsActive
       FROM map.ValueLookup
       WHERE (@Domain IS NULL OR Domain = @Domain)
         AND (@Search IS NULL OR SourceValue LIKE '%' + @Search + '%' OR TargetValue LIKE '%' + @Search + '%')
-      ORDER BY Domain, SourceValue
+        AND (@State IS NULL OR (@State = N'ACTIVE' AND IsActive = 1) OR (@State = N'INACTIVE' AND IsActive = 0))
+      ORDER BY Domain, SourceValue, Language
       OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
 
       SELECT COUNT_BIG(*) FROM map.ValueLookup
       WHERE (@Domain IS NULL OR Domain = @Domain)
-        AND (@Search IS NULL OR SourceValue LIKE '%' + @Search + '%' OR TargetValue LIKE '%' + @Search + '%');
+        AND (@Search IS NULL OR SourceValue LIKE '%' + @Search + '%' OR TargetValue LIKE '%' + @Search + '%')
+        AND (@State IS NULL OR (@State = N'ACTIVE' AND IsActive = 1) OR (@State = N'INACTIVE' AND IsActive = 0));
       """,
       reader => new ValueLookupRow(PimDb.Int64(reader, "ValueLookupId"), PimDb.TextOrEmpty(reader, "Domain"),
         PimDb.TextOrEmpty(reader, "SourceValue"), PimDb.Text(reader, "Language"), PimDb.TextOrEmpty(reader, "TargetValue"),
@@ -358,12 +361,13 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       {
         command.Parameters.AddWithValue("@Domain", string.IsNullOrWhiteSpace(domain) ? DBNull.Value : domain);
         command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+        command.Parameters.AddWithValue("@State", string.IsNullOrWhiteSpace(state) ? DBNull.Value : state);
         command.Parameters.AddWithValue("@Skip", skip);
         command.Parameters.AddWithValue("@Take", take);
       }, cancellationToken);
 
   public Task<(IReadOnlyList<FieldMappingRow> Rows, long TotalCount)> GetFieldMappingsAsync(
-    int organizationId, string? entityType, string? search, int skip, int take, CancellationToken cancellationToken = default) =>
+    int organizationId, string? entityType, string? search, string? state, int skip, int take, CancellationToken cancellationToken = default) =>
     database.PageAsync("""
       SELECT mapping.FieldMappingId, connector.SourceCode, mapping.EntityType, mapping.SourceElement,
              mapping.TargetFieldCode, mapping.IsRequired, mapping.IsActive
@@ -371,7 +375,9 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = mapping.SourceConnectorId
       WHERE connector.OrganizationId = @OrganizationId
         AND (@EntityType IS NULL OR mapping.EntityType = @EntityType)
-        AND (@Search IS NULL OR mapping.SourceElement LIKE '%' + @Search + '%' OR mapping.TargetFieldCode LIKE '%' + @Search + '%')
+        AND (@Search IS NULL OR connector.SourceCode LIKE '%' + @Search + '%'
+          OR mapping.SourceElement LIKE '%' + @Search + '%' OR mapping.TargetFieldCode LIKE '%' + @Search + '%')
+        AND (@State IS NULL OR (@State = N'ACTIVE' AND mapping.IsActive = 1) OR (@State = N'INACTIVE' AND mapping.IsActive = 0))
       ORDER BY connector.SourceCode, mapping.EntityType, mapping.TargetFieldCode
       OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
 
@@ -380,7 +386,9 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = mapping.SourceConnectorId
       WHERE connector.OrganizationId = @OrganizationId
         AND (@EntityType IS NULL OR mapping.EntityType = @EntityType)
-        AND (@Search IS NULL OR mapping.SourceElement LIKE '%' + @Search + '%' OR mapping.TargetFieldCode LIKE '%' + @Search + '%');
+        AND (@Search IS NULL OR connector.SourceCode LIKE '%' + @Search + '%'
+          OR mapping.SourceElement LIKE '%' + @Search + '%' OR mapping.TargetFieldCode LIKE '%' + @Search + '%')
+        AND (@State IS NULL OR (@State = N'ACTIVE' AND mapping.IsActive = 1) OR (@State = N'INACTIVE' AND mapping.IsActive = 0));
       """,
       reader => new FieldMappingRow(PimDb.Int64(reader, "FieldMappingId"), PimDb.TextOrEmpty(reader, "SourceCode"),
         PimDb.TextOrEmpty(reader, "EntityType"), PimDb.TextOrEmpty(reader, "SourceElement"),
@@ -390,6 +398,7 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
         command.Parameters.AddWithValue("@OrganizationId", organizationId);
         command.Parameters.AddWithValue("@EntityType", string.IsNullOrWhiteSpace(entityType) ? DBNull.Value : entityType);
         command.Parameters.AddWithValue("@Search", string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim());
+        command.Parameters.AddWithValue("@State", string.IsNullOrWhiteSpace(state) ? DBNull.Value : state);
         command.Parameters.AddWithValue("@Skip", skip);
         command.Parameters.AddWithValue("@Take", take);
       }, cancellationToken);
@@ -405,6 +414,46 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       reader => new PimOption(PimDb.TextOrEmpty(reader, "EntityType"),
         $"{PimDb.TextOrEmpty(reader, "EntityType")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
       command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+
+  public Task<IReadOnlyList<PimOption>> GetMappingSourcesAsync(int organizationId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync("""
+      SELECT connector.SourceCode, COUNT_BIG(mapping.FieldMappingId) AS RowCountValue
+      FROM map.SourceConnector connector
+      LEFT JOIN map.FieldMapping mapping ON mapping.SourceConnectorId = connector.SourceConnectorId
+      WHERE connector.OrganizationId = @OrganizationId
+      GROUP BY connector.SourceCode
+      ORDER BY connector.SourceCode;
+      """,
+      reader => new PimOption(PimDb.TextOrEmpty(reader, "SourceCode"),
+        $"{PimDb.TextOrEmpty(reader, "SourceCode")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
+      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+
+  public Task<IReadOnlyList<string>> GetCanonicalFieldCodesAsync(CancellationToken cancellationToken = default) =>
+    database.QueryAsync("""
+      SELECT FieldCode FROM (
+        SELECT DISTINCT TargetFieldCode FROM map.FieldMapping WHERE NULLIF(TargetFieldCode, N'') IS NOT NULL
+        UNION SELECT DISTINCT FieldCode FROM val.FieldRequirement WHERE NULLIF(FieldCode, N'') IS NOT NULL
+        UNION SELECT DISTINCT CanonicalFieldCode FROM out.ExportColumn WHERE NULLIF(CanonicalFieldCode, N'') IS NOT NULL
+      ) fields
+      ORDER BY FieldCode;
+      """, reader => PimDb.TextOrEmpty(reader, "FieldCode"), cancellationToken: cancellationToken);
+
+  public async Task<FieldMappingSummary> GetFieldMappingSummaryAsync(int organizationId, CancellationToken cancellationToken = default)
+  {
+    var rows = await database.QueryAsync("""
+      SELECT COUNT_BIG(*) AS TotalCount,
+        COALESCE(SUM(CASE WHEN mapping.IsActive = 1 THEN CONVERT(bigint, 1) ELSE 0 END), 0) AS ActiveCount,
+        COALESCE(SUM(CASE WHEN mapping.IsRequired = 1 AND mapping.IsActive = 1 THEN CONVERT(bigint, 1) ELSE 0 END), 0) AS RequiredCount,
+        COALESCE(SUM(CASE WHEN mapping.IsActive = 0 THEN CONVERT(bigint, 1) ELSE 0 END), 0) AS InactiveCount
+      FROM map.FieldMapping mapping
+      INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = mapping.SourceConnectorId
+      WHERE connector.OrganizationId = @OrganizationId;
+      """,
+      reader => new FieldMappingSummary(PimDb.Int64(reader, "TotalCount"), PimDb.Int64(reader, "ActiveCount"),
+        PimDb.Int64(reader, "RequiredCount"), PimDb.Int64(reader, "InactiveCount")),
+      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+    return rows.FirstOrDefault() ?? new(0, 0, 0, 0);
+  }
 
   // ─── Sistem ───────────────────────────────────────────────────────────────
   public Task<IReadOnlyList<ErrorLogRow>> GetErrorLogAsync(string? severity, int take, CancellationToken cancellationToken = default) =>

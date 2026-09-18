@@ -2,8 +2,17 @@ using System.Data;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.Operations;
+using PIM.Outbound;
 
 namespace PIM.Intranet.Services;
+
+/// <summary>
+/// Izid poskusa takojšnjega pošiljanja po kliku "Odobri" — glej <see cref="SaopWriteService.TrySendArticleAsync"/>.
+/// </summary>
+/// <param name="Documents">Koliko dokumentov je bilo dejansko obdelanih (0, kadar ni bilo česa poslati).</param>
+/// <param name="Notes">Ena vrstica na dokument — enaka oblika kot pri worker CLI, npr. "NW.12603: PATCH uspešno".</param>
+/// <param name="NotConfigured">Poverilnice SAOP (razdelek "Saop" v appsettings.Local.json ali PIM_SAOP_* v okolju) niso nastavljene; ni bilo poskušeno nič.</param>
+public sealed record SaopSendBatchResult(int Documents, int Sent, int Failed, IReadOnlyList<string> Notes, bool NotConfigured);
 
 /// <param name="ValueFormat"><c>text</c>, <c>decimal4</c>, <c>decimal8</c> ali <c>bool</c>.</param>
 public sealed record WritableFieldRow(
@@ -49,11 +58,13 @@ public sealed record OutboundBatchRow(
 /// preveri tu (ugotovitev A1, pregled 2026-09-08): <c>@Actor</c> je bil doslej samo revizijski
 /// podatek in ne pogoj.
 /// </summary>
-public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard guard)
+public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard guard, ILogger<SaopWriteService> logger)
 {
   const string TargetKind = "SAOP_PRODUCT";
 
-  string ConnectionString => configuration.GetConnectionString("Pim")
+  // Prek resolverja in ne naravnost iz konfiguracije: ta storitev je edina hodila mimo njega,
+  // zato je kot edina spregledala PIM_CONNECTION_STRING in v produkciji vzela prazno vrednost.
+  string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava na bazo PIM ni nastavljena.");
 
   /* --- kaj se sme urejati ---------------------------------------------- */
@@ -127,6 +138,103 @@ public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard
 
   public async Task<int> RequeueBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
     await GuardedScalarIntAsync("EXEC out.RequeueOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
+
+  /* --- takojsnje posiljanje po odobritvi --------------------------------- */
+
+  /// <summary>
+  /// Poskusi TAKOJ poslati TOČNO EN, DOLOČEN artikel v SAOP — namesto da uporabnik po kliku na
+  /// "Odobri" čaka na naslednji zagon workerja `PIM.OutboxDispatcher`. Uporabnik je izrecno
+  /// zahteval, da se pošlje artikel, ki ga je označil, ne najstarejši v vrsti — zato
+  /// <see cref="SaopDocumentRunner.SendOneAsync"/> prevzame prek `out.ClaimItemDocumentByKey`
+  /// (migracija 193, po šifri), ne prek `out.ClaimItemDocument` (po vrstnem redu, za worker).
+  /// Sicer ista pot gradnje dokumenta, POST/PATCH odločitve (<see cref="SaopIntentResolver"/>)
+  /// in zaključka (`out.CompleteItemDocument`) kot worker. Kar se ne pošlje (ni poverilnic,
+  /// časovna omejitev, zavrnitev), NE izgine — ostane v vrsti za naslednji poskus.
+  ///
+  /// Bere isto mesto kot že obstoječi zajem iz SAOP (razdelek "Saop" v `appsettings.Local.json`,
+  /// polja BaseUrl/Username/Password/AcceptUntrustedCertificate — glej `appsettings.Local.example.json`
+  /// in `PIM.KatalogWorker.SaopWorkerConfiguration`), z istima okoljskima spremenljivkama
+  /// (`PIM_SAOP_USERNAME`, `PIM_SAOP_PASSWORD`, `PIM_SAOP_BASE_URL`) kot prednostnim virom. En sam
+  /// vir poverilnic za ves SAOP promet, namesto da bi si vsak klicatelj izmislil svoje ime. Brez
+  /// njih se ne poskusi nič in to ni napaka: artikel preprosto čaka na worker, tako kot je čakal doslej.
+  /// </summary>
+  public async Task<SaopSendBatchResult> TrySendArticleAsync(int organizationId, string entityKey, CancellationToken cancellationToken = default)
+  {
+    var (baseUrl, username, password, acceptUntrusted) = ReadSaopCredentials();
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+    {
+      logger.LogInformation(
+        "SAOP posiljanje: preskoceno za artikel {Artikel} (organizacija {Organizacija}) — razdelek Saop v appsettings.Local.json (ali PIM_SAOP_USERNAME/PIM_SAOP_PASSWORD v okolju) nima uporabnika/gesla.",
+        entityKey, organizationId);
+      return new(0, 0, 0, [], NotConfigured: true);
+    }
+
+    await guard.RequireAsync(PimPolicies.SaopWrite);
+
+    // BaseUrl pride dejansko iz dbo.IntegrationProfile te organizacije (SaopDocumentRunner ga
+    // bere ob prevzemu); nastavitev tu je samo varnostna mreza, ce profil naslova nima.
+    var connection = new SaopConnection(baseUrl ?? string.Empty, username, password,
+      TimeoutSeconds: 20, AcceptUntrustedCertificate: acceptUntrusted);
+
+    using var sender = new SaopDocumentSender(connection);
+    var workerId = $"intranet:{Environment.MachineName}:{Environment.ProcessId}";
+    var options = new SaopDocumentRunOptions(TargetKind, DryRun: false, OutputDirectory: null, MaxDocuments: 1, OrganizationId: organizationId);
+    var runner = new SaopDocumentRunner(ConnectionString, workerId, options, sender);
+
+    logger.LogInformation(
+      "SAOP posiljanje: zacenjam za artikel {Artikel} (organizacija {Organizacija}, worker {WorkerId}).",
+      entityKey, organizationId, workerId);
+
+    // Krajsa omejitev kot pri worker CLI (privzeto 120s): to tece znotraj klika v Blazorju in ne
+    // sme predolgo zamrzniti seje uporabnika, ce je SAOP pocasen ali ne odgovarja.
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    timeout.CancelAfter(TimeSpan.FromSeconds(25));
+    try
+    {
+      var result = await runner.SendOneAsync(organizationId, entityKey, timeout.Token);
+      logger.LogInformation(
+        "SAOP posiljanje: konec za artikel {Artikel} — poslanih {Poslanih}, neuspesnih {Neuspesnih}. {Podrobnosti}",
+        entityKey, result.Sent, result.Failed, string.Join(" | ", result.Notes));
+      return new(result.Documents, result.Sent, result.Failed, result.Notes, NotConfigured: false);
+    }
+    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+      logger.LogWarning("SAOP posiljanje: casovna omejitev za artikel {Artikel} (organizacija {Organizacija}).", entityKey, organizationId);
+      return new(0, 0, 0, ["SAOP se ni odzval pravočasno; poskus bo ponovil naslednji zagon workerja."], NotConfigured: false);
+    }
+    catch (Exception exception)
+    {
+      logger.LogError(exception, "SAOP posiljanje: nepricakovana napaka za artikel {Artikel} (organizacija {Organizacija}).", entityKey, organizationId);
+      return new(0, 0, 0, [$"Nepričakovana napaka: {exception.Message}"], NotConfigured: false);
+    }
+  }
+
+  /// <summary>
+  /// Isti razdelek "Saop" (appsettings.Local.json) in ista okoljska imena (PIM_SAOP_*), ki jih
+  /// bere <c>PIM.KatalogWorker.SaopWorkerConfiguration</c> za zajem IZ SAOP — gre za isti SAOP
+  /// racun, zato je prav, da je mesto nastavitve eno samo. Okolje ima prednost pred datoteko.
+  /// </summary>
+  static (string? BaseUrl, string? Username, string? Password, bool AcceptUntrustedCertificate) ReadSaopCredentials()
+  {
+    var saop = LocalSettings.Section("Saop");
+    string? Text(string name) =>
+      saop is { } section && section.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+        ? value.GetString() : null;
+    bool Flag(string name) =>
+      saop is { } section && section.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+        && value.GetBoolean();
+    static string? Env(string name)
+    {
+      var value = Environment.GetEnvironmentVariable(name);
+      return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    return (
+      Env("PIM_SAOP_BASE_URL") ?? Text("BaseUrl"),
+      Env("PIM_SAOP_USERNAME") ?? Text("Username"),
+      Env("PIM_SAOP_PASSWORD") ?? Text("Password"),
+      Flag("AcceptUntrustedCertificate"));
+  }
 
   /// <summary>Zapisovalna razlicica: najprej vloga, sele nato baza.</summary>
   async Task<int> GuardedScalarIntAsync(string sql, long batchId, string actor, CancellationToken cancellationToken)
@@ -251,12 +359,24 @@ public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard
   /// da uporabnik to vidi pred potrditvijo.
   ///
   /// Sama preslikava je v <see cref="WorkbookChangeMapper"/>, ker je čista logika: tako jo je
-  /// mogoče preizkusiti brez baze in brez spletnega projekta.
+  /// mogoče preizkusiti brez baze in brez spletnega projekta. Slovenski naslov (glej
+  /// <see cref="SaopFieldLabels"/>) doda ta stran, ker je edina, ki bazo za ta klic sploh sme
+  /// videti — tako je prepoznan tudi delovni list s strani Izdelki, ki piše ta naslov namesto
+  /// imena elementa SAOP.
+  ///
+  /// <see cref="ProductWorkbookContract.HeaderHints"/> je nujen: delovni list iz Izdelkov ima
+  /// DVE naslovni vrstici (skupine — »Ključ«, »ERP …« — nato pravi naslovi), ker ima vsaj en
+  /// stolpec Group (glej WorkbookWriter). Brez namiga bi bralnik za naslovno vrstico vzel prvo
+  /// vrstico s katerima koli dvema nepraznima celicama — to je vrstica skupin, ne stolpcev — in
+  /// uvoz bi javil, da manjka stolpec »Šifra artikla«/»ItemID«, čeprav je v datoteki, samo v
+  /// drugi vrstici. Ista predloga s te strani (brez skupin) s hintom deluje enako kot brez njega.
   /// </summary>
   public WorkbookImportPreview PreviewWorkbook(Stream stream, IReadOnlyList<WritableFieldRow> writable)
   {
-    var sheet = WorkbookTable.Read(stream);
-    return WorkbookChangeMapper.Map(sheet, writable.Select(polje => new WritableField(polje.FieldKey, polje.ElementName)).ToArray());
+    var sheet = WorkbookTable.Read(stream, headerHints: ProductWorkbookContract.HeaderHints);
+    return WorkbookChangeMapper.Map(sheet, writable
+      .Select(polje => new WritableField(polje.FieldKey, polje.ElementName, SaopFieldLabels.For(polje.ElementName)))
+      .ToArray());
   }
 
   async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)

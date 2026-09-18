@@ -1,7 +1,8 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject RoleAccessService Access
 
-@* Vir navigacije je PimNavigation (koda), ne sec.Navigation* (baza) — glej razlago v
-   PimNavigation.cs. Bralni model v bazi ostaja, samo menija ne polni vec. *@
+@* Struktura navigacije je PimNavigation (koda), vidnost pa sec.RolePermission (baza).
+   Tako skrbnik ne more ustvariti neobstojece poti, lahko pa vlogi varno doloci, kaj vidi. *@
 
 <a class="pim-brand" href="nadzorna-plosca" aria-label="PIM nadzorna plošča">
   <span class="pim-mark" aria-hidden="true">P</span>
@@ -40,11 +41,16 @@
   protected override async Task OnInitializedAsync()
   {
     var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-    var roles = state.User.Claims
-      .Where(claim => claim.Type == System.Security.Claims.ClaimTypes.Role)
-      .Select(claim => claim.Value)
-      .ToHashSet(StringComparer.Ordinal);
-    Sections = PIM.Intranet.Services.PimNavigation.For(roles);
+    try
+    {
+      var permissions = await Access.GetAllowedKeysAsync(state.User);
+      Sections = PIM.Intranet.Services.PimNavigation.ForPermissions(permissions);
+    }
+    catch
+    {
+      // Če registra ni mogoče prebrati, meni ne kaže povezav, ki jih ne more preveriti.
+      Sections = [];
+    }
   }
 
   // Razdelilne strani morajo ostati poudarjene tudi na svojih podstraneh (nastavitve/atributi),

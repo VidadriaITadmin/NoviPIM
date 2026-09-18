@@ -69,6 +69,8 @@ foreach (var retired in new[] { "Zajem in preslikave", "Validacija in vrzeli", "
 foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v SAOP", "Izhod na splet" })
   Expect(navLabels.Contains(expected), $"V meniju manjka postavka »{expected}«.");
 
+WorkerConsoleChecks.Run();
+WorkerSchedulerChecks.Run();
 Console.WriteLine("F10 intranet logic PASS.");
 
 /* ─── Kontrast palete po WCAG (P3-23, pregled 2026-09-08) ─────────────────────

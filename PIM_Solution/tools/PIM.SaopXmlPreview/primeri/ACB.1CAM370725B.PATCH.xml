@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?><ItemsGeneralData>
+  <ItemGeneralData>
+    <ItemID>ACB.1CAM370725B</ItemID>
+    <ItemLastModified>2026-08-23T19:12:36.476Z</ItemLastModified>
+    <ItemTitle1>Tiga Shade 25cm White</ItemTitle1>
+    <GeneralData>
+      <ItemUnitOfMeas>kom</ItemUnitOfMeas>
+      <ItemGroup>ACB</ItemGroup>
+      <AccountingBookGroupID>ACB</AccountingBookGroupID>
+      <WebPublish>N</WebPublish>
+      <CustomsTariffNo>94051140</CustomsTariffNo>
+      <ItemDepartment>C</ItemDepartment>
+      <ItemEANCode>8430390370179</ItemEANCode>
+    </GeneralData>
+    <SalesData>
+      <DiscountGroup1ID>ACB</DiscountGroup1ID>
+      <IsActive>D</IsActive>
+      <AdditionalProperty1ID>C</AdditionalProperty1ID>
+    </SalesData>
+    <StockData>
+      <SupplierID>33199795</SupplierID>
+      <ManufacturerID>00001630</ManufacturerID>
+    </StockData>
+    <PropertiesData>
+      <ItemWeightPerUnit>0.0000</ItemWeightPerUnit>
+      <ItemGrossWeight>0.0000</ItemGrossWeight>
+      <ItemWidth>0.00000000</ItemWidth>
+      <ItemHeight>0.00000000</ItemHeight>
+      <ItemCountryOfOrigin>ES</ItemCountryOfOrigin>
+    </PropertiesData>
+  </ItemGeneralData>
+</ItemsGeneralData>

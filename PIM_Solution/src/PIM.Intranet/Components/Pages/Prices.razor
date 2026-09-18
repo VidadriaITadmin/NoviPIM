@@ -75,7 +75,7 @@
             <td class="numeric">@row.PriceListCount</td>
             <td class="numeric">@(row.MinNet?.ToString("N2") ?? "—")</td>
             <td class="numeric">@(row.MaxNet?.ToString("N2") ?? "—")</td>
-            <td>@(row.LastValidFrom?.ToLocalTime().ToString("d") ?? "—")</td>
+            <td>@(row.LastValidFrom?.ToPimLocal().ToString("d") ?? "—")</td>
             <td><PimChip Text="@(row.ActiveCount > 0 ? $"{row.ActiveCount} veljavnih" : "brez veljavne")" Tone="@(row.ActiveCount > 0 ? "good" : "warn")" /></td>
           </tr>
           @if (open)
@@ -94,7 +94,7 @@
                           <td class="numeric">@price.Net.ToString("N2")</td>
                           <td class="numeric">@price.VatRate.ToString("N1") %</td>
                           <td class="numeric">@Gross(price).ToString("N2")</td>
-                          <td>@price.ValidFrom.ToLocalTime().ToString("d")</td>
+                          <td>@price.ValidFrom.ToPimLocal().ToString("d")</td>
                           <td><PimChip Text="@(price.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(price.IsActive ? "good" : null)" /></td>
                         </tr>
                       }

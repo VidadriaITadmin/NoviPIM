@@ -1,0 +1,101 @@
+/* Workerji: ročni zagon, izpis v živo in dnevniki. Barve in razmiki pridejo iz app.css;
+   tu je samo tisto, česar druge strani nimajo — konzolni izpis in oznake poslov. */
+
+.panel-title { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: space-between; }
+.panel-note { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: 0 0 .75rem; }
+
+.group-title {
+  color: var(--pim-text-soft);
+  font-size: .75rem;
+  font-weight: 650;
+  letter-spacing: .03em;
+  margin: 1.25rem 0 .5rem;
+  text-transform: uppercase;
+}
+
+.picker { align-items: center; display: inline-flex; font-size: .85rem; gap: .5rem; }
+
+.job-cell { min-width: 16rem; }
+.job-note { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; margin-top: 2px; max-width: 42rem; }
+
+/* Zunanji klic je vidno označen, preden ga kdo sproži — SAOP in dobavitelj nista naša. */
+.reach-flag,
+.drift-flag {
+  background: var(--pim-warn-bg);
+  border: 1px solid var(--pim-warn-border);
+  border-radius: 5px;
+  color: var(--pim-warn-text);
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 650;
+  margin-top: 4px;
+  padding: 1px 6px;
+}
+
+.disabled-row { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+
+.primary-small { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 650; }
+.danger-action { border-color: var(--pim-bad-border); color: var(--pim-bad-text); font-weight: 650; }
+
+.row-alarm { background: var(--pim-bad-bg); }
+.row-selected { background: var(--pim-info-bg); }
+.nowrap { white-space: nowrap; }
+.error-count { color: var(--pim-bad-text); font-weight: 650; }
+
+.run-meta { color: var(--pim-text-soft); font-size: .82rem; margin: .25rem 0 .5rem; }
+
+.command {
+  background: #0f172a;
+  border-radius: var(--pim-radius-xs);
+  color: #e2e8f0;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+  margin: .5rem 0;
+  overflow-x: auto;
+  padding: .5rem .75rem;
+}
+
+.console-toolbar { align-items: center; display: flex; flex-wrap: wrap; font-size: .82rem; gap: .75rem; margin-bottom: .5rem; }
+
+/* column-reverse drži izpis prilepljen na dno, dokler ga skrbnik sam ne pomakne navzgor — tako
+   se nova vrstica vidi brez JavaScripta za pomikanje. */
+.console {
+  background: #0f172a;
+  border-radius: var(--pim-radius-sm);
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column-reverse;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-height: 32rem;
+  overflow: auto;
+  padding: .75rem 1rem;
+}
+
+.line { white-space: pre-wrap; word-break: break-word; }
+.line-error { color: #fca5a5; font-weight: 600; }
+.line-warn { color: #fcd34d; }
+.line-header { color: #93c5fd; font-weight: 600; }
+.line-ok { color: #86efac; }
+
+/* Razporejevalnik (2026-09-17): dejstva o uri v dveh stolpcih, urejanje razporeda v vrstici cikla,
+   koraki zagona kot vgnezdena tabela v zgodovini. */
+.scheduler-facts {
+  display: grid;
+  gap: .35rem 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  margin: 0 0 .75rem;
+}
+.scheduler-facts > div { display: flex; flex-wrap: wrap; gap: .4rem; font-size: .82rem; line-height: 1.5; }
+.scheduler-facts dt { color: var(--pim-text-soft); font-weight: 650; margin: 0; min-width: 6.5rem; }
+.scheduler-facts dd { margin: 0; }
+
+.schedule-edit { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .35rem; }
+.interval-input { width: 5rem; }
+.time-input { width: 7rem; }
+
+.legacy-tasks { margin-top: 1rem; }
+.legacy-tasks > summary { color: var(--pim-text-soft); cursor: pointer; font-size: .82rem; font-weight: 650; }
+
+.steps-table { font-size: .8rem; margin: .25rem 0; }

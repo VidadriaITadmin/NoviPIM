@@ -3,13 +3,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
+using PIM.Operations;
 
-const string connectionStringVariable = "PIM_CONNECTION_STRING";
-var connectionString = ReadConnectionString(connectionStringVariable, "Pim");
+var connectionString = LocalSettings.ConnectionString();
 
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.Error.WriteLine($"Manjka {connectionStringVariable} oziroma ConnectionStrings:Pim v appsettings.Local.json. Connection string ni zapisan v repozitorij.");
+  Console.Error.WriteLine(LocalSettings.MissingConnectionMessage() + " Connection string ni zapisan v repozitorij.");
   return 2;
 }
 
@@ -96,6 +96,7 @@ if (verifyOnly)
   return 0;
 }
 
+string? currentMigration = null;
 await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
 try
 {
@@ -103,12 +104,13 @@ try
 
   foreach (var migration in migrations)
   {
-    var scriptHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(migration.Script))).ToLowerInvariant();
+    currentMigration = migration.Name;
+    var scriptHash = ScriptHash(migration.Script);
     var storedHash = await ReadMigrationHashAsync(connection, transaction, migration.Name);
 
     if (storedHash is not null)
     {
-      if (!string.Equals(storedHash, scriptHash, StringComparison.OrdinalIgnoreCase))
+      if (!MatchesStoredHash(storedHash, migration.Script))
       {
         throw new InvalidOperationException($"Vsebina že uporabljene migracije {migration.Name} je bila spremenjena.");
       }
@@ -126,10 +128,39 @@ try
   Console.WriteLine("Migracije so uspešno uporabljene.");
   return 0;
 }
-catch
+catch (Exception exception)
 {
-  await transaction.RollbackAsync();
+  // Ob SET XACT_ABORT ON (ali časovni omejitvi) strežnik transakcijo že sam razveljavi;
+  // RollbackAsync takrat vrže NullReferenceException in prekrije pravo napako iz skripte.
+  try { await transaction.RollbackAsync(); }
+  catch (Exception rollbackException) { Console.Error.WriteLine($"Rollback ni uspel (transakcija je verjetno že razveljavljena): {rollbackException.Message}"); }
+  Console.Error.WriteLine($"Migracija {currentMigration ?? "?"} ni uspela: {exception.Message}");
   throw;
+}
+
+// Hash je neodvisen od koncev vrstic: git s core.autocrlf isto datoteko enkrat odloži z LF in
+// drugič s CRLF (2026-09-15 je bila 195_ReclaimStaleSendingDocuments.sql uveljavljena z LF, po
+// ponovnem checkoutu pa je bila CRLF), migrator pa je to javil kot spremenjeno vsebino in
+// razveljavil vse migracije v isti transakciji. Vsebinska sprememba ostane napaka.
+static string ScriptHash(string script)
+  => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizeLineEndings(script)))).ToLowerInvariant();
+
+static string NormalizeLineEndings(string script) => script.Replace("\r\n", "\n").Replace('\r', '\n');
+
+// Stari zapisi v dbo.SchemaMigration so bili hashirani iz surove vsebine, ki je bila lahko LF ali
+// CRLF; oba sprejmemo, da obstoječih ledgerjev (tudi produkcijskega) ni treba prepisovati.
+static bool MatchesStoredHash(string storedHash, string script)
+{
+  var normalized = NormalizeLineEndings(script);
+  string[] candidates =
+  [
+    ScriptHash(script),
+    RawHash(normalized.Replace("\n", "\r\n")),
+    RawHash(script),
+  ];
+  return candidates.Any(candidate => string.Equals(storedHash, candidate, StringComparison.OrdinalIgnoreCase));
+
+  static string RawHash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
 }
 
 static string ResolveMigrationsDirectory(string[] arguments)
@@ -164,30 +195,6 @@ static string ResolveMigrationsDirectory(string[] arguments)
   }
 
   return Path.Combine(Directory.GetCurrentDirectory(), "sql", "migrations");
-}
-
-static string? ReadConnectionString(string environmentVariable, string localSettingName)
-{
-  var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
-  if (!string.IsNullOrWhiteSpace(environmentValue))
-  {
-    return environmentValue;
-  }
-
-  var localPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Local.json");
-  if (!File.Exists(localPath))
-  {
-    return null;
-  }
-
-  using var document = JsonDocument.Parse(File.ReadAllText(localPath));
-  if (!document.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
-    || !connectionStrings.TryGetProperty(localSettingName, out var setting))
-  {
-    return null;
-  }
-
-  return setting.GetString();
 }
 
 static async Task EnsureMigrationLedgerAsync(SqlConnection connection)
@@ -272,9 +279,12 @@ static async Task InsertMigrationAsync(SqlConnection connection, SqlTransaction 
 
 static async Task ExecuteAsync(SqlConnection connection, SqlTransaction? transaction, string sql)
 {
+  // Brez casovne omejitve: podatkovne migracije (197 je pobrisala ~6,5 GB PayloadXml) trajajo
+  // vec minut, 120 s pa je prekinilo skripto sredi dela in razveljavilo vse migracije v paketu.
+  // Socasnost varuje sp_getapplock, zato blokada ne more viseti v nedogled brez vidnega vzroka.
   await using var command = new SqlCommand(sql, connection, transaction)
   {
-    CommandTimeout = 120
+    CommandTimeout = 0
   };
   await command.ExecuteNonQueryAsync();
 }
@@ -283,11 +293,10 @@ static async Task VerifyF0Async(SqlConnection connection, IReadOnlyCollection<Mi
 {
   foreach (var migration in migrations)
   {
-    var expectedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(migration.Script))).ToLowerInvariant();
     await using var command = new SqlCommand("SELECT ScriptHash FROM dbo.SchemaMigration WHERE MigrationId = @MigrationId;", connection);
     command.Parameters.AddWithValue("@MigrationId", migration.Name);
     var actualHash = (string?)await command.ExecuteScalarAsync();
-    if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+    if (actualHash is null || !MatchesStoredHash(actualHash, migration.Script))
     {
       throw new InvalidOperationException($"Migracijska sled za {migration.Name} manjka ali ne ustreza vsebini skripte.");
     }
@@ -368,7 +377,12 @@ static async Task VerifyF1Async(SqlConnection connection)
     await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.objects WHERE object_id = OBJECT_ID(@value);", expectedObject, 1, $"Manjka F1 objekt {expectedObject}.");
   }
 
-  await AssertCountAsync(connection, "SELECT COUNT(*) FROM val.ValidationProfile WHERE ProfileCode IN (N'ERP_L1', N'WEB_B2C') AND IsActive = 1;", null, 2, "Manjkajo aktivni validacijski profili ERP_L1 oziroma WEB_B2C.");
+  /* 2026-09-16: ERP_L1 in WEB_B2C sta bila po uporabnikovi odlocitvi umaknjena iz validacije
+     (nadomestila sta ju ERP_L1_EU/SLO/THIRD/SHARED_CORE in WEB_svetila_si/WEB_videlektro/
+     SHARED_CORE) - preverba zdaj zahteva vsaj en aktiven blokirajoc profil na vsako stran, ne
+     vec ti dve konkretni, zdaj neaktivni/nescinkovito imeni. */
+  await AssertAtLeastAsync(connection, "SELECT COUNT(*) FROM val.ValidationProfile WHERE BlocksErp = 1 AND IsActive = 1;", 1, "Ni nobenega aktivnega validacijskega profila, ki bi blokiral ERP.");
+  await AssertAtLeastAsync(connection, "SELECT COUNT(*) FROM val.ValidationProfile WHERE BlocksWeb = 1 AND IsActive = 1;", 1, "Ni nobenega aktivnega validacijskega profila, ki bi blokiral splet.");
   await AssertCountAsync(connection, """
     SELECT COUNT(*)
     FROM out.ExportColumn exportColumn
@@ -481,6 +495,10 @@ static async Task VerifyF8Async(SqlConnection connection)
   // "nadomeščeno sporočilo je videti kot nepotrjeno".
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'out.OutboxMessage') AND name=N'ErrorClass';", null, 1, "Manjka F8 stolpec out.OutboxMessage.ErrorClass.");
   await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.check_constraints WHERE name=N'CK_OutboxMessage_Status' AND definition LIKE N'%Superseded%';", null, 1, "F8 stanje Superseded ni dovoljeno v CK_OutboxMessage_Status.");
+  // Migracija 169: brez tega stolpca bi izbira POST/PATCH spet sklepala iz obstoja vrstice v
+  // canon.Product in bi za artikel, ki je v PIM, v SAOP pa ne, izbrala PATCH.
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'canon.Product') AND name=N'ErpExistence';", null, 1, "Manjka F8 stolpec canon.Product.ErpExistence.");
+  await AssertCountAsync(connection, "SELECT COUNT(*) FROM sys.sql_modules WHERE object_id IN(OBJECT_ID(N'out.GetSaopItemWriteState'),OBJECT_ID(N'out.ClaimItemDocument'),OBJECT_ID(N'out.PeekItemDocuments')) AND definition LIKE N'%ErpExistence%';", null, 3, "F8 izbira POST/PATCH ne bere canon.Product.ErpExistence.");
 }
 
 static async Task VerifyF9Async(SqlConnection connection)

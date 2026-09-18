@@ -1,0 +1,8 @@
+﻿{
+    "CreatedUtc":  "2026-09-15T21:27:33.6908679Z",
+    "Runtime":  "win-x64",
+    "Configuration":  "Release",
+    "Intranet":  "intranet",
+    "DatabaseMigrator":  "database\\PIM.Migrator.exe",
+    "Migrations":  "database\\migrations"
+}

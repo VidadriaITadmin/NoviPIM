@@ -16,10 +16,10 @@ using PIM.Operations;
 // brez toliko zagonov, kolikor je bilo dostav. Isto napako je imel odhodni dispatcher.
 
 var arguments = args.ToList();
-var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
+var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.Error.WriteLine("PIM_CONNECTION_STRING ni nastavljen.");
+  Console.Error.WriteLine(LocalSettings.MissingConnectionMessage());
   return 2;
 }
 
@@ -51,7 +51,13 @@ await using (var escalate = new SqlCommand("ops.EscalateOutboundEvents", connect
 var deliveryEnabled = string.Equals(Environment.GetEnvironmentVariable("PIM_ALERT_DELIVERY_ENABLED"), "true", StringComparison.OrdinalIgnoreCase);
 if (!deliveryEnabled)
 {
-  Console.WriteLine("Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.");
+  // Tek se zabeleži tudi brez dostave (2026-09-17): brez ops.BeginRun postopek ALERT_DISPATCH nikoli
+  // ne utripne in razporejevalnik ga po dveh razmikih razglasi za zastalega (PipelineOverdue),
+  // čeprav se worker vsakih pet minut oglasi in samo nima česa poslati. Tišina in "izklopljena
+  // dostava" sta različni stvari; to je zdaj vidno kot uspešen tek z razlogom.
+  await using var idleRun = await OperationsRun.BeginAsync(connectionString, 2, "ALERT_DISPATCH", $"{Environment.MachineName}:{Environment.ProcessId}");
+  await idleRun.CompleteAsync(true);
+  Console.WriteLine("Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.");
   return 0;
 }
 
@@ -70,7 +76,7 @@ var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
 var maxDeliveries = int.TryParse(Value("--max"), out var parsedMax) ? parsedMax : 50;
 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 var webhookSender = new WebhookAlertSender(http, webhookOptions);
-var emailSender = new EmailAlertSender(emailOptions);
+var emailSender = new EmailAlertSender(emailOptions, http);
 
 await using var operationsRun = await OperationsRun.BeginAsync(connectionString, 2, "ALERT_DISPATCH", workerId);
 var delivered = 0;

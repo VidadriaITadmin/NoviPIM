@@ -128,10 +128,12 @@ brisanje po `AGENTS.md` §4.1 odločitev človeka; je pa zapisano tu, da ni vide
 
 | Kaj | Meja | Kje je zapisana |
 |---|---|---|
-| Vrstic v izvozu | 20.000 | `ProductWorkbookService.MaxRows`; večji nabor je zapisan v opombo v datoteki |
+| Vrstic v izvozu | brez lastne meje — meja lista .xlsx, 1.048.000 (2026-09-17, prej 20.000) | `WorkbookTable.MaxRows`, nanjo kažejo `ProductWorkbookService.MaxRows`, `ProductExportService.MaxRows`, `QualityIssueExportService.MaxRows` in `StockReadService.MaxExportRows`; seznam se bere po straneh po 20.000 (meja `intranet.GetProductList`), podatki na vrstico po paketih po 5.000; večji nabor je zapisan v opombo v datoteki |
+| Hkratnih izvozov / uvozov | 2 + 2 (nastavljivo: `Intranet:MaxConcurrentExports`, `Intranet:MaxConcurrentImports`) | `HeavyWorkGate`; ostali čakajo v vrsti po vrstnem redu, stran pove položaj. Izmerjeno 2026-09-17: en izvoz celega kataloga (196.000 vrstic) traja minute in bi jih deset hkrati podrlo odzivnost vseh strani |
+| Izdelkov v enem množičnem zapisu pri uvozu | 1.000 | `ProductWorkbookService.BulkProducts` → `pim.SaveProductTextsBulk` / `pim.SaveProductAttributesBulk` (migracija 218) |
 | Stolpcev atributov izven nabora | 200 | `ProductWorkbookService.MaxAttributeColumns`; nabor kategorije ni omejen |
 | Velikost naložene datoteke | 16 MB | `ProductImport.razor` |
-| Vrstic pri branju zvezka | 50.000 | `WorkbookTable.MaxRows` |
+| Vrstic pri branju zvezka | 1.048.000 (2026-09-17, prej 50.000) — ista številka kot pri izvozu, da se izvožena datoteka vedno da vrniti v celoti | `WorkbookTable.MaxRows` |
 
 ## Kaj se je pri tem moralo popraviti drugje
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.Intranet.Services;
+using PIM.Operations;
 
 var userName = ReadOption(args, "--user") ?? "admin";
 var displayName = ReadOption(args, "--name") ?? "Administrator";
@@ -61,23 +62,4 @@ static string ReadPassword()
   return new string(buffer.ToArray());
 }
 
-static string? ReadConnectionString()
-{
-  var environmentValue = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-  if (!string.IsNullOrWhiteSpace(environmentValue)) return environmentValue;
-  var current = new DirectoryInfo(Directory.GetCurrentDirectory());
-  while (current is not null)
-  {
-    var path = Path.Combine(current.FullName, "appsettings.Local.json");
-    if (File.Exists(path))
-    {
-      using var document = JsonDocument.Parse(File.ReadAllText(path));
-      return document.RootElement.TryGetProperty("ConnectionStrings", out var strings)
-        && strings.TryGetProperty("Pim", out var setting) ? setting.GetString() : null;
-    }
-
-    current = current.Parent;
-  }
-
-  return null;
-}
+static string? ReadConnectionString() => LocalSettings.ConnectionString();

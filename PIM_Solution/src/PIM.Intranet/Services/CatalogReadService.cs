@@ -30,6 +30,7 @@ public sealed record CategoryRow(int CategoryId, string CategoryTreeCode, string
 public sealed record WarehouseRow(int WarehouseId, string WarehouseCode, string? Name, string? WarehouseType, string? GroupCode, bool IsActive, DateTime UpdatedUtc);
 public sealed record WebSiteRow(int WebSiteId, string WebSiteCode, string WebSiteName, string CategoryTreeCode, string LanguageCode, string CategoryFieldCode, int SortOrder, bool IsActive, long CategoryCount);
 public sealed record LanguageRow(int LanguageRowId, string SaopLanguageId, string LanguageCode, string Name, int OrganizationId, bool IsActive, DateTime UpdatedUtc);
+public sealed record ReservationExclusionRow(int OrganizationId, string OrganizationName, string ItemId, string? Name, DateTime UpdatedUtc);
 
 /// <summary>
 /// Bralni model kataloskih strani: mediji, cene, partnerji, atributi, kategorije, sifranti.
@@ -426,6 +427,32 @@ public sealed class CatalogReadService(PimDb database)
         PimDb.Text(reader, "Name"), PimDb.Text(reader, "WarehouseType"), PimDb.Text(reader, "GroupCode"),
         PimDb.Bool(reader, "IsActive"), PimDb.DateTimeValue(reader, "UpdatedUtc")),
       command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+
+  /// <summary>
+  /// Izdelki, ki jih je SAOP oznacil kot izlocene iz rezervacije zaloge (planiranje).
+  /// Bere neposredno canon.ProductPlanning — polje se danes ne pretaka v canon.FieldValue.
+  /// Arhivirani izdelki (IsActive = 0) se ne prikazejo — sprozilec/backfill migracije 190 jim
+  /// zastavico ze pobrise, filter tu je samo se dodatna varovalka.
+  /// </summary>
+  /// <param name="organizationId">null pomeni vsa podjetja (isti vzorec kot StockReadService.GetOverviewAsync).</param>
+  public Task<IReadOnlyList<ReservationExclusionRow>> GetReservationExclusionsAsync(
+    int? organizationId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync("""
+      SELECT product.OrganizationId, organization.Name AS OrganizationName, product.ItemID, text.Value AS Name, planning.UpdatedUtc
+      FROM canon.ProductPlanning planning
+      INNER JOIN canon.Product product ON product.ProductId = planning.ProductId
+      INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = product.OrganizationId
+      LEFT JOIN canon.ProductText text
+        ON text.ProductId = product.ProductId AND text.TextType = N'TITLE_ERP' AND text.Lang = N'sl'
+      WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+        AND planning.ExcludeQuantityReservation = 1 AND product.IsActive = 1
+      ORDER BY organization.Name, product.ItemID;
+      """,
+      reader => new ReservationExclusionRow(
+        PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"), PimDb.TextOrEmpty(reader, "ItemID"),
+        PimDb.Text(reader, "Name"), PimDb.DateTimeValue(reader, "UpdatedUtc")),
+      command => command.Parameters.AddWithValue("@OrganizationId", organizationId is null ? DBNull.Value : organizationId.Value),
+      cancellationToken);
 
   public Task<IReadOnlyList<WebSiteRow>> GetWebSitesAsync(CancellationToken cancellationToken = default) =>
     database.QueryAsync("""

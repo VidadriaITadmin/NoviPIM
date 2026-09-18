@@ -1,0 +1,43 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pim-intranet",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet"
+      ],
+      "port": 5091
+    },
+    {
+      "name": "pim-intranet-release",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet",
+        "-c",
+        "Release",
+        "--no-launch-profile",
+        "--urls",
+        "http://localhost:5093"
+      ],
+      "port": 5093
+    },
+    {
+      "name": "pim-published",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "C:/PIM_publish/PIM/PIM.Intranet.dll",
+        "--urls",
+        "http://localhost:5094",
+        "--contentRoot",
+        "C:/PIM_publish/PIM",
+        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
+      ],
+      "port": 5094
+    }
+  ]
+}

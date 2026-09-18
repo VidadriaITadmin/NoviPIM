@@ -18,6 +18,16 @@ public sealed class SaopStockProviderRegistry
   /// <summary>Pot registriranega pogleda; ista za zahtevo in za zapis v stock.Snapshot.Endpoint.</summary>
   public const string RegisteredViewPath = "api/registeredviews/data";
 
+  /// <summary>
+  /// Datum in kolicina prihoda, en artikel naenkrat (migracija 189). Locen od zaloge same:
+  /// GetStocks/registrirani pogled tega ne poznata (glej opombo pri Schema zgoraj).
+  /// </summary>
+  public const string ItemDeliveryDatePath = "api/Item/GetItemDeliveryDate";
+
+  /// <summary>Zahteva za GetItemDeliveryDate; searchQuery.itemID je edini obvezen del.</summary>
+  public static HttpRequestMessage CreateItemDeliveryDateRequest(string itemId, Uri baseUri) =>
+    new(HttpMethod.Get, new Uri(baseUri, $"{ItemDeliveryDatePath}?searchQuery.itemID={WebUtility.UrlEncode(itemId)}"));
+
   /// <summary>Privzeta velikost strani registriranega pogleda — enaka kot v starem sistemu (1000).</summary>
   public const int RegisteredViewDefaultPageSize = 1000;
 

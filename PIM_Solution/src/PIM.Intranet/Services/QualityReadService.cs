@@ -63,6 +63,20 @@ public sealed record QualityBulkLever(long PendingCount, long CoveredProductCoun
 public sealed record QualityOverview(
   QualityTotals Totals, IReadOnlyList<QualityRuleImpact> Rules, IReadOnlyList<QualitySupplierImpact> Suppliers);
 
+public sealed record ProductReadinessRow(
+  long ProductId, int OrganizationId, string ItemId, string? Ean, string Name,
+  bool WebPublish, string ValidationStatus, decimal Completeness, DateTime? LastValidatedUtc,
+  bool IsValidationStale, long ErrorCount, long WarningCount, long ErpBlockingCount,
+  long WebBlockingCount, bool HasGlobalHold, bool HasErpHold, bool HasWebHold,
+  bool IsErpReady, bool IsWebReady);
+
+public sealed record ProductReadinessTotals(
+  long TotalCount, long ErpReadyCount, long ErpBlockedCount, long WebReadyCount,
+  long WebBlockedCount, long HoldCount, long StaleCount);
+
+public sealed record ProductReadinessPage(
+  IReadOnlyList<ProductReadinessRow> Rows, ProductReadinessTotals Totals);
+
 /// <summary>
 /// Bralni model kakovosti. SQL ostane v oštevilčeni migraciji (102); tu je samo klic
 /// procedure in preslikava stolpcev po imenu.
@@ -74,6 +88,36 @@ public sealed class QualityReadService(IConfiguration configuration)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
+
+  public async Task<ProductReadinessPage> GetProductReadinessAsync(
+    int? organizationId, string? search, string? state, int skip, int take,
+    CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetQualityProducts", connection)
+    { CommandType = CommandType.StoredProcedure, CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(search);
+    command.Parameters.Add("@State", SqlDbType.NVarChar, 30).Value = Optional(state);
+    command.Parameters.Add("@Skip", SqlDbType.Int).Value = skip;
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = await ReadAsync(reader, row => new ProductReadinessRow(
+      PimDb.Int64(row,"ProductId"),PimDb.Int32(row,"OrganizationId"),PimDb.TextOrEmpty(row,"ItemID"),
+      PimDb.Text(row,"EAN"),PimDb.TextOrEmpty(row,"ProductName"),PimDb.Bool(row,"WebPublish"),
+      PimDb.TextOrEmpty(row,"ValidationStatus"),PimDb.Decimal(row,"Completeness"),PimDb.NullableDateTime(row,"LastValidatedUtc"),
+      PimDb.Bool(row,"IsValidationStale"),PimDb.Int64(row,"ErrorCount"),PimDb.Int64(row,"WarningCount"),
+      PimDb.Int64(row,"ErpBlockingCount"),PimDb.Int64(row,"WebBlockingCount"),PimDb.Bool(row,"HasGlobalHold"),
+      PimDb.Bool(row,"HasErpHold"),PimDb.Bool(row,"HasWebHold"),PimDb.Bool(row,"IsErpReady"),PimDb.Bool(row,"IsWebReady")), cancellationToken);
+    await NextAsync(reader,cancellationToken);
+    var totals = new ProductReadinessTotals(0,0,0,0,0,0,0);
+    if (await reader.ReadAsync(cancellationToken)) totals = new(
+      PimDb.Int64(reader,"TotalCount"),PimDb.Int64(reader,"ErpReadyCount"),PimDb.Int64(reader,"ErpBlockedCount"),
+      PimDb.Int64(reader,"WebReadyCount"),PimDb.Int64(reader,"WebBlockedCount"),PimDb.Int64(reader,"HoldCount"),
+      PimDb.Int64(reader,"StaleCount"));
+    return new(rows,totals);
+  }
 
   public async Task<QualityIssuePage> GetIssuesAsync(
     QualityIssueFilter filter, CancellationToken cancellationToken = default)
@@ -118,7 +162,7 @@ public sealed class QualityReadService(IConfiguration configuration)
     if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
       total = Convert.ToInt64(reader.GetValue(0));
 
-    return new(products, issues, total);
+    return new(NormalizeBlockingCounts(products, issues), issues, total);
   }
 
   public async Task<QualityOverview> GetOverviewAsync(
@@ -293,7 +337,7 @@ public sealed class QualityReadService(IConfiguration configuration)
       PimDb.DateTimeValue(row, "FirstDetectedUtc"), PimDb.DateTimeValue(row, "LastDetectedUtc")), cancellationToken);
     await NextAsync(reader, cancellationToken);
     var total = await reader.ReadAsync(cancellationToken) ? Convert.ToInt64(reader.GetValue(0)) : 0;
-    return new(products, issues, total);
+    return new(NormalizeBlockingCounts(products, issues), issues, total);
   }
 
   /// <summary>Odprte zahteve po kategorijah drevesa, vecnivojsko (177). Podjetje null = vsa.</summary>
@@ -349,6 +393,21 @@ public sealed class QualityReadService(IConfiguration configuration)
 
   static object Optional(string? value) =>
     string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+  // WARNING je nasvet in nikoli blokada. Starejsi SQL bralni model je stel samo zastavico
+  // profila, zato je opozorilo v UI lahko lazno kazalo "Blokira ERP/splet".
+  static IReadOnlyList<QualityProductRow> NormalizeBlockingCounts(
+    IReadOnlyList<QualityProductRow> products, IReadOnlyList<QualityIssueRow> issues)
+  {
+    var blocking = issues.Where(issue => string.Equals(issue.Severity,"ERROR",StringComparison.OrdinalIgnoreCase))
+      .GroupBy(issue => issue.ProductId)
+      .ToDictionary(group => group.Key, group => (
+        Erp: (long)group.Count(issue => issue.BlocksErp),
+        Web: (long)group.Count(issue => issue.BlocksWeb)));
+    return products.Select(product => blocking.TryGetValue(product.ProductId,out var count)
+      ? product with { BlockingErpCount=count.Erp, BlockingWebCount=count.Web }
+      : product with { BlockingErpCount=0, BlockingWebCount=0 }).ToArray();
+  }
 
   static async Task NextAsync(SqlDataReader reader, CancellationToken cancellationToken)
   {

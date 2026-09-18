@@ -2,6 +2,7 @@ using System.Data;
 using System.Runtime.CompilerServices;
 using Microsoft.Data.SqlClient;
 using PIM.B2b;
+using PIM.Operations;
 
 [assembly: InternalsVisibleTo("PIM.F7.MagentoExportTests")]
 
@@ -31,7 +32,7 @@ public static class MagentoExportCommand
         if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDir, nameof(outputDir));
         if (string.IsNullOrWhiteSpace(connectionString))
-            throw new InvalidOperationException("Manjka PIM_CONNECTION_STRING. Nastavite okoljsko spremenljivko PIM_CONNECTION_STRING.");
+            throw new InvalidOperationException(LocalSettings.MissingConnectionMessage());
 
         Directory.CreateDirectory(outputDir);
 
@@ -40,15 +41,15 @@ public static class MagentoExportCommand
 
         // Datoteki sta par in ju Magento uvozi skupaj. Zato obe najprej zapisemo ob stran,
         // sele nato prestavimo na koncni imeni. Ce pade poizvedba za stranke ali pisanje druge
-        // datoteke, v izhodni mapi ne nastane nov magento-products.csv poleg stare ali
-        // manjkajoce magento-customers.csv - torej ni polovicnega izvoza.
+        // datoteke, v izhodni mapi ne nastane nov katalog.csv poleg stare ali
+        // manjkajoce stranke.csv - torej ni polovicnega izvoza.
         // Obliko preberemo pred podatki: manjkajoč ali izklopljen profil je napaka
         // konfiguracije in mora pasti, preden se karkoli zapiše v izhodno mapo.
         var productProfile = await ExportProfileRegistry.LoadProfileAsync(connection, MagentoProductSchema.ProfileCode, ct);
         var customerProfile = await ExportProfileRegistry.LoadProfileAsync(connection, MagentoCustomerSchema.ProfileCode, ct);
 
-        var productPath = Path.Combine(outputDir, "magento-products.csv");
-        var customerPath = Path.Combine(outputDir, "magento-customers.csv");
+        var productPath = Path.Combine(outputDir, "katalog.csv");
+        var customerPath = Path.Combine(outputDir, "stranke.csv");
 
         // Zacasna in varnostna imena so enolicna za posamezen zagon. Dva socasna zagona v isto
         // mapo bi si sicer povozila .tmp in .prej: eden bi pobrisal drugemu varnostno kopijo ali
@@ -65,11 +66,21 @@ public static class MagentoExportCommand
         // zamenjava se pod kljucavnico na izhodni mapi: drugi zagon raje pade z jasnim
         // sporocilom, kot da objavi par iz dveh zagonov.
         using var directoryLock = MagentoExportLock.Acquire(outputDir);
+
+        await RefreshCatalogReviewAsync(connection, organizationId, ct);
         var markerBackedUp = false;
         var productBackedUp = false;
         var customerBackedUp = false;
         var productReplaced = false;
         var replacementSucceeded = false;
+
+        // Sled izvoza (migracija 172). Datoteki sta par, zapisa pa sta dva — vsak profil ima
+        // svoje stevilo vrstic, svojo velikost in svoj hash. Skupen izid imata zato, ker se
+        // par zamenja skupaj: ce pade zamenjava, nista uspesna niti eden niti drugi.
+        var productRunKey = await ExportRunLog.BeginAsync(connection, MagentoProductSchema.ProfileCode, organizationId, ct);
+        var customerRunKey = await ExportRunLog.BeginAsync(connection, MagentoCustomerSchema.ProfileCode, organizationId, ct);
+        var productCount = 0;
+        var customerCount = 0;
 
         try
         {
@@ -77,9 +88,9 @@ public static class MagentoExportCommand
             // stranjo, veljaven za to stran (pravilo je v out.GetExportRows in registru profila).
             // Do takrat je izvoz jemal ves katalog podjetja (43.504 vrstic namesto 1.957 pri
             // podjetju 2) — uporabnik 2026-09-02: "v izvozu morajo biti cisti podatki".
-            var productCount = await RegistryCsvWriter.WriteAsync(productTempPath, productProfile.Columns,
+            productCount = await RegistryCsvWriter.WriteAsync(productTempPath, productProfile.Columns,
                 ReadExportRowsAsync(connection, productProfile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
-            var customerCount = await RegistryCsvWriter.WriteAsync(customerTempPath, customerProfile.Columns,
+            customerCount = await RegistryCsvWriter.WriteAsync(customerTempPath, customerProfile.Columns,
                 ReadExportRowsAsync(connection, customerProfile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
 
             // Vse premikanje datotek je znotraj ENEGA try: tudi odmik prejsnjega para.
@@ -135,6 +146,15 @@ public static class MagentoExportCommand
                 DeleteIfExists(customerBackupPath);
                 DeleteIfExists(markerBackupPath);
             }
+
+            // Zapis nastane tudi ob padcu: izvoz, ki ni uspel, mora biti v zgodovini viden,
+            // sicer je videti, kot da tiste noci sploh ni bil poskusen.
+            await ExportRunLog.CompleteAsync(connection, productRunKey, replacementSucceeded,
+                rowCount: productCount, columnCount: productProfile.Columns.Count,
+                filePath: productPath, error: replacementSucceeded ? null : "Zamenjava para datotek ni uspela.", ct: ct);
+            await ExportRunLog.CompleteAsync(connection, customerRunKey, replacementSucceeded,
+                rowCount: customerCount, columnCount: customerProfile.Columns.Count,
+                filePath: customerPath, error: replacementSucceeded ? null : "Zamenjava para datotek ni uspela.", ct: ct);
         }
     }
 
@@ -150,7 +170,7 @@ public static class MagentoExportCommand
         if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDir, nameof(outputDir));
         if (string.IsNullOrWhiteSpace(connectionString))
-            throw new InvalidOperationException("Manjka PIM_CONNECTION_STRING. Nastavite okoljsko spremenljivko PIM_CONNECTION_STRING.");
+            throw new InvalidOperationException(LocalSettings.MissingConnectionMessage());
 
         Directory.CreateDirectory(outputDir);
         await using var connection = new SqlConnection(connectionString);
@@ -160,6 +180,11 @@ public static class MagentoExportCommand
         var targetPath = Path.Combine(outputDir, fileName ?? $"magento-{profileCode.ToLowerInvariant().Replace('_', '-')}.csv");
         var tempPath = $"{targetPath}.{Guid.NewGuid():N}.tmp";
         using var directoryLock = MagentoExportLock.Acquire(outputDir);
+        await RefreshCatalogReviewAsync(connection, organizationId, ct);
+
+        // Sled izvoza (migracija 172). Zapis se odpre sele tu, po prevzemu kljucavnice:
+        // zagon, ki na kljucavnici pade, ni izvoz in ne sme pustiti vrstice.
+        var runKey = await ExportRunLog.BeginAsync(connection, profileCode, organizationId, ct);
         try
         {
             // Samo objavljeni izdelki s spletno stranjo; ali je zahtevana tudi veljavnost za splet,
@@ -167,12 +192,55 @@ public static class MagentoExportCommand
             var count = await RegistryCsvWriter.WriteAsync(tempPath, profile.Columns,
                 ReadExportRowsAsync(connection, profile.ExportProfileId, organizationId, onlyPublished: true, ct), ct);
             File.Move(tempPath, targetPath, overwrite: true);
+            await ExportRunLog.CompleteAsync(connection, runKey, succeeded: true,
+                rowCount: count, columnCount: profile.Columns.Count, filePath: targetPath, ct: ct);
             return count;
+        }
+        catch (Exception exception)
+        {
+            await ExportRunLog.CompleteAsync(connection, runKey, succeeded: false, error: exception.Message, ct: ct);
+            throw;
         }
         finally
         {
             DeleteIfExists(tempPath);
         }
+    }
+
+    /// <summary>
+    /// val.RunValidation in val.Promote za podjetje — isti korak, ki ga Katalog-cikel.ps1 in
+    /// Nocno-vse.ps1 pozeneta pred izvozom. Izvoz vzame samo izdelke, ki so VALID in promovirani
+    /// v pim.*; worker, ki ga Scheduled Task zazene neposredno (namenski streznik), bi brez tega
+    /// izvazal po zadnji validaciji, ki jo je slucajno sprozil kdo drug.
+    /// </summary>
+    public static async Task RefreshValidationAsync(int organizationId, string connectionString, CancellationToken ct = default)
+    {
+        if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(ct);
+        foreach (var procedure in new[] { "val.RunValidation", "val.Promote" })
+        {
+            await using var command = new SqlCommand(procedure, connection)
+            {
+                CommandType = CommandType.StoredProcedure,
+                // Enaka meja kot v scripts\Sql.ps1: validacija celega podjetja lahko traja minute.
+                CommandTimeout = 1800,
+            };
+            command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+            await command.ExecuteNonQueryAsync(ct);
+        }
+    }
+
+    private static async Task RefreshCatalogReviewAsync(SqlConnection connection, int organizationId, CancellationToken ct)
+    {
+        await using var command = new SqlCommand("pim.RefreshCatalogReview", connection)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 120,
+        };
+        command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+        await command.ExecuteNonQueryAsync(ct);
     }
 
     /// <summary>Korak vracanja v prejsnje stanje, ki ne sme prekriti prvotne izjeme.</summary>

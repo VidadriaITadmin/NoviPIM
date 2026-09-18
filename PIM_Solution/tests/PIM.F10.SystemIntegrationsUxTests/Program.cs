@@ -26,13 +26,13 @@ Assert(markup.Contains("@page \"/system/integracije\"", StringComparison.Ordinal
 Assert(markup.Contains("@attribute [Authorize(Roles = \"ADMIN\")]", StringComparison.Ordinal), "Stran mora ostati omejena na vlogo ADMIN.");
 
 // 2. Naslov strani, kontekstni zavihek in dejanje osvežitve.
+// Prenova 2026-09-10: krajevni <nav class="page-tabs"> z enim samim zavihkom je zamenjal skupni
+// NadzorTabs (PimTab.cs), isti vzorec kot na /kakovost (QualityTabs) in /saop (SaopTabs) — stran
+// je zdaj eden od vec zavihkov nadzora, ne vec osamljena z lastnim enojnim zavihkom.
 Assert(Regex.IsMatch(markup, "<h1>Integracije sistema</h1>"), "Stran mora ohraniti vidni naslov <h1>Integracije sistema</h1>.");
-var tabs = Regex.Match(markup, "<nav[^>]*class=\"page-tabs\"[^>]*>");
-Assert(tabs.Success, "Zavihki morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
-Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki morajo imeti aria-label.");
-Assert(Regex.Matches(markup, "class=\"page-tab(?!s)").Count == 1,
-  "Stran ima en sam podatkovno podprt pogled; drugih zavihkov brez vira ni dovoljeno uvesti.");
-Assert(Regex.IsMatch(markup, "class=\"page-tab active\"[^>]*aria-current=\"page\""), "Aktivni zavihek mora imeti aria-current=\"page\".");
+Assert(markup.Contains("<PimTabs", StringComparison.Ordinal) && markup.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
+  "Stran mora prikazati skupni zavihek NadzorTabs, enako kot preostale strani nadzora.");
+Assert(Regex.IsMatch(markup, "<PimTabs Active=\"alarmi\""), "Aktivni zavihek na tej strani mora biti \"alarmi\".");
 var refresh = Regex.Match(markup, "<button[^>]*class=\"filter-button\"[^>]*>");
 Assert(refresh.Success, "Gumb za osvežitev mora ostati na strani.");
 Assert(refresh.Value.Contains("type=\"button\"", StringComparison.Ordinal), "Gumb osvežitve mora imeti type=\"button\", da v obrazcu ne pošilja.");

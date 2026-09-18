@@ -31,8 +31,14 @@ public static class WorkbookTable
   const string Ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   const string RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-  /// <summary>Največ vrstic na list; varovalka pred zvezkom, ki bi pojedel ves pomnilnik.</summary>
-  public const int MaxRows = 50_000;
+  /// <summary>Največ vrstic na list. To ni poslovna meja, ampak fizična meja lista .xlsx
+  /// (Excel: 1.048.576 vrstic, tu odštete naslovne vrstice in opombe). Uporabnik 2026-09-17:
+  /// izvoz ne sme imeti svoje zgornje meje — cel pogled je cel pogled, tudi ko katalog zraste;
+  /// prej je bila tu varovalka 50.000 (in v izvozih 20.000), ki jo je katalog ze prerasel.
+  /// Vsi izvozi (ProductExportService, ProductWorkbookService, QualityIssueExportService,
+  /// StockReadService) berejo to isto stevilo, da izvoz nikoli ne napise vec vrstic, kot jih
+  /// uvoz zna prebrati nazaj.</summary>
+  public const int MaxRows = 1_048_000;
 
   /// <param name="headerHints">Naslovi, po katerih se prepozna prava naslovna vrstica. Zvezek,
   /// ki ga zapiše <see cref="WorkbookWriter"/> s skupinami stolpcev, ima dve naslovni vrstici:

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace PIM.Intranet.Services;
 
@@ -10,7 +11,8 @@ namespace PIM.Intranet.Services;
 /// pot«, tu za vprašanje »kako je naše drevo videti in kako se imenuje v posameznem jeziku«.
 /// Prvo je preslikava vira, drugo je katalog sam.
 /// </summary>
-public sealed class CategoryTreeService(PimDb database, IConfiguration configuration)
+/// <param name="cache">Predpomnilnik procesa za izbirnik kategorij; neobvezen, da ga testi lahko izpustijo.</param>
+public sealed class CategoryTreeService(PimDb database, IConfiguration configuration, PimWriteGuard guard, IMemoryCache? cache = null)
 {
   static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -118,38 +120,73 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   /// je izbira smiselna: koliko izdelkov je pod kategorijo in koliko atributov ima njen nabor.
   /// Brez tega bi uporabnik izbiral naslepo in šele po izvozu videl prazno datoteko.
   /// </summary>
-  public Task<IReadOnlyList<CategoryPickRow>> GetCategoryPickerAsync(
-    string categoryTreeCode, CancellationToken cancellationToken = default) =>
+  public async Task<IReadOnlyList<CategoryPickRow>> GetCategoryPickerAsync(
+    string categoryTreeCode, CancellationToken cancellationToken = default)
+  {
+    // Izbirnik se spremeni sele ob urejanju kategorij ali uvrstitev, stran /izdelki pa ga bere ob
+    // VSAKEM nalaganju za vsako drevo (2026-09-17: 1,3-1,8 s na drevo tudi po prepisu poizvedbe
+    // spodaj, prej 6 s). Proces ga zato drzi pet minut v pomnilniku; brez predpomnilnika (testi,
+    // ki servis sestavijo rocno) gre naravnost v bazo.
+    if (cache is null) return await LoadCategoryPickerAsync(categoryTreeCode, cancellationToken);
+    var rows = await cache.GetOrCreateAsync("category-picker:" + categoryTreeCode, async entry =>
+    {
+      entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+      return await LoadCategoryPickerAsync(categoryTreeCode, cancellationToken);
+    });
+    return rows ?? [];
+  }
+
+  Task<IReadOnlyList<CategoryPickRow>> LoadCategoryPickerAsync(
+    string categoryTreeCode, CancellationToken cancellationToken) =>
     database.QueryAsync(
       """
+      /* 2026-09-17: prevedene poti drevesa se izracunajo ENKRAT (#Pot), uvrstitve izdelkov enkrat
+         (#Uvrstitev), stevilo izdelkov v poddrevesu pa prek zaprtja prednik-potomec po poti
+         (#Poddrevo). Prej je OUTER APPLY za vsako vozlisce znova izracunal rekurzivni pogled
+         canon.CategoryPathTranslated - izmerjeno 6 s na drevo, dve drevesi ob VSAKEM nalaganju
+         strani /izdelki. Uvrstitev na jezikovni razlicici strani se zdaj steje prek kode kategorije
+         (prej samo, kadar se je pot v tujem jeziku slucajno ujela s slovensko predpono). */
+      SELECT prevod.CategoryCode, prevod.LanguageCode, prevod.CategoryPath, spletna.SortOrder
+      INTO #Pot
+      FROM canon.CategoryPathTranslated AS prevod
+      INNER JOIN canon.WebSite AS spletna
+        ON spletna.CategoryTreeCode = prevod.CategoryTreeCode AND spletna.LanguageCode = prevod.LanguageCode
+       AND spletna.IsActive = 1
+      WHERE prevod.CategoryTreeCode = @CategoryTreeCode;
+
+      SELECT CategoryCode, CategoryPath
+      INTO #Prikaz
+      FROM (SELECT CategoryCode, CategoryPath, ROW_NUMBER() OVER (PARTITION BY CategoryCode ORDER BY SortOrder) AS Vrsta FROM #Pot) AS izbor
+      WHERE Vrsta = 1;
+
+      SELECT DISTINCT productCategory.ProductId, prevod.CategoryCode
+      INTO #Uvrstitev
+      FROM canon.ProductCategory AS productCategory
+      INNER JOIN canon.WebSite AS spletna
+        ON spletna.WebSiteCode = productCategory.WebSite AND spletna.CategoryTreeCode = @CategoryTreeCode
+      INNER JOIN #Pot AS prevod
+        ON prevod.LanguageCode = spletna.LanguageCode AND prevod.CategoryPath = productCategory.CategoryPath;
+
+      SELECT prednik.CategoryCode AS Prednik, potomec.CategoryCode AS Potomec
+      INTO #Poddrevo
+      FROM #Prikaz AS prednik
+      INNER JOIN #Prikaz AS potomec
+        ON potomec.CategoryCode = prednik.CategoryCode OR potomec.CategoryPath LIKE prednik.CategoryPath + N' > %';
+
       SELECT
         node.CategoryTreeCode, node.CategoryCode, node.CategoryName, node.LevelNo,
-        CategoryPath = pot.CategoryPath,
+        CategoryPath = prikaz.CategoryPath,
         ProductCount = ISNULL(izdelki.Stevilo, 0),
         AttributeCount = ISNULL(nabor.Stevilo, 0)
       FROM canon.Category AS node
-      OUTER APPLY
+      LEFT JOIN #Prikaz AS prikaz ON prikaz.CategoryCode = node.CategoryCode
+      LEFT JOIN
       (
-        SELECT TOP (1) prevod.CategoryPath
-        FROM canon.CategoryPathTranslated AS prevod
-        INNER JOIN canon.WebSite AS spletna
-          ON spletna.CategoryTreeCode = prevod.CategoryTreeCode AND spletna.LanguageCode = prevod.LanguageCode
-        WHERE prevod.CategoryTreeCode = node.CategoryTreeCode AND prevod.CategoryCode = node.CategoryCode
-          AND spletna.IsActive = 1
-        ORDER BY spletna.SortOrder
-      ) AS pot
-      OUTER APPLY
-      (
-        SELECT Stevilo = COUNT_BIG(DISTINCT productCategory.ProductId)
-        FROM canon.ProductCategory AS productCategory
-        INNER JOIN canon.WebSite AS spletna ON spletna.WebSiteCode = productCategory.WebSite
-        INNER JOIN canon.CategoryPathTranslated AS prevod
-          ON prevod.CategoryTreeCode = spletna.CategoryTreeCode AND prevod.LanguageCode = spletna.LanguageCode
-         AND prevod.CategoryPath = productCategory.CategoryPath
-        WHERE prevod.CategoryTreeCode = node.CategoryTreeCode
-          AND (prevod.CategoryCode = node.CategoryCode
-            OR prevod.CategoryPath LIKE pot.CategoryPath + N' > %')
-      ) AS izdelki
+        SELECT poddrevo.Prednik AS CategoryCode, Stevilo = COUNT_BIG(DISTINCT uvrstitev.ProductId)
+        FROM #Poddrevo AS poddrevo
+        INNER JOIN #Uvrstitev AS uvrstitev ON uvrstitev.CategoryCode = poddrevo.Potomec
+        GROUP BY poddrevo.Prednik
+      ) AS izdelki ON izdelki.CategoryCode = node.CategoryCode
       OUTER APPLY
       (
         SELECT Stevilo = COUNT(*)
@@ -157,7 +194,9 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
         WHERE ucinkovit.Level <> N'EXCLUDED'
       ) AS nabor
       WHERE node.CategoryTreeCode = @CategoryTreeCode AND node.IsActive = 1
-      ORDER BY pot.CategoryPath, node.CategoryName;
+      ORDER BY prikaz.CategoryPath, node.CategoryName;
+
+      DROP TABLE #Poddrevo; DROP TABLE #Uvrstitev; DROP TABLE #Prikaz; DROP TABLE #Pot;
       """,
       reader => new CategoryPickRow(
         PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"),
@@ -167,28 +206,41 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
       command => command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode),
       cancellationToken);
 
+  /// <param name="Changed">Število spremenjenih jezikov.</param>
+  /// <param name="CategoryCode">
+  /// Koda kategorije po shranjevanju. Če se je slovensko ime spremenilo, migracija 223 preimenuje
+  /// tudi kodo (in pot) vozlišča ter vse potomce, zato ta koda ni nujno enaka vhodni.
+  /// </param>
+  public sealed record SaveTranslationsResult(int Changed, string CategoryCode);
+
   /// <summary>
-  /// Zapiše prevode ene kategorije v več jezikih hkrati. Vrne število spremenjenih jezikov.
-  /// Če en jezik pade na pravilu, ne obvelja noben — delno shranjen prevod izgleda opravljen.
+  /// Zapiše prevode ene kategorije v več jezikih hkrati. Če en jezik pade na pravilu, ne obvelja
+  /// noben — delno shranjen prevod izgleda opravljen. Sprememba slovenskega imena preimenuje tudi
+  /// kodo in pot kategorije (glej 223), zato klicatelj po klicu uporabi vrnjeno CategoryCode.
   /// </summary>
-  public async Task<int> SaveTranslationsAsync(
+  public async Task<SaveTranslationsResult> SaveTranslationsAsync(
     string categoryTreeCode, string categoryCode, IReadOnlyDictionary<string, string> translations,
     string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     var payload = JsonSerializer.Serialize(
       translations.Select(pair => new { lang = pair.Key, name = pair.Value }));
 
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand(
-      "EXEC canon.SaveCategoryTranslations @CategoryTreeCode, @CategoryCode, @TranslationsJson, @Actor;",
+      "EXEC canon.SaveCategoryTranslations @CategoryTreeCode, @CategoryCode OUTPUT, @TranslationsJson, @Actor;",
       connection);
     command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
-    command.Parameters.AddWithValue("@CategoryCode", categoryCode);
+    var categoryCodeParameter = command.Parameters.Add("@CategoryCode", System.Data.SqlDbType.NVarChar, 400);
+    categoryCodeParameter.Direction = System.Data.ParameterDirection.InputOutput;
+    categoryCodeParameter.Value = categoryCode;
     command.Parameters.AddWithValue("@TranslationsJson", payload);
     command.Parameters.AddWithValue("@Actor", actor);
     var value = await command.ExecuteScalarAsync(cancellationToken);
-    return value is null or DBNull ? 0 : Convert.ToInt32(value);
+    var changed = value is null or DBNull ? 0 : Convert.ToInt32(value);
+    if (changed > 0) ClearPickerCache([categoryTreeCode]);
+    return new SaveTranslationsResult(changed, (string)categoryCodeParameter.Value);
   }
 
   // --- Nabor atributov po kategoriji (migracija 147) -------------------------------------
@@ -252,6 +304,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     string categoryTreeCode, string categoryCode, string attributeCode, string? level, string actor,
     CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand(
@@ -262,6 +315,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     command.Parameters.AddWithValue("@Level", Nullable(level));
     command.Parameters.AddWithValue("@Actor", actor);
     await command.ExecuteNonQueryAsync(cancellationToken);
+    ClearPickerCache([categoryTreeCode]);
   }
 
   // --- Pregled naborov po kategorijah (migracija 170) ------------------------------------
@@ -348,6 +402,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     string categoryTreeCode, string categoryCode, IReadOnlyList<AttributeSetItem> items, string actor,
     CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     var payload = JsonSerializer.Serialize(items.Select(item => new { code = item.CodeOrName, level = item.Level }));
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
@@ -361,6 +416,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     var saved = command.Parameters.Add("@Saved", System.Data.SqlDbType.Int);
     saved.Direction = System.Data.ParameterDirection.Output;
     await command.ExecuteNonQueryAsync(cancellationToken);
+    ClearPickerCache([categoryTreeCode]);
     return saved.Value is int count ? count : 0;
   }
 
@@ -384,6 +440,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   /// <summary>Atribut po slovenskem imenu: obstojecega vrne, neaktivnega vklopi, novega ustvari. Vrne kodo.</summary>
   public async Task<string> EnsureAttributeDefinitionAsync(string name, string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC canon.EnsureAttributeDefinition @Name, @Actor, @AttributeCode OUTPUT;", connection);
@@ -398,6 +455,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   /// <summary>Nova kategorija pod starsem (null = koren) — 178. Postopek zavrne isto ime pod istim starsem. Vrne kodo.</summary>
   public async Task<string> CreateCategoryAsync(string categoryTreeCode, string? parentCategoryCode, string name, string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("EXEC canon.SaveCategory @CategoryTreeCode, @ParentCategoryCode, @Name, @Actor, @CategoryCode OUTPUT;", connection);
@@ -408,7 +466,112 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     var code = command.Parameters.Add("@CategoryCode", System.Data.SqlDbType.NVarChar, 200);
     code.Direction = System.Data.ParameterDirection.Output;
     await command.ExecuteNonQueryAsync(cancellationToken);
-    return code.Value as string ?? throw new InvalidOperationException($"Kategorije »{name}« ni bilo mogoče ustvariti.");
+    var created = code.Value as string ?? throw new InvalidOperationException($"Kategorije »{name}« ni bilo mogoče ustvariti.");
+    ClearPickerCache([categoryTreeCode]);
+    return created;
+  }
+
+  // --- Premikanje in trajno brisanje kategorij (migracija 228) ---------------------------
+
+  public sealed record CategoryRef(string CategoryTreeCode, string CategoryCode);
+
+  /// <summary>
+  /// Obseg je vedno celo poddrevo vsake izbrane korenske kategorije. Ce sta izbrana stars in
+  /// njegov otrok, RootCount zato steje samo starsa, CategoryCount pa vsako vozlisce natanko enkrat.
+  /// </summary>
+  public sealed record CategoryChangeImpact(
+    long SelectedCount, long RootCount, long CategoryCount, long DescendantCount,
+    long CanonProductAssignments, long PimProductAssignments, long OverrideAssignments,
+    long MappingCount, long AttributeSetCount, long ValidationRuleCount, long TitleRuleCount)
+  {
+    public long ProductAssignments => CanonProductAssignments + PimProductAssignments + OverrideAssignments;
+  }
+
+  public sealed record CategoryChangeResult(
+    int RootCount, int CategoryCount, long AssignmentCount, long MappingCount = 0);
+
+  /// <summary>Predogled dejanskega vpliva pred premikom ali trajnim brisanjem.</summary>
+  public async Task<CategoryChangeImpact> GetChangeImpactAsync(
+    IReadOnlyCollection<CategoryRef> categories, CancellationToken cancellationToken = default)
+  {
+    var payload = SerializeCategoryRefs(categories);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("canon.GetCategoryChangeImpact", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.AddWithValue("@CategoriesJson", payload);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken))
+      throw new InvalidOperationException("Predogleda vpliva kategorij ni bilo mogoče pripraviti.");
+    return new(
+      PimDb.Int64(reader, "SelectedCount"), PimDb.Int64(reader, "RootCount"),
+      PimDb.Int64(reader, "CategoryCount"), PimDb.Int64(reader, "DescendantCount"),
+      PimDb.Int64(reader, "CanonProductAssignments"), PimDb.Int64(reader, "PimProductAssignments"),
+      PimDb.Int64(reader, "OverrideAssignments"), PimDb.Int64(reader, "MappingCount"),
+      PimDb.Int64(reader, "AttributeSetCount"), PimDb.Int64(reader, "ValidationRuleCount"),
+      PimDb.Int64(reader, "TitleRuleCount"));
+  }
+
+  /// <summary>
+  /// Premakne eno ali vec vej pod istega starsa (null = koren). Kode ostanejo stabilne; baza v isti
+  /// transakciji posodobi nivoje, vse jezikovne poti in uvrstitve izdelkov.
+  /// </summary>
+  public async Task<CategoryChangeResult> MoveCategoriesAsync(
+    IReadOnlyCollection<CategoryRef> categories, string targetTreeCode, string? targetParentCategoryCode,
+    string actor, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var payload = SerializeCategoryRefs(categories);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("canon.MoveCategories", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.AddWithValue("@CategoriesJson", payload);
+    command.Parameters.AddWithValue("@TargetCategoryTreeCode", targetTreeCode);
+    command.Parameters.AddWithValue("@TargetParentCategoryCode", Nullable(targetParentCategoryCode));
+    command.Parameters.AddWithValue("@Actor", actor);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken))
+      throw new InvalidOperationException("Premik kategorij ni vrnil rezultata.");
+    var result = new CategoryChangeResult(
+      PimDb.Int32(reader, "RootCount"), PimDb.Int32(reader, "CategoryCount"),
+      PimDb.Int64(reader, "AssignmentCount"));
+    ClearPickerCache(categories.Select(category => category.CategoryTreeCode).Append(targetTreeCode));
+    return result;
+  }
+
+  /// <summary>
+  /// Trajno odstrani izbrane kategorije in njihova poddrevesa. Izdelki ostanejo, odstranijo se le
+  /// njihove uvrstitve v izbrisane kategorije. Postopek hrani revizijsko sled.
+  /// </summary>
+  public async Task<CategoryChangeResult> DeleteCategoriesAsync(
+    IReadOnlyCollection<CategoryRef> categories, string actor, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var payload = SerializeCategoryRefs(categories);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("canon.DeleteCategories", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.AddWithValue("@CategoriesJson", payload);
+    command.Parameters.AddWithValue("@Actor", actor);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken))
+      throw new InvalidOperationException("Brisanje kategorij ni vrnilo rezultata.");
+    var result = new CategoryChangeResult(
+      PimDb.Int32(reader, "RootCount"), PimDb.Int32(reader, "CategoryCount"),
+      PimDb.Int64(reader, "AssignmentCount"), PimDb.Int64(reader, "MappingCount"));
+    ClearPickerCache(categories.Select(category => category.CategoryTreeCode));
+    return result;
   }
 
   /// <param name="CategoryPath">Slovenska pot; v izbirniku je zamaknjena po ravni.</param>
@@ -428,6 +591,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     string fromTreeCode, string fromCategoryCode, string toTreeCode, string toCategoryCode,
     bool includeInherited, bool overwrite, string actor, CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand(
@@ -444,6 +608,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     var copied = command.Parameters.Add("@Copied", System.Data.SqlDbType.Int);
     copied.Direction = System.Data.ParameterDirection.Output;
     await command.ExecuteNonQueryAsync(cancellationToken);
+    ClearPickerCache([toTreeCode]);
     return copied.Value is int count ? count : 0;
   }
 
@@ -463,6 +628,22 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     {
       return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
+  }
+
+  static string SerializeCategoryRefs(IReadOnlyCollection<CategoryRef> categories)
+  {
+    if (categories.Count == 0) throw new ArgumentException("Izberi vsaj eno kategorijo.", nameof(categories));
+    return JsonSerializer.Serialize(categories
+      .Where(category => !string.IsNullOrWhiteSpace(category.CategoryTreeCode) && !string.IsNullOrWhiteSpace(category.CategoryCode))
+      .Distinct()
+      .Select(category => new { tree = category.CategoryTreeCode, code = category.CategoryCode }));
+  }
+
+  void ClearPickerCache(IEnumerable<string> categoryTreeCodes)
+  {
+    if (cache is null) return;
+    foreach (var treeCode in categoryTreeCodes.Where(code => !string.IsNullOrWhiteSpace(code)).Distinct(StringComparer.OrdinalIgnoreCase))
+      cache.Remove("category-picker:" + treeCode);
   }
 
   static object Nullable(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value;

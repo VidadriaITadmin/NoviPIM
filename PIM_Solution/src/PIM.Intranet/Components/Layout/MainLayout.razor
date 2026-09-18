@@ -1,7 +1,7 @@
 @inherits LayoutComponentBase
 
 @inject AuthenticationStateProvider AuthenticationStateProvider
-@inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
 @inject NavigationManager Navigation
 
 @* Preklop navigacije je CSS, ne JavaScript in ne vezje: postavitev ostane staticni SSR, ker
@@ -21,14 +21,76 @@
       </div>
       <div class="topbar-spacer"></div>
 
-      <a class="notification-button" href="system/integracije" title="@AlertTitle">
-        <span class="notification-icon" aria-hidden="true"></span>
-        @if (OpenAlerts > 0)
-        {
-          <span class="notification-count">@OpenAlerts</span>
-        }
-        <span class="visually-hidden">@AlertTitle</span>
-      </a>
+      @* Zvonec je skrbnikov. Prej je vodil naravnost na /sistem, ne da bi skrbnik videl, kaj
+         sploh caka — zdaj <details> odpre spustni seznam zadnjih obvestil brez vezja Blazorja
+         (glava ostaja staticna SSR), povezava na dno pa še vedno vodi na polni pregled.
+         <details> se sam zapre samo ob ponovnem kliku na zvonec; klik kamorkoli drugam, Escape
+         in premik fokusa ven ga zaprejo prek wwwroot/js/pim-shell.js (vkljucen v App.razor). *@
+      @if (IsAdmin)
+      {
+        <details class="notification-menu">
+          <summary class="notification-button @(Attention.Total > 0 ? "notification-alarm" : null)" title="@AlertTitle">
+            <span class="notification-icon" aria-hidden="true"></span>
+            @if (Attention.Total > 0)
+            {
+              <span class="notification-count">@Attention.Total</span>
+            }
+            <span class="visually-hidden">@AlertTitle</span>
+          </summary>
+          <div class="notification-panel">
+            <div class="notification-panel-header">
+              <strong>Obvestila</strong>
+              @if (RecentAlerts.Any(alert => !alert.IsSeen))
+              {
+                <form method="post" action="obvestila/precitaj-vse">
+                  <AntiforgeryToken />
+                  <input type="hidden" name="vrniNa" value="@ReturnPath" />
+                  <button type="submit" class="notification-mark-all">Označi vse kot prebrano</button>
+                </form>
+              }
+            </div>
+            @if (RecentAlerts.Count == 0)
+            {
+              <p class="notification-empty">Trenutno ni odprtih obvestil.</p>
+            }
+            else
+            {
+              <ul class="notification-list">
+                @foreach (var alert in RecentAlerts)
+                {
+                  <li class="notification-item severity-@Chip(alert.Severity) @(alert.IsSeen ? null : "notification-unseen")">
+                    @* Cel zapis je povezava na stran, kjer je opozorilo dejansko videti in resljivo
+                       (npr. konkretni artikli pri izlocitvah iz rezervacije, ne samo stevilo) — glej
+                       AlertHref spodaj. Redigiran povzetek (Sifra artikla, stevilo, vir ...) je zdaj
+                       viden tukaj, ne samo na /sistem/integracije, ker uporabnik prej ni vedel, KAJ
+                       tocno je narobe, dokler ni odprl polnega pregleda. *@
+                    <a class="notification-item-body" href="@AlertHref(alert)" title="@($"Odpri: {alert.Title}")">
+                      <div class="notification-item-top">
+                        <span class="notification-title">@alert.Title</span>
+                        <span class="notification-severity-label">@alert.Severity</span>
+                      </div>
+                      @if (!string.IsNullOrWhiteSpace(alert.PayloadSummaryRedacted))
+                      {
+                        <span class="notification-detail">@alert.PayloadSummaryRedacted</span>
+                      }
+                      <span class="notification-meta">@alert.OrganizationName · @alert.Pipeline · @alert.LastSeenUtc.ToPimLocal().ToString("g")</span>
+                    </a>
+                    @if (!alert.IsSeen)
+                    {
+                      <form method="post" action="@($"obvestila/precitaj/{alert.AlertId}")">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="vrniNa" value="@ReturnPath" />
+                        <button type="submit" class="notification-mark-one" aria-label="@($"Označi kot prebrano: {alert.Title}")" title="Označi kot prebrano">✓</button>
+                      </form>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+            <a class="notification-panel-link" href="sistem/integracije">Odpri vsa obvestila</a>
+          </div>
+        </details>
+      }
       <div class="signed-user"><span>@Initials</span><strong>@DisplayName</strong></div>
       <form method="post" action="odjava"><AntiforgeryToken /><button type="submit" class="logout-button">Odjava</button></form>
     </header>
@@ -39,27 +101,53 @@
 @code {
   string DisplayName = "Uporabnik";
   string Initials = "U";
-  int OpenAlerts;
+  bool IsAdmin;
+  AttentionSummary Attention = AttentionSummary.Empty;
+  IReadOnlyList<AdminAlertRow> RecentAlerts = [];
   PimLifecycleArea Lifecycle = PimLifecycle.Oversight;
+  string ReturnPath = "";
 
-  string AlertTitle => OpenAlerts == 0 ? "Ni odprtih opozoril" : $"Odprta opozorila: {OpenAlerts}";
+  string AlertTitle => Attention.Total == 0 ? "Vse teče: ni odprtih opozoril" : $"Potrebuje pozornost: {Attention.Title}";
+  static string Chip(string severity) => severity is "Critical" ? "bad" : severity is "Warning" ? "warn" : "good";
+
+  // Klik na obvestilo mora odpreti stran, kjer je videti in resljivo prav TO, o cemer opozorilo
+  // govori — ne vedno isti splosni pregled. Preslikava je po AlertKind (glej migracijo 222 za
+  // popoln seznam vrst, ki jih baza sploh kdaj zapise); privzeto se uporabi celoten pregled.
+  static string AlertHref(AdminAlertRow alert) => alert.AlertKind switch
+  {
+    "ReservationExcluded" => "nastavitve/rezervacija-zaloge",
+    "StockSnapshotStale" or "StockSnapshotEmpty" => "zaloge",
+    "OutboundDead" or "OutboundDrift" or "OutboundUnacknowledged" => "izvozi/obvestila",
+    "StaleHeartbeat" or "StalledWatermark" or "PipelinePaused" or "PipelineDisabled" or "PipelineOverdue" => "teki-obdelave",
+    "CycleOverdue" => "sistem?pogled=postopki",
+    "ExportRejected" => "sistem/izvozi",
+    _ => "sistem/integracije",
+  };
 
   protected override async Task OnInitializedAsync()
   {
-    Lifecycle = PimLifecycle.ResolveLifecycleArea(Navigation.ToBaseRelativePath(Navigation.Uri));
+    ReturnPath = Navigation.ToBaseRelativePath(Navigation.Uri);
+    Lifecycle = PimLifecycle.ResolveLifecycleArea(ReturnPath);
     var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
     DisplayName = user.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? user.Identity?.Name ?? "Uporabnik";
     Initials = string.Concat(DisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    IsAdmin = user.IsInRole(PimRoles.Admin);
+    if (!IsAdmin) return;
+
+    var userKey = user.Identity?.Name ?? "neznan";
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is not null) OpenAlerts = await Data.GetOpenAlertCountAsync(organization.OrganizationId);
+      // Števec ni vezan na izbrano podjetje: postopek, ki je padel pri podjetju 3, je enako
+      // narobe, tudi kadar skrbnik gleda podjetje 1.
+      Attention = await Nadzor.GetAttentionAsync(userKey);
+      RecentAlerts = await Nadzor.GetRecentAlertsAsync(userKey);
     }
     catch
     {
       // Baza ni dosegljiva: zvonec ostane brez stevca, stran pa se vseeno izrise s svojim
       // lastnim sporocilom o napaki.
-      OpenAlerts = 0;
+      Attention = AttentionSummary.Empty;
+      RecentAlerts = [];
     }
   }
 }

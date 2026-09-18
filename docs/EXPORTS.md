@@ -92,6 +92,20 @@ polj pri njih preverja šele CSV generator ob pisanju (razdelek 3.2).
 
 ---
 
+## 2z. Enota je v glavi stolpca: `out.CatalogUnitRule` (migracija 216)
+
+Od 2026-09-16 katalog nima več stolpcev `Enota …`: enota je v glavi (`Bruto teža [kg]`,
+`Višina [mm]`, `Napetost [V]`). Katera enota velja za kateri stolpec, pove vrstica registra
+`out.CatalogUnitRule` (`ValueFieldCode`, `UnitFieldCode` — polje z enoto vira ali NULL,
+`TargetUnit`). `out.GetExportRows` (blok `Catalog216`) vrednost pretvori v enoto glave
+(`out.UnitFactor`: mm/cm/m, g/kg, cm3/dm3/m3; sopomenke kgs, gr, dm³, ⁰), neštevilski vrednosti
+enoto glave samo odvzame (`50/60 Hz` → `50/60`, `3000K` → `3000`), neznano enoto pusti pri miru
+(`3IN1`, `80lm/W`). Enota vira: iz vrednosti same, sicer iz polja z enoto, sicer enota glave.
+Nov stolpec z enoto = ena vrstica registra + glava z `[enota]`; kode ni treba spreminjati.
+Isti blok še: šifra partnerja → ime (`canon.PartnerName`), `Garancija` → `pim.WarrantySl`,
+stolpci `… SLO`/`… ANG` z veliko začetnico. Podrobnosti: `docs/DATABASE.md` (216) in
+`docs/KATALOG_PRESLIKAVA_ATRIBUTOV.md`.
+
 ## 2a. Kategorije: `canon.WebSite` pove, katera stran gre v kateri stolpec
 
 Od migracije `059` spletna stran ni več zapisana v programu. Prej je bilo v
@@ -214,7 +228,7 @@ manjkajoči operativni člen.
 
 `PIM.B2bWorker` podpira read-only ukaz `--export-magento --organization-id <int>
 --output-dir <dir>`. Bere izključno `PIM_CONNECTION_STRING` in lokalno ustvari
-`magento-products.csv` (213 glav po predlogi) ter `magento-customers.csv` (19
+`katalog.csv` (213 glav po predlogi) ter `stranke.csv` (19
 glav po predlogi). Datoteki sta UTF-8 brez BOM z vrsticami LF; manjkajoča polja
 ostanejo prazna. FTP, HTTP in Magento dostava niso del ukaza.
 
@@ -319,7 +333,7 @@ pojavi v stolpcu `Glavna slika` (namenoma z malimi črkami — primerjava vloge 
 biti občutljiva na velikost črk). Test sam poseje stranko z `WebEnabled = 1`, zato so
 robni primeri strank dokazani; **v sami razvojni bazi pa ni nobene stranke z
 `WebEnabled = 1` v nobeni organizaciji** (izmerjeno 2026-09-02: 4.390 strank s
-spletnim profilom, od tega 0 odprtih za splet), zato je `magento-customers.csv` v
+spletnim profilom, od tega 0 odprtih za splet), zato je `stranke.csv` v
 resničnem zagonu prazna datoteka z glavo. To je podatek, ne okvara kode.
 
 ### 3.4 Izvoz nastane iz tabel, ne iz datoteke na disku (migracija `142`)
@@ -383,18 +397,43 @@ organizacija 3 (10.595 izdelkov) je dala **znak za znak enaki** datoteki, organi
 
 ## 3z. Pravila spletnega izvoza in zaloga v datoteki (migracija 146, 2026-09-03)
 
-**Kaj gre v datoteko.** Od migracije 146 `out.GetExportRows` za profile z virom `PIM_PRODUCT`
-vzame izdelek samo, če:
+**Kaj gre v datoteko.** Od migracije 146 (pogoj 2 od migracije 201) `out.GetExportRows` za
+profile z virom `PIM_PRODUCT` vzame izdelek na spletno stran S samo, če:
 
-1. ima vsaj eno vrstico v `pim.ProductCategory` — stolpec **Spletne strani** ni prazen
+1. ima vrstico v `pim.ProductCategory` za S — stolpec **Spletne strani** ni prazen
    (uporabnik 2026-09-02: »na splet ne gredo artikli, če imajo prazen stolpec svetila/videlektro«);
-2. je objavljen (`canon.Product.WebPublish = 1`);
-3. kadar ima profil `out.ExportProfile.RequireWebValid = 1`: je `VALID` v vsakem validacijskem
-   profilu, ki blokira splet (`BlocksWeb = 1`) in velja za stran — profil brez drevesa
-   (`SHARED_CORE`) za vse strani, profil z `val.ValidationProfile.CategoryTreeCode` samo za svoje
-   drevo (`WEB_svetila_si` → `svetila_si`, `WEB_videlektro` → `videlektro`).
+2. je aktiven (`canon.Product.IsActive = 1`) in ima **kljukico** za drevo strani S
+   (`pim.ProductWebShop.IsPublished = 1`, `WebShopCode = canon.WebSite.CategoryTreeCode`:
+   `svetila_si` za `svetila_si`/`svetila_si_en`, `videlektro` za `B2C`/`B2C_EN`). Do migracije
+   201 je tu stal SAOP `canon.Product.WebPublish = 1`, ki ga je uporabnik ob 182 zavrnil
+   (uporabnik 2026-09-14: »morajo iti artikli, ki so aktivni, ki imajo kljukico svetila ali
+   videlektro in pa potem morajo imeti narejeno validacijo«);
+3. nima ročnega spletnega zadržka (`val.ProductHold`, migracija 194);
+4. kadar ima profil `out.ExportProfile.RequireWebValid = 1` (`MAGENTO_PRODUCTS`): je `VALID` v
+   vsakem validacijskem profilu, ki blokira splet (`BlocksWeb = 1`) in velja za stran — profil brez
+   drevesa (`SHARED_CORE`) za vse strani, profil z `val.ValidationProfile.CategoryTreeCode` samo za
+   svoje drevo (`WEB_svetila_si` → `svetila_si`, `WEB_videlektro` → `videlektro`). Brez stanja
+   validacije izdelek ni `VALID`.
 
-Stolpec »Spletne strani« in stolpci kategorij nosijo samo strani, za katere je izdelek veljaven.
+**Stranke** (`MAGENTO_CUSTOMERS`, stranke.csv) gredo v datoteko od migracije 202 samo po
+aktivnosti (`b2b.Customer.IsActive = 1`). Oznaka Splet in tip nista pogoj (uporabnik 2026-09-15:
+»ta splet kljukica se tiče samo artiklov«); tip še vedno določa Magento skupino v datoteki, stranka
+brez tipa gre ven s prazno skupino. Migracija 201 je vmes zahtevala aktivnost + Splet + tip, prej
+je zadoščal `WebEnabled`.
+
+Stolpci kategorij nosijo samo strani, za katere je izdelek veljaven. Stolpec »Spletne strani« od
+migracije 213 bere kljukici spletišč s kartice artikla (`pim.ProductWebShop`) in izpiše `svetila`,
+`videlektro` ali `svetila|videlektro` (`canon.WebSite.TreeLabel`; do 213 je našteval kode strani
+`svetila_si`, `svetila_si_en`, `B2C`, `B2C_EN`). Pogoj, kdaj je izdelek v datoteki, je nespremenjen.
+
+**En katalog, samo podjetje 2 (uporabnik 2026-09-15, migracija 213).** `katalog.csv` in
+`stranke.csv` nastaneta samo za podjetje 2 (IQLighting) — `Katalog-cikel.ps1`/`Nocno-vse.ps1`
+`-PodjetjeKataloga`, gumb na `/sistem/workerji` s `FixedOrganizationId = 2`. VID (podjetje 3)
+prispeva zalogo (146, spodaj) in cenik: stolpec »Cena B2B« bere VID-ov cenik `B2B` po šifri artikla
+(`out.ExportPriceList.PriceOrganizationId = 3`), »Cena B2C« IQ-jev lastni cenik. Migracija 208 je
+bila vmesna rešitev (B2B ← IQ-jev B2C). Validacija, objava in naročila še vedno tečejo za vsa štiri
+podjetja; `magento-stock-prices.csv` prav tako.
+
 Worker `PIM.B2bWorker --export-magento` kliče proceduro z `@OnlyPublished = 1`. Izmerjeno po
 migraciji: podjetje 3 = **2.368** vrstic (prej 10.595 objavljenih), podjetje 2 = **1.957**
 (prej 43.504). `/splet` pokaže tri števce: *V datoteki*, *Brez spletne strani*, *S stranjo, a
@@ -423,7 +462,7 @@ vire ločeno.
 stolpci zaloge; `RequireWebValid = 0`) nastane vsakih pet minut iz `scripts\Zaloga-cikel.ps1`:
 `PIM.B2bWorker --export-profile MAGENTO_STOCK_PRICES --organization-id <n> --output-dir
 izvoz\magento\<n> --file-name magento-stock-prices.csv`. Vsebuje samo izdelke, ki so že na
-spletu (spletna stran + objava), in namenoma ne gre skozi validacijo.
+spletu (spletna stran + aktiven + kljukica spletišča, od 201), in namenoma ne gre skozi validacijo.
 
 **Nabor atributov (147).** Kadar katera od dovoljenih kategorij izdelka (ali njen prednik) določa
 nabor v `canon.CategoryAttributeSet`, gredo v datoteko samo atributi iz nabora (REQUIRED,

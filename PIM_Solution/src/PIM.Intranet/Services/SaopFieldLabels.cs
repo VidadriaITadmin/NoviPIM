@@ -120,6 +120,7 @@ public static class SaopFieldLabels
     ["ItemHeight"] = "Višina",
     ["ItemDimensionUOM"] = "Enota dimenzij",
     ["ADRID"] = "ADR",
+    ["ItemExcludeQtyReservation"] = "Kljukica za rezervacijo",
   };
 
   static readonly Dictionary<string, string> Sections = new(StringComparer.OrdinalIgnoreCase)

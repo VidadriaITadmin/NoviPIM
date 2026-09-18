@@ -80,10 +80,6 @@ public sealed record ProductListFilter(
   string? Activity = null, string? WebPublish = null, string? CompletenessBand = null,
   string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null);
 
-public sealed record ProductListViewCounts(
-  long TotalCount, long ToFixCount, long NoImageCount, long NoWebTitleCount,
-  long NoCategoryCount, long NoEanCount, long NotPublishedCount, long WaitingSaopCount);
-
 /// <param name="FacetLabel">Kar uporabnik bere; pri partnerjih ime, sicer enako <paramref name="FacetValue"/>.</param>
 public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount, string FacetLabel);
 
@@ -299,7 +295,10 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     await using var command = new SqlCommand("intranet.GetProductList", connection)
     {
       CommandType = CommandType.StoredProcedure,
-      CommandTimeout = 60,
+      // Stran (50 vrstic) ostane pri 60 s; izvozna stran (do 20.000 vrstic) tece v ozadju in sme pod
+      // socasno obremenitvijo trajati dlje - izmerjeno 2026-09-17: ob dveh socasnih izvozih celega
+      // kataloga in urni validaciji je stran 20.000 vrstic presegla 60 s in izvoz je padel s 500.
+      CommandTimeout = filter.Take > 1_000 ? 600 : 60,
     };
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
@@ -342,27 +341,6 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       total = Convert.ToInt64(reader.GetValue(0));
 
     return new(rows, total);
-  }
-
-  /// <param name="organizationId">null pomeni vsa podjetja.</param>
-  public async Task<ProductListViewCounts> GetProductListViewsAsync(
-    int? organizationId, CancellationToken cancellationToken = default)
-  {
-    await using var connection = new SqlConnection(ConnectionString);
-    await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("intranet.GetProductListViews", connection)
-    {
-      CommandType = CommandType.StoredProcedure,
-      CommandTimeout = 60,
-    };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
-    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, 0, 0, 0, 0, 0, 0);
-    return new(
-      PimDb.Int64(reader, "TotalCount"), PimDb.Int64(reader, "ToFixCount"),
-      PimDb.Int64(reader, "NoImageCount"), PimDb.Int64(reader, "NoWebTitleCount"),
-      PimDb.Int64(reader, "NoCategoryCount"), PimDb.Int64(reader, "NoEanCount"),
-      PimDb.Int64(reader, "NotPublishedCount"), PimDb.Int64(reader, "WaitingSaopCount"));
   }
 
   /// <summary>Vrednosti filtrov so dejanske vrednosti kataloga, ne trdo kodiran seznam.</summary>

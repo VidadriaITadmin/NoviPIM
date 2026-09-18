@@ -22,7 +22,9 @@ public sealed record SaopItemFieldRow(
 public sealed record SaopItemContract(
   SaopDocumentShape Shape, IReadOnlyList<SaopXmlField> Contract, IReadOnlyList<SaopItemFieldRow> Fields);
 
-/// <param name="ExistsInSaop">Ali je artikel v kanoničnem modelu; od tega je odvisen POST ali PATCH.</param>
+/// <param name="ExistsInSaop">Ali SAOP artikel pozna (<c>canon.Product.ErpExistence</c>, migracija 169);
+/// od tega je odvisen POST ali PATCH. Ni isto kot "artikel je v PIM" — artikel iz ne-ERP vira je v
+/// kanoničnem modelu, v SAOP pa ga še ni.</param>
 /// <param name="Values">Trenutne kanonične vrednosti po ključu polja; samo neprazne.</param>
 /// <param name="Defaults">Privzetki iz <c>out.SaopAddDefault</c> po ključu <c>Ovoj/Element</c>.</param>
 public sealed record SaopItemState(
@@ -237,6 +239,20 @@ public sealed class SaopItemWriteService(IConfiguration configuration, ILogger<S
     return SaopItemPlanner.Plan(
       contract.Shape, contract.Contract, state.ItemId, state.ExistsInSaop,
       state.Values, state.Defaults, changes, stampUtc ?? DateTime.UtcNow);
+  }
+
+  /// <summary>
+  /// Isti predogled kot zgoraj, samo za spremembe, ki že čakajo v vrsti (stran Izvozi/Čakalna
+  /// vrsta), ne za tiste, ki jih urednik ravnokar vpisuje v obrazec. Klicatelj vrednosti prebere
+  /// iz <see cref="SaopWriteService.GetPendingOverlayAsync"/> — ista storitev, ki jih tam že
+  /// prikaže kot prekrivko.
+  /// </summary>
+  public async Task<SaopItemPlan> PreviewQueuedAsync(
+    int organizationId, string itemId, IReadOnlyDictionary<string, string?> changes, CancellationToken cancellationToken = default)
+  {
+    var contract = await GetContractAsync(organizationId, cancellationToken);
+    var state = await GetItemStateAsync(organizationId, itemId, cancellationToken);
+    return BuildPlan(contract, state, changes);
   }
 
   async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)

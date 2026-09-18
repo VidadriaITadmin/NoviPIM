@@ -1,0 +1,226 @@
+@page "/administracija/mape"
+@page "/sistem/mape"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+@*
+  Kam sistem shranjuje datoteke.
+
+  Zakaj ta stran obstaja: vsaka pot se je doslej računala iz »korena repozitorija«. To drži na
+  razvojnem računalniku in pade na strežniku — pod IIS je koren objavljena mapa spletnega mesta,
+  ki jo naslednja objava prepiše, aplikacijski bazen pa vanjo praviloma nima pravice pisati.
+
+  Zato ta stran ne shrani poti, dokler vanjo dejansko ne zapiše in pobriše datoteke. Obstoj mape
+  ne pove ničesar o pravicah, pod IIS pa manjka prav pravica.
+*@
+
+<PageTitle>Mesta shranjevanja</PageTitle>
+<PimPage Title="Mesta shranjevanja"
+         Subtitle="Pregledno nastavi, kam sistem zapisuje datoteke. Vsako pot pred shranjevanjem preizkusimo z resničnim zapisom in brisanjem testne datoteke."
+         Crumbs="Crumbs">
+  <Actions>
+    <button type="button" class="filter-button" disabled="@(Loading || Busy)" @onclick="NaloziAsync">Osveži</button>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="mape" Tabs="SistemskeZadeveTabs.Tabs" Label="Sistemske zadeve" />
+
+<div class="path-intro ui-card">
+  <span class="path-intro-icon" aria-hidden="true">i</span>
+  <div>
+    <strong>Preizkus velja za račun <span class="code-value">@Racun</span></strong>
+    <p>Workerji lahko tečejo pod drugim računom, zato mora imeti tudi ta dovoljenje za iste mape. Na strežniku izberi pot zunaj objavljene mape spletnega mesta.</p>
+  </div>
+</div>
+
+@if (Sporocilo is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Sporocilo</p> }
+@if (Napaka is not null) { <p class="message-state error-state" role="alert">@Napaka</p> }
+
+<PimState Loading="Loading" Error="@null" Empty="false" LoadingText="Berem nastavitve …">
+  <div class="path-summary-grid" aria-label="Povzetek mest shranjevanja">
+    <div class="ui-card path-summary"><span>Nastavljeno</span><strong>@Vrstice.Count(row => row.OrganizationId is null) / @PIM.Operations.SystemPaths.Keys.Count</strong></div>
+    <div class="ui-card path-summary"><span>Uporablja privzeto</span><strong>@(PIM.Operations.SystemPaths.Keys.Count - Vrstice.Count(row => row.OrganizationId is null))</strong></div>
+    <div class="ui-card path-summary"><span>Preverjeno zdaj</span><strong>@Izidi.Count</strong></div>
+  </div>
+
+  @foreach (var kljuc in PIM.Operations.SystemPaths.Keys)
+  {
+    var nastavljena = Vrstice.FirstOrDefault(row => row.PathKey == kljuc && row.OrganizationId is null);
+    <section class="ui-card path-card section-gap" aria-label="@kljuc">
+      <div class="panel-title">
+        <div>
+          <span class="eyebrow">Mesto shranjevanja</span>
+          <h2>@PIM.Operations.SystemPaths.Describe(kljuc)</h2>
+          <p>@Opis(kljuc)</p>
+        </div>
+        <div class="path-state">
+          <span class="code-value">@kljuc</span>
+          <PimChip Text="@(nastavljena is null ? "Privzeta pot" : "Nastavljeno")" Tone="@(nastavljena is null ? "neutral" : "good")" />
+        </div>
+      </div>
+
+      <p class="panel-note">
+        @if (nastavljena is null)
+        {
+          <text>Ni nastavljeno — velja vgrajeni privzetek <span class="code-value">@Privzetek(kljuc)</span>.</text>
+        }
+        else
+        {
+          <text>
+            Nastavil @nastavljena.UpdatedBy, @PimTime.Format(nastavljena.UpdatedUtc).
+            @if (nastavljena.LastCheckResult is { Length: > 0 } izid)
+            {
+              <text>Zadnja preverba @PimTime.Format(nastavljena.LastCheckedUtc): @izid</text>
+            }
+          </text>
+        }
+      </p>
+
+      <div class="path-editor">
+        <label class="form-field path-field" for="@($"pot-{kljuc}")">Absolutna pot ali omrežna lokacija
+        <input id="@($"pot-{kljuc}")" type="text" class="filter-select path-input"
+               placeholder="D:\PIM\prevzem ali \\streznik\delitev\prevzem"
+               value="@Vnos(kljuc, nastavljena)" @onchange="@(e => Nastavi(kljuc, e.Value?.ToString()))" />
+        </label>
+        <div class="path-actions">
+          <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => PreizkusiAsync(kljuc)">Preizkusi dostop</button>
+          <button type="button" class="primary-button" disabled="@Busy" @onclick="() => ShraniAsync(kljuc)">Preizkusi in shrani</button>
+          @if (nastavljena is not null)
+          {
+            <button type="button" class="secondary-button warn-action" disabled="@Busy" @onclick="() => PocistiAsync(kljuc)">Vrni na privzeto</button>
+          }
+        </div>
+      </div>
+
+      @if (Izidi.TryGetValue(kljuc, out var preverba))
+      {
+        <p class="@(preverba.Writable ? "message-state success-message" : "message-state error-state")" role="status">
+          @preverba.Message
+        </p>
+      }
+    </section>
+  }
+</PimState>
+
+@code {
+  IReadOnlyList<SystemPathRow> Vrstice = [];
+  readonly Dictionary<string, string> Urejeni = [];
+  readonly Dictionary<string, PIM.Operations.PathCheck> Izidi = [];
+  bool Loading = true;
+  bool Busy;
+  string? Sporocilo;
+  string? Napaka;
+  string Uporabnik = "neznan";
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistemske zadeve", "administracija/uporabniki"), new("Mesta shranjevanja")];
+
+  string Racun => PIM.Operations.SystemPaths.Identiteta();
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    Uporabnik = state.User.Identity?.Name ?? "neznan";
+    await NaloziAsync();
+  }
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Napaka = null;
+    try
+    {
+      Vrstice = await Nadzor.GetSystemPathsAsync();
+      Urejeni.Clear();
+    }
+    catch { Napaka = "Nastavitev mest shranjevanja trenutno ni mogoče prebrati."; }
+    finally { Loading = false; }
+  }
+
+  string Vnos(string kljuc, SystemPathRow? nastavljena) =>
+    Urejeni.TryGetValue(kljuc, out var vrednost) ? vrednost : nastavljena?.Location ?? "";
+
+  void Nastavi(string kljuc, string? vrednost) => Urejeni[kljuc] = (vrednost ?? "").Trim();
+
+  /// <summary>Preizkus brez shranjevanja: skrbnik mora videti izid, preden nastavitev velja.</summary>
+  void PreizkusiAsync(string kljuc)
+  {
+    Sporocilo = null;
+    Napaka = null;
+    Izidi[kljuc] = PIM.Operations.SystemPaths.Check(Vnos(kljuc, Nastavljena(kljuc)));
+  }
+
+  async Task ShraniAsync(string kljuc)
+  {
+    Busy = true;
+    Sporocilo = null;
+    Napaka = null;
+    try
+    {
+      var pot = Vnos(kljuc, Nastavljena(kljuc));
+      var izid = await Nadzor.SaveSystemPathAsync(kljuc, pot, Uporabnik);
+      Izidi[kljuc] = izid;
+
+      if (!izid.Writable)
+      {
+        Napaka = "Pot ni shranjena: " + izid.Message;
+        return;
+      }
+
+      await Nadzor.LogActivityAsync(Uporabnik, "PATH_UPDATE", "Mesto shranjevanja",
+        $"{PIM.Operations.SystemPaths.Describe(kljuc)} → {pot}",
+        entityKey: kljuc, oldValue: Nastavljena(kljuc)?.Location, newValue: pot);
+
+      Sporocilo = $"{kljuc}: shranjeno in preizkušeno.";
+      await NaloziAsync();
+    }
+    catch { Napaka = "Poti ni bilo mogoče shraniti."; }
+    finally { Busy = false; }
+  }
+
+  async Task PocistiAsync(string kljuc)
+  {
+    Busy = true;
+    Sporocilo = null;
+    Napaka = null;
+    try
+    {
+      var prej = Nastavljena(kljuc)?.Location;
+      await Nadzor.ClearSystemPathAsync(kljuc);
+      await Nadzor.LogActivityAsync(Uporabnik, "PATH_CLEAR", "Mesto shranjevanja",
+        $"{PIM.Operations.SystemPaths.Describe(kljuc)} vrnjeno na privzeto",
+        entityKey: kljuc, oldValue: prej, newValue: Privzetek(kljuc));
+
+      Izidi.Remove(kljuc);
+      Sporocilo = $"{kljuc}: velja spet vgrajeni privzetek.";
+      await NaloziAsync();
+    }
+    catch { Napaka = "Nastavitve ni bilo mogoče odstraniti."; }
+    finally { Busy = false; }
+  }
+
+  SystemPathRow? Nastavljena(string kljuc) =>
+    Vrstice.FirstOrDefault(row => row.PathKey == kljuc && row.OrganizationId is null);
+
+  // Privzetki so v kodi klicateljev; tu so našteti samo zato, da skrbnik vidi, kaj velja,
+  // dokler ni nastavil ničesar. Če se privzetek v workerju spremeni, se mora spremeniti tudi tu.
+  static string Privzetek(string kljuc) => kljuc switch
+  {
+    PIM.Operations.SystemPaths.Landing => @"<koren>\PIM_Solution\data\prevzem",
+    PIM.Operations.SystemPaths.Export => @"<koren>\izvoz\magento\<podjetje>",
+    PIM.Operations.SystemPaths.Log => @"<koren>\logs",
+    PIM.Operations.SystemPaths.Workbook => @"<koren>\izvoz\zvezki",
+    _ => "—",
+  };
+
+  static string Opis(string kljuc) => kljuc switch
+  {
+    PIM.Operations.SystemPaths.Landing => "Prejete datoteke dobaviteljev pred obdelavo.",
+    PIM.Operations.SystemPaths.Export => "Končne datoteke, pripravljene za splet in druge izhode.",
+    PIM.Operations.SystemPaths.Log => "Dnevniki workerjev in tehnični izpisi.",
+    PIM.Operations.SystemPaths.Workbook => "Excelovi delovni zvezki za množično urejanje.",
+    _ => "Sistemska mapa.",
+  };
+}

@@ -1,5 +1,5 @@
 @page "/nastavitve/skladisca"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CatalogReadService Catalog
 @inject PIM.Intranet.Services.IntranetDataService Data
@@ -19,7 +19,7 @@
             <td>@(row.WarehouseType ?? "—")</td>
             <td>@(row.GroupCode ?? "—")</td>
             <td><PimChip Text="@(row.IsActive ? "Aktivno" : "Neaktivno")" Tone="@(row.IsActive ? "good" : null)" /></td>
-            <td>@row.UpdatedUtc.ToLocalTime().ToString("g")</td>
+            <td>@row.UpdatedUtc.ToPimLocal().ToString("g")</td>
           </tr>
         }
       </Rows>

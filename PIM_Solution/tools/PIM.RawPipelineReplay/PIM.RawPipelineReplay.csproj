@@ -7,5 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/PIM.XmlMapping/PIM.XmlMapping.csproj" />
+    <!-- LocalSettings: skupno iskanje ene same appsettings.Local.json rešitve. -->
+    <ProjectReference Include="../../src/PIM.Operations/PIM.Operations.csproj" />
   </ItemGroup>
 </Project>

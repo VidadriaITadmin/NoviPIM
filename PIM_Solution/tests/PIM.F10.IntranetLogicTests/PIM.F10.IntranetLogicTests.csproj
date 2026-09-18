@@ -11,5 +11,7 @@
     <Compile Include="..\..\src\PIM.Intranet\Services\PimNavigation.cs" Link="PimNavigation.cs" />
     <Compile Include="..\..\src\PIM.Intranet\Services\QualityFieldPolicy.cs" Link="QualityFieldPolicy.cs" />
     <Compile Include="..\..\src\PIM.Intranet\Services\ValidationLayer.cs" Link="ValidationLayer.cs" />
+    <Compile Include="../../src/PIM.Intranet/Services/WorkerConsolePolicy.cs" Link="WorkerConsolePolicy.cs" />
+    <Compile Include="../../src/PIM.Intranet/Services/WorkerSchedulerPolicy.cs" Link="WorkerSchedulerPolicy.cs" />
   </ItemGroup>
 </Project>

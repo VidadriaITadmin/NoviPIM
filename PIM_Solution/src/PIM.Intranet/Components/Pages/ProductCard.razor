@@ -210,7 +210,7 @@
                                BlockingCount="@erpBlockingCount"
                                WarningCount="@ErpIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="ERP — Slovenija"
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" EnterToSave="SaveChangesAsync" DefaultGroup="ERP — Slovenija"
                                ReadOnly="@(!CanEdit)" />
         </section>
 
@@ -223,14 +223,14 @@
                                StatusTone="@(commercialWarningCount == 0 ? "good" : "warn")" BlockingCount="0"
                                WarningCount="@commercialWarningCount" LastValidatedUtc="@Detail.Header.LastValidatedUtc"
                                Fields="@CommercialFields" Issues="@CommercialIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Klasifikacija in objava"
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" EnterToSave="SaveChangesAsync" DefaultGroup="Klasifikacija in objava"
                                ReadOnly="@(!CanEdit)" />
 
           <section id="panel-prices" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Cene</h2><a href="cene?izdelek=@Detail.Header.ItemId">Odpri poslovni pogled</a></div>
             @if (PriceChecks?.IsMissing == true) { <PimMissing Object="intranet.GetPriceChecks" What="preverbe cen tega artikla po ceniku" Needs="canon.ProductPrice + šifrant preverb + prag marže" /> }
             <PimState Empty="@(Detail.Prices.Count == 0)" EmptyText="Izdelek nima cene.">
-              <PimTable Caption="Cene izdelka po cenikih" Columns="PriceColumns"><Rows>@foreach (var row in Detail.Prices) { <tr><td>@row.PriceList</td><td class="numeric">@row.Net.ToString("N2")</td><td class="numeric">@row.VatRate.ToString("N1") %</td><td class="numeric">@row.Gross.ToString("N2")</td><td>@row.ValidFrom.ToLocalTime().ToString("d")</td><td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td></tr> }</Rows></PimTable>
+              <PimTable Caption="Cene izdelka po cenikih" Columns="PriceColumns"><Rows>@foreach (var row in Detail.Prices) { <tr><td>@row.PriceList</td><td class="numeric">@row.Net.ToString("N2")</td><td class="numeric">@row.VatRate.ToString("N1") %</td><td class="numeric">@row.Gross.ToString("N2")</td><td>@row.ValidFrom.ToPimLocal().ToString("d")</td><td><PimChip Text="@(row.IsActive ? "Veljavna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td></tr> }</Rows></PimTable>
             </PimState>
           </section>
         </section>
@@ -242,7 +242,7 @@
                                BlockingCount="@webBlockingCount"
                                WarningCount="@WebIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@WebFields" Issues="@WebIssues"
-                               Drafts="Drafts" FieldChanged="OnFieldChanged" DefaultGroup="Spletna polja"
+                               Drafts="Drafts" FieldChanged="OnFieldChanged" EnterToSave="SaveChangesAsync" DefaultGroup="Spletna polja"
                                ReadOnly="@(!CanEdit)">
             <Toolbar>
               <label for="product-site">Spletno mesto</label>
@@ -277,8 +277,9 @@
                       <input type="checkbox" disabled="@(!CanEdit || ShopBusy)"
                              checked="@ShopDraft(shopCode)"
                              @onchange="args => OnShopChanged(shopCode, args)" />
+                      @* 213: ime je oznaka drevesa (svetila, videlektro) — ista, kot gre v stolpec
+                         "Spletne strani" v katalog.csv; interna koda (svetila_si) uporabnika ne zanima. *@
                       <span class="shop-name">@shop.WebShopName</span>
-                      <span class="code-value">@shopCode</span>
                     </label>
                     @if (shop.ChangedBy is not null)
                     {
@@ -331,10 +332,10 @@
                     {
                       <text>
                         @head.SourceTable · vir @head.SourceCode · @head.EntityType, stran @head.PageNumber ·
-                        prevzeto @(head.ReceivedUtc?.ToLocalTime().ToString("g") ?? "—")
+                        prevzeto @(head.ReceivedUtc?.ToPimLocal().ToString("g") ?? "—")
                         @if (head.LastModifiedAtUtc is DateTime changed)
                         {
-                          <text>· v SAOP nazadnje spremenjen @changed.ToLocalTime().ToString("g")</text>
+                          <text>· v SAOP nazadnje spremenjen @changed.ToPimLocal().ToString("g")</text>
                         }
                       </text>
                     }
@@ -395,7 +396,7 @@
             <div class="subsection-head"><h2>Zaloga</h2><a href="zaloge?isci=@Uri.EscapeDataString(Detail.Header.ItemId)">Odpri poslovni pogled</a></div>
             @if (StockChecks?.IsMissing == true) { <PimMissing Object="intranet.GetStockChecks" What="preverbe zaloge tega artikla" Needs="stock.Snapshot, stock.Position, stock.UnmatchedPosition in potrjene pragove" /> }
             <PimState Empty="@(Detail.Stock.Count == 0)" EmptyText="Izdelek nima aktivnega zalogovnega posnetka.">
-              <PimTable Caption="Aktivne zalogovne pozicije izdelka" Columns="StockColumns"><Rows>@foreach (var row in Detail.Stock) { <tr><td>@(row.WarehouseName ?? row.WarehouseCode ?? row.MatchKey)</td><td>@(row.ProviderKind ?? "—")</td><td class="numeric">@row.Quantity.ToString("N2")</td><td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td><td>@(row.AvailabilityDate?.ToLocalTime().ToString("d") ?? "—")</td><td>@PimFormat.Ago(row.SnapshotUtc)</td><td>@StockRule(row)</td></tr> }</Rows></PimTable>
+              <PimTable Caption="Aktivne zalogovne pozicije izdelka" Columns="StockColumns"><Rows>@foreach (var row in Detail.Stock) { <tr><td>@(row.WarehouseName ?? row.WarehouseCode ?? row.MatchKey)</td><td>@(row.ProviderKind ?? "—")</td><td class="numeric">@row.Quantity.ToString("N2")</td><td class="numeric">@(row.IncomingQuantity?.ToString("N2") ?? "—")</td><td>@(row.AvailabilityDate?.ToPimLocal().ToString("d") ?? "—")</td><td>@PimFormat.Ago(row.SnapshotUtc)</td><td>@StockRule(row)</td></tr> }</Rows></PimTable>
             </PimState>
           </section>
         </section>
@@ -406,7 +407,7 @@
             <div class="subsection-head"><h2>Kakovost</h2><span>@Detail.Issues.Count.ToString("N0") odprtih zahtev</span></div>
             <PimState Empty="@(Detail.Issues.Count == 0)" EmptyText="Izdelek nima odprtih validacijskih težav.">
               <PimTable Caption="Odprte težave po nivoju validacije" Columns="IssueColumns">
-                <Rows>@foreach (var item in LayerIssues) { <tr><td><PimChip Text="@ValidationLayer.Label(item.Layer)" Tone="@(item.Layer == PimValidationLayer.Komerciala ? "warn" : null)" />@if (item.Shared) { <PimChip Text="SKUPNO" Tone="warn" /> }</td><td>@item.Issue.ProfileCode</td><td><PimChip Text="@item.Issue.Severity" Tone="@(item.Issue.Severity == "ERROR" ? "bad" : "warn")" /></td><td>@item.Issue.FieldCode</td><td>@item.Issue.Message</td><td>@item.Issue.LastDetectedUtc.ToLocalTime().ToString("g")</td></tr> }</Rows>
+                <Rows>@foreach (var item in LayerIssues) { <tr><td><PimChip Text="@ValidationLayer.Label(item.Layer)" Tone="@(item.Layer == PimValidationLayer.Komerciala ? "warn" : null)" />@if (item.Shared) { <PimChip Text="SKUPNO" Tone="warn" /> }</td><td>@item.Issue.ProfileCode</td><td><PimChip Text="@item.Issue.Severity" Tone="@(item.Issue.Severity == "ERROR" ? "bad" : "warn")" /></td><td>@item.Issue.FieldCode</td><td>@item.Issue.Message</td><td>@item.Issue.LastDetectedUtc.ToPimLocal().ToString("g")</td></tr> }</Rows>
               </PimTable>
             </PimState>
           </section>
@@ -421,14 +422,15 @@
           <section id="panel-history" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Zgodovina sprememb</h2></div>
             <PimState Empty="@(Detail.History.Count == 0)" EmptyText="Za ta izdelek še ni zabeleženih sprememb sledljivih polj.">
-              <PimTable Caption="Revizijska sled sprememb izdelka" Columns="HistoryColumns"><Rows>@foreach (var row in Detail.History) { <tr><td>@row.FieldKey</td><td>@Value(row.OldValue)</td><td>@Value(row.NewValue)</td><td>@row.Owner</td><td>@row.ChangeSource</td><td>@row.ChangedBy</td><td>@row.ChangedAtUtc.ToLocalTime().ToString("g")</td><td>@Value(row.Note)</td></tr> }</Rows></PimTable>
+              <PimTable Caption="Revizijska sled sprememb izdelka" Columns="HistoryColumns"><Rows>@foreach (var row in Detail.History) { <tr><td>@row.FieldKey</td><td>@Value(row.OldValue)</td><td>@Value(row.NewValue)</td><td>@row.Owner</td><td>@row.ChangeSource</td><td>@row.ChangedBy</td><td>@row.ChangedAtUtc.ToPimLocal().ToString("g")</td><td>@Value(row.Note)</td></tr> }</Rows></PimTable>
             </PimState>
           </section>
 
           <section id="panel-origin" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Izvor podatkov</h2></div>
-            <PimState Empty="@(Origins.Count == 0)" EmptyText="Za izdelek ni mogoče določiti vhodnega zapisa.">
-              <PimTable Caption="Vhodni teki in strani, iz katerih izvirajo podatki" Columns="OriginColumns"><Rows>@foreach (var row in Origins) { <tr><td><a href="zajem/tezave/INBOX/@row.InboxId">@row.SourceCode</a></td><td><a href="zajem/teki/@row.RunId">@ShortId(row.RunId)</a></td><td>@row.EntityType</td><td class="numeric">@row.PageNumber</td><td class="numeric">@row.RecordOrdinal</td><td class="numeric">@row.ExtractedFieldCount</td><td>@row.Status</td><td>@row.ReceivedUtc.ToLocalTime().ToString("g")</td></tr> }</Rows></PimTable>
+            @if (!OriginsLoaded) { <p class="hint" role="status"><span class="opening-spinner" aria-hidden="true"></span> Iščem vhodne zapise izdelka …</p> }
+            <PimState Empty="@(OriginsLoaded && Origins.Count == 0)" EmptyText="Za izdelek ni mogoče določiti vhodnega zapisa.">
+              <PimTable Caption="Vhodni teki in strani, iz katerih izvirajo podatki" Columns="OriginColumns"><Rows>@foreach (var row in Origins) { <tr><td><a href="zajem/tezave/INBOX/@row.InboxId">@row.SourceCode</a></td><td><a href="zajem/teki/@row.RunId">@ShortId(row.RunId)</a></td><td>@row.EntityType</td><td class="numeric">@row.PageNumber</td><td class="numeric">@row.RecordOrdinal</td><td class="numeric">@row.ExtractedFieldCount</td><td>@row.Status</td><td>@row.ReceivedUtc.ToPimLocal().ToString("g")</td></tr> }</Rows></PimTable>
             </PimState>
           </section>
         </section>
@@ -528,7 +530,7 @@
   {
     var writable = Writable(fieldKey);
     var stored = Detail?.Fields.FirstOrDefault(row => row.FieldKey == fieldKey);
-    var resolved = value ?? stored?.Value;
+    var resolved = PendingValue(fieldKey) ?? value ?? stored?.Value;
     return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "—" : "PIM"), null, null,
       Pending(fieldKey), inReadModel,
       writable is null ? ProductFieldEdit.None : ProductFieldEdit.Saop, FormatOf(writable),
@@ -542,7 +544,7 @@
     var fieldKey = $"ProductText.{textType}.{language}";
     var writable = Writable(fieldKey);
     var stored = Detail?.Texts.FirstOrDefault(row => row.TextType == textType && row.Language == language);
-    var resolved = value ?? stored?.Value;
+    var resolved = PendingValue(fieldKey) ?? value ?? stored?.Value;
     var multiline = textType.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase);
     return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "PIM" : "SAOP"), null, null,
       Pending(fieldKey), true,
@@ -892,7 +894,10 @@
       OrganizationId = organization.OrganizationId;
       OrganizationName = organization.Name;
       var cardTask = Workbench.GetProductCardAsync(organization.OrganizationId, ProductId, "sl");
-      var originTask = Workbench.GetProductOriginAsync(organization.OrganizationId, ProductId);
+      // Izvor podatkov (intranet.GetProductOrigin) se nalozi sele, ko uporabnik odpre zavihek
+      // Kakovost in zgodovina (LoadOriginsAsync): isce po 78 M vrstic map.ExtractedValue in je
+      // bil izmerjeno 17,8 s od 18 s odpiranja kartice (2026-09-17), vidi pa ga redkokdo.
+      OriginsLoaded = false;
       var priceTask = Features.GetPriceChecksAsync(organization.OrganizationId, ProductId);
       var stockTask = Features.GetStockChecksAsync(organization.OrganizationId, ProductId);
       var sitesTask = Catalog.GetWebSitesAsync();
@@ -903,13 +908,14 @@
       var attributeSetTask = Workbench.GetProductAttributeSetAsync(ProductId);
       // Spletisca (182): oznaka na izdelku pove, kam gre in kdo ga validira.
       var shopTask = Edits.GetWebShopsAsync(ProductId);
-      await Task.WhenAll(cardTask, originTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask);
-      Detail = await cardTask; Origins = await originTask; PriceChecks = await priceTask; StockChecks = await stockTask;
+      await Task.WhenAll(cardTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask);
+      Detail = await cardTask; PriceChecks = await priceTask; StockChecks = await stockTask;
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
       AttributeSet = await attributeSetTask; WebShops = await shopTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
       if (Section == "saop-endpoint") _ = LoadSnapshotAsync();
+      if (Section == "quality-history") _ = LoadOriginsAsync();
     }
     catch { Error = "Kartice izdelka trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -1150,6 +1156,21 @@
     Section = section;
     Navigation.NavigateTo($"izdelki/{ProductId}#{section}", replace: true);
     if (section == "saop-endpoint") _ = LoadSnapshotAsync();
+    if (section == "quality-history") _ = LoadOriginsAsync();
+  }
+
+  // Izvor podatkov se bere lenobno (glej LoadAsync): enkrat na odprtje kartice, ob prvem obisku
+  // zavihka Kakovost in zgodovina. Napaka izvora ne podre kartice - tabela ostane prazna s pojasnilom.
+  bool OriginsLoaded;
+  bool OriginsLoading;
+  async Task LoadOriginsAsync()
+  {
+    if (OriginsLoaded || OriginsLoading) return;
+    OriginsLoading = true;
+    try { Origins = await Workbench.GetProductOriginAsync(OrganizationId, ProductId); }
+    catch { Origins = []; }
+    finally { OriginsLoading = false; OriginsLoaded = true; }
+    await InvokeAsync(StateHasChanged);
   }
 
   /// <summary>Posnetek se isce po zajetih straneh odgovora, zato se nalozi na zahtevo in samo enkrat.</summary>
@@ -1172,6 +1193,11 @@
     return new(label, key, value ?? field?.Value, field?.Owner ?? "—", null, null, Pending(key), inModel);
   }
   bool Pending(string key) => Detail?.PendingOverlays.Any(row => row.FieldKey == key) == true;
+
+  /// <summary>Vrednost iz odhodne vrste, ki še čaka potrditev SAOP (migracija 089, §"Prekrivka"):
+  /// pokaže se NAD kanonično vrednostjo, da uporabnik takoj vidi, kaj je poslal, ne da bi se
+  /// pretvarjali, da je to že dejstvo — vrstica ostane "obvezno/manjka", dokler SAOP ne potrdi.</summary>
+  string? PendingValue(string key) => Detail?.PendingOverlays.FirstOrDefault(row => row.FieldKey == key)?.Value;
   string OwnerFor(string key) => Detail?.Fields.FirstOrDefault(row =>
     string.Equals(row.FieldKey, key, StringComparison.OrdinalIgnoreCase))?.Owner ?? "PIM";
   IReadOnlyList<PimValidationLayer> ProfileLayers(string profileCode)
@@ -1193,7 +1219,7 @@
   bool MatchesSite(string profileCode) => string.IsNullOrWhiteSpace(SelectedSite) || Normalize(profileCode).Contains(Normalize(SelectedSite), StringComparison.OrdinalIgnoreCase) || IsShared(profileCode);
   static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
   static string StockRule(ProductCardStock row) => row.MinimumStock is null && row.MaximumStock is null ? "—" : $"{Number(row.MinimumStock)} / {Number(row.MaximumStock)}";
-  static string Moment(DateTime? value) => value?.ToLocalTime().ToString("g") ?? "—";
+  static string Moment(DateTime? value) => value?.ToPimLocal().ToString("g") ?? "—";
   static string YesNo(bool value) => value ? "Da" : "Ne";
   static string Flag(bool value) => value ? "true" : "false";
   static string Value(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;

@@ -1,0 +1,6 @@
+ops.ScheduleProfile — nov vnos za cene
+
+INSERT INTO ops.ScheduleProfile (OrganizationId, Provider, Pipeline, IsEnabled, IntervalSeconds, StaleAfterSeconds, ...)
+-- Pipeline='SAOP_PRICES', IsEnabled=1, IntervalSeconds=300, StaleAfterSeconds=900
+
+4 nove vrstice (org 1–4), kopirane po vzoru SAOP_PRODUCTS. Cene zdaj lahko tečejo na 5 min, ločeno od preostalega urnega kataloga.

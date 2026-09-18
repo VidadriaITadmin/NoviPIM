@@ -1,0 +1,5 @@
+.access-denied-card { align-items: flex-start; display: flex; gap: 1rem; margin: 3rem auto; max-width: 42rem; padding: 1.4rem; }
+.access-denied-card h1 { color: var(--pim-text-strong); font-size: 1.2rem; margin: 0 0 .35rem; }
+.access-denied-card p { color: var(--pim-text-muted); line-height: 1.55; margin: 0 0 1rem; }
+.access-denied-icon { align-items: center; background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: 50%; color: var(--pim-warn-text); display: flex; flex: 0 0 2.5rem; font-size: 1.1rem; font-weight: 800; height: 2.5rem; justify-content: center; }
+.access-denied-link { display: inline-flex; text-decoration: none; }

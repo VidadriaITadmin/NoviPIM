@@ -2,11 +2,11 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using PIM.Operations;
 
-var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
+var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.WriteLine("PIM_CONNECTION_STRING ni nastavljen; watchdog ni spremenil podatkov.");
-  return 0;
+  Console.Error.WriteLine(LocalSettings.MissingConnectionMessage());
+  return 2;
 }
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();

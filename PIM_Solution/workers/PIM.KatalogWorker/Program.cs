@@ -47,10 +47,10 @@ if (mode == SaopSourceMode.Disabled)
   return 0;
 }
 
-var connectionString = LocalConfiguration.GetConnectionString("PIM_CONNECTION_STRING", "Pim");
+var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.Error.WriteLine("Manjka PIM_CONNECTION_STRING oziroma ConnectionStrings:Pim v appsettings.Local.json.");
+  Console.Error.WriteLine(LocalSettings.MissingConnectionMessage());
   return 2;
 }
 
@@ -101,7 +101,7 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
   var connection = SaopWorkerConfiguration.GetConnectionString();
   if (string.IsNullOrWhiteSpace(connection))
   {
-    Console.Error.WriteLine("Manjka PIM_CONNECTION_STRING oziroma ConnectionStrings:Pim v appsettings.Local.json.");
+    Console.Error.WriteLine(LocalSettings.MissingConnectionMessage());
     return 2;
   }
 
@@ -213,9 +213,17 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     return 0;
   }
 
+  // Cene rabijo lasten, pogostejsi razpored (5 min) locen od preostalega kataloga (1h) — glej
+  // ops.ScheduleProfile SAOP_PRICES. Kadar je izbran izkljucno GetPrices, tece pod tem imenom;
+  // vsaka druga izbira (poln katalog ali kaksna druga posamezna tocka) ostane SAOP_PRODUCTS.
+  var pipeline = endpoints.Count == 1 && string.Equals(endpoints[0].Key, "GetPrices", StringComparison.OrdinalIgnoreCase)
+    ? "SAOP_PRICES"
+    : "SAOP_PRODUCTS";
+
   Console.WriteLine(
     $"Živ SAOP zajem: podjetij={organizations.Length}, končnih točk={endpoints.Count}, "
-    + $"{(arguments.FullSync ? "poln zajem" : "delta zajem")}{(arguments.SkipMapping ? ", brez preslikave" : "")}.");
+    + $"{(arguments.FullSync ? "poln zajem" : "delta zajem")}{(arguments.SkipMapping ? ", brez preslikave" : "")}, "
+    + $"razpored={pipeline}.");
 
   if (arguments.MaxPages is { } pageLimit)
   {
@@ -275,7 +283,7 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     {
       Log(organization, $"[{organization.Id}] {organization.Name} ({organization.SourceCode})");
       return OperationsRun.BeginAsync(
-        connection, organization.Id, "SAOP_PRODUCTS", $"{Environment.MachineName}:{Environment.ProcessId}");
+        connection, organization.Id, pipeline, $"{Environment.MachineName}:{Environment.ProcessId}");
     },
     workAsync: async (organization, operationsRun) =>
     {
@@ -322,7 +330,12 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
       }
 
       Flush(organization);
-      return summary.AllSucceeded;
+      if (summary.AllSucceeded) return (true, null);
+
+      var detail = string.Join("; ", summary.Endpoints
+        .Where(endpoint => !endpoint.Succeeded)
+        .Select(endpoint => $"{endpoint.EndpointKey}: {endpoint.Error}"));
+      return (false, detail);
     },
     completeAsync: (operationsRun, succeeded, error) => operationsRun.CompleteAsync(succeeded, error),
     disposeAsync: operationsRun => operationsRun.DisposeAsync().AsTask(),

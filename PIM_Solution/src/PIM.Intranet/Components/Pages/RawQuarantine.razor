@@ -3,25 +3,199 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
-<PageTitle>Karantena</PageTitle>
-<div class="page-header"><div><h1>Karantena</h1><p>Zapisi, izločeni med podatkovno obdelavo.</p></div></div>
-@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
-   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
+@inject NavigationManager Navigation
+
+<PageTitle>Napake uvoza</PageTitle>
+
+<PimPage Title="Napake uvoza" Subtitle="Tehnična karantena vhodnih zapisov, ki niso prišli do artikla v PIM-u. Poslovne blokade artiklov so na zavihku Artikli za popravilo." Crumbs="Crumbs" />
+
+<PimTabs Active="karantena" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+
+@* Vir/entiteta sta tu tisto, kar sta pri izdelkih dobavitelj/kategorija: karantena nastane PRED
+   izdelkom, zato (se) nima ne artikla ne nase kategorije — pravi obseg za delo po sklopih sta
+   vir zajema in vrsta entitete. Uporabnikova zahteva 2026-09-10: filtri kot na strani Izdelki
+   in izvoz, ki upošteva prav to, kar je filtrirano. *@
 <section class="ui-card toolbar" role="search" aria-labelledby="quarantine-filter-title">
-  <h2 id="quarantine-filter-title" class="visually-hidden">Iskanje karantenskih zapisov</h2>
-  <label class="visually-hidden" for="quarantine-search">Poišči karantenski zapis</label><input id="quarantine-search" type="search" class="search-input" placeholder="Poišči po viru, entiteti ali razlogu …" @bind="Search" @bind:event="oninput" />
+  <h2 id="quarantine-filter-title" class="visually-hidden">Filtriranje karantenskih zapisov</h2>
+
+  <label class="visually-hidden" for="quarantine-organization">Podjetje</label>
+  <select id="quarantine-organization" class="filter-select" @bind="OrganizationDraft">
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="quarantine-source">Vir</label>
+  <select id="quarantine-source" class="filter-select" @bind="SourceDraft">
+    <option value="">Vsi viri</option>
+    @foreach (var source in Sources) { <option value="@source">@source</option> }
+  </select>
+
+  <label class="visually-hidden" for="quarantine-entity">Entiteta</label>
+  <select id="quarantine-entity" class="filter-select" @bind="EntityDraft">
+    <option value="">Vse entitete</option>
+    @foreach (var entity in Entities) { <option value="@entity">@entity</option> }
+  </select>
+
+  <label class="visually-hidden" for="quarantine-search">Poišči po viru, entiteti ali razlogu</label>
+  <input id="quarantine-search" type="search" class="search-input" placeholder="Poišči po viru, entiteti ali razlogu …"
+         @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+  <a class="ghost-button" href="@ExportHref()" title="Izvozi trenutno filtriran seznam karantenskih zapisov v Excel.">Izvozi Excel</a>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
+
+@if (ActiveChips.Count > 0)
+{
+  <section class="ui-card active-filters" aria-label="Aktivni filtri">
+    @foreach (var chip in ActiveChips)
+    {
+      <a class="filter-chip" href="@chip.RemoveHref" aria-label="Odstrani filter @chip.Label">@chip.Label<span class="chip-remove" aria-hidden="true"></span></a>
+    }
+    <a class="filter-chip clear-all" href="kakovost/karantena">Počisti vse</a>
+  </section>
+}
+
 <section class="ui-card data-card" aria-label="Karantenski zapisi podatkovne obdelave">
-@if (Loading) { <div class="loading-state" role="status">Nalaganje karantene …</div> }
-else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
-else if (Filtered.Count == 0) { <div class="empty-state">Ni karantenskih zapisov za izbrani filter.</div> }
-else {
-  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela karantenskih zapisov">
-    <table class="data-table"><caption>Karantenski zapisi podatkovne obdelave</caption><thead><tr><th scope="col">Vir</th><th scope="col">Entiteta</th><th scope="col">Stran</th><th scope="col">Razlog izločitve</th><th scope="col">Prejeto</th></tr></thead><tbody>@foreach (var row in Filtered) { <tr><td>@row.SourceCode</td><td>@row.EntityType</td><td>@row.PageNumber</td><td>@(row.FailureReason??"Razlog ni podan")</td><td>@row.ReceivedUtc.ToLocalTime().ToString("g")</td></tr> }</tbody></table>
-  </div> }
+  <PimState Loading="Loading" Error="@Error" Empty="@(Filtered.Count == 0)"
+            EmptyText="Ni karantenskih zapisov za izbrani filter." LoadingText="Nalaganje karantene …">
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela karantenskih zapisov">
+      <table class="data-table">
+        <caption>Karantenski zapisi podatkovne obdelave</caption>
+        <thead>
+          <tr><th scope="col">Vir</th><th scope="col">Entiteta</th><th scope="col">Stran</th><th scope="col">Razlog izločitve</th><th scope="col">Prejeto</th></tr>
+        </thead>
+        <tbody>
+          @foreach (var row in Filtered)
+          {
+            <tr>
+              <td>@row.SourceCode</td>
+              <td>@row.EntityType</td>
+              <td>@row.PageNumber</td>
+              <td>@(row.FailureReason ?? "Razlog ni podan")</td>
+              <td>@row.ReceivedUtc.ToPimLocal().ToString("g")</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </PimState>
 </section>
-@code {IReadOnlyList<PIM.Intranet.Services.QuarantineRow>? Rows;bool Loading=true;string? Error;string Search="";IReadOnlyList<PIM.Intranet.Services.QuarantineRow> Filtered=>Rows?.Where(x=>Search==""||x.SourceCode.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityType.Contains(Search,StringComparison.OrdinalIgnoreCase)||(x.FailureReason?.Contains(Search,StringComparison.OrdinalIgnoreCase)??false)).ToList()??[];protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}Rows=await Data.GetQuarantineAsync(org.OrganizationId);}catch{Error="Karantene trenutno ni mogoče naložiti.";}finally{Loading=false;}}
-  // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Filtered.Count} rezultatov";
+
+@code {
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "vir")] public string? QuerySource { get; set; }
+  [SupplyParameterFromQuery(Name = "entiteta")] public string? QueryEntity { get; set; }
+
+  IReadOnlyList<PIM.Intranet.Services.QuarantineRow> Rows = [];
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
+  bool Loading = true;
+  string? Error;
+  int? OrganizationId;
+  string OrganizationDraft = "";
+  string SearchDraft = "";
+  string SourceDraft = "";
+  string EntityDraft = "";
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost/artikli"), new("Napake uvoza")];
+
+  sealed record FilterChip(string Label, string RemoveHref);
+
+  IReadOnlyList<string> Sources => Rows.Select(row => row.SourceCode).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value).ToList();
+  IReadOnlyList<string> Entities => Rows.Select(row => row.EntityType).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value).ToList();
+
+  IReadOnlyList<PIM.Intranet.Services.QuarantineRow> Filtered => Rows
+    .Where(row => string.IsNullOrWhiteSpace(QuerySource) || string.Equals(row.SourceCode, QuerySource, StringComparison.OrdinalIgnoreCase))
+    .Where(row => string.IsNullOrWhiteSpace(QueryEntity) || string.Equals(row.EntityType, QueryEntity, StringComparison.OrdinalIgnoreCase))
+    .Where(row => string.IsNullOrWhiteSpace(QuerySearch)
+      || row.SourceCode.Contains(QuerySearch, StringComparison.OrdinalIgnoreCase)
+      || row.EntityType.Contains(QuerySearch, StringComparison.OrdinalIgnoreCase)
+      || (row.FailureReason?.Contains(QuerySearch, StringComparison.OrdinalIgnoreCase) ?? false))
+    .ToList();
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchDraft = QuerySearch ?? "";
+    SourceDraft = QuerySource ?? "";
+    EntityDraft = QueryEntity ?? "";
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      if (Organizations.Count == 0)
+      {
+        try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+      }
+      var requested = int.TryParse(QueryOrganization, out var parsedOrganization) ? parsedOrganization : (int?)null;
+      var organization = requested is int wanted
+        ? Organizations.FirstOrDefault(row => row.OrganizationId == wanted) ?? await Data.GetCurrentOrganizationAsync()
+        : await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrganizationDraft = organization.OrganizationId.ToString();
+
+      if (OrganizationId != organization.OrganizationId)
+      {
+        OrganizationId = organization.OrganizationId;
+        Rows = await Data.GetQuarantineAsync(organization.OrganizationId);
+      }
+    }
+    catch { Error = "Karantene trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Filtered.Count:N0} rezultatov";
+
+  List<FilterChip> ActiveChips
+  {
+    get
+    {
+      var chips = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySource)) chips.Add(new($"Vir: {QuerySource}", Href(source: "")));
+      if (!string.IsNullOrWhiteSpace(QueryEntity)) chips.Add(new($"Entiteta: {QueryEntity}", Href(entity: "")));
+      return chips;
+    }
+  }
+
+  // Filtri zivijo v naslovu: povezavo je mogoce deliti, izvoz pa uporabi isti niz parametrov.
+  string Href(string? search = null, string? source = null, string? entity = null, string? organization = null)
+  {
+    var parameters = new List<string>();
+    Add("podjetje", Resolve(organization, QueryOrganization));
+    Add("isci", Resolve(search, QuerySearch));
+    Add("vir", Resolve(source, QuerySource));
+    Add("entiteta", Resolve(entity, QueryEntity));
+
+    return parameters.Count == 0 ? "kakovost/karantena" : "kakovost/karantena?" + string.Join('&', parameters);
+
+    void Add(string name, string? value)
+    {
+      if (!string.IsNullOrWhiteSpace(value)) parameters.Add(name + "=" + Uri.EscapeDataString(value));
+    }
+
+    static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
+  }
+
+  // "podjetje" se poda izrecno, ker ob prvem nalaganju se ni v naslovu — brez tega bi izvoz na
+  // prvi obisk manjkal (ista rešitev kot na /kakovost/napake).
+  string ExportHref()
+  {
+    var listHref = Href(organization: OrganizationDraft);
+    var separatorIndex = listHref.IndexOf('?');
+    var parameters = separatorIndex < 0 ? "" : listHref[(separatorIndex + 1)..];
+    return parameters.Length == 0 ? "izvoz/karantena.xlsx" : "izvoz/karantena.xlsx?" + parameters;
+  }
+
+  Task ApplyFiltersAsync()
+  {
+    Navigation.NavigateTo(Href(search: SearchDraft.Trim(), source: SourceDraft, entity: EntityDraft, organization: OrganizationDraft));
+    return Task.CompletedTask;
+  }
+
+  Task SearchKeyAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args) =>
+    args.Key == "Enter" ? ApplyFiltersAsync() : Task.CompletedTask;
 }

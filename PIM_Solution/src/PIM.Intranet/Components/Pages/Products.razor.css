@@ -85,6 +85,8 @@
 
 .filter-select { max-width: none; width: 100%; }
 
+.filter-field ::deep .pim-picker { max-width: none; min-width: 0; width: 100%; }
+
 .filter-actions { align-items: center; display: flex; gap: .75rem; margin-top: .9rem; }
 
 .link-button { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; text-decoration: none; }
@@ -134,6 +136,14 @@
   margin-bottom: 1rem;
   padding: .6rem .9rem;
 }
+
+/* Izvoz v ozadju: med gradnjo ostane opozorilne barve, ob koncu preklopi na dobro/slabo, da
+   uporabnik loci "gotovo" od "ni uspelo", ne da bi bral besedilo. */
+.export-notice { align-items: center; display: flex; gap: .5rem; }
+.export-notice .opening-spinner { border-color: #fde68a; border-top-color: var(--pim-warn-text); }
+.export-notice-completed { background: var(--pim-good-bg); border-color: var(--pim-good-border, var(--pim-good-bg)); color: var(--pim-good-text); }
+.export-notice-failed { background: var(--pim-bad-bg); border-color: var(--pim-bad-border, var(--pim-bad-bg)); color: var(--pim-bad-text); }
+.export-notice .link-button { color: inherit; margin-left: auto; text-decoration: underline; }
 
 .data-card { padding: 0; }
 
@@ -203,6 +213,10 @@
 
 .table-scroll { overflow-x: auto; }
 
+/* Pojavno okno »Stolpci« uporabi skupno .xml-lightbox (app.css); tu je samo vrstica s kljukico. */
+.column-picker-row { align-items: center; display: flex; gap: .55rem; padding: .4rem 0; }
+.column-picker-row input[type="checkbox"] { flex: 0 0 auto; height: 1rem; width: 1rem; }
+
 .search-input:focus-visible,
 .filter-select:focus-visible,
 .filter-button:focus-visible,
@@ -210,7 +224,6 @@
 .link-button:focus-visible,
 .primary-button:focus-visible,
 .filter-chip:focus-visible,
-.page-tab:focus-visible,
 .table-scroll:focus-visible,
 .data-table a:focus-visible,
 .select-cell input:focus-visible {

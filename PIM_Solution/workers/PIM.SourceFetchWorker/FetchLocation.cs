@@ -17,7 +17,13 @@ public sealed record FetchLocation(
   int? MinIntervalMinutes = null);
 
 /// <summary>Kaj je bilo za en vir dejansko prevzeto.</summary>
-public sealed record FetchOutcome(string SourceCode, string Kind, bool Fetched, long Bytes, string? TargetPath, string? Skipped, string? Error);
+/// <param name="ArchivePath">
+/// Datirana stisnjena kopija, ce je ta prevzem prinesel spremenjeno vsebino; null, kadar kopije
+/// ni (nespremenjena datoteka, preskocen prevzem ali napaka pri arhiviranju).
+/// </param>
+public sealed record FetchOutcome(
+  string SourceCode, string Kind, bool Fetched, long Bytes, string? TargetPath, string? Skipped, string? Error,
+  string? ArchivePath = null);
 
 /// <summary>Poverilnice enega vira, prebrane iz <c>Fetch</c> v <c>appsettings.Local.json</c>.</summary>
 public sealed record FetchCredential(string? Url, string? BaseUri, string? UserName, string? Password, string? RemoteDirectory, string? RemoteFileName, bool UsePassive)

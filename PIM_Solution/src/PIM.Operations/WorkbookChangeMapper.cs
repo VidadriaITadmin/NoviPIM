@@ -1,7 +1,10 @@
 namespace PIM.Operations;
 
-/// <summary>Polje, ki ga sme uporabnik urejati: kanonična koda in ime elementa v SAOP.</summary>
-public sealed record WritableField(string FieldKey, string ElementName);
+/// <param name="Label">Slovenski naslov polja, kot ga uporablja delovni list s strani Izdelki —
+/// tja gre lahko uporabnik po ta artikel namesto na to stran, datoteko pa naloži tu; brez te
+/// oznake bi vsak njen ERP stolpec padel med neprepoznane, ker delovni list ne piše imena
+/// elementa SAOP, ampak slovenski naslov.</param>
+public sealed record WritableField(string FieldKey, string ElementName, string? Label = null);
 
 /// <param name="Values">Vrednosti po kanonični kodi polja; prazne celice niso vključene.</param>
 public sealed record WorkbookChangeRow(int RowNumber, string ItemId, IReadOnlyDictionary<string, string> Values);
@@ -53,7 +56,8 @@ public static class WorkbookChangeMapper
       var header = Normalize(sheet.Headers[index]);
       if (header.Length == 0) continue;
       var match = writable.FirstOrDefault(candidate =>
-        Normalize(candidate.FieldKey) == header || Normalize(candidate.ElementName) == header);
+        Normalize(candidate.FieldKey) == header || Normalize(candidate.ElementName) == header
+        || (candidate.Label is not null && Normalize(candidate.Label) == header));
       if (match is null) unmapped.Add(sheet.Headers[index]); else byColumn[index] = match;
     }
 

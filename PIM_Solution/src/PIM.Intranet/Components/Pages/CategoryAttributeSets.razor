@@ -1,5 +1,5 @@
 @page "/nastavitve/nabori-atributov"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @using PIM.Intranet.Services
 @inject CategoryTreeService Tree
@@ -55,7 +55,7 @@
   @if (Overview.Summary.WebProfileCode is null)
   {
     <p class="message-state error-message" role="alert">
-      Drevo @TreeLabel(TreeCode) nima aktivnega spletnega validacijskega profila (val.ValidationProfile.CategoryTreeCode), zato nabora ni mogoče shraniti. Profil se doda v pravilih validacije.
+      Drevo @TreeLabel(TreeCode) nima aktivnega spletnega validacijskega profila, zato nabora ni mogoče shraniti. Profil se doda v pravilih validacije.
     </p>
   }
 }

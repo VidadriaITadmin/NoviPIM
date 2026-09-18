@@ -14,7 +14,7 @@ namespace PIM.Intranet.Services;
 /// Pravila so v bazi (121, 122, 125). Servis ne presoja ničesar: postopek zavrne neznano
 /// lastnost, izvorni atribut, ki ga register ne pozna, neznan jezik in verigo enot.
 /// </summary>
-public sealed class AttributeMappingService(PimDb database, IConfiguration configuration)
+public sealed class AttributeMappingService(PimDb database, IConfiguration configuration, PimWriteGuard guard)
 {
   static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -115,10 +115,12 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
       "SELECT DISTINCT SourceCode FROM map.SourceAttribute ORDER BY SourceCode;",
       reader => PimDb.TextOrEmpty(reader, "SourceCode"), null, cancellationToken);
 
-  public Task<string> SaveMapAsync(
+  public async Task<string> SaveMapAsync(
     string sourceCode, string sourceAttributeName, string attributeCode, string? languageCode,
-    bool isUnit, string actor, string? note, CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    bool isUnit, string actor, string? note, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC map.SaveAttributeMap @SourceCode, @SourceAttributeName, @AttributeCode, @LanguageCode, @IsUnit, @Actor, @Note;",
       command =>
       {
@@ -130,11 +132,14 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
 
-  public Task<string> DeactivateMapAsync(
+  public async Task<string> DeactivateMapAsync(
     string sourceCode, string sourceAttributeName, string actor, string? note,
-    CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC map.DeactivateAttributeMap @SourceCode, @SourceAttributeName, @Actor, @Note;",
       command =>
       {
@@ -143,13 +148,16 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
 
   /// <summary>Poveže enoto z lastnostjo, ki ji pripada. Prazen cilj par odstrani.</summary>
-  public Task<string> SaveDefinitionAsync(
+  public async Task<string> SaveDefinitionAsync(
     string attributeCode, string? attributeGroup, string? dataType, string? unit,
     bool? isTranslatable, string? unitOfAttributeCode, string actor, string? note,
-    CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC canon.SaveAttributeDefinition @AttributeCode, @AttributeGroup, @DataType, @Unit, @IsTranslatable, @UnitOfAttributeCode, @Actor, @Note;",
       command =>
       {
@@ -162,6 +170,7 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
 
   /// <summary>
   /// Imena lastnosti v več jezikih hkrati. Če en jezik pade na pravilu, ne obvelja noben.
@@ -170,6 +179,7 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
     string attributeCode, IReadOnlyDictionary<string, string> translations, string actor,
     CancellationToken cancellationToken = default)
   {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
     var payload = JsonSerializer.Serialize(
       translations.Select(pair => new { lang = pair.Key, name = pair.Value }));
 

@@ -1,38 +1,105 @@
 @page "/pravila/preslikave"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.GovernanceReadService Governance
-@inject PIM.Intranet.Services.IntranetDataService Data
-@inject PIM.Intranet.Services.RulesWriteService Rules
+@inject GovernanceReadService Governance
+@inject IntranetDataService Data
+@inject RulesWriteService Rules
 @inject AuthenticationStateProvider Authentication
 
-<PageTitle>Preslikave polj</PageTitle>
-@* L3: uporabnik 2026-08-28 — »Ni to misljeno da vemo od kje je polje prislo in kam se pise v
-   PIM?« Prav to je zdaj glavna os tabele: en stolpec »od kod« (vir in element) in en stolpec
-   »kam« (polje v PIM), med njima pusica. Vrstica se ureja na mestu. *@
-<PimPage Title="Preslikave polj"
-         Subtitle="Od kod polje pride in kam se zapiše v PIM. Obveznost tukaj pomeni, da brez elementa zapisa ni mogoče zajeti; poslovna obveznost sodi v validacijo."
-         Crumbs="Crumbs" />
+<PageTitle>Izvor in preslikave polj</PageTitle>
+<PimPage Title="Izvor in preslikave polj"
+         Subtitle="Vsaka vrstica pove, kateri element vira napolni katero polje v PIM. Obveznost tukaj velja za zajem; poslovna obveznost se nastavi v validaciji."
+         Crumbs="Crumbs">
+  <Actions>
+    <a class="secondary" href="zajem/neujemanja">Odpri neujemanja zajema</a>
+  </Actions>
+</PimPage>
 
-@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+<PimTabs Active="mappings" Tabs="RulesTabs.Tabs" Label="Pravila in izvor podatkov" />
+
+<section class="ui-card rule-guide" aria-labelledby="mapping-guide-title">
+  <div>
+    <h2 id="mapping-guide-title">Kaj popraviš na tej strani?</h2>
+    <p>Preslikavo spremeniš, kadar podatek iz XML-ja, datoteke ali ERP pristane v napačnem PIM polju oziroma se sploh ne zajame.</p>
+  </div>
+  <ol class="rule-steps">
+    <li><strong>Najdi element vira</strong><span>Išči po izvornem elementu ali ciljnem polju.</span></li>
+    <li><strong>Preveri smer</strong><span>Levo je vir, desno je mesto zapisa v PIM.</span></li>
+    <li><strong>Shrani in ponovno zajemi</strong><span>Sprememba velja pri naslednji obdelavi vira.</span></li>
+  </ol>
+</section>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
 
-<section class="ui-card toolbar" role="search" aria-labelledby="mapping-filter-title">
+@if (!Loading && Error is null)
+{
+  <div class="rule-summary" aria-label="Povzetek preslikav polj">
+    <div class="rule-summary-item"><span>Vseh preslikav</span><strong>@Summary.TotalCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item good"><span>Aktivnih</span><strong>@Summary.ActiveCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item warn"><span>Obveznih pri zajemu</span><strong>@Summary.RequiredCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Neaktivnih</span><strong>@Summary.InactiveCount.ToString("N0")</strong></div>
+  </div>
+}
+
+<details class="ui-card compact-details">
+  <summary>Dodaj novo preslikavo</summary>
+  <div class="compact-details-body">
+    <div class="form-grid mapping-create-grid">
+      <label class="form-field">Vir
+        <select class="filter-select" @bind="NewSourceCode">
+          <option value="">Izberi vir</option>
+          @foreach (var source in Sources) { <option value="@source.Value">@source.Label</option> }
+        </select>
+      </label>
+      <label class="form-field">Vrsta podatka
+        <input class="form-input" list="mapping-entities" placeholder="npr. Product" @bind="NewEntityType" />
+      </label>
+      <label class="form-field">Element v viru
+        <input class="form-input" placeholder="npr. Product/EAN" @bind="NewSourceElement" />
+      </label>
+      <label class="form-field">Ciljno polje v PIM
+        <input class="form-input" list="mapping-target-fields" placeholder="npr. Product.EAN" @bind="NewTargetField" />
+      </label>
+      <label class="check-field"><input type="checkbox" @bind="NewRequired" />Brez elementa zavrni vhodni zapis</label>
+      <div class="form-action">
+        <button type="button" class="primary-button" disabled="@(Busy || !CanSaveNew)" @onclick="AddAsync">Dodaj preslikavo</button>
+      </div>
+    </div>
+    <datalist id="mapping-entities">
+      @foreach (var entity in EntityTypes) { <option value="@entity.Value"></option> }
+    </datalist>
+    <datalist id="mapping-target-fields">
+      @foreach (var field in TargetFields) { <option value="@field"></option> }
+    </datalist>
+    <p class="card-note">Novo preslikavo dodaj le za element, ki ga vir res pošilja. Če je poslovno polje obvezno za ERP ali splet, to nastavi v zavihku Validacija.</p>
+  </div>
+</details>
+
+<section class="ui-card toolbar section-gap" role="search" aria-labelledby="mapping-filter-title">
   <h2 id="mapping-filter-title" class="visually-hidden">Filtriranje preslikav</h2>
-  <label class="visually-hidden" for="mapping-search">Išči element ali ciljno polje</label>
-  <input id="mapping-search" class="search-input" type="search" placeholder="Išči element ali ciljno polje …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
-  <label class="visually-hidden" for="mapping-entity">Entiteta</label>
+  <label class="visually-hidden" for="mapping-search">Išči vir, element ali ciljno polje</label>
+  <input id="mapping-search" class="search-input" type="search" placeholder="Išči vir, element ali ciljno polje …"
+         @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <label class="visually-hidden" for="mapping-entity">Vrsta podatka</label>
   <select id="mapping-entity" class="filter-select" @bind="EntityType" @bind:after="ApplyAsync">
-    <option value="">Vse entitete</option>
+    <option value="">Vse vrste podatkov</option>
     @foreach (var option in EntityTypes) { <option value="@option.Value">@option.Label</option> }
   </select>
-  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <label class="visually-hidden" for="mapping-state">Stanje</label>
+  <select id="mapping-state" class="filter-select" @bind="State" @bind:after="ApplyAsync">
+    <option value="">Aktivne in neaktivne</option>
+    <option value="ACTIVE">Samo aktivne</option>
+    <option value="INACTIVE">Samo neaktivne</option>
+  </select>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Poišči</button>
+  @if (HasFilter) { <button type="button" class="secondary-button" @onclick="ClearFiltersAsync">Počisti</button> }
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
 <section class="ui-card data-card" aria-label="Preslikave polj">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni preslikav." LoadingText="Nalaganje preslikav …">
-    <PimTable Caption="Elementi virov in ciljna polja" Columns="Columns">
+    <PimTable Caption="Pot podatka: element vira → polje v PIM" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
@@ -47,7 +114,7 @@
               @if (editing)
               {
                 <label class="visually-hidden" for="@("target-" + row.FieldMappingId)">Ciljno polje v PIM</label>
-                <input id="@("target-" + row.FieldMappingId)" class="form-input" @bind="TargetDraft" />
+                <input id="@("target-" + row.FieldMappingId)" class="form-input" list="mapping-target-fields" @bind="TargetDraft" />
               }
               else
               {
@@ -61,7 +128,7 @@
               }
               else
               {
-                <PimChip Text="@(row.IsRequired ? "Obvezno pri zajemu" : "Neobvezno")" Tone="@(row.IsRequired ? "warn" : null)" Prefix="Zahteva: " />
+                <PimChip Text="@(row.IsRequired ? "Obvezno pri zajemu" : "Neobvezno")" Tone="@(row.IsRequired ? "warn" : null)" />
               }
             </td>
             <td>
@@ -77,8 +144,10 @@
             <td>
               @if (editing)
               {
-                <button type="button" class="small-action" disabled="@Busy" @onclick="() => SaveAsync(row)">Shrani</button>
-                <button type="button" class="small-action" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                <div class="table-actions">
+                  <button type="button" class="small-action good-action" disabled="@(Busy || TargetDraft.Trim().Length == 0)" @onclick="() => SaveAsync(row)">Shrani</button>
+                  <button type="button" class="small-action" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                </div>
               }
               else
               {
@@ -94,11 +163,15 @@
 </section>
 
 @code {
-  IReadOnlyList<PIM.Intranet.Services.FieldMappingRow> Rows = [];
-  IReadOnlyList<PIM.Intranet.Services.PimOption> EntityTypes = [];
+  IReadOnlyList<FieldMappingRow> Rows = [];
+  IReadOnlyList<PimOption> EntityTypes = [];
+  IReadOnlyList<PimOption> Sources = [];
+  IReadOnlyList<string> TargetFields = [];
+  FieldMappingSummary Summary = new(0, 0, 0, 0);
   int? OrganizationId;
   string EntityType = "";
   string Search = "";
+  string State = "";
   int Skip;
   const int Take = 50;
   long Total;
@@ -108,21 +181,45 @@
   string? Message;
   string? SaveError;
 
-  /// <summary>Vrstica, ki se ureja; null pomeni, da se ne ureja nobena.</summary>
   long? Editing;
   string TargetDraft = "";
   bool RequiredDraft;
   bool ActiveDraft;
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Preslikave polj")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Od kod (vir in element)"), new(""), new("Kam v PIM"), new("Obveznost"), new("Stanje"), new("Dejanje")];
+
+  string NewSourceCode = "", NewEntityType = "", NewSourceElement = "", NewTargetField = "";
+  bool NewRequired;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Izvor in preslikave")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [new("Od kod (vir in element)"), new(""), new("Kam v PIM"), new("Zahteva zajema"), new("Stanje"), new("Dejanje")];
 
   protected override async Task OnInitializedAsync()
   {
     var organization = await Data.GetCurrentOrganizationAsync();
     if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
     OrganizationId = organization.OrganizationId;
-    try { EntityTypes = await Governance.GetMappedEntityTypesAsync(organization.OrganizationId); } catch { EntityTypes = []; }
+    await ReloadOptionsAsync();
     await LoadAsync();
+  }
+
+  async Task ReloadOptionsAsync()
+  {
+    if (OrganizationId is null) return;
+    try
+    {
+      var entitiesTask = Governance.GetMappedEntityTypesAsync(OrganizationId.Value);
+      var sourcesTask = Governance.GetMappingSourcesAsync(OrganizationId.Value);
+      var fieldsTask = Governance.GetCanonicalFieldCodesAsync();
+      var summaryTask = Governance.GetFieldMappingSummaryAsync(OrganizationId.Value);
+      await Task.WhenAll(entitiesTask, sourcesTask, fieldsTask, summaryTask);
+      EntityTypes = await entitiesTask;
+      Sources = await sourcesTask;
+      TargetFields = await fieldsTask;
+      Summary = await summaryTask;
+      if (NewSourceCode.Length == 0) NewSourceCode = Sources.FirstOrDefault()?.Value ?? "";
+      if (NewEntityType.Length == 0) NewEntityType = EntityTypes.FirstOrDefault()?.Value ?? "";
+    }
+    catch { EntityTypes = []; Sources = []; TargetFields = []; }
   }
 
   async Task LoadAsync()
@@ -130,42 +227,67 @@
     if (OrganizationId is null) return;
     Loading = true;
     Error = null;
-    try { (Rows, Total) = await Governance.GetFieldMappingsAsync(OrganizationId.Value, EntityType, Search, Skip, Take); }
+    try { (Rows, Total) = await Governance.GetFieldMappingsAsync(OrganizationId.Value, EntityType, Search, State, Skip, Take); }
     catch { Error = "Preslikav trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
-  void StartEdit(PIM.Intranet.Services.FieldMappingRow row)
+  void StartEdit(FieldMappingRow row)
   {
     Editing = row.FieldMappingId;
     TargetDraft = row.TargetFieldCode;
     RequiredDraft = row.IsRequired;
     ActiveDraft = row.IsActive;
-    Message = null;
-    SaveError = null;
+    Message = SaveError = null;
   }
 
   void CancelEdit() => Editing = null;
 
-  async Task SaveAsync(PIM.Intranet.Services.FieldMappingRow row)
+  async Task AddAsync()
   {
     if (OrganizationId is null) return;
-    Busy = true; Message = null; SaveError = null;
+    Busy = true; Message = SaveError = null;
     try
     {
-      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
-      await Rules.SaveMappingAsync(row.FieldMappingId, OrganizationId.Value, row.SourceCode, row.EntityType,
-        row.SourceElement, TargetDraft.Trim(), RequiredDraft, ActiveDraft, actor);
-      Editing = null;
-      Message = $"Preslikava {row.SourceElement} → {TargetDraft.Trim()} je shranjena.";
+      await Rules.SaveMappingAsync(null, OrganizationId.Value, NewSourceCode, NewEntityType,
+        NewSourceElement.Trim(), NewTargetField.Trim(), NewRequired, true, await ActorAsync());
+      Message = $"Preslikava {NewSourceElement.Trim()} → {NewTargetField.Trim()} je dodana in velja pri naslednjem zajemu.";
+      NewSourceElement = NewTargetField = "";
+      NewRequired = false;
+      await ReloadOptionsAsync();
       await LoadAsync();
     }
-    catch { SaveError = "Preslikave ni bilo mogoče shraniti."; }
+    catch (Exception exception) { SaveError = exception.Message; }
     finally { Busy = false; }
   }
 
-  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task SaveAsync(FieldMappingRow row)
+  {
+    if (OrganizationId is null) return;
+    Busy = true; Message = SaveError = null;
+    try
+    {
+      await Rules.SaveMappingAsync(row.FieldMappingId, OrganizationId.Value, row.SourceCode, row.EntityType,
+        row.SourceElement, TargetDraft.Trim(), RequiredDraft, ActiveDraft, await ActorAsync());
+      Editing = null;
+      Message = $"Preslikava {row.SourceElement} → {TargetDraft.Trim()} je shranjena.";
+      await ReloadOptionsAsync();
+      await LoadAsync();
+    }
+    catch (Exception exception) { SaveError = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync() =>
+    (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task ApplyAsync() { Skip = 0; Editing = null; await LoadAsync(); }
+  async Task ClearFiltersAsync() { EntityType = Search = State = ""; await ApplyAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+
+  bool HasFilter => EntityType.Length > 0 || Search.Trim().Length > 0 || State.Length > 0;
+  bool CanSaveNew => NewSourceCode.Length > 0 && NewEntityType.Trim().Length > 0
+    && NewSourceElement.Trim().Length > 0 && NewTargetField.Trim().Length > 0;
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} preslikav";
 }

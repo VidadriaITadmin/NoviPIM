@@ -40,7 +40,9 @@ public static class MappingProcedures
     new("Customer", "map.ProcessCustomerInbox"),
     new("CustomerGroupDiscount", "map.ProcessCustomerGroupDiscountInbox"),
     new("CustomerItem", "map.ProcessCustomerItemInbox"),
-    new("Document", "map.ProcessDocumentInbox")
+    new("Document", "map.ProcessDocumentInbox"),
+    new("SalesOrder", "map.ProcessSalesOrderInbox"),
+    new("PurchaseOrder", "map.ProcessPurchaseOrderInbox")
   ];
 
   /// <summary>Svetovi, ki jih ta seznam pokriva, skupaj s tistim, ki ga obdela ProcessRawInbox.</summary>

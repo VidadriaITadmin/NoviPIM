@@ -5,7 +5,8 @@ using System.Text.RegularExpressions;
 // Prejsnja razlicica je zamrznila ozek obseg: stiri KPI kartice iz Rows.Count, en zavihek,
 // sest stolpcev in odjemalsko filtriranje. Ta obseg je bil odvisen od tega, da stran nalozi
 // vse pozicije naenkrat — stock.Position ima 379.610 vrstic, zato je bila to okvara, ne izbira.
-// Stran zdaj bere intranet.GetStockPositions in intranet.GetStockOverview (migracija 103).
+// Stran zdaj bere intranet.GetStockByItem (migracija 190, ena vrstica na artikel — glej spodaj)
+// in intranet.GetStockOverview (migracija 103).
 //
 // Kar pogodba varuje, ostaja isto in je zaostreno: dostopnost, resnicen podatkovni vir,
 // odsotnost zapisovalnih dejanj (zaloga se v ERP nikoli ne pise) in odsotnost izmisljene vsebine.
@@ -44,10 +45,9 @@ var toolbarLabel = Regex.Match(toolbar.Value, "aria-labelledby=\"([^\"]+)\"");
 Assert(toolbarLabel.Success, "Iskalni sklop mora imeti aria-labelledby.");
 Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(toolbarLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
   "Naslov iskalnega sklopa mora ostati bralcem zaslona dostopen in vizualno skrit.");
-// Kontroli »razpolozljivost« in »ujemanje« sta odpadli: uporabnik ju je 2026-08-28 zavrnil,
-// ker na obe vprasanji ze odgovarjajo klikljive kartice povzetka. Namesto njiju je prisla
-// vrsta vira. Parametra v naslovu ostaneta, ker nanju kazejo kartice.
-foreach (var retired in new[] { "id=\"stock-availability\"", "id=\"stock-matched\"", "Vsa razpoložljivost", "Ujemanje: vseeno" })
+// Kontrole »razpolozljivost«, »ujemanje« (2026-08-28) in »vrsta vira« (2026-09-10, glej I6 spodaj)
+// so odpadle. Parametra v naslovu ostaneta, ker nanju kazejo kartice/povezave.
+foreach (var retired in new[] { "id=\"stock-availability\"", "id=\"stock-matched\"", "id=\"stock-kind\"", "Vsa razpoložljivost", "Ujemanje: vseeno" })
   Assert(!markup.Contains(retired, StringComparison.Ordinal), "Odpisana kontrola se ne sme vrniti: " + retired + ".");
 // G1: SAOP zaloga obstaja pri vseh stirih podjetjih (DEMO 16, IQ 8.719, VID 7.002,
 // Ediito 3.105 pozicij), stran pa je videla samo prvo po sifri. Podjetje je zato filter,
@@ -56,7 +56,7 @@ Assert(Regex.IsMatch(markup, "<option value=\"\">Vsa podjetja</option>"),
   "Privzeti obseg zaloge so vsa podjetja.");
 Assert(markup.Contains("@row.OrganizationName", StringComparison.Ordinal),
   "Pri vec podjetjih mora vrstica povedati, cigava zaloga je.");
-foreach (var control in new[] { "stock-search", "stock-source", "stock-kind", "stock-instock", "stock-age", "stock-organization" })
+foreach (var control in new[] { "stock-search", "stock-source", "stock-instock", "stock-age", "stock-organization" })
 {
   Assert(Regex.IsMatch(markup, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
   Assert(Regex.IsMatch(markup, "id=\"" + control + "\""), "Kontrola " + control + " ne obstaja.");
@@ -74,16 +74,17 @@ Assert(Regex.Matches(markup, "<PimState ").Count == 3, "Vsaka od treh tabel mora
 foreach (var parameter in new[] { "Loading=", "Error=", "Empty=", "EmptyText=", "LoadingText=" })
   Assert(markup.Contains(parameter, StringComparison.Ordinal), "PimState mora dobiti " + parameter + ".");
 
-// 5. Stanje in svezina nista razlocljiva samo po barvi.
-Assert(Regex.IsMatch(markup, "<PimChip Text=\"@\\(row\\.Quantity > 0 \\? \"Na zalogi\" : \"Brez zaloge\"\\)\""),
-  "Stanje pozicije mora biti izpisano z besedo.");
+// 5. Stanje in svezina nista razlocljiva samo po barvi. Stanje je zdaj sesteta kolicina obeh
+// strani (2026-09-10), ne vec ena sama position.Quantity.
+Assert(Regex.IsMatch(markup, "<PimChip Text=\"@\\(\\(row\\.ErpQuantity \\+ row\\.SupplierQuantity\\) > 0 \\? \"Na zalogi\" : \"Brez zaloge\"\\)\""),
+  "Stanje pozicije mora biti izpisano z besedo, izracunano iz sestete kolicine obeh strani.");
 Assert(markup.Contains("Prefix=\"Svežina: \"", StringComparison.Ordinal), "Svezina vira mora imeti govorno predpono.");
 Assert(markup.Contains("FreshnessLabel(", StringComparison.Ordinal), "Starost posnetka mora biti izpisana z besedo, ne le z barvo.");
 
 // 6. Stranicenje je streznisko in izhaja iz istega stetja kot seznam.
 Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"PageData\\.TotalCount\""),
   "Seznam mora biti strezniski; 379.610 pozicij se ne nalaga v pomnilnik.");
-foreach (var parameter in new[] { "isci", "vir", "starost", "vrsta", "zaloga", "stran", "podjetje" })
+foreach (var parameter in new[] { "isci", "vir", "starost", "zaloga", "stran", "podjetje" })
   Assert(Regex.IsMatch(markup, "SupplyParameterFromQuery\\(Name = \"" + parameter + "\"\\)"),
     "Filter " + parameter + " mora ziveti v naslovu URL.");
 Assert(!markup.Contains("Rows?.Where(", StringComparison.Ordinal), "Odjemalskega filtriranja ne sme biti vec.");
@@ -106,12 +107,12 @@ Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pra
 
 // 9. Varovalka: stran ostane vezana na dejanski bralni proceduri in nicesar ne pise.
 Assert(markup.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal), "Stran mora poznati vsa podjetja, ne le prvega po sifri.");
-foreach (var call in new[] { "Stock.GetPositionsAsync", "Stock.GetOverviewAsync" })
+foreach (var call in new[] { "Stock.GetItemsAsync", "Stock.GetOverviewAsync" })
   Assert(markup.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "(?<![A-Za-z0-9_])(?:Data|Stock)\\.(\\w+)"))
-  Assert(new[] { "GetOrganizationsAsync", "GetPositionsAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
+  Assert(new[] { "GetOrganizationsAsync", "GetItemsAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
     "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
-Assert(markup.Contains("intranet.GetStockPositions", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
+Assert(markup.Contains("intranet.GetStockByItem", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
 var allowedHandlers = new[] { "ApplyFiltersAsync" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
@@ -124,53 +125,57 @@ foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "Approv
 Assert(!markup.Contains('\u203A'), "Unicode nadomestne ikone niso dovoljene; uporabi CSS obliko.");
 
 // 11. Varovalka: nobene vsebine brez podatkovnega vira.
-// Skladisce, dobavni rok in min/max so od migracije 103 resnicni stolpci, zato niso vec na
-// seznamu. Rezervacije, trendi in izvozi ostanejo prepovedani, ker vira zanje ni.
 foreach (var fabricated in new[] { "Rezervirano", "Fizična zaloga", "Nizek nivo", "Trend", "ta teden",
   "Osveži", "Stolpci", "Izvozi", "Uvozi", "Vrstic na stran", "Izbranih" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmisljene vsebine: " + fabricated + ".");
 foreach (var literal in new[] { "9.842", "9842", "426", "3,7", "86%" })
   Assert(!markup.Contains(literal, StringComparison.Ordinal), "Stevilke iz UX slike se ne prepisujejo v kodo: " + literal + ".");
 
-// ─── Popravki zaloge 2026-08-28 ───────────────────────────────────────────────────────────
+// ─── Popravki zaloge 2026-08-28 / 2026-09-03 ──────────────────────────────────────────────
+//
+// I1 (08-28, vrsta-vira cip in filter) in I6/I7 (09-10, locena tabela na skladisce/dobavitelja
+// z drugim cipom) sta bila oba nadomescena 09-10 z eno zdruzeno vrstico na artikel (glej spodaj)
+// — ne cip ne locena tabela ne obstajata vec; asercij zanju zato ni vec.
 
-// I1: vrsta vira mora biti vidna v vrstici in filtrirljiva, sicer je SAOP zaloga nevidna.
-Assert(markup.Contains("KindLabel(row.SourceKind)", StringComparison.Ordinal),
-  "Vsaka vrstica mora povedati, ali je zaloga iz ERP ali od dobavitelja.");
-Assert(Regex.IsMatch(markup, "SupplyParameterFromQuery\\(Name = \"vrsta\"\\)"),
-  "Vrsta vira mora ziveti v naslovu URL.");
-Assert(markup.Contains("QueryKind", StringComparison.Ordinal), "Vrsta vira mora priti v poizvedbo, ne biti filtrirana v pomnilniku.");
-
-// I2: datum prihoda mora biti posten — kadar ga vir ne poslje, se to pove, ne pokaze pomisljaja.
-Assert(markup.Contains("datuma ni", StringComparison.Ordinal),
-  "Kadar vir javi kolicino brez datuma, mora stran to povedati, ne skriti za pomisljajem.");
-Assert(markup.Contains("new(\"Prihod\")", StringComparison.Ordinal), "Stolpec prihoda mora biti poimenovan po tem, kar pove.");
-
-// I3: vrstice oblackov z aktivnimi filtri ni vec.
-Assert(!markup.Contains("class=\"ui-card active-filters\"", StringComparison.Ordinal),
-  "Vrstice oblackov z aktivnimi filtri ni vec.");
-Assert(!markup.Contains("ActiveChips", StringComparison.Ordinal), "Z oblacki odpade tudi njihova koda.");
-
-// ─── Popravki zaloge 2026-09-03 ───────────────────────────────────────────────────────────
-
-// I4: filter "ima zalogo" se je vrnil, a ozji od stare "Vsa razpolozljivost" (samo dvoje
-// vrednosti, brez INCOMING) in gre v poizvedbo, ne v pomnilniski filter.
+// I4: filter "ima zalogo" gre v poizvedbo, ne v pomnilniski filter, in ponuja tudi "Prihaja zaloga".
 Assert(markup.Contains("QueryInStock", StringComparison.Ordinal),
   "Ima zalogo mora priti v poizvedbo, ne biti filtrirano v pomnilniku.");
 Assert(Regex.IsMatch(markup, "<option value=\"IN_STOCK\">Na zalogi</option>"),
   "Filter ima zalogo mora ponuditi Na zalogi.");
 Assert(Regex.IsMatch(markup, "<option value=\"OUT_OF_STOCK\">Brez zaloge</option>"),
   "Filter ima zalogo mora ponuditi Brez zaloge.");
+Assert(Regex.IsMatch(markup, "<option value=\"INCOMING\">Prihaja zaloga</option>"),
+  "Filter ima zalogo mora ponuditi Prihaja zaloga.");
 
-// I5: prenos CSV je odvisen od filtrov nad tabelo, ne samo od podjetja — trije loceni gumbi
-// (ERP/DOBAVITELJ/VSE) in Obseg izvoza so odpadli, ker so prenos vodili mimo filtrov.
-foreach (var retired in new[] { "SAOP (ERP)</a>", ">Dobavitelj</a>", ">Oboje</a>", "id=\"stock-export-scope\"" })
-  Assert(!markup.Contains(retired, StringComparison.Ordinal), "Loceni izvozni gumb/kontrola se ne sme vrniti: " + retired + ".");
+// ─── Popravki zaloge 2026-09-10 ───────────────────────────────────────────────────────────
+//
+// Uporabnik je zaporedoma prosil: (a) locimo nasa/dobaviteljeva zaloga v dve tabeli, (b) po
+// pregledu — ne, ena tabela, a z resnicnim datumom/kolicino prihoda za SAOP (drug SAOP endpoint,
+// GetItemDeliveryDate, migracija 189), (c) ne dve vrstici na isti artikel, ampak stolpci v ENI
+// vrstici za oboje hkrati (migracija 190, intranet.GetStockByItem), (d) samo Excel, brez CSV,
+// z enim jasnim gumbom namesto dveh (»zakaj imava excel in pa CSV ... naj bo samo Excel«).
+
+// I6: ena vrstica na artikel — HasErp/HasSupplier locita "vira ni" od "vir pravi 0", stolpci
+// za obe strani soobstajajo v isti vrstici namesto v loceni tabeli ali cipu.
+foreach (var required in new[] { "row.HasErp", "row.HasSupplier", "row.ErpQuantity", "row.SupplierQuantity", "row.ErpWarehouse", "row.SupplierCode" })
+  Assert(markup.Contains(required, StringComparison.Ordinal), "Zdruzena vrstica mora uporabiti " + required + ".");
+
+// I7: prihod (kolicina in datum) za SAOP stran pride iz ErpIncomingQuantity/ErpIncomingDate
+// (stock.ItemDeliveryDate prek intranet.GetStockByItem), ne vec vedno pomisljaj.
+Assert(markup.Contains("row.ErpIncomingQuantity", StringComparison.Ordinal) && markup.Contains("row.ErpIncomingDate", StringComparison.Ordinal),
+  "Prikaz SAOP prihoda mora priti iz ErpIncomingQuantity/ErpIncomingDate (stock.ItemDeliveryDate).");
+Assert(markup.Contains("datuma ni", StringComparison.Ordinal),
+  "Kadar vir javi kolicino brez datuma, mora stran to povedati, ne skriti za pomisljajem.");
+
+// I8: izvoz je samo Excel — CSV (gumb, endpoint, StockExportHref z "vir") je odstranjen.
+Assert(markup.Contains("izvoz/zaloge.xlsx", StringComparison.Ordinal), "Stran mora ponuditi izvoz zaloge v Excel.");
+Assert(!markup.Contains("izvoz/zaloge.csv", StringComparison.Ordinal), "Izvoz CSV je odstranjen; samo Excel ostane.");
+Assert(!Regex.IsMatch(markup, ">CSV<"), "Ni vec locenega gumba CSV.");
 var exportHrefBody = Regex.Match(markup, "string StockExportHref\\s*\\{.*?\\n  \\}", RegexOptions.Singleline);
 Assert(exportHrefBody.Success, "Gumb za prenos mora graditi naslov iz trenutnih filtrov (StockExportHref).");
-foreach (var draft in new[] { "SourceDraft", "SearchDraft", "InStockDraft", "AgeDraft", "KindDraft", "OrganizationDraft" })
+foreach (var draft in new[] { "SourceDraft", "SearchDraft", "InStockDraft", "AgeDraft", "OrganizationDraft" })
   Assert(exportHrefBody.Value.Contains(draft, StringComparison.Ordinal),
-    "Prenos CSV mora uporabiti filter " + draft + " s strani, ne samo podjetje.");
+    "Izvoz mora uporabiti filter " + draft + " s strani, ne samo podjetje.");
 
 Console.WriteLine("F10 stocks UX contract PASS.");
 

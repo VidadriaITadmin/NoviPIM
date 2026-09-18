@@ -22,7 +22,7 @@
     </select>
   </label>
   @* Spletno mesto in objava sta filtra izdelkov. Pri strankah nimata pomena — spletno mesto
-     bi izvoz izpraznilo, objava pa pomeni WebEnabled in jo doloca profil sam. *@
+     bi izvoz izpraznilo, objava pa pomeni aktivnost stranke (202) in jo doloca profil sam. *@
   <label class="field-control"><span>Spletno mesto</span>
     <select @bind="SelectedSite" disabled="@(!IsProductProfile)">
       <option value="">Vsa spletna mesta</option>
@@ -93,7 +93,7 @@
       + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SelectedSite}")
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
       + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic."
-    : $"Filter zajema {(EffectiveOnlyPublished ? "samo stranke, odprte za splet" : "vse stranke")}"
+    : $"Filter zajema {(EffectiveOnlyPublished ? "samo aktivne stranke" : "vse stranke")}"
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
       + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic.";
   string DownloadHref => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
@@ -107,7 +107,7 @@
   {
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
+      var organization = (await Data.GetOrganizationsAsync()).SingleOrDefault(value => value.OrganizationId == 2);
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       OrganizationId = organization.OrganizationId;
       Sites = await Catalog.GetWebSitesAsync();

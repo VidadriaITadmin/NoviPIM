@@ -1,0 +1,9 @@
+ops.ScheduleProfile — nova razporeda za Magento avtomatizacijo
+
+INSERT INTO ops.ScheduleProfile (OrganizationId, Provider, Pipeline, IsEnabled, IntervalSeconds, StaleAfterSeconds, ...)
+-- Pipeline='MAGENTO_PRODUCTS', IsEnabled=1, IntervalSeconds=7200 (2h), StaleAfterSeconds=14400
+
+INSERT INTO ops.ScheduleProfile (OrganizationId, Provider, Pipeline, IsEnabled, IntervalSeconds, StaleAfterSeconds, ...)
+-- Pipeline='MAGENTO_STOCK_PRICES', IsEnabled=1, IntervalSeconds=300 (5 min), StaleAfterSeconds=900
+
+Skupaj 8 novih vrstic (2 pipeline x org 1-4). PIM.B2bWorker (Magento izvoz) doslej ni bil povezan z ops.ScheduleProfile - ta razpored mu to omogoči: poln izvoz artiklov+strank (MAGENTO_PRODUCTS) na 2 uri, hitra osvežitev cen/zaloge na obstoječi CSV (MAGENTO_STOCK_PRICES) na 5 min. Koda (workers/PIM.B2bWorker/Program.cs) je bila hkrati dopolnjena z --po-urniku, da ta razpored dejansko upošteva.

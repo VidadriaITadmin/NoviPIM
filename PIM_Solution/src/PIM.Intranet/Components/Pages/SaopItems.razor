@@ -7,6 +7,7 @@
 @inject SaopItemWriteService Documents
 @inject SaopWriteService Write
 @inject IntranetDataService Data
+@inject SaopOrganizationContext OrgContext
 @inject AuthenticationStateProvider Authentication
 @inject ILogger<SaopItems> Log
 
@@ -21,7 +22,7 @@
   </Actions>
 </PimPage>
 
-<PimTabs Active="items" Tabs="Tabs" Label="Pogledi izhoda v SAOP" />
+<PimTabs Active="items" Tabs="SaopTabs.Tabs" Label="Pogledi izhoda v SAOP" />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
@@ -470,15 +471,6 @@
 @code {
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod v SAOP", "saop"), new("Artikli")];
 
-  static readonly IReadOnlyList<PimTab> Tabs =
-  [
-    new("overview", "Pregled", "saop", "Stanje po entitetah"),
-    new("items", "Artikli", "saop/artikli", "Nov artikel in sprememba"),
-    new("queue", "Čakalna vrsta", "outbound", "Odobritev in ponovni poskus"),
-    new("history", "Zgodovina", "saop/zgodovina", "Operacija in odgovor ERP"),
-    new("drifts", "Odkloni", "saop/odkloni", "Poslano se ne ujema z ERP"),
-  ];
-
   static readonly IReadOnlyList<PimColumn> RejectedColumns = [new("Artikel"), new("Polje"), new("Razlog")];
 
   static readonly string[] SectionOrder = ["Item", "GeneralData", "SalesData", "StockData", "PropertiesData"];
@@ -568,13 +560,17 @@
   static string ArticleLabel(int count) => count == 1 ? "artikel" : count == 2 ? "artikla" : count is 3 or 4 ? "artikli" : "artiklov";
   static string FieldLabel(int count) => count == 1 ? "polje" : count == 2 ? "polji" : "polj";
 
+  // Brez izbranih artiklov mora predloga ostati prazna (samo glava) — nikakor ne sme, kot prej,
+  // tiho priloziti vseh artiklov podjetja. Ker odsotnost "items" na /izvoz/izdelki.xlsx pomeni
+  // "cel pogled" (rabi ga izvoz s strani Izdelki), tu za prazno tabelo posebej posljemo "prazna=1".
   string TemplateHref
   {
     get
     {
-      var codes = string.Join(',', Rows.Select(row => row.ItemId));
       var query = $"izvoz/izdelki.xlsx?predloga=saop&podjetje={OrganizationId}";
-      return codes.Length == 0 ? query : query + "&items=" + Uri.EscapeDataString(codes);
+      if (Rows.Count == 0) return query + "&prazna=1";
+      var codes = string.Join(',', Rows.Select(row => $"{OrganizationId}|{row.ItemId}"));
+      return query + "&items=" + Uri.EscapeDataString(codes);
     }
   }
 
@@ -583,9 +579,12 @@
     try
     {
       Organizations = await Data.GetOrganizationsAsync();
+      // Isto podjetje kot na drugih straneh SAOP (Cakalna vrsta, Zgodovina, Pregled) — glej
+      // SaopOrganizationContext. Ce ga se nihce ni izbral v tej seji, pade na privzeto.
       var current = await Data.GetCurrentOrganizationAsync();
-      OrganizationId = current?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+      OrganizationId = OrgContext.OrganizationId ?? current?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
       if (OrganizationId == 0) { LoadError = "Aktivna organizacija ni na voljo."; return; }
+      OrgContext.OrganizationId = OrganizationId;
       await LoadOrganizationAsync();
     }
     catch (Exception exception)
@@ -614,6 +613,7 @@
   {
     if (!int.TryParse(args.Value?.ToString(), out var organizationId) || organizationId == OrganizationId) return;
     OrganizationId = organizationId;
+    OrgContext.OrganizationId = organizationId;
     Rows.Clear();
     Outcome = null;
     Error = null; Message = null;
@@ -970,7 +970,7 @@
   string Locked(SaopItemFieldRow field) => field.IsKey
     ? "Ključ dokumenta: vrednost je šifra artikla."
     : field.FieldKey is null
-      ? "PIM te vrednosti ne hrani; pri novem artiklu jo doda privzetek iz out.SaopAddDefault."
+      ? "PIM te vrednosti ne hrani; pri novem artiklu jo doda sistemski privzetek."
       : "Polje je v lasti SAOP; PIM ga ne piše nazaj.";
 
   /// <summary>Zapis v dnevnik seje in v dnevnik strežnika hkrati.</summary>

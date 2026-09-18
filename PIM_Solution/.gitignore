@@ -1,5 +1,7 @@
 bin/
 obj/
+.vs/
+.claude/settings.local.json
 appsettings.Local.json
 appsettings.*.Local.json
 TestResults/

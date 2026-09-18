@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using PIM.Intranet.Components.Pages.ProductCardParts;
 using PIM.Intranet.Services;
 
@@ -47,7 +48,7 @@ foreach (var value in new[] { "VerifyF10Async", "sec.CreateLocalUser", "sec.Crea
 var programText = File.ReadAllText(intranetProgram);
 var loginText = File.ReadAllText(loginPage);
 Assert(programText.Contains("UseStaticWebAssets()", StringComparison.Ordinal), "Intranet mora v produkciji streči generiran CSS paket Razor komponent.");
-Assert(programText.Contains("LocalSettingsLocator.FindRepositoryRootLocalSettingsPath", StringComparison.Ordinal), "Iskanje korenske lokalne nastavitve mora biti depth-independent, ne fiksna relativna pot.");
+Assert(programText.Contains("LocalSettings.Sources(builder.Environment.ContentRootPath)", StringComparison.Ordinal), "Lokalne nastavitve mora najti skupni iskalnik rešitve (mapa ob .exe + koren rešitve), ne fiksna relativna pot.");
 Assert(!programText.Contains("\"..\", \"..\", \"..\"", StringComparison.Ordinal), "Pot do korenske nastavitve ne sme biti krhka fiksna relativna pot treh nivojev navzgor.");
 Assert(programText.Contains("MapPost(\"/auth/prijava\"", StringComparison.Ordinal), "Prijavna POST pot mora biti ločena od Razor poti /prijava.");
 Assert(loginText.Contains("action=\"auth/prijava\"", StringComparison.Ordinal), "Prijavni obrazec mora oddati na base-path relativno auth pot.");
@@ -261,12 +262,12 @@ await AssertRefusedAsync("ProductEditService.SaveAttributesAsync",
   () => new ProductEditService(unusableConfiguration, viewerGuard)
     .SaveAttributesAsync(1, 1, [new ProductAttributeEdit("BARVA", "x")], "qa_viewer"));
 await AssertRefusedAsync("SaopWriteService.EnqueueAsync",
-  () => new SaopWriteService(unusableConfiguration, viewerGuard)
+  () => new SaopWriteService(unusableConfiguration, viewerGuard, NullLogger<SaopWriteService>.Instance)
     .EnqueueAsync(1, [("0000000000001", "Product.Name", "x")], "qa_viewer", "CARD", null));
 await AssertRefusedAsync("SaopWriteService.RequeueMessageAsync",
-  () => new SaopWriteService(unusableConfiguration, viewerGuard).RequeueMessageAsync(1, "qa_viewer"));
+  () => new SaopWriteService(unusableConfiguration, viewerGuard, NullLogger<SaopWriteService>.Instance).RequeueMessageAsync(1, "qa_viewer"));
 await AssertRefusedAsync("SaopWriteService.ApproveBatchAsync",
-  () => new SaopWriteService(unusableConfiguration, viewerGuard).ApproveBatchAsync(1, "qa_viewer"));
+  () => new SaopWriteService(unusableConfiguration, viewerGuard, NullLogger<SaopWriteService>.Instance).ApproveBatchAsync(1, "qa_viewer"));
 await AssertRefusedAsync("IntranetDataService.AcknowledgeAlertAsync",
   () => new IntranetDataService(unusableConfiguration, viewerGuard).AcknowledgeAlertAsync(1, 1, "qa_viewer"));
 await AssertRefusedAsync("IntranetDataService.ResolveAlertAsync",

@@ -1,8 +1,8 @@
 @page "/nastavitve"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 
 <PageTitle>Nastavitve kataloga</PageTitle>
-<PimPage Title="Nastavitve kataloga" Subtitle="Šifranti in strukture, ki določajo obliko kataloga. Strani so za zdaj bralne; brez zapisovalne procedure ne prikazujejo navideznega gumba za shranjevanje." />
+<PimPage Title="Nastavitve kataloga" Subtitle="Šifranti in strukture, ki določajo obliko kataloga. Ureja ADMIN in CATALOG_EDITOR; COMMERCIAL ima bralni dostop." />
 
 <section class="hub-grid" aria-label="Področja nastavitev kataloga">
   <PimHubCard Title="Atributi" Href="nastavitve/atributi" Description="Sifrant atributov: slovensko ime, prevodi, preslikave virov in raba pri izdelkih." />
@@ -12,4 +12,5 @@
   <PimHubCard Title="Spletni kanali" Href="nastavitve/kanali" Description="Jezik, kategorijsko drevo in ciljno polje posameznega spletnega mesta." />
   <PimHubCard Title="Jeziki" Href="nastavitve/jeziki" Description="Jezikovne šifre po organizaciji in njihova preslikava v katalog." />
   <PimHubCard Title="Skladišča" Href="nastavitve/skladisca" Description="Šifranti skladišč po organizaciji, kot so prišli iz SAOP." />
+  <PimHubCard Title="Rezervacija zaloge" Href="nastavitve/rezervacija-zaloge" Description="Izdelki, ki jih je SAOP označil kot izločene iz rezervacije zaloge." />
 </section>

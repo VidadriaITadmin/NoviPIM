@@ -1,0 +1,168 @@
+@page "/zajem/novi-artikli"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SupplierCandidateReadService Candidates
+@inject SupplierCandidateWriteService CandidatesWrite
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Novi artikli dobaviteljev</PageTitle>
+<PimPage Title="Novi artikli dobaviteljev" Subtitle="Artikli, ki jih je dobavitelj (NW, BT …) poslal, v PIM-u pa jih (še) ni, ker PIM-ov katalog polni samo SAOP. Odobri ustvari artikel, naslednji zajem vira ga obogati; zavrni ga umakne s seznama." Crumbs="Crumbs" />
+<IngestTabs Active="candidates" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="candidate-filter-title">
+  <h2 id="candidate-filter-title" class="visually-hidden">Filtriranje kandidatov za nove artikle</h2>
+  <label class="visually-hidden" for="candidate-organization">Podjetje</label>
+  <select id="candidate-organization" class="filter-select" @bind="Organization" @bind:after="ApplyAsync">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="candidate-source">Vir</label>
+  <select id="candidate-source" class="filter-select" @bind="Source" @bind:after="ApplyAsync">
+    <option value="">Vsi viri</option>
+    <option value="NW_XML">NW_XML</option>
+    <option value="BT_XML">BT_XML</option>
+  </select>
+
+  <label class="visually-hidden" for="candidate-status">Stanje</label>
+  <select id="candidate-status" class="filter-select" @bind="Status" @bind:after="ApplyAsync">
+    <option value="PENDING">Čaka na odločitev</option>
+    <option value="APPROVED">Odobreni</option>
+    <option value="REJECTED">Zavrnjeni</option>
+    <option value="">Vsa stanja</option>
+  </select>
+
+  <label class="visually-hidden" for="candidate-search">Poišči šifro ali EAN</label>
+  <input id="candidate-search" type="search" class="search-input" placeholder="Šifra ali EAN …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+</section>
+
+@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
+@if (ActionError is not null) { <p class="message-state error-message" role="alert">@ActionError</p> }
+
+<section class="ui-card data-card section-gap" aria-label="Seznam kandidatov za nove artikle">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page?.Rows.Count == 0)" EmptyText="Za izbrane filtre ni kandidatov." LoadingText="Nalaganje kandidatov …">
+    <PimTable Caption="Kandidati za nove artikle po podjetju in viru" Columns="Columns">
+      <Rows>
+        @foreach (var row in Page?.Rows ?? Array.Empty<SupplierProductCandidateRow>())
+        {
+          <tr>
+            <td>@row.OrganizationName</td>
+            <td><strong>@row.ItemId</strong><div class="tree-path">@(row.Ean ?? "brez EAN")</div></td>
+            <td><span class="code-value">@row.SourceCode</span></td>
+            <td>@row.FirstSeenUtc.ToPimLocal().ToString("g")</td>
+            <td>@row.LastSeenUtc.ToPimLocal().ToString("g")</td>
+            <td class="numeric">@row.OccurrenceCount.ToString("N0")</td>
+            <td><PimChip Text="@StatusLabel(row.Status)" Tone="@StatusTone(row.Status)" /></td>
+            <td>
+              @if (row.Status == "PENDING")
+              {
+                @if (RejectingId == row.SupplierProductCandidateId)
+                {
+                  <input class="form-input" placeholder="Razlog zavrnitve …" @bind="RejectReason" />
+                  <button class="small-action warn-action" disabled="@Busy" @onclick="() => RejectAsync(row)">Potrdi zavrnitev</button>
+                  <button class="small-action" @onclick="() => RejectingId = null">Prekliči</button>
+                }
+                else
+                {
+                  <button class="small-action" disabled="@Busy" @onclick="() => ApproveAsync(row)">Odobri</button>
+                  <button class="small-action" disabled="@Busy" @onclick="() => BeginReject(row)">Zavrni …</button>
+                }
+              }
+              else
+              {
+                <span class="muted">@(row.DecidedBy ?? "—") · @(row.DecidedUtc?.ToPimLocal().ToString("g") ?? "—")</span>
+              }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    @if (Page is not null) { <PimPager Skip="Skip" Take="Take" Total="Page.Totals.TotalCount" SkipChanged="OnSkipChangedAsync" Label="Strani kandidatov za nove artikle" /> }
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  SupplierProductCandidatePage? Page;
+  bool Loading = true, Busy;
+  string? Error, Message, ActionError;
+  string Organization = "", Source = "", Status = "PENDING", Search = "";
+  string RejectReason = "";
+  long? RejectingId;
+  int Skip;
+  const int Take = 50;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Novi artikli")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Podjetje"), new("Artikel"), new("Vir"), new("Prvič viden"), new("Nazadnje viden"),
+    new("Ponovitev", Numeric: true), new("Stanje"), new("Dejanje"),
+  ];
+
+  int? OrganizationFilter => int.TryParse(Organization, out var value) ? value : null;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Organizations = []; }
+
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      Page = await Candidates.GetCandidatesAsync(
+        OrganizationFilter, Source == "" ? null : Source, Status == "" ? null : Status, Search, Skip, Take);
+    }
+    catch (Exception ex) { Error = ex.Message; }
+    finally { Loading = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Page?.Totals.TotalCount ?? 0:N0} kandidatov";
+
+  void BeginReject(SupplierProductCandidateRow row) { RejectingId = row.SupplierProductCandidateId; RejectReason = ""; }
+  async Task<string> ActorAsync() => (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  async Task ApproveAsync(SupplierProductCandidateRow row)
+  {
+    Busy = true; ActionError = null;
+    try
+    {
+      await CandidatesWrite.ApproveAsync(row.SupplierProductCandidateId, await ActorAsync());
+      Message = $"Artikel {row.ItemId} je odobren. Obogatitev pride z naslednjim zajemom vira {row.SourceCode}.";
+      await LoadAsync();
+    }
+    catch (Exception ex) { ActionError = ex.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task RejectAsync(SupplierProductCandidateRow row)
+  {
+    Busy = true; ActionError = null;
+    try
+    {
+      await CandidatesWrite.RejectAsync(row.SupplierProductCandidateId, RejectReason, await ActorAsync());
+      Message = $"Artikel {row.ItemId} je zavrnjen.";
+      RejectingId = null;
+      await LoadAsync();
+    }
+    catch (Exception ex) { ActionError = ex.Message; }
+    finally { Busy = false; }
+  }
+
+  static string StatusLabel(string status) => status switch { "PENDING" => "Čaka", "APPROVED" => "Odobren", "REJECTED" => "Zavrnjen", _ => status };
+  static string? StatusTone(string status) => status switch { "PENDING" => "warn", "APPROVED" => "good", "REJECTED" => "bad", _ => null };
+}

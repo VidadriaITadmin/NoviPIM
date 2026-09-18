@@ -1,11 +1,12 @@
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
 using PIM.XmlMapping;
+using PIM.Operations;
 
-var connectionString = LocalConfiguration.GetConnectionString("PIM_CONNECTION_STRING", "Pim");
+var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-  Console.WriteLine("F3 integracija preskočena: manjka PIM_CONNECTION_STRING oziroma ConnectionStrings:Pim v appsettings.Local.json.");
+  Console.WriteLine("F3 integracija preskočena: " + LocalSettings.MissingConnectionMessage());
   return 0;
 }
 

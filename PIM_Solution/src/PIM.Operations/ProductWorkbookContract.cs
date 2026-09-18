@@ -39,7 +39,9 @@ public sealed record SaopWritableField(string FieldKey, string ElementName, stri
 
 /// <param name="Code">Koda v <c>canon.WebSite</c>, npr. <c>svetila_si</c> ali <c>B2C</c>.</param>
 /// <param name="Name">Ime, ki ga uporabnik bere in piše, npr. <c>Svetila.si</c>.</param>
-public sealed record WorkbookWebSite(string Code, string Name);
+/// <param name="CategoryTreeCode">Deli ga jezikovna različica iste strani (npr. <c>svetila_si</c>
+/// in <c>svetila_si_en</c>) — po tem se strani na izpisu združijo v eno ime.</param>
+public sealed record WorkbookWebSite(string Code, string Name, string CategoryTreeCode);
 
 /// <param name="Code">Koda atributa v <c>canon.ProductAttribute</c>.</param>
 /// <param name="Name">Ime za naslov stolpca; kadar prevoda ni, je enako kodi.</param>
@@ -168,6 +170,12 @@ public static class ProductWorkbookContract
           Width: textType.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase) ? 48 : 34));
 
     columns.Add(new(GroupWeb, "Slike", "ProductMedia.Url", ProductWorkbookTarget.ReadOnly, Width: 44,
+      IsMultiValue: true));
+
+    // Vse, kar canon.ProductMedia in canon.ProductDocument nosita in ni slika (dokumenti, videi,
+    // arhivi …) — ista razvrstitev kot na strani Mediji (MediaKindPolicy.Classify), da izvoz in
+    // stran nikoli ne kažeta različnih stvari za isti izdelek.
+    columns.Add(new(GroupWeb, "Dokumenti", "ProductMedia.Documents", ProductWorkbookTarget.ReadOnly, Width: 44,
       IsMultiValue: true));
 
     // --- Atributi ----------------------------------------------------------------------

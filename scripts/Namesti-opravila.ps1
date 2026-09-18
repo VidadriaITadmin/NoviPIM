@@ -6,11 +6,22 @@
   Nacrtovana opravila so po AGENTS.md #4.7 sistemska nastavitev. Ta skripta obstaja zato, da je
   ukaz zapisan, ponovljiv in odstranljiv - ne zato, da bi jo pognal kdorkoli.
 
-  Registrira tri naloge pod tvojim racunom:
+  OD 2026-09-17 TE NALOGE NISO VEC POTREBNE: cikle poganja razporejevalnik v samem intranetu
+  (migracija 221, stran /sistem/workerji, docs/WORKERS.md "Razporejevalnik v aplikaciji") - pod
+  IIS, v Visual Studiu ali z dotnet run. Skripte ciklov se same umaknejo, kadar intranet drzi najem
+  (Sql.ps1, -Vseeno za rocni zagon). Naloge odstrani z -Odstrani; registriraj jih samo, kadar intranet
+  ne tece nikjer in cikle hoces poganjati z racunalnika brez njega.
+
+  Registrira stiri naloge pod tvojim racunom:
 
     PIM nocni tok   vsak dan ob $Ura   cel tok: katalog, XML, zaloga, validacija, izvoz
-    PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP in Braytron XML
+    PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP, Braytron XML, promote, cena+zaloga
+    PIM katalog     vsako uro          promote + poln izvoz (katalog.csv/stranke.csv)
     PIM nadzor      vsakih 5 minut     nadzornik zastalih obdelav in razposiljanje alarmov
+
+  PIM katalog je locena od PIM zaloga zato, ker je poln izvoz (215 stolpcev) tezji od hitrega
+  profila cena+zaloga (14 stolpcev) — uporabnik 2026-09-10 je hotel katalog na uro, ceno in
+  zalogo pa pogosteje; ti dve nalogi to locita, ne da bi poln izvoz tekel vsakih 5 minut.
 
   Nadzor je edini del, ki pove, da se je nekaj ustavilo. Brez njega odpoved ostane tiha -
   izmerjeno 28. 8. 2026 je zaloga padla 18-krat zapored in tega ni izvedel nihce.
@@ -38,25 +49,41 @@
 
 .PARAMETER BrezZaloge
   Registriraj samo nocni tok, brez zalogovnega cikla.
+
+.PARAMETER MapaWorkerjev
+  Strežnik brez izvorne kode: mapa objavljenih workerjev (<mapa>\<Worker>\<Worker>.exe, kot jo
+  naredi PIM_Solution\deploy\Publish-Workers.ps1 oziroma Publish-All.ps1). Vsaka naloga jo dobi kot
+  -MapaWorkerjev in skripte pozenejo .exe namesto dotnet run (glej Workerji.ps1). Privzeto
+  <koren>\Workerji, ce obstaja — pri objavi v eno mapo torej ni treba podati nicesar. Koren je tu
+  mapa nad scripts\ — v njej mora biti appsettings.Local.json ali appsettings.json s povezavo,
+  PIM_Solution\ pa ni potrebna.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
   [ValidatePattern('^\d{2}:\d{2}$')] [string]$Ura = '02:30',
   [switch]$Odstrani,
-  [switch]$BrezZaloge
+  [switch]$BrezZaloge,
+  [string]$MapaWorkerjev = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
 $mestoSkripte = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $koren = Split-Path -Parent $mestoSkripte
-$nocno  = Join-Path $mestoSkripte 'Nocno-vse.ps1'
-$cikel  = Join-Path $mestoSkripte 'Zaloga-cikel.ps1'
-$nadzor = Join-Path $mestoSkripte 'Nadzor.ps1'
+$nocno   = Join-Path $mestoSkripte 'Nocno-vse.ps1'
+$cikel   = Join-Path $mestoSkripte 'Zaloga-cikel.ps1'
+$katalog = Join-Path $mestoSkripte 'Katalog-cikel.ps1'
+$nadzor  = Join-Path $mestoSkripte 'Nadzor.ps1'
+
+# Objava v eno mapo (deploy\Publish-All.ps1): Workerji\ ob korenu velja brez -MapaWorkerjev. Podamo jo
+# nalogam izrecno, da je v registrirani nalogi vidno, od kod tecejo.
+if ([string]::IsNullOrWhiteSpace($MapaWorkerjev) -and (Test-Path (Join-Path $koren 'Workerji'))) {
+  $MapaWorkerjev = Join-Path $koren 'Workerji'
+}
 
 # Stari imeni sta v seznamu zato, da jih -Odstrani pospravi tudi pri tistih, ki so ju ze imeli
 # registrirani; nova namestitev ju ne ustvari vec.
-$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM nadzor', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
+$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM katalog', 'PIM nadzor', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
 
 if ($Odstrani) {
   foreach ($ime in $imena) {
@@ -71,15 +98,16 @@ if ($Odstrani) {
 
 . (Join-Path $mestoSkripte 'Izvajalec.ps1')
 
-foreach ($pot in @($nocno, $cikel, $nadzor)) {
+foreach ($pot in @($nocno, $cikel, $katalog, $nadzor)) {
   if (-not (Test-Path $pot)) { throw "Ni najdena skripta $pot." }
 }
 
 function Registriraj([string]$ime, [string]$skripta, [string[]]$dodatni, $prozilec, [timespan]$meja) {
   # Ukaz zgradi Izvajalec.ps1: naloga ne pozene PowerShella naravnost, ampak prek Tiho.vbs,
   # da konzolnega okna ni niti za trenutek. Zakaj je tako, je zapisano v Tiho.vbs.
-  $ukaz = TihiUkaz -Skripta $skripta -MapaSkript $mestoSkripte `
-                   -Argumenti (@('-KorenRepozitorija', "`"$koren`"") + $dodatni)
+  $skupni = @('-KorenRepozitorija', "`"$koren`"")
+  if (-not [string]::IsNullOrWhiteSpace($MapaWorkerjev)) { $skupni += @('-MapaWorkerjev', "`"$MapaWorkerjev`"") }
+  $ukaz = TihiUkaz -Skripta $skripta -MapaSkript $mestoSkripte -Argumenti ($skupni + $dodatni)
 
   $akcija = New-ScheduledTaskAction -Execute $ukaz.Program -Argument $ukaz.Argumenti -WorkingDirectory $koren
 
@@ -104,8 +132,11 @@ function Registriraj([string]$ime, [string]$skripta, [string[]]$dodatni, $prozil
   # Registriraj). Otroski procesi dotnet run podedujejo isto skrito konzolo in svojega okna
   # ne odprejo.
   if ($PSCmdlet.ShouldProcess($ime, 'Registriraj nacrtovano nalogo')) {
+    # Polno ime (DOMENA\uporabnik): na domenskem racunalniku samo $env:USERNAME Register-ScheduledTask
+    # zavrne z "The parameter is incorrect ... UserId" (izmerjeno 2026-09-14, AD\david).
     Register-ScheduledTask -TaskName $ime -Action $akcija -Trigger $prozilec `
-      -Settings $nastavitve -User $env:USERNAME -RunLevel Limited -Force | Out-Null
+      -Settings $nastavitve -User ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+      -RunLevel Limited -Force | Out-Null
     Write-Output "Registrirana: $ime"
     Write-Output "   $($ukaz.Program) $($ukaz.Argumenti)"
   }
@@ -133,6 +164,10 @@ if (-not $BrezZaloge) {
 
   Registriraj 'PIM zaloga' $cikel @('-Kaj', 'Vse', '-PoUrniku') (Ponavljajoc 5 2) (New-TimeSpan -Minutes 30)
 
+  # Vsako uro, locena od petminutne zaloge (glej opis Katalog-cikel.ps1: poln izvoz je tezji od
+  # hitrega profila cena+zaloga in ne sodi v isti petminutni ritem).
+  Registriraj 'PIM katalog' $katalog @() (Ponavljajoc 60 6) (New-TimeSpan -Minutes 45)
+
   # Nadzor je zamaknjen za dve minuti od zaloge: ce bi tekla hkrati, bi nadzornik lahko razglasil
   # za zastalo izvajanje, ki se je pravkar zacelo.
   Registriraj 'PIM nadzor' $nadzor @() (Ponavljajoc 5 4) (New-TimeSpan -Minutes 15)
@@ -140,5 +175,5 @@ if (-not $BrezZaloge) {
 
 Write-Output ''
 Write-Output 'Preveri z:  Get-ScheduledTask -TaskName "PIM *" | Get-ScheduledTaskInfo'
-Write-Output 'Odstrani z: pwsh -File scripts\Namesti-opravila.ps1 -Odstrani'
-Write-Output 'Dnevniki:   logs\ (nocni tok in zalogovni cikel pisata locena dnevnika)'
+Write-Output 'Odstrani z: powershell -ExecutionPolicy Bypass -File scripts\Namesti-opravila.ps1 -Odstrani'
+Write-Output 'Dnevniki:   logs\ (nocni tok, zalogovni cikel in katalog cikel pisejo loceno)'

@@ -215,13 +215,100 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     if (File.Exists(target) && IstaVsebina(temporary, target))
     {
       File.Delete(temporary);
+
+      // Staranje arhiva tece tudi takrat, ko se vsebina ni spremenila; sicer bi kopije ostale
+      // za vedno pri viru, ki se dolgo ne spreminja.
+      PocistiArhiv(target);
       return new(location.SourceCode, location.Kind, false, new FileInfo(target).Length, target,
         "Dobaviteljeva datoteka je nespremenjena; obdrzimo prejsnjo.", null);
     }
 
     File.Move(temporary, target, overwrite: true);
-    return new(location.SourceCode, location.Kind, true, new FileInfo(target).Length, target, null, null);
+    var arhiv = Arhiviraj(target);
+    return new(location.SourceCode, location.Kind, true, new FileInfo(target).Length, target, null, null, arhiv);
   }
+
+  /// <summary>
+  /// Koliko dni hranimo datirane kopije. Trideset dni pokrije tipicno vprasanje »kaj je bilo v
+  /// datoteki, preden se je cena spremenila« in mesecno primerjavo, ne da bi mapa rasla brez konca.
+  /// </summary>
+  const int ArchiveRetentionDays = 30;
+
+  /// <summary>
+  /// Datirana kopija pravkar prevzete datoteke.
+  ///
+  /// Zakaj: ciljna datoteka se ob vsakem prevzemu prepise, zato je vedno na voljo samo zadnja.
+  /// Ko dobavitelj enkrat poslje veljavno, a napacno vsebino, ni s cim primerjati — in vprasanje
+  /// »kaksna je bila zaloga vceraj ob petih« nima odgovora. Braytronovega XML-ja ni mogoce
+  /// prenesti znova, ker ga sme dobavitelj oddati enkrat na tri ure; izgubljena datoteka je
+  /// izgubljena za vedno.
+  ///
+  /// Kopija nastane SAMO ob resnicni spremembi vsebine (klicatelj je ze ugotovil, da se datoteka
+  /// razlikuje od prejsnje), zato arhiv ne raste ob nespremenjenih prevzemih.
+  ///
+  /// Stisnjeno je zato, ker je Braytronov katalog 19 MB: pri osmih prevzemih na dan bi
+  /// trideset dni pomenilo vec gigabajtov. XML in CSV se stisneta priblizno desetkratno.
+  /// Ziva datoteka ostane nestisnjena in se bere neposredno; stisnjena je samo zgodovina.
+  ///
+  /// Napaka arhiviranja ne sme podreti prevzema: datoteka, ki je prisla, je pomembnejsa od
+  /// kopije o njej.
+  /// </summary>
+  static string? Arhiviraj(string target)
+  {
+    try
+    {
+      var mapa = Path.Combine(Path.GetDirectoryName(target)!, "arhiv");
+      Directory.CreateDirectory(mapa);
+
+      // Cas je UTC in to pove crka Z v imenu. Lokalni cas bi ob premiku ure jeseni dal dve
+      // datoteki z istim imenom in ena bi povozila drugo.
+      //
+      // Sekunde in ne minute: pri minutni locljivosti sta dve spremembi v isti minuti dali isto
+      // ime in druga je povozila prvo. Braytron se sicer spremeni na tri ure, a prevzemnik je
+      // splosen in hitrejsi vir bi tiho izgubljal razlicice.
+      var osnova = Path.GetFileNameWithoutExtension(target);
+      var koncnica = Path.GetExtension(target);
+      var pot = Path.Combine(mapa, $"{osnova}_{DateTime.UtcNow:yyyyMMdd_HHmmss}Z{koncnica}.gz");
+
+      // Zadnja varovalka za isto sekundo: raje dve kopiji kot izgubljena razlicica.
+      for (var zaporedna = 2; File.Exists(pot) && zaporedna < 100; zaporedna++)
+        pot = Path.Combine(mapa, $"{osnova}_{DateTime.UtcNow:yyyyMMdd_HHmmss}Z-{zaporedna}{koncnica}.gz");
+
+      using (var vir = File.OpenRead(target))
+      using (var cilj = File.Create(pot))
+      using (var stiskalnik = new System.IO.Compression.GZipStream(cilj, System.IO.Compression.CompressionLevel.Optimal))
+        vir.CopyTo(stiskalnik);
+
+      PocistiArhiv(target);
+      return pot;
+    }
+    catch (IOException) { return null; }
+    catch (UnauthorizedAccessException) { return null; }
+  }
+
+  /// <summary>
+  /// Odstrani kopije, starejse od <see cref="ArchiveRetentionDays"/> dni. Brise izkljucno
+  /// datoteke te mape, ki se ujemajo z imenom tega vira — nikoli po vzorcu <c>*</c> in nikoli
+  /// zunaj mape <c>arhiv</c>.
+  /// </summary>
+  static void PocistiArhiv(string target)
+  {
+    var mapa = Path.Combine(Path.GetDirectoryName(target)!, "arhiv");
+    if (!Directory.Exists(mapa)) return;
+
+    var meja = DateTime.UtcNow.AddDays(-ArchiveRetentionDays);
+    var vzorec = $"{Path.GetFileNameWithoutExtension(target)}_*Z*{Path.GetExtension(target)}.gz";
+    foreach (var datoteka in Directory.EnumerateFiles(mapa, vzorec))
+    {
+      try
+      {
+        if (File.GetLastWriteTimeUtc(datoteka) < meja) File.Delete(datoteka);
+      }
+      catch (IOException) { }
+      catch (UnauthorizedAccessException) { }
+    }
+  }
+
 
   static bool IstaVsebina(string prva, string druga)
   {
@@ -252,12 +339,4 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
     UnauthorizedAccessException => "Ni pravice za pisanje v ciljno mapo.",
     _ => $"Prevzem ni uspel ({exception.GetType().Name}).",
   };
-
-  /// <summary>Odsek <c>Fetch</c> iz lokalnih nastavitev; prazen dokument, kadar ga ni.</summary>
-  public static JsonElement ReadFetchSection(string? settingsPath)
-  {
-    if (settingsPath is null || !File.Exists(settingsPath)) return default;
-    using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
-    return document.RootElement.TryGetProperty("Fetch", out var fetch) ? fetch.Clone() : default;
-  }
 }

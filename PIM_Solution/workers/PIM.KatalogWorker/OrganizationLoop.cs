@@ -29,7 +29,7 @@ internal static class OrganizationLoop
   internal static async Task<bool> RunAsync<TRun>(
     IReadOnlyList<SaopOrganization> organizations,
     Func<SaopOrganization, Task<TRun>> beginAsync,
-    Func<SaopOrganization, TRun, Task<bool>> workAsync,
+    Func<SaopOrganization, TRun, Task<(bool Succeeded, string? Error)>> workAsync,
     Func<TRun, bool, string?, Task> completeAsync,
     Func<TRun, Task> disposeAsync,
     Action<SaopOrganization, Exception> reportFailure,
@@ -65,9 +65,9 @@ internal static class OrganizationLoop
       try
       {
         run = await beginAsync(organization);
-        var succeeded = await workAsync(organization, run);
+        var (succeeded, error) = await workAsync(organization, run);
         failed |= !succeeded;
-        await completeAsync(run, succeeded, succeeded ? null : "Vsaj ena končna točka ni uspela.");
+        await completeAsync(run, succeeded, succeeded ? null : error ?? "Vsaj ena končna točka ni uspela.");
       }
       catch (Exception exception)
       {

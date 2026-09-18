@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.Data.SqlClient;
 using PIM.B2b;
 using PIM.B2bWorker;
@@ -7,16 +7,16 @@ using PIM.B2bWorker;
 // 1. Pogodba CSV — brez baze.
 // ---------------------------------------------------------------------------
 
-Equal(213, MagentoCsvContract.ProductHeaders.Count, "Magento products mora imeti 213 glav.");
+Equal(176, MagentoCsvContract.ProductHeaders.Count, "Magento products mora imeti 176 glav (216: brez 40 stolpcev \"Enota ...\" in Komentarji).");
 Equal(19, MagentoCsvContract.CustomerHeaders.Count, "Magento customers mora imeti 19 glav.");
 Equal("Šifra artikla", MagentoCsvContract.ProductHeaders[0], "Prva glava izdelkov.");
-Equal("Združljivo z", MagentoCsvContract.ProductHeaders[^1], "Zadnja glava izdelkov.");
+Equal("Rabatna skupina ERP", MagentoCsvContract.ProductHeaders[^1], "Zadnja glava izdelkov.");
 Equal("Šifra stranke", MagentoCsvContract.CustomerHeaders[0], "Prva glava strank.");
 Equal("Popust NW", MagentoCsvContract.CustomerHeaders[^1], "Zadnja glava strank.");
 // Od migracije 050 je glava ključ, po katerem Magento poveže stolpec s svojim atributom.
 // Ključ mora biti enoličen in brez presledka na robu, sicer se povezave ne da narediti
 // ali pa se tiho ne ujame.
-Equal("Enota višine stropne kapice", MagentoCsvContract.ProductHeaders[70], "Glava ne sme imeti presledka na koncu.");
+Equal("Višina stropne kapice [cm]", MagentoCsvContract.ProductHeaders[62], "Glava ne sme imeti presledka na koncu; enota je od 216 v glavi.");
 Equal(true, MagentoCsvContract.ProductHeaders.All(header => header.Length > 0 && header == header.Trim()),
   "Nobena glava izdelkov ne sme biti prazna ali imeti presledka na robu.");
 Equal(MagentoCsvContract.ProductHeaders.Count, MagentoCsvContract.ProductHeaders.Distinct(StringComparer.Ordinal).Count(),
@@ -129,6 +129,7 @@ const string galleryUrl = "https://test.local/f7-gallery.jpg";
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+await CatalogLifecycleTests.RunAsync(connection);
 
 // ---------------------------------------------------------------------------
 // 5a. Register izvoznih stolpcev je resnica o obliki datoteke.
@@ -143,28 +144,29 @@ await connection.OpenAsync();
 var registryProductColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode);
 var registryCustomerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode);
 
-Equal(213, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 213 aktivnih stolpcev.");
+Equal(176, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 176 aktivnih stolpcev.");
 Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
 Equal(true, registryProductColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo izdelkov.");
 Equal(true, registryCustomerColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.CustomerHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo strank.");
-Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 213)),
-  "SortOrder izdelkov mora biti zvezen 1..213.");
+Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 176)),
+  "SortOrder izdelkov mora biti zvezen 1..176.");
 Equal(true, registryCustomerColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 19)),
   "SortOrder strank mora biti zvezen 1..19.");
 
 Equal("Product.ItemID", registryProductColumns[0].CanonicalFieldCode, "Stolpec 1 je sifra artikla.");
-Equal("Product.Pak2", registryProductColumns[32].CanonicalFieldCode, "Stolpec 33 je PAK2.");
-Equal("Product.MainImage", registryProductColumns[37].CanonicalFieldCode, "Stolpec 38 je glavna slika.");
-Equal("Product.OtherImages", registryProductColumns[38].CanonicalFieldCode, "Stolpec 39 so ostale slike.");
-Equal("Attr.Grlo", registryProductColumns[53].CanonicalFieldCode, "Stolpec 54 je prvi atribut.");
+Equal("Product.Pak2", registryProductColumns[26].CanonicalFieldCode, "Stolpec 27 je PAK2.");
+Equal("Product.MainImage", registryProductColumns[31].CanonicalFieldCode, "Stolpec 32 je glavna slika.");
+Equal("Product.OtherImages", registryProductColumns[32].CanonicalFieldCode, "Stolpec 33 so ostale slike.");
+Equal("Attr.Grlo", registryProductColumns[47].CanonicalFieldCode, "Stolpec 48 je prvi atribut.");
 // Stolpec 7 je do migracije 077 sluzil kot primer stolpca brez vira; zdaj ima vir
 // (Product.Supplier), ker sta dobavitelj in merska enota v katalogu od prvega zajema, le objava
 // ju ni nesla naprej. Namen trditve je isti — da se vidi, kateri stolpec ima vir in kateri ne —
-// zato primer prevzame stolpec 13, kjer vira res ni: SAOP poslje tezo brez enote.
+// zato primer prevzame stolpec 28 (Omejitev pri narocanju), kjer vira res ni. Stolpec 13 (Enota bruto
+// teze) je od 216 izklopljen: enota je v glavi "Bruto teza [kg]".
 Equal("Product.Supplier", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 je dobavitelj.");
-Equal("", registryProductColumns[12].CanonicalFieldCode, "Stolpec 13 (Enota bruto teze) nima dolocenega vira.");
+Equal("", registryProductColumns[27].CanonicalFieldCode, "Stolpec 28 (Omejitev pri narocanju) nima dolocenega vira.");
 Equal("Customer.Key", registryCustomerColumns[0].CanonicalFieldCode, "Stolpec 1 strank je sifra.");
 Equal("Customer.MagentoGroup", registryCustomerColumns[5].CanonicalFieldCode, "Stolpec 6 strank je skupina.");
 Equal("Customer.NwDiscount", registryCustomerColumns[18].CanonicalFieldCode, "Stolpec 19 strank je popust NW.");
@@ -243,35 +245,67 @@ await Throws<ExportContractException>(
 // Vzamemo obstojec promoviran izdelek in mu zacasno dodamo dva medija. Novega izdelka
 // ne ustvarjamo - manj posega v skupno stanje, in test brise samo svoji dve vrstici.
 //
-// Od migracije 146 gre v datoteko samo objavljen izdelek, veljaven v vseh profilih, ki
-// blokirajo splet in veljajo za njegovo stran (tu B2C = drevo videlektro). Izbira zato ni vec
-// "prvi po sifri", ampak "prvi, ki na splet sploh sme" — sicer bi test dokazoval izvoz
-// izdelka, ki ga pravilo iz datoteke izloci.
+// Od migracije 201 gre v datoteko samo aktiven izdelek s kljukico spletisca, veljaven v vseh
+// profilih, ki blokirajo splet in veljajo za njegovo stran. Izbira je zato "prvi, ki na splet
+// sploh sme", in to na svetila_si: na videlektro danes ni oznacen noben izdelek, zato tam za
+// splet ni veljaven nihce. Izdelek mora biti brez nabora atributov po kategoriji (147), sicer
+// bi nabor izlocil posajena atributa in test bi dokazoval nabor namesto izvoza.
 long pimProductId;
+long canonProductId;
 string itemId;
+bool videlektroFlagSuspended = false;
 await using (var pick = new SqlCommand("""
-  SELECT TOP(1) promoted.PimProductId, promoted.ItemID
+  SELECT TOP(1) promoted.PimProductId, promoted.ItemID, product.ProductId,
+    HasVidelektro = CASE WHEN EXISTS (SELECT 1 FROM pim.ProductWebShop AS shop
+      WHERE shop.ProductId = product.ProductId AND shop.WebShopCode = N'videlektro' AND shop.IsPublished = 1) THEN 1 ELSE 0 END
   FROM pim.Product AS promoted
   INNER JOIN canon.Product AS product
     ON product.OrganizationId = promoted.OrganizationId AND product.ItemID = promoted.ItemID
-  WHERE promoted.OrganizationId = @OrgId AND product.WebPublish = 1
+  WHERE promoted.OrganizationId = @OrgId AND product.IsActive = 1
+    AND EXISTS (SELECT 1 FROM pim.ProductWebShop AS shop
+                WHERE shop.ProductId = product.ProductId AND shop.WebShopCode = N'svetila_si' AND shop.IsPublished = 1)
+    AND NOT EXISTS (SELECT 1 FROM val.ProductHold AS hold
+                    WHERE hold.ProductId = product.ProductId AND hold.IsActive = 1 AND hold.ChannelCode IN (N'ALL', N'WEB'))
     AND NOT EXISTS
     (
       SELECT 1 FROM val.ValidationProfile AS profile
       LEFT JOIN val.ProductValidationState AS state
         ON state.ProductId = product.ProductId AND state.ValidationProfileId = profile.ValidationProfileId
       WHERE profile.IsActive = 1 AND profile.BlocksWeb = 1
-        AND (profile.CategoryTreeCode IS NULL OR profile.CategoryTreeCode = N'videlektro')
+        AND (profile.CategoryTreeCode IS NULL OR profile.CategoryTreeCode = N'svetila_si')
         AND ISNULL(state.Status, N'INVALID') <> N'VALID'
     )
-  ORDER BY promoted.ItemID;
+    AND NOT EXISTS
+    (
+      SELECT 1 FROM pim.ProductCategory AS category
+      INNER JOIN canon.WebSite AS site ON site.WebSiteCode = category.WebSite
+      INNER JOIN canon.Category AS node
+        ON node.CategoryTreeCode = site.CategoryTreeCode AND node.CategoryPath = category.CategoryPath
+      CROSS APPLY canon.CategoryAttributeEffective(node.CategoryTreeCode, node.CategoryCode) AS effective
+      WHERE category.PimProductId = promoted.PimProductId AND effective.Level <> N'EXCLUDED'
+    )
+  /* Raje izdelek brez kljukice videlektro: dokaz "stran brez kljukice ne gre v izvoz" je tako
+     brez posega. Ce ga ni (masovna oznaka NW je vsem dala obe), se kljukica zacasno umakne. */
+  ORDER BY CASE WHEN EXISTS (SELECT 1 FROM pim.ProductWebShop AS shop
+      WHERE shop.ProductId = product.ProductId AND shop.WebShopCode = N'videlektro' AND shop.IsPublished = 1) THEN 1 ELSE 0 END,
+    promoted.ItemID;
   """, connection))
 {
   pick.Parameters.AddWithValue("@OrgId", organizationId);
   await using var reader = await pick.ExecuteReaderAsync();
-  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni objavljenega in za splet veljavnega izdelka organizacije 2 za dokaz izvoza.");
+  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni aktivnega, za svetila_si oznacenega in veljavnega izdelka organizacije 2 brez nabora atributov za dokaz izvoza.");
   pimProductId = reader.GetInt64(0);
   itemId = reader.GetString(1);
+  canonProductId = reader.GetInt64(2);
+  videlektroFlagSuspended = reader.GetInt32(3) == 1;
+}
+
+if (videlektroFlagSuspended)
+{
+  await using var suspend = new SqlCommand(
+    "UPDATE pim.ProductWebShop SET IsPublished = 0 WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection);
+  suspend.Parameters.AddWithValue("@Id", canonProductId);
+  await suspend.ExecuteNonQueryAsync();
 }
 
 // Zapomnimo si natanko tiste vrstice, ki jih vstavimo. Brisanje po (PimProductId, SortOrder)
@@ -279,6 +313,7 @@ await using (var pick = new SqlCommand("""
 // dovoli testu brisati samo tisto, kar je ustvaril sam.
 var seededMediaIds = new List<long>();
 var seededPriceIds = new List<long>();
+var seededCanonicalPriceIds = new List<long>();
 var seededAttributeIds = new List<long>();
 var seededCategoryIds = new List<long>();
 var seededPriceListIds = new List<int>();
@@ -361,11 +396,28 @@ try
     seededPriceListIds.Add(Convert.ToInt32(await seedRegistry.ExecuteScalarAsync()));
   }
 
+  // 204: current prices are read directly from canon, independently of promotion.
+  foreach (var priceId in seededPriceIds)
+  {
+    await using var seedCanonical = new SqlCommand("""
+      INSERT canon.ProductPrice(ProductId,PriceList,Net,VatRate,ValidFrom,IsActive)
+      OUTPUT INSERTED.ProductPriceId
+      SELECT @ProductId,PriceList,Net,VatRate,ValidFrom,IsActive
+      FROM pim.ProductPrice WHERE PimProductPriceId=@PriceId;
+      """, connection);
+    seedCanonical.Parameters.AddWithValue("@ProductId", canonProductId);
+    seedCanonical.Parameters.AddWithValue("@PriceId", priceId);
+    seededCanonicalPriceIds.Add(Convert.ToInt64(await seedCanonical.ExecuteScalarAsync()));
+  }
+
+  // Poti ne obstajajo v canon.Category, zato ne prinesejo nabora atributov (147). Tretja je na
+  // B2C (drevo videlektro), za katerega izdelek nima kljukice — ne sme priti v izvoz.
   await using (var seedCategory = new SqlCommand("""
     INSERT pim.ProductCategory (PimProductId, WebSite, CategoryPath)
     OUTPUT INSERTED.PimProductCategoryId
-    VALUES (@PimProductId, N'B2C', N'Svetila/Stropne'),
-           (@PimProductId, N'B2C_EN', N'Lights/Ceiling');
+    VALUES (@PimProductId, N'svetila_si', N'F7 Svetila/Stropne'),
+           (@PimProductId, N'svetila_si_en', N'F7 Lights/Ceiling'),
+           (@PimProductId, N'B2C', N'F7 Vid/Brez kljukice');
     """, connection))
   {
     seedCategory.Parameters.AddWithValue("@PimProductId", pimProductId);
@@ -383,7 +435,7 @@ try
     """, connection))
   {
     seedAttribute.Parameters.AddWithValue("@PimProductId", pimProductId);
-    seedAttribute.Parameters.AddWithValue("@AttributeCode", MagentoCsvContract.ProductHeaders[53].Trim());
+    seedAttribute.Parameters.AddWithValue("@AttributeCode", MagentoCsvContract.ProductHeaders[47].Trim());
     await using var attributeReader = await seedAttribute.ExecuteReaderAsync();
     while (await attributeReader.ReadAsync()) seededAttributeIds.Add(attributeReader.GetInt64(0));
   }
@@ -408,14 +460,15 @@ try
   //   - izklopljen (IsActive=0) prag stranke se mora vrniti na privzeti prag;
   //   - potekel skupinski rabat ne sme v izvoz;
   //   - veljaven skupinski rabat mora v izvoz.
+  // Od migracije 202 gre v izvoz vsaka aktivna stranka, zato jo test ustvari aktivno.
   // ---------------------------------------------------------------------------
 
   const string customerKey = "F7-TEST-KUPEC";
 
   await using (var seedCustomer = new SqlCommand("""
-    INSERT b2b.Customer (OrganizationId, CustomerKey, Name, PayerCode, PayerName, PriceListCode)
+    INSERT b2b.Customer (OrganizationId, CustomerKey, Name, PayerCode, PayerName, PriceListCode, IsActive)
     OUTPUT INSERTED.CustomerId
-    VALUES (@OrgId, @CustomerKey, N'F7 testni kupec', N'PL-1', N'F7 placnik', N'CENIK-1');
+    VALUES (@OrgId, @CustomerKey, N'F7 testni kupec', N'PL-1', N'F7 placnik', N'CENIK-1', 1);
     """, connection))
   {
     seedCustomer.Parameters.AddWithValue("@OrgId", organizationId);
@@ -426,7 +479,7 @@ try
   await using (var seedProfile = new SqlCommand("""
     INSERT pim.CustomerWebProfile (CustomerId, CustomerTypeCode, PackagingDiscountEnabled, ValueDiscountEnabled, B2bPlusEnabled, WebEnabled)
     -- B2B+ je VKLOPLJEN, a mu je okno poteklo: izvoz mora javiti 0, ne 1.
-    VALUES (@CustomerId, NULL, 1, 1, 1, 1);
+    VALUES (@CustomerId, (SELECT TOP (1) CustomerTypeCode FROM pim.CustomerTypeCatalog ORDER BY CustomerTypeCode), 1, 1, 1, 1);
     UPDATE pim.CustomerWebProfile SET B2bPlusValidFrom='2020-01-01', B2bPlusValidTo='2020-12-31'
     WHERE CustomerId=@CustomerId;
 
@@ -461,17 +514,17 @@ try
 
   await MagentoExportCommand.ExecuteAsync(organizationId, exportDirectory, connectionString);
 
-  var productsCsv = Path.Combine(exportDirectory, "magento-products.csv");
-  var customersCsv = Path.Combine(exportDirectory, "magento-customers.csv");
-  Equal(true, File.Exists(productsCsv), "Ukaz mora ustvariti magento-products.csv.");
-  Equal(true, File.Exists(customersCsv), "Ukaz mora ustvariti magento-customers.csv.");
+  var productsCsv = Path.Combine(exportDirectory, "katalog.csv");
+  var customersCsv = Path.Combine(exportDirectory, "stranke.csv");
+  Equal(true, File.Exists(productsCsv), "Ukaz mora ustvariti katalog.csv.");
+  Equal(true, File.Exists(customersCsv), "Ukaz mora ustvariti stranke.csv.");
 
   var productLines = (await File.ReadAllTextAsync(productsCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
   var customerLines = (await File.ReadAllTextAsync(customersCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-  Equal(213, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora imeti 213 stolpcev.");
+  Equal(176, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora imeti 176 stolpcev.");
   Equal(19, SplitCsvLine(customerLines[0]).Count, "Glava strank mora imeti 19 stolpcev.");
   Equal(true, productLines.Length > 1, "Izvoz mora vrniti vsaj eno vrstico izdelka — če je SQL padel, jih ni.");
 
@@ -479,11 +532,11 @@ try
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
     ?? throw new InvalidOperationException($"Izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-  Equal(213, row.Count, "Vrstica izdelka mora imeti 213 stolpcev.");
-  Equal("111.11", row[28], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
-  Equal("222.22", row[27],
+  Equal(176, row.Count, "Vrstica izdelka mora imeti 176 stolpcev.");
+  Equal("111.11", row[22], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
+  Equal("222.22", row[21],
     "Cena B2B mora priti iz cenika, ki ga doloca out.ExportPriceList — sifre F7_CENIK v programu ni.");
-  Equal("E27", row[53], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
+  Equal("E27", row[47], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
 
   var slovenianColumn = MagentoCsvContract.ProductHeaders
     .Select((header, index) => (header, index))
@@ -495,11 +548,16 @@ try
   Equal("Kovina", row[slovenianColumn],
     "Atribut z jezikom 'sl' mora pristati v stolpcu s pripono SLO — jezik se v glavo zlozi nazaj.");
 
-  // Kategorije: WebSite B2C -> slovenski stolpec, B2C_EN -> angleski.
+  // Kategorije: svetila_si -> slovenski stolpec, svetila_si_en -> angleski (izdelek ima lahko ze
+  // svoje poti, zato Contains). Pot na B2C (drevo videlektro) ne sme priti nikamor: izdelek nima
+  // kljukice za videlektro, zato je ta stran zanj zaprta, cetudi ima tam kategorijo (201).
   if (seededCategoryIds.Count > 0)
   {
-    Equal("Svetila/Stropne", row[26], "Stolpec 'Kategorije vid SLO' mora vsebovati pot iz B2C.");
-    Equal("Lights/Ceiling", row[25], "Stolpec 'Kategorije vid ANG' mora vsebovati pot iz B2C_EN.");
+    Contains(row[18], "F7 Svetila/Stropne", "Stolpec 'Kategorije svetila SLO' mora vsebovati pot iz svetila_si.");
+    Contains(row[17], "F7 Lights/Ceiling", "Stolpec 'Kategorije svetila ANG' mora vsebovati pot iz svetila_si_en.");
+    Equal(false, row[20].Contains("F7 Vid/Brez kljukice", StringComparison.Ordinal),
+      "Kategorija na spletiscu brez kljukice ne sme v izvoz.");
+    Equal(false, row[2].Split('|').Contains("B2C"), "Stolpec 'Spletne strani' ne sme nasteti strani brez kljukice.");
   }
 
   // Socasni izvoz v isto mapo mora pasti z jasnim sporocilom, ne objaviti mesanega para.
@@ -509,9 +567,9 @@ try
       () => MagentoExportCommand.ExecuteAsync(organizationId, exportDirectory, connectionString, CancellationToken.None),
       "Drugi socasni izvoz v isto mapo mora pasti.");
   }
-  Equal(primaryUrl, row[37], "Stolpec 'Glavna slika' mora vsebovati medij z vlogo PRIMARY.");
-  Contains(row[38], galleryUrl, "Stolpec 'Ostale slike' mora vsebovati medij z vlogo GALLERY.");
-  Equal(false, row[38].Contains(primaryUrl, StringComparison.Ordinal),
+  Equal(primaryUrl, row[31], "Stolpec 'Glavna slika' mora vsebovati medij z vlogo PRIMARY.");
+  Contains(row[32], galleryUrl, "Stolpec 'Ostale slike' mora vsebovati medij z vlogo GALLERY.");
+  Equal(false, row[32].Contains(primaryUrl, StringComparison.Ordinal),
     "Glavna slika se ne sme podvojiti med ostalimi slikami.");
 
   // --- Negativni preizkus registra cenikov -------------------------------
@@ -531,15 +589,15 @@ try
     await MagentoExportCommand.ExecuteAsync(organizationId, registryExportDirectory, connectionString);
 
     var withoutRegistry = (await File.ReadAllTextAsync(
-        Path.Combine(registryExportDirectory, "magento-products.csv"), Encoding.UTF8))
+        Path.Combine(registryExportDirectory, "katalog.csv"), Encoding.UTF8))
       .Split('\n', StringSplitOptions.RemoveEmptyEntries)
       .Skip(1).Select(SplitCsvLine)
       .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
       ?? throw new InvalidOperationException($"Drugi izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-    Equal("", withoutRegistry[27],
+    Equal("", withoutRegistry[21],
       "Brez aktivne vrstice registra mora stolpec 'Cena B2B' ostati prazen, cetudi cena v bazi obstaja.");
-    Equal("111.11", withoutRegistry[28],
+    Equal("111.11", withoutRegistry[22],
       "Izklop vrstice za B2B ne sme vplivati na stolpec 'Cena B2C'.");
   }
 
@@ -569,6 +627,58 @@ try
     "Prihodnji skupinski rabat ne sme biti izvozen.");
   Equal("11", customerRow[18], "Popust NW mora priti iz veljavnega rabata.");
 
+  // --- Pravilo iz migracije 201 -------------------------------------------
+  // Isti postopek, ki ga bere worker, z iskanjem po sifri: izdelek brez kljukice za svoje
+  // spletisce ne sme v katalog; stranka ne sme, ce ni aktivna ali nima tipa. Kljukica se takoj
+  // vrne, stranko pobrise finally.
+  async Task<List<string>> ExportKeysAsync(string profileCode, string search)
+  {
+    await using var command = new SqlCommand("""
+      DECLARE @ProfileId int = (SELECT ExportProfileId FROM out.ExportProfile WHERE ProfileCode = @ProfileCode AND IsActive = 1);
+      DECLARE @Total int;
+      EXEC out.GetExportRows @OrganizationId = @OrgId, @ExportProfileId = @ProfileId, @OnlyPublished = 1,
+        @Search = @Search, @Take = 0, @TotalCount = @Total OUTPUT;
+      """, connection) { CommandTimeout = 600 };
+    command.Parameters.AddWithValue("@ProfileCode", profileCode);
+    command.Parameters.AddWithValue("@OrgId", organizationId);
+    command.Parameters.AddWithValue("@Search", search);
+    var keys = new List<string>();
+    await using var reader = await command.ExecuteReaderAsync();
+    while (await reader.ReadAsync()) keys.Add(reader.IsDBNull(0) ? "" : reader.GetString(0));
+    return keys;
+  }
+
+  async Task ExecuteForIdAsync(string sql, long id)
+  {
+    await using var command = new SqlCommand(sql, connection);
+    command.Parameters.AddWithValue("@Id", id);
+    await command.ExecuteNonQueryAsync();
+  }
+
+  Equal(true, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
+    "Aktiven, za svetila_si oznacen in veljaven izdelek mora biti v katalogu.");
+  try
+  {
+    await ExecuteForIdAsync("UPDATE pim.ProductWebShop SET IsPublished = 0 WHERE ProductId = @Id AND WebShopCode = N'svetila_si';", canonProductId);
+    Equal(false, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
+      "Izdelek brez kljukice za svetila_si ne sme v katalog, cetudi ima kategorijo in je veljaven.");
+  }
+  finally
+  {
+    await ExecuteForIdAsync("UPDATE pim.ProductWebShop SET IsPublished = 1 WHERE ProductId = @Id AND WebShopCode = N'svetila_si';", canonProductId);
+  }
+
+  // Stranke (202): steje samo aktivnost iz SAOP. Oznaka Splet in tip nista pogoj — uporabnik
+  // 2026-09-15: "ta splet kljukica se tice samo artiklov".
+  Equal(true, (await ExportKeysAsync("MAGENTO_CUSTOMERS", customerKey)).Contains(customerKey),
+    "Aktivna stranka mora biti v izvozu.");
+  await ExecuteForIdAsync("UPDATE b2b.Customer SET IsActive = 0 WHERE CustomerId = @Id;", seededCustomerId!.Value);
+  Equal(false, (await ExportKeysAsync("MAGENTO_CUSTOMERS", customerKey)).Contains(customerKey),
+    "Neaktivna stranka ne sme v izvoz.");
+  await ExecuteForIdAsync("UPDATE b2b.Customer SET IsActive = 1 WHERE CustomerId = @Id; UPDATE pim.CustomerWebProfile SET CustomerTypeCode = NULL, WebEnabled = 0 WHERE CustomerId = @Id;", seededCustomerId!.Value);
+  Equal(true, (await ExportKeysAsync("MAGENTO_CUSTOMERS", customerKey)).Contains(customerKey),
+    "Aktivna stranka brez tipa in brez oznake Splet mora v izvoz — pri strankah steje samo aktivnost (202).");
+
   // Datoteki sta par: po uspesnem izvozu ne sme ostati nobena zacasna datoteka.
   Equal(0, Directory.GetFiles(exportDirectory, "*.tmp").Length,
     "Po uspesnem izvozu ne sme ostati nobena .tmp datoteka.");
@@ -587,9 +697,9 @@ try
       organizationId, exportDirectory, "Server=ne-obstaja-f7;Database=PIM;Connect Timeout=2;Encrypt=False", CancellationToken.None),
     "Izvoz z nedosegljivo bazo mora pasti.");
   Equal(productBefore, await File.ReadAllTextAsync(productsCsv, Encoding.UTF8),
-    "Padli izvoz ne sme spremeniti magento-products.csv.");
+    "Padli izvoz ne sme spremeniti katalog.csv.");
   Equal(customerBefore, await File.ReadAllTextAsync(customersCsv, Encoding.UTF8),
-    "Padli izvoz ne sme spremeniti magento-customers.csv.");
+    "Padli izvoz ne sme spremeniti stranke.csv.");
   Equal(0, Directory.GetFiles(exportDirectory, "*.tmp").Length,
     "Padli izvoz ne sme pustiti .tmp datotek.");
   Equal(true, File.Exists(markerPath), "Padli izvoz mora pustiti oznako, ker prejsnji par ostane veljaven.");
@@ -604,12 +714,12 @@ try
       "Izvoz z zaklenjeno datoteko strank mora pasti.");
   }
 
-  Equal(true, File.Exists(productsCsv), "Po padcu pri zamenjavi mora magento-products.csv se obstajati.");
-  Equal(true, File.Exists(customersCsv), "Po padcu pri zamenjavi mora magento-customers.csv se obstajati.");
+  Equal(true, File.Exists(productsCsv), "Po padcu pri zamenjavi mora katalog.csv se obstajati.");
+  Equal(true, File.Exists(customersCsv), "Po padcu pri zamenjavi mora stranke.csv se obstajati.");
   Equal(productBefore, await File.ReadAllTextAsync(productsCsv, Encoding.UTF8),
-    "Padec pri zamenjavi ne sme spremeniti magento-products.csv.");
+    "Padec pri zamenjavi ne sme spremeniti katalog.csv.");
   Equal(customerBefore, await File.ReadAllTextAsync(customersCsv, Encoding.UTF8),
-    "Padec pri zamenjavi ne sme spremeniti magento-customers.csv.");
+    "Padec pri zamenjavi ne sme spremeniti stranke.csv.");
   Equal(0, Directory.GetFiles(exportDirectory, "*.tmp").Length, "Ne sme ostati .tmp datoteka.");
   Equal(0, Directory.GetFiles(exportDirectory, "*.prej").Length, "Ne sme ostati .prej datoteka.");
   Equal(true, File.Exists(markerPath), "Po povratku mora oznaka spet veljati za vrnjeni par.");
@@ -618,6 +728,14 @@ try
 }
 finally
 {
+  if (videlektroFlagSuspended)
+  {
+    await using var restore = new SqlCommand(
+      "UPDATE pim.ProductWebShop SET IsPublished = 1 WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection);
+    restore.Parameters.AddWithValue("@Id", canonProductId);
+    await restore.ExecuteNonQueryAsync();
+  }
+
   // Brisanje po vstavljenih identitetah, ne po (PimProductId, SortOrder).
   if (seededMediaIds.Count > 0)
   {
@@ -657,6 +775,13 @@ finally
     for (var index = 0; index < seededPriceIds.Count; index++)
       cleanupPrices.Parameters.AddWithValue(priceParameters[index], seededPriceIds[index]);
     await cleanupPrices.ExecuteNonQueryAsync();
+  }
+
+  foreach (var priceId in seededCanonicalPriceIds)
+  {
+    await using var cleanup = new SqlCommand("DELETE canon.ProductPrice WHERE ProductPriceId=@Id;", connection);
+    cleanup.Parameters.AddWithValue("@Id", priceId);
+    await cleanup.ExecuteNonQueryAsync();
   }
 
   // Testna stranka in vse, kar visi na njej. Vse te vrstice je ustvaril ta test in nobena

@@ -142,15 +142,7 @@ await using (var summaryConnection = new SqlConnection(connectionString))
 await operationsRun.CompleteAsync(true);
 return 0;
 
-static string? ReadConnectionString()
-{
-  var value = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-  if (!string.IsNullOrWhiteSpace(value)) return value;
-  var path = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Local.json");
-  if (!File.Exists(path)) return null;
-  using var document = JsonDocument.Parse(File.ReadAllText(path));
-  return document.RootElement.GetProperty("ConnectionStrings").GetProperty("Pim").GetString();
-}
+static string? ReadConnectionString() => LocalSettings.ConnectionString();
 static async Task<string[]> ReadEntitiesAsync(SqlConnection connection, string sourceCode, int organizationId)
 {
   await using var command = new SqlCommand("""

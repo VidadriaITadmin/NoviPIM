@@ -43,6 +43,11 @@ param(
   [int]$SteTeceUr = 6,
   [string]$KorenRepozitorija = '',
 
+  # Mapa objavljenih workerjev (<mapa>\<Worker>\<Worker>.exe). Ce je podana, tece .exe namesto
+  # dotnet run in gradnja se preskoci — tako nocni tok tece na strezniku brez izvorne kode.
+  # Glej Workerji.ps1. Privzeto PIM_PUBLISHED_WORKERS.
+  [string]$MapaWorkerjev = $env:PIM_PUBLISHED_WORKERS,
+
   # Mape virov. Privzetki so fixture mape v repozitoriju; ko dobavitelj postavi datoteke drugam,
   # se spremeni parameter nacrtovane naloge in ne skripta.
   [string]$MapaNwXml = '',
@@ -53,6 +58,10 @@ param(
 
   # Podjetja, ki jih obdelamo pri virih, kjer podjetje ni del datoteke.
   [int[]]$Podjetja = @(1, 2, 3, 4),
+
+  # Podjetje, katerega artikli in stranke gredo v katalog.csv/stranke.csv (korak 8). Samo eno,
+  # namenoma — glej opis parametra -PodjetjeKataloga v Katalog-cikel.ps1 (uporabnik 2026-09-15).
+  [int]$PodjetjeKataloga = 2,
 
   # Zivi klic na SAOP za kolicine zaloge. Privzeto izklopljen (AGENTS.md #4.5).
   [switch]$ZalogaIzSaop,
@@ -68,7 +77,10 @@ param(
 
   # Preskoci zajem iz SAOP. Rabi se dvakrat: kadar je ERP v vzdrzevanju in kadar se preizkusa
   # sama skripta — vse ostalo tece iz datotek in iz baze, brez enega samega klica navzven.
-  [switch]$BrezSaopKataloga
+  [switch]$BrezSaopKataloga,
+
+  # Pozeni tudi, ce cikle ze poganja razporejevalnik v aplikaciji (glej spodaj).
+  [switch]$Vseeno
 )
 
 $ErrorActionPreference = 'Stop'
@@ -81,10 +93,9 @@ if ([string]::IsNullOrWhiteSpace($KorenRepozitorija)) {
 $resitev = Join-Path $KorenRepozitorija 'PIM_Solution'
 if ([string]::IsNullOrWhiteSpace($MapaNwXml))   { $MapaNwXml = Join-Path $resitev 'fixtures\nw' }
 if ([string]::IsNullOrWhiteSpace($MapaBtXml))   { $MapaBtXml = Join-Path $resitev 'fixtures\bt' }
-# Zaloga se bere iz mape, kamor jo polozi prevzemnik, ne iz fixtures: fixtures so testni podatki
-# in ziv prenos jih ne sme povoziti. 2026-08-27 se je prav to zgodilo in podrlo tri teste F6.
-if ([string]::IsNullOrWhiteSpace($MapaZalogNw)) { $MapaZalogNw = Join-Path $resitev 'data\prevzem\NW_STOCK' }
-if ([string]::IsNullOrWhiteSpace($MapaZalogBt)) { $MapaZalogBt = Join-Path $resitev 'data\prevzem\BT_STOCK' }
+# Privzetek za -MapaZalogNw/-MapaZalogBt je spodaj, ko je znana povezava: isti koren prevzema, kot
+# ga uporabi prevzemnik (register LANDING_ROOT), ne fixtures — fixtures so testni podatki in ziv
+# prenos jih ne sme povoziti (2026-08-27 je prav to podrlo tri teste F6).
 
 $mapaDnevnikov = Join-Path $KorenRepozitorija 'logs'
 if (-not (Test-Path $mapaDnevnikov)) { New-Item -ItemType Directory -Path $mapaDnevnikov | Out-Null }
@@ -121,13 +132,30 @@ function Zapisi([string]$vrstica) {
 }
 
 # --- povezava: ista pot kot jo uporablja worker -----------------------------
-$povezava = $env:PIM_CONNECTION_STRING
-if ([string]::IsNullOrWhiteSpace($povezava)) {
-  $lokalne = Join-Path $KorenRepozitorija 'appsettings.Local.json'
-  if (-not (Test-Path $lokalne)) { Zapisi 'NAPAKA: ni PIM_CONNECTION_STRING in ni appsettings.Local.json.'; exit 99 }
-  $povezava = (Get-Content $lokalne -Raw | ConvertFrom-Json).ConnectionStrings.Pim
-}
+# PimPovezava (Sql.ps1): okolje, sicer appsettings.Local.json, sicer appsettings.json v korenu.
+. (Join-Path $PSScriptRoot 'Sql.ps1')
+try { $povezava = PimPovezava $KorenRepozitorija }
+catch { Zapisi "NAPAKA: $($_.Exception.Message)"; exit 99 }
 $env:PIM_CONNECTION_STRING = $povezava
+
+# Razporejevalnik v aplikaciji (2026-09-17, migracija 221): kadar intranet drzi najem v
+# ops.SchedulerLease, ta cikel ze poganja sam; naloga Windows bi ga pognala se enkrat. -Vseeno
+# je za cloveka, ki skripto pozene rocno in hoce izid zdaj.
+if (-not $Vseeno) {
+  $lastnikRazporejevalnika = PimRazporejevalnikVAplikaciji $env:PIM_CONNECTION_STRING
+  if ($lastnikRazporejevalnika) {
+    Zapisi "PRESKOCENO: cikel poganja razporejevalnik v aplikaciji ($lastnikRazporejevalnika). Windows naloga ni vec potrebna - odstrani jo z scripts\Namesti-opravila.ps1 -Odstrani. Za rocni zagon kljub temu dodaj -Vseeno."
+    exit 0
+  }
+}
+
+
+# Koren prevzema: isti kot ga uporabi PIM.SourceFetchWorker (PimPotPrevzema v Sql.ps1). Korak 1a ga
+# prevzemniku poda z --target, korak 5 iz njega bere — zato se ne moreta raziti.
+try { $prevzem = PimPotPrevzema $povezava $resitev }
+catch { Zapisi "OPOZORILO: register LANDING_ROOT ni dosegljiv ($($_.Exception.Message)); velja privzetek."; $prevzem = Join-Path $resitev 'data\prevzem' }
+if ([string]::IsNullOrWhiteSpace($MapaZalogNw)) { $MapaZalogNw = Join-Path $prevzem 'NW_STOCK' }
+if ([string]::IsNullOrWhiteSpace($MapaZalogBt)) { $MapaZalogBt = Join-Path $prevzem 'BT_STOCK' }
 
 # Poizvedbe gredo skozi sqlcmd, ne skozi ADO.NET. Razlog je prakticen: Microsoft.Data.SqlClient
 # je paket NuGet in ne del PowerShella, ob rocnem nalaganju iz izhoda gradnje pa potrebuje se
@@ -196,26 +224,8 @@ function Korak([string]$ime, [scriptblock]$delo) {
   }
 }
 
-function PozeniWorker([string]$projekt, [string[]]$argumenti) {
-  $prej = Get-Location
-  try {
-    Set-Location $resitev
-    # Enak vzorec kot v Nocni-zajem.ps1: pod 'Stop' bi prva vrstica na stderr postala
-    # terminirajoca napaka in korak bi padel brez tega, kar je worker o napaki povedal.
-    # Merilo uspeha je izhodna koda, ne to, ali je worker kaj napisal na stderr.
-    $prejsnjaObravnava = $ErrorActionPreference
-    try {
-      $ErrorActionPreference = 'Continue'
-      & dotnet run --project $projekt --no-build -- @argumenti 2>&1 | ForEach-Object {
-        if ($_ -is [System.Management.Automation.ErrorRecord]) { Zapisi "   STDERR: $($_.Exception.Message)" }
-        else { Zapisi "   $_" }
-      }
-    }
-    finally { $ErrorActionPreference = $prejsnjaObravnava }
-    if ($LASTEXITCODE -ne 0) { throw "worker $projekt je končal z izhodno kodo $LASTEXITCODE" }
-  }
-  finally { Set-Location $prej }
-}
+# PozeniWorker (objavljen .exe ali dotnet run) je skupen v Workerji.ps1.
+. (Join-Path $PSScriptRoot 'Workerji.ps1')
 
 function ZajemXml([string]$sifraVira, [string]$mapa, [int]$podjetje) {
   if (-not (Test-Path $mapa)) { Zapisi "   preskočeno: mape $mapa ni"; return }
@@ -267,7 +277,11 @@ Zapisi "Dnevnik: $dnevnik"
 # --- 0. gradnja -------------------------------------------------------------
 # Workerji tecejo z --no-build, ker bi sicer vsak od dvajsetih zagonov znova prevajal isto
 # resitev. Zgradi se torej enkrat na zacetku; ce gradnja pade, ni smisla poganjati nicesar.
-if (-not $BrezGradnje) {
+# Z objavljenimi workerji (-MapaWorkerjev) ni cesa graditi: .exe so ze zgrajeni, PIM.sln pa ni.
+if (-not [string]::IsNullOrWhiteSpace($MapaWorkerjev)) {
+  Zapisi "== Gradnja == preskočeno: objavljeni workerji v $MapaWorkerjev."
+}
+elseif (-not $BrezGradnje) {
   Zapisi '== Gradnja =='
   $prej = Get-Location
   try {
@@ -307,7 +321,7 @@ if ($BrezPrevzema) {
   Zapisi '== Prevzem datotek == preskočeno: stikalo -BrezPrevzema.'
 }
 else {
-  Korak 'Prevzem dobaviteljevih datotek' { PozeniWorker 'workers\PIM.SourceFetchWorker' @() }
+  Korak 'Prevzem dobaviteljevih datotek' { PozeniWorker 'workers\PIM.SourceFetchWorker' @('--target', $prevzem) }
 }
 
 # --- 2. Dobaviteljev XML ----------------------------------------------------
@@ -353,6 +367,12 @@ if ($ZalogaIzSaop) {
     $env:PIM_SAOP_MODE = 'Live'
     PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','))
   }
+  # Datumi in kolicine prihoda (migracija 189, GetItemDeliveryDate) so en klic na artikel — sem
+  # sodijo, v nocni tek, ne v petminutni cikel same zaloge (Zaloga-cikel.ps1).
+  Korak 'Zaloga iz SAOP (datumi prihoda)' {
+    $env:PIM_SAOP_MODE = 'Live'
+    PozeniWorker 'workers\PIM.SaopStockWorker' @('--organizations', ($Podjetja -join ','), '--dostave')
+  }
 }
 else {
   Zapisi '== Zaloga iz SAOP == preskočeno: brez stikala -ZalogaIzSaop (živ klic je odločitev človeka).'
@@ -369,12 +389,11 @@ Korak 'Validacija in objava' {
 
 # --- 8. Izvoz ---------------------------------------------------------------
 if (-not $BrezIzvoza) {
-  Korak 'Magento izvoz' {
-    foreach ($o in $Podjetja) {
-      $izhod = Join-Path $KorenRepozitorija "izvoz\magento\$o"
-      if (-not (Test-Path $izhod)) { New-Item -ItemType Directory -Path $izhod -Force | Out-Null }
-      PozeniWorker 'workers\PIM.B2bWorker' @('--export-magento', '--organization-id', "$o", '--output-dir', $izhod)
-    }
+  Korak 'Izvoz kataloga in strank' {
+    # En par datotek (katalog.csv, stranke.csv), samo -PodjetjeKataloga; ne po en na podjetje.
+    # Ciljna mapa ni vec tu: worker jo sam razresi (register ops.SystemPath, kljuc EXPORT_ROOT;
+    # glej scripts\Nastavi-izvozno-pot.ps1).
+    PozeniWorker 'workers\PIM.B2bWorker' @('--export-magento', '--organization-id', "$PodjetjeKataloga")
   }
 }
 

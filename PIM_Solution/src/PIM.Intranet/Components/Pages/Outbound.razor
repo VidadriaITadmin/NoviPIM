@@ -1,47 +1,308 @@
 @page "/outbound"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
+@using PIM.Outbound
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject SaopWriteService Write
+@inject SaopItemWriteService ItemWrite
+@inject PIM.Intranet.Services.SaopOrganizationContext OrgContext
 @inject AuthenticationStateProvider Authentication
 <PageTitle>Izvozi</PageTitle>
-<div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev sporočilo samo uvrsti v čakalno vrsto.</p></div></div>
-@* Povezav na druge strani tu ni vec kot zavihkov: videti so kot preklop pogleda, v resnici
-   pa zamenjajo stran in z njo navigacijsko drevo. Odlocitev uporabnika 2026-08-28. *@
-@if (Rows is not null) {
-  <section class="kpi-grid" aria-labelledby="outbound-kpi-title">
-    <h2 id="outbound-kpi-title" class="visually-hidden">Hitri pregled izvozov</h2>
-    <article class="ui-card kpi"><span>Čaka na odobritev</span><strong>@(Rows.Count(x=>x.Status=="PendingApproval").ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x=>x.Status=="PendingApproval"))</span></article>
-    <article class="ui-card kpi"><span>V čakalni vrsti</span><strong>@(Rows.Count(x=>x.Status is "Pending" or "Retry").ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x=>x.Status is "Pending" or "Retry"))</span></article>
-    <article class="ui-card kpi"><span>Napake dostave</span><strong>@(Rows.Count(x=>x.Status is "Error" or "Dead").ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x=>x.Status is "Error" or "Dead"))</span></article>
-    <article class="ui-card kpi"><span>Zaznani odkloni</span><strong>@(Rows.Count(x=>x.DriftDetail is not null).ToString("N0"))</strong><span class="kpi-share">@Share(Rows.Count(x=>x.DriftDetail is not null))</span></article>
-  </section> }
+<div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev poskusi takoj poslati v SAOP; brez nastavljenih poverilnic samo uvrsti v čakalno vrsto za worker.</p></div></div>
+<PimTabs Active="queue" Tabs="SaopTabs.Tabs" Label="Pogledi izhoda v SAOP" />
 <section class="ui-card toolbar" role="search" aria-labelledby="outbound-filter-title">
   <h2 id="outbound-filter-title" class="visually-hidden">Filtriranje izvozov</h2>
-  <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči cilj, entiteto ali ključ …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in Statuses) { <option>@status</option> }</select>
+  <label class="visually-hidden" for="out-org">Podjetje</label><select id="out-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">@foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }</select>
+  <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči šifro artikla …" @bind="Search" @bind:event="oninput" />
+  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option>@status</option> }</select>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  <button type="button" class="small-action" disabled="@Loading" @onclick="RefreshAsync">Osveži</button>
 </section>
-<section class="ui-card data-card" aria-label="Seznam odhodnih sporočil">
+@if (Selected.Count > 0) {
+  <section class="ui-card toolbar bulk-actions" role="toolbar" aria-label="Skupinska dejanja za izbrane artikle">
+    <span class="result-count" role="status" aria-live="polite">Izbranih artiklov: @Selected.Count</span>
+    <button type="button" class="small-action good-action" disabled="@ActionBusy" @onclick="ApproveSelected">Odobri izbrane artikle</button>
+    <button type="button" class="small-action" disabled="@ActionBusy" @onclick="CancelSelected">Prekliči izbrane artikle</button>
+  </section>
+}
+<section class="ui-card data-card" aria-label="Artikli v odhodni vrsti">
 @if (Loading) { <div class="loading-state" role="status">Nalaganje izvozov …</div> }
 else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
-else if (Filtered.Count == 0) { <div class="empty-state">Ni izvozov za izbrane filtre.</div> }
+else if (FilteredArticles.Count == 0) { <div class="empty-state">Ni artiklov za izbrane filtre — vse, kar je bilo odobreno, poslano ali preklicano, je v Zgodovini.</div> }
 else {
-  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odhodnih sporočil">
-    <p class="visually-hidden">Dedup ključ preprečuje podvojeno aktivno odhodno sporočilo z enakim kanoničnim payloadom.</p>
-<table class="data-table"><caption>Odhodna sporočila aktivne organizacije</caption><thead><tr><th scope="col">Cilj</th><th scope="col">Operacija</th><th scope="col">Entiteta</th><th scope="col">Polja</th><th scope="col">Status</th><th scope="col" class="numeric">Poskusi</th><th scope="col">Naslednji poskus</th><th scope="col">Odziv</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var row in PageRows) { <tr><td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(row.Status)</span></td><td class="numeric">@row.AttemptCount.ToString("N0")</td><td>@(row.NextAttemptUtc?.ToLocalTime().ToString("g") ?? "—")</td><td>@ResponseSummary(row)</td><td>@if (row.DriftDetail is not null) { <span class="drift-flag">@row.DriftDetail</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (row.Status=="PendingApproval") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri sporočilo @row.EntityType @row.EntityKey" @onclick="()=>Approve(row.OutboxMessageId)">Odobri</button> }@if (row.Status is "PendingApproval" or "Pending" or "Error" or "Retry") { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči sporočilo @row.EntityType @row.EntityKey" @onclick="()=>Cancel(row.OutboxMessageId)">Prekliči</button> }@if (row.Status is "Error" or "Dead") { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Ponovi sporočilo @row.EntityType @row.EntityKey" @onclick="()=>Retry(row.OutboxMessageId)">Ponovi</button> }</div></td></tr> }</tbody></table>
+  <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela artiklov v odhodni vrsti">
+<table class="data-table"><caption>En artikel je ena vrstica, ne glede na to, koliko njegovih polj je spremenjenih. Odobritev in preklic veljata za cel artikel.</caption><thead><tr><th scope="col"><input type="checkbox" aria-label="Izberi vse na strani" checked="@AllOnPageSelected" @onchange="e=>ToggleAllOnPage((bool)e.Value!)" /></th><th scope="col">Šifra</th><th scope="col">Operacija</th><th scope="col" class="numeric">Polja</th><th scope="col">Status</th><th scope="col">Zadnja sprememba</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var article in PageArticles) { <tr><td>@if (article.CanApprove || article.CanCancel) { <input type="checkbox" aria-label="Izberi @article.EntityKey" checked="@Selected.Contains((article.EntityType,article.EntityKey))" @onchange="e=>ToggleRow((article.EntityType,article.EntityKey),(bool)e.Value!)" /> }</td><td><strong>@article.EntityKey</strong></td><td>@article.Operation</td><td class="numeric">@article.FieldCount.ToString("N0")</td><td><span class="status-chip @Chip(article.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(article.Status)</span></td><td>@article.LastChangeUtc.ToPimLocal().ToString("g")</td><td>@if (article.HasDrift) { <span class="drift-flag">odklon</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (article.CanApprove) { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri artikel @article.EntityKey" @onclick="()=>Approve(article.EntityType,article.EntityKey)">Odobri</button> }@if (article.CanCancel) { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči artikel @article.EntityKey" @onclick="()=>Cancel(article.EntityType,article.EntityKey)">Prekliči</button> }@if (article.CanRetry) { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Ponovi artikel @article.EntityKey" @onclick="()=>RetryArticle(article)">Ponovi</button> }@if (article.Status is "Pending" or "Retry") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Pošlji zdaj @article.EntityKey" @onclick="()=>SendNow(article)">Pošlji zdaj</button> }@if (article.ErrorReason is not null) { <button type="button" class="small-action warn-action" @onclick="()=>OpenError(article.EntityKey,article.ErrorReason!)">Poglej napako</button> }<button type="button" class="small-action" disabled="@ActionBusy" aria-label="Poglej XML za @article.EntityKey" @onclick="()=>OpenXmlAsync(article)">Poglej XML</button></div></td></tr> }</tbody></table>
   </div>
   <nav class="pagination" aria-label="Strani naloženih izvozov"><button type="button" disabled="@(CurrentPage==0)" @onclick="Previous">Prejšnja</button><span class="page-position">Stran @(CurrentPage+1) od @PageCount</span><button type="button" disabled="@(CurrentPage+1>=PageCount)" @onclick="Next">Naslednja</button></nav> }
 </section>
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
-@code{int? OrganizationId;IReadOnlyList<PIM.Intranet.Services.OutboundRow>? Rows;bool Loading=true,ActionBusy;string? Message,Error;string Search="",StatusFilter="";int Page;const int PageSize=10;IReadOnlyList<PIM.Intranet.Services.OutboundRow> Filtered=>(Rows??[]).Where(x=>(StatusFilter==""||x.Status==StatusFilter)&&(Search==""||x.TargetKind.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityType.Contains(Search,StringComparison.OrdinalIgnoreCase)||x.EntityKey.Contains(Search,StringComparison.OrdinalIgnoreCase))).ToList();IEnumerable<PIM.Intranet.Services.OutboundRow> PageRows=>Filtered.Skip(CurrentPage*PageSize).Take(PageSize);IEnumerable<string> Statuses=>(Rows??[]).Select(x=>x.Status).Distinct().Order();int PageCount=>Math.Max(1,(int)Math.Ceiling(Filtered.Count/(decimal)PageSize));
+
+@* Podrobnosti po polju: eno sporočilo na spremenjeno polje, tocno tako, kot je zapisano v
+   out.OutboxMessage. Za vsakdanjo rabo je nepotrebno (artikel zgoraj je ze ena vrstica); ostane
+   kot dodatna tabela za administratorja, ki bi sicer moral gledati naravnost v bazo. Privzeto
+   zaprto, ker podvaja isto vsebino kot zgornja tabela. *@
+@if (Rows is { Count: > 0 }) {
+  <details class="field-detail">
+    <summary>Podrobnosti po polju (za administratorja) — @Rows.Count sporočil</summary>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odhodnih sporočil po polju">
+<table class="data-table"><caption>Eno sporočilo na spremenjeno polje, kot je zapisano v out.OutboxMessage.</caption><thead><tr><th scope="col">Cilj</th><th scope="col">Operacija</th><th scope="col">Entiteta</th><th scope="col">Polja</th><th scope="col">Status</th><th scope="col" class="numeric">Poskusi</th><th scope="col">Naslednji poskus</th><th scope="col">Odziv</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var row in Rows.OrderByDescending(r=>r.CreatedUtc)) { <tr><td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(row.Status)</span></td><td class="numeric">@row.AttemptCount.ToString("N0")</td><td>@(row.NextAttemptUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@ResponseSummary(row)</td><td>@if (row.DriftDetail is not null) { <span class="drift-flag">@row.DriftDetail</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (row.Status=="PendingApproval") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri artikel @row.EntityType @row.EntityKey" @onclick="()=>Approve(row.EntityType,row.EntityKey)">Odobri</button> }@if (row.Status is "PendingApproval" or "Pending" or "Error" or "Retry") { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči artikel @row.EntityType @row.EntityKey" @onclick="()=>Cancel(row.EntityType,row.EntityKey)">Prekliči</button> }@if (row.Status is "Error" or "Dead") { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Ponovi sporočilo @row.EntityType @row.EntityKey" @onclick="()=>RetryMessage(row.OutboxMessageId)">Ponovi</button> }@if (!string.IsNullOrWhiteSpace(row.LastError)) { <button type="button" class="small-action warn-action" @onclick="()=>OpenErrorForRow(row)">Poglej napako</button> }</div></td></tr> }</tbody></table>
+    </div>
+  </details>
+}
+
+@if (XmlPreviewArticle is { } previewArticle) {
+  <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Predogled dokumenta SAOP" @onclick="CloseXml">
+    <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
+      <header>
+        <div>
+          <strong>@previewArticle.EntityKey</strong>
+          <span>@(XmlPreviewPlan is { } headerPlan ? $"{headerPlan.Operation} {headerPlan.Path}" : XmlLoading ? "Sestavljanje …" : "")</span>
+        </div>
+        <button type="button" class="small-action" @onclick="CloseXml">Zapri</button>
+      </header>
+      <div class="xml-lightbox-body">
+        @if (XmlLoading) { <p>Nalaganje …</p> }
+        else if (XmlError is not null) { <p class="error-state" role="alert">@XmlError</p> }
+        else if (XmlPreviewPlan is { } plan) {
+          @if (plan.Error is not null) { <p class="error-state" role="alert">@plan.Error</p> }
+          else {
+            @if (plan.MissingMandatory.Count > 0) { <p class="message-state warn-message">Manjka obvezno polje: @string.Join(", ", plan.MissingMandatory)</p> }
+            <pre>@plan.Xml</pre>
+          }
+        }
+      </div>
+      <footer>
+        <span class="result-count">@(XmlPreviewPlan is { Error: null } shown ? $"{shown.ChangeCount} spremenjenih polj, {shown.ElementCount} elementov v dokumentu." : "")</span>
+      </footer>
+    </div>
+  </div>
+}
+
+@* Razlog zavrnitve SAOP v pojavnem oknu namesto v vrstici — uporabnikova zahteva, da vrstica
+   ostane pregledna in razlog vidiš samo, ko ga hočeš videti. *@
+@if (ErrorPreview is { } errorPreview) {
+  <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Napaka pošiljanja" @onclick="CloseError">
+    <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
+      <header>
+        <div><strong>@errorPreview.Title</strong><span>Napaka pošiljanja</span></div>
+        <button type="button" class="small-action" @onclick="CloseError">Zapri</button>
+      </header>
+      <div class="xml-lightbox-body"><p class="error-state" role="alert">@errorPreview.Detail</p></div>
+    </div>
+  </div>
+}
+
+@code{
+  int? OrganizationId;IReadOnlyList<PIM.Intranet.Services.OutboundRow>? Rows;bool Loading=true,ActionBusy;string? Message,Error;string Search="",StatusFilter="";int Page;const int PageSize=10;
+  // Brez izbirnika je stran vedno kazala samo podjetje z najnizjo sifro (GetCurrentOrganizationAsync
+  // vedno vrne to) — artikli za katero koli drugo podjetje so bili tu nevidni, ceprav so bili v
+  // vrsti. Enak izbirnik kot na strani Artikli (SaopItems.razor).
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
+
+  /* --- artikel = ena vrstica, ne glede na stevilo spremenjenih polj ------- */
+  static readonly string[] Terminal = ["Verified","Succeeded","Completed","Cancelled","Superseded"];
+  // Vrstni red pove, kateri status "zmaga", kadar ima en artikel vec polj v razlicnih stanjih —
+  // najprej tisto, kar terja pozornost ali dejanje, nazadnje tisto, kar samo caka na worker.
+  static readonly string[] StatusPriority = ["Error","Dead","PendingApproval","Retry","Pending","Sending","Drift","Sent"];
+
+  sealed record ArticleRow(string EntityType, string EntityKey, string Operation, IReadOnlyList<PIM.Intranet.Services.OutboundRow> Messages)
+  {
+    public int FieldCount => Messages.Count;
+    public DateTime LastChangeUtc => Messages.Max(m => m.CreatedUtc);
+    public bool HasDrift => Messages.Any(m => m.DriftDetail is not null);
+    public string Status => StatusPriority.FirstOrDefault(candidate => Messages.Any(m => m.Status == candidate)) ?? Messages[0].Status;
+    public bool CanApprove => Messages.Any(m => m.Status == "PendingApproval");
+    public bool CanCancel => Messages.Any(m => m.Status is "PendingApproval" or "Pending" or "Error" or "Retry");
+    public bool CanRetry => Messages.Any(m => m.Status is "Error" or "Dead");
+    // Razlog zavrnitve SAOP (ali povezave) — vidnost, ki jo je zahteval uporabnik: status Error
+    // sam po sebi ne pove nic, dokler zraven ne stoji ta stavek.
+    public string? ErrorReason => Messages.Where(m => m.Status is "Error" or "Dead")
+      .Select(m => m.LastError).FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
+  }
+
+  // Artikel, ki nima vec nobenega aktivnega polja (vse je Verified/Cancelled/…), tu ne spada —
+  // je ze v Zgodovini. Ta stran je namenoma samo tisto, kar se dogaja, ne vse, kar se je zgodilo.
+  IReadOnlyList<ArticleRow> Articles => (Rows ?? [])
+    .GroupBy(row => (row.EntityType, row.EntityKey))
+    .Where(group => group.Any(row => !Terminal.Contains(row.Status)))
+    .Select(group => new ArticleRow(group.Key.EntityType, group.Key.EntityKey, group.First().Operation, group.ToArray()))
+    .ToArray();
+  IReadOnlyList<string> ArticleStatuses => Articles.Select(a => a.Status).Distinct().Order().ToArray();
+  IReadOnlyList<ArticleRow> FilteredArticles => Articles
+    .Where(a => (StatusFilter == "" || a.Status == StatusFilter)
+      && (Search == "" || a.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+    .OrderByDescending(a => a.LastChangeUtc).ToList();
+  IEnumerable<ArticleRow> PageArticles => FilteredArticles.Skip(CurrentPage*PageSize).Take(PageSize);
+  int PageCount=>Math.Max(1,(int)Math.Ceiling(FilteredArticles.Count/(decimal)PageSize));
+
   // Po zožitvi filtra je lahko izbrana stran izven obsega; izpiše se zadnja obstoječa, ne prazna.
   int CurrentPage => Math.Min(Page, PageCount - 1);
   void Previous()=>Page=Math.Max(0,CurrentPage-1);void Next()=>Page=Math.Min(PageCount-1,CurrentPage+1);
-  protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}OrganizationId=org.OrganizationId;await Reload();}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value);}async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}async Task Act(Func<string,Task> action,string success){ActionBusy=true;Error=null;Message=null;try{await action(await Actor());Message=success;await Reload();}catch{Error="Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena.";}finally{ActionBusy=false;}}Task Approve(long id)=>Act(actor=>Data.ApproveOutboundAsync(id,actor),"Sporočilo je odobreno.");Task Cancel(long id)=>Act(actor=>Data.CancelOutboundAsync(id,actor),"Sporočilo je preklicano.");Task Retry(long id)=>Act(actor=>Data.RetryOutboundAsync(id,actor),"Sporočilo je pripravljeno za ponovni poskus.");static string Chip(string value)=>value is "Verified" or "Succeeded" or "Completed"?"good":value is "Error" or "Dead" or "Drift" or "Cancelled"?"bad":"warn";
+  protected override async Task OnInitializedAsync(){try{Organizations=await Data.GetOrganizationsAsync();var org=await Data.GetCurrentOrganizationAsync();OrganizationId=OrgContext.OrganizationId??org?.OrganizationId??Organizations.FirstOrDefault()?.OrganizationId;if(OrganizationId is null){Error="Aktivna organizacija ni na voljo.";return;}OrgContext.OrganizationId=OrganizationId;await Reload();}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
+  async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value);}
+  async Task OnOrganizationChangedAsync(ChangeEventArgs args)
+  {
+    if (!int.TryParse(args.Value?.ToString(), out var organizationId) || organizationId == OrganizationId) return;
+    OrganizationId = organizationId;
+    OrgContext.OrganizationId = organizationId;
+    Selected.Clear();
+    Page = 0;
+    Loading = true; Error = null; Message = null;
+    try { await Reload(); }
+    catch { Error = "Izvozov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+  async Task RefreshAsync(){Error=null;try{await Reload();}catch{Error="Osvežitev ni uspela.";}}
+  async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}
+  async Task Act(Func<string,Task> action,string success){ActionBusy=true;Error=null;Message=null;try{await action(await Actor());Message=success;await Reload();}catch{Error="Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena.";}finally{ActionBusy=false;}}
+
+  // Odobritev/preklic velja za CEL artikel (vsa cakajoca polja naenkrat), ne za eno vrstico —
+  // worker itak pobere in poslje vse spremembe artikla v enem klicu (migracija 152), zato bi
+  // odobritev polje-za-polje uporabnika silila v vec klikov za isti artikel.
+  async Task Approve(string entityType, string entityKey)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await Actor();
+      await Data.ApproveItemAsync(OrganizationId!.Value, entityType, entityKey, actor);
+      // Po odobritvi TAKOJ poskusi poslati TA artikel (po sifri, glej TrySendArticleAsync) —
+      // ne najstarejsega v vrsti.
+      Message = "Artikel je odobren. " + SendMessage(await Write.TrySendArticleAsync(OrganizationId!.Value, entityKey));
+      await Reload();
+    }
+    catch { Error = "Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena."; }
+    finally { ActionBusy = false; }
+  }
+  Task Cancel(string entityType, string entityKey)=>Act(actor=>Data.CancelItemAsync(OrganizationId!.Value,entityType,entityKey,actor),"Artikel je preklican.");
+  // Rocni "poslji zdaj" za artikel, ki je ze odobren (Pending/Retry) in samo caka na worker —
+  // brez tega ni bilo nobenega nacina, da uporabnik sam sprozi posiljanje po odobritvi.
+  async Task SendNow(ArticleRow article)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try { Message = SendMessage(await Write.TrySendArticleAsync(OrganizationId!.Value, article.EntityKey)); await Reload(); }
+    catch { Error = "Dejanja trenutno ni mogoče izvesti."; }
+    finally { ActionBusy = false; }
+  }
+  Task RetryMessage(long id)=>Act(actor=>Data.RetryOutboundAsync(id,actor),"Sporočilo je pripravljeno za ponovni poskus.");
+  async Task RetryArticle(ArticleRow article)
+  {
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await Actor();
+      foreach (var message in article.Messages.Where(m => m.Status is "Error" or "Dead"))
+        await Data.RetryOutboundAsync(message.OutboxMessageId, actor);
+      Message = "Artikel je pripravljen za ponovni poskus.";
+      await Reload();
+    }
+    catch { Error = "Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena."; }
+    finally { ActionBusy = false; }
+  }
+  // Skupno besedilo za posamezno IN skupinsko posiljanje — Notes je ena vrstica na dokument
+  // (npr. "NW.12603: PATCH uspesno"), enaka oblika kot pri worker CLI.
+  static string SendMessage(SaopSendBatchResult send)
+  {
+    if (send.NotConfigured) return "SAOP poverilnice niso nastavljene na tem strežniku — čaka na worker.";
+    if (send.Documents == 0) return "Ni bilo česa poslati.";
+    var detail = send.Notes.Count > 0 ? " " + string.Join(" ", send.Notes) : "";
+    return send.Failed == 0 ? $"Poslano v SAOP: {send.Sent} od {send.Documents}.{detail}"
+      : $"Poslano v SAOP: {send.Sent} od {send.Documents}, ni uspelo: {send.Failed}.{detail}";
+  }
+  static string Chip(string value)=>value is "Sent" or "Verified" or "Succeeded" or "Completed"?"good":value is "Error" or "Dead" or "Drift" or "Cancelled"?"bad":"warn";
+
+  /* --- izbor artiklov in skupinsko dejanje -------------------------------- */
+  HashSet<(string EntityType,string EntityKey)> Selected = [];
+  bool AllOnPageSelected => PageArticles.Any(a=>a.CanApprove||a.CanCancel) && PageArticles.Where(a=>a.CanApprove||a.CanCancel).All(a=>Selected.Contains((a.EntityType,a.EntityKey)));
+  void ToggleRow((string EntityType,string EntityKey) key, bool value){ if(value) Selected.Add(key); else Selected.Remove(key); }
+  void ToggleAllOnPage(bool value){ foreach(var a in PageArticles.Where(a=>a.CanApprove||a.CanCancel)){ if(value) Selected.Add((a.EntityType,a.EntityKey)); else Selected.Remove((a.EntityType,a.EntityKey)); } }
+  async Task ActBulk(Func<string,(string EntityType,string EntityKey),Task> action, string doneWord)
+  {
+    var articles = Selected.ToArray();
+    if (articles.Length == 0) return;
+    ActionBusy = true; Error = null; Message = null;
+    var actor = await Actor();
+    var ok = 0; var failed = new List<string>();
+    foreach (var article in articles)
+    {
+      try { await action(actor, article); ok++; }
+      catch { failed.Add($"{article.EntityType} {article.EntityKey}"); }
+    }
+    Selected.Clear();
+    await Reload();
+    Message = failed.Count == 0
+      ? $"{doneWord}: {ok} artiklov."
+      : $"{doneWord}: {ok} artiklov, ni uspelo za: {string.Join(", ", failed)}.";
+    ActionBusy = false;
+  }
+  Task CancelSelected() => ActBulk((actor,article)=>Data.CancelItemAsync(OrganizationId!.Value,article.EntityType,article.EntityKey,actor), "Preklicano");
+  // Skupinska odobritev odobri vsakega izbranega in ga TAKOJ posebej poslje (isti TrySendArticleAsync
+  // kot pri eni vrstici) — vsak artikel po svoji sifri, ne po vrstnem redu v vrsti.
+  async Task ApproveSelected()
+  {
+    var articles = Selected.ToArray();
+    if (articles.Length == 0) return;
+    ActionBusy = true; Error = null; Message = null;
+    var actor = await Actor();
+    var ok = 0; var failed = new List<string>(); var sendNotes = new List<string>();
+    foreach (var article in articles)
+    {
+      try
+      {
+        await Data.ApproveItemAsync(OrganizationId!.Value, article.EntityType, article.EntityKey, actor);
+        ok++;
+        var send = await Write.TrySendArticleAsync(OrganizationId!.Value, article.EntityKey);
+        sendNotes.Add($"{article.EntityKey}: {SendMessage(send)}");
+      }
+      catch { failed.Add($"{article.EntityType} {article.EntityKey}"); }
+    }
+    Selected.Clear();
+    await Reload();
+    var approved = failed.Count == 0 ? $"Odobreno: {ok} artiklov." : $"Odobreno: {ok} artiklov, ni uspelo za: {string.Join(", ", failed)}.";
+    Message = sendNotes.Count == 0 ? approved : $"{approved} {string.Join(" ", sendNotes)}";
+    ActionBusy = false;
+  }
+
+  /* --- predogled XML v pojavnem oknu --------------------------------------
+     Isti gradnik kot na strani Artikli (SaopItemPlanner): pogodba + trenutno stanje artikla +
+     spremembe, ki ze cakajo v vrsti (GetPendingOverlayAsync — ista storitev, ki jih tam ze kaze
+     kot prekrivko). Nic se ne prevzame (out.ClaimItemDocument) in nic se ne poslje. */
+  ArticleRow? XmlPreviewArticle; SaopItemPlan? XmlPreviewPlan; bool XmlLoading; string? XmlError;
+  async Task OpenXmlAsync(ArticleRow article)
+  {
+    XmlPreviewArticle = article; XmlPreviewPlan = null; XmlError = null; XmlLoading = true;
+    try
+    {
+      var overlay = await Write.GetPendingOverlayAsync(OrganizationId!.Value, [article.EntityKey]);
+      var changes = overlay.Where(o => o.EntityKey == article.EntityKey)
+        .ToDictionary(o => o.FieldKey, o => o.Value, StringComparer.Ordinal);
+      XmlPreviewPlan = await ItemWrite.PreviewQueuedAsync(OrganizationId!.Value, article.EntityKey, changes);
+    }
+    catch { XmlError = "Dokumenta trenutno ni bilo mogoče sestaviti."; }
+    finally { XmlLoading = false; }
+  }
+  void CloseXml(){ XmlPreviewArticle = null; XmlPreviewPlan = null; XmlError = null; }
+
+  /* --- razlog napake v pojavnem oknu -------------------------------------- */
+  (string Title, string Detail)? ErrorPreview;
+  void OpenError(string title, string detail) => ErrorPreview = (title, detail);
+  void OpenErrorForRow(PIM.Intranet.Services.OutboundRow row) => OpenError($"{row.EntityType} {row.EntityKey}", row.LastError ?? "");
+  void CloseError() => ErrorPreview = null;
+
   // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary=>Loading?"Nalaganje …":Error is not null?"Rezultati niso na voljo":$"{Filtered.Count} rezultatov";
-  // Delež je izpeljan iz istega nabora vrstic; brez vrstic ni imenovalca in se zato ne prikaže.
-  string Share(int count)=>Rows is null||Rows.Count == 0?"—":$"{((decimal)count*100/Rows.Count).ToString("0.#")} % sporočil";
+  string ResultSummary=>Loading?"Nalaganje …":Error is not null?"Rezultati niso na voljo":$"{FilteredArticles.Count} artiklov";
   // Odziv sestavljata koda in korelacijski ključ; kadar ju procedura ne vrne, ostane celica pošteno prazna.
   static string ResponseSummary(PIM.Intranet.Services.OutboundRow row){var parts=new[]{row.ResponseStatusCode?.ToString(System.Globalization.CultureInfo.InvariantCulture),row.ResponseCorrelationId}.Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray();return parts.Length==0?"—":string.Join(" ",parts);}
-  static string StatusLabel(string status)=>status=="Sent"?"Poslano, nepotrjeno":status;}
+  // Uporabnikova zahteva: navzven samo "Poslano" ali "Napaka", ne cel notranji seznam stanj —
+  // razlika Sent/Verified (potrjeno ali ne) in Error/Dead/Retry (zakaj tocno) ostane v out.OutboxMessage
+  // in v gumbu "Poglej napako", ne v tem nazivu.
+  static string StatusLabel(string status)=>status switch
+  {
+    "PendingApproval" => "Čaka odobritev",
+    "Sent" or "Verified" or "Succeeded" or "Completed" => "Poslano",
+    "Error" or "Dead" or "Drift" => "Napaka",
+    "Cancelled" => "Preklicano",
+    "Superseded" => "Nadomeščeno",
+    _ => "V obdelavi",
+  };
+}

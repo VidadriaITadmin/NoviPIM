@@ -18,28 +18,16 @@ appsettings.Local.json
 # logi in delovni imeniki
 *.log
 .tmp-debug/
-.hermes/
-
-# referencni stari sistem (ni del tega repozitorija)
-/PIM_test/
-
-# razno
-.DS_Store
-
-# artefakt preusmeritve "> NUL" v POSIX lupini (NUL tam ni naprava, ampak datoteka)
-NUL
-**/NUL
+.tmp/
 logs/
 
 # Excelove zaklepne datoteke
 ~$*
 **/~$*
 
-# izhod nocnega opravila (Magento CSV, do 14 MB na podjetje)
+# izhod nocnega opravila / izvozi za splet (cene in podatki strank - ne sodijo v repozitorij)
 izvoz/
 
-# lokalna pomozna skripta za migrator (bere appsettings.Local.json, absolutna pot tega racunalnika)
-/.migrate.ps1
-
-# izhod orodja SaopXmlPreview (generirani PATCH XML iz pravega kataloga)
-PIM_Solution/tools/PIM.SaopXmlPreview/primeri/
+# lokalni dotnet publish izhod (testni self-contained publish)
+publish/
+appsettings.Local.json

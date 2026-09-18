@@ -27,6 +27,12 @@
 
 .card-note summary { color: var(--pim-text-strong); cursor: pointer; font-weight: 600; }
 
+.title-rule-picker { align-items: end; display: grid; gap: .75rem 1rem; grid-template-columns: minmax(220px, 1.2fr) minmax(260px, 1fr) auto; margin-bottom: 1rem; padding: 1rem 1.15rem; }
+.title-rule-picker h2 { color: var(--pim-text-strong); font-size: .95rem; margin: 0 0 .2rem; }
+.title-rule-picker p { color: var(--pim-text-muted); font-size: .76rem; line-height: 1.45; margin: 0; }
+.empty-title-start { align-items: center; background: var(--pim-surface-subtle); border: 1px dashed var(--pim-border-strong); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; padding: .75rem; }
+.empty-title-start p { color: var(--pim-text-muted); flex: 1 1 100%; font-size: .8rem; margin: 0; }
+
 /* --- Jezikovni "chip" gumbi v predogledu -------------------------------------------------- */
 
 .lang-chips { display: flex; gap: .35rem; }
@@ -110,3 +116,5 @@
 .picker-list button:hover { background: var(--pim-surface-hover); }
 
 .template { background: var(--pim-neutral-bg); border-radius: var(--pim-radius-xs); font-size: .78rem; padding: .1rem .35rem; }
+
+@media (max-width: 900px) { .title-rule-picker { align-items: stretch; grid-template-columns: 1fr; } }

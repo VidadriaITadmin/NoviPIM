@@ -2,4 +2,18 @@
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/PIM.StockMapping/PIM.StockMapping.csproj" /><ProjectReference Include="../../src/PIM.Operations/PIM.Operations.csproj" /></ItemGroup>
   <ItemGroup><PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" /></ItemGroup>
+  <!--
+    StockLandingWriter.cs v tej mapi je zastarel izvod. Pisalna pot zaloge se je preselila v
+    PIM.StockMapping (glej glavo src/PIM.StockMapping/StockLandingWriter.cs), ker jo poleg
+    datotecnega workerja potrebuje se PIM.SaopStockWorker. Ta izvod se je ob zadnjem kopiranju
+    delovne kopije vrnil in prevajanje pade z CS0104 (dvoumna referenca).
+
+    Da razlika ostane vidna, datoteke ne brisemo brez odlocitve cloveka (AGENTS.md §4.1), ampak
+    jo izkljucimo iz prevajanja. Dokaz, da je pravi izvod v PIM.StockMapping: oba klicatelja
+    (Program.cs:85, PIM.SaopStockWorker/SaopStockRunner.cs:104) razstavljata cetverec, ta izvod
+    pa vraca trojcek; PIM.F6.ContractTests bere pogodbo iz src/PIM.StockMapping.
+
+    Ko clovek potrdi brisanje, se ta ItemGroup odstrani skupaj z datoteko.
+  -->
+  <ItemGroup><Compile Remove="StockLandingWriter.cs" /></ItemGroup>
 </Project>

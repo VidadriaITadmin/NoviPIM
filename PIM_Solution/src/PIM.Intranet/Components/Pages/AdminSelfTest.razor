@@ -1,0 +1,142 @@
+@page "/sistem/samotest"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject AuthenticationStateProvider Authentication
+
+@*
+  Zgodovina nočnega samotesta.
+
+  En zagon pove, ali je sistem nocoj deloval. Šele zaporedje zagonov pove, ali se stanje
+  slabša — in prav to je vprašanje, na katero doslej ni bilo mogoče odgovoriti: vsak kos je
+  imel svoj zeleni test, celota pa nobenega.
+
+  Trajanje je tu enakovredno izidu. Test, ki je še vedno PASS, a traja trikrat dlje kot pred
+  mesecem, je opozorilo, ki ga status sam ne pove.
+
+  Prenova 2026-09-10: koraki zadnjega zagona (prej "oblacki" na /sistem) so se preselili sem —
+  na pregledni strani so bili predolg seznam, tu pa so natanko to, kar uporabnik pride iskat.
+*@
+
+<PageTitle>Nočni samotest</PageTitle>
+<PimPage Title="Nočni samotest"
+         Subtitle="@($"Ali je celota delovala vsako noč, kje se je ustavila in koliko časa je potrebovala. Časi so v naši uri ({PimTime.ZoneLabel}).")"
+         Crumbs="Crumbs">
+  <Actions>
+    <button type="button" class="filter-button" disabled="@Loading" @onclick="NaloziAsync">Osveži</button>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="samotest" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+<div class="message-state info-message">
+  Samotest samo bere in sestavi eno začasno datoteko; ne kliče SAOP-a, ne pošilja ničesar in
+  ne spreminja podatkov. Zaganja ga načrtovano opravilo
+  <span class="code-value">PIM samotest</span>; ročno ga poženeš z
+  <span class="code-value">dotnet run --project tests\PIM.SelfTest.Nightly</span>.
+</div>
+
+@if (Steps.Count > 0)
+{
+  <section class="ui-card data-card section-gap" aria-label="Koraki zadnjega zagona">
+    <div class="panel-title"><h2>Koraki zadnjega zagona</h2></div>
+    <PimTable Caption="Koraki zadnjega samotesta z izmerjenim trajanjem" Columns="StolpciKorakov">
+      <Rows>
+        @foreach (var korak in Steps)
+        {
+          <tr class="@(korak.Status == "Failed" ? "row-alarm" : null)">
+            <td class="numeric">@korak.Ordinal</td>
+            <td><span class="code-value">@korak.StepCode</span></td>
+            <td>@korak.Label</td>
+            <td><PimChip Text="@Oznaka(korak.Status)" Tone="@Ton(korak.Status)" /></td>
+            <td class="numeric">@PimTime.Duration(korak.DurationMs)</td>
+            <td class="numeric">@Meritev(korak)</td>
+            <td>@(korak.DetailRedacted ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+}
+
+<section class="ui-card data-card section-gap" aria-label="Zgodovina nočnega samotesta">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="Samotest se še ni izvedel." LoadingText="Berem zgodovino samotestov …">
+    <PimTable Caption="Zagoni samotesta: izid, koraki in trajanje" Columns="Stolpci">
+      <Rows>
+        @foreach (var zagon in Rows)
+        {
+          <tr class="@(zagon.Status is "Failed" or "Abandoned" ? "row-alarm" : null)">
+            <td class="nowrap">@PimTime.FormatExact(zagon.StartedUtc)</td>
+            <td><span class="code-value">@zagon.TestCode</span></td>
+            <td><PimChip Text="@Oznaka(zagon.Status)" Tone="@Ton(zagon.Status)" /></td>
+            <td class="numeric">@zagon.StepsPassed.ToString("N0") / @zagon.StepsTotal.ToString("N0")</td>
+            <td class="numeric">@zagon.StepsFailed.ToString("N0")</td>
+            <td class="numeric">@zagon.StepsSkipped.ToString("N0")</td>
+            <td class="numeric">@PimTime.Duration(zagon.DurationMs)</td>
+            <td>@Sprozilec(zagon.TriggeredBy)</td>
+            <td>@(zagon.DetailRedacted ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<SelfTestRunRow> Rows = [];
+  IReadOnlyList<SelfTestStepRow> Steps = [];
+  bool Loading = true;
+  string? Error;
+  const int Take = 90;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Nočni samotest")];
+  static readonly IReadOnlyList<PimColumn> Stolpci =
+  [
+    new("Zagnan"), new("Test"), new("Izid"), new("Uspelo", true), new("Padlo", true),
+    new("Preskočeno", true), new("Trajanje", true), new("Sprožil"), new("Opomba"),
+  ];
+  static readonly IReadOnlyList<PimColumn> StolpciKorakov =
+  [
+    new("#", true), new("Koda"), new("Kaj preverja"), new("Izid"), new("Trajanje", true), new("Meritev", true), new("Podrobnost"),
+  ];
+
+  protected override Task OnInitializedAsync() => NaloziAsync();
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      Rows = await Nadzor.GetSelfTestHistoryAsync(Take);
+
+      // Koraki zadnjega zagona niso del zgodovine (ena vrstica na zagon); pridejo iz istega
+      // utripa kot /sistem, ker ni druge poizvedbe, ki bi jih vrnila same.
+      var state = await Authentication.GetAuthenticationStateAsync();
+      var uporabnik = state.User.Identity?.Name ?? "neznan";
+      Steps = (await Nadzor.GetPulseAsync(uporabnik)).SelfTestSteps;
+    }
+    catch { Error = "Zgodovine samotestov trenutno ni mogoče prebrati."; }
+    finally { Loading = false; }
+  }
+
+  static string Meritev(SelfTestStepRow korak) => korak.Measure is null ? "—"
+    : $"{korak.Measure.Value:N0} {korak.MeasureUnit}".TrimEnd();
+
+  static string Oznaka(string status) => status switch
+  {
+    "Passed" => "Uspel", "Failed" => "Padel", "Warning" => "Z opozorili",
+    "Running" => "V teku", "Abandoned" => "Nedokončan", _ => status,
+  };
+
+  static string? Ton(string status) => status switch
+  {
+    "Passed" => "good", "Failed" or "Abandoned" => "bad", "Warning" => "warn", _ => null,
+  };
+
+  static string Sprozilec(string value) => value switch
+  {
+    "Scheduler" => "urnik", "Task" => "načrtovano opravilo", _ => "ročno",
+  };
+}

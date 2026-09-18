@@ -16,7 +16,7 @@
         @foreach (var row in Rows)
         {
           <tr>
-            <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td>
+            <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td>
             <td>@row.FieldSummary</td><td>—</td><td>@row.DriftDetail</td><td>@row.DriftDetail</td>
             <td><button type="button" class="small-action warn-action" disabled="@Busy" @onclick="() => RetryAsync(row.OutboxMessageId)">Pošlji ponovno</button></td>
           </tr>

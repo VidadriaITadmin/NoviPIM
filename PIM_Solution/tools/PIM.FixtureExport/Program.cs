@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
+using PIM.Operations;
 
 // Varno, izključno bralno orodje: iz PIM_test.raw_history.ApiResponses izvozi surove ResponseBody
 // za natanko pet dovoljenih F3 SAOP končnih točk organizacije 2 (IQLighting) v fixtures/saop/iqlighting.
@@ -20,7 +21,7 @@ var endpoints = new (string Folder, string EndpointKey)[]
   ("PriceLists", "PriceLists"),
 };
 
-var connectionString = LocalConfiguration.GetConnectionString("PIM_TEST_CONNECTION_STRING", "PimTest");
+var connectionString = LocalSettings.ConnectionString("PimTest", "PIM_TEST_CONNECTION_STRING");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
   Console.Error.WriteLine("Manjka PIM_TEST_CONNECTION_STRING oziroma ConnectionStrings:PimTest v appsettings.Local.json (povezava na izvorno bazo PIM_test, ki vsebuje raw_history.ApiResponses).");

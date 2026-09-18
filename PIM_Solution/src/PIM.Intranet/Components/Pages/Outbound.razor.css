@@ -24,3 +24,10 @@
 @media (max-width: 900px) {
   .data-table { min-width: 1180px; }
 }
+
+/* Podrobnosti po polju: sekundarna tabela za administratorja, zato privzeto zaprta. */
+.field-detail summary { color: var(--pim-text-soft); cursor: pointer; font-size: 13px; padding: 6px 0; }
+.field-detail[open] summary { margin-bottom: 8px; }
+
+/* .xml-lightbox* je zdaj v app.css (globalno) — uporablja ga tudi /saop/zgodovina za isto
+   pojavno okno z napako, zato ne sme biti izolirano samo na to stran. */

@@ -1,11 +1,9 @@
 ﻿<Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
-            <NotAuthorized>
-                <p>Za nadaljevanje se prijavite.</p>
-                <a href="prijava">Prijava</a>
-            </NotAuthorized>
-        </AuthorizeRouteView>
+        @* Dovoljenja niso vec trdo zapisana v vlogah posamezne strani. PimAccessRouteView
+           uporabi isti register kot meni in urejevalnik vlog ter vsebino izrise sele po
+           uspesnem preverjanju. Tako skrita povezava ni edina varovalka pred neposrednim URL-jem. *@
+        <PimAccessRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>

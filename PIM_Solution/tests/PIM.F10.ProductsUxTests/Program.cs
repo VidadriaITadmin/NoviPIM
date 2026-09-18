@@ -22,18 +22,22 @@ Assert(File.Exists(cssPath), "Manjka izoliran slog izdelkov: " + cssPath);
 var markup = File.ReadAllText(razorPath);
 var css = File.ReadAllText(cssPath);
 
-// 1. Glava strani in shranjeni delovni pogledi.
+// 1. Glava strani; shranjeni pogledi so zdaj filter "Napaka", ne locena vrstica zavihkov.
 Assert(Regex.IsMatch(markup, "<PimPage Title=\"Izdelki\""), "Stran mora uporabiti skupno glavo PimPage z naslovom Izdelki.");
-var tabs = Regex.Match(markup, "<nav class=\"page-tabs\"[^>]*>");
-Assert(tabs.Success, "Shranjeni pogledi morajo biti navigacijski sklop <nav class=\"page-tabs\">.");
-Assert(Regex.IsMatch(tabs.Value, "aria-label=\"[^\"]+\""), "Zavihki morajo imeti aria-label.");
-Assert(Regex.IsMatch(markup, "aria-current=\"@\\(active \\? \"page\" : null\\)\""), "Aktivni pogled mora imeti aria-current=\"page\".");
-Assert(markup.Contains("@ViewCount(view.Code)", StringComparison.Ordinal),
-  "Stevec pogleda mora izhajati iz podatkov (intranet.GetProductListViews), ne iz vpisane vrednosti.");
-foreach (var view in new[] { "ALL", "TO_FIX", "NO_IMAGE", "NO_WEB_TITLE", "NO_CATEGORY", "NO_EAN", "NOT_PUBLISHED", "WAITING_SAOP" })
-  Assert(Regex.IsMatch(markup, "new\\(\"" + view + "\", "), "Manjka shranjeni pogled " + view + ".");
-Assert(Regex.Matches(markup, "new\\(\"(ALL|TO_FIX|NO_IMAGE|NO_WEB_TITLE|NO_CATEGORY|NO_EAN|NOT_PUBLISHED|WAITING_SAOP)\", ").Count == 8,
-  "Pogledov je natanko osem; vsak mora imeti svoj stevec v bralni proceduri.");
+// Uporabnik 2026-09-17: »a bi stran kej hitreje delal ce to odstraniva, sej to lahk vse v
+// filtre dodava«. Vrstica <nav class="page-tabs"> je ob vsaki zamenjavi podjetja klicala
+// intranet.GetProductListViews — sedem stetij cez cel katalog za zavihke, ki jih uporabnik ni
+// nujno gledal. Ista izbira zdaj zivi v filtru Napaka (isti parameter pogled v naslovu), brez
+// locenega stetja.
+Assert(!markup.Contains("<nav class=\"page-tabs\"", StringComparison.Ordinal),
+  "Vrstica zavihkov je odsla; shranjeni pogledi so zdaj filter Napaka.");
+Assert(!markup.Contains("GetProductListViewsAsync", StringComparison.Ordinal),
+  "Stetje po zavihkih ni vec potrebno, ker locene vrstice zavihkov ni vec.");
+Assert(Regex.IsMatch(markup, "<label for=\"product-view\">Napaka</label>"), "Filter Napaka manjka.");
+foreach (var view in new[] { "TO_FIX", "NO_IMAGE", "NO_WEB_TITLE", "NO_CATEGORY", "NO_EAN", "NOT_PUBLISHED", "WAITING_SAOP" })
+  Assert(markup.Contains("<option value=\"" + view + "\">", StringComparison.Ordinal), "Manjka moznost napake " + view + ".");
+Assert(markup.Contains("QueryView", StringComparison.Ordinal) && markup.Contains("ViewDraft", StringComparison.Ordinal),
+  "Filter Napaka mora ziveti v naslovu (parameter pogled), kot vsi ostali filtri.");
 
 // 2. Orodna vrstica je poimenovan iskalni sklop, vsaka kontrola ima svojo oznako.
 var toolbar = Regex.Match(markup, "<section class=\"ui-card toolbar\"[^>]*>");
@@ -43,7 +47,7 @@ var toolbarLabel = Regex.Match(toolbar.Value, "aria-labelledby=\"([^\"]+)\"");
 Assert(toolbarLabel.Success, "Iskalni sklop mora imeti aria-labelledby.");
 Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(toolbarLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
   "Naslov iskalnega sklopa mora ostati bralcem zaslona dostopen in vizualno skrit.");
-foreach (var control in new[] { "product-search", "product-organization", "product-manufacturer", "product-supplier",
+foreach (var control in new[] { "product-search", "product-view", "product-organization", "product-manufacturer", "product-supplier",
   "product-group", "product-department", "product-erp", "product-web", "product-activity", "product-webpublish",
   "product-completeness", "product-sort" })
 {
@@ -217,7 +221,7 @@ Assert(markup.Contains("@bind:after=\"ApplySortAsync\"", StringComparison.Ordina
   "Razvrstitev mora ucinkovati takoj ob izbiri.");
 
 // 10. Varovalka: stran ostane vezana na dejanske bralne procedure.
-var allowedCalls = new[] { "GetOrganizationsAsync", "GetProductListAsync", "GetProductListViewsAsync", "GetProductListFacetsAsync" };
+var allowedCalls = new[] { "GetOrganizationsAsync", "GetProductListAsync", "GetProductListFacetsAsync" };
 foreach (var call in allowedCalls)
   Assert(markup.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "(?:Data|Workbench)\\.(\\w+)"))

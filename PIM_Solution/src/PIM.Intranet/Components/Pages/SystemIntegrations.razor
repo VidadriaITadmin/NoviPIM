@@ -3,42 +3,208 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
 @inject AuthenticationStateProvider Authentication
-@* Pogodbeni izraz: Zadnji srčni utrip. *@
-<PageTitle>Integracije sistema</PageTitle>
-<div class="page-header"><div><h1>Integracije sistema</h1><p>Zdravje izvajanj, urniki, vodni žigi in operativna opozorila.</p></div><button type="button" class="filter-button" disabled="@(Loading||ActionBusy)" @onclick="Reload">Osveži stanje</button></div>
-<nav class="page-tabs" aria-label="Pogledi integracij"><span class="page-tab active" aria-current="page">Stanje in opozorila</span></nav>
-@if(Message is not null){<p class="alert alert-success" role="status" aria-live="polite">@Message</p>}
-@if(Loading){<div class="ui-card loading-state" role="status">Nalaganje integracij …</div>}
-else if(Error is not null){<div class="ui-card error-state" role="alert">@Error</div>}
-else if(View is not null){
-  <section class="kpi-grid" aria-label="Povzetek stanja integracij">
-    <article class="ui-card kpi"><span>Integracije</span><strong>@(View.Integrations.Count.ToString("N0"))</strong></article>
-    <article class="ui-card kpi"><span>Omogočene</span><strong>@(View.Integrations.Count(x=>x.IsEnabled).ToString("N0"))</strong></article>
-    <article class="ui-card kpi"><span>Odprta opozorila</span><strong>@(View.Alerts.Count(x=>x.ResolvedUtc is null).ToString("N0"))</strong></article>
-    <article class="ui-card kpi"><span>Mrtva / odkloni</span><strong>@(View.Integrations.Sum(x=>x.OutboxDeadCount).ToString("N0")) / @(View.Integrations.Sum(x=>x.OutboxDriftCount).ToString("N0"))</strong></article>
+
+<PageTitle>Alarmi in podjetja</PageTitle>
+<PimPage Title="Alarmi in podjetja"
+         Subtitle="Odprte težave, njihov naslednji korak in nadzor nad tem, za katera podjetja avtomatika sploh teče."
+         Crumbs="Crumbs">
+  <Actions><button type="button" class="filter-button" disabled="@(Loading || ActionBusy)" @onclick="Reload">Osveži stanje</button></Actions>
+</PimPage>
+<PimTabs Active="alarmi" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+@if (Message is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+@if (Loading)
+{
+  <div class="ui-card loading-state" role="status">Nalaganje stanja nadzora …</div>
+}
+else if (View is not null)
+{
+  <section class="ui-card action-guide" aria-labelledby="action-guide-title">
+    <h2 id="action-guide-title">Kaj naredim, ko je nekaj narobe?</h2>
+    <ol>
+      <li><strong>Preberi naslednji korak</strong> pri alarmu spodaj.</li>
+      <li><strong>Odpri Workerji in dnevniki</strong>, če je worker zastal, ni tekel ali je padel.</li>
+      <li><strong>Potrdi</strong>, da je težava prevzeta, in <strong>razreši</strong> šele po uspešnem ponovnem zagonu oziroma odpravi vzroka.</li>
+    </ol>
   </section>
-  <section class="ui-card data-card" aria-label="Seznam integracij">
-  @if(View.Integrations.Count==0){<div class="empty-state">Aktivna organizacija nima integracij.</div>}
-  else{
-    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela integracij">
-      <table class="data-table"><caption>Integracije aktivne organizacije</caption><thead><tr><th scope="col">Ponudnik</th><th scope="col">Postopek</th><th scope="col">Omogočeno</th><th scope="col">Stanje</th><th scope="col">Zadnji utrip</th><th scope="col">Zadnji uspeh</th><th scope="col">Zadnja napaka</th><th scope="col">Vodni žig</th><th scope="col">Naslednje izvajanje</th></tr></thead><tbody>@foreach(var row in View.Integrations){<tr><td>@row.Provider</td><td>@row.Pipeline</td><td><span class="status-chip @(row.IsEnabled?"good":null)"><span class="visually-hidden">Omogočeno: </span>@(row.IsEnabled?"Da":"Ne")</span></td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Stanje: </span>@(row.Status??"Ni podatka")</span></td><td>@Local(row.LastHeartbeatUtc)</td><td>@Local(row.LastSuccessfulRunUtc)</td><td>@Local(row.LastFailedRunUtc)</td><td>@Local(row.WatermarkUtc)</td><td>@Local(row.NextScheduledUtc)</td></tr>}</tbody></table>
-    </div>}
+
+  <section class="kpi-grid" aria-label="Povzetek operativnega stanja">
+    <article class="ui-card kpi"><span>Aktivna podjetja v avtomatiki</span><strong>@Automation.Count(row => row.IsAutomationEnabled)</strong><small>od @Automation.Count aktivnih</small></article>
+    <article class="ui-card kpi"><span>Odprti alarmi</span><strong>@View.Alerts.Count(row => row.ResolvedUtc is null)</strong><small>@View.Alerts.Count(row => row.Severity == "Critical" && row.ResolvedUtc is null) kritičnih</small></article>
+    <article class="ui-card kpi"><span>Workerji v napaki</span><strong>@View.Integrations.Count(row => row.Status is "Failed" or "Stale")</strong><small>od @View.Integrations.Count postopkov</small></article>
+    <article class="ui-card kpi"><span>Odhodne težave</span><strong>@View.Integrations.Sum(row => row.OutboxDeadCount + row.OutboxDriftCount)</strong><small>mrtva sporočila ali odkloni</small></article>
   </section>
-  <section class="ui-card data-card" aria-label="Seznam operativnih opozoril">
-  @if(View.Alerts.Count==0){<div class="empty-state">Odprtih ali zabeleženih opozoril ni.</div>}
-  else{
-    <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela operativnih opozoril">
-      <table class="data-table"><caption>Operativna opozorila</caption><thead><tr><th scope="col">Resnost</th><th scope="col">Postopek</th><th scope="col">Naslov</th><th scope="col">Redigiran povzetek</th><th scope="col" class="numeric">Pojavitve</th><th scope="col">Zadnja pojavitev</th><th scope="col">Potrdil</th><th scope="col">Razrešil</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach(var alert in View.Alerts){<tr><td><span class="status-chip @Chip(alert.Severity)"><span class="visually-hidden">Resnost: </span>@alert.Severity</span></td><td>@alert.Pipeline</td><td>@alert.Title</td><td>@alert.PayloadSummaryRedacted</td><td class="numeric">@alert.OccurrenceCount.ToString("N0")</td><td>@Local(alert.LastSeenUtc)</td><td>@(alert.AcknowledgedBy??"—")</td><td>@(alert.ResolvedBy??"—")</td><td><div class="table-actions">@if(alert.ResolvedUtc is null){@if(alert.AcknowledgedUtc is null){<button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Potrdi opozorilo @alert.Title" @onclick="()=>Acknowledge(alert.AlertId)">Potrdi</button>}<button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Razreši opozorilo @alert.Title" @onclick="()=>Resolve(alert.AlertId)">Razreši</button>}else{<span class="no-action">—</span>}</div></td></tr>}</tbody></table>
-    </div>}
-  </section>}
-@code{int? OrganizationId;PIM.Intranet.Services.SystemIntegrationView? View;bool Loading=true;string? Message,Error;
-  // Zapisovalni dejanji sta revidirani, zato med izvajanjem ne smeta biti sprožljivi drugič.
+
+  <section class="ui-card automation-card" aria-labelledby="automation-title">
+    <div class="panel-title"><h2 id="automation-title">Podjetja v avtomatiki</h2></div>
+    <p class="panel-note">
+      Izključeno podjetje ostane vidno v PIM-u, vendar zanj cikli ne kličejo workerjev in se ne ustvarjajo ali pošiljajo obvestila.
+      To uporabi za DEMO ali katerokoli podjetje, ki ga začasno ne želiš obdelovati.
+    </p>
+    <div class="automation-list">
+      @foreach (var company in Automation)
+      {
+        var confirmationKey = $"automation:{company.OrganizationId}";
+        <article class="automation-row @(company.IsAutomationEnabled ? null : "automation-off")">
+          <div>
+            <strong>@company.Name</strong>
+            <p>@(company.IsAutomationEnabled ? "Workerji in obvestila so vključeni." : "Izključeno: workerji se ne kličejo, obvestila se ne ustvarjajo ali pošiljajo.")</p>
+            @if (company.UpdatedUtc is { } updated)
+            {
+              <small>Zadnja sprememba: @PimTime.Format(updated)@(company.UpdatedBy is { Length: > 0 } actor ? $" · {actor}" : "")</small>
+            }
+          </div>
+          <div class="table-actions">
+            @if (Confirming == confirmationKey)
+            {
+              <button type="button" class="small-action danger-action" disabled="@ActionBusy" @onclick="() => SetAutomation(company, false)">Potrdi izključitev</button>
+              <button type="button" class="small-action" disabled="@ActionBusy" @onclick="() => Confirming = null">Prekliči</button>
+            }
+            else if (company.IsAutomationEnabled)
+            {
+              <button type="button" class="small-action warn-action" disabled="@ActionBusy" @onclick="() => Confirming = confirmationKey">Izključi avtomatiko</button>
+            }
+            else
+            {
+              <button type="button" class="small-action good-action" disabled="@ActionBusy" @onclick="() => SetAutomation(company, true)">Vključi avtomatiko</button>
+            }
+          </div>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="ui-card data-card" aria-labelledby="alerts-title">
+    <div class="panel-title"><h2 id="alerts-title">Odprti alarmi</h2><a href="sistem/napake">Vse tehnične napake</a></div>
+    <p class="panel-note">To je delovni seznam. Za podrobni izpis workerja odpri povezavo v stolpcu »Naslednji korak«.</p>
+    @if (OpenAlerts.Count == 0)
+    {
+      <div class="empty-state">Odprtih alarmov ni.</div>
+    }
+    else
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odprtih alarmov">
+        <table class="data-table"><caption>Odprti operativni alarmi</caption><thead><tr><th scope="col">Resnost</th><th scope="col">Podjetje</th><th scope="col">Težava</th><th scope="col">Zadnja pojavitev</th><th scope="col">Naslednji korak</th><th scope="col">Dejanje</th></tr></thead><tbody>
+          @foreach (var alert in OpenAlerts)
+          {
+            var next = NextStep(alert);
+            <tr><td><PimChip Text="@SeverityLabel(alert.Severity)" Tone="@Chip(alert.Severity)" /></td><td>@alert.OrganizationName</td><td><strong>@alert.Title</strong><div class="job-note">@alert.PayloadSummaryRedacted</div></td><td>@PimTime.FormatWithAge(alert.LastSeenUtc)</td><td><a class="small-action" href="@next.Href">@next.Label</a></td><td><div class="table-actions">@if(alert.AcknowledgedUtc is null){<button type="button" class="small-action warn-action" disabled="@ActionBusy" @onclick="()=>Acknowledge(alert)">Potrdi</button>}<button type="button" class="small-action good-action" disabled="@ActionBusy" @onclick="()=>Resolve(alert)">Razreši</button></div></td></tr>
+          }
+        </tbody></table>
+      </div>
+    }
+  </section>
+
+  <section class="ui-card data-card" aria-labelledby="workers-title">
+    <div class="panel-title"><h2 id="workers-title">Stanje workerjev</h2><a href="sistem/workerji">Odpri workerje in dnevnike</a></div>
+    <p class="panel-note">Prikazani so samo postopki podjetij, ki so vključena v avtomatiko.</p>
+    @if (EnabledIntegrations.Count == 0)
+    {
+      <div class="empty-state">Nobeno podjetje ni vključeno v avtomatiko.</div>
+    }
+    else
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela stanja workerjev">
+        <table class="data-table"><caption>Workerji po podjetju</caption><thead><tr><th scope="col">Podjetje</th><th scope="col">Postopek</th><th scope="col">Stanje</th><th scope="col">Zadnji uspeh</th><th scope="col">Zadnja napaka</th><th scope="col">Ukrep</th></tr></thead><tbody>
+          @foreach(var row in EnabledIntegrations)
+          {
+            <tr class="@(row.Status is "Failed" or "Stale" ? "row-alarm" : null)"><td>@row.OrganizationCode</td><td><span class="code-value">@row.Pipeline</span></td><td><PimChip Text="@(row.Status ?? "Še brez teka")" Tone="@Chip(row.Status)" /></td><td>@PimTime.FormatWithAge(row.LastSuccessfulRunUtc, "nikoli")</td><td>@(row.LastFailedRunUtc is null ? "—" : PimTime.FormatWithAge(row.LastFailedRunUtc))</td><td><a class="small-action" href="sistem/workerji">Dnevnik in ponovni zagon</a></td></tr>
+          }
+        </tbody></table>
+      </div>
+    }
+  </section>
+}
+
+@code {
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Alarmi in podjetja")];
+  PIM.Intranet.Services.SystemIntegrationView? View;
+  IReadOnlyList<PIM.Intranet.Services.OrganizationAutomationRow> Automation = [];
+  bool Loading = true;
   bool ActionBusy;
-  protected override async Task OnInitializedAsync(){try{var org=await Data.GetCurrentOrganizationAsync();if(org is null){Error="Aktivna organizacija ni na voljo.";return;}OrganizationId=org.OrganizationId;await Reload();}finally{Loading=false;}}
-  async Task Reload(){if(OrganizationId is null)return;Loading=true;Error=null;try{View=await Data.GetSystemIntegrationsAsync(OrganizationId.Value);}catch{Error="Integracij trenutno ni mogoče naložiti.";}finally{Loading=false;}}
-  async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}
-  async Task Acknowledge(long id){if(ActionBusy)return;ActionBusy=true;Message=null;try{await Data.AcknowledgeAlertAsync(OrganizationId!.Value,id,await Actor());Message="Opozorilo je potrjeno in auditirano.";await Reload();}catch{Error="Opozorila ni bilo mogoče potrditi.";}finally{ActionBusy=false;}}
-  async Task Resolve(long id){if(ActionBusy)return;ActionBusy=true;Message=null;try{await Data.ResolveAlertAsync(OrganizationId!.Value,id,await Actor());Message="Opozorilo je razrešeno in auditirano.";await Reload();}catch{Error="Opozorila ni bilo mogoče razrešiti.";}finally{ActionBusy=false;}}
-  static string Local(DateTime? value)=>value?.ToLocalTime().ToString("g")??"—";
-  static string Chip(string? value)=>value is "Healthy" or "Succeeded" or "Info"?"good":value is "Failed" or "Critical" or "Error"?"bad":"warn";}
+  string? Confirming;
+  string? Message, Error;
+
+  IReadOnlyList<PIM.Intranet.Services.SystemAlertRow> OpenAlerts => View?.Alerts.Where(alert => alert.ResolvedUtc is null).ToList() ?? [];
+  IReadOnlyList<PIM.Intranet.Services.SystemIntegrationRow> EnabledIntegrations => View?.Integrations
+    .Where(row => Automation.FirstOrDefault(company => company.OrganizationId == row.OrganizationId)?.IsAutomationEnabled != false).ToList() ?? [];
+
+  protected override async Task OnInitializedAsync() => await Reload();
+
+  async Task Reload()
+  {
+    Loading = true; Error = null;
+    try
+    {
+      var organizations = await Data.GetOrganizationsAsync();
+      var integrations = new List<PIM.Intranet.Services.SystemIntegrationRow>();
+      var alerts = new List<PIM.Intranet.Services.SystemAlertRow>();
+      foreach (var organization in organizations)
+      {
+        var part = await Data.GetSystemIntegrationsAsync(organization.OrganizationId);
+        integrations.AddRange(part.Integrations); alerts.AddRange(part.Alerts);
+      }
+      Automation = await Data.GetOrganizationAutomationAsync();
+      View = new(integrations, alerts);
+    }
+    catch { Error = "Stanja nadzora trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task<string> Actor()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  async Task SetAutomation(PIM.Intranet.Services.OrganizationAutomationRow company, bool enabled)
+  {
+    if (ActionBusy) return;
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await Actor();
+      await Data.SetOrganizationAutomationAsync(company.OrganizationId, enabled, actor);
+      await Nadzor.LogActivityAsync(actor, enabled ? "AUTOMATION_ENABLE" : "AUTOMATION_DISABLE", "Podjetje",
+        enabled ? $"Avtomatika za {company.Name} je vključena." : $"Avtomatika za {company.Name} je izključena; workerji in obvestila so ustavljeni.",
+        entityKey: company.OrganizationId.ToString(), organizationId: company.OrganizationId,
+        oldValue: enabled ? "izključena" : "vključena", newValue: enabled ? "vključena" : "izključena");
+      Confirming = null;
+      Message = enabled ? $"{company.Name}: avtomatika je vključena." : $"{company.Name}: avtomatika je izključena. Workerji in obvestila so ustavljeni.";
+      await Reload();
+    }
+    catch { Error = "Nastavitve podjetja ni bilo mogoče shraniti. Stanje ostaja nespremenjeno."; }
+    finally { ActionBusy = false; }
+  }
+
+  async Task Acknowledge(PIM.Intranet.Services.SystemAlertRow alert)
+  {
+    if (ActionBusy) return;
+    ActionBusy = true; Error = null;
+    try { await Data.AcknowledgeAlertAsync(alert.OrganizationId, alert.AlertId, await Actor()); Message = "Alarm je potrjen."; await Reload(); }
+    catch { Error = "Alarma ni bilo mogoče potrditi."; }
+    finally { ActionBusy = false; }
+  }
+
+  async Task Resolve(PIM.Intranet.Services.SystemAlertRow alert)
+  {
+    if (ActionBusy) return;
+    ActionBusy = true; Error = null;
+    try { await Data.ResolveAlertAsync(alert.OrganizationId, alert.AlertId, await Actor()); Message = "Alarm je razrešen."; await Reload(); }
+    catch { Error = "Alarma ni bilo mogoče razrešiti."; }
+    finally { ActionBusy = false; }
+  }
+
+  static (string Label, string Href) NextStep(PIM.Intranet.Services.SystemAlertRow alert) => alert.AlertKind switch
+  {
+    "OutboundDead" or "OutboundDrift" => ("Odpri odhodno vrsto", "outbound"),
+    "StaleHeartbeat" or "PipelineOverdue" or "CycleOverdue" => ("Odpri workerje in dnevnik", "sistem/workerji"),
+    _ => ("Odpri tehnične napake", "sistem/napake"),
+  };
+  static string? Chip(string? value) => value is "Healthy" or "Succeeded" or "Info" ? "good" : value is "Failed" or "Critical" or "Error" or "Stale" ? "bad" : "warn";
+  static string SeverityLabel(string value) => value switch { "Critical" => "Kritično", "Warning" => "Opozorilo", _ => value };
+}

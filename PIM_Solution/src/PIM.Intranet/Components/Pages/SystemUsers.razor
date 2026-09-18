@@ -1,115 +1,245 @@
+@page "/administracija"
+@page "/administracija/uporabniki"
 @page "/system/uporabniki"
 @page "/sistem/uporabniki"
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.IntranetUserAdministrationService Users
+@inject IntranetUserAdministrationService Users
+@inject RoleAdministrationService Roles
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Uporabniki</PageTitle>
 <PimPage Title="Uporabniki"
-         Subtitle="Kdo sme v PIM, kaj sme in na kateri naslov prejema opozorila. Domenski uporabnik se preveri v Active Directory in njegovo geslo ostane tam — PIM ga ne hrani in ga zato ne more spremeniti."
-         Crumbs="Crumbs" />
+         Subtitle="Računi, dostop in obvestila na enem mestu. Domensko geslo ostane v Active Directory; lokalno geslo PIM hrani samo v zgoščeni obliki."
+         Crumbs="Crumbs">
+  <Actions>
+    <button type="button" class="primary-button" @onclick="() => ShowCreate = !ShowCreate">
+      @(ShowCreate ? "Zapri obrazec" : "Dodaj uporabnika")
+    </button>
+  </Actions>
+</PimPage>
 
-@if (Message is not null) { <p class="message-state @(MessageOk ? "success-message" : "error-message")" role="alert">@Message</p> }
+<PimTabs Active="uporabniki" Tabs="SistemskeZadeveTabs.Tabs" Label="Sistemske zadeve" />
 
-<section class="ui-card panel" aria-labelledby="dodaj-domenskega">
-  <h2 id="dodaj-domenskega">Dodaj domenskega uporabnika</h2>
-  <div class="form-grid">
-    <label class="form-field" for="domainIdentity">Domenski uporabnik
-      <input id="domainIdentity" class="form-input" @bind="DomainIdentity" placeholder="DOMENA\uporabnik" />
-    </label>
-    <label class="form-field" for="roleCode">Vloga
-      <select id="roleCode" class="filter-select" @bind="RoleCode">@Vloge</select>
-    </label>
-    <div class="form-action"><button type="button" class="secondary-button" @onclick="Find" disabled="@Busy">Najdi v AD</button></div>
-    <div class="form-action"><button type="button" class="primary-button" @onclick="Add" disabled="@(Busy || Found is null)">Dodaj</button></div>
+@if (Message is not null)
+{
+  <p class="message-state @(MessageOk ? "success-message" : "error-message")" role="alert" aria-live="polite">@Message</p>
+}
+
+<div class="user-summary-grid" aria-label="Povzetek uporabnikov">
+  <div class="ui-card user-summary"><span>Vseh računov</span><strong>@(Rows?.Count ?? 0)</strong></div>
+  <div class="ui-card user-summary"><span>Aktivnih</span><strong>@(Rows?.Count(user => user.IsEnabled) ?? 0)</strong></div>
+  <div class="ui-card user-summary"><span>Domenskih</span><strong>@(Rows?.Count(user => user.AuthSource == "DOMAIN") ?? 0)</strong></div>
+  <div class="ui-card user-summary"><span>Brez e-pošte</span><strong>@(Rows?.Count(user => string.IsNullOrWhiteSpace(user.Email)) ?? 0)</strong></div>
+</div>
+
+@if (ShowCreate)
+{
+  <section class="ui-card create-user-card" aria-labelledby="create-user-title">
+    <div class="create-user-head">
+      <div>
+        <span class="eyebrow">Nov račun</span>
+        <h2 id="create-user-title">Dodaj uporabnika</h2>
+        <p>Najprej izberi vir prijave. Domenskega uporabnika preverimo v AD, lokalnemu pa določiš začetno geslo.</p>
+      </div>
+      <div class="account-kind-switch" role="group" aria-label="Vrsta računa">
+        <button type="button" class="@(NewAccountKind == "DOMAIN" ? "active" : null)" @onclick='() => NewAccountKind = "DOMAIN"'>Domenski račun</button>
+        <button type="button" class="@(NewAccountKind == "LOCAL" ? "active" : null)" @onclick='() => NewAccountKind = "LOCAL"'>Lokalni račun</button>
+      </div>
+    </div>
+
+    @if (NewAccountKind == "DOMAIN")
+    {
+      <div class="create-flow" aria-labelledby="dodaj-domenskega">
+        <div class="flow-step"><span>1</span><div><strong id="dodaj-domenskega">Dodaj domenskega uporabnika</strong><small>Vpiši DOMENA\uporabnik in ga najprej poišči.</small></div></div>
+        <div class="domain-create-grid">
+          <label class="form-field" for="domainIdentity">Domenski uporabnik
+            <input id="domainIdentity" class="form-input" @bind="DomainIdentity" placeholder="DOMENA\uporabnik" />
+          </label>
+          <label class="form-field" for="roleCode">Začetna vloga
+            <select id="roleCode" class="filter-select" @bind="RoleCode">
+              @foreach (var role in RoleRows) { <option value="@role.RoleCode">@role.Name</option> }
+            </select>
+          </label>
+          <button type="button" class="secondary-button" @onclick="Find" disabled="@(Busy || string.IsNullOrWhiteSpace(DomainIdentity))">Najdi v AD</button>
+          <button type="button" class="primary-button" @onclick="Add" disabled="@(Busy || Found is null)">Dodaj račun</button>
+        </div>
+        @if (Found is not null)
+        {
+          <div class="found-user" role="status"><span aria-hidden="true">✓</span><div><strong>@Found.DisplayName</strong><small>@Found.DomainIdentity</small></div></div>
+        }
+      </div>
+    }
+    else
+    {
+      <div class="create-flow" aria-labelledby="dodaj-lokalnega">
+        <div class="flow-step"><span>1</span><div><strong id="dodaj-lokalnega">Dodaj lokalnega uporabnika</strong><small>Za osebe brez domenskega računa. Geslo naj ima vsaj 10 znakov.</small></div></div>
+        <div class="local-create-grid">
+          <label class="form-field" for="novoIme">Uporabniško ime
+            <input id="novoIme" class="form-input" @bind="NovoUporabnisko" placeholder="npr. mnovak" />
+          </label>
+          <label class="form-field" for="novoPrikazno">Ime in priimek
+            <input id="novoPrikazno" class="form-input" @bind="NovoPrikazno" placeholder="npr. Maja Novak" />
+          </label>
+          <label class="form-field" for="novoEposta">E-pošta
+            <input id="novoEposta" type="email" class="form-input" @bind="NovoEposta" placeholder="ime.priimek@podjetje.si" />
+          </label>
+          <label class="form-field" for="novoGeslo">Začetno geslo
+            <input id="novoGeslo" type="password" class="form-input" @bind="NovoGeslo" autocomplete="new-password" placeholder="vsaj 10 znakov" />
+          </label>
+          <label class="form-field" for="novaVloga">Začetna vloga
+            <select id="novaVloga" class="filter-select" @bind="NovaVloga">
+              @foreach (var role in RoleRows) { <option value="@role.RoleCode">@role.Name</option> }
+            </select>
+          </label>
+          <button type="button" class="primary-button create-local-action" @onclick="DodajLokalnega" disabled="@Busy">Ustvari račun</button>
+        </div>
+      </div>
+    }
+  </section>
+}
+
+<section class="ui-card data-card user-list-card" aria-label="Seznam uporabnikov">
+  <div class="card-toolbar user-toolbar">
+    <label class="visually-hidden" for="user-search">Poišči uporabnika</label>
+    <input id="user-search" type="search" class="search-input" @bind="Search" @bind:event="oninput" placeholder="Poišči po imenu, uporabniku ali e-pošti …" />
+    <label class="visually-hidden" for="source-filter">Vir računa</label>
+    <select id="source-filter" class="filter-select" @bind="SourceFilter">
+      <option value="">Vsi viri</option>
+      <option value="DOMAIN">Domenski</option>
+      <option value="LOCAL">Lokalni</option>
+    </select>
+    <label class="visually-hidden" for="status-filter">Stanje računa</label>
+    <select id="status-filter" class="filter-select" @bind="StatusFilter">
+      <option value="">Vsa stanja</option>
+      <option value="ACTIVE">Aktivni</option>
+      <option value="DISABLED">Onemogočeni</option>
+    </select>
+    <span class="result-count" role="status">@FilteredRows.Count @UserLabel(FilteredRows.Count)</span>
   </div>
-  @if (Found is not null) { <p class="message-state success-message" role="status">Najden: <strong>@Found.DisplayName</strong> (@Found.DomainIdentity).</p> }
-</section>
 
-<section class="ui-card panel section-gap" aria-labelledby="dodaj-lokalnega">
-  <h2 id="dodaj-lokalnega">Dodaj lokalnega uporabnika</h2>
-  <p class="hint">Lokalni račun je za tiste, ki nimajo domenskega. Geslo se shrani zgoščeno; čistopis ne zapusti tega zaslona.</p>
-  <div class="form-grid">
-    <label class="form-field" for="novoIme">Uporabniško ime
-      <input id="novoIme" class="form-input" @bind="NovoUporabnisko" placeholder="npr. mnovak" />
-    </label>
-    <label class="form-field" for="novoPrikazno">Ime in priimek
-      <input id="novoPrikazno" class="form-input" @bind="NovoPrikazno" placeholder="npr. Maja Novak" />
-    </label>
-    <label class="form-field" for="novoEposta">E-pošta
-      <input id="novoEposta" type="email" class="form-input" @bind="NovoEposta" placeholder="ime.priimek@podjetje.si" />
-    </label>
-    <label class="form-field" for="novoGeslo">Geslo (vsaj 10 znakov)
-      <input id="novoGeslo" type="password" class="form-input" @bind="NovoGeslo" autocomplete="new-password" />
-    </label>
-    <label class="form-field" for="novaVloga">Vloga
-      <select id="novaVloga" class="filter-select" @bind="NovaVloga">@Vloge</select>
-    </label>
-    <div class="form-action"><button type="button" class="primary-button" @onclick="DodajLokalnega" disabled="@Busy">Ustvari račun</button></div>
-  </div>
-</section>
-
-<section class="ui-card data-card section-gap" aria-label="Seznam uporabnikov">
   <PimState Loading="@(Rows is null)" Empty="@(Rows is { Count: 0 })" EmptyText="Uporabnikov ni." LoadingText="Nalaganje uporabnikov …">
     @if (Rows is not null)
     {
-      <PimTable Caption="Uporabniki, njihove vloge in naslov za opozorila" Columns="Columns">
+      <PimTable Caption="Uporabniki, njihove vloge in stanje računa" Columns="Columns">
         <Rows>
-          @foreach (var user in Rows)
+          @foreach (var user in FilteredRows)
           {
             var domenski = user.AuthSource == "DOMAIN";
-            <tr>
+            var safe = SafeId(user.UserName);
+            <tr class="@(!user.IsEnabled ? "disabled-user-row" : null)">
               <td>
-                <strong>@(user.DomainIdentity ?? user.UserName)</strong>
-                <div class="tree-path">@user.Roles</div>
+                <div class="user-identity">
+                  <span class="user-avatar" aria-hidden="true">@Initials(user.DisplayName)</span>
+                  <span><strong>@user.DisplayName</strong><small>@(user.DomainIdentity ?? user.UserName)</small></span>
+                </div>
               </td>
               <td>
-                <label class="visually-hidden" for="@($"ime-{user.UserName}")">Ime za @user.UserName</label>
-                <input id="@($"ime-{user.UserName}")" class="table-input" value="@Vrednost(Imena, user.UserName, user.DisplayName)"
-                       @onchange="args => Imena[user.UserName] = args.Value?.ToString()" />
+                @if (string.IsNullOrWhiteSpace(user.Email)) { <span class="missing-email">E-pošta ni nastavljena</span> }
+                else { <span>@user.Email</span> }
+                <small class="last-seen">Nazadnje viden: @PimTime.FormatWithAge(user.LastSeenUtc, "nikoli")</small>
               </td>
-              <td><PimChip Text="@(domenski ? "AD" : "Lokalno")" Tone="@(domenski ? "good" : null)" /></td>
               <td>
-                <label class="visually-hidden" for="@($"posta-{user.UserName}")">E-pošta za @user.UserName</label>
-                <input id="@($"posta-{user.UserName}")" type="email" class="table-input"
-                       value="@Vrednost(Naslovi, user.UserName, user.Email)"
-                       @onchange="args => Naslovi[user.UserName] = args.Value?.ToString()" />
+                <div class="role-chip-list">
+                  @foreach (var roleCode in ParseRoles(user.Roles))
+                  {
+                    <span class="role-chip">@RoleName(roleCode)</span>
+                  }
+                </div>
               </td>
-              <td><PimChip Text="@(user.IsEnabled ? "Aktiven" : "Onemogočen")" Tone="@(user.IsEnabled ? "good" : "bad")" /></td>
               <td>
-                @if (domenski)
-                {
-                  <span class="muted" title="Geslo domenskega uporabnika je v Active Directory">v AD</span>
-                }
-                else
-                {
-                  <label class="visually-hidden" for="@($"geslo-{user.UserName}")">Novo geslo za @user.UserName</label>
-                  <input id="@($"geslo-{user.UserName}")" type="password" class="table-input" autocomplete="new-password"
-                         placeholder="novo geslo" value="@(Gesla.TryGetValue(user.UserName, out var g) ? g : "")"
-                         @onchange="args => Gesla[user.UserName] = args.Value?.ToString()" />
-                }
+                <PimChip Text="@(user.IsEnabled ? "Aktiven" : "Onemogočen")" Tone="@(user.IsEnabled ? "good" : "bad")" />
+                <small class="account-source">@(domenski ? "Active Directory" : "Lokalni račun")</small>
               </td>
               <td>
                 <div class="table-actions">
-                  <button type="button" class="small-action good-action" disabled="@Busy" @onclick="() => Shrani(user)">Shrani</button>
-                  @if (!domenski)
-                  {
-                    <button type="button" class="small-action warn-action" disabled="@(Busy || string.IsNullOrWhiteSpace(Vrednost(Gesla, user.UserName, null)))"
-                            @onclick="() => PonastaviGeslo(user.UserName)">Nastavi geslo</button>
-                  }
                   <button type="button" class="small-action @(user.IsEnabled ? "warn-action" : "good-action")" disabled="@Busy"
                           @onclick="() => Preklopi(user)">@(user.IsEnabled ? "Onemogoči" : "Omogoči")</button>
                 </div>
               </td>
             </tr>
+            <tr class="user-editor-row">
+              <td colspan="5">
+                <details class="user-detail">
+                  <summary><span>Uredi račun</span><small>Podatki, vloge, geslo in obvestila</small></summary>
+                  <div class="user-detail-body">
+                    <section class="user-edit-section" aria-labelledby="@($"profile-{safe}")">
+                      <div class="detail-section-title"><div><span class="eyebrow">Profil</span><h3 id="@($"profile-{safe}")">Osnovni podatki</h3></div><PimChip Text="@(domenski ? "AD" : "Lokalno")" Tone="@(domenski ? "good" : null)" /></div>
+                      <div class="user-profile-grid">
+                        <label class="form-field" for="@($"ime-{safe}")">Ime in priimek
+                          <input id="@($"ime-{safe}")" class="form-input" value="@Vrednost(Imena, user.UserName, user.DisplayName)"
+                                 @onchange="args => Imena[user.UserName] = args.Value?.ToString()" />
+                        </label>
+                        <label class="form-field" for="@($"posta-{safe}")">E-pošta
+                          <input id="@($"posta-{safe}")" type="email" class="form-input" value="@Vrednost(Naslovi, user.UserName, user.Email)"
+                                 @onchange="args => Naslovi[user.UserName] = args.Value?.ToString()" />
+                        </label>
+                        @if (!domenski)
+                        {
+                          <label class="form-field" for="@($"geslo-{safe}")">Novo geslo
+                            <input id="@($"geslo-{safe}")" type="password" class="form-input" autocomplete="new-password" placeholder="vsaj 10 znakov"
+                                   value="@Vrednost(Gesla, user.UserName, null)" @onchange="args => Gesla[user.UserName] = args.Value?.ToString()" />
+                          </label>
+                        }
+                        <div class="profile-actions">
+                          <button type="button" class="primary-button" disabled="@Busy" @onclick="() => Shrani(user)">Shrani profil</button>
+                          @if (!domenski)
+                          {
+                            <button type="button" class="secondary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(Vrednost(Gesla, user.UserName, null)))"
+                                    @onclick="() => PonastaviGeslo(user.UserName)">Nastavi geslo</button>
+                          }
+                          @if (user.LastSeenUtc is not null)
+                          {
+                            <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => PrisilnoOdjavi(user.UserName)">Prisilno odjavi</button>
+                          }
+                        </div>
+                      </div>
+                    </section>
+
+                    <section class="user-edit-section" aria-labelledby="@($"roles-{safe}")">
+                      <div class="detail-section-title">
+                        <div><span class="eyebrow">Dostop</span><h3 id="@($"roles-{safe}")">Vloge uporabnika</h3></div>
+                        <button type="button" class="primary-button" disabled="@Busy" @onclick="() => ShraniVloge(user.UserName)">Shrani vloge</button>
+                      </div>
+                      <div class="role-choice-grid">
+                        @foreach (var role in RoleRows)
+                        {
+                          var checkboxId = $"vloga-{safe}-{role.RoleCode}";
+                          <label class="choice-card @(VlogeIzbrane[user.UserName].Contains(role.RoleCode) ? "is-selected" : null)" for="@checkboxId">
+                            <input id="@checkboxId" type="checkbox" checked="@VlogeIzbrane[user.UserName].Contains(role.RoleCode)" disabled="@Busy"
+                                   @onchange="args => PreklopiVlogo(user.UserName, role.RoleCode, (bool)(args.Value ?? false))" />
+                            <span><strong>@role.Name</strong><small>@role.Description</small></span>
+                          </label>
+                        }
+                      </div>
+                    </section>
+
+                    <section class="user-edit-section" aria-labelledby="@($"notifications-{safe}")">
+                      <div class="detail-section-title"><div><span class="eyebrow">Obvestila</span><h3 id="@($"notifications-{safe}")">Kaj uporabnik prejema</h3></div></div>
+                      <div class="notification-settings">
+                        <label class="choice-card wide @(user.ReceivesStockReplenishmentEmail ? "is-selected" : null)">
+                          <input type="checkbox" checked="@user.ReceivesStockReplenishmentEmail" disabled="@Busy"
+                                 @onchange="args => PreklopiNarocnino(user.UserName, (bool)(args.Value ?? false))" />
+                          <span><strong>Dnevni e-mail: zaloga pod MID</strong><small>Zahteva nastavljen naslov e-pošte.</small></span>
+                        </label>
+                        @foreach (var subscription in Obvestila.TryGetValue(user.UserName, out var subscriptions) ? subscriptions : [])
+                        {
+                          var checkboxId = $"alarm-{safe}-{subscription.AlertKind}";
+                          <label class="choice-card @(subscription.IsSubscribed ? "is-selected" : null)" for="@checkboxId">
+                            <input id="@checkboxId" type="checkbox" checked="@subscription.IsSubscribed" disabled="@Busy"
+                                   @onchange="args => PreklopiObvestilo(user.UserName, subscription.AlertKind, (bool)(args.Value ?? false))" />
+                            <span><strong>@AlertLabel(subscription.AlertKind)</strong><small>Obvestilo v zvoncu</small></span>
+                          </label>
+                        }
+                      </div>
+                    </section>
+                  </div>
+                </details>
+              </td>
+            </tr>
           }
         </Rows>
       </PimTable>
-      <p class="hint">
-        Na naslov e-pošte gredo opozorila: ustavljen postopek, nepotrjena napaka odhodne poti v SAOP
-        in zastale obdelave. Prazno polje pomeni, da uporabnik obvestil ne prejema. Naslovi naj bodo
-        domenski, ker prejemnike razpošiljanje bere prav iz tega seznama.
-      </p>
     }
   </PimState>
 </section>
@@ -122,48 +252,80 @@
   string NovoEposta = "";
   string NovoGeslo = "";
   string NovaVloga = "VIEWER";
-
+  string NewAccountKind = "DOMAIN";
+  string Search = "";
+  string SourceFilter = "";
+  string StatusFilter = "";
+  bool ShowCreate;
   bool Busy;
   bool MessageOk;
   string? Message;
-  PIM.Intranet.Services.ActiveDirectoryUser? Found;
-  IReadOnlyList<PIM.Intranet.Services.IntranetUserRow>? Rows;
+  ActiveDirectoryUser? Found;
+  IReadOnlyList<IntranetUserRow>? Rows;
+  IReadOnlyList<ManagedRoleRow> RoleRows = [];
 
   readonly Dictionary<string, string?> Naslovi = new(StringComparer.OrdinalIgnoreCase);
   readonly Dictionary<string, string?> Imena = new(StringComparer.OrdinalIgnoreCase);
   readonly Dictionary<string, string?> Gesla = new(StringComparer.OrdinalIgnoreCase);
+  readonly Dictionary<string, HashSet<string>> VlogeIzbrane = new(StringComparer.OrdinalIgnoreCase);
+  readonly Dictionary<string, IReadOnlyList<UserAlertSubscriptionRow>> Obvestila = new(StringComparer.OrdinalIgnoreCase);
+  string? TrenutniUporabnik;
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Uporabniki")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs =
+    [new("Sistemske zadeve", "administracija/uporabniki"), new("Uporabniki")];
   static readonly IReadOnlyList<PimColumn> Columns =
+    [new("Uporabnik"), new("Kontakt in aktivnost"), new("Vloge"), new("Stanje"), new("Dejanja")];
+
+  static readonly (string Koda, string Ime)[] VrsteAlarmov =
   [
-    new("Uporabnik in vloge"), new("Ime"), new("Vir"), new("E-pošta"), new("Stanje"), new("Geslo"), new("Dejanja"),
+    ("StaleHeartbeat", "Worker brez utripa"), ("OutboundDead", "Mrtva odhodna sporočila"),
+    ("OutboundDrift", "Odklon odhodnih sporočil"), ("StalledWatermark", "Zastal vodni žig"),
+    ("PipelineDisabled", "Onemogočen cevovod"), ("ReservationExcluded", "Izločeno iz rezervacije zaloge"),
+    ("OutboundUnacknowledged", "Nepotrjena odhodna napaka"),
   ];
 
-  static RenderFragment Vloge => builder =>
-  {
-    var moznosti = new (string Koda, string Ime)[]
-    {
-      ("VIEWER", "Pregledovalec"), ("CATALOG_EDITOR", "Urednik kataloga"),
-      ("COMMERCIAL", "Urednik komerciale"), ("ADMIN", "Skrbnik"),
-    };
-    var zaporedna = 0;
-    foreach (var (koda, ime) in moznosti)
-    {
-      builder.OpenElement(zaporedna++, "option");
-      builder.AddAttribute(zaporedna++, "value", koda);
-      builder.AddContent(zaporedna++, ime);
-      builder.CloseElement();
-    }
-  };
+  IReadOnlyList<IntranetUserRow> FilteredRows => (Rows ?? []).Where(user =>
+    (string.IsNullOrWhiteSpace(Search)
+      || Contains(user.DisplayName, Search) || Contains(user.UserName, Search)
+      || Contains(user.DomainIdentity, Search) || Contains(user.Email, Search))
+    && (SourceFilter.Length == 0 || user.AuthSource == SourceFilter)
+    && (StatusFilter.Length == 0 || (StatusFilter == "ACTIVE" ? user.IsEnabled : !user.IsEnabled)))
+    .ToArray();
 
-  // Neshranjen vnos ima prednost pred vrednostjo iz baze, sicer bi osvezitev tabele pobrisala,
-  // kar uporabnik ravno tipka.
+  static string AlertLabel(string kind) => Array.Find(VrsteAlarmov, value => value.Koda == kind).Ime ?? kind;
+  string RoleName(string code) => RoleRows.FirstOrDefault(role => role.RoleCode == code)?.Name ?? code;
+  static bool Contains(string? value, string search) => value?.Contains(search.Trim(), StringComparison.CurrentCultureIgnoreCase) == true;
+  static string UserLabel(int count) => count == 1 ? "uporabnik" : count == 2 ? "uporabnika" : "uporabnikov";
+  static string Initials(string name) => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
+  static string SafeId(string value) => new(value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray());
+
   static string Vrednost(Dictionary<string, string?> vnosi, string kljuc, string? izBaze) =>
     vnosi.TryGetValue(kljuc, out var vrednost) ? vrednost ?? "" : izBaze ?? "";
 
-  protected override async Task OnInitializedAsync() => await Reload();
+  protected override async Task OnInitializedAsync()
+  {
+    TrenutniUporabnik = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User.Identity?.Name;
+    await Reload();
+  }
 
-  async Task Reload() => Rows = await Users.GetUsersAsync();
+  async Task Reload()
+  {
+    RoleRows = await Roles.GetRolesAsync();
+    if (!RoleRows.Any(role => role.RoleCode == RoleCode)) RoleCode = RoleRows.FirstOrDefault()?.RoleCode ?? "";
+    if (!RoleRows.Any(role => role.RoleCode == NovaVloga)) NovaVloga = RoleRows.FirstOrDefault()?.RoleCode ?? "";
+    Rows = await Users.GetUsersAsync();
+    VlogeIzbrane.Clear();
+    Obvestila.Clear();
+    foreach (var user in Rows)
+    {
+      VlogeIzbrane[user.UserName] = ParseRoles(user.Roles);
+      Obvestila[user.UserName] = await Users.GetAlertSubscriptionsAsync(user.UserName);
+    }
+  }
+
+  static HashSet<string> ParseRoles(string csv) => csv == "—"
+    ? new HashSet<string>(StringComparer.Ordinal)
+    : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal);
 
   async Task Izvedi(Func<Task> dejanje, string uspeh)
   {
@@ -184,14 +346,12 @@
     finally { Busy = false; }
   }
 
-  Task Shrani(PIM.Intranet.Services.IntranetUserRow user) => Izvedi(async () =>
+  Task Shrani(IntranetUserRow user) => Izvedi(async () =>
   {
     var ime = Vrednost(Imena, user.UserName, user.DisplayName);
     if (ime != user.DisplayName) await Users.SetDisplayNameAsync(user.UserName, ime);
-
     var naslov = Vrednost(Naslovi, user.UserName, user.Email);
     if (naslov != (user.Email ?? "")) await Users.SetEmailAsync(user.UserName, naslov);
-
     Imena.Remove(user.UserName);
     Naslovi.Remove(user.UserName);
   }, $"Podatki za {user.UserName} so shranjeni.");
@@ -202,14 +362,17 @@
     Gesla.Remove(userName);
   }, $"Geslo za {userName} je nastavljeno.");
 
-  Task Preklopi(PIM.Intranet.Services.IntranetUserRow user) =>
-    Izvedi(() => Users.SetEnabledAsync(user.UserName, !user.IsEnabled),
-      user.IsEnabled ? $"{user.UserName} je onemogočen." : $"{user.UserName} je omogočen.");
+  Task Preklopi(IntranetUserRow user) => Izvedi(() => Users.SetEnabledAsync(user.UserName, !user.IsEnabled),
+    user.IsEnabled ? $"{user.UserName} je onemogočen." : $"{user.UserName} je omogočen.");
+
+  Task PreklopiNarocnino(string userName, bool prejema) =>
+    Izvedi(() => Users.SetStockReplenishmentSubscriptionAsync(userName, prejema),
+      prejema ? $"{userName} bo prejemal dnevni mail o zalogi pod MID." : $"{userName} ne bo več prejemal tega maila.");
 
   Task DodajLokalnega() => Izvedi(async () =>
   {
     await Users.CreateLocalUserAsync(NovoUporabnisko, NovoPrikazno, NovoGeslo, NovaVloga, NovoEposta);
-    NovoUporabnisko = ""; NovoPrikazno = ""; NovoEposta = ""; NovoGeslo = "";
+    NovoUporabnisko = ""; NovoPrikazno = ""; NovoEposta = ""; NovoGeslo = ""; ShowCreate = false;
   }, "Lokalni račun je ustvarjen.");
 
   void Find()
@@ -224,7 +387,26 @@
   Task Add() => Izvedi(async () =>
   {
     await Users.AddDomainUserAsync(DomainIdentity, RoleCode);
-    Found = null;
-    DomainIdentity = "";
+    Found = null; DomainIdentity = ""; ShowCreate = false;
   }, "Domenski uporabnik je dodan.");
+
+  void PreklopiVlogo(string userName, string roleCode, bool oznaceno)
+  {
+    if (oznaceno) VlogeIzbrane[userName].Add(roleCode);
+    else VlogeIzbrane[userName].Remove(roleCode);
+  }
+
+  Task ShraniVloge(string userName) => Izvedi(
+    () => Users.SetRolesAsync(userName, VlogeIzbrane[userName].ToArray()),
+    $"Vloge za {userName} so shranjene.");
+
+  Task PreklopiObvestilo(string userName, string alertKind, bool prejema) => Izvedi(async () =>
+  {
+    await Users.SetAlertSubscriptionAsync(userName, alertKind, prejema, TrenutniUporabnik ?? "neznan");
+    Obvestila[userName] = await Users.GetAlertSubscriptionsAsync(userName);
+  }, prejema ? $"{userName} zdaj prejema to vrsto obvestil v zvoncu." : $"{userName} ne prejema več te vrste obvestil v zvoncu.");
+
+  Task PrisilnoOdjavi(string userName) => Izvedi(
+    () => Users.ForceSignOutAsync(userName),
+    $"{userName} je prisilno odjavljen; naslednja zahteva ga vrne na prijavo.");
 }

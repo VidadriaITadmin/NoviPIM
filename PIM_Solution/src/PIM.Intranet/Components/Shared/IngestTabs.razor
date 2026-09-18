@@ -1,5 +1,5 @@
 <nav class="ingest-tabs" aria-label="Pogledi vhodnih podatkov">
-  @foreach (var tab in Tabs)
+  @foreach (var tab in VisibleTabs)
   {
     <a class="ingest-tab @(tab.Key == Active ? "active" : null)" href="@tab.Href"
        aria-current="@(tab.Key == Active ? "page" : null)">
@@ -10,14 +10,29 @@
 </nav>
 
 @code {
+  [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
+  [Inject] RoleAccessService Access { get; set; } = default!;
+
   [Parameter, EditorRequired] public required string Active { get; set; }
+  IReadOnlyList<IngestTabDefinition> VisibleTabs = [];
 
   static readonly IReadOnlyList<IngestTabDefinition> Tabs =
   [
-    new("overview", "Vhodi", "zajem", "Viri, stanje in svežina", "tab-sources"),
-    new("runs", "Teki", "zajem/teki", "Izvedbe in koraki", "tab-runs"),
-    new("issues", "Težave", "zajem/tezave", "Napake in čakalne vrste", "tab-issues"),
+    new("overview", "Vhodi", "zajem", "Viri, stanje in svežina", "tab-sources", "tab.ingest.overview"),
+    new("runs", "Teki", "zajem/teki", "Izvedbe in koraki", "tab-runs", "tab.ingest.runs"),
+    new("issues", "Težave", "zajem/tezave", "Napake in čakalne vrste", "tab-issues", "tab.ingest.issues"),
   ];
 
-  sealed record IngestTabDefinition(string Key, string Label, string Href, string Description, string Icon);
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      var allowed = await Access.GetAllowedKeysAsync(user);
+      VisibleTabs = Tabs.Where(tab => allowed.Contains(tab.PermissionKey)).ToArray();
+    }
+    catch { VisibleTabs = []; }
+  }
+
+  sealed record IngestTabDefinition(string Key, string Label, string Href, string Description, string Icon, string PermissionKey);
 }

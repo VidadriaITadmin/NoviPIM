@@ -8,9 +8,12 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseStaticWebAssets();
-var repositoryRootLocalSettingsPath = LocalSettingsLocator.FindRepositoryRootLocalSettingsPath(builder.Environment.ContentRootPath);
-if (repositoryRootLocalSettingsPath is not null)
-  builder.Configuration.AddJsonFile(repositoryRootLocalSettingsPath, optional: true, reloadOnChange: false);
+// Lokalne nastavitve: mapa ob .exe (produkcija — tako datoteko ohranja Publish-Intranet.ps1),
+// nato skupna datoteka v korenu rešitve (razvoj). Zadnji vir prepiše prejšnje; na strežniku
+// korena rešitve ni, zato tam ostane samo prva. Iskanje je v PIM.Operations.LocalSettings, ker
+// isto potrebujejo workerji, orodja in testi — šest kopij te logike je našlo šest datotek.
+foreach (var localSettingsPath in LocalSettings.Sources(builder.Environment.ContentRootPath))
+  builder.Configuration.AddJsonFile(localSettingsPath, optional: true, reloadOnChange: false);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -26,6 +29,17 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     // A3: piskotek se ob vsaki zahtevi primerja z zigom v bazi, zato izklop racuna in odvzem
     // vloge veljata takoj in ne sele cez 14 dni.
     options.Events.OnValidatePrincipal = PimSessionValidator.ValidateAsync;
+    // 224: "razlog", ki ga je PimSessionValidator.RejectAsync pustil v HttpContext.Items, potuje
+    // do prijavne strani, da uporabnik vidi, zakaj je ven ("nekdo drug se je prijavil s tem
+    // racunom"), ne samo da je spet na /prijava.
+    options.Events.OnRedirectToLogin = context =>
+    {
+      var reason = context.HttpContext.Items.TryGetValue("pim:razlogOdjave", out var value) ? value as string : null;
+      context.Response.Redirect(reason is null
+        ? context.RedirectUri
+        : Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(context.RedirectUri, "razlog", reason));
+      return Task.CompletedTask;
+    };
   });
 builder.Services.AddAuthorization(options =>
 {
@@ -67,6 +81,7 @@ builder.Services.AddScoped<LocalUserAuthenticationService>();
 builder.Services.AddScoped<UserSecurityStateService>();
 builder.Services.AddScoped<PimWriteGuard>();
 builder.Services.AddSingleton<PimLoginThrottle>();
+builder.Services.AddSingleton<PimLoginTakeover>();
 builder.Services.AddScoped<IntranetDataService>();
 builder.Services.AddScoped<PimDb>();
 builder.Services.AddScoped<CatalogReadService>();
@@ -77,28 +92,67 @@ builder.Services.AddScoped<RulesWriteService>();
 builder.Services.AddScoped<TitleRuleService>();
 builder.Services.AddScoped<PriceSheetService>();
 builder.Services.AddScoped<WebExportBuildService>();
+builder.Services.AddScoped<CatalogControlService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
+builder.Services.AddScoped<QualityIssueExportService>();
 builder.Services.AddScoped<ProductWorkbookService>();
+// Izvoz delovnega lista v ozadju (/izdelki, gumb "Izvozi Excel"): singleton, ker opravilo zivi
+// dlje od kroga, ki ga je sprozilo — uporabnik lahko stran zapre in se vrne, izvoz tece dalje.
+builder.Services.AddSingleton<ExportResultStore>();
+builder.Services.AddSingleton<ExportJobService>();
+// Vrata za tezka opravila (izvoz celega kataloga, uvoz delovnega lista): hkrati jih tece
+// najvec toliko, kolikor dovolijo nastavitve (privzeto 2 + 2), ostala cakajo v vrsti — glej
+// HeavyWorkGate za izmerjeni razlog (analiza 2026-09-17).
+builder.Services.AddSingleton<HeavyWorkGate>();
+// Predpomnilnik procesa za redko spreminjajoce se registre (izbirnik kategorij na /izdelki, 5 min).
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
+builder.Services.AddScoped<QualityWriteService>();
 builder.Services.AddScoped<StockReadService>();
 builder.Services.AddScoped<GovernanceReadService>();
 builder.Services.AddScoped<IntranetFeatureReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
 builder.Services.AddScoped<IntranetUserAdministrationService>();
+builder.Services.AddScoped<RoleAdministrationService>();
+builder.Services.AddScoped<RoleAccessService>();
 builder.Services.AddScoped<SaopWriteService>();
 builder.Services.AddScoped<SaopItemWriteService>();
+builder.Services.AddScoped<SaopOrganizationContext>();
 builder.Services.AddScoped<CategoryMappingService>();
 builder.Services.AddScoped<CategoryTreeService>();
 builder.Services.AddScoped<AttributeMappingService>();
+builder.Services.AddScoped<AdminConsoleService>();
+// Rocni zagon workerjev (/sistem/workerji): singleton, ker zagon zivi dlje od strani, ki ga je sprozila.
+builder.Services.AddSingleton<WorkerConsoleService>();
+// Razporejevalnik v aplikaciji (2026-09-17, migracija 221): ura, ki cikle poganja tam, kjer tece
+// intranet — IIS, Visual Studio, dotnet run — namesto Windows naloge, vezane na racun in racunalnik.
+// En razporejevalnik naenkrat drzi najem v ops.SchedulerLease; ostali procesi nad isto bazo cakajo.
+builder.Services.AddSingleton<WorkerSchedulerStore>();
+builder.Services.AddSingleton<WorkerCycleRunner>();
+builder.Services.AddSingleton<SelfAddress>();
+builder.Services.AddSingleton<WorkerSchedulerService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<WorkerSchedulerService>());
+
+// Naša ura je izbrana enkrat ob zagonu, ne podedovana od strežnika. Na IIS, nastavljenem na
+// UTC, bi ToLocalTime() kazal dve uri prej — in to bi se pokazalo šele po objavi.
+PimTime.Configure(builder.Configuration);
 
 var app = builder.Build();
 
 // IIS virtual application and local-root hosting are both supported. UsePathBase
 // only consumes /PIM when it is present and leaves root requests unchanged.
 app.UsePathBase("/PIM");
+
+// Lasten naslov za samodejni utrip pod IIS (glej WorkerSchedulerService): aplikacija ga izve ob prvi zahtevi.
+var selfAddress = app.Services.GetRequiredService<SelfAddress>();
+app.Use((context, next) =>
+{
+  selfAddress.Observe(context.Request);
+  return next(context);
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -112,7 +166,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
-app.MapPost("/auth/prijava", async (HttpContext context, LocalUserAuthenticationService authenticationService, PimLoginThrottle throttle, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+app.MapPost("/auth/prijava", async (
+  HttpContext context, LocalUserAuthenticationService authenticationService, UserSecurityStateService security,
+  PimLoginThrottle throttle, PimLoginTakeover takeover, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
 {
   await antiforgery.ValidateRequestAsync(context);
   var form = await context.Request.ReadFormAsync();
@@ -139,14 +195,54 @@ app.MapPost("/auth/prijava", async (HttpContext context, LocalUserAuthentication
 
   throttle.RegisterSuccess(userName, remoteAddress);
   var rememberMe = form.ContainsKey("zapomniMe");
+
+  // 224: en racun, ena ziva seja. Ce je racun trenutno aktiven drugje, ga NE prijavimo tiho mimo
+  // — namesto piskotka dobi zeton za prevzem, ki ga /prijava ponudi kot potrditev. Geslo je s tem
+  // ze preverjeno (zgoraj); drugi krog (spodaj, /auth/prijava/prevzemi) ga zato ne zahteva znova.
+  var lastSeenUtc = await security.GetLastSeenUtcAsync(user.UserName, context.RequestAborted);
+  if (lastSeenUtc is not null && DateTime.UtcNow - lastSeenUtc.Value < PimLoginTakeover.ActiveWindow)
+  {
+    var takeoverToken = takeover.Issue(user.UserName, rememberMe);
+    var lastSeenLocal = PimTime.FormatTime(lastSeenUtc);
+    return Results.Redirect($"{context.Request.PathBase}/prijava?zasedeno={takeoverToken}&ime={Uri.EscapeDataString(user.DisplayName)}&ob={Uri.EscapeDataString(lastSeenLocal)}");
+  }
+
   var principal = PimSessionValidator.BuildPrincipal(
     new PimUserSecurityState(user.UserName, user.DisplayName, true, user.SecurityStamp, user.Roles));
-  await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal,
-    new AuthenticationProperties
-    {
-      IsPersistent = rememberMe,
-      ExpiresUtc = rememberMe ? DateTimeOffset.UtcNow.AddDays(14) : null,
-    });
+  var properties = new AuthenticationProperties
+  {
+    IsPersistent = rememberMe,
+    ExpiresUtc = rememberMe ? DateTimeOffset.UtcNow.AddDays(14) : null,
+  };
+  await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
+  return Results.Redirect($"{context.Request.PathBase}/nadzorna-plosca");
+}).AllowAnonymous().RequireRateLimiting(PimRateLimits.Login);
+
+// Drugi korak prevzema seje: uporabnik je na /prijava potrdil "Da, prevzemi". Zeton (ne geslo!)
+// dokazuje, da je bilo geslo ze preverjeno zgoraj — glej PimLoginTakeover za razlog. Prevzem =
+// nov SecurityStamp (sec.ForceSignOutUser), ki stari seji odvzame veljavnost ob njeni naslednji
+// zahtevi (PimSessionValidator, 181), tukaj pa ga takoj uporabimo za novo prijavo.
+app.MapPost("/auth/prijava/prevzemi", async (
+  HttpContext context, UserSecurityStateService security, PimLoginTakeover takeover,
+  Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+  await antiforgery.ValidateRequestAsync(context);
+  var form = await context.Request.ReadFormAsync();
+  if (!Guid.TryParse(form["zeton"].ToString(), out var parsedToken) || takeover.Consume(parsedToken) is not { } prevzem)
+    return Results.Redirect($"{context.Request.PathBase}/prijava?razlog=potekel");
+
+  var state = await security.GetAsync(prevzem.UserName, context.RequestAborted);
+  if (state is null || !state.IsEnabled)
+    return Results.Redirect($"{context.Request.PathBase}/prijava?napaka=1");
+
+  var newStamp = await security.ForceSignOutAsync(prevzem.UserName, context.RequestAborted);
+  var principal = PimSessionValidator.BuildPrincipal(state with { SecurityStamp = newStamp });
+  var properties = new AuthenticationProperties
+  {
+    IsPersistent = prevzem.RememberMe,
+    ExpiresUtc = prevzem.RememberMe ? DateTimeOffset.UtcNow.AddDays(14) : null,
+  };
+  await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, properties);
   return Results.Redirect($"{context.Request.PathBase}/nadzorna-plosca");
 }).AllowAnonymous().RequireRateLimiting(PimRateLimits.Login);
 app.MapPost("/odjava", async (HttpContext context) =>
@@ -154,40 +250,59 @@ app.MapPost("/odjava", async (HttpContext context) =>
   await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
   return Results.Redirect($"{context.Request.PathBase}/prijava");
 });
+
+// Zvonec v glavi: navadna <form> objava (glava strani ostaja staticna SSR), zato preverba
+// vira in ciljne poti sledi isti obliki kot /odjava zgoraj. "vrniNa" je pot brez PathBase, kot
+// jo vrne Navigation.ToBaseRelativePath — nikoli absoluten ali navzkrizen naslov.
+static string PimReturnPath(HttpContext context)
+{
+  var value = context.Request.Form["vrniNa"].ToString();
+  if (string.IsNullOrWhiteSpace(value) || !Uri.IsWellFormedUriString(value, UriKind.Relative) || value.StartsWith('/'))
+    return $"{context.Request.PathBase}/";
+  return $"{context.Request.PathBase}/{value}";
+}
+app.MapPost("/obvestila/precitaj-vse", async (HttpContext context, AdminConsoleService nadzor, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+  await antiforgery.ValidateRequestAsync(context);
+  await nadzor.MarkAlertsSeenAsync(context.User.Identity?.Name ?? "neznan", context.RequestAborted);
+  return Results.Redirect(PimReturnPath(context));
+}).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin));
+app.MapPost("/obvestila/precitaj/{id:long}", async (HttpContext context, long id, AdminConsoleService nadzor, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+  await antiforgery.ValidateRequestAsync(context);
+  await nadzor.MarkAlertSeenAsync(context.User.Identity?.Name ?? "neznan", id, context.RequestAborted);
+  return Results.Redirect(PimReturnPath(context));
+}).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin));
+
 app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymous();
 
-// Izvoz trenutnega pogleda seznama izdelkov. Bralna pot: uporabi isto proceduro in iste
-// filtre kot stran, zato je datoteka natanko to, kar uporabnik vidi. Zgornja meja je
-// izrecna in zapisana v datoteko — tiho odrezan izvoz je huje kot majhen izvoz.
-// Izvoz zaloge z izbiro vira (migracija 150, filtri iz migracije 151): SAOP (ERP), dobavitelj
-// ali oboje, po zelji se dolocen vir, iskanje, ima zalogo in svezina — isti filtri kot na
-// tabeli /zaloge, ker gumb ne sme prenesti vec, kot je uporabnik filtriral. "splet" ostane brez
-// kontrole na strani (dropdown Obseg izvoza je odpadel 2026-09-03), a ostaja veljaven parameter.
-app.MapGet("/izvoz/zaloge.csv", async (HttpContext context, StockReadService stocks, CancellationToken cancellationToken) =>
+// Izvoz zaloge, ena vrstica na artikel (migracija 190/191) — isti vir in isti filtri kot tabela
+// na strani, zato je datoteka natanko to, kar je uporabnik filtriral. Podjetje ni vec obvezno:
+// uporabnik 2026-09-11, dobesedno, »naredi da se bodo za vsa podjetja zaloge izpisovale in da se
+// bo lahko vse kar bos filtreral izvozilo v excel« — prazno/manjkajoce "podjetje" pomeni vsa,
+// enako kot na tabeli. Samo Excel (2026-09-10: »naj bo samo Excel«) — CSV je odpadel.
+app.MapGet("/izvoz/zaloge.xlsx", async (HttpContext context, StockReadService stocks, HeavyWorkGate gate, CancellationToken cancellationToken) =>
 {
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
   var query = context.Request.Query;
-  if (!int.TryParse(query["podjetje"], out var organizationId) || organizationId <= 0)
-    return Results.BadRequest("Izberi podjetje: izvoz zaloge je po podjetju.");
-  var source = (query["vir"].ToString() ?? "VSE").ToUpperInvariant();
-  if (source is not ("ERP" or "DOBAVITELJ" or "VSE")) source = "VSE";
-  var onlyWeb = string.Equals(query["splet"], "1", StringComparison.Ordinal);
+  var organizationId = int.TryParse(query["podjetje"], out var parsedOrganization) && parsedOrganization > 0
+    ? parsedOrganization : (int?)null;
   var sourceCode = query["virsifra"].ToString();
   var search = query["isci"].ToString();
   var availability = query["zaloga"].ToString();
   var maxAgeHours = int.TryParse(query["starost"], out var age) ? age : (int?)null;
-  context.Response.ContentType = "text/csv; charset=utf-8";
-  context.Response.Headers.ContentDisposition =
-    $"attachment; filename=\"PIM_zaloga_{organizationId}_{source.ToLowerInvariant()}_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv\"";
-  await stocks.WriteStockCsvAsync(
-    organizationId, source, onlyWeb, sourceCode, search, availability, maxAgeHours,
-    context.Response.Body, cancellationToken);
-  return Results.Empty;
+  var workbook = await stocks.BuildStockWorkbookAsync(
+    organizationId, sourceCode, search, availability, maxAgeHours, cancellationToken);
+  return Results.File(workbook,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    $"PIM_zaloga_{organizationId?.ToString() ?? "vsa"}_{DateTime.UtcNow:yyyyMMdd_HHmm}.xlsx");
 }).RequireAuthorization();
 
 app.MapGet("/izvoz/izdelki.csv", async (
-  HttpContext context, ProductWorkbenchService workbench,
+  HttpContext context, ProductWorkbenchService workbench, HeavyWorkGate gate,
   CancellationToken cancellationToken) =>
 {
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
   var query = context.Request.Query;
   string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
 
@@ -244,9 +359,11 @@ app.MapGet("/izvoz/izdelki.csv", async (
 //   brez predloge    — pregled, enosmeren.
 // Obseg je bodisi cel pogled bodisi samo izbrani izdelki.
 app.MapGet("/izvoz/izdelki.xlsx", async (
-  HttpContext context, ProductExportService export, ProductWorkbookService workbook,
-  CancellationToken cancellationToken) =>
+  HttpContext context, ProductExportService export, ProductWorkbookService workbook, HeavyWorkGate gate,
+  ExportResultStore results, CancellationToken cancellationToken) =>
 {
+  // Ista vrata kot izvoz v ozadju: neposredna povezava ne sme obiti omejitve socasnosti.
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
   var query = context.Request.Query;
   string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
   int? organizationId = int.TryParse(Value("podjetje"), out var parsedOrganization) ? parsedOrganization : null;
@@ -260,7 +377,12 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
   // servis: izvoz in uvoz morata brati isti seznam, sicer se datoteka ne da vrniti.
   var workbookTemplate = string.Equals(requested, "delovni", StringComparison.OrdinalIgnoreCase);
 
-  var selected = Value("items")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+  // "prazna=1" izrecno zahteva prazno predlogo (samo glava, brez vrstic) — uporablja jo delovna
+  // predloga SAOP, kadar tabela na strani se ne vsebuje artiklov. Brez tega bi manjkajoc "items"
+  // padel na privzeto vejo spodaj, ki vrne cel pogled, kar tu ni zeleno (glej ProductExportService.BuildAsync).
+  var selected = string.Equals(Value("prazna"), "1", StringComparison.Ordinal)
+    ? Array.Empty<string>()
+    : Value("items")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
   var filter = new ProductListFilter(
     organizationId, 0, ProductExportService.MaxRows, Value("isci"), Value("pogled"),
@@ -274,15 +396,135 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
 
   if (workbookTemplate)
   {
-    var workbookBytes = await workbook.BuildAsync(filter, selected, cancellationToken);
-    return Results.File(workbookBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ProductWorkbookService.FileName(DateTime.UtcNow));
+    // Zvezek gre na disk (ExportResultStore), ne v byte[]: cel katalog je 120 MB in dva socasna
+    // izvoza v pomnilniku sta bila izmerjena kot 1,3 GB delovnega pomnilnika procesa (2026-09-17).
+    // Datoteka ostane 2 uri v zacasni mapi in jo pobrise ista hramba kot pri izvozu v ozadju.
+    const string workbookContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    var tempPath = results.CreateTempFile();
+    await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
+      await workbook.BuildToAsync(stream, filter, selected, includeGroups: null, progress: null, cancellationToken);
+    var token = results.Put(tempPath, ProductWorkbookService.FileName(DateTime.UtcNow), workbookContentType);
+    return results.TryGet(token, out var path, out var fileName, out var contentType)
+      ? Results.File(path, contentType, fileName)
+      : Results.Problem("Izvoz je bil zgrajen, a datoteke ni mogoce najti.");
   }
 
   var bytes = await export.BuildAsync(filter, template, selected, cancellationToken);
   return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ProductExportService.FileName(template, DateTime.UtcNow));
 });
+
+// Prevzem zvezka, ki ga je zgradil ExportJobService v ozadju (/izdelki, gumb "Izvozi Excel").
+// Token zivi v ExportResultStore, datoteka na disku v zacasni mapi procesa — glej ExportJobService
+// za razlog, da gradnja sploh tece loceno od tega klica. Odgovor pretaka datoteko z diska.
+app.MapGet("/izvoz/prenos/{token:guid}", (Guid token, ExportResultStore results) =>
+  results.TryGet(token, out var path, out var fileName, out var contentType)
+    ? Results.File(path, contentType, fileName)
+    : Results.NotFound("Izvoz ni (vec) na voljo; morda je potekel ali ga je ze prevzel kdo drug."));
+
+// Izvoz odprtih napak validacije: isti filtri kot na /kakovost/napake, enaka oblika zvezka kot
+// na /izdelki. Vrstica je obarvana po resnosti (rdeca = napaka, bleda oranzna = opozorilo) —
+// uporabnikova zahteva 2026-09-10.
+app.MapGet("/izvoz/kakovost-napake.xlsx", async (
+  HttpContext context, QualityIssueExportService export, CancellationToken cancellationToken) =>
+{
+  var query = context.Request.Query;
+  string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
+  if (!int.TryParse(Value("podjetje"), out var organizationId))
+    return Results.BadRequest("Izberi podjetje: izvoz napak je po podjetju.");
+
+  var filter = new QualityIssueFilter(
+    organizationId, 0, QualityIssueExportService.MaxRows, Value("isci"), Value("profil"),
+    Value("resnost"), Value("blokira"), Value("polje"), "sl",
+    Value("drevo"), Value("kategorija"));
+
+  var bytes = await export.BuildAsync(filter, Value("nivo"), Value("spletisce"), cancellationToken);
+  return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    QualityIssueExportService.FileName(DateTime.UtcNow));
+}).RequireAuthorization();
+
+// Izvoz karantenskih zapisov: isti filtri kot na /kakovost/karantena.
+app.MapGet("/izvoz/karantena.xlsx", async (
+  HttpContext context, IntranetDataService data, CancellationToken cancellationToken) =>
+{
+  var query = context.Request.Query;
+  string? Value(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
+  if (!int.TryParse(Value("podjetje"), out var organizationId))
+    return Results.BadRequest("Izberi podjetje: izvoz karantene je po podjetju.");
+
+  var rows = await data.GetQuarantineAsync(organizationId, cancellationToken);
+  var search = Value("isci");
+  var source = Value("vir");
+  var entity = Value("entiteta");
+  var filtered = rows
+    .Where(row => string.IsNullOrWhiteSpace(source) || string.Equals(row.SourceCode, source, StringComparison.OrdinalIgnoreCase))
+    .Where(row => string.IsNullOrWhiteSpace(entity) || string.Equals(row.EntityType, entity, StringComparison.OrdinalIgnoreCase))
+    .Where(row => string.IsNullOrWhiteSpace(search)
+      || row.SourceCode.Contains(search, StringComparison.OrdinalIgnoreCase)
+      || row.EntityType.Contains(search, StringComparison.OrdinalIgnoreCase)
+      || (row.FailureReason?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+    .ToList();
+
+  var columns = new WorkbookColumn[]
+  {
+    new("Vir", Width: 16), new("Entiteta", Width: 20), new("Stran", WorkbookCellKind.Number, 10),
+    new("Razlog izločitve", Width: 60), new("Prejeto", WorkbookCellKind.DateTime, 18),
+  };
+  var cells = filtered.Select(row => (IReadOnlyList<object?>)new object?[]
+  {
+    row.SourceCode, row.EntityType, row.PageNumber, row.FailureReason ?? "Razlog ni podan", row.ReceivedUtc,
+  });
+  var bytes = WorkbookWriter.Write("Karantena", columns, cells);
+  return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "karantena-" + DateTime.UtcNow.ToPimLocal().ToString("yyyyMMdd-HHmm", System.Globalization.CultureInfo.InvariantCulture) + ".xlsx");
+}).RequireAuthorization();
+
+// Izvoz validacijskih profilov (/pravila/validacija): en list na poslovni nivo (ERP_SLO,
+// ERP_EU/THIRD, KOMERCIALA, SPLET), enak nabor aktivnih zahtev, ki jih ta stran že prikazuje
+// po nivoju (ValidationLayer.Resolve). "Prevedeno polje" je ime, kot ga uporabnik vidi na
+// kartici izdelka (ProductFieldLabels) — surova koda sama po sebi pove premalo.
+app.MapGet("/izvoz/validacijski-profili.xlsx", async (
+  HttpContext context, GovernanceReadService governance, IntranetDataService data, CancellationToken cancellationToken) =>
+{
+  var organization = await data.GetCurrentOrganizationAsync(cancellationToken);
+  if (organization is null) return Results.BadRequest("Aktivna organizacija ni na voljo.");
+
+  var profiles = await governance.GetValidationProfilesAsync(organization.OrganizationId, cancellationToken);
+  var rows = new List<(ValidationProfileRow Profile, FieldRequirementRow Requirement)>();
+  foreach (var profile in profiles)
+    foreach (var requirement in await governance.GetFieldRequirementsAsync(profile.ValidationProfileId, organization.OrganizationId, cancellationToken))
+      if (requirement.IsActive) rows.Add((profile, requirement));
+
+  static string Severity(string? severity) => string.Equals(severity, "WARNING", StringComparison.OrdinalIgnoreCase) ? "Opozorilo" : "Napaka";
+  static string Impact(ValidationProfileRow profile) => (profile.BlocksErp, profile.BlocksWeb) switch
+  {
+    (true, true) => "ERP in splet", (true, false) => "ERP", (false, true) => "Splet", _ => "Ne blokira",
+  };
+
+  var columns = new WorkbookColumn[]
+  {
+    new("Profil", Width: 18), new("Polje", Width: 28), new("Prevedeno polje", Width: 32),
+    new("Resnost", Width: 14), new("Obvezno", Width: 12), new("Vpliv", Width: 16),
+  };
+
+  var sheets = Enum.GetValues<PimValidationLayer>().Select(layer =>
+  {
+    var layerRows = rows
+      .Where(row => ValidationLayer.Resolve(row.Profile.ProfileCode, row.Profile.Scope, row.Profile.BlocksErp, row.Profile.BlocksWeb).Contains(layer))
+      .OrderBy(row => row.Profile.ProfileCode, StringComparer.Ordinal).ThenBy(row => row.Requirement.FieldCode, StringComparer.Ordinal);
+    var cells = layerRows.Select(row => (IReadOnlyList<object?>)new object?[]
+    {
+      row.Profile.ProfileCode, row.Requirement.FieldCode, ProductFieldLabels.For(row.Requirement.FieldCode),
+      Severity(row.Requirement.Severity), row.Requirement.IsRequired ? "Obvezno" : "Neobvezno", Impact(row.Profile),
+    });
+    // Code(), ne Label(): Excel ne dovoli "/" v imenu lista, Label() pa ga nosi (ERP_EU/THIRD).
+    return new WorkbookWriteSheet(ValidationLayer.Code(layer), columns, cells);
+  }).ToArray();
+
+  var bytes = WorkbookWriter.Write(sheets);
+  return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "validacijski-profili-" + DateTime.UtcNow.ToPimLocal().ToString("yyyyMMdd-HHmm", System.Globalization.CultureInfo.InvariantCulture) + ".xlsx");
+}).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial));
 
 // Izvoz trenutnega stanja po registrskem profilu. Vsebina gre neposredno iz SqlDataReader
 // v odziv; tudi 100.000 vrstic zato ne postane en velik byte[] v pomnilniku.
@@ -292,7 +534,7 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
 // ista procedura, ki jo uporabi tudi PIM.B2bWorker, zato razhajanja med tem, kar uporabnik
 // vidi, in tem, kar odide na splet, ne more biti.
 app.MapGet("/izvoz/splet-na-zahtevo", async (
-  HttpContext context, WebExportBuildService export, CancellationToken cancellationToken) =>
+  HttpContext context, WebExportBuildService export, AdminConsoleService console, CancellationToken cancellationToken) =>
 {
   var query = context.Request.Query;
   if (!int.TryParse(query["podjetje"], out var organizationId) || organizationId <= 0
@@ -303,12 +545,35 @@ app.MapGet("/izvoz/splet-na-zahtevo", async (
   string? Optional(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
   var profileCode = Optional("koda");
   if (profileCode is null) return Results.BadRequest("Manjka koda izvoznega profila.");
-  var fileName = WebExportBuildService.FileName(profileCode, DateTime.UtcNow);
+  // "ime" pride iz /splet za stalni par katalog.csv/stranke.csv; brez njega (npr. splet/izvoz
+  // z izbranim poljubnim profilom) ostane privzeto, casovno zigosano ime.
+  var fileName = Optional("ime") is { } requestedFileName
+    ? WebExportBuildService.SafeFileName(requestedFileName, profileCode, DateTime.UtcNow)
+    : WebExportBuildService.FileName(profileCode, DateTime.UtcNow);
   context.Response.ContentType = "text/csv; charset=utf-8";
   context.Response.Headers.ContentDisposition =
     $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
-  await export.WriteCsvAsync(organizationId, profileId, Optional("spletisce"), onlyPublished,
-    Optional("isci"), context.Response.Body, cancellationToken);
+  // Sled izvoza (migracija 172): datoteka, ki jo je uporabnik prenesel, je enakovreden dogodek
+  // kot datoteka, ki jo je ponoci sestavil urnik. Zapis ne sme ustaviti prenosa, zato so
+  // njegove napake pozrte v servisu.
+  var actor = context.User.Identity?.Name ?? "neznan";
+  var runKey = await console.BeginExportRunAsync(profileCode, organizationId, actor, cancellationToken);
+  try
+  {
+    var rows = await export.WriteCsvAsync(organizationId, profileId, Optional("spletisce"), onlyPublished,
+      Optional("isci"), context.Response.Body, cancellationToken);
+    await console.CompleteExportRunAsync(runKey, succeeded: true, rowCount: rows, fileName: fileName,
+      cancellationToken: cancellationToken);
+  }
+  catch (Exception exception)
+  {
+    // Glava je ze poslana, zato odgovora ni mogoce spremeniti v napako; zabelezimo pa jo,
+    // sicer bi bil skrajsan CSV videti kot uspesen izvoz.
+    await console.CompleteExportRunAsync(runKey, succeeded: false, error: exception.Message,
+      cancellationToken: CancellationToken.None);
+    throw;
+  }
+
   return Results.Empty;
 }).RequireAuthorization();
 

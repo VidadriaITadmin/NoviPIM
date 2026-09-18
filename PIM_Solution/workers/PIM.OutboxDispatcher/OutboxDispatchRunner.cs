@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
 using PIM.Operations;
+using PIM.Outbound;
 
 namespace PIM.OutboxDispatcher;
 
@@ -139,7 +140,13 @@ public sealed class OutboxDispatchRunner(string connectionString, string workerI
   static async Task<List<int>> ReadScheduledOrganizationsAsync(SqlConnection connection, CancellationToken cancellationToken)
   {
     await using var command = new SqlCommand(
-      "SELECT OrganizationId FROM ops.ScheduleProfile WHERE Pipeline=@Pipeline AND IsEnabled=1 ORDER BY OrganizationId;", connection);
+      """
+      SELECT profile.OrganizationId
+      FROM ops.ScheduleProfile profile
+      LEFT JOIN ops.OrganizationAutomationPolicy policy ON policy.OrganizationId = profile.OrganizationId
+      WHERE profile.Pipeline=@Pipeline AND profile.IsEnabled=1 AND COALESCE(policy.IsEnabled, CONVERT(bit, 1))=1
+      ORDER BY profile.OrganizationId;
+      """, connection);
     command.Parameters.Add("@Pipeline", SqlDbType.NVarChar, 100).Value = Pipeline;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var organizations = new List<int>();

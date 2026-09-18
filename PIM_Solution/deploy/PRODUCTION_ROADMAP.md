@@ -63,7 +63,6 @@ Dostop/UI:      PIM.Intranet + sec.* (vloge, prijava)
 | `PIM.OutboxDispatcher` | pošiljanje iz outboxa (SAOP write) | interval | ✅ / live TODO |
 | `PIM.Watchdog` | stale/Dead/Drift detekcija | interval (nadzor) | ✅ |
 | `PIM.AlertDispatcher` | dostava alarmov | interval (nadzor) | ✅ (dostava privzeto izklopljena) |
-| `PIM.FoundationWorker` | temeljni/skeletni | — | temelj |
 
 > Workerji so tipa **„zaženi in končaj"** → v produkciji tečejo kot **Scheduled Task na
 > interval**, ne kot klasična Windows storitev. `sp_getapplock` prepreči prekrivanje.

@@ -1,0 +1,5 @@
+# samo preveri stanje, ni� ne spremeni:
+.\Invoke-PendingMigrations.ps1 -ConnectionString "Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True" -Status
+
+# dejansko uveljavi manjkajo�e:
+.\Invoke-PendingMigrations.ps1 -ConnectionString "Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"

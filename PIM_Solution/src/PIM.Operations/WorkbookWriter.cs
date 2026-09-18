@@ -29,6 +29,9 @@ public enum WorkbookCellTone
 
   /// <summary>Rumenkasta: polje je pogoj za validacijo.</summary>
   Required,
+
+  /// <summary>Bleda oranzna: opozorilo — ne blokira, a je vredno pogledati (kakovost, napake).</summary>
+  Warning,
 }
 
 /// <param name="Value">Vrednost celice; enaka pravila kot pri golih vrednostih.</param>
@@ -44,6 +47,15 @@ public sealed record WorkbookColumn(
   string? Group = null, WorkbookCellTone HeaderTone = WorkbookCellTone.None);
 
 /// <summary>
+/// En list zvezka z več listi za pisanje; glej <see cref="WorkbookWriter.Write(IReadOnlyList{WorkbookWriteSheet})"/>.
+/// Ime se razlikuje od bralnega <see cref="WorkbookSheet"/> (WorkbookTable.cs), da se ne prekrivata.
+/// </summary>
+/// <param name="Notes">Vrstice pod tabelo tega lista — tam pove, česa v datoteki ni in zakaj.</param>
+public sealed record WorkbookWriteSheet(
+  string Name, IReadOnlyList<WorkbookColumn> Columns,
+  IEnumerable<IReadOnlyList<object?>> Rows, IReadOnlyList<string>? Notes = null);
+
+/// <summary>
 /// Zapis delovnega zvezka (.xlsx) — nasprotna smer <see cref="WorkbookTable"/>.
 ///
 /// Zakaj brez knjižnice: iz istega razloga kot pri branju. Zvezek je stisnjena mapa datotek
@@ -54,6 +66,12 @@ public sealed record WorkbookColumn(
 /// Zakaj ne CSV: CSV je za Excel dvoumen — ločilo, kodna stran in vodilne ničle v šifri
 /// artikla so odvisni od nastavitev računalnika, ki datoteko odpre. Zvezek nosi tip vsake
 /// celice s sabo, zato se šifra <c>0000000000001</c> odpre kot <c>0000000000001</c>.
+///
+/// Vrstice se pišejo naravnost v stisnjen vnos zvezka, ne najprej v en niz: list s sto tisoč
+/// vrsticami bi kot niz pojedel gigabajte, stisnjen pa je nekaj deset megabajtov. Zato
+/// vrstice pridejo kot zaporedje (<see cref="IEnumerable{T}"/> ali <see cref="IAsyncEnumerable{T}"/>),
+/// ki ga zapisovalnik prebere natanko enkrat — vir jih lahko bere iz baze po paketih, medtem
+/// ko se datoteka ze pise.
 ///
 /// Vrednosti celic so <c>string</c>, <c>decimal</c>/<c>double</c>/<c>int</c>/<c>long</c>,
 /// <c>DateTime</c>, <c>bool</c> (»da«/»ne«) ali <c>null</c> (prazna celica).
@@ -71,68 +89,202 @@ public static class WorkbookWriter
     string sheetName,
     IReadOnlyList<WorkbookColumn> columns,
     IEnumerable<IReadOnlyList<object?>> rows,
-    IReadOnlyList<string>? notes = null)
+    IReadOnlyList<string>? notes = null) =>
+    Write([new WorkbookWriteSheet(sheetName, columns, rows, notes)]);
+
+  /// <summary>Zvezek z enim ali več listi; vsak list ima svoje stolpce, vrstice in opombe.</summary>
+  public static byte[] Write(IReadOnlyList<WorkbookWriteSheet> sheets)
   {
+    ArgumentNullException.ThrowIfNull(sheets);
+    if (sheets.Count == 0) throw new ArgumentException("Zvezek brez listov ni zvezek.", nameof(sheets));
+    foreach (var sheet in sheets)
+      if (sheet.Columns.Count == 0) throw new ArgumentException("Zvezek brez stolpcev ni tabela.", nameof(sheets));
+
+    var stream = new MemoryStream();
+    using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+    {
+      PutEnvelope(archive, sheets.Select(sheet => SheetName(sheet.Name)).ToArray());
+      for (var index = 0; index < sheets.Count; index++)
+      {
+        using var writer = OpenSheet(archive, index + 1);
+        WriteSheet(writer, sheets[index]);
+      }
+    }
+
+    return stream.ToArray();
+  }
+
+  /// <summary>
+  /// En list, vrstice iz asinhronega vira: izvoz, ki vrstice bere iz baze po paketih
+  /// (ProductWorkbookService), jih pise sproti, ne da bi jih najprej vse zbral v pomnilniku.
+  /// </summary>
+  /// <param name="notes">Vrstice pod tabelo — tam pove, česa v datoteki ni in zakaj.</param>
+  public static async Task<byte[]> WriteAsync(
+    string sheetName,
+    IReadOnlyList<WorkbookColumn> columns,
+    IAsyncEnumerable<IReadOnlyList<object?>> rows,
+    IReadOnlyList<string>? notes = null,
+    CancellationToken cancellationToken = default)
+  {
+    using var stream = new MemoryStream();
+    await WriteAsync(stream, sheetName, columns, rows, notes, cancellationToken);
+    return stream.ToArray();
+  }
+
+  /// <summary>
+  /// Isto kot <see cref="WriteAsync(string, IReadOnlyList{WorkbookColumn}, IAsyncEnumerable{IReadOnlyList{object?}}, IReadOnlyList{string}?, CancellationToken)"/>,
+  /// a zapise naravnost v dani tok (datoteko na disku): zvezek celega kataloga meri desetine
+  /// megabajtov in vec hkratnih izvozov v pomnilniku bi pojedlo delovni pomnilnik streznika.
+  /// Tok mora dovoliti iskanje (ZipArchive pise osrednji imenik na koncu).
+  /// </summary>
+  public static async Task WriteAsync(
+    Stream destination,
+    string sheetName,
+    IReadOnlyList<WorkbookColumn> columns,
+    IAsyncEnumerable<IReadOnlyList<object?>> rows,
+    IReadOnlyList<string>? notes = null,
+    CancellationToken cancellationToken = default)
+  {
+    ArgumentNullException.ThrowIfNull(destination);
     ArgumentNullException.ThrowIfNull(columns);
     ArgumentNullException.ThrowIfNull(rows);
     if (columns.Count == 0) throw new ArgumentException("Zvezek brez stolpcev ni tabela.", nameof(columns));
 
-    var sheet = new StringBuilder();
-    sheet.Append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""");
-    sheet.Append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
+    using var archive = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true);
+    PutEnvelope(archive, [SheetName(sheetName)]);
+    using var writer = OpenSheet(archive, 1);
+    var headerRows = WriteSheetHead(writer, columns);
+    var rowNumber = headerRows;
+    var truncated = false;
+    await foreach (var row in rows.WithCancellation(cancellationToken))
+    {
+      if (rowNumber - headerRows >= MaxRows) { truncated = true; break; }
+      rowNumber++;
+      WriteRow(writer, columns, row, rowNumber);
+    }
+    WriteSheetTail(writer, columns, notes, headerRows, rowNumber, truncated);
+  }
+
+  /// <summary>Stalni deli zvezka: tipi vsebine, povezave, seznam listov in slogi.</summary>
+  static void PutEnvelope(ZipArchive archive, IReadOnlyList<string> sheetNames)
+  {
+    Put(archive, "[Content_Types].xml",
+      $$"""
+      <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+        {{string.Join("\n  ", Enumerable.Range(1, sheetNames.Count).Select(index =>
+          $"""<Override PartName="/xl/worksheets/sheet{index}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"""))}}
+        <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+      </Types>
+      """);
+    Put(archive, "_rels/.rels",
+      """
+      <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+      </Relationships>
+      """);
+    Put(archive, "xl/workbook.xml",
+      $$"""
+      <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <sheets>{{string.Join("", sheetNames.Select((name, index) =>
+          $"""<sheet name="{Escape(name)}" sheetId="{index + 1}" r:id="rId{index + 1}"/>"""))}}</sheets>
+      </workbook>
+      """);
+    // rId(sheetNames.Count + 1) je slog; vsak list dobi svoj rId po vrstnem redu pred njim.
+    Put(archive, "xl/_rels/workbook.xml.rels",
+      $$"""
+      <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        {{string.Join("\n  ", Enumerable.Range(1, sheetNames.Count).Select(index =>
+          $"""<Relationship Id="rId{index}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{index}.xml"/>"""))}}
+        <Relationship Id="rId{{sheetNames.Count + 1}}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+      </Relationships>
+      """);
+    Put(archive, "xl/styles.xml", Styles);
+  }
+
+  static void WriteSheet(TextWriter writer, WorkbookWriteSheet workbookSheet)
+  {
+    var columns = workbookSheet.Columns;
+    var headerRows = WriteSheetHead(writer, columns);
+    var rowNumber = headerRows;
+    var truncated = false;
+    foreach (var row in workbookSheet.Rows)
+    {
+      if (rowNumber - headerRows >= MaxRows) { truncated = true; break; }
+      rowNumber++;
+      WriteRow(writer, columns, row, rowNumber);
+    }
+    WriteSheetTail(writer, columns, workbookSheet.Notes, headerRows, rowNumber, truncated);
+  }
+
+  /// <summary>Zacetek lista do prve podatkovne vrstice; vrne stevilo naslovnih vrstic.</summary>
+  static int WriteSheetHead(TextWriter writer, IReadOnlyList<WorkbookColumn> columns)
+  {
+    writer.Write("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""");
+    writer.Write("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
 
     // Kadar stolpci nosijo skupine, ima list dve naslovni vrstici: skupine in imena.
     var hasGroups = columns.Any(column => !string.IsNullOrWhiteSpace(column.Group));
     var headerRows = hasGroups ? 2 : 1;
 
     // Zamrznjena naslovna vrstica: pri 20.000 vrsticah je brez tega že tretja stran ugibanje.
-    sheet.Append(CultureInfo.InvariantCulture, $"""<sheetViews><sheetView workbookViewId="0"><pane ySplit="{headerRows}" topLeftCell="A{headerRows + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>""");
+    writer.Write(FormattableString.Invariant($"""<sheetViews><sheetView workbookViewId="0"><pane ySplit="{headerRows}" topLeftCell="A{headerRows + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>"""));
 
-    sheet.Append("<cols>");
+    writer.Write("<cols>");
     for (var index = 0; index < columns.Count; index++)
     {
       var width = columns[index].Width > 0 ? columns[index].Width : DefaultWidth(columns[index]);
-      sheet.Append(CultureInfo.InvariantCulture, $"""<col min="{index + 1}" max="{index + 1}" width="{width.ToString("0.##", CultureInfo.InvariantCulture)}" customWidth="1"/>""");
+      writer.Write(FormattableString.Invariant($"""<col min="{index + 1}" max="{index + 1}" width="{width.ToString("0.##", CultureInfo.InvariantCulture)}" customWidth="1"/>"""));
     }
-    sheet.Append("</cols><sheetData>");
+    writer.Write("</cols><sheetData>");
 
     if (hasGroups)
     {
-      sheet.Append("""<row r="1">""");
+      writer.Write("""<row r="1">""");
       for (var index = 0; index < columns.Count; index++)
       {
         // Skupina se izpise samo nad prvim stolpcem skupine; sicer bi se ime ponavljalo
         // pri vsakem stolpcu in bi vrstica postala hrup namesto orientacije.
         var group = columns[index].Group;
         var repeats = index > 0 && string.Equals(columns[index - 1].Group, group, StringComparison.Ordinal);
-        AppendCell(sheet, Reference(index, 1), repeats ? null : group, WorkbookCellKind.Text, styleIndex: 1);
+        WriteCell(writer, Reference(index, 1), repeats ? null : group, WorkbookCellKind.Text, styleIndex: 1);
       }
-      sheet.Append("</row>");
+      writer.Write("</row>");
     }
 
-    sheet.Append(CultureInfo.InvariantCulture, $"""<row r="{headerRows}">""");
+    writer.Write(FormattableString.Invariant($"""<row r="{headerRows}">"""));
     for (var index = 0; index < columns.Count; index++)
-      AppendCell(sheet, Reference(index, headerRows), columns[index].Header, WorkbookCellKind.Text,
+      WriteCell(writer, Reference(index, headerRows), columns[index].Header, WorkbookCellKind.Text,
         styleIndex: columns[index].HeaderTone == WorkbookCellTone.Required ? 11 : 1);
-    sheet.Append("</row>");
+    writer.Write("</row>");
 
-    var rowNumber = headerRows;
-    var truncated = false;
-    foreach (var row in rows)
+    return headerRows;
+  }
+
+  static void WriteRow(TextWriter writer, IReadOnlyList<WorkbookColumn> columns, IReadOnlyList<object?> row, int rowNumber)
+  {
+    writer.Write(FormattableString.Invariant($"""<row r="{rowNumber}">"""));
+    for (var index = 0; index < columns.Count && index < row.Count; index++)
     {
-      if (rowNumber - headerRows >= MaxRows) { truncated = true; break; }
-      rowNumber++;
-      sheet.Append(CultureInfo.InvariantCulture, $"""<row r="{rowNumber}">""");
-      for (var index = 0; index < columns.Count && index < row.Count; index++)
-      {
-        var raw = row[index];
-        var tone = raw is WorkbookCell toned ? toned.Tone : WorkbookCellTone.None;
-        if (raw is WorkbookCell cell) raw = cell.Value;
-        AppendCell(sheet, Reference(index, rowNumber), raw, columns[index].Kind, StyleOf(columns[index].Kind, tone));
-      }
-      sheet.Append("</row>");
+      var raw = row[index];
+      var tone = raw is WorkbookCell toned ? toned.Tone : WorkbookCellTone.None;
+      if (raw is WorkbookCell cell) raw = cell.Value;
+      WriteCell(writer, Reference(index, rowNumber), raw, columns[index].Kind, StyleOf(columns[index].Kind, tone));
     }
+    writer.Write("</row>");
+  }
 
+  /// <summary>Opombe pod tabelo, konec podatkov in samodejni filter nad naslovno vrstico.</summary>
+  static void WriteSheetTail(
+    TextWriter writer, IReadOnlyList<WorkbookColumn> columns, IReadOnlyList<string>? notes,
+    int headerRows, int rowNumber, bool truncated)
+  {
     var noteLines = new List<string>(notes ?? []);
     if (truncated) noteLines.Add($"Zapisanih je prvih {MaxRows:N0} vrstic; datoteka je odrezana.");
     if (noteLines.Count > 0)
@@ -141,61 +293,20 @@ public static class WorkbookWriter
       foreach (var note in noteLines)
       {
         rowNumber++;
-        sheet.Append(CultureInfo.InvariantCulture, $"""<row r="{rowNumber}">""");
-        AppendCell(sheet, Reference(0, rowNumber), note, WorkbookCellKind.Text, styleIndex: 0);
-        sheet.Append("</row>");
+        writer.Write(FormattableString.Invariant($"""<row r="{rowNumber}">"""));
+        WriteCell(writer, Reference(0, rowNumber), note, WorkbookCellKind.Text, styleIndex: 0);
+        writer.Write("</row>");
       }
     }
 
-    sheet.Append("</sheetData>");
-    sheet.Append(CultureInfo.InvariantCulture, $"""<autoFilter ref="A{headerRows}:{ColumnName(columns.Count - 1)}{headerRows}"/>""");
-    sheet.Append("</worksheet>");
-
-    var stream = new MemoryStream();
-    using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
-    {
-      Put(archive, "[Content_Types].xml",
-        """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-          <Default Extension="xml" ContentType="application/xml"/>
-          <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-          <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-          <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-          <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-        </Types>
-        """);
-      Put(archive, "_rels/.rels",
-        """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-        </Relationships>
-        """);
-      Put(archive, "xl/workbook.xml",
-        $"""
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-          <sheets><sheet name="{Escape(SheetName(sheetName))}" sheetId="1" r:id="rId1"/></sheets>
-        </workbook>
-        """);
-      Put(archive, "xl/_rels/workbook.xml.rels",
-        """
-        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-          <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-          <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-        </Relationships>
-        """);
-      Put(archive, "xl/styles.xml", Styles);
-      Put(archive, "xl/worksheets/sheet1.xml", sheet.ToString());
-    }
-
-    return stream.ToArray();
+    writer.Write("</sheetData>");
+    writer.Write(FormattableString.Invariant($"""<autoFilter ref="A{headerRows}:{ColumnName(columns.Count - 1)}{headerRows}"/>"""));
+    writer.Write("</worksheet>");
   }
 
   /* Slog: 0 privzeto, 1 glava, 2 datum, 3 odstotek; 4–6 manjkajoca vrednost (vinsko rdeca)
-     v istih treh oblikah, 7–9 zahtevano polje (rumenkasta), 11 zahtevana glava. */
+     v istih treh oblikah, 7–9 zahtevano polje (rumenkasta), 11 zahtevana glava,
+     12–14 opozorilo (bleda oranzna) v istih treh oblikah. */
   const string Styles =
     """
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -208,19 +319,20 @@ public static class WorkbookWriter
         <font><sz val="11"/><name val="Calibri"/></font>
         <font><b/><sz val="11"/><name val="Calibri"/></font>
       </fonts>
-      <fills count="5">
+      <fills count="6">
         <fill><patternFill patternType="none"/></fill>
         <fill><patternFill patternType="gray125"/></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFEEF1F6"/><bgColor indexed="64"/></patternFill></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFF6D6D6"/><bgColor indexed="64"/></patternFill></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFFCEFC0"/><bgColor indexed="64"/></patternFill></fill>
+        <fill><patternFill patternType="solid"><fgColor rgb="FFFCE0C2"/><bgColor indexed="64"/></patternFill></fill>
       </fills>
       <borders count="2">
         <border><left/><right/><top/><bottom/><diagonal/></border>
         <border><left/><right/><top/><bottom style="thin"><color rgb="FFBFC7D2"/></bottom><diagonal/></border>
       </borders>
       <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-      <cellXfs count="12">
+      <cellXfs count="15">
         <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
         <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
         <xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
@@ -233,6 +345,9 @@ public static class WorkbookWriter
         <xf numFmtId="165" fontId="0" fillId="4" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
         <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
         <xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+        <xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/>
+        <xf numFmtId="164" fontId="0" fillId="5" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
+        <xf numFmtId="165" fontId="0" fillId="5" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/>
       </cellXfs>
     </styleSheet>
     """;
@@ -244,6 +359,7 @@ public static class WorkbookWriter
     {
       WorkbookCellTone.Missing => 4 + offset,
       WorkbookCellTone.Required => 7 + offset,
+      WorkbookCellTone.Warning => 12 + offset,
       // Brez podlage ostane stara razporeditev slogov: 0 besedilo in stevilo, 2 datum, 3 odstotek.
       _ => offset == 0 ? 0 : offset + 1,
     };
@@ -256,13 +372,13 @@ public static class WorkbookWriter
     _ => Math.Clamp(column.Header.Length + 4, 12, 42),
   };
 
-  static void AppendCell(StringBuilder sheet, string reference, object? value, WorkbookCellKind kind, int styleIndex)
+  static void WriteCell(TextWriter writer, string reference, object? value, WorkbookCellKind kind, int styleIndex)
   {
     var style = styleIndex == 0 ? "" : $" s=\"{styleIndex}\"";
     if (value is null || (value is string empty && empty.Length == 0))
     {
       // Prazna celica obdrzi svoj slog: prav pri njej podlaga nekaj pove — vrednost manjka.
-      sheet.Append(CultureInfo.InvariantCulture, $"""<c r="{reference}"{style}/>""");
+      writer.Write(FormattableString.Invariant($"""<c r="{reference}"{style}/>"""));
       return;
     }
 
@@ -271,19 +387,19 @@ public static class WorkbookWriter
     if (kind is WorkbookCellKind.DateTime && value is DateTime moment)
     {
       var serial = (moment - SerialEpoch).TotalDays;
-      sheet.Append(CultureInfo.InvariantCulture, $"""<c r="{reference}"{style}><v>{serial.ToString("0.######", CultureInfo.InvariantCulture)}</v></c>""");
+      writer.Write(FormattableString.Invariant($"""<c r="{reference}"{style}><v>{serial.ToString("0.######", CultureInfo.InvariantCulture)}</v></c>"""));
       return;
     }
 
     if (kind is WorkbookCellKind.Number or WorkbookCellKind.Percent && TryNumber(value, out var number))
     {
-      sheet.Append(CultureInfo.InvariantCulture, $"""<c r="{reference}"{style}><v>{number.ToString("0.##########", CultureInfo.InvariantCulture)}</v></c>""");
+      writer.Write(FormattableString.Invariant($"""<c r="{reference}"{style}><v>{number.ToString("0.##########", CultureInfo.InvariantCulture)}</v></c>"""));
       return;
     }
 
     // Besedilo gre v celico samo (inlineStr): brez tabele deljenih nizov je zapis tekoč,
     // datoteka pa nekaj odstotkov večja. Pri izvozu, ki nastane in odide, je to prava menjava.
-    sheet.Append(CultureInfo.InvariantCulture, $"""<c r="{reference}"{style} t="inlineStr"><is><t xml:space="preserve">{Escape(Convert.ToString(value, CultureInfo.InvariantCulture))}</t></is></c>""");
+    writer.Write(FormattableString.Invariant($"""<c r="{reference}"{style} t="inlineStr"><is><t xml:space="preserve">{Escape(Convert.ToString(value, CultureInfo.InvariantCulture))}</t></is></c>"""));
   }
 
   static bool TryNumber(object value, out decimal number)
@@ -345,7 +461,7 @@ public static class WorkbookWriter
         case '\r': break;
         case '\t': builder.Append(' '); break;
         default:
-          if (character >= ' ' || character == '	') builder.Append(character);
+          if (character >= ' ' || character == '\t') builder.Append(character);
           break;
       }
 
@@ -357,5 +473,12 @@ public static class WorkbookWriter
     var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
     using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
     writer.Write(content);
+  }
+
+  /// <summary>Odpre vnos lista za pisanje; vrstice gredo vanj sproti, stisnjene, ne prek niza.</summary>
+  static StreamWriter OpenSheet(ZipArchive archive, int sheetIndex)
+  {
+    var entry = archive.CreateEntry($"xl/worksheets/sheet{sheetIndex}.xml", CompressionLevel.Optimal);
+    return new StreamWriter(entry.Open(), new UTF8Encoding(false), bufferSize: 1 << 16);
   }
 }

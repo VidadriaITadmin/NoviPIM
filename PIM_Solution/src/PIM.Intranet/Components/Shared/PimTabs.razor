@@ -2,7 +2,7 @@
    uporabnik je povedal, da je kartic prevec in da hoèe le nekaj zavihkov, ki se res rabijo.
    Vsak zavihek je ena delovna stran; stevilo ob njem je vedno iz baze, nikoli vpisano. *@
 <nav class="pim-tabs" aria-label="@Label">
-  @foreach (var tab in Tabs)
+  @foreach (var tab in VisibleTabs)
   {
     <a class="pim-tab @(tab.Key == Active ? "active" : null)" href="@tab.Href"
        aria-current="@(tab.Key == Active ? "page" : null)">
@@ -16,7 +16,23 @@
 </nav>
 
 @code {
+  [Inject] AuthenticationStateProvider Authentication { get; set; } = default!;
+  [Inject] RoleAccessService Access { get; set; } = default!;
+
   [Parameter, EditorRequired] public required string Active { get; set; }
   [Parameter, EditorRequired] public required IReadOnlyList<PimTab> Tabs { get; set; }
   [Parameter] public string Label { get; set; } = "Zavihki";
+
+  IReadOnlyList<PimTab> VisibleTabs = [];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      var allowed = await Access.GetAllowedKeysAsync(user);
+      VisibleTabs = Tabs.Where(tab => tab.PermissionKey is null || allowed.Contains(tab.PermissionKey)).ToArray();
+    }
+    catch { VisibleTabs = []; }
+  }
 }

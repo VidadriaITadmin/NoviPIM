@@ -42,18 +42,22 @@ for (var index = 0; index < args.Length; index++)
   }
 }
 
-var settingsPath = FindLocalSettings();
-var connectionString = ReadConnectionString(settingsPath);
+var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
-  return Napaka("Manjka povezava Pim (PIM_CONNECTION_STRING ali appsettings.Local.json).");
+  return Napaka(LocalSettings.MissingConnectionMessage());
 
-var fetchSection = SourceFetcher.ReadFetchSection(settingsPath);
-var targetRoot = targetOverride
-  ?? Environment.GetEnvironmentVariable("PIM_FETCH_ROOT")
-  ?? Path.Combine(RepositoryRoot(settingsPath), "PIM_Solution", "data", "prevzem");
+var fetchSection = LocalSettings.Section("Fetch") ?? default;
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+
+// Vrstni red je enak povsod (glej PIM.Operations.SystemPaths): argument, okolje, register,
+// privzetek. Register je tretji zato, da rocni zagon z --target ostane mocnejsi od nastavitve
+// in se da preizkus izvesti drugje kot v produkcijski mapi.
+var targetRoot = targetOverride
+  ?? Environment.GetEnvironmentVariable("PIM_FETCH_ROOT")
+  ?? await PIM.Operations.SystemPaths.ResolveAsync(connection, PIM.Operations.SystemPaths.Landing)
+  ?? Path.Combine(LocalSettings.FindSolutionRoot(AppContext.BaseDirectory) ?? Directory.GetCurrentDirectory(), "data", "prevzem");
 var locations = await ReadLocationsAsync(connection, onlySource);
 
 if (locations.Count == 0)
@@ -101,7 +105,7 @@ await using var run = await OperationsRun.BeginAsync(connectionString, organizat
   $"{Environment.MachineName}:{Environment.ProcessId}");
 
 var prevzetih = 0;
-var napak = 0;
+var napake = new List<string>();
 try
 {
   foreach (var location in locations)
@@ -112,13 +116,14 @@ try
 
     if (outcome.Error is not null)
     {
-      napak++;
+      napake.Add($"{outcome.SourceCode}: {outcome.Error}");
       Console.Error.WriteLine($"[{outcome.SourceCode}] NAPAKA: {outcome.Error}");
     }
     else if (outcome.Fetched)
     {
       prevzetih++;
-      Console.WriteLine($"[{outcome.SourceCode}] prevzeto {outcome.Bytes:N0} bajtov -> {outcome.TargetPath}");
+      var arhiv = outcome.ArchivePath is null ? "" : $"; arhiv {Path.GetFileName(outcome.ArchivePath)}";
+      Console.WriteLine($"[{outcome.SourceCode}] prevzeto {outcome.Bytes:N0} bajtov -> {outcome.TargetPath}{arhiv}");
     }
     else
     {
@@ -128,11 +133,11 @@ try
 }
 finally
 {
-  await run.CompleteAsync(napak == 0, napak == 0 ? null : $"Neuspesnih prevzemov: {napak}.");
+  await run.CompleteAsync(napake.Count == 0, napake.Count == 0 ? null : string.Join("; ", napake));
 }
 
-Console.WriteLine($"Prevzem koncan: uspesno {prevzetih}, neuspesno {napak}, skupaj virov {locations.Count}.");
-return napak > 0 ? 1 : 0;
+Console.WriteLine($"Prevzem koncan: uspesno {prevzetih}, neuspesno {napake.Count}, skupaj virov {locations.Count}.");
+return napake.Count > 0 ? 1 : 0;
 
 static int Napaka(string sporocilo)
 {
@@ -177,40 +182,4 @@ static async Task<int?> ReadScheduledOrganizationAsync(SqlConnection connection)
   return await command.ExecuteScalarAsync() as int?;
 }
 
-/// <summary>
-/// Nastavitve korena repozitorija, ne prve najdene datoteke. Pod PIM_Solution stoji svoja
-/// appsettings.Local.json, ki nosi samo povezavo in nima odseka Fetch; ce bi worker vzel njo
-/// (kar se zgodi, ko ga pozene skripta iz PIM_Solution), poverilnic ne bi nasel. Koren
-/// prepoznamo po PIM_Solution\PIM.sln — isti postopek kot LocalSettingsLocator v intranetu.
-/// </summary>
-static string? FindLocalSettings()
-{
-  var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-  string? prvaNajdena = null;
 
-  while (directory is not null)
-  {
-    var candidate = Path.Combine(directory.FullName, "appsettings.Local.json");
-    if (File.Exists(candidate))
-    {
-      prvaNajdena ??= candidate;
-      if (File.Exists(Path.Combine(directory.FullName, "PIM_Solution", "PIM.sln"))) return candidate;
-    }
-
-    directory = directory.Parent;
-  }
-
-  return prvaNajdena;
-}
-
-static string RepositoryRoot(string? settingsPath) =>
-  settingsPath is null ? Directory.GetCurrentDirectory() : Path.GetDirectoryName(settingsPath)!;
-
-static string? ReadConnectionString(string? settingsPath)
-{
-  var value = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-  if (!string.IsNullOrWhiteSpace(value)) return value;
-  if (settingsPath is null) return null;
-  using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
-  return document.RootElement.GetProperty("ConnectionStrings").GetProperty("Pim").GetString();
-}

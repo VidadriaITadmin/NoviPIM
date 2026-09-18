@@ -28,8 +28,10 @@ Ne-Razor končne točke:
 | POST | `/auth/prijava` | `AllowAnonymous`, obvezen antiforgery token | prevzame `uporabniskoIme`, `geslo`, neobvezno `zapomniMe`; ob uspehu prijavi in preusmeri na `{PathBase}/nadzorna-plosca`, sicer na `{PathBase}/prijava?napaka=1` |
 | POST | `/odjava` | zahteva sejo (velja `FallbackPolicy`) | odjava iz piškotne sheme, preusmeritev na `{PathBase}/prijava` |
 | GET | `/health` | `AllowAnonymous` | vrne `{ "stanje": "zdravo" }` |
-| GET | `/izvoz/izdelki.xlsx` | zahteva sejo (velja `FallbackPolicy`) | **izvoz, ki ga ponuja stran**: isti filtri kot `/izdelki`, vključno s `kategorija=<drevo>:<koda>`, ki zoži vrstice IN stolpce atributov na nabor kategorije. Tri predloge (`predloga=delovni` — delovni list, ki se vrne na `/izdelki/uvoz`; `predloga=saop`; brez predloge pregled) in dva obsega (cel pogled ali `items=` za izbrane). Predloga SAOP ima stolpce iz registra `out.SaopXmlField` — ista datoteka za izvoz, urejanje in vračanje. Delovni zvezek dela `PIM.Operations.WorkbookWriter` (brez zunanje knjižnice): zamrznjena naslovna vrstica, samodejni filter, šifra artikla ostane besedilo. En klic v bazo, zgornja meja 20.000 vrstic je zapisana v datoteko |
-| GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki` (vključno s `podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), brez `podjetje` zajame vsa podjetja, prvi stolpec je podjetje; CSV s podpičjem in UTF-8 BOM, zgornja meja 20.000 vrstic je zapisana v datoteko, kadar je nabor večji |
+| GET | `/izvoz/izdelki.xlsx` | zahteva sejo (velja `FallbackPolicy`) | **izvoz, ki ga ponuja stran**: isti filtri kot `/izdelki`, vključno s `kategorija=<drevo>:<koda>`, ki zoži vrstice IN stolpce atributov na nabor kategorije. Tri predloge (`predloga=delovni` — delovni list, ki se vrne na `/izdelki/uvoz`; `predloga=saop`; brez predloge pregled) in dva obsega (cel pogled ali `items=` za izbrane). Predloga SAOP ima stolpce iz registra `out.SaopXmlField` — ista datoteka za izvoz, urejanje in vračanje. Delovni zvezek dela `PIM.Operations.WorkbookWriter` (brez zunanje knjižnice): zamrznjena naslovna vrstica, samodejni filter, šifra artikla ostane besedilo. Seznam se bere po straneh po 2.000 (baza pove `TotalCount`), brez lastne zgornje meje — edina meja je meja lista .xlsx (`WorkbookTable.MaxRows`, 1.048.000), ki se zapiše v datoteko, kadar je nabor večji. Stran `/izdelki` te povezave ne uporablja več neposredno: gumb **Izvozi Excel** sproži gradnjo v ozadju (`ExportJobService`) in prenos prek `/izvoz/prenos/{token}` |
+| GET | `/izvoz/prenos/{token}` | zahteva sejo (velja `FallbackPolicy`) | prevzem zvezka, ki ga je v ozadju zgradil `ExportJobService` (gumb Izvozi Excel na `/izdelki`); token je ključ v `ExportResultStore` — datoteka leži na disku v začasni mapi procesa (od 2026-09-17, prej `byte[]` v pomnilniku), velja 2 uri, odgovor jo pretaka z diska; po poteku ali ponovnem zagonu strežnika vrne 404. Stran ob koncu gradnje prenos sproži sama (`wwwroot/js/pim-export.js`) in pokaže še povezavo »prenesi ročno« |
+| — | vsi `/izvoz/*.xlsx` in `/izvoz/izdelki.csv` | | gredo skozi `HeavyWorkGate.Exports` (2026-09-17): hkrati tečeta največ dva izvoza (nastavitev `Intranet:MaxConcurrentExports`), ostali čakajo po vrstnem redu; neposredna povezava ne obide vrat, ki jih uporablja tudi izvoz v ozadju |
+| GET | `/izvoz/izdelki.csv` | zahteva sejo (velja `FallbackPolicy`) | izvozi trenutni filtriran pogled seznama izdelkov; isti filtri kot `/izdelki` (vključno s `podjetje`, `oddelek`, `aktivnost`, `objava`, `popolnost`), brez `podjetje` zajame vsa podjetja, prvi stolpec je podjetje; CSV s podpičjem in UTF-8 BOM; zgornja meja je `WorkbookTable.MaxRows` (1.048.000, ni poslovna meja) in je zapisana v datoteko, kadar je nabor večji |
 
 Avtentikacija je piškotna (`CookieAuthenticationDefaults`), `LoginPath` je `/prijava`,
 `AccessDeniedPath` pa `/brez-dostopa`. Globalni `FallbackPolicy` zahteva
@@ -141,7 +143,12 @@ postavk, ki jih vloga ne sme odpreti, ne kaže več: `PimNavigation` ima vloge n
 | `/pravila`, `/pravila/validacija`, `/pravila/slovar`, `/pravila/preslikave` | registri pravil | `ADMIN, CATALOG_EDITOR, COMMERCIAL` | `MainLayout` |
 | `/nastavitve` in `/nastavitve/{atributi,kategorije,skladisca,kanali,jeziki}` | bralni pogledi nastavitev kataloga | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
 | `/nastavitve/nabori-atributov` | `Pages/CategoryAttributeSets.razor` — pregled naborov atributov po kategorijah za vsako drevo (svetila, videlektro) z množičnim urejanjem (izbira več, lepljenje seznama, kopiranje nabora); migracija 170 | `ADMIN, CATALOG_EDITOR` | `MainLayout` |
-| `/sistem`, `/sistem/napake`, `/sistem/vloge` | sistemska razdelilna stran in bralni pogledi | `ADMIN` | `MainLayout` |
+| `/sistem` | `Pages/System.razor` — **nadzorna plošča skrbnika** (migracija 172): kaj potrebuje pozornost, stanje postopkov z vklopom/izklopom in razmikom, nočni samotest s trajanji, artikli po podjetjih, zadnji izvoz po profilu; samodejno osveževanje vsako minuto | `ADMIN` | `MainLayout` |
+| `/sistem/sled` | `Pages/AdminActivity.razor` — kdo je kaj spremenil, kdaj in iz katere vrednosti v katero; en seznam iz šestih virov (`intranet.GetUserActivityTrail`) | `ADMIN` | `MainLayout` |
+| `/sistem/izvozi` | `Pages/AdminExports.razor` — zagoni izvozov: vrstice, stolpci, velikost, trajanje, SHA-256 (`out.ExportRun`) | `ADMIN` | `MainLayout` |
+| `/sistem/zmogljivost` | `Pages/AdminPerformance.razor` — zagoni, uspešnost in trajanja po postopku; označi postopke, ki trajajo dlje od svojega razmika | `ADMIN` | `MainLayout` |
+| `/sistem/samotest` | `Pages/AdminSelfTest.razor` — zgodovina nočnih samotestov | `ADMIN` | `MainLayout` |
+| `/sistem/napake`, `/sistem/vloge` | bralni pogledi | `ADMIN` | `MainLayout` |
 | `/system/integracije` | `Pages/SystemIntegrations.razor` | `ADMIN` | `MainLayout` |
 | `/system/uporabniki` | `Pages/SystemUsers.razor` | `ADMIN` | `MainLayout` |
 | `/Error` | `Pages/Error.razor` | zahteva sejo (fallback) | privzeto |
@@ -197,13 +204,13 @@ kliče HTTP-ja neposredno — to varovalko preverja test F8.
 | `GetCurrentOrganizationAsync` | `SELECT TOP (1) … FROM dbo.OrganizationConfig WHERE IsActive = 1` | `MainLayout` in vse strani s podatki |
 | `PimNavigation.For` | katalog poti v kodi + filtriranje po zahtevkih vlog | `NavMenu` |
 | `GetDashboardAsync` | `intranet.GetDashboard` | `/nadzorna-plosca` |
-| `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); `@OrganizationId` je neobvezen — `NULL` pomeni **vsa podjetja**, neznano podjetje vrne prazen nabor; filtri iskanje, shranjen pogled, podjetje, proizvajalec, dobavitelj, skupina, oddelek, ERP/spletni status, aktivnost, zastavica za splet, razred popolnosti, **kategorija z vsemi potomci** (migracija 175), razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
-| `ProductWorkbenchService.GetProductListViewsAsync` | `intranet.GetProductListViews` (števci osmih shranjenih pogledov); `NULL` podjetje pomeni vsa | `/izdelki` |
+| `ProductWorkbenchService.GetProductListAsync` | `intranet.GetProductList` (2 nabora: vrstice + `TotalCount`); `@OrganizationId` je neobvezen — `NULL` pomeni **vsa podjetja**, neznano podjetje vrne prazen nabor; filtri iskanje, shranjen pogled (zdaj filter **Napaka** na strani, ne vrstica zavihkov — 2026-09-17), podjetje, proizvajalec, dobavitelj, skupina, oddelek, ERP/spletni status, aktivnost, zastavica za splet, razred popolnosti, **kategorija z vsemi potomci** (migracija 175), razvrstitev in stran | `/izdelki`, `/izvoz/izdelki.csv` |
 | `ProductWorkbenchService.GetProductListFacetsAsync` | `intranet.GetProductListFilters` (4 nabori: proizvajalci, dobavitelji, skupine, oddelki); `FacetLabel` je **ime partnerja** iz `canon.PartnerName` (pogled nad `b2b.Customer`), `FacetValue` ostane šifra, ker ta potuje v SAOP; `NULL` podjetje pomeni vsa | `/izdelki` |
-| `ProductExportService.BuildAsync` | `intranet.GetProductList` (en klic, `@Take` do 20.000) + `intranet.GetProductFieldValues` in `intranet.GetSaopTemplateColumns` (migracija 117) | `/izvoz/izdelki.xlsx` |
-| `ProductWorkbookService.BuildAsync` | `intranet.GetProductList` + `intranet.GetProductWorkbook` (migracije 171, 173 in 175; šest naborov: vrednosti polj, kategorije po straneh, atributi, slike, šifrant atributov z naborom kategorije, register zahtevanih polj) | `/izvoz/izdelki.xlsx?predloga=delovni` |
-| `ProductWorkbookService.PreviewAsync` | isti klic; predogled obdrži samo celice, ki se razlikujejo od zapisanega stanja | `/izdelki/uvoz` |
-| `ProductWorkbookService.ApplyAsync` | `pim.SaveProductTexts`, `pim.SaveProductAttributes`, `pim.SetProductCategories`, `out.EnqueueSaopItemChanges` — vsak stolpec gre k svojemu lastniku | `/izdelki/uvoz` |
+| `ProductExportService.BuildAsync` | `intranet.GetProductList` (po straneh po 2.000, brez lastne zgornje meje; 2026-09-17) + `intranet.GetProductFieldValues` in `intranet.GetSaopTemplateColumns` (migracija 117) | `/izvoz/izdelki.xlsx` |
+| `ProductWorkbookService.BuildAsync` | `intranet.GetProductList` po straneh po 2.000 + `intranet.GetProductWorkbook` (migracije 171, 173, 175 in 191; šest naborov: vrednosti polj, kategorije po straneh, atributi, mediji, šifrant atributov z naborom kategorije, register zahtevanih polj). Od 2026-09-17: šifrant in register en klic **brez** izdelkov (s kategorijo, kadar je izbrana; sicer celoten šifrant kot pri uvozu), podatki na vrstico pa po paketih po 2.000 sproti med pisanjem (`WorkbookWriter.WriteAsync`) — v pomnilniku je en paket, ne ves pogled | `/izvoz/izdelki.xlsx?predloga=delovni`, `ExportJobService` |
+| `ExportJobService.StartWorkbookExport` | isti klici kot `ProductWorkbookService.BuildAsync`, a v ozadju (Task v lastni DI seji — preživi zaprtje strani). Od 2026-09-17: opravilo najprej čaka na `HeavyWorkGate.Exports` (stanje **Queued** s položajem v vrsti; hkrati največ dva izvoza), nato gradi naravnost v datoteko na disku (`ExportResultStore.CreateTempFile`, `WorkbookWriter.WriteAsync(Stream)`) in sproti javlja število zapisanih vrstic (stanje Running, `RowCount`); časovna meja 90 min, po njej Failed. Seznam se bere po straneh po 20.000 (meja procedure), podatki na vrstico po paketih po 5.000. Stran dobi stanje prek dogodka `Changed` | `/izdelki` (gumb Izvozi Excel), `/izvoz/prenos/{token}` |
+| `ProductWorkbookService.PreviewAsync` | isti klic; predogled obdrži samo celice, ki se razlikujejo od zapisanega stanja; trenutno stanje izdelkov bere po paketih po 5.000 (`ReadBatchedAsync`, 2026-09-17); stran ga požene znotraj `HeavyWorkGate.Imports` (hkrati največ dva uvoza) | `/izdelki/uvoz` |
+| `ProductWorkbookService.ApplyAsync` | od 2026-09-17 (migracija 218): besedila in atributi vseh vrstic gredo zbrano po podjetjih v `pim.SaveProductTextsBulk` / `pim.SaveProductAttributesBulk` po 1.000 izdelkov na klic (en MERGE, ena serija zgodovine, ena množična validacija `val.RunValidationForProducts`) — prej ena procedura in ena validacija na vrstico (10 s na vrstico); kategorije in strani še vedno `pim.SetProductCategories` na (izdelek, stran), ERP polja `out.EnqueueSaopItemChanges` po podjetju. Napredek javlja stran (`IProgress<string>`), izdelek, ki ga paket zavrne, dobi opozorilo s številko vrstice | `/izdelki/uvoz` |
 | `ProductEditService.SaveTextsAsync` | `pim.SaveProductTexts` (migracija 111) — piše besedila, ki so last PIM, sproži zgodovino prek sprožilcev in **takoj revalidira ta en izdelek**; besedilo, ki ga piše SAOP, zavrne z napako 52402 | `/izdelki/{id}` |
 | `ProductEditService.SaveAttributesAsync` | `pim.SaveProductAttributes` (migracija 111) — enako za lastnosti izdelka | `/izdelki/{id}` |
 | `SaopWriteService.EnqueueAsync` | `out.EnqueueSaopItemChanges` — polje, ki ga PIM piše nazaj v SAOP, gre v odhodno vrsto in čaka odobritev | `/izdelki/{id}`, `/izvozi/mnozicno`, `/saop/artikli` |
@@ -377,6 +384,20 @@ Vsi projekti F10 so v `PIM.sln`; merodajni zagon ostaja
 
 ---
 
+## 5.1 Ura in časovni pas
+
+Baza hrani UTC. Pretvorbo v našo uro dela **izključno** `Services/PimTime.cs`:
+
+- pas je izbran izrecno prek `Pim:TimeZone` (privzeto `Central European Standard Time`) in
+  nastavljen ob zagonu z `PimTime.Configure(builder.Configuration)`;
+- `DateTime.ToLocalTime()` v intranetu ni dovoljen — vrne čas *strežnika*, kar je na razvojnem
+  računalniku slučajno pravilno, na IIS strežniku v UTC pa dve uri narobe; napaka se pokaže
+  šele po objavi. Prepoved varuje `PIM.F10.AdminConsoleUxTests`;
+- za obstoječe strani obstaja razširitev `.ToPimLocal()`, da je zamenjava zamenjava imena in
+  ne prepis izraza;
+- oblike so na enem mestu: `PimTime.Format` (na minuto), `FormatExact` (na sekundo),
+  `FormatWithAge` (ura + »pred 4 min«) in `PimTime.Duration` (850 ms, 12 s, 4 min 20 s).
+
 ## 6. UX omejitve
 
 Vir pravil: `PIM_Solution/UX/README.md`, `TARGET_STATE.md`, `LESSONS.md`.
@@ -490,9 +511,9 @@ Za preverjanje obeh načinov gostovanja se ista instanca odziva na `/…` in `/P
 - [ ] `/nadzorna-plosca`: pet KPI kartic v eni vrsti na namizju, paneli za kakovost,
       procese, opozorila, integracije in hitre dostope; nobene izmišljene vsebine.
 - [ ] `/izdelki`: privzeto so vidna **vsa podjetja**, stolpec Podjetje pove, čigav je
-      izdelek; filter podjetja zoži seznam, števce zavihkov in vrednosti spustnih
-      seznamov. Iskanje in status filtrirata **strežniško**; »Prejšnja/Naslednja« se
-      pravilno onemogočita na robovih; števec strani ustreza `TotalCount`.
+      izdelek; filter podjetja zoži seznam in vrednosti spustnih seznamov. Iskanje in
+      status filtrirata **strežniško**; »Prejšnja/Naslednja« se pravilno onemogočita na
+      robovih; števec strani ustreza `TotalCount`.
 - [ ] `/izdelki`: izbira izdelkov iz **dveh podjetij** onemogoči »Uredi izbrane« in to
       pove na glas; izbira iz enega podjetja odpre množično urejanje tega podjetja.
 - [ ] `/izdelki/{id}`: glava, profili in odprte težave se ujemajo z bazo; neobstoječ

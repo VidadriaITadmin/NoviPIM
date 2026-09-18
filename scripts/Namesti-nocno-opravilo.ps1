@@ -9,7 +9,7 @@
 
   Pozeni v PowerShellu kot skrbnik:
 
-      pwsh -File scripts\Namesti-nocno-opravilo.ps1
+      powershell -ExecutionPolicy Bypass -File scripts\Namesti-nocno-opravilo.ps1
 
   Kaj naredi: ustvari (ali posodobi) nalogo "PIM nocno opravilo", ki ob dogovorjeni uri pozene
   Nocno-vse.ps1 pod tvojim racunom. Naloga tece tudi, ce racunalnik ob tisti uri ni bil prizgan
@@ -74,8 +74,10 @@ $nastavitve = New-ScheduledTaskSettingsSet `
   -DontStopIfGoingOnBatteries `
   -AllowStartIfOnBatteries
 
+# DOMENA\uporabnik: samo $env:USERNAME domenski racunalnik zavrne (glej Namesti-opravila.ps1).
 Register-ScheduledTask -TaskName $ImeNaloge -Action $akcija -Trigger $prozilec `
-  -Settings $nastavitve -User $env:USERNAME -RunLevel Limited -Force | Out-Null
+  -Settings $nastavitve -User ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
+  -RunLevel Limited -Force | Out-Null
 
 Write-Output "Naloga '$ImeNaloge' je registrirana; zagon vsak dan ob $Ura."
 Write-Output "Ukaz: $($ukaz.Program) $($ukaz.Argumenti)"

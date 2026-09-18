@@ -61,7 +61,7 @@
           @foreach (var row in Rows)
           {
             <tr class="@(row.Severity == "Error" && row.AcknowledgedUtc is null ? "row-attention" : null)">
-              <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td>
+              <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td>
               <td><span class="status-chip @Chip(row.Severity)"><span class="visually-hidden">Resnost: </span>@Resnost(row.Severity)</span></td>
               <td>@Korak(row.Step)</td>
               <td>@row.EntityKey<br /><span class="hint">@row.FieldName</span></td>

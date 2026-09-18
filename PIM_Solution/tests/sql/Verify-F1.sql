@@ -1,7 +1,13 @@
 SET NOCOUNT ON;
 
-IF (SELECT COUNT(*) FROM val.ValidationProfile WHERE ProfileCode IN (N'ERP_L1', N'WEB_B2C') AND IsActive = 1) <> 2
-  THROW 52101, 'F1 preverjanje: manjkajo aktivni validacijski profili.', 1;
+/* 2026-09-16: ERP_L1 in WEB_B2C sta bila po uporabnikovi odlocitvi umaknjena iz validacije
+   (nadomestila sta ju ERP_L1_EU/SLO/THIRD/SHARED_CORE in WEB_svetila_si/WEB_videlektro/
+   SHARED_CORE) - preverba zdaj zahteva vsaj en aktiven blokirajoc profil na vsako stran, ne
+   vec ti dve konkretni, zdaj neaktivni/nescinkovito imeni. */
+IF (SELECT COUNT(*) FROM val.ValidationProfile WHERE BlocksErp = 1 AND IsActive = 1) < 1
+  THROW 52101, 'F1 preverjanje: ni nobenega aktivnega validacijskega profila, ki bi blokiral ERP.', 1;
+IF (SELECT COUNT(*) FROM val.ValidationProfile WHERE BlocksWeb = 1 AND IsActive = 1) < 1
+  THROW 52104, 'F1 preverjanje: ni nobenega aktivnega validacijskega profila, ki bi blokiral splet.', 1;
 
 IF EXISTS
 (

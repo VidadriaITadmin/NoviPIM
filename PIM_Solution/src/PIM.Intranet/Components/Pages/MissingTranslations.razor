@@ -7,6 +7,8 @@
 <PimPage Title="Manjkajoči prevodi" Subtitle="Vrednosti iz vseh virov, za katere slovar lastnosti in jezika nima prevoda. Vrstica nastane med preslikavo, zato je seznam posledica dejanskega zajema, ne domneve. Slovar je skupen vsem podjetjem — prevod, ki ga vpišeš, velja povsod."
          Crumbs="Crumbs" />
 
+<PimTabs Active="prevodi" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+
 <section class="ui-card toolbar" role="search" aria-labelledby="translation-filter-title">
   <h2 id="translation-filter-title" class="visually-hidden">Filtriranje manjkajočih prevodov</h2>
   <label class="visually-hidden" for="translation-language">Jezik</label>
@@ -31,7 +33,8 @@
             <td><span class="code-value">@row.Language</span></td>
             <td>@row.SourceValue</td>
             <td class="numeric">@row.SeenCount.ToString("N0")</td>
-            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+            <td>@row.LastSeenUtc.ToPimLocal().ToString("g")</td>
+            <td><a class="small-action translation-action" href="@DictionaryHref(row)">Dodaj prevod</a></td>
           </tr>
         }
       </Rows>
@@ -50,7 +53,7 @@
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Kakovost", "kakovost"), new("Manjkajoči prevodi")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new("Domena"), new("Jezik"), new("Vrednost iz vira"), new("Pojavitev", Numeric: true), new("Nazadnje")
+    new("Domena"), new("Jezik"), new("Vrednost iz vira"), new("Pojavitev", Numeric: true), new("Nazadnje"), new("Dejanje")
   ];
 
   protected override async Task OnInitializedAsync()
@@ -70,4 +73,7 @@
   }
 
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+
+  static string DictionaryHref(PIM.Intranet.Services.MissingTranslationRow row) =>
+    $"pravila/slovar?domena={Uri.EscapeDataString(row.Domain)}&vrednost={Uri.EscapeDataString(row.SourceValue)}&jezik={Uri.EscapeDataString(row.Language)}";
 }

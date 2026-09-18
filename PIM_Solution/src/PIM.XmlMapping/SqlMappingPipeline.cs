@@ -82,6 +82,20 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
       apply.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
       await apply.ExecuteNonQueryAsync(cancellationToken);
 
+      // Zastoj (deadlock) s hkratno validacijo ni napaka strani, a ga map.ProcessRawInbox v CATCH
+      // pošlje v karanteno. 2026-09-15 je tako obtičalo 8 strani (5 od 6 strani Vidadrie) in
+      // VatRateId ni prišel v katalog. Take strani gredo nazaj na Pending in postopek se ponovi.
+      // Migracija 211 tak zastoj z val.RunValidation/val.Promote naredi redek (SET DEADLOCK_PRIORITY
+      // LOW v obeh — ob zastoju z map.ProcessRawInbox zdaj vedno izgubi validacija/promocija, ne
+      // preslikava), a ga ne izniči (SQL Server zastoj vseeno lahko odkrije; glej glavo migracije
+      // 211 za razlago, zakaj namerno ne z izključno čakajočo ključavnico). Ta zanka zato ostane.
+      for (var attempt = 1; attempt <= DeadlockRetries; attempt++)
+      {
+        if (await ReopenDeadlockedAsync(connection, runId, organizationId, sourceCode, cancellationToken) == 0) break;
+        await Task.Delay(TimeSpan.FromSeconds(5 * attempt), cancellationToken);
+        await apply.ExecuteNonQueryAsync(cancellationToken);
+      }
+
       // Vse, kar ni izdelek, ima svoj postopek: sifranti od migracije 064, nazivi in jeziki od
       // 072, lastnosti po meri in pravilo zaloge od 076, valute/ceniki/konti/planiranje od 082,
       // stranke in artikel pri stranki od 087. map.ProcessRawInbox jih preskoci po
@@ -386,6 +400,49 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
     }
 
     await transaction.CommitAsync(cancellationToken);
+  }
+
+  private const int DeadlockRetries = 3;
+
+  /// <summary>
+  /// Strani tega zagona, ki jih je map.ProcessRawInbox dal v karanteno samo zaradi zastoja, vrne
+  /// na Pending in pobriše zavrnitve, ki jih je ob tem zapisal v map.UnmappedValue — sicer bi
+  /// vrednosti ostale na seznamu zavrnjenih, čeprav jih ponovni poskus sprejme. Postopek sporočilo
+  /// hrani brez številke napake, zato se zastoj prepozna po besedilu (SQL Server: "deadlocked").
+  /// Po migraciji 211 (SET DEADLOCK_PRIORITY LOW v val.RunValidation/val.Promote) naj bo ta primer
+  /// redek — map.ProcessRawInbox ob zastoju z njima praviloma zmaga in te vrstice sploh ne vidi.
+  /// </summary>
+  private static async Task<int> ReopenDeadlockedAsync(
+    SqlConnection connection,
+    Guid runId,
+    int organizationId,
+    string sourceCode,
+    CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand("""
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DECLARE @Reopened TABLE (InboxId bigint PRIMARY KEY);
+      UPDATE raw.Inbox SET Status=N'Pending', ProcessedUtc=NULL, FailureReason=NULL
+      OUTPUT inserted.InboxId INTO @Reopened
+      WHERE RunId=@RunId AND OrganizationId=@OrganizationId AND SourceCode=@SourceCode
+        AND Status=N'Quarantined' AND FailureReason LIKE N'%deadlock%';
+      DELETE rejected
+      FROM map.UnmappedValue rejected
+      INNER JOIN map.ExtractedValue value ON value.ExtractedValueId=rejected.ExtractedValueId
+      INNER JOIN @Reopened reopened ON reopened.InboxId=value.InboxId
+      WHERE rejected.Reason LIKE N'%deadlock%';
+      COMMIT TRANSACTION;
+      SELECT COUNT(*) FROM @Reopened;
+      """, connection)
+    {
+      // Ena stran nosi do ~150.000 zavrnitev; privzetih 30 sekund za brisanje ne zadošča.
+      CommandTimeout = ApplyCommandTimeoutSeconds
+    };
+    command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier).Value = runId;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
   }
 
   private static async Task QuarantineAsync(

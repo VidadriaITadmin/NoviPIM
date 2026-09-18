@@ -18,6 +18,7 @@ using PIM.OutboxDispatcher;
 const int organizationId = 9821;
 const string vObstojecem = "F8D-OBSTOJEC";
 const string vNovem = "F8D-NOV";
+const string vPimuNeVSaop = "F8D-SAMO-PIM";
 
 var connectionString = ReadConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -190,9 +191,30 @@ try
     $"SELECT TOP(1) AssignedSaopItemId FROM out.SaopItemAssignment WHERE OutboxMessageId={zaSifro};"),
     "Šifra iz Keys/Key[SifraArtikla] se mora zapisati");
 
+  /* --- 7) Artikel je v PIM, v SAOP pa ne ------------------------------------------------ */
+  //
+  // Migracija 169. Doslej je bila metoda izpeljana iz vprašanja "ali vrstica obstaja v
+  // canon.Product", kar je držalo samo, dokler je artikle smel ustvarjati izključno SAOP.
+  // Ko jih začne ustvarjati še scraper oziroma ročni Excel, je tak artikel v PIM in ga v SAOP
+  // ni — staro merilo bi zanj izbralo PATCH na zapis, ki ga v SAOP ni.
+  //
+  // vObstojecem in vPimuNeVSaop sta v canon.Product oba; razlikujeta se samo po ErpExistence.
+  // Zgoraj (točka 3) je vObstojecem odšel s PATCH, tu mora vPimuNeVSaop oditi s POST — torej
+  // odloča zastavica in ne prisotnost vrstice.
+
+  var samoVPimu = await EnqueueAsync(vPimuNeVSaop, "ProductText.TITLE_ERP.sl", "Naziv iz PIM", batchId);
+  fixture.RespondByMethod(post: SaopFixture.CreatedWithCode, patch: SaopFixture.UpdateOk);
+  var izPima = await RunAsync(dryRun: false, sender: NewSender());
+
+  Equal(1, izPima.Documents, "Artikel, ki čaka na SAOP, je en dokument");
+  Equal("POST", fixture.LastRequest!.Method,
+    "Artikel v canon.Product z ErpExistence=NOT_YET_IN_ERP mora oditi s POST, ne s PATCH");
+  Equal("/api/Item/AddItemsGeneralData", fixture.LastRequest!.Path, "Pot za ustvarjanje artikla");
+  Equal("Sent", await StatusAsync(samoVPimu), "Po ustvarjanju je sporočilo poslano");
+
   Console.WriteLine("F8 dokument: naročilo, združevanje sprememb v en dokument, suhi tek brez porabe poskusa, "
-    + "Basic + OrganisationId + application/xml, HTTP 200 z napako v telesu, samopopravek ADD/PATCH in "
-    + "prevzem dodeljene šifre PASS.");
+    + "Basic + OrganisationId + application/xml, HTTP 200 z napako v telesu, samopopravek ADD/PATCH, "
+    + "prevzem dodeljene šifre in POST za artikel, ki ga SAOP še ne pozna, PASS.");
   return 0;
 }
 finally
@@ -252,11 +274,20 @@ async Task SetupAsync()
       + "VALUES(@Org,N'*',@Section,@Element,@Value,1,N'F8D');",
       ("@Org", organizationId), ("@Section", section), ("@Element", element), ("@Value", value));
 
-  // Samo prvi artikel obstaja v kanoničnem modelu — torej ga SAOP pozna in gre s PATCH.
+  // Prvi artikel je v kanoničnem modelu in ga SAOP pozna (ErpExistence privzeto
+  // CONFIRMED_IN_ERP) — gre s PATCH.
   await SqlAsync(
     "INSERT canon.Product(OrganizationId,ItemID,ItemGroup,UoM,AccountingGroup,Department,DiscountGroup,Supplier,BusinessHash) "
     + "VALUES(@Org,@Item,N'F8DG',N'kom',N'F8DG',N'C',N'F8DG',N'F8DS',NULL);",
     ("@Org", organizationId), ("@Item", vObstojecem));
+
+  // Drugi je prav tako v kanoničnem modelu, a ga SAOP še ne pozna — vanj ga bo šele treba
+  // ustvariti. Razlika proti prvemu je izključno zastavica; vse ostalo je enako, da je jasno,
+  // da o metodi odloča ona in ne prisotnost vrstice (migracija 169).
+  await SqlAsync(
+    "INSERT canon.Product(OrganizationId,ItemID,ItemGroup,UoM,AccountingGroup,Department,DiscountGroup,Supplier,BusinessHash,ErpExistence) "
+    + "VALUES(@Org,@Item,N'F8DG',N'kom',N'F8DG',N'C',N'F8DG',N'F8DS',NULL,N'NOT_YET_IN_ERP');",
+    ("@Org", organizationId), ("@Item", vPimuNeVSaop));
 }
 
 async Task CleanupAsync()

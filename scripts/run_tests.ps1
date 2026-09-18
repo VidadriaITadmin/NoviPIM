@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Edini merodajni testni zagon za NoviPIM. Izhod 0 = vse OK, 1 = napaka.
 
@@ -80,6 +80,13 @@ Zapisi Cyan ""
 
 # --- 2. Konzolni testni projekti ------------------------------------------
 $projekti = Get-ChildItem $testsDir -Directory | Sort-Object Name
+
+# Nocni samotest ni test kode, ampak test namescenega sistema: pade, kadar delavec molci ali
+# je SAOP nedosegljiv. To sta operativni stanji in ne napaki v kodi, zato ne smeta pobarvati
+# regresijskega zagona rdece. Zaganja ga scripts\Nocni-samotest.ps1 oziroma nacrtovano opravilo.
+$izkljuceni = @('PIM.SelfTest.Nightly')
+$projekti = $projekti | Where-Object { $izkljuceni -notcontains $_.Name }
+
 if ($Filter) { $projekti = $projekti | Where-Object { $_.Name -like "*$Filter*" } }
 
 $padli = @()

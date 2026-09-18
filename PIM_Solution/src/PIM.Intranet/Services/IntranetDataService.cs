@@ -4,6 +4,7 @@ namespace PIM.Intranet.Services;
 
 public sealed record NavigationEntry(string GroupName, string Name, string Route, int GroupOrder, int ItemOrder);
 public sealed record OrganizationContext(int OrganizationId, string Name);
+public sealed record OrganizationAutomationRow(int OrganizationId, string Name, bool IsAutomationEnabled, DateTime? UpdatedUtc, string? UpdatedBy);
 public sealed record DashboardMetrics(long CanonProductCount, long PimProductCount, long ErpValidCount, long WebInvalidCount, long QuarantineCount);
 public sealed record ProductRow(long ProductId, string ItemId, string? Ean, string Status, decimal Completeness);
 public sealed record ProductPage(IReadOnlyList<ProductRow> Rows, long TotalCount, int Skip, int Take);
@@ -28,7 +29,8 @@ public sealed record ValueTierRow(byte TierNumber, decimal ThresholdGrossExVat, 
 public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string? CustomerKey, string? CustomerTypeCode, string ItemGroupCode, decimal PercentValue, DateTime? ValidFrom, DateTime? ValidTo);
 public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string Operation, string EntityType, string EntityKey,
   string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
-  int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc);
+  int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc,
+  string? ApprovedBy, DateTime? ApprovedUtc, DateTime? SentUtc, string? LastError, string? SaopErrorKind);
 /// <param name="IntervalSeconds">Kako pogosto naj postopek tece; ura v Windows tiktaka na 5 minut.</param>
 /// <param name="NextScheduledUtc">Kdaj je postopek naslednjic na vrsti; null pomeni takoj.</param>
 public sealed record ScheduleRow(
@@ -41,7 +43,7 @@ public sealed record ScheduleRow(
 public sealed record SystemIntegrationRow(int OrganizationId, string OrganizationCode, string Provider, string Pipeline, bool IsEnabled,
   string? Status, DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc, DateTime? WatermarkUtc,
   DateTime? NextScheduledUtc, int OpenAlerts, int OutboxDeadCount, int OutboxDriftCount);
-public sealed record SystemAlertRow(long AlertId, string Pipeline, string AlertKind, string Severity, string Title,
+public sealed record SystemAlertRow(long AlertId, int OrganizationId, string OrganizationName, string Pipeline, string AlertKind, string Severity, string Title,
   string PayloadSummaryRedacted, int OccurrenceCount, DateTime FirstSeenUtc, DateTime LastSeenUtc,
   DateTime? AcknowledgedUtc, string? AcknowledgedBy, DateTime? ResolvedUtc, string? ResolvedBy);
 public sealed record SystemIntegrationView(IReadOnlyList<SystemIntegrationRow> Integrations, IReadOnlyList<SystemAlertRow> Alerts);
@@ -96,6 +98,32 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
       rows.Add(new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name"))));
 
     return rows;
+  }
+
+  /// <summary>Aktivna podjetja in ali jih sme avtomatika obdelovati oziroma zanje pošiljati alarme.</summary>
+  public async Task<IReadOnlyList<OrganizationAutomationRow>> GetOrganizationAutomationAsync(CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetOrganizationAutomation", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<OrganizationAutomationRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetBoolean(2),
+        reader.IsDBNull(3) ? null : reader.GetDateTime(3), reader.IsDBNull(4) ? null : reader.GetString(4)));
+    return rows;
+  }
+
+  public async Task SetOrganizationAutomationAsync(int organizationId, bool isEnabled, string actor, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.AlertWrite);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.SetOrganizationAutomation", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    command.Parameters.AddWithValue("@OrganizationId", organizationId);
+    command.Parameters.AddWithValue("@IsEnabled", isEnabled);
+    command.Parameters.AddWithValue("@Actor", actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
   /// <summary>
@@ -339,7 +367,7 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
     await using var command=new SqlCommand("EXEC intranet.GetOutboundMessages @OrganizationId;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);
     await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<OutboundRow>();
-    while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetInt32(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetDateTime(13)));
+    while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetInt32(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetDateTime(13),reader.IsDBNull(14)?null:reader.GetString(14),reader.IsDBNull(15)?null:reader.GetDateTime(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),reader.IsDBNull(17)?null:reader.GetString(17),reader.IsDBNull(18)?null:reader.GetString(18)));
     return rows;
   }
 
@@ -355,6 +383,25 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
+  // Odobritev/preklic po artiklu, ne po polju (migracija 152): worker itak pobere in poslje
+  // vsa cakajoca sporocila enega artikla naenkrat, zato bi odobritev polje-za-polje uporabnika
+  // silila v sedem klikov za en artikel. out.ApproveItemDocument/out.CancelItemDocument sta
+  // v bazi ze od 152, tu ju samo prvic povezemo z vmesnikom.
+  public Task<int> ApproveItemAsync(int organizationId,string entityType,string entityKey,string actor,CancellationToken cancellationToken=default) =>
+    ExecuteItemActionAsync("out.ApproveItemDocument",organizationId,entityType,entityKey,actor,cancellationToken);
+  public Task<int> CancelItemAsync(int organizationId,string entityType,string entityKey,string actor,CancellationToken cancellationToken=default) =>
+    ExecuteItemActionAsync("out.CancelItemDocument",organizationId,entityType,entityKey,actor,cancellationToken);
+
+  async Task<int> ExecuteItemActionAsync(string procedure,int organizationId,string entityType,string entityKey,string actor,CancellationToken cancellationToken)
+  {
+    await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
+    await using var command=new SqlCommand($"EXEC {procedure} @OrganizationId,@EntityType,@EntityKey,@Actor;",connection);
+    command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@EntityType",entityType);
+    command.Parameters.AddWithValue("@EntityKey",entityKey);command.Parameters.AddWithValue("@Actor",actor);
+    var value=await command.ExecuteScalarAsync(cancellationToken);
+    return value is null or DBNull ? 0 : Convert.ToInt32(value);
+  }
+
   public async Task<SystemIntegrationView> GetSystemIntegrationsAsync(int organizationId,CancellationToken cancellationToken=default)
   {
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
@@ -362,7 +409,7 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     await using var reader=await command.ExecuteReaderAsync(cancellationToken);var integrations=new List<SystemIntegrationRow>();
     while(await reader.ReadAsync(cancellationToken))integrations.Add(new(reader.GetInt32(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetBoolean(4),reader.IsDBNull(5)?null:reader.GetString(5),reader.IsDBNull(6)?null:reader.GetDateTime(6),reader.IsDBNull(7)?null:reader.GetDateTime(7),reader.IsDBNull(8)?null:reader.GetDateTime(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetDateTime(10),reader.GetInt32(11),reader.GetInt32(12),reader.GetInt32(13)));
     await reader.NextResultAsync(cancellationToken);var alerts=new List<SystemAlertRow>();
-    while(await reader.ReadAsync(cancellationToken))alerts.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetInt32(6),reader.GetDateTime(7),reader.GetDateTime(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetString(10),reader.IsDBNull(11)?null:reader.GetDateTime(11),reader.IsDBNull(12)?null:reader.GetString(12)));
+    while(await reader.ReadAsync(cancellationToken))alerts.Add(new(reader.GetInt64(0),reader.GetInt32(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.GetDateTime(9),reader.GetDateTime(10),reader.IsDBNull(11)?null:reader.GetDateTime(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.IsDBNull(13)?null:reader.GetDateTime(13),reader.IsDBNull(14)?null:reader.GetString(14)));
     return new(integrations,alerts);
   }
 

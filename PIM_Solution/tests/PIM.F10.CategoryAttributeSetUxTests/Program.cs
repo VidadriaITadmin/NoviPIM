@@ -116,7 +116,11 @@ Assert(page.Contains("ResolveAttributeNamesAsync", StringComparison.Ordinal),
 var quality = Read(Path.Combine(pages, "Quality.razor"));
 var qualityService = Read(Path.Combine(services, "QualityReadService.cs"));
 var issues = Read(Path.Combine(pages, "ValidationErrors.razor"));
-Assert(quality.Contains("kakovost?pogled=kategorije", StringComparison.Ordinal) && quality.Contains("GetByCategoryAsync", StringComparison.Ordinal),
+// Zavihek Po kategorijah je zdaj del skupnega seznama QualityTabs (PimTab.cs, prenova
+// 2026-09-10), ne vec lokalnega <nav> v Quality.razor — pot je zato lahko v enem ali drugem.
+var pimTabSource = Read(Path.Combine(Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared"), "PimTab.cs"));
+Assert((quality.Contains("kakovost?pogled=kategorije", StringComparison.Ordinal) || pimTabSource.Contains("kakovost?pogled=kategorije", StringComparison.Ordinal))
+    && quality.Contains("GetByCategoryAsync", StringComparison.Ordinal),
   "/kakovost mora imeti zavihek Po kategorijah iz intranet.GetQualityByCategory.");
 Assert(quality.Contains("CollapseTo(", StringComparison.Ordinal) && quality.Contains("Collapsed", StringComparison.Ordinal),
   "Pogled po kategorijah mora biti vecnivojski: veje se zlagajo po ravneh.");

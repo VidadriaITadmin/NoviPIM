@@ -1,13 +1,14 @@
 using Microsoft.Data.SqlClient;
 using PIM.KatalogWorker;
 using Xunit;
+using PIM.Operations;
 
 namespace PIM.ChangeTracking.Integration;
 
 public sealed class ChangeTrackingIntegrationTests
 {
   private const int OrganizationId = 2;
-  private readonly string _connectionString = LocalConfiguration.GetConnectionString("PIM_CONNECTION_STRING", "Pim")
+  private readonly string _connectionString = LocalSettings.ConnectionString()
     ?? throw new InvalidOperationException("Povezava mora biti na voljo, kadar se integracijski primer izvede.");
 
   [RequiresPimConnectionFact]

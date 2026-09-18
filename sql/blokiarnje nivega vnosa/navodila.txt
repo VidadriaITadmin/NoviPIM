@@ -1,0 +1,6 @@
+Rešeno. Naredil sem dve spremembi v bazi SONJA/PIM (kot dogovorjeno, te takoj obveščam):
+
+Uveljavil migracijo 195 (sql/migrations/195_ErpGateAllowsOwnFieldFix.sql) — zapisana v dbo.SchemaMigration, torej sledljivo. Nova funkcija val.IsProductChannelReadyForField + zamenjan sprožilec out.TR_OutboxMessage_ErpQualityGate.
+Odkril sem drug, ločen problem, ki je tudi blokiral: canon.Product.LastValidatedUtc za NW.10017 ni bil osvežen že ~16 ur, sprožilec pa poleg tvojega popravka zahteva tudi, da je validacija mlajša od 2 ur — sicer artikel šteje kot "nepripravljen" ne glede na to, kaj vpisuješ. To sem popravil samo za ta artikel z EXEC val.RunValidation @OrganizationId=3, @ProductId=61744 (samo podatkovna osvežitev, ne shema).
+
+Oboje sem preveril s testnim klicem znotraj BEGIN TRAN … ROLLBACK (torej brez trajne spremembe) — vpis Product.VatRateId='02' zdaj uspe.

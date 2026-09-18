@@ -1,26 +1,27 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using PIM.Operations;
 
 namespace PIM.Intranet.Services;
 
-public sealed record StockPositionRow(
-  long PositionId, string? NormalizedItemId, string? Ean, decimal Quantity,
-  DateTime? AvailabilityDate, decimal? IncomingQuantity, string? MatchKey, long? MatchedProductId,
-  string? ProductName, string? ProductItemId, string SourceCode, string? SourceKind,
-  int OrganizationId, string OrganizationName, string? ProviderKind,
-  string? Endpoint, DateTime SnapshotUtc, int FreshnessMinutes,
-  decimal? MinimumStock, decimal? MaximumStock, string? WarehouseCode,
-  // Registrirani pogled SAOP (migracija 145); NULL pri virih, ki teh kolicin ne poznajo.
-  decimal? OrderedQuantity = null, decimal? ForShipmentQuantity = null,
-  decimal? AvailableQuantity = null, decimal? SupplierOrderedQuantity = null);
+/// <summary>
+/// Ena vrstica na artikel (migracija 190): SAOP in dobaviteljev del združena, ne dve ločeni
+/// vrstici. <c>Has*</c> loči "vira ni" (null/pomišljaj) od "vir pravi 0" (dejanska ničla).
+/// </summary>
+public sealed record StockItemRow(
+  string GroupKey, int OrganizationId, string OrganizationName, string? NormalizedItemId, string? Ean,
+  long? MatchedProductId, string? ProductName, string? ProductItemId,
+  bool HasErp, string? ErpWarehouse, decimal ErpQuantity, decimal ErpAvailable, decimal ErpOrdered,
+  decimal ErpForShipment, decimal ErpSupplierOrdered, decimal? ErpIncomingQuantity, DateTime? ErpIncomingDate, DateTime? ErpSnapshotUtc,
+  bool HasSupplier, string? SupplierCode, decimal SupplierQuantity, decimal? SupplierIncoming, DateTime? SupplierIncomingDate, DateTime? SupplierSnapshotUtc,
+  decimal? MinimumStock, decimal? MaximumStock);
 
-public sealed record StockPositionPage(IReadOnlyList<StockPositionRow> Rows, long TotalCount);
+public sealed record StockItemPage(IReadOnlyList<StockItemRow> Rows, long TotalCount);
 
 /// <param name="OrganizationId">null pomeni vsa podjetja (migracija 134).</param>
-public sealed record StockPositionFilter(
+public sealed record StockItemFilter(
   int? OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? SourceCode = null,
-  string? Availability = null, string? Matched = null, int? MaxAgeHours = null, string Language = "sl",
-  string? SourceKind = null);
+  string? Availability = null, int? MaxAgeHours = null, string Language = "sl");
 
 public sealed record StockTotals(
   long PositionCount, long MatchedCount, long UnmatchedCount, long InStockCount,
@@ -37,7 +38,7 @@ public sealed record StockOverview(
   StockTotals Totals, IReadOnlyList<StockSourceRow> Sources, IReadOnlyList<StockIssueRow> Issues);
 
 /// <summary>
-/// Bralni model zaloge. SQL ostane v oštevilčeni migraciji (103).
+/// Bralni model zaloge. SQL ostane v oštevilčeni migraciji (103, 190).
 ///
 /// Zaloga je namerno samo bralna: PIM je ne piše nazaj v ERP. To ni vrzel, ampak meja sistema,
 /// zato tudi izpeljana težava nima gumba »reši« — izgine, ko izgine vzrok.
@@ -47,12 +48,17 @@ public sealed class StockReadService(IConfiguration configuration)
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
-  public async Task<StockPositionPage> GetPositionsAsync(
-    StockPositionFilter filter, CancellationToken cancellationToken = default)
+  /// <summary>
+  /// Ena vrstica na artikel (migracija 190) — stranicenje teče nad že združenimi vrsticami, ne
+  /// nad pozicijami, sicer bi SAOP in dobaviteljeva pozicija istega artikla padli na različni
+  /// strani (intranet.GetStockPositions razvršča po viru najprej).
+  /// </summary>
+  public async Task<StockItemPage> GetItemsAsync(
+    StockItemFilter filter, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("intranet.GetStockPositions", connection)
+    await using var command = new SqlCommand("intranet.GetStockByItem", connection)
     {
       CommandType = CommandType.StoredProcedure,
       CommandTimeout = 60,
@@ -63,25 +69,21 @@ public sealed class StockReadService(IConfiguration configuration)
     command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(filter.Search);
     command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(filter.SourceCode);
     command.Parameters.Add("@Availability", SqlDbType.NVarChar, 20).Value = Optional(filter.Availability);
-    command.Parameters.Add("@Matched", SqlDbType.NVarChar, 20).Value = Optional(filter.Matched);
     command.Parameters.Add("@MaxAgeHours", SqlDbType.Int).Value = filter.MaxAgeHours is null ? DBNull.Value : filter.MaxAgeHours.Value;
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
-    command.Parameters.Add("@SourceKind", SqlDbType.NVarChar, 20).Value = Optional(filter.SourceKind);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    var rows = await ReadAsync(reader, row => new StockPositionRow(
-      PimDb.Int64(row, "PositionId"), PimDb.Text(row, "NormalizedItemId"), PimDb.Text(row, "Ean"),
-      PimDb.Decimal(row, "Quantity"), PimDb.NullableDateTime(row, "AvailabilityDate"),
-      PimDb.NullableDecimal(row, "IncomingQuantity"), PimDb.Text(row, "MatchKey"),
-      PimDb.NullableInt64(row, "MatchedProductId"), PimDb.Text(row, "ProductName"),
-      PimDb.Text(row, "ProductItemId"), PimDb.TextOrEmpty(row, "SourceCode"), PimDb.Text(row, "SourceKind"),
-      PimDb.Int32(row, "OrganizationId"), PimDb.TextOrEmpty(row, "OrganizationName"),
-      PimDb.Text(row, "ProviderKind"), PimDb.Text(row, "Endpoint"),
-      PimDb.DateTimeValue(row, "SnapshotUtc"), PimDb.Int32(row, "FreshnessMinutes"),
-      PimDb.NullableDecimal(row, "MinimumStock"), PimDb.NullableDecimal(row, "MaximumStock"),
-      PimDb.Text(row, "WarehouseCode"),
-      PimDb.NullableDecimal(row, "OrderedQuantity"), PimDb.NullableDecimal(row, "ForShipmentQuantity"),
-      PimDb.NullableDecimal(row, "AvailableQuantity"), PimDb.NullableDecimal(row, "SupplierOrderedQuantity")), cancellationToken);
+    var rows = await ReadAsync(reader, row => new StockItemRow(
+      PimDb.TextOrEmpty(row, "GroupKey"), PimDb.Int32(row, "OrganizationId"), PimDb.TextOrEmpty(row, "OrganizationName"),
+      PimDb.Text(row, "NormalizedItemId"), PimDb.Text(row, "Ean"), PimDb.NullableInt64(row, "MatchedProductId"),
+      PimDb.Text(row, "ProductName"), PimDb.Text(row, "ProductItemId"),
+      PimDb.Int32(row, "HasErp") == 1, PimDb.Text(row, "ErpWarehouse"),
+      PimDb.Decimal(row, "ErpQuantity"), PimDb.Decimal(row, "ErpAvailable"), PimDb.Decimal(row, "ErpOrdered"),
+      PimDb.Decimal(row, "ErpForShipment"), PimDb.Decimal(row, "ErpSupplierOrdered"),
+      PimDb.NullableDecimal(row, "ErpIncomingQuantity"), PimDb.NullableDateTime(row, "ErpIncomingDate"), PimDb.NullableDateTime(row, "ErpSnapshotUtc"),
+      PimDb.Int32(row, "HasSupplier") == 1, PimDb.Text(row, "SupplierCode"), PimDb.Decimal(row, "SupplierQuantity"),
+      PimDb.NullableDecimal(row, "SupplierIncoming"), PimDb.NullableDateTime(row, "SupplierIncomingDate"), PimDb.NullableDateTime(row, "SupplierSnapshotUtc"),
+      PimDb.NullableDecimal(row, "MinimumStock"), PimDb.NullableDecimal(row, "MaximumStock")), cancellationToken);
 
     long total = 0;
     if (await reader.NextResultAsync(cancellationToken) && await reader.ReadAsync(cancellationToken))
@@ -90,48 +92,66 @@ public sealed class StockReadService(IConfiguration configuration)
     return new(rows, total);
   }
 
-  /// <summary>
-  /// Pretocno zapise CSV zaloge podjetja iz out.GetStockExportRows (migracija 150, filtri
-  /// razsirjeni v 151): vir ERP, DOBAVITELJ ali VSE, po zelji samo izdelki na spletu, dolocen
-  /// vir, iskanje, ima zalogo in svezina posnetka — isti filtri, ki jih pozna tudi tabela na
-  /// /zaloge. Glava je iz imen stolpcev procedure.
-  /// </summary>
-  public async Task<int> WriteStockCsvAsync(
-    int organizationId, string source, bool onlyWeb, string? sourceCode, string? search,
-    string? availability, int? maxAgeHours, Stream body, CancellationToken cancellationToken = default)
-  {
-    await using var connection = new SqlConnection(ConnectionString);
-    await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("out.GetStockExportRows", connection)
-    {
-      CommandType = CommandType.StoredProcedure, CommandTimeout = 300,
-    };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-    command.Parameters.Add("@Source", SqlDbType.NVarChar, 20).Value = source;
-    command.Parameters.Add("@OnlyWeb", SqlDbType.Bit).Value = onlyWeb;
-    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(sourceCode);
-    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = Optional(search);
-    command.Parameters.Add("@Availability", SqlDbType.NVarChar, 20).Value = Optional(availability);
-    command.Parameters.Add("@MaxAgeHours", SqlDbType.Int).Value = maxAgeHours is null ? DBNull.Value : maxAgeHours.Value;
-    command.Parameters.Add("@Skip", SqlDbType.Int).Value = 0;
-    command.Parameters.Add("@Take", SqlDbType.Int).Value = 0;
-    command.Parameters.Add("@TotalCount", SqlDbType.Int).Direction = ParameterDirection.Output;
+  /// <summary>Najdaljši Naziv, preden Excel stolpec postane nepregleden.</summary>
+  const int NameMaxLength = 40;
 
-    await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
-    await using var writer = new StreamWriter(body, new System.Text.UTF8Encoding(true), leaveOpen: true);
-    var headers = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
-    await writer.WriteLineAsync(string.Join(';', headers.Select(WebExportBuildService.Escape)));
-    var written = 0;
-    while (await reader.ReadAsync(cancellationToken))
+  static string? Truncate(string? value) =>
+    value is { Length: > NameMaxLength } ? value[..NameMaxLength] + "…" : value;
+
+  /// <summary>Fizična meja lista .xlsx, ne poslovna — glej WorkbookTable.MaxRows (2026-09-17).</summary>
+  const int MaxExportRows = PIM.Operations.WorkbookTable.MaxRows;
+
+  /// <summary>
+  /// Zvezek zaloge (.xlsx), en list, ena vrstica na artikel — isti vir kot tabela na strani
+  /// (intranet.GetStockByItem, migracija 190), samo s slovenskimi imeni stolpcev in skrajšanim
+  /// nazivom. Strani prebere zaporedoma, dokler ne zbere vsega ali doseže MaxExportRows.
+  /// </summary>
+  /// <param name="organizationId">null pomeni vsa podjetja — izvoz sledi popolnoma isti izbiri kot tabela.</param>
+  public async Task<byte[]> BuildStockWorkbookAsync(
+    int? organizationId, string? sourceCode, string? search, string? availability, int? maxAgeHours,
+    CancellationToken cancellationToken = default)
+  {
+    // 20.000 = zgornja meja @Take v intranet.GetStockByItem (migracija 218; prej 200). Vsak klic
+    // znova sestavi celotno #StockByItem, zato je bil izvoz z 2.000 (dejansko 200) na klic
+    // desetine klicev in 44 s za eno podjetje; zdaj je en klic.
+    const int PageSize = 20_000;
+    var rows = new List<StockItemRow>();
+    var skip = 0;
+    while (rows.Count < MaxExportRows)
     {
-      var values = new string?[reader.FieldCount];
-      for (var index = 0; index < values.Length; index++)
-        values[index] = await reader.IsDBNullAsync(index, cancellationToken) ? null : Convert.ToString(reader.GetValue(index), System.Globalization.CultureInfo.InvariantCulture);
-      await writer.WriteLineAsync(string.Join(';', values.Select(WebExportBuildService.Escape)));
-      written++;
+      var page = await GetItemsAsync(
+        new StockItemFilter(organizationId, skip, PageSize, search, sourceCode, availability, maxAgeHours), cancellationToken);
+      rows.AddRange(page.Rows);
+      if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
+      skip += PageSize;
     }
-    await writer.FlushAsync(cancellationToken);
-    return written;
+    var truncated = rows.Count > MaxExportRows;
+    if (truncated) rows = rows.Take(MaxExportRows).ToList();
+
+    IReadOnlyList<WorkbookColumn> columns =
+    [
+      new("Šifra artikla", Width: 18), new("EAN", Width: 16), new("Naziv", Width: NameMaxLength + 4),
+      new("Skladišče", Width: 24), new("SAOP količina", WorkbookCellKind.Number), new("SAOP razpoložljivo", WorkbookCellKind.Number),
+      new("SAOP prihodna količina", WorkbookCellKind.Number), new("SAOP datum prihoda", Width: 18),
+      new("Minimalna zaloga", WorkbookCellKind.Number), new("Maksimalna zaloga", WorkbookCellKind.Number),
+      new("Dobavitelj", Width: 20), new("Dobaviteljeva količina", WorkbookCellKind.Number),
+      new("Dobaviteljeva prihodna količina", WorkbookCellKind.Number), new("Dobaviteljev datum prihoda", Width: 18),
+      new("Podjetje", Width: 16), new("SAOP posnetek", WorkbookCellKind.DateTime), new("Dobaviteljev posnetek", WorkbookCellKind.DateTime),
+    ];
+
+    var cells = rows.Select(row => (IReadOnlyList<object?>)new object?[]
+    {
+      row.ProductItemId ?? row.NormalizedItemId, row.Ean, Truncate(row.ProductName),
+      row.HasErp ? row.ErpWarehouse : null, row.HasErp ? row.ErpQuantity : null, row.HasErp ? row.ErpAvailable : null,
+      row.HasErp ? row.ErpIncomingQuantity : null, row.HasErp ? row.ErpIncomingDate : null,
+      row.MinimumStock, row.MaximumStock,
+      row.HasSupplier ? row.SupplierCode : null, row.HasSupplier ? row.SupplierQuantity : null,
+      row.HasSupplier ? row.SupplierIncoming : null, row.HasSupplier ? row.SupplierIncomingDate : null,
+      row.OrganizationName, row.HasErp ? row.ErpSnapshotUtc : null, row.HasSupplier ? row.SupplierSnapshotUtc : null,
+    });
+
+    IReadOnlyList<string>? notes = truncated ? [$"Zapisanih je prvih {MaxExportRows:N0} vrstic; datoteka je odrezana."] : null;
+    return WorkbookWriter.Write("Zaloga", columns, cells, notes);
   }
 
   /// <param name="organizationId">null pomeni vsa podjetja (migracija 134).</param>

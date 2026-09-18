@@ -2,6 +2,7 @@ using System.Data;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.XmlMapping;
+using PIM.Operations;
 
 if (args.Length != 5 || args[0] != "--apply" || args[1] != "--run-id" || args[3] != "--source-code"
   || !Guid.TryParse(args[2], out var runId)
@@ -52,13 +53,4 @@ if (await reader.ReadAsync())
 
 return 0;
 
-static string? ReadPimConnectionString()
-{
-  var environmentValue = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-  if (!string.IsNullOrWhiteSpace(environmentValue)) return environmentValue;
-
-  var path = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Local.json");
-  if (!File.Exists(path)) return null;
-  using var document = JsonDocument.Parse(File.ReadAllText(path));
-  return document.RootElement.GetProperty("ConnectionStrings").GetProperty("Pim").GetString();
-}
+static string? ReadPimConnectionString() => LocalSettings.ConnectionString();

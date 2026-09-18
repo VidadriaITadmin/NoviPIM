@@ -1,37 +1,147 @@
 @page "/pravila/slovar"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.GovernanceReadService Governance
+@inject GovernanceReadService Governance
+@inject RulesWriteService Rules
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Slovar vrednosti</PageTitle>
-<PimPage Title="Slovar vrednosti" Subtitle="Izvorna vrednost se prevede v ciljno znotraj domene. Stran prikazuje register; urejanje bo dodano šele z zapisovalno proceduro in revizijsko sledjo." Crumbs="Crumbs" />
+<PimPage Title="Slovar vrednosti"
+         Subtitle="Izvorno vrednost spremeni v enotno PIM vrednost ali prevod. Ožja domena ima prednost pred splošno domeno *."
+         Crumbs="Crumbs">
+  <Actions>
+    <a class="secondary" href="kakovost/prevodi">Odpri manjkajoče prevode</a>
+  </Actions>
+</PimPage>
 
-<section class="ui-card toolbar" role="search" aria-labelledby="dictionary-filter-title">
+<PimTabs Active="dictionary" Tabs="RulesTabs.Tabs" Label="Pravila in izvor podatkov" />
+
+<section class="ui-card rule-guide" aria-labelledby="dictionary-guide-title">
+  <div>
+    <h2 id="dictionary-guide-title">Kdaj dodaš vrstico v slovar?</h2>
+    <p>Ko različni viri uporabljajo drugo oznako za isto stvar ali ko vrednost potrebuje prevod za izhodni jezik.</p>
+  </div>
+  <ol class="rule-steps">
+    <li><strong>Izberi domeno</strong><span>Uporabi lastnost; * naj velja samo za res splošne izraze.</span></li>
+    <li><strong>Vpiši par vrednosti</strong><span>Izvorna vrednost se ob zajemu zamenja s ciljno.</span></li>
+    <li><strong>Preveri kakovost</strong><span>V manjkajočih prevodih preveri, kaj je še ostalo.</span></li>
+  </ol>
+</section>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+
+@if (!Loading && Error is null)
+{
+  <div class="rule-summary" aria-label="Povzetek slovarja vrednosti">
+    <div class="rule-summary-item"><span>Vseh vnosov</span><strong>@DictionaryTotal.ToString("N0")</strong></div>
+    <div class="rule-summary-item good"><span>Aktivnih</span><strong>@DictionaryActive.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Neaktivnih</span><strong>@DictionaryInactive.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Domen</span><strong>@Domains.Count.ToString("N0")</strong></div>
+  </div>
+}
+
+<details class="ui-card compact-details" open="@PrefillNew">
+  <summary>Dodaj vrednost ali prevod</summary>
+  <div class="compact-details-body">
+    <div class="form-grid dictionary-create-grid">
+      <label class="form-field">Domena
+        <input class="form-input" list="dictionary-domains" placeholder="* ali koda lastnosti" @bind="NewDomain" />
+      </label>
+      <label class="form-field">Vrednost iz vira
+        <input class="form-input" placeholder="npr. Black" @bind="NewSourceValue" />
+      </label>
+      <label class="form-field">Jezik
+        <select class="filter-select" @bind="NewLanguage">
+          @foreach (var language in Languages) { <option value="@language">@language</option> }
+        </select>
+      </label>
+      <label class="form-field">Ciljna vrednost
+        <input class="form-input" placeholder="npr. črna" @bind="NewTargetValue" />
+      </label>
+      <label class="form-field dictionary-note">Opomba (neobvezno)
+        <input class="form-input" placeholder="Zakaj ali od kod je preslikava" @bind="NewNote" />
+      </label>
+      <div class="form-action">
+        <button type="button" class="primary-button" disabled="@(Busy || !CanSaveNew)" @onclick="AddAsync">Dodaj v slovar</button>
+      </div>
+    </div>
+    <datalist id="dictionary-domains">
+      @foreach (var domain in Domains) { <option value="@domain.Domain"></option> }
+    </datalist>
+    <p class="card-note">Za isti jezik, domeno in izvorno vrednost obstaja samo ena vrstica. Če že obstaja, jo poišči spodaj in uredi.</p>
+  </div>
+</details>
+
+<section class="ui-card toolbar section-gap" role="search" aria-labelledby="dictionary-filter-title">
   <h2 id="dictionary-filter-title" class="visually-hidden">Filtriranje slovarja vrednosti</h2>
   <label class="visually-hidden" for="dictionary-search">Išči vrednost</label>
-  <input id="dictionary-search" class="search-input" type="search" placeholder="Išči izvorno ali ciljno vrednost …" @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
+  <input id="dictionary-search" class="search-input" type="search" placeholder="Išči izvorno ali ciljno vrednost …"
+         @bind="Search" @bind:event="oninput" @onkeyup="OnKeyAsync" />
   <label class="visually-hidden" for="dictionary-domain">Domena</label>
   <select id="dictionary-domain" class="filter-select" @bind="Domain" @bind:after="ApplyAsync">
     <option value="">Vse domene</option>
     @foreach (var row in Domains) { <option value="@row.Domain">@row.Domain (@row.RowCount.ToString("N0"))</option> }
   </select>
-  <button type="button" class="filter-button" @onclick="ApplyAsync">Uporabi filtre</button>
+  <label class="visually-hidden" for="dictionary-state">Stanje</label>
+  <select id="dictionary-state" class="filter-select" @bind="State" @bind:after="ApplyAsync">
+    <option value="">Aktivne in neaktivne</option>
+    <option value="ACTIVE">Samo aktivne</option>
+    <option value="INACTIVE">Samo neaktivne</option>
+  </select>
+  <button type="button" class="filter-button" @onclick="ApplyAsync">Poišči</button>
+  @if (HasFilter) { <button type="button" class="secondary-button" @onclick="ClearFiltersAsync">Počisti</button> }
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
 <section class="ui-card data-card" aria-label="Slovar vrednosti">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni vrednosti." LoadingText="Nalaganje slovarja …">
-    <PimTable Caption="Preslikave izvornih vrednosti" Columns="Columns">
+    <PimTable Caption="Preslikave izvornih vrednosti — klikni Uredi za spremembo" Columns="Columns">
       <Rows>
         @foreach (var row in Rows)
         {
-          <tr>
-            <td><span class="code-value">@row.Domain</span></td>
-            <td>@row.SourceValue</td>
-            <td>@(row.Language ?? "—")</td>
-            <td>@row.TargetValue</td>
-            <td class="muted">@(row.Note ?? "—")</td>
-            <td><PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /></td>
+          var editing = EditingId == row.ValueLookupId;
+          <tr class="@(editing ? "is-editing" : null)">
+            <td>
+              @if (editing) { <input class="table-input" aria-label="Domena" list="dictionary-domains" @bind="EditDomain" /> }
+              else { <span class="code-value">@row.Domain</span> }
+            </td>
+            <td>
+              @if (editing) { <input class="table-input" aria-label="Izvorna vrednost" @bind="EditSourceValue" /> }
+              else { @row.SourceValue }
+            </td>
+            <td>
+              @if (editing) { <input class="table-input dictionary-language" aria-label="Jezik" maxlength="10" @bind="EditLanguage" /> }
+              else { @(row.Language ?? "—") }
+            </td>
+            <td>
+              @if (editing) { <input class="table-input" aria-label="Ciljna vrednost" @bind="EditTargetValue" /> }
+              else { <strong>@row.TargetValue</strong> }
+            </td>
+            <td>
+              @if (editing) { <input class="table-input" aria-label="Opomba" @bind="EditNote" /> }
+              else { <span class="muted">@(row.Note ?? "—")</span> }
+            </td>
+            <td>
+              @if (editing)
+              {
+                <label class="check-field"><input type="checkbox" @bind="EditActive" />Aktivna</label>
+              }
+              else { <PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /> }
+            </td>
+            <td>
+              @if (editing)
+              {
+                <div class="table-actions">
+                  <button type="button" class="small-action good-action" disabled="@(Busy || !CanSaveEdit)" @onclick="() => SaveEditAsync(row)">Shrani</button>
+                  <button type="button" class="small-action" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                </div>
+              }
+              else
+              {
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => StartEdit(row)">Uredi</button>
+              }
+            </td>
           </tr>
         }
       </Rows>
@@ -41,21 +151,47 @@
 </section>
 
 @code {
-  IReadOnlyList<PIM.Intranet.Services.ValueLookupRow> Rows = [];
-  IReadOnlyList<PIM.Intranet.Services.ValueDomainRow> Domains = [];
+  IReadOnlyList<ValueLookupRow> Rows = [];
+  IReadOnlyList<ValueDomainRow> Domains = [];
+  static readonly IReadOnlyList<string> Languages = ["SL", "DE", "HR", "EN", "IT"];
   string Domain = "";
   string Search = "";
+  string State = "";
   int Skip;
   const int Take = 50;
   long Total;
   bool Loading = true;
+  bool Busy;
   string? Error;
+  string? Message;
+  string? SaveError;
+
+  long? EditingId;
+  string EditDomain = "", EditSourceValue = "", EditLanguage = "", EditTargetValue = "", EditNote = "";
+  bool EditActive;
+
+  string NewDomain = "*", NewSourceValue = "", NewLanguage = "SL", NewTargetValue = "", NewNote = "";
+
+  [SupplyParameterFromQuery(Name = "domena")] public string? RequestedDomain { get; set; }
+  [SupplyParameterFromQuery(Name = "vrednost")] public string? RequestedSourceValue { get; set; }
+  [SupplyParameterFromQuery(Name = "jezik")] public string? RequestedLanguage { get; set; }
+
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Slovar vrednosti")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Domena"), new("Izvorna vrednost"), new("Jezik"), new("Ciljna vrednost"), new("Opomba"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [new("Domena"), new("Izvorna vrednost"), new("Jezik"), new("Ciljna vrednost"), new("Opomba"), new("Stanje"), new("Dejanje")];
 
   protected override async Task OnInitializedAsync()
   {
-    try { Domains = await Governance.GetValueDomainsAsync(); } catch { Domains = []; }
+    if (!string.IsNullOrWhiteSpace(RequestedDomain)) NewDomain = Domain = RequestedDomain.Trim();
+    if (!string.IsNullOrWhiteSpace(RequestedSourceValue)) NewSourceValue = Search = RequestedSourceValue.Trim();
+    if (!string.IsNullOrWhiteSpace(RequestedLanguage)) NewLanguage = RequestedLanguage.Trim().ToUpperInvariant();
+    await ReloadAllAsync();
+  }
+
+  async Task ReloadAllAsync()
+  {
+    try { Domains = await Governance.GetValueDomainsAsync(); }
+    catch { Domains = []; }
     await LoadAsync();
   }
 
@@ -63,13 +199,68 @@
   {
     Loading = true;
     Error = null;
-    try { (Rows, Total) = await Governance.GetValueLookupsAsync(Domain, Search, Skip, Take); }
+    try { (Rows, Total) = await Governance.GetValueLookupsAsync(Domain, Search, State, Skip, Take); }
     catch { Error = "Slovarja trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
-  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  void StartEdit(ValueLookupRow row)
+  {
+    EditingId = row.ValueLookupId;
+    EditDomain = row.Domain;
+    EditSourceValue = row.SourceValue;
+    EditLanguage = row.Language ?? "SL";
+    EditTargetValue = row.TargetValue;
+    EditNote = row.Note ?? "";
+    EditActive = row.IsActive;
+    Message = SaveError = null;
+  }
+
+  void CancelEdit() => EditingId = null;
+
+  async Task AddAsync()
+  {
+    await SaveAsync(null, NewDomain, NewSourceValue, NewLanguage, NewTargetValue, NewNote, true, "Vrednost je dodana v slovar.");
+    if (SaveError is null)
+    {
+      NewSourceValue = NewTargetValue = NewNote = "";
+      if (!string.IsNullOrWhiteSpace(Domain)) NewDomain = Domain;
+    }
+  }
+
+  Task SaveEditAsync(ValueLookupRow row) => SaveAsync(row.ValueLookupId, EditDomain, EditSourceValue,
+    EditLanguage, EditTargetValue, EditNote, EditActive, "Vrstica slovarja je shranjena.");
+
+  async Task SaveAsync(long? id, string domain, string source, string language, string target, string? note, bool active, string message)
+  {
+    Busy = true; Message = SaveError = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      await Rules.SaveValueLookupAsync(id, domain, source, language, target, note, active, actor);
+      EditingId = null;
+      Message = message;
+      await ReloadAllAsync();
+    }
+    catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number is 2601 or 2627)
+    {
+      SaveError = "Ta kombinacija domene, izvorne vrednosti in jezika že obstaja. Poišči jo v seznamu in jo uredi.";
+    }
+    catch (Exception exception) { SaveError = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task ApplyAsync() { Skip = 0; EditingId = null; await LoadAsync(); }
+  async Task ClearFiltersAsync() { Domain = Search = State = ""; await ApplyAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
-  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} vrstic";
+
+  bool PrefillNew => !string.IsNullOrWhiteSpace(RequestedSourceValue);
+  bool HasFilter => Domain.Length > 0 || Search.Trim().Length > 0 || State.Length > 0;
+  bool CanSaveNew => NewSourceValue.Trim().Length > 0 && NewLanguage.Trim().Length > 0 && NewTargetValue.Trim().Length > 0;
+  bool CanSaveEdit => EditSourceValue.Trim().Length > 0 && EditLanguage.Trim().Length > 0 && EditTargetValue.Trim().Length > 0;
+  long DictionaryTotal => Domains.Sum(row => row.RowCount);
+  long DictionaryActive => Domains.Sum(row => row.ActiveCount);
+  long DictionaryInactive => DictionaryTotal - DictionaryActive;
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Total:N0} zadetkov";
 }

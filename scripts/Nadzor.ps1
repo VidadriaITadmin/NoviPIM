@@ -21,16 +21,26 @@
 
 .PARAMETER KorenRepozitorija
   Koren repozitorija; privzeto se izpelje iz mesta skripte.
+
+.PARAMETER MapaWorkerjev
+  Mapa objavljenih workerjev (<mapa>\<Worker>\<Worker>.exe). Ce je podana, tece .exe namesto
+  dotnet run — tako nadzor tece na strezniku brez izvorne kode. Privzeto PIM_PUBLISHED_WORKERS.
 #>
 [CmdletBinding()]
-param([string]$KorenRepozitorija = '')
+param(
+  [string]$KorenRepozitorija = '',
+  [string]$MapaWorkerjev = $env:PIM_PUBLISHED_WORKERS,
+
+  # Pozeni tudi, ce cikle ze poganja razporejevalnik v aplikaciji (glej spodaj).
+  [switch]$Vseeno
+)
 
 $ErrorActionPreference = 'Stop'
 
 $mestoSkripte = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Definition }
 $koren = if ([string]::IsNullOrWhiteSpace($KorenRepozitorija)) { Split-Path -Parent $mestoSkripte } else { $KorenRepozitorija }
+# Mapa resitve je potrebna samo za dotnet run; z objavljenimi workerji je na strezniku ni (Workerji.ps1).
 $resitev = Join-Path $koren 'PIM_Solution'
-if (-not (Test-Path $resitev)) { throw "Ni najdena mapa $resitev." }
 
 $dnevnik = Join-Path $koren 'logs'
 if (-not (Test-Path $dnevnik)) { New-Item -ItemType Directory -Path $dnevnik | Out-Null }
@@ -57,34 +67,26 @@ function Zapisi([string]$vrstica) {
 
 # PIM.AlertDispatcher bere povezavo samo iz okoljske spremenljivke in brez nje konca z 2.
 # Ostali workerji jo znajo prebrati iz appsettings.Local.json; da se nacini ne razhajajo,
-# jo tu preberemo iz iste datoteke in postavimo za ta proces.
-if ([string]::IsNullOrWhiteSpace($env:PIM_CONNECTION_STRING)) {
-  $nastavitve = Join-Path $koren 'appsettings.Local.json'
-  if (Test-Path $nastavitve) {
-    $env:PIM_CONNECTION_STRING = (Get-Content $nastavitve -Raw | ConvertFrom-Json).ConnectionStrings.Pim
+# jo tu preberemo po isti poti (PimPovezava: okolje, .Local.json, .json) in postavimo za ta proces.
+. (Join-Path $mestoSkripte 'Sql.ps1')
+$env:PIM_CONNECTION_STRING = PimPovezava $koren
+
+# Razporejevalnik v aplikaciji (2026-09-17, migracija 221): kadar intranet drzi najem v
+# ops.SchedulerLease, ta cikel ze poganja sam; naloga Windows bi ga pognala se enkrat. -Vseeno
+# je za cloveka, ki skripto pozene rocno in hoce izid zdaj.
+if (-not $Vseeno) {
+  $lastnikRazporejevalnika = PimRazporejevalnikVAplikaciji $env:PIM_CONNECTION_STRING
+  if ($lastnikRazporejevalnika) {
+    Zapisi "PRESKOCENO: cikel poganja razporejevalnik v aplikaciji ($lastnikRazporejevalnika). Windows naloga ni vec potrebna - odstrani jo z scripts\Namesti-opravila.ps1 -Odstrani. Za rocni zagon kljub temu dodaj -Vseeno."
+    exit 0
   }
 }
-if ([string]::IsNullOrWhiteSpace($env:PIM_CONNECTION_STRING)) { throw 'Povezava Pim ni na voljo.' }
+
 
 $padli = 0
 
-function PozeniWorker([string]$projekt) {
-  $prej = Get-Location
-  try {
-    Set-Location $resitev
-    $prejsnjaObravnava = $ErrorActionPreference
-    try {
-      $ErrorActionPreference = 'Continue'
-      & dotnet run --project $projekt --no-build 2>&1 | ForEach-Object {
-        if ($_ -is [System.Management.Automation.ErrorRecord]) { Zapisi "   STDERR: $($_.Exception.Message)" }
-        else { Zapisi "   $_" }
-      }
-    }
-    finally { $ErrorActionPreference = $prejsnjaObravnava }
-    if ($LASTEXITCODE -ne 0) { throw "worker $projekt je koncal z izhodno kodo $LASTEXITCODE" }
-  }
-  finally { Set-Location $prej }
-}
+# PozeniWorker (objavljen .exe ali dotnet run) je skupen v Workerji.ps1.
+. (Join-Path $mestoSkripte 'Workerji.ps1')
 
 function Korak([string]$ime, [scriptblock]$telo) {
   Zapisi "== $ime =="

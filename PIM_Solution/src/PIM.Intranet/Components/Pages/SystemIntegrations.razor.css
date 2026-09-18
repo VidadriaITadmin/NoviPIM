@@ -1,23 +1,21 @@
-/* Izoliran slog strani /system/integracije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
-
-/* Dve podatkovni kartici zapored: razmik nosi slog, ne dodatni razred v označbi. */
-.data-card + .data-card { margin-top: 16px; }
-
-/* Gosti tabeli z devetimi stolpci; na ozkih zaslonih se pomikata, namesto da bi se stiskali. */
+.action-guide { border-left: 4px solid var(--pim-primary); margin-bottom: 1rem; padding: 1rem 1.15rem; }
+.action-guide h2, .panel-title h2 { color: var(--pim-text-strong); font-size: 1rem; margin: 0; }
+.action-guide ol { color: var(--pim-text-soft); display: grid; gap: .35rem; margin: .7rem 0 0 1.2rem; padding: 0; }
+.automation-card, .data-card { margin-top: 1rem; }
+.panel-title { align-items: center; display: flex; justify-content: space-between; margin-bottom: .45rem; }
+.panel-title a { color: var(--pim-primary); font-size: .8rem; text-decoration: none; }
+.panel-title a:hover { text-decoration: underline; }
+.panel-note, .job-note { color: var(--pim-text-muted); font-size: .8rem; line-height: 1.45; margin: 0 0 .75rem; }
+.job-note { margin: .2rem 0 0; max-width: 36rem; }
+.automation-list { display: grid; gap: .5rem; }
+.automation-row { align-items: center; border: 1px solid var(--pim-border); border-left: 3px solid var(--pim-good-bar); border-radius: var(--pim-radius-sm); display: flex; gap: 1rem; justify-content: space-between; padding: .7rem .85rem; }
+.automation-row.automation-off { background: var(--pim-warn-bg); border-left-color: var(--pim-warn-bar); }
+.automation-row strong { color: var(--pim-text-strong); }
+.automation-row p { color: var(--pim-text-soft); font-size: .82rem; margin: .12rem 0; }
+.automation-row small { color: var(--pim-text-muted); font-size: .72rem; }
 .table-scroll { overflow-x: auto; }
-.numeric { text-align: right; font-variant-numeric: tabular-nums; }
-
-/* Redigiran povzetek in naslov opozorila sta lahko dolga; celice ostanejo poravnane na vrh. */
 .data-table td { vertical-align: top; }
-
-/* Prazna celica dejanj ni sporočilo; pomišljaj ostane vizualno podrejen. */
-.no-action { color: #64748b; }
-
-/* Viden fokus tipkovnice: skupni slog gumbov obris odstrani, zato ga tu vrnemo. */
-.filter-button:focus-visible,
-.small-action:focus-visible,
-.table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
-
-@media (max-width: 900px) {
-  .data-table { min-width: 900px; }
-}
+.row-alarm { background: var(--pim-bad-bg); }
+.danger-action { border-color: var(--pim-bad-border); color: var(--pim-bad-text); }
+.filter-button:focus-visible, .small-action:focus-visible, .table-scroll:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+@media (max-width: 760px) { .automation-row { align-items: flex-start; flex-direction: column; } .data-table { min-width: 760px; } }

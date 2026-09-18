@@ -1,0 +1,72 @@
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
+@inject RoleAccessService Access
+
+@if (Loading)
+{
+  <LayoutView Layout="@DefaultLayout">
+    <div class="loading-state" role="status">Preverjam dostop …</div>
+  </LayoutView>
+}
+else if (Allowed)
+{
+  <RouteView RouteData="RouteData" DefaultLayout="DefaultLayout" />
+}
+else
+{
+  <LayoutView Layout="@DefaultLayout">
+    <section class="ui-card access-denied-card" role="alert">
+      <span class="access-denied-icon" aria-hidden="true">!</span>
+      <div>
+        <h1>Ta stran ni vključena v tvojo vlogo</h1>
+        <p>@(AccessError ?? "Skrbnik lahko dostop doda na strani Sistemske zadeve → Vloge.")</p>
+        <a class="primary-button access-denied-link" href="nadzorna-plosca">Nazaj na nadzorno ploščo</a>
+      </div>
+    </section>
+  </LayoutView>
+}
+
+@code {
+  [Parameter, EditorRequired] public required RouteData RouteData { get; set; }
+  [Parameter] public Type? DefaultLayout { get; set; }
+
+  bool Loading = true;
+  bool Allowed;
+  string? AccessError;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Allowed = false;
+    AccessError = null;
+    var state = await Authentication.GetAuthenticationStateAsync();
+    var path = Navigation.ToBaseRelativePath(Navigation.Uri);
+    var permissionKey = PimAccessCatalog.Resolve(path);
+
+    // Prijava, stran napake in korenska preusmeritev so javne. Vse druge poti morajo biti
+    // registrirane; neznana nova stran je privzeto zaprta, dokler je ne dodamo v katalog.
+    if (permissionKey is null)
+    {
+      Allowed = true;
+      Loading = false;
+      return;
+    }
+
+    if (state.User.Identity?.IsAuthenticated != true)
+    {
+      AccessError = "Za nadaljevanje se prijavi.";
+      Loading = false;
+      return;
+    }
+
+    try
+    {
+      Allowed = await Access.CanAccessAsync(state.User, permissionKey);
+    }
+    catch
+    {
+      AccessError = "Dovoljenj trenutno ni mogoče preveriti. Poskusi znova čez trenutek.";
+    }
+    finally { Loading = false; }
+  }
+}

@@ -419,7 +419,7 @@ static void Assert(bool condition, string message)
           ? throw new InvalidOperationException("51100 Razpored ni omogočen.")
           : Task.FromResult<object>(new object());
       },
-      workAsync: (organization, _) => { worked.Add(organization.Id); return Task.FromResult(true); },
+      workAsync: (organization, _) => { worked.Add(organization.Id); return Task.FromResult((true, (string?)null)); },
       completeAsync: (_, _, _) => Task.CompletedTask,
       disposeAsync: _ => Task.CompletedTask,
       reportFailure: (organization, _) => reported.Add(organization.Id));
@@ -445,7 +445,7 @@ static void Assert(bool condition, string message)
         worked.Add(organization.Id);
         return organization.Id == 1
           ? throw new InvalidOperationException("Zajem je padel.")
-          : Task.FromResult(true);
+          : Task.FromResult((true, (string?)null));
       },
       completeAsync: (_, succeeded, _) => { completedAs.Add(succeeded); return Task.CompletedTask; },
       disposeAsync: run => { disposed.Add(run); return Task.CompletedTask; },
@@ -465,7 +465,7 @@ static void Assert(bool condition, string message)
     await OrganizationLoop.RunAsync<object>(
       [new SaopOrganization(9, "Brez razporeda", "SAOP_X")],
       beginAsync: _ => throw new InvalidOperationException("51100"),
-      workAsync: (_, _) => Task.FromResult(true),
+      workAsync: (_, _) => Task.FromResult((true, (string?)null)),
       completeAsync: (_, _, _) => { completeCalls++; return Task.CompletedTask; },
       disposeAsync: _ => { disposeCalls++; return Task.CompletedTask; },
       reportFailure: (_, _) => { });
@@ -479,7 +479,7 @@ static void Assert(bool condition, string message)
     var failed = await OrganizationLoop.RunAsync<object>(
       organizations,
       beginAsync: _ => Task.FromResult<object>(new object()),
-      workAsync: (_, _) => Task.FromResult(true),
+      workAsync: (_, _) => Task.FromResult((true, (string?)null)),
       completeAsync: (_, _, _) => Task.CompletedTask,
       disposeAsync: _ => Task.CompletedTask,
       reportFailure: (_, _) => { });
@@ -506,7 +506,7 @@ static void Assert(bool condition, string message)
         await Task.Delay(30);
         lock (gate) { worked.Add(organization.Id); running--; }
         if (organization.Id == 2) throw new InvalidOperationException("Zajem drugega podjetja je padel.");
-        return true;
+        return (true, (string?)null);
       },
       completeAsync: (_, _, _) => Task.CompletedTask,
       disposeAsync: _ => Task.CompletedTask,
@@ -534,7 +534,7 @@ static void Assert(bool condition, string message)
         lock (gate) { running++; peak = Math.Max(peak, running); }
         await Task.Delay(10);
         lock (gate) { running--; }
-        return true;
+        return (true, (string?)null);
       },
       completeAsync: (_, _, _) => Task.CompletedTask,
       disposeAsync: _ => Task.CompletedTask,

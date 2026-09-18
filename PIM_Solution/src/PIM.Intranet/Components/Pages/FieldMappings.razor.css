@@ -4,6 +4,9 @@
 .is-editing { background: #eef2ff; }
 .is-editing .form-input { max-width: 18rem; }
 .check-field { align-items: center; display: inline-flex; font-size: .8rem; gap: .35rem; }
+.mapping-create-grid { grid-template-columns: repeat(4, minmax(145px, 1fr)); }
 .small-action:focus-visible,
 .form-input:focus-visible,
 .filter-select:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+@media (max-width: 900px) { .mapping-create-grid { grid-template-columns: repeat(2, minmax(145px, 1fr)); } }
+@media (max-width: 540px) { .mapping-create-grid { grid-template-columns: 1fr; } }

@@ -33,30 +33,53 @@ public enum ProductExportTemplate
 ///
 /// Zakaj en klic in ne stranicenje: prej je izvoz sestavljal zvezek s 100 zaporednimi klici po
 /// 200 vrstic in brskalnik je zahtevo prekinil, preden je datoteka nastala. Zdaj gre en klic
-/// z <c>@Take</c> do 20.000 (migracija 115) — merjeno 1,0 s za 20.000 vrstic.
+/// z <c>@Take</c> do <see cref="MaxRows"/> (migracija 115; meja dvignjena 2026-09-17) — merjeno
+/// 1,0 s za 20.000 vrstic pri predlogi »pregled«; predloga »delovni« bere vec tabel na vrstico
+/// (kategorije, atributi, mediji) in je zato pocasnejsa pri istem stevilu vrstic.
 /// </summary>
 public sealed class ProductExportService(IConfiguration configuration, ProductWorkbenchService workbench)
 {
-  /// <summary>Zgornja meja vrstic; izrecna in zapisana v datoteko, kadar je nabor večji.</summary>
-  public const int MaxRows = 20_000;
+  /// <summary>Zgornja meja vrstic: fizična meja lista .xlsx (WorkbookTable.MaxRows), ne poslovna.
+  /// Do 2026-09-17 je bila tu lastna meja 20.000 in izvoz »cel pogled« je pri 28.915 artiklih
+  /// tiho odrezal tretjino; uporabnik je zahteval, da izvoz nima svoje meje.</summary>
+  public const int MaxRows = WorkbookTable.MaxRows;
+
+  /// <summary>Vrstic v enem klicu baze; seznam se bere po straneh, ne z eno visoko mejo @Take.</summary>
+  const int PageSize = 2_000;
 
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
+  /// <param name="onlySelectionKeys">Ključi izbranih vrstic v obliki »PodjetjeId|Šifra« — šifra
+  /// artikla sama ni dovolj, ker isto šifro lahko nosi vec podjetij (isti dobavitelj v vec
+  /// katalogih); brez podjetja bi izvoz vrnil vse njih namesto samo izbrane vrstice. Null pomeni
+  /// »brez izbora« in vrne cel pogled (izvoz s strani Izdelki); prazna, a ne-null zbirka pomeni
+  /// »izbor je izrecno prazen« in vrne nič vrstic (predloga SAOP brez dodanih artiklov).</param>
   public async Task<byte[]> BuildAsync(
     ProductListFilter filter, ProductExportTemplate template,
-    IReadOnlyCollection<string>? onlyItemIds = null, CancellationToken cancellationToken = default)
+    IReadOnlyCollection<string>? onlySelectionKeys = null, CancellationToken cancellationToken = default)
   {
-    var page = await workbench.GetProductListAsync(filter with { Skip = 0, Take = MaxRows }, cancellationToken);
-    var rows = onlyItemIds is { Count: > 0 }
-      ? page.Rows.Where(row => onlyItemIds.Contains(row.ItemId, StringComparer.OrdinalIgnoreCase)).ToList()
-      : page.Rows.ToList();
+    // Baza sama pove, koliko vrstic ima pogled (TotalCount); tu se bere stran za stranjo, dokler
+    // ni vsega — isti vzorec kot StockReadService.BuildStockWorkbookAsync.
+    var rows = new List<ProductListRow>();
+    long totalCount = 0;
+    var skip = 0;
+    while (rows.Count < MaxRows)
+    {
+      var page = await workbench.GetProductListAsync(filter with { Skip = skip, Take = PageSize }, cancellationToken);
+      totalCount = page.TotalCount;
+      rows.AddRange(page.Rows);
+      if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
+      skip += PageSize;
+    }
+    if (onlySelectionKeys is not null)
+      rows = rows.Where(row => onlySelectionKeys.Contains($"{row.OrganizationId}|{row.ItemId}", StringComparer.OrdinalIgnoreCase)).ToList();
 
     var notes = new List<string>();
-    if (onlyItemIds is { Count: > 0 })
-      notes.Add($"Izvoženi so izbrani izdelki: {rows.Count:N0} od {onlyItemIds.Count:N0} izbranih (ostali niso v tem pogledu).");
-    else if (page.TotalCount > rows.Count)
-      notes.Add($"Izvoženih {rows.Count:N0} od {page.TotalCount:N0} vrstic pogleda; zgornja meja izvoza je {MaxRows:N0}.");
+    if (onlySelectionKeys is { Count: > 0 })
+      notes.Add($"Izvoženi so izbrani izdelki: {rows.Count:N0} od {onlySelectionKeys.Count:N0} izbranih (ostali niso v tem pogledu).");
+    else if (onlySelectionKeys is null && totalCount > rows.Count)
+      notes.Add($"Izvoženih {rows.Count:N0} od {totalCount:N0} vrstic pogleda; zgornja meja izvoza je {MaxRows:N0}.");
 
     return template == ProductExportTemplate.Saop
       ? await BuildSaopAsync(rows, notes, cancellationToken)
@@ -239,21 +262,37 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
   async Task<byte[]> BuildSaopAsync(
     IReadOnlyList<ProductListRow> rows, List<string> notes, CancellationToken cancellationToken)
   {
-    var template = await GetTemplateColumnsAsync(cancellationToken);
+    var registry = await GetTemplateColumnsAsync(cancellationToken);
     var values = await GetFieldValuesAsync(rows.Select(row => row.ProductId).ToList(), cancellationToken);
 
+    // Isti vrstni red in isti slovenski naslovi kot delovni list s strani Izdelki
+    // (ProductWorkbookService.WritableSaopFieldsAsync): sifra artikla prva, pisljiva ERP polja po
+    // SortOrder, nepisljiva (»dodatna«, samo za nov artikel — SAOP jih zahteva, PIM jih ne hrani)
+    // cisto na koncu. Tako je datoteka s te strani in tista iz Izdelkov ista oblika in ju je
+    // mogoce zamenjati. Uporabnikova zahteva 2026-09-10.
+    var itemId = registry.FirstOrDefault(column => column.FieldKey == ProductWorkbookContract.ItemIdField);
+    var writable = registry.Where(column => column.IsWritable && column.FieldKey != ProductWorkbookContract.ItemIdField).ToList();
+    var readOnlyExtra = registry.Where(column => !column.IsWritable && column.FieldKey != ProductWorkbookContract.ItemIdField).ToList();
+    var template = new List<SaopTemplateColumn>();
+    if (itemId is not null) template.Add(itemId);
+    template.AddRange(writable);
+    template.AddRange(readOnlyExtra);
+
     // Podjetje je prvi stolpec, ker je sifra artikla enolicna samo znotraj podjetja; brez njega
-    // uvoz ne ve, komu vrstica pripada. Sifra pride iz registra (element ItemID), zato je tu ni
-    // se enkrat — dva stolpca z istim naslovom bi bila pri uvozu dvoumna.
+    // uvoz ne ve, komu vrstica pripada.
     var columns = new List<WorkbookColumn> { new("Podjetje", Width: 16) };
-    columns.AddRange(template.Select(column => new WorkbookColumn(
-      column.ElementName,
-      column.ValueFormat switch
-      {
-        "decimal4" or "decimal8" => WorkbookCellKind.Number,
-        _ => WorkbookCellKind.Text,
-      },
-      Width: Math.Clamp(column.ElementName.Length + 3, 14, 30))));
+    columns.AddRange(template.Select(column =>
+    {
+      var label = SaopFieldLabels.For(column.ElementName);
+      return new WorkbookColumn(
+        label,
+        column.ValueFormat switch
+        {
+          "decimal4" or "decimal8" => WorkbookCellKind.Number,
+          _ => WorkbookCellKind.Text,
+        },
+        Width: Math.Clamp(label.Length + 3, 14, 32));
+    }));
 
     var cells = rows.Select(row =>
     {
@@ -265,12 +304,14 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
       return (IReadOnlyList<object?>)line;
     });
 
-    notes.Add("Predloga SAOP: naslovi stolpcev so imena elementov SAOP iz registra out.SaopXmlField.");
-    notes.Add($"Obvezno pri novem artiklu: {string.Join(", ", template.Where(column => column.IsAddMandatory).Select(column => column.ElementName))}.");
-    var readOnly = template.Where(column => !column.IsWritable).Select(column => column.ElementName).ToList();
+    notes.Add("Predloga SAOP: naslovi stolpcev so slovenska imena elementov SAOP (register out.SaopXmlField); dodatna, nepisljiva polja stojijo na koncu.");
+    var mandatory = template.Where(column => column.IsAddMandatory).Select(column => SaopFieldLabels.For(column.ElementName)).ToList();
+    if (mandatory.Count > 0)
+      notes.Add($"Obvezno pri novem artiklu: {string.Join(", ", mandatory)}.");
+    var readOnly = readOnlyExtra.Select(column => SaopFieldLabels.For(column.ElementName)).ToList();
     if (readOnly.Count > 0)
       notes.Add($"PIM teh polj ne piše nazaj v SAOP (pri spremembi se prezrejo): {string.Join(", ", readOnly)}.");
-    notes.Add("Podjetje in ItemID sta ključ vrstice; ne spreminjaj ju, sicer uvoz ne najde izdelka.");
+    notes.Add("Podjetje in Šifra artikla sta ključ vrstice; ne spreminjaj ju, sicer uvoz ne najde izdelka.");
 
     return WorkbookWriter.Write("Artikli SAOP", columns, cells, notes);
   }
@@ -328,5 +369,5 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
   /// <summary>Ime datoteke z datumom, da se izvozi ne prepisujejo v mapi prenosov.</summary>
   public static string FileName(ProductExportTemplate template, DateTime nowUtc) =>
     (template == ProductExportTemplate.Saop ? "artikli-saop-" : "izdelki-")
-    + nowUtc.ToLocalTime().ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture) + ".xlsx";
+    + nowUtc.ToPimLocal().ToString("yyyyMMdd-HHmm", CultureInfo.InvariantCulture) + ".xlsx";
 }

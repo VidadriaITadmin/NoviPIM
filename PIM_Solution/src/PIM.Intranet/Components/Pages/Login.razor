@@ -12,25 +12,61 @@
     {
       <p class="login-alert" role="alert">Uporabniško ime ali geslo ni pravilno.</p>
     }
-    <form method="post" action="auth/prijava">
-      <AntiforgeryToken />
-      <div class="login-field">
-        <label for="uporabniskoIme">Uporabniško ime</label>
-        <input id="uporabniskoIme" name="uporabniskoIme" placeholder="npr. admin" autocomplete="username" required />
+    @if (RazlogParam == "seja")
+    {
+      <p class="login-alert" role="alert">Seja je bila prekinjena — nekdo drug se je prijavil s tem računom ali so se spremenile vaše pravice.</p>
+    }
+    @if (RazlogParam == "onemogocen")
+    {
+      <p class="login-alert" role="alert">Ta račun je onemogočen.</p>
+    }
+    @if (RazlogParam == "potekel")
+    {
+      <p class="login-alert" role="alert">Potrditev je potekla (velja 2 minuti). Prijavite se znova.</p>
+    }
+    @if (Zasedeno is not null)
+    {
+      <div class="login-occupied" role="alert">
+        <p>Račun <strong>@ImeParam</strong> je trenutno prijavljen na drugi napravi@(string.IsNullOrEmpty(ObParam) ? "" : $" (nazadnje viden ob {ObParam})").</p>
+        <p>Ali ga želite odjaviti in nadaljevati tukaj?</p>
+        <form method="post" action="auth/prijava/prevzemi">
+          <AntiforgeryToken />
+          <input type="hidden" name="zeton" value="@Zasedeno" />
+          <button type="submit" class="login-submit">Da, prevzemi sejo</button>
+        </form>
+        <a class="login-note" href="prijava">Prekliči</a>
       </div>
-      <div class="login-field">
-        <label for="geslo">Geslo</label>
-        <input id="geslo" name="geslo" type="password" autocomplete="current-password" required />
-      </div>
-      <label class="remember-me"><input name="zapomniMe" type="checkbox" /> <span>Zapomni si me (do 14 dni na tem računalniku)</span></label>
-      <button type="submit" class="login-submit">Prijava</button>
-    </form>
-    <p class="login-note">Geslo se preveri varno; brez kljukice velja seja do zaprtja brskalnika.</p>
+    }
+    else
+    {
+      <form method="post" action="auth/prijava">
+        <AntiforgeryToken />
+        <div class="login-field">
+          <label for="uporabniskoIme">Uporabniško ime</label>
+          <input id="uporabniskoIme" name="uporabniskoIme" placeholder="npr. admin" autocomplete="username" required />
+        </div>
+        <div class="login-field">
+          <label for="geslo">Geslo</label>
+          <input id="geslo" name="geslo" type="password" autocomplete="current-password" required />
+        </div>
+        <label class="remember-me"><input name="zapomniMe" type="checkbox" /> <span>Zapomni si me (do 14 dni na tem računalniku)</span></label>
+        <button type="submit" class="login-submit">Prijava</button>
+      </form>
+      <p class="login-note">Geslo se preveri varno; brez kljukice velja seja do zaprtja brskalnika.</p>
+    }
   </section>
 </main>
 
 @code {
   [SupplyParameterFromQuery(Name = "napaka")]
   public string? NapakaParam { get; set; }
+  [SupplyParameterFromQuery(Name = "razlog")]
+  public string? RazlogParam { get; set; }
+  [SupplyParameterFromQuery(Name = "zasedeno")]
+  public string? Zasedeno { get; set; }
+  [SupplyParameterFromQuery(Name = "ime")]
+  public string? ImeParam { get; set; }
+  [SupplyParameterFromQuery(Name = "ob")]
+  public string? ObParam { get; set; }
   bool Napaka => NapakaParam == "1";
 }

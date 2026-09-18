@@ -28,8 +28,8 @@
         <h2 id="issue-context-title">Kontekst</h2>
         <dl class="detail-list">
           <dt>Podjetje</dt><dd>@Detail.OrganizationName</dd>
-          <dt>Prvič</dt><dd>@Detail.FirstSeenUtc.ToLocalTime().ToString("g")</dd>
-          <dt>Nazadnje</dt><dd>@Detail.LastSeenUtc.ToLocalTime().ToString("g")</dd>
+          <dt>Prvič</dt><dd>@Detail.FirstSeenUtc.ToPimLocal().ToString("g")</dd>
+          <dt>Nazadnje</dt><dd>@Detail.LastSeenUtc.ToPimLocal().ToString("g")</dd>
           <dt>Tek</dt><dd>@if (Detail.RunId is not null) { <a href="zajem/teki/@Detail.RunId">@Detail.RunId</a> } else { <span>—</span> }</dd>
         </dl>
       </article>

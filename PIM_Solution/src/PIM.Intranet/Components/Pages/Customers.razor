@@ -47,7 +47,6 @@
             <td>@(row.CustomerType ?? "—")</td>
             <td>@(row.MagentoGroupKey ?? "—")</td>
             <td><PimChip Text="@(row.B2bPlusEnabled ? "Da" : "Ne")" Tone="@(row.B2bPlusEnabled ? "good" : null)" Prefix="B2B+: " /></td>
-            <td><PimChip Text="@(row.WebEnabled ? "Omogočen" : "Onemogočen")" Tone="@(row.WebEnabled ? "good" : null)" Prefix="Splet: " /></td>
           </tr>
         }
       </Rows>
@@ -71,7 +70,7 @@
   const int PageSize = 25;
 
   static readonly IReadOnlyList<PimColumn> Columns =
-    [new("Šifra"), new("Naziv"), new("Vrsta"), new("Tip stranke"), new("Magento skupina"), new("B2B+"), new("Splet")];
+    [new("Šifra"), new("Naziv"), new("Vrsta"), new("Tip stranke"), new("Magento skupina"), new("B2B+")];
 
   // Vrste, ki jih je nastel uporabnik 2026-08-28. Proizvajalec je nov.
   static readonly IReadOnlyList<KindView> Views =

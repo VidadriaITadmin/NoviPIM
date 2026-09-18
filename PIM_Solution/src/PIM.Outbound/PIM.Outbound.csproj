@@ -1,3 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <!-- SaopDocumentRunner bere prevzem/zakljucek dokumenta neposredno (out.ClaimItemDocument,
+         out.CompleteItemDocument): edini izjemi od "brez baze" v tem projektu, ker morata biti
+         claim in send atomarna glede na lease in ju zato ne gre lociti od preostale poti pošiljanja. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
 </Project>

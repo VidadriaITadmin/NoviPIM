@@ -184,5 +184,5 @@
   static string FlowKind(string value) => value switch { "STOCK" => "zaloga", "WORKBOOK" => "delovni zvezek", "XML" => "XML", "SAOP" => "API", _ => value };
   static string StatusLabel(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "V redu", "Running" => "V teku", "Failed" => "Neuspešno", "Stale" => "Zamuja", "NeverRun" => "Še brez teka", _ => value };
   static string? StatusTone(string value) => value switch { "Healthy" or "Completed" or "Succeeded" => "good", "Running" or "NeverRun" => null, "Stale" => "warn", "Failed" => "bad", _ => null };
-  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToPimLocal().ToString("g");
 }

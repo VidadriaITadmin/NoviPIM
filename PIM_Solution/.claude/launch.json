@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pim-intranet",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "C:\\Users\\David\\Documents\\GitHub\\PIM\\PIM_Solution\\src\\PIM.Intranet"],
+      "port": 5091
+    }
+  ]
+}

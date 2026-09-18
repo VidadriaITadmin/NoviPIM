@@ -3,32 +3,35 @@
 @rendermode InteractiveServer
 @using PIM.Intranet.Services
 @inject GovernanceReadService Governance
-@inject PipelineReadService Pipeline
 @inject IntranetDataService Data
 @inject CatalogReadService Catalog
 @inject QualityReadService QualityRead
 @inject CategoryTreeService Tree
+@inject NavigationManager Navigation
 
 <PageTitle>Kakovost</PageTitle>
 
 @* Faza toka: KAKOVOST (3). Vir: val.ProductIssue, val.FieldRequirement, val.ValidationProfile.
    Bralna stran.
 
-   Prenova 2026-08-28. Prej je bil pregled razdeljen po profilih in je imel štiri visoke
-   kartice ter štiri zaporedne tabele. Ker isto polje zahteva več profilov, se je isto delo
-   pojavilo trikrat — merjeno: 340.227 odprtih napak povzroča 16 polj. Pregled je zato
-   urejen po polju, profili pa so dobili svoj zavihek. *@
+   Prenova 2026-09-10. Zavihek "Pregled" in kartice "Kje popraviti" so odpadli — uporabnik je
+   povedal, da isto ze kaze nadzorna plošca in da so kartice odvec, ko so lahko zavihki. Karantena
+   in napake validacije sta zdaj prva dva zavihka, ker se z njima delo dejansko zacne. Isti
+   QualityTabs seznam (Components/Shared/PimTab.cs) uporabljajo tudi /kakovost/karantena,
+   /kakovost/napake, /kakovost/prevodi in /kakovost/kategorije, da je vrstni red povsod enak. *@
 <PimPage Title="Kakovost" Subtitle="@HeadlineText" />
 
-@* Zavihek sme prikazati vsebino samo na tej strani. Oba spodnja to poceneta — povezava je na
-   isti naslov z drugim poizvedbenim parametrom, zato je pogled deljiv in ga je mogoce dodati
-   med zaznamke. Povezave na druge strani NE smejo biti zavihki: uporabnika odnesejo drugam,
-   skupaj z drugim navigacijskim drevesom. Take povezave so spodaj, v razdelku »Kje popraviti«. *@
-<nav class="page-tabs" aria-label="Pogledi kakovosti">
-  <a class="page-tab @(ShowProfiles ? null : "active")" href="kakovost" aria-current="@(ShowProfiles ? null : "page")">Pregled</a>
-  <a class="page-tab @(ShowProfiles ? "active" : null)" href="kakovost?pogled=profili" aria-current="@(ShowProfiles ? "page" : null)">Profili in zahteve</a>
-  <a class="page-tab @(ShowCategories ? "active" : null)" href="kakovost?pogled=kategorije" aria-current="@(ShowCategories ? "page" : null)">Po kategorijah</a>
-</nav>
+<PimTabs Active="@(ShowProfiles ? "profili" : ShowCategories ? "pokategorijah" : "")" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+
+@* Ostane kot kratko besedilo, ne vec kot kartice-gumbi: razlaga je se vedno potrebna (uporabnik
+   je 2026-08-28 vprasal, kaj karanteno loci od napake), pot do dela pa je zdaj zavihek zgoraj. *@
+<p class="section-lead">
+  Napaka in karantena nista isto in ne nastaneta na istem mestu v toku.
+  <strong>Karantena je pred PIM-om:</strong> zapis iz vira je prispel, preslikava pa ga ni
+  sprejela, zato izdelka iz njega sploh ni. <strong>Napaka validacije je za PIM-om:</strong>
+  izdelek obstaja, a mu manjka polje, ki ga zahteva profil, zato ne sme ven.
+  Popravek karantene je preslikava ali izvorni podatek; popravek napake je vrednost na kartici izdelka.
+</p>
 
 @if (ShowCategories)
 {
@@ -116,128 +119,9 @@
     </PimState>
   </section>
 }
-
-
-<PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje kakovosti …">
-
-  @if (ShowCategories) { }
-  else if (!ShowProfiles)
-  {
-    <section class="ui-card data-card readiness" aria-labelledby="readiness-title">
-      @* Filtra po spletnem mestu tu ni: uporabnik je 2026-08-28 povedal, da ni relevanten,
-         ker stran hkrati pokriva ERP, komercialo in splet, spletno mesto pa zoži samo enega
-         od štirih nivojev. Kdor hoče eno spletno mesto, ga izbere na strani z napakami. *@
-      <h2 id="readiness-title" class="card-caption">
-        Pripravljenost za objavo
-        <span class="card-caption-note">@ScopeNote</span>
-      </h2>
-      @foreach (var layer in Layers)
-      {
-        var summary = SummaryFor(layer);
-        var blocking = layer != PimValidationLayer.Komerciala;
-        <div class="readiness-row @(blocking ? null : "muted-row")">
-          <div class="readiness-name">
-            <strong>@ValidationLayer.Label(layer)</strong>
-            <span class="code-value">@ValidationLayer.Code(layer) · @LayerNote(layer)</span>
-          </div>
-          <div class="readiness-count">@summary.AffectedProductCount.ToString("N0")</div>
-          @if (blocking)
-          {
-            <div class="readiness-bar">
-              <PimBar Percent="@summary.ValidShare" Label="@($"Delež pripravljenih na nivoju {ValidationLayer.Label(layer)}")" />
-              <span class="readiness-unit">pripravljenih</span>
-            </div>
-          }
-          else
-          {
-            <div class="readiness-bar"><span class="readiness-unit">opozorila, ne blokade</span></div>
-          }
-          <div class="readiness-open">
-            <a href="@($"kakovost/napake?nivo={ValidationLayer.Code(layer)}")">Odpri napake →</a>
-          </div>
-        </div>
-      }
-      <div class="card-note">
-        Odstotek je delež izdelkov <strong>brez</strong> odprte zahteve na tem nivoju; številka levo je izdelkov, ki jih nivo ustavi.
-        Opozorila komerciale ne blokirajo objave.
-      </div>
-    </section>
-
-    <section class="ui-card data-card section-gap" aria-labelledby="gaps-title">
-      <h2 id="gaps-title" class="card-caption">
-        Kaj popraviti — po polju
-        <span class="card-caption-note">@Gaps.Count polj ustavlja @(Totals?.ProductsWithIssue.ToString("N0") ?? "—") izdelkov</span>
-      </h2>
-      <PimTable Caption="Odprte zahteve po polju" Columns="GapColumns">
-        <Rows>
-          @foreach (var gap in VisibleGaps)
-          {
-            var target = QualityFieldPolicy.FixTarget(gap.FieldCode);
-            <tr>
-              <td>
-                <a href="@QualityFieldPolicy.IssuesHref(gap.FieldCode)">@QualityFieldPolicy.FieldName(gap.FieldCode)</a>
-                <div class="tree-path">@QualityFieldPolicy.EntityLabel(gap.FieldCode) · <span class="code-value">@gap.FieldCode</span></div>
-              </td>
-              <td>
-                <div class="gap-share">
-                  <span class="gap-count">@gap.AffectedProducts.ToString("N0")</span>
-                  <span class="gap-track" role="progressbar" aria-valuenow="@ShareOfActive(gap)" aria-valuemin="0" aria-valuemax="100"
-                        aria-label="@($"Delež aktivnih izdelkov brez vrednosti v polju {gap.FieldCode}")">
-                    <i style="width:@Width(ShareOfActive(gap))" aria-hidden="true"></i>
-                  </span>
-                  <span class="gap-percent">@ShareOfActive(gap).ToString("0.#") %</span>
-                </div>
-              </td>
-              <td>
-                @if (gap.BlockingLayers.Count == 0)
-                {
-                  <span class="muted">nič</span>
-                }
-                else
-                {
-                  @foreach (var layer in gap.BlockingLayers) { <PimChip Text="@ValidationLayer.Label(layer)" Tone="info" Prefix="Blokira: " /> }
-                }
-              </td>
-              <td><PimChip Text="@(gap.IsError ? "Napaka" : "Opozorilo")" Tone="@(gap.IsError ? "bad" : "warn")" Prefix="Resnost: " /></td>
-              <td>
-                @* Uporabnik 2026-08-28: »Ta polje kje popraviti mi moras razloziti kaj vsak
-                   pomeni.« Ime cilja samo pove, kam pelje povezava, ne pa, kaj tam naredis. *@
-                @if (target.Href is not null) { <a href="@target.Href" title="@target.Explanation">@target.Label →</a> }
-                else { <span class="muted" title="@target.Explanation">@target.Label</span> }
-                <div class="tree-path">@target.Explanation</div>
-                @* Pregled 2026-09-08 (§3.3): ob polju mora pisati, koliko izdelkov ta poseg sploh
-                   doseze. Brez tega urednik ne loci posega, ki resi pol kataloga, od posega, ki
-                   resi pol odstotka — in prav to je danes primer pri kategorijah. *@
-                @if (CategoryLever is not null && target.Href == "kakovost/kategorije")
-                {
-                  <p class="lever-note @(CategoryLever.CoverageShare < 5 ? "lever-weak" : null)">
-                    @CategoryLever.PendingCount.ToString("N0") nepreslikanih poti pokrije
-                    <strong>@CategoryLever.CoveredProductCount.ToString("N0")</strong> izdelkov
-                    od @CategoryLever.TotalMissingProductCount.ToString("N0") brez kategorije
-                    (@CategoryLever.CoverageShare.ToString("0.##") %).
-                    @if (CategoryLever.CoverageShare < 5)
-                    {
-                      <span>Ostalih ta poseg ne doseže — nimajo dobaviteljeve poti, ker zajem zanje še ni tekel.</span>
-                    }
-                  </p>
-                }
-              </td>
-            </tr>
-          }
-        </Rows>
-      </PimTable>
-      @if (Gaps.Count > VisibleGaps.Count || ShowAllGaps)
-      {
-        <div class="card-note">
-          <button type="button" class="small-action" @onclick="() => ShowAllGaps = !ShowAllGaps">
-            @(ShowAllGaps ? "Prikaži samo najbolj razširjena" : $"Prikaži vseh {Gaps.Count} polj")
-          </button>
-        </div>
-      }
-    </section>
-  }
-  else
-  {
+else if (ShowProfiles)
+{
+  <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje kakovosti …">
     <section class="ui-card data-card" aria-labelledby="profiles-title">
       <h2 id="profiles-title" class="card-caption">Vseh @Profiles.Count profilov v eni tabeli — nivo je stolpec, ne ločen razdelek</h2>
       <PimTable Caption="Validacijski profili in njihove zahteve" Columns="ProfileColumns">
@@ -277,37 +161,15 @@
         </div>
       }
     </section>
-  }
-</PimState>
-
-<h2 class="section-title">Kje popraviti</h2>
-<p class="section-lead">
-  Napaka in karantena nista isto in ne nastaneta na istem mestu v toku.
-  <strong>Karantena je pred PIM-om:</strong> zapis iz vira je prispel, preslikava pa ga ni
-  sprejela, zato izdelka iz njega sploh ni. <strong>Napaka validacije je za PIM-om:</strong>
-  izdelek obstaja, a mu manjka polje, ki ga zahteva profil, zato ne sme ven.
-  Popravek karantene je preslikava ali izvorni podatek; popravek napake je vrednost na kartici izdelka.
-</p>
-<section class="hub-grid" aria-label="Delovne strani kakovosti">
-  <PimHubCard Title="Napake validacije" Href="kakovost/napake"
-              Description="Izdelek obstaja, a mu manjka zahtevano polje. Popravi se vrednost na kartici izdelka." />
-  <PimHubCard Title="Karantena" Href="kakovost/karantena"
-              Description="Zapis iz vira, ki ga preslikava ni sprejela — izdelka iz njega ni. Popravi se preslikava ali izvorni podatek." />
-  <PimHubCard Title="Manjkajoči prevodi" Href="kakovost/prevodi"
-              Description="Vrednost obstaja, prevoda v ciljni jezik pa ne. Popravi se v slovarju vrednosti." Count="@Counts(Ingest?.MissingTranslations)" />
-  <PimHubCard Title="Nepreslikane kategorije" Href="kakovost/kategorije"
-              Description="Dobaviteljeva pot brez naše kategorije. Popravi se s preslikavo kategorij." Count="@Counts(Ingest?.MissingCategories)" />
-</section>
+  </PimState>
+}
 
 @code {
   [SupplyParameterFromQuery(Name = "pogled")] public string? QueryView { get; set; }
 
   IReadOnlyList<ValidationProfileRow> Profiles = [];
-  IReadOnlyList<ValidationLayerSummary> Summaries = [];
-  IReadOnlyList<FieldGapRow> Gaps = [];
   IReadOnlyList<OrganizationContext> Organizations = [];
   QualityTotals? Totals;
-  IngestSummary? Ingest;
   bool ShowProfiles;
 
   // 177: pogled po kategorijah.
@@ -327,16 +189,8 @@
   /// <param name="ProductsWithIssue">Aktivni izdelki z vsaj eno odprto zahtevo, vsa podjetja.</param>
   /// <param name="ActiveProducts">Vsi aktivni izdelki, vsa podjetja — imenovalec deležev.</param>
   sealed record QualityTotals(long ProductsWithIssue, long ActiveProducts);
-  bool ShowAllGaps;
   bool Loading = true;
   string? Error;
-
-  const int VisibleGapCount = 9;
-
-  static readonly PimValidationLayer[] Layers = Enum.GetValues<PIM.Intranet.Services.PimValidationLayer>();
-
-  static readonly IReadOnlyList<PimColumn> GapColumns =
-    [new("Polje"), new("Izdelkov brez vrednosti"), new("Blokira"), new("Resnost"), new("Kje se popravi")];
 
   static readonly IReadOnlyList<PimColumn> ProfileColumns =
   [
@@ -347,12 +201,16 @@
   /// <summary>
   /// Uporabnik 2026-08-28: »Potem kaze kakovost samo DEMO artiklov, sploh ne vseh.«
   /// Stran je racunala iz GetCurrentOrganizationAsync, ta pa vrne vedno prvo podjetje po
-  /// sifri. Kakovost je vprasanje celotnega kataloga, zato se nivoji, vrzeli in stevila
-  /// sestejejo cez vsa aktivna podjetja. Profili so skupni register in se ne sestevajo —
-  /// preberejo se enkrat, stevila v njih pa se sestejejo po sifri profila.
+  /// sifri. Kakovost je vprasanje celotnega kataloga, zato se stevila sestejejo cez vsa
+  /// aktivna podjetja. Profili so skupni register in se ne sestevajo — preberejo se enkrat,
+  /// stevila v njih pa se sestejejo po sifri profila.
   /// </summary>
   protected override async Task OnInitializedAsync()
   {
+    // "Pregled" (privzeti pogled brez ?pogled=) je odpadel — kar je kazal, kaze nadzorna
+    // plošca. Bare /kakovost zdaj vodi naravnost na prvi zavihek dela: karanteno.
+    if (!IsKnownView(QueryView)) { Navigation.NavigateTo("kakovost/artikli"); return; }
+
     try
     {
       Organizations = await Data.GetOrganizationsAsync();
@@ -360,51 +218,31 @@
       Trees = await Tree.GetTreeCodesAsync();
       CategoryTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
 
-      /* P2-11: branja so tekla zaporedno, podjetje za podjetjem. Merjeno 2026-09-09 je bilo
-         GetQualityOverview 490 ms na podjetje, torej blizu dveh sekund samo cakanja, ceprav so
-         podjetja med seboj neodvisna. Znotraj enega podjetja zaporedje ostane — obseg in vrzeli
-         potrebujeta seznam profilov — podjetja pa tecejo vzporedno. Vsak klic si odpre svojo
-         povezavo (PimDb), zato skupnega stanja ni; stanje strani se spremeni sele, ko so vsi
-         odgovori tu. */
+      /* P2-11: branja tecejo vzporedno po podjetjih, ker so med seboj neodvisna. Vsak klic si
+         odpre svojo povezavo (PimDb), zato skupnega stanja ni; stanje strani se spremeni sele,
+         ko so vsi odgovori tu. */
       var perOrganization = await Task.WhenAll(Organizations.Select(async organization =>
       {
         var profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
-        var summaries = await Governance.GetValidationLayerSummariesAsync(organization.OrganizationId, profiles);
-        var gaps = await Governance.GetFieldGapsAsync(organization.OrganizationId, profiles);
-        // Nacrta odblokiranja stran ne rise vec (uporabnik ga je 2026-08-28 zavrnil kot
-        // nesmiselnega), potrebni pa sta stevili aktivnih izdelkov in izdelkov s tezavo —
-        // brez njiju delezi v tabeli vrzeli nimajo imenovalca.
         UnblockPlan? plan = null;
         try { plan = await Governance.GetUnblockPlanAsync(organization.OrganizationId); } catch { }
-        IngestSummary? ingest = null;
-        try { ingest = await Pipeline.GetSummaryAsync(organization.OrganizationId); } catch { }
-        return (Profiles: profiles, Summaries: summaries, Gaps: gaps, Plan: plan, Ingest: ingest);
+        return (Profiles: profiles, Plan: plan);
       }));
 
       var plans = perOrganization.Where(row => row.Plan is not null).Select(row => row.Plan!).ToList();
-      var ingests = perOrganization.Where(row => row.Ingest is not null).Select(row => row.Ingest!).ToList();
 
       Profiles = MergeProfiles(perOrganization.Select(row => row.Profiles).ToList());
-      Summaries = MergeSummaries(perOrganization.Select(row => row.Summaries).ToList());
-      Gaps = MergeGaps(perOrganization.Select(row => row.Gaps).ToList());
       Totals = plans.Count == 0 ? null : new(
         plans.Sum(plan => plan.ProductsWithIssue),
         plans.Sum(plan => plan.ActiveProducts));
-      Ingest = ingests.Count == 0 ? null : new(
-        ingests.Sum(row => row.PendingPages), ingests.Sum(row => row.ProcessedPages),
-        ingests.Sum(row => row.QuarantinedPages), ingests.Sum(row => row.UnmappedValues),
-        ingests.Sum(row => row.MissingTranslations), ingests.Sum(row => row.MissingCategories));
-
-      // Ocena ucinka skupinskega posega (pregled 2026-09-08, §3.3). Seznam nepreslikanih poti je
-      // skupen vsem podjetjem, ker je drevo dobaviteljevo, zato tudi ocena ni po podjetju.
-      try { CategoryLever = await QualityRead.GetCategoryLeverAsync(null); } catch { CategoryLever = null; }
     }
     catch { Error = "Kakovosti trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
-  /// <summary>Koliko izdelkov sploh lahko resi preslikava kategorij; null pomeni, da ocene ni.</summary>
-  QualityBulkLever? CategoryLever;
+  static bool IsKnownView(string? view) =>
+    string.Equals(view, "profili", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(view, "kategorije", StringComparison.OrdinalIgnoreCase);
 
   /// <summary>Profil je skupen register; stevila v njem se sestejejo po sifri profila.</summary>
   static IReadOnlyList<ValidationProfileRow> MergeProfiles(IReadOnlyList<IReadOnlyList<ValidationProfileRow>> groups) =>
@@ -418,30 +256,11 @@
       })
       .ToArray();
 
-  static IReadOnlyList<ValidationLayerSummary> MergeSummaries(IReadOnlyList<IReadOnlyList<ValidationLayerSummary>> groups) =>
-    Enum.GetValues<PimValidationLayer>()
-      .Select(layer =>
-      {
-        var rows = groups.SelectMany(group => group).Where(summary => summary.Layer == layer).ToArray();
-        return new ValidationLayerSummary(layer, rows.Sum(row => row.ProductCount), rows.Sum(row => row.AffectedProductCount));
-      })
-      .ToArray();
-
-  /// <summary>Isto polje pri vec podjetjih je ena vrzel; blokirani nivoji se zdruzijo.</summary>
-  static IReadOnlyList<FieldGapRow> MergeGaps(IReadOnlyList<IReadOnlyList<FieldGapRow>> groups) =>
-    groups.SelectMany(group => group)
-      .GroupBy(gap => gap.FieldCode, StringComparer.Ordinal)
-      .Select(group => new FieldGapRow(
-        group.Key,
-        group.Sum(gap => gap.AffectedProducts),
-        group.Any(gap => gap.IsError),
-        group.SelectMany(gap => gap.BlockingLayers).Distinct().ToArray()))
-      .OrderByDescending(gap => gap.AffectedProducts)
-      .ToArray();
-
   // Zavihek se bere iz naslova, zato se prebere ob vsaki navigaciji in ne samo ob prvem izrisu.
   protected override async Task OnParametersSetAsync()
   {
+    if (!IsKnownView(QueryView)) { Navigation.NavigateTo("kakovost/artikli"); return; }
+
     ShowProfiles = string.Equals(QueryView, "profili", StringComparison.OrdinalIgnoreCase);
     ShowCategories = string.Equals(QueryView, "kategorije", StringComparison.OrdinalIgnoreCase);
     if (ShowCategories && CategoryRows.Count == 0 && !CategoriesLoading && !string.IsNullOrWhiteSpace(CategoryTree))
@@ -499,18 +318,8 @@
   }
 
   string HeadlineText => Totals is null || Totals.ActiveProducts == 0
-    ? "Validacija je razdeljena na štiri poslovne nivoje. Skupne zahteve so prikazane v vsakem nivoju, ki ga blokirajo."
-    : $"{Totals.ProductsWithIssue:N0} od {Totals.ActiveProducts:N0} aktivnih izdelkov ima vsaj eno odprto zahtevo. "
-      + $"Vse odprte zahteve povzroča {Gaps.Count} različnih polj.";
-
-  string ScopeNote => Organizations.Count switch
-  {
-    0 => "",
-    1 => "vsi izdelki podjetja " + Organizations[0].Name,
-    var count => $"vsi izdelki {count} podjetij skupaj",
-  };
-
-  IReadOnlyList<FieldGapRow> VisibleGaps => ShowAllGaps ? Gaps : Gaps.Take(VisibleGapCount).ToArray();
+    ? "Validacija je razdeljena na štiri poslovne nivoje in več delovnih zavihkov spodaj."
+    : $"{Totals.ProductsWithIssue:N0} od {Totals.ActiveProducts:N0} aktivnih izdelkov ima vsaj eno odprto zahtevo.";
 
   IReadOnlyList<ValidationProfileRow> OrderedProfiles => Profiles
     .OrderByDescending(profile => ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb).Count > 0)
@@ -522,12 +331,6 @@
 
   static string Width(decimal percent) =>
     Math.Clamp(percent, 0, 100).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%";
-
-  decimal ShareOfActive(FieldGapRow gap) => Totals is null || Totals.ActiveProducts == 0
-    ? 0 : Math.Round(100m * gap.AffectedProducts / Totals.ActiveProducts, 1);
-
-  ValidationLayerSummary SummaryFor(PimValidationLayer layer) =>
-    Summaries.FirstOrDefault(summary => summary.Layer == layer) ?? new(layer, 0, 0);
 
   static decimal Share(ValidationProfileRow profile)
   {
@@ -542,16 +345,4 @@
     (false, true) => "Splet",
     _ => "Ne blokira",
   };
-
-  static string LayerNote(PimValidationLayer layer) => layer switch
-  {
-    PimValidationLayer.ErpSlo => "osnovne zahteve za slovenski ERP tok",
-    PimValidationLayer.ErpEuThird => "dodatek k zahtevam ERP Slovenija",
-    PimValidationLayer.Komerciala => "opozorila za komercialno kakovost; ne blokirajo",
-    _ => "zahteve spletnih kanalov",
-  };
-
-  static string? Counts(long? value) => value is null ? null : value.Value.ToString("N0");
-
-
 }

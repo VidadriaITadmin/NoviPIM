@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using PIM.B2b;
 using PIM.B2bWorker;
 
@@ -6,7 +6,7 @@ public static class MagentoExportTests
 {
     public static async Task RunAllAsync()
     {
-        Equal(213, MagentoProductSchema.Headers.Length, "Product CSV mora imeti točno 213 stolpcev.");
+        Equal(176, MagentoProductSchema.Headers.Length, "Product CSV mora imeti točno 176 stolpcev (216: enote v glavi, brez stolpcev Enota/Komentarji).");
         Equal(19, MagentoCustomerSchema.Headers.Length, "Customer CSV mora imeti točno 19 stolpcev.");
 
         Equal("Šifra artikla", MagentoProductSchema.Headers[0], "1. stolpec produktov (ItemID).");
@@ -16,12 +16,12 @@ public static class MagentoExportTests
         Equal("Naziv artikla", MagentoProductSchema.Headers[4], "5. stolpec produktov (naziv SLO).");
         Equal("Proizvajalec", MagentoProductSchema.Headers[5], "6. stolpec produktov (manufacturer).");
         Equal("Oznaka tarifa", MagentoProductSchema.Headers[9], "10. stolpec produktov (carinska tarifa).");
-        Equal("PAK2", MagentoProductSchema.Headers[32], "33. stolpec produktov (PAK2).");
-        Equal("Skupina popusta", MagentoProductSchema.Headers[34], "35. stolpec produktov (S code).");
-        Equal("S popust %", MagentoProductSchema.Headers[35], "36. stolpec produktov (S percent).");
-        Equal("Glavna slika", MagentoProductSchema.Headers[37], "38. stolpec produktov (main image).");
-        Equal("Grlo", MagentoProductSchema.Headers[53], "54. stolpec produktov (1. atribut).");
-        Equal("Združljivo z", MagentoProductSchema.Headers[212], "213. stolpec produktov (zadnji).");
+        Equal("Pakirna količina", MagentoProductSchema.Headers[26], "27. stolpec produktov (Pakirna količina, prej PAK2 — 217).");
+        Equal("Skupina popusta", MagentoProductSchema.Headers[28], "29. stolpec produktov (S code).");
+        Equal("S popust %", MagentoProductSchema.Headers[29], "30. stolpec produktov (S percent).");
+        Equal("Glavna slika", MagentoProductSchema.Headers[31], "32. stolpec produktov (main image).");
+        Equal("Grlo", MagentoProductSchema.Headers[47], "48. stolpec produktov (1. atribut).");
+        Equal("Združljivo z", MagentoProductSchema.Headers[171], "172. stolpec produktov (zadnji atribut).");
 
         Equal("Šifra stranke", MagentoCustomerSchema.Headers[0], "1. stolpec strank (key).");
         Equal("Naziv", MagentoCustomerSchema.Headers[1], "2. stolpec strank (name).");
@@ -40,7 +40,7 @@ public static class MagentoExportTests
             [0] = "Product.ItemID",
             [1] = "Product.EAN",
             [5] = "Product.Manufacturer",
-            [32] = "Product.Pak2",
+            [26] = "Product.Pak2",
         });
         var customerColumns = TemplateColumns(MagentoCustomerSchema.Headers, new Dictionary<int, string>
         {
@@ -60,7 +60,7 @@ public static class MagentoExportTests
                 ["Product.Pak2"] = "5",
                 ["Product.Manufacturer"] = "Nowodvorski",
             };
-            var productPath = Path.Combine(dir, "magento-products.csv");
+            var productPath = Path.Combine(dir, "katalog.csv");
             await MagentoExportCommand.WriteProductCsvAsync(productPath, productColumns, [productRow]);
 
             var bytes = await File.ReadAllBytesAsync(productPath);
@@ -72,20 +72,20 @@ public static class MagentoExportTests
 
             var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var headerFields = ParseCsv(lines[0]);
-            Equal(213, headerFields.Length, "Header line ima 213 polj.");
+            Equal(176, headerFields.Length, "Header line ima 176 polj.");
             Equal("Šifra artikla", headerFields[0], "1. header v CSV.");
-            Equal("PAK2", headerFields[32], "33. header je PAK2.");
-            Equal("Združljivo z", headerFields[212], "213. header je Združljivo z.");
+            Equal("Pakirna količina", headerFields[26], "27. header je Pakirna količina.");
+            Equal("Združljivo z", headerFields[171], "172. header je Združljivo z.");
 
             var dataFields = ParseCsv(lines[1]);
-            Equal(213, dataFields.Length, "Data line ima 213 polj.");
+            Equal(176, dataFields.Length, "Data line ima 176 polj.");
             Equal("0000123", dataFields[0], "ItemID ohranja vodilne ničle.");
             Equal("4030096006084", dataFields[1], "EAN vrednost.");
-            Equal("5", dataFields[32], "PAK2 vrednost.");
+            Equal("5", dataFields[26], "Pakirna količina (Pak2) vrednost.");
             Equal("Nowodvorski", dataFields[5], "Manufacturer vrednost.");
             Equal("", dataFields[6], "Dobavitelj je prazen (stolpec brez kanonične kode).");
             Equal("", dataFields[8], "Merska enota je prazna (stolpec brez kanonične kode).");
-            Equal("", dataFields[53], "Grlo je prazen (stolpec brez kanonične kode).");
+            Equal("", dataFields[47], "Grlo je prazen (stolpec brez kanonične kode).");
 
             var escapeRow = new Dictionary<string, string?>
             {
@@ -106,7 +106,7 @@ public static class MagentoExportTests
                 ["Customer.Name"] = "Test stranka, d.o.o.",
                 ["Customer.MagentoGroup"] = "b2b_instalater",
             };
-            var custPath = Path.Combine(dir, "magento-customers.csv");
+            var custPath = Path.Combine(dir, "stranke.csv");
             await MagentoExportCommand.WriteCustomerCsvAsync(custPath, customerColumns, [custRow]);
 
             var custBytes = await File.ReadAllBytesAsync(custPath);

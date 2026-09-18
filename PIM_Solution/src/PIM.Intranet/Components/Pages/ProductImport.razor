@@ -5,6 +5,7 @@
 @using PIM.Intranet.Services
 @inject ProductWorkbookService Workbook
 @inject IntranetDataService Data
+@inject HeavyWorkGate Gate
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Uvoz delovnega lista</PageTitle>
@@ -122,6 +123,15 @@
         odobri jih na <a href="izvozi/mnozicno">Množično urejanje</a> ali <a href="outbound">Odhodna pošta</a>.
       </p>
     }
+    @if (Outcome.Problems.Count > 0)
+    {
+      <p class="hint">
+        Vsako opozorilo spodaj velja samo za polje ali stran, ki ga navaja — ostala polja iste
+        vrstice, druge vrstice in vse, kar je že zapisano zgoraj, ostanejo. Prazna celica v
+        datoteki ni bila nikoli razlog za opozorilo: taka celica pomeni »ne dotikaj se« in uvoz
+        je ne spremeni.
+      </p>
+    }
     @foreach (var problem in Outcome.Problems.Take(50)) { <p class="message-state warn-message">@problem</p> }
     @if (Outcome.Problems.Count > 50)
     {
@@ -164,6 +174,17 @@
     return state.User.Identity?.Name ?? "neznan";
   }
 
+  // Vrata za uvoze (HeavyWorkGate.Imports): hkrati tece najvec Limit uvozov, ostali cakajo po
+  // vrstnem redu. Kadar je mesto prosto, vstopimo takoj in brez sporocila; sicer stran pove,
+  // koliko jih je pred nami, in caka — gumb ostane onemogocen (Busy), stran pa odzivna.
+  async Task<IDisposable> EnterImportLaneAsync()
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    Message = $"Uvoz čaka v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync();
+  }
+
   async Task OnFileAsync(InputFileChangeEventArgs args)
   {
     Error = null; Message = null; Preview = null; Outcome = null;
@@ -176,7 +197,11 @@
       using var buffer = new MemoryStream();
       await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
       buffer.Position = 0;
-      Preview = await Workbook.PreviewAsync(buffer, OrganizationId);
+      // Predogled bere trenutno stanje vseh izdelkov datoteke; gre skozi ista vrata kot zapis,
+      // da deset hkratnih uvozov ne prebere kataloga desetkrat naenkrat (HeavyWorkGate).
+      using (await EnterImportLaneAsync())
+        Preview = await Workbook.PreviewAsync(buffer, OrganizationId);
+      Message = null;
     }
     catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
     catch (Exception failure) { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel: " + failure.Message; }
@@ -188,8 +213,13 @@
     Busy = true; Error = null; Message = null;
     try
     {
-      Outcome = await Workbook.ApplyAsync(Preview, await ActorAsync(),
-        string.IsNullOrWhiteSpace(Note) ? null : Note.Trim());
+      var actor = await ActorAsync();
+      // Napredek pride iz servisa po korakih (branje stanja, kategorije, mnozicni zapis, SAOP);
+      // Progress<T> ga vrne na vezje strani, zato je StateHasChanged tu varen.
+      var progress = new Progress<string>(text => { Message = text; _ = InvokeAsync(StateHasChanged); });
+      using (await EnterImportLaneAsync())
+        Outcome = await Workbook.ApplyAsync(Preview, actor,
+          string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), progress);
       Message = $"Uvoz končan: {Outcome.PimChanges} vrednosti zapisanih, {Outcome.SaopQueued} uvrščenih v vrsto.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
       Preview = null;

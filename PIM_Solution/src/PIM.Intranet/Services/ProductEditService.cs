@@ -21,6 +21,14 @@ public sealed record ProductEditConflict(string FieldKey, string? Expected, stri
 public sealed record ProductTextEdit(string Language, string TextType, string? Value, string? Expected = null, bool CheckExpected = false);
 public sealed record ProductAttributeEdit(string AttributeCode, string? Value, string? Expected = null, bool CheckExpected = false);
 
+/// <summary>Ena sprememba besedila v mnozicnem zapisu (218); izdelek je del vrstice, ker gre vec izdelkov v en klic.</summary>
+public sealed record ProductTextBulkEdit(long ProductId, string Language, string TextType, string? Value);
+public sealed record ProductAttributeBulkEdit(long ProductId, string AttributeCode, string? Value);
+
+/// <param name="Skipped">Izdelki, ki jih procedura ni zapisala (npr. niso v tem podjetju), z razlogom.</param>
+public sealed record ProductBulkEditOutcome(long ChangedCount, long ProductCount, IReadOnlyList<ProductBulkSkip> Skipped);
+public sealed record ProductBulkSkip(long ProductId, string Reason);
+
 /// <param name="WebShopCode">Koda spletišča (<c>svetila_si</c>, <c>videlektro</c>) — ista kot
 /// <c>canon.WebSite.CategoryTreeCode</c> in <c>val.ValidationProfile.CategoryTreeCode</c>.</param>
 /// <param name="IsPublished">Ali izdelek gre na to spletišče. To je merilo spletne validacije;
@@ -123,6 +131,72 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
     command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     return await reader.ReadAsync(cancellationToken) ? (int)PimDb.Int64(reader, "PublishedCount") : 0;
+  }
+
+  /* ─── Mnozicni zapis (218) — uvoz delovnega lista ──────────────────────────────────── */
+
+  /// <summary>
+  /// Besedila za poljubno mnogo izdelkov v enem klicu (<c>pim.SaveProductTextsBulk</c>): en MERGE,
+  /// ena serija zgodovine in ena mnozicna validacija (<c>val.RunValidationForProducts</c>) namesto
+  /// ene procedure in ene validacije na vrstico. Ista pravila lastnistva kot pri
+  /// <see cref="SaveTextsAsync"/>; sporna polja (Expected) tu niso podprta, ker jih uvoz ne posilja.
+  /// </summary>
+  public async Task<ProductBulkEditOutcome> SaveTextsBulkAsync(
+    int organizationId, IEnumerable<ProductTextBulkEdit> edits,
+    string actor, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await SaveBulkAsync("pim.SaveProductTextsBulk", organizationId,
+      JsonSerializer.Serialize(edits.Select(edit => new
+      {
+        productId = edit.ProductId,
+        lang = edit.Language,
+        textType = edit.TextType,
+        value = edit.Value ?? string.Empty,
+      })), actor, note, cancellationToken);
+  }
+
+  /// <summary>Atributi za poljubno mnogo izdelkov v enem klicu (<c>pim.SaveProductAttributesBulk</c>); glej <see cref="SaveTextsBulkAsync"/>.</summary>
+  public async Task<ProductBulkEditOutcome> SaveAttributesBulkAsync(
+    int organizationId, IEnumerable<ProductAttributeBulkEdit> edits,
+    string actor, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await SaveBulkAsync("pim.SaveProductAttributesBulk", organizationId,
+      JsonSerializer.Serialize(edits.Select(edit => new
+      {
+        productId = edit.ProductId,
+        attributeCode = edit.AttributeCode,
+        value = edit.Value ?? string.Empty,
+      })), actor, note, cancellationToken);
+  }
+
+  async Task<ProductBulkEditOutcome> SaveBulkAsync(
+    string procedure, int organizationId, string changesJson,
+    string actor, string? note, CancellationToken cancellationToken)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(procedure, connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      // Paket ima do tisoc izdelkov; mnozicna validacija paketa je izmerjena v sekundah, ne minutah.
+      CommandTimeout = 600,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@ChangesJson", SqlDbType.NVarChar, -1).Value = changesJson;
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, []);
+    var outcome = new ProductBulkEditOutcome(PimDb.Int64(reader, "ChangedCount"), PimDb.Int64(reader, "ProductCount"), []);
+
+    var skipped = new List<ProductBulkSkip>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        skipped.Add(new(PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "Reason")));
+    return outcome with { Skipped = skipped };
   }
 
   async Task<ProductEditOutcome> SaveAsync(

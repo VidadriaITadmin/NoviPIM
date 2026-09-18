@@ -458,16 +458,16 @@ ločeno in pogosto, cilj 5 minut.
 
 | Datoteka | Kdo | Kdaj |
 |---|---|---|
-| `izvoz\magento\<org>\magento-products.csv` (213 glav) in `magento-customers.csv` (19 glav) | `PIM.B2bWorker --export-magento` | nočni tok, korak 8 |
+| `izvoz\magento\<org>\katalog.csv` (213 glav) in `stranke.csv` (19 glav) | `PIM.B2bWorker --export-magento` | nočni tok, korak 8 |
 | `izvoz\magento\<org>\magento-export.complete` | isti ukaz | oznaka, da je par datotek celovit (ID zagona, čas UTC, števci) |
 | `izvoz\magento\<org>\magento-stock-prices.csv` (14 glav) | `PIM.B2bWorker --export-profile` | vsakih 5 minut |
 | `PIM_splet_<profil>_<yyyyMMdd_HHmm>.csv` | intranet `GET /izvoz/splet-na-zahtevo?podjetje=&profil=&koda=&spletisce=&objavljeni=&isci=` | na klik z `/splet/izvoz` |
 | `PIM_zaloga_<org>_<vir>_<čas>.csv` | intranet `GET /izvoz/zaloge.csv` | na klik z `/zaloge` |
 | `/izvoz/izdelki.csv`, `/izvoz/izdelki.xlsx` | intranet | seznam izdelkov z istimi filtri kot `/izdelki`; predloga `saop` ima stolpce iz `out.SaopXmlField` |
 
-Par `magento-products.csv`/`magento-customers.csv` je nedeljiv: najprej `.tmp`, prejšnji par v
+Par `katalog.csv`/`stranke.csv` je nedeljiv: najprej `.tmp`, prejšnji par v
 `.prej`, zamenjava pod ključavnico `.magento-export.lock`. Datoteke so UTF-8 brez BOM, LF;
-`magento-customers.csv` je v razvojni bazi prazna z glavo, ker nobena stranka nima
+`stranke.csv` je v razvojni bazi prazna z glavo, ker nobena stranka nima
 `WebEnabled = 1` (podatek, ne okvara).
 
 **Dostava v Magento ni implementirana** — datoteka nastane v mapi, način dostave (mapa / FTP /
@@ -767,7 +767,7 @@ datoteke. Pri SQL spremembi: dokaz pred in po (meritev v glavi migracije).
 | 7 | **Migracija 070 na čisti namestitvi** | vstavi urnik `GENERIC_XML` za podjetja 1, 3 in 4, nato zahteva štiri → na prazni bazi pade z 52701 (na razvojnem računalniku je vrstica za podjetje 2 nastala ročno) | nova migracija, ki doda manjkajočo vrstico (obstoječe 070 se ne ureja); glej `docs/PRENOS_NA_SLUZBENI_RACUNALNIK.md` |
 | 8 | **E-poštna dostava alarmov** | prejemnik vpisan, `PIM_ALERT_DELIVERY_ENABLED` in `PIM_SMTP_*` niso nastavljeni | sistemska nastavitev (človek) |
 | 9 | **Braytronove kategorije** | `map.CategoryPathMap` za `BT_XML` prazen; predlog v `PIM_Solution\docs\Braytron_druzine_predlog.csv` | potrditev preslikave družin |
-| 10 | **Stranke za splet** | nobena stranka nima `WebEnabled = 1`; `magento-customers.csv` je prazna z glavo; preslikava Tip stranke → Magento skupina vzdržuje poslovni tim | vpis spletnih profilov |
+| 10 | **Stranke za splet** | nobena stranka nima `WebEnabled = 1`; `stranke.csv` je prazna z glavo; preslikava Tip stranke → Magento skupina vzdržuje poslovni tim | vpis spletnih profilov |
 | 11 | **Vstopnica za objavo** | ali je `ERP_L1_SLO` sam ali skupaj s `COMMERCIAL_L2` (`docs/TVOJE_NALOGE.md` §5) | odločitev uporabnika |
 | 12 | **Kanonična pot izvoza `ERP_L1`** | `out.ExportProductsCsv` vrne šest praznih stolpcev od devetih (tiho) | dopolnitev `CASE` ali umik profila |
 | 13 | **Analitika** | zgodovinskih read modelov ni; nadzorna plošča nima trendov | namenski zgodovinski modeli, ko so viri potrjeni |

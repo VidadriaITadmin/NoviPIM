@@ -14,8 +14,8 @@ public sealed class MagentoExportRunner
 
     var products = await ReadProductsAsync(connection, organizationId, cancellationToken);
     var customers = await ReadCustomersAsync(connection, organizationId, cancellationToken);
-    await B2bProductCsvGenerator.WriteAsync(Path.Combine(outputDirectory, "magento-products.csv"), ProductColumns(), products, cancellationToken);
-    await CustomerCsvGenerator.WriteAsync(Path.Combine(outputDirectory, "magento-customers.csv"), CustomerColumns(), customers, cancellationToken);
+    await B2bProductCsvGenerator.WriteAsync(Path.Combine(outputDirectory, "katalog.csv"), ProductColumns(), products, cancellationToken);
+    await CustomerCsvGenerator.WriteAsync(Path.Combine(outputDirectory, "stranke.csv"), CustomerColumns(), customers, cancellationToken);
   }
 
   private static IEnumerable<ExportColumnDefinition> ProductColumns()

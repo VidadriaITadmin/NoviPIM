@@ -71,7 +71,8 @@
               else
               {
                 <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)"
-                       disabled="@row.Pending" value="@Draft(row)" @onchange="args => Change(row, args)" />
+                       disabled="@row.Pending" value="@Draft(row)" @onchange="args => Change(row, args)"
+                       @onkeyup="args => EnterSaves(args)" />
               }
 
               <p class="field-note">
@@ -143,6 +144,11 @@
 
   [Parameter] public EventCallback<(ProductChannelField Field, string? Value)> FieldChanged { get; set; }
 
+  /// <summary>Shrani takoj, brez zgornjega gumba — uporabno, kadar je sprememba ena sama
+  /// (uporabnik 2026-09-11). @onkeyup pride po @onchange (brskalnik odda "change" ob Enterju,
+  /// preden pride "keyup"), zato je osnutek v Drafts že posodobljen, ko ta klic sprozi shranjevanje.</summary>
+  [Parameter] public EventCallback EnterToSave { get; set; }
+
   string ControlId(ProductChannelField field) =>
     PanelId + "-" + new string(field.FieldKey.Select(character => char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '-').ToArray());
 
@@ -154,4 +160,7 @@
 
   Task Change(ProductChannelField field, ChangeEventArgs args) =>
     FieldChanged.InvokeAsync((field, args.Value?.ToString()));
+
+  Task EnterSaves(KeyboardEventArgs args) =>
+    args.Key == "Enter" ? EnterToSave.InvokeAsync() : Task.CompletedTask;
 }

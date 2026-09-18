@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Urniki obdelav</PageTitle>
@@ -104,13 +105,18 @@
 
   async Task Preklopi(PIM.Intranet.Services.ScheduleRow row) =>
     await ShraniAsync(row, !row.IsEnabled, row.IntervalSeconds,
-      row.IsEnabled ? $"{row.Pipeline} je izklopljen." : $"{row.Pipeline} je vklopljen.");
+      row.IsEnabled ? $"{row.Pipeline} je izklopljen." : $"{row.Pipeline} je vklopljen.",
+      row.IsEnabled ? "SCHEDULE_DISABLE" : "SCHEDULE_ENABLE",
+      row.IsEnabled ? "vklopljen" : "izklopljen",
+      row.IsEnabled ? "izklopljen" : "vklopljen");
 
   async Task Shrani(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
     await ShraniAsync(row, row.IsEnabled, Minute(row, kljuc) * 60,
-      $"Razmik za {row.Pipeline} je {Minute(row, kljuc)} min.");
+      $"Razmik za {row.Pipeline} je {Minute(row, kljuc)} min.",
+      "SCHEDULE_INTERVAL", $"{Math.Max(1, row.IntervalSeconds / 60)} min", $"{Minute(row, kljuc)} min");
 
-  async Task ShraniAsync(PIM.Intranet.Services.ScheduleRow row, bool vklopljen, int sekunde, string uspeh)
+  async Task ShraniAsync(PIM.Intranet.Services.ScheduleRow row, bool vklopljen, int sekunde, string uspeh,
+    string dejanje, string staro, string novo)
   {
     Busy = true;
     Error = null;
@@ -118,8 +124,14 @@
     try
     {
       var state = await Authentication.GetAuthenticationStateAsync();
-      await Data.SaveScheduleAsync(row.OrganizationId, row.Pipeline, vklopljen, sekunde,
-        state.User.Identity?.Name ?? "neznan");
+      var akter = state.User.Identity?.Name ?? "neznan";
+      await Data.SaveScheduleAsync(row.OrganizationId, row.Pipeline, vklopljen, sekunde, akter);
+
+      // ops.ScheduleProfile hrani samo zadnjo spremembo; brez tega zapisa zgodovine ni.
+      // Ista sled kot na /sistem, da ni pomembno, s katere strani je bila sprememba narejena.
+      await Nadzor.LogActivityAsync(akter, dejanje, "Urnik", uspeh,
+        entityKey: row.Pipeline, organizationId: row.OrganizationId, oldValue: staro, newValue: novo);
+
       Message = uspeh;
       await NaloziAsync();
     }
@@ -156,5 +168,5 @@
   };
 
   static string Cas(DateTime? value, string kadarNiVrednosti) =>
-    value is null ? kadarNiVrednosti : value.Value.ToLocalTime().ToString("g");
+    value is null ? kadarNiVrednosti : value.Value.ToPimLocal().ToString("g");
 }

@@ -1,0 +1,133 @@
+@page "/sistem/sled"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
+
+@*
+  Kdo je kaj spremenil.
+
+  Vrstice niso na enem mestu zato, ker bi bila nova tabela lepša, ampak zato, ker so sledi
+  že obstajale — vsaka v svojem stolpcu svoje tabele (ChangedBy, ApprovedBy, ResolvedBy,
+  UpdatedBy). Vprašanje "kdo je to naredil" je zato zahtevalo šest poizvedb in poznavanje
+  sheme. Stolpec Vir pove, iz katere tabele vrstica prihaja, da je vsak podatek preverljiv
+  nazaj do izvora.
+
+  Ura je naša (PimTime), na sekundo natančno: pri sledi je vrstni red pomembnejši od lepote.
+*@
+
+<PageTitle>Sled sprememb</PageTitle>
+<PimPage Title="Sled sprememb"
+         Subtitle="@($"Kdo je kaj spremenil in kdaj. Časi so v naši uri ({PimTime.ZoneLabel}), ne v UTC.")"
+         Crumbs="Crumbs" />
+
+<PimTabs Active="sled" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+<section class="ui-card toolbar" role="search" aria-labelledby="sled-filter-naslov">
+  <h2 id="sled-filter-naslov" class="visually-hidden">Filtriranje sledi</h2>
+
+  <label class="visually-hidden" for="sled-obdobje">Obdobje</label>
+  <select id="sled-obdobje" class="filter-select" @bind="Dni" @bind:after="NaloziAsync">
+    <option value="1">Zadnji dan</option>
+    <option value="7">Zadnjih 7 dni</option>
+    <option value="30">Zadnjih 30 dni</option>
+    <option value="90">Zadnjih 90 dni</option>
+    <option value="365">Zadnje leto</option>
+  </select>
+
+  <label class="visually-hidden" for="sled-iskanje">Iskanje po uporabniku, ključu ali opisu</label>
+  <input id="sled-iskanje" type="search" class="filter-select" placeholder="Uporabnik, šifra ali opis …"
+         @bind="Iskanje" @bind:event="oninput" @onkeyup="OnTipka" />
+
+  <button type="button" class="filter-button" disabled="@Loading" @onclick="NaloziAsync">Poišči</button>
+  <span class="result-count" role="status" aria-live="polite">@Povzetek</span>
+</section>
+
+<section class="ui-card data-card section-gap" aria-label="Sled sprememb">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
+            EmptyText="V izbranem obdobju ni zabeleženih sprememb." LoadingText="Berem sled …">
+    <PimTable Caption="Kronološka sled dejanj uporabnikov in sistema" Columns="Stolpci">
+      <Rows>
+        @foreach (var vrstica in Rows)
+        {
+          <tr>
+            <td class="nowrap">@PimTime.FormatExact(vrstica.OccurredUtc)</td>
+            <td>@vrstica.Actor</td>
+            <td><PimChip Text="@DejanjeOznaka(vrstica.ActionCode)" Tone="@DejanjeTon(vrstica.ActionCode)" Prefix="Dejanje: " /></td>
+            <td>@vrstica.EntityType</td>
+            <td><span class="code-value">@(vrstica.EntityKey ?? "—")</span></td>
+            <td>@(vrstica.OrganizationName ?? "—")</td>
+            <td>@vrstica.Summary</td>
+            <td>@Sprememba(vrstica)</td>
+            <td class="muted"><span class="code-value">@vrstica.SourceTable</span></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@code {
+  IReadOnlyList<ActivityRow> Rows = [];
+  int Dni = 7;
+  string Iskanje = "";
+  bool Loading = true;
+  string? Error;
+  const int Take = 500;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Sled sprememb")];
+  static readonly IReadOnlyList<PimColumn> Stolpci =
+  [
+    new("Čas"), new("Kdo"), new("Dejanje"), new("Kaj"), new("Ključ"), new("Podjetje"),
+    new("Opis"), new("Iz → v"), new("Vir"),
+  ];
+
+  protected override Task OnInitializedAsync() => NaloziAsync();
+
+  async Task OnTipka(KeyboardEventArgs e)
+  {
+    if (e.Key == "Enter") await NaloziAsync();
+  }
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Error = null;
+    try { Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take); }
+    catch { Error = "Sledi trenutno ni mogoče prebrati."; }
+    finally { Loading = false; }
+  }
+
+  string Povzetek => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+
+  static string Sprememba(ActivityRow row) => (row.OldValue, row.NewValue) switch
+  {
+    (null, null) => "—",
+    (null, var novo) => novo!,
+    (var staro, null) => staro!,
+    var (staro, novo) => $"{staro} → {novo}",
+  };
+
+  static string DejanjeOznaka(string code) => code switch
+  {
+    "PRODUCT_FIELD" => "Polje izdelka",
+    "SCHEDULE_UPDATE" or "SCHEDULE_INTERVAL" => "Urnik",
+    "SCHEDULE_ENABLE" => "Vklop",
+    "SCHEDULE_DISABLE" => "Izklop",
+    "ALERT_ACK" => "Potrditev alarma",
+    "ALERT_RESOLVE" => "Razrešitev alarma",
+    "OUTBOX_APPROVE" => "Odobritev v SAOP",
+    "EXPORT_BUILD" => "Priprava izvoza",
+    "ADD" => "Dodano",
+    "REMOVE" => "Odstranjeno",
+    _ => code,
+  };
+
+  static string? DejanjeTon(string code) => code switch
+  {
+    "SCHEDULE_DISABLE" or "REMOVE" => "warn",
+    "OUTBOX_APPROVE" or "ALERT_RESOLVE" or "ADD" => "good",
+    _ => null,
+  };
+}

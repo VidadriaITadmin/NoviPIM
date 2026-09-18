@@ -1,0 +1,176 @@
+@page "/nastavitve/rezervacija-zaloge"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.SaopWriteService Write
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Izločeno iz rezervacije zaloge</PageTitle>
+<PimPage Title="Izločeno iz rezervacije zaloge" Subtitle="Izdelki, ki jih je SAOP označil kot izločene iz rezervacije zaloge (ItemExcludeQtyReservation). Ob vsaki novi izločitvi PIM pošlje obvestilo in v Izhod v SAOP → Čakalna vrsta uvrsti potrditev, ki čaka na odobritev. Preklic izločitve tukaj gre po isti poti: v čakalno vrsto, ne neposredno v SAOP." Crumbs="Crumbs" />
+
+@* Isti vzorec kot na strani Zaloga: privzeto vsa podjetja, ker je SAOP vir za vsa stiri in
+   izlocitev iz rezervacije ni vezana na eno samo podjetje. *@
+<section class="ui-card toolbar" role="search" aria-labelledby="reservation-filter-title">
+  <h2 id="reservation-filter-title" class="visually-hidden">Filtriranje po podjetju</h2>
+  <label class="visually-hidden" for="reservation-organization">Podjetje</label>
+  <select id="reservation-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="ReloadAsync">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@Summary</span>
+</section>
+
+@if (Selected.Count > 0)
+{
+  <section class="ui-card toolbar" aria-label="Dejanja nad izbranimi izdelki">
+    @if (!Confirming)
+    {
+      <span>Izbranih je @Selected.Count izdelkov.</span>
+      <button type="button" class="small-action warn-action" disabled="@Busy" @onclick="() => Confirming = true">Prekliči izločitev</button>
+      <button type="button" class="small-action" disabled="@Busy" @onclick="ClearSelection">Počisti izbiro</button>
+    }
+    else
+    {
+      <p class="message-state" role="alert">
+        Res želiš preklicati izločitev iz rezervacije zaloge za @Selected.Count izdelkov?
+        Sprememba gre v Izhod v SAOP → Čakalna vrsta in čaka na tvojo odobritev, preden gre v SAOP.
+      </p>
+      <button type="button" class="small-action good-action" disabled="@Busy" @onclick="ConfirmUnflagAsync">Da, prekliči izločitev</button>
+      <button type="button" class="small-action" disabled="@Busy" @onclick="() => Confirming = false">Ne</button>
+    }
+  </section>
+}
+
+<section class="ui-card data-card" aria-label="Seznam izločenih izdelkov">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni izločenih izdelkov za izbrani filter." LoadingText="Nalaganje izločenih izdelkov …">
+    <PimTable Caption="Izdelki, izločeni iz rezervacije zaloge" Columns="Columns">
+      <Rows>
+        @foreach (var row in Rows)
+        {
+          var key = SelectionKey(row);
+          var pending = PendingKeys.Contains(key);
+          <tr>
+            <td>
+              @if (pending)
+              {
+                <span class="hint" title="Sprememba za ta izdelek že čaka na odobritev v Izhod v SAOP.">Čaka na odobritev</span>
+              }
+              else
+              {
+                <input type="checkbox" aria-label="Izberi izdelek @row.ItemId za preklic izločitve" disabled="@Busy"
+                       checked="@Selected.ContainsKey(key)" @onchange="e => Toggle(row, e)" />
+              }
+            </td>
+            <td>@row.OrganizationName</td>
+            <td><span class="code-value">@row.ItemId</span></td>
+            <td>@(row.Name ?? "—")</td>
+            <td>@row.UpdatedUtc.ToPimLocal().ToString("g")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </PimState>
+</section>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+@code {
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
+  IReadOnlyList<PIM.Intranet.Services.ReservationExclusionRow> Rows = [];
+  readonly Dictionary<string, SelectedItem> Selected = new(StringComparer.OrdinalIgnoreCase);
+  readonly HashSet<string> PendingKeys = new(StringComparer.OrdinalIgnoreCase);
+  bool Loading = true, Busy, Confirming;
+  string? Error, Message;
+  string OrganizationDraft = "";
+  const string ReservationFieldKey = "Planning.ExcludeQtyReservation";
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Rezervacija zaloge")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Izbor"), new("Podjetje"), new("Šifra artikla"), new("Naziv"), new("Zaznano")];
+
+  sealed record SelectedItem(int OrganizationId, string ItemId);
+
+  static string SelectionKey(PIM.Intranet.Services.ReservationExclusionRow row) => row.OrganizationId + "|" + row.ItemId;
+
+  string Summary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} izdelkov";
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      Organizations = await Data.GetOrganizationsAsync();
+      await ReloadAsync();
+    }
+    catch { Error = "Izločenih izdelkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  async Task ReloadAsync()
+  {
+    Loading = true; Error = null; ClearSelection();
+    try
+    {
+      int? organizationId = int.TryParse(OrganizationDraft, out var parsed) ? parsed : null;
+      Rows = await Catalog.GetReservationExclusionsAsync(organizationId);
+      await LoadPendingAsync();
+    }
+    catch { Error = "Izločenih izdelkov trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
+  }
+
+  // Izdelek, za katerega sprememba tega polja ze caka na odobritev, se ne sme znova ponuditi za
+  // odznacitev — podvojen zahtevek bi bodisi trcil v dedup bodisi zmedel vrstni red odobritve.
+  async Task LoadPendingAsync()
+  {
+    PendingKeys.Clear();
+    foreach (var group in Rows.GroupBy(row => row.OrganizationId))
+    {
+      var overlay = await Write.GetPendingOverlayAsync(group.Key, group.Select(row => row.ItemId));
+      foreach (var pending in overlay.Where(item => item.FieldKey == ReservationFieldKey))
+        PendingKeys.Add(group.Key + "|" + pending.EntityKey);
+    }
+  }
+
+  void Toggle(PIM.Intranet.Services.ReservationExclusionRow row, ChangeEventArgs args)
+  {
+    var key = SelectionKey(row);
+    if (args.Value is true) Selected[key] = new(row.OrganizationId, row.ItemId);
+    else Selected.Remove(key);
+  }
+
+  void ClearSelection() { Selected.Clear(); Confirming = false; }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  async Task ConfirmUnflagAsync()
+  {
+    if (Busy || Selected.Count == 0) return;
+    Busy = true; Message = null; Error = null;
+    try
+    {
+      var actor = await ActorAsync();
+      int queued = 0, duplicates = 0, rejected = 0;
+      foreach (var group in Selected.Values.GroupBy(item => item.OrganizationId))
+      {
+        // out.OutboundBatch.Source dovoli samo CARD/EXCEL/BULK/SINGLE (CK_OutboundBatch_Source);
+        // isto pravilo kot SaopItems.razor.
+        var items = group.ToList();
+        var source = items.Count == 1 ? "SINGLE" : "BULK";
+        var outcome = await Write.EnqueueAsync(
+          group.Key, items.Select(item => (item.ItemId, ReservationFieldKey, (string?)"false")),
+          actor, source, "Preklic izločitve na strani Rezervacija zaloge.");
+        queued += outcome.Queued; duplicates += outcome.Duplicates; rejected += outcome.Rejected;
+      }
+      Message = rejected == 0
+        ? $"{queued:N0} sprememb uvrščenih v čakalno vrsto Izhod v SAOP ({duplicates:N0} je že čakalo)."
+        : $"{queued:N0} sprememb uvrščenih, {rejected:N0} zavrnjenih ({duplicates:N0} je že čakalo). Preveri Izhod v SAOP.";
+      ClearSelection();
+      await ReloadAsync();
+    }
+    catch { Error = "Preklica izločitve trenutno ni bilo mogoče uvrstiti v čakalno vrsto."; }
+    finally { Busy = false; }
+  }
+}

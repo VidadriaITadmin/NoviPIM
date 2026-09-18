@@ -1,14 +1,504 @@
 @page "/sistem"
 @namespace PIM.Intranet.Components.Pages.SystemArea
 @attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 
-<PageTitle>Sistem</PageTitle>
-<PimPage Title="Sistem" Subtitle="Zdravje integracij, uporabniki, vloge in tehnični dogodki. Podrobnosti so vidne samo skrbnikom." />
+@*
+  Nadzorna plošča skrbnika.
 
-<section class="hub-grid" aria-label="Sistemska področja">
-  <PimHubCard Title="Urniki obdelav" Href="sistem/urniki" Description="Kaj se izvaja samo od sebe, kako pogosto in ali je vklopljeno." />
-  <PimHubCard Title="Integracije in alarmi" Href="sistem/integracije" Description="Srčni utrip, zadnji uspešni teki ter odprti alarmi po organizaciji." />
-  <PimHubCard Title="Uporabniki" Href="sistem/uporabniki" Description="Lokalni in domenski uporabniki ter njihove dodeljene vloge." />
-  <PimHubCard Title="Vloge" Href="sistem/vloge" Description="Vloge iz varnostnega registra in število uporabnikov v posamezni vlogi." />
-  <PimHubCard Title="Dnevnik napak" Href="sistem/napake" Description="Najnovejši tehnični dogodki po plasti, resnosti in procesnem teku." />
-</section>
+  Prenova 2026-09-10, isti razlog kot na /kakovost: ena dolga stran z desetimi kartami-gumbi na
+  dnu je bila neberljiva, seznam "Potrebuje pozornost" je podvajal vrstice, ki jih spodnje tabele
+  ze kazejo, samotest pa je na pregled vlekel celotno tabelo korakov. Zdaj je zgoraj isti zavihek-
+  trak kot na /kakovost in /saop (NadzorTabs, Components/Shared/PimTab.cs): Postopki in Zaloga sta
+  pogled znotraj te strani (isti Pulse, brez dodatnega obiska baze), preostali zavihki so obstojece
+  podstrani. "Potrebuje pozornost" je zdaj kratek trak (do 3 najhujsih), ne vec seznam vsega.
+
+  Vsi časi so v naši uri (PimTime), ne v UTC in ne v času strežnika.
+*@
+
+<PageTitle>Nadzor sistema</PageTitle>
+
+<PimPage Title="Nadzor sistema"
+         Subtitle="@($"Ali postopki tečejo, kdo je kaj spremenil, kaj gre ven in ali celota deluje. Vsi časi so v naši uri ({PimTime.ZoneLabel}).")">
+  <Actions>
+    <span class="refresh-note" role="status" aria-live="polite">@OsvezenoOb</span>
+    <label class="auto-refresh">
+      <input type="checkbox" checked="@SamodejnoOsvezevanje" @onchange="PreklopiSamodejno" />
+      <span>Samodejno vsako minuto</span>
+    </label>
+    <button type="button" class="filter-button" disabled="@(Loading || Busy)" @onclick="NaloziAsync">Osveži zdaj</button>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="@AktivniZavihek" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+@if (Message is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Message</p> }
+
+<PimState Loading="@(Loading && Pulse.Workers.Count == 0)" Error="@Error" Empty="false"
+          LoadingText="Berem stanje sistema …">
+
+  @if (ShowPostopki)
+  {
+    @* ── Postopki: stanje in krmiljenje na istem mestu ──────────────────────── *@
+    <section class="ui-card data-card" aria-labelledby="postopki-naslov">
+      <div class="panel-title">
+        <h2 id="postopki-naslov">Postopki</h2>
+        <a href="sistem/zmogljivost">Zmogljivost in trajanja</a>
+      </div>
+      <p class="panel-note">
+        Vklop in razmik veljata takoj: postopek brez omogočenega razporeda zavrne zagon.
+        Načrtovano opravilo Windows je samo ura, ki tiktaka; ali sme postopek teči, je zapisano tu.
+      </p>
+
+      <PimTable Caption="Postopki, njihovo stanje in razmik izvajanja" Columns="StolpciPostopkov">
+        <Rows>
+          @foreach (var postopek in Pulse.Workers)
+          {
+            var kljuc = $"{postopek.OrganizationId}|{postopek.Pipeline}";
+            <tr class="@(postopek.Health is WorkerHealth.Silent or WorkerHealth.Failing ? "row-alarm" : null)">
+              <td>
+                <span class="code-value">@postopek.Pipeline</span>
+                <div class="tree-path">@Opis(postopek.Pipeline)</div>
+              </td>
+              <td>@Vloga(postopek.Pipeline)</td>
+              <td>@postopek.OrganizationName</td>
+              <td><PimChip Text="@ZdravjeOznaka(postopek.Health)" Tone="@ZdravjeTon(postopek.Health)" /></td>
+              <td>@PimTime.FormatWithAge(postopek.LastHeartbeatUtc, "nikoli")</td>
+              <td>@PimTime.Format(postopek.LastSuccessfulRunUtc, "nikoli")</td>
+              <td class="numeric">@postopek.Runs24h.ToString("N0")<span class="muted"> / @postopek.Failures24h.ToString("N0")</span></td>
+              <td class="numeric">
+                @PimTime.Duration(postopek.AvgDurationMs)
+                @if (postopek.IsSlowerThanInterval)
+                {
+                  <span class="drift-flag" title="Najdaljši zagon presega razmik; zagoni se lovijo sami s seboj.">
+                    vrh @PimTime.Duration(postopek.MaxDurationMs)
+                  </span>
+                }
+              </td>
+              <td>
+                <label class="visually-hidden" for="@($"razmik-{kljuc}")">Razmik v minutah za @postopek.Pipeline</label>
+                <input id="@($"razmik-{kljuc}")" type="number" min="1" max="1440" class="filter-select interval-input"
+                       value="@Minute(postopek, kljuc)" @onchange="@(e => NastaviMinute(kljuc, e.Value?.ToString()))" />
+                <span class="muted"> min</span>
+              </td>
+              <td>
+                @if (postopek.LastErrorRedacted is { Length: > 0 } napaka)
+                {
+                  <span class="drift-flag">@napaka</span>
+                }
+                else { <span class="muted">—</span> }
+              </td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="small-action @(postopek.IsEnabled ? "warn-action" : "good-action")"
+                          disabled="@Busy" @onclick="() => PreklopiAsync(postopek)">
+                    @(postopek.IsEnabled ? "Izklopi" : "Vklopi")
+                  </button>
+                  <button type="button" class="small-action" disabled="@(Busy || !Spremenjen(postopek, kljuc))"
+                          @onclick="() => ShraniRazmikAsync(postopek, kljuc)">Shrani razmik</button>
+                </div>
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+  }
+  else if (ShowZaloga)
+  {
+    @* ── Katalog po podjetjih ─────────────────────────────────────────────── *@
+    <section class="ui-card data-card" aria-labelledby="katalog-naslov">
+      <div class="panel-title">
+        <h2 id="katalog-naslov">Artikli po podjetjih</h2>
+        <a href="izdelki">Delovni seznam izdelkov</a>
+      </div>
+      <PimTable Caption="Stanje kataloga po podjetjih" Columns="StolpciKataloga">
+        <Rows>
+          @foreach (var podjetje in Pulse.Catalog)
+          {
+            <tr>
+              <td>@podjetje.OrganizationName</td>
+              <td class="numeric">@podjetje.ProductCount.ToString("N0")</td>
+              <td class="numeric">@podjetje.ActiveCount.ToString("N0")</td>
+              <td class="numeric">@podjetje.PublishedCount.ToString("N0")</td>
+              <td class="numeric">@podjetje.InvalidCount.ToString("N0")</td>
+              <td class="numeric">@podjetje.QuarantineCount.ToString("N0")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+
+    @* ── Svežina zaloge po viru ───────────────────────────────────────────── *@
+    @*
+       Zakaj je to svoj razdelek in ne stolpec v tabeli postopkov: »zaloga« sta dve različni
+       stvari, ki pišeta v isto tabelo. STOCK_FILE je lahko zelen, ker mu datoteka priteče po
+       javnem internetu, medtem ko SAOP_STOCK pada, ker do ERP ni povezave. Takrat je pol
+       zaloge sveže, pol pa nekaj dni stare — in iz zelene lučke postopka to ni razvidno.
+    *@
+    <section class="ui-card data-card section-gap" aria-labelledby="zaloga-naslov">
+      <div class="panel-title">
+        <h2 id="zaloga-naslov">Svežina zaloge po viru</h2>
+        <a href="zaloge">Zaloga</a>
+      </div>
+      <p class="panel-note">
+        Zelen postopek pomeni, da je zadnji zagon uspel — ne, da so podatki sveži. Merilo svežine
+        je starost posnetka; ta stolpec pove, kako stara zaloga gre v tem trenutku na splet.
+      </p>
+
+      <PimState Loading="false" Error="@null" Empty="@(Zaloga.Count == 0)"
+                EmptyText="Ni aktivnih posnetkov zaloge.">
+        <PimTable Caption="Starost zaloge po viru in podjetju" Columns="StolpciZaloge">
+          <Rows>
+            @foreach (var vrstica in Zaloga)
+            {
+              <tr class="@(vrstica.IsStale ? "row-alarm" : null)">
+                <td>@vrstica.Source</td>
+                <td>@vrstica.OrganizationName</td>
+                <td class="numeric">@vrstica.PositionCount.ToString("N0")</td>
+                <td>@PimTime.Format(vrstica.NewestSnapshotUtc)</td>
+                <td class="numeric">
+                  @Starost(vrstica.AgeHours)
+                  @if (vrstica.IsStale) { <span class="drift-flag">zastarelo</span> }
+                </td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </PimState>
+    </section>
+  }
+  else
+  {
+    @* ── Pregled: kratek trak pozornosti + kljucne stevilke ─────────────────── *@
+    @if (Pozornost.Count == 0)
+    {
+      <p class="message-state success-message">
+        Vse teče: noben postopek ne molči, ni odprtega kritičnega alarma in nočni samotest je uspel.
+      </p>
+    }
+    else
+    {
+      <section class="ui-card attention-card attention-alarm" aria-labelledby="pozornost-naslov">
+        <div class="attention-head">
+          <h2 id="pozornost-naslov">Potrebuje pozornost (@Pozornost.Count)</h2>
+        </div>
+        <ul class="attention-list">
+          @foreach (var vrstica in Pozornost.Take(3))
+          {
+            <li class="attention-item @vrstica.Tone">
+              <div>
+                <strong>@vrstica.Title</strong>
+                <span>@vrstica.Detail</span>
+              </div>
+              @if (vrstica.Href is not null)
+              {
+                <a class="small-action" href="@vrstica.Href">@vrstica.LinkLabel</a>
+              }
+            </li>
+          }
+        </ul>
+        @if (Pozornost.Count > 3)
+        {
+        <p class="attention-more">+ še @(Pozornost.Count - 3) — odpri Postopke za urnike oziroma Alarme in podjetja za ukrep in diagnostiko.</p>
+        }
+      </section>
+    }
+
+    <section class="kpi-grid section-gap" aria-label="Povzetek stanja sistema">
+      <PimStat Label="Postopki delajo" Value="@($"{Pulse.HealthyCount} / {Pulse.Workers.Count}")"
+               Note="@($"{Pulse.SilentCount} molči, {Pulse.FailingCount} v napaki, {Pulse.OffCount} izklopljenih")"
+               Href="sistem?pogled=postopki" />
+      <PimStat Label="Odprti alarmi" Value="@Pulse.Alerts.Count.ToString("N0")"
+               Note="@($"{Pulse.OpenCriticalCount} kritičnih")" Href="sistem/integracije" />
+      <PimStat Label="Nočni samotest" Value="@SamotestVrednost" Note="@SamotestOpomba" Href="sistem/samotest" />
+      <PimStat Label="Odhodna vrsta" Value="@CakaOdobritve" Note="@OdhodnaOpomba" Href="saop" />
+      <PimStat Label="Izdelkov v katalogu" Value="@Pulse.Catalog.Sum(row => row.ProductCount).ToString("N0")"
+               Note="@($"{Pulse.Catalog.Sum(row => row.PublishedCount):N0} objavljenih")" Href="sistem?pogled=zaloga" />
+      <PimStat Label="Zadnji izvoz" Value="@ZadnjiIzvozVrednost" Note="@ZadnjiIzvozOpomba" Href="sistem/izvozi" />
+    </section>
+  }
+</PimState>
+
+@code {
+  /// <param name="Tone">good, warn ali bad; ton je izpeljan iz resnosti, ne vpisan.</param>
+  sealed record AttentionRow(string Tone, string Title, string Detail, string? Href, string LinkLabel);
+
+  [SupplyParameterFromQuery(Name = "pogled")] public string? QueryView { get; set; }
+
+  AdminPulse Pulse = AdminPulse.Empty;
+  IReadOnlyList<StockFreshnessRow> Zaloga = [];
+  readonly Dictionary<string, int> Urejeni = [];
+  global::System.Threading.Timer? Ura;
+  string Uporabnik = "neznan";
+  bool Loading = true;
+  bool Busy;
+  bool SamodejnoOsvezevanje = true;
+  string? Error;
+  string? Message;
+  DateTime? OsvezenoUtc;
+  bool ShowPostopki;
+  bool ShowZaloga;
+
+  string AktivniZavihek => ShowPostopki ? "postopki" : ShowZaloga ? "zaloga" : "pregled";
+
+  static readonly IReadOnlyList<PimColumn> StolpciPostopkov =
+  [
+    new("Postopek"), new("Vloga"), new("Podjetje"), new("Stanje"), new("Zadnji utrip"), new("Zadnji uspeh"),
+    new("Zagonov / padcev 24 h", true), new("Trajanje", true), new("Razmik"), new("Zadnja napaka"), new("Dejanja"),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> StolpciKataloga =
+  [
+    new("Podjetje"), new("Izdelkov", true), new("Aktivnih", true), new("Objavljenih", true),
+    new("Neveljavnih", true), new("V karanteni", true),
+  ];
+
+  static readonly IReadOnlyList<PimColumn> StolpciZaloge =
+  [
+    new("Vir"), new("Podjetje"), new("Pozicij", true), new("Najnovejši posnetek"), new("Starost", true),
+  ];
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    Uporabnik = state.User.Identity?.Name ?? "neznan";
+    await NaloziAsync();
+
+    // Skrbnik te strani ne gleda neprekinjeno; ura mora teči tudi, ko je zavihek v ozadju,
+    // sicer je "zadnji utrip pred 2 minutama" star pol ure.
+    Ura = new global::System.Threading.Timer(async _ =>
+    {
+      if (!SamodejnoOsvezevanje || Busy) return;
+      await InvokeAsync(NaloziAsync);
+    }, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+  }
+
+  // Zavihek se bere iz naslova, zato se prebere ob vsaki navigaciji in ne samo ob prvem izrisu.
+  protected override void OnParametersSet()
+  {
+    ShowPostopki = string.Equals(QueryView, "postopki", StringComparison.OrdinalIgnoreCase);
+    ShowZaloga = string.Equals(QueryView, "zaloga", StringComparison.OrdinalIgnoreCase);
+  }
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      Pulse = await Nadzor.GetPulseAsync(Uporabnik);
+      Zaloga = await Nadzor.GetStockFreshnessAsync();
+      Urejeni.Clear();
+      OsvezenoUtc = DateTime.UtcNow;
+
+      // Kdor je konzolo odprl, je alarme videl. Zvonček od tega trenutka ne trdi drugače.
+      await Nadzor.MarkAlertsSeenAsync(Uporabnik);
+    }
+    catch
+    {
+      Error = "Stanja sistema trenutno ni mogoče prebrati. Preveri povezavo do baze.";
+    }
+    finally
+    {
+      Loading = false;
+      StateHasChanged();
+    }
+  }
+
+  void PreklopiSamodejno(ChangeEventArgs e) => SamodejnoOsvezevanje = e.Value is true;
+
+  // ── Krmiljenje postopkov ──────────────────────────────────────────────────
+  int Minute(WorkerPulseRow row, string kljuc) =>
+    Urejeni.TryGetValue(kljuc, out var vrednost) ? vrednost : row.IntervalMinutes;
+
+  bool Spremenjen(WorkerPulseRow row, string kljuc) =>
+    Urejeni.TryGetValue(kljuc, out var vrednost) && vrednost != row.IntervalMinutes;
+
+  void NastaviMinute(string kljuc, string? vnos)
+  {
+    if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) Urejeni[kljuc] = minute;
+  }
+
+  Task PreklopiAsync(WorkerPulseRow row) => ShraniAsync(
+    row, !row.IsEnabled, row.IntervalSeconds,
+    row.IsEnabled ? $"{row.Pipeline} ({row.OrganizationName}) je izklopljen." : $"{row.Pipeline} ({row.OrganizationName}) je vklopljen.",
+    row.IsEnabled ? "SCHEDULE_DISABLE" : "SCHEDULE_ENABLE",
+    row.IsEnabled ? "vklopljen" : "izklopljen",
+    row.IsEnabled ? "izklopljen" : "vklopljen");
+
+  Task ShraniRazmikAsync(WorkerPulseRow row, string kljuc)
+  {
+    var minute = Minute(row, kljuc);
+    return ShraniAsync(row, row.IsEnabled, minute * 60,
+      $"Razmik za {row.Pipeline} ({row.OrganizationName}) je {minute} min.",
+      "SCHEDULE_INTERVAL", $"{row.IntervalMinutes} min", $"{minute} min");
+  }
+
+  async Task ShraniAsync(WorkerPulseRow row, bool vklopljen, int sekunde, string uspeh,
+    string dejanje, string staro, string novo)
+  {
+    Busy = true;
+    Error = null;
+    Message = null;
+    try
+    {
+      await Data.SaveScheduleAsync(row.OrganizationId, row.Pipeline, vklopljen, sekunde, Uporabnik);
+
+      // ops.ScheduleProfile hrani samo zadnjo spremembo; brez tega zapisa zgodovine ni.
+      await Nadzor.LogActivityAsync(Uporabnik, dejanje, "Urnik", uspeh,
+        entityKey: row.Pipeline, organizationId: row.OrganizationId, oldValue: staro, newValue: novo);
+
+      Message = uspeh;
+      await NaloziAsync();
+    }
+    catch
+    {
+      // Sporočilo iz baze lahko nosi ime objekta; uporabniku povemo le, da sprememba ni potrjena.
+      Error = "Spremembe urnika ni bilo mogoče shraniti. Stanje ostaja nespremenjeno.";
+    }
+    finally { Busy = false; }
+  }
+
+  // ── Kaj potrebuje pozornost ───────────────────────────────────────────────
+  List<AttentionRow> Pozornost
+  {
+    get
+    {
+      var vrstice = new List<AttentionRow>();
+
+      foreach (var postopek in Pulse.Workers.Where(row => row.Health is WorkerHealth.Silent))
+        vrstice.Add(new("bad",
+          $"{postopek.Pipeline} ({postopek.OrganizationName}) molči",
+          $"Dovoljen zamik je {postopek.StaleAfterSeconds / 60} min, zadnji utrip {PimTime.FormatWithAge(postopek.LastHeartbeatUtc, "ga sploh ni")}.",
+          "sistem?pogled=postopki", "Postopki"));
+
+      foreach (var postopek in Pulse.Workers.Where(row => row.Health is WorkerHealth.Failing))
+        vrstice.Add(new("bad",
+          $"{postopek.Pipeline} ({postopek.OrganizationName}) pada",
+          postopek.LastErrorRedacted is { Length: > 0 } napaka
+            ? napaka
+            : $"Zadnji uspeh {PimTime.Format(postopek.LastSuccessfulRunUtc, "ga ni")}; v 24 h {postopek.Failures24h:N0} padcev.",
+          "teki-obdelave", "Teki"));
+
+      foreach (var alarm in Pulse.Alerts.Where(row => row.Severity == "Critical"))
+        vrstice.Add(new("bad", $"{alarm.Title} ({alarm.OrganizationName})",
+          $"{alarm.PayloadSummaryRedacted} · {alarm.Pipeline} · {alarm.OccurrenceCount:N0}× · zadnjič {PimTime.FormatWithAge(alarm.LastSeenUtc)}",
+          "sistem/integracije", "Alarmi"));
+
+      if (Pulse.SelfTest is { Status: "Failed" } test)
+        vrstice.Add(new("bad", "Nočni samotest je padel",
+          $"{test.StepsFailed} od {test.StepsTotal} korakov ni uspelo; zagon {PimTime.FormatWithAge(test.StartedUtc)}.",
+          "sistem/samotest", "Samotest"));
+
+      if (Pulse.SelfTest is { } zadnji && zadnji.StartedUtc < DateTime.UtcNow.AddHours(-30))
+        vrstice.Add(new("warn", "Nočni samotest se dolgo ni izvedel",
+          $"Zadnji zagon {PimTime.FormatWithAge(zadnji.StartedUtc)}. Preveri načrtovano opravilo.",
+          "sistem/samotest", "Samotest"));
+
+      var mrtvi = Pulse.OutboxCount("Dead");
+      if (mrtvi > 0)
+        vrstice.Add(new("warn", $"{mrtvi:N0} mrtvih odhodnih sporočil",
+          "Sporočila, ki jih SAOP ni sprejel in se ne bodo ponovila sama.", "saop", "Izhod v SAOP"));
+
+      foreach (var izvoz in Pulse.Exports.Where(row => row.Status == "Failed"))
+        vrstice.Add(new("warn", $"Izvoz {izvoz.ProfileCode} ni uspel",
+          izvoz.ErrorRedacted ?? $"Zagon {PimTime.FormatWithAge(izvoz.StartedUtc)}.", "sistem/izvozi", "Izvozi"));
+
+      return vrstice;
+    }
+  }
+
+  // ── Prikazne pretvorbe ────────────────────────────────────────────────────
+  string OsvezenoOb => OsvezenoUtc is null ? "" : $"Osveženo {PimTime.FormatTime(OsvezenoUtc)}";
+
+  string SamotestVrednost => Pulse.SelfTest is null ? "ni bil izveden" : SamotestOznaka(Pulse.SelfTest.Status);
+
+  string SamotestOpomba => Pulse.SelfTest is null
+    ? "nočno opravilo še ni registrirano"
+    : $"{PimTime.FormatWithAge(Pulse.SelfTest.StartedUtc)} · {PimTime.Duration(Pulse.SelfTest.DurationMs)}";
+
+  // Ugnezdeni narekovaji v atributu Razor prevede, a je vrstica potem neberljiva; zato tu.
+  string CakaOdobritve => Pulse.OutboxCount("PendingApproval").ToString("N0");
+
+  string OdhodnaOpomba => $"čaka odobritve; {Pulse.OutboxCount("Dead"):N0} mrtvih";
+
+  string ZadnjiIzvozVrednost => Pulse.Exports.Count == 0 ? "ni zapisa"
+    : PimTime.Format(Pulse.Exports.Max(row => row.StartedUtc));
+
+  string ZadnjiIzvozOpomba => Pulse.Exports.Count == 0
+    ? "zgodovina se polni od migracije 172"
+    : $"{Pulse.Exports.Count(row => row.Status == "Succeeded")} od {Pulse.Exports.Count} profilov uspešnih";
+
+  static string Starost(int hours) => hours < 1 ? "manj kot uro"
+    : hours < 48 ? $"{hours} h"
+    : $"{hours / 24} dni";
+
+  static string ZdravjeOznaka(WorkerHealth health) => health switch
+  {
+    WorkerHealth.Healthy => "Dela",
+    WorkerHealth.Running => "V teku",
+    WorkerHealth.Silent => "Molči",
+    WorkerHealth.Failing => "Napaka",
+    WorkerHealth.Off => "Izklopljen",
+    _ => "Še ni teklo",
+  };
+
+  static string? ZdravjeTon(WorkerHealth health) => health switch
+  {
+    WorkerHealth.Healthy or WorkerHealth.Running => "good",
+    WorkerHealth.Silent or WorkerHealth.Failing => "bad",
+    WorkerHealth.Off => "warn",
+    _ => null,
+  };
+
+  static string SamotestOznaka(string status) => status switch
+  {
+    "Passed" => "Uspel", "Failed" => "Padel", "Warning" => "Z opozorili",
+    "Running" => "V teku", "Skipped" => "Preskočen", "Abandoned" => "Nedokončan", _ => status,
+  };
+
+  static string Opis(string pipeline) => pipeline switch
+  {
+    "SAOP_STOCK" => "količine zaloge iz ERP",
+    "SAOP_DELIVERY" => "dobave iz nabavnih nalogov",
+    "STOCK_FILE" => "zaloga iz dobaviteljeve datoteke",
+    "SOURCE_FETCH" => "prevzem dobaviteljevih datotek",
+    "SAOP_PRODUCTS" => "katalog artiklov iz ERP",
+    "SAOP_PRICES" => "cene artiklov iz ERP",
+    "GENERIC_XML" => "dobaviteljev XML",
+    "OUTBOUND" => "odhodna pošta v SAOP",
+    "ALERT_DISPATCH" => "razpošiljanje opozoril",
+    "WATCHDOG" => "nadzor zastalih izvajanj",
+    "MAGENTO_PRODUCTS" => "izvoz artiklov in strank za splet",
+    "MAGENTO_STOCK_PRICES" => "izvoz cen in zaloge za splet",
+    _ => "—",
+  };
+
+  // Polna vloga postopka za stolpec "Vloga" na tej strani — kdo (worker) in od kod (SAOP ali
+  // kateri dobavitelj) bere ali piše. Namerno ločeno od Opis(): Opis je kratek podnaslov pod
+  // imenom postopka, to je polni stavek za svoj stolpec.
+  static string Vloga(string pipeline) => pipeline switch
+  {
+    "SAOP_PRODUCTS" => "PIM.KatalogWorker — katalog artiklov iz SAOP (brez cen)",
+    "SAOP_PRICES" => "PIM.KatalogWorker — cene artiklov iz SAOP, ločeno od kataloga",
+    "SAOP_STOCK" => "PIM.SaopStockWorker — zaloga iz SAOP",
+    "SAOP_DELIVERY" => "PIM.SaopStockWorker — datumi in količine dobave iz SAOP",
+    "GENERIC_XML" => "PIM.XmlFileWorker — dobaviteljev katalog (Braytron, Nowodvorski, splet)",
+    "STOCK_FILE" => "PIM.StockFileWorker — dobaviteljeva zaloga (Braytron, Nowodvorski)",
+    "SOURCE_FETCH" => "PIM.SourceFetchWorker — prevzem datotek od dobaviteljev (Braytron, Nowodvorski)",
+    "OUTBOUND" => "PIM.OutboxDispatcher — pošiljanje sprememb nazaj v SAOP",
+    "ALERT_DISPATCH" => "PIM.AlertDispatcher — razpošiljanje alarmov (webhook/e-pošta)",
+    "WATCHDOG" => "PIM.Watchdog — nadzor obtičanih/zastalih postopkov",
+    "MAGENTO_PRODUCTS" => "PIM.B2bWorker — izvoz artiklov in strank za splet (Magento)",
+    "MAGENTO_STOCK_PRICES" => "PIM.B2bWorker — izvoz cen in zaloge za splet (Magento)",
+    _ => "—",
+  };
+
+  public void Dispose() => Ura?.Dispose();
+}

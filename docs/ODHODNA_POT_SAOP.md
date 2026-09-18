@@ -71,6 +71,24 @@ Kaj stran naredi in česa **ne**:
 poslan ADD, kjer bi moral biti PATCH, in obratno. Zato sta stari strani
 `/export/saop-item-new` in `/export/saop-item-edit` tu **ena** stran.
 
+**Iz česa je metoda izpeljana (od migracije 169).** Merilo je `canon.Product.ErpExistence`:
+`CONFIRMED_IN_ERP` → PATCH, `NOT_YET_IN_ERP` (ali artikla v `canon.Product` sploh ni) → POST.
+Berejo ga vsa tri mesta, ki metodo določajo: `out.GetSaopItemWriteState` (kartica in predogled),
+`out.ClaimItemDocument` (pravi prevzem) in `out.PeekItemDocuments` (suhi tek).
+
+Do 169 je bilo merilo »ali vrstica obstaja v `canon.Product`«. To je držalo samo, dokler je
+artikle smel ustvarjati izključno SAOP (`map.SourceConnector.CanCreateProducts = 1`, migracija
+042). Ko artikle začnejo ustvarjati še viri, ki niso ERP (scraper, ročni Excel), je tak artikel
+v PIM, v SAOP pa ga ni — staro merilo bi zanj izbralo PATCH na zapis, ki v SAOP ne obstaja.
+
+Privzetek stolpca je `CONFIRMED_IN_ERP`, zato se za vse artikle, ki so v bazi nastali do 169,
+metoda ne spremeni. Zapis `NOT_YET_IN_ERP` ob ustvarjanju iz ne-ERP vira je ločen korak
+(skupaj z registracijo takega vira); `map.ProcessRawInbox` se v 169 ne dotika.
+
+Varovalka ostaja: če je zastavica kljub temu napačna, odgovor SAOP prevlada nad njo —
+`ItemAlreadyExists` preklopi na PATCH, `ItemNotFound` na POST (`SaopIntentResolver`), in to se
+zgodi znotraj istega prevzema, brez porabe drugega poskusa.
+
 **Pogoj, da se da uvrstiti v vrsto.** `dbo.IntegrationProfile` mora imeti omogočeno vrstico
 za `SAOP_PRODUCT` in to organizacijo. Dokler je nima, stran to pove takoj in v vrsto ne gre
 nič (`51001`). Vnos, predogled in dokument delujejo tudi brez profila — to je namenoma, da se

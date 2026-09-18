@@ -25,8 +25,8 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     int organizationId, int exportProfileId, string? webSite, bool onlyPublished,
     string? search, int skip = 0, int take = 200, CancellationToken cancellationToken = default)
   {
-    if (take is < 1 or > 200)
-      throw new ArgumentOutOfRangeException(nameof(take), "Predogled ima lahko od 1 do 200 vrstic.");
+    if (take is < 1 or > 1000)
+      throw new ArgumentOutOfRangeException(nameof(take), "Predogled ima lahko od 1 do 1000 vrstic.");
 
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = Command(connection, organizationId, exportProfileId, webSite,
@@ -42,7 +42,8 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     return new(columns, rows, total.Value is DBNull ? 0 : Convert.ToInt32(total.Value), skip, take);
   }
 
-  public async Task WriteCsvAsync(
+  /// <returns>Število zapisanih podatkovnih vrstic, brez glave; zapiše se v <c>out.ExportRun</c>.</returns>
+  public async Task<long> WriteCsvAsync(
     int organizationId, int exportProfileId, string? webSite, bool onlyPublished,
     string? search, Stream output, CancellationToken cancellationToken = default)
   {
@@ -57,6 +58,7 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     await writer.WriteLineAsync(string.Join(';', Enumerable.Range(0, reader.FieldCount)
       .Select(index => Escape(reader.GetName(index)))).AsMemory(), cancellationToken);
 
+    long rows = 0;
     while (await reader.ReadAsync(cancellationToken))
     {
       var cells = new string[reader.FieldCount];
@@ -65,8 +67,10 @@ public sealed class WebExportBuildService(IConfiguration configuration)
           ? null
           : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture));
       await writer.WriteLineAsync(string.Join(';', cells).AsMemory(), cancellationToken);
+      rows++;
     }
     await writer.FlushAsync(cancellationToken);
+    return rows;
   }
 
   public static string FileName(string profileCode, DateTime utcNow)
@@ -75,6 +79,19 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     var safeProfile = new string(profileCode.Trim().Select(character => char.IsLetterOrDigit(character) || character is '-' or '_'
       ? character : '_').ToArray());
     return $"PIM_splet_{safeProfile}_{utcNow:yyyyMMdd_HHmm}.csv";
+  }
+
+  /// <summary>
+  /// Uveljavi predlagano ime prenesene datoteke (npr. »katalog.csv«, ki ga izbere stran /splet)
+  /// namesto privzetega, casovno zigosanega imena. Ce predlog ni varen, se uporabi privzeto ime.
+  /// </summary>
+  public static string SafeFileName(string requested, string profileCode, DateTime utcNow)
+  {
+    var trimmed = requested.Trim();
+    if (trimmed.Length == 0) return FileName(profileCode, utcNow);
+    var safe = new string(trimmed.Select(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.'
+      ? character : '_').ToArray());
+    return safe.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? safe : safe + ".csv";
   }
 
   public static string Escape(string? value)

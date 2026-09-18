@@ -41,7 +41,7 @@
             <td><span class="code-value">@(page.SourceCode)</span></td>
             <td>@(page.EntityType)</td>
             <td><PimChip Text="@(page.Status)" Tone="@Tone(page.Status)" /></td>
-            <td>@(page.ReceivedUtc.ToLocalTime().ToString("g"))</td>
+            <td>@(page.ReceivedUtc.ToPimLocal().ToString("g"))</td>
             <td>@(Moment(page.ProcessedUtc))</td>
             <td class="muted">@(page.FailureReason ?? "—")</td>
           </tr>
@@ -117,5 +117,5 @@
     _ => null
   };
 
-  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToPimLocal().ToString("g");
 }

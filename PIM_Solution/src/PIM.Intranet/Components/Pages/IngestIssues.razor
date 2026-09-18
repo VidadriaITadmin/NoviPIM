@@ -57,8 +57,8 @@
             <td>@row.OrganizationName</td>
             <td><span class="code-value">@row.SourceCode</span></td>
             <td class="numeric">@row.OccurrenceCount.ToString("N0")</td>
-            <td>@row.FirstSeenUtc.ToLocalTime().ToString("g")</td>
-            <td>@row.LastSeenUtc.ToLocalTime().ToString("g")</td>
+            <td>@row.FirstSeenUtc.ToPimLocal().ToString("g")</td>
+            <td>@row.LastSeenUtc.ToPimLocal().ToString("g")</td>
             <td>
               @if (row.RunId is not null) { <a href="zajem/teki/@row.RunId">Odpri tek</a> }
               else { <span class="muted">—</span> }

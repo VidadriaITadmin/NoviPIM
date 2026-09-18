@@ -1,0 +1,10 @@
+-- 1. Vklopite merjenje obeh nastavitev
+SET STATISTICS TIME ON;
+SET STATISTICS IO ON;
+
+-- 2. Zaženete svojo proceduro ali poizvedbo
+EXEC MojaPrelepaProcedura;
+
+-- 3. Izklopite merjenje (da ne smeti pri naslednjih poizvedbah)
+SET STATISTICS TIME OFF;
+SET STATISTICS IO OFF;

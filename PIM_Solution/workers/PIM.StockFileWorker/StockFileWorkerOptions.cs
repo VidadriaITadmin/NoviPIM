@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PIM.Operations;
 
 namespace PIM.StockFileWorker;
 
@@ -81,24 +82,6 @@ public sealed record StockFileWorkerOptions(
     return args[++index];
   }
 
-  /// <summary>Povezava: najprej okolje, nato lokalna nastavitev z iskanjem navzgor.</summary>
-  public static string? ReadConnectionString()
-  {
-    var value = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-    if (!string.IsNullOrWhiteSpace(value)) return value;
-    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-    while (directory is not null)
-    {
-      var path = Path.Combine(directory.FullName, "appsettings.Local.json");
-      if (File.Exists(path))
-      {
-        using var document = JsonDocument.Parse(File.ReadAllText(path));
-        if (document.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
-          && connectionStrings.TryGetProperty("Pim", out var pim))
-          return pim.GetString();
-      }
-      directory = directory.Parent;
-    }
-    return null;
-  }
+  /// <summary>Povezava: najprej okolje, nato skupna lokalna nastavitev rešitve.</summary>
+  public static string? ReadConnectionString() => LocalSettings.ConnectionString();
 }

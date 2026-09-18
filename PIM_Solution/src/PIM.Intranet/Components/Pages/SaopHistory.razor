@@ -3,21 +3,31 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 @inject SaopWriteService Write
+@inject SaopOrganizationContext OrgContext
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Zgodovina zapisov v SAOP</PageTitle>
 <PimPage Title="Zgodovina zapisov v SAOP" Subtitle="Ena vrstica predstavlja poslovno operacijo. Posamezni poskusi zahtevajo dodaten bralni model." Crumbs="Crumbs" />
 
+<PimTabs Active="history" Tabs="SaopTabs.Tabs" Label="Pogledi izhoda v SAOP" />
+
 <section class="ui-card toolbar" role="search" aria-label="Filtri zgodovine SAOP">
+  <select class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">@foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }</select>
   <select class="filter-select" @bind="Entity"><option value="">Vse entitete</option>@foreach (var value in Entities) { <option value="@value">@value</option> }</select>
   <select class="filter-select" value="@(Status ?? "")" @onchange="args => Status = args.Value?.ToString()"><option value="">Vsa stanja</option>@foreach (var value in Statuses) { <option value="@value">@value</option> }</select>
-  <select class="filter-select" disabled title="Odobritelj ni v bralnem modelu"><option>Uporabnik — ni podatka</option></select>
+  <select class="filter-select" @bind="Approver"><option value="">Vsi odobritelji</option>@foreach (var value in Approvers) { <option value="@value">@value</option> }</select>
   <select class="filter-select" @bind="Period"><option value="0">Vse obdobje</option><option value="7">Zadnjih 7 dni</option><option value="30">Zadnjih 30 dni</option><option value="90">Zadnjih 90 dni</option></select>
   <input class="search-input" type="search" placeholder="Ključ, polje ali cilj …" @bind="Search" @bind:event="oninput" />
   <span class="result-count">@Filtered.Count.ToString("N0") operacij</span>
 </section>
 
-<PimMissing Object="intranet.GetOutboundMessages" What="odobritelja, čas pošiljanja, staro in novo vrednost ter razčlenitev out.OutboxAttempt" Needs="out.OutboxMessage, out.OutboxAttempt in posnetek dejansko poslanih polj" />
+@* PimMissing tu ne bi bil pravilen: procedura za spodnje ze obstaja v bazi (intranet.GetOutboundMessage,
+   migracija 021), samo na to stran se ni vezana — ne gre za manjkajoc objekt v bazi. *@
+<div class="message-state info-message">
+  Ta seznam kaže zadnje stanje vsake operacije. Staro/novo vrednost polja ob spremembi in razčlenitev
+  po posameznih poskusih (out.OutboxAttempt) tu še nista prikazani — bralna procedura za eno sporočilo
+  (<span class="code-value">intranet.GetOutboundMessage</span>) v bazi že obstaja, na to stran pa še ni vezana.
+</div>
 
 @if (Message is not null)
 {
@@ -28,24 +38,51 @@
   <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Filtered.Count == 0)" EmptyText="Za izbrane filtre ni operacij." LoadingText="Nalaganje zgodovine …">
     <PimTable Caption="Operacije zapisa v SAOP" Columns="Columns">
       <Rows>
-        @foreach (var row in Filtered)
+        @foreach (var row in PageRows)
         {
           <tr>
-            <td>@row.CreatedUtc.ToLocalTime().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td><td>@row.Operation</td>
-            <td>@row.FieldSummary</td><td>—</td><td>@(row.Status == "Sent" ? "Da, nepotrjeno" : "—")</td><td>@Response(row)</td>
+            <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td><td>@row.Operation</td>
+            <td>@row.FieldSummary</td><td>@(row.ApprovedBy ?? "—")</td><td>@(row.SentUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@Response(row)</td>
             <td>@(row.Status is "Verified" or "Succeeded" ? "Da" : "—")</td><td><PimChip Text="@Label(row.Status)" Tone="@Tone(row.Status)" /></td>
-            <td>@if (row.Status is "Error" or "Dead")
+            <td><div class="table-actions">
+              @if (row.Status is "Error" or "Dead")
               {
                 <button type="button" class="small-action warn-action" disabled="@ActionBusy"
                   aria-label="Pošlji znova @row.EntityType @row.EntityKey"
                   @onclick="() => RequeueMessageAsync(row)">Pošlji znova</button>
-              }</td>
+              }
+              @if (!string.IsNullOrWhiteSpace(row.LastError))
+              {
+                <button type="button" class="small-action warn-action" @onclick="() => OpenErrorForRow(row)">Poglej napako</button>
+              }
+            </div></td>
           </tr>
         }
       </Rows>
     </PimTable>
   </PimState>
+  @if (Filtered.Count > 0)
+  {
+    <nav class="pagination" aria-label="Strani zgodovine">
+      <button type="button" disabled="@(CurrentPage==0)" @onclick="Previous">Prejšnja</button>
+      <span class="page-position">Stran @(CurrentPage+1) od @PageCount</span>
+      <button type="button" disabled="@(CurrentPage+1>=PageCount)" @onclick="Next">Naslednja</button>
+    </nav>
+  }
 </section>
+
+@if (ErrorPreview is { } errorPreview)
+{
+  <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Napaka pošiljanja" @onclick="CloseError">
+    <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
+      <header>
+        <div><strong>@errorPreview.Title</strong><span>Napaka pošiljanja</span></div>
+        <button type="button" class="small-action" @onclick="CloseError">Zapri</button>
+      </header>
+      <div class="xml-lightbox-body"><p class="error-state" role="alert">@errorPreview.Detail</p></div>
+    </div>
+  </div>
+}
 
 @code {
   // A2, pregled 2026-09-08: /saop/zgodovina brez ?stanje= je padel s HTTP 500. Blazor lastnost ob
@@ -53,32 +90,70 @@
   // bral Status.Length. Zato je tip nicelen in filter to izrecno prenese.
   [SupplyParameterFromQuery(Name = "stanje")] public string? Status { get; set; }
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Zgodovina")];
+  int? OrganizationId;
+  IReadOnlyList<OrganizationContext> Organizations = [];
   static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat"), new("Dejanje")];
   IReadOnlyList<OutboundRow> Rows = [];
   bool Loading = true;
   bool ActionBusy;
   string? Error;
   string? Message;
-  string Entity = "", Search = "", Period = "30";
+  string Entity = "", Search = "", Period = "30", Approver = "";
   IReadOnlyList<string> Entities => Rows.Select(row => row.EntityType).Distinct().Order().ToArray();
   IReadOnlyList<string> Statuses => Rows.Select(row => row.Status).Distinct().Order().ToArray();
+  IReadOnlyList<string> Approvers => Rows.Select(row => row.ApprovedBy).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct().Order().ToArray()!;
   IReadOnlyList<OutboundRow> Filtered => Rows.Where(row =>
     (Entity.Length == 0 || row.EntityType == Entity) && (string.IsNullOrEmpty(Status) || row.Status == Status)
+    && (Approver.Length == 0 || row.ApprovedBy == Approver)
     && (Period == "0" || row.CreatedUtc >= DateTime.UtcNow.AddDays(-int.Parse(Period)))
     && (Search.Length == 0 || row.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.FieldSummary.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.TargetKind.Contains(Search, StringComparison.OrdinalIgnoreCase)))
     .OrderByDescending(row => row.CreatedUtc).ToArray();
 
+  /* --- strani (10 na stran) ------------------------------------------------ */
+  int Page;
+  const int PageSize = 10;
+  int PageCount => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (decimal)PageSize));
+  // Po zožitvi filtra je lahko izbrana stran izven obsega; izpiše se zadnja obstoječa, ne prazna.
+  int CurrentPage => Math.Min(Page, PageCount - 1);
+  IEnumerable<OutboundRow> PageRows => Filtered.Skip(CurrentPage * PageSize).Take(PageSize);
+  void Previous() => Page = Math.Max(0, CurrentPage - 1);
+  void Next() => Page = Math.Min(PageCount - 1, CurrentPage + 1);
+
+  /* --- razlog napake v pojavnem oknu --------------------------------------- */
+  (string Title, string Detail)? ErrorPreview;
+  void OpenErrorForRow(OutboundRow row) => ErrorPreview = ($"{row.EntityType} {row.EntityKey}", row.LastError ?? "");
+  void CloseError() => ErrorPreview = null;
+
   protected override async Task OnInitializedAsync()
   {
-    try { await ReloadAsync(); }
+    try
+    {
+      Organizations = await Data.GetOrganizationsAsync();
+      var org = await Data.GetCurrentOrganizationAsync();
+      OrganizationId = OrgContext.OrganizationId ?? org?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId;
+      if (OrganizationId is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      OrgContext.OrganizationId = OrganizationId;
+      await ReloadAsync();
+    }
     catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
   async Task ReloadAsync()
   {
-    var org = await Data.GetCurrentOrganizationAsync();
-    if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-    Rows = await Data.GetOutboundAsync(org.OrganizationId);
+    if (OrganizationId is not null) Rows = await Data.GetOutboundAsync(OrganizationId.Value);
+  }
+  // Isti izbirnik kot na Artiklih/Cakalni vrsti — brez njega je stran vedno kazala samo podjetje
+  // z najnizjo sifro, zgodovina drugih podjetij pa je bila tu nevidna.
+  async Task OnOrganizationChangedAsync(ChangeEventArgs args)
+  {
+    if (!int.TryParse(args.Value?.ToString(), out var organizationId) || organizationId == OrganizationId) return;
+    OrganizationId = organizationId;
+    OrgContext.OrganizationId = organizationId;
+    Page = 0;
+    Loading = true; Error = null; Message = null;
+    try { await ReloadAsync(); }
+    catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
+    finally { Loading = false; }
   }
   async Task<string> ActorAsync() =>
     (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
@@ -95,6 +170,16 @@
     finally { ActionBusy = false; }
   }
   static string Response(OutboundRow row) => row.ResponseStatusCode is null && row.ResponseCorrelationId is null ? "—" : $"{row.ResponseStatusCode} {row.ResponseCorrelationId}".Trim();
-  static string Label(string status) => status == "Sent" ? "Poslano, nepotrjeno" : status;
-  static string? Tone(string status) => status is "Verified" or "Succeeded" ? "good" : status is "Error" or "Dead" or "Drift" or "Cancelled" ? "bad" : "warn";
+  // Ista poenostavljena poimenovanja kot na Čakalni vrsti: navzven samo Poslano/Napaka/Preklicano,
+  // ne cel notranji seznam stanj — razlog za napako je v gumbu "Poglej napako".
+  static string Label(string status) => status switch
+  {
+    "PendingApproval" => "Čaka odobritev",
+    "Sent" or "Verified" or "Succeeded" or "Completed" => "Poslano",
+    "Error" or "Dead" or "Drift" => "Napaka",
+    "Cancelled" => "Preklicano",
+    "Superseded" => "Nadomeščeno",
+    _ => "V obdelavi",
+  };
+  static string? Tone(string status) => status is "Sent" or "Verified" or "Succeeded" or "Completed" ? "good" : status is "Error" or "Dead" or "Drift" or "Cancelled" ? "bad" : "warn";
 }

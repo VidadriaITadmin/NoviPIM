@@ -1,0 +1,8 @@
+Migracija 197 — shema + podatki (sql/migrations/197_StopStoringProcessedRawPayload.sql, commit cabe913)
+
+ALTER TABLE raw.Inbox ALTER COLUMN PayloadXml nvarchar(max) NULL (bilo NOT NULL)
+ALTER TABLE stock.LandingRecord ALTER COLUMN RawPayload nvarchar(max) NULL (bilo NOT NULL)
+Redefiniran map.ProcessRawInbox: ob prehodu vrstice v Status='Processed' zdaj doda PayloadXml=NULL
+Redefiniran stock.ApplyLandingRecord: ob prehodu v Status='Applied' zdaj doda RawPayload=NULL
+Enkratno čiščenje obstoječih podatkov: UPDATE raw.Inbox SET PayloadXml=NULL WHERE Status='Processed' (1.215 vrstic, 5,68 GB sproščenih) in enako za stock.LandingRecord (2.977.579 vrstic, ~20,75 MB)
+Quarantined vrstice v obeh tabelah obdržijo payload namerno (rabita ga GetInboundIssueDetailAsync predogled in migracija 141 GetSaopEndpointSnapshot)

@@ -20,6 +20,10 @@ int? pageSize = null;
 string? baseUrlOverride = null;
 var onlySettings = false;
 var bySchedule = false;
+// Datumi in kolicine prihoda (migracija 189, GetItemDeliveryDate) so locen, pocasnejsi zajem —
+// en artikel naenkrat, zato gre v nocni tek, ne v petminutni cikel zaloge same.
+var deliveryDates = false;
+var maxDeliveryLookups = 300;
 
 for (var index = 0; index < args.Length; index++)
 {
@@ -45,6 +49,13 @@ for (var index = 0; index < args.Length; index++)
       // Nacrtovani zagon spostuje razpored iz baze; rocni ga namenoma obide.
       bySchedule = true;
       break;
+    case "--dostave":
+      deliveryDates = true;
+      break;
+    case "--max-dostave":
+      if (index + 1 >= args.Length) return Napaka("--max-dostave potrebuje število.");
+      maxDeliveryLookups = int.Parse(args[++index], CultureInfo.InvariantCulture);
+      break;
     default:
       return Napaka($"Neznan argument: {args[index]}.");
   }
@@ -63,7 +74,10 @@ if (onlySettings || !live)
   Console.WriteLine(live ? "Samo nastavitve, klic ni izveden." : "PIM_SAOP_MODE ni Live — klic ni izveden.");
   Console.WriteLine($"  naslov:   {settings.BaseUrl}");
   Console.WriteLine($"  podjetja: {string.Join(", ", organizations)}");
-  Console.WriteLine("  profil in skladišča se preberejo iz stock.SaopProviderProfile in canon.Warehouse.");
+  if (deliveryDates)
+    Console.WriteLine($"  dejanje:  datumi in kolicine prihoda (GetItemDeliveryDate), do {maxDeliveryLookups} artiklov na podjetje.");
+  else
+    Console.WriteLine("  profil in skladišča se preberejo iz stock.SaopProviderProfile in canon.Warehouse.");
   return 0;
 }
 
@@ -79,8 +93,10 @@ http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
 http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml"));
 
 // Ime postopka je isto v ops.ScheduleProfile, ops.PipelineRun in ops.IntegrationHealth,
-// zato stoji na enem mestu.
-const string Pipeline = "SAOP_STOCK";
+// zato stoji na enem mestu. Datumi prihoda dobijo svoj Pipeline (SAOP_DELIVERY, migracija 164), da imajo
+// svoj razpored — ta zajem je en klic na artikel in ne sodi v petminutni cikel zaloge same.
+// Pipeline mora biti omogocen v ops.ScheduleProfile, preden prvi zagon uspe (glej spodaj).
+var Pipeline = deliveryDates ? "SAOP_DELIVERY" : "SAOP_STOCK";
 
 var runner = new SaopStockRunner(settings.ConnectionString, http, new Uri(settings.BaseUrl.TrimEnd('/') + "/"));
 var napake = 0;
@@ -112,10 +128,20 @@ foreach (var organizationId in organizations)
 
   try
   {
-    var izid = await runner.RunAsync(organizationId, pageSize);
-    await run.CompleteAsync(true);
-    Console.WriteLine($"[{organizationId}] {izid.ProfileCode} ({izid.ProviderKind}): skladišč={izid.Warehouses}, "
-      + $"zapisov={izid.RecordsRead}, uporabljenih={izid.Applied}, v karanteni={izid.Quarantined}, RunId={izid.RunId}.");
+    if (deliveryDates)
+    {
+      var izidDostave = await runner.RunItemDeliveryDatesAsync(organizationId, maxDeliveryLookups);
+      await run.CompleteAsync(true);
+      Console.WriteLine($"[{organizationId}] datumi prihoda: preverjenih={izidDostave.ItemsChecked}, "
+        + $"z dobavo={izidDostave.ItemsWithDelivery}.");
+    }
+    else
+    {
+      var izid = await runner.RunAsync(organizationId, pageSize);
+      await run.CompleteAsync(true);
+      Console.WriteLine($"[{organizationId}] {izid.ProfileCode} ({izid.ProviderKind}): skladišč={izid.Warehouses}, "
+        + $"zapisov={izid.RecordsRead}, uporabljenih={izid.Applied}, v karanteni={izid.Quarantined}, RunId={izid.RunId}.");
+    }
   }
   catch (Exception exception)
   {
@@ -134,7 +160,8 @@ return napake == 0 ? 0 : 1;
 static int Napaka(string sporocilo)
 {
   Console.Error.WriteLine(sporocilo);
-  Console.Error.WriteLine("Uporaba: PIM.SaopStockWorker [--organizations 2,3] [--page-size N] [--base-url URL] [--samo-nastavitve]");
+  Console.Error.WriteLine("Uporaba: PIM.SaopStockWorker [--organizations 2,3] [--page-size N] [--base-url URL] "
+    + "[--samo-nastavitve] [--dostave [--max-dostave N]]");
   return 2;
 }
 
@@ -145,60 +172,28 @@ internal sealed record SaopStockSettings(
 {
   public static SaopStockSettings? Read(string? baseUrlOverride)
   {
-    // Nastavitve korena repozitorija, ne prve najdene datoteke. Pod PIM_Solution stoji svoja
-    // appsettings.Local.json, ki nosi samo povezavo in nima odseka Saop; ko worker pozene
-    // skripta iz PIM_Solution, bi vzel njo in koncal z "Manjka nastavitev Saop", ceprav so
-    // nastavitve v korenu. Koren prepoznamo po PIM_Solution\PIM.sln.
-    var path = FindSettingsPath();
-    if (path is not null)
+    // Odsek Saop iz skupne lokalne nastavitve rešitve. Prej je bilo tu svoje iskanje datoteke:
+    // ker je vsak worker iskal po svoje, je vsak našel drugo datoteko in ta je znala biti brez
+    // odseka Saop — worker je javil "Manjka nastavitev Saop", čeprav je bila nastavljena.
+    if (LocalSettings.Section("Saop") is not { } saop) return null;
+
+    var organizations = new List<int>();
+    if (saop.TryGetProperty("Organizations", out var array))
     {
+      foreach (var element in array.EnumerateArray())
       {
-        using var document = JsonDocument.Parse(File.ReadAllText(path));
-        var root = document.RootElement;
-        if (!root.TryGetProperty("Saop", out var saop)) return null;
-        var organizations = new List<int>();
-        if (saop.TryGetProperty("Organizations", out var array))
-        {
-          foreach (var element in array.EnumerateArray())
-          {
-            if (element.TryGetProperty("IsActive", out var active) && active.GetBoolean()
-              && element.TryGetProperty("Id", out var id)) organizations.Add(id.GetInt32());
-          }
-        }
-        var connection = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-        if (string.IsNullOrWhiteSpace(connection) && root.TryGetProperty("ConnectionStrings", out var strings)
-          && strings.TryGetProperty("Pim", out var pim)) connection = pim.GetString();
-        return new(
-          baseUrlOverride ?? saop.GetProperty("BaseUrl").GetString() ?? "",
-          saop.TryGetProperty("Username", out var user) ? user.GetString() ?? "" : "",
-          saop.TryGetProperty("Password", out var pass) ? pass.GetString() ?? "" : "",
-          saop.TryGetProperty("TimeoutSeconds", out var timeout) ? timeout.GetInt32() : 120,
-          saop.TryGetProperty("AcceptUntrustedCertificate", out var untrusted) && untrusted.GetBoolean(),
-          connection, organizations);
+        if (element.TryGetProperty("IsActive", out var active) && active.GetBoolean()
+          && element.TryGetProperty("Id", out var id)) organizations.Add(id.GetInt32());
       }
     }
 
-    return null;
+    return new(
+      baseUrlOverride ?? saop.GetProperty("BaseUrl").GetString() ?? "",
+      saop.TryGetProperty("Username", out var user) ? user.GetString() ?? "" : "",
+      saop.TryGetProperty("Password", out var pass) ? pass.GetString() ?? "" : "",
+      saop.TryGetProperty("TimeoutSeconds", out var timeout) ? timeout.GetInt32() : 120,
+      saop.TryGetProperty("AcceptUntrustedCertificate", out var untrusted) && untrusted.GetBoolean(),
+      LocalSettings.ConnectionString(), organizations);
   }
 
-  /// <summary>Prva najdena datoteka navzgor; ce je med njimi koren repozitorija, zmaga ta.</summary>
-  static string? FindSettingsPath()
-  {
-    var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-    string? prvaNajdena = null;
-
-    while (directory is not null)
-    {
-      var candidate = Path.Combine(directory.FullName, "appsettings.Local.json");
-      if (File.Exists(candidate))
-      {
-        prvaNajdena ??= candidate;
-        if (File.Exists(Path.Combine(directory.FullName, "PIM_Solution", "PIM.sln"))) return candidate;
-      }
-
-      directory = directory.Parent;
-    }
-
-    return prvaNajdena;
-  }
 }

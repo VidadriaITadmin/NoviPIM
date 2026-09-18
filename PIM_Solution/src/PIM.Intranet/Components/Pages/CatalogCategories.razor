@@ -1,5 +1,5 @@
 @page "/nastavitve/kategorije"
-@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CategoryTreeService Tree
 @inject PIM.Intranet.Services.IntranetDataService Data
@@ -46,8 +46,8 @@
 @* 178. Do zdaj je kategorije vstavljala samo migracija; urednik jih zdaj doda tu. Izbirnik starsa
    isce po imenu in poti; ime se pred shranjevanjem primerja z obstojecimi (isto ime pod istim starsem
    ustavi, podobno ime opozori). *@
-<section class="ui-card section-gap new-category" aria-labelledby="new-category-title">
-  <h2 id="new-category-title" class="card-caption">Nova kategorija</h2>
+<details class="ui-card section-gap new-category" open="@CreatePanelOpen">
+  <summary id="new-category-title" class="card-caption">+ Dodaj korensko kategorijo</summary>
   <div class="editor-actions">
     <label class="editor-field" for="new-tree">
       <span class="editor-label">Drevo</span>
@@ -73,7 +73,7 @@
   {
     <p class="message-state" role="status">Podobno ime že obstaja: @string.Join("; ", NewSimilar.Take(5).Select(option => option.CategoryPath)). Preveri, preden ustvariš novo.</p>
   }
-</section>
+</details>
 
 <section class="ui-card toolbar section-gap" role="search" aria-labelledby="tree-filter-title">
   <h2 id="tree-filter-title" class="visually-hidden">Filtriranje drevesa</h2>
@@ -125,7 +125,21 @@
   </label>
 </section>
 
-<section class="ui-card tree-card section-gap" aria-label="Kategorijsko drevo">
+@if (Picked.Count > 0)
+{
+  <section class="ui-card category-bulk section-gap" aria-label="Paketne akcije kategorij">
+    <span class="bulk-count"><strong>@Picked.Count</strong> izbranih</span>
+    <button type="button" @onclick="ToggleVisiblePicked">@(AllVisiblePicked ? "Odstrani vidne iz izbora" : "Izberi vidne rezultate")</button>
+    <button type="button" @onclick="ClearPicked">Počisti izbor</button>
+    <span class="bulk-spacer"></span>
+    <button type="button" disabled="@(!CanMovePicked || Busy)" title="@(CanMovePicked ? "Premakni izbrane veje" : "Za skupni premik izberi kategorije istega drevesa")"
+            @onclick="OpenMovePickedAsync">Premakni izbrane</button>
+    <button type="button" class="danger-action" disabled="@Busy" @onclick="OpenDeletePickedAsync">Izbriši izbrane</button>
+  </section>
+}
+
+<div class="category-workspace section-gap">
+<section class="ui-card tree-card" aria-label="Kategorijsko drevo">
   <div class="tree-bar">
     <div class="tree-actions">
       <button type="button" @onclick="ExpandAll">Razpri vse</button>
@@ -144,7 +158,17 @@
   <div class="tree-legend" aria-hidden="true">
     <span class="tree-legend-item"><span class="lang is-set">xx</span> ime je zapisano</span>
     <span class="tree-legend-item"><span class="lang is-missing">xx</span> ime manjka</span>
+    <span class="tree-legend-item"><span class="drag-example">⠿</span> povleci za premik</span>
   </div>
+
+  @if (Dragged is not null)
+  {
+    <div class="root-drop @(DropAtRoot ? "is-over" : null)"
+         @ondragenter="() => DropAtRoot = true" @ondragleave="() => DropAtRoot = false"
+         @ondragover:preventDefault @ondrop="DropOnRootAsync">
+      Spusti sem, da »@DisplayName(Dragged)« postane korenska kategorija.
+    </div>
+  }
 
   <PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)"
             EmptyText="Za te filtre ni nobene kategorije." LoadingText="Nalaganje drevesa …">
@@ -152,10 +176,17 @@
       @foreach (var row in Visible)
       {
         var expanded = !Collapsed.Contains(row.CategoryPath);
-        <li class="tree-node @(row.IsMatch ? null : "is-context") @(Editing == row.CategoryCode ? "is-editing" : null)"
+        <li class="tree-node @(row.IsMatch ? null : "is-context") @(Editing == row.CategoryCode ? "is-editing" : null) @(Selected is not null && CategoryKey(Selected) == CategoryKey(row) ? "is-selected" : null) @(DropTargetKey == CategoryKey(row) ? "is-drop-target" : null)"
             role="treeitem" aria-level="@row.LevelNo">
 
-          <div class="node-line" style="@Indent(row.LevelNo)">
+          <div class="node-line" style="@Indent(row.LevelNo)"
+               @ondragenter="() => SetDropTarget(row)" @ondragover:preventDefault
+               @ondrop="() => DropOnCategoryAsync(row)">
+            <span class="node-drag" draggable="true" title="Povleci kategorijo na novo nadrejeno kategorijo"
+                  aria-label="@($"Premakni {DisplayName(row)} z vlečenjem")"
+                  @ondragstart="() => BeginDrag(row)" @ondragend="EndDrag">⠿</span>
+            <input type="checkbox" checked="@Picked.Contains(CategoryKey(row))"
+                   @onchange="args => TogglePicked(row, args)" aria-label="@($"Izberi {DisplayName(row)}")" />
             @if (row.ChildCount > 0)
             {
               <button type="button" class="node-toggle" @onclick="() => Toggle(row)"
@@ -168,7 +199,7 @@
               <span class="node-toggle is-leaf" aria-hidden="true"></span>
             }
 
-            <button type="button" class="node-name" @onclick="() => ToggleEditor(row)">
+            <button type="button" class="node-name" @onclick="() => SelectCategory(row)">
               <span class="node-title @(IsFallback(row) ? "is-fallback" : null)"
                     title="@(IsFallback(row) ? "Ime v jeziku " + Language + " manjka; prikazano je slovensko." : null)">@DisplayName(row)</span>
               @if (ShowOriginal(row)) { <span class="node-original">@row.CategoryName</span> }
@@ -187,9 +218,6 @@
 
             <span class="node-count" title="Izdelkov neposredno v tej kategoriji">@row.ProductCount.ToString("N0")</span>
             <span class="node-count is-deep" title="Izdelkov s podkategorijami vred">@row.DescendantProductCount.ToString("N0")</span>
-            <button type="button" class="node-attributes @(AttributeEditing == row.CategoryCode ? "is-active" : null)"
-                    title="Kateri atributi veljajo za izdelke te kategorije (podedujejo jih podkategorije)"
-                    @onclick="() => ToggleAttributesAsync(row)">Atributi</button>
           </div>
 
           @if (AttributeEditing == row.CategoryCode)
@@ -318,6 +346,135 @@
   </PimState>
 </section>
 
+<aside class="ui-card category-detail" aria-label="Podrobnosti kategorije">
+  @if (Selected is null)
+  {
+    <div class="category-detail-empty"><strong>Izberi kategorijo</strong><span>Podrobnosti in kontekstne akcije se odprejo tukaj.</span></div>
+  }
+  else
+  {
+    <header><h2>@DisplayName(Selected)</h2><span class="code-value">@Selected.CategoryCode</span><p>@Selected.CategoryPath</p></header>
+    <nav class="category-tabs" aria-label="Podrobnosti kategorije">
+      <button type="button" class="@(CategoryTab == "BASIC" ? "is-active" : null)" @onclick='() => CategoryTab = "BASIC"'>Osnovno</button>
+      <button type="button" class="@(CategoryTab == "TRANSLATIONS" ? "is-active" : null)" @onclick='() => CategoryTab = "TRANSLATIONS"'>Prevodi</button>
+      <button type="button" class="@(CategoryTab == "ATTRIBUTES" ? "is-active" : null)" @onclick='() => CategoryTab = "ATTRIBUTES"'>Atributi</button>
+      <button type="button" class="@(CategoryTab == "USAGE" ? "is-active" : null)" @onclick='() => CategoryTab = "USAGE"'>Uporaba</button>
+    </nav>
+    <div class="category-detail-body">
+      @if (CategoryTab == "BASIC")
+      {
+        <dl><dt>Drevo</dt><dd>@Selected.CategoryTreeCode</dd><dt>Nivo</dt><dd>@Selected.LevelNo</dd><dt>Izdelkov</dt><dd>@Selected.ProductCount.ToString("N0") neposredno · @Selected.DescendantProductCount.ToString("N0") s podkategorijami</dd><dt>Stanje</dt><dd>@(Selected.IsActive ? "aktivna" : "neaktivna")</dd></dl>
+        <div class="detail-actions">
+          <button type="button" @onclick="PrepareChildCategory">+ Dodaj podkategorijo</button>
+          <button type="button" disabled="@Busy" @onclick="() => OpenMoveAsync(Selected)">Premakni</button>
+          <button type="button" class="danger-action" disabled="@Busy" @onclick="() => OpenDeleteAsync(Selected)">Izbriši</button>
+        </div>
+        <p class="detail-hint">Kategorijo lahko tudi primeš za znak ⠿ v drevesu in jo spustiš na novo nadrejeno kategorijo.</p>
+      }
+      else if (CategoryTab == "TRANSLATIONS")
+      {
+        <div class="editor-grid">@foreach (var language in Languages) { <label class="editor-field"><span class="editor-label">@language.LanguageCode · @language.Name</span><input class="form-input" value="@GetDraft(language.LanguageCode)" @onchange="args => SetDraft(language.LanguageCode, args.Value?.ToString())" /></label> }</div>
+        <button type="button" class="button-primary" disabled="@Busy" @onclick="() => SaveAsync(Selected)">Shrani prevode</button>
+      }
+      else if (CategoryTab == "ATTRIBUTES")
+      {
+        <p>Nabor vsebuje podedovane, obvezne, priporočene in izločene atribute.</p><button type="button" @onclick="() => ToggleAttributesAsync(Selected)">Uredi nabor atributov</button><a href="nastavitve/nabori-atributov">Odpri paketno urejanje naborov</a>
+      }
+      else { <p><strong>@Selected.DescendantProductCount.ToString("N0")</strong> izdelkov je v tej veji.</p><a href="izdelki/kategorije">Odpri uvrstitve izdelkov</a><a href="kakovost/kategorije">Odpri preslikave kategorij</a> }
+    </div>
+  }
+</aside>
+</div>
+
+@if (MoveDialogOpen)
+{
+  <div class="category-dialog-backdrop" role="presentation" @onclick="CloseMoveDialog">
+    <section class="category-dialog" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title" @onclick:stopPropagation>
+      <header class="dialog-header">
+        <div><span class="dialog-kicker">Premik drevesa</span><h2 id="move-dialog-title">Izberi novo mesto</h2></div>
+        <button type="button" class="dialog-close" aria-label="Zapri" @onclick="CloseMoveDialog">×</button>
+      </header>
+      <div class="dialog-body">
+        @if (OperationError is not null) { <p class="message-state error-message" role="alert">@OperationError</p> }
+        @if (MovePreviewLoading)
+        {
+          <p class="message-state">Pripravljam varen predogled premika …</p>
+        }
+        else if (MoveImpact is not null)
+        {
+          <div class="impact-strip">
+            <span><strong>@MoveImpact.RootCount</strong> @(MoveImpact.RootCount == 1 ? "veja" : "vej")</span>
+            <span><strong>@MoveImpact.CategoryCount</strong> kategorij skupaj</span>
+            <span><strong>@MoveImpact.ProductAssignments</strong> uvrstitev izdelkov</span>
+          </div>
+        }
+        <p class="dialog-explanation">Premakne se celotno poddrevo. Kode, prevodi, atributni nabori in preslikave ostanejo pripeti; poti in uvrstitve izdelkov se posodobijo samodejno.</p>
+        <label class="editor-field" for="move-target">
+          <span class="editor-label">Nova nadrejena kategorija</span>
+          <PimPicker Id="move-target" Options="MoveTargetOptions" Value="MoveTarget" ValueChanged="SelectMoveTarget"
+                     Disabled="@(Busy || MovePreviewLoading)" Placeholder="Vpiši ime ali celotno pot …" />
+        </label>
+        <button type="button" class="root-choice @(MoveToRoot ? "is-selected" : null)" disabled="@(Busy || MovePreviewLoading)" @onclick="SelectRootTarget">
+          <span class="root-choice-icon">⌂</span><span><strong>Postavi na koren drevesa</strong><small>Brez nadrejene kategorije</small></span>
+        </button>
+        @if (MoveDestinationLabel is not null)
+        {
+          <p class="destination-preview"><span>Nova lokacija</span><strong>@MoveDestinationLabel</strong></p>
+        }
+      </div>
+      <footer class="dialog-footer">
+        <button type="button" disabled="@Busy" @onclick="CloseMoveDialog">Prekliči</button>
+        <button type="button" class="button-primary" disabled="@(Busy || MovePreviewLoading || MoveImpact is null || OperationError is not null || (!MoveToRoot && MoveTarget is null))" @onclick="ConfirmMoveAsync">
+          @(Busy ? "Premikam …" : "Potrdi premik")
+        </button>
+      </footer>
+    </section>
+  </div>
+}
+
+@if (DeleteDialogOpen)
+{
+  <div class="category-dialog-backdrop" role="presentation" @onclick="CloseDeleteDialog">
+    <section class="category-dialog delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" @onclick:stopPropagation>
+      <header class="dialog-header">
+        <div><span class="dialog-kicker is-danger">Trajni izbris</span><h2 id="delete-dialog-title">Preveri vpliv brisanja</h2></div>
+        <button type="button" class="dialog-close" aria-label="Zapri" @onclick="CloseDeleteDialog">×</button>
+      </header>
+      <div class="dialog-body">
+        @if (OperationError is not null) { <p class="message-state error-message" role="alert">@OperationError</p> }
+        @if (DeletePreviewLoading)
+        {
+          <p class="message-state">Preverjam podkategorije in povezane podatke …</p>
+        }
+        else if (DeleteImpact is not null)
+        {
+          <div class="delete-summary">
+            <div><strong>@DeleteImpact.CategoryCount</strong><span>kategorij bo odstranjenih</span></div>
+            <div><strong>@DeleteImpact.DescendantCount</strong><span>podkategorij v obsegu</span></div>
+            <div><strong>@DeleteImpact.ProductAssignments</strong><span>uvrstitev izdelkov bo odstranjenih</span></div>
+            <div><strong>@DeleteImpact.MappingCount</strong><span>preslikav bo odstranjenih</span></div>
+          </div>
+          <ul class="impact-details">
+            <li>Izdelki se <strong>ne izbrišejo</strong>; odstranijo se samo njihove uvrstitve v te kategorije.</li>
+            <li>Odstranjenih bo @DeleteImpact.AttributeSetCount atributnih nastavitev, @DeleteImpact.ValidationRuleCount validacijskih in @DeleteImpact.TitleRuleCount naslovnih pravil.</li>
+            <li>Dejanje je zapisano v revizijski zgodovini, kategorij pa po potrditvi ni mogoče obnoviti iz tega zaslona.</li>
+          </ul>
+        }
+        <label class="delete-confirm" for="delete-confirmation">
+          <span>Za trajni izbris vpiši <strong>IZBRIŠI</strong></span>
+          <input id="delete-confirmation" class="form-input" autocomplete="off" @bind="DeleteConfirmation" @bind:event="oninput" disabled="@(Busy || DeletePreviewLoading)" />
+        </label>
+      </div>
+      <footer class="dialog-footer">
+        <button type="button" disabled="@Busy" @onclick="CloseDeleteDialog">Prekliči</button>
+        <button type="button" class="danger-primary" disabled="@(Busy || DeletePreviewLoading || DeleteImpact is null || !DeleteConfirmed)" @onclick="ConfirmDeleteAsync">
+          @(Busy ? "Brišem …" : $"Trajno izbriši {DeleteImpact?.CategoryCount ?? 0}")
+        </button>
+      </footer>
+    </section>
+  </div>
+}
+
 <div class="hub-grid section-gap">
   <PimHubCard Title="Preslikave kategorij" Href="kakovost/kategorije"
               Description="Katera dobaviteljeva pot vodi v katero od teh kategorij." />
@@ -338,6 +495,7 @@
   IReadOnlyList<string> Trees = [];
 
   readonly HashSet<string> Collapsed = [];
+  readonly HashSet<string> Picked = [];
   readonly Dictionary<string, string> Draft = new(StringComparer.OrdinalIgnoreCase);
 
   bool Loading = true;
@@ -353,6 +511,28 @@
   bool OnlyMissing;
   bool OnlyWithProducts;
   string? Editing;
+  PIM.Intranet.Services.CategoryTreeService.TreeRow? Selected;
+  string CategoryTab = "BASIC";
+  bool CreatePanelOpen;
+
+  // 228: premik, paketni izbor in trajni izbris s predogledom vpliva.
+  PIM.Intranet.Services.CategoryTreeService.TreeRow? Dragged;
+  string? DropTargetKey;
+  bool DropAtRoot;
+  bool MoveDialogOpen;
+  bool MovePreviewLoading;
+  bool MoveToRoot;
+  string MoveTree = "";
+  string? MoveTarget;
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryRef> PendingCategories = [];
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> MoveNodes = [];
+  IReadOnlyList<PimPickerOption> MoveTargetOptions = [];
+  PIM.Intranet.Services.CategoryTreeService.CategoryChangeImpact? MoveImpact;
+  bool DeleteDialogOpen;
+  bool DeletePreviewLoading;
+  string DeleteConfirmation = "";
+  PIM.Intranet.Services.CategoryTreeService.CategoryChangeImpact? DeleteImpact;
+  string? OperationError;
 
   // Nabor atributov po kategoriji (147).
   string? AttributeEditing;
@@ -425,6 +605,271 @@
     : $"{Rows.Count(row => row.IsMatch):N0} kategorij · {Visible.Count:N0} vidnih vrstic";
 
   static string Indent(int level) => $"padding-left:{(level - 1) * 22}px";
+  const char CategoryKeySeparator = '\u001f';
+  static string CategoryKey(PIM.Intranet.Services.CategoryTreeService.TreeRow row) => row.CategoryTreeCode + CategoryKeySeparator + row.CategoryCode;
+  static PIM.Intranet.Services.CategoryTreeService.CategoryRef CategoryRef(PIM.Intranet.Services.CategoryTreeService.TreeRow row) => new(row.CategoryTreeCode, row.CategoryCode);
+  static PIM.Intranet.Services.CategoryTreeService.CategoryRef? ParseCategoryKey(string key)
+  {
+    var separator = key.IndexOf(CategoryKeySeparator);
+    return separator <= 0 || separator == key.Length - 1
+      ? null
+      : new(key[..separator], key[(separator + 1)..]);
+  }
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryRef> PickedRefs => Picked
+    .Select(ParseCategoryKey).Where(reference => reference is not null).Select(reference => reference!).ToList();
+  bool AllVisiblePicked => Visible.Count > 0 && Visible.All(row => Picked.Contains(CategoryKey(row)));
+  bool CanMovePicked => Picked.Count > 0
+    && PickedRefs.Select(reference => reference.CategoryTreeCode).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+  void TogglePicked(PIM.Intranet.Services.CategoryTreeService.TreeRow row, ChangeEventArgs args) { if (args.Value is true) Picked.Add(CategoryKey(row)); else Picked.Remove(CategoryKey(row)); }
+  void ToggleVisiblePicked()
+  {
+    if (AllVisiblePicked) foreach (var row in Visible) Picked.Remove(CategoryKey(row));
+    else foreach (var row in Visible) Picked.Add(CategoryKey(row));
+  }
+  void ClearPicked() => Picked.Clear();
+  void SelectCategory(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    Selected = row;
+    CategoryTab = "BASIC";
+    Editing = null;
+    Draft.Clear();
+    foreach (var language in Languages)
+      Draft[language.LanguageCode] = row.Translations.TryGetValue(language.LanguageCode, out var name) ? name : "";
+  }
+
+  async Task PrepareChildCategory()
+  {
+    if (Selected is null) return;
+    NewTree = Selected.CategoryTreeCode;
+    await LoadNewParentOptionsAsync();
+    NewParent = Selected.CategoryCode;
+    NewName = "";
+    CreatePanelOpen = true;
+  }
+
+  void BeginDrag(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    Dragged = row;
+    DropTargetKey = null;
+    DropAtRoot = false;
+    OperationError = null;
+  }
+
+  void SetDropTarget(PIM.Intranet.Services.CategoryTreeService.TreeRow row)
+  {
+    DropAtRoot = false;
+    DropTargetKey = Dragged is null || CategoryKey(Dragged) == CategoryKey(row) ? null : CategoryKey(row);
+  }
+
+  void EndDrag()
+  {
+    Dragged = null;
+    DropTargetKey = null;
+    DropAtRoot = false;
+  }
+
+  async Task DropOnCategoryAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow target)
+  {
+    if (Dragged is null) return;
+    var source = Dragged;
+    EndDrag();
+    await OpenMoveAsync([CategoryRef(source)], target.CategoryCode, false);
+  }
+
+  async Task DropOnRootAsync()
+  {
+    if (Dragged is null) return;
+    var source = Dragged;
+    EndDrag();
+    await OpenMoveAsync([CategoryRef(source)], null, true);
+  }
+
+  Task OpenMoveAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    OpenMoveAsync([CategoryRef(row)], null, false);
+
+  Task OpenMovePickedAsync() => OpenMoveAsync(PickedRefs, null, false);
+
+  async Task OpenMoveAsync(
+    IReadOnlyCollection<PIM.Intranet.Services.CategoryTreeService.CategoryRef> categories,
+    string? preferredTarget, bool rootTarget)
+  {
+    var selection = categories.Distinct().ToArray();
+    if (selection.Length == 0) return;
+    var trees = selection.Select(category => category.CategoryTreeCode).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    if (trees.Length != 1)
+    {
+      Error = "Za skupni premik izberi kategorije iz istega drevesa.";
+      return;
+    }
+
+    DeleteDialogOpen = false;
+    MoveDialogOpen = true;
+    MovePreviewLoading = true;
+    MoveImpact = null;
+    MoveNodes = [];
+    MoveTargetOptions = [];
+    OperationError = null;
+    PendingCategories = selection;
+    MoveTree = trees[0];
+    MoveTarget = null;
+    MoveToRoot = rootTarget;
+    try
+    {
+      var nodesTask = Tree.GetCategoryOptionsAsync(MoveTree);
+      var impactTask = Tree.GetChangeImpactAsync(selection);
+      await Task.WhenAll(nodesTask, impactTask);
+      MoveNodes = await nodesTask;
+      MoveImpact = await impactTask;
+
+      var selectedPaths = MoveNodes
+        .Where(node => selection.Any(category => category.CategoryCode == node.CategoryCode))
+        .Select(node => node.CategoryPath).ToArray();
+      MoveTargetOptions = MoveNodes
+        .Where(node => !selectedPaths.Any(path => node.CategoryPath == path || node.CategoryPath.StartsWith(path + " > ", StringComparison.Ordinal)))
+        .Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1))
+        .ToList();
+
+      if (!rootTarget && preferredTarget is not null)
+      {
+        if (MoveTargetOptions.Any(option => option.Key == preferredTarget)) MoveTarget = preferredTarget;
+        else OperationError = "Kategorije ni mogoče spustiti same vase ali v njeno podkategorijo. Izberi drugo mesto.";
+      }
+    }
+    catch (Exception exception) { OperationError = exception.Message; }
+    finally { MovePreviewLoading = false; }
+  }
+
+  Task SelectMoveTarget(string? target)
+  {
+    MoveTarget = target;
+    if (target is not null)
+    {
+      MoveToRoot = false;
+      if (MoveImpact is not null) OperationError = null;
+    }
+    return Task.CompletedTask;
+  }
+
+  void SelectRootTarget()
+  {
+    MoveToRoot = true;
+    MoveTarget = null;
+    if (MoveImpact is not null) OperationError = null;
+  }
+
+  string? MoveDestinationLabel => MoveToRoot
+    ? $"{MoveTree} · koren drevesa"
+    : MoveTarget is null ? null : MoveNodes.FirstOrDefault(node => node.CategoryCode == MoveTarget)?.CategoryPath;
+
+  void CloseMoveDialog()
+  {
+    if (Busy) return;
+    MoveDialogOpen = false;
+    MoveImpact = null;
+    MoveTarget = null;
+    MoveToRoot = false;
+    OperationError = null;
+    PendingCategories = [];
+  }
+
+  async Task ConfirmMoveAsync()
+  {
+    if (PendingCategories.Count == 0 || MoveImpact is null || OperationError is not null || (!MoveToRoot && MoveTarget is null)) return;
+    Busy = true;
+    OperationError = null;
+    Message = null;
+    Error = null;
+    var movedSelection = PendingCategories.ToArray();
+    try
+    {
+      var result = await Tree.MoveCategoriesAsync(
+        movedSelection, MoveTree, MoveToRoot ? null : MoveTarget, await ActorAsync());
+      MoveDialogOpen = false;
+      Picked.Clear();
+      Collapsed.Clear();
+      Branch = "";
+      await RefreshTreeAfterChangeAsync();
+      Selected = Rows.FirstOrDefault(row => row.CategoryTreeCode == movedSelection[0].CategoryTreeCode
+        && row.CategoryCode == movedSelection[0].CategoryCode);
+      Message = result.RootCount == 1
+        ? $"Veja je premaknjena. Posodobljenih kategorij: {result.CategoryCount:N0}; prestavljenih uvrstitev izdelkov: {result.AssignmentCount:N0}."
+        : $"Premaknjenih vej: {result.RootCount:N0}. Posodobljenih kategorij: {result.CategoryCount:N0}; prestavljenih uvrstitev izdelkov: {result.AssignmentCount:N0}.";
+      PendingCategories = [];
+    }
+    catch (Exception exception) { OperationError = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  Task OpenDeleteAsync(PIM.Intranet.Services.CategoryTreeService.TreeRow row) =>
+    OpenDeleteAsync([CategoryRef(row)]);
+
+  Task OpenDeletePickedAsync() => OpenDeleteAsync(PickedRefs);
+
+  async Task OpenDeleteAsync(IReadOnlyCollection<PIM.Intranet.Services.CategoryTreeService.CategoryRef> categories)
+  {
+    var selection = categories.Distinct().ToArray();
+    if (selection.Length == 0) return;
+    MoveDialogOpen = false;
+    DeleteDialogOpen = true;
+    DeletePreviewLoading = true;
+    DeleteImpact = null;
+    DeleteConfirmation = "";
+    OperationError = null;
+    PendingCategories = selection;
+    try { DeleteImpact = await Tree.GetChangeImpactAsync(selection); }
+    catch (Exception exception) { OperationError = exception.Message; }
+    finally { DeletePreviewLoading = false; }
+  }
+
+  bool DeleteConfirmed => string.Equals(DeleteConfirmation.Trim(), "IZBRIŠI", StringComparison.OrdinalIgnoreCase);
+
+  void CloseDeleteDialog()
+  {
+    if (Busy) return;
+    DeleteDialogOpen = false;
+    DeleteImpact = null;
+    DeleteConfirmation = "";
+    OperationError = null;
+    PendingCategories = [];
+  }
+
+  async Task ConfirmDeleteAsync()
+  {
+    if (!DeleteConfirmed || DeleteImpact is null || PendingCategories.Count == 0) return;
+    Busy = true;
+    OperationError = null;
+    Message = null;
+    Error = null;
+    try
+    {
+      var result = await Tree.DeleteCategoriesAsync(PendingCategories, await ActorAsync());
+      DeleteDialogOpen = false;
+      Selected = null;
+      Editing = null;
+      AttributeEditing = null;
+      Picked.Clear();
+      Collapsed.Clear();
+      Branch = "";
+      await RefreshTreeAfterChangeAsync();
+      Message = $"Trajno odstranjenih kategorij: {result.CategoryCount:N0}. Odstranjenih uvrstitev izdelkov: {result.AssignmentCount:N0}; preslikav: {result.MappingCount:N0}. Izdelki niso bili izbrisani.";
+      PendingCategories = [];
+    }
+    catch (Exception exception) { OperationError = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task RefreshTreeAfterChangeAsync()
+  {
+    Trees = await Tree.GetTreeCodesAsync();
+    if (!string.IsNullOrWhiteSpace(TreeCode) && !Trees.Contains(TreeCode, StringComparer.OrdinalIgnoreCase)) TreeCode = "";
+    if (!Trees.Contains(NewTree, StringComparer.OrdinalIgnoreCase))
+      NewTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
+    Roots = [];
+    await LoadNewParentOptionsAsync();
+    await LoadCoverageAsync();
+    await LoadAsync();
+  }
 
   // Drevo se bere v izbranem jeziku. Ce imena v tem jeziku ni, obvelja slovensko - enako, kot to
   // za spletne poti dela canon.CategoryPathTranslated - a je tu oznaceno, da se vidi, da je to
@@ -497,6 +942,8 @@
       int? organizationId = int.TryParse(OrganizationFilter, out var parsedOrganization) ? parsedOrganization : null;
       int? level = int.TryParse(Level, out var parsedLevel) ? parsedLevel : null;
       Rows = await Tree.GetTreeAsync(TreeCode, organizationId, Language, Search, Branch, OnlyMissing, OnlyWithProducts, level);
+      if (Selected is not null)
+        Selected = Rows.FirstOrDefault(row => CategoryKey(row) == CategoryKey(Selected));
 
       // Ob iskanju ali ozjem filtru je vsako zlaganje skoda: zadetek bi bil skrit pod vejo, ki jo
       // je uporabnik zlozil prej in nanjo ni vec mislil.
@@ -558,13 +1005,18 @@
     Error = null;
     try
     {
-      var changed = await Tree.SaveTranslationsAsync(row.CategoryTreeCode, row.CategoryCode, payload, await ActorAsync());
-      Message = changed == 0
+      var result = await Tree.SaveTranslationsAsync(row.CategoryTreeCode, row.CategoryCode, payload, await ActorAsync());
+      Message = result.Changed == 0
         ? "Imena so bila že takšna; nič se ni spremenilo."
-        : $"Shranjenih imen: {changed}. Poti, ki gredo skozi »{row.CategoryName}«, so odslej prevedene.";
+        : result.CategoryCode == row.CategoryCode
+          ? $"Shranjenih imen: {result.Changed}. Poti, ki gredo skozi »{row.CategoryName}«, so odslej prevedene."
+          : $"Shranjenih imen: {result.Changed}. Slovensko ime se je spremenilo, zato sta se koda ({result.CategoryCode}) in pot posodobili tudi za podkategorije.";
       CancelEdit();
       await LoadCoverageAsync();
       await LoadAsync();
+      // Ce se je koda ob preimenovanju spremenila, stara koda v osvezenem seznamu ne obstaja vec
+      // (LoadAsync bi izbiro izgubil) - ponovna izbira po dejanski, morda novi kodi.
+      Selected = Rows.FirstOrDefault(candidate => candidate.CategoryTreeCode == row.CategoryTreeCode && candidate.CategoryCode == result.CategoryCode);
     }
     // Postopek zavrne neznan jezik in neobstojeco kategorijo; sporocilo pride iz baze, ker je
     // pravilo tam.

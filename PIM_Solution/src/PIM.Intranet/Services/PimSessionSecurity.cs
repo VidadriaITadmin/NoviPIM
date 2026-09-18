@@ -46,6 +46,51 @@ public sealed class UserSecurityStateService(IConfiguration configuration)
       reader.GetGuid(reader.GetOrdinal("SecurityStamp")),
       roles.Length == 0 ? [] : roles.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
   }
+
+  /// <summary>
+  /// Kdaj je bil racun nazadnje viden (migracija 224); null, ce se nikoli ali ne obstaja. Namenoma
+  /// locena poizvedba od <see cref="GetAsync"/> zgoraj — tista ob vsakem klicu "zadnjic viden"
+  /// prepise na zdaj, tu pa gre za prijavo, ki mora prebrati vrednost izpred TEGA poskusa.
+  /// </summary>
+  public async Task<DateTime?> GetLastSeenUtcAsync(string userName, CancellationToken cancellationToken = default)
+  {
+    var connectionString = ConnectionStringResolver.Resolve(configuration);
+    if (string.IsNullOrWhiteSpace(connectionString)) return null;
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("sec.GetUserPresence", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure,
+      CommandTimeout = 15,
+    };
+    command.Parameters.AddWithValue("@UserName", userName);
+    var result = await command.ExecuteScalarAsync(cancellationToken);
+    return result is DateTime lastSeen ? lastSeen : null;
+  }
+
+  /// <summary>
+  /// Prevzem seje (migracija 224): nov zig prekine vse obstojece seje tega uporabnika, ker jih
+  /// <see cref="PimSessionValidator"/> ob njihovi naslednji zahtevi zavrne. Vrne novi zig, da ga
+  /// klicatelj takoj vpise v piskotek nove seje — stari <c>AuthenticatedLocalUser.SecurityStamp</c>
+  /// bi po tem klicu ze bil neveljaven.
+  /// </summary>
+  public async Task<Guid> ForceSignOutAsync(string userName, CancellationToken cancellationToken = default)
+  {
+    var connectionString = ConnectionStringResolver.Resolve(configuration);
+    if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException("Manjka ConnectionStrings:Pim.");
+
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("sec.ForceSignOutUser", connection)
+    {
+      CommandType = System.Data.CommandType.StoredProcedure,
+      CommandTimeout = 15,
+    };
+    command.Parameters.AddWithValue("@UserName", userName);
+    var result = await command.ExecuteScalarAsync(cancellationToken);
+    return result is Guid newStamp ? newStamp : throw new InvalidOperationException("Prevzem seje ni uspel.");
+  }
 }
 
 /// <summary>
@@ -87,12 +132,15 @@ public static class PimSessionValidator
       return;
     }
 
-    if (state is null || !state.IsEnabled) { await RejectAsync(context); return; }
+    if (state is null || !state.IsEnabled) { await RejectAsync(context, "onemogocen"); return; }
 
     var stampInCookie = principal!.FindFirst(PimClaims.SecurityStamp)?.Value;
     if (!Guid.TryParse(stampInCookie, out var cookieStamp) || cookieStamp != state.SecurityStamp)
     {
-      await RejectAsync(context);
+      // Zig se ne ujema: nekdo drug se je prijavil s tem racunom (224) ali so se vloge/geslo
+      // spremenili (181). Locenega vzroka za ti dve vejici ne poznamo, a obe sta "seja",
+      // ne "racun izklopljen" — /prijava zato pokaze splosno, a razumljivo sporocilo.
+      await RejectAsync(context, "seja");
       return;
     }
 
@@ -117,8 +165,14 @@ public static class PimSessionValidator
     return new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme));
   }
 
-  static async Task RejectAsync(CookieValidatePrincipalContext context)
+  /// <summary>
+  /// <paramref name="reason"/> potuje naprej do <c>OnRedirectToLogin</c> (Program.cs) prek
+  /// <see cref="HttpContext.Items"/> — edini prostor, ki prezivi od tega preverjanja piskotka do
+  /// izziva za avtorizacijo znotraj iste zahteve. Prazen "razlog" pomeni "ni bilo seje", ne napako.
+  /// </summary>
+  static async Task RejectAsync(CookieValidatePrincipalContext context, string? reason = null)
   {
+    if (reason is not null) context.HttpContext.Items["pim:razlogOdjave"] = reason;
     context.RejectPrincipal();
     await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
   }
@@ -163,6 +217,37 @@ public sealed class PimLoginThrottle
   }
 
   public void RegisterSuccess(string? userName, string? remoteAddress) => attempts.TryRemove(Key(userName, remoteAddress), out _);
+}
+
+/// <summary>
+/// Kratkozivi zeton za prevzem seje na strani prijave (migracija 224, A3-slog: ista logika kot
+/// SecurityStamp, samo za en drug sprozilec — "nekdo drug se prijavlja s tem racunom", ne
+/// "vloga se je spremenila"). Prvi POST na /auth/prijava preveri geslo in ob ze aktivnem racunu
+/// namesto piskotka vrne ta zeton; drugi POST (po potrditvi "Da, prevzemi") ga porabi. Geslo se
+/// med tema koraki namenoma ne prenasa nazaj v obrazec — ostalo bi v HTML-ju in dnevnikih. Zeton
+/// sam je dovolj: je nakljucen (Guid), enkraten, kratek (2 min) in vezan na eno uporabnisko ime,
+/// torej dokazuje "to geslo je bilo pravkar preverjeno" brez ponovnega vnosa.
+/// </summary>
+public sealed class PimLoginTakeover
+{
+  public static readonly TimeSpan ActiveWindow = TimeSpan.FromMinutes(3);
+  static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(2);
+
+  readonly ConcurrentDictionary<Guid, (string UserName, bool RememberMe, DateTime ExpiresUtc)> pending = new();
+
+  public Guid Issue(string userName, bool rememberMe)
+  {
+    var token = Guid.NewGuid();
+    pending[token] = (userName, rememberMe, DateTime.UtcNow + TokenLifetime);
+    return token;
+  }
+
+  /// <summary>Porabi zeton (enkraten); null, ce ne obstaja ali je potekel.</summary>
+  public (string UserName, bool RememberMe)? Consume(Guid token)
+  {
+    if (!pending.TryRemove(token, out var entry) || entry.ExpiresUtc < DateTime.UtcNow) return null;
+    return (entry.UserName, entry.RememberMe);
+  }
 }
 
 /// <summary>

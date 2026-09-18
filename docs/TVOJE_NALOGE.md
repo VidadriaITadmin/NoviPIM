@@ -377,7 +377,7 @@ stanje že obdelanega zajema.
 
 ### 11. Kam se Magento CSV dostavi?
 
-Izvoz naredi `magento-products.csv` in `magento-customers.csv` ter oznako
+Izvoz naredi `katalog.csv` in `stranke.csv` ter oznako
 `magento-export.complete`. Ni urnika, ni dostave, ni evidence oddanih datotek.
 
 Povej troje: **kako** (mapa, FTP/SFTP, HTTP), **kam** (pot ali naslov; poverilnice v

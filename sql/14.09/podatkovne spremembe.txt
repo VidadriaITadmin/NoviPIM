@@ -1,0 +1,5 @@
+Prave podatkovne spremembe med testiranjem (ne shema, ampak realni podatki, ker sem workerje dejansko pognal v živo proti pravemu SAOP)
+
+Zaloga (stock.SyncRun/stock.LandingRecord/stock.Position) osvežena za vsa 4 podjetja: IQLighting 8.770 zapisov, DEMO 16, Vidadria 3.077, Ediito 3.116
+Celoten katalog (raw.Inbox → mapirano v canon.*) osvežen za vsa 4 podjetja: IQLighting 169.579, DEMO 1.817, Vidadria 10.486, Ediito 1.391 zapisov
+Nekaj testnih klicev za GetPrices (majhne količine, do 421 zapisov), pospravljeno prek --map-run, brez ostankov

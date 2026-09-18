@@ -15,7 +15,42 @@ public sealed record CustomerGeneral(
   string? CustomerTypeCode, string? CustomerKind, string? PayerKind,
   bool PackagingDiscountEnabled, bool ValueDiscountEnabled, bool B2bPlusEnabled,
   DateTime? B2bPlusValidFrom, DateTime? B2bPlusValidTo, bool WebEnabled,
-  string? MagentoGroupKey, string? CustomerTypeName);
+  string? MagentoGroupKey, string? CustomerTypeName,
+  bool HasManualGeneral, string? GeneralUpdatedBy, DateTime? GeneralUpdatedUtc);
+
+/// <summary>
+/// Osnutek rocnega prepisa splosnih podatkov stranke (migracija 200). Isto nacelo kot pri
+/// kontaktih: obrazec ureja rocni prepis, ne ucinkovito vrednost, zato je to svoj razred in ne
+/// <see cref="CustomerGeneral"/> sam.
+/// </summary>
+public sealed class CustomerGeneralDraft
+{
+  public string? CustomerKey { get; set; }
+  public string? Name { get; set; }
+  public string? PayerCode { get; set; }
+  public string? PayerName { get; set; }
+  public string? PriceListCode { get; set; }
+  public string? DiscountPriceListCode { get; set; }
+  public string? Address { get; set; }
+  public string? Street { get; set; }
+  public string? HouseNumber { get; set; }
+  public string? City { get; set; }
+  public string? PostalCode { get; set; }
+  public string? Country { get; set; }
+  public string? TaxNumber { get; set; }
+  public string? RegistrationNumber { get; set; }
+  public string? ActivityCode { get; set; }
+  public bool? SubjectToVat { get; set; }
+  public int? PaymentDays { get; set; }
+  public decimal? RebatePercent { get; set; }
+  public bool? IsActive { get; set; }
+  public string? CustomerType { get; set; }
+  public string? LegalForm { get; set; }
+  public bool? IsDefaulter { get; set; }
+  public bool? UpfrontPayment { get; set; }
+  public string? LanguageId { get; set; }
+  public string? CurrencyCode { get; set; }
+}
 
 public sealed record CustomerGroupDiscount(string ItemGroupCode, decimal DiscountPercent, decimal? MinQuantity, DateTime? ValidFrom, DateTime? ValidTo, string CustomerGroupCode);
 public sealed record CustomerValueTier(byte TierNumber, decimal ThresholdGrossExVat, decimal PercentValue, bool IsActive);
@@ -93,7 +128,9 @@ public sealed class CustomerCardService(IConfiguration configuration)
       PimDb.Bool(reader, "PackagingDiscountEnabled"), PimDb.Bool(reader, "ValueDiscountEnabled"),
       PimDb.Bool(reader, "B2bPlusEnabled"), PimDb.NullableDateTime(reader, "B2bPlusValidFrom"),
       PimDb.NullableDateTime(reader, "B2bPlusValidTo"), PimDb.Bool(reader, "WebEnabled"),
-      PimDb.Text(reader, "MagentoGroupKey"), PimDb.Text(reader, "CustomerTypeName"));
+      PimDb.Text(reader, "MagentoGroupKey"), PimDb.Text(reader, "CustomerTypeName"),
+      PimDb.Bool(reader, "HasManualGeneral"), PimDb.Text(reader, "GeneralUpdatedBy"),
+      PimDb.NullableDateTime(reader, "GeneralUpdatedUtc"));
 
     var groupDiscounts = await NextAsync(reader, row => new CustomerGroupDiscount(
       PimDb.TextOrEmpty(row, "ItemGroupCode"), PimDb.Decimal(row, "DiscountPercent"),
@@ -165,6 +202,53 @@ public sealed class CustomerCardService(IConfiguration configuration)
 
   static object Trimmed(string? value) =>
     string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+  /// <summary>
+  /// Rocni prepis splosnih podatkov stranke (migracija 200). Obrazec ureja UCINKOVITO vrednost
+  /// (glej klicatelja v CustomerDetail.razor: draft se napolni iz <see cref="CustomerGeneral"/>,
+  /// ne iz surovega prepisa) - uporabnik vidi trenutni podatek in ga po potrebi popravi, namesto
+  /// praznega obrazca. Polje, ki ga uporabnik ne spremeni, procedura sama prepozna kot enako
+  /// trenutnemu SAOP izvoru in ga NE zapise kot prepis (primerjava je tu, ne v klicatelju), zato
+  /// obstojeci prepisi na drugih poljih ostanejo nedotaknjeni.
+  /// </summary>
+  public async Task SaveGeneralAsync(int organizationId, long customerId, CustomerGeneralDraft draft, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("b2b.SaveCustomerGeneral", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@CustomerId", SqlDbType.BigInt).Value = customerId;
+    command.Parameters.Add("@CustomerKey", SqlDbType.NVarChar, 100).Value = Trimmed(draft.CustomerKey);
+    command.Parameters.Add("@Name", SqlDbType.NVarChar, 300).Value = Trimmed(draft.Name);
+    command.Parameters.Add("@PayerCode", SqlDbType.NVarChar, 100).Value = Trimmed(draft.PayerCode);
+    command.Parameters.Add("@PayerName", SqlDbType.NVarChar, 300).Value = Trimmed(draft.PayerName);
+    command.Parameters.Add("@PriceListCode", SqlDbType.NVarChar, 100).Value = Trimmed(draft.PriceListCode);
+    command.Parameters.Add("@DiscountPriceListCode", SqlDbType.NVarChar, 100).Value = Trimmed(draft.DiscountPriceListCode);
+    command.Parameters.Add("@Address", SqlDbType.NVarChar, 400).Value = Trimmed(draft.Address);
+    command.Parameters.Add("@Street", SqlDbType.NVarChar, 400).Value = Trimmed(draft.Street);
+    command.Parameters.Add("@HouseNumber", SqlDbType.NVarChar, 60).Value = Trimmed(draft.HouseNumber);
+    command.Parameters.Add("@City", SqlDbType.NVarChar, 200).Value = Trimmed(draft.City);
+    command.Parameters.Add("@PostalCode", SqlDbType.NVarChar, 40).Value = Trimmed(draft.PostalCode);
+    command.Parameters.Add("@Country", SqlDbType.NVarChar, 20).Value = Trimmed(draft.Country);
+    command.Parameters.Add("@TaxNumber", SqlDbType.NVarChar, 40).Value = Trimmed(draft.TaxNumber);
+    command.Parameters.Add("@RegistrationNumber", SqlDbType.NVarChar, 40).Value = Trimmed(draft.RegistrationNumber);
+    command.Parameters.Add("@ActivityCode", SqlDbType.NVarChar, 40).Value = Trimmed(draft.ActivityCode);
+    command.Parameters.Add("@SubjectToVat", SqlDbType.Bit).Value = (object?)draft.SubjectToVat ?? DBNull.Value;
+    command.Parameters.Add("@PaymentDays", SqlDbType.Int).Value = (object?)draft.PaymentDays ?? DBNull.Value;
+    var rebateParam = command.Parameters.Add("@RebatePercent", SqlDbType.Decimal);
+    rebateParam.Precision = 9; rebateParam.Scale = 4;
+    rebateParam.Value = (object?)draft.RebatePercent ?? DBNull.Value;
+    command.Parameters.Add("@IsActive", SqlDbType.Bit).Value = (object?)draft.IsActive ?? DBNull.Value;
+    command.Parameters.Add("@CustomerType", SqlDbType.NVarChar, 10).Value = Trimmed(draft.CustomerType);
+    command.Parameters.Add("@LegalForm", SqlDbType.NVarChar, 10).Value = Trimmed(draft.LegalForm);
+    command.Parameters.Add("@IsDefaulter", SqlDbType.Bit).Value = (object?)draft.IsDefaulter ?? DBNull.Value;
+    command.Parameters.Add("@UpfrontPayment", SqlDbType.Bit).Value = (object?)draft.UpfrontPayment ?? DBNull.Value;
+    command.Parameters.Add("@LanguageId", SqlDbType.NVarChar, 20).Value = Trimmed(draft.LanguageId);
+    command.Parameters.Add("@CurrencyCode", SqlDbType.NVarChar, 20).Value = Trimmed(draft.CurrencyCode);
+    command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
 
   /// <summary>Zaznamek uporabnika. Besedilo brez vsebine procedura zavrne.</summary>
   public async Task AddNoteAsync(int organizationId, long customerId, string body, string actor, CancellationToken cancellationToken = default)

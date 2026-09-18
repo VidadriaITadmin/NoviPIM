@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?><ItemsGeneralData>
+  <ItemGeneralData>
+    <ItemID>3F.58616</ItemID>
+    <ItemLastModified>2026-08-24T04:41:23.282Z</ItemLastModified>
+    <ItemTitle1>3F Linda prahotesna</ItemTitle1>
+    <ItemTitle2>LED 150cm 66W IP66 4K siva</ItemTitle2>
+    <GeneralData>
+      <ItemUnitOfMeas>kom</ItemUnitOfMeas>
+      <ItemGroup>3FILIPPI</ItemGroup>
+      <AccountingBookGroupID>3FILIPPI</AccountingBookGroupID>
+      <WebPublish>d</WebPublish>
+      <CustomsTariffNo>94051140</CustomsTariffNo>
+      <ItemDepartment>B</ItemDepartment>
+      <ItemEANCode>8015466122625</ItemEANCode>
+    </GeneralData>
+    <SalesData>
+      <DiscountGroup1ID>3FILIPPI</DiscountGroup1ID>
+      <IsActive>D</IsActive>
+      <AdditionalProperty1ID>B</AdditionalProperty1ID>
+    </SalesData>
+    <StockData>
+      <SupplierID>91086973</SupplierID>
+      <ManufacturerID>00001498</ManufacturerID>
+    </StockData>
+    <PropertiesData>
+      <ItemWeightPerUnit>3.7600</ItemWeightPerUnit>
+      <ItemGrossWeight>0.0000</ItemGrossWeight>
+      <ItemWidth>170.00000000</ItemWidth>
+      <ItemHeight>105.00000000</ItemHeight>
+      <ItemDimensionUOM>mm</ItemDimensionUOM>
+      <ItemCountryOfOrigin>IT</ItemCountryOfOrigin>
+    </PropertiesData>
+  </ItemGeneralData>
+</ItemsGeneralData>

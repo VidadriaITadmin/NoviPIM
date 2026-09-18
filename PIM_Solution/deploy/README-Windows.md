@@ -14,6 +14,8 @@ Ustvarite izključno bazo `PIM`, loginom dodelite najmanjše pravice in migracij
 
 ## Workerji, opravila in računi
 
+Od 2026-09-17 cikle (zaloga, katalog, nadzor, nočni tok, samotest) poganja razporejevalnik v samem intranetu (`WorkerSchedulerService`, migracija 221; glej `docs/WORKERS.md`, razdelek »Razporejevalnik v aplikaciji«). Scheduled Tasks za cikle niso več potrebni; objava intraneta mora prinesti mapo `Workerji\` (`dotnet publish PIM.Intranet`, `deploy\Publish-All.ps1`), bazen pa naj bo »Always running« s predhodnim nalaganjem (`deploy\Configure-IisAlwaysRunning.ps1`, kot administrator), sicer po recikliranju ura stoji do prve zahteve. Stanje in zaostanek vsakega cikla sta na `/sistem/workerji`.
+
 Za vsak worker uporabite namenski service account brez interaktivne prijave. `Install-Workers.ps1` objavi self-contained `win-x64`; `Configure-ScheduledTasks.ps1` namesti `PIM.Watchdog` in `PIM.AlertDispatcher`. Drugim pipeline workerjem nastavite interval skladno z `ops.ScheduleProfile`. Račun potrebuje samo Read/Execute na svoji mapi, Modify na izrecnih landing mapah in SQL EXECUTE. Gesla vnesite interaktivno ali prek upravljanega trezorja. Preverite, da prekrivanje iste organizacije/pipeline zavrne drugi zagon.
 
 ## IIS namestitev

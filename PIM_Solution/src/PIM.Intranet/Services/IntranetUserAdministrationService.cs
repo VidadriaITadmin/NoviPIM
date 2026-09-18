@@ -6,9 +6,13 @@ namespace PIM.Intranet.Services;
 /// Naslov za opozorila. Napaka odhodne poti, ki je uporabnik pet minut ne potrdi, gre sem;
 /// brez naslova ni komu pisati in stopnjevanje tiho odpade.
 /// </param>
-public sealed record IntranetUserRow(string UserName, string DisplayName, string AuthSource, string? DomainIdentity, bool IsEnabled, string Roles, string? Email);
+/// <param name="LastSeenUtc">Kdaj je bil racun nazadnje viden (migracija 224); null, ce se nikoli.</param>
+public sealed record IntranetUserRow(string UserName, string DisplayName, string AuthSource, string? DomainIdentity, bool IsEnabled, string Roles, string? Email, bool ReceivesStockReplenishmentEmail, DateTime? LastSeenUtc);
 
-public sealed class IntranetUserAdministrationService(IConfiguration configuration, ActiveDirectoryService activeDirectory)
+/// <summary>Ena vrsta sistemskega alarma (ops.Alert.AlertKind, glej CK_UserAlertSubscription_Kind) in ali je uporabnik nanjo narocen.</summary>
+public sealed record UserAlertSubscriptionRow(string AlertKind, bool IsSubscribed);
+
+public sealed class IntranetUserAdministrationService(IConfiguration configuration, ActiveDirectoryService activeDirectory, UserSecurityStateService security)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration) ?? throw new InvalidOperationException("Manjka ConnectionStrings:Pim.");
 
@@ -36,21 +40,70 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
     await using var command = new SqlCommand("""
       SELECT localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled,
         STRING_AGG(roleValue.RoleCode, N', ') WITHIN GROUP (ORDER BY roleValue.RoleCode) AS Roles,
-        localUser.Email
+        localUser.Email, localUser.ReceivesStockReplenishmentEmail, localUser.LastSeenUtc
       FROM sec.LocalUser localUser
       LEFT JOIN sec.LocalUserRole userRole ON userRole.LocalUserId = localUser.LocalUserId
       LEFT JOIN sec.Role roleValue ON roleValue.RoleId = userRole.RoleId
-      GROUP BY localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled, localUser.Email
+      GROUP BY localUser.UserName, localUser.DisplayName, localUser.AuthSource, localUser.DomainIdentity, localUser.IsEnabled,
+        localUser.Email, localUser.ReceivesStockReplenishmentEmail, localUser.LastSeenUtc
       ORDER BY localUser.UserName;
       """, connection);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     while (await reader.ReadAsync(cancellationToken))
     {
-      users.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4), reader.IsDBNull(5) ? "—" : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6)));
+      users.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetBoolean(4), reader.IsDBNull(5) ? "—" : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetBoolean(7), reader.IsDBNull(8) ? null : reader.GetDateTime(8)));
     }
 
     return users;
   }
+
+  /// <summary>Nadomesti CELOTEN nabor vlog uporabnika (sec.SetUserRoles, migracija 225) — ne doda/odvzame ene same.</summary>
+  public async Task SetRolesAsync(string userName, IReadOnlyList<string> roleCodes, CancellationToken cancellationToken = default)
+  {
+    if (roleCodes.Count == 0) throw new InvalidOperationException("Vsaj ena vloga je obvezna.");
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("sec.SetUserRoles", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    command.Parameters.AddWithValue("@UserName", userName);
+    command.Parameters.AddWithValue("@RoleCodesCsv", string.Join(',', roleCodes));
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  /// <summary>Vseh sedem znanih vrst alarmov + ali je uporabnik nanje narocen (intranet.GetUserAlertSubscriptions, 225).</summary>
+  public async Task<IReadOnlyList<UserAlertSubscriptionRow>> GetAlertSubscriptionsAsync(string userName, CancellationToken cancellationToken = default)
+  {
+    var rows = new List<UserAlertSubscriptionRow>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetUserAlertSubscriptions", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    command.Parameters.AddWithValue("@UserName", userName);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(reader.GetString(0), reader.GetBoolean(1)));
+    return rows;
+  }
+
+  /// <summary>Vklopi ali izklopi eno vrsto alarma za enega uporabnika (intranet.SetUserAlertSubscription, 214).</summary>
+  public async Task SetAlertSubscriptionAsync(string userName, string alertKind, bool enabled, string actor, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.SetUserAlertSubscription", connection) { CommandType = System.Data.CommandType.StoredProcedure };
+    command.Parameters.AddWithValue("@UserName", userName);
+    command.Parameters.AddWithValue("@AlertKind", alertKind);
+    command.Parameters.AddWithValue("@IsEnabled", enabled);
+    command.Parameters.AddWithValue("@Actor", actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  /// <summary>
+  /// Prisilna odjava (migracija 224): nov zig prekine vse obstojece seje tega uporabnika ob
+  /// njihovi naslednji zahtevi (PimSessionValidator). Uporabno, kadar admin ne caka na prijavo
+  /// z druge naprave, ampak nekoga odjavi sam — npr. pozabljen odprt racunalnik v skladiscu.
+  /// </summary>
+  public async Task ForceSignOutAsync(string userName, CancellationToken cancellationToken = default) =>
+    await security.ForceSignOutAsync(userName, cancellationToken);
 
   /// <summary>
   /// Nov lokalni racun. Geslo se zgosti tu in v bazo gre samo zgoscena vrednost — procedura
@@ -158,5 +211,21 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
     command.Parameters.AddWithValue("@UserName", userName);
     if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
       throw new InvalidOperationException("Uporabnika ni bilo mogoce najti.");
+  }
+
+  /// <summary>
+  /// Ali uporabnik prejema dnevni e-mail o zalogi pod MID (PIM.StockReplenishmentWorker). Ločeno
+  /// od splošnega naslova za opozorila zgoraj — ta klic je za en specifičen mail, ne za vse.
+  /// </summary>
+  public async Task SetStockReplenishmentSubscriptionAsync(string userName, bool receives, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "UPDATE sec.LocalUser SET ReceivesStockReplenishmentEmail = @Receives WHERE UserName = @UserName;", connection);
+    command.Parameters.AddWithValue("@Receives", receives);
+    command.Parameters.AddWithValue("@UserName", userName);
+    if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+      throw new InvalidOperationException("Uporabnika ni bilo mogoče najti.");
   }
 }

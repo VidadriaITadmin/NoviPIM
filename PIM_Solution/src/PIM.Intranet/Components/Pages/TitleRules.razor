@@ -13,8 +13,49 @@
          Subtitle="Izberi, iz česa naj se sestavi spletni naziv izdelka. En sam izbor da naziv v vseh jezikih hkrati."
          Crumbs="Crumbs" />
 
+<PimTabs Active="titles" Tabs="RulesTabs.Tabs" Label="Pravila in izvor podatkov" />
+
+<section class="ui-card rule-guide" aria-labelledby="title-guide-title">
+  <div>
+    <h2 id="title-guide-title">Varno urejanje spletnih nazivov</h2>
+    <p>Predogled uporablja trenutni osnutek, zapis pa pravilo pred uporabo samodejno shrani. Tako prikaz in dejanski rezultat ne moreta biti različna.</p>
+  </div>
+  <ol class="rule-steps">
+    <li><strong>Izberi pravilo</strong><span>Obstoječe pravilo se odpre s trenutnimi nastavitvami.</span></li>
+    <li><strong>Sestavi in preveri</strong><span>Dodaj dele; predogled pokaže rezultat na pravih izdelkih.</span></li>
+    <li><strong>Zapiši nazive</strong><span>Privzeto se dopolnijo samo manjkajoči nazivi.</span></li>
+  </ol>
+</section>
+
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+@if (Rules.Count > 0)
+{
+  <div class="rule-summary" aria-label="Povzetek pravil za nazive">
+    <div class="rule-summary-item"><span>Vseh pravil</span><strong>@Rules.Count.ToString("N0")</strong></div>
+    <div class="rule-summary-item good"><span>Aktivnih</span><strong>@Rules.Count(rule => rule.IsActive).ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Za kategorijo</span><strong>@Rules.Count(rule => !string.IsNullOrWhiteSpace(rule.CategoryCode)).ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Za en jezik</span><strong>@Rules.Count(rule => !string.IsNullOrWhiteSpace(rule.LanguageCode)).ToString("N0")</strong></div>
+  </div>
+}
+
+<section class="ui-card title-rule-picker" aria-labelledby="rule-picker-title">
+  <div>
+    <h2 id="rule-picker-title">Pravilo za urejanje</h2>
+    <p>Izberi obstoječe pravilo ali začni novega. Aktivno pravilo z najvišjo prednostjo je odprto samodejno.</p>
+  </div>
+  <label class="form-field">Izbrano pravilo
+    <select class="filter-select" value="@(EditingId?.ToString() ?? "")" @onchange="SelectRuleAsync">
+      <option value="">— novo pravilo —</option>
+      @foreach (var rule in Rules)
+      {
+        <option value="@rule.TitleRuleId">@rule.RuleCode — @rule.Name @(rule.IsActive ? "" : "(neaktivno)")</option>
+      }
+    </select>
+  </label>
+  <button type="button" class="secondary-button" disabled="@Busy" @onclick="NewRule">Novo pravilo</button>
+</section>
 
 @* Stran je namenoma ena sama: seznam pravil, izbirnik sestavnih delov in predogled na istem
    mestu (uporabnik 2026-09-02: stran mora biti pregledna). Prenova 2026-09-03: uporabnik ne
@@ -81,8 +122,11 @@
   {
     @if (Draft.Blocks.Count == 0)
     {
-      <p class="card-note">Naziv je še prazen. Dodaj spodaj prvi sestavni del — npr. ERP naziv ali
-        kategorijo — nato dodajaj atribute, ki naj bodo v nazivu.</p>
+      <div class="empty-title-start">
+        <p>Naziv je še prazen. Začni s priporočeno sestavo ali dodaj posamezen sestavni del.</p>
+        <button type="button" class="secondary-button" @onclick='() => UsePresetAsync("ERP_CATEGORY")'>ERP naziv + kategorija</button>
+        <button type="button" class="secondary-button" @onclick='() => UsePresetAsync("ERP_MANUFACTURER")'>ERP naziv + proizvajalec</button>
+      </div>
     }
     <ol class="block-list">
       @for (var index = 0; index < Draft.Blocks.Count; index++)
@@ -244,8 +288,8 @@
     </label>
     <label class="filter-check"><input type="checkbox" @bind="OnlyMissing" @bind:after="PreviewDraftAsync" /> Samo izdelki brez spletnega naziva v tem jeziku</label>
     <div class="form-action">
-      <button type="button" class="primary-button" disabled="@(Busy || EditingId is null || !Draft.IsActive)" title="Zapiše sestavljene nazive v izbranem jeziku za izdelke, ki jih pravilo doseže"
-              @onclick="ApplyAsync">Zapiši nazive (@(OnlyMissing ? "samo manjkajoče" : "tudi prepis obstoječih"))</button>
+      <button type="button" class="primary-button" disabled="@(Busy || EditingId is null || !Draft.IsActive || !HasContent())" title="Najprej shrani trenutno pravilo, nato zapiše sestavljene nazive v izbranem jeziku"
+              @onclick="ApplyAsync">Shrani pravilo in zapiši nazive (@(OnlyMissing ? "samo manjkajoče" : "tudi prepis obstoječih"))</button>
     </div>
   </div>
   <PimState Loading="PreviewLoading" Error="@PreviewError" Empty="@(Preview.Count == 0)" EmptyText="Predogled je prazen: pravilo ne doseže nobenega izdelka ali pa vsi že imajo naziv." LoadingText="Sestavljanje nazivov …">
@@ -265,23 +309,26 @@
   </PimState>
 </section>
 
-<section class="ui-card data-card section-gap">
-  <PimTable Caption="Pravila" Columns="RuleColumns">
-    <Rows>
-      @foreach (var rule in Rules)
-      {
-        <tr class="@(rule.IsActive ? null : "is-inactive")">
-          <td><button type="button" class="link-button" @onclick="() => Edit(rule)">@rule.RuleCode</button><div class="tree-path">@rule.Name</div></td>
-          <td>@(rule.CategoryTreeCode ?? "vsa drevesa")<div class="tree-path">@(rule.CategoryPath ?? "privzeto za drevo")</div></td>
-          <td>@(rule.LanguageCode ?? "vsi")</td>
-          <td>@Summarize(rule)</td>
-          <td><PimChip Text="@(rule.IsActive ? "aktivno" : "neaktivno")" Tone="@(rule.IsActive ? "good" : null)" /></td>
-          <td>@rule.UpdatedUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")<div class="tree-path">@rule.UpdatedBy</div></td>
-        </tr>
-      }
-    </Rows>
-  </PimTable>
-</section>
+<details class="ui-card compact-details section-gap">
+  <summary>Vsa pravila in njihove prednosti (@Rules.Count.ToString("N0"))</summary>
+  <div class="data-card">
+    <PimTable Caption="Pravila" Columns="RuleColumns">
+      <Rows>
+        @foreach (var rule in Rules)
+        {
+          <tr class="@(rule.IsActive ? null : "is-inactive")">
+            <td><button type="button" class="link-button" @onclick="() => Edit(rule)">@rule.RuleCode</button><div class="tree-path">@rule.Name</div></td>
+            <td>@(rule.CategoryTreeCode ?? "vsa drevesa")<div class="tree-path">@(rule.CategoryPath ?? "privzeto za drevo")</div></td>
+            <td>@(rule.LanguageCode ?? "vsi")</td>
+            <td>@Summarize(rule)</td>
+            <td><PimChip Text="@(rule.IsActive ? "aktivno" : "neaktivno")" Tone="@(rule.IsActive ? "good" : null)" /></td>
+            <td>@rule.UpdatedUtc.ToPimLocal().ToString("dd.MM.yyyy HH:mm")<div class="tree-path">@rule.UpdatedBy</div></td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </div>
+</details>
 
 @code {
   sealed class BlockDraft
@@ -354,12 +401,14 @@
     try
     {
       Organizations = await Data.GetOrganizationsAsync();
-      PreviewOrganizationId = Organizations.FirstOrDefault(organization => organization.OrganizationId == 3)?.OrganizationId
-        ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+      var currentOrganization = await Data.GetCurrentOrganizationAsync();
+      PreviewOrganizationId = currentOrganization?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
       Categories = await Titles.GetCategoriesAsync();
       Trees = Categories.Select(category => category.CategoryTreeCode).Distinct().OrderBy(tree => tree).ToArray();
       Rules = await Titles.GetRulesAsync();
       AllAttributes = await Attributes.GetDefinitionsAsync(null, false, false, false);
+      var firstRule = Rules.Where(rule => rule.IsActive).OrderBy(rule => rule.SortOrder).FirstOrDefault() ?? Rules.FirstOrDefault();
+      if (firstRule is not null) await Edit(firstRule);
     }
     catch (Exception exception) { Error = exception.Message; }
   }
@@ -583,6 +632,16 @@
 
   void RemoveBlock(int index) => Draft.Blocks.RemoveAt(index);
 
+  async Task UsePresetAsync(string preset)
+  {
+    Draft.Blocks = preset switch
+    {
+      "ERP_MANUFACTURER" => [new BlockDraft { Kind = "ErpName" }, new BlockDraft { Kind = "Manufacturer" }],
+      _ => [new BlockDraft { Kind = "ErpName" }, new BlockDraft { Kind = "Category" }],
+    };
+    await PreviewDraftAsync();
+  }
+
   // --- Nalaganje, shranjevanje, predogled, zapis --------------------------------------------
 
   async Task Edit(TitleRuleService.RuleRow rule)
@@ -606,6 +665,13 @@
     await PreviewDraftAsync();
   }
 
+  async Task SelectRuleAsync(ChangeEventArgs args)
+  {
+    if (!int.TryParse(args.Value?.ToString(), out var id)) { NewRule(); return; }
+    var rule = Rules.FirstOrDefault(candidate => candidate.TitleRuleId == id);
+    if (rule is not null) await Edit(rule);
+  }
+
   void NewRule() { EditingId = null; Draft = new(); Preview = []; CategoryAttributes = null; }
 
   async Task SaveAsync()
@@ -613,12 +679,9 @@
     Busy = true; Message = null; Error = null;
     try
     {
-      var id = await Titles.SaveRuleAsync(Draft.RuleCode, string.IsNullOrWhiteSpace(Draft.Name) ? Draft.RuleCode : Draft.Name,
-        Draft.CategoryTreeCode, Draft.CategoryCode, Draft.LanguageCode, CurrentTemplate(), " ", Draft.IsActive, Draft.SortOrder, Draft.Note, await ActorAsync());
-      EditingId = id;
-      Rules = await Titles.GetRulesAsync();
+      await PersistDraftAsync();
       Message = $"Pravilo {Draft.RuleCode.ToUpperInvariant()} je shranjeno. Nazivi se ne spremenijo, dokler jih ne zapišeš spodaj.";
-      Draft.RuleCode = Draft.RuleCode.ToUpperInvariant();
+      await PreviewDraftAsync();
     }
     catch (Exception exception) { Error = exception.Message; }
     finally { Busy = false; }
@@ -642,6 +705,9 @@
     Busy = true; Message = null; Error = null;
     try
     {
+      // Predogled uporablja trenutni osnutek. Pred zapisom ga zato vedno shranimo, da procedura
+      // ne more uporabiti stare predloge iz baze in zapisati česa drugega, kot je uporabnik videl.
+      await PersistDraftAsync();
       var result = await Titles.ApplyAsync(PreviewOrganizationId, PreviewLanguage, EditingId, Draft.CategoryTreeCode, Draft.CategoryCode,
         OnlyMissing, await ActorAsync(), $"pravilo {Draft.RuleCode}");
       Message = $"Zapisanih nazivov ({PreviewLanguage}): {result.Written:N0} od {result.Candidates:N0} kandidatov. Validacija je ponovljena, zgodovina je v kartici izdelka.";
@@ -649,6 +715,16 @@
     }
     catch (Exception exception) { Error = exception.Message; }
     finally { Busy = false; }
+  }
+
+  async Task PersistDraftAsync()
+  {
+    var id = await Titles.SaveRuleAsync(Draft.RuleCode, string.IsNullOrWhiteSpace(Draft.Name) ? Draft.RuleCode : Draft.Name,
+      Draft.CategoryTreeCode, Draft.CategoryCode, Draft.LanguageCode, CurrentTemplate(), " ", Draft.IsActive,
+      Draft.SortOrder, Draft.Note, await ActorAsync());
+    EditingId = id;
+    Draft.RuleCode = Draft.RuleCode.ToUpperInvariant();
+    Rules = await Titles.GetRulesAsync();
   }
 
   async Task<string> ActorAsync()

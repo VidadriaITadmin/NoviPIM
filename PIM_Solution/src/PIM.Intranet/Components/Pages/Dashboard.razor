@@ -1,6 +1,8 @@
 @page "/nadzorna-plosca"
 @attribute [Authorize]
 @inject PIM.Intranet.Services.IntranetDataService Data
+@using Microsoft.Extensions.Caching.Memory
+@inject IMemoryCache Cache
 
 <PageTitle>Nadzorna plošča</PageTitle>
 <div class="page-heading"><span>Nadzorna plošča</span><h1>Nadzorna plošča</h1><p>Stanje vseh podjetij skupaj, ne samo prvega po šifri.</p></div>
@@ -67,7 +69,7 @@ else
         <div class="process-head"><span>Proces / Integracija</span><span>Zadnji zagon</span><span>Status</span></div>
         @foreach (var run in Runs.OrderByDescending(row => row.StartedUtc).Take(5))
         {
-          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToLocalTime().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
+          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToPimLocal().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
         }
       }
     </section>
@@ -124,6 +126,22 @@ else
   static decimal ProfileCompleteness(PIM.Intranet.Services.QualityProfileRow profile) => Math.Clamp(Math.Round(profile.AverageCompleteness ?? (profile.ProductCount > 0 ? 100m * profile.ValidCount / profile.ProductCount : 0)), 0, 100);
   static string StatusClass(string? status) => status?.ToUpperInvariant() switch { "SUCCEEDED" or "OK" or "HEALTHY" => "good", "FAILED" or "ERROR" or "UNHEALTHY" => "bad", _ => "warn" };
 
+  // Stevci plosce se spreminjajo z urno validacijo in petminutnimi cikli, zato jih proces drzi minuto v
+  // pomnilniku: izmerjeno 2026-09-17 je deset uporabnikov na plosci hkrati pomenilo 40 socasnih tezkih
+  // poizvedb (stiri podjetja x stiri klici) in vsem je stran padla na 30 s meji ukaza. Z minuto
+  // predpomnilnika bazo vprasa prvi, ostali berejo isto.
+  static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(60);
+
+  async Task<T> CachedAsync<T>(string key, Func<Task<T>> load)
+  {
+    var value = await Cache.GetOrCreateAsync(key, async entry =>
+    {
+      entry.AbsoluteExpirationRelativeToNow = CacheFor;
+      return await load();
+    });
+    return value!;
+  }
+
   protected override async Task OnInitializedAsync()
   {
     try
@@ -131,9 +149,11 @@ else
       var organizations = await Data.GetOrganizationsAsync();
       if (organizations.Count == 0) { Error = "Nobeno podjetje ni aktivno."; return; }
 
-      var companies = new List<CompanyMetrics>(organizations.Count);
-      foreach (var organization in organizations)
-        companies.Add(new(organization, await Data.GetDashboardAsync(organization.OrganizationId)));
+      // Podjetja vzporedno (218): vsak klic odpre svojo povezavo, zato stran caka na najpocasnejse
+      // podjetje, ne na vsoto vseh — prej je slo zaporedoma in nadzorna plosca je cakala vsakega posebej.
+      var companies = (await Task.WhenAll(organizations.Select(async organization =>
+        new CompanyMetrics(organization, await CachedAsync(
+          $"dashboard:metrics:{organization.OrganizationId}", () => Data.GetDashboardAsync(organization.OrganizationId)))))).ToList();
       Companies = companies;
       Metrics = new(
         companies.Sum(company => company.Metrics.CanonProductCount),
@@ -148,16 +168,29 @@ else
       var alerts = new List<PIM.Intranet.Services.SystemAlertRow>();
       var integrations = new List<PIM.Intranet.Services.SystemIntegrationRow>();
       bool anyProfiles = false, anyRuns = false, anyIntegrations = false;
-      foreach (var organization in organizations)
-      {
-        try { profiles.AddRange((await Data.GetValidationIssuesAsync(organization.OrganizationId)).Profiles); anyProfiles = true; } catch { }
-        try { runs.AddRange(await Data.GetPipelineRunsAsync(organization.OrganizationId)); anyRuns = true; } catch { }
-        try
+      // Tudi ti trije klici na podjetje tecejo vzporedno; rezultati se zlozijo v istem vrstnem
+      // redu podjetij kot prej, da se prikaz ne spremeni.
+      var perOrganization = await Task.WhenAll(organizations.Select(organization =>
+        CachedAsync($"dashboard:panels:{organization.OrganizationId}", async () =>
         {
-          var view = await Data.GetSystemIntegrationsAsync(organization.OrganizationId);
-          alerts.AddRange(view.Alerts); integrations.AddRange(view.Integrations); anyIntegrations = true;
-        }
-        catch { }
+          // take: 0 — nadzorna plosca bere samo profile (drugi nabor); seznam napak (prvi nabor, TOP 200
+          // po datumu cez vse odprte napake podjetja) bi stal ~2 s na podjetje in se tu nikoli ne prikaze.
+          var issuesTask = Task.Run(() => Data.GetValidationIssuesAsync(organization.OrganizationId, take: 0));
+          var runsTask = Task.Run(() => Data.GetPipelineRunsAsync(organization.OrganizationId));
+          var integrationsTask = Task.Run(() => Data.GetSystemIntegrationsAsync(organization.OrganizationId));
+          PIM.Intranet.Services.QualityView? issues = null;
+          IReadOnlyList<PIM.Intranet.Services.PipelineRunRow>? organizationRuns = null;
+          PIM.Intranet.Services.SystemIntegrationView? view = null;
+          try { issues = await issuesTask; } catch { }
+          try { organizationRuns = await runsTask; } catch { }
+          try { view = await integrationsTask; } catch { }
+          return (issues, organizationRuns, view);
+        })));
+      foreach (var (issues, organizationRuns, view) in perOrganization)
+      {
+        if (issues is not null) { profiles.AddRange(issues.Profiles); anyProfiles = true; }
+        if (organizationRuns is not null) { runs.AddRange(organizationRuns); anyRuns = true; }
+        if (view is not null) { alerts.AddRange(view.Alerts); integrations.AddRange(view.Integrations); anyIntegrations = true; }
       }
 
       Profiles = anyProfiles ? MergeProfiles(profiles) : null;

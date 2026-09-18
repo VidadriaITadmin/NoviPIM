@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PIM.Operations;
 
 namespace PIM.KatalogWorker;
 
@@ -46,68 +47,12 @@ public sealed record SaopSettings
 
 public static class SaopWorkerConfiguration
 {
-  /// <summary>
-  /// Prednost: okoljska spremenljivka, nato korenska <c>appsettings.Local.json</c>. Korena ne
-  /// sestavljamo s fiksnim številom <c>..</c> — to se podre takoj, ko se worker požene iz druge
-  /// mape ali objavi. Namesto tega iščemo navzgor, dokler ne najdemo <c>PIM_Solution\PIM.sln</c>.
-  /// </summary>
-  public static string? FindRepositoryRootLocalSettingsPath()
-  {
-    var directory = new DirectoryInfo(AppContext.BaseDirectory);
-    while (directory is not null)
-    {
-      if (File.Exists(Path.Combine(directory.FullName, "PIM_Solution", "PIM.sln")))
-      {
-        var candidate = Path.Combine(directory.FullName, "appsettings.Local.json");
-        return File.Exists(candidate) ? candidate : null;
-      }
-
-      directory = directory.Parent;
-    }
-
-    return null;
-  }
-
-  public static string? GetConnectionString()
-  {
-    var fromEnvironment = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING");
-    if (!string.IsNullOrWhiteSpace(fromEnvironment))
-    {
-      return fromEnvironment;
-    }
-
-    // Zgodovinsko je worker bral samo iz trenutne mape; to je preživelo, ker so ga zaganjali iz
-    // korena. Trenutna mapa ostane prva možnost, korenska datoteka pa je zdaj rezervni izhod.
-    foreach (var path in LocalSettingsCandidates())
-    {
-      using var document = JsonDocument.Parse(File.ReadAllText(path));
-      if (document.RootElement.TryGetProperty("ConnectionStrings", out var connectionStrings)
-        && connectionStrings.TryGetProperty("Pim", out var pim))
-      {
-        var value = pim.GetString();
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-          return value;
-        }
-      }
-    }
-
-    return null;
-  }
+  /// <summary>Povezava na bazo; iskanje datoteke je skupno celi rešitvi.</summary>
+  public static string? GetConnectionString() => LocalSettings.ConnectionString();
 
   public static SaopSettings Read()
   {
-    JsonElement? saop = null;
-    foreach (var path in LocalSettingsCandidates())
-    {
-      using var document = JsonDocument.Parse(File.ReadAllText(path));
-      if (document.RootElement.TryGetProperty("Saop", out var section))
-      {
-        saop = section.Clone();
-        break;
-      }
-    }
-
+    var saop = LocalSettings.Section("Saop");
     var organizations = ReadOrganizations(saop);
 
     return new SaopSettings
@@ -127,21 +72,6 @@ public static class SaopWorkerConfiguration
       PriceListIds = StringArray(saop, "PriceListIds"),
       Organizations = organizations
     };
-  }
-
-  private static IEnumerable<string> LocalSettingsCandidates()
-  {
-    var current = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.Local.json");
-    if (File.Exists(current))
-    {
-      yield return current;
-    }
-
-    var root = FindRepositoryRootLocalSettingsPath();
-    if (root is not null && !string.Equals(root, current, StringComparison.OrdinalIgnoreCase))
-    {
-      yield return root;
-    }
   }
 
   private static IReadOnlyList<SaopOrganization> ReadOrganizations(JsonElement? saop)

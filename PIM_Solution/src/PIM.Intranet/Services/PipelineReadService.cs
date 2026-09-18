@@ -186,6 +186,10 @@ public sealed class PipelineReadService(PimDb database)
                SUM(CASE WHEN landing.Status = N'Quarantined' THEN CONVERT(bigint, 1) ELSE 0 END) AS RejectedCount
         FROM stock.LandingRecord landing
         WHERE landing.OrganizationId = connector.OrganizationId AND landing.SourceConnectorId = connector.SourceConnectorId
+          /* 2026-09-17: samo odprta stanja - vsota CASE je ista, poizvedba pa gre po filtriranem
+             indeksu IX_StockLandingRecord_Open (migracija 218) namesto cez milijone "Applied"
+             vrstic na konektor (izmerjeno 25-39 s za celo stran /zajem, ki je padla na 30 s meji). */
+          AND landing.Status IN (N'Pending', N'Quarantined')
       ) stockCounts
       WHERE organization.IsActive = 1
         AND (@OrganizationId IS NULL OR connector.OrganizationId = @OrganizationId)

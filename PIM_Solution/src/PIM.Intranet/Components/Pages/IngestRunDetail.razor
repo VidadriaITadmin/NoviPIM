@@ -27,7 +27,7 @@
       <article class="ui-card panel" aria-labelledby="run-volume-title">
         <h2 id="run-volume-title">Rezultat</h2>
         <dl class="detail-list">
-          <dt>Začetek</dt><dd>@View.Header.StartedUtc.ToLocalTime().ToString("g")</dd>
+          <dt>Začetek</dt><dd>@View.Header.StartedUtc.ToPimLocal().ToString("g")</dd>
           <dt>Konec</dt><dd>@Moment(View.Header.EndedUtc)</dd>
           <dt>Trajanje</dt><dd>@Duration(View.Header.StartedUtc, View.Header.EndedUtc)</dd>
           <dt>Prebrano</dt><dd class="numeric">@View.Header.RowsRead.ToString("N0")</dd>
@@ -51,7 +51,7 @@
                 <td class="numeric">@step.RowsMerged.ToString("N0")</td>
                 <td class="numeric">@(step.DurationMs?.ToString("N0") ?? "—")</td>
                 <td><PimChip Text="@Status(step.Status)" Tone="@Tone(step.Status)" /></td>
-                <td>@step.RecordedUtc.ToLocalTime().ToString("g")</td>
+                <td>@step.RecordedUtc.ToPimLocal().ToString("g")</td>
               </tr>
             }
           </Rows>
@@ -68,7 +68,7 @@
             @foreach (var errorValue in View.Errors)
             {
               <tr>
-                <td>@errorValue.OccurredUtc.ToLocalTime().ToString("g")</td>
+                <td>@errorValue.OccurredUtc.ToPimLocal().ToString("g")</td>
                 <td><PimChip Text="@errorValue.Severity" Tone="@Tone(errorValue.Severity)" /></td>
                 <td><a href="zajem/tezave/ERROR/@errorValue.ErrorLogId"><span class="code-value">@errorValue.ErrorCode</span></a></td>
                 <td>@errorValue.Message</td>
@@ -90,7 +90,7 @@
               <tr>
                 <td><a href="zajem/tezave/STOCK/@issue.UnmatchedPositionId"><span class="code-value">@issue.ReasonCode</span></a></td>
                 <td>@(issue.ItemId ?? "—")</td><td>@(issue.Ean ?? "—")</td><td>@issue.Detail</td>
-                <td>@issue.CreatedUtc.ToLocalTime().ToString("g")</td>
+                <td>@issue.CreatedUtc.ToPimLocal().ToString("g")</td>
               </tr>
             }
           </Rows>
@@ -108,7 +108,7 @@
               <tr>
                 <td><a href="zajem/tezave/INBOX/@pageRow.InboxId">@pageRow.PageNumber</a></td>
                 <td>@pageRow.EntityType</td><td><PimChip Text="@Status(pageRow.Status)" Tone="@Tone(pageRow.Status)" /></td>
-                <td>@pageRow.ReceivedUtc.ToLocalTime().ToString("g")</td><td>@(pageRow.FailureReason ?? "—")</td>
+                <td>@pageRow.ReceivedUtc.ToPimLocal().ToString("g")</td><td>@(pageRow.FailureReason ?? "—")</td>
               </tr>
             }
           </Rows>
@@ -162,6 +162,6 @@
 
   static string Status(string value) => value switch { "Succeeded" or "Completed" => "Uspešno", "Failed" => "Neuspešno", "Cancelled" => "Preklicano", "Running" => "V teku", "Pending" => "Čaka", "Processed" => "Obdelano", "Quarantined" => "Karantena", "Skipped" => "Preskočeno", _ => value };
   static string? Tone(string value) => value switch { "Succeeded" or "Completed" or "Processed" => "good", "Failed" or "Cancelled" or "Quarantined" or "Error" or "Critical" => "bad", "Running" or "Pending" or "Warning" => "warn", _ => null };
-  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToLocalTime().ToString("g");
+  static string Moment(DateTime? value) => value is null ? "—" : value.Value.ToPimLocal().ToString("g");
   static string Duration(DateTime start, DateTime? end) => end is null ? "V teku" : $"{Math.Max(0, (end.Value - start).TotalSeconds):N0} s";
 }

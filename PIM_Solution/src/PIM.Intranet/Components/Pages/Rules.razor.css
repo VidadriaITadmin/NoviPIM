@@ -1,0 +1,32 @@
+.rules-start { display: grid; gap: 1.5rem; grid-template-columns: minmax(230px, .8fr) minmax(0, 1.7fr); overflow: hidden; }
+.rules-start-copy { background: linear-gradient(145deg, #eef2ff, #f8fafc); border-right: 1px solid var(--pim-border); padding: 1.5rem; }
+.rules-eyebrow { color: var(--pim-accent); display: block; font-size: .7rem; font-weight: 750; letter-spacing: .06em; margin-bottom: .45rem; text-transform: uppercase; }
+.rules-start-copy h2, .rules-flow h2 { color: var(--pim-text-strong); font-size: 1.08rem; margin: 0 0 .5rem; }
+.rules-start-copy p, .rules-flow-head p { color: var(--pim-text-muted); font-size: .82rem; line-height: 1.55; margin: 0; }
+.rules-task-list { display: flex; flex-direction: column; padding: .55rem 1rem .55rem 0; }
+.rules-task-list a { align-items: center; border-bottom: 1px solid var(--pim-border-soft); color: inherit; display: grid; gap: .75rem; grid-template-columns: auto minmax(0, 1fr) auto; padding: .8rem .55rem; text-decoration: none; }
+.rules-task-list a:last-child { border-bottom: 0; }
+.rules-task-list a:hover { background: var(--pim-surface-hover); border-radius: var(--pim-radius-sm); }
+.rules-task-list strong, .rules-task-list small { display: block; }
+.rules-task-list strong { color: var(--pim-text-strong); font-size: .86rem; margin-bottom: .15rem; }
+.rules-task-list small { color: var(--pim-text-muted); font-size: .75rem; line-height: 1.4; }
+.task-number { align-items: center; background: #eef2ff; border-radius: 999px; color: var(--pim-accent); display: flex; font-size: .72rem; font-weight: 750; height: 1.65rem; justify-content: center; width: 1.65rem; }
+.task-arrow { color: var(--pim-accent); font-size: 1.05rem; }
+.rules-flow { margin-top: 1rem; }
+.rules-flow-head { align-items: end; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: .7rem; }
+.rules-flow-head p { max-width: 41rem; }
+.rules-flow ol { display: grid; gap: .55rem; grid-template-columns: repeat(5, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.rules-flow li { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); min-height: 5.1rem; padding: .8rem .9rem; position: relative; }
+.rules-flow li:not(:last-child)::after { background: var(--pim-accent); border-radius: 999px; color: #fff; content: "›"; font-size: .85rem; height: 1.35rem; line-height: 1.27rem; position: absolute; right: -.98rem; text-align: center; top: 1.8rem; width: 1.35rem; z-index: 1; }
+.rules-flow strong, .rules-flow span { display: block; }
+.rules-flow strong { color: var(--pim-text-strong); font-size: .82rem; margin-bottom: .25rem; }
+.rules-flow span { color: var(--pim-text-muted); font-size: .72rem; line-height: 1.4; }
+@media (max-width: 900px) {
+  .rules-start { grid-template-columns: 1fr; }
+  .rules-start-copy { border-bottom: 1px solid var(--pim-border); border-right: 0; }
+  .rules-task-list { padding: .4rem 1rem 1rem; }
+  .rules-flow ol { grid-template-columns: 1fr; }
+  .rules-flow li { min-height: 0; }
+  .rules-flow li:not(:last-child)::after { bottom: -.7rem; left: 50%; right: auto; top: auto; transform: rotate(90deg); }
+}
+@media (max-width: 600px) { .rules-flow-head { align-items: flex-start; flex-direction: column; } }

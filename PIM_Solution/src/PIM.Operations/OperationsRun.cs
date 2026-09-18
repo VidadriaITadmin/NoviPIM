@@ -54,6 +54,10 @@ public sealed class OperationsRun : IAsyncDisposable
       command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
       command.Parameters.Add("@Pipeline", SqlDbType.NVarChar, 100).Value = pipeline;
       command.Parameters.Add("@WorkerId", SqlDbType.NVarChar, 200).Value = workerId;
+      // Kdo je zagon sprozil (144): razporejevalnik v aplikaciji in skripte nastavijo
+      // PIM_TRIGGERED_BY na Scheduler oziroma Task; brez tega je vsak tek v ops.PipelineRun
+      // "Human", tudi tisti ob treh ponoci — doslej ga ni podajal nihce.
+      command.Parameters.Add("@TriggeredBy", SqlDbType.NVarChar, 30).Value = TriggeredBy();
       var runId = command.Parameters.Add("@RunId", SqlDbType.UniqueIdentifier);
       runId.Direction = ParameterDirection.Output;
       await command.ExecuteNonQueryAsync(cancellationToken);
@@ -64,6 +68,13 @@ public sealed class OperationsRun : IAsyncDisposable
       await connection.DisposeAsync();
       throw;
     }
+  }
+
+  /// <summary>Vrednost za ops.PipelineRun.TriggeredBy iz okolja; zaprt seznam iz migracije 144.</summary>
+  public static string TriggeredBy()
+  {
+    var value = Environment.GetEnvironmentVariable("PIM_TRIGGERED_BY");
+    return value is "Scheduler" or "Human" or "Task" ? value : "Human";
   }
 
   public async Task HeartbeatAsync(DateTime? watermarkUtc = null, CancellationToken cancellationToken = default)

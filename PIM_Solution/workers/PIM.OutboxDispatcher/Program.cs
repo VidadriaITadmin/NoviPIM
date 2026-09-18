@@ -1,4 +1,7 @@
 using System.Globalization;
+using System.Text.Json;
+using PIM.Operations;
+using PIM.Outbound;
 using PIM.OutboxDispatcher;
 
 // Odhodna pot v SAOP.
@@ -37,19 +40,21 @@ if (send)
 {
   // Dve neodvisni varovalki. Zastavica sama ne zadošča: brez poverilnic se ne pošlje nič in
   // se to jasno pove, namesto da bi vsaka zahteva vrnila 401 in porabila poskus.
-  var baseUrl = Environment.GetEnvironmentVariable("SAOP_BASE_URL");
-  var username = Environment.GetEnvironmentVariable("SAOP_USERNAME");
-  var password = Environment.GetEnvironmentVariable("SAOP_PASSWORD");
+  //
+  // Isti vir poverilnic kot spletni vmesnik (SaopWriteService.TrySendArticleAsync): razdelek
+  // "Saop" v appsettings.Local.json ali PIM_SAOP_* v okolju — isti SAOP racun, eno mesto
+  // nastavitve. Stara imena SAOP_BASE_URL/SAOP_USERNAME/SAOP_PASSWORD (iz prve razlicice te
+  // poti, glej docs\ODHODNA_POT_SAOP.md) ostanejo veljavna kot rezerva za obstojece skripte.
+  var (baseUrl, username, password, acceptUntrusted) = ReadSaopCredentials();
   if (string.IsNullOrWhiteSpace(baseUrl) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
   {
-    Console.Error.WriteLine("Za --send morajo biti nastavljeni SAOP_BASE_URL, SAOP_USERNAME in SAOP_PASSWORD.");
+    Console.Error.WriteLine("Za --send morajo biti nastavljene poverilnice SAOP: razdelek \"Saop\" v appsettings.Local.json (BaseUrl/Username/Password) ali PIM_SAOP_BASE_URL/PIM_SAOP_USERNAME/PIM_SAOP_PASSWORD v okolju.");
     Console.Error.WriteLine("Brez njih ni bilo poslano nič. Navodila: docs\\ODHODNA_POT_SAOP.md");
     return 2;
   }
 
-  sender = new SaopDocumentSender(new(baseUrl!, username!, password!,
-    TimeoutSeconds: 120,
-    AcceptUntrustedCertificate: string.Equals(Environment.GetEnvironmentVariable("SAOP_ACCEPT_UNTRUSTED_CERT"), "true", StringComparison.OrdinalIgnoreCase)));
+  sender = new SaopDocumentSender(new(baseUrl, username, password,
+    TimeoutSeconds: 120, AcceptUntrustedCertificate: acceptUntrusted));
 
   Console.WriteLine($"POZOR: pošiljanje v SAOP je vklopljeno. Naslov: {baseUrl}");
 }
@@ -79,6 +84,33 @@ string? Value(string name)
 {
   var index = arguments.IndexOf(name);
   return index >= 0 && index + 1 < arguments.Count ? arguments[index + 1] : null;
+}
+
+(string? BaseUrl, string? Username, string? Password, bool AcceptUntrustedCertificate) ReadSaopCredentials()
+{
+  var saop = LocalSettings.Section("Saop");
+  string? Text(string name) =>
+    saop is { } section && section.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+      ? value.GetString() : null;
+  bool Flag(string name) =>
+    saop is { } section && section.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+      && value.GetBoolean();
+  static string? Env(params string[] names)
+  {
+    foreach (var name in names)
+    {
+      var value = Environment.GetEnvironmentVariable(name);
+      if (!string.IsNullOrWhiteSpace(value)) return value;
+    }
+    return null;
+  }
+
+  return (
+    Env("PIM_SAOP_BASE_URL", "SAOP_BASE_URL") ?? Text("BaseUrl"),
+    Env("PIM_SAOP_USERNAME", "SAOP_USERNAME") ?? Text("Username"),
+    Env("PIM_SAOP_PASSWORD", "SAOP_PASSWORD") ?? Text("Password"),
+    Flag("AcceptUntrustedCertificate")
+      || string.Equals(Environment.GetEnvironmentVariable("SAOP_ACCEPT_UNTRUSTED_CERT"), "true", StringComparison.OrdinalIgnoreCase));
 }
 
 // --- stara pot po enem sporočilu ----------------------------------------------------------

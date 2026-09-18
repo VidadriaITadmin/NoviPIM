@@ -132,29 +132,28 @@ slovarju (`/pravila/slovar`) in na `/kakovost/prevodi`.
 Podjetje, Proizvajalec, Dobavitelj, **ERP**, **Splet**, Popolnost, Težave, Vrzeli, Zadnja
 sprememba. ERP in Splet povesta, ali je izdelek za ta kanal veljaven.
 
-**Shranjeni pogledi** (zavihki nad seznamom, s števci): Vsi izdelki, Za urediti, Brez slike,
-Brez spletnega naziva, Brez kategorije, Brez EAN, Neobjavljeni, Čaka SAOP.
-
 **Iskanje in filtri.** Polje **Išči po šifri artikla ali EAN**. Gumb za filtre odpre:
-Podjetje, Proizvajalec, Dobavitelj, Skupina artikla, Slika (Ima sliko / Brez slike), ABC
-klasifikacija, Pripravljenost za ERP, Pripravljenost za splet, Aktivnost artikla, Zastavica
-za splet (Označeni / Neoznačeni), Popolnost (0 % / Pod 50 % / 50–99 % / 100 %). Potrdi z
-**Uporabi filtre**; **Počisti vse** vrne privzeti seznam. **Razvrstitev**: po šifri,
-popolnosti, zadnji spremembi ali podjetju.
+Podjetje, **Napaka** (Za urediti / Brez slike / Brez spletnega naziva / Brez kategorije /
+Brez EAN / Neobjavljeni / Čaka SAOP — nekdanji zavihki nad seznamom so od 2026-09-17 ta
+filter), Proizvajalec, Dobavitelj, Skupina artikla, Kategorija, Slika (Ima sliko / Brez
+slike), ABC klasifikacija, Pripravljenost za ERP, Pripravljenost za splet, Aktivnost
+artikla, Zastavica za splet (Označeni / Neoznačeni), Popolnost (0 % / Pod 50 % / 50–99 % /
+100 %). Potrdi z **Uporabi filtre**; **Počisti vse** vrne privzeti seznam. **Razvrstitev**:
+po šifri, popolnosti, zadnji spremembi ali podjetju.
 
 **Gumbi nad seznamom**
 
 | Gumb | Kaj naredi |
 |---|---|
 | **Uredi izbrane (N)** | množično urejanje označenih izdelkov; dela samo, če so vsi iz istega podjetja |
-| **Izvozi Excel** | trenutni filtriran pogled kot delovni zvezek (do 20.000 vrstic) |
+| **Izvozi Excel** | trenutni filtriran pogled (ali označene vrstice) kot delovni zvezek. Zvezek se gradi **v ozadju** — med gradnjo lahko delaš naprej; obvestilo sproti kaže število zapisanih vrstic, ko je gotov, se prenos sproži sam (če ga brskalnik zadrži, je v obvestilu povezava »prenesi ročno«). Hkrati tečeta največ dva izvoza za vse uporabnike skupaj; če jih je več, tvoj počaka v vrsti in obvestilo pove, koliko jih je pred tabo — začne se sam. Brez lastne zgornje meje vrstic: cel pogled je cel pogled, edina meja je meja lista .xlsx (1.048.000 vrstic) |
 | **Predloga SAOP** | isti nabor izdelkov v predlogi s stolpci SAOP — za izpolnjevanje in vračanje |
 | **Excel → čakalna lista SAOP** | odpre `/saop/artikli`, kjer izpolnjeno predlogo uvoziš (postopek 8) |
 
 **Tipično opravilo — najdi izdelke, ki jih moram urediti za splet**
 
-1. Odpri `/izdelki`, izberi zavihek **Za urediti** ali filter **Pripravljenost za splet →
-   Blokirani za splet**.
+1. Odpri `/izdelki`, izberi filter **Napaka → Za urediti** ali filter **Pripravljenost za
+   splet → Blokirani za splet**.
 2. Po potrebi zoži na **Podjetje** in **Dobavitelj**, klikni **Uporabi filtre**.
 3. Klikni naziv izdelka — odpre se kartica.
 
@@ -445,7 +444,7 @@ Pravilo (velja od 2026-09-02): v datoteko za splet gre izdelek, ki hkrati
 | `/splet` → **Zakaj izdelek ne pride do datoteke** | katera zahteva ustavi koliko izdelkov |
 | `/kakovost/napake` s filtrom **Kaj blokira → Blokira splet** | seznam izdelkov po napaki |
 | kartica izdelka → zavihek **Splet** | stanje kanala, **Blokirajoče napake**, **Odprte težave kanala** |
-| `/izdelki` → zavihek **Brez kategorije** / **Neobjavljeni** | hitri seznami |
+| `/izdelki` → filter **Napaka → Brez kategorije** / **Neobjavljeni** | hitri seznami |
 
 **Kako popravim — manjka kategorija**
 
