@@ -1,0 +1,5 @@
+19:29:23  === ZAČETEK: Artikli iz SAOP | posel SAOP_PRODUCT_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:18600:AutomationHost:console | 2026-09-22 19:29:23
+19:29:23  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+19:29:23  == Artikli iz SAOP (podjetje 2) ==
+19:29:24     Živ SAOP zajem: podjetij=1, končnih točk=8, delta zajem, razpored=SAOP_PRODUCTS.
+19:29:24     [2] IQLighting (SAOP_IQLIGHTING)

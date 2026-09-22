@@ -1,0 +1,16 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\bin\Release\net10.0\PIM.Automation.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\bin\Release\net10.0\PIM.Automation.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\bin\Release\net10.0\PIM.Automation.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\bin\Release\net10.0\PIM.Operations.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\bin\Release\net10.0\PIM.Operations.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.csproj.AssemblyReference.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.sourcelink.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Auto.5B927DEC.Up2Date
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\refint\PIM.Automation.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\PIM.Automation.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Automation\obj\Release\net10.0\ref\PIM.Automation.dll

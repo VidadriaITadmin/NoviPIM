@@ -1,0 +1,52 @@
+23:23:26  === ZAČETEK: Zaloga dobaviteljev | posel SUPPLIER_STOCK_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 23:23:26
+23:23:26  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+23:23:26  == Zaloga NW_STOCK ==
+23:23:27     [FAZA] Prenos NW_STOCK (podjetje 1): se je začela.
+23:23:27     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 23. 09. 2026 00:53.
+23:23:27     [FAZA] Prenos NW_STOCK (podjetje 1): preskočeno; Razmik dobavitelja se tece; naslednji prenos po 23. 09. 2026 00:53..
+23:23:27     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+23:23:28     [FAZA] Branje NW_STOCK (podjetje 2): se je začela: nw-zaloga.csv.
+23:23:29     Prebranih zapisov: 2760; SHA-256: 3b6100b1318ac5801888e2267564ddee2042990e166cf453493709028b654f98
+23:23:29     [FAZA] Branje NW_STOCK (podjetje 2): uspelo, brez novih podatkov — prebrano 2.760, zapisano 2.760, 85,0 kB; datoteka z dne 22. 9. 2026 22:53.
+23:23:29     [FAZA] Zapis NW_STOCK (podjetje 2): se je začela.
+23:23:29     [FAZA] Zapis NW_STOCK (podjetje 2): preskočeno — prebrano 2.760; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 22:53).
+23:23:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-22 20:53:13Z, uporabljenih=2760, v karanteni=0, RunId=d7f5a8b1-5f0d-4d53-aa50-ea69fd344068. Zapisano ni bilo nic.
+23:23:29     [FAZA] Branje NW_STOCK (podjetje 3): se je začela: nw-zaloga.csv.
+23:23:30     Prebranih zapisov: 2760; SHA-256: 3b6100b1318ac5801888e2267564ddee2042990e166cf453493709028b654f98
+23:23:30     [FAZA] Branje NW_STOCK (podjetje 3): uspelo, brez novih podatkov — prebrano 2.760, zapisano 2.760, 85,0 kB; datoteka z dne 22. 9. 2026 22:53.
+23:23:30     [FAZA] Zapis NW_STOCK (podjetje 3): se je začela.
+23:23:30     [FAZA] Zapis NW_STOCK (podjetje 3): preskočeno — prebrano 2.760; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 22:53).
+23:23:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-22 20:53:13Z, uporabljenih=2760, v karanteni=0, RunId=d477252f-129b-40bd-89cb-dd25cf3139c4. Zapisano ni bilo nic.
+23:23:31     [FAZA] Branje NW_STOCK (podjetje 4): se je začela: nw-zaloga.csv.
+23:23:31     Prebranih zapisov: 2760; SHA-256: 3b6100b1318ac5801888e2267564ddee2042990e166cf453493709028b654f98
+23:23:31     [FAZA] Branje NW_STOCK (podjetje 4): uspelo, brez novih podatkov — prebrano 2.760, zapisano 2.760, 85,0 kB; datoteka z dne 22. 9. 2026 22:53.
+23:23:31     [FAZA] Zapis NW_STOCK (podjetje 4): se je začela.
+23:23:31     [FAZA] Zapis NW_STOCK (podjetje 4): preskočeno — prebrano 2.760; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 22:53).
+23:23:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-22 20:53:13Z, uporabljenih=2760, v karanteni=0, RunId=b8f4d642-9142-4720-a9b5-98c96615644d. Zapisano ni bilo nic.
+23:23:31     konec: Zaloga NW_STOCK (4 s)
+23:23:31  == Zaloga BT_STOCK ==
+23:23:32     [FAZA] Prenos BT_STOCK (podjetje 1): se je začela.
+23:23:34     [BT_STOCK] nespremenjeno: Dobaviteljeva datoteka je nespremenjena; obdrzimo prejsnjo.
+23:23:34     [FAZA] Prenos BT_STOCK (podjetje 1): uspelo, brez novih podatkov — 1,5 MB; Dobaviteljeva datoteka je nespremenjena; obdrzimo prejsnjo..
+23:23:34     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+23:23:35     [FAZA] Branje BT_STOCK (podjetje 2): se je začela: braytron-zaloga.xml.
+23:23:35     Prebranih zapisov: 1389; SHA-256: 6301fe60e46e060aa24f34cb375b3130905fdd344018683a5add365f081c3024
+23:23:35     [FAZA] Branje BT_STOCK (podjetje 2): uspelo, brez novih podatkov — prebrano 1.389, zapisano 1.389, 1,5 MB; datoteka z dne 22. 9. 2026 20:03.
+23:23:35     [FAZA] Zapis BT_STOCK (podjetje 2): se je začela.
+23:23:35     [FAZA] Zapis BT_STOCK (podjetje 2): preskočeno — prebrano 1.389; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 20:03).
+23:23:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-22 18:03:45Z, uporabljenih=1389, v karanteni=0, RunId=54975209-e041-4bdd-b1e7-923c449659c8. Zapisano ni bilo nic.
+23:23:36     [FAZA] Branje BT_STOCK (podjetje 3): se je začela: braytron-zaloga.xml.
+23:23:36     Prebranih zapisov: 1389; SHA-256: 6301fe60e46e060aa24f34cb375b3130905fdd344018683a5add365f081c3024
+23:23:36     [FAZA] Branje BT_STOCK (podjetje 3): uspelo, brez novih podatkov — prebrano 1.389, zapisano 1.389, 1,5 MB; datoteka z dne 22. 9. 2026 20:03.
+23:23:36     [FAZA] Zapis BT_STOCK (podjetje 3): se je začela.
+23:23:36     [FAZA] Zapis BT_STOCK (podjetje 3): preskočeno — prebrano 1.389; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 20:03).
+23:23:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-22 18:03:45Z, uporabljenih=1389, v karanteni=0, RunId=b78745b4-b268-4c65-9751-6ba4547300fa. Zapisano ni bilo nic.
+23:23:37     [FAZA] Branje BT_STOCK (podjetje 4): se je začela: braytron-zaloga.xml.
+23:23:37     Prebranih zapisov: 1389; SHA-256: 6301fe60e46e060aa24f34cb375b3130905fdd344018683a5add365f081c3024
+23:23:37     [FAZA] Branje BT_STOCK (podjetje 4): uspelo, brez novih podatkov — prebrano 1.389, zapisano 1.389, 1,5 MB; datoteka z dne 22. 9. 2026 20:03.
+23:23:37     [FAZA] Zapis BT_STOCK (podjetje 4): se je začela.
+23:23:37     [FAZA] Zapis BT_STOCK (podjetje 4): preskočeno — prebrano 1.389; isti posnetek je že v bazi (datoteka z dne 22. 9. 2026 20:03).
+23:23:37     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-22 18:03:45Z, uporabljenih=1389, v karanteni=0, RunId=62e15d21-f0e9-4069-9281-7bc849dbc37c. Zapisano ni bilo nic.
+23:23:37     konec: Zaloga BT_STOCK (6 s)
+23:23:37  Zaloga dobaviteljev končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+23:23:37  === KONEC: izhod 0, trajanje 00:00:10

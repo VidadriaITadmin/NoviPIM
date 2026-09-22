@@ -1,0 +1,19 @@
+22:21:11  === ZAČETEK: Validacija artiklov | posel PRODUCT_VALIDATION | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:21:11
+22:21:11  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+22:21:11  == Validacija (podjetje 2) ==
+22:21:11     [FAZA] Izračun VALIDACIJA (podjetje 2): se je začela: EXEC val.RunValidation @OrganizationId = 2; EXEC pim.WithdrawIneligibleWebShops.
+22:22:00     Validacija (podjetje 2): opravljeno.
+22:22:00     [FAZA] Izračun VALIDACIJA (podjetje 2): uspelo, brez novih podatkov — prebrano 98.287, zapisano 89.848, zavrnjeno 8.439; Validacija (podjetje 2): brez sprememb — veljavnih 89.848, neveljavnih 8.439.
+22:22:00     konec: Validacija (podjetje 2) (48 s)
+22:22:00  == Validacija (podjetje 3) ==
+22:22:00     [FAZA] Izračun VALIDACIJA (podjetje 3): se je začela: EXEC val.RunValidation @OrganizationId = 3; EXEC pim.WithdrawIneligibleWebShops.
+22:22:23     Validacija (podjetje 3): opravljeno.
+22:22:23     [FAZA] Izračun VALIDACIJA (podjetje 3): uspelo, brez novih podatkov — prebrano 22.699, zapisano 18.807, zavrnjeno 3.892; Validacija (podjetje 3): brez sprememb — veljavnih 18.807, neveljavnih 3.892.
+22:22:23     konec: Validacija (podjetje 3) (23 s)
+22:22:23  == Validacija (podjetje 4) ==
+22:22:23     [FAZA] Izračun VALIDACIJA (podjetje 4): se je začela: EXEC val.RunValidation @OrganizationId = 4; EXEC pim.WithdrawIneligibleWebShops.
+22:22:46     Validacija (podjetje 4): opravljeno.
+22:22:46     [FAZA] Izračun VALIDACIJA (podjetje 4): uspelo, brez novih podatkov — prebrano 39.154, zapisano 35.651, zavrnjeno 3.503; Validacija (podjetje 4): brez sprememb — veljavnih 35.651, neveljavnih 3.503.
+22:22:46     konec: Validacija (podjetje 4) (23 s)
+22:22:46  Validacija artiklov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:22:46  === KONEC: izhod 0, trajanje 00:01:34

@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PIM.SaopStockWorker/1.0.0": {
+        "runtime": {
+          "PIM.SaopStockWorker.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.SaopStockWorker/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

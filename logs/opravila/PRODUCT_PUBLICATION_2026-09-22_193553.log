@@ -1,0 +1,13 @@
+19:35:53  === ZAČETEK: Objava v PIM | posel PRODUCT_PUBLICATION | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 19:35:53
+19:35:53  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+19:35:53  == Objava (podjetje 2) ==
+19:35:58     Objava (podjetje 2): opravljeno.
+19:35:58     konec: Objava (podjetje 2) (5 s)
+19:35:58  == Objava (podjetje 3) ==
+19:36:01     Objava (podjetje 3): opravljeno.
+19:36:01     konec: Objava (podjetje 3) (2 s)
+19:36:01  == Objava (podjetje 4) ==
+19:36:03     Objava (podjetje 4): opravljeno.
+19:36:03     konec: Objava (podjetje 4) (2 s)
+19:36:03  Objava v PIM končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+19:36:03  === KONEC: izhod 0, trajanje 00:00:10

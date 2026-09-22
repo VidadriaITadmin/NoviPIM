@@ -1,0 +1,91 @@
+/* Pregled kakovosti. Odločitev prenove: pregled je urejen po polju, ker se delo deli po
+   polju — isto polje zahteva več profilov in je v prejšnji razdelitvi nastopilo trikrat. */
+
+.card-caption[b-mwkmop1db9] {
+  align-items: baseline; background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border);
+  color: var(--pim-text-strong); display: flex; font-size: .875rem; font-weight: 600;
+  gap: .75rem; justify-content: space-between; margin: 0; padding: .85rem 1.25rem;
+}
+.card-caption-note[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .8rem; font-weight: 400; }
+/* Razlaga razlike med karanteno in napako validacije: uporabnik je vprasal, kaj ju loci,
+   zato odgovor stoji na strani in ne v dokumentaciji. */
+.section-lead[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .85rem; line-height: 1.55; margin: 0 0 .9rem; max-width: 72ch; }
+.section-lead strong[b-mwkmop1db9] { color: var(--pim-text-strong); }
+.card-note[b-mwkmop1db9] { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .78rem; line-height: 1.55; padding: .7rem 1.25rem; }
+.card-note-inline[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: .75rem 0 0; }
+
+/* ─── Pripravljenost ─────────────────────────────────────────────────────── */
+.readiness-row[b-mwkmop1db9] {
+  align-items: center; border-top: 1px solid var(--pim-border-soft); display: grid;
+  gap: 1rem; grid-template-columns: minmax(0, 1fr) 8rem 15rem 7rem; padding: .8rem 1.25rem;
+}
+.readiness-row:first-of-type[b-mwkmop1db9] { border-top: 0; }
+.readiness-row.muted-row[b-mwkmop1db9] { background: var(--pim-surface-subtle); }
+.readiness-name strong[b-mwkmop1db9] { color: var(--pim-text-strong); display: block; font-size: .9375rem; }
+.readiness-name .code-value[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .72rem; }
+.readiness-count[b-mwkmop1db9] { color: var(--pim-bad-strong); font-size: 1.25rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.muted-row .readiness-count[b-mwkmop1db9] { color: var(--pim-warn-text); }
+.readiness-bar[b-mwkmop1db9] { align-items: center; display: flex; gap: .55rem; }
+.readiness-unit[b-mwkmop1db9] { color: var(--pim-text-soft); font-size: .8125rem; white-space: nowrap; }
+.readiness-open[b-mwkmop1db9] { text-align: right; }
+.site-filter[b-mwkmop1db9] { align-items: center; display: inline-flex; flex: 0 0 auto; gap: .5rem; }
+.site-filter span[b-mwkmop1db9] { color: var(--pim-text-soft); font-size: .75rem; font-weight: 600; }
+
+/* ─── Načrt odblokiranja ─────────────────────────────────────────────────── */
+.plan-grid[b-mwkmop1db9] { display: grid; gap: 1.75rem; grid-template-columns: minmax(0, 1fr) 22rem; padding: 1.15rem 1.25rem 1.25rem; }
+.plan-lead[b-mwkmop1db9] { color: var(--pim-text-strong); font-size: .875rem; line-height: 1.55; margin: 0 0 1.1rem; }
+.plan-chart[b-mwkmop1db9] { display: grid; gap: .5rem; grid-template-columns: 2.6rem minmax(0, 1fr); }
+.plan-axis[b-mwkmop1db9] { color: #94a3b8; display: flex; flex-direction: column; font-size: .68rem; height: 190px; justify-content: space-between; padding-bottom: 1px; text-align: right; }
+.plan-plot[b-mwkmop1db9] { align-items: flex-end; border-bottom: 1px solid var(--pim-border); display: flex; gap: .8rem; height: 190px; }
+.plan-bar[b-mwkmop1db9] { background: #c7d2fe; border-radius: 4px 4px 0 0; flex: 1; min-height: 2px; position: relative; }
+.plan-bar.peak[b-mwkmop1db9] { background: var(--pim-primary); }
+.plan-peak-value[b-mwkmop1db9] { color: var(--pim-primary); font-size: .8125rem; font-weight: 700; left: 50%; position: absolute; top: -1.25rem; transform: translateX(-50%); white-space: nowrap; }
+.plan-ticks[b-mwkmop1db9] { display: flex; gap: .8rem; padding-top: .35rem; }
+.plan-ticks span[b-mwkmop1db9] { color: #94a3b8; flex: 1; font-size: .72rem; text-align: center; }
+.plan-ticks span.peak[b-mwkmop1db9] { color: var(--pim-primary); font-weight: 700; }
+.plan-caption[b-mwkmop1db9] { color: #94a3b8; font-size: .72rem; padding-top: .25rem; }
+.plan-list-title[b-mwkmop1db9] { color: #64748b; font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding-bottom: .6rem; text-transform: uppercase; }
+.plan-step[b-mwkmop1db9] { align-items: center; border-bottom: 1px solid var(--pim-border-soft); display: grid; gap: .6rem; grid-template-columns: 1.25rem minmax(0, 1fr) 3.75rem; padding: .45rem 0; }
+.plan-step.peak[b-mwkmop1db9] { background: var(--pim-accent-ring); border-bottom-color: transparent; border-radius: var(--pim-radius-xs); padding: .5rem; }
+.plan-step-no[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.plan-step.peak .plan-step-no[b-mwkmop1db9], .plan-step.peak .plan-step-share[b-mwkmop1db9] { color: var(--pim-primary); font-weight: 700; }
+.plan-step-name[b-mwkmop1db9] { color: var(--pim-text-strong); font-size: .8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-step.peak .plan-step-name[b-mwkmop1db9] { color: #312e81; font-weight: 700; }
+.plan-step-share[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ─── Tabela polj ────────────────────────────────────────────────────────── */
+/* Merilnik vrzeli ni statusni: visoka vrednost je slaba, zato brez zelene in oranzne. */
+.gap-share[b-mwkmop1db9] { align-items: center; display: flex; gap: .65rem; }
+.gap-count[b-mwkmop1db9] { color: var(--pim-text-strong); font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3.5rem; text-align: right; }
+.gap-track[b-mwkmop1db9] { background: #edf2f7; border-radius: 999px; display: block; height: .4rem; overflow: hidden; width: 4.75rem; }
+.gap-track i[b-mwkmop1db9] { background: var(--pim-primary); border-radius: 999px; display: block; height: 100%; }
+.gap-percent[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .78rem; font-variant-numeric: tabular-nums; min-width: 2.75rem; }
+.orphan-row[b-mwkmop1db9] { background: var(--pim-warn-bg); }
+.muted[b-mwkmop1db9] { color: var(--pim-text-muted); }
+
+@media (max-width: 1100px) {
+  .plan-grid[b-mwkmop1db9] { grid-template-columns: 1fr; }
+  .readiness-row[b-mwkmop1db9] { grid-template-columns: minmax(0, 1fr) 6rem; row-gap: .5rem; }
+  .readiness-bar[b-mwkmop1db9], .readiness-open[b-mwkmop1db9] { grid-column: 1 / -1; text-align: left; }
+}
+
+/* --- 177: pogled po kategorijah (razredi filtra so ponovljeni zaradi CSS izolacije) ----------- */
+
+.filter-check[b-mwkmop1db9] { align-items: center; color: var(--pim-text-soft); display: inline-flex; font-size: .82rem; gap: .4rem; white-space: nowrap; }
+.filter-check input[b-mwkmop1db9] { accent-color: var(--pim-primary); }
+
+.category-cell[b-mwkmop1db9] { align-items: center; display: flex; gap: .4rem; }
+.category-name[b-mwkmop1db9] { color: var(--pim-text-strong); font-weight: 600; }
+tr.level-1 .category-name[b-mwkmop1db9] { font-size: .95rem; }
+.tree-toggle[b-mwkmop1db9] { background: none; border: 0; color: var(--pim-text-muted); cursor: pointer; font-size: .9rem; line-height: 1; padding: 0 .2rem; width: 1.2rem; }
+.tree-toggle:focus-visible[b-mwkmop1db9] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.tree-toggle-space[b-mwkmop1db9] { display: inline-block; width: 1.2rem; }
+.top-fields[b-mwkmop1db9] { display: flex; flex-direction: column; gap: .15rem; font-size: .82rem; }
+.top-field .code-value[b-mwkmop1db9] { margin-left: .3rem; }
+.table-actions[b-mwkmop1db9] { white-space: nowrap; }
+
+/* Ocena učinka skupinskega posega (§3.3 pregleda 2026-09-08). Šibek vzvod mora biti viden na prvi
+   pogled — številka, ki je videti kot vsaka druga, ne prepreči tedna zaman opravljenega dela. */
+.lever-note[b-mwkmop1db9] { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.4; margin: .35rem 0 0; }
+.lever-note strong[b-mwkmop1db9] { color: var(--pim-text); }
+.lever-note.lever-weak[b-mwkmop1db9] { border-left: 3px solid var(--pim-warn, #b8860b); padding-left: .5rem; }

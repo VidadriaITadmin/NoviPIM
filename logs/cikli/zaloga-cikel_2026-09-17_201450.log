@@ -1,0 +1,41 @@
+20:14:50  === ZAČETEK: Zalogovni cikel | sprožil: razporejevalnik (razporejevalnik) | po razporedu | 2026-09-17 20:14:50
+20:14:50  Podjetja: 1, 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution
+20:14:50  == Zaloga NW_STOCK ==
+20:14:51     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 17. 09. 2026 21:15.
+20:14:51     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:14:52     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:14:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=b3a4118e-59b9-4ada-ab79-e60844329345. Zapisano ni bilo nic.
+20:14:53     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:14:53     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=91cd8b3e-2ebb-417e-b490-ee3ecbc7bc47. Zapisano ni bilo nic.
+20:14:54     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:14:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=2b9413ba-2fef-4e60-9fe2-d1434306ee5a. Zapisano ni bilo nic.
+20:14:55     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:14:55     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=9d050312-c012-4986-9325-67e21d009aa7. Zapisano ni bilo nic.
+20:14:55     konec: Zaloga NW_STOCK (5 s)
+20:14:55  == Zaloga BT_STOCK ==
+20:14:56     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+20:14:57     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:14:57     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+20:14:58     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:14:58     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+20:14:59     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:14:59     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+20:15:00     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:15:00     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+20:15:00     konec: Zaloga BT_STOCK (5 s)
+20:15:00  == Zaloga iz SAOP (kolicine) ==
+20:15:01     STDERR: Manjka nastavitev Saop (BaseUrl, Username, Password) v appsettings.Local.json.
+20:15:01     STDERR: Uporaba: PIM.SaopStockWorker [--organizations 2,3] [--page-size N] [--base-url URL] [--samo-nastavitve] [--dostave [--max-dostave N]]
+20:15:01     NAPAKA: Zaloga iz SAOP je končal z izhodno kodo 2.
+20:15:01     NAPAKA v koraku 'Zaloga iz SAOP (kolicine)' po 0 s: izhodna koda 2
+20:15:01  == Osvezitev cen kataloga ==
+20:15:02     STDERR: Manjkajo SAOP poverilnice. Dopolni sekcijo "Saop" v korenski appsettings.Local.json (BaseUrl, Username, Password) ali nastavi PIM_SAOP_BASE_URL, PIM_SAOP_USERNAME in PIM_SAOP_PASSWORD.
+20:15:02     NAPAKA: Cene iz SAOP je končal z izhodno kodo 2.
+20:15:02     NAPAKA v koraku 'Osvezitev cen kataloga' po 0 s: izhodna koda 2
+20:15:02  == Izvoz cen in zaloge za splet ==
+20:15:12     Izvoz profila MAGENTO_STOCK_PRICES končan: 11435 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+20:16:05     Izvoz profila MAGENTO_STOCK_PRICES končan: 89652 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+20:16:21     Izvoz profila MAGENTO_STOCK_PRICES končan: 18683 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+20:16:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 35650 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+20:16:46     konec: Izvoz cen in zaloge za splet (103 s)
+20:16:46  == Osvezitev kataloga in strank s cenami in zalogo (podjetje 2) ==

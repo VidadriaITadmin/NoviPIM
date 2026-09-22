@@ -1,0 +1,10 @@
+20:32:39  === ZAČETEK: Katalog in stranke za splet | posel WEB_CATALOG_EXPORT | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 20:32:39
+20:32:39  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+20:32:39  == Katalog in stranke za splet ==
+20:32:50     Objava na splet zapisana: 2176 objavljenih, 387 odjavnih vrstic (0 novih odjav).
+20:32:51     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+20:32:51     konec: Katalog in stranke za splet (11 s)
+20:32:51  Katalog in stranke za splet končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+20:32:51     OPOZORILO: pričakovana datoteka C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\katalog.csv ne obstaja; artefakt ni zapisan.
+20:32:51     OPOZORILO: pričakovana datoteka C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\stranke.csv ne obstaja; artefakt ni zapisan.
+20:32:51  === KONEC: izhod 0, trajanje 00:00:11

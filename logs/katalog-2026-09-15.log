@@ -1,0 +1,60 @@
+20:43:15  == Narocila iz SAOP (VNK/VND) ==
+20:43:16     STDERR: Manjkajo SAOP poverilnice. Dopolni sekcijo "Saop" v korenski appsettings.Local.json (BaseUrl, Username, Password) ali nastavi PIM_SAOP_BASE_URL, PIM_SAOP_USERNAME in PIM_SAOP_PASSWORD.
+20:43:16     NAPAKA: worker workers\PIM.SaopOrdersWorker je koncal z izhodno kodo 2
+20:43:16  == Osvezitev objave (podjetje 1) ==
+20:43:31     konec: Osvezitev objave (podjetje 1)
+20:43:31  == Osvezitev objave (podjetje 2) ==
+20:44:20     konec: Osvezitev objave (podjetje 2)
+20:44:20  == Osvezitev objave (podjetje 3) ==
+20:44:41     konec: Osvezitev objave (podjetje 3)
+20:44:41  == Osvezitev objave (podjetje 4) ==
+20:45:03     konec: Osvezitev objave (podjetje 4)
+20:45:03  == Izvoz kataloga in strank (podjetje 2) ==
+20:45:10     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+20:45:10     konec: Izvoz kataloga in strank (podjetje 2)
+20:45:10  Katalog cikel koncan; padlih korakov: 1.
+21:14:14  == Narocila iz SAOP (VNK/VND) ==
+21:14:15     STDERR: Manjkajo SAOP poverilnice. Dopolni sekcijo "Saop" v korenski appsettings.Local.json (BaseUrl, Username, Password) ali nastavi PIM_SAOP_BASE_URL, PIM_SAOP_USERNAME in PIM_SAOP_PASSWORD.
+21:14:15     NAPAKA: worker workers\PIM.SaopOrdersWorker je koncal z izhodno kodo 2
+21:14:15  == Osvezitev objave (podjetje 1) ==
+21:14:30     konec: Osvezitev objave (podjetje 1)
+21:14:30  == Osvezitev objave (podjetje 2) ==
+21:15:09     konec: Osvezitev objave (podjetje 2)
+21:15:09  == Osvezitev objave (podjetje 3) ==
+21:15:29     konec: Osvezitev objave (podjetje 3)
+21:15:29  == Osvezitev objave (podjetje 4) ==
+21:15:53     konec: Osvezitev objave (podjetje 4)
+21:15:53  == Izvoz kataloga in strank (podjetje 2) ==
+21:16:05     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+21:16:05     konec: Izvoz kataloga in strank (podjetje 2)
+21:16:05  Katalog cikel koncan; padlih korakov: 1.
+22:14:14  == Narocila iz SAOP (VNK/VND) ==
+22:14:15     STDERR: Manjkajo SAOP poverilnice. Dopolni sekcijo "Saop" v korenski appsettings.Local.json (BaseUrl, Username, Password) ali nastavi PIM_SAOP_BASE_URL, PIM_SAOP_USERNAME in PIM_SAOP_PASSWORD.
+22:14:15     NAPAKA: worker workers\PIM.SaopOrdersWorker je koncal z izhodno kodo 2
+22:14:15  == Osvezitev objave (podjetje 1) ==
+22:14:26     konec: Osvezitev objave (podjetje 1)
+22:14:26  == Osvezitev objave (podjetje 2) ==
+22:14:53     konec: Osvezitev objave (podjetje 2)
+22:14:53  == Osvezitev objave (podjetje 3) ==
+22:15:10     konec: Osvezitev objave (podjetje 3)
+22:15:10  == Osvezitev objave (podjetje 4) ==
+22:15:25     konec: Osvezitev objave (podjetje 4)
+22:15:25  == Izvoz kataloga in strank (podjetje 2) ==
+22:15:33     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento
+22:15:33     konec: Izvoz kataloga in strank (podjetje 2)
+22:15:33  Katalog cikel koncan; padlih korakov: 1.
+23:14:14  == Narocila iz SAOP (VNK/VND) ==
+23:14:15     STDERR: Manjkajo SAOP poverilnice. Dopolni sekcijo "Saop" v korenski appsettings.Local.json (BaseUrl, Username, Password) ali nastavi PIM_SAOP_BASE_URL, PIM_SAOP_USERNAME in PIM_SAOP_PASSWORD.
+23:14:15     NAPAKA: worker workers\PIM.SaopOrdersWorker je koncal z izhodno kodo 2
+23:14:15  == Osvezitev objave (podjetje 1) ==
+23:14:29     konec: Osvezitev objave (podjetje 1)
+23:14:29  == Osvezitev objave (podjetje 2) ==
+23:15:00     konec: Osvezitev objave (podjetje 2)
+23:15:00  == Osvezitev objave (podjetje 3) ==
+23:15:18     konec: Osvezitev objave (podjetje 3)
+23:15:18  == Osvezitev objave (podjetje 4) ==
+23:15:34     konec: Osvezitev objave (podjetje 4)
+23:15:34  == Izvoz kataloga in strank (podjetje 2) ==
+23:16:45     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento
+23:16:45     konec: Izvoz kataloga in strank (podjetje 2)
+23:16:45  Katalog cikel koncan; padlih korakov: 1.

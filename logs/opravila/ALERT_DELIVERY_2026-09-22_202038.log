@@ -1,0 +1,7 @@
+20:20:38  === ZAČETEK: Razpošiljanje alarmov | posel ALERT_DELIVERY | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 20:20:38
+20:20:38  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 300 s
+20:20:38  == Razpošiljanje alarmov ==
+20:20:39     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+20:20:39     konec: Razpošiljanje alarmov (1 s)
+20:20:39  Razpošiljanje alarmov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+20:20:39  === KONEC: izhod 0, trajanje 00:00:01

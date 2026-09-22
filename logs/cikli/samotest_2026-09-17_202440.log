@@ -1,0 +1,24 @@
+20:24:40  === ZAČETEK: Nočni samotest | sprožil: razporejevalnik (razporejevalnik) | po razporedu | 2026-09-17 20:24:40
+20:24:40  Podjetja: 1, 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution
+20:24:40  == Nočni samotest ==
+20:24:42     Samotest NIGHTLY_SYSTEM (e83066d6-84de-4678-92e7-b97f2092741f)
+20:24:42     ──────────────────────────────────────────────────────────────────────────────
+20:24:42     DB                 USPEL             23 ms  262 uporabljenih migracij
+20:24:42     SCHEMA             USPEL             15 ms  7 objektov je na mestu
+20:24:42     SCHEDULES          USPEL              3 ms  44 od 51 vklopljenih
+20:24:42     HEARTBEAT          PADEL             13 ms  Molčijo: ALERT_DISPATCH (org 2), SAOP_DELIVERY (org 1), SAOP_DELIVERY (org 2), SAOP_DELIVERY (org 3), SAOP_DELIVERY (org 4), SAOP_ORDERS_VND (org 1), SAOP_ORDERS_VND (org 2), SAOP_ORDERS_VND (org 3), SAOP_ORDERS_VND (org 4), SAOP_ORDERS_VNK (org 1), SAOP_ORDERS_VNK (org 2), SAOP_ORDERS_VNK (org 3), SAOP_ORDERS_VNK (org 4), SAOP_PRODUCTS (org 1), SAOP_PRODUCTS (org 2), SAOP_PRODUCTS (org 3), SAOP_PRODUCTS ( …
+20:24:42     RUNS_24H           PADEL             11 ms  Brez zagona v 24 h: ALERT_DISPATCH (org 2), SAOP_ORDERS_VND (org 1), SAOP_ORDERS_VND (org 2), SAOP_ORDERS_VND (org 3), SAOP_ORDERS_VND (org 4), SAOP_ORDERS_VNK (org 1), SAOP_ORDERS_VNK (org 2), SAOP_ORDERS_VNK (org 3), SAOP_ORDERS_VNK (org 4), STOCK_REPLENISHMENT_DIGEST (org 1), STOCK_REPLENISHMENT_DIGEST (org 2), STOCK_REPLENISHMENT_DIGEST (org 3), STOCK_REPLENISHMENT_DIGEST (org 4)
+20:24:42     CATALOG            USPEL             26 ms  196.594 izdelkov (+2 od prejšnjega zagona)
+20:24:42     STOCK_FRESHNESS    USPEL              8 ms  vsi viri mlajši od 24 h (najstarejši 3 h)
+20:24:42     QUARANTINE         OPOZORILO          2 ms  5 zapisov čaka v karanteni.
+20:24:42     QUALITY            OPOZORILO        113 ms  15.028 objavljenih izdelkov ima odprto zahtevo.
+20:25:39     WEB_CSV            USPEL          56456 ms  89.652 vrstic × 17 stolpcev, 5.352 kB
+20:25:39     OUTBOX             OPOZORILO          4 ms  1 mrtvih sporočil, 14 čaka odobritve.
+20:25:39     ECHO               USPEL              2 ms  ni nepojasnjenih odklonov
+20:25:39     EXPORT_FRESHNESS   USPEL              2 ms  148 uspešnih izvozov v 24 h
+20:25:39     ──────────────────────────────────────────────────────────────────────────────
+20:25:39     REZULTAT: PADEL — 13 korakov, 56678 ms
+20:25:39     NAPAKA: Samotest je končal z izhodno kodo 1.
+20:25:39     NAPAKA v koraku 'Nočni samotest' po 58 s: izhodna koda 1
+20:25:39  Nočni samotest koncan; padlih korakov: 1.
+20:25:39  === KONEC: izhod 1, trajanje 00:00:58

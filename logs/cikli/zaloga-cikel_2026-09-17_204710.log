@@ -1,0 +1,67 @@
+20:47:10  === ZAČETEK: Zalogovni cikel | sprožil: razporejevalnik (razporejevalnik) | po razporedu | 2026-09-17 20:47:10
+20:47:10  Podjetja: 1, 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution
+20:47:10  == Zaloga NW_STOCK ==
+20:47:11     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 17. 09. 2026 21:15.
+20:47:11     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:47:12     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:47:12     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=b3a4118e-59b9-4ada-ab79-e60844329345. Zapisano ni bilo nic.
+20:47:13     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:47:14     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=91cd8b3e-2ebb-417e-b490-ee3ecbc7bc47. Zapisano ni bilo nic.
+20:47:15     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:47:15     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=2b9413ba-2fef-4e60-9fe2-d1434306ee5a. Zapisano ni bilo nic.
+20:47:16     Prebranih zapisov: 2762; SHA-256: a9949c8d0268b7a86462a81e35eec5b7e4e651a83b46939d71629285af1e289e
+20:47:16     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-17 17:15:16Z, uporabljenih=2762, v karanteni=0, RunId=9d050312-c012-4986-9325-67e21d009aa7. Zapisano ni bilo nic.
+20:47:16     konec: Zaloga NW_STOCK (6 s)
+20:47:16  == Zaloga BT_STOCK ==
+20:47:17     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+20:47:18     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:47:19     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+20:47:20     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:47:20     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+20:47:21     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:47:21     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+20:47:22     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+20:47:22     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+20:47:22     konec: Zaloga BT_STOCK (6 s)
+20:47:22  == Zaloga iz SAOP (kolicine) ==
+20:47:24     [1] SAOP_GETSTOCKS (GetStocks): skladišč=4, zapisov=16, uporabljenih=16, v karanteni=0, RunId=da4e4677-5c09-4129-8379-efff77b45149.
+20:47:29     [2] SAOP_GETSTOCKS (GetStocks): skladišč=1, zapisov=8774, uporabljenih=8774, v karanteni=0, RunId=8dfa0962-6e21-44ac-aa8e-249d63a49152.
+20:47:31     [3] SAOP_REGISTERED_VIEW (RegisteredViewData): skladišč=0, zapisov=3073, uporabljenih=3073, v karanteni=0, RunId=221eaeb1-8b75-4806-bb75-16fd1407c07d.
+20:47:33     [4] SAOP_GETSTOCKS (GetStocks): skladišč=14, zapisov=3122, uporabljenih=3122, v karanteni=0, RunId=2836e694-29b0-4b80-a90f-993b176ffb7c.
+20:47:33     konec: Zaloga iz SAOP (kolicine) (10 s)
+20:47:33  == Osvezitev cen kataloga ==
+20:47:34     Živ SAOP zajem: podjetij=4, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+20:47:34     [2] IQLighting (SAOP_IQLIGHTING)
+20:47:56       GetPrices: strani=3 zapisov=149 — MEJNIK STOJI (SAOP je vrnil 149 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:47:56       SKUPAJ strani=3 zapisov=149 RunId=f75b7eb1-d260-44d6-ace4-d25ef23f4ebc
+20:47:56       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetPrices=3. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+20:47:56       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run f75b7eb1-d260-44d6-ace4-d25ef23f4ebc.
+20:47:56     [3] Vidadria (SAOP_VIDADRIA)
+20:48:18       GetPrices: strani=5 zapisov=206 — MEJNIK STOJI (SAOP je vrnil 206 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:48:18       SKUPAJ strani=5 zapisov=206 RunId=2c4261dc-a232-4e7e-a98e-4f6e7a199bb5
+20:48:18       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 2c4261dc-a232-4e7e-a98e-4f6e7a199bb5.
+20:48:18     [4] Ediito (SAOP_EDIITO)
+20:48:25       GetPrices: strani=2 zapisov=17 — MEJNIK STOJI (SAOP je vrnil 17 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:48:25       SKUPAJ strani=2 zapisov=17 RunId=0fe8ff70-cd2b-4ea6-8b3a-1a63b555c09a
+20:48:25       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 0fe8ff70-cd2b-4ea6-8b3a-1a63b555c09a.
+20:48:25     [1] DEMO (SAOP_DEMO)
+20:48:30       GetPrices: strani=0 zapisov=0 [4,1 s]
+20:48:30       SKUPAJ strani=0 zapisov=0 RunId=4018c767-2307-4240-88b2-34a742f7cfaf
+20:48:30     konec: Osvezitev cen kataloga (56 s)
+20:48:30  == Izvoz cen in zaloge za splet ==
+20:48:40     Izvoz profila MAGENTO_STOCK_PRICES končan: 11435 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+20:49:40     Izvoz profila MAGENTO_STOCK_PRICES končan: 89656 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+20:49:58     Izvoz profila MAGENTO_STOCK_PRICES končan: 18683 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+20:50:24     Izvoz profila MAGENTO_STOCK_PRICES končan: 35651 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+20:50:24     konec: Izvoz cen in zaloge za splet (113 s)
+20:50:24  == Osvezitev kataloga in strank s cenami in zalogo (podjetje 2) ==
+20:52:12     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+20:52:12     konec: Osvezitev kataloga in strank s cenami in zalogo (podjetje 2) (108 s)
+20:52:12  == Zaloga iz SAOP (datumi prihoda) ==
+20:52:13     [1] SAOP_DELIVERY: se ni na vrsti po razporedu; preskoceno.
+20:52:13     [2] SAOP_DELIVERY: se ni na vrsti po razporedu; preskoceno.
+20:52:13     [3] SAOP_DELIVERY: se ni na vrsti po razporedu; preskoceno.
+20:52:13     [4] SAOP_DELIVERY: se ni na vrsti po razporedu; preskoceno.
+20:52:14     konec: Zaloga iz SAOP (datumi prihoda) (1 s)
+20:52:14  Zaloga in cene koncan; padlih korakov: 0.
+20:52:14  === KONEC: izhod 0, trajanje 00:05:03

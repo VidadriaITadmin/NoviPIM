@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "PIM.F10.QualityUxTests/1.0.0": {
+        "runtime": {
+          "PIM.F10.QualityUxTests.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.F10.QualityUxTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

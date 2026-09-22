@@ -1,0 +1,9 @@
+22:28:26  === ZAČETEK: Nadzornik | posel ALERT_EVALUATION | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:28:26
+22:28:26  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 300 s
+22:28:26  == Nadzornik zastalih obdelav ==
+22:28:27     [FAZA] Izračun WATCHDOG: se je začela.
+22:28:27     [FAZA] Izračun WATCHDOG: uspelo — zapisano 3; novih alarmov 0, zaprtih 3, odprtih skupaj 625, v vrsto za dostavo 0.
+22:28:27     Watchdog pregled je končan.
+22:28:27     konec: Nadzornik zastalih obdelav (0 s)
+22:28:27  Nadzornik končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:28:27  === KONEC: izhod 0, trajanje 00:00:00

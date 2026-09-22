@@ -1,0 +1,52 @@
+06:05:20  == Narocila iz SAOP (VNK/VND) ==
+06:05:21     [2] IQLighting (SAOP_IQLIGHTING)
+06:05:22       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:05:22       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:05:22     [3] Vidadria (SAOP_VIDADRIA)
+06:05:22       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:05:22       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:05:22     [4] Ediito (SAOP_EDIITO)
+06:05:22       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:05:22       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:05:22     [1] DEMO (SAOP_DEMO)
+06:05:22       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:05:22       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:05:22     konec: Narocila iz SAOP (VNK/VND)
+06:05:22  == Osvezitev objave (podjetje 1) ==
+06:05:56     konec: Osvezitev objave (podjetje 1)
+06:05:56  == Osvezitev objave (podjetje 2) ==
+06:06:34     konec: Osvezitev objave (podjetje 2)
+06:06:34  == Osvezitev objave (podjetje 3) ==
+06:06:53     konec: Osvezitev objave (podjetje 3)
+06:06:53  == Osvezitev objave (podjetje 4) ==
+06:07:07     konec: Osvezitev objave (podjetje 4)
+06:07:07  == Izvoz kataloga in strank (podjetje 2) ==
+06:08:53     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+06:08:53     konec: Izvoz kataloga in strank (podjetje 2)
+06:08:53  Katalog cikel koncan; padlih korakov: 0.
+06:14:15  == Narocila iz SAOP (VNK/VND) ==
+06:14:16     [2] IQLighting (SAOP_IQLIGHTING)
+06:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:14:16     [3] Vidadria (SAOP_VIDADRIA)
+06:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:14:16     [4] Ediito (SAOP_EDIITO)
+06:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:14:16     [1] DEMO (SAOP_DEMO)
+06:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+06:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+06:14:16     konec: Narocila iz SAOP (VNK/VND)
+06:14:16  == Osvezitev objave (podjetje 1) ==
+06:14:33     konec: Osvezitev objave (podjetje 1)
+06:14:33  == Osvezitev objave (podjetje 2) ==
+06:15:14     konec: Osvezitev objave (podjetje 2)
+06:15:14  == Osvezitev objave (podjetje 3) ==
+06:15:34     konec: Osvezitev objave (podjetje 3)
+06:15:34  == Osvezitev objave (podjetje 4) ==
+06:16:06     konec: Osvezitev objave (podjetje 4)
+06:16:06  == Izvoz kataloga in strank (podjetje 2) ==
+06:16:12     STDERR: MAGENTO_PRODUCTS ze tece; ta zagon se je umaknil.
+06:16:12     konec: Izvoz kataloga in strank (podjetje 2)
+06:16:12  Katalog cikel koncan; padlih korakov: 0.

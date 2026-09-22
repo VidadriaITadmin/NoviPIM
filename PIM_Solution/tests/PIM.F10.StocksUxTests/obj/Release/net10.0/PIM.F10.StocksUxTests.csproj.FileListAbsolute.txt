@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\bin\Release\net10.0\PIM.F10.StocksUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\bin\Release\net10.0\PIM.F10.StocksUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\bin\Release\net10.0\PIM.F10.StocksUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\bin\Release\net10.0\PIM.F10.StocksUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\bin\Release\net10.0\PIM.F10.StocksUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\refint\PIM.F10.StocksUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\ref\PIM.F10.StocksUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.StocksUxTests\obj\Release\net10.0\PIM.F10.StocksUxTests.sourcelink.json

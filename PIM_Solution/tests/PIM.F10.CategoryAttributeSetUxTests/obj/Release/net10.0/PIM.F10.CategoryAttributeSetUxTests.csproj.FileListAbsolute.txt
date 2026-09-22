@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\bin\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\bin\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\bin\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\bin\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\bin\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\refint\PIM.F10.CategoryAttributeSetUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\ref\PIM.F10.CategoryAttributeSetUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryAttributeSetUxTests\obj\Release\net10.0\PIM.F10.CategoryAttributeSetUxTests.sourcelink.json

@@ -1,0 +1,11 @@
+{
+  "organizationId": 2,
+  "sourceCode": "SAOP_IQLIGHTING",
+  "responseFormat": "xml",
+  "generatedFrom": "PIM_test",
+  "items": 500,
+  "prices": 509,
+  "descriptions": 499,
+  "currencies": 181,
+  "priceLists": 13
+}

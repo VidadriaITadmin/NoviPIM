@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\bin\Release\net10.0\PIM.F10.PipelineRunsUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\bin\Release\net10.0\PIM.F10.PipelineRunsUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\bin\Release\net10.0\PIM.F10.PipelineRunsUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\bin\Release\net10.0\PIM.F10.PipelineRunsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\bin\Release\net10.0\PIM.F10.PipelineRunsUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\refint\PIM.F10.PipelineRunsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\ref\PIM.F10.PipelineRunsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.PipelineRunsUxTests\obj\Release\net10.0\PIM.F10.PipelineRunsUxTests.sourcelink.json

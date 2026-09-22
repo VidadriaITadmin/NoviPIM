@@ -1,0 +1,193 @@
+/* Izoliran slog strani /stranke. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.result-count[b-1qkmkqa9vt] { font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* Filtri stojijo v isti kartici kot tabela, loceni samo s crto — isto kot pri vhodnih podatkih.
+   Najpogostejsi trije (iskanje, podjetje, tip) so vedno vidni, ostali se odprejo na zahtevo. */
+.ghost-button[b-1qkmkqa9vt] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  gap: .4rem;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ghost-button:hover[b-1qkmkqa9vt] { background: var(--pim-surface-hover); }
+/* Izvoz praznega pogleda ni dejanje, ampak past; povezava to pove, ne samo ob kliku. */
+.ghost-button.disabled[b-1qkmkqa9vt] { opacity: .45; pointer-events: none; }
+.filter-toggle.open[b-1qkmkqa9vt] { background: var(--pim-surface-subtle); border-color: var(--pim-text-muted); }
+.filter-badge[b-1qkmkqa9vt] { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
+.toolbar-actions[b-1qkmkqa9vt] { align-items: center; display: flex; gap: .5rem; }
+
+.filter-panel[b-1qkmkqa9vt] { border-bottom: 1px solid var(--pim-border); padding: .85rem; }
+.filter-panel[hidden][b-1qkmkqa9vt] { display: none; }
+.filter-grid[b-1qkmkqa9vt] { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.filter-field[b-1qkmkqa9vt] { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.filter-field label[b-1qkmkqa9vt] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.filter-field .filter-select[b-1qkmkqa9vt] { max-width: none; width: 100%; }
+.filter-actions[b-1qkmkqa9vt] { margin-top: .75rem; }
+.link-button[b-1qkmkqa9vt] { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover[b-1qkmkqa9vt] { text-decoration: underline; }
+
+/* Cela vrstica je ena poteza: odpre stranko. Zato kazalec in poudarek na celi vrstici,
+   ne povezava v celici — podcrtano besedilo sredi klikljive vrstice obljublja dve dejanji. */
+.row-link[b-1qkmkqa9vt] { cursor: pointer; }
+.row-link:hover[b-1qkmkqa9vt] { background: var(--pim-surface-hover); }
+.page-position[b-1qkmkqa9vt] { color: var(--pim-text-soft); font-size: 13px; }
+
+.customer-name[b-1qkmkqa9vt] { display: block; }
+.customer-meta[b-1qkmkqa9vt] { color: var(--pim-text-muted); display: block; font-size: .75rem; margin-top: .1rem; }
+.rule-flags[b-1qkmkqa9vt] { display: flex; flex-wrap: wrap; gap: .25rem; }
+.rule-flag[b-1qkmkqa9vt] { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: 999px; font-size: .72rem; padding: .05rem .45rem; white-space: nowrap; }
+.source-note[b-1qkmkqa9vt] { font-size: .8rem; margin: .9rem .2rem 0; max-width: 70rem; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1qkmkqa9vt],
+.search-input:focus-visible[b-1qkmkqa9vt],
+.filter-select:focus-visible[b-1qkmkqa9vt],
+.ghost-button:focus-visible[b-1qkmkqa9vt],
+.link-button:focus-visible[b-1qkmkqa9vt],
+.pagination button:focus-visible[b-1qkmkqa9vt],
+.row-link:focus-visible[b-1qkmkqa9vt] { outline: 2px solid var(--pim-primary); outline-offset: -2px; }
+
+/* Osem podatkovnih stolpcev se na telefonu ne sme stisniti. */
+@media (max-width: 900px) {
+  .data-table[b-1qkmkqa9vt] { min-width: 960px; }
+  .toolbar-actions[b-1qkmkqa9vt] { width: 100%; }
+  .toolbar-actions > *[b-1qkmkqa9vt] { flex: 1 1 auto; justify-content: center; }
+}
+
+/* Seznam strank sledi istemu delovnemu ritmu kot /izdelki: mirna orodna vrstica,
+   filtri na zahtevo, aktivne izbire kot znac-ke in tabela kot locena delovna povrsina. */
+.customer-list-toolbar[b-1qkmkqa9vt] { display: block; padding: 0; }
+.customer-list-toolbar > .card-toolbar[b-1qkmkqa9vt] {
+  align-items: center;
+  border-bottom: 1px solid var(--pim-line, var(--pim-border));
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  padding: .85rem 1rem;
+}
+.customer-list-toolbar > .card-toolbar .search-field[b-1qkmkqa9vt] { flex: 1 1 22rem; min-width: 14rem; position: relative; }
+.customer-list-toolbar > .card-toolbar .search-input[b-1qkmkqa9vt] { max-width: none; min-width: 0; padding-left: 2.1rem; width: 100%; }
+.search-icon[b-1qkmkqa9vt] {
+  border: 1.5px solid var(--pim-text-muted);
+  border-radius: 50%;
+  height: .7rem;
+  left: .75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: .7rem;
+}
+.search-icon[b-1qkmkqa9vt]::after {
+  background: var(--pim-text-muted);
+  bottom: -.28rem;
+  content: "";
+  height: .3rem;
+  position: absolute;
+  right: -.1rem;
+  transform: rotate(-45deg);
+  width: 1.5px;
+}
+.ghost-button[b-1qkmkqa9vt] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  gap: .4rem;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ghost-button:hover[b-1qkmkqa9vt] { background: var(--pim-surface-hover); }
+.filter-toggle.open[b-1qkmkqa9vt] { background: var(--pim-surface-subtle); border-color: var(--pim-text-muted); }
+.funnel[b-1qkmkqa9vt] { border-left: .3rem solid transparent; border-right: .3rem solid transparent; border-top: .4rem solid currentColor; display: inline-block; height: 0; width: 0; }
+.filter-badge[b-1qkmkqa9vt] { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
+.customer-list-toolbar > .card-toolbar .toolbar-actions[b-1qkmkqa9vt] { align-items: center; display: flex; gap: .5rem; margin-left: auto; }
+.customer-list-toolbar > .card-toolbar .result-count[b-1qkmkqa9vt] { margin-left: 0; }
+
+.customer-list-toolbar > .filter-panel[b-1qkmkqa9vt] {
+  border-bottom: 1px solid var(--pim-border);
+  border-top: 0;
+  margin-top: 0;
+  padding: .85rem 1rem 1rem;
+}
+.customer-list-toolbar > .filter-panel[hidden][b-1qkmkqa9vt] { display: none; }
+.filter-grid[b-1qkmkqa9vt] { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.filter-field[b-1qkmkqa9vt] { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.filter-field label[b-1qkmkqa9vt] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.filter-field .filter-select[b-1qkmkqa9vt] { max-width: none; width: 100%; }
+.filter-actions[b-1qkmkqa9vt] { align-items: center; display: flex; gap: .75rem; margin-top: .9rem; }
+.link-button[b-1qkmkqa9vt] { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover[b-1qkmkqa9vt] { text-decoration: underline; }
+
+.active-filters[b-1qkmkqa9vt] { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1rem; }
+.filter-chip[b-1qkmkqa9vt] {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+}
+.filter-chip:hover[b-1qkmkqa9vt] { background: var(--pim-surface-hover); }
+.filter-chip.clear-all[b-1qkmkqa9vt] { border-style: dashed; color: var(--pim-text-muted); }
+.chip-remove[b-1qkmkqa9vt] { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove[b-1qkmkqa9vt]::before,
+.chip-remove[b-1qkmkqa9vt]::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 50%;
+  width: 100%;
+}
+.chip-remove[b-1qkmkqa9vt]::before { transform: rotate(45deg); }
+.chip-remove[b-1qkmkqa9vt]::after { transform: rotate(-45deg); }
+
+.customer-list-card[b-1qkmkqa9vt] { overflow: hidden; padding: 0; }
+.table-toolbar[b-1qkmkqa9vt] { align-items: center; display: flex; gap: .5rem; justify-content: flex-end; margin: .75rem 1rem .5rem; }
+.table-toolbar label[b-1qkmkqa9vt] { color: var(--pim-text-muted); font-size: .78rem; }
+.table-toolbar .filter-select[b-1qkmkqa9vt] { max-width: 14rem; }
+.row-link:focus-visible[b-1qkmkqa9vt] { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+.filter-chip:focus-visible[b-1qkmkqa9vt],
+.search-input:focus-visible[b-1qkmkqa9vt],
+.filter-select:focus-visible[b-1qkmkqa9vt],
+.ghost-button:focus-visible[b-1qkmkqa9vt],
+.link-button:focus-visible[b-1qkmkqa9vt],
+.pagination button:focus-visible[b-1qkmkqa9vt] { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .customer-list-toolbar > .card-toolbar[b-1qkmkqa9vt] { align-items: stretch; flex-direction: column; }
+  .customer-list-toolbar > .card-toolbar .search-field[b-1qkmkqa9vt] { flex: 0 0 auto; min-width: 0; }
+  .customer-list-toolbar > .card-toolbar > .filter-select[b-1qkmkqa9vt],
+  .customer-list-toolbar > .card-toolbar > .ghost-button[b-1qkmkqa9vt] { max-width: none; width: 100%; }
+  .customer-list-toolbar > .card-toolbar .toolbar-actions[b-1qkmkqa9vt] { margin-left: 0; width: 100%; }
+  .customer-list-toolbar > .card-toolbar .toolbar-actions > *[b-1qkmkqa9vt] { flex: 1 1 auto; justify-content: center; }
+  .filter-grid[b-1qkmkqa9vt] { grid-template-columns: 1fr; }
+  .table-toolbar[b-1qkmkqa9vt] { justify-content: flex-start; margin-left: 1rem; margin-right: 1rem; }
+  .row-flags[b-1qkmkqa9vt] { max-width: none; }
+}

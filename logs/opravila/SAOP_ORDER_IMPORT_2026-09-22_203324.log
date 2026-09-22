@@ -1,0 +1,19 @@
+20:33:25  === ZAČETEK: Naročila iz SAOP | posel SAOP_ORDER_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 20:33:25
+20:33:25  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+20:33:25  == Naročila iz SAOP (podjetje 2) ==
+20:33:29     [2] IQLighting (SAOP_IQLIGHTING)
+20:33:29       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+20:33:29       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+20:33:29     konec: Naročila iz SAOP (podjetje 2) (4 s)
+20:33:29  == Naročila iz SAOP (podjetje 3) ==
+20:33:30     [3] Vidadria (SAOP_VIDADRIA)
+20:33:30       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+20:33:30       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+20:33:30     konec: Naročila iz SAOP (podjetje 3) (1 s)
+20:33:30  == Naročila iz SAOP (podjetje 4) ==
+20:33:31     [4] Ediito (SAOP_EDIITO)
+20:33:31       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+20:33:31       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+20:33:31     konec: Naročila iz SAOP (podjetje 4) (1 s)
+20:33:31  Naročila iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+20:33:31  === KONEC: izhod 0, trajanje 00:00:06

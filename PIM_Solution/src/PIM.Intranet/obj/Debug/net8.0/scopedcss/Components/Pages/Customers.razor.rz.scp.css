@@ -1,0 +1,24 @@
+/* Izoliran slog strani /stranke. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-1qkmkqa9vt] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-1qkmkqa9vt] { font-variant-numeric: tabular-nums; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-1qkmkqa9vt] { overflow-x: auto; }
+.row-action[b-1qkmkqa9vt] { text-align: right; width: 44px; }
+.open-link[b-1qkmkqa9vt] { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
+.chevron[b-1qkmkqa9vt] { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
+.page-position[b-1qkmkqa9vt] { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1qkmkqa9vt],
+.search-input:focus-visible[b-1qkmkqa9vt],
+.filter-select:focus-visible[b-1qkmkqa9vt],
+.pagination button:focus-visible[b-1qkmkqa9vt],
+.table-scroll:focus-visible[b-1qkmkqa9vt],
+.data-table a:focus-visible[b-1qkmkqa9vt],
+.open-link:focus-visible[b-1qkmkqa9vt] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+/* Sedem podatkovnih stolpcev in stolpec dejanja se na telefonu ne smejo stisniti. */
+@media (max-width: 900px) {
+  .data-table[b-1qkmkqa9vt] { min-width: 760px; }
+}

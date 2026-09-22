@@ -1,0 +1,40 @@
+.app-shell[b-a4h9fu3zyz] { background: #f6f8fb; display: flex; min-height: 100vh; }
+.app-sidebar[b-a4h9fu3zyz] { background: linear-gradient(160deg, #1c242e, #111820); color: #dce4f0; flex: 0 0 200px; min-height: 100vh; position: relative; }
+.app-main[b-a4h9fu3zyz] { flex: 1; min-width: 0; }
+.app-topbar[b-a4h9fu3zyz] { align-items: center; background: #fff; border-bottom: 1px solid #e2e7ee; display: flex; gap: 12px; height: 66px; padding: 0 26px; }
+.menu-glyph[b-a4h9fu3zyz] { align-items: center; background: transparent; border: 0; color: #34445d; cursor: pointer; display: inline-flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.menu-glyph-icon[b-a4h9fu3zyz], .menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { background: currentColor; border-radius: 2px; display: block; height: 2px; position: relative; width: 17px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { content: ""; left: 0; position: absolute; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before { top: -6px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::after { top: 6px; }
+.menu-glyph:focus-visible[b-a4h9fu3zyz] { border-radius: 5px; box-shadow: 0 0 0 3px rgba(23, 100, 232, .18); outline: none; }
+.global-search[b-a4h9fu3zyz] { align-items: center; border: 1px solid #dbe2eb; border-radius: 6px; color: #718096; display: flex; font-size: 13px; gap: 10px; height: 38px; max-width: 350px; padding: 0 13px; text-decoration: none; width: 100%; }
+.search-icon[b-a4h9fu3zyz] { border: 1.6px solid #718096; border-radius: 50%; height: 11px; position: relative; width: 11px; }
+.search-icon[b-a4h9fu3zyz]::after { background: #718096; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
+.topbar-spacer[b-a4h9fu3zyz] { flex: 1; }
+.top-context[b-a4h9fu3zyz] { background: #fff; border: 1px solid #dfe5ed; border-radius: 6px; display: flex; flex-direction: column; min-width: 112px; padding: 5px 11px; text-align: left; }
+.top-context small[b-a4h9fu3zyz] { color: #78869a; font-size: 9px; }
+.top-context strong[b-a4h9fu3zyz] { color: #27364d; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.top-control[b-a4h9fu3zyz] { font: inherit; }
+.top-control:disabled[b-a4h9fu3zyz] { cursor: not-allowed; opacity: .68; }
+.notification-button[b-a4h9fu3zyz] { background: transparent; border: 0; height: 34px; opacity: .58; padding: 8px; width: 34px; }
+.notification-button span[b-a4h9fu3zyz] { border: 1.7px solid #41516a; border-radius: 9px 9px 4px 4px; display: block; height: 14px; position: relative; width: 13px; }
+.notification-button span[b-a4h9fu3zyz]::after { background: #41516a; border-radius: 50%; bottom: -5px; content: ""; height: 3px; left: 4px; position: absolute; width: 3px; }
+.signed-user[b-a4h9fu3zyz] { align-items: center; display: flex; gap: 9px; }
+.signed-user span[b-a4h9fu3zyz] { align-items: center; background: #47556c; border-radius: 50%; color: #fff; display: flex; font-size: 11px; height: 32px; justify-content: center; width: 32px; }
+.signed-user strong[b-a4h9fu3zyz] { font-size: 13px; white-space: nowrap; }
+.logout-button[b-a4h9fu3zyz] { background: transparent; border: 0; color: #53627a; cursor: pointer; font: inherit; font-size: 12px; }
+.app-content[b-a4h9fu3zyz] { padding: 20px 26px 34px; }
+
+@media (max-width: 1050px) { .top-control[b-a4h9fu3zyz] { display: none; } }
+@media (max-width: 760px) {
+  .app-sidebar[b-a4h9fu3zyz] { display: none; left: 0; position: fixed; top: 0; width: 220px; z-index: 100; }
+  .app-sidebar.open[b-a4h9fu3zyz] { display: block; }
+  .app-topbar[b-a4h9fu3zyz] { padding: 0 14px; }
+  .top-context[b-a4h9fu3zyz], .signed-user strong[b-a4h9fu3zyz], .logout-button[b-a4h9fu3zyz] { display: none; }
+  .global-search[b-a4h9fu3zyz] { max-width: none; }
+  .app-content[b-a4h9fu3zyz] { padding: 18px 14px; }
+}
+
+#blazor-error-ui[b-a4h9fu3zyz] { background: lightyellow; bottom: 0; box-shadow: 0 -1px 2px rgba(0, 0, 0, .2); display: none; left: 0; padding: .6rem 1.25rem .7rem; position: fixed; width: 100%; z-index: 1000; }
+#blazor-error-ui .dismiss[b-a4h9fu3zyz] { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }

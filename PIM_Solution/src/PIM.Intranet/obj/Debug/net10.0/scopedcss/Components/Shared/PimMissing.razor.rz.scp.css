@@ -1,0 +1,13 @@
+.missing-read-model[b-mq3vz4iwol] {
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-left: .25rem solid var(--pim-text-muted);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-soft);
+  margin: 1rem 0;
+  padding: 1rem 1.1rem;
+}
+
+.missing-read-model strong[b-mq3vz4iwol] { color: var(--pim-text-strong); }
+.missing-read-model p[b-mq3vz4iwol] { margin: .35rem 0 0; }
+.code-value[b-mq3vz4iwol] { font-family: var(--pim-font-mono, ui-monospace, monospace); }

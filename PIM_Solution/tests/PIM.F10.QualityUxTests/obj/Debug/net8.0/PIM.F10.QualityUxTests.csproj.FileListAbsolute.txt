@@ -1,0 +1,14 @@
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Debug\net8.0\PIM.F10.QualityUxTests.exe
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Debug\net8.0\PIM.F10.QualityUxTests.deps.json
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Debug\net8.0\PIM.F10.QualityUxTests.runtimeconfig.json
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Debug\net8.0\PIM.F10.QualityUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Debug\net8.0\PIM.F10.QualityUxTests.pdb
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.AssemblyInfoInputs.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.AssemblyInfo.cs
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.csproj.CoreCompileInputs.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\refint\PIM.F10.QualityUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.pdb
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\PIM.F10.QualityUxTests.genruntimeconfig.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Debug\net8.0\ref\PIM.F10.QualityUxTests.dll

@@ -1,0 +1,13 @@
+19:35:23  === ZAČETEK: Zaloga iz SAOP | posel STOCK_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 19:35:23
+19:35:23  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+19:35:23  == Zaloga iz SAOP (podjetje 2) ==
+19:35:30     [2] SAOP_GETSTOCKS (GetStocks): skladišč=1, zapisov=8775, uporabljenih=8775, v karanteni=0, RunId=003839e5-169d-4cbf-b192-8578cf9b7f2e.
+19:35:31     konec: Zaloga iz SAOP (podjetje 2) (7 s)
+19:35:31  == Zaloga iz SAOP (podjetje 3) ==
+19:35:35     [3] SAOP_REGISTERED_VIEW (RegisteredViewData): skladišč=0, zapisov=3034, uporabljenih=3034, v karanteni=0, RunId=f425087c-983f-4c74-a607-85451d14365e.
+19:35:35     konec: Zaloga iz SAOP (podjetje 3) (4 s)
+19:35:35  == Zaloga iz SAOP (podjetje 4) ==
+19:35:38     [4] SAOP_GETSTOCKS (GetStocks): skladišč=14, zapisov=3125, uporabljenih=3125, v karanteni=0, RunId=738d8801-b200-4ee0-a64a-a4b67d851451.
+19:35:38     konec: Zaloga iz SAOP (podjetje 4) (3 s)
+19:35:38  Zaloga iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+19:35:38  === KONEC: izhod 0, trajanje 00:00:15

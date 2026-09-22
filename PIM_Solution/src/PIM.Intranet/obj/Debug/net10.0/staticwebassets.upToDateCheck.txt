@@ -1,0 +1,17 @@
+C:\Users\david\.nuget\packages\microsoft.aspnetcore.app.internal.assets\10.0.12\build\..\_framework\blazor.server.js
+C:\Users\david\.nuget\packages\microsoft.aspnetcore.app.internal.assets\10.0.12\build\..\_framework\blazor.web.js
+C:\Users\david\.nuget\packages\microsoft.aspnetcore.app.internal.assets\10.0.12\_framework\blazor.web.js
+C:\Users\david\.nuget\packages\microsoft.aspnetcore.app.internal.assets\10.0.12\_framework\blazor.server.js
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\bootstrap\bootstrap.min.css
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\bootstrap\bootstrap.min.css.map
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\js\pim-export.js
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\js\pim-shell.js
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\favicon.svg
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\wwwroot\app.css
+wwwroot\app.css
+wwwroot\bootstrap\bootstrap.min.css
+wwwroot\bootstrap\bootstrap.min.css.map
+wwwroot\favicon.png
+wwwroot\favicon.svg
+wwwroot\js\pim-export.js
+wwwroot\js\pim-shell.js

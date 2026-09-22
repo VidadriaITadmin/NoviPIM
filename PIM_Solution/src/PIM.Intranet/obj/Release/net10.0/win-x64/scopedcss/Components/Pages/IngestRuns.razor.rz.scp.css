@@ -1,0 +1,4 @@
+.toolbar[b-o83nlb0vcb] { flex-wrap: wrap; }
+.data-table[b-o83nlb0vcb] { min-width: 980px; }
+.numeric[b-o83nlb0vcb] { font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) { .data-table[b-o83nlb0vcb] { min-width: 920px; } }

@@ -1,0 +1,5 @@
+.issue-summary[b-2wtnin9gh5] { color: var(--pim-text-strong); line-height: 1.55; }
+.technical-details[b-2wtnin9gh5] { margin-top: 1rem; padding: 1rem 1.1rem; }
+.technical-details summary[b-2wtnin9gh5] { cursor: pointer; font-size: .85rem; font-weight: 650; }
+.technical-details p[b-2wtnin9gh5] { font-size: .8rem; line-height: 1.5; }
+.technical-details pre[b-2wtnin9gh5] { background: #0f172a; border-radius: var(--pim-radius-sm); color: #dbeafe; font: .75rem/1.55 Consolas, "Cascadia Mono", monospace; max-height: 32rem; overflow: auto; padding: 1rem; white-space: pre; }

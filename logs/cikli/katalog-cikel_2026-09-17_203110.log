@@ -1,0 +1,115 @@
+20:31:10  === ZAČETEK: Katalog za splet | sprožil: razporejevalnik (razporejevalnik) | po razporedu | 2026-09-17 20:31:10
+20:31:10  Podjetja: 1, 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution
+20:31:10  == SAOP katalog (delta) ==
+20:31:11     Živ SAOP zajem: podjetij=4, končnih točk=16, delta zajem, razpored=SAOP_PRODUCTS.
+20:31:11     Podjetja tečejo vzporedno (4 hkrati).
+20:31:11     Meja na klic: 5000 zapisov na stran, največ 1000 strani na končno točko.
+20:31:25     [1] DEMO (SAOP_DEMO)
+20:31:25       GetItemsGeneralData: strani=0 zapisov=0 [0,6 s]
+20:31:25       GetItemsDescriptions: strani=0 zapisov=0 [0,6 s]
+20:31:25       GetItemsTitlesLanguage: strani=0 zapisov=0 [0,8 s]
+20:31:25       GetItemsCustomProperties: strani=0 zapisov=0 [0,6 s]
+20:31:25       GetItemsPlanningData: strani=0 zapisov=0 [0,4 s]
+20:31:25       GetItemsStockData: strani=0 zapisov=0 [0,5 s]
+20:31:25       GetItemsStockAccountingData: strani=0 zapisov=0 [0,6 s]
+20:31:25       GetItemCustomerDataV2: strani=0 zapisov=0 [0,7 s]
+20:31:25       GetPrices: strani=0 zapisov=0 [5,1 s]
+20:31:25       GetLanguages: strani=1 zapisov=5 — MEJNIK STOJI (SAOP je vrnil 5 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       Currencies: strani=1 zapisov=181 — MEJNIK STOJI (SAOP je vrnil 181 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       PriceLists: strani=1 zapisov=7 — MEJNIK STOJI (SAOP je vrnil 7 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       Warehouses: strani=1 zapisov=7 — MEJNIK STOJI (SAOP je vrnil 7 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       Customers: strani=1 zapisov=1614 — MEJNIK STOJI (SAOP je vrnil 1614 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       CustomerItemGroupDiscounts: strani=1 zapisov=3 — MEJNIK STOJI (SAOP je vrnil 3 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:25       TechnologicalProcess: strani=1 zapisov=0 [0,5 s, 0,46 s/stran]
+20:31:25       SKUPAJ strani=7 zapisov=1817 RunId=db9e0fe2-87b7-45d1-bb63-52556403cd5c
+20:31:25       OPOZORILO: pri 6 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run db9e0fe2-87b7-45d1-bb63-52556403cd5c.
+20:31:31     [4] Ediito (SAOP_EDIITO)
+20:31:31       GetItemsGeneralData: strani=1 zapisov=31 [0,7 s, 0,72 s/stran]
+20:31:31       GetItemsDescriptions: strani=1 zapisov=4 [2,0 s, 1,98 s/stran]
+20:31:31       GetItemsTitlesLanguage: strani=0 zapisov=0 [1,4 s]
+20:31:31       GetItemsCustomProperties: strani=1 zapisov=444 — MEJNIK STOJI (SAOP je vrnil 444 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       GetItemsPlanningData: strani=1 zapisov=21 [0,4 s, 0,43 s/stran]
+20:31:31       GetItemsStockData: strani=1 zapisov=1 — MEJNIK STOJI (SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       GetItemsStockAccountingData: strani=0 zapisov=0 [0,9 s]
+20:31:31       GetItemCustomerDataV2: strani=1 zapisov=20 — MEJNIK STOJI (SAOP je vrnil 20 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       GetPrices: strani=2 zapisov=17 — MEJNIK STOJI (SAOP je vrnil 17 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       GetLanguages: strani=1 zapisov=5 — MEJNIK STOJI (SAOP je vrnil 5 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       Currencies: strani=1 zapisov=181 — MEJNIK STOJI (SAOP je vrnil 181 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       PriceLists: strani=1 zapisov=8 — MEJNIK STOJI (SAOP je vrnil 8 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       Warehouses: strani=1 zapisov=15 — MEJNIK STOJI (SAOP je vrnil 15 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       Customers: strani=1 zapisov=616 [0,9 s, 0,87 s/stran]
+20:31:31       CustomerItemGroupDiscounts: strani=1 zapisov=1 — MEJNIK STOJI (SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       TechnologicalProcess: strani=1 zapisov=13 — MEJNIK STOJI (SAOP je vrnil 13 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:31:31       SKUPAJ strani=15 zapisov=1377 RunId=ce298954-0eda-40f0-89b2-b8a71c5859ea
+20:31:31       OPOZORILO: pri 10 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run ce298954-0eda-40f0-89b2-b8a71c5859ea.
+20:32:01     [3] Vidadria (SAOP_VIDADRIA)
+20:32:01       GetItemsGeneralData: strani=1 zapisov=385 [3,5 s, 3,55 s/stran]
+20:32:01       GetItemsDescriptions: strani=0 zapisov=0 [0,8 s]
+20:32:01       GetItemsTitlesLanguage: strani=0 zapisov=0 [1,0 s]
+20:32:01       GetItemsCustomProperties: strani=0 zapisov=0 [0,7 s]
+20:32:01       GetItemsPlanningData: strani=1 zapisov=313 [0,6 s, 0,55 s/stran]
+20:32:01       GetItemsStockData: strani=1 zapisov=50 [0,6 s, 0,62 s/stran]
+20:32:01       GetItemsStockAccountingData: strani=0 zapisov=0 [0,9 s]
+20:32:01       GetItemCustomerDataV2: strani=1 zapisov=4 [0,7 s, 0,68 s/stran]
+20:32:01       GetPrices: strani=5 zapisov=206 — MEJNIK STOJI (SAOP je vrnil 206 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:32:01       GetLanguages: strani=1 zapisov=5 — MEJNIK STOJI (SAOP je vrnil 5 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:32:01       Currencies: strani=1 zapisov=181 — MEJNIK STOJI (SAOP je vrnil 181 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:32:01       PriceLists: strani=1 zapisov=31 [0,3 s, 0,33 s/stran]
+20:32:01       Warehouses: strani=1 zapisov=75 [0,4 s, 0,35 s/stran]
+20:32:01       Customers: strani=1 zapisov=4672 [3,2 s, 3,24 s/stran]
+20:32:01       CustomerItemGroupDiscounts: strani=1 zapisov=4297 [0,9 s, 0,92 s/stran]
+20:32:01       TechnologicalProcess: strani=1 zapisov=101 — MEJNIK STOJI (SAOP je vrnil 101 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:32:01       SKUPAJ strani=16 zapisov=10320 RunId=7faf04a6-b43e-48f0-ad51-4ab18ae9a05a
+20:32:01       OPOZORILO: pri 4 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 7faf04a6-b43e-48f0-ad51-4ab18ae9a05a.
+20:33:21     [2] IQLighting (SAOP_IQLIGHTING)
+20:33:21       GetItemsGeneralData: strani=1 zapisov=173 [9,8 s, 9,84 s/stran]
+20:33:21       GetItemsDescriptions: strani=0 zapisov=0 [3,3 s]
+20:33:21       GetItemsTitlesLanguage: strani=10 zapisov=47709 — MEJNIK STOJI (SAOP je vrnil 47709 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetItemsCustomProperties: strani=1 zapisov=1173 — MEJNIK STOJI (SAOP je vrnil 1173 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetItemsPlanningData: strani=1 zapisov=31 [0,5 s, 0,49 s/stran]
+20:33:21       GetItemsStockData: strani=1 zapisov=75 — MEJNIK STOJI (SAOP je vrnil 75 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetItemsStockAccountingData: strani=23 zapisov=111054 — MEJNIK STOJI (SAOP je vrnil 111054 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetItemCustomerDataV2: strani=1 zapisov=3963 — MEJNIK STOJI (SAOP je vrnil 3963 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetPrices: strani=3 zapisov=149 — MEJNIK STOJI (SAOP je vrnil 149 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       GetLanguages: strani=1 zapisov=5 — MEJNIK STOJI (SAOP je vrnil 5 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       Currencies: strani=1 zapisov=181 — MEJNIK STOJI (SAOP je vrnil 181 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       PriceLists: strani=1 zapisov=13 — MEJNIK STOJI (SAOP je vrnil 13 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       Warehouses: strani=1 zapisov=36 [0,4 s, 0,36 s/stran]
+20:33:21       Customers: strani=1 zapisov=4721 [2,8 s, 2,79 s/stran]
+20:33:21       CustomerItemGroupDiscounts: strani=1 zapisov=11 — MEJNIK STOJI (SAOP je vrnil 11 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       TechnologicalProcess: strani=1 zapisov=5 — MEJNIK STOJI (SAOP je vrnil 5 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:33:21       SKUPAJ strani=48 zapisov=169299 RunId=a87328ab-ba7a-4bb4-845b-a0346ca27ce2
+20:33:21       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetPrices=3. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+20:33:21       OPOZORILO: pri 11 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run a87328ab-ba7a-4bb4-845b-a0346ca27ce2.
+20:33:21     konec: SAOP katalog (delta) (130 s)
+20:33:21  == Narocila iz SAOP (VNK/VND) ==
+20:33:22     [2] IQLighting (SAOP_IQLIGHTING)
+20:33:22       Naročila kupcev (VNK): brez nastavljene knjige, preskočeno.
+20:33:22       Naročila dobaviteljem (VND): brez nastavljene knjige, preskočeno.
+20:33:22     [3] Vidadria (SAOP_VIDADRIA)
+20:33:22       Naročila kupcev (VNK): brez nastavljene knjige, preskočeno.
+20:33:22       Naročila dobaviteljem (VND): brez nastavljene knjige, preskočeno.
+20:33:22     [4] Ediito (SAOP_EDIITO)
+20:33:22       Naročila kupcev (VNK): brez nastavljene knjige, preskočeno.
+20:33:22       Naročila dobaviteljem (VND): brez nastavljene knjige, preskočeno.
+20:33:22     [1] DEMO (SAOP_DEMO)
+20:33:22       Naročila kupcev (VNK): brez nastavljene knjige, preskočeno.
+20:33:22       Naročila dobaviteljem (VND): brez nastavljene knjige, preskočeno.
+20:33:22     konec: Narocila iz SAOP (VNK/VND) (1 s)
+20:33:22  == Osvezitev objave (podjetje 1) ==
+20:33:44     Validacija in objava (podjetje 1): opravljeno.
+20:33:44     konec: Osvezitev objave (podjetje 1) (21 s)
+20:33:44  == Osvezitev objave (podjetje 2) ==
+20:34:38     Validacija in objava (podjetje 2): opravljeno.
+20:34:38     konec: Osvezitev objave (podjetje 2) (54 s)
+20:34:38  == Osvezitev objave (podjetje 3) ==
+20:34:56     Validacija in objava (podjetje 3): opravljeno.
+20:34:56     konec: Osvezitev objave (podjetje 3) (18 s)
+20:34:56  == Osvezitev objave (podjetje 4) ==
+20:35:12     Validacija in objava (podjetje 4): opravljeno.
+20:35:12     konec: Osvezitev objave (podjetje 4) (16 s)
+20:35:12  == Izvoz kataloga in strank (podjetje 2) ==
+20:35:18     STDERR: MAGENTO_PRODUCTS ze tece; ta zagon se je umaknil.
+20:35:18     konec: Izvoz kataloga in strank (podjetje 2) (6 s)
+20:35:18  Katalog za splet koncan; padlih korakov: 0.
+20:35:18  === KONEC: izhod 0, trajanje 00:04:08

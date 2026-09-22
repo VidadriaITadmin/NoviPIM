@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\bin\Release\net10.0\PIM.F10.TitleRulesTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\bin\Release\net10.0\PIM.F10.TitleRulesTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\bin\Release\net10.0\PIM.F10.TitleRulesTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\bin\Release\net10.0\PIM.F10.TitleRulesTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\bin\Release\net10.0\PIM.F10.TitleRulesTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\refint\PIM.F10.TitleRulesTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\ref\PIM.F10.TitleRulesTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.TitleRulesTests\obj\Release\net10.0\PIM.F10.TitleRulesTests.sourcelink.json

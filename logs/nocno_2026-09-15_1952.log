@@ -1,0 +1,18 @@
+2026-09-15 19:52:33  OPOZORILO: v ops.PipelineRun je 1 zagon(ov) v stanju Running brez konca, starejših od ure. Ne blokirajo, so pa rep prejšnjih padcev.
+2026-09-15 19:52:33  Začetek nočnega opravila: delta zajem, podjetja: 1, 2, 3, 4.
+2026-09-15 19:52:33  Dnevnik: C:\Users\david\Desktop\PIM\NoviPIM\logs\nocno_2026-09-15_1952.log
+2026-09-15 19:52:33  == Gradnja ==
+2026-09-15 19:53:11     
+2026-09-15 19:53:11     Build succeeded.
+2026-09-15 19:53:11         0 Warning(s)
+2026-09-15 19:53:11         0 Error(s)
+2026-09-15 19:53:11     
+2026-09-15 19:53:11     Time Elapsed 00:00:35.37
+2026-09-15 19:53:11  == SAOP katalog ==
+2026-09-15 19:53:13     Živ SAOP zajem: podjetij=4, končnih točk=16, delta zajem.
+2026-09-15 19:53:13     Podjetja tečejo vzporedno (4 hkrati).
+2026-09-15 19:53:13     Meja na klic: 5000 zapisov na stran, največ 1000 strani na končno točko.
+2026-09-15 19:53:36     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-15 19:53:36     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-15 19:53:36     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-15 19:53:36     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.

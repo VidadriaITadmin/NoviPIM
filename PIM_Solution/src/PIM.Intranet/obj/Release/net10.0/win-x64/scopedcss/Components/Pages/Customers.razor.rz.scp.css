@@ -1,0 +1,22 @@
+/* Izoliran slog strani /stranke. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.result-count[b-1qkmkqa9vt] { font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* Filtri stojijo v isti kartici kot tabela, loceni samo s crto — isto kot pri vhodnih podatkih. */
+
+/* Cela vrstica je ena poteza: odpre stranko. Zato kazalec in poudarek na celi vrstici,
+   ne povezava v celici — podcrtano besedilo sredi klikljive vrstice obljublja dve dejanji. */
+.row-link[b-1qkmkqa9vt] { cursor: pointer; }
+.row-link:hover[b-1qkmkqa9vt] { background: var(--pim-surface-hover); }
+.page-position[b-1qkmkqa9vt] { color: var(--pim-text-soft); font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1qkmkqa9vt],
+.search-input:focus-visible[b-1qkmkqa9vt],
+.filter-select:focus-visible[b-1qkmkqa9vt],
+.pagination button:focus-visible[b-1qkmkqa9vt],
+.row-link:focus-visible[b-1qkmkqa9vt] { outline: 2px solid var(--pim-primary); outline-offset: -2px; }
+
+/* Sedem podatkovnih stolpcev se na telefonu ne sme stisniti. */
+@media (max-width: 900px) {
+  .data-table[b-1qkmkqa9vt] { min-width: 760px; }
+}

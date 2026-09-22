@@ -1,0 +1,420 @@
+is_global = true
+build_property.TargetFramework = net10.0
+build_property.TargetFrameworkIdentifier = .NETCoreApp
+build_property.TargetFrameworkVersion = v10.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EntryPointFilePath = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = PIM.Intranet
+build_property.RootNamespace = PIM.Intranet
+build_property.ProjectDir = C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 10.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 10.0
+build_property.EnableCodeStyleSeverity = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Layout/EmptyLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcRW1wdHlMYXlvdXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/BulkOutbound.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xCdWxrT3V0Ym91bmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributeDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nQXR0cmlidXRlRGV0YWlsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogChannels.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nQ2hhbm5lbHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogControl.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nQ29udHJvbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogLanguages.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nTGFuZ3VhZ2VzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogReservationExclusions.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nUmVzZXJ2YXRpb25FeGNsdXNpb25zLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogSettings.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nU2V0dGluZ3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogWarehouses.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nV2FyZWhvdXNlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ClearanceImport.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDbGVhcmFuY2VJbXBvcnQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Counter.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb3VudGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ExportProfileDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xFeHBvcnRQcm9maWxlRGV0YWlsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Exports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xFeHBvcnRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestAttributes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RBdHRyaWJ1dGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestQueue.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RRdWV1ZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestSourceDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RTb3VyY2VEZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestUnmapped.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RVbm1hcHBlZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/MissingTranslations.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNaXNzaW5nVHJhbnNsYXRpb25zLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/OutboundEvents.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xPdXRib3VuZEV2ZW50cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Partners.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQYXJ0bmVycy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCategories.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0Q2F0ZWdvcmllcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductImport.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0SW1wb3J0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/QualityProducts.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWFsaXR5UHJvZHVjdHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Saop.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYW9wLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SaopDrifts.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYW9wRHJpZnRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SaopFields.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYW9wRmllbGRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SaopHistory.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYW9wSGlzdG9yeS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationRules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWYWxpZGF0aW9uUnVsZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Weather.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWF0aGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/WebExportBuild.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWJFeHBvcnRCdWlsZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/WebWithdrawals.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWJXaXRoZHJhd2Fscy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimBar.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltQmFyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimChip.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltQ2hpcC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimHubCard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltSHViQ2FyZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimPage.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimPager.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltUGFnZXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimStat.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltU3RhdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimState.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltU3RhdGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimTable.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltVGFibGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-a4h9fu3zyz
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-qruzvtq060
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/AccessDenied.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2Nlc3NEZW5pZWQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-z1lde4t351
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/AdminActivity.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pbkFjdGl2aXR5LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-46vijz580n
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/AdminPaths.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblBhdGhzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-bu4wtq8mfc
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/AdminSelfTest.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblNlbGZUZXN0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-li8wobmdvs
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nQXR0cmlidXRlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-44ca7qrr06
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogCategories.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRhbG9nQ2F0ZWdvcmllcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-gdix7t4fnf
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CategoryAttributeSets.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXRlZ29yeUF0dHJpYnV0ZVNldHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-ajfc07r1nf
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Checks.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDaGVja3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-kvppotoupz
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CustomerDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDdXN0b21lckRldGFpbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-ovnc46o79p
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/CustomerImport.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDdXN0b21lckltcG9ydC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-s7zcn8by71
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Customers.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDdXN0b21lcnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-1qkmkqa9vt
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Dashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEYXNoYm9hcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-t1dtz4fwh1
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/DiscountRules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEaXNjb3VudFJ1bGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-os0ed7vebb
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Error.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xFcnJvci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-wt1sld12oc
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/FieldMappings.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xGaWVsZE1hcHBpbmdzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-e5hv1jbtsv
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Ingest.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3QucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-g0jab0xmss
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestCandidates.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RDYW5kaWRhdGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-1dhtvzagq1
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestIssueDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RJc3N1ZURldGFpbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-2wtnin9gh5
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestIssues.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RJc3N1ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-za52rmnq3o
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRunDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RSdW5EZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-iyj3ore3co
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRuns.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xJbmdlc3RSdW5zLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-o83nlb0vcb
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xMb2dpbi5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-xtrwrrrqwq
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Media.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNZWRpYS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-b8585ng4kk
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/MissingCategories.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNaXNzaW5nQ2F0ZWdvcmllcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-afk26sg6se
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Monitor.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNb25pdG9yLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-iiqsggn2y2
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/MonitorJob.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xNb25pdG9ySm9iLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-20ah75o7z5
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Outbound.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xPdXRib3VuZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-1c74dq2ow0
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/PipelineRuns.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQaXBlbGluZVJ1bnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-9ge7ylnu98
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Prices.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcmljZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-qsytyv5g30
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/PriceSheet.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcmljZVNoZWV0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-zjigu16r2n
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0Q2FyZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-xk16qy6yff
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard/ProductChannelPanel.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0Q2FyZFxQcm9kdWN0Q2hhbm5lbFBhbmVsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-10mk7bcwup
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard/ProductMediaGallery.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0Q2FyZFxQcm9kdWN0TWVkaWFHYWxsZXJ5LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-0fpd1m0puy
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0RGV0YWlsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-u9cz5uw9od
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ProductLinks.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0TGlua3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-bnzlwmqbfj
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9kdWN0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-jppeqvylrb
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Quality.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWFsaXR5LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-mwkmop1db9
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/RawQuarantine.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSYXdRdWFyYW50aW5lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-7ypetzis60
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Rules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSdWxlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-cd4jb2tdkb
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SaopItems.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYW9wSXRlbXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-8qoty4kdey
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Stocks.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTdG9ja3MucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-4ikop73mob
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SystemRoles.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTeXN0ZW1Sb2xlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-tos1mjo8w3
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/SystemUsers.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTeXN0ZW1Vc2Vycy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-9vx1q0mm89
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/TitleRules.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xUaXRsZVJ1bGVzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-wxodwrl8qo
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationErrors.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWYWxpZGF0aW9uRXJyb3JzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-jzbhz0xyes
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/ValueDictionary.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xWYWx1ZURpY3Rpb25hcnkucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-g4xkpvztfx
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Pages/Web.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-ppz5a2b6az
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/ImportGapsDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcSW1wb3J0R2Fwc0RpYWxvZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-vqqevl3ts2
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/IngestTabs.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcSW5nZXN0VGFicy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-87p1euhc0f
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimAccessRouteView.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltQWNjZXNzUm91dGVWaWV3LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-cu2mu0e7wf
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimContextPicker.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltQ29udGV4dFBpY2tlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-0z5vm5qnvv
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimMissing.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltTWlzc2luZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-mq3vz4iwol
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimPicker.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltUGlja2VyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-2l4w8mqr78
+
+[C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet/Components/Shared/PimTabs.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGltVGFicy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-gelil291wx

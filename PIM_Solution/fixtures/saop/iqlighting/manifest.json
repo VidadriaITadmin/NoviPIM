@@ -1,0 +1,133 @@
+{
+  "GeneratedUtc": "2026-07-30T10:15:25.2456840Z",
+  "SourceOrganizationId": 2,
+  "SourceOrganizationName": "IQLighting",
+  "Note": "Ustvarjeno s tools/PIM.FixtureExport iz PIM_test.raw_history.ApiResponses (dobeseden ResponseBody, brez popravkov).",
+  "Endpoints": [
+    {
+      "Endpoint": "ItemGeneralData",
+      "EndpointKey": "GetItemsGeneralData",
+      "RunId": "1cb417976ae4",
+      "IngestedAtUtc": "2026-07-15T11:11:21.4561901",
+      "Pages": [
+        {
+          "Page": 1,
+          "FileName": "page-001.xml",
+          "ResponseHash": "C5BC2CF4AD5F66A73AEE8D6A4B6E88C84F6CD53A2CB6226A3789BB66950619FF"
+        },
+        {
+          "Page": 2,
+          "FileName": "page-002.xml",
+          "ResponseHash": "1077B07B248931104867B2742C2E6AB0646476F0D4D89E48DBA0A1EDEEB8BF5F"
+        },
+        {
+          "Page": 3,
+          "FileName": "page-003.xml",
+          "ResponseHash": "45A3E909F3E679B63D7A4CEF931AC36C7A970B07B18C26191F21C431034738E8"
+        },
+        {
+          "Page": 4,
+          "FileName": "page-004.xml",
+          "ResponseHash": "0D8DE726E6477435B48283893AF1762489E0CA6F6F6669C09471546DFF6CDBBA"
+        },
+        {
+          "Page": 5,
+          "FileName": "page-005.xml",
+          "ResponseHash": "7B3AB8C248220ACBC0423E722652C01ADFADAA647D1589F5E6B67CD7B6CEAB00"
+        },
+        {
+          "Page": 6,
+          "FileName": "page-006.xml",
+          "ResponseHash": "1F2FE7410EE58126176C919BC8D16AD3A97ABE43E324B9B900D971F7E3801831"
+        },
+        {
+          "Page": 7,
+          "FileName": "page-007.xml",
+          "ResponseHash": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+        }
+      ]
+    },
+    {
+      "Endpoint": "Prices",
+      "EndpointKey": "GetPrices",
+      "RunId": "4a39cc4d1d9f",
+      "IngestedAtUtc": "2026-07-06T12:22:06.0678792",
+      "Pages": [
+        {
+          "Page": 1,
+          "FileName": "page-001.xml",
+          "ResponseHash": "4A00A690C852C07CF65582140A38E16E738F4E90B6CD1678CA37B814604E7992"
+        },
+        {
+          "Page": 2,
+          "FileName": "page-002.xml",
+          "ResponseHash": "4A00A690C852C07CF65582140A38E16E738F4E90B6CD1678CA37B814604E7992"
+        },
+        {
+          "Page": 3,
+          "FileName": "page-003.xml",
+          "ResponseHash": "BA0E2FCD1896FD8AEC4F932AD5227533115DB8ACCBB733177FD15EB3B7886B84"
+        },
+        {
+          "Page": 4,
+          "FileName": "page-004.xml",
+          "ResponseHash": "4A00A690C852C07CF65582140A38E16E738F4E90B6CD1678CA37B814604E7992"
+        }
+      ]
+    },
+    {
+      "Endpoint": "Descriptions",
+      "EndpointKey": "GetItemsDescriptions",
+      "RunId": "894943c14257",
+      "IngestedAtUtc": "2026-07-15T11:11:25.3011773",
+      "Pages": [
+        {
+          "Page": 1,
+          "FileName": "page-001.xml",
+          "ResponseHash": "776CA809D05A9C56B66672DFD5ADCDB6A87CD96279340AFC70EE211B7D113045"
+        },
+        {
+          "Page": 2,
+          "FileName": "page-002.xml",
+          "ResponseHash": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+        }
+      ]
+    },
+    {
+      "Endpoint": "Currencies",
+      "EndpointKey": "Currencies",
+      "RunId": "05d0ebe33252",
+      "IngestedAtUtc": "2026-07-24T11:23:13.7035179",
+      "Pages": [
+        {
+          "Page": 1,
+          "FileName": "page-001.xml",
+          "ResponseHash": "70A1ABDEDD622F096D3B2BA9C9AB75DC15D1850DA943FC9B5EF5F73360BCBB7D"
+        },
+        {
+          "Page": 2,
+          "FileName": "page-002.xml",
+          "ResponseHash": "BFFB45301A03D1CDFE8AB7D1642DAD49EAE2C75C41FE73F3496B34CEF5CD51D0"
+        }
+      ]
+    },
+    {
+      "Endpoint": "PriceLists",
+      "EndpointKey": "PriceLists",
+      "RunId": "5cf5e1bacf91",
+      "IngestedAtUtc": "2026-07-24T12:29:42.5549051",
+      "Pages": [
+        {
+          "Page": 1,
+          "FileName": "page-001.xml",
+          "ResponseHash": "76DCFEC52AE015F97588E4D693D749A36E9BF938D40DCE76454A383E482704D7"
+        },
+        {
+          "Page": 2,
+          "FileName": "page-002.xml",
+          "ResponseHash": "46D3540C5C22586D6172DF516E354A132D50AC844377AAFAE5786742D03F27B8"
+        }
+      ]
+    }
+  ]
+}

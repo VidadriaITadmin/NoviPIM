@@ -1,0 +1,13 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\bin\Release\net10.0\PIM.StockMapping.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\bin\Release\net10.0\PIM.StockMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\bin\Release\net10.0\PIM.StockMapping.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.csproj.AssemblyReference.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\refint\PIM.StockMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\ref\PIM.StockMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.StockMapping\obj\Release\net10.0\PIM.StockMapping.sourcelink.json

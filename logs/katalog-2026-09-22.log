@@ -1,0 +1,120 @@
+15:42:23  == Narocila iz SAOP (VNK/VND) ==
+15:42:37     [2] IQLighting (SAOP_IQLIGHTING)
+15:42:40       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+15:42:40       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+15:42:40     [3] Vidadria (SAOP_VIDADRIA)
+15:42:40       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+15:42:40       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+15:42:40     [4] Ediito (SAOP_EDIITO)
+15:42:40       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+15:42:40       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+15:42:40     [1] DEMO (SAOP_DEMO)
+15:42:40       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+15:42:40       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+15:42:41     konec: Narocila iz SAOP (VNK/VND)
+15:42:41  == Osvezitev objave (podjetje 1) ==
+15:43:06     konec: Osvezitev objave (podjetje 1)
+15:43:06  == Osvezitev objave (podjetje 2) ==
+15:43:52     konec: Osvezitev objave (podjetje 2)
+15:43:52  == Osvezitev objave (podjetje 3) ==
+15:44:14     konec: Osvezitev objave (podjetje 3)
+15:44:14  == Osvezitev objave (podjetje 4) ==
+15:44:31     konec: Osvezitev objave (podjetje 4)
+15:44:31  == Izvoz kataloga in strank (podjetje 2) ==
+15:46:16     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+15:46:16     konec: Izvoz kataloga in strank (podjetje 2)
+15:46:16  Katalog cikel koncan; padlih korakov: 0.
+16:14:15  == Narocila iz SAOP (VNK/VND) ==
+16:14:16     [2] IQLighting (SAOP_IQLIGHTING)
+16:14:17       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+16:14:17       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+16:14:17     [3] Vidadria (SAOP_VIDADRIA)
+16:14:17       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+16:14:17       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+16:14:17     [4] Ediito (SAOP_EDIITO)
+16:14:17       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+16:14:17       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+16:14:17     [1] DEMO (SAOP_DEMO)
+16:14:17       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+16:14:17       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+16:14:17     konec: Narocila iz SAOP (VNK/VND)
+16:14:17  == Osvezitev objave (podjetje 1) ==
+16:14:37     konec: Osvezitev objave (podjetje 1)
+16:14:37  == Osvezitev objave (podjetje 2) ==
+16:15:29     konec: Osvezitev objave (podjetje 2)
+16:15:29  == Osvezitev objave (podjetje 3) ==
+16:15:55     konec: Osvezitev objave (podjetje 3)
+16:15:55  == Osvezitev objave (podjetje 4) ==
+16:16:15     konec: Osvezitev objave (podjetje 4)
+16:16:15  Katalog cikel koncan; padlih korakov: 0.
+17:14:15  == Narocila iz SAOP (VNK/VND) ==
+17:14:16     [2] IQLighting (SAOP_IQLIGHTING)
+17:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+17:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+17:14:16     [3] Vidadria (SAOP_VIDADRIA)
+17:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+17:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+17:14:16     [4] Ediito (SAOP_EDIITO)
+17:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+17:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+17:14:16     [1] DEMO (SAOP_DEMO)
+17:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+17:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+17:14:16     konec: Narocila iz SAOP (VNK/VND)
+17:14:16  == Osvezitev objave (podjetje 1) ==
+17:14:29     konec: Osvezitev objave (podjetje 1)
+17:14:29  == Osvezitev objave (podjetje 2) ==
+17:15:04     konec: Osvezitev objave (podjetje 2)
+17:15:04  == Osvezitev objave (podjetje 3) ==
+17:15:23     konec: Osvezitev objave (podjetje 3)
+17:15:23  == Osvezitev objave (podjetje 4) ==
+17:15:39     konec: Osvezitev objave (podjetje 4)
+17:15:39  Katalog cikel koncan; padlih korakov: 0.
+18:14:15  == Narocila iz SAOP (VNK/VND) ==
+18:14:15     [2] IQLighting (SAOP_IQLIGHTING)
+18:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+18:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+18:14:16     [3] Vidadria (SAOP_VIDADRIA)
+18:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+18:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+18:14:16     [4] Ediito (SAOP_EDIITO)
+18:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+18:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+18:14:16     [1] DEMO (SAOP_DEMO)
+18:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+18:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+18:14:16     konec: Narocila iz SAOP (VNK/VND)
+18:14:16  == Osvezitev objave (podjetje 1) ==
+18:14:44     konec: Osvezitev objave (podjetje 1)
+18:14:44  == Osvezitev objave (podjetje 2) ==
+18:16:09     konec: Osvezitev objave (podjetje 2)
+18:16:09  == Osvezitev objave (podjetje 3) ==
+18:16:36     konec: Osvezitev objave (podjetje 3)
+18:16:36  == Osvezitev objave (podjetje 4) ==
+18:17:05     konec: Osvezitev objave (podjetje 4)
+18:17:05  Katalog cikel koncan; padlih korakov: 0.
+19:14:15  == Narocila iz SAOP (VNK/VND) ==
+19:14:15     [2] IQLighting (SAOP_IQLIGHTING)
+19:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+19:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+19:14:16     [3] Vidadria (SAOP_VIDADRIA)
+19:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+19:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+19:14:16     [4] Ediito (SAOP_EDIITO)
+19:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+19:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+19:14:16     [1] DEMO (SAOP_DEMO)
+19:14:16       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+19:14:16       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+19:14:16     konec: Narocila iz SAOP (VNK/VND)
+19:14:16  == Osvezitev objave (podjetje 1) ==
+19:14:31     konec: Osvezitev objave (podjetje 1)
+19:14:31  == Osvezitev objave (podjetje 2) ==
+19:15:16     konec: Osvezitev objave (podjetje 2)
+19:15:16  == Osvezitev objave (podjetje 3) ==
+19:15:42     konec: Osvezitev objave (podjetje 3)
+19:15:42  == Osvezitev objave (podjetje 4) ==
+19:16:07     konec: Osvezitev objave (podjetje 4)
+19:16:07  Katalog cikel koncan; padlih korakov: 0.
+20:14:15  PRESKOCENO: cikel poganja razporejevalnik v aplikaciji (DESKTOP-TONVQHJ:2216:AutomationHost:console / AutomationHost:console). Windows naloga ni vec potrebna - odstrani jo z scripts\Namesti-opravila.ps1 -Odstrani. Za rocni zagon kljub temu dodaj -Vseeno.
+21:14:15  PRESKOCENO: cikel poganja razporejevalnik v aplikaciji (DESKTOP-TONVQHJ:2216:AutomationHost:console / AutomationHost:console). Windows naloga ni vec potrebna - odstrani jo z scripts\Namesti-opravila.ps1 -Odstrani. Za rocni zagon kljub temu dodaj -Vseeno.

@@ -1,0 +1,68 @@
+{
+  "organizationId": 2,
+  "organizationCode": "IQLighting",
+  "responseFormat": "xml",
+  "sourceFile": "Results_for_APIs.txt",
+  "endpoints": {
+    "GetItemsGeneralData": {
+      "sourceEndpointKey": "GetItemsGeneralData",
+      "folder": "ItemGeneralData",
+      "files": [
+        "ItemGeneralData/page-001.xml"
+      ],
+      "status": "repaired-from-truncated-source",
+      "selectedRunId": "3acd8db329fe",
+      "payloadBytes": 64819,
+      "completeRecords": 25,
+      "payloadSha256": "1f084fe97f6b57bf30478e14eb7c21da0875268228e65a7c595163028db5387e"
+    },
+    "GetPrices": {
+      "sourceEndpointKey": "GetPrices",
+      "folder": "Prices",
+      "files": [
+        "Prices/page-001.xml"
+      ],
+      "status": "repaired-from-truncated-source",
+      "selectedRunId": "6e3425e12687",
+      "payloadBytes": 65151,
+      "completeRecords": 70,
+      "payloadSha256": "7adb455f2f79620b600640ca39ab0844a20d0d276203c2adc90e3ab8d1345efb"
+    },
+    "GetItemsDescriptions": {
+      "sourceEndpointKey": "GetItemsDescriptions",
+      "folder": "Descriptions",
+      "files": [
+        "Descriptions/page-001.xml"
+      ],
+      "status": "ready",
+      "selectedRunId": "c4a201e19f18",
+      "capturedUtc": "2026-07-27 11:29:17.3669200",
+      "payloadSha256": "b6b12298e95df8caffa8d8ebb5eb0cca2b490b52ec2a8fb54debf67dd77d19ab",
+      "payloadBytes": 496
+    },
+    "Currencies": {
+      "sourceEndpointKey": "Currencies",
+      "folder": "Currencies",
+      "files": [
+        "Currencies/page-001.xml"
+      ],
+      "status": "ready",
+      "selectedRunId": "fb09d10c1714",
+      "capturedUtc": "2026-07-27 08:37:24.9760724",
+      "payloadSha256": "70a1abdedd622f096d3b2ba9c9ab75dc15d1850da943fc9b5ef5f73360bcbb7d",
+      "payloadBytes": 35838
+    },
+    "PriceLists": {
+      "sourceEndpointKey": "PriceLists",
+      "folder": "PriceLists",
+      "files": [
+        "PriceLists/page-001.xml"
+      ],
+      "status": "ready",
+      "selectedRunId": "fcb28328f033",
+      "capturedUtc": "2026-07-27 11:28:05.8495456",
+      "payloadSha256": "76dcfec52ae015f97588e4d693d749a36e9bf938d40dce76454a383e482704d7",
+      "payloadBytes": 6780
+    }
+  }
+}

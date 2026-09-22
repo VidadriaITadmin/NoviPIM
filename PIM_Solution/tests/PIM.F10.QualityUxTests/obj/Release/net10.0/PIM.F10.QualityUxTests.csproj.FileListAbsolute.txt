@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Release\net10.0\PIM.F10.QualityUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Release\net10.0\PIM.F10.QualityUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Release\net10.0\PIM.F10.QualityUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Release\net10.0\PIM.F10.QualityUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\bin\Release\net10.0\PIM.F10.QualityUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\refint\PIM.F10.QualityUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\ref\PIM.F10.QualityUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.QualityUxTests\obj\Release\net10.0\PIM.F10.QualityUxTests.sourcelink.json

@@ -1,0 +1,30 @@
+/* Izoliran slog kartice stranke. */
+
+/* Stevec ob zavihku pove, koliko je za njim, ne da bi ga bilo treba odpreti. */
+.tab-count[b-ovnc46o79p] { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
+
+.subsection-head[b-ovnc46o79p] { align-items: baseline; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .75rem; }
+.subsection-head h2[b-ovnc46o79p] { font-size: 1rem; margin: 0; }
+.subsection-head span[b-ovnc46o79p] { color: var(--pim-text-muted); font-size: .78rem; }
+
+/* Zaznamek je zapis, ne polje: seznam je berljiv, avtor in cas sta nad besedilom. */
+.note-input[b-ovnc46o79p] { min-height: 5.5rem; resize: vertical; width: 100%; }
+.note-list[b-ovnc46o79p] { display: flex; flex-direction: column; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.note-entry[b-ovnc46o79p] { background: var(--pim-surface-hover); border-left: 3px solid var(--pim-accent); border-radius: var(--pim-radius-xs); padding: .6rem .8rem; }
+.note-head[b-ovnc46o79p] { align-items: baseline; color: var(--pim-text-muted); display: flex; font-size: .75rem; gap: .6rem; justify-content: space-between; }
+.note-entry p[b-ovnc46o79p] { margin: .35rem 0 0; white-space: pre-wrap; }
+
+/* Znacka pod poljem pove, od kod vrednost je: rocno, iz SAOP ali je sploh ni.
+   Brez tega uporabnik ne ve, ali bo njegov vnos kaj prepisal. */
+.field-origin[b-ovnc46o79p] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .01em; margin-top: .2rem; text-transform: lowercase; }
+
+/* Revizijska sled nosi cel JSON; brez preloma bi ena vrstica raztegnila tabelo cez zaslon. */
+.wrap-cell[b-ovnc46o79p] { max-width: 22rem; overflow-wrap: anywhere; }
+
+.page-tab:focus-visible[b-ovnc46o79p],
+.form-input:focus-visible[b-ovnc46o79p],
+.filter-select:focus-visible[b-ovnc46o79p] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .subsection-head[b-ovnc46o79p] { flex-direction: column; gap: .2rem; }
+}

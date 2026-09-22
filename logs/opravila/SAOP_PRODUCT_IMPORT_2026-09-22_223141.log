@@ -1,0 +1,107 @@
+22:31:41  === ZAČETEK: Artikli iz SAOP | posel SAOP_PRODUCT_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:31:41
+22:31:41  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+22:31:41  == Artikli iz SAOP (podjetje 2) ==
+22:31:42     Živ SAOP zajem: podjetij=1, končnih točk=8, delta zajem, razpored=SAOP_PRODUCTS.
+22:31:42     [2] IQLighting (SAOP_IQLIGHTING)
+22:31:42     [FAZA] Prenos GetItemsGeneralData (podjetje 2): se je začela.
+22:31:43     [FAZA] Prenos GetItemsGeneralData (podjetje 2): uspelo, brez novih podatkov — prebrano 116, zapisano 0; mejnik stoji: SAOP je vrnil 116 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:31:43     [FAZA] Prenos GetItemsDescriptions (podjetje 2): se je začela.
+22:31:45     [FAZA] Prenos GetItemsDescriptions (podjetje 2): uspelo, brez novih podatkov — prebrano 0, zapisano 0; Descriptions: ni sprememb.
+22:31:45     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 2): se je začela.
+22:32:00     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 2): uspelo, brez novih podatkov — prebrano 47.709, zapisano 0; mejnik stoji: SAOP je vrnil 47709 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:00     [FAZA] Prenos GetItemsCustomProperties (podjetje 2): se je začela.
+22:32:02     [FAZA] Prenos GetItemsCustomProperties (podjetje 2): uspelo, brez novih podatkov — prebrano 1.173, zapisano 0; mejnik stoji: SAOP je vrnil 1173 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:02     [FAZA] Prenos GetItemsPlanningData (podjetje 2): se je začela.
+22:32:02     [FAZA] Prenos GetItemsPlanningData (podjetje 2): uspelo, brez novih podatkov — prebrano 19, zapisano 0; mejnik stoji: SAOP je vrnil 19 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:02     [FAZA] Prenos GetItemsStockData (podjetje 2): se je začela.
+22:32:03     [FAZA] Prenos GetItemsStockData (podjetje 2): uspelo, brez novih podatkov — prebrano 75, zapisano 0; mejnik stoji: SAOP je vrnil 75 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:03     [FAZA] Prenos GetItemsStockAccountingData (podjetje 2): se je začela.
+22:32:05     [FAZA] Prenos GetItemsStockAccountingData (podjetje 2): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsStockAccountingData: ni sprememb.
+22:32:05     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 2): se je začela.
+22:32:08     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 2): uspelo, brez novih podatkov — prebrano 3.963, zapisano 0; mejnik stoji: SAOP je vrnil 3963 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:08       GetItemsGeneralData: strani=1 zapisov=116 — MEJNIK STOJI (SAOP je vrnil 116 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:08       GetItemsDescriptions: strani=0 zapisov=0 [1,6 s]
+22:32:08       GetItemsTitlesLanguage: strani=10 zapisov=47709 — MEJNIK STOJI (SAOP je vrnil 47709 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:08       GetItemsCustomProperties: strani=1 zapisov=1173 — MEJNIK STOJI (SAOP je vrnil 1173 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:08       GetItemsPlanningData: strani=1 zapisov=19 — MEJNIK STOJI (SAOP je vrnil 19 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:08       GetItemsStockData: strani=1 zapisov=75 — MEJNIK STOJI (SAOP je vrnil 75 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:08       GetItemsStockAccountingData: strani=0 zapisov=0 [2,0 s]
+22:32:08       GetItemCustomerDataV2: strani=1 zapisov=3963 — MEJNIK STOJI (SAOP je vrnil 3963 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:09     [FAZA] Preslikava SAOP_IQLIGHTING (podjetje 2): se je začela.
+22:32:09     [FAZA] Preslikava SAOP_IQLIGHTING (podjetje 2): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:32:09     [FAZA] Mejnik SAOP_IQLIGHTING (podjetje 2): se je začela.
+22:32:09     [FAZA] Mejnik SAOP_IQLIGHTING (podjetje 2): uspelo — prebrano 2, zapisano 2; premaknjenih 2 od 2 upravičenih; brez premika zaradi napake ali čakanja na preslikavo: 6.
+22:32:09       SKUPAJ strani=15 zapisov=53055 RunId=be7aa592-b92f-4725-b8fe-e07c32a133a0
+22:32:09       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetItemsGeneralData=1. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+22:32:09       OPOZORILO: pri 6 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run be7aa592-b92f-4725-b8fe-e07c32a133a0.
+22:32:09     konec: Artikli iz SAOP (podjetje 2) (27 s)
+22:32:09  == Artikli iz SAOP (podjetje 3) ==
+22:32:09     Živ SAOP zajem: podjetij=1, končnih točk=8, delta zajem, razpored=SAOP_PRODUCTS.
+22:32:09     [3] Vidadria (SAOP_VIDADRIA)
+22:32:10     [FAZA] Prenos GetItemsGeneralData (podjetje 3): se je začela.
+22:32:11     [FAZA] Prenos GetItemsGeneralData (podjetje 3): uspelo, brez novih podatkov — prebrano 695, zapisano 0; mejnik stoji: SAOP je vrnil 695 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:11     [FAZA] Prenos GetItemsDescriptions (podjetje 3): se je začela.
+22:32:12     [FAZA] Prenos GetItemsDescriptions (podjetje 3): uspelo, brez novih podatkov — prebrano 1, zapisano 0; mejnik stoji: SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:12     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 3): se je začela.
+22:32:12     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 3): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsTitlesLanguage: ni sprememb.
+22:32:12     [FAZA] Prenos GetItemsCustomProperties (podjetje 3): se je začela.
+22:32:13     [FAZA] Prenos GetItemsCustomProperties (podjetje 3): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsCustomProperties: ni sprememb.
+22:32:13     [FAZA] Prenos GetItemsPlanningData (podjetje 3): se je začela.
+22:32:14     [FAZA] Prenos GetItemsPlanningData (podjetje 3): uspelo, brez novih podatkov — prebrano 459, zapisano 0; mejnik stoji: SAOP je vrnil 459 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:14     [FAZA] Prenos GetItemsStockData (podjetje 3): se je začela.
+22:32:14     [FAZA] Prenos GetItemsStockData (podjetje 3): uspelo, brez novih podatkov — prebrano 7, zapisano 0; mejnik stoji: SAOP je vrnil 7 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:14     [FAZA] Prenos GetItemsStockAccountingData (podjetje 3): se je začela.
+22:32:15     [FAZA] Prenos GetItemsStockAccountingData (podjetje 3): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsStockAccountingData: ni sprememb.
+22:32:15     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 3): se je začela.
+22:32:16     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 3): uspelo, brez novih podatkov — prebrano 10, zapisano 0; mejnik stoji: SAOP je vrnil 10 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:16       GetItemsGeneralData: strani=1 zapisov=695 — MEJNIK STOJI (SAOP je vrnil 695 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:16       GetItemsDescriptions: strani=1 zapisov=1 — MEJNIK STOJI (SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:16       GetItemsTitlesLanguage: strani=0 zapisov=0 [0,7 s]
+22:32:16       GetItemsCustomProperties: strani=0 zapisov=0 [0,6 s]
+22:32:16       GetItemsPlanningData: strani=1 zapisov=459 — MEJNIK STOJI (SAOP je vrnil 459 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:16       GetItemsStockData: strani=1 zapisov=7 — MEJNIK STOJI (SAOP je vrnil 7 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:16       GetItemsStockAccountingData: strani=0 zapisov=0 [0,7 s]
+22:32:16       GetItemCustomerDataV2: strani=1 zapisov=10 — MEJNIK STOJI (SAOP je vrnil 10 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:16     [FAZA] Preslikava SAOP_VIDADRIA (podjetje 3): se je začela.
+22:32:16     [FAZA] Preslikava SAOP_VIDADRIA (podjetje 3): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:32:16     [FAZA] Mejnik SAOP_VIDADRIA (podjetje 3): se je začela.
+22:32:16     [FAZA] Mejnik SAOP_VIDADRIA (podjetje 3): uspelo — prebrano 3, zapisano 3; premaknjenih 3 od 3 upravičenih; brez premika zaradi napake ali čakanja na preslikavo: 5.
+22:32:16       SKUPAJ strani=5 zapisov=1172 RunId=df8737d2-2707-43bf-b993-070556ad35e4
+22:32:16       OPOZORILO: pri 5 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run df8737d2-2707-43bf-b993-070556ad35e4.
+22:32:16     konec: Artikli iz SAOP (podjetje 3) (7 s)
+22:32:16  == Artikli iz SAOP (podjetje 4) ==
+22:32:16     Živ SAOP zajem: podjetij=1, končnih točk=8, delta zajem, razpored=SAOP_PRODUCTS.
+22:32:16     [4] Ediito (SAOP_EDIITO)
+22:32:17     [FAZA] Prenos GetItemsGeneralData (podjetje 4): se je začela.
+22:32:17     [FAZA] Prenos GetItemsGeneralData (podjetje 4): uspelo, brez novih podatkov — prebrano 32, zapisano 0; mejnik stoji: SAOP je vrnil 32 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:17     [FAZA] Prenos GetItemsDescriptions (podjetje 4): se je začela.
+22:32:18     [FAZA] Prenos GetItemsDescriptions (podjetje 4): uspelo, brez novih podatkov — prebrano 1, zapisano 0; mejnik stoji: SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:18     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 4): se je začela.
+22:32:19     [FAZA] Prenos GetItemsTitlesLanguage (podjetje 4): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsTitlesLanguage: ni sprememb.
+22:32:19     [FAZA] Prenos GetItemsCustomProperties (podjetje 4): se je začela.
+22:32:20     [FAZA] Prenos GetItemsCustomProperties (podjetje 4): uspelo, brez novih podatkov — prebrano 444, zapisano 0; mejnik stoji: SAOP je vrnil 444 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:20     [FAZA] Prenos GetItemsPlanningData (podjetje 4): se je začela.
+22:32:20     [FAZA] Prenos GetItemsPlanningData (podjetje 4): uspelo, brez novih podatkov — prebrano 13, zapisano 0; mejnik stoji: SAOP je vrnil 13 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:20     [FAZA] Prenos GetItemsStockData (podjetje 4): se je začela.
+22:32:21     [FAZA] Prenos GetItemsStockData (podjetje 4): uspelo, brez novih podatkov — prebrano 1, zapisano 0; mejnik stoji: SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:21     [FAZA] Prenos GetItemsStockAccountingData (podjetje 4): se je začela.
+22:32:22     [FAZA] Prenos GetItemsStockAccountingData (podjetje 4): uspelo, brez novih podatkov — prebrano 0, zapisano 0; GetItemsStockAccountingData: ni sprememb.
+22:32:22     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 4): se je začela.
+22:32:22     [FAZA] Prenos GetItemCustomerDataV2 (podjetje 4): uspelo, brez novih podatkov — prebrano 20, zapisano 0; mejnik stoji: SAOP je vrnil 20 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+22:32:22       GetItemsGeneralData: strani=1 zapisov=32 — MEJNIK STOJI (SAOP je vrnil 32 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:22       GetItemsDescriptions: strani=1 zapisov=1 — MEJNIK STOJI (SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:22       GetItemsTitlesLanguage: strani=0 zapisov=0 [0,8 s]
+22:32:22       GetItemsCustomProperties: strani=1 zapisov=444 — MEJNIK STOJI (SAOP je vrnil 444 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:22       GetItemsPlanningData: strani=1 zapisov=13 — MEJNIK STOJI (SAOP je vrnil 13 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:22       GetItemsStockData: strani=1 zapisov=1 — MEJNIK STOJI (SAOP je vrnil 1 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:22       GetItemsStockAccountingData: strani=0 zapisov=0 [0,9 s]
+22:32:22       GetItemCustomerDataV2: strani=1 zapisov=20 — MEJNIK STOJI (SAOP je vrnil 20 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+22:32:23     [FAZA] Preslikava SAOP_EDIITO (podjetje 4): se je začela.
+22:32:23     [FAZA] Preslikava SAOP_EDIITO (podjetje 4): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:32:23     [FAZA] Mejnik SAOP_EDIITO (podjetje 4): se je začela.
+22:32:23     [FAZA] Mejnik SAOP_EDIITO (podjetje 4): uspelo — prebrano 2, zapisano 2; premaknjenih 2 od 2 upravičenih; brez premika zaradi napake ali čakanja na preslikavo: 6.
+22:32:23       SKUPAJ strani=6 zapisov=511 RunId=3eb3aa1a-fd65-4a16-8afc-abe032e2b2f6
+22:32:23       OPOZORILO: pri 6 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 3eb3aa1a-fd65-4a16-8afc-abe032e2b2f6.
+22:32:23     konec: Artikli iz SAOP (podjetje 4) (6 s)
+22:32:23  Artikli iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:32:23  === KONEC: izhod 0, trajanje 00:00:41

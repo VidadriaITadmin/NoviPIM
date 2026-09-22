@@ -1,0 +1,44 @@
+23:20:56  === ZAČETEK: Cene iz SAOP | posel PRICE_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 23:20:56
+23:20:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 2400 s
+23:20:56  == Cene iz SAOP (podjetje 2) ==
+23:20:57     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+23:20:57     [2] IQLighting (SAOP_IQLIGHTING)
+23:20:58     [FAZA] Prenos GetPrices (podjetje 2): se je začela.
+23:21:23     [FAZA] Prenos GetPrices (podjetje 2): uspelo, brez novih podatkov — prebrano 122, zapisano 0; mejnik stoji: SAOP je vrnil 122 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+23:21:23       GetPrices: strani=2 zapisov=122 — MEJNIK STOJI (SAOP je vrnil 122 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+23:21:26     [FAZA] Preslikava SAOP_IQLIGHTING (podjetje 2): se je začela.
+23:21:26     [FAZA] Preslikava SAOP_IQLIGHTING (podjetje 2): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+23:21:26     [FAZA] Mejnik SAOP_IQLIGHTING (podjetje 2): se je začela.
+23:21:26     [FAZA] Mejnik SAOP_IQLIGHTING (podjetje 2): preskočeno; noben mejnik ni bil upravičen do premika (končnih točk z napako ali brez česa preslikati: 1).
+23:21:26       SKUPAJ strani=2 zapisov=122 RunId=d6392c24-f3ca-4d6d-86f0-e5c154ceac6e
+23:21:26       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetPrices=3. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+23:21:26       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run d6392c24-f3ca-4d6d-86f0-e5c154ceac6e.
+23:21:26     konec: Cene iz SAOP (podjetje 2) (29 s)
+23:21:26  == Cene iz SAOP (podjetje 3) ==
+23:21:27     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+23:21:27     [3] Vidadria (SAOP_VIDADRIA)
+23:21:28     [FAZA] Prenos GetPrices (podjetje 3): se je začela.
+23:21:52     [FAZA] Prenos GetPrices (podjetje 3): uspelo, brez novih podatkov — prebrano 275, zapisano 0; mejnik stoji: SAOP je vrnil 275 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+23:21:52       GetPrices: strani=5 zapisov=275 — MEJNIK STOJI (SAOP je vrnil 275 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+23:21:52     [FAZA] Preslikava SAOP_VIDADRIA (podjetje 3): se je začela.
+23:21:52     [FAZA] Preslikava SAOP_VIDADRIA (podjetje 3): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+23:21:52     [FAZA] Mejnik SAOP_VIDADRIA (podjetje 3): se je začela.
+23:21:52     [FAZA] Mejnik SAOP_VIDADRIA (podjetje 3): preskočeno; noben mejnik ni bil upravičen do premika (končnih točk z napako ali brez česa preslikati: 1).
+23:21:52       SKUPAJ strani=5 zapisov=275 RunId=ac22e68d-7f36-4c14-b349-cc29b8020c2b
+23:21:52       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run ac22e68d-7f36-4c14-b349-cc29b8020c2b.
+23:21:53     konec: Cene iz SAOP (podjetje 3) (26 s)
+23:21:53  == Cene iz SAOP (podjetje 4) ==
+23:21:53     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+23:21:53     [4] Ediito (SAOP_EDIITO)
+23:21:54     [FAZA] Prenos GetPrices (podjetje 4): se je začela.
+23:22:02     [FAZA] Prenos GetPrices (podjetje 4): uspelo, brez novih podatkov — prebrano 14, zapisano 0; mejnik stoji: SAOP je vrnil 14 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+23:22:02       GetPrices: strani=1 zapisov=14 — MEJNIK STOJI (SAOP je vrnil 14 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+23:22:03     [FAZA] Preslikava SAOP_EDIITO (podjetje 4): se je začela.
+23:22:03     [FAZA] Preslikava SAOP_EDIITO (podjetje 4): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+23:22:03     [FAZA] Mejnik SAOP_EDIITO (podjetje 4): se je začela.
+23:22:03     [FAZA] Mejnik SAOP_EDIITO (podjetje 4): preskočeno; noben mejnik ni bil upravičen do premika (končnih točk z napako ali brez česa preslikati: 1).
+23:22:03       SKUPAJ strani=1 zapisov=14 RunId=a5b1bb5a-6368-44ec-9ca9-c6b5c60915f4
+23:22:03       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run a5b1bb5a-6368-44ec-9ca9-c6b5c60915f4.
+23:22:03     konec: Cene iz SAOP (podjetje 4) (10 s)
+23:22:03  Cene iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+23:22:03  === KONEC: izhod 0, trajanje 00:01:06

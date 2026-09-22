@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PIM.F6.BehaviorTests/1.0.0": {
+        "dependencies": {
+          "PIM.StockMapping": "1.0.0"
+        },
+        "runtime": {
+          "PIM.F6.BehaviorTests.dll": {}
+        }
+      },
+      "PIM.StockMapping/1.0.0": {
+        "runtime": {
+          "PIM.StockMapping.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.F6.BehaviorTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PIM.StockMapping/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

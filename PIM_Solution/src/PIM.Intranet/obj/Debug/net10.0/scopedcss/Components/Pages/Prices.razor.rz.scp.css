@@ -1,0 +1,153 @@
+/* Izoliran slog strani /cene. Orodna vrstica, filtri in znacke so isti kot na /stranke (265). */
+
+.result-count[b-qsytyv5g30] { color: var(--pim-text-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+
+.price-toolbar[b-qsytyv5g30] { display: block; padding: 0; }
+.price-toolbar > .card-toolbar[b-qsytyv5g30] {
+  align-items: center;
+  border-bottom: 1px solid var(--pim-line, var(--pim-border));
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  padding: .85rem 1rem;
+}
+.price-toolbar > .card-toolbar .search-field[b-qsytyv5g30] { flex: 1 1 22rem; min-width: 14rem; position: relative; }
+.price-toolbar > .card-toolbar .search-input[b-qsytyv5g30] { max-width: none; min-width: 0; padding-left: 2.1rem; width: 100%; }
+.price-toolbar > .card-toolbar .toolbar-actions[b-qsytyv5g30] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; }
+.search-icon[b-qsytyv5g30] {
+  border: 1.5px solid var(--pim-text-muted);
+  border-radius: 50%;
+  height: .7rem;
+  left: .75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: .7rem;
+}
+.search-icon[b-qsytyv5g30]::after {
+  background: var(--pim-text-muted);
+  bottom: -.28rem;
+  content: "";
+  height: .3rem;
+  position: absolute;
+  right: -.1rem;
+  transform: rotate(-45deg);
+  width: 1.5px;
+}
+
+.ghost-button[b-qsytyv5g30] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  gap: .4rem;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ghost-button:hover[b-qsytyv5g30] { background: var(--pim-surface-hover); }
+/* Izvoz praznega pogleda ni dejanje, ampak past; povezava to pove, ne samo ob kliku. */
+.ghost-button.disabled[b-qsytyv5g30] { opacity: .45; pointer-events: none; }
+.filter-toggle.open[b-qsytyv5g30] { background: var(--pim-surface-subtle); border-color: var(--pim-text-muted); }
+.funnel[b-qsytyv5g30] { border-left: .3rem solid transparent; border-right: .3rem solid transparent; border-top: .4rem solid currentColor; display: inline-block; height: 0; width: 0; }
+.filter-badge[b-qsytyv5g30] { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; margin-left: .3rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
+
+.price-toolbar > .filter-panel[b-qsytyv5g30] { border-bottom: 1px solid var(--pim-border); padding: .85rem 1rem 1rem; }
+.price-toolbar > .filter-panel[hidden][b-qsytyv5g30] { display: none; }
+.filter-grid[b-qsytyv5g30] { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.filter-field[b-qsytyv5g30] { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.filter-field label[b-qsytyv5g30] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.filter-field .filter-select[b-qsytyv5g30], .filter-field .form-input[b-qsytyv5g30] { max-width: none; width: 100%; }
+.filter-actions[b-qsytyv5g30] { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .9rem; }
+.link-button[b-qsytyv5g30] { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover[b-qsytyv5g30] { text-decoration: underline; }
+.link-button:disabled[b-qsytyv5g30] { cursor: default; opacity: .5; }
+
+.new-list h3[b-qsytyv5g30] { font-size: .95rem; margin: 0 0 .35rem; }
+.new-list .hint[b-qsytyv5g30] { color: var(--pim-text-muted); font-size: .8rem; margin: 0 0 .85rem; max-width: 60rem; }
+
+.active-filters[b-qsytyv5g30] { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1rem; }
+.filter-chip[b-qsytyv5g30] {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+}
+.filter-chip:hover[b-qsytyv5g30] { background: var(--pim-surface-hover); }
+.filter-chip.clear-all[b-qsytyv5g30] { border-style: dashed; color: var(--pim-text-muted); }
+.chip-remove[b-qsytyv5g30] { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove[b-qsytyv5g30]::before,
+.chip-remove[b-qsytyv5g30]::after { background: currentColor; content: ""; height: 1px; left: 0; position: absolute; top: 50%; width: 100%; }
+.chip-remove[b-qsytyv5g30]::before { transform: rotate(45deg); }
+.chip-remove[b-qsytyv5g30]::after { transform: rotate(-45deg); }
+
+.price-list-card[b-qsytyv5g30] { overflow: hidden; padding: 0; }
+
+/* Cela vrstica odpre cenike te vrstice — v vrstici, ne na kartici izdelka. */
+.row-link[b-qsytyv5g30] { cursor: pointer; }
+.row-link:hover[b-qsytyv5g30] { background: var(--pim-surface-hover); }
+.row-link.open[b-qsytyv5g30], tr.open[b-qsytyv5g30] { background: var(--pim-surface-subtle); }
+
+.product-name[b-qsytyv5g30] { display: block; font-weight: 600; }
+.product-meta[b-qsytyv5g30] { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+.price-lists[b-qsytyv5g30] { font-variant-numeric: tabular-nums; }
+
+/* »+N« pove, koliko cenikov je se, ne da bi jih vse nasteli. */
+.more-badge[b-qsytyv5g30] { background: var(--pim-surface-subtle); border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
+
+.detail-row > td[b-qsytyv5g30] { background: var(--pim-surface-hover); padding: .75rem 1rem; }
+.detail-actions[b-qsytyv5g30] { margin: .6rem 0 0; }
+
+/* Sprememba v vrsti stoji ob stari ceni, ne namesto nje: SAOP je vir, dokler je zajem ne prinese. */
+.queue-note[b-qsytyv5g30] { color: var(--pim-text-muted); display: block; font-size: .75rem; margin-top: .2rem; }
+.queue-note.warn[b-qsytyv5g30] { color: var(--pim-warn-text); }
+.queue-note.bad[b-qsytyv5g30], .error-text[b-qsytyv5g30] { color: var(--pim-bad-text, #b42318); }
+.queue-note.good[b-qsytyv5g30] { color: var(--pim-good-text); }
+
+.numeric-input[b-qsytyv5g30] { max-width: 7rem; text-align: right; }
+.edit-actions[b-qsytyv5g30] { white-space: nowrap; }
+.edit-actions > *[b-qsytyv5g30] { margin-right: .35rem; }
+.primary-button.small[b-qsytyv5g30], .secondary-button.small[b-qsytyv5g30] { font-size: .78rem; min-height: 1.9rem; padding: .25rem .6rem; }
+
+.add-price[b-qsytyv5g30] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.add-price-title[b-qsytyv5g30] { color: var(--pim-text-muted); font-size: .78rem; font-weight: 600; }
+.add-price .filter-select[b-qsytyv5g30] { max-width: 16rem; }
+
+.send-job[b-qsytyv5g30] { margin-bottom: 1rem; }
+.send-job h2[b-qsytyv5g30] { font-size: .95rem; margin: 0 0 .35rem; }
+.send-job p[b-qsytyv5g30] { font-size: .85rem; margin: 0 0 .5rem; }
+.change-list[b-qsytyv5g30] { font-size: .78rem; margin: .4rem 0 0; padding-left: 1.1rem; }
+
+.source-note[b-qsytyv5g30] { font-size: .8rem; margin: .9rem .2rem 0; max-width: 70rem; }
+
+.page-tab:focus-visible[b-qsytyv5g30],
+.search-input:focus-visible[b-qsytyv5g30],
+.filter-select:focus-visible[b-qsytyv5g30],
+.ghost-button:focus-visible[b-qsytyv5g30],
+.link-button:focus-visible[b-qsytyv5g30],
+.filter-chip:focus-visible[b-qsytyv5g30],
+.row-link:focus-visible[b-qsytyv5g30] { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-qsytyv5g30] { min-width: 880px; }
+  .price-toolbar > .card-toolbar[b-qsytyv5g30] { align-items: stretch; flex-direction: column; }
+  .price-toolbar > .card-toolbar .search-field[b-qsytyv5g30] { flex: 0 0 auto; min-width: 0; }
+  .price-toolbar > .card-toolbar .toolbar-actions[b-qsytyv5g30] { margin-left: 0; width: 100%; }
+  .price-toolbar > .card-toolbar .toolbar-actions > *[b-qsytyv5g30] { flex: 1 1 auto; justify-content: center; }
+  .filter-grid[b-qsytyv5g30] { grid-template-columns: 1fr; }
+}

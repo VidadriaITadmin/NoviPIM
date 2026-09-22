@@ -1,0 +1,64 @@
+22:39:56  === ZAČETEK: Naročila iz SAOP | posel SAOP_ORDER_IMPORT | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:39:56
+22:39:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+22:39:56  == Naročila iz SAOP (podjetje 2) ==
+22:39:57     [2] IQLighting (SAOP_IQLIGHTING)
+22:39:58       Naročila kupcev (VNK): 0 spremenjenih od 2026-09-15.
+22:39:58     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 2): se je začela.
+22:39:58     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 2): uspelo, brez novih podatkov — prebrano 0, zapisano 0; ni sprememb od 2026-09-15.
+22:39:58     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 2): se je začela.
+22:39:58     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 2): uspelo; vodni žig premaknjen na 2026-09-22 20:39 UTC.
+22:39:58     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 2): se je začela.
+22:39:58     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 2): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:39:58       Naročila kupcev (VNK): pristanjenih strani 0. RunId=1ba5cd38-89e3-4f7c-b474-3ff00ffed8d5
+22:39:58       Naročila dobaviteljem (VND): 0 spremenjenih od 2026-09-15.
+22:39:58     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 2): se je začela.
+22:39:58     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 2): uspelo, brez novih podatkov — prebrano 0, zapisano 0; ni sprememb od 2026-09-15.
+22:39:58     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 2): se je začela.
+22:39:58     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 2): uspelo; vodni žig premaknjen na 2026-09-22 20:39 UTC.
+22:39:58     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 2): se je začela.
+22:39:58     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 2): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:39:58       Naročila dobaviteljem (VND): pristanjenih strani 0. RunId=ecbf3484-2fcb-400d-854c-0b0125e58f38
+22:39:58     konec: Naročila iz SAOP (podjetje 2) (1 s)
+22:39:58  == Naročila iz SAOP (podjetje 3) ==
+22:39:59     [3] Vidadria (SAOP_VIDADRIA)
+22:40:01       Naročila kupcev (VNK): 0 spremenjenih od 2026-09-15.
+22:40:01     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 3): se je začela.
+22:40:01     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 3): uspelo, brez novih podatkov — prebrano 0, zapisano 0; ni sprememb od 2026-09-15.
+22:40:01     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 3): se je začela.
+22:40:01     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 3): uspelo; vodni žig premaknjen na 2026-09-22 20:39 UTC.
+22:40:01     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 3): se je začela.
+22:40:01     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 3): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:40:01       Naročila kupcev (VNK): pristanjenih strani 0. RunId=6eb12507-0c76-4a4b-b515-87631a1cd082
+22:40:01       Naročila dobaviteljem (VND): 634 spremenjenih od 2024-09-15.
+22:40:03     STDERR:   NAPAKA: dokument 2024/VND/214 ni prebran: SAOP klic ni uspel. Podjetje=3 Url=https://192.168.178.12:81/iCenterAPI/api/PurchaseOrders/GetPurchaseOrder/2024/VND/214 Status=500 Internal Server Error Uporabnik=ApiMagento. Odlomek odgovora:
+22:40:03     STDERR: <?xml version="1.0" encoding="utf-8"?><Error><Message>Internal server error</Message></Error>
+22:40:49       OPOZORILO: 609 vrstic GetPurchaseOrder ostaja Pending; vodni žig ni premaknjen.
+22:40:49     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 3): se je začela.
+22:40:49     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 3): NAPAKA — prebrano 634, zapisano 633, zavrnjeno 1; SAOP ni vrnil 1 dokumentov: 2024/VND/214; zajetih 633 od 634.
+22:40:49     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 3): se je začela.
+22:40:49     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 3): preskočeno; vodni žig ni premaknjen: 609 strani čaka preslikavo; isto obdobje bo zajeto znova.
+22:42:04     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 3): se je začela.
+22:42:04     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 3): uspelo — prebrano 609, zapisano 609; GetPurchaseOrder: obdelanih strani 609.
+22:42:04       Naročila dobaviteljem (VND): pristanjenih strani 633. RunId=4da9c107-1801-4b58-befb-57368acc1b91
+22:42:04     konec: Naročila iz SAOP (podjetje 3) (125 s)
+22:42:04  == Naročila iz SAOP (podjetje 4) ==
+22:42:05     [4] Ediito (SAOP_EDIITO)
+22:42:05       Naročila kupcev (VNK): 0 spremenjenih od 2026-09-15.
+22:42:05     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 4): se je začela.
+22:42:05     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 4): uspelo, brez novih podatkov — prebrano 0, zapisano 0; ni sprememb od 2026-09-15.
+22:42:05     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 4): se je začela.
+22:42:05     [FAZA] Mejnik SAOP_ORDERS_VNK (podjetje 4): uspelo; vodni žig premaknjen na 2026-09-22 20:42 UTC.
+22:42:07     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 4): se je začela.
+22:42:07     [FAZA] Preslikava SAOP_ORDERS_VNK (podjetje 4): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:42:07       Naročila kupcev (VNK): pristanjenih strani 0. RunId=c6e131de-d6e4-4f9d-ad16-e20452c05131
+22:42:08       Naročila dobaviteljem (VND): 0 spremenjenih od 2026-09-15.
+22:42:08     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 4): se je začela.
+22:42:08     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 4): uspelo, brez novih podatkov — prebrano 0, zapisano 0; ni sprememb od 2026-09-15.
+22:42:08     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 4): se je začela.
+22:42:08     [FAZA] Mejnik SAOP_ORDERS_VND (podjetje 4): uspelo; vodni žig premaknjen na 2026-09-22 20:42 UTC.
+22:42:10     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 4): se je začela.
+22:42:10     [FAZA] Preslikava SAOP_ORDERS_VND (podjetje 4): preskočeno; ta zagon ni zapisal nobene strani v raw.Inbox (vse je že zajeto ali je bil odgovor prazen); ni bilo česa preslikati.
+22:42:10       Naročila dobaviteljem (VND): pristanjenih strani 0. RunId=e744d631-7c1d-45d2-9773-ec984096e883
+22:42:10     konec: Naročila iz SAOP (podjetje 4) (6 s)
+22:42:10  Naročila iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:42:10  === KONEC: izhod 0, trajanje 00:02:13

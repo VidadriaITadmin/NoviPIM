@@ -1,0 +1,24 @@
+19:33:23  === ZAČETEK: Zaloga dobaviteljev | posel SUPPLIER_STOCK_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 19:33:23
+19:33:23  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+19:33:23  == Zaloga NW_STOCK ==
+19:33:24     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 22. 09. 2026 20:05.
+19:33:24     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:33:25     Prebranih zapisov: 2760; SHA-256: 941e77fa15be77ff61ebbfdb883ce62cf5637551ed8171816e014a51e189c412
+19:33:28     Zaloga zapisana; vir=NW_STOCK, podjetje=2, uporabljenih=2760, v karanteni=0, RunId=b333f851-9a27-47f8-aa10-2710d77f1d3b.
+19:33:29     Prebranih zapisov: 2760; SHA-256: 941e77fa15be77ff61ebbfdb883ce62cf5637551ed8171816e014a51e189c412
+19:33:31     Zaloga zapisana; vir=NW_STOCK, podjetje=3, uporabljenih=2760, v karanteni=0, RunId=4dced88a-e46f-41fc-ba71-4a9731f86d3b.
+19:33:32     Prebranih zapisov: 2760; SHA-256: 941e77fa15be77ff61ebbfdb883ce62cf5637551ed8171816e014a51e189c412
+19:33:33     Zaloga zapisana; vir=NW_STOCK, podjetje=4, uporabljenih=2760, v karanteni=0, RunId=60516d4b-1f23-4bd1-869d-e0b27e3285cb.
+19:33:33     konec: Zaloga NW_STOCK (10 s)
+19:33:33  == Zaloga BT_STOCK ==
+19:33:34     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 22. 09. 2026 20:00.
+19:33:34     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:33:35     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+19:33:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-17 15:07:47Z, uporabljenih=1389, v karanteni=0, RunId=7f8b9bc6-9c94-4908-8368-ca840e90feb4. Zapisano ni bilo nic.
+19:33:36     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+19:33:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-17 15:07:47Z, uporabljenih=1389, v karanteni=0, RunId=69e4e351-dc8f-4b85-9bd5-72cf28d35906. Zapisano ni bilo nic.
+19:33:37     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+19:33:38     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-17 15:07:47Z, uporabljenih=1389, v karanteni=0, RunId=4826bbfa-159c-452a-bff7-0b106ff82ed5. Zapisano ni bilo nic.
+19:33:38     konec: Zaloga BT_STOCK (4 s)
+19:33:38  Zaloga dobaviteljev končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+19:33:38  === KONEC: izhod 0, trajanje 00:00:14

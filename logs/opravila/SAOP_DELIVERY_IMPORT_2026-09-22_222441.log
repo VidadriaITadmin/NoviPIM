@@ -1,0 +1,19 @@
+22:24:41  === ZAČETEK: Datumi dobave iz SAOP | posel SAOP_DELIVERY_IMPORT | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:24:41
+22:24:41  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+22:24:41  == Datumi dobave iz SAOP (podjetje 2) ==
+22:24:42     [FAZA] Prenos SAOP_DELIVERY (podjetje 2): se je začela.
+22:26:18     [2] datumi prihoda: preverjenih=300, z dobavo=4.
+22:26:18     [FAZA] Prenos SAOP_DELIVERY (podjetje 2): uspelo — prebrano 300, zapisano 4; datumi prihoda iz SAOP.
+22:26:18     konec: Datumi dobave iz SAOP (podjetje 2) (96 s)
+22:26:18  == Datumi dobave iz SAOP (podjetje 3) ==
+22:26:19     [FAZA] Prenos SAOP_DELIVERY (podjetje 3): se je začela.
+22:27:53     [3] datumi prihoda: preverjenih=300, z dobavo=0.
+22:27:53     [FAZA] Prenos SAOP_DELIVERY (podjetje 3): uspelo, brez novih podatkov — prebrano 300, zapisano 0; datumi prihoda iz SAOP.
+22:27:53     konec: Datumi dobave iz SAOP (podjetje 3) (95 s)
+22:27:53  == Datumi dobave iz SAOP (podjetje 4) ==
+22:27:54     [FAZA] Prenos SAOP_DELIVERY (podjetje 4): se je začela.
+22:29:27     [4] datumi prihoda: preverjenih=300, z dobavo=2.
+22:29:27     [FAZA] Prenos SAOP_DELIVERY (podjetje 4): uspelo — prebrano 300, zapisano 2; datumi prihoda iz SAOP.
+22:29:27     konec: Datumi dobave iz SAOP (podjetje 4) (93 s)
+22:29:27  Datumi dobave iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:29:27  === KONEC: izhod 0, trajanje 00:04:45

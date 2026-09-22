@@ -1,0 +1,20 @@
+[06:47:46] Samotest se zacenja. Profil=MAGENTO_STOCK_PRICES, podjetje=2, sprozil=Task.
+[06:49:56] Samotest NIGHTLY_SYSTEM (ed76dc2a-c73a-40ee-ba3f-955b84864302)
+[06:49:56] ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+[06:49:56] DB                 USPEL             88 ms  263 uporabljenih migracij
+[06:49:56] SCHEMA             USPEL             11 ms  7 objektov je na mestu
+[06:49:56] SCHEDULES          USPEL              9 ms  44 od 51 vklopljenih
+[06:49:56] HEARTBEAT          PADEL             13 ms  Mol─Źijo: GENERIC_XML (org 1), GENERIC_XML (org 2), GENERIC_XML (org 3), GENERIC_XML (org 4), MAGENTO_PRODUCTS (org 2), MAGENTO_STOCK_PRICES (org 1), MAGENTO_STOCK_PRICES (org 2), MAGENTO_STOCK_PRICES (org 3), MAGENTO_STOCK_PRICES (org 4), SAOP_DELIVERY (org 1), SAOP_DELIVERY (org 2), SAOP_DELIVERY (org 3), SAOP_DELIVERY (org 4), SAOP_PRICES (org 1), SAOP_PRICES (org 2), SAOP_PRICES (org 3), SAOP_PRICES (or ÔÇŽ
+[06:49:56] RUNS_24H           PADEL              7 ms  Brez zagona v 24 h: GENERIC_XML (org 1), GENERIC_XML (org 2), GENERIC_XML (org 3), GENERIC_XML (org 4), MAGENTO_PRODUCTS (org 2), MAGENTO_STOCK_PRICES (org 1), MAGENTO_STOCK_PRICES (org 2), MAGENTO_STOCK_PRICES (org 3), MAGENTO_STOCK_PRICES (org 4), SAOP_DELIVERY (org 1), SAOP_DELIVERY (org 2), SAOP_DELIVERY (org 3), SAOP_DELIVERY (org 4), SAOP_PRICES (org 1), SAOP_PRICES (org 2), SAOP_PRICES (org 3), SAOP_PRICES (or ÔÇŽ
+[06:49:56] CATALOG            USPEL             45 ms  196.605 izdelkov (+0 od prej┼ínjega zagona)
+[06:49:56] STOCK_FRESHNESS    PADEL           4072 ms  Zastarela zaloga: datoteka (org 2): 72 h, datoteka (org 3): 72 h, datoteka (org 4): 72 h, SAOP (org 1): 79 h, SAOP (org 2): 79 h, SAOP (org 3): 79 h, SAOP (org 4): 79 h
+[06:49:56] QUARANTINE         OPOZORILO          2 ms  9 zapisov ─Źaka v karanteni.
+[06:49:56] QUALITY            OPOZORILO       3595 ms  15.029 objavljenih izdelkov ima odprto zahtevo.
+[06:49:56] WEB_CSV            USPEL          76968 ms  89.656 vrstic ├Ś 17 stolpcev, 5.353 kB
+[06:49:56] OUTBOX             OPOZORILO          1 ms  1 mrtvih sporo─Źil, 14 ─Źaka odobritve.
+[06:49:56] ECHO               USPEL              1 ms  ni nepojasnjenih odklonov
+[06:49:56] EXPORT_FRESHNESS   PADEL              2 ms  V zadnjih 24 urah ni bilo nobenega uspe┼ínega izvoza.
+[06:49:56] ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+[06:49:56] REZULTAT: PADEL ÔÇö 13 korakov, 84814 ms
+[06:49:56] Izhodna koda: 1
+[06:49:56] Dnevnik: C:\Users\david\Desktop\PIM\NoviPIM\logs\samotest_20260921_064746.log

@@ -1,0 +1,10 @@
+20:46:40  === ZAČETEK: Nadzor in alarmi | sprožil: razporejevalnik (razporejevalnik) | po razporedu | 2026-09-17 20:46:40
+20:46:40  Podjetja: 1, 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution
+20:46:40  == Nadzornik zastalih obdelav ==
+20:46:41     Watchdog pregled je končan.
+20:46:41     konec: Nadzornik zastalih obdelav (1 s)
+20:46:41  == Razposiljanje alarmov ==
+20:46:42     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+20:46:42     konec: Razposiljanje alarmov (1 s)
+20:46:42  Nadzor in alarmi koncan; padlih korakov: 0.
+20:46:42  === KONEC: izhod 0, trajanje 00:00:02

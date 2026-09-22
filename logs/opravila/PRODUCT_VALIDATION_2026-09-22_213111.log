@@ -1,0 +1,19 @@
+21:31:11  === ZAČETEK: Validacija artiklov | posel PRODUCT_VALIDATION | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console | 2026-09-22 21:31:11
+21:31:11  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+21:31:11  == Validacija (podjetje 2) ==
+21:31:11     [FAZA] Izračun VALIDACIJA (podjetje 2): se je začela: EXEC val.RunValidation @OrganizationId = 2; EXEC pim.WithdrawIneligibleWebShops.
+21:31:54     Validacija (podjetje 2): opravljeno.
+21:31:54     [FAZA] Izračun VALIDACIJA (podjetje 2): uspelo; Validacija (podjetje 2): opravljeno.
+21:31:54     konec: Validacija (podjetje 2) (42 s)
+21:31:54  == Validacija (podjetje 3) ==
+21:31:54     [FAZA] Izračun VALIDACIJA (podjetje 3): se je začela: EXEC val.RunValidation @OrganizationId = 3; EXEC pim.WithdrawIneligibleWebShops.
+21:32:18     Validacija (podjetje 3): opravljeno.
+21:32:18     [FAZA] Izračun VALIDACIJA (podjetje 3): uspelo; Validacija (podjetje 3): opravljeno.
+21:32:18     konec: Validacija (podjetje 3) (24 s)
+21:32:18  == Validacija (podjetje 4) ==
+21:32:18     [FAZA] Izračun VALIDACIJA (podjetje 4): se je začela: EXEC val.RunValidation @OrganizationId = 4; EXEC pim.WithdrawIneligibleWebShops.
+21:32:42     Validacija (podjetje 4): opravljeno.
+21:32:42     [FAZA] Izračun VALIDACIJA (podjetje 4): uspelo; Validacija (podjetje 4): opravljeno.
+21:32:42     konec: Validacija (podjetje 4) (23 s)
+21:32:42  Validacija artiklov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+21:32:42  === KONEC: izhod 0, trajanje 00:01:30

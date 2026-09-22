@@ -1,0 +1,75 @@
+20:43:00  === ZAČETEK: Zalogovni cikel | sprožil: admin | vsa podjetja | 2026-09-15 20:43:00
+20:43:00  --- powershell -File scripts\Zaloga-cikel.ps1
+20:43:00  == Zaloga NW_STOCK ==
+20:43:01     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 15. 09. 2026 21:52.
+20:43:01     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:43:02     Prebranih zapisov: 2762; SHA-256: 2944665c56c7c06eac4a13061e2d3a8a4dfe61b850297662c855e2c7a7c6435c
+20:43:02     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-15 17:52:43Z, uporabljenih=2762, v karanteni=0, RunId=459c27f4-39c8-4ab1-99d8-8f15b4ff7683. Zapisano ni bilo nic.
+20:43:03     Prebranih zapisov: 2762; SHA-256: 2944665c56c7c06eac4a13061e2d3a8a4dfe61b850297662c855e2c7a7c6435c
+20:43:03     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-15 17:52:43Z, uporabljenih=2762, v karanteni=0, RunId=de6757e4-c970-4ca3-8858-d89042caf81f. Zapisano ni bilo nic.
+20:43:04     Prebranih zapisov: 2762; SHA-256: 2944665c56c7c06eac4a13061e2d3a8a4dfe61b850297662c855e2c7a7c6435c
+20:43:05     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-15 17:52:43Z, uporabljenih=2762, v karanteni=0, RunId=8a508903-792e-4631-94fe-be541ec5c291. Zapisano ni bilo nic.
+20:43:05     Prebranih zapisov: 2762; SHA-256: 2944665c56c7c06eac4a13061e2d3a8a4dfe61b850297662c855e2c7a7c6435c
+20:43:06     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-15 17:52:43Z, uporabljenih=2762, v karanteni=0, RunId=d78dceff-7a9e-427b-bce2-13cf57ed279d. Zapisano ni bilo nic.
+20:43:06     konec: Zaloga NW_STOCK
+20:43:06  == Zaloga BT_STOCK ==
+20:43:07     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 15. 09. 2026 23:32.
+20:43:07     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:43:07     Prebranih zapisov: 1389; SHA-256: 94b795fed5c0e61f34d203f9295b09140639e3376e4e771b86fcc1450fad2c35
+20:43:08     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-15 18:32:34Z, uporabljenih=1389, v karanteni=0, RunId=d5937296-5c39-429d-92e4-3d1e4d225264. Zapisano ni bilo nic.
+20:43:09     Prebranih zapisov: 1389; SHA-256: 94b795fed5c0e61f34d203f9295b09140639e3376e4e771b86fcc1450fad2c35
+20:43:09     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-15 18:32:34Z, uporabljenih=1389, v karanteni=0, RunId=00d73a91-58ac-4c88-87ed-69fe7e68d9e3. Zapisano ni bilo nic.
+20:43:10     Prebranih zapisov: 1389; SHA-256: 94b795fed5c0e61f34d203f9295b09140639e3376e4e771b86fcc1450fad2c35
+20:43:10     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-15 18:32:34Z, uporabljenih=1389, v karanteni=0, RunId=9a0d0bbc-88ee-4d13-8be1-c145b68009a5. Zapisano ni bilo nic.
+20:43:11     Prebranih zapisov: 1389; SHA-256: 94b795fed5c0e61f34d203f9295b09140639e3376e4e771b86fcc1450fad2c35
+20:43:11     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-15 18:32:34Z, uporabljenih=1389, v karanteni=0, RunId=5a72fede-0aad-49c2-91f4-133e8f4df186. Zapisano ni bilo nic.
+20:43:11     konec: Zaloga BT_STOCK
+20:43:11  == Zaloga iz SAOP (kolicine) ==
+20:43:12     [1] SAOP_GETSTOCKS (GetStocks): skladišč=4, zapisov=16, uporabljenih=16, v karanteni=0, RunId=b9f6edd6-bc12-4107-9c09-9fb6ea89d587.
+20:43:16     [2] SAOP_GETSTOCKS (GetStocks): skladišč=1, zapisov=8772, uporabljenih=8772, v karanteni=0, RunId=a4e01dfa-8bc6-4185-9fda-853ac3dac8d8.
+20:43:22     [3] SAOP_REGISTERED_VIEW (RegisteredViewData): skladišč=0, zapisov=3074, uporabljenih=3074, v karanteni=0, RunId=f2f14d66-4de4-448c-95e6-3f5b9306c5de.
+20:43:24     [4] SAOP_GETSTOCKS (GetStocks): skladišč=14, zapisov=3117, uporabljenih=3117, v karanteni=0, RunId=d09a7bbf-193c-4b34-8c1d-5e71f3394096.
+20:43:24     konec: Zaloga iz SAOP (kolicine)
+20:43:24  == Osvezitev cen kataloga ==
+20:43:25     Živ SAOP zajem: podjetij=4, končnih točk=1, delta zajem.
+20:43:25     [2] IQLighting (SAOP_IQLIGHTING)
+20:43:46       GetPrices: strani=2 zapisov=106 — MEJNIK STOJI (SAOP je vrnil 106 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:43:47       SKUPAJ strani=2 zapisov=106 RunId=073b8d6d-cc27-4ee8-9d27-2f5178925db5
+20:43:47       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetPrices=3. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+20:43:47       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 073b8d6d-cc27-4ee8-9d27-2f5178925db5.
+20:43:47     [3] Vidadria (SAOP_VIDADRIA)
+20:44:09       GetPrices: strani=5 zapisov=218 — MEJNIK STOJI (SAOP je vrnil 218 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:44:09       SKUPAJ strani=5 zapisov=218 RunId=45a2e2da-7977-4978-9a64-acd7bdd8341a
+20:44:09       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 45a2e2da-7977-4978-9a64-acd7bdd8341a.
+20:44:09     [4] Ediito (SAOP_EDIITO)
+20:44:16       GetPrices: strani=2 zapisov=12 — MEJNIK STOJI (SAOP je vrnil 12 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:44:16       SKUPAJ strani=2 zapisov=12 RunId=e0450ad7-a871-4e06-8c3b-10a6be92cd05
+20:44:16       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run e0450ad7-a871-4e06-8c3b-10a6be92cd05.
+20:44:16     [1] DEMO (SAOP_DEMO)
+20:44:21       GetPrices: strani=0 zapisov=0 [4,1 s]
+20:44:21       SKUPAJ strani=0 zapisov=0 RunId=790bdbec-faf5-4af9-9f7d-e3eb63487f81
+20:44:22     konec: Osvezitev cen kataloga
+20:44:22  == Izvoz cen in zaloge za splet ==
+20:44:26     Izvoz profila MAGENTO_STOCK_PRICES končan: 422 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+20:44:27     STDERR: Unhandled exception. System.InvalidOperationException: V mapi C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2 že teče Magento izvoz (C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\.magento-export.lock). Sočasna zagona bi lahko objavila par datotek iz dveh različnih izvozov. Počakaj, da se prvi konča, ali izberi drugo izhodno mapo.
+20:44:27     STDERR:  ---> System.IO.IOException: The process cannot access the file 'C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\.magento-export.lock' because it is being used by another process.
+20:44:27     STDERR:    at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)
+20:44:27     STDERR:    at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+20:44:27     STDERR:    at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+20:44:27     STDERR:    at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+20:44:27     STDERR:    at System.IO.FileStream..ctor(String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, FileOptions options, Int64 preallocationSize)
+20:44:27     STDERR:    at System.IO.FileStream..ctor(String path, FileMode mode, FileAccess access, FileShare share, Int32 bufferSize, FileOptions options)
+20:44:27     STDERR:    at PIM.B2bWorker.MagentoExportLock.Acquire(String outputDirectory) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.B2bWorker\MagentoExportLock.cs:line 27
+20:44:27     STDERR:    --- End of inner exception stack trace ---
+20:44:27     STDERR:    at PIM.B2bWorker.MagentoExportLock.Acquire(String outputDirectory) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.B2bWorker\MagentoExportLock.cs:line 37
+20:44:27     STDERR:    at PIM.B2bWorker.MagentoExportCommand.ExportProfileAsync(String profileCode, Int32 organizationId, String outputDir, String fileName, String connectionString, CancellationToken ct) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.B2bWorker\MagentoExportCommand.cs:line 179
+20:44:27     STDERR:    at PIM.B2bWorker.MagentoExportCommand.ExportProfileAsync(String profileCode, Int32 organizationId, String outputDir, String fileName, String connectionString, CancellationToken ct) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.B2bWorker\MagentoExportCommand.cs:line 203
+20:44:27     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.B2bWorker\Program.cs:line 26
+20:44:27     STDERR:    at Program.<Main>(String[] args)
+20:44:30     NAPAKA: worker workers\PIM.B2bWorker je koncal z izhodno kodo -532462766
+20:44:30  == Osvezitev kataloga in strank s cenami in zalogo (podjetje 2) ==
+20:44:39     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+20:44:39     konec: Osvezitev kataloga in strank s cenami in zalogo (podjetje 2)
+20:44:39  Zalogovni cikel koncan; padlih korakov: 1.
+20:44:39  NAPAKA: powershell -File scripts\Zaloga-cikel.ps1 je končal z izhodno kodo 1.
+20:44:39  === KONEC: izhod 1, trajanje 00:01:38

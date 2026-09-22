@@ -1,0 +1,40 @@
+/* Izoliran slog osebne izkaznice izdelka. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.breadcrumb[b-u9cz5uw9od] { align-items: center; color: #64748b; display: flex; font-size: 12px; gap: 8px; margin-bottom: 10px; }
+.breadcrumb a[b-u9cz5uw9od] { color: var(--pim-primary); text-decoration: none; }
+.breadcrumb a:hover[b-u9cz5uw9od] { text-decoration: underline; }
+.breadcrumb-current[b-u9cz5uw9od] { color: #36465f; font-weight: 600; }
+/* Ločilo drobtinic je nadzorovana oblika, ne besedilni znak. */
+.breadcrumb-sep[b-u9cz5uw9od] { border-right: 1.5px solid #94a3b8; border-top: 1.5px solid #94a3b8; height: 6px; transform: rotate(45deg); width: 6px; }
+
+.page-header[b-u9cz5uw9od] { flex-wrap: wrap; gap: 12px; }
+.identity-line[b-u9cz5uw9od] { align-items: center; color: #64748b; display: flex; flex-wrap: wrap; font-size: 13px; gap: 10px; margin: 5px 0 0; }
+.identity-line span + span[b-u9cz5uw9od]::before { background: #94a3b8; border-radius: 50%; content: ""; display: inline-block; height: 3px; margin-right: 10px; vertical-align: middle; width: 3px; }
+.header-chips[b-u9cz5uw9od] { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.flag-chip[b-u9cz5uw9od] { background: #eef2f7; border: 1px solid #dae1eb; border-radius: 5px; color: #536078; font-size: 12px; font-weight: 650; padding: 3px 8px; }
+.flag-chip.on[b-u9cz5uw9od] { background: #eaf8ef; border-color: #c7ebd3; color: #16813c; }
+.flag-chip.off[b-u9cz5uw9od] { background: #f5f7fa; border-color: #dde3ec; color: #64748b; }
+
+/* Povzetek stanja: kartica na dejanski validacijski profil in kartica popolnosti. */
+.summary-grid[b-u9cz5uw9od] { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 16px; }
+.summary-card[b-u9cz5uw9od] { padding: 16px 17px; }
+.summary-card h3[b-u9cz5uw9od] { color: #64748b; font-size: 12px; font-weight: 650; margin: 0 0 10px; }
+.summary-status[b-u9cz5uw9od] { margin: 0 0 10px; }
+.summary-issues[b-u9cz5uw9od] { color: var(--pim-text-soft); font-size: 12px; margin: 0; }
+.summary-value[b-u9cz5uw9od] { color: var(--pim-text); font-size: 22px; font-weight: 700; margin: 0 0 10px; }
+.completeness-card .progress-track[b-u9cz5uw9od] { width: 100%; }
+
+.tab-panel[b-u9cz5uw9od] { padding-bottom: 4px; }
+.detail-table th[b-u9cz5uw9od] { color: #64748b; font-size: 12px; font-weight: 650; padding: 12px 16px; text-align: left; white-space: nowrap; width: 220px; }
+.detail-table td[b-u9cz5uw9od] { color: #27344a; }
+.table-scroll[b-u9cz5uw9od] { overflow-x: auto; }
+
+/* Viden fokus tipkovnice: skupni slog obris odstrani, zato ga tu vrnemo. */
+.breadcrumb a:focus-visible[b-u9cz5uw9od],
+.page-tab:focus-visible[b-u9cz5uw9od],
+.tab-panel:focus-visible[b-u9cz5uw9od],
+.table-scroll:focus-visible[b-u9cz5uw9od] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .table-scroll .data-table[b-u9cz5uw9od] { min-width: 640px; }
+  .detail-table th[b-u9cz5uw9od] { width: auto; }
+}

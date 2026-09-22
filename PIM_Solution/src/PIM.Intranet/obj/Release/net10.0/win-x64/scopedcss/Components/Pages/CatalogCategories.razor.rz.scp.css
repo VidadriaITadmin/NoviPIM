@@ -1,0 +1,341 @@
+/* Drevo kategorij. Slog je last te strani: nobena druga stran ne izrisuje hierarhije, zato v
+   skupni app.css ne sodi. */
+
+/* --- Pokritost prevodov ------------------------------------------------------------------
+   Prej je bilo tu deset kartic KPI, ki so zasedle cel zaslon, preden se je videla prva
+   kategorija. Ista informacija gre v pet vrstic, vsaka pa je hkrati filter. */
+
+.coverage[b-gdix7t4fnf] { padding: 1rem 1.25rem; }
+
+.coverage-head[b-gdix7t4fnf] {
+  align-items: baseline;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: .65rem;
+}
+
+.coverage-head h2[b-gdix7t4fnf] {
+  font-size: .95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.coverage-total[b-gdix7t4fnf] {
+  color: var(--pim-text-muted);
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage-rows[b-gdix7t4fnf] {
+  display: grid;
+  gap: .3rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.coverage-row[b-gdix7t4fnf] {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--pim-radius-xs);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: .55rem;
+  grid-template-columns: 1.9rem 1fr auto;
+  padding: .3rem .45rem;
+  text-align: left;
+  width: 100%;
+}
+
+.coverage-row:hover[b-gdix7t4fnf] { background: var(--pim-surface-hover); }
+.coverage-row.is-active[b-gdix7t4fnf] { background: var(--pim-accent-ring); border-color: var(--pim-primary); }
+
+.coverage-code[b-gdix7t4fnf] {
+  color: var(--pim-text-strong);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.coverage-track[b-gdix7t4fnf] {
+  background: var(--pim-border-soft);
+  border-radius: 999px;
+  display: block;
+  height: .4rem;
+  overflow: hidden;
+}
+
+.coverage-fill[b-gdix7t4fnf] { background: var(--pim-primary); display: block; height: 100%; }
+
+.coverage-value[b-gdix7t4fnf] {
+  color: var(--pim-warn-text);
+  font-size: .74rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.coverage-value.is-done[b-gdix7t4fnf] { color: var(--pim-good-text); }
+
+/* --- Drevo -------------------------------------------------------------------------------- */
+
+.tree-card[b-gdix7t4fnf] { padding: 0; }
+
+.tree-bar[b-gdix7t4fnf] {
+  align-items: center;
+  border-bottom: 1px solid var(--pim-border);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: .6rem 1rem;
+}
+
+.tree-actions[b-gdix7t4fnf] { display: flex; gap: .4rem; }
+
+/* Imena stolpcev nad drevesom. Ista mreza kot .node-line, da glava in vrstica stojita
+   druga nad drugo; prva celica je prazna, ker je nad gumbom za razpiranje. */
+.tree-head[b-gdix7t4fnf] {
+  align-items: end;
+  border-bottom: 1px solid var(--pim-border);
+  color: var(--pim-text-muted);
+  display: grid;
+  font-size: .7rem;
+  font-weight: 600;
+  gap: .5rem;
+  grid-template-columns: 1.5rem minmax(12rem, 1fr) auto 3.5rem 4.5rem;
+  letter-spacing: .02em;
+  padding: .5rem 1rem .4rem 0;
+  text-transform: uppercase;
+}
+.tree-head-name[b-gdix7t4fnf] { grid-column: 2; }
+.tree-head-count[b-gdix7t4fnf] { text-align: right; }
+
+.tree-legend[b-gdix7t4fnf] {
+  border-bottom: 1px solid var(--pim-border-soft);
+  color: var(--pim-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: .72rem;
+  gap: 1rem;
+  padding: .45rem 1rem;
+}
+
+.tree-legend-item[b-gdix7t4fnf] { align-items: center; display: inline-flex; gap: .35rem; }
+
+.tree[b-gdix7t4fnf] { list-style: none; margin: 0; padding: 0; }
+
+.tree-node[b-gdix7t4fnf] { border-bottom: 1px solid var(--pim-border-soft); }
+.tree-node:last-child[b-gdix7t4fnf] { border-bottom: none; }
+
+/* Prednik zadetka ni zadetek, je pa nujen, da se vidi, kje zadetek stoji. */
+.tree-node.is-context .node-title[b-gdix7t4fnf] { color: var(--pim-text-muted); font-weight: 400; }
+.tree-node.is-editing[b-gdix7t4fnf] { background: var(--pim-surface-subtle); }
+
+.node-line[b-gdix7t4fnf] {
+  align-items: center;
+  display: grid;
+  gap: .5rem;
+  grid-template-columns: 1.5rem minmax(12rem, 1fr) auto 3.5rem 4.5rem;
+  min-height: 2.3rem;
+  padding-right: 1rem;
+}
+
+.node-line:hover[b-gdix7t4fnf] { background: var(--pim-surface-hover); }
+
+.node-toggle[b-gdix7t4fnf] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border-strong);
+  border-radius: var(--pim-radius-xs);
+  color: var(--pim-text-soft);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .85rem;
+  height: 1.25rem;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 1.25rem;
+}
+
+.node-toggle:hover[b-gdix7t4fnf] { border-color: var(--pim-primary); color: var(--pim-primary); }
+
+/* List nima veje; prazen kvadrat drzi mrezo poravnano, da imena ne poskakujejo. */
+.node-toggle.is-leaf[b-gdix7t4fnf] { background: none; border: none; }
+
+.node-name[b-gdix7t4fnf] {
+  align-items: baseline;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: .45rem;
+  overflow: hidden;
+  padding: .25rem 0;
+  text-align: left;
+}
+
+.node-title[b-gdix7t4fnf] {
+  color: var(--pim-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-name:hover .node-title[b-gdix7t4fnf] { color: var(--pim-primary); text-decoration: underline; }
+
+.node-children[b-gdix7t4fnf] {
+  color: var(--pim-text-muted);
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.node-children[b-gdix7t4fnf]::before { content: "▸ "; }
+
+.node-off[b-gdix7t4fnf] { color: var(--pim-warn-text); font-size: .7rem; }
+
+/* --- Jeziki --------------------------------------------------------------------------------
+   Vseh pet jezikov je vidnih hkrati, ker je vprasanje "kateri manjka" pomembnejse od
+   vrednosti enega. Zapisano ime je v naslovu znacke. */
+
+.node-langs[b-gdix7t4fnf] { display: inline-flex; gap: .2rem; }
+
+.lang[b-gdix7t4fnf] {
+  border-radius: var(--pim-radius-xs);
+  cursor: default;
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  line-height: 1;
+  padding: .25rem .32rem;
+  text-transform: uppercase;
+}
+
+.lang.is-set[b-gdix7t4fnf] { background: var(--pim-good-bg); color: var(--pim-good-text); }
+.lang.is-missing[b-gdix7t4fnf] { background: var(--pim-neutral-bg); border: 1px dashed var(--pim-border-strong); color: var(--pim-text-muted); }
+/* Izbrani jezik ni obrobljen: jezik nosi ze naslov vozlisca. Znacka ga samo tise poudari. */
+.lang.is-focus[b-gdix7t4fnf] { box-shadow: inset 0 -2px 0 currentColor; }
+
+.node-count[b-gdix7t4fnf] {
+  color: var(--pim-text-muted);
+  font-size: .76rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.node-count.is-deep[b-gdix7t4fnf] { color: var(--pim-text-soft); font-weight: 600; }
+
+/* --- Urejanje imen -------------------------------------------------------------------------- */
+
+.node-editor[b-gdix7t4fnf] {
+  border-top: 1px dashed var(--pim-border-strong);
+  padding: .85rem 1rem 1rem 3rem;
+}
+
+.editor-head[b-gdix7t4fnf] {
+  color: var(--pim-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  font-size: .74rem;
+  margin-bottom: .6rem;
+}
+
+.editor-path[b-gdix7t4fnf] { color: var(--pim-text-soft); }
+.editor-code[b-gdix7t4fnf] { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+
+.editor-grid[b-gdix7t4fnf] {
+  display: grid;
+  gap: .55rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.editor-field[b-gdix7t4fnf] { display: flex; flex-direction: column; gap: .25rem; }
+
+.editor-label[b-gdix7t4fnf] {
+  align-items: center;
+  color: var(--pim-text-soft);
+  display: flex;
+  font-size: .72rem;
+  gap: .35rem;
+  text-transform: uppercase;
+}
+
+.editor-label em[b-gdix7t4fnf] {
+  color: var(--pim-warn-text);
+  font-size: .68rem;
+  font-style: normal;
+  text-transform: none;
+}
+
+.editor-actions[b-gdix7t4fnf] {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .7rem;
+}
+
+.editor-note[b-gdix7t4fnf] { color: var(--pim-text-muted); font-size: .74rem; }
+
+.filter-check[b-gdix7t4fnf] {
+  align-items: center;
+  color: var(--pim-text-soft);
+  display: inline-flex;
+  font-size: .82rem;
+  gap: .4rem;
+  white-space: nowrap;
+}
+
+.filter-check input[b-gdix7t4fnf] { accent-color: var(--pim-primary); }
+
+@media (max-width: 900px) {
+  .node-line[b-gdix7t4fnf] { grid-template-columns: 1.5rem 1fr auto; }
+  .node-count[b-gdix7t4fnf] { display: none; }
+}
+
+/* --- Ime v izbranem jeziku ----------------------------------------------------------------
+   Ce prevoda ni, se pokaze slovensko ime - a pikcasto podcrtano, da se vidi, da je nadomestek
+   in ne prevod. Tiho slovensko ime sredi tujega drevesa je natanko tisto, cesar nihce ne
+   opazi. */
+
+.node-title.is-fallback[b-gdix7t4fnf] {
+  border-bottom: 1px dotted var(--pim-warn-border);
+  color: var(--pim-text-muted);
+  font-weight: 500;
+}
+
+.node-original[b-gdix7t4fnf] {
+  color: var(--pim-text-muted);
+  font-size: .74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-original[b-gdix7t4fnf]::before { content: "· "; }
+
+.editor-origin[b-gdix7t4fnf] { color: var(--pim-text-soft); font-weight: 600; }
+
+/* Nabor atributov po kategoriji (147) */
+.node-attributes[b-gdix7t4fnf] { margin-left: .5rem; font-size: .8rem; padding: .1rem .5rem; border-radius: .35rem; border: 1px solid var(--pim-border, #d4d4d8); background: transparent; cursor: pointer; }
+.node-attributes.is-active[b-gdix7t4fnf] { background: var(--pim-accent, #f97316); color: #fff; border-color: transparent; }
+.attribute-editor .attribute-set[b-gdix7t4fnf] { width: 100%; border-collapse: collapse; margin: .5rem 0; font-size: .9rem; }
+.attribute-editor .attribute-set th[b-gdix7t4fnf], .attribute-editor .attribute-set td[b-gdix7t4fnf] { padding: .3rem .5rem; border-bottom: 1px solid var(--pim-border, #e4e4e7); text-align: left; }
+.attribute-editor .attribute-set td.numeric[b-gdix7t4fnf], .attribute-editor .attribute-set th.numeric[b-gdix7t4fnf] { text-align: right; }
+.attribute-editor .attribute-set tr.is-inherited td[b-gdix7t4fnf] { color: var(--pim-muted, #52525b); }
+.attribute-editor .code-value[b-gdix7t4fnf] { margin-left: .4rem; font-size: .75rem; opacity: .7; }
+.attribute-suggestions[b-gdix7t4fnf] { margin-top: .5rem; }
+.attribute-suggestions ul[b-gdix7t4fnf] { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .25rem; }
+.attribute-suggestions li[b-gdix7t4fnf] { display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
+
+/* 178: nova kategorija */
+.new-category[b-gdix7t4fnf] { padding: .9rem 1rem; }
+.new-category .card-caption[b-gdix7t4fnf] { font-size: .95rem; margin: 0 0 .6rem; }
+.new-category .editor-actions[b-gdix7t4fnf] { align-items: end; display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+.new-category .editor-field[b-gdix7t4fnf] { display: flex; flex-direction: column; gap: .2rem; }
+.new-category .parent-field[b-gdix7t4fnf] { flex: 1 1 22rem; min-width: 0; }
+.new-category .editor-label[b-gdix7t4fnf] { color: var(--pim-text-muted); font-size: .75rem; font-weight: 600; text-transform: uppercase; }

@@ -1,0 +1,7 @@
+19:48:53  === ZAČETEK: Nadzornik | posel ALERT_EVALUATION | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 19:48:53
+19:48:53  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 300 s
+19:48:53  == Nadzornik zastalih obdelav ==
+19:48:54     Watchdog pregled je končan.
+19:48:54     konec: Nadzornik zastalih obdelav (1 s)
+19:48:54  Nadzornik končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+19:48:54  === KONEC: izhod 0, trajanje 00:00:01

@@ -1,0 +1,88 @@
+/* Zaloga. Skupne oblike so v app.css; tu je samo tisto, kar je lastno tej strani.
+   Izolirani slog ne sega v otroške komponente — te nosijo svoj slog same. */
+
+.toolbar[b-4ikop73mob] { flex-wrap: wrap; }
+
+.search-input[b-4ikop73mob] { flex: 1 1 14rem; min-width: 11rem; }
+
+.filter-select[b-4ikop73mob] { max-width: 13rem; }
+
+.result-count[b-4ikop73mob] { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
+
+.active-filters[b-4ikop73mob] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1.25rem; }
+
+.filter-chip[b-4ikop73mob] {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  display: inline-flex;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+  text-decoration: none;
+}
+
+.filter-chip:hover[b-4ikop73mob] { background: var(--pim-surface-hover); }
+
+.filter-chip.clear-all[b-4ikop73mob] { border-style: dashed; color: var(--pim-text-muted); }
+
+.chip-remove[b-4ikop73mob] { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove[b-4ikop73mob]::before,
+.chip-remove[b-4ikop73mob]::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 50%;
+  width: 100%;
+}
+.chip-remove[b-4ikop73mob]::before { transform: rotate(45deg); }
+.chip-remove[b-4ikop73mob]::after { transform: rotate(-45deg); }
+
+.kpi-grid[b-4ikop73mob] { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin-bottom: 1.25rem; }
+
+.section-title[b-4ikop73mob] { font-size: 1rem; font-weight: 600; margin: 1.75rem 0 .75rem; }
+
+.data-card[b-4ikop73mob] { margin-bottom: 1.25rem; padding: 0; }
+
+.product-name[b-4ikop73mob] { display: block; font-weight: 600; }
+
+.product-meta[b-4ikop73mob] { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+
+.product-meta span + span[b-4ikop73mob] { margin-left: .35rem; }
+
+.code-value[b-4ikop73mob] { font-family: var(--pim-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .75rem; }
+
+.source-code[b-4ikop73mob] { font-weight: 600; }
+
+.gap-flag[b-4ikop73mob] { background: var(--pim-warn-bg); border-radius: 999px; color: var(--pim-warn-text); font-size: .7rem; font-weight: 600; padding: .1rem .4rem; }
+
+.detail-cell[b-4ikop73mob] { color: var(--pim-text-muted); font-size: .78rem; max-width: 24rem; }
+
+.muted[b-4ikop73mob] { color: var(--pim-text-muted); }
+
+.source-note[b-4ikop73mob] { font-size: .78rem; margin: 1rem 0 2rem; }
+
+.data-table[b-4ikop73mob] { min-width: 64rem; }
+
+.table-scroll[b-4ikop73mob] { overflow-x: auto; }
+
+.search-input:focus-visible[b-4ikop73mob],
+.filter-select:focus-visible[b-4ikop73mob],
+.filter-button:focus-visible[b-4ikop73mob],
+.filter-chip:focus-visible[b-4ikop73mob],
+.table-scroll:focus-visible[b-4ikop73mob],
+.data-table a:focus-visible[b-4ikop73mob] {
+  outline: 2px solid var(--pim-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .toolbar[b-4ikop73mob] { align-items: stretch; flex-direction: column; }
+  .filter-select[b-4ikop73mob] { max-width: none; }
+  .result-count[b-4ikop73mob] { margin-left: 0; }
+  .detail-cell[b-4ikop73mob] { max-width: none; }
+}

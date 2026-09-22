@@ -1,0 +1,16 @@
+21:13:39  === ZAČETEK: Cene in zaloga za splet | posel WEB_STOCK_EXPORT | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 21:13:39
+21:13:39  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+21:13:39  == Cene in zaloga (podjetje 2) ==
+21:13:48     Izvoz profila MAGENTO_STOCK_PRICES končan: 2176 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+21:13:48     konec: Cene in zaloga (podjetje 2) (9 s)
+21:13:48  == Cene in zaloga (podjetje 3) ==
+21:13:57     Izvoz profila MAGENTO_STOCK_PRICES končan: 2418 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+21:13:58     konec: Cene in zaloga (podjetje 3) (9 s)
+21:13:58  == Cene in zaloga (podjetje 4) ==
+21:14:00     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+21:14:00     konec: Cene in zaloga (podjetje 4) (2 s)
+21:14:00  Cene in zaloga za splet končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+21:14:00     Artefakt MAGENTO_STOCK_PRICES (podjetje 2): magento-stock-prices.csv je nespremenjen (isti hash kot zadnjič).
+21:14:00     Artefakt MAGENTO_STOCK_PRICES (podjetje 3): magento-stock-prices.csv je nespremenjen (isti hash kot zadnjič).
+21:14:00     Artefakt MAGENTO_STOCK_PRICES (podjetje 4): magento-stock-prices.csv je nespremenjen (isti hash kot zadnjič).
+21:14:00  === KONEC: izhod 0, trajanje 00:00:20

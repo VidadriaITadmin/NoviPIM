@@ -1,0 +1,56 @@
+.app-shell[b-a4h9fu3zyz] { background: #f7f9fc; display: flex; min-height: 100vh; }
+.app-sidebar[b-a4h9fu3zyz] { background: linear-gradient(160deg, #202833, #121821); color: #dce4f0; flex: 0 0 200px; min-height: 100vh; }
+.app-main[b-a4h9fu3zyz] { min-width: 0; flex: 1; }
+.app-topbar[b-a4h9fu3zyz] { align-items: center; background: #fff; border-bottom: 1px solid #e6eaf0; display: flex; gap: 14px; height: 66px; padding: 0 28px; }
+.menu-glyph[b-a4h9fu3zyz] { color: #34445d; font-size: 20px; }
+.global-search[b-a4h9fu3zyz] { align-items: center; border: 1px solid #dfe5ee; border-radius: 7px; color: #93a0b4; display: flex; font-size: 14px; gap: 9px; max-width: 350px; padding: 10px 13px; width: 100%; }
+.topbar-spacer[b-a4h9fu3zyz] { flex: 1; }
+.top-context[b-a4h9fu3zyz] { border: 1px solid #e1e6ee; border-radius: 7px; display: flex; flex-direction: column; min-width: 104px; padding: 5px 12px; }
+.top-context small[b-a4h9fu3zyz] { color: #7a879b; font-size: 10px; }.top-context strong[b-a4h9fu3zyz] { color: #27364d; font-size: 13px; font-weight: 600; }
+.logout-button[b-a4h9fu3zyz] { background: transparent; border: 0; color: #53627a; cursor: pointer; font: inherit; font-size: 13px; }
+.app-content[b-a4h9fu3zyz] { padding: 20px 26px 32px; }
+
+.top-row[b-a4h9fu3zyz] {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d6d5d5;
+    justify-content: flex-end;
+    height: 3.5rem;
+    display: flex;
+    align-items: center;
+}
+
+    .top-row[b-a4h9fu3zyz]  a, .top-row[b-a4h9fu3zyz]  .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+    }
+
+    .top-row[b-a4h9fu3zyz]  a:hover, .top-row[b-a4h9fu3zyz]  .btn-link:hover {
+        text-decoration: underline;
+    }
+
+    .top-row[b-a4h9fu3zyz]  a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+@media (max-width: 760px) { .app-sidebar[b-a4h9fu3zyz] { display: none; }.app-topbar[b-a4h9fu3zyz] { padding: 0 16px; }.top-context[b-a4h9fu3zyz] { display: none; }.global-search[b-a4h9fu3zyz] { max-width: none; }.app-content[b-a4h9fu3zyz] { padding: 18px; } }
+
+#blazor-error-ui[b-a4h9fu3zyz] {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss[b-a4h9fu3zyz] {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }

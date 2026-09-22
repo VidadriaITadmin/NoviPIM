@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\bin\Release\net10.0\PIM.F10.OutboundUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\bin\Release\net10.0\PIM.F10.OutboundUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\bin\Release\net10.0\PIM.F10.OutboundUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\bin\Release\net10.0\PIM.F10.OutboundUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\bin\Release\net10.0\PIM.F10.OutboundUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\refint\PIM.F10.OutboundUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\ref\PIM.F10.OutboundUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.OutboundUxTests\obj\Release\net10.0\PIM.F10.OutboundUxTests.sourcelink.json

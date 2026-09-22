@@ -1,0 +1,9 @@
+.dictionary-create-grid[b-g4xkpvztfx] { grid-template-columns: repeat(4, minmax(145px, 1fr)); }
+.dictionary-note[b-g4xkpvztfx] { grid-column: span 3; }
+.dictionary-language[b-g4xkpvztfx] { min-width: 4.5rem; width: 4.5rem; }
+.is-editing[b-g4xkpvztfx] { background: #eef2ff; }
+@media (max-width: 900px) {
+  .dictionary-create-grid[b-g4xkpvztfx] { grid-template-columns: repeat(2, minmax(145px, 1fr)); }
+  .dictionary-note[b-g4xkpvztfx] { grid-column: span 1; }
+}
+@media (max-width: 540px) { .dictionary-create-grid[b-g4xkpvztfx] { grid-template-columns: 1fr; } }

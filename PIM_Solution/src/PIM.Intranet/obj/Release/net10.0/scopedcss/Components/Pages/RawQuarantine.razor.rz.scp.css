@@ -1,0 +1,16 @@
+/* Izoliran slog strani /karantena. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-7ypetzis60] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-7ypetzis60] { font-variant-numeric: tabular-nums; }
+
+/* Razlog izločitve je lahko dolg, zato se tabela na ozkih zaslonih pomika, namesto da bi se stiskala. */
+.table-scroll[b-7ypetzis60] { overflow-x: auto; }
+.data-table td[b-7ypetzis60] { vertical-align: top; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-7ypetzis60],
+.search-input:focus-visible[b-7ypetzis60],
+.table-scroll:focus-visible[b-7ypetzis60] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-7ypetzis60] { min-width: 620px; }
+}

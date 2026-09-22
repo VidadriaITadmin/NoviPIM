@@ -1,0 +1,67 @@
+2026-08-23 22:04:18  OPOZORILO: v ops.PipelineRun je 10 zagon(ov) v stanju Running brez konca, starejsih od ure. Ne blokirajo, so pa rep prejsnjih padcev.
+2026-08-23 22:04:18  Zacetek nocnega opravila: delta zajem, podjetja: 1, 2, 3, 4.
+2026-08-23 22:04:18  Dnevnik: C:\Users\david\Desktop\PIM\NoviPIM\logs\nocno_2026-08-23_2204.log
+2026-08-23 22:04:18  == SAOP katalog == preskoceno: stikalo -BrezSaopKataloga. Klica navzven ni bilo.
+2026-08-23 22:04:18  == Dobaviteljev XML (Nowodvorski) ==
+2026-08-23 22:04:21     Preskocenih datotek: 0; ze zajetih strani: 3.
+2026-08-23 22:04:21     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=85ca0e84-c003-4456-8e96-5a84790fcf46.
+2026-08-23 22:04:23     Preskocenih datotek: 0; ze zajetih strani: 3.
+2026-08-23 22:04:23     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=eb53ae50-9796-45cc-9d5d-27c558370e77.
+2026-08-23 22:04:26     Preskocenih datotek: 0; ze zajetih strani: 3.
+2026-08-23 22:04:26     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=2e168915-0b90-45a6-9ea8-d36dbca3f09a.
+2026-08-23 22:04:28     Preskocenih datotek: 0; ze zajetih strani: 3.
+2026-08-23 22:04:29     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=5ee0458f-8de7-4caa-9ebf-8f1880728e10.
+2026-08-23 22:04:29     konec: Dobaviteljev XML (Nowodvorski) (10 s)
+2026-08-23 22:04:29  == Dobaviteljev XML (Braytron) ==
+2026-08-23 22:04:30     Preskocenih datotek: 0; ze zajetih strani: 2.
+2026-08-23 22:04:31     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=12765094-7d10-4e69-b1dc-c9d7205a7261.
+2026-08-23 22:04:33     Preskocenih datotek: 0; ze zajetih strani: 2.
+2026-08-23 22:04:33     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=163185b8-5ac3-4990-a2ab-76d7a8403e60.
+2026-08-23 22:04:35     Preskocenih datotek: 0; ze zajetih strani: 2.
+2026-08-23 22:04:35     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=6406b5f7-0e4b-41b8-9227-55817f15ccc2.
+2026-08-23 22:04:37     Preskocenih datotek: 0; ze zajetih strani: 2.
+2026-08-23 22:04:37     Generi─Źni XML zajem je kon─Źan; datotek=1, RunId=ee602568-6de8-4fc3-b0fa-57f6ca6ef531.
+2026-08-23 22:04:37     konec: Dobaviteljev XML (Braytron) (8 s)
+2026-08-23 22:04:37  == Preslikava zaostanka v raw.Inbox ==
+2026-08-23 22:04:38     V raw.Inbox ni nepreslikanih vrstic.
+2026-08-23 22:04:38     konec: Preslikava zaostanka v raw.Inbox (1 s)
+2026-08-23 22:04:38  == Zaloge dobaviteljev ==
+2026-08-23 22:04:39     Prebranih zapisov: 2697; SHA-256: 794178e3c506b99193387f8190eb47c63594d5fd38edaedecfd2675dfdfc90cd
+2026-08-23 22:04:39     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-07-31 08:03:08Z, uporabljenih=2697, v karanteni=0, RunId=72def2e2-0e64-49e7-a484-a0818cb7f727. Zapisano ni bilo nic.
+2026-08-23 22:04:40     Prebranih zapisov: 2697; SHA-256: 794178e3c506b99193387f8190eb47c63594d5fd38edaedecfd2675dfdfc90cd
+2026-08-23 22:04:40     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-07-31 08:03:08Z, uporabljenih=2697, v karanteni=0, RunId=3993636c-e0b5-4f3d-aded-c7972d4e09fe. Zapisano ni bilo nic.
+2026-08-23 22:04:40     Prebranih zapisov: 2697; SHA-256: 794178e3c506b99193387f8190eb47c63594d5fd38edaedecfd2675dfdfc90cd
+2026-08-23 22:04:41     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-07-31 08:03:08Z, uporabljenih=2697, v karanteni=0, RunId=6c2b7b98-72c5-4111-9c8a-52da9a85eb08. Zapisano ni bilo nic.
+2026-08-23 22:04:41     Prebranih zapisov: 2697; SHA-256: 794178e3c506b99193387f8190eb47c63594d5fd38edaedecfd2675dfdfc90cd
+2026-08-23 22:04:42     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-07-31 08:03:08Z, uporabljenih=2697, v karanteni=0, RunId=d633bfb5-1e7a-4f4b-b58b-9605298e8c40. Zapisano ni bilo nic.
+2026-08-23 22:04:42     Prebranih zapisov: 1361; SHA-256: d93668793c4235c1d9ed9c45e20e7ea24dbffd2c111e6617726c07a6e1eee8af
+2026-08-23 22:04:43     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-07-31 08:06:12Z, uporabljenih=1361, v karanteni=0, RunId=360e2232-28be-4033-942b-7b5d3c9de031. Zapisano ni bilo nic.
+2026-08-23 22:04:43     Prebranih zapisov: 1361; SHA-256: d93668793c4235c1d9ed9c45e20e7ea24dbffd2c111e6617726c07a6e1eee8af
+2026-08-23 22:04:44     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-07-31 08:06:12Z, uporabljenih=1361, v karanteni=0, RunId=7f0696a6-f510-403e-84dd-bee0b628a15c. Zapisano ni bilo nic.
+2026-08-23 22:04:44     Prebranih zapisov: 1361; SHA-256: d93668793c4235c1d9ed9c45e20e7ea24dbffd2c111e6617726c07a6e1eee8af
+2026-08-23 22:04:45     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-07-31 08:06:12Z, uporabljenih=1361, v karanteni=0, RunId=6ed3543f-8bce-4c78-a0cb-d91e86b62437. Zapisano ni bilo nic.
+2026-08-23 22:04:45     Prebranih zapisov: 1361; SHA-256: d93668793c4235c1d9ed9c45e20e7ea24dbffd2c111e6617726c07a6e1eee8af
+2026-08-23 22:04:46     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-07-31 08:06:12Z, uporabljenih=1361, v karanteni=0, RunId=6dbd9bb0-0cce-4d12-ae42-23a33443b28d. Zapisano ni bilo nic.
+2026-08-23 22:04:46     konec: Zaloge dobaviteljev (8 s)
+2026-08-23 22:04:46  == Zaloga iz SAOP == preskoceno: brez stikala -ZalogaIzSaop (ziv klic je odlocitev cloveka).
+2026-08-23 22:04:46  == Validacija in objava ==
+2026-08-23 22:04:58     podjetje 1: validirano in objavljeno.
+2026-08-23 22:06:10     podjetje 2: validirano in objavljeno.
+2026-08-23 22:06:27     podjetje 3: validirano in objavljeno.
+2026-08-23 22:06:46     podjetje 4: validirano in objavljeno.
+2026-08-23 22:06:46     konec: Validacija in objava (120 s)
+2026-08-23 22:06:46  == Magento izvoz ==
+2026-08-23 22:06:47     Magento CSV izvoz kon─Źan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+2026-08-23 22:06:52     Magento CSV izvoz kon─Źan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+2026-08-23 22:06:54     Magento CSV izvoz kon─Źan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+2026-08-23 22:06:57     Magento CSV izvoz kon─Źan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+2026-08-23 22:06:57     konec: Magento izvoz (12 s)
+2026-08-23 22:06:57  
+2026-08-23 22:06:57  POVZETEK: opravljenih 6, padlih 0.
+2026-08-23 22:06:57     raw.Inbox: Pending 0, Quarantined 10.
+2026-08-23 22:06:57     OK    Dobaviteljev XML (Nowodvorski)
+2026-08-23 22:06:57     OK    Dobaviteljev XML (Braytron)
+2026-08-23 22:06:57     OK    Preslikava zaostanka v raw.Inbox
+2026-08-23 22:06:57     OK    Zaloge dobaviteljev
+2026-08-23 22:06:57     OK    Validacija in objava
+2026-08-23 22:06:57     OK    Magento izvoz

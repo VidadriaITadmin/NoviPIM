@@ -1,0 +1,12 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\bin\Release\net10.0\PIM.B2b.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\bin\Release\net10.0\PIM.B2b.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\bin\Release\net10.0\PIM.B2b.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\refint\PIM.B2b.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\ref\PIM.B2b.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.B2b\obj\Release\net10.0\PIM.B2b.sourcelink.json

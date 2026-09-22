@@ -1,0 +1,32 @@
+/* Izoliran slog strani /splet.
+
+   .section-title, .card-note, .note-panel in .link-button so tu ponovljeni (kot na drugih
+   straneh, npr. TitleRules.razor.css) — Blazor CSS izolacija pravil iz drugih strani ne uporabi
+   tukaj, zato bi stran brez ponovitve ostala brez sloga za te splosne razrede. */
+.section-title[b-ppz5a2b6az] { color: var(--pim-text-strong); font-size: 1.05rem; margin: 1.5rem 0 .65rem; }
+.section-title:first-of-type[b-ppz5a2b6az] { margin-top: 0; }
+
+.card-note[b-ppz5a2b6az] { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .82rem; line-height: 1.55; padding: .7rem 1.25rem; }
+
+.note-panel[b-ppz5a2b6az] { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-muted); font-size: .85rem; line-height: 1.5; margin: 1rem 1.25rem; padding: .85rem 1rem; }
+
+.link-button[b-ppz5a2b6az] { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; text-decoration: none; }
+.link-button:hover:not(:disabled)[b-ppz5a2b6az] { text-decoration: underline; }
+.link-button:disabled[b-ppz5a2b6az] { cursor: default; opacity: .5; }
+
+/* Orodna vrstica predogleda: naziv datoteke, iskalnik in prenos celotne datoteke skupaj na
+   vrhu, tako da uporabniku ni treba iskati prenosa pod (lahko dolgo) tabelo predogleda. */
+.preview-toolbar[b-ppz5a2b6az] { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; padding: 1rem 1.25rem .75rem; }
+.preview-toolbar strong[b-ppz5a2b6az] { color: var(--pim-text-strong); flex: 1 1 auto; font-size: .9rem; }
+.preview-toolbar .search-input[b-ppz5a2b6az] { max-width: 20rem; }
+
+/* Predogled CSV je sirok: 213 stolpcev Magento predloge se ne stisne, ampak se pomika. */
+.csv-preview[b-ppz5a2b6az] { margin: 0 1.25rem; max-height: 26rem; overflow: auto; }
+.csv-preview:focus-visible[b-ppz5a2b6az] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.csv-table[b-ppz5a2b6az] { font-size: .72rem; white-space: nowrap; }
+.csv-table th[b-ppz5a2b6az] { background: var(--pim-surface-hover); position: sticky; top: 0; z-index: 1; }
+.csv-table td[b-ppz5a2b6az] { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }
+.preview-row > td[b-ppz5a2b6az] { background: var(--pim-surface-hover); padding: 0 0 .75rem; }
+.preview-row .message-state[b-ppz5a2b6az] { margin: .75rem 1.25rem 0; }
+.is-open[b-ppz5a2b6az] { background: #eef2ff; }
+.small-action:focus-visible[b-ppz5a2b6az] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }

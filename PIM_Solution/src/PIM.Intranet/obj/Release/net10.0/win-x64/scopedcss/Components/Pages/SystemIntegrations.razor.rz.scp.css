@@ -1,0 +1,25 @@
+/* Izoliran slog strani /system/integracije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+
+.integrations-note[b-q74bqwwpyw] { color: var(--pim-text-muted); font-size: .82rem; margin: -4px 0 16px; }
+
+/* Dve podatkovni kartici zapored: razmik nosi slog, ne dodatni razred v označbi. */
+.data-card + .data-card[b-q74bqwwpyw] { margin-top: 16px; }
+
+/* Gosti tabeli z devetimi stolpci; na ozkih zaslonih se pomikata, namesto da bi se stiskali. */
+.table-scroll[b-q74bqwwpyw] { overflow-x: auto; }
+.numeric[b-q74bqwwpyw] { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Redigiran povzetek in naslov opozorila sta lahko dolga; celice ostanejo poravnane na vrh. */
+.data-table td[b-q74bqwwpyw] { vertical-align: top; }
+
+/* Prazna celica dejanj ni sporočilo; pomišljaj ostane vizualno podrejen. */
+.no-action[b-q74bqwwpyw] { color: #64748b; }
+
+/* Viden fokus tipkovnice: skupni slog gumbov obris odstrani, zato ga tu vrnemo. */
+.filter-button:focus-visible[b-q74bqwwpyw],
+.small-action:focus-visible[b-q74bqwwpyw],
+.table-scroll:focus-visible[b-q74bqwwpyw] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-q74bqwwpyw] { min-width: 900px; }
+}

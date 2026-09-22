@@ -1,0 +1,392 @@
+/* /Components/Layout/MainLayout.razor.rz.scp.css */
+.app-shell[b-a4h9fu3zyz] { background: #f6f8fb; display: flex; min-height: 100vh; }
+.app-sidebar[b-a4h9fu3zyz] { background: linear-gradient(160deg, #1c242e, #111820); color: #dce4f0; flex: 0 0 200px; min-height: 100vh; position: relative; }
+.app-main[b-a4h9fu3zyz] { flex: 1; min-width: 0; }
+.app-topbar[b-a4h9fu3zyz] { align-items: center; background: #fff; border-bottom: 1px solid #e2e7ee; display: flex; gap: 12px; height: 66px; padding: 0 26px; }
+.menu-glyph[b-a4h9fu3zyz] { align-items: center; background: transparent; border: 0; color: #34445d; cursor: pointer; display: inline-flex; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.menu-glyph-icon[b-a4h9fu3zyz], .menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { background: currentColor; border-radius: 2px; display: block; height: 2px; position: relative; width: 17px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { content: ""; left: 0; position: absolute; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before { top: -6px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::after { top: 6px; }
+.menu-glyph:focus-visible[b-a4h9fu3zyz] { border-radius: 5px; box-shadow: 0 0 0 3px rgba(23, 100, 232, .18); outline: none; }
+.global-search[b-a4h9fu3zyz] { align-items: center; border: 1px solid #dbe2eb; border-radius: 6px; color: #718096; display: flex; font-size: 13px; gap: 10px; height: 38px; max-width: 350px; padding: 0 13px; text-decoration: none; width: 100%; }
+.search-icon[b-a4h9fu3zyz] { border: 1.6px solid #718096; border-radius: 50%; height: 11px; position: relative; width: 11px; }
+.search-icon[b-a4h9fu3zyz]::after { background: #718096; content: ""; height: 1.5px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 5px; }
+.topbar-spacer[b-a4h9fu3zyz] { flex: 1; }
+.top-context[b-a4h9fu3zyz] { background: #fff; border: 1px solid #dfe5ed; border-radius: 6px; display: flex; flex-direction: column; min-width: 112px; padding: 5px 11px; text-align: left; }
+.top-context small[b-a4h9fu3zyz] { color: #78869a; font-size: 9px; }
+.top-context strong[b-a4h9fu3zyz] { color: #27364d; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.top-control[b-a4h9fu3zyz] { font: inherit; }
+.top-control:disabled[b-a4h9fu3zyz] { cursor: not-allowed; opacity: .68; }
+.notification-button[b-a4h9fu3zyz] { background: transparent; border: 0; height: 34px; opacity: .58; padding: 8px; width: 34px; }
+.notification-button span[b-a4h9fu3zyz] { border: 1.7px solid #41516a; border-radius: 9px 9px 4px 4px; display: block; height: 14px; position: relative; width: 13px; }
+.notification-button span[b-a4h9fu3zyz]::after { background: #41516a; border-radius: 50%; bottom: -5px; content: ""; height: 3px; left: 4px; position: absolute; width: 3px; }
+.signed-user[b-a4h9fu3zyz] { align-items: center; display: flex; gap: 9px; }
+.signed-user span[b-a4h9fu3zyz] { align-items: center; background: #47556c; border-radius: 50%; color: #fff; display: flex; font-size: 11px; height: 32px; justify-content: center; width: 32px; }
+.signed-user strong[b-a4h9fu3zyz] { font-size: 13px; white-space: nowrap; }
+.logout-button[b-a4h9fu3zyz] { background: transparent; border: 0; color: #53627a; cursor: pointer; font: inherit; font-size: 12px; }
+.app-content[b-a4h9fu3zyz] { padding: 20px 26px 34px; }
+
+@media (max-width: 1050px) { .top-control[b-a4h9fu3zyz] { display: none; } }
+@media (max-width: 760px) {
+  .app-sidebar[b-a4h9fu3zyz] { display: none; left: 0; position: fixed; top: 0; width: 220px; z-index: 100; }
+  .app-sidebar.open[b-a4h9fu3zyz] { display: block; }
+  .app-topbar[b-a4h9fu3zyz] { padding: 0 14px; }
+  .top-context[b-a4h9fu3zyz], .signed-user strong[b-a4h9fu3zyz], .logout-button[b-a4h9fu3zyz] { display: none; }
+  .global-search[b-a4h9fu3zyz] { max-width: none; }
+  .app-content[b-a4h9fu3zyz] { padding: 18px 14px; }
+}
+
+#blazor-error-ui[b-a4h9fu3zyz] { background: lightyellow; bottom: 0; box-shadow: 0 -1px 2px rgba(0, 0, 0, .2); display: none; left: 0; padding: .6rem 1.25rem .7rem; position: fixed; width: 100%; z-index: 1000; }
+#blazor-error-ui .dismiss[b-a4h9fu3zyz] { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }
+/* /Components/Layout/NavMenu.razor.rz.scp.css */
+.pim-mark[b-qruzvtq060] { align-items: center; background: linear-gradient(135deg, #ff8a00, #f45b17); border-radius: 7px; color: #fff; display: flex; font-size: 17px; font-weight: 800; height: 42px; justify-content: center; margin: 18px 19px 27px; text-decoration: none; width: 42px; }
+.app-navigation[b-qruzvtq060] { display: flex; flex-direction: column; gap: 2px; padding: 0 7px 24px; }
+.navigation-group[b-qruzvtq060] { color: #9daabd; font-size: 10px; font-weight: 700; letter-spacing: .07em; margin: 20px 14px 7px; text-transform: uppercase; }
+.navigation-link[b-qruzvtq060] { align-items: center; border-radius: 5px; color: #d9e1eb; display: flex; font-size: 12px; gap: 12px; min-height: 38px; padding: 0 14px; text-decoration: none; }
+.navigation-link:hover[b-qruzvtq060] { background: rgba(255, 255, 255, .06); color: #fff; }
+.navigation-link.active[b-qruzvtq060] { background: rgba(255, 255, 255, .08); border-left: 2px solid #ff7900; border-radius: 0 5px 5px 0; color: #fff; padding-left: 12px; }
+.navigation-icon[b-qruzvtq060] { background-color: #b8c3d0; display: inline-block; flex: 0 0 17px; height: 17px; mask: var(--icon) center / contain no-repeat; width: 17px; }
+.navigation-link.active .navigation-icon[b-qruzvtq060] { background-color: #ff7900; }
+.icon-dashboard[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='3' width='7' height='7' rx='1'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1'/%3E%3C/g%3E%3C/svg%3E"); }
+.icon-products[b-qruzvtq060], .icon-stock[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m12 2 9 5-9 5-9-5 9-5Zm9 5v10l-9 5-9-5V7m9 5v10' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-quality[b-qruzvtq060], .icon-alert[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 2 21h20L12 3Zm0 6v5m0 3v2' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-import[b-qruzvtq060], .icon-export[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v13m-5-5 5 5 5-5M4 20h16' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-export[b-qruzvtq060] { transform: rotate(180deg); }
+.icon-users[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='9' cy='8' r='3'/%3E%3Cpath d='M3 20v-3c0-3 2-5 6-5s6 2 6 5v3M16 6a3 3 0 0 1 0 6m1 2c3 0 4 2 4 5'/%3E%3C/g%3E%3C/svg%3E"); }
+.icon-rules[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 17 17 7M7 7h.01M17 17h.01' fill='none' stroke='black' stroke-linecap='round' stroke-width='3'/%3E%3C/svg%3E"); }
+.icon-settings[b-qruzvtq060], .icon-link[b-qruzvtq060] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='3' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+/* /Components/Pages/Customers.razor.rz.scp.css */
+/* Izoliran slog strani /stranke. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-1qkmkqa9vt] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-1qkmkqa9vt] { font-variant-numeric: tabular-nums; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-1qkmkqa9vt] { overflow-x: auto; }
+.row-action[b-1qkmkqa9vt] { text-align: right; width: 44px; }
+.open-link[b-1qkmkqa9vt] { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
+.chevron[b-1qkmkqa9vt] { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
+.page-position[b-1qkmkqa9vt] { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1qkmkqa9vt],
+.search-input:focus-visible[b-1qkmkqa9vt],
+.filter-select:focus-visible[b-1qkmkqa9vt],
+.pagination button:focus-visible[b-1qkmkqa9vt],
+.table-scroll:focus-visible[b-1qkmkqa9vt],
+.data-table a:focus-visible[b-1qkmkqa9vt],
+.open-link:focus-visible[b-1qkmkqa9vt] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+/* Sedem podatkovnih stolpcev in stolpec dejanja se na telefonu ne smejo stisniti. */
+@media (max-width: 900px) {
+  .data-table[b-1qkmkqa9vt] { min-width: 760px; }
+}
+/* /Components/Pages/Dashboard.razor.rz.scp.css */
+.page-heading[b-t1dtz4fwh1] { margin-bottom: 19px; }
+.page-heading > span[b-t1dtz4fwh1] { color: #718096; display: block; font-size: 11px; margin-bottom: 9px; }
+.page-heading h1[b-t1dtz4fwh1] { color: #172b4d; font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.page-heading p[b-t1dtz4fwh1] { color: #64748b; font-size: 13px; margin: 5px 0 0; }
+.metric-grid[b-t1dtz4fwh1] { display: grid; gap: 14px; grid-template-columns: repeat(5, minmax(150px, 1fr)); margin-bottom: 18px; }
+.metric-card[b-t1dtz4fwh1] { background: #fff; border: 1px solid #e1e6ed; border-radius: 9px; box-shadow: 0 2px 7px rgba(20, 35, 60, .04); color: #17233d; min-height: 116px; padding: 17px 58px 15px 17px; position: relative; text-decoration: none; }
+.metric-card:hover[b-t1dtz4fwh1], .quick-links a:hover[b-t1dtz4fwh1] { border-color: #b9ccff; }
+.metric-card > span:not(.metric-icon)[b-t1dtz4fwh1], .metric-card small[b-t1dtz4fwh1] { color: #64748b; display: block; font-size: 12px; white-space: nowrap; }
+.metric-card strong[b-t1dtz4fwh1] { display: block; font-size: 22px; margin: 7px 0 4px; }
+.metric-icon[b-t1dtz4fwh1], .row-icon[b-t1dtz4fwh1], .quick-icon[b-t1dtz4fwh1] { background-color: currentColor; display: inline-block; mask: var(--icon) center / contain no-repeat; }
+.metric-icon[b-t1dtz4fwh1] { background-color: #246bff; border: 11px solid #edf3ff; border-radius: 50%; box-sizing: content-box; height: 20px; position: absolute; right: 15px; top: 16px; width: 20px; }
+.green .metric-icon[b-t1dtz4fwh1] { background-color: #22a957; border-color: #ecf9f1; }
+.orange .metric-icon[b-t1dtz4fwh1] { background-color: #f97316; border-color: #fff3e9; }
+.red .metric-icon[b-t1dtz4fwh1] { background-color: #ef4444; border-color: #fff0f1; }
+.amber .metric-icon[b-t1dtz4fwh1] { background-color: #eaa300; border-color: #fff7e2; }
+.dashboard-grid[b-t1dtz4fwh1] { display: grid; gap: 14px; grid-template-columns: 1fr 1.15fr 1.2fr; }
+.dashboard-panel[b-t1dtz4fwh1] { background: #fff; border: 1px solid #e1e6ed; border-radius: 9px; box-shadow: 0 2px 7px rgba(20, 35, 60, .04); min-height: 230px; padding: 17px 18px; }
+.panel-title[b-t1dtz4fwh1] { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; }
+.panel-title h2[b-t1dtz4fwh1] { color: #22324d; font-size: 15px; font-weight: 650; margin: 0; }
+.panel-title a[b-t1dtz4fwh1], .panel-link[b-t1dtz4fwh1] { color: #1264e8; font-size: 12px; text-decoration: none; }
+.count-badge[b-t1dtz4fwh1] { background: #eef2f7; border-radius: 10px; color: #334155; font-size: 11px; padding: 2px 7px; }
+.list-row[b-t1dtz4fwh1], .alert-row[b-t1dtz4fwh1] { align-items: center; border-top: 1px solid #edf0f5; color: #36465f; display: grid; font-size: 12px; gap: 9px; grid-template-columns: 22px 1fr auto 8px; min-height: 46px; text-decoration: none; }
+.list-row:first-of-type[b-t1dtz4fwh1] { border-top: 0; }
+.list-row > strong[b-t1dtz4fwh1] { background: #f0f3f7; border-radius: 11px; color: #29384f; font-size: 11px; padding: 2px 7px; }
+.list-row > i[b-t1dtz4fwh1], .alert-row > i[b-t1dtz4fwh1], .quality-row > i[b-t1dtz4fwh1] { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 6px; transform: rotate(45deg); width: 6px; }
+.row-icon[b-t1dtz4fwh1] { height: 18px; width: 18px; }
+.row-icon.danger[b-t1dtz4fwh1] { background-color: #ef4444; }
+.row-icon.warning[b-t1dtz4fwh1] { background-color: #eaa300; }
+.unavailable-note[b-t1dtz4fwh1], .info-note[b-t1dtz4fwh1] { background: #f5f8fc; border-radius: 5px; color: #6b778c; font-size: 11px; margin-top: 10px; padding: 9px 10px; }
+.info-note[b-t1dtz4fwh1] { background: #eef4ff; color: #53657f; }
+.quality-row[b-t1dtz4fwh1] { align-items: center; border-top: 1px solid #edf0f5; color: #36465f; display: grid; font-size: 12px; gap: 10px; grid-template-columns: minmax(64px, .8fr) minmax(90px, 1.5fr) 38px 8px; min-height: 43px; text-decoration: none; }
+.progress[b-t1dtz4fwh1] { background: #e9edf2; border-radius: 99px; height: 6px; overflow: hidden; }
+.progress i[b-t1dtz4fwh1] { background: #31ad57; border-radius: inherit; display: block; height: 100%; }
+.progress i.warn[b-t1dtz4fwh1] { background: #ff8a00; }
+.process-head[b-t1dtz4fwh1], .process-row[b-t1dtz4fwh1] { align-items: center; display: grid; gap: 10px; grid-template-columns: 1.35fr 1fr 68px; }
+.process-head[b-t1dtz4fwh1] { color: #718096; font-size: 10px; padding: 0 0 8px; }
+.process-row[b-t1dtz4fwh1] { border-top: 1px solid #edf0f5; color: #27364d; font-size: 11px; min-height: 35px; text-decoration: none; }
+.status[b-t1dtz4fwh1] { border: 1px solid #d8dee8; border-radius: 4px; color: #6b778c; font-size: 10px; font-weight: 600; justify-self: start; padding: 2px 6px; }
+.status.good[b-t1dtz4fwh1] { background: #ebf8ef; border-color: #bce5c8; color: #19833e; }
+.status.warn[b-t1dtz4fwh1] { background: #fff7e8; border-color: #f7d79d; color: #bf6b00; }
+.status.bad[b-t1dtz4fwh1] { background: #fff0f0; border-color: #f6baba; color: #d82f2f; }
+.alert-row[b-t1dtz4fwh1] { grid-template-columns: 22px 1fr 8px; }
+.alert-row > span:nth-child(2)[b-t1dtz4fwh1] { display: flex; flex-direction: column; }
+.alert-row small[b-t1dtz4fwh1], .integration-row small[b-t1dtz4fwh1] { color: #718096; font-size: 10px; margin-top: 2px; }
+.panel-link[b-t1dtz4fwh1] { display: inline-block; margin-top: 12px; }
+.integration-row[b-t1dtz4fwh1] { align-items: center; border-top: 1px solid #edf0f5; color: #27364d; display: grid; font-size: 12px; grid-template-columns: 1fr 1fr auto; min-height: 37px; text-decoration: none; }
+.integration-row small[b-t1dtz4fwh1] { margin: 0; }
+.quick-links[b-t1dtz4fwh1] { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(70px, 1fr)); }
+.quick-links a[b-t1dtz4fwh1] { align-items: center; border: 1px solid #e5eaf1; border-radius: 7px; color: #334155; display: flex; flex-direction: column; font-size: 11px; gap: 9px; justify-content: center; min-height: 82px; padding: 10px 5px; text-align: center; text-decoration: none; }
+.quick-icon[b-t1dtz4fwh1] { height: 22px; width: 22px; }
+.quick-icon.blue[b-t1dtz4fwh1] { background-color: #246bff; }.quick-icon.red[b-t1dtz4fwh1] { background-color: #ef4444; }.quick-icon.amber[b-t1dtz4fwh1] { background-color: #eaa300; }.quick-icon.green[b-t1dtz4fwh1] { background-color: #22a957; }.quick-icon.purple[b-t1dtz4fwh1] { background-color: #9333ea; }
+.panel-state[b-t1dtz4fwh1] { color: #718096; font-size: 12px; padding: 24px 8px; text-align: center; }
+.good-state[b-t1dtz4fwh1] { color: #19833e; }
+/* Viden fokus tipkovnice na vseh interaktivnih elementih plošče. */
+.metric-card:focus-visible[b-t1dtz4fwh1], .list-row:focus-visible[b-t1dtz4fwh1], .quality-row:focus-visible[b-t1dtz4fwh1], .process-row:focus-visible[b-t1dtz4fwh1], .alert-row:focus-visible[b-t1dtz4fwh1], .integration-row:focus-visible[b-t1dtz4fwh1], .quick-links a:focus-visible[b-t1dtz4fwh1], .panel-title a:focus-visible[b-t1dtz4fwh1], .panel-link:focus-visible[b-t1dtz4fwh1] { border-radius: 7px; outline: 2px solid #1264e8; outline-offset: 2px; }
+.icon-products[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m12 2 9 5-9 5-9-5 9-5Zm9 5v10l-9 5-9-5V7m9 5v10' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-check[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 13 4 4L19 7' fill='none' stroke='black' stroke-width='2.5'/%3E%3C/svg%3E"); }
+.icon-published[b-t1dtz4fwh1], .icon-export[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v13m-5-5 5 5 5-5M4 20h16' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-warning[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 2 21h20L12 3Zm0 6v5m0 3v2' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-lock[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='10' width='16' height='11' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M8 10V7a4 4 0 0 1 8 0v3' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-process[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 12a8 8 0 0 1 14-5l2 2m0-5v5h-5M20 12a8 8 0 0 1-14 5l-2-2m0 5v-5h5' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+.icon-settings[b-t1dtz4fwh1] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='3' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E"); }
+
+@media (min-width: 1350px) { .dashboard-grid[b-t1dtz4fwh1] { grid-template-columns: 1fr 1.15fr 1.2fr; } }
+@media (max-width: 1120px) { .metric-grid[b-t1dtz4fwh1] { grid-template-columns: repeat(3, 1fr); }.dashboard-grid[b-t1dtz4fwh1] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .metric-grid[b-t1dtz4fwh1], .dashboard-grid[b-t1dtz4fwh1] { grid-template-columns: 1fr; }.metric-grid[b-t1dtz4fwh1] { gap: 10px; }.processes-panel[b-t1dtz4fwh1] { overflow-x: auto; }.process-head[b-t1dtz4fwh1], .process-row[b-t1dtz4fwh1] { min-width: 430px; } }
+/* /Components/Pages/Login.razor.rz.scp.css */
+.login-screen[b-xtrwrrrqwq] {
+  align-items: center;
+  background: #faf9f7;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.login-card[b-xtrwrrrqwq] {
+  background: #fff;
+  border: 1px solid #efede9;
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(24, 35, 55, .08);
+  color: #17233d;
+  max-width: 354px;
+  padding: 30px 24px 18px;
+  text-align: left;
+  width: 100%;
+}
+
+.login-brand[b-xtrwrrrqwq] { align-items: center; display: flex; font-size: 20px; font-weight: 700; gap: 10px; justify-content: center; }
+.login-mark[b-xtrwrrrqwq] { align-items: center; background: linear-gradient(135deg, #ff8a00, #f45b17); border-radius: 6px; color: #fff; display: inline-flex; font-size: 15px; font-weight: 800; height: 30px; justify-content: center; width: 30px; }
+.login-subtitle[b-xtrwrrrqwq] { color: #6b7890; font-size: 14px; margin: 8px 0 26px; text-align: center; }
+.login-alert[b-xtrwrrrqwq] { background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; color: #b42318; font-size: 14px; margin-bottom: 16px; padding: 10px 12px; }
+.login-field[b-xtrwrrrqwq] { margin-bottom: 16px; }
+.login-field label[b-xtrwrrrqwq] { display: block; font-size: 15px; font-weight: 500; margin-bottom: 7px; }
+.login-field input[b-xtrwrrrqwq] { border: 1px solid #d8dee9; border-radius: 7px; box-sizing: border-box; font: inherit; min-height: 38px; outline: none; padding: 8px 11px; width: 100%; }
+.login-field input:focus[b-xtrwrrrqwq] { border-color: #2d67e8; box-shadow: 0 0 0 3px rgba(45, 103, 232, .12); }
+.remember-me[b-xtrwrrrqwq] { align-items: flex-start; display: flex; font-size: 14px; gap: 8px; line-height: 1.45; margin: 17px 0 24px; }
+.remember-me input[b-xtrwrrrqwq] { accent-color: #263d6e; height: 16px; margin: 2px 0 0; width: 16px; }
+.login-submit[b-xtrwrrrqwq] { background: #263d6e; border: 0; border-radius: 6px; color: #fff; cursor: pointer; font: inherit; font-weight: 700; min-height: 39px; width: 100%; }
+.login-submit:hover[b-xtrwrrrqwq] { background: #1d315a; }
+.login-note[b-xtrwrrrqwq] { border-top: 1px solid #f0f1f3; color: #667085; font-size: 12px; line-height: 1.55; margin: 24px 0 0; padding-top: 18px; text-align: center; }
+/* /Components/Pages/Outbound.razor.rz.scp.css */
+/* Izoliran slog strani /outbound. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-1c74dq2ow0] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-1c74dq2ow0] { font-variant-numeric: tabular-nums; }
+
+/* Delež pod vrednostjo hitrega pregleda je izpeljan podatek, zato ostane vizualno podrejen. */
+.kpi-share[b-1c74dq2ow0] { color: #64748b; display: block; font-size: 12px; margin-top: 4px; }
+
+/* Deset stolpcev je gostih; na ozkih zaslonih se tabela pomika, namesto da bi se stiskala. */
+.table-scroll[b-1c74dq2ow0] { overflow-x: auto; }
+.numeric[b-1c74dq2ow0] { text-align: right; font-variant-numeric: tabular-nums; }
+.page-position[b-1c74dq2ow0] { color: #526078; font-size: 13px; }
+
+/* Odklon je opozorilo, zato nosi tudi besedilo in ne le barve. */
+.drift-flag[b-1c74dq2ow0] { background: #fff7e8; border: 1px solid #fde1ad; border-radius: 5px; color: #cf7200; display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 6px; }
+
+/* Viden fokus tipkovnice: skupni slog polj in gumbov obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1c74dq2ow0],
+.search-input:focus-visible[b-1c74dq2ow0],
+.filter-select:focus-visible[b-1c74dq2ow0],
+.small-action:focus-visible[b-1c74dq2ow0],
+.pagination button:focus-visible[b-1c74dq2ow0],
+.table-scroll:focus-visible[b-1c74dq2ow0] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-1c74dq2ow0] { min-width: 1180px; }
+}
+/* /Components/Pages/PipelineRuns.razor.rz.scp.css */
+/* Izoliran slog strani /teki-obdelave. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-9ge7ylnu98] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-9ge7ylnu98] { font-variant-numeric: tabular-nums; }
+
+/* Ime vira je naslov kartice, zato ne sme prevzeti privzete velikosti in odmikov <h2>. */
+.source-name[b-9ge7ylnu98] { font-size: 15px; font-weight: 650; margin: 0; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-9ge7ylnu98] { overflow-x: auto; }
+.numeric[b-9ge7ylnu98] { text-align: right; font-variant-numeric: tabular-nums; }
+.page-position[b-9ge7ylnu98] { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-9ge7ylnu98],
+.search-input:focus-visible[b-9ge7ylnu98],
+.filter-select:focus-visible[b-9ge7ylnu98],
+.pagination button:focus-visible[b-9ge7ylnu98],
+.table-scroll:focus-visible[b-9ge7ylnu98] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+/* Osem stolpcev in trije stolpci kartic virov se na telefonu ne smejo stisniti. */
+@media (max-width: 900px) {
+  .data-table[b-9ge7ylnu98] { min-width: 880px; }
+  .source-grid[b-9ge7ylnu98] { grid-template-columns: 1fr; }
+}
+/* /Components/Pages/ProductDetail.razor.rz.scp.css */
+/* Izoliran slog osebne izkaznice izdelka. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.breadcrumb[b-u9cz5uw9od] { align-items: center; color: #64748b; display: flex; font-size: 12px; gap: 8px; margin-bottom: 10px; }
+.breadcrumb a[b-u9cz5uw9od] { color: #1264e8; text-decoration: none; }
+.breadcrumb a:hover[b-u9cz5uw9od] { text-decoration: underline; }
+.breadcrumb-current[b-u9cz5uw9od] { color: #36465f; font-weight: 600; }
+/* Ločilo drobtinic je nadzorovana oblika, ne besedilni znak. */
+.breadcrumb-sep[b-u9cz5uw9od] { border-right: 1.5px solid #94a3b8; border-top: 1.5px solid #94a3b8; height: 6px; transform: rotate(45deg); width: 6px; }
+
+.page-header[b-u9cz5uw9od] { flex-wrap: wrap; gap: 12px; }
+.identity-line[b-u9cz5uw9od] { align-items: center; color: #64748b; display: flex; flex-wrap: wrap; font-size: 13px; gap: 10px; margin: 5px 0 0; }
+.identity-line span + span[b-u9cz5uw9od]::before { background: #94a3b8; border-radius: 50%; content: ""; display: inline-block; height: 3px; margin-right: 10px; vertical-align: middle; width: 3px; }
+.header-chips[b-u9cz5uw9od] { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.flag-chip[b-u9cz5uw9od] { background: #eef2f7; border: 1px solid #dae1eb; border-radius: 5px; color: #536078; font-size: 12px; font-weight: 650; padding: 3px 8px; }
+.flag-chip.on[b-u9cz5uw9od] { background: #eaf8ef; border-color: #c7ebd3; color: #16813c; }
+.flag-chip.off[b-u9cz5uw9od] { background: #f5f7fa; border-color: #dde3ec; color: #64748b; }
+
+/* Povzetek stanja: kartica na dejanski validacijski profil in kartica popolnosti. */
+.summary-grid[b-u9cz5uw9od] { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin-bottom: 16px; }
+.summary-card[b-u9cz5uw9od] { padding: 16px 17px; }
+.summary-card h3[b-u9cz5uw9od] { color: #64748b; font-size: 12px; font-weight: 650; margin: 0 0 10px; }
+.summary-status[b-u9cz5uw9od] { margin: 0 0 10px; }
+.summary-issues[b-u9cz5uw9od] { color: #526078; font-size: 12px; margin: 0; }
+.summary-value[b-u9cz5uw9od] { color: #17233d; font-size: 22px; font-weight: 700; margin: 0 0 10px; }
+.completeness-card .progress-track[b-u9cz5uw9od] { width: 100%; }
+
+.tab-panel[b-u9cz5uw9od] { padding-bottom: 4px; }
+.detail-table th[b-u9cz5uw9od] { color: #64748b; font-size: 12px; font-weight: 650; padding: 12px 16px; text-align: left; white-space: nowrap; width: 220px; }
+.detail-table td[b-u9cz5uw9od] { color: #27344a; }
+.table-scroll[b-u9cz5uw9od] { overflow-x: auto; }
+
+/* Viden fokus tipkovnice: skupni slog obris odstrani, zato ga tu vrnemo. */
+.breadcrumb a:focus-visible[b-u9cz5uw9od],
+.page-tab:focus-visible[b-u9cz5uw9od],
+.tab-panel:focus-visible[b-u9cz5uw9od],
+.table-scroll:focus-visible[b-u9cz5uw9od] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .table-scroll .data-table[b-u9cz5uw9od] { min-width: 640px; }
+  .detail-table th[b-u9cz5uw9od] { width: auto; }
+}
+/* /Components/Pages/Products.razor.rz.scp.css */
+/* Izoliran slog strani /izdelki. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-jppeqvylrb] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-jppeqvylrb] { font-variant-numeric: tabular-nums; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-jppeqvylrb] { overflow-x: auto; }
+.progress-value[b-jppeqvylrb] { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.row-action[b-jppeqvylrb] { text-align: right; width: 44px; }
+.open-link[b-jppeqvylrb] { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
+.chevron[b-jppeqvylrb] { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
+.page-position[b-jppeqvylrb] { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.search-input:focus-visible[b-jppeqvylrb],
+.filter-select:focus-visible[b-jppeqvylrb],
+.filter-button:focus-visible[b-jppeqvylrb],
+.pagination button:focus-visible[b-jppeqvylrb],
+.table-scroll:focus-visible[b-jppeqvylrb],
+.data-table a:focus-visible[b-jppeqvylrb],
+.open-link:focus-visible[b-jppeqvylrb] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-jppeqvylrb] { min-width: 640px; }
+}
+/* /Components/Pages/RawQuarantine.razor.rz.scp.css */
+/* Izoliran slog strani /karantena. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-7ypetzis60] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-7ypetzis60] { font-variant-numeric: tabular-nums; }
+
+/* Razlog izločitve je lahko dolg, zato se tabela na ozkih zaslonih pomika, namesto da bi se stiskala. */
+.table-scroll[b-7ypetzis60] { overflow-x: auto; }
+.data-table td[b-7ypetzis60] { vertical-align: top; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-7ypetzis60],
+.search-input:focus-visible[b-7ypetzis60],
+.table-scroll:focus-visible[b-7ypetzis60] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-7ypetzis60] { min-width: 620px; }
+}
+/* /Components/Pages/Stocks.razor.rz.scp.css */
+/* Izoliran slog strani /zaloge. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-4ikop73mob] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-4ikop73mob] { font-variant-numeric: tabular-nums; }
+
+/* Delež pod KPI vrednostjo je izpeljan podatek, zato ostane vizualno podrejen. */
+.kpi-share[b-4ikop73mob] { color: #64748b; display: block; font-size: 12px; margin-top: 4px; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-4ikop73mob] { overflow-x: auto; }
+.numeric[b-4ikop73mob] { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Zastarelost je opozorilo, zato nosi tudi besedilo in ne le barve. */
+.stale-flag[b-4ikop73mob] { background: #fff7e8; border: 1px solid #fde1ad; border-radius: 5px; color: #cf7200; font-size: 11px; font-weight: 650; margin-left: 8px; padding: 2px 6px; white-space: nowrap; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.search-input:focus-visible[b-4ikop73mob],
+.filter-select:focus-visible[b-4ikop73mob],
+.table-scroll:focus-visible[b-4ikop73mob],
+.data-table a:focus-visible[b-4ikop73mob] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-4ikop73mob] { min-width: 720px; }
+}
+/* /Components/Pages/SystemIntegrations.razor.rz.scp.css */
+/* Izoliran slog strani /system/integracije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+
+/* Dve podatkovni kartici zapored: razmik nosi slog, ne dodatni razred v označbi. */
+.data-card + .data-card[b-q74bqwwpyw] { margin-top: 16px; }
+
+/* Gosti tabeli z devetimi stolpci; na ozkih zaslonih se pomikata, namesto da bi se stiskali. */
+.table-scroll[b-q74bqwwpyw] { overflow-x: auto; }
+.numeric[b-q74bqwwpyw] { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Redigiran povzetek in naslov opozorila sta lahko dolga; celice ostanejo poravnane na vrh. */
+.data-table td[b-q74bqwwpyw] { vertical-align: top; }
+
+/* Prazna celica dejanj ni sporočilo; pomišljaj ostane vizualno podrejen. */
+.no-action[b-q74bqwwpyw] { color: #64748b; }
+
+/* Viden fokus tipkovnice: skupni slog gumbov obris odstrani, zato ga tu vrnemo. */
+.filter-button:focus-visible[b-q74bqwwpyw],
+.small-action:focus-visible[b-q74bqwwpyw],
+.table-scroll:focus-visible[b-q74bqwwpyw] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-q74bqwwpyw] { min-width: 900px; }
+}
+/* /Components/Pages/ValidationErrors.razor.rz.scp.css */
+/* Izoliran slog strani /napake-validacije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-jzbhz0xyes] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; }
+.kpi strong[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; }
+
+/* Kartici pregleda sta gosti, a berljivi; na ozkih zaslonih se tabeli pomikata, namesto da bi se stiskali. */
+.table-scroll[b-jzbhz0xyes] { overflow-x: auto; }
+.progress-value[b-jzbhz0xyes] { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.issue-count[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; text-align: right; }
+.no-value[b-jzbhz0xyes] { color: #8593a8; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-jzbhz0xyes],
+.search-input:focus-visible[b-jzbhz0xyes],
+.filter-select:focus-visible[b-jzbhz0xyes],
+.table-scroll:focus-visible[b-jzbhz0xyes],
+.data-table a:focus-visible[b-jzbhz0xyes],
+.kpi a:focus-visible[b-jzbhz0xyes] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .quality-grid[b-jzbhz0xyes] { grid-template-columns: 1fr; }
+  .data-table[b-jzbhz0xyes] { min-width: 560px; }
+}

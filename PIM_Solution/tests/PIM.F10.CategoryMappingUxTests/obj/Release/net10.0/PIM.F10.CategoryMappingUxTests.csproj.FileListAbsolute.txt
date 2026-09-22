@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\bin\Release\net10.0\PIM.F10.CategoryMappingUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\bin\Release\net10.0\PIM.F10.CategoryMappingUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\bin\Release\net10.0\PIM.F10.CategoryMappingUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\bin\Release\net10.0\PIM.F10.CategoryMappingUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\bin\Release\net10.0\PIM.F10.CategoryMappingUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\refint\PIM.F10.CategoryMappingUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\ref\PIM.F10.CategoryMappingUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.CategoryMappingUxTests\obj\Release\net10.0\PIM.F10.CategoryMappingUxTests.sourcelink.json

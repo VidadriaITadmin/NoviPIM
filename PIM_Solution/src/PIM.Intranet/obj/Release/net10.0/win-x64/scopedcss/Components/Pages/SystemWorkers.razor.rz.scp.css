@@ -1,0 +1,116 @@
+/* Workerji: ročni zagon, izpis v živo in dnevniki. Barve in razmiki pridejo iz app.css;
+   tu je samo tisto, česar druge strani nimajo — konzolni izpis in oznake poslov. */
+
+.panel-title[b-htbcua8725] { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; justify-content: space-between; }
+.panel-note[b-htbcua8725] { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: 0 0 .75rem; }
+
+.group-title[b-htbcua8725] {
+  color: var(--pim-text-soft);
+  font-size: .75rem;
+  font-weight: 650;
+  letter-spacing: .03em;
+  margin: 1.25rem 0 .5rem;
+  text-transform: uppercase;
+}
+
+.picker[b-htbcua8725] { align-items: center; display: inline-flex; font-size: .85rem; gap: .5rem; }
+
+.job-cell[b-htbcua8725] { min-width: 16rem; }
+.job-note[b-htbcua8725] { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; margin-top: 2px; max-width: 42rem; }
+
+/* Kartice ciklov: en cikel, vse na enem mestu (opis, ali teče sama, zadnji uspeh, gumbi) namesto
+   ločenih tabel, ki jih je bilo treba sam povezati po imenu. */
+.cycle-grid[b-htbcua8725] { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); }
+.cycle-card[b-htbcua8725] {
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: 1rem 1.1rem;
+}
+.cycle-card.row-alarm[b-htbcua8725] { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); }
+.cycle-header[b-htbcua8725] { align-items: flex-start; display: flex; gap: .75rem; justify-content: space-between; }
+.cycle-header h3[b-htbcua8725] { font-size: 1rem; margin: 0; }
+.cycle-duration[b-htbcua8725] { color: var(--pim-text-muted); display: block; font-size: .75rem; margin-top: 2px; }
+.cycle-status[b-htbcua8725] { color: var(--pim-text-soft); display: flex; flex-wrap: wrap; font-size: .78rem; gap: .5rem; }
+.disabled-block[b-htbcua8725] { display: flex; flex-direction: column; gap: 4px; }
+
+.step-list[b-htbcua8725] {
+  border-top: 1px dashed var(--pim-border);
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin-top: .25rem;
+  padding-top: .6rem;
+}
+.step-row[b-htbcua8725] { align-items: flex-start; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: space-between; }
+
+/* Zunanji klic je vidno označen, preden ga kdo sproži — SAOP in dobavitelj nista naša. */
+.reach-flag[b-htbcua8725],
+.drift-flag[b-htbcua8725] {
+  background: var(--pim-warn-bg);
+  border: 1px solid var(--pim-warn-border);
+  border-radius: 5px;
+  color: var(--pim-warn-text);
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 650;
+  margin-top: 4px;
+  padding: 1px 6px;
+}
+
+.disabled-row[b-htbcua8725] { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+
+.primary-small[b-htbcua8725] { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 650; }
+.danger-action[b-htbcua8725] { border-color: var(--pim-bad-border); color: var(--pim-bad-text); font-weight: 650; }
+
+.row-alarm[b-htbcua8725] { background: var(--pim-bad-bg); }
+.row-selected[b-htbcua8725] { background: var(--pim-info-bg); }
+.nowrap[b-htbcua8725] { white-space: nowrap; }
+.error-count[b-htbcua8725] { color: var(--pim-bad-text); font-weight: 650; }
+
+.run-meta[b-htbcua8725] { color: var(--pim-text-soft); font-size: .82rem; margin: .25rem 0 .5rem; }
+
+.command[b-htbcua8725] {
+  background: #0f172a;
+  border-radius: var(--pim-radius-xs);
+  color: #e2e8f0;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+  margin: .5rem 0;
+  overflow-x: auto;
+  padding: .5rem .75rem;
+}
+
+.console-toolbar[b-htbcua8725] { align-items: center; display: flex; flex-wrap: wrap; font-size: .82rem; gap: .75rem; margin-bottom: .5rem; }
+
+/* column-reverse drži izpis prilepljen na dno, dokler ga skrbnik sam ne pomakne navzgor — tako
+   se nova vrstica vidi brez JavaScripta za pomikanje. */
+.console[b-htbcua8725] {
+  background: #0f172a;
+  border-radius: var(--pim-radius-sm);
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column-reverse;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-height: 32rem;
+  overflow: auto;
+  padding: .75rem 1rem;
+}
+
+.line[b-htbcua8725] { white-space: pre-wrap; word-break: break-word; }
+.line-error[b-htbcua8725] { color: #fca5a5; font-weight: 600; }
+.line-warn[b-htbcua8725] { color: #fcd34d; }
+.line-header[b-htbcua8725] { color: #93c5fd; font-weight: 600; }
+.line-ok[b-htbcua8725] { color: #86efac; }
+
+/* Izpis in dnevnik se odpreta v pojavnem oknu (uporabnik 2026-09-15: "kar ni popout okno ko
+   odpreš log") namesto na dnu strani. .xml-lightbox je skupen razred iz app.css (glej
+   SaopHistory.razor); tu je samo širša različica, ker konzola rabi več prostora kot predogled XML. */
+.console-lightbox .xml-lightbox-panel[b-htbcua8725] { max-width: 72rem; }
+.console-lightbox .xml-lightbox-body[b-htbcua8725] { max-height: 76vh; }
+.console-lightbox .console[b-htbcua8725] { max-height: none; }

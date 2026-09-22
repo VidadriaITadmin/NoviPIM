@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PIM.F6.SaopProviderTests/1.0.0": {
+        "dependencies": {
+          "PIM.SaopStockWorker": "1.0.0"
+        },
+        "runtime": {
+          "PIM.F6.SaopProviderTests.dll": {}
+        }
+      },
+      "PIM.SaopStockWorker/1.0.0": {
+        "runtime": {
+          "PIM.SaopStockWorker.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.F6.SaopProviderTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PIM.SaopStockWorker/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

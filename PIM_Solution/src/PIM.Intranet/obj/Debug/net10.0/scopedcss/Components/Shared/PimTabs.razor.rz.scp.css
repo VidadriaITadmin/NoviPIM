@@ -1,0 +1,9 @@
+.pim-tabs[b-gelil291wx] { align-items: stretch; background: rgba(255, 255, 255, .62); border: 1px solid var(--pim-border); border-radius: .7rem; display: flex; flex-wrap: nowrap; gap: .25rem; margin: 0 0 1.25rem; overflow-x: auto; padding: .28rem; }
+.pim-tab[b-gelil291wx] { align-items: center; border: 1px solid transparent; border-radius: .5rem; color: var(--pim-text-muted); display: flex; flex: 0 0 auto; gap: .5rem; padding: .55rem .8rem; text-decoration: none; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.pim-tab:hover[b-gelil291wx] { background: var(--pim-surface-hover); color: var(--pim-text-strong); }
+.pim-tab.active[b-gelil291wx] { background: var(--pim-surface); border-color: #d8dcff; box-shadow: 0 1px 4px rgba(15, 23, 42, .08); color: var(--pim-accent); }
+.pim-tab-copy[b-gelil291wx] { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.pim-tab strong[b-gelil291wx] { color: inherit; font-size: .85rem; font-weight: 600; }
+.pim-tab small[b-gelil291wx] { color: var(--pim-text-muted); font-size: .68rem; line-height: 1.3; margin-top: .05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pim-tab-count[b-gelil291wx] { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; padding: .1rem .45rem; }
+.pim-tab:focus-visible[b-gelil291wx] { outline: 2px solid var(--pim-accent); outline-offset: 1px; }

@@ -1,0 +1,59 @@
+/* Skladišča po podjetjih (2026-09-22, migracija 267). Skupne oblike so v app.css. */
+.warehouse-toolbar[b-r3nu6g7iie] { display: block; margin-bottom: 1.25rem; padding: 0; }
+.warehouse-toolbar .search-input[b-r3nu6g7iie] { flex: 1 1 18rem; max-width: none; }
+.result-count[b-r3nu6g7iie] { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; white-space: nowrap; }
+
+.ghost-button[b-r3nu6g7iie] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  display: inline-flex;
+  font-size: .82rem;
+  font-weight: 600;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ghost-button:hover[b-r3nu6g7iie] { background: var(--pim-surface-hover); }
+
+.organization-card[b-r3nu6g7iie] { margin-bottom: 1.25rem; overflow: hidden; padding: 0; }
+.organization-head[b-r3nu6g7iie] { align-items: flex-start; display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; justify-content: space-between; padding: 1rem 1rem .75rem; }
+.organization-head h2[b-r3nu6g7iie] { font-size: 1.05rem; font-weight: 600; margin: 0 0 .25rem; }
+.organization-note[b-r3nu6g7iie] { font-size: .82rem; margin: 0; max-width: 48rem; }
+.organization-actions[b-r3nu6g7iie] { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.stock-summary[b-r3nu6g7iie] {
+  border-bottom: 1px solid var(--pim-border);
+  border-top: 1px solid var(--pim-border);
+  display: grid;
+  gap: .5rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  margin: 0;
+  padding: .75rem 1rem;
+}
+.stock-summary div[b-r3nu6g7iie] { min-width: 0; }
+.stock-summary dt[b-r3nu6g7iie] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.stock-summary dd[b-r3nu6g7iie] { font-size: 1rem; font-variant-numeric: tabular-nums; font-weight: 600; margin: .15rem 0 0; }
+
+.is-read td[b-r3nu6g7iie] { background: var(--pim-surface-subtle); }
+.cell-meta[b-r3nu6g7iie] { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+.code-value[b-r3nu6g7iie] { font-family: var(--pim-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .75rem; }
+.muted[b-r3nu6g7iie] { color: var(--pim-text-muted); }
+.empty-note[b-r3nu6g7iie] { font-size: .82rem; margin: 0; padding: .75rem 1rem 1rem; }
+.source-note[b-r3nu6g7iie] { font-size: .78rem; margin: 1rem 0 2rem; max-width: 70rem; }
+
+.search-input:focus-visible[b-r3nu6g7iie],
+.filter-select:focus-visible[b-r3nu6g7iie],
+.ghost-button:focus-visible[b-r3nu6g7iie],
+.stock-summary a:focus-visible[b-r3nu6g7iie] { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .warehouse-toolbar .card-toolbar[b-r3nu6g7iie] { align-items: stretch; flex-direction: column; }
+  .warehouse-toolbar .filter-select[b-r3nu6g7iie], .warehouse-toolbar .search-input[b-r3nu6g7iie] { max-width: none; width: 100%; }
+  .result-count[b-r3nu6g7iie] { margin-left: 0; }
+  .organization-actions[b-r3nu6g7iie] { width: 100%; }
+  .organization-actions > *[b-r3nu6g7iie] { flex: 1 1 auto; justify-content: center; }
+}

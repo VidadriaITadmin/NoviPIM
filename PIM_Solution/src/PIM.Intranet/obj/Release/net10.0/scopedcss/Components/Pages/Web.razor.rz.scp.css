@@ -1,0 +1,11 @@
+/* Izoliran slog strani /splet. */
+
+/* Predogled CSV je sirok: 213 stolpcev Magento predloge se ne stisne, ampak se pomika. */
+.csv-preview[b-ppz5a2b6az] { max-height: 26rem; overflow: auto; }
+.csv-preview:focus-visible[b-ppz5a2b6az] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.csv-table[b-ppz5a2b6az] { font-size: .72rem; white-space: nowrap; }
+.csv-table th[b-ppz5a2b6az] { background: var(--pim-surface-hover); position: sticky; top: 0; z-index: 1; }
+.csv-table td[b-ppz5a2b6az] { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }
+.preview-row > td[b-ppz5a2b6az] { background: var(--pim-surface-hover); padding: .75rem 1rem; }
+.is-open[b-ppz5a2b6az] { background: #eef2ff; }
+.small-action:focus-visible[b-ppz5a2b6az] { outline: 2px solid var(--pim-primary); outline-offset: 2px; }

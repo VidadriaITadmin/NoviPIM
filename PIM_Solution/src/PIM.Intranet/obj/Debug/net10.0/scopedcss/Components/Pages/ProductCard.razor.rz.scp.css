@@ -1,0 +1,305 @@
+/* Kartica izdelka. Slog obrazca kanala je pri ProductChannelPanel — izoliran slog Blazorja
+   velja samo za oznako svoje komponente in do otroka ne seže. */
+
+/* --- glava ------------------------------------------------------------------------- */
+
+.product-hero[b-xk16qy6yff] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  margin-bottom: .75rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.media-tile[b-xk16qy6yff] {
+  align-items: center;
+  aspect-ratio: 1;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  color: var(--pim-text-muted);
+  display: flex;
+  font-size: .7rem;
+  font-weight: 600;
+  justify-content: center;
+  overflow: hidden;
+}
+.media-tile img[b-xk16qy6yff] { height: 100%; object-fit: contain; width: 100%; }
+
+.product-identity[b-xk16qy6yff] { min-width: 0; }
+
+.identity-line[b-xk16qy6yff] { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .82rem; gap: .6rem; margin: 0 0 .7rem; }
+.identity-line > span + span[b-xk16qy6yff]::before { content: "·"; margin-right: .6rem; }
+
+.header-chips[b-xk16qy6yff] { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; }
+
+.flag-chip[b-xk16qy6yff] { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 999px; color: var(--pim-neutral-text); font-size: .74rem; font-weight: 600; padding: .2rem .6rem; }
+.flag-chip.on[b-xk16qy6yff] { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
+.flag-chip.off[b-xk16qy6yff] { background: var(--pim-surface-subtle); }
+
+.media-link[b-xk16qy6yff] { display: inline-block; font-size: .78rem; font-weight: 600; margin-top: .6rem; overflow-wrap: anywhere; }
+
+/* Popolnost je stevilka, ki jo je treba opaziti — brez obroca in brez okrasne barve. */
+.hero-completeness[b-xk16qy6yff] { border-left: 1px solid var(--pim-border); min-width: 11rem; padding-left: 1.5rem; }
+.score-value[b-xk16qy6yff] { color: var(--pim-text-strong); display: block; font-size: 2.1rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.score-label[b-xk16qy6yff] { color: var(--pim-text-muted); display: block; font-size: .74rem; margin: .1rem 0 .6rem; }
+.score-note[b-xk16qy6yff] { color: var(--pim-text-muted); display: block; font-size: .74rem; margin-top: .45rem; }
+
+/* --- dejanja ob naslovu ------------------------------------------------------------- */
+
+.card-actions[b-xk16qy6yff] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
+.save-state[b-xk16qy6yff] { font-size: .78rem; white-space: nowrap; }
+.save-ok[b-xk16qy6yff] { color: var(--pim-good-text); font-weight: 600; }
+.save-error[b-xk16qy6yff] { color: var(--pim-bad-text); font-weight: 600; }
+.save-dirty[b-xk16qy6yff] { color: var(--pim-warn-text); font-weight: 600; }
+.save-split[b-xk16qy6yff] { display: inline-flex; flex-wrap: wrap; gap: .35rem; margin-left: .5rem; }
+.save-split > span[b-xk16qy6yff] { border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 600; padding: .1rem .5rem; white-space: nowrap; }
+.save-now[b-xk16qy6yff] { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
+.save-saop[b-xk16qy6yff] { background: #eef2ff; border-color: #c7d2fe; color: var(--pim-accent); }
+
+.ghost-button[b-xk16qy6yff] {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: .45rem .8rem;
+}
+.ghost-button:hover:not(:disabled)[b-xk16qy6yff] { background: var(--pim-surface-hover); }
+.ghost-button:disabled[b-xk16qy6yff] { cursor: default; opacity: .45; }
+
+/* --- pet uporabnisko razumljivih sklopov -------------------------------------------- */
+
+.product-workspace[b-xk16qy6yff] {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 15.5rem minmax(0, 1fr) minmax(17rem, 22rem);
+}
+
+.section-nav-column[b-xk16qy6yff] { min-width: 0; }
+
+.section-nav-card[b-xk16qy6yff] {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  padding: .45rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.product-section-nav[b-xk16qy6yff] { display: flex; flex-direction: column; gap: .2rem; }
+
+.product-section-nav button[b-xk16qy6yff] {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-muted);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 600;
+  gap: .6rem;
+  justify-content: space-between;
+  min-height: 2.75rem;
+  padding: .65rem .75rem .65rem 1rem;
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+
+.product-section-nav button:hover[b-xk16qy6yff] { background: var(--pim-surface-hover); color: var(--pim-text-strong); }
+
+.product-section-nav button.active[b-xk16qy6yff] { background: var(--pim-surface-subtle); color: var(--pim-text-strong); font-weight: 700; }
+.product-section-nav button.active[b-xk16qy6yff]::before {
+  background: var(--pim-accent);
+  border-radius: 0 3px 3px 0;
+  bottom: .45rem;
+  content: "";
+  left: -.45rem;
+  position: absolute;
+  top: .45rem;
+  width: 3px;
+}
+
+.nav-badge[b-xk16qy6yff] { border-radius: 999px; font-size: .7rem; font-weight: 700; min-width: 1.35rem; padding: .12rem .4rem; text-align: center; }
+.nav-badge.bad[b-xk16qy6yff] { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.nav-badge.warn[b-xk16qy6yff] { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+
+.section-content[b-xk16qy6yff] { min-width: 0; }
+.section-panel[hidden][b-xk16qy6yff] { display: none; }
+.section-stack[b-xk16qy6yff] { display: flex; flex-direction: column; gap: 1rem; }
+.section-heading[b-xk16qy6yff] { margin: 0 0 .1rem; }
+.section-heading h2[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: 1.15rem; margin: 0 0 .25rem; }
+.section-heading p[b-xk16qy6yff] { color: var(--pim-text-muted); font-size: .82rem; margin: 0; }
+
+/* Aktivnosti so en sam, vedno viden modul in berejo ProductCardView.History. */
+.activity-column[b-xk16qy6yff] { min-width: 0; }
+.activity-card[b-xk16qy6yff] { padding: 1rem; position: sticky; top: 1rem; }
+.activity-head[b-xk16qy6yff] { align-items: flex-start; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .9rem; }
+.activity-head h2[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: 1rem; margin: 0 0 .18rem; }
+.activity-head p[b-xk16qy6yff] { color: var(--pim-text-muted); font-size: .75rem; margin: 0; }
+.activity-count[b-xk16qy6yff] { align-items: center; background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: 999px; color: var(--pim-text-strong); display: inline-flex; font-size: .72rem; font-weight: 700; justify-content: center; min-width: 1.8rem; padding: .2rem .45rem; }
+.activity-empty[b-xk16qy6yff] { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .82rem; margin: 0; padding-top: .9rem; }
+.activity-timeline[b-xk16qy6yff] { list-style: none; margin: 0; padding: .1rem 0 0 1.5rem; position: relative; }
+.activity-timeline[b-xk16qy6yff]::before { background: var(--pim-border); bottom: 1rem; content: ""; left: .35rem; position: absolute; top: .55rem; width: 2px; }
+.activity-event[b-xk16qy6yff] { border-bottom: 1px solid var(--pim-border); padding: 0 0 1rem; position: relative; }
+.activity-event + .activity-event[b-xk16qy6yff] { padding-top: 1rem; }
+.activity-event:last-child[b-xk16qy6yff] { border-bottom: 0; padding-bottom: .1rem; }
+.activity-marker[b-xk16qy6yff] { background: var(--pim-accent); border: 3px solid var(--pim-good-bg); border-radius: 50%; height: .78rem; left: -1.5rem; position: absolute; top: .15rem; width: .78rem; }
+.activity-event time[b-xk16qy6yff] { color: var(--pim-text-muted); display: block; font-size: .7rem; font-variant-numeric: tabular-nums; margin-bottom: .25rem; }
+.activity-event h3[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: .82rem; line-height: 1.35; margin: 0 0 .25rem; overflow-wrap: anywhere; }
+.activity-change[b-xk16qy6yff] { color: var(--pim-text); font-size: .78rem; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
+.activity-meta[b-xk16qy6yff] { color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .2rem .45rem; margin: .4rem 0 0; }
+.activity-meta span + span[b-xk16qy6yff]::before { content: "·"; margin-right: .45rem; }
+.activity-note[b-xk16qy6yff] { background: var(--pim-surface-subtle); border-radius: var(--pim-radius-xs); color: var(--pim-text-muted); font-size: .72rem; line-height: 1.4; margin: .55rem 0 0; padding: .4rem .5rem; overflow-wrap: anywhere; }
+.activity-toggle[b-xk16qy6yff] { background: transparent; border: 0; border-top: 1px solid var(--pim-border); color: var(--pim-primary); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 700; margin-top: .85rem; padding: .75rem 0 0; text-align: left; width: 100%; }
+.activity-toggle:hover[b-xk16qy6yff] { color: var(--pim-text-strong); }
+.activity-toggle:focus-visible[b-xk16qy6yff] { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+/* --- pregled ----------------------------------------------------------------------- */
+
+.overview-panel[hidden][b-xk16qy6yff] { display: none; }
+
+.blocking-banner[b-xk16qy6yff] {
+  align-items: center;
+  background: var(--pim-bad-bg);
+  border: 1px solid var(--pim-bad-border);
+  border-radius: var(--pim-radius);
+  color: var(--pim-bad-text);
+  display: grid;
+  gap: .8rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin-bottom: 1rem;
+  padding: .8rem 1rem;
+}
+
+.alert-mark[b-xk16qy6yff] { align-items: center; border: 2px solid currentColor; border-radius: 50%; display: flex; font-size: .8rem; font-weight: 800; height: 1.75rem; justify-content: center; width: 1.75rem; }
+.blocking-banner strong[b-xk16qy6yff] { display: block; font-size: .9rem; }
+.blocking-banner div span[b-xk16qy6yff] { color: var(--pim-text-muted); display: block; font-size: .78rem; margin-top: .15rem; }
+.banner-action[b-xk16qy6yff] { background: var(--pim-surface); border: 1px solid var(--pim-bad-border); border-radius: var(--pim-radius-sm); color: var(--pim-bad-text); cursor: pointer; font: inherit; font-size: .8rem; font-weight: 700; padding: .55rem .8rem; }
+.banner-action:hover[b-xk16qy6yff] { background: color-mix(in srgb, var(--pim-bad-bg) 45%, white); }
+
+.section-title[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: 1.05rem; margin: 0 0 .65rem; }
+
+.channel-strip[b-xk16qy6yff] { display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1rem; }
+
+/* Kanalska kartica je nevtralna: stanje pove cip, ne barvna crta cez vso sirino. */
+.channel-card[b-xk16qy6yff] { cursor: pointer; display: grid; gap: .5rem; justify-items: start; min-width: 0; padding: 1rem; text-align: left; }
+.channel-card:hover[b-xk16qy6yff] { background: var(--pim-surface-hover); }
+.channel-name[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: .95rem; font-weight: 700; }
+.channel-card small[b-xk16qy6yff] { color: var(--pim-text-muted); }
+
+.overview-grid[b-xk16qy6yff] { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.25fr) minmax(18rem, .9fr); }
+.key-data-card[b-xk16qy6yff], .task-card[b-xk16qy6yff] { overflow: hidden; padding: 1rem 1.15rem; }
+.key-data-card h2[b-xk16qy6yff], .task-card h2[b-xk16qy6yff] { color: var(--pim-text-strong); font-size: 1rem; margin: 0 0 .7rem; }
+
+.key-data-list[b-xk16qy6yff] { margin: 0; }
+.key-data-list > div[b-xk16qy6yff] { align-items: center; border-top: 1px solid var(--pim-border); display: grid; gap: 1rem; grid-template-columns: 8rem minmax(0, 1fr); min-height: 2.6rem; }
+.key-data-list dt[b-xk16qy6yff] { color: var(--pim-text-muted); font-size: .77rem; font-weight: 700; }
+.key-data-list dd[b-xk16qy6yff] { align-items: center; display: flex; font-size: .84rem; gap: .6rem; justify-content: space-between; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.owner-label[b-xk16qy6yff] { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); border-radius: 999px; color: var(--pim-good-text); flex: 0 0 auto; font-size: .68rem; font-weight: 700; padding: .1rem .45rem; }
+.detail-link[b-xk16qy6yff] { background: transparent; border: 0; color: var(--pim-primary); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 700; margin-top: .75rem; padding: 0; }
+
+.task-list[b-xk16qy6yff] { display: flex; flex-direction: column; }
+.task-item[b-xk16qy6yff] { align-items: center; background: transparent; border: 0; border-top: 1px solid var(--pim-border); color: var(--pim-text-strong); cursor: pointer; display: grid; font: inherit; font-size: .82rem; gap: .65rem; grid-template-columns: auto minmax(0, 1fr) auto auto; min-height: 3.65rem; padding: .65rem 0; text-align: left; width: 100%; }
+.task-item:hover[b-xk16qy6yff] { background: var(--pim-surface-hover); }
+.task-mark[b-xk16qy6yff] { align-items: center; border-radius: 50%; display: flex; font-size: .7rem; font-weight: 800; height: 1.6rem; justify-content: center; width: 1.6rem; }
+.task-mark.bad[b-xk16qy6yff] { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.task-mark.warn[b-xk16qy6yff] { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.task-status[b-xk16qy6yff] { border-radius: 999px; font-size: .68rem; font-weight: 700; padding: .12rem .45rem; }
+.task-status.bad[b-xk16qy6yff] { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.task-status.warn[b-xk16qy6yff] { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.empty-tasks[b-xk16qy6yff] { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .82rem; margin: 0; padding-top: .8rem; }
+
+.tab-panel[b-xk16qy6yff] { min-height: 12rem; }
+.tab-panel h2[b-xk16qy6yff] { font-size: 1rem; margin: 1.1rem 1.1rem .7rem; }
+.data-table[b-xk16qy6yff] { min-width: 46rem; }
+.subsection-head[b-xk16qy6yff] { align-items: center; background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border); display: flex; gap: 1rem; justify-content: space-between; min-height: 3.25rem; padding: .7rem 1rem; }
+.subsection-head h2[b-xk16qy6yff] { margin: 0; }
+.subsection-head a[b-xk16qy6yff], .subsection-head span[b-xk16qy6yff] { color: var(--pim-text-muted); font-size: .78rem; }
+.muted[b-xk16qy6yff] { color: var(--pim-text-muted); }
+.code-value[b-xk16qy6yff] { font-family: var(--pim-font-mono, ui-monospace, monospace); font-size: .75rem; }
+
+.product-section-nav button:focus-visible[b-xk16qy6yff],
+.ghost-button:focus-visible[b-xk16qy6yff],
+.primary-button:focus-visible[b-xk16qy6yff],
+.channel-card:focus-visible[b-xk16qy6yff],
+.task-item:focus-visible[b-xk16qy6yff],
+.detail-link:focus-visible[b-xk16qy6yff],
+.banner-action:focus-visible[b-xk16qy6yff],
+.tab-panel:focus-visible[b-xk16qy6yff],
+.media-link:focus-visible[b-xk16qy6yff] { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 1240px) {
+  .product-workspace[b-xk16qy6yff] { grid-template-columns: 13.5rem minmax(0, 1fr); }
+  .activity-column[b-xk16qy6yff] { grid-column: 2; }
+  .activity-card[b-xk16qy6yff] { position: static; }
+}
+
+@media (max-width: 900px) {
+  .product-workspace[b-xk16qy6yff] { grid-template-columns: 1fr; }
+  .activity-column[b-xk16qy6yff] { grid-column: auto; }
+  .section-nav-card[b-xk16qy6yff] { overflow-x: auto; position: static; }
+  .product-section-nav[b-xk16qy6yff] { flex-direction: row; min-width: max-content; }
+  .product-section-nav button[b-xk16qy6yff] { min-width: max-content; }
+  .product-section-nav button.active[b-xk16qy6yff]::before { bottom: -.45rem; height: 3px; left: .65rem; right: .65rem; top: auto; width: auto; }
+  .product-hero[b-xk16qy6yff] { grid-template-columns: 5rem minmax(0, 1fr); padding: 1rem; }
+  .hero-completeness[b-xk16qy6yff] { border-left: 0; border-top: 1px solid var(--pim-border); grid-column: 1 / -1; padding: 1rem 0 0; }
+  .channel-strip[b-xk16qy6yff] { grid-template-columns: 1fr; }
+  .overview-grid[b-xk16qy6yff] { grid-template-columns: 1fr; }
+  .data-table[b-xk16qy6yff] { min-width: 42rem; }
+}
+
+/* Zavihek »SAOP endpoint«. Odklon mora biti viden na prvi pogled, a ne samo po barvi:
+   stolpec »Ujemanje« nosi tudi besedo, ker barva sama za dostopnost ni dovolj. */
+.snapshot-group[b-xk16qy6yff] { margin-top: 1rem; }
+.snapshot-group h3[b-xk16qy6yff] { font-size: .9rem; margin: 0; }
+.row-different[b-xk16qy6yff] { background: var(--pim-warn-surface, #fff7ed); }
+.row-different td:first-child[b-xk16qy6yff] { box-shadow: inset 3px 0 0 var(--pim-bad, #dc2626); }
+
+@media (max-width: 540px) {
+  .card-actions[b-xk16qy6yff] { align-items: stretch; flex-direction: column; width: 100%; }
+  .blocking-banner[b-xk16qy6yff] { align-items: start; grid-template-columns: auto 1fr; }
+  .banner-action[b-xk16qy6yff] { grid-column: 1 / -1; width: 100%; }
+  .product-hero[b-xk16qy6yff] { grid-template-columns: 1fr; }
+  .media-tile[b-xk16qy6yff] { max-width: 7rem; }
+  .key-data-list > div[b-xk16qy6yff] { align-items: start; gap: .25rem; grid-template-columns: 1fr; padding: .55rem 0; }
+}
+
+/* Spletišča (182): potrditvena polja, ki povedo, kam izdelek gre. Namenoma ločena kartica in ne
+   polje v mreži kanala — to ni podatek iz vira, ampak odločitev človeka. */
+.web-shops .shop-list[b-xk16qy6yff] { display: flex; flex-direction: column; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+.web-shops .shop-list li[b-xk16qy6yff] { align-items: baseline; display: flex; flex-wrap: wrap; gap: .5rem; }
+.web-shops .shop-list label[b-xk16qy6yff] { align-items: center; cursor: pointer; display: flex; gap: .5rem; }
+.web-shops .shop-name[b-xk16qy6yff] { font-weight: 600; }
+.web-shops .shop-trace[b-xk16qy6yff] { color: var(--pim-text-muted); font-size: .78rem; }
+.web-shops .shop-actions[b-xk16qy6yff] { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .85rem; }
+
+/* P3-17: sočasnost. Konflikt ni napaka sistema, ampak dejstvo o delu dveh ljudi, zato opozorilna
+   in ne rdeča barva — pove pa obe vrednosti, ker se brez njiju ni mogoče odločiti. */
+.conflict-card[b-xk16qy6yff] { border-left: 4px solid #f59e0b; display: flex; flex-direction: column; gap: .6rem; margin-bottom: 1rem; padding: 1rem 1.25rem; }
+.conflict-card h2[b-xk16qy6yff] { font-size: 1rem; margin: 0; }
+.conflict-card p[b-xk16qy6yff] { margin: 0; }
+.conflict-list[b-xk16qy6yff] { display: flex; flex-direction: column; gap: .4rem; list-style: none; margin: 0; padding: 0; }
+.conflict-list li[b-xk16qy6yff] { align-items: baseline; display: flex; flex-wrap: wrap; gap: .35rem .9rem; }
+.conflict-mine[b-xk16qy6yff], .conflict-theirs[b-xk16qy6yff] { font-size: .82rem; }
+.conflict-mine[b-xk16qy6yff] { color: var(--pim-text-muted); }
+.conflict-theirs[b-xk16qy6yff] { font-weight: 600; }
+
+/* AI predlog na zavihku Splet (2026-09-21): jezik + gumb ob izbirniku spletnega mesta. */
+.ai-tools[b-xk16qy6yff] { align-items: center; display: inline-flex; flex-wrap: wrap; gap: .4rem; margin-left: .75rem; }
+.ai-tools .ai-hint[b-xk16qy6yff] { font-size: .78rem; }
+
+/* 251: pasica samodejnega umika s spleta nad spletišči. */
+.web-withdrawn ul[b-xk16qy6yff] { margin: .4rem 0; padding-left: 1.2rem; }
+.web-withdrawn li[b-xk16qy6yff] { margin: .15rem 0; }

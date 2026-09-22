@@ -1,0 +1,22 @@
+22:57:56  === ZAČETEK: Cene in zaloga za splet | posel WEB_STOCK_EXPORT | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:57:56
+22:57:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+22:57:56  == Cene in zaloga (podjetje 2) ==
+22:58:03     Izvoz profila MAGENTO_STOCK_PRICES končan: 2176 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+22:58:03     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 2): se je začela.
+22:58:03     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 2): uspelo — zapisano 2.176, 188,6 kB; magento-stock-prices.csv, stolpcev 17.
+22:58:03     konec: Cene in zaloga (podjetje 2) (6 s)
+22:58:03  == Cene in zaloga (podjetje 3) ==
+22:58:08     Izvoz profila MAGENTO_STOCK_PRICES končan: 2418 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+22:58:08     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 3): se je začela.
+22:58:08     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 3): uspelo — zapisano 2.418, 169,5 kB; magento-stock-prices.csv, stolpcev 17.
+22:58:08     konec: Cene in zaloga (podjetje 3) (5 s)
+22:58:08  == Cene in zaloga (podjetje 4) ==
+22:58:10     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+22:58:10     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 4): se je začela.
+22:58:10     [FAZA] Datoteka MAGENTO_STOCK_PRICES (podjetje 4): uspelo, brez novih podatkov — zapisano 0, 314 B; magento-stock-prices.csv je prazna (0 vrstic), stolpcev 17.
+22:58:10     konec: Cene in zaloga (podjetje 4) (1 s)
+22:58:10  Cene in zaloga za splet končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:58:10     Artefakt #8 MAGENTO_STOCK_PRICES (podjetje 2): magento-stock-prices.csv, 193.135 B, 2.176 vrstic, SHA-256 33520d690523…
+22:58:10     Artefakt #9 MAGENTO_STOCK_PRICES (podjetje 3): magento-stock-prices.csv, 173.593 B, 2.418 vrstic, SHA-256 2fb3611573a4…
+22:58:10     Artefakt MAGENTO_STOCK_PRICES (podjetje 4): magento-stock-prices.csv je nespremenjen (isti hash kot zadnjič).
+22:58:10  === KONEC: izhod 0, trajanje 00:00:13

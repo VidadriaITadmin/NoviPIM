@@ -1,0 +1,19 @@
+21:32:56  === ZAČETEK: Objava v PIM | posel PRODUCT_PUBLICATION | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console | 2026-09-22 21:32:56
+21:32:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+21:32:56  == Objava (podjetje 2) ==
+21:32:56     [FAZA] Izračun OBJAVA (podjetje 2): se je začela: EXEC val.Promote @OrganizationId = 2.
+21:33:01     Objava (podjetje 2): opravljeno.
+21:33:01     [FAZA] Izračun OBJAVA (podjetje 2): uspelo; Objava (podjetje 2): opravljeno.
+21:33:01     konec: Objava (podjetje 2) (5 s)
+21:33:01  == Objava (podjetje 3) ==
+21:33:01     [FAZA] Izračun OBJAVA (podjetje 3): se je začela: EXEC val.Promote @OrganizationId = 3.
+21:33:04     Objava (podjetje 3): opravljeno.
+21:33:04     [FAZA] Izračun OBJAVA (podjetje 3): uspelo; Objava (podjetje 3): opravljeno.
+21:33:04     konec: Objava (podjetje 3) (2 s)
+21:33:04  == Objava (podjetje 4) ==
+21:33:04     [FAZA] Izračun OBJAVA (podjetje 4): se je začela: EXEC val.Promote @OrganizationId = 4.
+21:33:06     Objava (podjetje 4): opravljeno.
+21:33:06     [FAZA] Izračun OBJAVA (podjetje 4): uspelo; Objava (podjetje 4): opravljeno.
+21:33:06     konec: Objava (podjetje 4) (1 s)
+21:33:06  Objava v PIM končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+21:33:06  === KONEC: izhod 0, trajanje 00:00:09

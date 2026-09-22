@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Release\net10.0\PIM.F10.DashboardUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Release\net10.0\PIM.F10.DashboardUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Release\net10.0\PIM.F10.DashboardUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Release\net10.0\PIM.F10.DashboardUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Release\net10.0\PIM.F10.DashboardUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\refint\PIM.F10.DashboardUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\ref\PIM.F10.DashboardUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Release\net10.0\PIM.F10.DashboardUxTests.sourcelink.json

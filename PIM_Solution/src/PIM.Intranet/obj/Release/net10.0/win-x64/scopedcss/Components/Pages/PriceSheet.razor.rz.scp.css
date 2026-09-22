@@ -1,0 +1,13 @@
+.price-sheet .sheet-head[b-zjigu16r2n] { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .5rem 0 1rem; }
+.price-sheet .sheet-head h2[b-zjigu16r2n] { margin: 0; font-size: 1.2rem; }
+.price-sheet .sheet-category[b-zjigu16r2n] { margin: 1.2rem 0 .4rem; font-size: 1rem; border-bottom: 2px solid var(--pim-accent, #f97316); padding-bottom: .2rem; page-break-after: avoid; }
+.price-sheet .sheet-table[b-zjigu16r2n] { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.price-sheet .sheet-table th[b-zjigu16r2n], .price-sheet .sheet-table td[b-zjigu16r2n] { padding: .3rem .5rem; border-bottom: 1px solid var(--pim-border, #e4e4e7); text-align: left; vertical-align: top; }
+.price-sheet .sheet-table th.numeric[b-zjigu16r2n], .price-sheet .sheet-table td.numeric[b-zjigu16r2n] { text-align: right; white-space: nowrap; }
+.price-sheet .sheet-image img[b-zjigu16r2n] { width: 48px; height: 48px; object-fit: contain; }
+.price-sheet tr[b-zjigu16r2n] { page-break-inside: avoid; }
+@media print {
+  [b-zjigu16r2n] .no-print, .no-print[b-zjigu16r2n] { display: none !important; }
+  .price-sheet[b-zjigu16r2n] { box-shadow: none; border: none; }
+  .price-sheet .sheet-table[b-zjigu16r2n] { font-size: 10pt; }
+}

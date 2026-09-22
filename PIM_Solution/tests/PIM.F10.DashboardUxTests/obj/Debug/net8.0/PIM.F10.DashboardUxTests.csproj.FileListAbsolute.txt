@@ -1,0 +1,14 @@
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Debug\net8.0\PIM.F10.DashboardUxTests.exe
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Debug\net8.0\PIM.F10.DashboardUxTests.deps.json
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Debug\net8.0\PIM.F10.DashboardUxTests.runtimeconfig.json
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Debug\net8.0\PIM.F10.DashboardUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\bin\Debug\net8.0\PIM.F10.DashboardUxTests.pdb
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.AssemblyInfoInputs.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.AssemblyInfo.cs
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.csproj.CoreCompileInputs.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\refint\PIM.F10.DashboardUxTests.dll
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.pdb
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\PIM.F10.DashboardUxTests.genruntimeconfig.cache
+C:\Users\David\Namizje\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.DashboardUxTests\obj\Debug\net8.0\ref\PIM.F10.DashboardUxTests.dll

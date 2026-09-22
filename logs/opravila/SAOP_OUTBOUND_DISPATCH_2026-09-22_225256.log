@@ -1,0 +1,8 @@
+22:52:56  === ZAČETEK: Pošiljanje v SAOP (odhodna vrsta) | posel SAOP_OUTBOUND_DISPATCH | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:52:56
+22:52:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+22:52:56  == Odhodna vrsta v SAOP ==
+22:52:58     STDERR: Za pipeline OUTBOUND ni omogocenega razporeda v ops.ScheduleProfile; nobeno sporocilo ni bilo prevzeto.
+22:52:58     NAPAKA: Odhodna vrsta je končal z izhodno kodo 1.
+22:52:58     NAPAKA v skupini 'Odhodna vrsta v SAOP' po 1 s: izhodna koda 1: STDERR: Za pipeline OUTBOUND ni omogocenega razporeda v ops.ScheduleProfile; nobeno sporocilo ni bilo prevzeto.
+22:52:58  Pošiljanje v SAOP (odhodna vrsta) končan: Failed; padlih skupin: 1, blokiranih: 0.
+22:52:58  === KONEC: izhod 1, trajanje 00:00:01

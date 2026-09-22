@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\bin\Release\net10.0\PIM.F10.SaopItemsUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\bin\Release\net10.0\PIM.F10.SaopItemsUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\bin\Release\net10.0\PIM.F10.SaopItemsUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\bin\Release\net10.0\PIM.F10.SaopItemsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\bin\Release\net10.0\PIM.F10.SaopItemsUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\refint\PIM.F10.SaopItemsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\ref\PIM.F10.SaopItemsUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.SaopItemsUxTests\obj\Release\net10.0\PIM.F10.SaopItemsUxTests.sourcelink.json

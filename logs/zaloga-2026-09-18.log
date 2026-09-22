@@ -1,0 +1,58 @@
+06:10:15  == Zaloga NW_STOCK ==
+06:10:17     [NW_STOCK] prevzeto 86.745 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\NW_STOCK\nw-zaloga.csv; arhiv nw-zaloga_20260918_041017Z.csv.gz
+06:10:17     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 1.
+06:10:17     Prebranih zapisov: 2762; SHA-256: af7c5b680c6049f88d2140ba8df7ea2b0fc1eff64fa0de54063b090951fadb7c
+06:10:19     Zaloga zapisana; vir=NW_STOCK, podjetje=1, uporabljenih=2762, v karanteni=0, RunId=85c8e034-9386-45f5-86ea-b7349c63d598.
+06:10:20     Prebranih zapisov: 2762; SHA-256: af7c5b680c6049f88d2140ba8df7ea2b0fc1eff64fa0de54063b090951fadb7c
+06:10:22     Zaloga zapisana; vir=NW_STOCK, podjetje=2, uporabljenih=2762, v karanteni=0, RunId=62d339ce-0ac6-4542-891f-bf5b654333d8.
+06:10:23     Prebranih zapisov: 2762; SHA-256: af7c5b680c6049f88d2140ba8df7ea2b0fc1eff64fa0de54063b090951fadb7c
+06:10:24     Zaloga zapisana; vir=NW_STOCK, podjetje=3, uporabljenih=2762, v karanteni=0, RunId=d4b16490-3359-4b9e-ada9-39e858e38e80.
+06:10:25     Prebranih zapisov: 2762; SHA-256: af7c5b680c6049f88d2140ba8df7ea2b0fc1eff64fa0de54063b090951fadb7c
+06:10:27     Zaloga zapisana; vir=NW_STOCK, podjetje=4, uporabljenih=2762, v karanteni=0, RunId=4f11bd24-be70-4fd0-a2b1-5891fb4d415c.
+06:10:27     konec: Zaloga NW_STOCK
+06:10:27  == Zaloga BT_STOCK ==
+06:10:28     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+06:10:29     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+06:10:29     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+06:10:30     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+06:10:30     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+06:10:31     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+06:10:31     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+06:10:32     Prebranih zapisov: 1389; SHA-256: 6698019c346705d3b9d19eee8d7a34a628cfee93615acac603b2d6f2cb666cdf
+06:10:32     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+06:10:32     konec: Zaloga BT_STOCK
+06:10:32  == Zaloga iz SAOP (kolicine) ==
+06:10:55     STDERR: [1] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:11:16     STDERR: [2] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:11:37     STDERR: [3] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:11:58     STDERR: [4] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:11:58     NAPAKA: worker PIM.SaopStockWorker je koncal z izhodno kodo 1
+06:11:58  == Osvezitev cen kataloga ==
+06:11:59     Živ SAOP zajem: podjetij=4, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+06:11:59     [2] IQLighting (SAOP_IQLIGHTING)
+06:12:20     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+06:12:20       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+06:12:20       SKUPAJ strani=0 zapisov=0 RunId=345198b1-f621-4bdd-8268-ba10ac15ac55
+06:12:20     [3] Vidadria (SAOP_VIDADRIA)
+06:12:41     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+06:12:41       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+06:12:42       SKUPAJ strani=0 zapisov=0 RunId=95bef5ee-73a9-47ea-9536-d5ba8eac77d0
+06:12:42     [4] Ediito (SAOP_EDIITO)
+06:13:03     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+06:13:03       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+06:13:03       SKUPAJ strani=0 zapisov=0 RunId=4c7d1333-11d0-40be-8cea-c0a3c4446953
+06:13:03     [1] DEMO (SAOP_DEMO)
+06:13:24     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+06:13:24       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+06:13:24       SKUPAJ strani=0 zapisov=0 RunId=25ccf560-df8b-4848-9398-eb24487ce7ff
+06:13:24     NAPAKA: worker PIM.KatalogWorker je koncal z izhodno kodo 1
+06:13:24  == Izvoz cen in zaloge za splet ==
+06:13:34     Izvoz profila MAGENTO_STOCK_PRICES končan: 11435 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+06:14:32     Izvoz profila MAGENTO_STOCK_PRICES končan: 89656 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+06:14:57     Izvoz profila MAGENTO_STOCK_PRICES končan: 18683 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+06:15:24     Izvoz profila MAGENTO_STOCK_PRICES končan: 35651 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+06:15:24     konec: Izvoz cen in zaloge za splet
+06:15:24  == Osvezitev kataloga in strank s cenami in zalogo (podjetje 2) ==
+06:17:10     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+06:17:10     konec: Osvezitev kataloga in strank s cenami in zalogo (podjetje 2)
+06:17:10  Zalogovni cikel koncan; padlih korakov: 2.

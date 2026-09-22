@@ -1,0 +1,13 @@
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\bin\Release\net8.0\PIM.F10.AuthTests.deps.json
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\bin\Release\net8.0\PIM.F10.AuthTests.runtimeconfig.json
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\bin\Release\net8.0\PIM.F10.AuthTests.dll
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\bin\Release\net8.0\PIM.F10.AuthTests.pdb
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.AssemblyInfoInputs.cache
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.AssemblyInfo.cs
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.csproj.CoreCompileInputs.cache
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.dll
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\refint\PIM.F10.AuthTests.dll
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.pdb
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\PIM.F10.AuthTests.genruntimeconfig.cache
+C:\PIM\Source\NoviPIM\PIM_Solution\tests\PIM.F10.AuthTests\obj\Release\net8.0\ref\PIM.F10.AuthTests.dll

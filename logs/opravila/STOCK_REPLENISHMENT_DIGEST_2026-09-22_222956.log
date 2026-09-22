@@ -1,0 +1,35 @@
+22:29:56  === ZAČETEK: Zaloga pod MID (dnevni mail) | posel STOCK_REPLENISHMENT_DIGEST | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:29:56
+22:29:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+22:29:56  == Zaloga pod MID (dnevni mail) ==
+22:29:57     OPOZORILO: pošiljanje e-pošte je izklopljeno (PIM_ALERT_EMAIL_ENABLED ni true). Povzetek se sestavi, a se ne pošlje.
+22:29:57     Prejemnikov s kljukico in naslovom: 1.
+22:29:57     [2] IQLighting
+22:29:57       MID osvežen: 0 vrstic.
+22:29:57       Artiklov na ali pod MID: 74 (dobaviteljev: 3).
+22:29:57     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 2): se je začela.
+22:29:57     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 2): uspelo — prebrano 0, zapisano 74; artiklov na ali pod MID: 74; MID osvežen za 0 vrstic.
+22:29:57       david@vidadria.com: Disabled
+22:29:57       Poslano: 0 od 1.
+22:29:57     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 2): se je začela.
+22:29:57     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 2): preskočeno — prebrano 1, zapisano 0; pošiljanje e-pošte je izklopljeno (PIM_ALERT_EMAIL_ENABLED ni true ali manjka pošiljatelj).
+22:29:57     [3] Vidadria
+22:29:57       MID osvežen: 0 vrstic.
+22:29:57       Artiklov na ali pod MID: 811 (dobaviteljev: 39).
+22:29:57     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 3): se je začela.
+22:29:57     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 3): uspelo — prebrano 0, zapisano 811; artiklov na ali pod MID: 811; MID osvežen za 0 vrstic.
+22:29:57       david@vidadria.com: Disabled
+22:29:57       Poslano: 0 od 1.
+22:29:57     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 3): se je začela.
+22:29:57     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 3): preskočeno — prebrano 1, zapisano 0; pošiljanje e-pošte je izklopljeno (PIM_ALERT_EMAIL_ENABLED ni true ali manjka pošiljatelj).
+22:29:57     [4] Ediito
+22:29:57       MID osvežen: 0 vrstic.
+22:29:58       Artiklov na ali pod MID: 1 (dobaviteljev: 1).
+22:29:58     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 4): se je začela.
+22:29:58     [FAZA] Izračun STOCK_REPLENISHMENT_DIGEST (podjetje 4): uspelo — prebrano 0, zapisano 1; artiklov na ali pod MID: 1; MID osvežen za 0 vrstic.
+22:29:58       david@vidadria.com: Disabled
+22:29:58       Poslano: 0 od 1.
+22:29:58     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 4): se je začela.
+22:29:58     [FAZA] Pošiljanje STOCK_REPLENISHMENT_DIGEST (podjetje 4): preskočeno — prebrano 1, zapisano 0; pošiljanje e-pošte je izklopljeno (PIM_ALERT_EMAIL_ENABLED ni true ali manjka pošiljatelj).
+22:29:58     konec: Zaloga pod MID (dnevni mail) (1 s)
+22:29:58  Zaloga pod MID (dnevni mail) končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:29:58  === KONEC: izhod 0, trajanje 00:00:01

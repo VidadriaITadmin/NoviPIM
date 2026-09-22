@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PIM.F8.BehaviorTests/1.0.0": {
+        "dependencies": {
+          "PIM.Outbound": "1.0.0"
+        },
+        "runtime": {
+          "PIM.F8.BehaviorTests.dll": {}
+        }
+      },
+      "PIM.Outbound/1.0.0": {
+        "runtime": {
+          "PIM.Outbound.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.F8.BehaviorTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "PIM.Outbound/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

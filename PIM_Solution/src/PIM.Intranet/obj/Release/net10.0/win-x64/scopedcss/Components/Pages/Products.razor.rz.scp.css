@@ -1,0 +1,238 @@
+/* Delovni seznam izdelkov. Skupne oblike (kartica, tabela, čip, merilnik, paginacija) so v
+   app.css; tu je samo tisto, kar je lastno tej strani. Izolirani slog ne sega v otroške
+   komponente — te nosijo svoj slog same. */
+
+/* Orodna vrstica ima dve ravni: vedno vidno iskanje z dejanji in filtre, ki se odprejo na
+   zahtevo. Enajst spustnih seznamov v eni vrsti je bilo natrpanih in nepregledno. */
+.toolbar[b-jppeqvylrb] { display: block; padding: .85rem 1rem; }
+
+.toolbar-row[b-jppeqvylrb] { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; }
+
+.search-field[b-jppeqvylrb] { flex: 1 1 22rem; min-width: 14rem; position: relative; }
+
+.search-input[b-jppeqvylrb] { padding-left: 2.1rem; width: 100%; }
+
+/* Lupa je CSS oblika, ne pisava — enak razlog kot pri puščici v vrstici. */
+.search-icon[b-jppeqvylrb] {
+  border: 1.5px solid var(--pim-text-muted);
+  border-radius: 50%;
+  height: .7rem;
+  left: .75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: .7rem;
+}
+.search-icon[b-jppeqvylrb]::after {
+  background: var(--pim-text-muted);
+  bottom: -.28rem;
+  content: "";
+  height: .3rem;
+  position: absolute;
+  right: -.1rem;
+  transform: rotate(-45deg);
+  width: 1.5px;
+}
+
+.ghost-button[b-jppeqvylrb] {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  gap: .4rem;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ghost-button:hover[b-jppeqvylrb] { background: var(--pim-surface-hover); }
+
+.filter-toggle.open[b-jppeqvylrb] { background: var(--pim-surface-subtle); border-color: var(--pim-text-muted); }
+
+/* Lijak filtra je oblika iz treh črt, ne znak iz pisave. */
+.funnel[b-jppeqvylrb] { border-left: .3rem solid transparent; border-right: .3rem solid transparent; border-top: .4rem solid currentColor; display: inline-block; height: 0; width: 0; }
+
+.filter-badge[b-jppeqvylrb] { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
+
+.toolbar-actions[b-jppeqvylrb] { align-items: center; display: flex; gap: .5rem; margin-left: auto; }
+
+
+/* Izvoz izbranih brez izbire ni dejanje, ampak past; povezava to pove, ne samo ob kliku. */
+.ghost-button.disabled[b-jppeqvylrb] { opacity: .45; pointer-events: none; }
+
+.result-count[b-jppeqvylrb] { color: var(--pim-text-muted); font-size: .8rem; white-space: nowrap; }
+
+.filter-panel[b-jppeqvylrb] { border-top: 1px solid var(--pim-line, var(--pim-border)); margin-top: .85rem; padding-top: .85rem; }
+
+.filter-panel[hidden][b-jppeqvylrb] { display: none; }
+
+.filter-grid[b-jppeqvylrb] { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+
+.filter-field[b-jppeqvylrb] { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+/* Kategorija ima dolge poti (»Notranja svetila > Downlights > Vgradne svetilke«) in ob njih
+   se stevila; v en stolpec mreze se ne splaca stlaciti. */
+.filter-field-wide[b-jppeqvylrb] { grid-column: span 2; }
+
+.filter-field label[b-jppeqvylrb] { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+
+.filter-select[b-jppeqvylrb] { max-width: none; width: 100%; }
+
+.filter-field[b-jppeqvylrb]  .pim-picker { max-width: none; min-width: 0; width: 100%; }
+
+.filter-actions[b-jppeqvylrb] { align-items: center; display: flex; gap: .75rem; margin-top: .9rem; }
+
+.link-button[b-jppeqvylrb] { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; text-decoration: none; }
+
+.link-button:hover[b-jppeqvylrb] { text-decoration: underline; }
+
+.active-filters[b-jppeqvylrb] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1.25rem; }
+
+.filter-chip[b-jppeqvylrb] {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  display: inline-flex;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+  text-decoration: none;
+}
+
+.filter-chip:hover[b-jppeqvylrb] { background: var(--pim-surface-hover); }
+
+.filter-chip.clear-all[b-jppeqvylrb] { border-style: dashed; color: var(--pim-text-muted); }
+
+/* Križec je CSS oblika, ne pisava — enak razlog kot pri puščici v vrstici. */
+.chip-remove[b-jppeqvylrb] { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove[b-jppeqvylrb]::before,
+.chip-remove[b-jppeqvylrb]::after {
+  background: currentColor;
+  content: "";
+  height: 1px;
+  left: 0;
+  position: absolute;
+  top: 50%;
+  width: 100%;
+}
+.chip-remove[b-jppeqvylrb]::before { transform: rotate(45deg); }
+.chip-remove[b-jppeqvylrb]::after { transform: rotate(-45deg); }
+
+.notice[b-jppeqvylrb] {
+  background: var(--pim-warn-bg);
+  border: 1px solid var(--pim-warn-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-warn-text);
+  font-size: .82rem;
+  margin-bottom: 1rem;
+  padding: .6rem .9rem;
+}
+
+.data-card[b-jppeqvylrb] { padding: 0; }
+
+/* Cela vrstica vodi na kartico; naziv je zato navadno besedilo, ne povezava. */
+/* Razvrstitev stoji nad tabelo: ni filter, samo obrne vrstni red. */
+.table-toolbar[b-jppeqvylrb] { align-items: center; display: flex; gap: .5rem; justify-content: flex-end; margin: 0 0 .5rem; }
+.table-toolbar label[b-jppeqvylrb] { color: var(--pim-text-muted); font-size: .78rem; }
+.table-toolbar .filter-select[b-jppeqvylrb] { max-width: 14rem; }
+
+/* Kartica se nalaga vec kot trenutek; do takrat mora seznam povedati, da se odpira. */
+.opening-card[b-jppeqvylrb] { position: relative; }
+.opening-overlay[b-jppeqvylrb] { align-items: center; background: rgba(255, 255, 255, .78); color: var(--pim-text-strong); display: flex; font-size: .85rem; gap: .6rem; inset: 0; justify-content: center; position: absolute; z-index: 2; }
+.opening-spinner[b-jppeqvylrb] { animation: opening-spin-b-jppeqvylrb .8s linear infinite; border: 2px solid #c7d2fe; border-radius: 50%; border-top-color: var(--pim-accent); display: inline-block; height: 1.1rem; width: 1.1rem; }
+@keyframes opening-spin-b-jppeqvylrb { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .opening-spinner[b-jppeqvylrb] { animation-duration: 2.4s; } }
+.row-link.opening[b-jppeqvylrb] { background: #eef2ff; }
+.row-link[b-jppeqvylrb] { cursor: pointer; }
+.row-link:hover[b-jppeqvylrb] { background: var(--pim-surface-hover); }
+.row-link:focus-visible[b-jppeqvylrb] { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+
+.thumb-cell[b-jppeqvylrb] { width: 3.5rem; }
+.thumb[b-jppeqvylrb] {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  display: flex;
+  height: 2.6rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 2.6rem;
+}
+.thumb img[b-jppeqvylrb] { height: 100%; object-fit: contain; width: 100%; }
+
+/* Prazna sličica je oblika, ne besedilo: v vrstici s 40 znaki ni prostora za »brez slike«,
+   vrzel pa vseeno pove značka »brez slike« v stolpcu Vrzeli. */
+.thumb-empty[b-jppeqvylrb] { border: 1.5px solid var(--pim-text-muted); border-radius: 2px; height: 1rem; opacity: .45; position: relative; width: 1.2rem; }
+.thumb-empty[b-jppeqvylrb]::after { background: var(--pim-text-muted); bottom: .15rem; content: ""; height: .45rem; left: .15rem; position: absolute; transform: skewX(-20deg); width: .9rem; }
+
+.product-name[b-jppeqvylrb] { color: var(--pim-text-strong); display: block; font-weight: 600; }
+
+.product-meta[b-jppeqvylrb] { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+
+.product-meta span + span[b-jppeqvylrb] { margin-left: .35rem; }
+
+.code-value[b-jppeqvylrb] { font-family: var(--pim-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: .75rem; }
+
+.row-flags[b-jppeqvylrb] { display: flex; flex-wrap: wrap; gap: .3rem; max-width: 18rem; }
+
+.gap-flag[b-jppeqvylrb], .wait-flag[b-jppeqvylrb], .ok-flag[b-jppeqvylrb] {
+  border-radius: 999px;
+  font-size: .7rem;
+  font-weight: 600;
+  padding: .15rem .45rem;
+  white-space: nowrap;
+}
+
+.gap-flag[b-jppeqvylrb] { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.wait-flag[b-jppeqvylrb] { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.ok-flag[b-jppeqvylrb] { background: var(--pim-good-bg); color: var(--pim-good-text); }
+
+.select-cell[b-jppeqvylrb] { width: 2.5rem; }
+
+/* Vrstica izbire pove, koliko je izbranih in da izvoz vzame samo te; pot do celega pogleda je en klik. */
+.selection-bar[b-jppeqvylrb] { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .82rem; gap: .5rem; margin: 0 0 .5rem; }
+
+.source-note[b-jppeqvylrb] { font-size: .78rem; margin: 1rem 0 2rem; }
+
+.data-table[b-jppeqvylrb] { min-width: 62rem; }
+
+.table-scroll[b-jppeqvylrb] { overflow-x: auto; }
+
+.search-input:focus-visible[b-jppeqvylrb],
+.filter-select:focus-visible[b-jppeqvylrb],
+.filter-button:focus-visible[b-jppeqvylrb],
+.ghost-button:focus-visible[b-jppeqvylrb],
+.link-button:focus-visible[b-jppeqvylrb],
+.primary-button:focus-visible[b-jppeqvylrb],
+.filter-chip:focus-visible[b-jppeqvylrb],
+.page-tab:focus-visible[b-jppeqvylrb],
+.table-scroll:focus-visible[b-jppeqvylrb],
+.data-table a:focus-visible[b-jppeqvylrb],
+.select-cell input:focus-visible[b-jppeqvylrb],
+.select-all:focus-visible[b-jppeqvylrb] {
+  outline: 2px solid var(--pim-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .toolbar-row[b-jppeqvylrb] { align-items: stretch; flex-direction: column; }
+  /* A6, pregled 2026-09-08: pri 800 px je bilo iskalno polje visoko pol zaslona, lupa pa je
+     lebdela sredi praznine. Vzrok ni bil slog polja, ampak sprememba osi: v stolpcu postane
+     flex-basis: 22rem VISINA in ne sirina. V stolpcu zato polje ne sme imeti osnove. */
+  .search-field[b-jppeqvylrb] { flex: 0 0 auto; min-width: 0; }
+  .toolbar-actions[b-jppeqvylrb] { margin-left: 0; }
+  .toolbar-actions > *[b-jppeqvylrb] { flex: 1 1 auto; justify-content: center; }
+  .filter-grid[b-jppeqvylrb] { grid-template-columns: 1fr; }
+  .filter-field-wide[b-jppeqvylrb] { grid-column: span 1; }
+  .row-flags[b-jppeqvylrb] { max-width: none; }
+}

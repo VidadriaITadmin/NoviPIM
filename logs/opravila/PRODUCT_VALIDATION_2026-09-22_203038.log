@@ -1,0 +1,13 @@
+20:30:38  === ZAČETEK: Validacija artiklov | posel PRODUCT_VALIDATION | sprožil: Dependency | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 20:30:38
+20:30:38  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+20:30:38  == Validacija (podjetje 2) ==
+20:31:20     Validacija (podjetje 2): opravljeno.
+20:31:20     konec: Validacija (podjetje 2) (41 s)
+20:31:20  == Validacija (podjetje 3) ==
+20:31:42     Validacija (podjetje 3): opravljeno.
+20:31:42     konec: Validacija (podjetje 3) (22 s)
+20:31:42  == Validacija (podjetje 4) ==
+20:32:06     Validacija (podjetje 4): opravljeno.
+20:32:06     konec: Validacija (podjetje 4) (23 s)
+20:32:06  Validacija artiklov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+20:32:06  === KONEC: izhod 0, trajanje 00:01:28

@@ -1,0 +1,25 @@
+22:10:56  === ZAČETEK: Zaloga iz SAOP | posel STOCK_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console | 2026-09-22 22:10:56
+22:10:56  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+22:10:56  == Zaloga iz SAOP (podjetje 2) ==
+22:10:57     [FAZA] Zapis SAOP_STOCK (podjetje 2): se je začela.
+22:11:01     [2] SAOP_GETSTOCKS (GetStocks): skladišč=1, zapisov=8775, uporabljenih=8775, v karanteni=0, RunId=84abb632-60f0-440e-a3c9-c788d18a57db.
+22:11:01     [FAZA] Zapis SAOP_STOCK (podjetje 2): uspelo — prebrano 8.775, zapisano 8.775; SAOP_GETSTOCKS, skladišč 1.
+22:11:01     [FAZA] Ujemanje SAOP_STOCK (podjetje 2): se je začela.
+22:11:01     [FAZA] Ujemanje SAOP_STOCK (podjetje 2): uspelo — prebrano 8.775, zapisano 8.765, zavrnjeno 10; 10 vrstic brez artikla v PIM.
+22:11:01     konec: Zaloga iz SAOP (podjetje 2) (5 s)
+22:11:01  == Zaloga iz SAOP (podjetje 3) ==
+22:11:02     [FAZA] Zapis SAOP_STOCK (podjetje 3): se je začela.
+22:11:05     [3] SAOP_REGISTERED_VIEW (RegisteredViewData): skladišč=0, zapisov=3034, uporabljenih=3034, v karanteni=0, RunId=a2fc6c11-d775-4e07-a2ee-31a4a636bc93.
+22:11:05     [FAZA] Zapis SAOP_STOCK (podjetje 3): uspelo — prebrano 3.034, zapisano 3.034; SAOP_REGISTERED_VIEW, skladišč 0.
+22:11:05     [FAZA] Ujemanje SAOP_STOCK (podjetje 3): se je začela.
+22:11:05     [FAZA] Ujemanje SAOP_STOCK (podjetje 3): uspelo — prebrano 3.034, zapisano 3.014, zavrnjeno 20; 20 vrstic brez artikla v PIM.
+22:11:05     konec: Zaloga iz SAOP (podjetje 3) (3 s)
+22:11:05  == Zaloga iz SAOP (podjetje 4) ==
+22:11:06     [FAZA] Zapis SAOP_STOCK (podjetje 4): se je začela.
+22:11:08     [4] SAOP_GETSTOCKS (GetStocks): skladišč=14, zapisov=3125, uporabljenih=3125, v karanteni=0, RunId=1c809a5d-887a-4486-8266-beb35e1fa15c.
+22:11:08     [FAZA] Zapis SAOP_STOCK (podjetje 4): uspelo — prebrano 3.125, zapisano 3.125; SAOP_GETSTOCKS, skladišč 14.
+22:11:08     [FAZA] Ujemanje SAOP_STOCK (podjetje 4): se je začela.
+22:11:08     [FAZA] Ujemanje SAOP_STOCK (podjetje 4): uspelo — prebrano 3.125, zapisano 3.124, zavrnjeno 1; 1 vrstic brez artikla v PIM.
+22:11:08     konec: Zaloga iz SAOP (podjetje 4) (2 s)
+22:11:08  Zaloga iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:11:08  === KONEC: izhod 0, trajanje 00:00:12

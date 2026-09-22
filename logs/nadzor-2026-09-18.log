@@ -1,0 +1,28 @@
+06:05:20  == Nadzornik zastalih obdelav ==
+06:05:22     Watchdog pregled je končan.
+06:05:22     konec: Nadzornik zastalih obdelav
+06:05:22  == Razposiljanje alarmov ==
+06:05:25     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+06:05:25     konec: Razposiljanje alarmov
+06:05:25  Nadzor koncan; padlih korakov: 0.
+06:07:16  == Nadzornik zastalih obdelav ==
+06:07:17     Watchdog pregled je končan.
+06:07:17     konec: Nadzornik zastalih obdelav
+06:07:17  == Razposiljanje alarmov ==
+06:07:18     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+06:07:18     konec: Razposiljanje alarmov
+06:07:18  Nadzor koncan; padlih korakov: 0.
+06:12:16  == Nadzornik zastalih obdelav ==
+06:12:17     Watchdog pregled je končan.
+06:12:17     konec: Nadzornik zastalih obdelav
+06:12:17  == Razposiljanje alarmov ==
+06:12:18     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+06:12:18     konec: Razposiljanje alarmov
+06:12:18  Nadzor koncan; padlih korakov: 0.
+06:17:16  == Nadzornik zastalih obdelav ==
+06:17:17     Watchdog pregled je končan.
+06:17:17     konec: Nadzornik zastalih obdelav
+06:17:17  == Razposiljanje alarmov ==
+06:17:18     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+06:17:18     konec: Razposiljanje alarmov
+06:17:18  Nadzor koncan; padlih korakov: 0.

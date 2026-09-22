@@ -1,0 +1,11 @@
+22:44:26  === ZAČETEK: Razpošiljanje alarmov | posel ALERT_DELIVERY | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:44:26
+22:44:26  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 300 s
+22:44:26  == Razpošiljanje alarmov ==
+22:44:27     [FAZA] Izračun ALERT_DISPATCH: se je začela.
+22:44:27     [FAZA] Izračun ALERT_DISPATCH: uspelo, brez novih podatkov — zapisano 0; stopnjevanih nepotrjenih napak odhodne poti (starejših od 300 s): 0.
+22:44:27     Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.
+22:44:27     [FAZA] Pošiljanje ALERT_DISPATCH: se je začela.
+22:44:27     [FAZA] Pošiljanje ALERT_DISPATCH: preskočeno; dostava opozoril je izklopljena (PIM_ALERT_DELIVERY_ENABLED ni true); nič ni bilo poslano.
+22:44:27     konec: Razpošiljanje alarmov (1 s)
+22:44:27  Razpošiljanje alarmov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:44:27  === KONEC: izhod 0, trajanje 00:00:01

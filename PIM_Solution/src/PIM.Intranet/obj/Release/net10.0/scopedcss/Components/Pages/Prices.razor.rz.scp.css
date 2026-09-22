@@ -1,0 +1,23 @@
+/* Izoliran slog strani /cene. */
+
+.result-count[b-qsytyv5g30] { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; }
+
+/* Cela vrstica odpre cenike te vrstice — v vrstici, ne na kartici izdelka. */
+.row-link[b-qsytyv5g30] { cursor: pointer; }
+.row-link:hover[b-qsytyv5g30] { background: var(--pim-surface-hover); }
+.row-link.open[b-qsytyv5g30] { background: #eef2ff; }
+.row-link:focus-visible[b-qsytyv5g30] { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+
+.product-name[b-qsytyv5g30] { display: block; font-weight: 600; }
+.product-meta[b-qsytyv5g30] { color: var(--pim-text-muted); display: block; font-size: .75rem; }
+.price-lists[b-qsytyv5g30] { font-variant-numeric: tabular-nums; }
+
+/* »+N« pove, koliko cenikov je se, ne da bi jih vse nasteli. */
+.more-badge[b-qsytyv5g30] { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
+
+.detail-row > td[b-qsytyv5g30] { background: var(--pim-surface-hover); padding: .75rem 1rem; }
+.detail-actions[b-qsytyv5g30] { margin: .6rem 0 0; }
+
+@media (max-width: 900px) {
+  .data-table[b-qsytyv5g30] { min-width: 820px; }
+}

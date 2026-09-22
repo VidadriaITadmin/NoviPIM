@@ -1,0 +1,503 @@
+19:28:15  Dnevniki: C:\Users\david\Desktop\PIM\NoviPIM\logs
+19:28:15  Gostitelj DESKTOP-TONVQHJ:18600:AutomationHost:console: postavitev na voljo=True ; koren=C:\Users\david\Desktop\PIM\NoviPIM; rešitev=C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution; objavljeni workerji=-; dnevniki=C:\Users\david\Desktop\PIM\NoviPIM\logs
+19:28:38  Workerji zgrajeni ob zagonu (13 projektov, 22 s); posli tečejo z dotnet run --no-build.
+19:28:38  Najem prevzet. Zaprtih visečih zagonov: 0 (posli), 0 (stari cikli).
+19:28:38  Gostitelj DESKTOP-TONVQHJ:18600:AutomationHost:console drži najem.
+19:29:23  Artikli iz SAOP (Scheduler) je na vrsti; zagon #1, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_PRODUCT_IMPORT_2026-09-22_192923.log.
+19:30:19  Dnevniki: C:\Users\david\Desktop\PIM\NoviPIM\logs
+19:30:19  Gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console: postavitev na voljo=True ; koren=C:\Users\david\Desktop\PIM\NoviPIM; rešitev=C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution; objavljeni workerji=-; dnevniki=C:\Users\david\Desktop\PIM\NoviPIM\logs
+19:30:38  Workerji zgrajeni ob zagonu (13 projektov, 18 s); posli tečejo z dotnet run --no-build.
+19:31:08  Najem prevzet. Zaprtih visečih zagonov: 1 (posli), 0 (stari cikli).
+19:31:08  Gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console drži najem.
+19:33:08  Naročila iz SAOP (Scheduler) je na vrsti; zagon #2, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_193308.log.
+19:33:11  Naročila iz SAOP #2: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:33:23  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #3, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_193323.log.
+19:33:38  Zaloga dobaviteljev #3: Succeeded — Opravljenih skupin: 2, korakov: 8.
+19:34:23  Validacija artiklov (Scheduler) je na vrsti; zagon #4, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_VALIDATION_2026-09-22_193423.log.
+19:35:23  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #5, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_193523.log.
+19:35:38  Zaloga iz SAOP #5: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:35:49  Validacija artiklov #4: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:35:53  Objava v PIM (Scheduler) je na vrsti; zagon #6, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_PUBLICATION_2026-09-22_193553.log.
+19:35:53  Cene in zaloga za splet (Dependency) je na vrsti; zagon #7, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_193553.log.
+19:36:03  Objava v PIM #6: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:36:08  Katalog in stranke za splet (Dependency) je na vrsti; zagon #8, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_193608.log.
+19:36:16  Cene in zaloga za splet #7: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:36:19  Katalog in stranke za splet #8: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:37:53  Cene iz SAOP (Scheduler) je na vrsti; zagon #9, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_193753.log.
+19:38:23  Nadzornik (Scheduler) je na vrsti; zagon #10, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_193823.log.
+19:38:24  Nadzornik #10: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:38:38  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #11, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_193838.log.
+19:38:39  Razpošiljanje alarmov #11: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:38:55  Cene iz SAOP #9: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:43:38  Nadzornik (Scheduler) je na vrsti; zagon #12, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_194338.log.
+19:43:39  Nadzornik #12: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:43:53  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #13, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_194353.log.
+19:43:54  Razpošiljanje alarmov #13: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:45:53  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #14, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_194553.log.
+19:46:06  Zaloga iz SAOP #14: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:46:08  Cene in zaloga za splet (Dependency) je na vrsti; zagon #15, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_194608.log.
+19:46:22  Cene in zaloga za splet #15: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:48:53  Nadzornik (Scheduler) je na vrsti; zagon #16, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_194853.log.
+19:48:54  Nadzornik #16: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:49:08  Cene iz SAOP (Scheduler) je na vrsti; zagon #17, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_194908.log.
+19:49:08  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #18, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_194908.log.
+19:49:09  Razpošiljanje alarmov #18: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:50:09  Cene iz SAOP #17: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:54:08  Nadzornik (Scheduler) je na vrsti; zagon #19, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_195408.log.
+19:54:09  Nadzornik #19: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:54:23  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #20, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_195423.log.
+19:54:24  Razpošiljanje alarmov #20: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:56:08  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #21, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_195608.log.
+19:56:23  Zaloga iz SAOP #21: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:56:38  Cene in zaloga za splet (Dependency) je na vrsti; zagon #22, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_195638.log.
+19:56:53  Cene in zaloga za splet #22: Succeeded — Opravljenih skupin: 3, korakov: 3.
+19:59:23  Nadzornik (Scheduler) je na vrsti; zagon #23, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_195923.log.
+19:59:24  Nadzornik #23: Succeeded — Opravljenih skupin: 1, korakov: 1.
+19:59:38  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #24, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_195938.log.
+19:59:39  Razpošiljanje alarmov #24: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:00:23  Cene iz SAOP (Scheduler) je na vrsti; zagon #25, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_200023.log.
+20:01:35  Cene iz SAOP #25: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:03:38  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #26, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_200338.log.
+20:03:51  Zaloga dobaviteljev #26: Succeeded — Opravljenih skupin: 2, korakov: 8.
+20:04:38  Nadzornik (Scheduler) je na vrsti; zagon #27, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_200438.log.
+20:04:39  Nadzornik #27: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:04:53  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #28, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_200453.log.
+20:04:54  Razpošiljanje alarmov #28: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:06:38  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #29, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_200638.log.
+20:06:54  Zaloga iz SAOP #29: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:07:08  Cene in zaloga za splet (Dependency) je na vrsti; zagon #30, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_200708.log.
+20:07:24  Cene in zaloga za splet #30: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:09:53  Nadzornik (Scheduler) je na vrsti; zagon #31, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_200953.log.
+20:09:54  Nadzornik #31: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:10:08  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #32, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_201008.log.
+20:10:09  Razpošiljanje alarmov #32: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:11:38  Cene iz SAOP (Scheduler) je na vrsti; zagon #33, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_201138.log.
+20:12:38  Cene iz SAOP #33: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:15:08  Nadzornik (Scheduler) je na vrsti; zagon #34, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_201508.log.
+20:15:09  Nadzornik #34: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:15:23  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #35, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_201523.log.
+20:15:24  Razpošiljanje alarmov #35: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:17:08  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #36, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_201708.log.
+20:17:21  Zaloga iz SAOP #36: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:17:23  Cene in zaloga za splet (Dependency) je na vrsti; zagon #37, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_201723.log.
+20:17:37  Cene in zaloga za splet #37: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:20:23  Nadzornik (Scheduler) je na vrsti; zagon #38, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_202023.log.
+20:20:24  Nadzornik #38: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:20:38  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #39, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_202038.log.
+20:20:39  Razpošiljanje alarmov #39: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:22:53  Cene iz SAOP (Scheduler) je na vrsti; zagon #40, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_202253.log.
+20:23:54  Cene iz SAOP #40: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:25:38  Nadzornik (Scheduler) je na vrsti; zagon #41, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_202538.log.
+20:25:39  Nadzornik #41: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:25:53  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #42, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_202553.log.
+20:25:54  Razpošiljanje alarmov #42: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:27:23  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #51, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_202723.log.
+20:27:35  Zaloga iz SAOP #51: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:27:38  Cene in zaloga za splet (Dependency) je na vrsti; zagon #52, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_202738.log.
+20:27:52  Cene in zaloga za splet #52: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:29:38  Artikli iz SAOP (Scheduler) je na vrsti; zagon #53, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_PRODUCT_IMPORT_2026-09-22_202938.log.
+20:30:26  Artikli iz SAOP #53: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:30:38  Validacija artiklov (Dependency) je na vrsti; zagon #54, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_VALIDATION_2026-09-22_203038.log.
+20:30:53  Nadzornik (Scheduler) je na vrsti; zagon #55, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_203053.log.
+20:30:54  Nadzornik #55: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:31:08  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #56, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_203108.log.
+20:31:09  Razpošiljanje alarmov #56: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:32:06  Validacija artiklov #54: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:32:08  Objava v PIM (Dependency) je na vrsti; zagon #57, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_PUBLICATION_2026-09-22_203208.log.
+20:32:30  Objava v PIM #57: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:32:39  Katalog in stranke za splet (Dependency) je na vrsti; zagon #58, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_203239.log.
+20:32:51  Katalog in stranke za splet #58: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:33:25  Naročila iz SAOP (Scheduler) je na vrsti; zagon #59, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_203324.log.
+20:33:31  Naročila iz SAOP #59: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:33:54  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #60, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_203354.log.
+20:34:09  Zaloga dobaviteljev #60: Succeeded — Opravljenih skupin: 2, korakov: 8.
+20:35:39  Cene iz SAOP (Scheduler) je na vrsti; zagon #61, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_203539.log.
+20:35:54  Nadzornik (Scheduler) je na vrsti; zagon #62, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_203554.log.
+20:35:55  Nadzornik #62: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:36:09  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #63, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_203609.log.
+20:36:10  Razpošiljanje alarmov #63: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:36:42  Cene iz SAOP #61: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:38:54  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #64, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_203854.log.
+20:39:07  Zaloga iz SAOP #64: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:39:09  Cene in zaloga za splet (Dependency) je na vrsti; zagon #65, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_203909.log.
+20:39:22  Cene in zaloga za splet #65: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:41:09  Nadzornik (Scheduler) je na vrsti; zagon #66, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_204109.log.
+20:41:10  Nadzornik #66: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:41:24  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #67, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_204124.log.
+20:41:25  Razpošiljanje alarmov #67: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:46:09  Posel TEST_JOB_A v katalogu kode ne obstaja; preskočen.
+20:46:09  Posel TEST_JOB_B v katalogu kode ne obstaja; preskočen.
+20:46:24  Nadzornik (Scheduler) je na vrsti; zagon #76, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_204624.log.
+20:46:24  Posel TEST_JOB_A v katalogu kode ne obstaja; preskočen.
+20:46:24  Posel TEST_JOB_B v katalogu kode ne obstaja; preskočen.
+20:46:25  Nadzornik #76: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:46:39  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #85, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_204639.log.
+20:46:40  Razpošiljanje alarmov #85: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:46:54  Cene iz SAOP (Scheduler) je na vrsti; zagon #86, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_204654.log.
+20:48:08  Cene iz SAOP #86: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:50:09  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #87, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_205009.log.
+20:50:22  Zaloga iz SAOP #87: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:50:24  Cene in zaloga za splet (Dependency) je na vrsti; zagon #88, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_205024.log.
+20:50:38  Cene in zaloga za splet #88: Succeeded — Opravljenih skupin: 3, korakov: 3.
+20:51:39  Nadzornik (Scheduler) je na vrsti; zagon #89, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_205139.log.
+20:51:40  Nadzornik #89: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:51:54  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #90, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_205154.log.
+20:51:55  Razpošiljanje alarmov #90: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:56:54  Nadzornik (Scheduler) je na vrsti; zagon #91, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_205654.log.
+20:56:55  Nadzornik #91: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:57:09  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #92, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_205709.log.
+20:57:10  Razpošiljanje alarmov #92: Succeeded — Opravljenih skupin: 1, korakov: 1.
+20:58:09  Cene iz SAOP (Scheduler) je na vrsti; zagon #93, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_205809.log.
+20:59:51  Cene iz SAOP #93: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:01:54  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #94, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_210154.log.
+21:02:08  Zaloga iz SAOP #94: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:02:09  Cene in zaloga za splet (Dependency) je na vrsti; zagon #95, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_210209.log.
+21:02:09  Nadzornik (Scheduler) je na vrsti; zagon #96, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_210209.log.
+21:02:10  Nadzornik #96: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:02:23  Cene in zaloga za splet #95: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:02:24  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #97, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_210224.log.
+21:02:25  Razpošiljanje alarmov #97: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:04:09  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #98, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_210409.log.
+21:04:20  Zaloga dobaviteljev #98: Succeeded — Opravljenih skupin: 2, korakov: 8.
+21:07:24  Nadzornik (Scheduler) je na vrsti; zagon #99, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_210724.log.
+21:07:25  Nadzornik #99: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:07:39  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #100, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_210739.log.
+21:07:40  Razpošiljanje alarmov #100: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:09:54  Cene iz SAOP (Scheduler) je na vrsti; zagon #101, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_210954.log.
+21:10:54  Cene iz SAOP #101: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:12:39  Nadzornik (Scheduler) je na vrsti; zagon #102, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_211239.log.
+21:12:40  Nadzornik #102: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:12:54  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #103, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_211254.log.
+21:12:55  Razpošiljanje alarmov #103: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:13:09  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #104, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_211309.log.
+21:13:27  Zaloga iz SAOP #104: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:13:39  Cene in zaloga za splet (Dependency) je na vrsti; zagon #105, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_211339.log.
+21:14:00  Cene in zaloga za splet #105: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:17:54  Nadzornik (Scheduler) je na vrsti; zagon #106, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_211754.log.
+21:17:55  Nadzornik #106: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:18:09  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #107, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_211809.log.
+21:18:10  Razpošiljanje alarmov #107: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:20:55  Cene iz SAOP (Scheduler) je na vrsti; zagon #108, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_212055.log.
+21:22:09  Cene iz SAOP #108: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:23:09  Nadzornik (Scheduler) je na vrsti; zagon #109, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_212309.log.
+21:23:10  Nadzornik #109: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:23:24  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #110, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_212324.log.
+21:23:25  Razpošiljanje alarmov #110: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:24:24  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #111, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_212424.log.
+21:24:40  Zaloga iz SAOP #111: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:24:54  Cene in zaloga za splet (Dependency) je na vrsti; zagon #120, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_212454.log.
+21:25:10  Cene in zaloga za splet #120: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:28:51  Dnevniki: C:\Users\david\Desktop\PIM\NoviPIM\logs
+21:28:51  Gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console: postavitev na voljo=True ; koren=C:\Users\david\Desktop\PIM\NoviPIM; rešitev=C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution; objavljeni workerji=-; dnevniki=C:\Users\david\Desktop\PIM\NoviPIM\logs
+21:29:11  Workerji zgrajeni ob zagonu (13 projektov, 19 s); posli tečejo z dotnet run --no-build.
+21:29:26  Najem prevzet. Zaprtih visečih zagonov: 0.
+21:29:26  Gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console drži najem.
+21:29:26  Nadzornik (Scheduler) je na vrsti; zagon #129, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_212926.log.
+21:29:26  Razpošiljanje alarmov: čaka na predhodnika ALERT_EVALUATION, ki ravno teče.
+21:29:27  Nadzornik #129: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:29:41  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #130, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_212941.log.
+21:29:42  Razpošiljanje alarmov #130: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:30:26  Artikli iz SAOP (Scheduler) je na vrsti; zagon #131, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_PRODUCT_IMPORT_2026-09-22_213026.log.
+21:31:09  Artikli iz SAOP #131: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:31:11  Validacija artiklov (Dependency) je na vrsti; zagon #132, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_VALIDATION_2026-09-22_213111.log.
+21:32:42  Validacija artiklov #132: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:32:56  Objava v PIM (Scheduler) je na vrsti; zagon #133, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_PUBLICATION_2026-09-22_213256.log.
+21:32:56  Katalog in stranke za splet: čaka na predhodnika PRODUCT_PUBLICATION, ki ravno teče.
+21:33:06  Objava v PIM #133: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:33:11  Cene iz SAOP (Scheduler) je na vrsti; zagon #134, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_213311.log.
+21:33:11  Katalog in stranke za splet (Scheduler) je na vrsti; zagon #135, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_213311.log.
+21:33:23  Katalog in stranke za splet #135: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:34:15  Cene iz SAOP #134: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:34:26  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #136, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_213426.log.
+21:34:34  Zaloga dobaviteljev #136: Succeeded — Opravljenih skupin: 2, korakov: 8.
+21:34:41  Nadzornik (Scheduler) je na vrsti; zagon #137, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_213441.log.
+21:34:42  Nadzornik #137: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:34:56  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #138, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_213456.log.
+21:34:57  Razpošiljanje alarmov #138: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:36:26  Naročila iz SAOP (Scheduler) je na vrsti; zagon #139, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_213626.log.
+21:36:29  Naročila iz SAOP #139: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:38:41  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #140, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_213841.log.
+21:38:54  Zaloga iz SAOP #140: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:38:56  Cene in zaloga za splet (Dependency) je na vrsti; zagon #141, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_213856.log.
+21:39:09  Cene in zaloga za splet #141: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:39:56  Nadzornik (Scheduler) je na vrsti; zagon #142, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_213956.log.
+21:39:57  Nadzornik #142: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:40:11  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #143, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_214011.log.
+21:40:12  Razpošiljanje alarmov #143: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:44:26  Cene iz SAOP (Scheduler) je na vrsti; zagon #144, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_214426.log.
+21:45:11  Nadzornik (Scheduler) je na vrsti; zagon #145, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_214511.log.
+21:45:12  Nadzornik #145: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:45:26  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #146, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_214526.log.
+21:45:27  Razpošiljanje alarmov #146: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:45:30  Cene iz SAOP #144: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:48:56  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #155, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_214856.log.
+21:49:09  Zaloga iz SAOP #155: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:49:11  Cene in zaloga za splet (Dependency) je na vrsti; zagon #156, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_214911.log.
+21:49:25  Cene in zaloga za splet #156: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:50:26  Nadzornik (Scheduler) je na vrsti; zagon #157, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_215026.log.
+21:50:27  Nadzornik #157: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:50:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #158, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_215041.log.
+21:50:42  Razpošiljanje alarmov #158: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:55:41  Cene iz SAOP (Scheduler) je na vrsti; zagon #159, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_215541.log.
+21:55:41  Nadzornik (Scheduler) je na vrsti; zagon #160, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_215541.log.
+21:55:42  Nadzornik #160: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:55:56  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #161, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_215556.log.
+21:55:57  Razpošiljanje alarmov #161: Succeeded — Opravljenih skupin: 1, korakov: 1.
+21:57:09  Cene iz SAOP #159: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:59:11  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #162, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_215911.log.
+21:59:26  Zaloga iz SAOP #162: Succeeded — Opravljenih skupin: 3, korakov: 3.
+21:59:41  Cene in zaloga za splet (Dependency) je na vrsti; zagon #163, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_215941.log.
+21:59:55  Cene in zaloga za splet #163: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:00:56  Nadzornik (Scheduler) je na vrsti; zagon #164, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_220056.log.
+22:00:57  Nadzornik #164: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:01:11  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #165, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_220111.log.
+22:01:12  Razpošiljanje alarmov #165: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:04:41  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #166, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_220441.log.
+22:04:49  Zaloga dobaviteljev #166: Succeeded — Opravljenih skupin: 2, korakov: 8.
+22:06:11  Nadzornik (Scheduler) je na vrsti; zagon #167, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_220611.log.
+22:06:12  Nadzornik #167: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:06:26  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #168, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_220626.log.
+22:06:27  Razpošiljanje alarmov #168: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:07:11  Cene iz SAOP (Scheduler) je na vrsti; zagon #169, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_220711.log.
+22:08:50  Cene iz SAOP #169: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:10:56  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #170, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_221056.log.
+22:11:08  Zaloga iz SAOP #170: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:11:11  Cene in zaloga za splet (Dependency) je na vrsti; zagon #171, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_221111.log.
+22:11:24  Cene in zaloga za splet #171: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:11:26  Nadzornik (Scheduler) je na vrsti; zagon #172, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_221126.log.
+22:11:27  Nadzornik #172: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:11:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #173, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_221141.log.
+22:11:42  Razpošiljanje alarmov #173: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:16:38  Dnevniki: C:\Users\david\Desktop\PIM\NoviPIM\logs
+22:16:38  Gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console: postavitev na voljo=True ; koren=C:\Users\david\Desktop\PIM\NoviPIM; rešitev=C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution; objavljeni workerji=-; dnevniki=C:\Users\david\Desktop\PIM\NoviPIM\logs
+22:16:56  Workerji zgrajeni ob zagonu (13 projektov, 18 s); posli tečejo z dotnet run --no-build.
+22:17:56  Najem prevzet. Zaprtih visečih zagonov: 0.
+22:17:56  Gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console drži najem.
+22:17:56  Nadzornik (Scheduler) je na vrsti; zagon #174, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_221756.log.
+22:17:56  Razpošiljanje alarmov: čaka na predhodnika ALERT_EVALUATION, ki ravno teče.
+22:17:57  Nadzornik #174: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:18:11  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #175, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_221811.log.
+22:18:12  Razpošiljanje alarmov #175: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:18:56  Cene iz SAOP (Scheduler) je na vrsti; zagon #176, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_221856.log.
+22:18:56  Datumi dobave iz SAOP čaka: SAOP ravno uporablja PRICE_IMPORT.
+22:20:11  Cene iz SAOP #176: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:20:11  Datumi dobave iz SAOP čaka na tišino SAOP do 22:22:11.
+22:21:11  Validacija artiklov (Human) je na vrsti; zagon #177, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_VALIDATION_2026-09-22_222111.log.
+22:21:11  Objava v PIM: čaka na predhodnika PRODUCT_VALIDATION, ki ravno teče.
+22:21:11  Katalog in stranke za splet (Human) je na vrsti; zagon #178, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_222111.log.
+22:21:26  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:21:29  Katalog in stranke za splet #178: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:21:41  Datumi dobave iz SAOP čaka na tišino SAOP do 22:22:11.
+22:21:41  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:21:56  Datumi dobave iz SAOP čaka na tišino SAOP do 22:22:11.
+22:21:56  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:22:11  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #179, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_222211.log.
+22:22:11  Datumi dobave iz SAOP čaka: SAOP ravno uporablja STOCK_IMPORT.
+22:22:11  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:22:26  Datumi dobave iz SAOP čaka: SAOP ravno uporablja STOCK_IMPORT.
+22:22:26  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:22:28  Zaloga iz SAOP #179: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:22:41  Datumi dobave iz SAOP čaka na tišino SAOP do 22:24:28.
+22:22:41  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:22:41  Cene in zaloga za splet (Dependency) je na vrsti; zagon #180, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_222241.log.
+22:22:46  Validacija artiklov #177: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:22:55  Cene in zaloga za splet #180: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:22:56  Datumi dobave iz SAOP čaka na tišino SAOP do 22:24:28.
+22:22:56  Zaloga dobaviteljev (Human) je na vrsti; zagon #181, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_222256.log.
+22:22:56  Objava v PIM (Human) je na vrsti; zagon #182, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_PUBLICATION_2026-09-22_222256.log.
+22:23:06  Zaloga dobaviteljev #181: Succeeded — Opravljenih skupin: 2, korakov: 8.
+22:23:07  Objava v PIM #182: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:23:11  Katalog in stranke za splet (Dependency) je na vrsti; zagon #183, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_222311.log.
+22:23:11  Nadzornik (Scheduler) je na vrsti; zagon #184, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_222311.log.
+22:23:12  Nadzornik #184: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:23:22  Katalog in stranke za splet #183: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:23:26  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #185, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_222326.log.
+22:23:27  Razpošiljanje alarmov #185: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:24:41  Datumi dobave iz SAOP (Human) je na vrsti; zagon #186, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_DELIVERY_IMPORT_2026-09-22_222441.log.
+22:26:11  Naročila iz SAOP čaka: SAOP ravno uporablja SAOP_DELIVERY_IMPORT.
+22:28:26  Nadzornik (Scheduler) je na vrsti; zagon #187, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_222826.log.
+22:28:27  Nadzornik #187: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:28:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #188, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_222841.log.
+22:28:41  Zaloga pod MID (dnevni mail) (Human) je na vrsti; zagon #189, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_REPLENISHMENT_DIGEST_2026-09-22_222841.log.
+22:28:42  Razpošiljanje alarmov #188: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:28:43  Zaloga pod MID (dnevni mail) #189: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:29:27  Datumi dobave iz SAOP #186: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:29:41  Naročila iz SAOP čaka na tišino SAOP do 22:31:27.
+22:29:56  Zaloga pod MID (dnevni mail) (Human) je na vrsti; zagon #190, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_REPLENISHMENT_DIGEST_2026-09-22_222956.log.
+22:29:58  Zaloga pod MID (dnevni mail) #190: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:31:41  Artikli iz SAOP (Scheduler) je na vrsti; zagon #191, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_PRODUCT_IMPORT_2026-09-22_223141.log.
+22:31:41  Naročila iz SAOP čaka: SAOP ravno uporablja SAOP_PRODUCT_IMPORT.
+22:31:56  Objava v PIM čaka: predhodnik Artikli iz SAOP ravno teče.
+22:32:11  Naročila iz SAOP čaka: SAOP ravno uporablja SAOP_PRODUCT_IMPORT.
+22:32:11  Objava v PIM čaka: predhodnik Artikli iz SAOP ravno teče.
+22:32:23  Artikli iz SAOP #191: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:32:26  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:32:26  Validacija artiklov (Dependency) je na vrsti; zagon #192, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_VALIDATION_2026-09-22_223226.log.
+22:32:26  Objava v PIM: čaka na predhodnika PRODUCT_VALIDATION, ki ravno teče.
+22:32:41  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:32:56  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:32:56  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:33:11  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:33:11  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:33:26  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:33:26  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:33:42  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:33:42  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:33:42  Nadzornik (Scheduler) je na vrsti; zagon #193, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_223342.log.
+22:33:45  Nadzornik #193: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:33:56  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:33:56  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:33:56  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #194, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_223356.log.
+22:33:57  Razpošiljanje alarmov #194: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:34:11  Naročila iz SAOP čaka na tišino SAOP do 22:34:23.
+22:34:11  Objava v PIM čaka: predhodnik Validacija artiklov ravno teče.
+22:34:12  Validacija artiklov #192: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:34:26  Naročila iz SAOP (Human) je na vrsti; zagon #195, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_223426.log.
+22:34:26  Objava v PIM (Human) je na vrsti; zagon #196, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRODUCT_PUBLICATION_2026-09-22_223426.log.
+22:34:40  Objava v PIM #196: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:34:41  Katalog in stranke za splet (Dependency) je na vrsti; zagon #197, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_CATALOG_EXPORT_2026-09-22_223441.log.
+22:34:52  Katalog in stranke za splet #197: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:37:49  Naročila iz SAOP #195: Warning — Delno: padle skupine: Naročila iz SAOP (podjetje 3). Uspelih skupin: 2.
+22:38:56  Nadzornik (Scheduler) je na vrsti; zagon #198, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_223856.log.
+22:38:57  Nadzornik #198: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:39:11  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #199, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_223911.log.
+22:39:12  Razpošiljanje alarmov #199: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:39:26  Naročila iz SAOP čaka na tišino SAOP do 22:39:49.
+22:39:56  Naročila iz SAOP (Human) je na vrsti; zagon #200, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_223956.log.
+22:40:56  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:42:10  Naročila iz SAOP #200: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:42:11  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:42:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:42:56  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:42:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:43:11  Naročila iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:11  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:11  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:43:26  Naročila iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:26  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:26  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:43:41  Naročila iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:41  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:43:56  Naročila iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:56  Cene iz SAOP čaka na tišino SAOP do 22:44:10.
+22:43:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:44:10.
+22:44:11  Naročila iz SAOP (Human) je na vrsti; zagon #201, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_ORDER_IMPORT_2026-09-22_224411.log.
+22:44:11  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:11  Nadzornik (Scheduler) je na vrsti; zagon #202, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_224411.log.
+22:44:11  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:12  Nadzornik #202: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:44:26  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:26  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #203, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_224426.log.
+22:44:26  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:27  Razpošiljanje alarmov #203: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:44:41  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:41  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:56  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:44:56  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:45:11  Cene iz SAOP čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:45:11  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja SAOP_ORDER_IMPORT.
+22:45:19  Naročila iz SAOP #201: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:45:26  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:45:26  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:45:41  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:45:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:45:56  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:45:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:46:11  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:46:11  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:46:26  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:46:26  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:46:41  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:46:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:46:56  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:46:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:47:11  Cene iz SAOP čaka na tišino SAOP do 22:47:19.
+22:47:11  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:47:19.
+22:47:26  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #204, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_224726.log.
+22:47:26  Cene iz SAOP čaka: SAOP ravno uporablja STOCK_IMPORT.
+22:47:26  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja STOCK_IMPORT.
+22:47:39  Zaloga iz SAOP #204: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:47:41  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:47:41  Cene in zaloga za splet (Dependency) je na vrsti; zagon #205, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_224741.log.
+22:47:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:47:55  Cene in zaloga za splet #205: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:47:56  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:47:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:48:11  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:48:11  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:48:26  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:48:26  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:48:41  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:48:41  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:48:56  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:48:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:49:11  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:49:11  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:49:26  Cene iz SAOP čaka na tišino SAOP do 22:49:39.
+22:49:26  Nadzornik (Scheduler) je na vrsti; zagon #206, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_224926.log.
+22:49:26  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:49:39.
+22:49:27  Nadzornik #206: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:49:41  Cene iz SAOP (Human) je na vrsti; zagon #207, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_224941.log.
+22:49:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #208, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_224941.log.
+22:49:41  Pošiljanje v SAOP (odhodna vrsta) čaka: SAOP ravno uporablja PRICE_IMPORT.
+22:49:42  Razpošiljanje alarmov #208: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:50:45  Cene iz SAOP #207: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:50:56  Pošiljanje v SAOP (odhodna vrsta) čaka na tišino SAOP do 22:52:45.
+22:52:56  Pošiljanje v SAOP (odhodna vrsta) (Human) je na vrsti; zagon #209, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_OUTBOUND_DISPATCH_2026-09-22_225256.log.
+22:52:58  Pošiljanje v SAOP (odhodna vrsta) #209: Failed — Padle skupine: Odhodna vrsta v SAOP.
+22:53:11  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #210, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_225311.log.
+22:53:26  Zaloga dobaviteljev #210: Succeeded — Opravljenih skupin: 2, korakov: 8.
+22:54:41  Nadzornik (Scheduler) je na vrsti; zagon #211, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_225441.log.
+22:54:42  Nadzornik #211: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:54:56  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #212, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_225456.log.
+22:54:58  Razpošiljanje alarmov #212: Succeeded — Opravljenih skupin: 1, korakov: 1.
+22:57:41  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #213, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_225741.log.
+22:57:56  Zaloga iz SAOP #213: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:57:56  Cene in zaloga za splet (Dependency) je na vrsti; zagon #214, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_225756.log.
+22:58:10  Cene in zaloga za splet #214: Succeeded — Opravljenih skupin: 3, korakov: 3.
+22:59:56  Nadzornik (Scheduler) je na vrsti; zagon #215, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_225956.log.
+22:59:57  Nadzornik #215: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:00:11  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #216, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_230011.log.
+23:00:12  Razpošiljanje alarmov #216: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:05:11  Nadzornik (Scheduler) je na vrsti; zagon #217, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_230511.log.
+23:05:12  Nadzornik #217: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:05:26  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #218, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_230526.log.
+23:05:27  Razpošiljanje alarmov #218: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:07:56  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #219, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_230756.log.
+23:08:10  Zaloga iz SAOP #219: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:08:11  Cene in zaloga za splet (Dependency) je na vrsti; zagon #220, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_230811.log.
+23:08:25  Cene in zaloga za splet #220: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:10:26  Nadzornik (Scheduler) je na vrsti; zagon #221, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_231026.log.
+23:10:27  Nadzornik #221: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:10:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #222, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_231041.log.
+23:10:42  Razpošiljanje alarmov #222: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:15:41  Nadzornik (Scheduler) je na vrsti; zagon #223, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_231541.log.
+23:15:42  Nadzornik #223: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:15:56  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #224, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_231556.log.
+23:15:57  Razpošiljanje alarmov #224: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:18:11  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #225, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_231811.log.
+23:18:25  Zaloga iz SAOP #225: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:18:26  Cene in zaloga za splet (Dependency) je na vrsti; zagon #226, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_231826.log.
+23:18:41  Cene in zaloga za splet #226: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:20:56  Cene iz SAOP (Scheduler) je na vrsti; zagon #227, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\PRICE_IMPORT_2026-09-22_232056.log.
+23:20:56  Nadzornik (Scheduler) je na vrsti; zagon #228, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_232056.log.
+23:20:57  Nadzornik #228: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:21:11  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #229, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_232111.log.
+23:21:12  Razpošiljanje alarmov #229: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:22:03  Cene iz SAOP #227: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:23:26  Zaloga dobaviteljev (Scheduler) je na vrsti; zagon #230, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SUPPLIER_STOCK_IMPORT_2026-09-22_232326.log.
+23:23:37  Zaloga dobaviteljev #230: Succeeded — Opravljenih skupin: 2, korakov: 8.
+23:26:11  Nadzornik (Scheduler) je na vrsti; zagon #231, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_232611.log.
+23:26:12  Nadzornik #231: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:26:26  Razpošiljanje alarmov (Scheduler) je na vrsti; zagon #232, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_232626.log.
+23:26:27  Razpošiljanje alarmov #232: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:28:26  Zaloga iz SAOP (Scheduler) je na vrsti; zagon #233, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\STOCK_IMPORT_2026-09-22_232826.log.
+23:28:39  Zaloga iz SAOP #233: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:28:41  Cene in zaloga za splet (Dependency) je na vrsti; zagon #234, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\WEB_STOCK_EXPORT_2026-09-22_232841.log.
+23:28:55  Cene in zaloga za splet #234: Succeeded — Opravljenih skupin: 3, korakov: 3.
+23:31:26  Nadzornik (Scheduler) je na vrsti; zagon #235, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_EVALUATION_2026-09-22_233126.log.
+23:31:27  Nadzornik #235: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:31:41  Razpošiljanje alarmov (Dependency) je na vrsti; zagon #236, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\ALERT_DELIVERY_2026-09-22_233141.log.
+23:31:42  Razpošiljanje alarmov #236: Succeeded — Opravljenih skupin: 1, korakov: 1.
+23:32:26  Artikli iz SAOP (Scheduler) je na vrsti; zagon #237, dnevnik C:\Users\david\Desktop\PIM\NoviPIM\logs\opravila\SAOP_PRODUCT_IMPORT_2026-09-22_233226.log.

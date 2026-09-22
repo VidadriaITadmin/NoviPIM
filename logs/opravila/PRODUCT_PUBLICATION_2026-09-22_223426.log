@@ -1,0 +1,19 @@
+22:34:26  === ZAČETEK: Objava v PIM | posel PRODUCT_PUBLICATION | sprožil: Human | gostitelj DESKTOP-TONVQHJ:5552:AutomationHost:console | 2026-09-22 22:34:26
+22:34:26  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+22:34:26  == Objava (podjetje 2) ==
+22:34:26     [FAZA] Izračun OBJAVA (podjetje 2): se je začela: EXEC val.Promote @OrganizationId = 2.
+22:34:32     Objava (podjetje 2): opravljeno.
+22:34:32     [FAZA] Izračun OBJAVA (podjetje 2): uspelo — prebrano 89.848, zapisano 89.848; Objava (podjetje 2): objavljenih 89.848 veljavnih artiklov, novih v PIM 0.
+22:34:32     konec: Objava (podjetje 2) (5 s)
+22:34:32  == Objava (podjetje 3) ==
+22:34:32     [FAZA] Izračun OBJAVA (podjetje 3): se je začela: EXEC val.Promote @OrganizationId = 3.
+22:34:35     Objava (podjetje 3): opravljeno.
+22:34:35     [FAZA] Izračun OBJAVA (podjetje 3): uspelo — prebrano 18.807, zapisano 18.807; Objava (podjetje 3): objavljenih 18.807 veljavnih artiklov, novih v PIM 0.
+22:34:35     konec: Objava (podjetje 3) (2 s)
+22:34:35  == Objava (podjetje 4) ==
+22:34:35     [FAZA] Izračun OBJAVA (podjetje 4): se je začela: EXEC val.Promote @OrganizationId = 4.
+22:34:40     Objava (podjetje 4): opravljeno.
+22:34:40     [FAZA] Izračun OBJAVA (podjetje 4): uspelo — prebrano 35.651, zapisano 35.651; Objava (podjetje 4): objavljenih 35.651 veljavnih artiklov, novih v PIM 0.
+22:34:40     konec: Objava (podjetje 4) (4 s)
+22:34:40  Objava v PIM končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+22:34:40  === KONEC: izhod 0, trajanje 00:00:13

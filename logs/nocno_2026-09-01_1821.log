@@ -1,0 +1,162 @@
+2026-09-01 18:21:01  Začetek nočnega opravila: POLN zajem, podjetja: 1, 2, 3, 4.
+2026-09-01 18:21:01  Dnevnik: C:\Users\david\Desktop\PIM\NoviPIM\logs\nocno_2026-09-01_1821.log
+2026-09-01 18:21:01  == Gradnja ==
+2026-09-01 18:21:42     
+2026-09-01 18:21:42     Build succeeded.
+2026-09-01 18:21:42         0 Warning(s)
+2026-09-01 18:21:42         0 Error(s)
+2026-09-01 18:21:42     
+2026-09-01 18:21:42     Time Elapsed 00:00:41.12
+2026-09-01 18:21:42  == SAOP katalog ==
+2026-09-01 18:21:45     Živ SAOP zajem: podjetij=4, končnih točk=16, poln zajem.
+2026-09-01 18:21:45     Podjetja tečejo vzporedno (4 hkrati).
+2026-09-01 18:21:45     Meja na klic: 5000 zapisov na stran, največ 1000 strani na končno točko.
+2026-09-01 18:22:06     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-01 18:22:06     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-01 18:22:06     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-01 18:22:06     STDERR:   Cenikov ni bilo mogoče prebrati (A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)); GetPrices bo preskočen.
+2026-09-01 18:27:23     [4] Ediito (SAOP_EDIITO)
+2026-09-01 18:27:23       GetItemsGeneralData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsDescriptions: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsTitlesLanguage: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsCustomProperties: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsPlanningData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockAccountingData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemCustomerDataV2: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+2026-09-01 18:27:23       GetLanguages: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Currencies: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       PriceLists: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Warehouses: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Customers: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       CustomerItemGroupDiscounts: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       TechnologicalProcess: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       SKUPAJ strani=0 zapisov=0 RunId=76ea237a-acf0-401b-be65-caa95c4fb3db
+2026-09-01 18:27:23     [1] DEMO (SAOP_DEMO)
+2026-09-01 18:27:23       GetItemsGeneralData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsDescriptions: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsTitlesLanguage: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsCustomProperties: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsPlanningData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockAccountingData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemCustomerDataV2: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+2026-09-01 18:27:23       GetLanguages: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Currencies: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       PriceLists: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Warehouses: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Customers: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       CustomerItemGroupDiscounts: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       TechnologicalProcess: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       SKUPAJ strani=0 zapisov=0 RunId=639235ad-6be0-4ecc-9d96-83bf35cffea3
+2026-09-01 18:27:23     [3] Vidadria (SAOP_VIDADRIA)
+2026-09-01 18:27:23       GetItemsGeneralData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsDescriptions: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsTitlesLanguage: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsCustomProperties: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsPlanningData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockAccountingData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemCustomerDataV2: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+2026-09-01 18:27:23       GetLanguages: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Currencies: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       PriceLists: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Warehouses: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Customers: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       CustomerItemGroupDiscounts: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       TechnologicalProcess: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       SKUPAJ strani=0 zapisov=0 RunId=545bc5e7-569e-43b3-8b55-fda4e7494026
+2026-09-01 18:27:23     [2] IQLighting (SAOP_IQLIGHTING)
+2026-09-01 18:27:23       GetItemsGeneralData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsDescriptions: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsTitlesLanguage: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsCustomProperties: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsPlanningData: NAPAKA [21,4 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockData: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemsStockAccountingData: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetItemCustomerDataV2: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       GetPrices: NAPAKA [0,0 s] — GetPrices: ni razpoložljivih cenikov (api/pricelists je vrnil prazen seznam ali ga ni bilo mogoče doseči) — zajem preskočen, mejnik nespremenjen.
+2026-09-01 18:27:23       GetLanguages: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Currencies: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       PriceLists: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Warehouses: NAPAKA [21,1 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       Customers: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       CustomerItemGroupDiscounts: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       TechnologicalProcess: NAPAKA [21,0 s] — A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+2026-09-01 18:27:23       SKUPAJ strani=0 zapisov=0 RunId=6afd9975-7db8-4628-9c66-c49e6fa166b9
+2026-09-01 18:27:23     NAPAKA v koraku 'SAOP katalog' po 341 s: worker workers\PIM.KatalogWorker je končal z izhodno kodo 1
+2026-09-01 18:27:23  == Prevzem dobaviteljevih datotek ==
+2026-09-01 18:27:25     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+2026-09-01 18:27:52     [BT_XML] prevzeto 19.195.039 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\BT_XML\braytron-izdelki.xml
+2026-09-01 18:27:52     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+2026-09-01 18:27:52     [NW_XML] preskoceno: Lokalna mapa — prevzem ni potreben.
+2026-09-01 18:27:52     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 4.
+2026-09-01 18:27:52     konec: Prevzem dobaviteljevih datotek (29 s)
+2026-09-01 18:27:52  == Dobaviteljev XML (Nowodvorski) ==
+2026-09-01 18:28:03     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:03     Generični XML zajem je končan; datotek=1, RunId=88fec832-1938-4faf-a943-9dcf458f4317.
+2026-09-01 18:28:11     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:11     Generični XML zajem je končan; datotek=1, RunId=bf61d033-0587-4fa3-9253-638312056148.
+2026-09-01 18:28:19     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:19     Generični XML zajem je končan; datotek=1, RunId=002e0772-7de3-4c83-ab40-b8f707ab0798.
+2026-09-01 18:28:28     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:28     Generični XML zajem je končan; datotek=1, RunId=398a36c3-24fa-4d7b-9eb1-3c9c9f12b9f1.
+2026-09-01 18:28:28     konec: Dobaviteljev XML (Nowodvorski) (35 s)
+2026-09-01 18:28:28  == Dobaviteljev XML (Braytron) ==
+2026-09-01 18:28:36     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:36     Generični XML zajem je končan; datotek=1, RunId=45182dd3-bfb7-42ba-911d-980cabadd435.
+2026-09-01 18:28:48     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:28:49     Generični XML zajem je končan; datotek=1, RunId=673f87e7-4ba1-42ad-91ab-329cfe0f83da.
+2026-09-01 18:29:02     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:29:03     Generični XML zajem je končan; datotek=1, RunId=9d17efd6-09e6-45ca-bd25-6ab9c490f47a.
+2026-09-01 18:29:07     Preskocenih datotek: 0; ze zajetih strani: 4.
+2026-09-01 18:29:07     Generični XML zajem je končan; datotek=1, RunId=f40c9ef9-7fd3-4d5b-bed8-325b424ff9c7.
+2026-09-01 18:29:07     konec: Dobaviteljev XML (Braytron) (39 s)
+2026-09-01 18:29:07  == Preslikava zaostanka v raw.Inbox ==
+2026-09-01 18:29:09     V raw.Inbox ni nepreslikanih vrstic.
+2026-09-01 18:29:09     konec: Preslikava zaostanka v raw.Inbox (2 s)
+2026-09-01 18:29:09  == Zaloge dobaviteljev ==
+2026-09-01 18:29:12     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+2026-09-01 18:29:13     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+2026-09-01 18:29:14     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+2026-09-01 18:29:15     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+2026-09-01 18:29:16     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+2026-09-01 18:29:16     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+2026-09-01 18:29:17     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+2026-09-01 18:29:18     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+2026-09-01 18:29:19     Prebranih zapisov: 1; SHA-256: 4241fa0b7f02956efb3614b84c80f1bfb33423a66a4cc38137ed3590e4c4d99a
+2026-09-01 18:29:19     Zaloga zapisana; vir=NW_STOCK, podjetje=1, uporabljenih=0, v karanteni=1, RunId=4341de82-00bc-47df-b00c-2ce2fa7f62ba.
+2026-09-01 18:29:19     NAPAKA v koraku 'Zaloge dobaviteljev' po 10 s: worker workers\PIM.StockFileWorker je končal z izhodno kodo 1
+2026-09-01 18:29:19  == Zaloga iz SAOP (količine) ==
+2026-09-01 18:29:21     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+2026-09-01 18:29:21     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+2026-09-01 18:29:21     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+2026-09-01 18:29:21     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+2026-09-01 18:29:21     NAPAKA v koraku 'Zaloga iz SAOP (količine)' po 1 s: worker workers\PIM.SaopStockWorker je končal z izhodno kodo 1
+2026-09-01 18:29:21  == Validacija in objava ==
+2026-09-01 18:29:43     podjetje 1: validirano in objavljeno.
+2026-09-01 18:31:27     podjetje 2: validirano in objavljeno.
+2026-09-01 18:31:51     podjetje 3: validirano in objavljeno.
+2026-09-01 18:32:16     podjetje 4: validirano in objavljeno.
+2026-09-01 18:32:16     konec: Validacija in objava (175 s)
+2026-09-01 18:32:16  == Magento izvoz ==
+2026-09-01 18:32:18     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+2026-09-01 18:32:22     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+2026-09-01 18:32:25     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+2026-09-01 18:32:29     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+2026-09-01 18:32:29     konec: Magento izvoz (13 s)
+2026-09-01 18:32:29  
+2026-09-01 18:32:29  POVZETEK: opravljenih 6, padlih 3.
+2026-09-01 18:32:29     raw.Inbox: Pending 0, Quarantined 4.
+2026-09-01 18:32:29     OK    Prevzem dobaviteljevih datotek
+2026-09-01 18:32:29     OK    Dobaviteljev XML (Nowodvorski)
+2026-09-01 18:32:29     OK    Dobaviteljev XML (Braytron)
+2026-09-01 18:32:29     OK    Preslikava zaostanka v raw.Inbox
+2026-09-01 18:32:29     OK    Validacija in objava
+2026-09-01 18:32:29     OK    Magento izvoz
+2026-09-01 18:32:29     PADEL SAOP katalog
+2026-09-01 18:32:29     PADEL Zaloge dobaviteljev
+2026-09-01 18:32:29     PADEL Zaloga iz SAOP (količine)

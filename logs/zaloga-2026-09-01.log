@@ -1,0 +1,899 @@
+18:19:41  == Zaloga NW_STOCK ==
+18:19:45     [NW_STOCK] prevzeto 87.351 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\NW_STOCK\nw-zaloga.csv
+18:19:45     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 1.
+18:19:47     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:19:48     Zaloga zapisana; vir=NW_STOCK, podjetje=1, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294.
+18:19:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:19:50     Zaloga zapisana; vir=NW_STOCK, podjetje=2, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496.
+18:19:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:19:53     Zaloga zapisana; vir=NW_STOCK, podjetje=3, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316.
+18:19:54     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:19:55     Zaloga zapisana; vir=NW_STOCK, podjetje=4, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b.
+18:19:55     konec: Zaloga NW_STOCK
+18:19:55  == Zaloga BT_STOCK ==
+18:19:57     [BT_STOCK] preskoceno: Dobavitelj dovoli prenos na 180 Dk; naslednji mozen 01.09.2026 21:53:10. Prejsnja datoteka je ohranjena.
+18:19:57     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:19:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:19:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:19:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:19:59     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:20:00     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:20:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:20:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:20:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:20:01     konec: Zaloga BT_STOCK
+18:20:01  == Zaloga iz SAOP (kolicine) ==
+18:20:02     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:20:02     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:20:02     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:20:02     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:20:02     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:20:02  Zalogovni cikel koncan; padlih korakov: 1.
+18:24:47  == Zaloga NW_STOCK ==
+18:24:49     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:24:49     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:24:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:24:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:24:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:24:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:24:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:24:53     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:24:54     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:24:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:24:54     konec: Zaloga NW_STOCK
+18:24:54  == Zaloga BT_STOCK ==
+18:24:55     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:24:55     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:24:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:24:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:24:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:24:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:24:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:24:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:24:59     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:25:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:25:00     konec: Zaloga BT_STOCK
+18:25:00  == Zaloga iz SAOP (kolicine) ==
+18:25:01     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:25:01     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:25:01     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:25:01     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:25:01     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:25:01  Zalogovni cikel koncan; padlih korakov: 1.
+18:29:48  == Zaloga NW_STOCK ==
+18:29:50     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:29:50     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:29:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:29:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:29:55     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:29:55     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:29:57     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:29:57     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:29:58     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:29:59     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:29:59     konec: Zaloga NW_STOCK
+18:29:59  == Zaloga BT_STOCK ==
+18:30:00     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:30:00     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:30:02     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:30:02     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:30:03     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:30:04     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:30:05     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:30:05     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:30:06     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:30:06     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:30:06     konec: Zaloga BT_STOCK
+18:30:06  == Zaloga iz SAOP (kolicine) ==
+18:30:07     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:30:07     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:30:07     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:30:07     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:30:08     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:30:08  Zalogovni cikel koncan; padlih korakov: 1.
+18:34:47  == Zaloga NW_STOCK ==
+18:34:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:34:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:34:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:34:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:34:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:34:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:34:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:34:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:34:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:34:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:34:52     konec: Zaloga NW_STOCK
+18:34:52  == Zaloga BT_STOCK ==
+18:34:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:34:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:34:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:34:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:34:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:34:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:34:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:34:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:34:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:34:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:34:58     konec: Zaloga BT_STOCK
+18:34:58  == Zaloga iz SAOP (kolicine) ==
+18:34:59     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:34:59     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:34:59     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:34:59     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:34:59     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:34:59  Zalogovni cikel koncan; padlih korakov: 1.
+18:39:47  == Zaloga NW_STOCK ==
+18:39:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:39:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:39:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:39:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:39:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:39:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:39:53     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:39:53     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:39:54     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:39:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:39:55     konec: Zaloga NW_STOCK
+18:39:55  == Zaloga BT_STOCK ==
+18:39:56     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:39:56     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:39:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:39:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:39:59     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:39:59     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:40:00     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:40:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:40:02     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:40:02     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:40:02     konec: Zaloga BT_STOCK
+18:40:02  == Zaloga iz SAOP (kolicine) ==
+18:40:03     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:40:03     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:40:03     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:40:03     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:40:03     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:40:03  Zalogovni cikel koncan; padlih korakov: 1.
+18:44:47  == Zaloga NW_STOCK ==
+18:44:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:44:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:44:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:44:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:44:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:44:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:44:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:44:53     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:44:54     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:44:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:44:54     konec: Zaloga NW_STOCK
+18:44:54  == Zaloga BT_STOCK ==
+18:44:55     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:44:55     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:44:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:44:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:44:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:44:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:44:59     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:45:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:45:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:45:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:45:01     konec: Zaloga BT_STOCK
+18:45:01  == Zaloga iz SAOP (kolicine) ==
+18:45:03     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:45:03     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:45:03     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:45:03     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:45:03     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:45:03  Zalogovni cikel koncan; padlih korakov: 1.
+18:49:46  == Zaloga NW_STOCK ==
+18:49:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:49:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:49:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:49:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:49:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:49:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:49:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:49:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:49:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:49:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:49:51     konec: Zaloga NW_STOCK
+18:49:51  == Zaloga BT_STOCK ==
+18:49:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:49:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:49:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:49:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:49:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:49:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:49:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:49:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:49:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:49:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:49:56     konec: Zaloga BT_STOCK
+18:49:56  == Zaloga iz SAOP (kolicine) ==
+18:49:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:49:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:49:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:49:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:49:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:49:57  Zalogovni cikel koncan; padlih korakov: 1.
+18:54:46  == Zaloga NW_STOCK ==
+18:54:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:54:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:54:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:54:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:54:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:54:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:54:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:54:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:54:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:54:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:54:51     konec: Zaloga NW_STOCK
+18:54:51  == Zaloga BT_STOCK ==
+18:54:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:54:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:54:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:54:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:54:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:54:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:54:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:54:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:54:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:54:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:54:56     konec: Zaloga BT_STOCK
+18:54:56  == Zaloga iz SAOP (kolicine) ==
+18:54:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:54:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:54:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:54:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:54:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:54:57  Zalogovni cikel koncan; padlih korakov: 1.
+18:59:46  == Zaloga NW_STOCK ==
+18:59:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+18:59:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:59:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:59:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+18:59:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:59:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+18:59:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:59:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+18:59:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+18:59:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+18:59:51     konec: Zaloga NW_STOCK
+18:59:51  == Zaloga BT_STOCK ==
+18:59:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+18:59:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+18:59:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:59:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+18:59:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:59:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+18:59:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:59:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+18:59:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+18:59:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+18:59:56     konec: Zaloga BT_STOCK
+18:59:56  == Zaloga iz SAOP (kolicine) ==
+18:59:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:59:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:59:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:59:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+18:59:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+18:59:57  Zalogovni cikel koncan; padlih korakov: 1.
+19:04:46  == Zaloga NW_STOCK ==
+19:04:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:04:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:04:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:04:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:04:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:04:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:04:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:04:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:04:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:04:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:04:51     konec: Zaloga NW_STOCK
+19:04:51  == Zaloga BT_STOCK ==
+19:04:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:04:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:04:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:04:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:04:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:04:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:04:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:04:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:04:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:04:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:04:56     konec: Zaloga BT_STOCK
+19:04:56  == Zaloga iz SAOP (kolicine) ==
+19:04:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:04:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:04:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:04:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:04:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:04:57  Zalogovni cikel koncan; padlih korakov: 1.
+19:09:46  == Zaloga NW_STOCK ==
+19:09:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:09:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:09:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:09:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:09:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:09:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:09:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:09:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:09:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:09:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:09:51     konec: Zaloga NW_STOCK
+19:09:51  == Zaloga BT_STOCK ==
+19:09:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:09:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:09:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:09:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:09:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:09:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:09:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:09:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:09:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:09:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:09:56     konec: Zaloga BT_STOCK
+19:09:56  == Zaloga iz SAOP (kolicine) ==
+19:09:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:09:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:09:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:09:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:09:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:09:57  Zalogovni cikel koncan; padlih korakov: 1.
+19:14:46  == Zaloga NW_STOCK ==
+19:14:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:14:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:14:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:14:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:14:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:14:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:14:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:14:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:14:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:14:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:14:51     konec: Zaloga NW_STOCK
+19:14:51  == Zaloga BT_STOCK ==
+19:14:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:14:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:14:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:14:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:14:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:14:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:14:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:14:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:14:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:14:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:14:57     konec: Zaloga BT_STOCK
+19:14:57  == Zaloga iz SAOP (kolicine) ==
+19:14:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:14:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:14:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:14:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:14:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:14:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:19:46  == Zaloga NW_STOCK ==
+19:19:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:19:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:19:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:19:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:19:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:19:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:19:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:19:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:19:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:19:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:19:52     konec: Zaloga NW_STOCK
+19:19:52  == Zaloga BT_STOCK ==
+19:19:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:19:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:19:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:19:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:19:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:19:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:19:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:19:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:19:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:19:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:19:58     konec: Zaloga BT_STOCK
+19:19:58  == Zaloga iz SAOP (kolicine) ==
+19:19:59     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:19:59     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:19:59     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:19:59     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:19:59     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:19:59  Zalogovni cikel koncan; padlih korakov: 1.
+19:24:46  == Zaloga NW_STOCK ==
+19:24:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:24:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:24:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:24:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:24:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:24:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:24:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:24:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:24:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:24:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:24:52     konec: Zaloga NW_STOCK
+19:24:52  == Zaloga BT_STOCK ==
+19:24:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:24:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:24:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:24:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:24:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:24:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:24:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:24:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:24:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:24:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:24:57     konec: Zaloga BT_STOCK
+19:24:57  == Zaloga iz SAOP (kolicine) ==
+19:24:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:24:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:24:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:24:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:24:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:24:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:29:46  == Zaloga NW_STOCK ==
+19:29:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:29:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:29:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:29:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:29:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:29:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:29:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:29:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:29:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:29:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:29:52     konec: Zaloga NW_STOCK
+19:29:52  == Zaloga BT_STOCK ==
+19:29:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:29:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:29:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:29:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:29:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:29:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:29:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:29:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:29:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:29:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:29:57     konec: Zaloga BT_STOCK
+19:29:57  == Zaloga iz SAOP (kolicine) ==
+19:29:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:29:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:29:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:29:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:29:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:29:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:34:46  == Zaloga NW_STOCK ==
+19:34:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:34:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:34:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:34:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:34:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:34:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:34:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:34:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:34:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:34:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:34:52     konec: Zaloga NW_STOCK
+19:34:52  == Zaloga BT_STOCK ==
+19:34:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:34:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:34:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:34:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:34:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:34:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:34:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:34:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:34:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:34:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:34:57     konec: Zaloga BT_STOCK
+19:34:57  == Zaloga iz SAOP (kolicine) ==
+19:34:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:34:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:34:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:34:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:34:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:34:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:39:46  == Zaloga NW_STOCK ==
+19:39:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:39:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:39:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:39:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:39:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:39:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:39:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:39:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:39:53     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:39:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:39:54     konec: Zaloga NW_STOCK
+19:39:54  == Zaloga BT_STOCK ==
+19:39:55     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:39:55     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:39:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:39:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:39:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:39:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:40:00     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:40:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:40:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:40:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:40:02     konec: Zaloga BT_STOCK
+19:40:02  == Zaloga iz SAOP (kolicine) ==
+19:40:03     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:40:03     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:40:03     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:40:03     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:40:03     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:40:03  Zalogovni cikel koncan; padlih korakov: 1.
+19:44:46  == Zaloga NW_STOCK ==
+19:44:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:44:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:44:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:44:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:44:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:44:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:44:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:44:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:44:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:44:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:44:51     konec: Zaloga NW_STOCK
+19:44:52  == Zaloga BT_STOCK ==
+19:44:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:44:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:44:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:44:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:44:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:44:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:44:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:44:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:44:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:44:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:44:57     konec: Zaloga BT_STOCK
+19:44:57  == Zaloga iz SAOP (kolicine) ==
+19:44:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:44:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:44:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:44:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:44:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:44:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:49:46  == Zaloga NW_STOCK ==
+19:49:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:49:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:49:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:49:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:49:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:49:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:49:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:49:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:49:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:49:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:49:52     konec: Zaloga NW_STOCK
+19:49:52  == Zaloga BT_STOCK ==
+19:49:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:49:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:49:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:49:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:49:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:49:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:49:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:49:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:49:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:49:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:49:57     konec: Zaloga BT_STOCK
+19:49:57  == Zaloga iz SAOP (kolicine) ==
+19:49:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:49:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:49:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:49:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:49:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:49:58  Zalogovni cikel koncan; padlih korakov: 1.
+19:54:46  == Zaloga NW_STOCK ==
+19:54:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:54:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:54:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:54:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:54:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:54:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:54:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:54:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:54:52     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:54:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:54:52     konec: Zaloga NW_STOCK
+19:54:52  == Zaloga BT_STOCK ==
+19:54:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:54:54     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:54:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:54:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:55:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:55:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:55:02     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:55:03     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:55:03     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:55:04     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:55:04     konec: Zaloga BT_STOCK
+19:55:04  == Zaloga iz SAOP (kolicine) ==
+19:55:05     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:55:05     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:55:05     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:55:05     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:55:05     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:55:05  Zalogovni cikel koncan; padlih korakov: 1.
+19:59:46  == Zaloga NW_STOCK ==
+19:59:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+19:59:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:59:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:59:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+19:59:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:59:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+19:59:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:59:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+19:59:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+19:59:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+19:59:52     konec: Zaloga NW_STOCK
+19:59:52  == Zaloga BT_STOCK ==
+19:59:53     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+19:59:53     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+19:59:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:59:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+19:59:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:59:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+19:59:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:59:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+19:59:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+19:59:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+19:59:58     konec: Zaloga BT_STOCK
+19:59:58  == Zaloga iz SAOP (kolicine) ==
+19:59:59     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:59:59     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:59:59     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:59:59     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+19:59:59     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+19:59:59  Zalogovni cikel koncan; padlih korakov: 1.
+20:04:46  == Zaloga NW_STOCK ==
+20:04:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+20:04:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:04:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:04:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+20:04:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:04:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+20:04:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:04:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+20:04:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:04:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+20:04:51     konec: Zaloga NW_STOCK
+20:04:51  == Zaloga BT_STOCK ==
+20:04:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:04:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:04:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:04:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:04:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:04:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:04:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:04:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:04:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:04:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:04:57     konec: Zaloga BT_STOCK
+20:04:57  == Zaloga iz SAOP (kolicine) ==
+20:04:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:04:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:04:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:04:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:04:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:04:57  Zalogovni cikel koncan; padlih korakov: 1.
+20:09:46  == Zaloga NW_STOCK ==
+20:09:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+20:09:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:09:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:09:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+20:09:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:09:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+20:09:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:09:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+20:09:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:09:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+20:09:51     konec: Zaloga NW_STOCK
+20:09:52  == Zaloga BT_STOCK ==
+20:09:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:09:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:09:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:09:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:09:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:09:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:09:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:09:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:09:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:09:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:09:57     konec: Zaloga BT_STOCK
+20:09:57  == Zaloga iz SAOP (kolicine) ==
+20:09:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:09:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:09:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:09:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:09:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:09:58  Zalogovni cikel koncan; padlih korakov: 1.
+20:14:46  == Zaloga NW_STOCK ==
+20:14:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 20:19.
+20:14:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:14:48     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:14:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=e4dd7cd0-5545-4940-8130-4b85ecbf0294. Zapisano ni bilo nic.
+20:14:49     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:14:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=b97945ed-56ea-4f30-afb4-0b94431d4496. Zapisano ni bilo nic.
+20:14:50     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:14:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=4ee4ffb4-053d-4126-b5df-0ccdb49cc316. Zapisano ni bilo nic.
+20:14:51     Prebranih zapisov: 2764; SHA-256: b16f1d4bce6a580f738545d9c3e17c55922893931286903d19534e89b9d226f6
+20:14:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 16:19:44Z, uporabljenih=2764, v karanteni=0, RunId=45aee547-3121-43b6-9dd1-b389f410101b. Zapisano ni bilo nic.
+20:14:51     konec: Zaloga NW_STOCK
+20:14:51  == Zaloga BT_STOCK ==
+20:14:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:14:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:14:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:14:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:14:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:14:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:14:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:14:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:14:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:14:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:14:57     konec: Zaloga BT_STOCK
+20:14:57  == Zaloga iz SAOP (kolicine) ==
+20:14:58     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:14:58     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:14:58     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:14:58     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:14:58     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:14:58  Zalogovni cikel koncan; padlih korakov: 1.
+20:19:46  == Zaloga NW_STOCK ==
+20:19:48     [NW_STOCK] prevzeto 87.350 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\NW_STOCK\nw-zaloga.csv
+20:19:48     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 1.
+20:19:49     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:19:52     Zaloga zapisana; vir=NW_STOCK, podjetje=1, uporabljenih=2764, v karanteni=0, RunId=e4e4f7a6-5788-41aa-a5b5-355496974849.
+20:19:52     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:19:54     Zaloga zapisana; vir=NW_STOCK, podjetje=2, uporabljenih=2764, v karanteni=0, RunId=a6f02a3b-b5a7-4ab8-8a08-714b8a4eea93.
+20:19:55     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:19:56     Zaloga zapisana; vir=NW_STOCK, podjetje=3, uporabljenih=2764, v karanteni=0, RunId=9136156a-3cf8-4672-9803-81738b36608d.
+20:19:57     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:19:58     Zaloga zapisana; vir=NW_STOCK, podjetje=4, uporabljenih=2764, v karanteni=0, RunId=17223c8e-a89c-4692-b24c-e7b575f70669.
+20:19:58     konec: Zaloga NW_STOCK
+20:19:58  == Zaloga BT_STOCK ==
+20:19:59     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:19:59     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:20:00     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:20:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:20:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:20:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:20:02     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:20:02     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:20:03     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:20:03     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:20:04     konec: Zaloga BT_STOCK
+20:20:04  == Zaloga iz SAOP (kolicine) ==
+20:20:04     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:20:04     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:20:04     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:20:04     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:20:04     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:20:04  Zalogovni cikel koncan; padlih korakov: 1.
+20:24:46  == Zaloga NW_STOCK ==
+20:24:47     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 22:19.
+20:24:47     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:24:48     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:24:48     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=e4e4f7a6-5788-41aa-a5b5-355496974849. Zapisano ni bilo nic.
+20:24:49     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:24:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=a6f02a3b-b5a7-4ab8-8a08-714b8a4eea93. Zapisano ni bilo nic.
+20:24:50     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:24:50     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=9136156a-3cf8-4672-9803-81738b36608d. Zapisano ni bilo nic.
+20:24:51     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:24:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=17223c8e-a89c-4692-b24c-e7b575f70669. Zapisano ni bilo nic.
+20:24:51     konec: Zaloga NW_STOCK
+20:24:51  == Zaloga BT_STOCK ==
+20:24:52     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:24:52     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:24:53     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:24:53     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:24:54     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:24:54     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:24:55     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:24:55     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:24:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:24:56     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:24:56     konec: Zaloga BT_STOCK
+20:24:56  == Zaloga iz SAOP (kolicine) ==
+20:24:57     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:24:57     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:24:57     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:24:57     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:24:57     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:24:57  Zalogovni cikel koncan; padlih korakov: 1.
+20:29:46  == Zaloga NW_STOCK ==
+20:29:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 22:19.
+20:29:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:29:55     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:29:57     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=e4e4f7a6-5788-41aa-a5b5-355496974849. Zapisano ni bilo nic.
+20:29:59     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:29:59     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=a6f02a3b-b5a7-4ab8-8a08-714b8a4eea93. Zapisano ni bilo nic.
+20:30:00     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:30:01     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=9136156a-3cf8-4672-9803-81738b36608d. Zapisano ni bilo nic.
+20:30:02     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:30:03     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=17223c8e-a89c-4692-b24c-e7b575f70669. Zapisano ni bilo nic.
+20:30:03     konec: Zaloga NW_STOCK
+20:30:03  == Zaloga BT_STOCK ==
+20:30:04     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:30:04     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:30:06     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:30:06     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:30:07     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:30:07     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:30:09     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:30:09     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:30:10     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:30:11     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:30:11     konec: Zaloga BT_STOCK
+20:30:11  == Zaloga iz SAOP (kolicine) ==
+20:30:12     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:30:12     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:30:12     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:30:12     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:30:12     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:30:12  Zalogovni cikel koncan; padlih korakov: 1.
+20:34:46  == Zaloga NW_STOCK ==
+20:34:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 22:19.
+20:34:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:34:49     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:34:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=e4e4f7a6-5788-41aa-a5b5-355496974849. Zapisano ni bilo nic.
+20:34:50     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:34:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=a6f02a3b-b5a7-4ab8-8a08-714b8a4eea93. Zapisano ni bilo nic.
+20:34:52     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:34:52     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=9136156a-3cf8-4672-9803-81738b36608d. Zapisano ni bilo nic.
+20:34:53     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:34:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=17223c8e-a89c-4692-b24c-e7b575f70669. Zapisano ni bilo nic.
+20:34:54     konec: Zaloga NW_STOCK
+20:34:54  == Zaloga BT_STOCK ==
+20:34:55     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:34:55     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:34:56     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:34:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:34:58     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:34:58     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:34:59     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:35:00     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:35:01     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:35:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:35:01     konec: Zaloga BT_STOCK
+20:35:01  == Zaloga iz SAOP (kolicine) ==
+20:35:03     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:35:03     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:35:03     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:35:03     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:35:03     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:35:03  Zalogovni cikel koncan; padlih korakov: 1.
+20:39:46  == Zaloga NW_STOCK ==
+20:39:48     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 22:19.
+20:39:48     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:39:49     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:39:49     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=e4e4f7a6-5788-41aa-a5b5-355496974849. Zapisano ni bilo nic.
+20:39:51     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:39:51     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=a6f02a3b-b5a7-4ab8-8a08-714b8a4eea93. Zapisano ni bilo nic.
+20:39:52     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:39:53     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=9136156a-3cf8-4672-9803-81738b36608d. Zapisano ni bilo nic.
+20:39:54     Prebranih zapisov: 2764; SHA-256: 0b541ef33861bf5ce199a83300f2bbe78db4c6d2d3660d21c15d89d8fc636421
+20:39:54     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-01 18:19:48Z, uporabljenih=2764, v karanteni=0, RunId=17223c8e-a89c-4692-b24c-e7b575f70669. Zapisano ni bilo nic.
+20:39:54     konec: Zaloga NW_STOCK
+20:39:54  == Zaloga BT_STOCK ==
+20:39:56     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 1. 09. 2026 21:19.
+20:39:56     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+20:39:57     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:39:57     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=1fe73126-89d2-4496-8230-03352ad46969. Zapisano ni bilo nic.
+20:39:59     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:39:59     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=f496222c-4285-46c1-9d57-a25b46ec24a9. Zapisano ni bilo nic.
+20:40:00     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:40:01     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=9d047ae1-f437-4ea6-8ada-c87aaed01386. Zapisano ni bilo nic.
+20:40:02     Prebranih zapisov: 1389; SHA-256: b5e58b00d97d3a86abd9c759e81992d460fcbfb627258e06e4a6adf09b1bf6cf
+20:40:02     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-08-31 11:05:00Z, uporabljenih=1389, v karanteni=0, RunId=2f8b0220-b477-4459-863d-13c2a74fbc34. Zapisano ni bilo nic.
+20:40:02     konec: Zaloga BT_STOCK
+20:40:02  == Zaloga iz SAOP (kolicine) ==
+20:40:04     STDERR: [1] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:40:04     STDERR: [2] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:40:04     STDERR: [3] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:40:04     STDERR: [4] Razpored za SAOP_STOCK ni omogocen; podjetje je preskoceno.
+20:40:04     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+20:40:04  Zalogovni cikel koncan; padlih korakov: 1.

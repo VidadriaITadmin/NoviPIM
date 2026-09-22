@@ -1,0 +1,32 @@
+20:46:54  === ZAČETEK: Cene iz SAOP | posel PRICE_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 20:46:54
+20:46:54  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 900 s
+20:46:54  == Cene iz SAOP (podjetje 2) ==
+20:46:55     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+20:46:55     [2] IQLighting (SAOP_IQLIGHTING)
+20:47:32       GetPrices: strani=2 zapisov=122 — MEJNIK STOJI (SAOP je vrnil 122 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:47:32     [FAZA] Prenos GetPrices (podjetje 2): se je začela.
+20:47:32     [FAZA] Prenos GetPrices (podjetje 2): uspelo, brez novih podatkov — prebrano 122, zapisano 122; mejnik stoji: SAOP je vrnil 122 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+20:47:32       SKUPAJ strani=2 zapisov=122 RunId=204c522e-6915-4f82-9671-055665c6542d
+20:47:32       OPOZORILO: v raw.Inbox ležijo nepreslikane vrstice iz prejšnjih zagonov: GetPrices=3. Preslikaj jih z --map-run <RunId tistega zagona>; poizvedba: SELECT DISTINCT RunId, EntityType FROM raw.Inbox WHERE Status=N'Pending';
+20:47:32       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 204c522e-6915-4f82-9671-055665c6542d.
+20:47:32     konec: Cene iz SAOP (podjetje 2) (38 s)
+20:47:32  == Cene iz SAOP (podjetje 3) ==
+20:47:33     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+20:47:33     [3] Vidadria (SAOP_VIDADRIA)
+20:47:58       GetPrices: strani=5 zapisov=275 — MEJNIK STOJI (SAOP je vrnil 275 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:47:58     [FAZA] Prenos GetPrices (podjetje 3): se je začela.
+20:47:58     [FAZA] Prenos GetPrices (podjetje 3): uspelo, brez novih podatkov — prebrano 275, zapisano 275; mejnik stoji: SAOP je vrnil 275 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+20:47:58       SKUPAJ strani=5 zapisov=275 RunId=9c45df85-d44f-4a3f-9b0b-ada6fdf1e939
+20:47:58       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run 9c45df85-d44f-4a3f-9b0b-ada6fdf1e939.
+20:47:58     konec: Cene iz SAOP (podjetje 3) (25 s)
+20:47:58  == Cene iz SAOP (podjetje 4) ==
+20:47:59     Živ SAOP zajem: podjetij=1, končnih točk=1, delta zajem, razpored=SAOP_PRICES.
+20:47:59     [4] Ediito (SAOP_EDIITO)
+20:48:08       GetPrices: strani=1 zapisov=14 — MEJNIK STOJI (SAOP je vrnil 14 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati); zapisi ostanejo v raw.Inbox in jih bo naslednji zagon zajel znova
+20:48:08     [FAZA] Prenos GetPrices (podjetje 4): se je začela.
+20:48:08     [FAZA] Prenos GetPrices (podjetje 4): uspelo, brez novih podatkov — prebrano 14, zapisano 14; mejnik stoji: SAOP je vrnil 14 zapisov, a so bili enaki že zajetim (dedup po hashu) — ta zagon nima česa preslikati.
+20:48:08       SKUPAJ strani=1 zapisov=14 RunId=b1cf0854-3bcd-4fb6-ba7a-d3dcb15ae709
+20:48:08       OPOZORILO: pri 1 končnih točkah mejnik stoji. Zajeti podatek leži v raw.Inbox in ga bo naslednji zagon zajel znova; če ga hočeš preslikati brez ponovnega klica, uporabi --map-run b1cf0854-3bcd-4fb6-ba7a-d3dcb15ae709.
+20:48:08     konec: Cene iz SAOP (podjetje 4) (10 s)
+20:48:08  Cene iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+20:48:08  === KONEC: izhod 0, trajanje 00:01:13

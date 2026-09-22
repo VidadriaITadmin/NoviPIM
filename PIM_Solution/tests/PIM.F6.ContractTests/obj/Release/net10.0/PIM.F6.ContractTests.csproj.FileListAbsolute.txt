@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\bin\Release\net10.0\PIM.F6.ContractTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\bin\Release\net10.0\PIM.F6.ContractTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\bin\Release\net10.0\PIM.F6.ContractTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\bin\Release\net10.0\PIM.F6.ContractTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\bin\Release\net10.0\PIM.F6.ContractTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\refint\PIM.F6.ContractTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\ref\PIM.F6.ContractTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F6.ContractTests\obj\Release\net10.0\PIM.F6.ContractTests.sourcelink.json

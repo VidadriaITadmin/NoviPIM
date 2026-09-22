@@ -1,0 +1,434 @@
+18:55:20  == Nadzornik zastalih obdelav ==
+18:55:20     NAPAKA: The term 'dotnet' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+18:55:20  == Razposiljanje alarmov ==
+18:55:20     NAPAKA: The term 'dotnet' is not recognized as a name of a cmdlet, function, script file, or executable program.
+Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+18:55:20  Nadzor koncan; padlih korakov: 2.
+19:04:29  == Nadzornik zastalih obdelav ==
+19:04:30     Watchdog pregled je kon─Źan.
+19:04:30     konec: Nadzornik zastalih obdelav
+19:04:30  == Razposiljanje alarmov ==
+19:04:31     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+19:04:31     konec: Razposiljanje alarmov
+19:04:31  Nadzor koncan; padlih korakov: 0.
+19:09:26  == Nadzornik zastalih obdelav ==
+19:09:27     Watchdog pregled je kon─Źan.
+19:09:27     konec: Nadzornik zastalih obdelav
+19:09:27  == Razposiljanje alarmov ==
+19:09:28     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+19:09:28     konec: Razposiljanje alarmov
+19:09:28  Nadzor koncan; padlih korakov: 0.
+19:13:19  == Nadzornik zastalih obdelav ==
+19:13:20     Watchdog pregled je končan.
+19:13:20     konec: Nadzornik zastalih obdelav
+19:13:20  == Razposiljanje alarmov ==
+19:13:21     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:13:21     konec: Razposiljanje alarmov
+19:13:21  Nadzor koncan; padlih korakov: 0.
+19:14:26  == Nadzornik zastalih obdelav ==
+19:14:27     Watchdog pregled je končan.
+19:14:27     konec: Nadzornik zastalih obdelav
+19:14:27  == Razposiljanje alarmov ==
+19:14:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:14:28     konec: Razposiljanje alarmov
+19:14:28  Nadzor koncan; padlih korakov: 0.
+19:19:26  == Nadzornik zastalih obdelav ==
+19:19:27     Watchdog pregled je končan.
+19:19:27     konec: Nadzornik zastalih obdelav
+19:19:27  == Razposiljanje alarmov ==
+19:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:19:28     konec: Razposiljanje alarmov
+19:19:28  Nadzor koncan; padlih korakov: 0.
+19:24:26  == Nadzornik zastalih obdelav ==
+19:24:27     Watchdog pregled je končan.
+19:24:27     konec: Nadzornik zastalih obdelav
+19:24:27  == Razposiljanje alarmov ==
+19:24:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:24:28     konec: Razposiljanje alarmov
+19:24:28  Nadzor koncan; padlih korakov: 0.
+19:29:26  == Nadzornik zastalih obdelav ==
+19:29:27     Watchdog pregled je končan.
+19:29:27     konec: Nadzornik zastalih obdelav
+19:29:27  == Razposiljanje alarmov ==
+19:29:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:29:28     konec: Razposiljanje alarmov
+19:29:28  Nadzor koncan; padlih korakov: 0.
+19:34:26  == Nadzornik zastalih obdelav ==
+19:34:27     Watchdog pregled je končan.
+19:34:27     konec: Nadzornik zastalih obdelav
+19:34:27  == Razposiljanje alarmov ==
+19:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:34:28     konec: Razposiljanje alarmov
+19:34:28  Nadzor koncan; padlih korakov: 0.
+19:39:26  == Nadzornik zastalih obdelav ==
+19:39:27     Watchdog pregled je končan.
+19:39:27     konec: Nadzornik zastalih obdelav
+19:39:27  == Razposiljanje alarmov ==
+19:39:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:39:28     konec: Razposiljanje alarmov
+19:39:28  Nadzor koncan; padlih korakov: 0.
+19:44:26  == Nadzornik zastalih obdelav ==
+19:44:28     Watchdog pregled je končan.
+19:44:28     konec: Nadzornik zastalih obdelav
+19:44:28  == Razposiljanje alarmov ==
+19:44:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:44:29     konec: Razposiljanje alarmov
+19:44:29  Nadzor koncan; padlih korakov: 0.
+19:49:26  == Nadzornik zastalih obdelav ==
+19:49:27     Watchdog pregled je končan.
+19:49:27     konec: Nadzornik zastalih obdelav
+19:49:27  == Razposiljanje alarmov ==
+19:49:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:49:29     konec: Razposiljanje alarmov
+19:49:29  Nadzor koncan; padlih korakov: 0.
+19:54:26  == Nadzornik zastalih obdelav ==
+19:54:27     Watchdog pregled je končan.
+19:54:27     konec: Nadzornik zastalih obdelav
+19:54:27  == Razposiljanje alarmov ==
+19:54:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:54:29     konec: Razposiljanje alarmov
+19:54:29  Nadzor koncan; padlih korakov: 0.
+19:59:29  == Nadzornik zastalih obdelav ==
+19:59:34     Watchdog pregled je končan.
+19:59:34     konec: Nadzornik zastalih obdelav
+19:59:34  == Razposiljanje alarmov ==
+19:59:45     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:59:45     konec: Razposiljanje alarmov
+19:59:45  Nadzor koncan; padlih korakov: 0.
+20:04:26  == Nadzornik zastalih obdelav ==
+20:04:27     Watchdog pregled je končan.
+20:04:27     konec: Nadzornik zastalih obdelav
+20:04:27  == Razposiljanje alarmov ==
+20:04:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:04:29     konec: Razposiljanje alarmov
+20:04:29  Nadzor koncan; padlih korakov: 0.
+20:09:26  == Nadzornik zastalih obdelav ==
+20:09:27     Watchdog pregled je končan.
+20:09:27     konec: Nadzornik zastalih obdelav
+20:09:27  == Razposiljanje alarmov ==
+20:09:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:09:29     konec: Razposiljanje alarmov
+20:09:29  Nadzor koncan; padlih korakov: 0.
+20:14:28  == Nadzornik zastalih obdelav ==
+20:14:29     Watchdog pregled je končan.
+20:14:29     konec: Nadzornik zastalih obdelav
+20:14:29  == Razposiljanje alarmov ==
+20:14:31     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:14:31     konec: Razposiljanje alarmov
+20:14:31  Nadzor koncan; padlih korakov: 0.
+20:19:26  == Nadzornik zastalih obdelav ==
+20:19:27     Watchdog pregled je končan.
+20:19:27     konec: Nadzornik zastalih obdelav
+20:19:27  == Razposiljanje alarmov ==
+20:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:19:28     konec: Razposiljanje alarmov
+20:19:28  Nadzor koncan; padlih korakov: 0.
+20:24:26  == Nadzornik zastalih obdelav ==
+20:24:28     Watchdog pregled je končan.
+20:24:28     konec: Nadzornik zastalih obdelav
+20:24:28  == Razposiljanje alarmov ==
+20:24:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:24:30     konec: Razposiljanje alarmov
+20:24:30  Nadzor koncan; padlih korakov: 0.
+20:29:26  == Nadzornik zastalih obdelav ==
+20:29:27     Watchdog pregled je končan.
+20:29:27     konec: Nadzornik zastalih obdelav
+20:29:27  == Razposiljanje alarmov ==
+20:29:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:29:29     konec: Razposiljanje alarmov
+20:29:29  Nadzor koncan; padlih korakov: 0.
+20:34:26  == Nadzornik zastalih obdelav ==
+20:34:27     Watchdog pregled je končan.
+20:34:27     konec: Nadzornik zastalih obdelav
+20:34:27  == Razposiljanje alarmov ==
+20:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:34:29     konec: Razposiljanje alarmov
+20:34:29  Nadzor koncan; padlih korakov: 0.
+20:39:26  == Nadzornik zastalih obdelav ==
+20:39:27     Watchdog pregled je končan.
+20:39:27     konec: Nadzornik zastalih obdelav
+20:39:27  == Razposiljanje alarmov ==
+20:39:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:39:28     konec: Razposiljanje alarmov
+20:39:28  Nadzor koncan; padlih korakov: 0.
+20:44:26  == Nadzornik zastalih obdelav ==
+20:44:27     Watchdog pregled je končan.
+20:44:27     konec: Nadzornik zastalih obdelav
+20:44:27  == Razposiljanje alarmov ==
+20:44:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:44:28     konec: Razposiljanje alarmov
+20:44:28  Nadzor koncan; padlih korakov: 0.
+20:49:26  == Nadzornik zastalih obdelav ==
+20:49:27     Watchdog pregled je končan.
+20:49:27     konec: Nadzornik zastalih obdelav
+20:49:27  == Razposiljanje alarmov ==
+20:49:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:49:28     konec: Razposiljanje alarmov
+20:49:28  Nadzor koncan; padlih korakov: 0.
+20:54:26  == Nadzornik zastalih obdelav ==
+20:54:27     Watchdog pregled je končan.
+20:54:27     konec: Nadzornik zastalih obdelav
+20:54:27  == Razposiljanje alarmov ==
+20:54:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:54:28     konec: Razposiljanje alarmov
+20:54:28  Nadzor koncan; padlih korakov: 0.
+20:59:26  == Nadzornik zastalih obdelav ==
+20:59:27     Watchdog pregled je končan.
+20:59:27     konec: Nadzornik zastalih obdelav
+20:59:27  == Razposiljanje alarmov ==
+20:59:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:59:28     konec: Razposiljanje alarmov
+20:59:28  Nadzor koncan; padlih korakov: 0.
+21:04:26  == Nadzornik zastalih obdelav ==
+21:04:28     Watchdog pregled je končan.
+21:04:28     konec: Nadzornik zastalih obdelav
+21:04:28  == Razposiljanje alarmov ==
+21:04:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:04:29     konec: Razposiljanje alarmov
+21:04:29  Nadzor koncan; padlih korakov: 0.
+21:09:26  == Nadzornik zastalih obdelav ==
+21:09:27     Watchdog pregled je končan.
+21:09:27     konec: Nadzornik zastalih obdelav
+21:09:27  == Razposiljanje alarmov ==
+21:09:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:09:28     konec: Razposiljanje alarmov
+21:09:28  Nadzor koncan; padlih korakov: 0.
+21:14:26  == Nadzornik zastalih obdelav ==
+21:14:27     Watchdog pregled je končan.
+21:14:27     konec: Nadzornik zastalih obdelav
+21:14:27  == Razposiljanje alarmov ==
+21:14:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:14:29     konec: Razposiljanje alarmov
+21:14:29  Nadzor koncan; padlih korakov: 0.
+21:19:26  == Nadzornik zastalih obdelav ==
+21:19:27     Watchdog pregled je končan.
+21:19:27     konec: Nadzornik zastalih obdelav
+21:19:27  == Razposiljanje alarmov ==
+21:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:19:28     konec: Razposiljanje alarmov
+21:19:28  Nadzor koncan; padlih korakov: 0.
+21:24:26  == Nadzornik zastalih obdelav ==
+21:24:27     Watchdog pregled je končan.
+21:24:27     konec: Nadzornik zastalih obdelav
+21:24:27  == Razposiljanje alarmov ==
+21:24:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:24:28     konec: Razposiljanje alarmov
+21:24:28  Nadzor koncan; padlih korakov: 0.
+21:29:26  == Nadzornik zastalih obdelav ==
+21:29:27     Watchdog pregled je končan.
+21:29:27     konec: Nadzornik zastalih obdelav
+21:29:27  == Razposiljanje alarmov ==
+21:29:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:29:28     konec: Razposiljanje alarmov
+21:29:28  Nadzor koncan; padlih korakov: 0.
+21:34:26  == Nadzornik zastalih obdelav ==
+21:34:27     Watchdog pregled je končan.
+21:34:27     konec: Nadzornik zastalih obdelav
+21:34:27  == Razposiljanje alarmov ==
+21:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:34:28     konec: Razposiljanje alarmov
+21:34:28  Nadzor koncan; padlih korakov: 0.
+21:39:26  == Nadzornik zastalih obdelav ==
+21:39:27     Watchdog pregled je končan.
+21:39:27     konec: Nadzornik zastalih obdelav
+21:39:27  == Razposiljanje alarmov ==
+21:39:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:39:29     konec: Razposiljanje alarmov
+21:39:29  Nadzor koncan; padlih korakov: 0.
+21:44:26  == Nadzornik zastalih obdelav ==
+21:44:27     Watchdog pregled je končan.
+21:44:27     konec: Nadzornik zastalih obdelav
+21:44:27  == Razposiljanje alarmov ==
+21:44:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:44:28     konec: Razposiljanje alarmov
+21:44:28  Nadzor koncan; padlih korakov: 0.
+21:49:26  == Nadzornik zastalih obdelav ==
+21:49:27     Watchdog pregled je končan.
+21:49:27     konec: Nadzornik zastalih obdelav
+21:49:27  == Razposiljanje alarmov ==
+21:49:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:49:28     konec: Razposiljanje alarmov
+21:49:28  Nadzor koncan; padlih korakov: 0.
+21:54:26  == Nadzornik zastalih obdelav ==
+21:54:27     Watchdog pregled je končan.
+21:54:27     konec: Nadzornik zastalih obdelav
+21:54:27  == Razposiljanje alarmov ==
+21:54:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:54:28     konec: Razposiljanje alarmov
+21:54:28  Nadzor koncan; padlih korakov: 0.
+21:59:26  == Nadzornik zastalih obdelav ==
+21:59:30     Watchdog pregled je končan.
+21:59:30     konec: Nadzornik zastalih obdelav
+21:59:30  == Razposiljanje alarmov ==
+21:59:33     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:59:33     konec: Razposiljanje alarmov
+21:59:33  Nadzor koncan; padlih korakov: 0.
+22:04:26  == Nadzornik zastalih obdelav ==
+22:04:27     Watchdog pregled je končan.
+22:04:27     konec: Nadzornik zastalih obdelav
+22:04:27  == Razposiljanje alarmov ==
+22:04:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:04:28     konec: Razposiljanje alarmov
+22:04:28  Nadzor koncan; padlih korakov: 0.
+22:09:26  == Nadzornik zastalih obdelav ==
+22:09:27     Watchdog pregled je končan.
+22:09:27     konec: Nadzornik zastalih obdelav
+22:09:27  == Razposiljanje alarmov ==
+22:09:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:09:28     konec: Razposiljanje alarmov
+22:09:28  Nadzor koncan; padlih korakov: 0.
+22:14:26  == Nadzornik zastalih obdelav ==
+22:14:27     Watchdog pregled je končan.
+22:14:27     konec: Nadzornik zastalih obdelav
+22:14:27  == Razposiljanje alarmov ==
+22:14:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:14:28     konec: Razposiljanje alarmov
+22:14:28  Nadzor koncan; padlih korakov: 0.
+22:19:26  == Nadzornik zastalih obdelav ==
+22:19:27     Watchdog pregled je končan.
+22:19:27     konec: Nadzornik zastalih obdelav
+22:19:27  == Razposiljanje alarmov ==
+22:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:19:28     konec: Razposiljanje alarmov
+22:19:28  Nadzor koncan; padlih korakov: 0.
+22:24:26  == Nadzornik zastalih obdelav ==
+22:24:27     Watchdog pregled je končan.
+22:24:27     konec: Nadzornik zastalih obdelav
+22:24:27  == Razposiljanje alarmov ==
+22:24:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:24:28     konec: Razposiljanje alarmov
+22:24:28  Nadzor koncan; padlih korakov: 0.
+22:29:26  == Nadzornik zastalih obdelav ==
+22:29:27     Watchdog pregled je končan.
+22:29:27     konec: Nadzornik zastalih obdelav
+22:29:27  == Razposiljanje alarmov ==
+22:29:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:29:28     konec: Razposiljanje alarmov
+22:29:28  Nadzor koncan; padlih korakov: 0.
+22:34:26  == Nadzornik zastalih obdelav ==
+22:34:27     Watchdog pregled je končan.
+22:34:27     konec: Nadzornik zastalih obdelav
+22:34:27  == Razposiljanje alarmov ==
+22:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:34:28     konec: Razposiljanje alarmov
+22:34:28  Nadzor koncan; padlih korakov: 0.
+22:39:26  == Nadzornik zastalih obdelav ==
+22:39:27     Watchdog pregled je končan.
+22:39:27     konec: Nadzornik zastalih obdelav
+22:39:27  == Razposiljanje alarmov ==
+22:39:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:39:28     konec: Razposiljanje alarmov
+22:39:28  Nadzor koncan; padlih korakov: 0.
+22:44:26  == Nadzornik zastalih obdelav ==
+22:44:27     Watchdog pregled je končan.
+22:44:27     konec: Nadzornik zastalih obdelav
+22:44:27  == Razposiljanje alarmov ==
+22:44:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:44:28     konec: Razposiljanje alarmov
+22:44:28  Nadzor koncan; padlih korakov: 0.
+22:49:26  == Nadzornik zastalih obdelav ==
+22:49:27     Watchdog pregled je končan.
+22:49:27     konec: Nadzornik zastalih obdelav
+22:49:27  == Razposiljanje alarmov ==
+22:49:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:49:28     konec: Razposiljanje alarmov
+22:49:28  Nadzor koncan; padlih korakov: 0.
+22:54:26  == Nadzornik zastalih obdelav ==
+22:54:27     Watchdog pregled je končan.
+22:54:27     konec: Nadzornik zastalih obdelav
+22:54:27  == Razposiljanje alarmov ==
+22:54:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:54:28     konec: Razposiljanje alarmov
+22:54:28  Nadzor koncan; padlih korakov: 0.
+22:59:26  == Nadzornik zastalih obdelav ==
+22:59:27     Watchdog pregled je končan.
+22:59:27     konec: Nadzornik zastalih obdelav
+22:59:27  == Razposiljanje alarmov ==
+22:59:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:59:28     konec: Razposiljanje alarmov
+22:59:28  Nadzor koncan; padlih korakov: 0.
+23:04:26  == Nadzornik zastalih obdelav ==
+23:04:27     Watchdog pregled je končan.
+23:04:27     konec: Nadzornik zastalih obdelav
+23:04:27  == Razposiljanje alarmov ==
+23:04:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:04:28     konec: Razposiljanje alarmov
+23:04:28  Nadzor koncan; padlih korakov: 0.
+23:09:26  == Nadzornik zastalih obdelav ==
+23:09:27     Watchdog pregled je končan.
+23:09:27     konec: Nadzornik zastalih obdelav
+23:09:27  == Razposiljanje alarmov ==
+23:09:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:09:28     konec: Razposiljanje alarmov
+23:09:28  Nadzor koncan; padlih korakov: 0.
+23:14:26  == Nadzornik zastalih obdelav ==
+23:14:27     Watchdog pregled je končan.
+23:14:27     konec: Nadzornik zastalih obdelav
+23:14:27  == Razposiljanje alarmov ==
+23:14:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:14:28     konec: Razposiljanje alarmov
+23:14:28  Nadzor koncan; padlih korakov: 0.
+23:19:26  == Nadzornik zastalih obdelav ==
+23:19:27     Watchdog pregled je končan.
+23:19:27     konec: Nadzornik zastalih obdelav
+23:19:27  == Razposiljanje alarmov ==
+23:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:19:28     konec: Razposiljanje alarmov
+23:19:28  Nadzor koncan; padlih korakov: 0.
+23:24:26  == Nadzornik zastalih obdelav ==
+23:24:27     Watchdog pregled je končan.
+23:24:27     konec: Nadzornik zastalih obdelav
+23:24:27  == Razposiljanje alarmov ==
+23:24:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:24:28     konec: Razposiljanje alarmov
+23:24:28  Nadzor koncan; padlih korakov: 0.
+23:29:26  == Nadzornik zastalih obdelav ==
+23:29:28     Watchdog pregled je končan.
+23:29:28     konec: Nadzornik zastalih obdelav
+23:29:28  == Razposiljanje alarmov ==
+23:29:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:29:29     konec: Razposiljanje alarmov
+23:29:29  Nadzor koncan; padlih korakov: 0.
+23:34:26  == Nadzornik zastalih obdelav ==
+23:34:27     Watchdog pregled je končan.
+23:34:27     konec: Nadzornik zastalih obdelav
+23:34:27  == Razposiljanje alarmov ==
+23:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:34:28     konec: Razposiljanje alarmov
+23:34:28  Nadzor koncan; padlih korakov: 0.
+23:39:26  == Nadzornik zastalih obdelav ==
+23:39:27     Watchdog pregled je končan.
+23:39:27     konec: Nadzornik zastalih obdelav
+23:39:27  == Razposiljanje alarmov ==
+23:39:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:39:28     konec: Razposiljanje alarmov
+23:39:28  Nadzor koncan; padlih korakov: 0.
+23:44:26  == Nadzornik zastalih obdelav ==
+23:44:27     Watchdog pregled je končan.
+23:44:27     konec: Nadzornik zastalih obdelav
+23:44:27  == Razposiljanje alarmov ==
+23:44:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:44:28     konec: Razposiljanje alarmov
+23:44:28  Nadzor koncan; padlih korakov: 0.
+23:49:26  == Nadzornik zastalih obdelav ==
+23:49:27     Watchdog pregled je končan.
+23:49:27     konec: Nadzornik zastalih obdelav
+23:49:27  == Razposiljanje alarmov ==
+23:49:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:49:28     konec: Razposiljanje alarmov
+23:49:28  Nadzor koncan; padlih korakov: 0.
+23:54:26  == Nadzornik zastalih obdelav ==
+23:54:27     Watchdog pregled je končan.
+23:54:27     konec: Nadzornik zastalih obdelav
+23:54:27  == Razposiljanje alarmov ==
+23:54:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:54:28     konec: Razposiljanje alarmov
+23:54:28  Nadzor koncan; padlih korakov: 0.
+23:59:26  == Nadzornik zastalih obdelav ==
+23:59:27     Watchdog pregled je končan.
+23:59:27     konec: Nadzornik zastalih obdelav
+23:59:27  == Razposiljanje alarmov ==
+23:59:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:59:28     konec: Razposiljanje alarmov
+23:59:28  Nadzor koncan; padlih korakov: 0.

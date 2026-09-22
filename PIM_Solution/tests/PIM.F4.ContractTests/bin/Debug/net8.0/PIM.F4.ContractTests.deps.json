@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "PIM.F4.ContractTests/1.0.0": {
+        "runtime": {
+          "PIM.F4.ContractTests.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PIM.F4.ContractTests/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

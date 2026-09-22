@@ -1,0 +1,154 @@
+﻿09:26:42  == Nadzornik zastalih obdelav ==
+09:26:43     PIM_CONNECTION_STRING ni nastavljen; watchdog ni spremenil podatkov.
+09:26:43     konec: Nadzornik zastalih obdelav
+09:26:43  == Razposiljanje alarmov ==
+09:26:44     STDERR: PIM_CONNECTION_STRING ni nastavljen.
+09:26:44     NAPAKA: worker workers\PIM.AlertDispatcher je koncal z izhodno kodo 2
+09:26:44  Nadzor koncan; padlih korakov: 1.
+09:27:31  == Nadzornik zastalih obdelav ==
+09:27:32     Watchdog pregled je kon─Źan.
+09:27:32     konec: Nadzornik zastalih obdelav
+09:27:32  == Razposiljanje alarmov ==
+09:27:33     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:27:33     konec: Razposiljanje alarmov
+09:27:33  Nadzor koncan; padlih korakov: 0.
+09:31:46  == Nadzornik zastalih obdelav ==
+09:31:47     Watchdog pregled je kon─Źan.
+09:31:47     konec: Nadzornik zastalih obdelav
+09:31:47  == Razposiljanje alarmov ==
+09:31:48     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:31:48     konec: Razposiljanje alarmov
+09:31:48  Nadzor koncan; padlih korakov: 0.
+09:36:46  == Nadzornik zastalih obdelav ==
+09:36:47     Watchdog pregled je kon─Źan.
+09:36:47     konec: Nadzornik zastalih obdelav
+09:36:47  == Razposiljanje alarmov ==
+09:36:48     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:36:48     konec: Razposiljanje alarmov
+09:36:48  Nadzor koncan; padlih korakov: 0.
+09:41:47  == Nadzornik zastalih obdelav ==
+09:41:48     Watchdog pregled je kon─Źan.
+09:41:48     konec: Nadzornik zastalih obdelav
+09:41:48  == Razposiljanje alarmov ==
+09:41:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:41:50     konec: Razposiljanje alarmov
+09:41:50  Nadzor koncan; padlih korakov: 0.
+09:46:46  == Nadzornik zastalih obdelav ==
+09:46:47     Watchdog pregled je kon─Źan.
+09:46:47     konec: Nadzornik zastalih obdelav
+09:46:47  == Razposiljanje alarmov ==
+09:46:48     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:46:49     konec: Razposiljanje alarmov
+09:46:49  Nadzor koncan; padlih korakov: 0.
+09:51:46  == Nadzornik zastalih obdelav ==
+09:51:47     Watchdog pregled je kon─Źan.
+09:51:47     konec: Nadzornik zastalih obdelav
+09:51:47  == Razposiljanje alarmov ==
+09:51:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:51:49     konec: Razposiljanje alarmov
+09:51:49  Nadzor koncan; padlih korakov: 0.
+09:56:46  == Nadzornik zastalih obdelav ==
+09:56:48     Watchdog pregled je kon─Źan.
+09:56:48     konec: Nadzornik zastalih obdelav
+09:56:48  == Razposiljanje alarmov ==
+09:56:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+09:56:49     konec: Razposiljanje alarmov
+09:56:49  Nadzor koncan; padlih korakov: 0.
+18:01:47  == Nadzornik zastalih obdelav ==
+18:01:48     Watchdog pregled je kon─Źan.
+18:01:48     konec: Nadzornik zastalih obdelav
+18:01:48  == Razposiljanje alarmov ==
+18:01:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:01:49     konec: Razposiljanje alarmov
+18:01:49  Nadzor koncan; padlih korakov: 0.
+18:06:47  == Nadzornik zastalih obdelav ==
+18:06:48     Watchdog pregled je kon─Źan.
+18:06:48     konec: Nadzornik zastalih obdelav
+18:06:48  == Razposiljanje alarmov ==
+18:06:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:06:49     konec: Razposiljanje alarmov
+18:06:49  Nadzor koncan; padlih korakov: 0.
+18:11:47  == Nadzornik zastalih obdelav ==
+18:11:48     Watchdog pregled je kon─Źan.
+18:11:48     konec: Nadzornik zastalih obdelav
+18:11:48  == Razposiljanje alarmov ==
+18:11:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:11:49     konec: Razposiljanje alarmov
+18:11:49  Nadzor koncan; padlih korakov: 0.
+18:16:47  == Nadzornik zastalih obdelav ==
+18:16:48     Watchdog pregled je kon─Źan.
+18:16:48     konec: Nadzornik zastalih obdelav
+18:16:48  == Razposiljanje alarmov ==
+18:16:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:16:49     konec: Razposiljanje alarmov
+18:16:49  Nadzor koncan; padlih korakov: 0.
+18:21:47  == Nadzornik zastalih obdelav ==
+18:21:48     Watchdog pregled je kon─Źan.
+18:21:48     konec: Nadzornik zastalih obdelav
+18:21:48  == Razposiljanje alarmov ==
+18:21:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:21:49     konec: Razposiljanje alarmov
+18:21:49  Nadzor koncan; padlih korakov: 0.
+18:26:47  == Nadzornik zastalih obdelav ==
+18:26:48     Watchdog pregled je kon─Źan.
+18:26:48     konec: Nadzornik zastalih obdelav
+18:26:48  == Razposiljanje alarmov ==
+18:26:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:26:49     konec: Razposiljanje alarmov
+18:26:49  Nadzor koncan; padlih korakov: 0.
+18:31:47  == Nadzornik zastalih obdelav ==
+18:31:48     Watchdog pregled je kon─Źan.
+18:31:48     konec: Nadzornik zastalih obdelav
+18:31:48  == Razposiljanje alarmov ==
+18:31:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:31:49     konec: Razposiljanje alarmov
+18:31:49  Nadzor koncan; padlih korakov: 0.
+18:36:47  == Nadzornik zastalih obdelav ==
+18:36:48     Watchdog pregled je kon─Źan.
+18:36:48     konec: Nadzornik zastalih obdelav
+18:36:48  == Razposiljanje alarmov ==
+18:36:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:36:49     konec: Razposiljanje alarmov
+18:36:49  Nadzor koncan; padlih korakov: 0.
+18:41:47  == Nadzornik zastalih obdelav ==
+18:41:48     Watchdog pregled je kon─Źan.
+18:41:48     konec: Nadzornik zastalih obdelav
+18:41:48  == Razposiljanje alarmov ==
+18:41:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:41:49     konec: Razposiljanje alarmov
+18:41:49  Nadzor koncan; padlih korakov: 0.
+18:46:47  == Nadzornik zastalih obdelav ==
+18:46:48     Watchdog pregled je kon─Źan.
+18:46:48     konec: Nadzornik zastalih obdelav
+18:46:48  == Razposiljanje alarmov ==
+18:46:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:46:49     konec: Razposiljanje alarmov
+18:46:49  Nadzor koncan; padlih korakov: 0.
+18:51:47  == Nadzornik zastalih obdelav ==
+18:51:48     Watchdog pregled je kon─Źan.
+18:51:48     konec: Nadzornik zastalih obdelav
+18:51:48  == Razposiljanje alarmov ==
+18:51:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:51:49     konec: Razposiljanje alarmov
+18:51:49  Nadzor koncan; padlih korakov: 0.
+18:56:47  == Nadzornik zastalih obdelav ==
+18:56:48     Watchdog pregled je kon─Źan.
+18:56:48     konec: Nadzornik zastalih obdelav
+18:56:48  == Razposiljanje alarmov ==
+18:56:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+18:56:49     konec: Razposiljanje alarmov
+18:56:49  Nadzor koncan; padlih korakov: 0.
+19:01:47  == Nadzornik zastalih obdelav ==
+19:01:48     Watchdog pregled je kon─Źan.
+19:01:48     konec: Nadzornik zastalih obdelav
+19:01:48  == Razposiljanje alarmov ==
+19:01:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+19:01:49     konec: Razposiljanje alarmov
+19:01:49  Nadzor koncan; padlih korakov: 0.
+19:06:47  == Nadzornik zastalih obdelav ==
+19:06:48     Watchdog pregled je kon─Źan.
+19:06:48     konec: Nadzornik zastalih obdelav
+19:06:48  == Razposiljanje alarmov ==
+19:06:49     Dostava opozoril je privzeto izklju─Źena; omre┼żni klic ni bil izveden.
+19:06:49     konec: Razposiljanje alarmov
+19:06:49  Nadzor koncan; padlih korakov: 0.

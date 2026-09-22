@@ -1,0 +1,16 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\bin\Release\net10.0\PIM.XmlMapping.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\bin\Release\net10.0\PIM.XmlMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\bin\Release\net10.0\PIM.XmlMapping.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.csproj.AssemblyReference.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\refint\PIM.XmlMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\ref\PIM.XmlMapping.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlMapping.sourcelink.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\bin\Release\net10.0\PIM.Operations.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\bin\Release\net10.0\PIM.Operations.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.XmlMapping\obj\Release\net10.0\PIM.XmlM.69C6396A.Up2Date

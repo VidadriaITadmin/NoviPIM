@@ -1,0 +1,140 @@
+/* Lupina ohranja obstoječi Razor in kontekstno vrstico, vizualno pa sledi referenci v2. */
+
+.app-shell[b-a4h9fu3zyz] { background: var(--pim-bg); display: flex; min-height: 100vh; }
+.app-sidebar[b-a4h9fu3zyz] {
+  background: #0f172a;
+  border-right: 1px solid #1e293b;
+  color: #e2e8f0;
+  flex: 0 0 18rem;
+  height: 100vh;
+  overflow-y: auto;
+  position: sticky;
+  scrollbar-color: #334155 transparent;
+  scrollbar-width: thin;
+  top: 0;
+}
+.app-main[b-a4h9fu3zyz] { flex: 1; min-width: 0; }
+.app-topbar[b-a4h9fu3zyz] {
+  align-items: center;
+  background: rgba(255, 255, 255, .96);
+  border-bottom: 1px solid var(--pim-border);
+  display: flex;
+  gap: .75rem;
+  min-height: 4rem;
+  padding: .65rem clamp(1.25rem, 2.5vw, 2.75rem);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* Preklop navigacije brez JavaScripta: skrito potrditveno polje in oznaka kot gumb.
+   Polje je pred .app-shell, zato lahko s sosedskim izbirnikom (~) odpre stransko vrstico. */
+.menu-toggle-input[b-a4h9fu3zyz] { height: 0; opacity: 0; pointer-events: none; position: absolute; width: 0; }
+.menu-glyph[b-a4h9fu3zyz] { align-items: center; background: transparent; border: 0; color: #475569; cursor: pointer; display: none; height: 36px; justify-content: center; padding: 0; width: 36px; }
+.menu-glyph-icon[b-a4h9fu3zyz], .menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { background: currentColor; border-radius: 2px; display: block; height: 2px; position: relative; width: 17px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before, .menu-glyph-icon[b-a4h9fu3zyz]::after { content: ""; left: 0; position: absolute; }
+.menu-glyph-icon[b-a4h9fu3zyz]::before { top: -6px; }
+.menu-glyph-icon[b-a4h9fu3zyz]::after { top: 6px; }
+.menu-toggle-input:focus-visible + .app-shell .menu-glyph[b-a4h9fu3zyz] { border-radius: var(--pim-radius-xs); box-shadow: 0 0 0 3px var(--pim-accent-ring); outline: none; }
+.menu-scrim[b-a4h9fu3zyz] { display: none; }
+
+.flow-context[b-a4h9fu3zyz] { display: flex; flex: 0 0 auto; flex-direction: column; min-width: 7.5rem; }
+.flow-context small[b-a4h9fu3zyz] { color: #94a3b8; font-size: .58rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.flow-context strong[b-a4h9fu3zyz] { color: #334155; font-size: .78rem; font-weight: 650; margin-top: .08rem; white-space: nowrap; }
+
+.topbar-spacer[b-a4h9fu3zyz] { flex: 1; }
+
+/* --- Opozorila in uporabnik --------------------------------------------- */
+.notification-button[b-a4h9fu3zyz] { align-items: center; border-radius: var(--pim-radius-sm); display: inline-flex; height: 2.35rem; justify-content: center; position: relative; text-decoration: none; width: 2.35rem; }
+.notification-button:hover[b-a4h9fu3zyz] { background: #f1f5f9; }
+.notification-icon[b-a4h9fu3zyz] { border: 1.7px solid #475569; border-radius: 9px 9px 4px 4px; display: block; height: 14px; position: relative; width: 13px; }
+.notification-icon[b-a4h9fu3zyz]::after { background: #475569; border-radius: 50%; bottom: -5px; content: ""; height: 3px; left: 4px; position: absolute; width: 3px; }
+/* Zvonec z odprtimi tezavami mora biti prepoznaven tudi brez branja stevilke: barva
+   ikone se spremeni, ne samo znacka. Barva ni edini nosilec — naslov (title) pove, kaj je. */
+.notification-button.notification-alarm .notification-icon[b-a4h9fu3zyz] { border-color: var(--pim-bad-text); }
+.notification-button.notification-alarm .notification-icon[b-a4h9fu3zyz]::after { background: var(--pim-bad-text); }
+.notification-count[b-a4h9fu3zyz] { align-items: center; background: var(--pim-bad-text); border: 2px solid #fff; border-radius: 999px; color: #fff; display: flex; font-size: .6rem; font-weight: 700; height: 18px; justify-content: center; min-width: 18px; padding: 0 3px; position: absolute; right: -2px; top: -2px; }
+
+/* Spustni seznam obvestil: <details>/<summary>, odpiranje brez JavaScripta (zapiranje ob kliku drugam: js/pim-shell.js) — enak pristop kot preklop
+   stranske navigacije zgoraj, samo brez scrima, ker gre za majhno, ne-modalno okno. Videz sledi
+   preostali konzoli (kartice, .status-chip barve), ne izumlja svojega. */
+.notification-menu[b-a4h9fu3zyz] { position: relative; }
+.notification-menu > summary[b-a4h9fu3zyz] { list-style: none; }
+.notification-menu > summary[b-a4h9fu3zyz]::-webkit-details-marker { display: none; }
+.notification-panel[b-a4h9fu3zyz] {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  box-shadow: var(--pim-shadow-hover);
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: min(23rem, 92vw);
+  z-index: 70;
+}
+.notification-panel-header[b-a4h9fu3zyz] {
+  align-items: center; background: var(--pim-surface-subtle); border-bottom: 1px solid var(--pim-border);
+  display: flex; justify-content: space-between; padding: .65rem .9rem;
+}
+.notification-panel-header strong[b-a4h9fu3zyz] { color: var(--pim-text-strong); font-size: .82rem; font-weight: 700; }
+.notification-mark-all[b-a4h9fu3zyz] { background: transparent; border: 0; color: var(--pim-accent-link); cursor: pointer; font: inherit; font-size: .7rem; font-weight: 600; padding: .15rem; }
+.notification-mark-all:hover[b-a4h9fu3zyz] { text-decoration: underline; }
+.notification-empty[b-a4h9fu3zyz] { color: #94a3b8; font-size: .8rem; padding: 1.5rem 1rem; text-align: center; }
+
+.notification-list[b-a4h9fu3zyz] {
+  list-style: none; margin: 0; max-height: 21rem; overflow-y: auto; padding: .3rem;
+  scrollbar-color: var(--pim-border-strong) transparent; scrollbar-width: thin;
+}
+.notification-list[b-a4h9fu3zyz]::-webkit-scrollbar { width: 7px; }
+.notification-list[b-a4h9fu3zyz]::-webkit-scrollbar-thumb { background: var(--pim-border-strong); border-radius: 999px; }
+.notification-list[b-a4h9fu3zyz]::-webkit-scrollbar-track { background: transparent; }
+
+.notification-item[b-a4h9fu3zyz] {
+  align-items: flex-start; border-left: 3px solid transparent; border-radius: var(--pim-radius-xs);
+  display: flex; gap: .5rem; padding: .55rem .6rem .55rem .55rem;
+}
+.notification-item:hover[b-a4h9fu3zyz] { background: var(--pim-surface-subtle); }
+.notification-item.notification-unseen[b-a4h9fu3zyz] { background: var(--pim-surface-subtle); }
+.notification-item.severity-bad[b-a4h9fu3zyz] { border-left-color: var(--pim-bad-text); }
+.notification-item.severity-warn[b-a4h9fu3zyz] { border-left-color: var(--pim-warn-text); }
+.notification-item.severity-good[b-a4h9fu3zyz] { border-left-color: var(--pim-good-text); }
+
+/* Celotna vrstica je gumb: odpre ustrezen pogled in hkrati oznaci obvestilo kot prebrano. */
+.notification-item-form[b-a4h9fu3zyz] { display: flex; flex: 1; margin: 0; min-width: 0; }
+.notification-item-body[b-a4h9fu3zyz] { background: transparent; border: 0; color: inherit; cursor: pointer; display: flex; flex: 1; flex-direction: column; font: inherit; gap: .2rem; min-width: 0; padding: 0; text-align: left; }
+.notification-item-body:focus-visible[b-a4h9fu3zyz] { border-radius: var(--pim-radius-xs); outline: none; box-shadow: 0 0 0 2px var(--pim-accent-ring); }
+.notification-panel-link[b-a4h9fu3zyz] {
+  background: var(--pim-surface); border-top: 1px solid var(--pim-border); color: var(--pim-accent-link);
+  display: block; font-size: .78rem; font-weight: 600; padding: .65rem; text-align: center; text-decoration: none;
+}
+.notification-panel-link:hover[b-a4h9fu3zyz] { background: var(--pim-surface-subtle); }
+
+@media (max-width: 520px) {
+  .notification-panel[b-a4h9fu3zyz] { position: fixed; right: .6rem; top: 3.6rem; width: min(23rem, calc(100vw - 1.2rem)); }
+}
+.signed-user[b-a4h9fu3zyz] { align-items: center; display: flex; gap: 9px; }
+.signed-user span[b-a4h9fu3zyz] { align-items: center; background: #334155; border-radius: 50%; color: #fff; display: flex; font-size: .7rem; font-weight: 700; height: 2rem; justify-content: center; width: 2rem; }
+.signed-user strong[b-a4h9fu3zyz] { color: #334155; font-size: .8rem; white-space: nowrap; }
+.logout-button[b-a4h9fu3zyz] { background: transparent; border: 0; border-radius: var(--pim-radius-xs); color: #64748b; cursor: pointer; font: inherit; font-size: .75rem; padding: .45rem .55rem; }
+.logout-button:hover[b-a4h9fu3zyz] { background: #f1f5f9; color: #334155; }
+.app-content[b-a4h9fu3zyz] { padding: 1.75rem clamp(1.25rem, 2.5vw, 2.75rem) 3rem; }
+
+@media (max-width: 900px) {
+  .app-sidebar[b-a4h9fu3zyz] { height: 100vh; left: 0; position: fixed; top: 0; transform: translateX(-102%); transition: transform .18s ease; width: min(20rem, 88vw); z-index: 100; }
+  .menu-glyph[b-a4h9fu3zyz] { display: inline-flex; }
+  .menu-toggle-input:checked + .app-shell .app-sidebar[b-a4h9fu3zyz] { transform: translateX(0); }
+  .menu-toggle-input:checked + .app-shell .menu-scrim[b-a4h9fu3zyz] { background: rgba(2, 6, 23, .58); display: block; inset: 0; position: fixed; z-index: 90; }
+  .app-topbar[b-a4h9fu3zyz] { padding: .6rem .9rem; }
+  .signed-user strong[b-a4h9fu3zyz], .logout-button[b-a4h9fu3zyz] { display: none; }
+  .app-content[b-a4h9fu3zyz] { padding: 1.15rem .9rem 2rem; }
+}
+
+@media (max-width: 520px) {
+  .flow-context small[b-a4h9fu3zyz] { display: none; }
+  .flow-context[b-a4h9fu3zyz] { min-width: 0; }
+}
+
+#blazor-error-ui[b-a4h9fu3zyz] { background: #b91c1c; bottom: 0; box-shadow: 0 -2px 12px rgba(15, 23, 42, .18); color: #fff; display: none; left: 0; padding: .7rem 1.25rem; position: fixed; width: 100%; z-index: 1000; }
+#blazor-error-ui a[b-a4h9fu3zyz] { color: #fff; font-weight: 600; }
+#blazor-error-ui .dismiss[b-a4h9fu3zyz] { cursor: pointer; position: absolute; right: .75rem; top: .5rem; }

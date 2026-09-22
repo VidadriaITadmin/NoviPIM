@@ -1,0 +1,31 @@
+21:36:26  === ZAČETEK: Naročila iz SAOP | posel SAOP_ORDER_IMPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console | 2026-09-22 21:36:26
+21:36:26  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+21:36:26  == Naročila iz SAOP (podjetje 2) ==
+21:36:26     [2] IQLighting (SAOP_IQLIGHTING)
+21:36:27       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+21:36:27     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 2): se je začela.
+21:36:27     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 2): preskočeno; brez nastavljene knjige (Saop:Organizations:SalesOrderBook); naročila se ne zajemajo.
+21:36:27       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+21:36:27     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 2): se je začela.
+21:36:27     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 2): preskočeno; brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook); naročila se ne zajemajo.
+21:36:27     konec: Naročila iz SAOP (podjetje 2) (1 s)
+21:36:27  == Naročila iz SAOP (podjetje 3) ==
+21:36:28     [3] Vidadria (SAOP_VIDADRIA)
+21:36:28       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+21:36:28     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 3): se je začela.
+21:36:28     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 3): preskočeno; brez nastavljene knjige (Saop:Organizations:SalesOrderBook); naročila se ne zajemajo.
+21:36:28       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+21:36:28     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 3): se je začela.
+21:36:28     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 3): preskočeno; brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook); naročila se ne zajemajo.
+21:36:28     konec: Naročila iz SAOP (podjetje 3) (1 s)
+21:36:28  == Naročila iz SAOP (podjetje 4) ==
+21:36:29     [4] Ediito (SAOP_EDIITO)
+21:36:29       Naročila kupcev (VNK): brez nastavljene knjige (Saop:Organizations:SalesOrderBook), preskočeno.
+21:36:29     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 4): se je začela.
+21:36:29     [FAZA] Prenos SAOP_ORDERS_VNK (podjetje 4): preskočeno; brez nastavljene knjige (Saop:Organizations:SalesOrderBook); naročila se ne zajemajo.
+21:36:29       Naročila dobaviteljem (VND): brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook), preskočeno.
+21:36:29     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 4): se je začela.
+21:36:29     [FAZA] Prenos SAOP_ORDERS_VND (podjetje 4): preskočeno; brez nastavljene knjige (Saop:Organizations:PurchaseOrderBook); naročila se ne zajemajo.
+21:36:29     konec: Naročila iz SAOP (podjetje 4) (1 s)
+21:36:29  Naročila iz SAOP končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+21:36:29  === KONEC: izhod 0, trajanje 00:00:03

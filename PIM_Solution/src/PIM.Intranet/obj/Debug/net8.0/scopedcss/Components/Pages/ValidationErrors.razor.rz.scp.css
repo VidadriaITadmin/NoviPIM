@@ -1,0 +1,23 @@
+/* Izoliran slog strani /napake-validacije. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-jzbhz0xyes] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; }
+.kpi strong[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; }
+
+/* Kartici pregleda sta gosti, a berljivi; na ozkih zaslonih se tabeli pomikata, namesto da bi se stiskali. */
+.table-scroll[b-jzbhz0xyes] { overflow-x: auto; }
+.progress-value[b-jzbhz0xyes] { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.issue-count[b-jzbhz0xyes] { font-variant-numeric: tabular-nums; text-align: right; }
+.no-value[b-jzbhz0xyes] { color: #8593a8; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-jzbhz0xyes],
+.search-input:focus-visible[b-jzbhz0xyes],
+.filter-select:focus-visible[b-jzbhz0xyes],
+.table-scroll:focus-visible[b-jzbhz0xyes],
+.data-table a:focus-visible[b-jzbhz0xyes],
+.kpi a:focus-visible[b-jzbhz0xyes] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .quality-grid[b-jzbhz0xyes] { grid-template-columns: 1fr; }
+  .data-table[b-jzbhz0xyes] { min-width: 560px; }
+}

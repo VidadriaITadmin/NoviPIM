@@ -1,0 +1,402 @@
+19:52:32  == Nadzornik zastalih obdelav ==
+19:52:42     Watchdog pregled je končan.
+19:52:43     konec: Nadzornik zastalih obdelav
+19:52:43  == Razposiljanje alarmov ==
+19:52:57     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:52:57     konec: Razposiljanje alarmov
+19:52:57  Nadzor koncan; padlih korakov: 0.
+19:54:27  == Nadzornik zastalih obdelav ==
+19:54:28     Watchdog pregled je končan.
+19:54:28     konec: Nadzornik zastalih obdelav
+19:54:28  == Razposiljanje alarmov ==
+19:54:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:54:29     konec: Razposiljanje alarmov
+19:54:29  Nadzor koncan; padlih korakov: 0.
+19:59:28  == Nadzornik zastalih obdelav ==
+19:59:31     Watchdog pregled je končan.
+19:59:31     konec: Nadzornik zastalih obdelav
+19:59:31  == Razposiljanje alarmov ==
+19:59:33     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+19:59:33     konec: Razposiljanje alarmov
+19:59:33  Nadzor koncan; padlih korakov: 0.
+20:04:26  == Nadzornik zastalih obdelav ==
+20:04:42     STDERR: Unhandled exception. Microsoft.Data.SqlClient.SqlException (0x80131904): A network-related or instance-specific error occurred while establishing a connection to SQL Server. The server was not found or was not accessible. Verify that the instance name is correct and that SQL Server is configured to allow remote connections. (provider: Named Pipes Provider, error: 40 - Could not open a connection to SQL Server)
+20:04:42     STDERR:  ---> System.ComponentModel.Win32Exception (53): The network path was not found.
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(TdsParserStateObject stateObj, SqlCommand command, Boolean callerHasConnectionLock, Boolean asyncClose)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.TdsParser.Connect(ServerInfo serverInfo, SqlInternalConnectionTds connHandler, TimeoutTimer timeout, SqlConnectionString connectionOptions, Boolean withFailover)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.AttemptOneLogin(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, TimeoutTimer timeout, Boolean withFailover)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.LoginNoFailover(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString connectionOptions, SqlCredential credential, TimeoutTimer timeout)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.OpenLoginEnlist(TimeoutTimer timeout, SqlConnectionString connectionOptions, SqlCredential credential, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds..ctor(DbConnectionPoolIdentity identity, SqlConnectionString connectionOptions, SqlCredential credential, Object providerInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString userConnectionOptions, SessionData reconnectSessionData, Boolean applyTransientFaultHandling, String accessToken, DbConnectionPool pool, Func`3 accessTokenCallback)
+20:04:42     STDERR:    at Microsoft.Data.SqlClient.SqlConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+20:04:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionFactory.CreatePooledConnection(DbConnectionPool pool, DbConnection owningObject, DbConnectionOptions options, DbConnectionPoolKey poolKey, DbConnectionOptions userOptions)
+20:04:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.CreateObject(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:04:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.UserCreateRequest(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:04:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, UInt32 waitForMultipleObjectsTimeout, Boolean allowCreate, Boolean onlyOneCheckConnection, DbConnectionOptions userOptions, DbConnectionInternal& connection)
+20:04:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.WaitForPendingOpen()
+20:04:42     STDERR: --- End of stack trace from previous location ---
+20:04:42     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.Watchdog\Program.cs:line 12
+20:04:42     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.Watchdog\Program.cs:line 21
+20:04:42     STDERR:    at Program.<Main>(String[] args)
+20:04:42     STDERR: ClientConnectionId:00000000-0000-0000-0000-000000000000
+20:04:42     STDERR: Error Number:53,State:0,Class:20
+20:04:44     NAPAKA: worker workers\PIM.Watchdog je koncal z izhodno kodo -532462766
+20:04:44  == Razposiljanje alarmov ==
+20:05:01     STDERR: Unhandled exception. Microsoft.Data.SqlClient.SqlException (0x80131904): A network-related or instance-specific error occurred while establishing a connection to SQL Server. The server was not found or was not accessible. Verify that the instance name is correct and that SQL Server is configured to allow remote connections. (provider: Named Pipes Provider, error: 40 - Could not open a connection to SQL Server)
+20:05:01     STDERR:  ---> System.ComponentModel.Win32Exception (53): The network path was not found.
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(TdsParserStateObject stateObj, SqlCommand command, Boolean callerHasConnectionLock, Boolean asyncClose)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.TdsParser.Connect(ServerInfo serverInfo, SqlInternalConnectionTds connHandler, TimeoutTimer timeout, SqlConnectionString connectionOptions, Boolean withFailover)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.AttemptOneLogin(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, TimeoutTimer timeout, Boolean withFailover)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.LoginNoFailover(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString connectionOptions, SqlCredential credential, TimeoutTimer timeout)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.OpenLoginEnlist(TimeoutTimer timeout, SqlConnectionString connectionOptions, SqlCredential credential, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds..ctor(DbConnectionPoolIdentity identity, SqlConnectionString connectionOptions, SqlCredential credential, Object providerInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString userConnectionOptions, SessionData reconnectSessionData, Boolean applyTransientFaultHandling, String accessToken, DbConnectionPool pool, Func`3 accessTokenCallback)
+20:05:01     STDERR:    at Microsoft.Data.SqlClient.SqlConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+20:05:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionFactory.CreatePooledConnection(DbConnectionPool pool, DbConnection owningObject, DbConnectionOptions options, DbConnectionPoolKey poolKey, DbConnectionOptions userOptions)
+20:05:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.CreateObject(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:05:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.UserCreateRequest(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:05:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, UInt32 waitForMultipleObjectsTimeout, Boolean allowCreate, Boolean onlyOneCheckConnection, DbConnectionOptions userOptions, DbConnectionInternal& connection)
+20:05:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.WaitForPendingOpen()
+20:05:01     STDERR: --- End of stack trace from previous location ---
+20:05:01     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.AlertDispatcher\Program.cs:line 27
+20:05:01     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.AlertDispatcher\Program.cs:line 114
+20:05:01     STDERR:    at Program.<Main>(String[] args)
+20:05:01     STDERR: ClientConnectionId:00000000-0000-0000-0000-000000000000
+20:05:01     STDERR: Error Number:53,State:0,Class:20
+20:05:03     NAPAKA: worker workers\PIM.AlertDispatcher je koncal z izhodno kodo -532462766
+20:05:03  Nadzor koncan; padlih korakov: 2.
+20:09:26  == Nadzornik zastalih obdelav ==
+20:09:42     STDERR: Unhandled exception. Microsoft.Data.SqlClient.SqlException (0x80131904): A network-related or instance-specific error occurred while establishing a connection to SQL Server. The server was not found or was not accessible. Verify that the instance name is correct and that SQL Server is configured to allow remote connections. (provider: Named Pipes Provider, error: 40 - Could not open a connection to SQL Server)
+20:09:42     STDERR:  ---> System.ComponentModel.Win32Exception (53): The network path was not found.
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(TdsParserStateObject stateObj, SqlCommand command, Boolean callerHasConnectionLock, Boolean asyncClose)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.TdsParser.Connect(ServerInfo serverInfo, SqlInternalConnectionTds connHandler, TimeoutTimer timeout, SqlConnectionString connectionOptions, Boolean withFailover)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.AttemptOneLogin(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, TimeoutTimer timeout, Boolean withFailover)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.LoginNoFailover(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString connectionOptions, SqlCredential credential, TimeoutTimer timeout)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.OpenLoginEnlist(TimeoutTimer timeout, SqlConnectionString connectionOptions, SqlCredential credential, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds..ctor(DbConnectionPoolIdentity identity, SqlConnectionString connectionOptions, SqlCredential credential, Object providerInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString userConnectionOptions, SessionData reconnectSessionData, Boolean applyTransientFaultHandling, String accessToken, DbConnectionPool pool, Func`3 accessTokenCallback)
+20:09:42     STDERR:    at Microsoft.Data.SqlClient.SqlConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+20:09:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionFactory.CreatePooledConnection(DbConnectionPool pool, DbConnection owningObject, DbConnectionOptions options, DbConnectionPoolKey poolKey, DbConnectionOptions userOptions)
+20:09:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.CreateObject(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:09:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.UserCreateRequest(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:09:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, UInt32 waitForMultipleObjectsTimeout, Boolean allowCreate, Boolean onlyOneCheckConnection, DbConnectionOptions userOptions, DbConnectionInternal& connection)
+20:09:42     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.WaitForPendingOpen()
+20:09:42     STDERR: --- End of stack trace from previous location ---
+20:09:42     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.Watchdog\Program.cs:line 12
+20:09:42     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.Watchdog\Program.cs:line 21
+20:09:42     STDERR:    at Program.<Main>(String[] args)
+20:09:42     STDERR: ClientConnectionId:00000000-0000-0000-0000-000000000000
+20:09:42     STDERR: Error Number:53,State:0,Class:20
+20:09:44     NAPAKA: worker workers\PIM.Watchdog je koncal z izhodno kodo -532462766
+20:09:44  == Razposiljanje alarmov ==
+20:10:01     STDERR: Unhandled exception. Microsoft.Data.SqlClient.SqlException (0x80131904): A network-related or instance-specific error occurred while establishing a connection to SQL Server. The server was not found or was not accessible. Verify that the instance name is correct and that SQL Server is configured to allow remote connections. (provider: Named Pipes Provider, error: 40 - Could not open a connection to SQL Server)
+20:10:01     STDERR:  ---> System.ComponentModel.Win32Exception (53): The network path was not found.
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnection.OnError(SqlException exception, Boolean breakConnection, Action`1 wrapCloseInAction)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.TdsParser.ThrowExceptionAndWarning(TdsParserStateObject stateObj, SqlCommand command, Boolean callerHasConnectionLock, Boolean asyncClose)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.TdsParser.Connect(ServerInfo serverInfo, SqlInternalConnectionTds connHandler, TimeoutTimer timeout, SqlConnectionString connectionOptions, Boolean withFailover)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.AttemptOneLogin(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, TimeoutTimer timeout, Boolean withFailover)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.LoginNoFailover(ServerInfo serverInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString connectionOptions, SqlCredential credential, TimeoutTimer timeout)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds.OpenLoginEnlist(TimeoutTimer timeout, SqlConnectionString connectionOptions, SqlCredential credential, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlInternalConnectionTds..ctor(DbConnectionPoolIdentity identity, SqlConnectionString connectionOptions, SqlCredential credential, Object providerInfo, String newPassword, SecureString newSecurePassword, Boolean redirectedUserInstance, SqlConnectionString userConnectionOptions, SessionData reconnectSessionData, Boolean applyTransientFaultHandling, String accessToken, DbConnectionPool pool, Func`3 accessTokenCallback)
+20:10:01     STDERR:    at Microsoft.Data.SqlClient.SqlConnectionFactory.CreateConnection(DbConnectionOptions options, DbConnectionPoolKey poolKey, Object poolGroupProviderInfo, DbConnectionPool pool, DbConnection owningConnection, DbConnectionOptions userOptions)
+20:10:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionFactory.CreatePooledConnection(DbConnectionPool pool, DbConnection owningObject, DbConnectionOptions options, DbConnectionPoolKey poolKey, DbConnectionOptions userOptions)
+20:10:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.CreateObject(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:10:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.UserCreateRequest(DbConnection owningObject, DbConnectionOptions userOptions, DbConnectionInternal oldConnection)
+20:10:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.TryGetConnection(DbConnection owningObject, UInt32 waitForMultipleObjectsTimeout, Boolean allowCreate, Boolean onlyOneCheckConnection, DbConnectionOptions userOptions, DbConnectionInternal& connection)
+20:10:01     STDERR:    at Microsoft.Data.ProviderBase.DbConnectionPool.WaitForPendingOpen()
+20:10:01     STDERR: --- End of stack trace from previous location ---
+20:10:01     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.AlertDispatcher\Program.cs:line 27
+20:10:01     STDERR:    at Program.<Main>$(String[] args) in C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\workers\PIM.AlertDispatcher\Program.cs:line 114
+20:10:01     STDERR:    at Program.<Main>(String[] args)
+20:10:01     STDERR: ClientConnectionId:00000000-0000-0000-0000-000000000000
+20:10:01     STDERR: Error Number:53,State:0,Class:20
+20:10:03     NAPAKA: worker workers\PIM.AlertDispatcher je koncal z izhodno kodo -532462766
+20:10:03  Nadzor koncan; padlih korakov: 2.
+20:14:26  == Nadzornik zastalih obdelav ==
+20:14:27     Watchdog pregled je končan.
+20:14:27     konec: Nadzornik zastalih obdelav
+20:14:27  == Razposiljanje alarmov ==
+20:14:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:14:28     konec: Razposiljanje alarmov
+20:14:28  Nadzor koncan; padlih korakov: 0.
+20:19:26  == Nadzornik zastalih obdelav ==
+20:19:27     Watchdog pregled je končan.
+20:19:27     konec: Nadzornik zastalih obdelav
+20:19:27  == Razposiljanje alarmov ==
+20:19:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:19:28     konec: Razposiljanje alarmov
+20:19:28  Nadzor koncan; padlih korakov: 0.
+20:24:27  == Nadzornik zastalih obdelav ==
+20:24:28     Watchdog pregled je končan.
+20:24:28     konec: Nadzornik zastalih obdelav
+20:24:28  == Razposiljanje alarmov ==
+20:24:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:24:29     konec: Razposiljanje alarmov
+20:24:29  Nadzor koncan; padlih korakov: 0.
+20:29:26  == Nadzornik zastalih obdelav ==
+20:29:27     Watchdog pregled je končan.
+20:29:27     konec: Nadzornik zastalih obdelav
+20:29:27  == Razposiljanje alarmov ==
+20:29:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:29:28     konec: Razposiljanje alarmov
+20:29:28  Nadzor koncan; padlih korakov: 0.
+20:34:26  == Nadzornik zastalih obdelav ==
+20:34:27     Watchdog pregled je končan.
+20:34:27     konec: Nadzornik zastalih obdelav
+20:34:27  == Razposiljanje alarmov ==
+20:34:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:34:28     konec: Razposiljanje alarmov
+20:34:28  Nadzor koncan; padlih korakov: 0.
+20:39:26  == Nadzornik zastalih obdelav ==
+20:39:27     Watchdog pregled je končan.
+20:39:27     konec: Nadzornik zastalih obdelav
+20:39:27  == Razposiljanje alarmov ==
+20:39:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:39:28     konec: Razposiljanje alarmov
+20:39:28  Nadzor koncan; padlih korakov: 0.
+20:44:26  == Nadzornik zastalih obdelav ==
+20:44:28     Watchdog pregled je končan.
+20:44:28     konec: Nadzornik zastalih obdelav
+20:44:28  == Razposiljanje alarmov ==
+20:44:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:44:29     konec: Razposiljanje alarmov
+20:44:29  Nadzor koncan; padlih korakov: 0.
+20:49:26  == Nadzornik zastalih obdelav ==
+20:49:27     Watchdog pregled je končan.
+20:49:27     konec: Nadzornik zastalih obdelav
+20:49:27  == Razposiljanje alarmov ==
+20:49:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:49:28     konec: Razposiljanje alarmov
+20:49:28  Nadzor koncan; padlih korakov: 0.
+20:54:26  == Nadzornik zastalih obdelav ==
+20:54:27     Watchdog pregled je končan.
+20:54:27     konec: Nadzornik zastalih obdelav
+20:54:27  == Razposiljanje alarmov ==
+20:54:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:54:28     konec: Razposiljanje alarmov
+20:54:28  Nadzor koncan; padlih korakov: 0.
+20:59:27  == Nadzornik zastalih obdelav ==
+20:59:28     Watchdog pregled je končan.
+20:59:28     konec: Nadzornik zastalih obdelav
+20:59:28  == Razposiljanje alarmov ==
+20:59:29     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+20:59:29     konec: Razposiljanje alarmov
+20:59:29  Nadzor koncan; padlih korakov: 0.
+21:04:26  == Nadzornik zastalih obdelav ==
+21:04:27     Watchdog pregled je končan.
+21:04:27     konec: Nadzornik zastalih obdelav
+21:04:27  == Razposiljanje alarmov ==
+21:04:28     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:04:29     konec: Razposiljanje alarmov
+21:04:29  Nadzor koncan; padlih korakov: 0.
+21:12:15  == Nadzornik zastalih obdelav ==
+21:12:16     Watchdog pregled je končan.
+21:12:16     konec: Nadzornik zastalih obdelav
+21:12:16  == Razposiljanje alarmov ==
+21:12:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:12:17     konec: Razposiljanje alarmov
+21:12:17  Nadzor koncan; padlih korakov: 0.
+21:17:15  == Nadzornik zastalih obdelav ==
+21:17:16     Watchdog pregled je končan.
+21:17:16     konec: Nadzornik zastalih obdelav
+21:17:16  == Razposiljanje alarmov ==
+21:17:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:17:17     konec: Razposiljanje alarmov
+21:17:17  Nadzor koncan; padlih korakov: 0.
+21:22:15  == Nadzornik zastalih obdelav ==
+21:22:16     Watchdog pregled je končan.
+21:22:16     konec: Nadzornik zastalih obdelav
+21:22:16  == Razposiljanje alarmov ==
+21:22:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:22:17     konec: Razposiljanje alarmov
+21:22:17  Nadzor koncan; padlih korakov: 0.
+21:27:15  == Nadzornik zastalih obdelav ==
+21:27:16     Watchdog pregled je končan.
+21:27:16     konec: Nadzornik zastalih obdelav
+21:27:16  == Razposiljanje alarmov ==
+21:27:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:27:18     konec: Razposiljanje alarmov
+21:27:18  Nadzor koncan; padlih korakov: 0.
+21:32:15  == Nadzornik zastalih obdelav ==
+21:32:16     Watchdog pregled je končan.
+21:32:16     konec: Nadzornik zastalih obdelav
+21:32:16  == Razposiljanje alarmov ==
+21:32:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:32:17     konec: Razposiljanje alarmov
+21:32:17  Nadzor koncan; padlih korakov: 0.
+21:37:15  == Nadzornik zastalih obdelav ==
+21:37:16     Watchdog pregled je končan.
+21:37:16     konec: Nadzornik zastalih obdelav
+21:37:16  == Razposiljanje alarmov ==
+21:37:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:37:17     konec: Razposiljanje alarmov
+21:37:17  Nadzor koncan; padlih korakov: 0.
+21:42:15  == Nadzornik zastalih obdelav ==
+21:42:16     Watchdog pregled je končan.
+21:42:16     konec: Nadzornik zastalih obdelav
+21:42:16  == Razposiljanje alarmov ==
+21:42:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:42:17     konec: Razposiljanje alarmov
+21:42:17  Nadzor koncan; padlih korakov: 0.
+21:47:15  == Nadzornik zastalih obdelav ==
+21:47:16     Watchdog pregled je končan.
+21:47:16     konec: Nadzornik zastalih obdelav
+21:47:16  == Razposiljanje alarmov ==
+21:47:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:47:17     konec: Razposiljanje alarmov
+21:47:17  Nadzor koncan; padlih korakov: 0.
+21:52:15  == Nadzornik zastalih obdelav ==
+21:52:16     Watchdog pregled je končan.
+21:52:16     konec: Nadzornik zastalih obdelav
+21:52:16  == Razposiljanje alarmov ==
+21:52:18     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:52:18     konec: Razposiljanje alarmov
+21:52:18  Nadzor koncan; padlih korakov: 0.
+21:57:15  == Nadzornik zastalih obdelav ==
+21:57:16     Watchdog pregled je končan.
+21:57:16     konec: Nadzornik zastalih obdelav
+21:57:16  == Razposiljanje alarmov ==
+21:57:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+21:57:17     konec: Razposiljanje alarmov
+21:57:17  Nadzor koncan; padlih korakov: 0.
+22:02:15  == Nadzornik zastalih obdelav ==
+22:02:16     Watchdog pregled je končan.
+22:02:16     konec: Nadzornik zastalih obdelav
+22:02:16  == Razposiljanje alarmov ==
+22:02:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:02:17     konec: Razposiljanje alarmov
+22:02:17  Nadzor koncan; padlih korakov: 0.
+22:07:15  == Nadzornik zastalih obdelav ==
+22:07:16     Watchdog pregled je končan.
+22:07:16     konec: Nadzornik zastalih obdelav
+22:07:16  == Razposiljanje alarmov ==
+22:07:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:07:17     konec: Razposiljanje alarmov
+22:07:17  Nadzor koncan; padlih korakov: 0.
+22:12:16  == Nadzornik zastalih obdelav ==
+22:12:18     Watchdog pregled je končan.
+22:12:18     konec: Nadzornik zastalih obdelav
+22:12:18  == Razposiljanje alarmov ==
+22:12:19     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:12:19     konec: Razposiljanje alarmov
+22:12:19  Nadzor koncan; padlih korakov: 0.
+22:17:15  == Nadzornik zastalih obdelav ==
+22:17:16     Watchdog pregled je končan.
+22:17:16     konec: Nadzornik zastalih obdelav
+22:17:16  == Razposiljanje alarmov ==
+22:17:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:17:17     konec: Razposiljanje alarmov
+22:17:17  Nadzor koncan; padlih korakov: 0.
+22:22:15  == Nadzornik zastalih obdelav ==
+22:22:16     Watchdog pregled je končan.
+22:22:16     konec: Nadzornik zastalih obdelav
+22:22:16  == Razposiljanje alarmov ==
+22:22:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:22:17     konec: Razposiljanje alarmov
+22:22:17  Nadzor koncan; padlih korakov: 0.
+22:27:15  == Nadzornik zastalih obdelav ==
+22:27:16     Watchdog pregled je končan.
+22:27:16     konec: Nadzornik zastalih obdelav
+22:27:16  == Razposiljanje alarmov ==
+22:27:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:27:17     konec: Razposiljanje alarmov
+22:27:17  Nadzor koncan; padlih korakov: 0.
+22:32:15  == Nadzornik zastalih obdelav ==
+22:32:16     Watchdog pregled je končan.
+22:32:16     konec: Nadzornik zastalih obdelav
+22:32:16  == Razposiljanje alarmov ==
+22:32:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:32:17     konec: Razposiljanje alarmov
+22:32:17  Nadzor koncan; padlih korakov: 0.
+22:37:15  == Nadzornik zastalih obdelav ==
+22:37:16     Watchdog pregled je končan.
+22:37:16     konec: Nadzornik zastalih obdelav
+22:37:16  == Razposiljanje alarmov ==
+22:37:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:37:17     konec: Razposiljanje alarmov
+22:37:17  Nadzor koncan; padlih korakov: 0.
+22:42:15  == Nadzornik zastalih obdelav ==
+22:42:17     Watchdog pregled je končan.
+22:42:17     konec: Nadzornik zastalih obdelav
+22:42:17  == Razposiljanje alarmov ==
+22:42:19     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:42:19     konec: Razposiljanje alarmov
+22:42:19  Nadzor koncan; padlih korakov: 0.
+22:47:15  == Nadzornik zastalih obdelav ==
+22:47:16     Watchdog pregled je končan.
+22:47:16     konec: Nadzornik zastalih obdelav
+22:47:16  == Razposiljanje alarmov ==
+22:47:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:47:17     konec: Razposiljanje alarmov
+22:47:17  Nadzor koncan; padlih korakov: 0.
+22:52:15  == Nadzornik zastalih obdelav ==
+22:52:16     Watchdog pregled je končan.
+22:52:16     konec: Nadzornik zastalih obdelav
+22:52:16  == Razposiljanje alarmov ==
+22:52:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:52:17     konec: Razposiljanje alarmov
+22:52:17  Nadzor koncan; padlih korakov: 0.
+22:57:15  == Nadzornik zastalih obdelav ==
+22:57:16     Watchdog pregled je končan.
+22:57:16     konec: Nadzornik zastalih obdelav
+22:57:16  == Razposiljanje alarmov ==
+22:57:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+22:57:17     konec: Razposiljanje alarmov
+22:57:17  Nadzor koncan; padlih korakov: 0.
+23:02:15  == Nadzornik zastalih obdelav ==
+23:02:17     Watchdog pregled je končan.
+23:02:17     konec: Nadzornik zastalih obdelav
+23:02:17  == Razposiljanje alarmov ==
+23:02:18     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:02:18     konec: Razposiljanje alarmov
+23:02:18  Nadzor koncan; padlih korakov: 0.
+23:07:15  == Nadzornik zastalih obdelav ==
+23:07:16     Watchdog pregled je končan.
+23:07:16     konec: Nadzornik zastalih obdelav
+23:07:16  == Razposiljanje alarmov ==
+23:07:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:07:17     konec: Razposiljanje alarmov
+23:07:17  Nadzor koncan; padlih korakov: 0.
+23:12:15  == Nadzornik zastalih obdelav ==
+23:12:16     Watchdog pregled je končan.
+23:12:16     konec: Nadzornik zastalih obdelav
+23:12:16  == Razposiljanje alarmov ==
+23:12:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:12:17     konec: Razposiljanje alarmov
+23:12:17  Nadzor koncan; padlih korakov: 0.
+23:17:15  == Nadzornik zastalih obdelav ==
+23:17:16     Watchdog pregled je končan.
+23:17:16     konec: Nadzornik zastalih obdelav
+23:17:16  == Razposiljanje alarmov ==
+23:17:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:17:17     konec: Razposiljanje alarmov
+23:17:17  Nadzor koncan; padlih korakov: 0.
+23:22:15  == Nadzornik zastalih obdelav ==
+23:22:16     Watchdog pregled je končan.
+23:22:16     konec: Nadzornik zastalih obdelav
+23:22:16  == Razposiljanje alarmov ==
+23:22:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:22:17     konec: Razposiljanje alarmov
+23:22:17  Nadzor koncan; padlih korakov: 0.
+23:27:15  == Nadzornik zastalih obdelav ==
+23:27:16     Watchdog pregled je končan.
+23:27:16     konec: Nadzornik zastalih obdelav
+23:27:16  == Razposiljanje alarmov ==
+23:27:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:27:17     konec: Razposiljanje alarmov
+23:27:17  Nadzor koncan; padlih korakov: 0.
+23:32:15  == Nadzornik zastalih obdelav ==
+23:32:16     Watchdog pregled je končan.
+23:32:16     konec: Nadzornik zastalih obdelav
+23:32:16  == Razposiljanje alarmov ==
+23:32:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:32:17     konec: Razposiljanje alarmov
+23:32:17  Nadzor koncan; padlih korakov: 0.
+23:37:15  == Nadzornik zastalih obdelav ==
+23:37:16     Watchdog pregled je končan.
+23:37:16     konec: Nadzornik zastalih obdelav
+23:37:16  == Razposiljanje alarmov ==
+23:37:17     Dostava opozoril je privzeto izključena; omrežni klic ni bil izveden.
+23:37:17     konec: Razposiljanje alarmov
+23:37:17  Nadzor koncan; padlih korakov: 0.

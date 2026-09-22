@@ -1,0 +1,14 @@
+21:33:11  === ZAČETEK: Katalog in stranke za splet | posel WEB_CATALOG_EXPORT | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:41644:AutomationHost:console | 2026-09-22 21:33:11
+21:33:11  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 1800 s
+21:33:11  == Katalog in stranke za splet ==
+21:33:23     Objava na splet zapisana: 2176 objavljenih, 387 odjavnih vrstic (0 novih odjav).
+21:33:23     Magento CSV izvoz končan: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\izvoz\magento\2
+21:33:23     [FAZA] Datoteka MAGENTO_PRODUCTS (podjetje 2): se je začela.
+21:33:23     [FAZA] Datoteka MAGENTO_PRODUCTS (podjetje 2): uspelo — zapisano 2.563, 2,5 MB; katalog.csv, stolpcev 180.
+21:33:23     [FAZA] Datoteka MAGENTO_CUSTOMERS (podjetje 2): se je začela.
+21:33:23     [FAZA] Datoteka MAGENTO_CUSTOMERS (podjetje 2): uspelo — zapisano 3.988, 248,2 kB; stranke.csv, stolpcev 19.
+21:33:23     konec: Katalog in stranke za splet (12 s)
+21:33:23  Katalog in stranke za splet končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+21:33:23     OPOZORILO: pričakovana datoteka C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\katalog.csv ne obstaja; artefakt ni zapisan.
+21:33:23     OPOZORILO: pričakovana datoteka C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2\stranke.csv ne obstaja; artefakt ni zapisan.
+21:33:23  === KONEC: izhod 0, trajanje 00:00:12

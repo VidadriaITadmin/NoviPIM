@@ -1,0 +1,15 @@
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\bin\Release\net10.0\PIM.F10.MediaUxTests.exe
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\bin\Release\net10.0\PIM.F10.MediaUxTests.deps.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\bin\Release\net10.0\PIM.F10.MediaUxTests.runtimeconfig.json
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\bin\Release\net10.0\PIM.F10.MediaUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\bin\Release\net10.0\PIM.F10.MediaUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.AssemblyInfoInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.AssemblyInfo.cs
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.csproj.CoreCompileInputs.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\refint\PIM.F10.MediaUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.pdb
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.genruntimeconfig.cache
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\ref\PIM.F10.MediaUxTests.dll
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\tests\PIM.F10.MediaUxTests\obj\Release\net10.0\PIM.F10.MediaUxTests.sourcelink.json

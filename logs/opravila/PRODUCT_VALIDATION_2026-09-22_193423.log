@@ -1,0 +1,13 @@
+19:34:23  === ZAČETEK: Validacija artiklov | posel PRODUCT_VALIDATION | sprožil: Scheduler | gostitelj DESKTOP-TONVQHJ:2216:AutomationHost:console | 2026-09-22 19:34:23
+19:34:23  Podjetja: 2, 3, 4 · prevzem: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem · izvoz: ob korenu (register EXPORT_ROOT ni nastavljen) · izvorna koda: C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution · časovna meja: 3600 s
+19:34:23  == Validacija (podjetje 2) ==
+19:35:04     Validacija (podjetje 2): opravljeno.
+19:35:04     konec: Validacija (podjetje 2) (40 s)
+19:35:04  == Validacija (podjetje 3) ==
+19:35:26     Validacija (podjetje 3): opravljeno.
+19:35:26     konec: Validacija (podjetje 3) (22 s)
+19:35:26  == Validacija (podjetje 4) ==
+19:35:49     Validacija (podjetje 4): opravljeno.
+19:35:49     konec: Validacija (podjetje 4) (22 s)
+19:35:49  Validacija artiklov končan: Succeeded; padlih skupin: 0, blokiranih: 0.
+19:35:49  === KONEC: izhod 0, trajanje 00:01:25

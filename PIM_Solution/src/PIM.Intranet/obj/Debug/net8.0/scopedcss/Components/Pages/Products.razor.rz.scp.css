@@ -1,0 +1,24 @@
+/* Izoliran slog strani /izdelki. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-jppeqvylrb] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-jppeqvylrb] { font-variant-numeric: tabular-nums; }
+
+/* Gosta, a berljiva tabela; na ozkih zaslonih se pomika, namesto da bi se stiskala. */
+.table-scroll[b-jppeqvylrb] { overflow-x: auto; }
+.progress-value[b-jppeqvylrb] { color: #526078; font-variant-numeric: tabular-nums; min-width: 46px; }
+.row-action[b-jppeqvylrb] { text-align: right; width: 44px; }
+.open-link[b-jppeqvylrb] { align-items: center; border-radius: 6px; display: inline-flex; height: 28px; justify-content: center; width: 28px; }
+.chevron[b-jppeqvylrb] { border-right: 1.5px solid #31445f; border-top: 1.5px solid #31445f; height: 7px; transform: rotate(45deg); width: 7px; }
+.page-position[b-jppeqvylrb] { color: #526078; font-size: 13px; }
+
+/* Viden fokus tipkovnice: skupni slog polj obris odstrani, zato ga tu vrnemo. */
+.search-input:focus-visible[b-jppeqvylrb],
+.filter-select:focus-visible[b-jppeqvylrb],
+.filter-button:focus-visible[b-jppeqvylrb],
+.pagination button:focus-visible[b-jppeqvylrb],
+.table-scroll:focus-visible[b-jppeqvylrb],
+.data-table a:focus-visible[b-jppeqvylrb],
+.open-link:focus-visible[b-jppeqvylrb] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-jppeqvylrb] { min-width: 640px; }
+}

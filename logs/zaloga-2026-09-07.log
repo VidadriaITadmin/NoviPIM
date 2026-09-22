@@ -1,0 +1,751 @@
+06:47:27  == Zaloga NW_STOCK ==
+06:47:30     [NW_STOCK] prevzeto 87.310 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\NW_STOCK\nw-zaloga.csv
+06:47:30     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 1.
+06:47:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:47:34     Zaloga zapisana; vir=NW_STOCK, podjetje=1, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2.
+06:47:35     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:47:36     Zaloga zapisana; vir=NW_STOCK, podjetje=2, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c.
+06:47:37     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:47:39     Zaloga zapisana; vir=NW_STOCK, podjetje=3, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49.
+06:47:40     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:47:41     Zaloga zapisana; vir=NW_STOCK, podjetje=4, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736.
+06:47:41     konec: Zaloga NW_STOCK
+06:47:41  == Zaloga BT_STOCK ==
+06:47:42     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+06:47:43     Prebranih zapisov: 1389; SHA-256: a2517b7733d27b59d8188eb1951be99010b20e4977c0b3dab7f5d75170a16581
+06:47:43     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+06:47:44     Prebranih zapisov: 1389; SHA-256: a2517b7733d27b59d8188eb1951be99010b20e4977c0b3dab7f5d75170a16581
+06:47:45     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+06:47:45     Prebranih zapisov: 1389; SHA-256: a2517b7733d27b59d8188eb1951be99010b20e4977c0b3dab7f5d75170a16581
+06:47:46     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+06:47:47     Prebranih zapisov: 1389; SHA-256: a2517b7733d27b59d8188eb1951be99010b20e4977c0b3dab7f5d75170a16581
+06:47:47     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+06:47:47     konec: Zaloga BT_STOCK
+06:47:47  == Zaloga iz SAOP (kolicine) ==
+06:48:12     STDERR: [1] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:48:34     STDERR: [2] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:48:55     STDERR: [3] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:49:16     STDERR: [4] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+06:49:16     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+06:49:16  == Izvoz cen in zaloge za splet ==
+06:49:18     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+06:49:22     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+06:49:25     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+06:49:27     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+06:49:27     konec: Izvoz cen in zaloge za splet
+06:49:27  Zalogovni cikel koncan; padlih korakov: 1.
+06:52:26  == Zaloga NW_STOCK ==
+06:52:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+06:52:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:52:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+06:52:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:52:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+06:52:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:52:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+06:52:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:52:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+06:52:31     konec: Zaloga NW_STOCK
+06:52:31  == Zaloga BT_STOCK ==
+06:52:34     [BT_STOCK] prevzeto 1.588.410 bajtov -> C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\data\prevzem\BT_STOCK\braytron-zaloga.xml
+06:52:34     Prevzem koncan: uspesno 1, neuspesno 0, skupaj virov 1.
+06:52:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:52:36     Zaloga zapisana; vir=BT_STOCK, podjetje=1, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4.
+06:52:37     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:52:37     Zaloga zapisana; vir=BT_STOCK, podjetje=2, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed.
+06:52:38     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:52:39     Zaloga zapisana; vir=BT_STOCK, podjetje=3, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690.
+06:52:40     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:52:41     Zaloga zapisana; vir=BT_STOCK, podjetje=4, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0.
+06:52:41     konec: Zaloga BT_STOCK
+06:52:41  == Zaloga iz SAOP (kolicine) ==
+06:52:42     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:52:42     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:52:42     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:52:42     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:52:42     konec: Zaloga iz SAOP (kolicine)
+06:52:42  == Izvoz cen in zaloge za splet ==
+06:52:43     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+06:52:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+06:52:50     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+06:52:51     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+06:52:51     konec: Izvoz cen in zaloge za splet
+06:52:51  Zalogovni cikel koncan; padlih korakov: 0.
+06:57:26  == Zaloga NW_STOCK ==
+06:57:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+06:57:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:57:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+06:57:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:57:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+06:57:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:57:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+06:57:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+06:57:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+06:57:31     konec: Zaloga NW_STOCK
+06:57:31  == Zaloga BT_STOCK ==
+06:57:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+06:57:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:57:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+06:57:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:57:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+06:57:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:57:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+06:57:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+06:57:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+06:57:36     konec: Zaloga BT_STOCK
+06:57:36  == Zaloga iz SAOP (kolicine) ==
+06:57:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:57:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:57:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:57:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+06:57:37     konec: Zaloga iz SAOP (kolicine)
+06:57:37  == Izvoz cen in zaloge za splet ==
+06:57:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+06:57:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+06:57:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+06:57:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+06:57:47     konec: Izvoz cen in zaloge za splet
+06:57:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:02:26  == Zaloga NW_STOCK ==
+07:02:27     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+07:02:27     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:02:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:02:28     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+07:02:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:02:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+07:02:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:02:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+07:02:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:02:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+07:02:31     konec: Zaloga NW_STOCK
+07:02:31  == Zaloga BT_STOCK ==
+07:02:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:02:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:02:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:02:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:02:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:02:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:02:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:02:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:02:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:02:36     konec: Zaloga BT_STOCK
+07:02:36  == Zaloga iz SAOP (kolicine) ==
+07:02:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:02:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:02:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:02:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:02:37     konec: Zaloga iz SAOP (kolicine)
+07:02:37  == Izvoz cen in zaloge za splet ==
+07:02:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:02:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:02:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:02:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:02:47     konec: Izvoz cen in zaloge za splet
+07:02:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:07:26  == Zaloga NW_STOCK ==
+07:07:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:07:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:07:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:07:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:07:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:07:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:07:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:07:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:07:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:07:31     konec: Zaloga NW_STOCK
+07:07:31  == Zaloga BT_STOCK ==
+07:07:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:07:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:07:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:07:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:07:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:07:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:07:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:07:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:07:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:07:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:07:36     konec: Zaloga BT_STOCK
+07:07:36  == Zaloga iz SAOP (kolicine) ==
+07:07:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:07:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:07:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:07:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:07:37     konec: Zaloga iz SAOP (kolicine)
+07:07:37  == Izvoz cen in zaloge za splet ==
+07:07:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:07:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:07:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:07:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:07:47     konec: Izvoz cen in zaloge za splet
+07:07:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:12:26  == Zaloga NW_STOCK ==
+07:12:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:12:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:12:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:12:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:12:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:12:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:12:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:12:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:12:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:12:31     konec: Zaloga NW_STOCK
+07:12:31  == Zaloga BT_STOCK ==
+07:12:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:12:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:12:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:12:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:12:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:12:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:12:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:12:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:12:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:12:36     konec: Zaloga BT_STOCK
+07:12:36  == Zaloga iz SAOP (kolicine) ==
+07:12:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:12:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:12:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:12:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:12:37     konec: Zaloga iz SAOP (kolicine)
+07:12:37  == Izvoz cen in zaloge za splet ==
+07:12:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:12:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:12:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:12:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:12:47     konec: Izvoz cen in zaloge za splet
+07:12:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:17:26  == Zaloga NW_STOCK ==
+07:17:27     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+07:17:27     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:17:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:17:28     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+07:17:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:17:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+07:17:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:17:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+07:17:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:17:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+07:17:31     konec: Zaloga NW_STOCK
+07:17:31  == Zaloga BT_STOCK ==
+07:17:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:17:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:17:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:17:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:17:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:17:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:17:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:17:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:17:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:17:36     konec: Zaloga BT_STOCK
+07:17:36  == Zaloga iz SAOP (kolicine) ==
+07:17:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:17:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:17:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:17:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:17:37     konec: Zaloga iz SAOP (kolicine)
+07:17:37  == Izvoz cen in zaloge za splet ==
+07:17:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:17:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:17:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:17:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:17:47     konec: Izvoz cen in zaloge za splet
+07:17:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:22:26  == Zaloga NW_STOCK ==
+07:22:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:22:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:22:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:22:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:22:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:22:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:22:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:22:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:22:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:22:31     konec: Zaloga NW_STOCK
+07:22:31  == Zaloga BT_STOCK ==
+07:22:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:22:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:22:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:22:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:22:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:22:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:22:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:22:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:22:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:22:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:22:36     konec: Zaloga BT_STOCK
+07:22:36  == Zaloga iz SAOP (kolicine) ==
+07:22:58     STDERR: [1] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:23:19     STDERR: [2] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:23:41     STDERR: [3] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:24:02     STDERR: [4] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:24:02     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+07:24:02  == Izvoz cen in zaloge za splet ==
+07:24:03     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:24:07     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:24:10     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:24:11     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:24:11     konec: Izvoz cen in zaloge za splet
+07:24:11  Zalogovni cikel koncan; padlih korakov: 1.
+07:27:26  == Zaloga NW_STOCK ==
+07:27:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:27:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:27:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:27:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:27:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:27:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:27:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:27:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:27:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:27:31     konec: Zaloga NW_STOCK
+07:27:31  == Zaloga BT_STOCK ==
+07:27:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:27:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:27:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:27:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:27:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:27:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:27:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:27:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:27:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:27:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:27:36     konec: Zaloga BT_STOCK
+07:27:36  == Zaloga iz SAOP (kolicine) ==
+07:27:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:27:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:27:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:27:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:27:37     konec: Zaloga iz SAOP (kolicine)
+07:27:37  == Izvoz cen in zaloge za splet ==
+07:27:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:27:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:27:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:27:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:27:47     konec: Izvoz cen in zaloge za splet
+07:27:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:32:26  == Zaloga NW_STOCK ==
+07:32:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:32:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:32:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:32:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:32:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:32:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:32:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:32:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:32:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:32:31     konec: Zaloga NW_STOCK
+07:32:31  == Zaloga BT_STOCK ==
+07:32:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:32:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:32:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:32:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:32:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:32:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:32:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:32:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:32:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:32:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:32:36     konec: Zaloga BT_STOCK
+07:32:36  == Zaloga iz SAOP (kolicine) ==
+07:32:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:32:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:32:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:32:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:32:37     konec: Zaloga iz SAOP (kolicine)
+07:32:37  == Izvoz cen in zaloge za splet ==
+07:32:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:32:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:32:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:32:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:32:47     konec: Izvoz cen in zaloge za splet
+07:32:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:37:26  == Zaloga NW_STOCK ==
+07:37:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:37:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:37:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:37:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:37:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:37:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:37:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+07:37:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:37:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+07:37:31     konec: Zaloga NW_STOCK
+07:37:31  == Zaloga BT_STOCK ==
+07:37:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:37:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:37:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:37:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:37:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:37:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:37:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:37:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:37:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:37:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:37:36     konec: Zaloga BT_STOCK
+07:37:36  == Zaloga iz SAOP (kolicine) ==
+07:37:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:37:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:37:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:37:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:37:37     konec: Zaloga iz SAOP (kolicine)
+07:37:37  == Izvoz cen in zaloge za splet ==
+07:37:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:37:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:37:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:37:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:37:47     konec: Izvoz cen in zaloge za splet
+07:37:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:42:26  == Zaloga NW_STOCK ==
+07:42:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:42:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:42:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:42:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:42:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:42:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:42:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+07:42:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:42:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+07:42:31     konec: Zaloga NW_STOCK
+07:42:31  == Zaloga BT_STOCK ==
+07:42:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:42:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:42:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:42:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:42:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:42:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:42:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:42:36     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:42:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:42:37     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:42:37     konec: Zaloga BT_STOCK
+07:42:37  == Zaloga iz SAOP (kolicine) ==
+07:42:38     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:42:38     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:42:38     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:42:38     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:42:38     konec: Zaloga iz SAOP (kolicine)
+07:42:38  == Izvoz cen in zaloge za splet ==
+07:42:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:42:43     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:42:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:42:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:42:47     konec: Izvoz cen in zaloge za splet
+07:42:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:47:26  == Zaloga NW_STOCK ==
+07:47:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:47:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:47:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:47:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:47:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:47:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:47:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:47:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:47:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:47:31     konec: Zaloga NW_STOCK
+07:47:31  == Zaloga BT_STOCK ==
+07:47:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:47:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:47:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:47:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:47:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:47:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:47:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:47:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:47:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:47:36     konec: Zaloga BT_STOCK
+07:47:36  == Zaloga iz SAOP (kolicine) ==
+07:47:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:47:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:47:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:47:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:47:37     konec: Zaloga iz SAOP (kolicine)
+07:47:37  == Izvoz cen in zaloge za splet ==
+07:47:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:47:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:47:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:47:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:47:47     konec: Izvoz cen in zaloge za splet
+07:47:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:52:26  == Zaloga NW_STOCK ==
+07:52:27     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+07:52:27     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:52:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:52:28     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+07:52:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:52:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+07:52:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:52:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:52:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:52:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:52:31     konec: Zaloga NW_STOCK
+07:52:31  == Zaloga BT_STOCK ==
+07:52:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:52:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:52:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:52:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:52:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:52:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:52:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:52:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:52:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:52:36     konec: Zaloga BT_STOCK
+07:52:36  == Zaloga iz SAOP (kolicine) ==
+07:52:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:52:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:52:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:52:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+07:52:37     konec: Zaloga iz SAOP (kolicine)
+07:52:37  == Izvoz cen in zaloge za splet ==
+07:52:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:52:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:52:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:52:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:52:47     konec: Izvoz cen in zaloge za splet
+07:52:47  Zalogovni cikel koncan; padlih korakov: 0.
+07:57:26  == Zaloga NW_STOCK ==
+07:57:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+07:57:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:57:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+07:57:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:57:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+07:57:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:57:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+07:57:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+07:57:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+07:57:31     konec: Zaloga NW_STOCK
+07:57:31  == Zaloga BT_STOCK ==
+07:57:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+07:57:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+07:57:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:57:33     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+07:57:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:57:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+07:57:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:57:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+07:57:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+07:57:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+07:57:36     konec: Zaloga BT_STOCK
+07:57:36  == Zaloga iz SAOP (kolicine) ==
+07:57:58     STDERR: [1] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:58:19     STDERR: [2] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:58:40     STDERR: [3] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:59:01     STDERR: [4] NAPAKA: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond. (192.168.178.12:81)
+07:59:02     NAPAKA: worker workers\PIM.SaopStockWorker je koncal z izhodno kodo 1
+07:59:02  == Izvoz cen in zaloge za splet ==
+07:59:03     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+07:59:07     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+07:59:10     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+07:59:11     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+07:59:11     konec: Izvoz cen in zaloge za splet
+07:59:11  Zalogovni cikel koncan; padlih korakov: 1.
+08:02:26  == Zaloga NW_STOCK ==
+08:02:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:02:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:02:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:02:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:02:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:02:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:02:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:02:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:02:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:02:31     konec: Zaloga NW_STOCK
+08:02:31  == Zaloga BT_STOCK ==
+08:02:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:02:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:02:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:02:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:02:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:02:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:02:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:02:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:02:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:02:36     konec: Zaloga BT_STOCK
+08:02:36  == Zaloga iz SAOP (kolicine) ==
+08:02:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:02:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:02:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:02:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:02:37     konec: Zaloga iz SAOP (kolicine)
+08:02:37  == Izvoz cen in zaloge za splet ==
+08:02:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:02:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:02:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:02:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:02:47     konec: Izvoz cen in zaloge za splet
+08:02:47  Zalogovni cikel koncan; padlih korakov: 0.
+08:07:26  == Zaloga NW_STOCK ==
+08:07:27     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+08:07:27     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+08:07:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:07:28     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+08:07:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:07:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+08:07:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:07:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+08:07:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:07:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+08:07:31     konec: Zaloga NW_STOCK
+08:07:31  == Zaloga BT_STOCK ==
+08:07:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:07:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:07:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:07:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:07:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:07:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:07:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:07:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:07:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:07:36     konec: Zaloga BT_STOCK
+08:07:36  == Zaloga iz SAOP (kolicine) ==
+08:07:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:07:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:07:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:07:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:07:37     konec: Zaloga iz SAOP (kolicine)
+08:07:37  == Izvoz cen in zaloge za splet ==
+08:07:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:07:42     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:07:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:07:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:07:47     konec: Izvoz cen in zaloge za splet
+08:07:47  Zalogovni cikel koncan; padlih korakov: 0.
+08:12:26  == Zaloga NW_STOCK ==
+08:12:28     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+08:12:28     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+08:12:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:12:29     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+08:12:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:12:30     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+08:12:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:12:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+08:12:33     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:12:33     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+08:12:33     konec: Zaloga NW_STOCK
+08:12:33  == Zaloga BT_STOCK ==
+08:12:36     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:12:37     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:12:37     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:12:39     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:12:39     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:12:40     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:12:40     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:12:41     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:12:42     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:12:42     konec: Zaloga BT_STOCK
+08:12:42  == Zaloga iz SAOP (kolicine) ==
+08:12:43     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:12:43     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:12:43     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:12:43     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:12:43     konec: Zaloga iz SAOP (kolicine)
+08:12:43  == Izvoz cen in zaloge za splet ==
+08:12:45     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:12:50     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:12:53     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:12:55     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:12:55     konec: Izvoz cen in zaloge za splet
+08:12:55  Zalogovni cikel koncan; padlih korakov: 0.
+08:17:26  == Zaloga NW_STOCK ==
+08:17:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:17:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:17:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:17:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:17:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:17:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:17:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:17:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:17:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:17:31     konec: Zaloga NW_STOCK
+08:17:31  == Zaloga BT_STOCK ==
+08:17:32     [BT_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 09:52.
+08:17:32     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+08:17:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:17:34     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=1, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=22264edf-421c-46ec-ae7e-a84c77d823c4. Zapisano ni bilo nic.
+08:17:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:17:35     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=2, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=58c1c6b2-642e-44e0-9796-22c14c07b1ed. Zapisano ni bilo nic.
+08:17:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:17:36     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=3, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=290f6dbc-7b1d-4f91-8915-fa7834a9e690. Zapisano ni bilo nic.
+08:17:37     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:17:37     Ta posnetek je ze v bazi; vir=BT_STOCK, podjetje=4, cas posnetka=2026-09-07 04:52:34Z, uporabljenih=1389, v karanteni=0, RunId=85dd4328-ee35-437c-8a50-8f80c2c4abf0. Zapisano ni bilo nic.
+08:17:37     konec: Zaloga BT_STOCK
+08:17:37  == Zaloga iz SAOP (kolicine) ==
+08:17:38     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:17:38     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:17:38     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:17:38     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:17:38     konec: Zaloga iz SAOP (kolicine)
+08:17:38  == Izvoz cen in zaloge za splet ==
+08:17:40     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:17:43     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:17:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:17:48     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:17:48     konec: Izvoz cen in zaloge za splet
+08:17:48  Zalogovni cikel koncan; padlih korakov: 0.
+08:22:26  == Zaloga NW_STOCK ==
+08:22:27     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:22:28     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:22:28     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:22:29     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:22:29     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:22:30     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:22:30     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:22:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:22:31     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:22:31     konec: Zaloga NW_STOCK
+08:22:31  == Zaloga BT_STOCK ==
+08:22:32     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:22:33     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:22:33     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:22:34     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:22:34     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:22:35     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:22:35     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:22:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:22:36     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:22:36     konec: Zaloga BT_STOCK
+08:22:36  == Zaloga iz SAOP (kolicine) ==
+08:22:37     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:22:37     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:22:37     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:22:37     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:22:37     konec: Zaloga iz SAOP (kolicine)
+08:22:37  == Izvoz cen in zaloge za splet ==
+08:22:39     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:22:43     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:22:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:22:47     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:22:47     konec: Izvoz cen in zaloge za splet
+08:22:47  Zalogovni cikel koncan; padlih korakov: 0.
+08:27:28  == Zaloga NW_STOCK ==
+08:27:30     [NW_STOCK] preskoceno: Razmik dobavitelja se tece; naslednji prenos po 7. 09. 2026 08:47.
+08:27:30     Prevzem koncan: uspesno 0, neuspesno 0, skupaj virov 1.
+08:27:31     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:27:31     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=1, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=8b739105-e54c-4562-92d3-3f5474728fe2. Zapisano ni bilo nic.
+08:27:32     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:27:32     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=2, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=1c77194b-b5fe-4766-8e8f-28f1a9ff734c. Zapisano ni bilo nic.
+08:27:33     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:27:33     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=3, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=b5958450-9d5a-4849-bbe7-4860e2998e49. Zapisano ni bilo nic.
+08:27:34     Prebranih zapisov: 2762; SHA-256: 173067bd390aa7f765e98a4070397f043d4b3a6ed93a16d1db7124c35dc79a27
+08:27:34     Ta posnetek je ze v bazi; vir=NW_STOCK, podjetje=4, cas posnetka=2026-09-07 04:47:29Z, uporabljenih=2762, v karanteni=0, RunId=e0bea651-1b62-45df-a894-172db81d6736. Zapisano ni bilo nic.
+08:27:34     konec: Zaloga NW_STOCK
+08:27:34  == Zaloga BT_STOCK ==
+08:27:35     SOURCE_FETCH: se ni na vrsti po razporedu; preskoceno.
+08:27:36     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:27:36     STOCK_FILE pri podjetju 1: se ni na vrsti po razporedu; preskoceno.
+08:27:37     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:27:37     STOCK_FILE pri podjetju 2: se ni na vrsti po razporedu; preskoceno.
+08:27:38     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:27:38     STOCK_FILE pri podjetju 3: se ni na vrsti po razporedu; preskoceno.
+08:27:39     Prebranih zapisov: 1389; SHA-256: 9fa8bce6cd9ee52841837cdbe0a3784e049b27825cd2f4cfe597aab33e8a78b0
+08:27:39     STOCK_FILE pri podjetju 4: se ni na vrsti po razporedu; preskoceno.
+08:27:39     konec: Zaloga BT_STOCK
+08:27:39  == Zaloga iz SAOP (kolicine) ==
+08:27:41     [1] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:27:41     [2] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:27:41     [3] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:27:41     [4] SAOP_STOCK: se ni na vrsti po razporedu; preskoceno.
+08:27:41     konec: Zaloga iz SAOP (kolicine)
+08:27:41  == Izvoz cen in zaloge za splet ==
+08:27:43     Izvoz profila MAGENTO_STOCK_PRICES končan: 352 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\1
+08:27:46     Izvoz profila MAGENTO_STOCK_PRICES končan: 2071 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\2
+08:27:50     Izvoz profila MAGENTO_STOCK_PRICES končan: 2488 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\3
+08:27:51     Izvoz profila MAGENTO_STOCK_PRICES končan: 0 vrstic v C:\Users\david\Desktop\PIM\NoviPIM\izvoz\magento\4
+08:27:51     konec: Izvoz cen in zaloge za splet
+08:27:51  Zalogovni cikel koncan; padlih korakov: 0.

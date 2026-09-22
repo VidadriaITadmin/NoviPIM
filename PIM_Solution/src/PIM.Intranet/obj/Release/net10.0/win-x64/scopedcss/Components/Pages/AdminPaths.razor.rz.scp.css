@@ -1,0 +1,13 @@
+/* Vrstica z eno potjo: polje se razteza, gumbi ostanejo ob njem. Na ozkem zaslonu se
+   prelomi, ker je pot lahko dolga in se ne sme skrajšati na tri pike. */
+.path-row[b-bu4wtq8mfc] { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }
+.path-input[b-bu4wtq8mfc] { flex: 1 1 24rem; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; min-width: 0; }
+
+.panel-title[b-bu4wtq8mfc] { align-items: center; display: flex; justify-content: space-between; margin-bottom: .5rem; }
+.panel-title h2[b-bu4wtq8mfc] { color: var(--pim-text-strong); font-size: 15px; font-weight: 650; margin: 0; }
+
+.panel-note[b-bu4wtq8mfc] { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: 0 0 .75rem; }
+
+@media (max-width: 720px) {
+  .panel-title[b-bu4wtq8mfc] { align-items: flex-start; flex-direction: column; gap: .25rem; }
+}

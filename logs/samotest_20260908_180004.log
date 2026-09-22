@@ -1,0 +1,19 @@
+[18:00:04] Samotest se zacenja. Profil=MAGENTO_STOCK_PRICES, podjetje=2, sprozil=Task.
+[18:00:48] Samotest NIGHTLY_SYSTEM (1fc48695-50cc-4fb5-b130-ce21474ef140)
+[18:00:48] ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+[18:00:48] DB                 USPEL             24 ms  184 uporabljenih migracij
+[18:00:48] SCHEMA             USPEL              4 ms  7 objektov je na mestu
+[18:00:48] SCHEDULES          USPEL              1 ms  23 od 23 vklopljenih
+[18:00:48] HEARTBEAT          PADEL              6 ms  Mol─Źijo: ALERT_DISPATCH (org 2), GENERIC_XML (org 1), GENERIC_XML (org 2), GENERIC_XML (org 3), GENERIC_XML (org 4), SAOP_DELIVERY (org 1), SAOP_DELIVERY (org 2), SAOP_DELIVERY (org 3), SAOP_DELIVERY (org 4), SAOP_STOCK (org 2)
+[18:00:48] RUNS_24H           PADEL              5 ms  Brez zagona v 24 h: ALERT_DISPATCH (org 2), SAOP_DELIVERY (org 1), SAOP_DELIVERY (org 2), SAOP_DELIVERY (org 3), SAOP_DELIVERY (org 4)
+[18:00:48] CATALOG            USPEL             20 ms  196.559 izdelkov (+0 od prej┼ínjega zagona)
+[18:00:48] QUARANTINE         OPOZORILO          1 ms  5 zapisov ─Źaka v karanteni.
+[18:00:48] QUALITY            OPOZORILO      38760 ms  15.034 objavljenih izdelkov ima odprto zahtevo.
+[18:00:48] WEB_CSV            USPEL           1855 ms  2.071 vrstic ├Ś 14 stolpcev, 118 kB
+[18:00:48] OUTBOX             OPOZORILO          1 ms  1 mrtvih sporo─Źil, 14 ─Źaka odobritve.
+[18:00:48] ECHO               USPEL              0 ms  ni nepojasnjenih odklonov
+[18:00:48] EXPORT_FRESHNESS   USPEL              1 ms  5 uspe┼ínih izvozov v 24 h
+[18:00:48] ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+[18:00:48] REZULTAT: PADEL ÔÇö 12 korakov, 40678 ms
+[18:00:48] Izhodna koda: 1
+[18:00:48] Dnevnik: C:\Users\david\Desktop\PIM\NoviPIM\logs\samotest_20260908_180004.log

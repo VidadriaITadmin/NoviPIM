@@ -1,0 +1,26 @@
+/* Izoliran slog strani /outbound. Dopolnjuje skupne razrede iz app.css, jih ne podvaja. */
+.toolbar[b-1c74dq2ow0] { flex-wrap: wrap; row-gap: 10px; }
+.result-count[b-1c74dq2ow0] { font-variant-numeric: tabular-nums; }
+
+/* Delež pod vrednostjo hitrega pregleda je izpeljan podatek, zato ostane vizualno podrejen. */
+.kpi-share[b-1c74dq2ow0] { color: #64748b; display: block; font-size: 12px; margin-top: 4px; }
+
+/* Deset stolpcev je gostih; na ozkih zaslonih se tabela pomika, namesto da bi se stiskala. */
+.table-scroll[b-1c74dq2ow0] { overflow-x: auto; }
+.numeric[b-1c74dq2ow0] { text-align: right; font-variant-numeric: tabular-nums; }
+.page-position[b-1c74dq2ow0] { color: #526078; font-size: 13px; }
+
+/* Odklon je opozorilo, zato nosi tudi besedilo in ne le barve. */
+.drift-flag[b-1c74dq2ow0] { background: #fff7e8; border: 1px solid #fde1ad; border-radius: 5px; color: #cf7200; display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 6px; }
+
+/* Viden fokus tipkovnice: skupni slog polj in gumbov obris odstrani, zato ga tu vrnemo. */
+.page-tab:focus-visible[b-1c74dq2ow0],
+.search-input:focus-visible[b-1c74dq2ow0],
+.filter-select:focus-visible[b-1c74dq2ow0],
+.small-action:focus-visible[b-1c74dq2ow0],
+.pagination button:focus-visible[b-1c74dq2ow0],
+.table-scroll:focus-visible[b-1c74dq2ow0] { outline: 2px solid #1764e8; outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table[b-1c74dq2ow0] { min-width: 1180px; }
+}
