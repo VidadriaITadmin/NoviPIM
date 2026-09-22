@@ -31,7 +31,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set \"PIM_CONNECTION_STRING=Server=DAVID\\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet run --project C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet -c Release --no-build --no-launch-profile --urls http://localhost:5095"
+        "set \"PIM_CONNECTION_STRING=Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet run --project C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet -c Release --no-build --no-launch-profile --urls http://localhost:5095"
       ],
       "port": 5095
     },
@@ -40,7 +40,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set \"PIM_CONNECTION_STRING=Server=DAVID\\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet run --project C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet -c Release --no-launch-profile --urls http://localhost:5093"
+        "set \"PIM_CONNECTION_STRING=Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet run --project C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet -c Release --no-launch-profile --urls http://localhost:5093"
       ],
       "port": 5093
     },
@@ -49,7 +49,7 @@
       "runtimeExecutable": "cmd",
       "runtimeArgs": [
         "/c",
-        "set \"PIM_CONNECTION_STRING=Server=DAVID\\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet build C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/PIM.Intranet.csproj -c Release -p:OutDir=C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/bin/Release-claude/ --nologo -v q && cd /d C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet && dotnet C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/bin/Release-claude/PIM.Intranet.dll --urls http://localhost:5093"
+        "set \"PIM_CONNECTION_STRING=Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && dotnet build C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/PIM.Intranet.csproj -c Release -p:OutDir=C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/bin/Release-claude/ --nologo -v q && cd /d C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet && dotnet C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet/bin/Release-claude/PIM.Intranet.dll --urls http://localhost:5093"
       ],
       "port": 5093
     },
@@ -70,7 +70,7 @@
         "--contentRoot", "C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet",
         "--urls", "http://localhost:5196",
         "--Scheduler:Enabled=false",
-        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
+        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
       ],
       "port": 5196
     },
@@ -82,7 +82,7 @@
         "--contentRoot", "C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet",
         "--urls", "http://localhost:5198",
         "--Scheduler:Enabled=false",
-        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
+        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
       ],
       "port": 5198
     },
@@ -94,9 +94,21 @@
         "--contentRoot", "C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet",
         "--urls", "http://localhost:5197",
         "--Scheduler:Enabled=false",
-        "--ConnectionStrings:Pim=Server=DAVID\\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
+        "--ConnectionStrings:Pim=Server=DAVID\MSSQL19;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
       ],
       "port": 5197
+    },
+    {
+      "name": "pim-intranet-cene",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "C:/Users/david/AppData/Local/Temp/claude/C--Users-david-Desktop-PIM-NoviPIM/512f3016-d5aa-4ced-95b6-3e30edba82d8/scratchpad/bin-intranet/PIM.Intranet.dll",
+        "--contentRoot", "C:/Users/david/Desktop/PIM/NoviPIM/PIM_Solution/src/PIM.Intranet",
+        "--urls", "http://localhost:5194",
+        "--Scheduler:Enabled=false",
+        "--ConnectionStrings:Pim=Server=DESKTOP-TONVQHJ\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True"
+      ],
+      "port": 5194
     }
   ]
 }

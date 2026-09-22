@@ -5,9 +5,9 @@ namespace PIM.Automation;
 
 /// <summary>
 /// Kar gostitelj potrebuje od sveta zunaj baze: postavitev (izvorna koda ali objavljeni workerji), mapa
-/// dnevnikov, časovni pas in okolje otroških procesov. Ista pravila kot v intranetu (WorkerConsoleLayout,
-/// WorkerCycleRunner.BuildEnvironmentAsync), da ročni zagon s strani in zagon iz gostitelja poganjata
-/// isti ukaz na isti mapi.
+/// dnevnikov, časovni pas in okolje otroških procesov. Ročni zagon s strani je samo zahteva
+/// (ops.RequestJobRun), ki jo izvede isti gostitelj — zato ročni in načrtovani zagon poganjata isti
+/// ukaz na isti mapi.
 /// </summary>
 public static class AutomationEnvironment
 {
@@ -80,7 +80,7 @@ public static class AutomationEnvironment
     return (root, note);
   }
 
-  /// <summary>Podmapa mape dnevnikov za zagone poslov (en dnevnik na zagon); intranet jo bere kot vrsto »opravila«.</summary>
+  /// <summary>Podmapa mape dnevnikov za zagone poslov (en dnevnik na zagon); pot gre v ops.JobRun.LogPath, po njej ga bere intranet.</summary>
   public const string JobLogFolder = "opravila";
 
   /// <summary>Koliko dni gostitelj hrani svoje dnevnike (opravila\, gostitelj\).</summary>
@@ -88,7 +88,7 @@ public static class AutomationEnvironment
 
   /// <summary>
   /// Hramba: izbriše *.log v podmapah opravila\ in gostitelj\, starejše od <paramref name="days"/> dni.
-  /// Drugih datotek v mapi dnevnikov (stari cikli, skripte) se ne dotika.
+  /// Drugih datotek v mapi dnevnikov (dnevniki starih ciklov iz časa pred 254, skripte) se ne dotika.
   /// </summary>
   public static int PruneLogs(string logRoot, int days, Action<string, Exception?> warn)
   {
@@ -119,10 +119,10 @@ public static class AutomationEnvironment
   {
     var folder = Path.Combine(logRoot, JobLogFolder);
     Directory.CreateDirectory(folder);
-    return Path.Combine(folder, $"{jobKey}_{startedLocal.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}.log");
+    return Path.Combine(folder, WorkerLogs.RunLogFileName(jobKey, startedLocal));
   }
 
-  /// <summary>Okolje cikla za en zagon: podjetja, mape, register (isti vrstni red kot v PIM.Operations.SystemPaths).</summary>
+  /// <summary>Okolje posla za en zagon: podjetja, mape, register (isti vrstni red kot v PIM.Operations.SystemPaths).</summary>
   public static async Task<CycleEnvironment> BuildAsync(
     AutomationStore store, WorkerConsoleSetup setup, TimeZoneInfo zone, int maxParallel, Action<string, Exception?> warn, CancellationToken cancellationToken)
   {

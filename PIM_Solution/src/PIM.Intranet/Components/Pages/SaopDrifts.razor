@@ -5,7 +5,7 @@
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Odkloni SAOP</PageTitle>
-<PimPage Title="Odkloni SAOP" Subtitle="Primerjava dejansko poslane vrednosti z vrednostjo, ki jo je vrnila naslednja sinhronizacija ERP." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="Odkloni SAOP" Subtitle="Primerjava dejansko poslane vrednosti z vrednostjo, ki jo je vrnila naslednja sinhronizacija ERP." Crumbs="Crumbs" />
 
 <PimMissing Object="intranet.GetOutboundMessages" What="strukturiran posnetek poslanih vrednosti in strukturiran echo iz SAOP; trenutni DriftDetail je le povzetek" Needs="out.OutboxMessage, posnetek polj ob pošiljanju in povratni SAOP zajem" />
 
@@ -18,7 +18,7 @@
           <tr>
             <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td>
             <td>@row.FieldSummary</td><td>—</td><td>@row.DriftDetail</td><td>@row.DriftDetail</td>
-            <td><button type="button" class="small-action warn-action" disabled="@Busy" @onclick="() => RetryAsync(row.OutboxMessageId)">Pošlji ponovno</button></td>
+            <td><button type="button" class="small-action warn-action" disabled="@Busy" @onclick="() => RetryAsync(row.OutboxMessageId)">Pošlji znova</button></td>
           </tr>
         }
       </Rows>

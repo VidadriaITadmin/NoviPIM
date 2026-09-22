@@ -192,7 +192,7 @@ public sealed class PipelineReadService(PimDb database)
           AND landing.Status IN (N'Pending', N'Quarantined')
       ) stockCounts
       WHERE organization.IsActive = 1
-        AND (@OrganizationId IS NULL OR connector.OrganizationId = @OrganizationId)
+        AND ((@OrganizationId IS NULL AND connector.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR connector.OrganizationId = @OrganizationId)
       ORDER BY organization.OrganizationId,
         CASE WHEN connector.SourceCode LIKE N'SAOP%' THEN 0 WHEN connector.SourceCode LIKE N'%XML%' THEN 1
           WHEN connector.SourceCode LIKE N'%STOCK%' THEN 2 ELSE 3 END,
@@ -233,21 +233,21 @@ public sealed class PipelineReadService(PimDb database)
 
       SELECT
         (SELECT COUNT_BIG(*) FROM raw.Inbox inbox
-         WHERE (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Pending') AS PendingPages,
+         WHERE ((@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Pending') AS PendingPages,
         (SELECT MIN(inbox.ReceivedUtc) FROM raw.Inbox inbox
-         WHERE (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Pending') AS OldestPendingUtc,
+         WHERE ((@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Pending') AS OldestPendingUtc,
         (SELECT COUNT_BIG(*) FROM raw.Inbox inbox
-         WHERE (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Quarantined') AS QuarantinedPages,
+         WHERE ((@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId) AND inbox.Status = N'Quarantined') AS QuarantinedPages,
         (SELECT COUNT_BIG(*) FROM map.UnmappedValue unmapped
          INNER JOIN map.ExtractedValue extracted ON extracted.ExtractedValueId = unmapped.ExtractedValueId
          INNER JOIN raw.Inbox inbox ON inbox.InboxId = extracted.InboxId
-         WHERE @OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId) AS UnmappedValues,
+         WHERE (@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId) AS UnmappedValues,
         ((SELECT COUNT_BIG(*) FROM map.MissingTranslationOpen) + COALESCE(@MissingCategories, 0)) AS MappingWorkCount,
         (SELECT COUNT_BIG(*) FROM stock.UnmatchedPosition unmatched
          INNER JOIN stock.LandingRecord landing ON landing.LandingRecordId = unmatched.LandingRecordId
-         WHERE @OrganizationId IS NULL OR landing.OrganizationId = @OrganizationId) AS StockUnmatchedCount,
+         WHERE (@OrganizationId IS NULL AND landing.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR landing.OrganizationId = @OrganizationId) AS StockUnmatchedCount,
         ((SELECT COUNT_BIG(*) FROM ops.DeadLetterQueue dead
-          WHERE dead.Status <> N'Resolved' AND (@OrganizationId IS NULL OR dead.OrganizationId = @OrganizationId)
+          WHERE dead.Status <> N'Resolved' AND ((@OrganizationId IS NULL AND dead.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR dead.OrganizationId = @OrganizationId)
             AND EXISTS
             (
               SELECT 1 FROM map.SourceConnector connector
@@ -258,7 +258,7 @@ public sealed class PipelineReadService(PimDb database)
           INNER JOIN ops.PipelineRun run ON run.RunId = errorValue.RunId
           WHERE errorValue.Severity IN (N'Error', N'Critical')
             AND errorValue.OccurredUtc >= DATEADD(day, -7, SYSUTCDATETIME())
-            AND (@OrganizationId IS NULL OR run.OrganizationId = @OrganizationId))) AS OpenTechnicalProblems;
+            AND ((@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId))) AS OpenTechnicalProblems;
       """,
       reader => new InboundOverviewSummary(
         PimDb.Int64(reader, "PendingPages"), PimDb.NullableDateTime(reader, "OldestPendingUtc"),
@@ -287,7 +287,7 @@ public sealed class PipelineReadService(PimDb database)
              run.StartedUtc, run.EndedUtc, run.CorrelationId
       FROM ops.PipelineRun run
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
-      WHERE @OrganizationId IS NULL OR run.OrganizationId = @OrganizationId;
+      WHERE (@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId;
 
       INSERT #InboundRuns
       SELECT N'STOCK', run.SyncRunId, run.OrganizationId, organization.Name, N'STOCK', connector.SourceCode,
@@ -296,7 +296,7 @@ public sealed class PipelineReadService(PimDb database)
       FROM stock.SyncRun run
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
       INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = run.SourceConnectorId
-      WHERE @OrganizationId IS NULL OR run.OrganizationId = @OrganizationId;
+      WHERE (@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId;
 
       SELECT RunKind, RunId, OrganizationId, OrganizationName, Pipeline, SourceCode, Status,
              RowsRead, RowsSucceeded, RowsFailed, StartedUtc, EndedUtc, CorrelationId
@@ -348,7 +348,7 @@ public sealed class PipelineReadService(PimDb database)
         FROM ops.PipelineRun run
         INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
         WHERE run.RunId = @RunId
-          AND (@OrganizationId IS NULL OR run.OrganizationId = @OrganizationId)
+          AND ((@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId)
         UNION ALL
         SELECT N'STOCK', run.SyncRunId, run.OrganizationId, organization.Name, N'STOCK', connector.SourceCode,
                run.Status, run.Endpoint, CONVERT(bigint, run.RecordsRead), CONVERT(bigint, run.RecordsApplied),
@@ -357,7 +357,7 @@ public sealed class PipelineReadService(PimDb database)
         INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
         INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = run.SourceConnectorId
         WHERE run.SyncRunId = @RunId
-          AND (@OrganizationId IS NULL OR run.OrganizationId = @OrganizationId)
+          AND ((@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId)
       ) value;
       """,
       reader => new InboundRunHeader(
@@ -495,7 +495,7 @@ public sealed class PipelineReadService(PimDb database)
       FROM raw.Inbox inbox
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = inbox.OrganizationId
       WHERE inbox.Status IN (N'Pending', N'Quarantined')
-        AND (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId)
+        AND ((@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId)
       GROUP BY inbox.OrganizationId, organization.Name, inbox.SourceCode, inbox.Status, inbox.FailureReason;
 
       INSERT #InboundIssues
@@ -506,7 +506,7 @@ public sealed class PipelineReadService(PimDb database)
       INNER JOIN stock.LandingRecord landing ON landing.LandingRecordId = unmatched.LandingRecordId
       INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = landing.SourceConnectorId
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = landing.OrganizationId
-      WHERE @OrganizationId IS NULL OR landing.OrganizationId = @OrganizationId
+      WHERE (@OrganizationId IS NULL AND landing.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR landing.OrganizationId = @OrganizationId
       GROUP BY landing.OrganizationId, organization.Name, connector.SourceCode, unmatched.ReasonCode, unmatched.Detail;
 
       INSERT #InboundIssues
@@ -517,7 +517,7 @@ public sealed class PipelineReadService(PimDb database)
              MIN(dead.FirstFailedUtc), MAX(dead.LastFailedUtc), NULL
       FROM ops.DeadLetterQueue dead
       LEFT JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = dead.OrganizationId
-      WHERE dead.Status <> N'Resolved' AND (@OrganizationId IS NULL OR dead.OrganizationId = @OrganizationId)
+      WHERE dead.Status <> N'Resolved' AND ((@OrganizationId IS NULL AND dead.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR dead.OrganizationId = @OrganizationId)
         AND EXISTS
         (
           SELECT 1 FROM map.SourceConnector sourceConnector
@@ -534,7 +534,7 @@ public sealed class PipelineReadService(PimDb database)
       INNER JOIN ops.PipelineRun run ON run.RunId = errorValue.RunId
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
       WHERE errorValue.Severity IN (N'Warning', N'Error', N'Critical')
-        AND (@OrganizationId IS NULL OR run.OrganizationId = @OrganizationId);
+        AND ((@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId);
 
       SELECT IssueKind, IssueId, OrganizationId, OrganizationName, SourceCode, Severity, Title, Detail,
              OccurrenceCount, FirstSeenUtc, LastSeenUtc, RunId
@@ -588,7 +588,7 @@ public sealed class PipelineReadService(PimDb database)
         FROM raw.Inbox inbox
         INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = inbox.OrganizationId
         WHERE inbox.InboxId = @IssueId
-          AND (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId);
+          AND ((@OrganizationId IS NULL AND inbox.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR inbox.OrganizationId = @OrganizationId);
         """,
       "STOCK" => """
         SELECT N'STOCK' AS IssueKind, unmatched.UnmatchedPositionId AS IssueId,
@@ -602,7 +602,7 @@ public sealed class PipelineReadService(PimDb database)
         INNER JOIN map.SourceConnector connector ON connector.SourceConnectorId = landing.SourceConnectorId
         INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = landing.OrganizationId
         WHERE unmatched.UnmatchedPositionId = @IssueId
-          AND (@OrganizationId IS NULL OR landing.OrganizationId = @OrganizationId);
+          AND ((@OrganizationId IS NULL AND landing.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR landing.OrganizationId = @OrganizationId);
         """,
       "DEADLETTER" => """
         SELECT N'DEADLETTER' AS IssueKind, dead.DeadLetterId AS IssueId,
@@ -615,7 +615,7 @@ public sealed class PipelineReadService(PimDb database)
         FROM ops.DeadLetterQueue dead
         LEFT JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = dead.OrganizationId
         WHERE dead.DeadLetterId = @IssueId
-          AND (@OrganizationId IS NULL OR dead.OrganizationId = @OrganizationId)
+          AND ((@OrganizationId IS NULL AND dead.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR dead.OrganizationId = @OrganizationId)
           AND EXISTS
           (
             SELECT 1 FROM map.SourceConnector connector
@@ -634,7 +634,7 @@ public sealed class PipelineReadService(PimDb database)
         INNER JOIN ops.PipelineRun run ON run.RunId = errorValue.RunId
         INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = run.OrganizationId
         WHERE errorValue.ErrorLogId = @IssueId
-          AND (@OrganizationId IS NULL OR run.OrganizationId = @OrganizationId);
+          AND ((@OrganizationId IS NULL AND run.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR run.OrganizationId = @OrganizationId);
         """,
       _ => null,
     };
@@ -802,7 +802,7 @@ public sealed class PipelineReadService(PimDb database)
   public async Task<InboundFilterOptions> GetInboundFilterOptionsAsync(int? organizationId, CancellationToken cancellationToken = default)
   {
     var sources = await database.QueryAsync(
-      "SELECT DISTINCT SourceCode FROM map.SourceConnector WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId ORDER BY SourceCode;",
+      "SELECT DISTINCT SourceCode FROM map.SourceConnector WHERE (@OrganizationId IS NULL AND OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR OrganizationId = @OrganizationId ORDER BY SourceCode;",
       reader => PimDb.TextOrEmpty(reader, "SourceCode"),
       command => command.Parameters.AddWithValue("@OrganizationId", (object?)organizationId ?? DBNull.Value),
       cancellationToken);
@@ -811,9 +811,9 @@ public sealed class PipelineReadService(PimDb database)
       """
       SELECT Pipeline FROM
       (
-        SELECT DISTINCT Pipeline FROM ops.PipelineRun WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId
+        SELECT DISTINCT Pipeline FROM ops.PipelineRun WHERE (@OrganizationId IS NULL AND OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR OrganizationId = @OrganizationId
         UNION
-        SELECT DISTINCT N'STOCK_SYNC' FROM stock.SyncRun WHERE @OrganizationId IS NULL OR OrganizationId = @OrganizationId
+        SELECT DISTINCT N'STOCK_SYNC' FROM stock.SyncRun WHERE (@OrganizationId IS NULL AND OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR OrganizationId = @OrganizationId
       ) AS combined
       ORDER BY Pipeline;
       """,

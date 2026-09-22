@@ -598,7 +598,7 @@ static async Task<int> UstvariAdminaAsync(string connectionString, string uporab
     return 1;
   }
 
-  Console.WriteLine($"Skrbnik {ime} je ustvarjen. Prijavi se na /prijava in geslo takoj spremeni na /sistem/uporabniki.");
+  Console.WriteLine($"Skrbnik {ime} je ustvarjen. Prijavi se na /prijava in geslo takoj spremeni na /administracija.");
   return 0;
 }
 

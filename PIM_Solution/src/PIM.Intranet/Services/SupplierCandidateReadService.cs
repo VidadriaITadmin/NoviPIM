@@ -24,10 +24,10 @@ public sealed record SupplierProductCandidateRow(
   public string CurrentItemId => ProductItemId ?? ItemId;
 
   /// <summary>Ali je kandidat uvozen, artikla pa v SAOP se ni in v vrsti ne caka nic (241) — »porini v SAOP«.</summary>
-  public bool CanQueueForSaop => Status == "APPROVED" && CreatedProductId is not null && SaopState is "NOT_QUEUED" or "FAILED";
+  public bool CanQueueForSaop => Status == "PENDING" && CreatedProductId is null && SaopState is "NOT_QUEUED" or "FAILED";
 
   /// <summary>Ali je kandidat uvozen, SAOP pa artikla se ne pozna (ne glede na vrsto).</summary>
-  public bool IsNotYetInErp => CreatedProductId is not null && ErpExistence == "NOT_YET_IN_ERP";
+  public bool IsNotYetInErp => CreatedProductId is null || ErpExistence == "NOT_YET_IN_ERP";
 }
 
 /// <param name="ImportedWaitingCount">Uvozeni artikli, ki v SAOP se niso in ne cakajo v vrsti (241).</param>

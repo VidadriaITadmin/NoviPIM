@@ -49,6 +49,14 @@ if (bySchedule && !await OperationsRun.IsDueAsync(connectionString, organization
   return 0;
 }
 
+// Faze (blok 6 prenove nadzora, 2026-09-22): DATOTEKA na izvozno datoteko — ime, vrstice, stolpci,
+// velikost. SourceCode je koda profila (MAGENTO_PRODUCTS, MAGENTO_CUSTOMERS, MAGENTO_STOCK_PRICES),
+// Pipeline ime teka. Zakaj: stran Nadzor mora pokazati, da je datoteka za splet res nastala in kako
+// velika je, ne samo izhodne kode; neuspeh je padla faza z razlogom.
+var phases = PhaseLog.FromEnvironment(connectionString, $"{Environment.MachineName}:{Environment.ProcessId}");
+string[] fileProfiles = exportProfile ? [pipeline] : [MagentoProductSchema.ProfileCode, MagentoCustomerSchema.ProfileCode];
+
+var datotekeZapisane = false;
 OperationsRun? run = null;
 try
 {
@@ -60,6 +68,14 @@ catch (SqlException exception) when (exception.Number is 51100 or 51101)
   Console.Error.WriteLine(exception.Number == 51100
     ? $"Razpored za {pipeline} ni omogocen; zagon je preskocen."
     : $"{pipeline} ze tece; ta zagon se je umaknil.");
+  foreach (var profil in fileProfiles)
+  {
+    await phases.RecordAsync(PhaseCodes.File, exception.Number == 51100 ? PhaseOutcome.Failed : PhaseOutcome.Skipped,
+      profil, organizationId, pipeline,
+      message: exception.Number == 51100
+        ? $"razpored {pipeline} za podjetje ni omogočen; datoteka ni nastala"
+        : $"{pipeline} že teče; ta zagon se je umaknil");
+  }
   return exception.Number == 51100 ? 2 : 0;
 }
 
@@ -79,19 +95,30 @@ try
     // En profil, ena datoteka: hitra osvezitev cen in zaloge (MAGENTO_STOCK_PRICES, migracija 146).
     var fileNameIndex = Array.IndexOf(args, "--file-name");
     var fileName = fileNameIndex >= 0 && fileNameIndex + 1 < args.Length ? args[fileNameIndex + 1] : null;
-    var rows = await MagentoExportCommand.ExportProfileAsync(pipeline, organizationId, outputDirectory, fileName, connectionString);
-    Console.WriteLine($"Izvoz profila {pipeline} končan: {rows} vrstic v {outputDirectory}");
+    var file = await MagentoExportCommand.ExportProfileFileAsync(pipeline, organizationId, outputDirectory, fileName, connectionString);
+    Console.WriteLine($"Izvoz profila {pipeline} končan: {file.Rows} vrstic v {outputDirectory}");
+    datotekeZapisane = true;
+    await RecordFileAsync(file);
   }
   else
   {
     // 251: to je datoteka, ki jo bere Magento — pred izvozom samodejni umik, po njem zapis objave.
-    await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString, publishToMagento: true);
+    var files = await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString, publishToMagento: true);
     Console.WriteLine($"Magento CSV izvoz končan: {outputDirectory}");
+    datotekeZapisane = true;
+    foreach (var file in files) await RecordFileAsync(file);
   }
   await run.CompleteAsync(true);
 }
 catch (Exception exception)
 {
+  // Par katalog.csv + stranke.csv se zamenja skupaj: ob padcu ni nastala nobena od datotek. Padec
+  // zapisa teka po že zapisanih datotekah ni padec datoteke.
+  foreach (var profil in datotekeZapisane ? Array.Empty<string>() : fileProfiles)
+  {
+    await phases.RecordAsync(PhaseCodes.File, PhaseOutcome.Failed, profil, organizationId, pipeline,
+      message: $"datoteka ni nastala: {exception.Message}");
+  }
   await run.CompleteAsync(false, exception.Message);
   throw;
 }
@@ -100,6 +127,14 @@ finally
   await run.DisposeAsync();
 }
 return 0;
+
+// Faza DATOTEKA: prazna datoteka (0 vrstic) je uspeh brez novih podatkov, ne »uspelo«.
+Task RecordFileAsync(ExportFileResult file) =>
+  phases.RecordAsync(PhaseCodes.File, PhaseOutcome.Succeeded, file.ProfileCode, organizationId, pipeline,
+    message: file.Rows > 0
+      ? $"{Path.GetFileName(file.FilePath)}, stolpcev {file.Columns}"
+      : $"{Path.GetFileName(file.FilePath)} je prazna (0 vrstic), stolpcev {file.Columns}",
+    hasNewData: file.Rows > 0, itemsOut: file.Rows, byteCount: file.Bytes);
 
 static string Required(string[] args, string name)
 {

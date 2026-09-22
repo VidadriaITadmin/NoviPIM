@@ -20,18 +20,14 @@ var pages = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 var services = Path.Combine(root, "src", "PIM.Intranet", "Services");
 
 // ── 1. Strani obstajajo in so skrbniške ──────────────────────────────────────
-var console = Read(Path.Combine(pages, "System.razor"));
-var consoleCss = Path.Combine(pages, "System.razor.css");
-Assert(File.Exists(consoleCss), "Manjka izoliran slog nadzorne plošče: " + consoleCss);
-
+// Blok 7 prenove nadzora (2026-09-22): Nadzor (Monitor.razor) in stran posla (MonitorJob.razor) sta
+// nadomestila stari pregled in njegove podstrani. Njune pogodbe so v razdelku 13 na koncu, da
+// preostanek testa pove svoje tudi, dokler novi strani še nastajata. Tu ostaneta samotest in sled,
+// ki nista posel.
 foreach (var (file, route) in new[]
 {
-  ("System.razor", "/sistem"),
   ("AdminActivity.razor", "/sistem/sled"),
-  ("AdminExports.razor", "/sistem/izvozi"),
-  ("AdminPerformance.razor", "/sistem/zmogljivost"),
   ("AdminSelfTest.razor", "/sistem/samotest"),
-  ("SystemWorkers.razor", "/sistem/workerji"),
 })
 {
   var markup = Read(Path.Combine(pages, file));
@@ -47,30 +43,39 @@ foreach (var (file, route) in new[]
     "Izoliran slog ne sme uhajati z ::deep: " + css);
 }
 
-// ── 2. Konzola pove, kaj je narobe, in ponudi krmiljenje ─────────────────────
-foreach (var pogodba in new[]
+// ── 2. Stare strani nadzora so odstranjene, ne skrite ────────────────────────
+// Uporabnik: »jaz moram vsaki korak imeti pod nadzorom … naredi pregledno in uporabno«. Sedem strani
+// je isti posel kazalo razdrobljeno (urnik na Opravilih, koraki na Zagonih, alarm na Integracijah);
+// zdaj je posel ena vrstica na Nadzoru in ena stran s koraki, fazami in izpisom.
+foreach (var odstranjena in new[]
 {
-  "Potrebuje pozornost",     // seznam težav
-  "Vse teče",                // prazno stanje istega seznama
-  "attention-list",
-  "GetPulseAsync",           // podatek iz baze, ne iz ocene
-  "MarkAlertsSeenAsync",     // odprtje konzole umiri zvonec
-  "SaveScheduleAsync",       // vklop/izklop in razmik sta tu
-  "LogActivityAsync",        // sprememba urnika pusti sled
-  "Samodejno vsako minuto",
-  "sistem/izvozi", "sistem/zmogljivost", "sistem/samotest",
+  "System.razor", "System.razor.css", "SystemJobs.razor", "SystemJobs.razor.css",
+  "SystemJobRuns.razor", "SystemJobRuns.razor.css", "SystemIntegrations.razor", "SystemIntegrations.razor.css",
+  "SystemErrors.razor", "SystemErrors.razor.css", "AdminPerformance.razor", "AdminPerformance.razor.css",
+  "AdminExports.razor", "AdminExports.razor.css",
 })
-  Assert(console.Contains(pogodba, StringComparison.Ordinal), "Nadzorna plošča nima pogodbe: " + pogodba);
+  Assert(!File.Exists(Path.Combine(pages, odstranjena)), "Stara stran nadzora se ne sme vrniti: " + odstranjena);
+Assert(!Directory.Exists(Path.Combine(root, "tests", "PIM.F10.SystemIntegrationsUxTests")),
+  "Pogodbeni test odstranjene strani /sistem/integracije ne sme ostati.");
+Assert(!Read(Path.Combine(root, "PIM.sln")).Contains("PIM.F10.SystemIntegrationsUxTests", StringComparison.Ordinal),
+  "PIM.sln ne sme več graditi testa odstranjene strani /sistem/integracije.");
 
-Assert(console.Contains("Izklopi", StringComparison.Ordinal) && console.Contains("Vklopi", StringComparison.Ordinal),
-  "Skrbnik mora postopek vklopiti in izklopiti s konzole.");
-Assert(console.Contains("Shrani razmik", StringComparison.Ordinal),
-  "Skrbnik mora s konzole spremeniti razmik izvajanja.");
-
-// Katalog (zdaj zavihek Zaloga) in izvozi (poln pregled je zavihek Izvozi, tu samo kljucna
-// stevilka s povezavo) morata biti dosegljiva iz konzole.
-Assert(console.Contains("Artikli po podjetjih", StringComparison.Ordinal), "Konzola mora pokazati pregled artiklov.");
-Assert(console.Contains("Href=\"sistem/izvozi\"", StringComparison.Ordinal), "Pregled mora povezati na poln seznam zagonov izvozov.");
+// Nobena stran, storitev ali skript v intranetu ne sme voditi na odstranjeno pot (prazna stran 404).
+// Iščemo naslov v narekovajih (href, niz v kodi, $"…"), ne omembe v komentarju. Velja tudi za postavitev
+// (povezava »Odpri vsa obvestila« v zvoncu vodi na /sistem).
+var odstranjenePoti = new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem?pogled=" };
+foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.*", SearchOption.AllDirectories))
+{
+  if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+      && !file.EndsWith(".js", StringComparison.OrdinalIgnoreCase)) continue;
+  if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+  if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
+  var text = File.ReadAllText(file);
+  foreach (var pot in odstranjenePoti)
+    foreach (var povezava in new[] { $"\"{pot}", $"\"/{pot}" })
+      Assert(!text.Contains(povezava, StringComparison.Ordinal),
+        $"{Path.GetFileName(file)} vodi na odstranjeno stran /{pot} ({povezava}).");
+}
 
 // ── 3. Naša ura, nikjer čas strežnika ────────────────────────────────────────
 var timeService = Read(Path.Combine(services, "PimTime.cs"));
@@ -103,7 +108,16 @@ Assert(layout.Contains("if (IsAdmin)", StringComparison.Ordinal),
   "Zvonec mora biti viden samo vlogi ADMIN; sicer vodi na stran, ki je uporabnik ne sme odpreti.");
 Assert(layout.Contains("GetAttentionAsync", StringComparison.Ordinal),
   "Števec zvonca mora šteti molčeče postopke in alarme, ne samo alarmov izbranega podjetja.");
-Assert(layout.Contains("sistem/integracije", StringComparison.Ordinal), "Zvonec mora voditi na pregled alarmov.");
+// Blok 7: klik na obvestilo odpre stran, kjer je težava vidna in rešljiva. Alarm posla
+// (Pipeline "OPRAVILO:<KEY>") odpre stran tega posla, gostitelj in postopki Nadzor, zavrnjen izvoz
+// stran spletnega izhoda. Nobena pot preslikave ne sme voditi na odstranjeno stran.
+var alertHrefStart = layout.IndexOf("static string AlertHref", StringComparison.Ordinal);
+Assert(alertHrefStart >= 0, "Postavitev mora imeti preslikavo obvestila na stran (AlertHref).");
+var alertHref = layout[alertHrefStart..layout.IndexOf("};", alertHrefStart, StringComparison.Ordinal)];
+foreach (var pogodba in new[] { "\"OPRAVILO:\"", "\"sistem/posel/\"", "\"GOSTITELJ\"", "\"ExportRejected\" => \"splet\"", "_ => \"sistem\"" })
+  Assert(alertHref.Contains(pogodba, StringComparison.Ordinal), "Preslikava obvestila nima pogodbe: " + pogodba);
+foreach (var pot in odstranjenePoti.Append("teki-obdelave"))
+  Assert(!alertHref.Contains("\"" + pot, StringComparison.Ordinal), "Obvestilo ne sme voditi na " + pot + ".");
 
 // ── 5. Samotest in njegov razpored ───────────────────────────────────────────
 var repositoryRoot = Path.GetDirectoryName(root)!;
@@ -221,7 +235,7 @@ else
 // Pod IIS mapa praviloma obstaja in je vidna, aplikacijski bazen pa vanjo ne sme pisati.
 // Nastavitev, ki tega ne preveri, izgleda kot da deluje, datoteke pa ne nastanejo.
 var paths = Read(Path.Combine(pages, "AdminPaths.razor"));
-Assert(paths.Contains("@page \"/sistem/mape\"", StringComparison.Ordinal), "Manjka stran /sistem/mape.");
+Assert(paths.Contains("@page \"/administracija/mape\"", StringComparison.Ordinal) && !paths.Contains("@page \"/sistem/mape\"", StringComparison.Ordinal), "Mesta shranjevanja imajo eno pot: /administracija/mape.");
 Assert(paths.Contains("[Authorize(Roles = \"ADMIN\")]", StringComparison.Ordinal), "Mesta shranjevanja so samo za ADMIN.");
 Assert(paths.Contains("SystemPaths.Identiteta", StringComparison.Ordinal),
   "Stran mora povedati, pod katerim računom intranet teče; brez tega preverba pisanja ni razumljiva.");
@@ -272,12 +286,14 @@ Assert(pimTab.Contains("class SistemskeZadeveTabs", StringComparison.Ordinal),
   "Uporabniki/vloge/mape morajo imeti svoj locen seznam zavihkov, locen od nadzora.");
 
 var activity = Read(Path.Combine(pages, "AdminActivity.razor"));
-var exports = Read(Path.Combine(pages, "AdminExports.razor"));
 var selfTestPage = Read(Path.Combine(pages, "AdminSelfTest.razor"));
-var integrations = Read(Path.Combine(pages, "SystemIntegrations.razor"));
-foreach (var page in new[] { console, activity, exports, selfTestPage, integrations, Read(Path.Combine(pages, "SystemWorkers.razor")) })
+foreach (var (page, active) in new[] { (activity, "sled"), (selfTestPage, "samotest") })
+{
   Assert(page.Contains("<PimTabs", StringComparison.Ordinal) && page.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
     "Vsaka stran nadzora mora prikazati skupni zavihek NadzorTabs.");
+  Assert(page.Contains($"<PimTabs Active=\"{active}\"", StringComparison.Ordinal),
+    $"Stran nadzora mora označiti svoj zavihek »{active}«.");
+}
 
 var users = Read(Path.Combine(pages, "SystemUsers.razor"));
 var roles = Read(Path.Combine(pages, "SystemRoles.razor"));
@@ -285,48 +301,45 @@ foreach (var page in new[] { users, roles, paths })
   Assert(page.Contains("<PimTabs", StringComparison.Ordinal) && page.Contains("SistemskeZadeveTabs.Tabs", StringComparison.Ordinal),
     "Uporabniki, vloge in mesta shranjevanja morajo prikazati skupni zavihek SistemskeZadeveTabs.");
 
-Assert(!console.Contains("hub-grid", StringComparison.Ordinal) && !console.Contains("PimHubCard", StringComparison.Ordinal),
-  "Kartice-gumbi na dnu /sistem so odstranjene — poti so zdaj zavihki.");
-Assert(!console.Contains("Zadnji izvoz po profilu", StringComparison.Ordinal),
-  "Polna tabela zadnjih izvozov na pregledu je odstranjena; polni pregled nosi zavihek Izvozi.");
-
 // Koraki zadnjega samotesta (prej cela tabela na pregledu, "oblacki") so se preselili na svojo stran.
-Assert(!console.Contains("SelfTestSteps", StringComparison.Ordinal),
-  "Koraki samotesta ne smejo biti vec na pregledni strani /sistem.");
 Assert(selfTestPage.Contains("SelfTestSteps", StringComparison.Ordinal),
   "Koraki zadnjega zagona morajo biti na strani /sistem/samotest.");
 
-// ── 11. Workerji (2026-09-15): rocni zagon, izpis v zivo in dnevniki ──────────
-var workersPage = Read(Path.Combine(pages, "SystemWorkers.razor"));
-foreach (var pogodba in new[] { "Konzola.Start", "Konzola.Cancel", "Potrdi zagon", "Samo napake", "Namesti-opravila.ps1", "GetScheduledTasksAsync", "SaveScheduleAsync", "LogActivityAsync", "WORKER_RUN", "ReadLog" })
-  Assert(workersPage.Contains(pogodba, StringComparison.Ordinal), "Stran Workerji nima pogodbe: " + pogodba);
-Assert(!workersPage.Contains("pwsh -File", StringComparison.Ordinal), "Ukaz za registracijo mora biti powershell; pwsh ni nujno namescen.");
-Assert(pimTab.Contains("\"sistem/workerji\"", StringComparison.Ordinal), "Workerji morajo biti zavihek nadzora.");
+// Blok 7: Nadzor ima natanko tri zavihke — Nadzor, Samotest in Sled sprememb. Opravila, Zagoni,
+// Alarmi in Izvozi so del strani posla, ne zavihki.
+var nadzorTabsStart = pimTab.IndexOf("class NadzorTabs", StringComparison.Ordinal);
+var nadzorTabs = pimTab[nadzorTabsStart..pimTab.IndexOf("];", nadzorTabsStart, StringComparison.Ordinal)];
+foreach (var zavihek in new[] { "new(\"nadzor\", \"Nadzor\", \"sistem\"", "new(\"samotest\", \"Samotest\", \"sistem/samotest\"", "new(\"sled\", \"Sled sprememb\", \"sistem/sled\"" })
+  Assert(nadzorTabs.Contains(zavihek, StringComparison.Ordinal), "Zavihkom nadzora manjka: " + zavihek);
+Assert(nadzorTabs.Split("new(", StringSplitOptions.None).Length - 1 == 3, "Nadzor ima natanko tri zavihke.");
+foreach (var odstranjen in new[] { "\"opravila\"", "\"zagoni\"", "\"alarmi\"", "\"izvozi\"", "\"pregled\"", "\"sistem/opravila\"", "\"sistem/zagoni\"", "\"sistem/integracije\"" })
+  Assert(!nadzorTabs.Contains(odstranjen, StringComparison.Ordinal), "Odstranjen zavihek nadzora se ne sme vrniti: " + odstranjen);
 
-// ── 12. Enotni model opravil (237): gostitelj avtomatike, Opravila, Zagoni, poslovne kartice ────
-// Uporabnik 2026-09-21: IIS je nadzorna konzola, ne motor avtomatike; glavna stran odgovarja na
-// "ali poslovanje deluje in kaj moram narediti" s štirimi poslovnimi karticami; ročni zagon je
-// zahteva, ki jo prevzame gostitelj; izvoz ne validira; naročila so ločena od kataloga.
-foreach (var (file, route) in new[] { ("SystemJobs.razor", "/sistem/opravila"), ("SystemJobRuns.razor", "/sistem/zagoni") })
-{
-  var markup = Read(Path.Combine(pages, file));
-  Assert(markup.Contains($"@page \"{route}\"", StringComparison.Ordinal), $"{file} mora biti na poti {route}.");
-  Assert(markup.Contains("[Authorize(Roles = \"ADMIN\")]", StringComparison.Ordinal), $"{file} mora biti dostopna samo vlogi ADMIN.");
-  Assert(markup.Contains("PimTime.", StringComparison.Ordinal), $"{file} mora čas kazati prek PimTime.");
-  Assert(markup.Contains("<PimTabs", StringComparison.Ordinal) && markup.Contains("NadzorTabs.Tabs", StringComparison.Ordinal), $"{file} mora prikazati skupni zavihek NadzorTabs.");
-  var css = Path.Combine(pages, Path.GetFileNameWithoutExtension(file) + ".razor.css");
-  Assert(File.Exists(css) && !File.ReadAllText(css).Contains("::deep", StringComparison.Ordinal), "Manjka ali uhaja izoliran slog: " + css);
-}
-var jobsPage = Read(Path.Combine(pages, "SystemJobs.razor"));
-foreach (var pogodba in new[] { "RequestRunAsync", "RequestCancelAsync", "SaveScheduleAsync", "LogActivityAsync", "Potrdi zagon", "GetHostAsync", "JOB_RUN_REQUEST" })
-  Assert(jobsPage.Contains(pogodba, StringComparison.Ordinal), "Stran Opravila nima pogodbe: " + pogodba);
-var runsPage = Read(Path.Combine(pages, "SystemJobRuns.razor"));
-foreach (var pogodba in new[] { "EffectiveStatus", "GetStepsAsync", "ReadLog", "RequestCancelAsync", "BlockedByJobKey" })
-  Assert(runsPage.Contains(pogodba, StringComparison.Ordinal), "Stran Zagoni nima pogodbe: " + pogodba);
-foreach (var pogodba in new[] { "flow-grid", "AutomationOverview.Build", "RequestRunAsync", "Odpri zagone" })
-  Assert(console.Contains(pogodba, StringComparison.Ordinal), "Pregled nima poslovnih kartic (237): " + pogodba);
-foreach (var pogodba in new[] { "\"sistem/opravila\"", "\"sistem/zagoni\"", "Izvajalniki" })
-  Assert(pimTab.Contains(pogodba, StringComparison.Ordinal), "Zavihki nadzora ne poznajo: " + pogodba);
+var accessCatalog = Read(Path.Combine(services, "PimAccessCatalog.cs"));
+Assert(accessCatalog.Contains("\"sistem/posel/\"", StringComparison.Ordinal),
+  "Stran posla (sistem/posel/<KEY>) mora imeti pravico v katalogu, sicer jo varovalo poti zapre.");
+foreach (var kljuc in new[] { "tab.system.jobs", "tab.system.runs", "tab.system.schedules", "tab.system.alerts", "view.system.exports", "view.system.performance", "view.system.errors" })
+  Assert(!accessCatalog.Contains("\"" + kljuc + "\"", StringComparison.Ordinal), "Katalog pravic še vsebuje ključ odstranjene strani: " + kljuc);
+
+// ── 11. En motor avtomatike (migracija 254): Workerji in Urniki sta odpadla ──────
+// Ročni zagon mimo gostitelja (/sistem/workerji, 2026-09-15) in razporejevalnik ciklov v intranetu
+// (/sistem/urniki, 2026-09-17) sta tekla vzporedno s PIM.AutomationHost; posle zdaj poganja samo
+// gostitelj (ops.Job*). Pogodbe strani Workerji so se prek Opravil in Zagonov (237) v bloku 7
+// preselile na Nadzor in stran posla (razdelek 13 jih preveri: sled, ustavitev, drugi klik):
+//   ročni zagon                  → Nadzor/stran posla: zahteva gostitelju (RequestRunAsync) s sledjo JOB_RUN_REQUEST;
+//   izpis dnevnika zagona        → stran posla: bralnik dnevnikov (ReadLog oziroma LogTail);
+//   urnik in vklop posla s sledjo → stran posla prek MonitorService.
+foreach (var odpisana in new[] { "SystemWorkers.razor", "SystemWorkers.razor.css", "SystemSchedules.razor", "SystemSchedules.razor.css" })
+  Assert(!File.Exists(Path.Combine(pages, odpisana)), "Stran starega motorja se ne sme vrniti: " + odpisana);
+foreach (var odpisan in new[] { "WorkerSchedulerService.cs", "WorkerCycleRunner.cs", "WorkerSchedulerStore.cs" })
+  Assert(!File.Exists(Path.Combine(services, odpisan)), "Razporejevalnik ciklov v intranetu se ne sme vrniti: " + odpisan);
+Assert(!pimTab.Contains("sistem/workerji", StringComparison.Ordinal) && !pimTab.Contains("Izvajalniki", StringComparison.Ordinal),
+  "Workerji (Izvajalniki) niso več zavihek nadzora; posel kaže njegova stran.");
+
+// ── 12. Enotni model opravil (237): gostitelj avtomatike ────────────────────────
+// Uporabnik 2026-09-21: IIS je nadzorna konzola, ne motor avtomatike; ročni zagon je zahteva, ki jo
+// prevzame gostitelj; izvoz ne validira; naročila so ločena od kataloga. Strani Opravila in Zagoni
+// (237) je blok 7 nadomestil z Nadzorom in stranjo posla (razdelek 13).
 Assert(!pimTab.Contains("\"sistem?pogled=postopki\"", StringComparison.Ordinal), "Tehnični razporedi postopkov niso več zavihek (dvojno razporejanje).");
 
 var catalog = Read(Path.Combine(root, "src", "PIM.Automation", "JobCatalog.cs"));
@@ -370,6 +383,52 @@ if (!string.IsNullOrWhiteSpace(connectionString))
     Assert(naborov == 3, $"intranet.GetJobDefinitions mora vrniti 3 nabore, vrnil je {naborov}.");
   }
 }
+
+// ── 13. Nadzor in stran posla (bloki 5–7 prenove nadzora, 2026-09-22) ───────────
+// Uporabnik: »jaz moram vsaki korak imeti pod nadzorom in videti da se vse izvede«. Nadzor ima eno
+// vrstico na posel (zelena / siva / rdeča, rumene ni), stran posla pa korake, faze s števili in
+// izpis. Razdelek je zadnji, da preostale pogodbe povedo svoje, tudi dokler strani še nastajata.
+var monitor = Read(Path.Combine(pages, "Monitor.razor"));
+var monitorJob = Read(Path.Combine(pages, "MonitorJob.razor"));
+foreach (var (file, markup, route) in new[]
+{
+  ("Monitor.razor", monitor, "@page \"/sistem\""),
+  ("MonitorJob.razor", monitorJob, "@page \"/sistem/posel/"),
+})
+{
+  Assert(markup.Contains(route, StringComparison.Ordinal), $"{file} mora biti na poti {route}.");
+  Assert(markup.Contains("[Authorize(Roles = \"ADMIN\")]", StringComparison.Ordinal), $"{file} mora biti dostopna samo vlogi ADMIN.");
+  Assert(markup.Contains("PimTime.", StringComparison.Ordinal), $"{file} mora čas kazati prek PimTime.");
+  Assert(markup.Contains("MonitorService", StringComparison.Ordinal), $"{file} mora brati prek MonitorService.");
+  // Rumene ni: stanje je zelena (good), siva (brez tona) ali rdeča (bad).
+  Assert(!markup.Contains("\"warn\"", StringComparison.Ordinal), $"{file} ne sme uporabljati rumenega tona »warn«.");
+  var css = Path.Combine(pages, Path.GetFileNameWithoutExtension(file) + ".razor.css");
+  Assert(File.Exists(css), "Manjka izoliran slog: " + css);
+  var cssText = File.ReadAllText(css);
+  Assert(!cssText.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep: " + css);
+  Assert(!cssText.Contains("--pim-warn", StringComparison.Ordinal) && !cssText.Contains(".warn", StringComparison.Ordinal),
+    "Slog nadzora ne sme imeti rumenega stanja: " + css);
+}
+Assert(monitor.Contains("<PimTabs Active=\"nadzor\"", StringComparison.Ordinal) && monitor.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
+  "Nadzor mora prikazati skupni zavihek NadzorTabs z aktivnim zavihkom »nadzor«.");
+foreach (var pogodba in new[] { "GetOverviewAsync", "RequestRunAsync", "sistem/posel/", "Vse teče", "sistem/samotest", "sistem/sled" })
+  Assert(monitor.Contains(pogodba, StringComparison.Ordinal), "Nadzor nima pogodbe: " + pogodba);
+Assert(!monitor.Contains("SelfTestSteps", StringComparison.Ordinal), "Koraki samotesta ne smejo biti na Nadzoru; so na /sistem/samotest.");
+foreach (var pogodba in new[] { "GetJobAsync", "PhaseCodes.Label" })
+  Assert(monitorJob.Contains(pogodba, StringComparison.Ordinal), "Stran posla nima pogodbe: " + pogodba);
+Assert(monitorJob.Contains("ReadLog", StringComparison.Ordinal) || monitorJob.Contains("LogTail", StringComparison.Ordinal),
+  "Stran posla mora pokazati izpis teka iz dnevnika (ReadLog ali LogTail).");
+
+// Nadzor in ročni zagon (preseljeno iz razdelka 11, prej SystemJobs/SystemJobRuns): sled vsakega dejanja,
+// ustavitev teka in drugi klik pred zagonom posla, ki kliče SAOP ali dobavitelja.
+var monitorService = Read(Path.Combine(services, "MonitorService.cs"));
+foreach (var pogodba in new[] { "\"JOB_RUN_REQUEST\"", "\"JOB_CANCEL_REQUEST\"", "LogActivityAsync", "RequestCancelAsync", "RequireAdminAsync" })
+  Assert(monitorService.Contains(pogodba, StringComparison.Ordinal), "MonitorService nima pogodbe (sled ali varovalo dejanja): " + pogodba);
+foreach (var (file, markup) in new[] { ("Monitor.razor", monitor), ("MonitorJob.razor", monitorJob) })
+  Assert(markup.Contains("Potrdi zagon", StringComparison.Ordinal) && markup.Contains("Reach != \"Internal\"", StringComparison.Ordinal),
+    $"{file}: zagon posla, ki kliče SAOP ali dobavitelja, zahteva drugi klik (»Potrdi zagon«).");
+Assert(monitorJob.Contains("RequestCancelAsync", StringComparison.Ordinal), "Stran posla mora omogočiti ustavitev teka (RequestCancelAsync).");
+Assert(monitor.Contains("MarkAlertsSeenAsync", StringComparison.Ordinal), "Nadzor mora ob odprtju označiti obvestila kot videna (zvonec).");
 
 Console.WriteLine("F10 admin console UX contract PASS.");
 

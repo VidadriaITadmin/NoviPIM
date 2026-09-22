@@ -214,7 +214,7 @@ public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard
   /// bere <c>PIM.KatalogWorker.SaopWorkerConfiguration</c> za zajem IZ SAOP — gre za isti SAOP
   /// racun, zato je prav, da je mesto nastavitve eno samo. Okolje ima prednost pred datoteko.
   /// </summary>
-  static (string? BaseUrl, string? Username, string? Password, bool AcceptUntrustedCertificate) ReadSaopCredentials()
+  internal static (string? BaseUrl, string? Username, string? Password, bool AcceptUntrustedCertificate) ReadSaopCredentials()
   {
     var saop = LocalSettings.Section("Saop");
     string? Text(string name) =>

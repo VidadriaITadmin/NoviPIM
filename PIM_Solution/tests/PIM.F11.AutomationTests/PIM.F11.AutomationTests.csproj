@@ -10,5 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
     <ProjectReference Include="..\..\src\PIM.Automation\PIM.Automation.csproj" />
+    <!-- Blok 2: faze korakov (PhaseLog, migracija 255). -->
+    <ProjectReference Include="..\..\src\PIM.Operations\PIM.Operations.csproj" />
   </ItemGroup>
 </Project>

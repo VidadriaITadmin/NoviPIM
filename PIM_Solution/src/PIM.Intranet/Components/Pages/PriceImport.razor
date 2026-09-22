@@ -1,0 +1,210 @@
+@page "/cene/uvoz"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@inject PriceWorkbookService Workbook
+@inject IntranetDataService Data
+@inject HeavyWorkGate Gate
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Uvoz cen</PageTitle>
+
+<PimPage Title="Uvoz delovnega lista cen" Crumbs="Crumbs"
+         Subtitle="Ista datoteka, ki jo izvozi gumb »Izvozi Excel« na strani Cene. Spremenjene in nove cene gredo v vrsto za SAOP in počakajo odobritev na zavihku »V SAOP« — v PIM se pokažejo, ko jih zajem cen prinese nazaj." />
+
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<AuthorizeView Policy="@PimPolicies.SaopWrite">
+  <NotAuthorized>
+    <p class="message-state warn-message">Cene v SAOP lahko pošilja samo vloga z dovoljenjem za zapis v SAOP (skrbnik, urednik kataloga). Predogled datoteke je na voljo, uvrstitev v vrsto ne.</p>
+  </NotAuthorized>
+</AuthorizeView>
+
+<section class="ui-card panel">
+  <h2>1. Izberi datoteko</h2>
+  <div class="form-grid">
+    <label class="form-field" for="import-organization">
+      Podjetje za vrstice brez stolpca »Podjetje«
+      <select id="import-organization" class="filter-select" @bind="OrganizationText">
+        <option value="">— iz stolpca v datoteki —</option>
+        @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+      </select>
+    </label>
+  </div>
+  <p class="hint">
+    Naslovov stolpcev ne spreminjaj — po njih uvoz prepozna, kaj je kaj. Ključ vrstice je <strong>Podjetje + Cenik + Šifra artikla</strong>.
+    <strong>Prazna celica pomeni, da se polja ne dotaknemo</strong>. Vrstica s cenikom, v katerem artikel še nima cene, je nova cena.
+    Nov cenik najprej dodaj na strani Cene → zavihek Ceniki.
+  </p>
+  <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+</section>
+
+@if (Preview is not null)
+{
+  <section class="ui-card panel section-gap">
+    <h2>2. Kaj bo šlo v SAOP</h2>
+    <p role="status">
+      Prebranih cen: <strong>@Preview.RowsRead.ToString("N0")</strong> —
+      spremenjenih: <strong>@((Preview.Rows.Count - Preview.NewCount).ToString("N0"))</strong>,
+      novih: <strong>@Preview.NewCount.ToString("N0")</strong>,
+      brez sprememb: <strong>@Preview.UnchangedRows.ToString("N0")</strong>.
+    </p>
+
+    @if (Preview.ReadOnlyColumns.Count > 0) { <p class="hint">Stolpci samo za branje (prezrti): @string.Join(", ", Preview.ReadOnlyColumns)</p> }
+    @if (Preview.UnknownColumns.Count > 0) { <p class="message-state warn-message">Stolpci brez ustreznega polja (ne bodo uvoženi): @string.Join(", ", Preview.UnknownColumns)</p> }
+    @foreach (var problem in Preview.Problems.Take(50)) { <p class="message-state warn-message">@problem</p> }
+    @if (Preview.Problems.Count > 50) { <p class="hint">… in še @(Preview.Problems.Count - 50) napak — te vrstice se ne uvozijo.</p> }
+    @if (Preview.Warnings.Count > 0)
+    {
+      <details class="section-gap" open="@(Preview.Warnings.Count <= 10)">
+        <summary>Opozorila (@Preview.Warnings.Count.ToString("N0")) — preveri, preden odobriš</summary>
+        <ul class="change-list">@foreach (var warning in Preview.Warnings.Take(200)) { <li>@warning</li> }</ul>
+      </details>
+    }
+
+    @if (Preview.Rows.Count > 0)
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza cen">
+        <table class="data-table">
+          <caption>Predogled prvih 100 cen s spremembami</caption>
+          <thead>
+            <tr>
+              <th scope="col">Vrstica</th><th scope="col">Podjetje</th><th scope="col">Cenik</th><th scope="col">Artikel</th>
+              <th scope="col" class="numeric">Neto prej</th><th scope="col" class="numeric">Neto potem</th><th scope="col" class="numeric">Sprememba</th>
+              <th scope="col">Drugo</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Preview.Rows.Take(100))
+            {
+              <tr>
+                <td>@row.RowNumber</td>
+                <td>@row.OrganizationName</td>
+                <td><span class="code-value">@row.PriceList</span></td>
+                <td><span class="code-value">@row.ItemId</span></td>
+                <td class="numeric">@(row.OldNet?.ToString("N2") ?? "nova")</td>
+                <td class="numeric"><strong>@row.NewNet.ToString("N2")</strong></td>
+                <td class="numeric">@(row.ChangePercent is { } percent ? percent.ToString("+0.#;-0.#;0") + " %" : "—")</td>
+                <td>@Other(row)</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (Preview.Rows.Count > 100) { <p class="hint">… in še @((Preview.Rows.Count - 100).ToString("N0")) cen.</p> }
+
+      <AuthorizeView Policy="@PimPolicies.SaopWrite">
+        <div class="panel-actions">
+          <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyAsync">
+            Uvrsti @Preview.Rows.Count.ToString("N0") cen v vrsto za SAOP (@string.Join(", ", Preview.Organizations))
+          </button>
+        </div>
+      </AuthorizeView>
+    }
+  </section>
+}
+
+@if (Outcome is not null)
+{
+  <section class="ui-card panel section-gap" aria-label="Izid uvoza">
+    <h2>3. Izid</h2>
+    <p role="status">
+      V vrsto za SAOP: <strong>@Outcome.Queued.ToString("N0")</strong> cen
+      @if (Outcome.Duplicates > 0) { <text>· že čakalo v vrsti: @Outcome.Duplicates.ToString("N0") </text> }
+      @if (Outcome.Unchanged > 0) { <text>· enakih kot v SAOP: @Outcome.Unchanged.ToString("N0") </text> }
+      @if (Outcome.Rejected.Count > 0) { <text>· zavrnjenih: @Outcome.Rejected.Count.ToString("N0")</text> }
+    </p>
+    <ul class="change-list">
+      @foreach (var (organization, batchId, outcome) in Outcome.Batches.Where(batch => batch.BatchId is not null))
+      {
+        <li>@organization — serija @batchId: @outcome.Queued.ToString("N0") cen čaka odobritev.</li>
+      }
+    </ul>
+    @foreach (var row in Outcome.Rejected.Take(50)) { <p class="message-state warn-message">@row.PriceList @row.ItemId: @row.Reason</p> }
+    <p>Odobri in pošlji na <a href="cene?zavihek=saop">Cene → V SAOP</a>. Nič ne odide brez odobritve.</p>
+  </section>
+}
+
+@code {
+  const long MaxUploadBytes = 32 * 1024 * 1024;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Cene in ceniki", "cene"), new("Uvoz")];
+
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  PriceImportPreview? Preview;
+  PriceImportOutcome? Outcome;
+  string OrganizationText = "";
+  string? FileName;
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  int? OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : null;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+  }
+
+  static string Other(PriceImportRow row)
+  {
+    var parts = new List<string>();
+    if (row.NewVat is { } vat && vat != row.OldVat) parts.Add($"DDV {row.OldVat?.ToString("0.#") ?? "—"} → {vat:0.#} %");
+    if (row.ValidFrom is { } from && from != row.OldValidFrom) parts.Add($"velja od {from:d. M. yyyy}");
+    if (row.Active is { } active && active != row.OldActive) parts.Add(active ? "aktivna" : "neaktivna");
+    return string.Join(" · ", parts);
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  // Ista vrata kot uvoz izdelkov in strank: hkrati tece najvec Limit uvozov.
+  async Task<IDisposable> EnterImportLaneAsync()
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    Message = $"Uvoz čaka v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync();
+  }
+
+  async Task OnFileAsync(InputFileChangeEventArgs args)
+  {
+    Error = null; Message = null; Preview = null; Outcome = null;
+    try
+    {
+      var file = args.File;
+      if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 32 MB. Razdeli jo na več datotek."; return; }
+      FileName = file.Name;
+      using var buffer = new MemoryStream();
+      await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
+      buffer.Position = 0;
+      using (await EnterImportLaneAsync())
+        Preview = await Workbook.PreviewAsync(buffer, OrganizationId);
+      Message = null;
+    }
+    catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
+    catch (Exception failure) { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel: " + failure.Message; }
+  }
+
+  async Task ApplyAsync()
+  {
+    if (Preview is null) return;
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await ActorAsync();
+      using (await EnterImportLaneAsync())
+        Outcome = await Workbook.ApplyAsync(Preview, actor, FileName);
+      Message = $"{Outcome.Queued:N0} cen čaka odobritev na zavihku »V SAOP«.";
+      // Predogled se umakne, da druga oddaja istega gumba ne uvrsti datoteke dvakrat.
+      Preview = null;
+    }
+    catch (Exception failure) { Error = "Uvoz ni uspel: " + failure.Message; }
+    finally { Busy = false; }
+  }
+}

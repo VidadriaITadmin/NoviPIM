@@ -99,6 +99,7 @@ public sealed class AutomationEngine(
 
   async Task TickAsync(CancellationToken stopping)
   {
+    // CanRunCycles je ostanek starih ciklov v intranetu (221, odstranjeni z 254): stolpec ostaja, gostitelj poda false.
     var lease = await store.AcquireLeaseAsync(Owner, hostName, Environment.ProcessId, options.Application,
       Math.Clamp(options.LeaseSeconds, 30, 600), canRunCycles: false, AutomationApplications.HostPriority, stopping);
     var isOwner = lease?.IsOwner == true;
@@ -116,10 +117,7 @@ public sealed class AutomationEngine(
       wasOwner = true;
       // Nič od prejšnjega procesa tega gostitelja ne teče več; zagoni brez utripa so mrtvi ne glede na gostitelja.
       var closed = await store.AbandonStaleAsync(Owner, options.StaleMinutes, hostName, stopping);
-      var legacy = 0;
-      try { legacy = await store.AbandonLegacyCycleRunsAsync(Owner, stopping); }
-      catch (Exception exception) { warn("Visečih zagonov starih ciklov ni bilo mogoče zapreti.", exception); }
-      Note($"Najem prevzet. Zaprtih visečih zagonov: {closed} (posli), {legacy} (stari cikli).");
+      Note($"Najem prevzet. Zaprtih visečih zagonov: {closed}.");
       log($"Gostitelj {Owner} drži najem.");
     }
     else

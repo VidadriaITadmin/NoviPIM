@@ -1,5 +1,4 @@
 @page "/administracija/mape"
-@page "/sistem/mape"
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.AdminConsoleService Nadzor
@@ -115,7 +114,7 @@
   string? Napaka;
   string Uporabnik = "neznan";
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistemske zadeve", "administracija/uporabniki"), new("Mesta shranjevanja")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistemske zadeve", "administracija"), new("Mesta shranjevanja")];
 
   string Racun => PIM.Operations.SystemPaths.Identiteta();
 

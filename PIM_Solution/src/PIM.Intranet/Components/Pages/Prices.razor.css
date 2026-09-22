@@ -1,23 +1,153 @@
-/* Izoliran slog strani /cene. */
+/* Izoliran slog strani /cene. Orodna vrstica, filtri in znacke so isti kot na /stranke (265). */
 
-.result-count { color: var(--pim-text-muted); font-size: .8rem; margin-left: auto; }
+.result-count { color: var(--pim-text-muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+
+.price-toolbar { display: block; padding: 0; }
+.price-toolbar > .card-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--pim-line, var(--pim-border));
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  padding: .85rem 1rem;
+}
+.price-toolbar > .card-toolbar .search-field { flex: 1 1 22rem; min-width: 14rem; position: relative; }
+.price-toolbar > .card-toolbar .search-input { max-width: none; min-width: 0; padding-left: 2.1rem; width: 100%; }
+.price-toolbar > .card-toolbar .toolbar-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-left: auto; }
+.search-icon {
+  border: 1.5px solid var(--pim-text-muted);
+  border-radius: 50%;
+  height: .7rem;
+  left: .75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: .7rem;
+}
+.search-icon::after {
+  background: var(--pim-text-muted);
+  bottom: -.28rem;
+  content: "";
+  height: .3rem;
+  position: absolute;
+  right: -.1rem;
+  transform: rotate(-45deg);
+  width: 1.5px;
+}
+
+.ghost-button {
+  align-items: center;
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  gap: .4rem;
+  min-height: var(--pim-control-height, 2.25rem);
+  padding: .4rem .8rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ghost-button:hover { background: var(--pim-surface-hover); }
+/* Izvoz praznega pogleda ni dejanje, ampak past; povezava to pove, ne samo ob kliku. */
+.ghost-button.disabled { opacity: .45; pointer-events: none; }
+.filter-toggle.open { background: var(--pim-surface-subtle); border-color: var(--pim-text-muted); }
+.funnel { border-left: .3rem solid transparent; border-right: .3rem solid transparent; border-top: .4rem solid currentColor; display: inline-block; height: 0; width: 0; }
+.filter-badge { background: var(--pim-accent); border-radius: 999px; color: #fff; font-size: .7rem; margin-left: .3rem; min-width: 1.1rem; padding: .05rem .35rem; text-align: center; }
+
+.price-toolbar > .filter-panel { border-bottom: 1px solid var(--pim-border); padding: .85rem 1rem 1rem; }
+.price-toolbar > .filter-panel[hidden] { display: none; }
+.filter-grid { display: grid; gap: .75rem 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.filter-field { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.filter-field label { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.filter-field .filter-select, .filter-field .form-input { max-width: none; width: 100%; }
+.filter-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .9rem; }
+.link-button { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover { text-decoration: underline; }
+.link-button:disabled { cursor: default; opacity: .5; }
+
+.new-list h3 { font-size: .95rem; margin: 0 0 .35rem; }
+.new-list .hint { color: var(--pim-text-muted); font-size: .8rem; margin: 0 0 .85rem; max-width: 60rem; }
+
+.active-filters { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; padding: .75rem 1rem; }
+.filter-chip {
+  align-items: center;
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: 999px;
+  color: var(--pim-text-strong);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: .78rem;
+  gap: .35rem;
+  padding: .25rem .6rem;
+}
+.filter-chip:hover { background: var(--pim-surface-hover); }
+.filter-chip.clear-all { border-style: dashed; color: var(--pim-text-muted); }
+.chip-remove { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove::before,
+.chip-remove::after { background: currentColor; content: ""; height: 1px; left: 0; position: absolute; top: 50%; width: 100%; }
+.chip-remove::before { transform: rotate(45deg); }
+.chip-remove::after { transform: rotate(-45deg); }
+
+.price-list-card { overflow: hidden; padding: 0; }
 
 /* Cela vrstica odpre cenike te vrstice — v vrstici, ne na kartici izdelka. */
 .row-link { cursor: pointer; }
 .row-link:hover { background: var(--pim-surface-hover); }
-.row-link.open { background: #eef2ff; }
-.row-link:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+.row-link.open, tr.open { background: var(--pim-surface-subtle); }
 
 .product-name { display: block; font-weight: 600; }
 .product-meta { color: var(--pim-text-muted); display: block; font-size: .75rem; }
 .price-lists { font-variant-numeric: tabular-nums; }
 
 /* »+N« pove, koliko cenikov je se, ne da bi jih vse nasteli. */
-.more-badge { background: #eef2ff; border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
+.more-badge { background: var(--pim-surface-subtle); border-radius: 999px; color: var(--pim-accent); font-size: .7rem; font-weight: 600; margin-left: .35rem; padding: .05rem .4rem; }
 
 .detail-row > td { background: var(--pim-surface-hover); padding: .75rem 1rem; }
 .detail-actions { margin: .6rem 0 0; }
 
+/* Sprememba v vrsti stoji ob stari ceni, ne namesto nje: SAOP je vir, dokler je zajem ne prinese. */
+.queue-note { color: var(--pim-text-muted); display: block; font-size: .75rem; margin-top: .2rem; }
+.queue-note.warn { color: var(--pim-warn-text); }
+.queue-note.bad, .error-text { color: var(--pim-bad-text, #b42318); }
+.queue-note.good { color: var(--pim-good-text); }
+
+.numeric-input { max-width: 7rem; text-align: right; }
+.edit-actions { white-space: nowrap; }
+.edit-actions > * { margin-right: .35rem; }
+.primary-button.small, .secondary-button.small { font-size: .78rem; min-height: 1.9rem; padding: .25rem .6rem; }
+
+.add-price { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+.add-price-title { color: var(--pim-text-muted); font-size: .78rem; font-weight: 600; }
+.add-price .filter-select { max-width: 16rem; }
+
+.send-job { margin-bottom: 1rem; }
+.send-job h2 { font-size: .95rem; margin: 0 0 .35rem; }
+.send-job p { font-size: .85rem; margin: 0 0 .5rem; }
+.change-list { font-size: .78rem; margin: .4rem 0 0; padding-left: 1.1rem; }
+
+.source-note { font-size: .8rem; margin: .9rem .2rem 0; max-width: 70rem; }
+
+.page-tab:focus-visible,
+.search-input:focus-visible,
+.filter-select:focus-visible,
+.ghost-button:focus-visible,
+.link-button:focus-visible,
+.filter-chip:focus-visible,
+.row-link:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: -2px; }
+
 @media (max-width: 900px) {
-  .data-table { min-width: 820px; }
+  .data-table { min-width: 880px; }
+  .price-toolbar > .card-toolbar { align-items: stretch; flex-direction: column; }
+  .price-toolbar > .card-toolbar .search-field { flex: 0 0 auto; min-width: 0; }
+  .price-toolbar > .card-toolbar .toolbar-actions { margin-left: 0; width: 100%; }
+  .price-toolbar > .card-toolbar .toolbar-actions > * { flex: 1 1 auto; justify-content: center; }
+  .filter-grid { grid-template-columns: 1fr; }
 }

@@ -1,0 +1,52 @@
+/* Nadzor (blok 5 prenove nadzora, 2026-09-22). Tri barve in nič drugega: zelena (good) = sveži
+   podatki, nevtralna siva = izklopljeno ali brez dela, rdeča (bad) = napaka ali prestari podatki.
+   Rumene (warn) namerno ni: uporabnik je prosil za pregledno stran, na kateri barva pomeni ukrep.
+   Barve in razmiki so izključno iz spremenljivk v app.css. */
+
+/* --- glava ---------------------------------------------------------------- */
+.refresh-note { align-self: center; color: var(--pim-text-muted); font-size: 12px; }
+
+/* --- gostitelj ------------------------------------------------------------ */
+.monitor-host { border-left: 4px solid var(--pim-neutral-border); margin-top: 1rem; padding: .85rem 1.15rem; scroll-margin-top: 5rem; }
+.monitor-host.good { border-left-color: var(--pim-good-bar); }
+.monitor-host.bad { background: var(--pim-bad-bg); border-left-color: var(--pim-bad-text); }
+.monitor-host h2 { color: var(--pim-text-strong); display: inline; font-size: .95rem; font-weight: 650; margin: 0; }
+.monitor-host.bad h2 { color: var(--pim-bad-strong); display: block; }
+.monitor-host-meta { color: var(--pim-text-muted); font-size: .82rem; margin-left: .35rem; }
+.monitor-host p { color: var(--pim-text-soft); font-size: .82rem; line-height: 1.55; margin: .4rem 0 0; }
+
+/* --- povzetek ------------------------------------------------------------- */
+.monitor-summary a { color: inherit; font-weight: 650; }
+
+/* --- razdelki s tabelami -------------------------------------------------- */
+.monitor-section { margin-top: 1rem; }
+.monitor-section-head { align-items: baseline; display: flex; flex-wrap: wrap; gap: .2rem 1rem; justify-content: space-between; padding: .85rem 1rem .7rem; }
+.monitor-section-head h2 { color: var(--pim-text-strong); font-size: 15px; font-weight: 650; margin: 0; }
+.monitor-section-head p { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; margin: 0; max-width: 52rem; }
+
+.monitor-job { max-width: 22rem; min-width: 13rem; }
+.monitor-note { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.4; margin-top: 2px; }
+/* Opis posla je v eni vrstici; cel je v title. Tabela ostane pregledna tudi pri dolgih opisih. */
+.monitor-oneline { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monitor-reason { color: var(--pim-text-soft); font-size: .82rem; line-height: 1.45; max-width: 30rem; min-width: 14rem; }
+.monitor-action { min-width: 8rem; }
+
+/* Rdeča vrstica je rdeča tudi pod miško (globalni :hover v app.css bi jo sicer pobarval sivo) in
+   razlog v njej je poudarjen — barva ni edini nosilec informacije, ob njej sta še čip in razlog. */
+.monitor-row-bad, .monitor-row-bad:hover { background: var(--pim-bad-bg); }
+.monitor-row-bad .monitor-reason { color: var(--pim-bad-strong); font-weight: 600; }
+
+.nowrap { white-space: nowrap; }
+.primary-small { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 650; }
+.danger-action { border-color: var(--pim-bad-border); color: var(--pim-bad-text); font-weight: 650; }
+
+/* --- povezave na dnu ------------------------------------------------------ */
+.monitor-links { display: flex; flex-wrap: wrap; font-size: .85rem; gap: .5rem 1.25rem; margin: 1.25rem 0 .5rem; }
+.monitor-links a { font-weight: 600; text-decoration: none; }
+.monitor-links a:hover { text-decoration: underline; }
+
+@media (max-width: 720px) {
+  .monitor-section-head { flex-direction: column; }
+  .monitor-job, .monitor-reason, .monitor-oneline { max-width: none; min-width: 0; }
+  .monitor-oneline { white-space: normal; }
+}

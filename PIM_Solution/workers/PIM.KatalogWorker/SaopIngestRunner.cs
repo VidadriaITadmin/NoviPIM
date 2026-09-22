@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 using Microsoft.Data.SqlClient;
+using PIM.Operations;
 
 [assembly: InternalsVisibleTo("PIM.F3.SaopClientTests")]
 [assembly: InternalsVisibleTo("PIM.F3.Integration")]
@@ -65,6 +66,20 @@ public sealed class SaopIngestRunner(
   /// </summary>
   private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(60);
 
+  /// <summary>
+  /// Skupni pisec faz procesa (blok 6). Program.cs po zajemu zapiše še PRESLIKAVA in MEJNIK; če bi
+  /// imel vsak svoj pisec, bi se vrstni red faz (PhaseOrder) v istem koraku začel znova pri 1 in
+  /// preslikava bi se na strani Nadzor pokazala pred prenosom. Brez njega (testi) si runner naredi svojega.
+  /// </summary>
+  public PhaseLog? Phases { get; init; }
+
+  /// <summary>
+  /// Postopek, pod katerim gredo faze končne točke: cene pod SAOP_PRICES, vse drugo pod SAOP_PRODUCTS.
+  /// Eno pravilo za PRENOS in PRESLIKAVA, da ista končna točka na strani Nadzor ne razpade na dva vira.
+  /// </summary>
+  public static string PhasePipeline(string endpointKey) =>
+    endpointKey.Contains("Price", StringComparison.OrdinalIgnoreCase) ? "SAOP_PRICES" : "SAOP_PRODUCTS";
+
   public async Task<IngestSummary> RunAsync(
     SaopOrganization organization,
     IReadOnlyList<SaopEndpoint> endpoints,
@@ -107,29 +122,53 @@ public sealed class SaopIngestRunner(
     var endpointSlots = new SemaphoreSlim(Math.Max(1, maxParallelEndpoints));
     var ordered = new EndpointResult?[endpoints.Count];
 
+    // Faze (migracija 255): vsak endpoint dobi svojo vrstico s številom zapisov in izidom.
+    // Uporabnikova zahteva 2026-09-22: »tudi vse endpointe pri katalogu« mora biti mogoče videti
+    // posebej — doslej je bil viden samo skupen izid zajema celega podjetja. Faza se odpre tik pred
+    // klicem endpointa in zapre po njem, da stolpec »Trajanje« pove, kateri endpoint je vzel čas
+    // (prej je bila zapisana za nazaj in je vsaka trajala ~1 ms).
+    var phases = Phases ?? PhaseLog.FromEnvironment(connectionString, $"{Environment.MachineName}:{Environment.ProcessId}", write);
+    var openPhases = new PhaseLog.Phase?[endpoints.Count];
+
     async Task RunOneEndpointAsync(int index)
     {
       await endpointSlots.WaitAsync(cancellationToken);
       try
       {
-        ordered[index] = await RunEndpointAsync(
-          client, endpoints[index], organization, sourceConnectorId, runId, startedUtc, fullSync, skipMapping,
+        var endpoint = endpoints[index];
+        openPhases[index] = await phases.BeginAsync(PhaseCodes.Fetch, endpoint.Key, organization.Id,
+          PhasePipeline(endpoint.Key), runId, cancellationToken: cancellationToken);
+        var result = ordered[index] = await RunEndpointAsync(
+          client, endpoint, organization, sourceConnectorId, runId, startedUtc, fullSync, skipMapping,
           priceListIds, heartbeatAsync, cancellationToken);
+        var (izid, opomba, noviPodatki, zapisano) = FetchPhaseOutcome(endpoint, result);
+        await openPhases[index]!.CompleteAsync(izid, noviPodatki, itemsIn: result.Records, itemsOut: zapisano,
+          message: opomba, cancellationToken: cancellationToken);
       }
       finally { endpointSlots.Release(); }
     }
 
-    if (maxParallelEndpoints > 1)
+    try
     {
-      await Task.WhenAll(Enumerable.Range(0, endpoints.Count).Select(RunOneEndpointAsync));
-    }
-    else
-    {
-      for (var index = 0; index < endpoints.Count; index++)
+      if (maxParallelEndpoints > 1)
       {
-        cancellationToken.ThrowIfCancellationRequested();
-        await RunOneEndpointAsync(index);
+        await Task.WhenAll(Enumerable.Range(0, endpoints.Count).Select(RunOneEndpointAsync));
       }
+      else
+      {
+        for (var index = 0; index < endpoints.Count; index++)
+        {
+          cancellationToken.ThrowIfCancellationRequested();
+          await RunOneEndpointAsync(index);
+        }
+      }
+    }
+    catch
+    {
+      // Prekinjen zajem: odprte faze se zaprejo kot padle (DisposeAsync), ne ostanejo »teče«.
+      foreach (var open in openPhases)
+        if (open is not null) await open.DisposeAsync();
+      throw;
     }
 
     for (var index = 0; index < endpoints.Count; index++)
@@ -159,6 +198,20 @@ public sealed class SaopIngestRunner(
     await FinishPipelineRunAsync(connection, summary, cancellationToken);
     return summary;
   }
+
+  /// <summary>
+  /// Izid faze PRENOS enega endpointa. Zapisano = novi ali spremenjeni zapisi: pri stoječem mejniku (SAOP je
+  /// vrnil iste zapise kot že zajete) in brez sprememb je 0, sicer bi stran trdila »zapisano 122«, ko ni bilo
+  /// zapisano nič novega.
+  /// </summary>
+  static (PhaseOutcome Outcome, string? Message, bool HasNewData, long ItemsOut) FetchPhaseOutcome(SaopEndpoint endpoint, EndpointResult result) =>
+    result switch
+    {
+      { Succeeded: false } => (PhaseOutcome.Failed, result.Error, false, 0),
+      { AwaitingMapping: true } => (PhaseOutcome.Succeeded, $"mejnik stoji: {result.WatermarkHold}", false, 0),
+      { Records: 0 } => (PhaseOutcome.Succeeded, $"{endpoint.EntityType}: ni sprememb", false, 0),
+      _ => (PhaseOutcome.Succeeded, $"{endpoint.EntityType}, strani {result.Pages}, {result.DurationMs / 1000.0:0.0} s", true, result.Records),
+    };
 
   private async Task<EndpointResult> RunEndpointAsync(
     SaopApiClient client,

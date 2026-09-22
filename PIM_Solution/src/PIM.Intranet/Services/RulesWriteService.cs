@@ -58,7 +58,7 @@ public sealed class RulesWriteService(IConfiguration configuration, PimWriteGuar
 
   public async Task<SavedRequirement> SaveRequirementAsync(
     int validationProfileId, string fieldCode, string severity, bool isRequired, bool isActive,
-    string actor, CancellationToken cancellationToken = default)
+    string actor, CancellationToken cancellationToken = default, int? fieldRequirementId = null)
   {
     await guard.RequireAsync(PimPolicies.BusinessWrite);
     await using var connection = new SqlConnection(ConnectionString);
@@ -70,6 +70,8 @@ public sealed class RulesWriteService(IConfiguration configuration, PimWriteGuar
     command.Parameters.Add("@IsRequired", SqlDbType.Bit).Value = isRequired;
     command.Parameters.Add("@IsActive", SqlDbType.Bit).Value = isActive;
     command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+    // 266: urejanje obstojece vrstice gre po njeni stevilki (zahteve po kategorijah imajo isto polje).
+    command.Parameters.Add("@FieldRequirementId", SqlDbType.Int).Value = (object?)fieldRequirementId ?? DBNull.Value;
 
     SavedRequirement saved;
     await using (var reader = await command.ExecuteReaderAsync(cancellationToken))

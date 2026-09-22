@@ -84,22 +84,15 @@ public sealed record AttentionSummary(
 {
   public static AttentionSummary Empty { get; } = new(0, 0, 0, 0, null);
 
-  /// <summary>Koliko stvari zahteva skrbnikovo pozornost; to je število na zvončku.</summary>
-  public int Total => SilentCount + FailingCount + CriticalCount + (SelfTestStatus == "Failed" ? 1 : 0);
+  /// <summary>Koliko novih, uporabniku naročenih obvestil je še neprebranih; to je število na zvončku.</summary>
+  public int Total => UnseenCount;
 
-  /// <summary>Naslov zvončka; pove, kaj je narobe, ne samo koliko.</summary>
+  /// <summary>Naslov zvončka pove, koliko novih obvestil čaka.</summary>
   public string Title
   {
     get
     {
-      if (Total == 0) return "Vse teče: noben postopek ne molči in ni kritičnega alarma.";
-
-      var deli = new List<string>(4);
-      if (SilentCount > 0) deli.Add($"{SilentCount} postopkov molči");
-      if (FailingCount > 0) deli.Add($"{FailingCount} v napaki");
-      if (CriticalCount > 0) deli.Add($"{CriticalCount} kritičnih alarmov");
-      if (SelfTestStatus == "Failed") deli.Add("nočni samotest je padel");
-      return string.Join(", ", deli);
+      return Total == 0 ? "Ni novih obvestil." : $"{Total} novih obvestil";
     }
   }
 }
@@ -124,7 +117,7 @@ public sealed record AdminPulse(
   public int OpenCriticalCount => Alerts.Count(row => row.Severity == "Critical");
   public int UnseenCount => Alerts.Count(row => !row.IsSeen);
 
-  /// <summary>Koliko stvari zahteva skrbnikovo pozornost zdaj; to je število na zvončku.</summary>
+  /// <summary>Koliko novih, uporabniku naročenih obvestil je še neprebranih; to je število na zvončku.</summary>
   public int AttentionCount => SilentCount + FailingCount + OpenCriticalCount
     + (SelfTest is { Status: "Failed" } ? 1 : 0);
 
@@ -277,7 +270,9 @@ public sealed class AdminConsoleService(PimDb database, IConfiguration configura
            FROM ops.Alert alarm
           WHERE alarm.ResolvedUtc IS NULL
             AND NOT EXISTS (SELECT 1 FROM ops.AlertSeen videno
-                             WHERE videno.AlertId = alarm.AlertId AND videno.UserKey = @UserKey)) AS UnseenCount,
+                             WHERE videno.AlertId = alarm.AlertId AND videno.UserKey = @UserKey))
+            AND EXISTS (SELECT 1 FROM intranet.UserAlertSubscription narocnina
+                        WHERE narocnina.UserName = @UserKey AND narocnina.AlertKind = alarm.AlertKind)) AS UnseenCount,
         (SELECT TOP (1) Status FROM ops.SelfTestRun ORDER BY StartedUtc DESC) AS SelfTestStatus;
       """,
       reader => new AttentionSummary(

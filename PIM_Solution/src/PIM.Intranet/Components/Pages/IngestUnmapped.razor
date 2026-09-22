@@ -5,7 +5,7 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Neujemanja</PageTitle>
-<PimPage Title="Neujemanja" Subtitle="Vrednosti iz virov, ki jih preslikava ni znala razvrstiti. Ista neznana vrednost običajno pride na tisočih zapisih, zato je seznam združen po vrednosti." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="Neujemanja" Subtitle="Vrednosti iz virov, ki jih preslikava ni znala razvrstiti. Ista neznana vrednost običajno pride na tisočih zapisih, zato je seznam združen po vrednosti." Crumbs="Crumbs" />
 
 <section class="ui-card data-card" aria-label="Seznam nerazvrščenih vrednosti">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Ni nerazvrščenih vrednosti." LoadingText="Nalaganje neujemanj …">

@@ -1,0 +1,1310 @@
+@page "/sistem/posel/{JobKey}"
+@namespace PIM.Intranet.Components.Pages.SystemArea
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject PIM.Intranet.Services.MonitorService Nadzor
+@inject AuthenticationStateProvider Authentication
+
+@*
+  Posel pod drobnogledom (blok 5 prenove nadzora, 2026-09-22): stanje in en korak, ki težavo reši,
+  viri s svežino, izbran tek s koraki in njihovimi fazami (s števili), izpis, zgodovina, urnik,
+  postopki, odvisnosti in datoteke — vse o enem poslu na eni strani (prej razdeljeno na Opravila,
+  Zagone ter Alarme in podjetja).
+
+  Zakaj faze pod koraki: korak je bil zelen, čeprav se Braytron pet dni ni prenesel (David: »ne pa
+  da so kar štirje koraki v enem workerju pa se ti ne delajo«). Faza pove, ali je bil prenos, ali
+  se je dalo prebrati in koliko se je zapisalo — in »preskočeno« ali »brez novih podatkov« ni
+  »uspelo«. Barve so iste kot na Nadzoru: zelena, siva, rdeča; rumene ni.
+
+  Postavitev je enaka za vsak posel (David: »da bo uporabnik točno vedel kam kateri podatek paše«):
+  Stanje zdaj (tri škatle: Kdaj teče, Zadnji rezultat, Kaj kliče), obvestila, nato oštevilčeni razdelki
+  1. Viri podatkov, 2. Zadnji tek, 3. Izpis dnevnika, 4. Zgodovina tekov, 5. Nastavitve. Razdelek nikoli ne
+  izgine; kadar je prazen, en stavek pove, zakaj. Faze vseh korakov so v mreži z isto predlogo stolpcev.
+
+  Izbran tek je v naslovu (?tek=<id>), da se povezava na tek da poslati in da gumb Nazaj dela.
+  Vsi časi so v naši uri (PimTime).
+*@
+
+<PageTitle>@Naslov</PageTitle>
+
+<PimPage Title="@Naslov" Subtitle="@Podnaslov" Crumbs="Drobtine">
+  <Actions>
+    <span class="refresh-note">@OsvezenoOb</span>
+    <button type="button" class="filter-button" disabled="@(Loading || Busy)" @onclick="OsveziAsync">Osveži</button>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="nadzor" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+@if (Message is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (NapakaBranja is not null && Podrobnosti is not null)
+{
+  <p class="message-state error-message" role="alert">@NapakaBranja Prikazano je stanje ob @PimTime.FormatTime(OsvezenoUtc).</p>
+}
+
+@if (Podrobnosti is null)
+{
+  if (Loading)
+  {
+    <PimState Loading="true" LoadingText="Berem posel …" />
+  }
+  else if (NapakaBranja is not null)
+  {
+    <PimState Error="@NapakaBranja" />
+  }
+  else
+  {
+    <PimState Empty="true" EmptyText="@($"Posel {JobKey} ne obstaja.")" />
+    <p class="monitor-back"><a href="sistem">Nazaj na Nadzor</a></p>
+  }
+}
+else
+{
+  var d = Podrobnosti;
+  var posel = d.Job;
+  var job = posel.Job;
+  var presoja = posel.Verdict;
+  var svezina = Svezina(posel);
+
+  @* ── Stanje zdaj: stanje, razlog, en korak in tri škatle z dejstvi ─────────────── *@
+  <section class="ui-card monitor-head @(MonitorPolicy.ToneCss(presoja.Tone) ?? "idle")" aria-labelledby="stanje-naslov">
+    <div class="monitor-head-top">
+      <h2 id="stanje-naslov" class="monitor-head-title">Stanje zdaj</h2>
+      <PimChip Text="@presoja.Label" Tone="@MonitorPolicy.ToneCss(presoja.Tone)" Prefix="Stanje: " />
+      @if (job.IsRunning)
+      {
+        <span class="monitor-running">
+          teče: @(job.RunningStep ?? "začetek teka")@(job.RunningSinceUtc is { } od ? $" · od {PimTime.FormatTime(od)}" : "")@(job.RunningHost is { Length: > 0 } gostitelj ? $" · {gostitelj}" : "")
+          @if (job.RunningIsStale) { <span class="monitor-count-bad"> · brez utripa več kot 10 min</span> }
+        </span>
+      }
+      else if (job.IsRequested)
+      {
+        <span class="monitor-running">zahteva za zagon oddana@(job.RequestedBy is { Length: > 0 } kdo ? $" ({kdo})" : "")@(job.RequestedRunUtc is { } kdaj ? $" ob {PimTime.FormatTime(kdaj)}" : "")</span>
+      }
+    </div>
+    <p class="monitor-head-reason">@presoja.Reason</p>
+
+    <div class="table-actions">
+      @* 1. En korak iz presoje (MonitorPolicy); zagon je spodaj, ker ima potrditveni korak. *@
+      @if (PotrjujeVklop && !job.IsEnabled)
+      {
+        <button type="button" class="small-action danger-action" disabled="@Busy" @onclick="() => VklopiAsync(posel)">Potrdi vklop (@Doseg(posel))</button>
+        <button type="button" class="small-action" @onclick="() => PotrjujeVklop = false">Prekliči</button>
+      }
+      else if (presoja.Action == MonitorAction.EnableJob && !job.IsEnabled)
+      {
+        <button type="button" class="small-action primary-small" disabled="@Busy" @onclick="() => VklopiAsync(posel)">@(presoja.ActionLabel ?? "Vklopi posel")</button>
+      }
+      else if (presoja.Action == MonitorAction.EnablePipeline)
+      {
+        <button type="button" class="small-action primary-small" disabled="@Busy" @onclick="() => VklopiPostopekIzPresojeAsync(posel)">@(presoja.ActionLabel ?? "Vklopi postopek")</button>
+      }
+      else if (presoja.Action == MonitorAction.OpenJob && presoja.ActionTarget == job.JobKey && posel.Sources.Count > 0)
+      {
+        @* Presoja vodi v ta posel (vir ne prinaša novih podatkov): tu je to razdelek Viri z vzrokom zadnje faze. *@
+        <a class="small-action primary-small" href="@(PoselHref(job.JobKey) + (Tek is { } izbrani ? $"?tek={izbrani}" : "") + "#viri")">Poglej vire</a>
+      }
+      else if (presoja.Action == MonitorAction.OpenJob && presoja.ActionTarget is { Length: > 0 } predhodnik && predhodnik != job.JobKey)
+      {
+        <a class="small-action primary-small" href="@PoselHref(predhodnik)">@(presoja.ActionLabel ?? $"Odpri posel {OznakaPosla(predhodnik)}")</a>
+      }
+      else if (presoja.Action == MonitorAction.OpenLog)
+      {
+        <a class="small-action primary-small" href="@IzpisHref(job)">@(presoja.ActionLabel ?? "Odpri izpis")</a>
+      }
+      else if (presoja.Action == MonitorAction.CheckHost)
+      {
+        <a class="small-action primary-small" href="sistem#gostitelj">@(presoja.ActionLabel ?? "Kako zagnati gostitelja")</a>
+      }
+
+      @* 2. Krmila posla: zagon ali ustavitev, vklop ali izklop. *@
+      @if (job.IsRunning && job.RunningJobRunId is { } tekoci)
+      {
+        <button type="button" class="small-action danger-action" disabled="@(Busy || job.CancelRequestedUtc is not null)" @onclick="() => UstaviAsync(posel, tekoci)">
+          @(job.CancelRequestedUtc is null ? "Ustavi" : "Ustavitev zahtevana")
+        </button>
+      }
+      else if (PotrjujeZagon)
+      {
+        <button type="button" class="small-action danger-action" disabled="@Busy" @onclick="() => PozeniAsync(posel)">Potrdi zagon (@Doseg(posel))</button>
+        <button type="button" class="small-action" @onclick="() => PotrjujeZagon = false">Prekliči</button>
+      }
+      else
+      {
+        <button type="button" class="small-action @(presoja.Action == MonitorAction.RunNow ? "primary-small" : null)" disabled="@(Busy || job.IsRequested)"
+                @onclick="() => PozeniAsync(posel)">@(presoja.Action == MonitorAction.RunNow ? presoja.ActionLabel ?? "Poženi zdaj" : "Poženi zdaj")</button>
+      }
+      @if (job.IsEnabled)
+      {
+        <button type="button" class="small-action" disabled="@Busy" @onclick="() => NastaviPoselAsync(posel, false)">Izklopi</button>
+      }
+      else if (presoja.Action != MonitorAction.EnableJob && !PotrjujeVklop)
+      {
+        <button type="button" class="small-action good-action" disabled="@Busy" @onclick="() => VklopiAsync(posel)">Vklopi</button>
+      }
+    </div>
+
+    @* Tri škatle z istim zaporedjem pri vsakem poslu: kdaj teče, kaj je prinesel, kaj kliče. *@
+    <div class="monitor-boxes">
+      <div class="monitor-box" role="group" aria-labelledby="skatla-kdaj">
+        <h3 id="skatla-kdaj">Kdaj teče</h3>
+        <dl class="monitor-kv">
+          <div>
+            <dt>Urnik</dt>
+            <dd>@JobCatalog.FormatSchedule(job.IntervalSeconds, job.DailyAtLocal)@(job.IsEnabled ? "" : " (izklopljen)")</dd>
+            <dd class="monitor-help">@(job.IsEnabled ? "Kako pogosto ga gostitelj zažene sam." : "Posel je izklopljen; po urniku ne teče, ročni zagon deluje.")</dd>
+          </div>
+          <div>
+            <dt>Naslednji zagon</dt>
+            <dd>@Naslednji(job)</dd>
+            <dd class="monitor-help">Kdaj ga gostitelj zažene naslednjič.</dd>
+          </div>
+          <div>
+            <dt>Časovna meja</dt>
+            <dd>@MinuteBesedilo(job.TimeoutSeconds)</dd>
+            <dd class="monitor-help">Največ @MinuteBesedilo(job.TimeoutSeconds) na en tek; potem se tek ustavi.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="monitor-box" role="group" aria-labelledby="skatla-rezultat">
+        <h3 id="skatla-rezultat">Zadnji rezultat</h3>
+        <dl class="monitor-kv">
+          <div>
+            <dt>Zadnji uspeh</dt>
+            <dd>@PimTime.FormatWithAge(job.LastSucceededUtc, "še nikoli")</dd>
+            <dd class="monitor-help">Kdaj se je posel nazadnje končal brez napake.</dd>
+          </div>
+          <div>
+            <dt>@svezina.Oznaka</dt>
+            <dd>@presoja.DataAgeLabel</dd>
+            <dd class="monitor-help">@svezina.Pomoc</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="monitor-box" role="group" aria-labelledby="skatla-klice">
+        <h3 id="skatla-klice">Kaj kliče</h3>
+        <dl class="monitor-kv">
+          <div>
+            <dt>Doseg</dt>
+            <dd>@(job.Reach == "Internal" ? "samo baza PIM" : Doseg(posel))</dd>
+            <dd class="monitor-help">@(job.Reach == "Internal" ? "Brez zunanjih klicev; ročni zagon ne zahteva potrditve." : "Zunanji klic; ročni zagon zahteva drugi klik (Potrdi zagon).")</dd>
+          </div>
+          <div>
+            <dt>Workerji</dt>
+            <dd>@(posel.Code is { Workers.Count: > 0 } kodaPosla ? string.Join(", ", kodaPosla.Workers) : "—")</dd>
+            <dd class="monitor-help">Programi, ki jih posel zažene; en zagon workerja je en korak.</dd>
+          </div>
+          <div>
+            <dt>Tehnični ključ</dt>
+            <dd><span class="code-value">@job.JobKey</span></dd>
+            <dd class="monitor-help">Ime posla v bazi in v dnevnikih.</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  @* ── Obvestila posla (alarmi, ki mu pripadajo) ────────────────────────────── *@
+  @if (posel.Alerts.Count > 0)
+  {
+    <section class="ui-card data-card monitor-section" aria-labelledby="obvestila-naslov">
+      <div class="monitor-section-head">
+        <h2 id="obvestila-naslov">Obvestila posla</h2>
+        <p>Odprta obvestila tega posla in njegovih postopkov. Potrdi pomeni »prevzeto«; razreši šele, ko je vzrok odpravljen.</p>
+      </div>
+      <PimTable Caption="Odprta obvestila posla" Columns="StolpciObvestil">
+        <Rows>
+          @foreach (var alarm in posel.Alerts)
+          {
+            <tr class="@(alarm.Severity == "Critical" ? "monitor-row-bad" : null)">
+              <td><PimChip Text="@Resnost(alarm.Severity)" Tone="@(alarm.Severity == "Critical" ? "bad" : null)" Prefix="" /></td>
+              <td>@alarm.OrganizationName</td>
+              <td class="monitor-reason">
+                <strong>@alarm.Title</strong>
+                @if (alarm.Summary is { Length: > 0 } povzetek) { <div class="monitor-note">@povzetek</div> }
+              </td>
+              <td>
+                @PimTime.FormatWithAge(alarm.LastSeenUtc)
+                @if (alarm.AcknowledgedUtc is { } potrjeno) { <div class="monitor-note">potrjeno @PimTime.Format(potrjeno)</div> }
+              </td>
+              <td>
+                <div class="table-actions">
+                  @if (alarm.AcknowledgedUtc is null)
+                  {
+                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => PotrdiAlarmAsync(alarm)">Potrdi</button>
+                  }
+                  <button type="button" class="small-action good-action" disabled="@Busy" @onclick="() => RazresiAlarmAsync(alarm)">Razreši</button>
+                </div>
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+  }
+
+  @* ── 1. Viri podatkov in svežina ───────────────────────────────────────────── *@
+  <section id="viri" class="ui-card data-card monitor-section" aria-labelledby="viri-naslov">
+    <div class="monitor-section-head">
+      <h2 id="viri-naslov">1. Viri podatkov</h2>
+      <p>Od kod posel prinaša podatke in kako sveži so. Zelena: sveži. Rdeča: starejši od meje ali zadnji poskus padel. Siva: še ni podatkov.</p>
+    </div>
+    @if (posel.Sources.Count == 0)
+    {
+      <p class="monitor-pad monitor-empty">Ta posel nima virov s pragom svežine.</p>
+    }
+    else
+    {
+      <PimTable Caption="Viri posla in svežina njihovih podatkov" Columns="StolpciVirov">
+        <Rows>
+          @foreach (var vir in posel.Sources)
+          {
+            var stanjeVira = VirStanje(vir.State);
+            <tr class="@(stanjeVira.Tone == "bad" ? "monitor-row-bad" : null)">
+              <td>
+                <strong>@vir.Label</strong>
+                <div class="monitor-note"><span class="code-value">@vir.SourceCode</span></div>
+              </td>
+              <td>@(vir.OrganizationName ?? "vsa podjetja")</td>
+              <td><PimChip Text="@stanjeVira.Text" Tone="@stanjeVira.Tone" Prefix="" /></td>
+              <td class="nowrap">
+                @Starost(vir.BasisUtc)
+                <div class="monitor-note">po @(vir.MeasureNewData ? "zadnjih novih podatkih" : "zadnjem uspešnem stiku")</div>
+              </td>
+              <td class="nowrap">@MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(vir.MaxAgeSeconds))</td>
+              <td>@PimTime.FormatWithAge(vir.LastContactUtc, "nikoli")</td>
+              <td>@PimTime.FormatWithAge(vir.LastNewDataUtc, "nikoli")</td>
+              <td class="monitor-reason">
+                @if (vir.LastPhaseCode is { Length: > 0 } faza)
+                {
+                  <span>@PhaseCodes.Label(faza)</span>
+                  var brezNovih = BrezNovihPodatkov(vir);
+                  @if (vir.LastStatus is { Length: > 0 } izid) { <span class="muted"> · @(brezNovih ? "brez novih podatkov" : IzidFaze(izid))</span> }
+                  @if (vir.LastItemsOut is { } zapisano && !brezNovih) { <span class="muted"> · zapisano @Stevilo(zapisano)</span> }
+                  @if (vir.LastItemsRejected is > 0) { <span class="monitor-count-bad"> · zavrnjeno @Stevilo(vir.LastItemsRejected)</span> }
+                }
+                else
+                {
+                  <span class="muted">še nobene faze</span>
+                }
+                @if (vir.LastMessage is { Length: > 0 } sporocilo) { <div class="monitor-note" title="@sporocilo">@Skrajsaj(sporocilo)</div> }
+                @if (vir.LastFailureUtc is { } padec) { <div class="monitor-note">zadnja napaka @PimTime.FormatWithAge(padec)</div> }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    }
+  </section>
+
+  @* ── 2. Izbran tek: povzetek, legenda, koraki kot kartice s fazami v skupni mreži ── *@
+  <section class="ui-card monitor-section" aria-labelledby="tek-naslov">
+    @if (d.SelectedRun is { } tek)
+    {
+      var tece = tek.EffectiveStatus == JobRunStatus.Running;
+      var razporeditev = RazporediFaze(d, tek);
+      var stanjeTeka = TekStanje(d, tek);
+      var jeZadnji = tek.JobRunId == job.LastJobRunId;
+      <div class="monitor-section-head">
+        <div class="monitor-section-title">
+          <h2 id="tek-naslov">@(jeZadnji || job.LastJobRunId is null ? "2. Zadnji tek" : "2. Izbrani tek")</h2>
+          @if (!jeZadnji && job.LastJobRunId is not null)
+          {
+            <a href="@PoselHref(job.JobKey)">Pokaži zadnji tek</a>
+          }
+        </div>
+        <p>Kaj se je zgodilo v enem teku posla: koraki po vrsti in pod vsakim njegove faze s števili.</p>
+      </div>
+      <div class="monitor-pad">
+        @if (Tek is { } iskani && iskani != tek.JobRunId)
+        {
+          <p class="monitor-run-summary">Tek #@iskani ne pripada temu poslu ali je prestar; prikazan je zadnji tek.</p>
+        }
+        <p class="monitor-run-lead">
+          Tek #@tek.JobRunId se je začel @DanInUra(tek.StartedUtc) (@Sprozilec(tek.TriggeredBy), @tek.StartedBy),
+          @if (tece)
+          {
+            <span>teče že @PimTime.Duration((long)tek.Duration.TotalMilliseconds) in še ni končan: </span>
+          }
+          else
+          {
+            <span>trajal @PimTime.Duration((long)tek.Duration.TotalMilliseconds) in se končal: </span>
+          }
+          <PimChip Text="@stanjeTeka.Text" Tone="@stanjeTeka.Tone" Prefix="" />
+          <span>. Korakov @Stevilo(tek.StepsTotal), padlih @Stevilo(tek.StepsFailed), blokiranih @Stevilo(tek.StepsBlocked).</span>
+        </p>
+        <p class="monitor-note">Gostitelj @(tek.HostName is { Length: > 0 } ? tek.HostName : "—")@(tek.TimeoutSeconds is { } meja ? $" · časovna meja teka {MinuteBesedilo(meja)}" : "") · začetek na sekundo @PimTime.FormatExact(tek.StartedUtc)</p>
+        @if (tek.Summary is { Length: > 0 } povzetekTeka && tek.EffectiveStatus != JobRunStatus.Succeeded)
+        {
+          <p class="monitor-run-summary @(TekTon(tek.EffectiveStatus))">@povzetekTeka</p>
+        }
+        @if (tek.EffectiveStatus == JobRunStatus.Blocked && tek.BlockedByJobKey is { Length: > 0 } blokiral)
+        {
+          <p class="monitor-run-summary">Blokiral ga je predhodnik <a href="@PoselHref(blokiral)">@OznakaPosla(blokiral)</a>@(tek.Occurrences > 1 ? $" ({Stevilo(tek.Occurrences)}× na vrsti)" : "").</p>
+        }
+        @if (tek.Status == JobRunStatus.Running && tek.EffectiveStatus == JobRunStatus.Abandoned)
+        {
+          <p class="monitor-run-summary bad">Tek nima utripa od @PimTime.FormatTime(tek.HeartbeatUtc); gostitelj ga bo zaprl kot zapuščenega.</p>
+        }
+
+        <div class="monitor-legend" role="note" aria-labelledby="legenda-naslov">
+          <h3 id="legenda-naslov">Kako brati korake in faze</h3>
+          <dl>
+            <div><dt>Korak</dt><dd>en zagon workerja (za eno podjetje).</dd></div>
+            <div><dt>Faza</dt><dd>en del dela znotraj koraka (Prenos, Branje, Zapis, Ujemanje, Preslikava, Mejnik, Izračun, Datoteka, Pošiljanje).</dd></div>
+            <div><dt>Prebrano</dt><dd>koliko zapisov je prišlo iz vira.</dd></div>
+            <div><dt>Zapisano</dt><dd>koliko jih je šlo v bazo.</dd></div>
+            <div><dt>Zavrnjeno</dt><dd>koliko jih ni šlo naprej (karantena, brez artikla, napaka dokumenta).</dd></div>
+            <div><dt>Barve</dt><dd>zelena: uspelo z novimi podatki; rdeča: napaka; siva: preskočeno ali brez novih podatkov.</dd></div>
+          </dl>
+        </div>
+
+        @if (d.Steps.Count == 0 && !tece)
+        {
+          <p class="monitor-empty">Tek nima zapisanih korakov.</p>
+        }
+        else
+        {
+          <div class="monitor-steps">
+            @foreach (var korak in d.Steps.OrderBy(k => k.StepOrder))
+            {
+              var fazeKoraka = razporeditev.Za(korak.StepOrder);
+              var stanjeKoraka = KorakStanje(korak, fazeKoraka);
+              var slabKorak = stanjeKoraka.Tone == "bad";
+              <article class="monitor-step @(slabKorak ? "bad" : null)" aria-labelledby="@($"korak-{korak.StepOrder}")">
+                <header class="monitor-step-head">
+                  <h3 id="@($"korak-{korak.StepOrder}")" class="monitor-step-title">
+                    <span class="monitor-step-num">Korak @korak.StepOrder</span>
+                    <span aria-hidden="true"> · </span><strong>@korak.StepName</strong>
+                    <span aria-hidden="true"> · </span><span>@ImePodjetja(d, korak.OrganizationId)</span>
+                  </h3>
+                  <PimChip Text="@stanjeKoraka.Text" Tone="@stanjeKoraka.Tone" Prefix="" />
+                  <span class="monitor-step-meta">trajanje @TrajanjeKoraka(korak) · začetek @PimTime.FormatTime(korak.StartedUtc)</span>
+                </header>
+                @if (korak.Note is { Length: > 0 } opomba)
+                {
+                  <p class="monitor-step-note @(slabKorak ? "bad" : null)">@opomba</p>
+                }
+                @if (korak.Command is { Length: > 0 } ukaz)
+                {
+                  <details class="monitor-tech">
+                    <summary>Tehnično</summary>
+                    <code>@ukaz</code>
+                  </details>
+                }
+                @if (fazeKoraka.Count > 0)
+                {
+                  @FazeMreza(fazeKoraka, $"Faze koraka {korak.StepOrder}: {korak.StepName}", false)
+                }
+                else if (d.Phases.Count > 0)
+                {
+                  <p class="monitor-step-empty">Ta korak ni zapisal faz.</p>
+                }
+              </article>
+            }
+            @if (tece)
+            {
+              <article class="monitor-step monitor-step-running" aria-labelledby="korak-tekoci">
+                <header class="monitor-step-head">
+                  <h3 id="korak-tekoci" class="monitor-step-title">
+                    <span class="monitor-step-num">Korak …</span>
+                    <span aria-hidden="true"> · </span><strong>@(tek.CurrentStep ?? "naslednji korak")</strong>
+                  </h3>
+                  <PimChip Text="Teče" Prefix="" />
+                  <span class="monitor-step-meta">trajanje — · začetek —</span>
+                </header>
+                <p class="monitor-step-note">Zadnji utrip teka @PimTime.FormatTime(tek.HeartbeatUtc); korak se zapiše, ko se konča.</p>
+                @if (razporeditev.Tekoci.Count > 0)
+                {
+                  @FazeMreza(razporeditev.Tekoci, "Faze koraka, ki teče", true)
+                }
+              </article>
+            }
+          </div>
+        }
+
+        @if (d.Phases.Count == 0)
+        {
+          <p class="monitor-note">Worker tega posla faz še ne poroča — vidni so samo koraki in izpis.</p>
+        }
+        @if (razporeditev.BrezKoraka.Count > 0)
+        {
+          <article class="monitor-step" aria-labelledby="faze-brez-koraka">
+            <header class="monitor-step-head">
+              <h3 id="faze-brez-koraka" class="monitor-step-title"><strong>Faze tega teka</strong></h3>
+            </header>
+            <p class="monitor-step-note">Teh faz ni bilo mogoče pripisati nobenemu koraku (ne po številki ne po času in podjetju).</p>
+            @FazeMreza(razporeditev.BrezKoraka, "Faze teka brez koraka", true)
+          </article>
+        }
+        @if (d.Phases.Any(f => f.JobRunId is null))
+        {
+          <p class="monitor-note">* Faza je s tekom povezana po času in podjetju: worker jo je zapisal brez številke teka (gostitelj s starejšo različico).</p>
+        }
+      </div>
+    }
+    else
+    {
+      <div class="monitor-section-head">
+        <h2 id="tek-naslov">2. Zadnji tek</h2>
+        <p>Kaj se je zgodilo v enem teku posla: koraki po vrsti in pod vsakim njegove faze s števili.</p>
+      </div>
+      <p class="monitor-pad monitor-empty">Posel še ni tekel.</p>
+    }
+  </section>
+
+  @* ── 3. Izpis izbranega teka ─────────────────────────────────────────────────── *@
+  <section id="izpis" class="ui-card monitor-section" aria-labelledby="izpis-naslov">
+    @if (d.SelectedRun is { } izbran)
+    {
+      var vrstice = CelIzpis ?? d.LogTail;
+      <div class="monitor-section-head">
+        <div class="monitor-section-title">
+          <h2 id="izpis-naslov">3. Izpis dnevnika</h2>
+          @* Če se je dal prebrati konec, se da prebrati tudi cel dnevnik (ista datoteka, ista mapa). *@
+          @if (d.LogTail is not null || CelIzpis is not null)
+          {
+            <button type="button" class="small-action" @onclick="() => PreklopiCelIzpis(izbran)">@(CelIzpis is null ? "Pokaži cel izpis" : "Pokaži samo konec")</button>
+          }
+        </div>
+        <p>Kaj je worker izpisal med tekom; rdeče so vrstice z napako.</p>
+      </div>
+      <div class="monitor-pad">
+        @if (vrstice is null)
+        {
+          <p class="monitor-empty">@(izbran.LogPath is null ? $"Tek #{izbran.JobRunId} nima dnevnika." : "Dnevnika ni mogoče prebrati: mapa dnevnikov gostitelja intranetu ni dosegljiva.")</p>
+        }
+        else if (vrstice.Count == 0)
+        {
+          <p class="monitor-empty">Dnevnik teka #@izbran.JobRunId je prazen.</p>
+        }
+        else
+        {
+          var napak = vrstice.Count(v => v.Tone == LogLineTone.Error);
+          <p class="monitor-note">
+            Tek #@izbran.JobRunId · @(CelIzpis is null ? $"zadnjih {Stevilo(vrstice.Count)} vrstic." : $"cel izpis (do 512 KB): {Stevilo(vrstice.Count)} vrstic.")
+            @if (napak > 0) { <span class="monitor-count-bad">Vrstic z napako: @Stevilo(napak).</span> }
+          </p>
+          <div class="monitor-console" role="log" tabindex="0" aria-label="@($"Izpis teka #{izbran.JobRunId}")">
+            <div>
+              @foreach (var vrstica in vrstice)
+              {
+                <div class="@(vrstica.Tone == LogLineTone.Error ? "monitor-line monitor-line-error" : "monitor-line")">@vrstica.Text</div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+    else
+    {
+      <div class="monitor-section-head">
+        <h2 id="izpis-naslov">3. Izpis dnevnika</h2>
+        <p>Kaj je worker izpisal med tekom; rdeče so vrstice z napako.</p>
+      </div>
+      <p class="monitor-pad monitor-empty">Izpisa ni, ker posel še ni tekel.</p>
+    }
+  </section>
+
+  @* ── 4. Zgodovina tekov ────────────────────────────────────────────────────── *@
+  <section class="ui-card data-card monitor-section" aria-labelledby="zgodovina-naslov">
+    <div class="monitor-section-head">
+      <h2 id="zgodovina-naslov">4. Zgodovina tekov</h2>
+      <p>Zadnjih 20 tekov; klik odpre tek zgoraj.</p>
+    </div>
+    <PimState Loading="false" Empty="@(d.Runs.Count == 0)" EmptyText="Posel še ni tekel.">
+      <PimTable Caption="Zadnji teki posla, najnovejši najprej" Columns="StolpciZgodovine">
+        <Rows>
+          @foreach (var zagon in d.Runs)
+          {
+            var jeIzbran = zagon.JobRunId == d.SelectedRun?.JobRunId;
+            var stanjeZagona = TekStanje(d, zagon);
+            <tr class="@VrsticaZgodovine(stanjeZagona.Tone, jeIzbran)">
+              <td class="nowrap">
+                <a href="@TekHref(job.JobKey, zagon.JobRunId)" aria-current="@(jeIzbran ? "true" : null)">@PimTime.FormatExact(zagon.StartedUtc)</a>
+                <div class="monitor-note">#@zagon.JobRunId</div>
+              </td>
+              <td><PimChip Text="@stanjeZagona.Text" Tone="@stanjeZagona.Tone" Prefix="" /></td>
+              <td class="numeric nowrap">@PimTime.Duration((long)zagon.Duration.TotalMilliseconds)</td>
+              <td>@Sprozilec(zagon.TriggeredBy)</td>
+              <td class="monitor-reason" title="@(zagon.Summary ?? "")">@Skrajsaj(zagon.Summary)</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+  </section>
+
+  @* ── 5. Nastavitve: urnik, postopki, odvisnosti, datoteke ──────────────────────── *@
+  <section class="ui-card monitor-section" aria-labelledby="nastavitve-naslov">
+    <div class="monitor-section-head">
+      <h2 id="nastavitve-naslov">5. Nastavitve</h2>
+      <p>Kako je posel nastavljen: kdaj teče, katere postopke sme odpreti, s katerimi posli je povezan in kaj zapiše.</p>
+    </div>
+
+    @* Urnik *@
+    <div class="monitor-sub" role="group" aria-labelledby="urnik-naslov">
+      <h3 id="urnik-naslov">Urnik</h3>
+      <p>
+        Zdaj: @JobCatalog.FormatSchedule(job.IntervalSeconds, job.DailyAtLocal), časovna meja @MinuteBesedilo(job.TimeoutSeconds).
+        @if (posel.Code is { } koda) { <span>Privzeto v kodi: @JobCatalog.FormatSchedule(koda.IntervalSeconds, koda.DailyAtLocal), meja @MinuteBesedilo(koda.TimeoutSeconds).</span> }
+        Sprememba velja od naslednjega tika gostitelja.
+      </p>
+      <div class="monitor-form">
+        @if (job.IntervalSeconds is not null)
+        {
+          <label class="monitor-field">
+            <span>Razmik (min)</span>
+            <input type="number" min="1" max="1440" class="filter-select monitor-number"
+                   value="@RazmikMinute(job)" @onchange="@(e => NastaviRazmik(e.Value?.ToString()))" />
+          </label>
+        }
+        else
+        {
+          <label class="monitor-field">
+            <span>Vsak dan ob</span>
+            <input type="time" class="filter-select monitor-time"
+                   value="@DnevnaUra(job)" @onchange="@(e => NastaviUro(e.Value?.ToString()))" />
+          </label>
+        }
+        <label class="monitor-field">
+          <span>Časovna meja (min)</span>
+          <input type="number" min="1" max="1440" class="filter-select monitor-number"
+                 value="@MejaMinute(job)" @onchange="@(e => NastaviMejo(e.Value?.ToString()))" />
+        </label>
+        <div class="table-actions">
+          <button type="button" class="small-action primary-small" disabled="@(Busy || !UrnikSpremenjen(job))" @onclick="() => ShraniUrnikAsync(job)">Shrani</button>
+          @if (UrejaUrnik)
+          {
+            <button type="button" class="small-action" disabled="@Busy" @onclick="PonastaviUrnik">Prekliči</button>
+          }
+        </div>
+      </div>
+    </div>
+
+    @* Postopki (ops.ScheduleProfile), ki jih koraki odprejo *@
+    <div class="monitor-sub" role="group" aria-labelledby="postopki-naslov">
+      <h3 id="postopki-naslov">Postopki</h3>
+      <p>Postopek je dovoljenje, da korak posla za podjetje sme teči; izklopljen postopek korak zavrne. Po zaporednih napakah se postopek izklopi sam — ko je vzrok odpravljen, ga tu znova vklopi.</p>
+      @if (posel.Pipelines.Count == 0)
+      {
+        <p class="monitor-empty">Posel ne odpira nobenega postopka.</p>
+      }
+      else
+      {
+        <PimTable Caption="Postopki posla po podjetjih" Columns="StolpciPostopkov">
+          <Rows>
+            @foreach (var postopek in posel.Pipelines)
+            {
+              var izklopljen = !postopek.IsEnabled && postopek.OrganizationInAutomation;
+              var zdravje = Zdravje(postopek.HealthStatus);
+              <tr class="@(izklopljen || zdravje.Tone == "bad" ? "monitor-row-bad" : null)">
+                <td><span class="code-value">@postopek.Pipeline</span></td>
+                <td>
+                  @postopek.OrganizationName
+                  @if (!postopek.OrganizationInAutomation) { <div class="monitor-note">izključeno iz avtomatike</div> }
+                </td>
+                <td><PimChip Text="@(postopek.IsEnabled ? "Vklopljen" : "Izklopljen")" Tone="@(postopek.IsEnabled ? "good" : izklopljen ? "bad" : null)" Prefix="" /></td>
+                <td><PimChip Text="@zdravje.Text" Tone="@zdravje.Tone" Prefix="" /></td>
+                <td>@PimTime.FormatWithAge(postopek.LastHeartbeatUtc, "nikoli")</td>
+                <td class="monitor-reason" title="@(postopek.LastError ?? "")">@Skrajsaj(postopek.LastError)</td>
+                <td class="numeric @(postopek.ConsecutiveFailures > 0 ? "monitor-count-bad" : null)">@Stevilo(postopek.ConsecutiveFailures)</td>
+                <td>
+                  @if (!postopek.IsEnabled)
+                  {
+                    <button type="button" class="small-action good-action" disabled="@Busy"
+                            @onclick="() => VklopiPostopekAsync(postopek.Pipeline, postopek.OrganizationId, postopek.OrganizationName)">Vklopi</button>
+                  }
+                </td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </div>
+
+    @* Odvisnosti *@
+    <div class="monitor-sub" role="group" aria-labelledby="odvisnosti-naslov">
+      <h3 id="odvisnosti-naslov">Odvisnosti</h3>
+      <p>Vrata: posel se ne izvede (blokiran), dokler predhodnik ni uspel. Sprožilec: uspeh predhodnika postavi posel na vrsto takoj.</p>
+      @if (d.DependsOn.Count == 0 && d.Triggers.Count == 0)
+      {
+        <p class="monitor-empty">Posel ne čaka na noben posel in ne sproži nobenega.</p>
+      }
+      else
+      {
+        <div class="monitor-deps">
+          <div>
+            <h4>Čaka na</h4>
+            @if (d.DependsOn.Count == 0)
+            {
+              <p class="muted">Na noben posel.</p>
+            }
+            else
+            {
+              <ul>
+                @foreach (var odvisnost in d.DependsOn)
+                {
+                  <li>
+                    <a href="@PoselHref(odvisnost.DependsOnJobKey)">@OznakaPosla(odvisnost.DependsOnJobKey)</a>
+                    <span class="muted"> · @OdvisnostOpis(odvisnost)</span>
+                    @if (odvisnost.Note is { Length: > 0 } opomba) { <div class="monitor-note">@opomba</div> }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+          <div>
+            <h4>Sproži</h4>
+            @if (d.Triggers.Count == 0)
+            {
+              <p class="muted">Nobenega posla.</p>
+            }
+            else
+            {
+              <ul>
+                @foreach (var naslednik in d.Triggers)
+                {
+                  <li>
+                    <a href="@PoselHref(naslednik.JobKey)">@OznakaPosla(naslednik.JobKey)</a>
+                    <span class="muted"> · @OdvisnostOpis(naslednik)</span>
+                    @if (naslednik.Note is { Length: > 0 } opomba) { <div class="monitor-note">@opomba</div> }
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    @* Datoteke (ops.Artifact) *@
+    <div class="monitor-sub" role="group" aria-labelledby="datoteke-naslov">
+      <h3 id="datoteke-naslov">Datoteke</h3>
+      <p>Izhodne datoteke, ki jih je posel zapisal ob uspehu.</p>
+      @if (d.Artifacts.Count == 0)
+      {
+        <p class="monitor-empty">Posel še ni zapisal nobene izhodne datoteke.</p>
+      }
+      else
+      {
+        <PimTable Caption="Datoteke posla" Columns="StolpciDatotek">
+          <Rows>
+            @foreach (var datoteka in d.Artifacts)
+            {
+              <tr>
+                <td>
+                  <span class="code-value" title="@datoteka.FilePath">@datoteka.FileName</span>
+                  @if (datoteka.OrganizationId is { } podjetjeDatoteke) { <div class="monitor-note">@ImePodjetja(d, podjetjeDatoteke)</div> }
+                </td>
+                <td class="numeric nowrap">@Velikost(datoteka.ByteCount)</td>
+                <td class="numeric">@Stevilo(datoteka.RowCountValue)</td>
+                <td>@PimTime.FormatWithAge(datoteka.FileModifiedUtc ?? datoteka.CreatedUtc)</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </div>
+  </section>
+}
+
+@code {
+  [Parameter] public string JobKey { get; set; } = "";
+
+  /// <summary>Izbran tek (?tek=&lt;id&gt;); brez njega stran pokaže zadnji tek.</summary>
+  [SupplyParameterFromQuery(Name = "tek")] public long? Tek { get; set; }
+
+  static readonly global::System.Globalization.CultureInfo Sl = global::System.Globalization.CultureInfo.GetCultureInfo("sl-SI");
+  static readonly global::System.Globalization.CultureInfo Inv = global::System.Globalization.CultureInfo.InvariantCulture;
+
+  static readonly IReadOnlyList<PimColumn> StolpciObvestil =
+    [new("Resnost"), new("Podjetje"), new("Obvestilo"), new("Zadnjič"), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> StolpciVirov =
+    [new("Vir"), new("Podjetje"), new("Stanje"), new("Starost podatkov"), new("Meja"), new("Zadnji stik z virom"), new("Zadnji novi podatki"), new("Kaj se je zgodilo nazadnje")];
+  static readonly IReadOnlyList<PimColumn> StolpciZgodovine =
+    [new("Začetek"), new("Stanje"), new("Trajanje", true), new("Sprožil"), new("Povzetek")];
+  static readonly IReadOnlyList<PimColumn> StolpciPostopkov =
+    [new("Postopek"), new("Podjetje"), new("Vklopljen"), new("Zdravje"), new("Zadnji utrip"), new("Zadnja napaka"), new("Zaporednih napak", true), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> StolpciDatotek =
+    [new("Datoteka"), new("Velikost", true), new("Vrstic", true), new("Čas")];
+
+  MonitorJobDetail? Podrobnosti;
+  (string Key, long? Tek)? nalozeno;
+  string Uporabnik = "neznan";
+  bool Loading = true;
+  bool Busy;
+  bool PotrjujeZagon;
+  bool PotrjujeVklop;
+  string? Message;
+  string? Error;
+  string? NapakaBranja;
+  DateTime? OsvezenoUtc;
+  IReadOnlyList<WorkerLogLine>? CelIzpis;
+  long? CelIzpisTek;
+  int? UrejeniRazmik;
+  string? UrejenaUra;
+  int? UrejenaMeja;
+  readonly CancellationTokenSource ustavi = new();
+
+  string Naslov => Podrobnosti?.Job.Job.Label ?? JobCatalog.Find(JobKey)?.Label ?? JobKey;
+
+  // Opis iz kode (JobCatalog) ima prednost pred opisom v bazi, ki lahko zaostaja za kodo.
+  string Podnaslov => Podrobnosti is { } d
+    ? $"{(d.Job.Code?.Description is { Length: > 0 } opis ? opis : d.Job.Job.Description)} Časi so v naši uri ({PimTime.ZoneLabel})."
+    : JobCatalog.Find(JobKey)?.Description is { Length: > 0 } opisIzKode
+      ? $"{opisIzKode} Časi so v naši uri ({PimTime.ZoneLabel})."
+      : $"Časi so v naši uri ({PimTime.ZoneLabel}).";
+
+  IReadOnlyList<PimCrumb> Drobtine => [new("Nadzor", "sistem"), new(Naslov)];
+
+  string OsvezenoOb => OsvezenoUtc is null ? "" : $"Osveženo ob {PimTime.FormatTime(OsvezenoUtc)}";
+
+  bool UrejaUrnik => UrejeniRazmik is not null || UrejenaUra is not null || UrejenaMeja is not null;
+
+  protected override async Task OnInitializedAsync()
+  {
+    // Žeton pred prvim await: po Dispose bi ustavi.Token vrgel ObjectDisposedException in prekinil vezje.
+    var zeton = ustavi.Token;
+    Uporabnik = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+    _ = OsvezujAsync(zeton);
+  }
+
+  // Posel in tek prideta iz naslova; povezava v zgodovini (?tek=) zamenja samo tek, drug posel pa vse.
+  protected override async Task OnParametersSetAsync()
+  {
+    if (nalozeno is { } prej && prej.Key == JobKey && prej.Tek == Tek) return;
+    if (nalozeno is not { } star || star.Key != JobKey)
+    {
+      Podrobnosti = null;
+      Message = null;
+      Error = null;
+      PotrjujeZagon = false;
+      PotrjujeVklop = false;
+      PonastaviUrnik();
+    }
+    CelIzpis = null;
+    CelIzpisTek = null;
+    nalozeno = (JobKey, Tek);
+    await NaloziAsync();
+  }
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    // Samodejna osvežitev, ki se je začela pred premikom na drug posel ali tek, se lahko konča za novim
+    // branjem; njen izid ne sme prepisati strani pod novim naslovom.
+    var zahteva = (JobKey, Tek);
+    try
+    {
+      var prebrano = await Nadzor.GetJobAsync(zahteva.JobKey, zahteva.Tek);
+      if (nalozeno is not { } trenutno || trenutno.Key != zahteva.JobKey || trenutno.Tek != zahteva.Tek) return;
+      Podrobnosti = prebrano;
+      OsvezenoUtc = DateTime.UtcNow;
+      NapakaBranja = null;
+
+      // Cel izpis velja za en tek; pri teku, ki še teče, se prebere znova, da raste skupaj s tekom.
+      if (CelIzpis is not null)
+      {
+        var tek = Podrobnosti?.SelectedRun;
+        if (tek is null || tek.JobRunId != CelIzpisTek) { CelIzpis = null; CelIzpisTek = null; }
+        else if (tek.EffectiveStatus == JobRunStatus.Running) CelIzpis = PreberiCelIzpis(tek) ?? CelIzpis;
+      }
+    }
+    catch (Exception exception)
+    {
+      NapakaBranja = "Posla ni mogoče prebrati: " + exception.Message;
+    }
+    finally { Loading = false; }
+  }
+
+  async Task OsveziAsync()
+  {
+    Message = null;
+    Error = null;
+    await NaloziAsync();
+  }
+
+  // Posel teče v drugem procesu (PIM.AutomationHost); stran se osveži sama, da se vidijo koraki in faze,
+  // ki pritekajo. Med urejanjem urnika ne, da vnos ne izgine; med dejanjem ne, da ne prehiti potrditve.
+  async Task OsvezujAsync(CancellationToken token)
+  {
+    using var ura = new PeriodicTimer(TimeSpan.FromSeconds(15));
+    try
+    {
+      while (await ura.WaitForNextTickAsync(token))
+      {
+        if (Busy || UrejaUrnik || nalozeno is null) continue;
+        await InvokeAsync(async () => { await NaloziAsync(); StateHasChanged(); });
+      }
+    }
+    catch (OperationCanceledException) { }
+    catch (ObjectDisposedException) { }
+  }
+
+  // ── Dejanja. Sled (ops.LogUserActivity) zapiše MonitorService ob uspehu. ────────
+  async Task IzvediAsync(Func<Task> dejanje, string uspeh, string neuspeh, bool ponastaviUrnik = false)
+  {
+    if (Busy) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await dejanje();
+      Message = uspeh;
+      if (ponastaviUrnik) PonastaviUrnik();
+      await NaloziAsync();
+    }
+    catch (MonitorTraceException sled)
+    {
+      // Dejanje je izvedeno, manjka samo sled. Ne sme izgledati kot neuspeh, sicer bi ga uporabnik ponovil
+      // (npr. dvakrat zahteval zagon).
+      Message = uspeh;
+      Error = sled.Message;
+      if (ponastaviUrnik) PonastaviUrnik();
+      await NaloziAsync();
+    }
+    catch (Exception exception) { Error = $"{neuspeh}: {exception.Message}"; }
+    finally { Busy = false; }
+  }
+
+  Task PozeniAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    // Posel, ki kliče SAOP ali dobavitelja oziroma pošilja e-pošto, zahteva drugi klik (kot prej na Opravilih).
+    if (posel.Job.Reach != "Internal" && !PotrjujeZagon)
+    {
+      PotrjujeZagon = true;
+      Message = null;
+      Error = null;
+      return Task.CompletedTask;
+    }
+    PotrjujeZagon = false;
+    return IzvediAsync(() => Nadzor.RequestRunAsync(posel.Job.JobKey, Uporabnik),
+      $"{posel.Job.Label}: zahteva za zagon je oddana; gostitelj jo prevzame ob naslednjem tiku (do 15 s). Stran se osvežuje sama.",
+      "Zahteve za zagon ni bilo mogoče oddati");
+  }
+
+  Task UstaviAsync(global::PIM.Intranet.Services.MonitorJob posel, long jobRunId) =>
+    IzvediAsync(() => Nadzor.RequestCancelAsync(jobRunId, Uporabnik),
+      $"{posel.Job.Label}: ustavitev teka #{jobRunId} je zahtevana; gostitelj jo izvede ob naslednjem utripu (do 30 s).",
+      "Ustavitve ni bilo mogoče zahtevati");
+
+  // Vklop posla z učinkom zunaj PIM-a (SAOP, dobavitelj, e-pošta) pomeni take klice po urniku: drugi klik kot pri zagonu.
+  Task VklopiAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    if (posel.Job.Reach != "Internal" && !PotrjujeVklop)
+    {
+      PotrjujeVklop = true;
+      Message = null;
+      Error = null;
+      return Task.CompletedTask;
+    }
+    PotrjujeVklop = false;
+    return NastaviPoselAsync(posel, true);
+  }
+
+  Task NastaviPoselAsync(global::PIM.Intranet.Services.MonitorJob posel, bool vklopljen) =>
+    IzvediAsync(() => Nadzor.SetJobEnabledAsync(posel.Job.JobKey, vklopljen, Uporabnik),
+      vklopljen
+        ? $"{posel.Job.Label}: posel je vklopljen; velja od naslednjega tika gostitelja."
+        : $"{posel.Job.Label}: posel je izklopljen; gostitelj ga ne poganja več po urniku.",
+      vklopljen ? "Posla ni bilo mogoče vklopiti" : "Posla ni bilo mogoče izklopiti");
+
+  Task VklopiPostopekIzPresojeAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    if (!RazberiPostopek(posel.Verdict.ActionTarget, out var postopek, out var podjetje))
+    {
+      Error = $"Postopka ni mogoče razbrati iz cilja »{posel.Verdict.ActionTarget}«.";
+      return Task.CompletedTask;
+    }
+    var ime = posel.Pipelines.FirstOrDefault(p => p.Pipeline == postopek && p.OrganizationId == podjetje)?.OrganizationName ?? $"podjetje {podjetje}";
+    return VklopiPostopekAsync(postopek, podjetje, ime);
+  }
+
+  Task VklopiPostopekAsync(string postopek, int podjetje, string ime) =>
+    IzvediAsync(() => Nadzor.EnablePipelineAsync(postopek, podjetje, Uporabnik),
+      $"Postopek {postopek} ({ime}) je vklopljen; posel ga uporabi ob naslednjem teku.",
+      "Postopka ni bilo mogoče vklopiti");
+
+  Task PotrdiAlarmAsync(MonitorAlertRow alarm) =>
+    IzvediAsync(() => Nadzor.AcknowledgeAlertAsync(alarm.AlertId, Uporabnik), $"Obvestilo »{alarm.Title}« je potrjeno.", "Obvestila ni bilo mogoče potrditi");
+
+  Task RazresiAlarmAsync(MonitorAlertRow alarm) =>
+    IzvediAsync(() => Nadzor.ResolveAlertAsync(alarm.AlertId, Uporabnik), $"Obvestilo »{alarm.Title}« je razrešeno.", "Obvestila ni bilo mogoče razrešiti");
+
+  /// <summary>Cilj EnablePipeline je »POSTOPEK|podjetje« (MonitorPolicy, pravilo 5), npr. »SAOP_STOCK|2«.</summary>
+  static bool RazberiPostopek(string? cilj, out string postopek, out int podjetje)
+  {
+    postopek = "";
+    podjetje = 0;
+    var deli = (cilj ?? "").Split('|');
+    if (deli.Length != 2 || deli[0].Length == 0 || !int.TryParse(deli[1], out podjetje)) return false;
+    postopek = deli[0];
+    return true;
+  }
+
+  // ── Izpis ─────────────────────────────────────────────────────────────────
+  void PreklopiCelIzpis(JobRunRow tek)
+  {
+    if (CelIzpis is not null)
+    {
+      CelIzpis = null;
+      CelIzpisTek = null;
+      return;
+    }
+    var vrstice = PreberiCelIzpis(tek);
+    if (vrstice is null)
+    {
+      Error = "Dnevnika ni mogoče prebrati (mapa dnevnikov gostitelja ni ista kot intranetova?).";
+      return;
+    }
+    CelIzpis = vrstice;
+    CelIzpisTek = tek.JobRunId;
+  }
+
+  /// <summary>Cel dnevnik teka (ReadLog bere konec datoteke do 512 KB) brez omejitve na zadnjih 80 vrstic; null, kadar ga ni.</summary>
+  IReadOnlyList<WorkerLogLine>? PreberiCelIzpis(JobRunRow tek) => Nadzor.ReadRunLog(tek.LogPath, null);
+
+  // ── Urnik ─────────────────────────────────────────────────────────────────
+  int RazmikMinute(JobDefinitionRow job) => UrejeniRazmik ?? Math.Max(1, (job.IntervalSeconds ?? 60) / 60);
+  string DnevnaUra(JobDefinitionRow job) => UrejenaUra ?? (job.DailyAtLocal ?? new TimeOnly(2, 30)).ToString("HH:mm", Inv);
+  int MejaMinute(JobDefinitionRow job) => UrejenaMeja ?? Math.Max(1, job.TimeoutSeconds / 60);
+
+  bool UrnikSpremenjen(JobDefinitionRow job) =>
+    (job.IntervalSeconds is { } razmik && UrejeniRazmik is { } novRazmik && novRazmik != Math.Max(1, razmik / 60))
+    || (job.IntervalSeconds is null && UrejenaUra is { } novaUra && novaUra != (job.DailyAtLocal ?? new TimeOnly(2, 30)).ToString("HH:mm", Inv))
+    || (UrejenaMeja is { } novaMeja && novaMeja != Math.Max(1, job.TimeoutSeconds / 60));
+
+  void NastaviRazmik(string? vnos) { if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) UrejeniRazmik = minute; }
+  void NastaviMejo(string? vnos) { if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) UrejenaMeja = minute; }
+  void NastaviUro(string? vnos) { if (TimeOnly.TryParse(vnos, Inv, out var ura)) UrejenaUra = ura.ToString("HH:mm", Inv); }
+
+  void PonastaviUrnik()
+  {
+    UrejeniRazmik = null;
+    UrejenaUra = null;
+    UrejenaMeja = null;
+  }
+
+  Task ShraniUrnikAsync(JobDefinitionRow job)
+  {
+    int? razmik = job.IntervalSeconds is not null ? RazmikMinute(job) : null;
+    TimeOnly? ura = job.IntervalSeconds is null ? TimeOnly.ParseExact(DnevnaUra(job), "HH:mm", Inv) : null;
+    var meja = MejaMinute(job);
+    var opis = $"{JobCatalog.FormatSchedule(razmik * 60, ura)}, meja {meja} min";
+    return IzvediAsync(() => Nadzor.SaveJobScheduleAsync(job.JobKey, razmik, ura, meja, Uporabnik),
+      $"{job.Label}: urnik je {opis}. Velja od naslednjega tika gostitelja.",
+      "Urnika ni bilo mogoče shraniti", ponastaviUrnik: true);
+  }
+
+  // ── Faze teka ─────────────────────────────────────────────────────────────
+  /// <param name="PoKoraku">Faze po StepOrder koraka, ki mu pripadajo.</param>
+  /// <param name="Tekoci">Faze koraka, ki še teče (gostitelj korak zapiše šele ob koncu).</param>
+  /// <param name="BrezKoraka">Faze, ki jih ni bilo mogoče pripisati nobenemu koraku.</param>
+  sealed record FazeTeka(IReadOnlyDictionary<int, List<JobRunPhaseRow>> PoKoraku, List<JobRunPhaseRow> Tekoci, List<JobRunPhaseRow> BrezKoraka)
+  {
+    public IReadOnlyList<JobRunPhaseRow> Za(int stepOrder) =>
+      PoKoraku.TryGetValue(stepOrder, out var faze) ? faze : Array.Empty<JobRunPhaseRow>();
+  }
+
+  static FazeTeka RazporediFaze(MonitorJobDetail d, JobRunRow tek)
+  {
+    var poKoraku = new Dictionary<int, List<JobRunPhaseRow>>();
+    var tekoci = new List<JobRunPhaseRow>();
+    var brez = new List<JobRunPhaseRow>();
+    var tece = tek.EffectiveStatus == JobRunStatus.Running;
+    foreach (var faza in d.Phases.OrderBy(f => f.StartedUtc).ThenBy(f => f.PhaseOrder))
+    {
+      var korak = faza.StepOrder is { } red
+        ? d.Steps.FirstOrDefault(k => k.StepOrder == red)
+        : PoCasu(d.Steps, faza);
+      if (korak is not null)
+      {
+        if (!poKoraku.TryGetValue(korak.StepOrder, out var seznam)) poKoraku[korak.StepOrder] = seznam = [];
+        seznam.Add(faza);
+      }
+      else if (tece) tekoci.Add(faza);
+      else brez.Add(faza);
+    }
+    return new(poKoraku, tekoci, brez);
+  }
+
+  // Faze, ki jih je worker zapisal brez številke koraka (gostitelj s starejšim binarjem, brez PIM_JOB_STEP_ORDER),
+  // pripišemo koraku, med katerim so se začele, pri istem podjetju. Sekunda strpnosti pokrije razliko med uro
+  // gostitelja (čas koraka) in uro baze (čas faze).
+  static JobStepRunRow? PoCasu(IReadOnlyList<JobStepRunRow> koraki, JobRunPhaseRow faza) =>
+    koraki.LastOrDefault(k =>
+      faza.StartedUtc >= k.StartedUtc.AddSeconds(-1)
+      && faza.StartedUtc <= (k.EndedUtc ?? DateTime.UtcNow).AddSeconds(1)
+      && (k.OrganizationId is null || faza.OrganizationId is null || k.OrganizationId == faza.OrganizationId));
+
+  /// <summary>
+  /// Faze enega koraka v mreži. Vsaka vrstica ima isto predlogo stolpcev (MonitorJob.razor.css,
+  /// .monitor-phase-line), zato se stolpci poravnajo čez vse korake na strani; sporočilo faze je v svoji
+  /// vrstici čez vso širino. Vir (in podjetje, kadar faza ni pod korakom) je drobno pod imenom faze.
+  /// </summary>
+  RenderFragment FazeMreza(IReadOnlyList<JobRunPhaseRow> faze, string napis, bool pokaziPodjetje) =>
+    @<div class="monitor-phase-scroll" role="region" tabindex="0" aria-label="@napis">
+      <div class="monitor-phase-grid" role="table" aria-label="@napis">
+        <div class="monitor-phase-line monitor-phase-header" role="row">
+          <span role="columnheader">Faza</span>
+          <span role="columnheader">Izid</span>
+          <span role="columnheader" class="numeric">Prebrano</span>
+          <span role="columnheader" class="numeric">Zapisano</span>
+          <span role="columnheader" class="numeric">Zavrnjeno</span>
+          <span role="columnheader" class="numeric">Velikost</span>
+          <span role="columnheader" class="numeric">Trajanje</span>
+        </div>
+        @foreach (var faza in faze)
+        {
+          var stanjeFaze = FazaStanje(faza);
+          var podrobno = string.Join(" · ", new[] { faza.SourceCode, pokaziPodjetje ? faza.OrganizationName : null }.Where(s => !string.IsNullOrWhiteSpace(s)));
+          <div class="monitor-phase-line @(stanjeFaze.Tone == "bad" ? "bad" : null)" role="row">
+            <span role="cell" class="monitor-phase-name">
+              <strong>@PhaseCodes.Label(faza.PhaseCode)@(faza.JobRunId is null ? " *" : "")</strong>
+              @if (podrobno.Length > 0) { <span class="monitor-phase-source">@podrobno</span> }
+            </span>
+            <span role="cell"><PimChip Text="@stanjeFaze.Text" Tone="@stanjeFaze.Tone" Prefix="" /></span>
+            <span role="cell" class="numeric">@Stevilo(faza.ItemsIn)</span>
+            <span role="cell" class="numeric">@Stevilo(faza.ItemsOut)</span>
+            <span role="cell" class="numeric @(faza.ItemsRejected is > 0 ? "monitor-count-bad" : null)">@Stevilo(faza.ItemsRejected)</span>
+            <span role="cell" class="numeric">@Velikost(faza.ByteCount)</span>
+            <span role="cell" class="numeric">@TrajanjeFaze(faza)</span>
+            @if (faza.Message is { Length: > 0 } sporocilo)
+            {
+              <span role="cell" class="monitor-phase-message">@sporocilo</span>
+            }
+          </div>
+        }
+      </div>
+    </div>;
+
+  /// <summary>
+  /// Oznaka in razlaga vrstice »svežina« v škatli Zadnji rezultat. Ista delitev kot v MonitorPolicy (pravilo 12):
+  /// vir, ki se meri po novih podatkih, pove starost podatkov; vir, ki se meri po stiku (cene), pove, kdaj je
+  /// posel nazadnje dosegel vir.
+  /// </summary>
+  static (string Oznaka, string Pomoc) Svezina(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    if (posel.Sources.Count == 0)
+      return ("Svežina podatkov", "Posel nima virov s pragom svežine, zato se starost ne meri.");
+    var zOsnovo = posel.Sources.Where(v => v.BasisUtc is not null).ToList();
+    if (zOsnovo.Count == 0)
+      return ("Svežina podatkov", "Viri še niso prinesli podatkov, zato starost še ni znana.");
+    return zOsnovo.Any(v => v.MeasureNewData)
+      ? ("Svežina podatkov", "Koliko so stari podatki, ki jih je posel nazadnje prinesel (najstarejši vir).")
+      : ("Zadnji stik z virom", "Koliko časa je minilo od zadnjega uspešnega stika z virom; podatki se redko spremenijo, zato se meri stik.");
+  }
+
+  /// <summary>Dan in ura za povzetek teka: »22. 9. ob 22:24«.</summary>
+  static string DanInUra(DateTime utc)
+  {
+    var lokalno = PimTime.Local(utc);
+    return $"{lokalno.ToString("d. M.", Inv)} ob {lokalno.ToString("HH:mm", Inv)}";
+  }
+
+  // ── Prikazne pretvorbe: samo good / bad / nevtralno (null) ────────────────
+  /// <summary>Faza: »uspelo« samo z novimi podatki; brez njih in »preskočeno« sta siva, ne zelena.</summary>
+  static (string Text, string? Tone) FazaStanje(JobRunPhaseRow faza) => faza.Status switch
+  {
+    "Succeeded" when faza.HasNewData => ("uspelo", "good"),
+    "Succeeded" => ("brez novih podatkov", null),
+    "Skipped" => ("preskočeno", null),
+    "Failed" => ("napaka", "bad"),
+    "Running" => ("teče", null),
+    _ => (faza.Status, null),
+  };
+
+  static string IzidFaze(string status) => status switch
+  {
+    "Succeeded" => "uspelo",
+    "Skipped" => "preskočeno",
+    "Failed" => "napaka",
+    "Running" => "teče",
+    _ => status,
+  };
+
+  /// <summary>
+  /// Zadnja faza vira je uspela, novih podatkov pa ni prinesla (zadnji novi podatki so starejši od zadnjega
+  /// stika). Tedaj »uspelo · zapisano 122« ne drži: SAOP je vrnil iste zapise kot že zajete.
+  /// </summary>
+  static bool BrezNovihPodatkov(SourceStateRow vir) =>
+    vir.LastStatus == "Succeeded" && vir.LastContactUtc is { } stik && (vir.LastNewDataUtc is not { } novi || novi < stik);
+
+  static (string Text, string? Tone) VirStanje(string state) => state switch
+  {
+    "Fresh" => ("Sveže", "good"),
+    "Stale" => ("Prestaro", "bad"),
+    "Failed" => ("Napaka", "bad"),
+    _ => ("Še ni podatkov", null),
+  };
+
+  static (string Text, string? Tone) Zdravje(string? status) => status switch
+  {
+    "Healthy" => ("Zdravo", "good"),
+    "Running" => ("Teče", null),
+    "Failed" => ("Napaka", "bad"),
+    "Stale" => ("Molči", "bad"),
+    _ => ("Še ni teklo", null),
+  };
+
+  static string TekOznaka(string? status) => status switch
+  {
+    "Running" => "Teče",
+    "Succeeded" => "Uspešno",
+    "Warning" => "Delno padlo",
+    "Failed" => "Napaka",
+    "TimedOut" => "Presežena meja",
+    "Cancelled" => "Ustavljeno",
+    "Abandoned" => "Zapuščeno",
+    "Blocked" => "Blokirano",
+    null or "" => "—",
+    _ => status,
+  };
+
+  // Delno padlo in blokirano sta rdeča kot na Nadzoru (MonitorPolicy, pravili 4 in 9); ustavljeno je sivo.
+  static string? TekTon(string? status) => status switch
+  {
+    "Succeeded" => "good",
+    "Warning" or "Failed" or "TimedOut" or "Abandoned" or "Blocked" => "bad",
+    _ => null,
+  };
+
+  /// <summary>
+  /// Tek po fazah (MonitorPolicy.SucceededByPhases): uspešen tek, katerega faze niso prinesle ničesar novega,
+  /// je siv »brez novih podatkov«, ne zelen »Uspešno«. Izbrani tek šteje vse svoje faze (tudi vezane po
+  /// času); ostali teki zgodovine samo faze z natančno vezjo.
+  /// </summary>
+  static (string Text, string? Tone) TekStanje(MonitorJobDetail d, JobRunRow tek)
+  {
+    var faze = tek.JobRunId == d.SelectedRun?.JobRunId
+      ? PhaseTally.Of(d.Phases.Select(f => (f.Status, f.HasNewData)))
+      : d.RunPhases.GetValueOrDefault(tek.JobRunId);
+    return MonitorPolicy.SucceededByPhases(tek.EffectiveStatus, faze) is { } poFazah
+      ? (poFazah.Label, MonitorPolicy.ToneCss(poFazah.Tone))
+      : (TekOznaka(tek.EffectiveStatus), TekTon(tek.EffectiveStatus));
+  }
+
+  /// <summary>Korak po fazah: izhodna koda 0 je »Uspešno« samo, če je vsaj ena faza prinesla nove podatke.</summary>
+  static (string Text, string? Tone) KorakStanje(JobStepRunRow korak, IReadOnlyList<JobRunPhaseRow> faze) =>
+    MonitorPolicy.SucceededByPhases(korak.Status, PhaseTally.Of(faze.Select(f => (f.Status, f.HasNewData)))) is { } poFazah
+      ? (poFazah.Label, MonitorPolicy.ToneCss(poFazah.Tone))
+      : (KorakOznaka(korak.Status), KorakTon(korak.Status));
+
+  static string KorakOznaka(string status) => status switch
+  {
+    "Succeeded" => "Uspešno",
+    "Failed" => "Napaka",
+    "TimedOut" => "Presežena meja",
+    "Skipped" => "Preskočeno",
+    "Blocked" => "Blokirano",
+    "Cancelled" => "Ustavljeno",
+    _ => status,
+  };
+
+  static string? KorakTon(string status) => status switch
+  {
+    "Succeeded" => "good",
+    "Failed" or "TimedOut" => "bad",
+    _ => null,
+  };
+
+  static string? VrsticaZgodovine(string? ton, bool jeIzbran)
+  {
+    var razredi = new List<string>();
+    if (ton == "bad") razredi.Add("monitor-row-bad");
+    if (jeIzbran) razredi.Add("monitor-row-selected");
+    return razredi.Count == 0 ? null : string.Join(" ", razredi);
+  }
+
+  static string Sprozilec(string? sprozilec) => sprozilec switch
+  {
+    "Scheduler" => "urnik",
+    "Human" => "ročno",
+    "Dependency" => "predhodnik",
+    null or "" => "—",
+    _ => sprozilec,
+  };
+
+  static string Resnost(string severity) => severity switch
+  {
+    "Critical" => "Kritično",
+    "Warning" => "Opozorilo",
+    "Info" => "Obvestilo",
+    _ => severity,
+  };
+
+  static string OdvisnostOpis(JobDependencyRow odvisnost)
+  {
+    var deli = new List<string>();
+    if (odvisnost.IsGate)
+      deli.Add(odvisnost.MaxAgeSeconds is { } meja ? $"vrata: uspeh mlajši od {MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(meja))}" : "vrata: mora uspeti");
+    if (odvisnost.TriggersDependent) deli.Add("sprožilec: uspeh postavi na vrsto takoj");
+    return deli.Count == 0 ? "samo vrstni red" : string.Join(", ", deli);
+  }
+
+  static string Doseg(global::PIM.Intranet.Services.MonitorJob posel) =>
+    posel.Code?.ReachNote is { Length: > 0 } opomba ? opomba
+    : posel.Job.Reach == "SendsEmail" ? "pošlje e-pošto"
+    : "kliče SAOP ali dobavitelja";
+
+  static string Naslednji(JobDefinitionRow job) =>
+    !job.IsEnabled ? "— (izklopljen)"
+    : job.IsRequested ? "zdaj (ročna zahteva)"
+    : PimTime.Format(job.NextDueUtc, "ob naslednjem tiku gostitelja");
+
+  static string ImePodjetja(MonitorJobDetail d, int? organizationId)
+  {
+    if (organizationId is not { } id) return "—";
+    return d.Job.Pipelines.FirstOrDefault(p => p.OrganizationId == id)?.OrganizationName
+      ?? d.Job.Sources.FirstOrDefault(s => s.OrganizationId == id)?.OrganizationName
+      ?? d.Phases.FirstOrDefault(f => f.OrganizationId == id)?.OrganizationName
+      ?? $"podjetje {id}";
+  }
+
+  static string OznakaPosla(string jobKey) => JobCatalog.Find(jobKey)?.Label ?? jobKey;
+
+  static string PoselHref(string jobKey) => $"sistem/posel/{jobKey}";
+
+  static string TekHref(string jobKey, long jobRunId) => $"sistem/posel/{jobKey}?tek={jobRunId}";
+
+  static string IzpisHref(JobDefinitionRow job) =>
+    (job.LastJobRunId is { } tek ? TekHref(job.JobKey, tek) : PoselHref(job.JobKey)) + "#izpis";
+
+  static string MinuteBesedilo(int sekunde) => $"{Stevilo(Math.Max(1, sekunde / 60))} min";
+
+  static string Starost(DateTime? utc) => utc is { } cas ? MonitorPolicy.AgeLabel(DateTime.UtcNow - cas) : "—";
+
+  static string TrajanjeKoraka(JobStepRunRow korak) =>
+    korak.EndedUtc is { } konec ? PimTime.Duration((long)(konec - korak.StartedUtc).TotalMilliseconds) : "—";
+
+  static string TrajanjeFaze(JobRunPhaseRow faza) =>
+    faza.DurationMs is { } ms ? PimTime.Duration(ms)
+    : faza.EndedUtc is { } konec ? PimTime.Duration((long)(konec - faza.StartedUtc).TotalMilliseconds)
+    : "teče";
+
+  static string Velikost(long? bajti) =>
+    bajti is not { } b ? "—"
+    : b < 1024 ? $"{b.ToString("N0", Sl)} B"
+    : b < 1024 * 1024 ? $"{(b / 1024d).ToString("N0", Sl)} KB"
+    : $"{(b / (1024d * 1024d)).ToString("N1", Sl)} MB";
+
+  static string Stevilo(long? n) => n is { } vrednost ? vrednost.ToString("N0", Sl) : "—";
+
+  static string Skrajsaj(string? besedilo, int dolzina = 140) =>
+    string.IsNullOrWhiteSpace(besedilo) ? "—"
+    : besedilo.Length <= dolzina ? besedilo
+    : besedilo[..(dolzina - 1)].TrimEnd() + "…";
+
+  public void Dispose()
+  {
+    ustavi.Cancel();
+    ustavi.Dispose();
+  }
+}

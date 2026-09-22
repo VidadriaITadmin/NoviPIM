@@ -41,6 +41,10 @@ public sealed record ProductWorkbookColumn(
 
   /// <summary>Logično polje (da/ne): primerja se po pomenu, ne po zapisu (»da« je isto kot »1«).</summary>
   public bool IsBool => string.Equals(ValueFormat, "bool", StringComparison.OrdinalIgnoreCase);
+
+  /// <summary>Številsko polje: primerja se po vrednosti (»1.5« je isto kot »1,5000«). Vse drugo je
+  /// besedilo in se primerja točno — »02« ni »2« (DDV, dobavitelj, skupine so šifre).</summary>
+  public bool IsNumber => ValueFormat is "decimal4" or "decimal8";
 }
 
 /// <param name="FieldKey">Kanonična koda, npr. <c>Product.UoM</c>.</param>
@@ -174,8 +178,14 @@ public static class ProductWorkbookContract
     // --- ERP: stolpci pridejo iz registra, ne iz tega seznama ---------------------------
     // Če register dobi novo polje, ga dobi tudi list; če polje izgubi pravico pisanja, izgine
     // iz lista. Seznam v kodi bi se z registrom slej ko prej razšel.
+    // Register lahko isto kanonično polje pošlje v več elementov SAOP (AdditionalProperty1ID je
+    // po 081 vedno enak oddelku, ItemDepartment). Zapisljiv je samo prvi stolpec; ostali so samo
+    // za branje. Prej sta bila oba zapisljiva in pri uvozu je drugi tiho povozil prvega:
+    // »Oddelek (ABC)« B -> A se ni zaznal, ker je »Dodatna lastnost 1« v isti vrstici še nosila B.
+    var saopKeys = new HashSet<string>(StringComparer.Ordinal);
     foreach (var field in spec.SaopFields)
-      columns.Add(new(GroupErp, field.Label, field.FieldKey, ProductWorkbookTarget.Saop,
+      columns.Add(new(GroupErp, field.Label, field.FieldKey,
+        saopKeys.Add(field.FieldKey) ? ProductWorkbookTarget.Saop : ProductWorkbookTarget.ReadOnly,
         field.ValueFormat is "decimal4" or "decimal8" ? WorkbookCellKind.Number : WorkbookCellKind.Text,
         Width: Math.Clamp(field.Label.Length + 3, 14, 32),
         Aliases: [field.ElementName], ValueFormat: field.ValueFormat));

@@ -5,7 +5,7 @@
 @inject IMemoryCache Cache
 
 <PageTitle>Nadzorna plošča</PageTitle>
-<div class="page-heading"><span>Nadzorna plošča</span><h1>Nadzorna plošča</h1><p>Stanje vseh podjetij skupaj, ne samo prvega po šifri.</p></div>
+<div class="page-heading"><span>Nadzorna plošča</span><h1>Nadzorna plošča</h1><p>Stanje vseh podjetij skupaj. Števci prikazujejo različne operativne množice, ne delov iste celote.</p></div>
 @if (Error is not null)
 {
   <div class="ui-card error-state" role="alert">@Error</div>
@@ -19,18 +19,18 @@ else
   <section class="dashboard-summary" aria-labelledby="povzetek-naslov">
   <h2 id="povzetek-naslov" class="visually-hidden">Povzetek stanja</h2>
   <div class="metric-grid">
-    <a class="metric-card blue" href="izdelki"><span class="metric-icon icon-products" aria-hidden="true"></span><span>Skupaj izdelkov</span><strong>@Metrics.CanonProductCount.ToString("N0")</strong><small>@CompanyNote</small></a>
-    <a class="metric-card green" href="izdelki"><span class="metric-icon icon-check" aria-hidden="true"></span><span>ERP veljavni</span><strong>@Metrics.ErpValidCount.ToString("N0")</strong><small>@ErpPercent % vseh izdelkov</small></a>
-    <a class="metric-card orange" href="izdelki"><span class="metric-icon icon-published" aria-hidden="true"></span><span>Objavljeni izdelki</span><strong>@Metrics.PimProductCount.ToString("N0")</strong><small>Promovirani v PIM</small></a>
-    <a class="metric-card red" href="napake-validacije"><span class="metric-icon icon-warning" aria-hidden="true"></span><span>Z napakami</span><strong>@Metrics.WebInvalidCount.ToString("N0")</strong><small>Neveljavni za splet</small></a>
-    <a class="metric-card amber" href="karantena"><span class="metric-icon icon-lock" aria-hidden="true"></span><span>V karanteni</span><strong>@Metrics.QuarantineCount.ToString("N0")</strong><small>Zapisi za pregled</small></a>
+    <a class="metric-card blue" href="izdelki" title="Vsi zapisi v kanoničnem katalogu, tudi neaktivni."><span class="metric-icon icon-products" aria-hidden="true"></span><span>Artikli v katalogu</span><strong>@Metrics.CanonProductCount.ToString("N0")</strong><small>@CompanyNote</small></a>
+    <a class="metric-card green" href="izdelki" title="Artikli brez odprte napake, ki blokira ERP."><span class="metric-icon icon-check" aria-hidden="true"></span><span>Brez ERP blokad</span><strong>@Metrics.ErpValidCount.ToString("N0")</strong><small>@ErpPercent % katalogskih artiklov</small></a>
+    <a class="metric-card orange" href="izdelki" title="Artikli z vrstico v sloju pim.Product; gre za zgodovinsko promocijo, ne nujno trenutno spletno objavo."><span class="metric-icon icon-published" aria-hidden="true"></span><span>V PIM sloju</span><strong>@Metrics.PimProductCount.ToString("N0")</strong><small>Zgodovinsko promovirani artikli</small></a>
+    <a class="metric-card red" href="kakovost/napake" title="Artikli z vsaj eno odprto napako, ki blokira izbrano spletno mesto."><span class="metric-icon icon-warning" aria-hidden="true"></span><span>Blokirani za splet</span><strong>@Metrics.WebInvalidCount.ToString("N0")</strong><small>Odprta spletna blokada</small></a>
+    <a class="metric-card amber" href="kakovost/karantena" title="Vhodni zapisi, ki jih obdelava ni mogla prevzeti; to niso artikli."><span class="metric-icon icon-lock" aria-hidden="true"></span><span>Zajemi v karanteni</span><strong>@Metrics.QuarantineCount.ToString("N0")</strong><small>Vhodni zapisi za pregled</small></a>
   </div>
   </section>
 
   <div class="dashboard-grid">
     <section class="dashboard-panel companies-panel" aria-labelledby="podjetja-naslov">
       <div class="panel-title"><h2 id="podjetja-naslov">Po podjetjih</h2><a href="izdelki">Vsi izdelki</a></div>
-      <div class="company-head"><span>Podjetje</span><span>Izdelkov</span><span>ERP veljavnih</span><span>Objavljenih</span><span>Z napakami</span><span>Karantena</span></div>
+      <div class="company-head"><span>Podjetje</span><span>Katalog</span><span>Brez ERP blokad</span><span>V PIM sloju</span><span>Blokirani za splet</span><span>Zajemi v karanteni</span></div>
       @foreach (var company in Companies)
       {
         <a class="company-row" href="izdelki?podjetje=@company.Organization.OrganizationId">
@@ -46,7 +46,7 @@ else
     </section>
 
     <section class="dashboard-panel quality-panel" aria-labelledby="kakovost-naslov">
-      <div class="panel-title"><h2 id="kakovost-naslov">Kakovost po profilih</h2><a href="napake-validacije">Poglej vse</a></div>
+      <div class="panel-title"><h2 id="kakovost-naslov">Kakovost po profilih</h2><a href="kakovost/napake">Poglej vse</a></div>
       @if (Profiles is null) { <p class="panel-state">Podatki o profilih niso na voljo.</p> }
       else if (Profiles.Count == 0) { <p class="panel-state">Ni podatkov o profilih kakovosti.</p> }
       else
@@ -54,14 +54,14 @@ else
         @foreach (var profile in Profiles.Take(4))
         {
           var completeness = ProfileCompleteness(profile);
-          <a class="quality-row" href="napake-validacije"><strong>@profile.ProfileCode</strong><span class="progress" role="progressbar" aria-valuenow="@completeness" aria-valuemin="0" aria-valuemax="100" aria-label="Popolnost profila @profile.ProfileCode"><i class="@(completeness < 75 ? "warn" : null)" style="width:@completeness%"></i></span><span>@completeness %</span><i></i></a>
+          <a class="quality-row" href="kakovost/napake"><strong>@profile.ProfileCode</strong><span class="progress" role="progressbar" aria-valuenow="@completeness" aria-valuemin="0" aria-valuemax="100" aria-label="Popolnost profila @profile.ProfileCode"><i class="@(completeness < 75 ? "warn" : null)" style="width:@completeness%"></i></span><span>@completeness %</span><i></i></a>
         }
       }
       <div class="info-note">Popolnost je izračunana iz dejanskih rezultatov profilov vseh podjetij.</div>
     </section>
 
     <section class="dashboard-panel processes-panel" aria-labelledby="procesi-naslov">
-      <div class="panel-title"><h2 id="procesi-naslov">Zadnji procesi / Status integracij</h2><a href="teki-obdelave">Poglej vse</a></div>
+      <div class="panel-title"><h2 id="procesi-naslov">Zadnji procesi / Status integracij</h2><a href="zajem/teki">Poglej vse</a></div>
       @if (Runs is null) { <p class="panel-state">Zadnji procesi niso na voljo.</p> }
       else if (Runs.Count == 0) { <p class="panel-state">Ni zabeleženih procesov.</p> }
       else
@@ -69,7 +69,7 @@ else
         <div class="process-head"><span>Proces / Integracija</span><span>Zadnji zagon</span><span>Status</span></div>
         @foreach (var run in Runs.OrderByDescending(row => row.StartedUtc).Take(5))
         {
-          <a class="process-row" href="teki-obdelave"><span>@run.Pipeline</span><span>@run.StartedUtc.ToPimLocal().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
+          <a class="process-row" href="zajem/teki"><span>@run.Pipeline</span><span>@run.StartedUtc.ToPimLocal().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
         }
       }
     </section>
@@ -82,21 +82,21 @@ else
       {
         @foreach (var alert in OpenAlerts.Take(5))
         {
-          <a class="alert-row" href="system/integracije"><span class="row-icon danger icon-warning" aria-hidden="true"></span><span><strong>@alert.Title</strong><small>@alert.Pipeline · @alert.OccurrenceCount pojavov</small></span><i></i></a>
+          <a class="alert-row" href="sistem"><span class="row-icon danger icon-warning" aria-hidden="true"></span><span><strong>@alert.Title</strong><small>@alert.Pipeline · @alert.OccurrenceCount pojavov</small></span><i></i></a>
         }
       }
-      <a class="panel-link" href="system/integracije">Vsa opozorila</a>
+      <a class="panel-link" href="sistem">Vsa opozorila</a>
     </section>
 
     <section class="dashboard-panel integration-panel" aria-labelledby="integracije-naslov">
-      <div class="panel-title"><h2 id="integracije-naslov">Stanje integracij</h2><a href="system/integracije">Podrobnosti</a></div>
+      <div class="panel-title"><h2 id="integracije-naslov">Stanje integracij</h2><a href="sistem">Podrobnosti</a></div>
       @if (Integrations is null) { <p class="panel-state">Stanje integracij ni na voljo.</p> }
       else if (Integrations.Count == 0) { <p class="panel-state">Ni nastavljenih integracij.</p> }
       else
       {
         @foreach (var integration in Integrations.Take(5))
         {
-          <a class="integration-row" href="system/integracije"><span>@integration.Provider</span><small>@integration.Pipeline</small><strong class="status @StatusClass(integration.Status)"><span class="visually-hidden">Status: </span>@(integration.Status ?? (integration.IsEnabled ? "Brez statusa" : "Onemogočeno"))</strong></a>
+          <a class="integration-row" href="sistem"><span>@integration.Provider</span><small>@integration.Pipeline</small><strong class="status @StatusClass(integration.Status)"><span class="visually-hidden">Status: </span>@(integration.Status ?? (integration.IsEnabled ? "Brez statusa" : "Onemogočeno"))</strong></a>
         }
       }
     </section>
@@ -120,7 +120,7 @@ else
   IReadOnlyList<PIM.Intranet.Services.SystemIntegrationRow>? Integrations;
   string? Error;
 
-  string CompanyNote => Companies.Count switch { 0 => "Kanonični izdelki", 1 => "Kanonični izdelki enega podjetja", var count => $"Kanonični izdelki {count} podjetij" };
+  string CompanyNote => Companies.Count switch { 0 => "Vsi kanonični artikli", 1 => "Vsi kanonični artikli enega podjetja", var count => $"Vsi kanonični artikli {count} podjetij" };
   decimal ErpPercent => Metrics?.CanonProductCount > 0 ? Math.Round(100m * Metrics.ErpValidCount / Metrics.CanonProductCount) : 0;
   IEnumerable<PIM.Intranet.Services.SystemAlertRow> OpenAlerts => (Alerts ?? []).Where(row => row.ResolvedUtc is null).OrderByDescending(row => row.LastSeenUtc);
   static decimal ProfileCompleteness(PIM.Intranet.Services.QualityProfileRow profile) => Math.Clamp(Math.Round(profile.AverageCompleteness ?? (profile.ProductCount > 0 ? 100m * profile.ValidCount / profile.ProductCount : 0)), 0, 100);

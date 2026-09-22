@@ -6,8 +6,8 @@ using PIM.Operations;
   PIM.AutomationHost — gostitelj avtomatike (migracija 237).
 
   Uporabnik 2026-09-21: »IIS naj bo nadzorna konzola, ne motor avtomatike.« Ta program je motor: en
-  dolgoživ proces, ki drži najem v ops.SchedulerLease (s prednostjo pred intranetom), vsakih nekaj
-  sekund pogleda, kateri posel iz ops.JobDefinition je na vrsti, ga prevzame (ops.ClaimJobRun) in
+  dolgoživ proces, ki drži najem v ops.SchedulerLease (od migracije 254 edini motor; razporejevalnika
+  v intranetu ni več), vsakih nekaj sekund pogleda, kateri posel iz ops.JobDefinition je na vrsti, ga prevzame (ops.ClaimJobRun) in
   požene — worker kot otroški proces (objavljen .exe ali dotnet run --no-build), validacijo in objavo
   kot SQL. Vsak zagon utripa, ima časovno mejo in vedno konča v enem od stanj Succeeded, Failed,
   TimedOut, Cancelled, Abandoned ali Blocked.

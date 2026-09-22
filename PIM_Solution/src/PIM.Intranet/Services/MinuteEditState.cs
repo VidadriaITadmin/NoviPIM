@@ -1,10 +1,9 @@
 namespace PIM.Intranet.Services;
 
 /// <summary>
-/// Nedokončane spremembe razmika (v minutah) za tabelo urejanja postopkov/urnikov — vsaka vrstica
-/// ima svoj vnos, ki velja, dokler uporabnik ne pritisne "Shrani razmik" ali stran znova ne naloži
-/// podatkov (<see cref="Clear"/>). Isto obnašanje je bilo doslej ročno podvojeno v System.razor
-/// (Postopki) in SystemSchedules.razor (Urniki obdelav).
+/// Nedokončane spremembe razmika (v minutah) za tabelo urejanja postopkov (System.razor, Postopki) —
+/// vsaka vrstica ima svoj vnos, ki velja, dokler uporabnik ne pritisne "Shrani razmik" ali stran znova
+/// ne naloži podatkov (<see cref="Clear"/>).
 /// </summary>
 public sealed class MinuteEditState
 {

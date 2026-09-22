@@ -360,3 +360,9 @@ h1:focus { outline: none; }
   .export-card-active .export-card-icon { animation-duration: 2.4s; }
   .export-progress-indeterminate .export-progress-fill { animation: none; width: 100%; opacity: .35; }
 }
+
+/* --- Podjetje strani (PimOrganizationScope) ----------------------------- */
+.organization-scope { align-items: center; display: inline-flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+.organization-scope label { color: var(--pim-text-muted); font-size: .8rem; font-weight: 600; }
+.organization-scope strong { font-size: .875rem; }
+.organization-scope .filter-select { min-width: 180px; }

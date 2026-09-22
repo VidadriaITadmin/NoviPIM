@@ -34,7 +34,11 @@ public sealed record ValidationLayerSummary(PimValidationLayer Layer, long Produ
 {
   public decimal ValidShare => ProductCount == 0 ? 0 : Math.Round(100m * Math.Max(0, ProductCount - AffectedProductCount) / ProductCount, 1);
 }
-public sealed record FieldRequirementRow(int FieldRequirementId, string FieldCode, bool IsRequired, bool IsActive, string? Severity, long OpenIssueCount);
+/// <param name="CategoryCode">Zahteva velja samo za to kategorijo (in nastane iz nabora atributov); null = cel profil.</param>
+/// <param name="CategoryPath">Slovenska pot kategorije za prikaz.</param>
+/// <param name="OriginScope">FOREIGN = zahteva velja samo za artikle s tujim poreklom (249).</param>
+public sealed record FieldRequirementRow(int FieldRequirementId, string FieldCode, bool IsRequired, bool IsActive, string? Severity, long OpenIssueCount,
+  string? CategoryTreeCode = null, string? CategoryCode = null, string? CategoryPath = null, string? OriginScope = null);
 
 /// <param name="AffectedProducts">Razlicnih aktivnih izdelkov z odprto zahtevo na tem polju.</param>
 /// <param name="IsError">Ali je vsaj ena zahteva za to polje resnosti ERROR.</param>
@@ -140,17 +144,22 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
   public Task<IReadOnlyList<FieldRequirementRow>> GetFieldRequirementsAsync(int validationProfileId, int organizationId, CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT requirement.FieldRequirementId, requirement.FieldCode, requirement.IsRequired, requirement.IsActive, requirement.Severity,
+             requirement.CategoryTreeCode, requirement.CategoryCode, requirement.OriginScope,
+             COALESCE(path.CategoryPath, requirement.CategoryCode) AS CategoryPath,
              (SELECT COUNT_BIG(*) FROM val.ProductIssue issue
               INNER JOIN canon.Product product ON product.ProductId = issue.ProductId
               WHERE issue.FieldRequirementId = requirement.FieldRequirementId AND issue.IsActive = 1
                 AND product.OrganizationId = @OrganizationId) AS OpenIssueCount
       FROM val.FieldRequirement requirement
+      LEFT JOIN canon.CategoryPathTranslated path
+        ON path.CategoryTreeCode = requirement.CategoryTreeCode AND path.CategoryCode = requirement.CategoryCode AND path.LanguageCode = N'sl'
       WHERE requirement.ValidationProfileId = @ValidationProfileId
-      ORDER BY requirement.IsActive DESC, requirement.FieldCode;
+      ORDER BY requirement.IsActive DESC, requirement.FieldCode, path.CategoryPath;
       """,
       reader => new FieldRequirementRow(PimDb.Int32(reader, "FieldRequirementId"), PimDb.TextOrEmpty(reader, "FieldCode"),
         PimDb.Bool(reader, "IsRequired"), PimDb.Bool(reader, "IsActive"), PimDb.Text(reader, "Severity"),
-        PimDb.Int64(reader, "OpenIssueCount")),
+        PimDb.Int64(reader, "OpenIssueCount"), PimDb.Text(reader, "CategoryTreeCode"), PimDb.Text(reader, "CategoryCode"),
+        PimDb.Text(reader, "CategoryPath"), PimDb.Text(reader, "OriginScope")),
       command =>
       {
         command.Parameters.AddWithValue("@ValidationProfileId", validationProfileId);
@@ -428,7 +437,7 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
   public Task<IReadOnlyList<string>> GetCanonicalFieldCodesAsync(CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT FieldCode FROM (
-        SELECT DISTINCT TargetFieldCode FROM map.FieldMapping WHERE NULLIF(TargetFieldCode, N'') IS NOT NULL
+        SELECT DISTINCT TargetFieldCode AS FieldCode FROM map.FieldMapping WHERE NULLIF(TargetFieldCode, N'') IS NOT NULL
         UNION SELECT DISTINCT FieldCode FROM val.FieldRequirement WHERE NULLIF(FieldCode, N'') IS NOT NULL
         UNION SELECT DISTINCT CanonicalFieldCode FROM out.ExportColumn WHERE NULLIF(CanonicalFieldCode, N'') IS NOT NULL
       ) fields

@@ -90,6 +90,10 @@ builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<CustomerListService>();
 builder.Services.AddScoped<CustomerWorkbookService>();
+// Cene in ceniki v SAOP (265): branje, vrsta, delovni list; posiljanje tece v ozadju (en tek na podjetje).
+builder.Services.AddScoped<PriceService>();
+builder.Services.AddScoped<PriceWorkbookService>();
+builder.Services.AddSingleton<PriceSendJobs>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
 builder.Services.AddScoped<TitleRuleService>();
@@ -140,20 +144,15 @@ builder.Services.AddScoped<CategoryMappingService>();
 builder.Services.AddScoped<CategoryTreeService>();
 builder.Services.AddScoped<AttributeMappingService>();
 builder.Services.AddScoped<AdminConsoleService>();
-// Rocni zagon workerjev (/sistem/workerji): singleton, ker zagon zivi dlje od strani, ki ga je sprozila.
+// Branje dnevnikov zagonov za izpis na /sistem/posel/<posel> (zagone vodi PIM.AutomationHost, ne intranet).
 builder.Services.AddSingleton<WorkerConsoleService>();
-// Razporejevalnik v aplikaciji (2026-09-17, migracija 221): ura, ki cikle poganja tam, kjer tece
-// intranet — IIS, Visual Studio, dotnet run — namesto Windows naloge, vezane na racun in racunalnik.
-// En razporejevalnik naenkrat drzi najem v ops.SchedulerLease; ostali procesi nad isto bazo cakajo.
-builder.Services.AddSingleton<WorkerSchedulerStore>();
-builder.Services.AddSingleton<WorkerCycleRunner>();
-builder.Services.AddSingleton<SelfAddress>();
-builder.Services.AddSingleton<WorkerSchedulerService>();
-builder.Services.AddHostedService(provider => provider.GetRequiredService<WorkerSchedulerService>());
 // Enotni model opravil (237): intranet je nadzorna konzola gostitelja avtomatike (PIM.AutomationHost) —
 // bere ops.JobDefinition/JobRun in oddaja zahteve (zagon, ustavitev, urnik), ki jih prevzame gostitelj.
 builder.Services.AddSingleton(provider =>
   new AutomationStore(ConnectionStringResolver.Resolve(provider.GetRequiredService<IConfiguration>()) ?? ""));
+// Nadzor (/sistem, /sistem/posel/{posel}), blok 5: sestavi posle, vire, postopke in alarme ter izreče sodbo
+// (MonitorPolicy). Scoped, ker preverja vlogo prijavljenega uporabnika (PimWriteGuard) in piše sled.
+builder.Services.AddScoped<MonitorService>();
 
 // Naša ura je izbrana enkrat ob zagonu, ne podedovana od strežnika. Na IIS, nastavljenem na
 // UTC, bi ToLocalTime() kazal dve uri prej — in to bi se pokazalo šele po objavi.
@@ -164,14 +163,6 @@ var app = builder.Build();
 // IIS virtual application and local-root hosting are both supported. UsePathBase
 // only consumes /PIM when it is present and leaves root requests unchanged.
 app.UsePathBase("/PIM");
-
-// Lasten naslov za samodejni utrip pod IIS (glej WorkerSchedulerService): aplikacija ga izve ob prvi zahtevi.
-var selfAddress = app.Services.GetRequiredService<SelfAddress>();
-app.Use((context, next) =>
-{
-  selfAddress.Observe(context.Request);
-  return next(context);
-});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -293,6 +284,24 @@ app.MapPost("/obvestila/precitaj/{id:long}", async (HttpContext context, long id
   return Results.Redirect(PimReturnPath(context));
 }).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin));
 
+// Podjetje strani, ki delajo z enim podjetjem (PimOrganizationScope). Piškotek bere
+// IntranetDataService.GetCurrentOrganizationAsync; neaktivno ali neznano podjetje se tam zavrže.
+app.MapPost("/kontekst/podjetje", async (HttpContext context, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+  await antiforgery.ValidateRequestAsync(context);
+  if (int.TryParse(context.Request.Form["podjetje"].ToString(), out var organizationId) && organizationId > 0)
+    context.Response.Cookies.Append(OrganizationScope.CookieName, organizationId.ToString(System.Globalization.CultureInfo.InvariantCulture), new CookieOptions
+    {
+      HttpOnly = true,
+      IsEssential = true,
+      SameSite = SameSiteMode.Lax,
+      Secure = context.Request.IsHttps,
+      Path = context.Request.PathBase.HasValue ? context.Request.PathBase.Value : "/",
+      Expires = DateTimeOffset.UtcNow.AddYears(1),
+    });
+  return Results.Redirect(PimReturnPath(context));
+}).RequireAuthorization();
+
 app.MapGet("/health", () => Results.Ok(new { stanje = "zdravo" })).AllowAnonymous();
 
 // Izvoz zaloge, ena vrstica na artikel (migracija 190/191) — isti vir in isti filtri kot tabela
@@ -304,17 +313,12 @@ app.MapGet("/izvoz/zaloge.xlsx", async (HttpContext context, StockReadService st
 {
   using var lease = await gate.Exports.EnterAsync(cancellationToken);
   var query = context.Request.Query;
-  var organizationId = int.TryParse(query["podjetje"], out var parsedOrganization) && parsedOrganization > 0
-    ? parsedOrganization : (int?)null;
-  var sourceCode = query["virsifra"].ToString();
-  var search = query["isci"].ToString();
-  var availability = query["zaloga"].ToString();
-  var maxAgeHours = int.TryParse(query["starost"], out var age) ? age : (int?)null;
-  var workbook = await stocks.BuildStockWorkbookAsync(
-    organizationId, sourceCode, search, availability, maxAgeHours, cancellationToken);
+  // 267: isti filtri in razvrstitev kot na /zaloge (skladisce, dobavitelj, posebnost, razvrsti).
+  var filter = StockQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
+  var workbook = await stocks.BuildStockWorkbookAsync(filter, cancellationToken);
   return Results.File(workbook,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    $"PIM_zaloga_{organizationId?.ToString() ?? "vsa"}_{DateTime.UtcNow:yyyyMMdd_HHmm}.xlsx");
+    $"PIM_zaloga_{filter.OrganizationId?.ToString() ?? "vsa"}_{DateTime.UtcNow:yyyyMMdd_HHmm}.xlsx");
 }).RequireAuthorization();
 
 // Delovni list strank (250): isti filtri kot na /stranke (podjetje, vloga, iskanje, tip, …), zato je
@@ -330,6 +334,19 @@ app.MapGet("/izvoz/stranke.xlsx", async (HttpContext context, CustomerListServic
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     CustomerWorkbookService.FileName(DateTime.UtcNow));
 }).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial));
+
+// Delovni list cen (265): isti filtri kot na /cene (podjetje, cenik, iskanje, stevilo cenikov, vrsta),
+// ena vrstica na ceno. Uvoz nazaj je na /cene/uvoz in gre v vrsto za SAOP, ne v PIM.
+app.MapGet("/izvoz/cene.xlsx", async (HttpContext context, PriceService prices, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+{
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
+  var query = context.Request.Query;
+  var filter = PriceQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
+  var rows = await prices.GetLinesAsync(filter, cancellationToken);
+  return Results.File(PriceWorkbookService.Build(rows),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    PriceWorkbookService.FileName(DateTime.UtcNow));
+}).RequireAuthorization();
 
 app.MapGet("/izvoz/izdelki.csv", async (
   HttpContext context, ProductWorkbenchService workbench, HeavyWorkGate gate,

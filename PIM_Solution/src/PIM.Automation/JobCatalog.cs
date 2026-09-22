@@ -16,8 +16,9 @@ namespace PIM.Automation;
   potrjeno stanje. Prav tako noben posel ne podaja stikala za razpored postopkov: urnik je ena raven.
 
   Tu je vse, kar se da preveriti brez baze in brez procesa: seznam poslov, privzeti urniki, odvisnosti
-  in načrt korakov. Ista gradiva (Worker, Note, StockFilesSteps, XmlSteps) kot pri starih ciklih, da
-  se ukazne vrstice workerjev ne razidejo. Kar posel potrebuje od sveta, pride prek CycleEnvironment.
+  in načrt korakov. Gradniki korakov (Worker, Note, StockFilesSteps, XmlSteps) so v WorkerSchedulerPolicy.cs,
+  kjer so ostali od starih ciklov (221), ki jih je migracija 254 odstranila; PIM.AutomationHost je edini
+  motor avtomatike. Kar posel potrebuje od sveta, pride prek CycleEnvironment.
 */
 
 /// <summary>Poslovni tok, po katerem nadzorna plošča sestavi kartico. Zaprt seznam (CK_JobDefinition_Flow).</summary>
@@ -58,8 +59,20 @@ public static class JobFlows
 public sealed record JobDependencyDefinition(string DependsOnJobKey, bool IsGate, int? MaxAgeSeconds, bool TriggersDependent, string Note);
 
 /// <param name="Pipelines">Postopki v ops.ScheduleProfile, ki jih koraki odprejo prek ops.BeginRun (izklopljen postopek zavrne zagon z 51100).</param>
-/// <param name="Workers">Imena projektov workerjev, ki jih posel poganja; za pogled »Izvajalniki« in za test, da noben worker ni brez posla.</param>
+/// <param name="Workers">Imena projektov workerjev, ki jih posel poganja; test (JobCatalogChecks) z njimi preveri, da noben worker ni brez posla.</param>
 /// <param name="ArtifactKinds">Kode izvoznih profilov, katerih datoteke gostitelj po uspehu zapiše v ops.Artifact.</param>
+/// <summary>
+/// Vir, ki ga posel prinaša, in koliko časa smejo biti njegovi podatki stari (blok 4 prenove nadzora, 2026-09-22).
+/// Svežina se meri iz faz workerjev (ops.JobPhaseRun), ne iz izhodne kode: zelena lučka pomeni sveže podatke.
+/// </summary>
+/// <param name="SourceCode">Isti niz, kot ga worker piše v ops.JobPhaseRun.SourceCode (BT_STOCK, GetPrices ...).</param>
+/// <param name="Pipeline">Postopek, pod katerim worker fazo piše (SOURCE_FETCH, STOCK_FILE, SAOP_STOCK ...).</param>
+/// <param name="MaxAgeSeconds">Meja svežine; starejši podatki so rdeči (alarm SourceStale).</param>
+/// <param name="PerOrganization">Ali se svežina meri za vsako podjetje posebej.</param>
+/// <param name="MeasureNewData">true: šteje zadnja faza z NOVIMI podatki (zaloga); false: šteje zadnji uspešen stik
+/// (cene, artikli — dolgo brez sprememb je normalno).</param>
+public sealed record JobSourceDefinition(string SourceCode, string Label, string Pipeline, int MaxAgeSeconds, bool PerOrganization, bool MeasureNewData);
+
 public sealed record JobDefinition(
   string Key, string Label, string Description, string Flow, bool IsFlowResult, int SortOrder,
   WorkerJobReach Reach, string? ReachNote, int? IntervalSeconds, TimeOnly? DailyAtLocal, int TimeoutSeconds, int? SlaSeconds,
@@ -72,6 +85,9 @@ public sealed record JobDefinition(
     WorkerJobReach.SendsEmail => "SendsEmail",
     _ => "Internal",
   };
+
+  /// <summary>Viri s prago svežine (ops.JobSource); prazno pri poslih, katerih workerji še ne pišejo faz.</summary>
+  public IReadOnlyList<JobSourceDefinition> Sources { get; init; } = [];
 }
 
 public static class JobCatalog
@@ -104,27 +120,50 @@ public static class JobCatalog
     new(SaopProductImport, "Artikli iz SAOP",
       "Samo osem točk za artikle (brez cen in šifrantov), vsako podjetje v svojem koraku; padec enega podjetja ne ustavi drugih. Cene imajo svoj posel, šifranti in poln zajem tečejo v nočni uskladitvi. Samo vhod: brez validacije, objave in izvoza. Uspeh sproži validacijo.",
       JobFlows.Inputs, true, 10, WorkerJobReach.ExternalCall, "kliče SAOP", 3600, null, 3600, 7200, true,
-      [], ["SAOP_PRODUCTS"], ["PIM.KatalogWorker"], []),
+      [], ["SAOP_PRODUCTS"], ["PIM.KatalogWorker"], []) { Sources = [
+      new("GetItemsGeneralData", "Osnovni podatki artiklov", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsDescriptions", "Opisi artiklov", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsTitlesLanguage", "Nazivi po jezikih", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsCustomProperties", "Lastnosti artiklov", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsPlanningData", "Planski podatki", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsStockData", "Zalogovni podatki", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemsStockAccountingData", "Knjigovodski podatki zaloge", "SAOP_PRODUCTS", 7200, true, false),
+      new("GetItemCustomerDataV2", "Podatki artiklov po kupcih", "SAOP_PRODUCTS", 7200, true, false),
+    ] },
     new(SaopOrderImport, "Naročila iz SAOP",
       "Naročila kupcev (VNK) in naročila dobaviteljem (VND) za MIN/MID/MAX, vsako podjetje v svojem koraku. Popolnoma ločeno od spletnega kataloga.",
       JobFlows.Orders, true, 20, WorkerJobReach.ExternalCall, "kliče SAOP", 3600, null, 1800, 7200, true,
-      [], ["SAOP_ORDERS_VNK", "SAOP_ORDERS_VND"], ["PIM.SaopOrdersWorker"], []),
+      [], ["SAOP_ORDERS_VNK", "SAOP_ORDERS_VND"], ["PIM.SaopOrdersWorker"], []) { Sources = [
+      // Blok 6: PIM.SaopOrdersWorker piše faze pod imenom razporeda (SourceCode = Pipeline). Stik, ne novi
+      // podatki: ura brez novega naročila je normalna. Podjetje brez knjige je preskok in ni stik.
+      new("SAOP_ORDERS_VNK", "Naročila kupcev (VNK)", "SAOP_ORDERS_VNK", 7200, true, false),
+      new("SAOP_ORDERS_VND", "Naročila dobaviteljem (VND)", "SAOP_ORDERS_VND", 7200, true, false),
+    ] },
     new(StockImport, "Zaloga iz SAOP",
       "Količine zaloge iz SAOP, vsako podjetje v svojem koraku; padec enega podjetja ne ustavi drugih. Uspeh sproži izvoz cen in zaloge za splet.",
       JobFlows.Stock, false, 30, WorkerJobReach.ExternalCall, "kliče SAOP", 600, null, 900, 1800, true,
-      [], ["SAOP_STOCK"], ["PIM.SaopStockWorker"], []),
+      [], ["SAOP_STOCK"], ["PIM.SaopStockWorker"], []) { Sources = [
+      new("SAOP_STOCK", "Zaloga iz SAOP", "SAOP_STOCK", 1800, true, true),
+    ] },
     new(PriceImport, "Cene iz SAOP",
       "Spremembe cen (GetPrices), vsako podjetje v svojem koraku. Okno spremembe določa Saop:LookbackDays v nastavitvah.",
       JobFlows.Stock, false, 31, WorkerJobReach.ExternalCall, "kliče SAOP", 600, null, 900, 1800, true,
-      [], ["SAOP_PRICES"], ["PIM.KatalogWorker"], []),
+      [], ["SAOP_PRICES"], ["PIM.KatalogWorker"], []) { Sources = [
+      new("GetPrices", "Cene iz SAOP", "SAOP_PRICES", 1800, true, false),
+    ] },
     new(SaopDeliveryImport, "Datumi dobave iz SAOP",
-      "Datumi in količine prihoda, en klic na artikel (do 300 artiklov na podjetje). Redno jih bere nočna uskladitev; ta posel je privzeto izklopljen in za ročni zagon.",
-      JobFlows.Stock, false, 32, WorkerJobReach.ExternalCall, "kliče SAOP", 10800, null, 1800, 129600, false,
+      "Datumi in količine prihoda, en klic na artikel za VSE artikle z zalogo iz SAOP (IQLighting ~8.800, okoli 50 min). Redno jih bere nočna uskladitev; ta posel je privzeto izklopljen in za ročni zagon.",
+      JobFlows.Stock, false, 32, WorkerJobReach.ExternalCall, "kliče SAOP", 10800, null, 10800, 129600, false,
       [], ["SAOP_DELIVERY"], ["PIM.SaopStockWorker"], []),
     new(SupplierStockImport, "Zaloga dobaviteljev",
       "Prevzem in branje zaloge Nowodvorski (FTP) in Braytron (HTTPS) za vsa vključena podjetja. Prevzemnik sam spoštuje omejitve dobaviteljev (Nowodvorski na 2 h, Braytron en prenos na 3 h); nespremenjena datoteka se ne zapiše znova. SAOP ne kliče.",
       JobFlows.Stock, false, 33, WorkerJobReach.ExternalCall, "kliče dobavitelja", 1800, null, 900, 7200, true,
-      [], ["SOURCE_FETCH", "STOCK_FILE"], ["PIM.SourceFetchWorker", "PIM.StockFileWorker"], []),
+      [], ["SOURCE_FETCH", "STOCK_FILE"], ["PIM.SourceFetchWorker", "PIM.StockFileWorker"], []) { Sources = [
+      // Dobaviteljeva datoteka: meri se zadnja NOVA datoteka v bazi (STOCK_FILE), ne stik s strežnikom —
+      // Braytron je 2026-09-22 pet dni vračal isto datoteko in vse je bilo zeleno.
+      new("BT_STOCK", "Braytron zaloga", "STOCK_FILE", 21600, true, true),
+      new("NW_STOCK", "Nowodvorski zaloga", "STOCK_FILE", 14400, true, true),
+    ] },
     new(ProductValidation, "Validacija artiklov",
       "val.RunValidation za vsako podjetje (celotna validacija, ker canon nima sledenja sprememb artiklov). Sproži jo uspešen zajem artiklov, sicer teče vsako uro.",
       JobFlows.WebCatalog, false, 40, WorkerJobReach.Internal, null, 3600, null, 3600, 7200, true,
@@ -141,7 +180,11 @@ public static class JobCatalog
       // (89.491 vrstic × 180 stolpcev) traja minute — pri 300 s bi tekel neprekinjeno in obremenjeval bazo.
       JobFlows.WebCatalog, true, 42, WorkerJobReach.Internal, null, 3600, null, 1800, 7200, true,
       [new(ProductPublication, true, null, true, "Izvoz samo iz uspešno objavljenega stanja.")],
-      [MagentoProducts], ["PIM.B2bWorker"], [MagentoProducts, MagentoCustomers]),
+      [MagentoProducts], ["PIM.B2bWorker"], [MagentoProducts, MagentoCustomers]) { Sources = [
+      // Blok 6: faza DATOTEKA PIM.B2bWorker (SourceCode = koda profila). Izvoz je samo za podjetje kataloga
+      // (2), zato vir ni po podjetjih — sicer bi bila 3 in 4 za vedno »prestara«.
+      new(MagentoProducts, "katalog.csv za splet", MagentoProducts, 7200, false, false),
+    ] },
     new(WebStockExport, "Cene in zaloga za splet",
       "magento-stock-prices.csv za vsako podjetje iz trenutnega objavljenega stanja (profil MAGENTO_STOCK_PRICES).",
       // Sproži ga uspešna zaloga iz SAOP (vsakih ~10 min); cene pridejo v datoteko ob naslednjem izvozu.
@@ -149,7 +192,9 @@ public static class JobCatalog
       JobFlows.Stock, true, 43, WorkerJobReach.Internal, null, 1800, null, 1800, 3600, true,
       [new(StockImport, false, null, true, "Uspešen zajem zaloge sproži izvoz cen in zaloge; padec ga ne blokira (izvoz bere zadnje objavljeno stanje)."),
        new(PriceImport, false, null, false, "Izvoz ne teče med zajemom cen; cene pridejo v datoteko ob naslednjem izvozu.")],
-      [MagentoStockPrices], ["PIM.B2bWorker"], [MagentoStockPrices]),
+      [MagentoStockPrices], ["PIM.B2bWorker"], [MagentoStockPrices]) { Sources = [
+      new(MagentoStockPrices, "magento-stock-prices.csv za splet", MagentoStockPrices, 3600, true, false),
+    ] },
     new(AlertEvaluation, "Nadzornik",
       "Nadzornik zastalih obdelav (PIM.Watchdog): zastareli utripi, mirujoči vodni žigi, mrtva odhodna sporočila; alarme uvrsti v vrsto za dostavo.",
       JobFlows.System, false, 50, WorkerJobReach.Internal, null, 300, null, 300, 1800, true,
@@ -164,11 +209,20 @@ public static class JobCatalog
       // 00:30: zunaj okna 02:00-03:00, ki ga poletni čas preskoči ali ponovi.
       JobFlows.Inputs, false, 60, WorkerJobReach.ExternalCall, "kliče SAOP in dobavitelja", null, new TimeOnly(0, 30), 21600, 129600, true,
       [], ["SAOP_PRODUCTS", "SOURCE_FETCH", "GENERIC_XML", "STOCK_FILE", "SAOP_STOCK", "SAOP_DELIVERY"],
-      ["PIM.KatalogWorker", "PIM.SourceFetchWorker", "PIM.XmlFileWorker", "PIM.StockFileWorker", "PIM.SaopStockWorker"], []),
+      ["PIM.KatalogWorker", "PIM.SourceFetchWorker", "PIM.XmlFileWorker", "PIM.StockFileWorker", "PIM.SaopStockWorker"], []) { Sources = [
+      new("SAOP_DELIVERY", "Datumi dobave iz SAOP", "SAOP_DELIVERY", 129600, true, false),
+      // Blok 6: PIM.XmlFileWorker piše BRANJE/ZAPIS/PRESLIKAVA pod GENERIC_XML s kodo vira (PIM_XML_SOURCE_CODE).
+      // Meji po odobrenem načrtu (2026-09-22): Nowodvorski 7 dni, Braytron 36 h (dan in rezerva za nočni termin).
+      new("NW_XML", "Nowodvorski XML (katalog)", "GENERIC_XML", 604800, true, false),
+      new("BT_XML", "Braytron XML (katalog)", "GENERIC_XML", 129600, true, false),
+    ] },
     new(StockReplenishmentDigest, "Zaloga pod MID (dnevni mail)",
       "Dnevni mail o artiklih na ali pod MID pragom prejemnikom s kljukico »Zaloga pod MID«.",
       JobFlows.Orders, false, 61, WorkerJobReach.SendsEmail, "pošlje e-pošto prejemnikom", null, new TimeOnly(5, 30), 900, 129600, true,
-      [], ["STOCK_REPLENISHMENT_DIGEST"], ["PIM.StockReplenishmentWorker"], []),
+      [], ["STOCK_REPLENISHMENT_DIGEST"], ["PIM.StockReplenishmentWorker"], []) { Sources = [
+      // Blok 6: IZRACUN in POSILJANJE PIM.StockReplenishmentWorker; neuspelo pošiljanje je padla faza.
+      new("STOCK_REPLENISHMENT_DIGEST", "Dnevni mail o zalogi pod MID", "STOCK_REPLENISHMENT_DIGEST", 129600, true, false),
+    ] },
     new(SystemSelfTest, "Nočni samotest",
       "Prehodi celo verigo (baza, razporedi, utripi, katalog, izvoz) in rezultat zapiše v ops.SelfTestRun. Samo bere. Privzeto izklopljen: brez objavljenega samotesta ga gostitelj poganja z dotnet run, ki ponoči gradi projekt.",
       JobFlows.System, false, 70, WorkerJobReach.Internal, null, null, new TimeOnly(4, 30), 1800, 129600, false,

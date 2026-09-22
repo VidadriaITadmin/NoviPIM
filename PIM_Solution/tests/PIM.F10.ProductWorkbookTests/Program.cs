@@ -43,6 +43,28 @@ var columns = ProductWorkbookContract.Build(spec);
 Check("ključ je prvi in nosi šifro artikla",
   columns[1].FieldKey == ProductWorkbookContract.ItemIdField && columns[0].FieldKey == ProductWorkbookContract.OrganizationField);
 
+// Objemke.xlsx 2026-09-22: »Oddelek (ABC)« B -> A se ni zaznal, ker je »Dodatna lastnost 1«
+// (AdditionalProperty1ID, isti ključ Product.Department) v isti vrstici še nosila B in je povozila A.
+var sharedKey = ProductWorkbookContract.Build(new(
+  [new("Product.Department", "ItemDepartment", "Oddelek (ABC)", "text"),
+   new("Product.Department", "AdditionalProperty1ID", "Dodatna lastnost 1", "text")],
+  [], [], ["sl"], []));
+Check("drugo polje SAOP z istim ključem je samo za branje",
+  sharedKey.Single(column => column.Header == "Oddelek (ABC)").Target == ProductWorkbookTarget.Saop
+  && sharedKey.Single(column => column.Header == "Dodatna lastnost 1").Target == ProductWorkbookTarget.ReadOnly);
+
+// »02« -> »2« v šifri je sprememba (prej jo je številska primerjava zamolčala); predogled jo
+// pokaže z opozorilom, ker jo pogosto naredi Excel sam.
+Check("razlika samo v vodilnih ničlah se prepozna",
+  ProductWorkbookService.OnlyLeadingZerosDiffer("2", "02")
+  && ProductWorkbookService.OnlyLeadingZerosDiffer("1", "0000001")
+  && !ProductWorkbookService.OnlyLeadingZerosDiffer("1", "0000601")
+  && !ProductWorkbookService.OnlyLeadingZerosDiffer("02", "02")
+  && !ProductWorkbookService.OnlyLeadingZerosDiffer("1.5", "01.5"));
+Check("šifra ni število: »02« je številsko polje le, kadar je decimal",
+  !new ProductWorkbookColumn("g", "DDV", "Product.VatRateId", ProductWorkbookTarget.Saop, ValueFormat: "text").IsNumber
+  && new ProductWorkbookColumn("g", "Teža", "ProductCommercial.NetWeight", ProductWorkbookTarget.Saop, ValueFormat: "decimal4").IsNumber);
+
 Check("stolpec spletnih strani obstaja in je last PIM",
   columns.Any(column => column.FieldKey == ProductWorkbookContract.WebSitesField
     && column.Target == ProductWorkbookTarget.Pim && column.IsMultiValue));

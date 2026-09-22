@@ -1,0 +1,60 @@
+@* Podjetje strani, ki dela z enim samim podjetjem (pravila, preslikave, pragovi, čakalne vrste).
+
+   Zakaj na strani in ne v zgornji vrstici: večpodjetniški pogledi (Izdelki, Zaloga, Kakovost …)
+   imajo svojo izbiro z »vsa podjetja«; skupni izbirnik v glavi bi tam nič ne pomenil in bi bil
+   spet obljuba, ki je stran ne drži (tak izbirnik je bil že enkrat odstranjen). Tu je obseg
+   viden natanko tam, kjer velja.
+
+   Prej so te strani tiho kazale in urejale prvo aktivno podjetje po šifri (DEMO), ne da bi
+   uporabnik to kjerkoli videl. Izbira gre v piškotek (OrganizationScope.CookieName), ki ga
+   bere IntranetDataService.GetCurrentOrganizationAsync, zato vse take strani delijo isto izbiro.
+   Obrazec je navaden POST s polno osvežitvijo: nov krog Blazorja prebere nov piškotek. *@
+@inject PIM.Intranet.Services.IntranetDataService Data
+@inject NavigationManager Navigation
+
+@if (Current is not null)
+{
+  <form class="organization-scope" method="post" action="kontekst/podjetje" data-enhance="false">
+    <AntiforgeryToken />
+    <input type="hidden" name="vrniNa" value="@ReturnPath" />
+    <label for="@FieldId">Podjetje</label>
+    @if (Options.Count > 1)
+    {
+      <select id="@FieldId" name="podjetje" class="filter-select" data-pim-autosubmit
+              title="Stran prikazuje in ureja samo izbrano podjetje.">
+        @foreach (var option in Options)
+        {
+          <option value="@option.OrganizationId" selected="@(option.OrganizationId == Current.OrganizationId)">@option.Name</option>
+        }
+      </select>
+      <button type="submit" class="ghost-button organization-scope-apply">Preklopi</button>
+    }
+    else
+    {
+      <strong id="@FieldId">@Current.Name</strong>
+    }
+  </form>
+}
+
+@code {
+  const string FieldId = "pim-organization-scope";
+
+  PIM.Intranet.Services.OrganizationContext? Current;
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Options = [];
+  string ReturnPath = "";
+
+  protected override async Task OnInitializedAsync()
+  {
+    ReturnPath = Navigation.ToBaseRelativePath(Navigation.Uri);
+    try
+    {
+      Current = await Data.GetCurrentOrganizationAsync();
+      Options = await Data.GetOrganizationsAsync();
+    }
+    catch
+    {
+      // Brez baze stran sama pokaže svojo napako; izbirnik ostane skrit.
+      Current = null;
+    }
+  }
+}

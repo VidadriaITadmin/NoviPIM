@@ -38,7 +38,7 @@ Assert(markup.Contains("Overview.Totals.PositionCount", StringComparison.Ordinal
   "Vrstica Skupaj mora izhajati iz agregata v bazi, ne iz prestevanja vrstic v pomnilniku.");
 
 // 3. Orodna vrstica je poimenovan iskalni sklop, vsaka kontrola pa ima svojo oznako.
-var toolbar = Regex.Match(markup, "<section class=\"ui-card toolbar\"[^>]*>");
+var toolbar = Regex.Match(markup, "<section class=\"ui-card toolbar[^\"]*\"[^>]*>");
 Assert(toolbar.Success, "Orodna vrstica mora ostati <section class=\"ui-card toolbar\">.");
 Assert(toolbar.Value.Contains("role=\"search\"", StringComparison.Ordinal), "Orodna vrstica mora biti razglasena kot role=\"search\".");
 var toolbarLabel = Regex.Match(toolbar.Value, "aria-labelledby=\"([^\"]+)\"");
@@ -56,14 +56,15 @@ Assert(Regex.IsMatch(markup, "<option value=\"\">Vsa podjetja</option>"),
   "Privzeti obseg zaloge so vsa podjetja.");
 Assert(markup.Contains("@row.OrganizationName", StringComparison.Ordinal),
   "Pri vec podjetjih mora vrstica povedati, cigava zaloga je.");
-foreach (var control in new[] { "stock-search", "stock-source", "stock-instock", "stock-age", "stock-organization" })
+// 2026-09-22 (267): "vir" in "ima zalogo" sta zamenjala skladisce, dobavitelj in posebnosti; ima zalogo so zavihki.
+foreach (var control in new[] { "stock-search", "stock-warehouse", "stock-supplier", "stock-signal", "stock-age", "stock-organization", "stock-sort" })
 {
   Assert(Regex.IsMatch(markup, "<label[^>]*for=\"" + control + "\""), "Kontrola " + control + " nima povezane oznake <label for>.");
   Assert(Regex.IsMatch(markup, "id=\"" + control + "\""), "Kontrola " + control + " ne obstaja.");
 }
 Assert(Regex.IsMatch(markup, "<input id=\"stock-search\"[^>]*type=\"search\""), "Iskalno polje mora biti type=\"search\".");
-Assert(markup.Contains("Overview.Sources.Select(source => source.SourceCode)", StringComparison.Ordinal),
-  "Seznam virov mora izhajati iz dejanskih posnetkov, ne iz vpisanega seznama.");
+Assert(markup.Contains(".SupplierSources", StringComparison.Ordinal) && markup.Contains("Warehouses.Organizations", StringComparison.Ordinal),
+  "Skladisca in dobavitelji morajo izhajati iz dejanskih posnetkov (intranet.GetWarehouseStock), ne iz vpisanega seznama.");
 
 // 4. Ziva stanja in zivo sporocilo o rezultatu.
 var count = Regex.Match(markup, "<span class=\"result-count\"[^>]*>");
@@ -84,7 +85,7 @@ Assert(markup.Contains("FreshnessLabel(", StringComparison.Ordinal), "Starost po
 // 6. Stranicenje je streznisko in izhaja iz istega stetja kot seznam.
 Assert(Regex.IsMatch(markup, "<PimPager Skip=\"Skip\" Take=\"Take\" Total=\"PageData\\.TotalCount\""),
   "Seznam mora biti strezniski; 379.610 pozicij se ne nalaga v pomnilnik.");
-foreach (var parameter in new[] { "isci", "vir", "starost", "zaloga", "stran", "podjetje" })
+foreach (var parameter in new[] { "isci", "vir", "starost", "zaloga", "stran", "podjetje", "skladisce", "dobavitelj", "posebnost", "razvrsti" })
   Assert(Regex.IsMatch(markup, "SupplyParameterFromQuery\\(Name = \"" + parameter + "\"\\)"),
     "Filter " + parameter + " mora ziveti v naslovu URL.");
 Assert(!markup.Contains("Rows?.Where(", StringComparison.Ordinal), "Odjemalskega filtriranja ne sme biti vec.");
@@ -97,7 +98,7 @@ Assert(!markup.Contains("<table class=\"data-table\">", StringComparison.Ordinal
 Assert(Regex.Matches(markup, "class=\"numeric\"").Count >= 4, "Kolicinski stolpci morajo biti poravnani desno.");
 
 // 8. Slog: fokus, prelivanje, odzivnost; brez uhajanja z ::deep.
-foreach (var selector in new[] { ".search-input", ".filter-select", ".filter-button", ".table-scroll", ".data-table a" })
+foreach (var selector in new[] { ".search-input", ".filter-select", ".ghost-button", ".page-tab", ".filter-chip", ".table-scroll", ".data-table a" })
   Assert(css.Contains(selector + ":focus-visible", StringComparison.Ordinal), "Manjka slog fokusa za " + selector + ".");
 Assert(Regex.IsMatch(css, ":focus-visible[^{]*\\{[^}]*outline:"), "Fokus mora risati obris, ne samo sence.");
 Assert(!css.Contains("::deep", StringComparison.Ordinal), "Izoliran slog ne sme uhajati z ::deep.");
@@ -107,13 +108,14 @@ Assert(Regex.IsMatch(css, "@media[^{]*max-width:\\s*900px"), "Manjka odzivno pra
 
 // 9. Varovalka: stran ostane vezana na dejanski bralni proceduri in nicesar ne pise.
 Assert(markup.Contains("Data.GetOrganizationsAsync", StringComparison.Ordinal), "Stran mora poznati vsa podjetja, ne le prvega po sifri.");
-foreach (var call in new[] { "Stock.GetItemsAsync", "Stock.GetOverviewAsync" })
+foreach (var call in new[] { "Stock.GetItemsAsync", "Stock.GetOverviewAsync", "Stock.GetWarehouseStockAsync" })
   Assert(markup.Contains(call, StringComparison.Ordinal), "Stran mora ohraniti klic " + call + ".");
 foreach (Match call in Regex.Matches(markup, "(?<![A-Za-z0-9_])(?:Data|Stock)\\.(\\w+)"))
-  Assert(new[] { "GetOrganizationsAsync", "GetItemsAsync", "GetOverviewAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
+  Assert(new[] { "GetOrganizationsAsync", "GetItemsAsync", "GetOverviewAsync", "GetWarehouseStockAsync" }.Contains(call.Groups[1].Value, StringComparer.Ordinal),
     "Nova podatkovna poizvedba ni v obsegu naloge: " + call.Value);
 Assert(markup.Contains("intranet.GetStockByItem", StringComparison.Ordinal), "Stran mora povedati, iz katerega vira bere.");
-var allowedHandlers = new[] { "ApplyFiltersAsync" };
+// 2026-09-22: filtri veljajo takoj (brez gumba »Uporabi«); dejanja so samo odpiranje in ciscenje filtrov.
+var allowedHandlers = new[] { "ToggleFilters", "ClearFilters" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
@@ -125,8 +127,10 @@ foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "Approv
 Assert(!markup.Contains('\u203A'), "Unicode nadomestne ikone niso dovoljene; uporabi CSS obliko.");
 
 // 11. Varovalka: nobene vsebine brez podatkovnega vira.
+// 2026-09-22: uporabnik je izrecno zahteval izvoz kot na izdelkih in strankah (»da ima izvoze,
+// samo da ne rabi uvozov«) — "Izvozi" je zato dovoljen, "Uvozi" ostane prepovedan.
 foreach (var fabricated in new[] { "Rezervirano", "Fizična zaloga", "Nizek nivo", "Trend", "ta teden",
-  "Osveži", "Stolpci", "Izvozi", "Uvozi", "Vrstic na stran", "Izbranih" })
+  "Osveži", "Stolpci", "Uvozi", "stranke/uvoz", "Vrstic na stran", "Izbranih" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Stran ne sme prikazovati izmisljene vsebine: " + fabricated + ".");
 foreach (var literal in new[] { "9.842", "9842", "426", "3,7", "86%" })
   Assert(!markup.Contains(literal, StringComparison.Ordinal), "Stevilke iz UX slike se ne prepisujejo v kodo: " + literal + ".");
@@ -140,12 +144,12 @@ foreach (var literal in new[] { "9.842", "9842", "426", "3,7", "86%" })
 // I4: filter "ima zalogo" gre v poizvedbo, ne v pomnilniski filter, in ponuja tudi "Prihaja zaloga".
 Assert(markup.Contains("QueryInStock", StringComparison.Ordinal),
   "Ima zalogo mora priti v poizvedbo, ne biti filtrirano v pomnilniku.");
-Assert(Regex.IsMatch(markup, "<option value=\"IN_STOCK\">Na zalogi</option>"),
-  "Filter ima zalogo mora ponuditi Na zalogi.");
-Assert(Regex.IsMatch(markup, "<option value=\"OUT_OF_STOCK\">Brez zaloge</option>"),
-  "Filter ima zalogo mora ponuditi Brez zaloge.");
-Assert(Regex.IsMatch(markup, "<option value=\"INCOMING\">Prihaja zaloga</option>"),
-  "Filter ima zalogo mora ponuditi Prihaja zaloga.");
+// 2026-09-22: ima zalogo je zavihek (kot vloga na /stranke), dodan je "Samo pri dobavitelju".
+foreach (var (code, label) in new[] { ("IN_STOCK", "Na zalogi"), ("OUT_OF_STOCK", "Brez zaloge"), ("INCOMING", "Prihaja zaloga"), ("SUPPLIER_ONLY", "Samo pri dobavitelju") })
+  Assert(markup.Contains($"new(\"{code}\", \"{label}\")", StringComparison.Ordinal), "Zavihek zaloge mora ponuditi " + label + ".");
+Assert(markup.Contains("class=\"page-tabs\"", StringComparison.Ordinal), "Ima zalogo so zavihki nad orodno vrstico.");
+foreach (var signal in new[] { "BELOW_MIN", "ABOVE_MAX", "LATE", "NEGATIVE", "NO_ERP", "UNMATCHED" })
+  Assert(markup.Contains($"new(\"{signal}\"", StringComparison.Ordinal), "Filter posebnosti mora ponuditi " + signal + ".");
 
 // ─── Popravki zaloge 2026-09-10 ───────────────────────────────────────────────────────────
 //
@@ -173,9 +177,13 @@ Assert(!markup.Contains("izvoz/zaloge.csv", StringComparison.Ordinal), "Izvoz CS
 Assert(!Regex.IsMatch(markup, ">CSV<"), "Ni vec locenega gumba CSV.");
 var exportHrefBody = Regex.Match(markup, "string StockExportHref\\s*\\{.*?\\n  \\}", RegexOptions.Singleline);
 Assert(exportHrefBody.Success, "Gumb za prenos mora graditi naslov iz trenutnih filtrov (StockExportHref).");
-foreach (var draft in new[] { "SourceDraft", "SearchDraft", "InStockDraft", "AgeDraft", "OrganizationDraft" })
-  Assert(exportHrefBody.Value.Contains(draft, StringComparison.Ordinal),
-    "Izvoz mora uporabiti filter " + draft + " s strani, ne samo podjetje.");
+// 2026-09-22 (267): izvoz vzame isti filter kot tabela (AppliedFilter) prek skupnega StockQuery,
+// ki ga bere tudi /izvoz/zaloge.xlsx — tako ni mogoce, da bi se kak filter izgubil.
+foreach (var required in new[] { "AppliedFilter", "StockQuery.ToQueryString" })
+  Assert(exportHrefBody.Value.Contains(required, StringComparison.Ordinal),
+    "Izvoz mora uporabiti " + required + ", ne svojega seznama parametrov.");
+Assert(!markup.Contains("izvoz/zaloge.xlsx?virsifra", StringComparison.Ordinal) && !markup.Contains("\"virsifra=", StringComparison.Ordinal),
+  "Izvoz ne gradi vec svojih imen parametrov.");
 
 Console.WriteLine("F10 stocks UX contract PASS.");
 

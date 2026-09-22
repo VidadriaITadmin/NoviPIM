@@ -1,5 +1,4 @@
 @page "/administracija/vloge"
-@page "/sistem/vloge"
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject RoleAdministrationService Roles
@@ -258,7 +257,7 @@
   string SelectedDescription = "";
 
   static readonly IReadOnlyList<PimCrumb> Crumbs =
-    [new("Sistemske zadeve", "administracija/uporabniki"), new("Vloge in dostop")];
+    [new("Sistemske zadeve", "administracija"), new("Vloge in dostop")];
 
   ManagedRoleRow? SelectedRole => RoleRows.FirstOrDefault(role => role.RoleId == SelectedRoleId);
 

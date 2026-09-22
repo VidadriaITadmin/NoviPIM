@@ -1,4 +1,3 @@
-@page "/napake-validacije"
 @page "/kakovost/napake"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -164,7 +163,7 @@
                       <span class="issue-field">@(issue.FieldCode ?? issue.IssueCode)</span>
                       <span class="issue-profile">@issue.ProfileCode</span>
                       @if (IsShared(issue)) { <PimChip Text="Skupno" Tone="info" /> }
-                      <span class="issue-severity @(issue.Severity == "WARNING" ? "warn" : "bad")">@SeverityLabel(issue.Severity)</span>
+                      <span class="issue-severity @(issue.Severity == "ERROR" && (issue.BlocksErp || issue.BlocksWeb) ? "bad" : "warn")">@IssueLabel(issue)</span>
                       <span class="issue-message">@issue.Message</span>
                     </li>
                   }
@@ -493,6 +492,11 @@
     var option = CategoryOptions.FirstOrDefault(candidate => candidate.CategoryCode == QueryCategory);
     return option is null ? QueryCategory : option.CategoryPath + " (s podkategorijami)";
   }
+
+  // Pregled 2026-09-22: napaka profila, ki nicesar ne ustavi (COMMERCIAL_L2), ni rdeca »Napaka«.
+  static string IssueLabel(PIM.Intranet.Services.QualityIssueRow issue) =>
+    issue.Severity != "ERROR" ? SeverityLabel(issue.Severity)
+    : issue.BlocksErp || issue.BlocksWeb ? "Napaka" : "Manjka (ne blokira)";
 
   static string SeverityLabel(string? severity) => severity switch
   {

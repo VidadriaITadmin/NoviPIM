@@ -23,6 +23,12 @@ AssertHeading(markup, summaryLabel.Groups[1].Value, "povzetka");
 Assert(Regex.IsMatch(markup, "<h2 id=\"" + Regex.Escape(summaryLabel.Groups[1].Value) + "\" class=\"visually-hidden\">"),
   "Naslov povzetka mora ostati bralcem zaslona dostopen in vizualno skrit.");
 Assert(Regex.Matches(markup, "class=\"metric-card ").Count == 5, "Povzetek mora imeti natanko pet kartic.");
+// Kartice predstavljajo razlicne operativne mnozice. Imena ne smejo namigovati, da se
+// »promovirani«, »ERP veljavni« in »spletno blokirani« seštevajo do kataloga.
+foreach (var label in new[] { "Artikli v katalogu", "Brez ERP blokad", "V PIM sloju", "Blokirani za splet", "Zajemi v karanteni" })
+  Assert(markup.Contains(label, StringComparison.Ordinal), "Manjka jasna oznaka kazalnika: " + label);
+foreach (var explanation in new[] { "Zgodovinsko promovirani artikli", "Vhodni zapisi za pregled" })
+  Assert(markup.Contains(explanation, StringComparison.Ordinal), "Kazalnik mora pojasniti svoj obseg: " + explanation);
 
 // 2. Vsak panel je poimenovana regija, vezana na svoj vidni naslov.
 // Panelov je po popravku 2026-08-28 pet, ne sest: „Moja opravila" je ponavljal dve kartici
@@ -91,6 +97,15 @@ foreach (var forbidden in new[] { "<form", "<button", "<input", "@onclick", "@on
 foreach (var fabricated in new[] { "12.480", "Janez Novak", "Ana Kovač", "Miha Kranjec", "AZ_0002", "AZ_0016", "BT_XML_240725", "Magento export", "SAOP katalog", "Nedavne aktivnosti", "pred 15 minutami", "Izdelki brez slik" })
   Assert(!markup.Contains(fabricated, StringComparison.Ordinal), "Nadzorna plošča ne sme prikazovati izmišljene vsebine iz UX slike: " + fabricated + ".");
 
+// 11. Povezave vodijo na stran, ki obstaja (blok 7 prenove nadzora, 2026-09-22).
+// /system/integracije in druge stare strani nadzora so odstranjene; opozorila in stanje integracij
+// zdaj pokaže Nadzor (/sistem), ki ima vsak posel z njegovimi postopki in alarmi v eni vrstici.
+foreach (var removed in new[] { "system/integracije", "sistem/integracije", "sistem/opravila", "sistem/zagoni", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi" })
+  Assert(!markup.Contains("href=\"" + removed, StringComparison.Ordinal), "Plošča ne sme voditi na odstranjeno stran /" + removed + ".");
+Assert(markup.Contains("<h2 id=\"integracije-naslov\">Stanje integracij</h2><a href=\"sistem\">", StringComparison.Ordinal),
+  "Panel »Stanje integracij« mora voditi na Nadzor (/sistem).");
+Assert(Regex.IsMatch(markup, "class=\"integration-row\" href=\"sistem\""), "Vrstica integracije mora voditi na Nadzor (/sistem).");
+Assert(markup.Contains("class=\"panel-link\" href=\"sistem\"", StringComparison.Ordinal), "»Vsa opozorila« mora voditi na Nadzor (/sistem).");
 
 /* ─── Hitrost nadzorne plosce (P2-11, pregled 2026-09-08 §5) ──────────────────
    Izmerjeno 2026-09-09: intranet.GetValidationIssues je za eno podjetje tekel 9.788 ms, ker je

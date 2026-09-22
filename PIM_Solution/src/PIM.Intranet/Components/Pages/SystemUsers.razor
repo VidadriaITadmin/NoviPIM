@@ -1,7 +1,4 @@
 @page "/administracija"
-@page "/administracija/uporabniki"
-@page "/system/uporabniki"
-@page "/sistem/uporabniki"
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject IntranetUserAdministrationService Users
@@ -287,7 +284,7 @@
   string? TrenutniUporabnik;
 
   static readonly IReadOnlyList<PimCrumb> Crumbs =
-    [new("Sistemske zadeve", "administracija/uporabniki"), new("Uporabniki")];
+    [new("Sistemske zadeve", "administracija"), new("Uporabniki")];
   static readonly IReadOnlyList<PimColumn> Columns =
     [new("Uporabnik"), new("Kontakt in aktivnost"), new("Vloge"), new("Stanje"), new("Dejanja")];
 

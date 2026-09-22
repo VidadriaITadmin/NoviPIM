@@ -35,8 +35,10 @@
 
   <!-- Objava v eno mapo (2026-09-16). `dotnet publish` intraneta objavi zraven še workerje
        (Workerji\<Worker>\<Worker>.exe, z isto konfiguracijo, RID in self-contained kot intranet) in skripte
-       ciklov (scripts\*.ps1, *.vbs). Intranet (/sistem/workerji, WorkerConsoleLayout) in skripte
-       (Workerji.ps1, Namesti-opravila.ps1) ju najdejo ob sebi brez nastavitev; mapo se v celoti prekopira
+       ciklov (scripts\*.ps1, *.vbs). Med workerji je tudi gostitelj avtomatike (Workerji\PIM.AutomationHost\),
+       ki posle poganja; on in skripte (Workerji.ps1, Namesti-opravila.ps1) workerje najdejo ob sebi brez
+       nastavitev (WorkerConsoleLayout), intranet pa iz iste postavitve samo bere dnevnike zagonov
+       (/sistem/posel/KLJUČ_POSLA). Mapo se v celoti prekopira
        čez mapo spletnega mesta (docs/PUBLISH.md 1.4). Na strežniku ni Gita in ne PIM.sln, zato mora
        objava prinesti vse. Hiter popravek samo intraneta: -p:PublishWorkers=false. -->
   <PropertyGroup>
@@ -45,7 +47,7 @@
 
   <ItemGroup>
     <PimWorkerProject Include="$(MSBuildProjectDirectory)\..\..\workers\*\*.csproj" />
-    <!-- Nočni samotest teče v ciklu razporejevalnika kot orodje ob workerjih (Workerji\PIM.SelfTest.Nightly\);
+    <!-- Nočni samotest teče kot posel gostitelja avtomatike (SYSTEM_SELF_TEST), orodje ob workerjih (Workerji\PIM.SelfTest.Nightly\);
          na strežniku brez izvorne kode ga sicer ne bi imel kdo pognati. -->
     <PimWorkerProject Include="$(MSBuildProjectDirectory)\..\..\tests\PIM.SelfTest.Nightly\PIM.SelfTest.Nightly.csproj" />
     <PimCycleScript Include="$(MSBuildProjectDirectory)\..\..\..\scripts\*.ps1;$(MSBuildProjectDirectory)\..\..\..\scripts\*.vbs" />

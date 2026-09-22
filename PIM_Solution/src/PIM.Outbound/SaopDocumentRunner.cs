@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
+using Change = (long Id, string FieldKey, string? Value);
 
 namespace PIM.Outbound;
 
@@ -59,11 +60,11 @@ public sealed class SaopDocumentRunner(
     await connection.OpenAsync(cancellationToken);
 
     var (shape, contract) = await ReadContractAsync(connection, options.TargetKind, cancellationToken);
-    var builder = new SaopDocumentBuilder(shape, contract);
+    var builders = CreateBuilders(shape, contract);
 
     return options.DryRun
-      ? await DryRunAsync(connection, shape, builder, cancellationToken)
-      : await SendRunAsync(connection, shape, builder, cancellationToken);
+      ? await DryRunAsync(connection, shape, builders, cancellationToken)
+      : await SendRunAsync(connection, shape, builders, cancellationToken);
   }
 
   /// <summary>
@@ -82,19 +83,19 @@ public sealed class SaopDocumentRunner(
     await connection.OpenAsync(cancellationToken);
 
     var (shape, contract) = await ReadContractAsync(connection, options.TargetKind, cancellationToken);
-    var builder = new SaopDocumentBuilder(shape, contract);
+    var builders = CreateBuilders(shape, contract);
 
     var claimed = await ClaimByKeyAsync(connection, organizationId, entityKey, cancellationToken);
     if (claimed is null) return new(0, 0, 0, 0, []);
 
-    var (sent, note) = await ProcessClaimedAsync(connection, shape, builder, claimed, cancellationToken);
+    var (sent, note) = await ProcessClaimedAsync(connection, shape, builders, claimed, cancellationToken);
     return new(1, sent ? 1 : 0, sent ? 0 : 1, 0, [note]);
   }
 
   /* --- suhi tek --------------------------------------------------------- */
 
   async Task<SaopDocumentRunResult> DryRunAsync(
-    SqlConnection connection, SaopDocumentShape shape, SaopDocumentBuilder builder, CancellationToken cancellationToken)
+    SqlConnection connection, SaopDocumentShape shape, DocumentBuilders builders, CancellationToken cancellationToken)
   {
     var notes = new List<string>();
     var documents = 0;
@@ -103,17 +104,25 @@ public sealed class SaopDocumentRunner(
     var pending = await PeekAsync(connection, cancellationToken);
     foreach (var candidate in pending)
     {
-      var built = await BuildAsync(connection, shape, builder, candidate.OrganizationId, candidate.EntityKey,
-        candidate.ExistsInSaop, candidate.LastErrorKind, cancellationToken);
+      var (general, planning) = Partition(builders,
+        await ReadChangesAsync(connection, options.TargetKind, candidate.OrganizationId, candidate.EntityKey, cancellationToken));
+
+      if (planning.Count > 0)
+      {
+        var plan = BuildPlanning(builders.Planning!, candidate.EntityKey, planning);
+        documents++;
+        await WriteDryRunFileAsync(candidate.EntityKey, PlanningShape.Operation(SaopIntent.Update), "Planning", plan.Xml, cancellationToken);
+        notes.Add($"{candidate.EntityKey}: {PlanningShape.Operation(SaopIntent.Update)} {PlanningShape.Path(SaopIntent.Update)} "
+          + $"({plan.ElementCount} polj, {planning.Count} sprememb) — planski podatki gredo na svojo končno točko.");
+        if (general.Count == 0) continue;
+      }
+
+      var built = await BuildAsync(connection, shape, builders.General, candidate.OrganizationId, candidate.EntityKey,
+        candidate.ExistsInSaop, candidate.LastErrorKind, general, cancellationToken);
       documents++;
       if (built.MissingMandatory.Count > 0) incomplete++;
 
-      if (options.OutputDirectory is { } directory)
-      {
-        Directory.CreateDirectory(directory);
-        var name = $"{Safe(built.EntityKey)}.{shape.Operation(built.Intent)}.{built.Intent}.xml";
-        await File.WriteAllTextAsync(Path.Combine(directory, name), built.Xml, cancellationToken);
-      }
+      await WriteDryRunFileAsync(built.EntityKey, shape.Operation(built.Intent), built.Intent.ToString(), built.Xml, cancellationToken);
 
       notes.Add($"{built.EntityKey}: {shape.Operation(built.Intent)} {shape.Path(built.Intent)} "
         + $"({built.ElementCount} polj, {built.MessageIds.Count} sprememb) — {built.Reason}"
@@ -123,10 +132,17 @@ public sealed class SaopDocumentRunner(
     return new(documents, 0, 0, incomplete, notes);
   }
 
+  async Task WriteDryRunFileAsync(string entityKey, string operation, string kind, string xml, CancellationToken cancellationToken)
+  {
+    if (options.OutputDirectory is not { } directory) return;
+    Directory.CreateDirectory(directory);
+    await File.WriteAllTextAsync(Path.Combine(directory, $"{Safe(entityKey)}.{operation}.{kind}.xml"), xml, cancellationToken);
+  }
+
   /* --- pravo pošiljanje ------------------------------------------------- */
 
   async Task<SaopDocumentRunResult> SendRunAsync(
-    SqlConnection connection, SaopDocumentShape shape, SaopDocumentBuilder builder, CancellationToken cancellationToken)
+    SqlConnection connection, SaopDocumentShape shape, DocumentBuilders builders, CancellationToken cancellationToken)
   {
     if (sender is null) throw new InvalidOperationException("Pošiljanje je zahtevano, povezave na SAOP pa ni.");
 
@@ -141,7 +157,7 @@ public sealed class SaopDocumentRunner(
       if (claimed is null) break;
       documents++;
 
-      var (ok, note) = await ProcessClaimedAsync(connection, shape, builder, claimed, cancellationToken);
+      var (ok, note) = await ProcessClaimedAsync(connection, shape, builders, claimed, cancellationToken);
       notes.Add(note);
       if (ok) sent++; else failed++;
     }
@@ -156,6 +172,88 @@ public sealed class SaopDocumentRunner(
   /// bi prej ali slej pokazala drug dokument, kot bi bil poslan.
   /// </summary>
   async Task<(bool Sent, string Note)> ProcessClaimedAsync(
+    SqlConnection connection, SaopDocumentShape shape, DocumentBuilders builders, ClaimedDocument claimed,
+    CancellationToken cancellationToken)
+  {
+    var (general, planning) = Partition(builders, claimed.Changes);
+    if (planning.Count == 0)
+    {
+      var only = await ProcessGeneralAsync(connection, shape, builders.General, claimed, cancellationToken);
+      return (only.Sent, only.Note);
+    }
+
+    // 263: planski podatki (izločitev iz rezervacije) gredo na UpdateItemsPlanningData, ki pozna
+    // samo PATCH — artikel mora v SAOP že obstajati. Zato gredo za splošnim dokumentom istega
+    // prevzema: nov artikel se najprej ustvari, nato dobi kljukico pod šifro, ki mu jo je dal SAOP.
+    var notes = new List<string>();
+    var sent = true;
+    var planningKey = claimed.EntityKey;
+    var intent = SaopIntentResolver.Resolve(new(claimed.ExistsInSaop, ParseErrorKind(claimed.LastErrorKind))).Intent;
+
+    if (general.Count > 0)
+    {
+      var outcome = await ProcessGeneralAsync(connection, shape, builders.General, claimed with { Changes = general },
+        cancellationToken);
+      notes.Add(outcome.Note);
+      sent = outcome.Sent;
+      intent = outcome.Intent;
+      if (outcome.AssignedItemId is { } assigned) planningKey = assigned;
+
+      if (!outcome.Sent && outcome.Intent == SaopIntent.Add)
+      {
+        // Artikel, ki ga SAOP ni sprejel, ne obstaja: planski podatki gredo z njim v ponovni poskus ali z njim obstanejo.
+        await CompleteAsync(connection, planning.Select(change => change.Id).ToArray(), succeeded: false, statusCode: null,
+          body: null, correlationId: null, reason: "Artikel v SAOP ni bil ustvarjen, zato planskih podatkov ni bilo kam zapisati.",
+          errorClass: outcome.ErrorClass ?? nameof(OutboundErrorClass.Business), errorKind: null, retryable: false,
+          assignedItemId: null, cancellationToken);
+        return (false, string.Join(" ", notes));
+      }
+    }
+    else if (intent == SaopIntent.Add)
+    {
+      const string reason = "Artikla SAOP še ne pozna, planske podatke (izločitev iz rezervacije) pa je mogoče samo "
+        + "spremeniti, ne ustvariti. Najprej pošlji artikel, nato ponovi to spremembo.";
+      await CompleteAsync(connection, planning.Select(change => change.Id).ToArray(), succeeded: false, statusCode: null,
+        body: null, correlationId: null, reason, errorClass: nameof(OutboundErrorClass.Business), errorKind: null,
+        retryable: false, assignedItemId: null, cancellationToken);
+      return (false, $"{claimed.EntityKey}: {reason}");
+    }
+
+    var planned = await ProcessPlanningAsync(connection, builders.Planning!, claimed.OrganizationId, planningKey, planning,
+      claimed.BaseUrl, cancellationToken);
+    notes.Add(planned.Note);
+    return (sent && planned.Sent, string.Join(" ", notes));
+  }
+
+  /// <summary>Planski podatki enega artikla: en PATCH na <see cref="SaopKnownShapes.ProductPlanning"/>, brez samopopravka metode — druge ni.</summary>
+  async Task<(bool Sent, string Note)> ProcessPlanningAsync(
+    SqlConnection connection, SaopDocumentBuilder builder, int organizationId, string entityKey,
+    IReadOnlyList<Change> changes, string? baseUrl, CancellationToken cancellationToken)
+  {
+    var ids = changes.Select(change => change.Id).ToArray();
+    var built = BuildPlanning(builder, entityKey, changes);
+    var path = PlanningShape.Path(SaopIntent.Update);
+    var outcome = await sender!.SendAsync(organizationId, path, PlanningShape.Operation(SaopIntent.Update), built.Xml,
+      cancellationToken, baseUrl);
+
+    if (outcome.Response.IsSuccess)
+    {
+      await CompleteAsync(connection, ids, succeeded: true, outcome.StatusCode, Redact(outcome.RawResponse),
+        outcome.CorrelationId, reason: null, errorClass: null, errorKind: null, retryable: false, assignedItemId: null,
+        cancellationToken);
+      return (true, $"{entityKey}: planski podatki (PATCH {path}) uspešno");
+    }
+
+    var advice = SaopErrorTranslator.Translate(outcome.Response.Errors);
+    var errorClass = SaopDocumentSender.Classify(outcome.StatusCode, outcome.Response);
+    await CompleteAsync(connection, ids, succeeded: false, outcome.StatusCode, Redact(outcome.RawResponse),
+      outcome.CorrelationId, reason: $"{advice.Summary} {advice.Instruction}".Trim(),
+      errorClass: errorClass == OutboundErrorClass.None ? null : errorClass.ToString(),
+      errorKind: advice.Kind.ToString(), retryable: false, assignedItemId: null, cancellationToken);
+    return (false, $"{entityKey}: planski podatki — {advice.Summary} {advice.Instruction}".Trim());
+  }
+
+  async Task<GeneralOutcome> ProcessGeneralAsync(
     SqlConnection connection, SaopDocumentShape shape, SaopDocumentBuilder builder, ClaimedDocument claimed,
     CancellationToken cancellationToken)
   {
@@ -169,7 +267,8 @@ public sealed class SaopDocumentRunner(
         correlationId: null, reason: $"Dokument ni popoln: manjka {string.Join(", ", built.MissingMandatory)}.",
         errorClass: nameof(OutboundErrorClass.Business), errorKind: null, retryable: false, assignedItemId: null,
         cancellationToken);
-      return (false, $"{built.EntityKey}: ni poslano, manjka {string.Join(", ", built.MissingMandatory)}.");
+      return new(false, $"{built.EntityKey}: ni poslano, manjka {string.Join(", ", built.MissingMandatory)}.",
+        built.Intent, null, nameof(OutboundErrorClass.Business));
     }
 
     var outcome = await sender!.SendAsync(claimed.OrganizationId, shape.Path(built.Intent),
@@ -180,8 +279,9 @@ public sealed class SaopDocumentRunner(
       await CompleteAsync(connection, built.MessageIds, succeeded: true, outcome.StatusCode, Redact(outcome.RawResponse),
         outcome.CorrelationId, reason: null, errorClass: null, errorKind: null, retryable: false,
         assignedItemId: outcome.Response.AssignedItemId, cancellationToken);
-      return (true, $"{built.EntityKey}: {IntentLabel(built.Intent)} ({shape.Operation(built.Intent)}) uspešno"
-        + (outcome.Response.AssignedItemId is { } assigned ? $", SAOP je dodelil šifro {assigned}" : string.Empty));
+      return new(true, $"{built.EntityKey}: {IntentLabel(shape, built.Intent)} ({shape.Operation(built.Intent)}) uspešno"
+        + (outcome.Response.AssignedItemId is { } assigned ? $", SAOP je dodelil šifro {assigned}" : string.Empty),
+        built.Intent, outcome.Response.AssignedItemId, null);
     }
 
     var advice = SaopErrorTranslator.Translate(outcome.Response.Errors);
@@ -190,10 +290,12 @@ public sealed class SaopDocumentRunner(
     // 118 od 130 napak stare vrste, zato se popravi TAKOJ in znotraj istega prevzema — ne
     // šele ob naslednjem zagonu. Popravek se zgodi natanko enkrat: če tudi druga metoda pade,
     // gre napaka uporabniku.
+    var finalIntent = built.Intent;
     if (SaopErrorTranslator.Retry(advice) is { } correctedIntent && correctedIntent != built.Intent)
     {
+      finalIntent = correctedIntent;
       var corrected = Build(shape, builder, claimed, correctedIntent);
-      var correctionNote = $"{built.EntityKey}: {advice.Summary} PIM je takoj poskusil z metodo {IntentLabel(correctedIntent)} ({shape.Operation(correctedIntent)}).";
+      var correctionNote = $"{built.EntityKey}: {advice.Summary} PIM je takoj poskusil z metodo {IntentLabel(shape, correctedIntent)} ({shape.Operation(correctedIntent)}).";
       outcome = await sender.SendAsync(claimed.OrganizationId, shape.Path(corrected.Intent),
         shape.Operation(corrected.Intent), corrected.Xml, cancellationToken, claimed.BaseUrl);
 
@@ -202,8 +304,9 @@ public sealed class SaopDocumentRunner(
         await CompleteAsync(connection, built.MessageIds, succeeded: true, outcome.StatusCode,
           Redact(outcome.RawResponse), outcome.CorrelationId, reason: null, errorClass: null, errorKind: null,
           retryable: false, assignedItemId: outcome.Response.AssignedItemId, cancellationToken);
-        return (true, $"{correctionNote} {IntentLabel(corrected.Intent)} ({shape.Operation(corrected.Intent)}) uspešno po samopopravku"
-          + (outcome.Response.AssignedItemId is { } dodeljena ? $", SAOP je dodelil šifro {dodeljena}" : string.Empty));
+        return new(true, $"{correctionNote} {IntentLabel(shape, corrected.Intent)} ({shape.Operation(corrected.Intent)}) uspešno po samopopravku"
+          + (outcome.Response.AssignedItemId is { } dodeljena ? $", SAOP je dodelil šifro {dodeljena}" : string.Empty),
+          corrected.Intent, outcome.Response.AssignedItemId, null);
       }
 
       advice = SaopErrorTranslator.Translate(outcome.Response.Errors);
@@ -218,19 +321,47 @@ public sealed class SaopDocumentRunner(
       outcome.CorrelationId, reason: $"{advice.Summary} {advice.Instruction}".Trim(),
       errorClass: errorClass == OutboundErrorClass.None ? null : errorClass.ToString(),
       errorKind: advice.Kind.ToString(), retryable, assignedItemId: null, cancellationToken);
-    return (false, $"{built.EntityKey}: {advice.Summary}"
-      + (retryable ? " PIM bo poskusil znova z drugo metodo." : $" {advice.Instruction}"));
+    return new(false, $"{built.EntityKey}: {advice.Summary}"
+      + (retryable ? " PIM bo poskusil znova z drugo metodo." : $" {advice.Instruction}"),
+      finalIntent, null, errorClass == OutboundErrorClass.None ? null : errorClass.ToString());
   }
 
   /* --- sestavljanje ----------------------------------------------------- */
 
   async Task<SaopBuiltDocument> BuildAsync(
     SqlConnection connection, SaopDocumentShape shape, SaopDocumentBuilder builder,
-    int organizationId, string entityKey, bool existsInSaop, string? lastErrorKind, CancellationToken cancellationToken)
+    int organizationId, string entityKey, bool existsInSaop, string? lastErrorKind, IReadOnlyList<Change> changes,
+    CancellationToken cancellationToken)
   {
-    var changes = await ReadChangesAsync(connection, organizationId, entityKey, cancellationToken);
     var (values, defaults) = await ReadEntityStateAsync(connection, organizationId, entityKey, cancellationToken);
     return Assemble(shape, builder, organizationId, entityKey, existsInSaop, lastErrorKind, changes, values, defaults);
+  }
+
+  static SaopDocumentShape PlanningShape => SaopKnownShapes.ProductPlanning;
+
+  static DocumentBuilders CreateBuilders(SaopDocumentShape shape, IReadOnlyList<SaopXmlField> contract)
+  {
+    var (general, planning) = SaopPlanningDocument.Split(shape, contract);
+    if (planning.Count == 0) return new(new SaopDocumentBuilder(shape, general), null, new HashSet<string>());
+    return new(new SaopDocumentBuilder(shape, general), new SaopDocumentBuilder(PlanningShape, planning),
+      planning.Where(field => !field.IsKey && field.FieldKey is not null).Select(field => field.FieldKey!)
+        .ToHashSet(StringComparer.Ordinal));
+  }
+
+  /// <summary>Spremembe splošnih podatkov in spremembe planskih podatkov istega artikla.</summary>
+  static (IReadOnlyList<Change> General, IReadOnlyList<Change> Planning) Partition(
+    DocumentBuilders builders, IReadOnlyList<Change> changes) =>
+    builders.PlanningKeys.Count == 0
+      ? (changes, [])
+      : (changes.Where(change => !builders.PlanningKeys.Contains(change.FieldKey)).ToArray(),
+         changes.Where(change => builders.PlanningKeys.Contains(change.FieldKey)).ToArray());
+
+  /// <summary>Samo spremenjena planska polja — tako, kot jih je pošiljal stari PIM, in brez privzetkov.</summary>
+  static SaopXmlBuildResult BuildPlanning(SaopDocumentBuilder builder, string entityKey, IReadOnlyList<Change> changes)
+  {
+    var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+    foreach (var change in changes) values[change.FieldKey] = change.Value;
+    return builder.Build(SaopIntent.Update, entityKey, values, new Dictionary<string, string>(), DateTime.UtcNow);
   }
 
   static SaopBuiltDocument Build(SaopDocumentShape shape, SaopDocumentBuilder builder, ClaimedDocument claimed,
@@ -290,7 +421,15 @@ public sealed class SaopDocumentRunner(
     Enum.TryParse<SaopErrorKind>(value, ignoreCase: true, out var parsed) ? parsed : null;
 
   /// <summary>Bralcu razumljiva beseda namesto HTTP metode (POST/PATCH) v sporočilih o pošiljanju.</summary>
-  static string IntentLabel(SaopIntent intent) => intent == SaopIntent.Add ? "Nov artikel" : "Posodobitev";
+  static string IntentLabel(SaopDocumentShape shape, SaopIntent intent) => intent == SaopIntent.Update
+    ? "Posodobitev"
+    : shape.EntityType switch { "Price" => "Nova cena", "PriceList" => "Nov cenik", "Customer" => "Nova stranka", _ => "Nov artikel" };
+
+  /// <summary>
+  /// Artikli imajo svoj prevzem (<c>out.ClaimItemDocument</c>, s privzetki in dodeljeno šifro); cene in
+  /// ceniki gredo prek <c>out.ClaimSaopDocument</c> (265), ki vrne izid iste oblike.
+  /// </summary>
+  bool IsProduct => string.Equals(options.TargetKind, SaopKnownShapes.Product.TargetKind, StringComparison.OrdinalIgnoreCase);
 
   /* --- branje iz baze --------------------------------------------------- */
 
@@ -353,11 +492,11 @@ public sealed class SaopDocumentRunner(
   }
 
   static async Task<List<(long Id, string FieldKey, string? Value)>> ReadChangesAsync(
-    SqlConnection connection, int organizationId, string entityKey, CancellationToken cancellationToken)
+    SqlConnection connection, string targetKind, int organizationId, string entityKey, CancellationToken cancellationToken)
   {
     await using var command = new SqlCommand("EXEC out.GetSaopEntityChanges @OrganizationId, @TargetKind, @EntityKey;", connection);
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-    command.Parameters.Add("@TargetKind", SqlDbType.NVarChar, 100).Value = "SAOP_PRODUCT";
+    command.Parameters.Add("@TargetKind", SqlDbType.NVarChar, 100).Value = targetKind;
     command.Parameters.Add("@EntityKey", SqlDbType.NVarChar, 450).Value = entityKey;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var changes = new List<(long, string, string?)>();
@@ -399,9 +538,24 @@ public sealed class SaopDocumentRunner(
 
   async Task<ClaimedDocument?> ClaimAsync(SqlConnection connection, CancellationToken cancellationToken)
   {
+    if (!IsProduct) return await ClaimSaopDocumentAsync(connection, options.OrganizationId, null, cancellationToken);
     await using var command = new SqlCommand("EXEC out.ClaimItemDocument @WorkerId, @LeaseSeconds;", connection);
     command.Parameters.Add("@WorkerId", SqlDbType.NVarChar, 200).Value = workerId;
     command.Parameters.Add("@LeaseSeconds", SqlDbType.Int).Value = 90;
+    return await ReadClaimedAsync(connection, command, cancellationToken);
+  }
+
+  /// <summary>Prevzem cene ali cenika (265); cena za cenik, ki ga SAOP še ne pozna, počaka.</summary>
+  async Task<ClaimedDocument?> ClaimSaopDocumentAsync(
+    SqlConnection connection, int? organizationId, string? entityKey, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand(
+      "EXEC out.ClaimSaopDocument @WorkerId, @LeaseSeconds, @TargetKind, @OrganizationId, @EntityKey;", connection);
+    command.Parameters.Add("@WorkerId", SqlDbType.NVarChar, 200).Value = workerId;
+    command.Parameters.Add("@LeaseSeconds", SqlDbType.Int).Value = 90;
+    command.Parameters.Add("@TargetKind", SqlDbType.NVarChar, 100).Value = options.TargetKind;
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+    command.Parameters.Add("@EntityKey", SqlDbType.NVarChar, 450).Value = (object?)entityKey ?? DBNull.Value;
     return await ReadClaimedAsync(connection, command, cancellationToken);
   }
 
@@ -409,6 +563,7 @@ public sealed class SaopDocumentRunner(
   async Task<ClaimedDocument?> ClaimByKeyAsync(
     SqlConnection connection, int organizationId, string entityKey, CancellationToken cancellationToken)
   {
+    if (!IsProduct) return await ClaimSaopDocumentAsync(connection, organizationId, entityKey, cancellationToken);
     await using var command = new SqlCommand(
       "EXEC out.ClaimItemDocumentByKey @WorkerId, @LeaseSeconds, @OrganizationId, @EntityKey;", connection);
     command.Parameters.Add("@WorkerId", SqlDbType.NVarChar, 200).Value = workerId;
@@ -489,6 +644,11 @@ public sealed class SaopDocumentRunner(
     var ordinal = reader.GetOrdinal(column);
     return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
   }
+
+  sealed record DocumentBuilders(
+    SaopDocumentBuilder General, SaopDocumentBuilder? Planning, IReadOnlySet<string> PlanningKeys);
+
+  sealed record GeneralOutcome(bool Sent, string Note, SaopIntent Intent, string? AssignedItemId, string? ErrorClass);
 
   sealed record PendingDocument(int OrganizationId, string EntityKey, bool ExistsInSaop, string? LastErrorKind);
 

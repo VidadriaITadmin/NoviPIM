@@ -5,10 +5,11 @@
 @inject IntranetDataService Data
 
 <PageTitle>Polja za zapis v SAOP</PageTitle>
-<PimPage Title="Kaj sme nazaj v SAOP" Subtitle="Bralni pregled polj, za katera obstaja nadzorovana zapisovalna pot. Urejanje lastništva tu ni dovoljeno." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="Kaj sme nazaj v SAOP" Subtitle="Polja, ki jih PIM sme zapisati nazaj v SAOP. Vsaka sprememba gre skozi čakalno vrsto in odobritev; vsa ostala polja so last SAOP in se popravijo v ERP." Crumbs="Crumbs" />
 
-<PimMissing Object="intranet.GetWritableSaopFields" What="lastnika polja iz pim.FieldOwnership in dokaz, da se polje po zapisu bere nazaj" Needs="pim.FieldOwnership, out.OwnershipPolicy in povezavo s povratnim SAOP poljem" />
-
+@* Pregled 2026-09-22: stran je vsakemu polju pripisala »Ni varno za pisanje« in dva vedno prazna
+   stolpca (Lastnik, Bere se nazaj), ceprav intranet.GetWritableSaopFields vrne ravno polja v lasti
+   PIM, ki se smejo pisati. Kaze se samo to, kar procedura res ve. *@
 <section class="ui-card data-card section-gap" aria-label="Dovoljena polja SAOP">
   <PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Rows.Count == 0)" EmptyText="Za organizacijo ni dovoljenih polj za zapis nazaj." LoadingText="Nalaganje polj …">
     <PimTable Caption="Polja z zapisovalno potjo v SAOP" Columns="Columns">
@@ -16,8 +17,9 @@
         @foreach (var row in Rows)
         {
           <tr>
-            <td><span class="code-value">@row.FieldKey</span></td><td>@row.ElementName</td><td>@row.Section</td><td>@row.ValueFormat</td>
-            <td>—</td><td>—</td><td><PimChip Text="Ni varno za pisanje" Tone="warn" /></td><td>@(row.IsAddMandatory ? "Da" : "Ne")</td>
+            <td><span class="code-value">@row.FieldKey</span></td><td>@row.ElementName</td><td>@row.Section</td>
+            <td>@row.ValueFormat@if (row.TrueValue is not null || row.FalseValue is not null) { <span class="muted"> (da = @(row.TrueValue ?? "—"), ne = @(row.FalseValue ?? "—"))</span> }</td>
+            <td>@(row.IsAddMandatory ? "Da" : "Ne")</td>
           </tr>
         }
       </Rows>
@@ -25,11 +27,11 @@
   </PimState>
 </section>
 
-<div class="note-panel section-gap">Stran je samo bralna. Brez potrjenega branja nazaj polje ni označeno kot varno, tudi če XML zapisovalna definicija obstaja.</div>
+<div class="note-panel section-gap">Stran je samo bralna. Ali je SAOP zapisano vrednost res prevzel, pokaže zavihek Odkloni (primerjava poslane vrednosti z naslednjim branjem iz SAOP).</div>
 
 @code {
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Kaj sme nazaj")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Polje"), new("XML element"), new("Sekcija"), new("Oblika"), new("Lastnik"), new("Bere se nazaj"), new("Varnost"), new("Obvezno ob dodajanju")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Polje"), new("XML element"), new("Sekcija"), new("Oblika"), new("Obvezno ob dodajanju")];
   IReadOnlyList<WritableFieldRow> Rows = [];
   bool Loading = true;
   string? Error;

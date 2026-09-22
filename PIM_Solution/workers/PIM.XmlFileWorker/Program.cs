@@ -80,18 +80,39 @@ var files = Directory.GetFiles(root, "*.*")
   .Where(path => !Path.GetFileName(path).StartsWith("~$", StringComparison.Ordinal))
   .OrderBy(path => path, StringComparer.Ordinal)
   .ToArray();
-await using var operationsRun = await OperationsRun.BeginAsync(connectionString, organizationId, "GENERIC_XML", $"{Environment.MachineName}:{Environment.ProcessId}");
+
+// Faze (blok 6 prenove nadzora, 2026-09-22): BRANJE na datoteko, ZAPIS na entiteto, PRESLIKAVA prek
+// MappingPhaseReport. Zakaj: doslej je padla ali neberljiva datoteka ostala samo v izpisu (ali pa je
+// proces padel brez sledi v bazi), stran Nadzor pa je videla le izhodno kodo koraka nočne uskladitve.
+const string XmlPipeline = "GENERIC_XML";
+var phases = PhaseLog.FromEnvironment(connectionString, $"{Environment.MachineName}:{Environment.ProcessId}");
+await using var operationsRun = await BeginOperationsRunAsync();
 var runId = Guid.NewGuid();
-await using (var connection = new SqlConnection(connectionString))
+var zabelezeno = false;
+try
 {
+  await using var connection = new SqlConnection(connectionString);
   await connection.OpenAsync();
   var entities = await ReadEntitiesAsync(connection, sourceCode, organizationId);
   await InsertRunAsync(connection, runId, organizationId, sourceCode);
   var page = 0;
   var preskoceneDatoteke = 0;
   var zeZajete = 0;
+  var prebraneDatoteke = 0;
+  var noveStrani = new Dictionary<string, int>(StringComparer.Ordinal);
+  var zajeteStrani = new Dictionary<string, int>(StringComparer.Ordinal);
+  foreach (var entity in entities) { noveStrani[entity] = 0; zajeteStrani[entity] = 0; }
+
+  if (files.Length == 0)
+  {
+    await phases.RecordAsync(PhaseCodes.Read, PhaseOutcome.Skipped, sourceCode, organizationId, XmlPipeline, runId,
+      $"v mapi {root} ni datotek .xml ali .xlsx");
+  }
+
   foreach (var file in files)
   {
+    var ime = Path.GetFileName(file);
+    await using var branje = await phases.BeginAsync(PhaseCodes.Read, sourceCode, organizationId, XmlPipeline, runId, ime);
     string payload;
     try
     {
@@ -105,28 +126,70 @@ await using (var connection = new SqlConnection(connectionString))
       // Zvezek brez lista s sifro artikla ni napaka zajema, ampak datoteka, ki ne sodi sem.
       // Prej je taka datoteka ustavila cel zagon in vse za njo je ostalo nezajeto.
       Console.Error.WriteLine($"  preskoceno: {Path.GetFileName(file)} — {exception.Message}");
+      await branje.FailedAsync($"Datoteke {ime} ni bilo mogoče prebrati: {exception.Message}");
       preskoceneDatoteke++;
       continue;
     }
+    catch (Exception exception) when (exception is not OperationCanceledException)
+    {
+      // Vse drugo (npr. brez pravice branja) podre zagon kot doslej, a z zapisano fazo.
+      await branje.FailedAsync($"Datoteke {ime} ni bilo mogoče prebrati: {exception.Message}");
+      zabelezeno = true;
+      throw;
+    }
+
+    // Branje ne prinese novih podatkov v bazo (to pove šele ZAPIS), zato HasNewData ostane 0 —
+    // enako kot pri PIM.StockFileWorker.
+    var (velikost, datum) = FileFacts(file);
+    await branje.SucceededAsync(byteCount: velikost, hasNewData: false,
+      message: datum is { } cas ? $"{ime}, datoteka z dne {cas:d. M. yyyy HH:mm}" : ime);
+    prebraneDatoteke++;
 
     foreach (var entity in entities)
     {
       try
       {
         await InsertInboxAsync(connection, runId, organizationId, sourceCode, entity, ++page, payload);
+        noveStrani[entity]++;
       }
       catch (SqlException exception) when (exception.Number is 2627 or 2601)
       {
         // Enolicnost (vir, entiteta, stran, hash) pomeni: to vsebino smo ze zajeli. To ni okvara,
         // ampak varovalka pred podvojenim zajemom — in ne sme ustaviti datotek za njo.
         zeZajete++;
+        zajeteStrani[entity]++;
+      }
+      catch (Exception exception) when (exception is not OperationCanceledException)
+      {
+        await phases.RecordAsync(PhaseCodes.Land, PhaseOutcome.Failed, sourceCode, organizationId, XmlPipeline, runId,
+          $"{entity}: zapis strani iz {ime} v raw.Inbox je padel: {exception.Message}");
+        zabelezeno = true;
+        throw;
       }
     }
   }
   if (preskoceneDatoteke > 0 || zeZajete > 0)
     Console.WriteLine($"Preskocenih datotek: {preskoceneDatoteke}; ze zajetih strani: {zeZajete}.");
+
+  await RecordLandingPhasesAsync(entities, prebraneDatoteke, noveStrani, zajeteStrani);
 }
-await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
+catch (Exception exception) when (exception is not OperationCanceledException && !zabelezeno)
+{
+  // Priprava zapisa (preslikave entitet, ops.PipelineRun, povezava) — napaka ne sme ostati brez sledi.
+  await phases.RecordAsync(PhaseCodes.Land, PhaseOutcome.Failed, sourceCode, organizationId, XmlPipeline, runId,
+    $"zapis v raw.Inbox je padel: {exception.Message}");
+  throw;
+}
+try
+{
+  await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
+}
+catch (Exception exception) when (exception is not OperationCanceledException)
+{
+  await MappingPhaseReport.RecordFailureAsync(phases, runId, sourceCode, organizationId, XmlPipeline, exception);
+  throw;
+}
+await MappingPhaseReport.RecordAsync(phases, connectionString, runId, sourceCode, organizationId, XmlPipeline);
 // Zaključi lasten zapis v ops.PipelineRun (enako kot PIM.KatalogWorker), da run ne ostane v stanju Running.
 await using (var connection = new SqlConnection(connectionString))
 {
@@ -141,6 +204,65 @@ await using (var summaryConnection = new SqlConnection(connectionString))
 }
 await operationsRun.CompleteAsync(true);
 return 0;
+
+// ops.BeginRun lahko zavrne zagon (izklopljen razpored GENERIC_XML za podjetje, 51100). Worker pade kot
+// doslej, a padec ostane zapisan kot faza — prej je bil viden samo kot izhodna koda koraka.
+async Task<OperationsRun> BeginOperationsRunAsync()
+{
+  try
+  {
+    return await OperationsRun.BeginAsync(connectionString!, organizationId, XmlPipeline, $"{Environment.MachineName}:{Environment.ProcessId}");
+  }
+  catch (Exception exception) when (exception is not OperationCanceledException)
+  {
+    await phases.RecordAsync(PhaseCodes.Read, PhaseOutcome.Failed, sourceCode, organizationId, XmlPipeline,
+      message: $"zagona {XmlPipeline} ni bilo mogoče odpreti (ops.BeginRun): {exception.Message}");
+    throw;
+  }
+}
+
+// Faza ZAPIS na entiteto: koliko strani je novih in koliko jih je raw.Inbox že poznal (ista vsebina).
+// Ista datoteka vsako noč je »uspelo, brez novih podatkov«, ne »uspelo«.
+async Task RecordLandingPhasesAsync(IReadOnlyList<string> entities, int prebraneDatoteke,
+  IReadOnlyDictionary<string, int> noveStrani, IReadOnlyDictionary<string, int> zajeteStrani)
+{
+  if (entities.Count == 0)
+  {
+    await phases.RecordAsync(PhaseCodes.Land, PhaseOutcome.Skipped, sourceCode, organizationId, XmlPipeline, runId,
+      "vir nima aktivne preslikave entitet (map.EntityMapping); v raw.Inbox ni zapisano nič");
+    return;
+  }
+  if (prebraneDatoteke == 0)
+  {
+    await phases.RecordAsync(PhaseCodes.Land, PhaseOutcome.Skipped, sourceCode, organizationId, XmlPipeline, runId,
+      "nobena datoteka ni bila prebrana; ni bilo česa zapisati");
+    return;
+  }
+  foreach (var entity in entities.Distinct(StringComparer.Ordinal))
+  {
+    var nove = noveStrani.GetValueOrDefault(entity);
+    var zajete = zajeteStrani.GetValueOrDefault(entity);
+    await phases.RecordAsync(PhaseCodes.Land, PhaseOutcome.Succeeded, sourceCode, organizationId, XmlPipeline, runId,
+      nove > 0
+        ? $"{entity}: novih strani {nove}, že zajetih {zajete}"
+        : $"{entity}: vse strani ({zajete}) so že v raw.Inbox (enaka vsebina)",
+      hasNewData: nove > 0, itemsIn: nove + zajete, itemsOut: nove);
+  }
+}
+
+// Velikost in čas datoteke za fazo BRANJE; napaka pri tem ne sme podreti zajema.
+static (long? Bytes, DateTime? Modified) FileFacts(string path)
+{
+  try
+  {
+    var info = new FileInfo(path);
+    return (info.Length, info.LastWriteTime);
+  }
+  catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+  {
+    return (null, null);
+  }
+}
 
 static string? ReadConnectionString() => LocalSettings.ConnectionString();
 static async Task<string[]> ReadEntitiesAsync(SqlConnection connection, string sourceCode, int organizationId)

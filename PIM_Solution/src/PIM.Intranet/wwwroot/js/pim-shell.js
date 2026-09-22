@@ -42,3 +42,14 @@
     if (next instanceof Element && !menu.contains(next)) menu.removeAttribute('open');
   });
 })();
+
+// Izbirnik podjetja strani (Components/Shared/PimOrganizationScope.razor) se odda takoj ob
+// izbiri; gumb »Preklopi« ostane za tipkovnico in brskalnik brez skript. Poslusalec je na
+// dokumentu, ker Blazor izbirnik izrise sele po nalaganju in ga ob navigaciji zamenja.
+(function () {
+  document.addEventListener('change', function (event) {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || !select.hasAttribute('data-pim-autosubmit')) return;
+    if (select.form) select.form.requestSubmit();
+  });
+})();

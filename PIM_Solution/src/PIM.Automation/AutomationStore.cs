@@ -85,6 +85,33 @@ public sealed class AutomationStore(string connectionString)
       command.Parameters.Add("@IsEnabledDefault", SqlDbType.Bit).Value = job.EnabledByDefault;
       await command.ExecuteNonQueryAsync(cancellationToken);
     }
+    // Viri s pragom svežine (256): katalog v kodi je vir resnice, vrstice v ops.JobSource pa bere stran Nadzor
+    // in ops.EvaluateJobAlerts (SourceStale). Odstranjen vir iz kode se v bazi izklopi, ne izbriše.
+    foreach (var job in jobs)
+    {
+      var order = 0;
+      foreach (var source in job.Sources)
+      {
+        await using var command = new SqlCommand("ops.EnsureJobSource", connection) { CommandType = CommandType.StoredProcedure };
+        command.Parameters.Add("@JobKey", SqlDbType.NVarChar, 60).Value = job.Key;
+        command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = source.SourceCode;
+        command.Parameters.Add("@Pipeline", SqlDbType.NVarChar, 100).Value = source.Pipeline;
+        command.Parameters.Add("@Label", SqlDbType.NVarChar, 120).Value = source.Label;
+        command.Parameters.Add("@MaxAgeSeconds", SqlDbType.Int).Value = source.MaxAgeSeconds;
+        command.Parameters.Add("@PerOrganization", SqlDbType.Bit).Value = source.PerOrganization;
+        command.Parameters.Add("@MeasureNewData", SqlDbType.Bit).Value = source.MeasureNewData;
+        command.Parameters.Add("@SortOrder", SqlDbType.Int).Value = ++order;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+      }
+      await using (var prune = new SqlCommand("ops.RetireJobSources", connection) { CommandType = CommandType.StoredProcedure })
+      {
+        prune.Parameters.Add("@JobKey", SqlDbType.NVarChar, 60).Value = job.Key;
+        prune.Parameters.Add("@KeepSourceCodes", SqlDbType.NVarChar, -1).Value =
+          string.Join(",", job.Sources.Select(source => $"{source.Pipeline}|{source.SourceCode}"));
+        await prune.ExecuteNonQueryAsync(cancellationToken);
+      }
+    }
+
     foreach (var job in jobs)
       foreach (var dependency in job.Dependencies)
       {
@@ -274,17 +301,6 @@ public sealed class AutomationStore(string connectionString)
     return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
   }
 
-  /// <summary>Viseči zagoni starih ciklov (221) brez utripa dlje od pol ure: gostitelj jih pospravi, ker intranet najema nima več.</summary>
-  public async Task<int> AbandonLegacyCycleRunsAsync(string actor, CancellationToken cancellationToken)
-  {
-    await using var connection = await OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("ops.AbandonWorkerCycleRuns", connection) { CommandType = CommandType.StoredProcedure };
-    command.Parameters.Add("@HostName", SqlDbType.NVarChar, 200).Value = "";
-    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
-    command.Parameters.Add("@StaleMinutes", SqlDbType.Int).Value = 30;
-    return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken) ?? 0);
-  }
-
   public async Task EvaluateAlertsAsync(string actor, CancellationToken cancellationToken)
   {
     await using var connection = await OpenAsync(cancellationToken);
@@ -403,6 +419,35 @@ public sealed class AutomationStore(string connectionString)
 
   public Task<string?> ResolveSystemPathAsync(string key, CancellationToken cancellationToken) =>
     SystemPaths.ResolveAsync(ConnectionString, key, null, cancellationToken);
+
+  /// <summary>
+  /// Števila za fazo IZRACUN validacije in objave (pregled bloka 6): brez njih je faza pisala le
+  /// »opravljeno« in objava 0 artiklov je bila videti enako kot objava tisočih. Merilo je profil
+  /// ERP_L1_SLO, ker po njem val.Promote izbira artikle za objavo. Null podjetje = vsa podjetja.
+  /// </summary>
+  public async Task<CatalogCounts> ReadCatalogCountsAsync(int? organizationId, CancellationToken cancellationToken)
+  {
+    await using var connection = await OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT
+        Products = (SELECT COUNT_BIG(*) FROM canon.Product product
+                    WHERE product.IsActive = 1 AND (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)),
+        Valid = SUM(CASE WHEN state.Status = N'VALID' THEN 1 ELSE 0 END),
+        Invalid = SUM(CASE WHEN state.Status <> N'VALID' THEN 1 ELSE 0 END),
+        Published = (SELECT COUNT_BIG(*) FROM pim.Product published
+                     WHERE @OrganizationId IS NULL OR published.OrganizationId = @OrganizationId)
+      FROM val.ProductValidationState state
+      INNER JOIN val.ValidationProfile profile ON profile.ValidationProfileId = state.ValidationProfileId
+      INNER JOIN canon.Product product ON product.ProductId = state.ProductId
+      WHERE profile.ProfileCode = N'ERP_L1_SLO' AND product.IsActive = 1
+        AND (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId);
+      """, connection) { CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    await reader.ReadAsync(cancellationToken);
+    static long Value(SqlDataReader reader, int ordinal) => reader.IsDBNull(ordinal) ? 0 : Convert.ToInt64(reader.GetValue(ordinal));
+    return new(Value(reader, 0), Value(reader, 1), Value(reader, 2), Value(reader, 3));
+  }
 
   /// <summary>
   /// SQL korak posla (validacija, objava). Zastoj (Msg 1205) je pričakovan dogodek, ne okvara: do

@@ -242,7 +242,10 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     Console.WriteLine("MERITEV: brez neaktivnih artiklov.");
   }
 
-  var runner = new SaopIngestRunner(connection, settings);
+  // En pisec faz za ves proces (blok 6): PRENOS (runner), PRESLIKAVA in MEJNIK (spodaj) gredo v isti
+  // korak posla po vrsti; z dvema piscema bi se vrstni red faz začel znova in stran bi ju premešala.
+  var phases = PhaseLog.FromEnvironment(connection, $"{Environment.MachineName}:{Environment.ProcessId}");
+  var runner = new SaopIngestRunner(connection, settings) { Phases = phases };
   var parallel = Math.Min(arguments.MaxParallelOrganizations, organizations.Length);
   if (parallel > 1)
   {
@@ -293,13 +296,36 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
         maxParallelEndpoints: arguments.MaxParallelEndpoints);
       if (!arguments.SkipMapping)
       {
-        await new SqlMappingPipeline(connection)
-          .ExtractAndApplyAsync(summary.RunId, organization.Id, organization.SourceCode);
+        // Faza PRESLIKAVA (blok 6): padec preslikave mora ostati viden kot padla faza, ne samo kot
+        // izhodna koda; izjema gre naprej v OrganizationLoop kot doslej.
+        try
+        {
+          await new SqlMappingPipeline(connection)
+            .ExtractAndApplyAsync(summary.RunId, organization.Id, organization.SourceCode);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+          await MappingPhaseReport.RecordFailureAsync(phases, summary.RunId, organization.SourceCode, organization.Id, pipeline, exception);
+          throw;
+        }
+        await MappingPhaseReport.RecordAsync(phases, connection, summary.RunId, organization.SourceCode, organization.Id, pipeline,
+          entityType => EndpointPhaseSource(summary, entityType));
 
         // Sele zdaj, ko je podatek v katalogu, se sme mejnik premakniti. Prej je stal tu
         // zajem, preslikava pa je prisla za njim — in ce je podjetje vmes padlo, je mejnik
         // ostal pred nepreslikanim podatkom.
-        var advanced = await runner.AdvanceWatermarksAsync(summary, organization);
+        IReadOnlyList<string> advanced;
+        try
+        {
+          advanced = await runner.AdvanceWatermarksAsync(summary, organization);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+          await phases.RecordAsync(PhaseCodes.Watermark, PhaseOutcome.Failed, organization.SourceCode, organization.Id, pipeline,
+            summary.RunId, $"mejnikov ni bilo mogoče premakniti: {exception.Message}");
+          throw;
+        }
+        await RecordWatermarkPhaseAsync(phases, summary, advanced, organization, pipeline);
         var candidates = summary.Endpoints.Count(endpoint => endpoint.WatermarkAdvanced);
         if (advanced.Count < candidates)
         {
@@ -307,6 +333,13 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
             $"  OPOZORILO: mejnik premaknjen za {advanced.Count} od {candidates} upravicenih koncnih tock; "
             + "za ostale je v raw.Inbox ostalo nepreslikano. Isto obdobje bo zajeto znova.");
         }
+      }
+      else
+      {
+        // --only-ingest: preslikave in premika mejnikov ni bilo; to mora biti vidno kot preskok, ne kot tišina.
+        const string razlog = "zagon je bil --only-ingest: zapisi ostanejo v raw.Inbox, mejnik stoji";
+        await phases.RecordAsync(PhaseCodes.Map, PhaseOutcome.Skipped, organization.SourceCode, organization.Id, pipeline, summary.RunId, razlog);
+        await phases.RecordAsync(PhaseCodes.Watermark, PhaseOutcome.Skipped, organization.SourceCode, organization.Id, pipeline, summary.RunId, razlog);
       }
 
       Log(organization,
@@ -347,6 +380,40 @@ static async Task<int> RunLiveAsync(WorkerArguments arguments)
     maxParallel: parallel);
 
   return failed ? 1 : 0;
+}
+
+// Faza PRESLIKAVA entitete gre pod isti vir kot PRENOS njene končne točke (ItemGeneralData →
+// GetItemsGeneralData, Prices → GetPrices pod SAOP_PRICES), da nadzor vidi zajem in preslikavo skupaj.
+static (string? SourceCode, string Pipeline)? EndpointPhaseSource(IngestSummary summary, string entityType)
+{
+  var endpoint = summary.Endpoints.FirstOrDefault(result => string.Equals(result.EntityType, entityType, StringComparison.OrdinalIgnoreCase));
+  return endpoint is null ? null : (endpoint.EndpointKey, SaopIngestRunner.PhasePipeline(endpoint.EndpointKey));
+}
+
+// Faza MEJNIK: koliko vodnih žigov je šlo naprej in koliko jih je zadržanih (v raw.Inbox je ostalo
+// nepreslikano). Zadržan mejnik ni napaka, a mora biti viden: isto obdobje bo zajeto znova.
+static Task RecordWatermarkPhaseAsync(PhaseLog phases, IngestSummary summary, IReadOnlyList<string> advanced,
+  SaopOrganization organization, string pipeline)
+{
+  var upraviceni = summary.Endpoints.Where(endpoint => endpoint.WatermarkAdvanced).ToList();
+  var neupraviceni = summary.Endpoints.Count - upraviceni.Count;
+  if (upraviceni.Count == 0)
+  {
+    return phases.RecordAsync(PhaseCodes.Watermark, PhaseOutcome.Skipped, organization.SourceCode, organization.Id, pipeline, summary.RunId,
+      $"noben mejnik ni bil upravičen do premika (končnih točk z napako ali brez česa preslikati: {neupraviceni})");
+  }
+
+  var zadrzani = upraviceni
+    .Where(endpoint => !advanced.Contains(endpoint.EntityType, StringComparer.Ordinal))
+    .Select(endpoint => endpoint.EndpointKey)
+    .ToList();
+  var opomba = $"premaknjenih {advanced.Count} od {upraviceni.Count} upravičenih";
+  if (zadrzani.Count > 0)
+    opomba += $"; zadržani ({string.Join(", ", zadrzani)}): v raw.Inbox je ostalo nepreslikano, isto obdobje bo zajeto znova";
+  if (neupraviceni > 0)
+    opomba += $"; brez premika zaradi napake ali čakanja na preslikavo: {neupraviceni}";
+  return phases.RecordAsync(PhaseCodes.Watermark, PhaseOutcome.Succeeded, organization.SourceCode, organization.Id, pipeline, summary.RunId,
+    opomba, hasNewData: advanced.Count > 0, itemsIn: upraviceni.Count, itemsOut: advanced.Count, itemsRejected: zadrzani.Count);
 }
 
 static async Task<IReadOnlyList<(Guid RunId, int OrganizationId, string SourceCode, int Pending)>> ReadPendingRunsAsync(

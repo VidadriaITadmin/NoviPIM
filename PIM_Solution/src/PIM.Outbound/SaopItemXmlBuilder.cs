@@ -76,6 +76,29 @@ public static class SaopKnownShapes
     StampUpdateElement: null,
     SuggestCodeElement: null);
 
+  /// <summary>
+  /// Planski podatki izdelka — svoj dokument na svoji končni točki, ne del <see cref="Product"/>.
+  /// SAOP pozna <c>ItemExcludeQtyReservation</c> samo v <c>PlanningData</c> (swagger); poslan v
+  /// <c>ItemsGeneralData</c> je vrnil 500 (ACB.C3986100N, 22.9.2026). Stari PIM je kljukico
+  /// pošiljal enako (<c>PIM_test/src/Services/SaopPlanningXmlBuilder.cs</c>). Končna točka pozna
+  /// samo PATCH, zato ima ustvarjanje isto pot: planski podatki gredo šele, ko artikel obstaja.
+  /// Ni v <see cref="All"/>, ker ima isti cilj kot izdelek — glej <see cref="SaopPlanningDocument"/>.
+  /// </summary>
+  public static readonly SaopDocumentShape ProductPlanning = new(
+    TargetKind: "SAOP_PRODUCT",
+    EntityType: "Product",
+    RootElementAdd: "ItemsPlanningData",
+    RootElementUpdate: "ItemsPlanningData",
+    ItemElement: "ItemPlanningData",
+    KeyElements: ["ItemID"],
+    AddPath: "api/Item/UpdateItemsPlanningData",
+    AddOperation: "PATCH",
+    UpdatePath: "api/Item/UpdateItemsPlanningData",
+    UpdateOperation: "PATCH",
+    StampAddElement: null,
+    StampUpdateElement: null,
+    SuggestCodeElement: null);
+
   public static IReadOnlyList<SaopDocumentShape> All => [Product, Customer, PriceList, Price];
 
   public static SaopDocumentShape ByTargetKind(string targetKind) =>

@@ -5,7 +5,7 @@
 @inject IntranetDataService Data
 
 <PageTitle>Atribut @AttributeCode</PageTitle>
-<PimPage Title="@AttributeCode" Subtitle="Različne vrednosti atributa, njihova uporaba in stanje prevoda. Stran je samo bralna." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="@AttributeCode" Subtitle="Različne vrednosti atributa, njihova uporaba in stanje prevoda. Stran je samo bralna." Crumbs="Crumbs" />
 
 @if (Result?.IsMissing == true)
 {

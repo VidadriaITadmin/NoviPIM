@@ -69,6 +69,10 @@ static class JobCatalogChecks
       var arguments = plan.SelectMany(group => group.Steps).Where(step => step.Process is not null).SelectMany(step => step.Process!.Arguments).ToList();
       Check(!arguments.Contains("--osvezi-validacijo"), $"{job.Key}: izvoz ne sme validirati (--osvezi-validacijo).");
       Check(!arguments.Contains("--po-urniku"), $"{job.Key}: posel ima en urnik — gostitelja; --po-urniku je dvojno razporejanje.");
+      // Preneseno iz WorkerConsoleChecks (ročni zagoni so odpadli, pravilo pa ostane pri poslih).
+      Check(plan.SelectMany(group => group.Steps).Where(step => step.Process?.Display.StartsWith("PIM.SaopStockWorker", StringComparison.Ordinal) == true)
+          .All(step => step.Environment is { } variables && variables.TryGetValue("PIM_SAOP_MODE", out var mode) && mode == "Live"),
+        $"{job.Key}: SaopStockWorker brez PIM_SAOP_MODE=Live SAOP-a ne pokliče in konča z 0 — tek bi lagal, da je uspel.");
     }
 
     var catalogExport = Expand(JobCatalog.Plan(JobCatalog.WebCatalogExport, env));
@@ -122,6 +126,22 @@ static class JobCatalogChecks
     Check(JobCatalog.NextAfterEnd(null, new TimeOnly(0, 30), end, Zone, 7) == WorkerCycles.NextDue(null, new TimeOnly(0, 30), end, Zone),
       "Dnevni posel ostane na dnevni uri ne glede na napake.");
 
+    // Dnevna ura je v naši uri, ne v UTC (preneseno iz WorkerSchedulerChecks, ko so stari cikli odpadli):
+    // na zgornjo primerjavo se ne moremo zanesti, ker obe strani računa ista funkcija.
+    var summerNoon = new DateTime(2026, 9, 17, 10, 0, 0, DateTimeKind.Utc); // 12:00 CEST
+    Check(WorkerCycles.NextDue(300, null, summerNoon, Zone) == summerNoon.AddMinutes(5), "Ponavljajoč termin: začetek + razmik.");
+    Check(WorkerCycles.NextDue(null, new TimeOnly(2, 30), summerNoon, Zone) == new DateTime(2026, 9, 18, 0, 30, 0, DateTimeKind.Utc),
+      "Dnevni posel ob 02:30 naše ure je naslednjič jutri ob 00:30 UTC (poletni čas).");
+    Check(WorkerCycles.NextDue(null, new TimeOnly(2, 30), new DateTime(2026, 9, 17, 0, 0, 0, DateTimeKind.Utc), Zone) == new DateTime(2026, 9, 17, 0, 30, 0, DateTimeKind.Utc),
+      "Ob 02:00 naše ure je 02:30 še danes.");
+    Check(WorkerCycles.NextDue(null, new TimeOnly(2, 30), new DateTime(2026, 12, 17, 10, 0, 0, DateTimeKind.Utc), Zone) == new DateTime(2026, 12, 18, 1, 30, 0, DateTimeKind.Utc),
+      "Pozimi je 02:30 naše ure ob 01:30 UTC.");
+    var springForward = WorkerCycles.NextDue(null, new TimeOnly(2, 30), new DateTime(2026, 3, 28, 12, 0, 0, DateTimeKind.Utc), Zone);
+    Check(springForward == new DateTime(2026, 3, 29, 1, 30, 0, DateTimeKind.Utc),
+      "Ura, ki je na dan prehoda na poletni čas ni (02:30 -> 03:30), se premakne za uro naprej in ne pade: " + springForward.ToString("o"));
+    Check(WorkerCycles.OwnerName("PIM-SRV", 4242, "AutomationHost:service") == "PIM-SRV:4242:AutomationHost:service",
+      "Lastnik najema pove gostitelja, proces in aplikacijo.");
+
     var validation = Expand(JobCatalog.Plan(JobCatalog.ProductValidation, env));
     Check(validation.Count == 4 && validation.All(g => g.Steps.Single() is { Kind: CycleStepKind.Sql } s && s.Sql!.Single().Contains("val.RunValidation", StringComparison.Ordinal))
       && validation.Select(g => g.Steps[0].OrganizationId).SequenceEqual([1, 2, 3, 4]),
@@ -138,10 +158,24 @@ static class JobCatalogChecks
     var supplier = Expand(JobCatalog.Plan(JobCatalog.SupplierStockImport, env));
     Check(supplier.Select(g => g.Name).SequenceEqual(["Zaloga NW_STOCK", "Zaloga BT_STOCK"]),
       "Zaloga dobaviteljev: dve neodvisni skupini: " + string.Join(" | ", supplier.Select(g => g.Name)));
-    Check(supplier[0].Steps.Count == 5 && supplier[0].Steps.Skip(1).Select(s => s.OrganizationId).SequenceEqual([1, 2, 3, 4]) && supplier[1].Steps[1].Kind == CycleStepKind.Note,
-      "Prevzeta datoteka se prebere za vsako podjetje; vir brez datoteke je zapis.");
+    Check(supplier[0].Steps.Count == 2 && supplier[0].Steps[1].OrganizationId is null
+        && supplier[0].Steps[1].Process!.Arguments.SkipWhile(a => a != "--organizations").Skip(1).FirstOrDefault() == "1,2,3,4"
+        && supplier[1].Steps[1].Kind == CycleStepKind.Note,
+      "Prevzeta datoteka se prebere enkrat za vsa podjetja; vir brez datoteke je zapis.");
     Check(supplier.All(g => !g.RequiresAllPrevious) && !supplier.SelectMany(g => g.Steps).Any(s => s.Environment?.ContainsKey("PIM_SAOP_MODE") == true),
       "Padec enega vira zaloge ne blokira drugega; zaloga dobaviteljev ne kliče SAOP.");
+    // Prevzem in branje datotek (preneseno iz WorkerSchedulerChecks): ukazna vrstica workerja je ista kot v skriptah.
+    var fetch = supplier[0].Steps[0].Process!.Arguments;
+    Check(fetch.SequenceEqual(["run", "--project", @"C:\repo\PIM_Solution\workers\PIM.SourceFetchWorker", "--no-build", "--", "--source", "NW_STOCK", "--target", @"D:\prevzem"]),
+      "Prevzem NW gre v koren prevzema: " + string.Join(" ", fetch));
+    Check(supplier[0].Steps.Skip(1).All(s => s.Process!.Arguments.Contains("--file") && s.Process!.Arguments.Contains(@"D:\prevzem\NW_STOCK\nw-zaloga.csv")
+        && s.Process!.Arguments.Contains("NW_STOCK")),
+      "Branje zaloge poda prevzeto datoteko in vir.");
+    Check(supplier[1].Steps.Count == 2 && supplier[1].Steps[1].Command.Contains("prevzete datoteke ni", StringComparison.Ordinal),
+      "Vir brez datoteke je zapis, ne napaka: " + supplier[1].Steps[1].Command);
+    var noLanding = Expand(JobCatalog.Plan(JobCatalog.SupplierStockImport, env with { LandingRoot = @"D:\drugje" }));
+    Check(noLanding.All(g => g.Steps.Count == 2 && g.Steps[1].Kind == CycleStepKind.Note && g.Steps[1].Command.Contains(@"mape D:\drugje\", StringComparison.Ordinal)),
+      "Brez mape prevzema je branje zapis, ne napaka.");
 
     var stockExport = Expand(JobCatalog.Plan(JobCatalog.WebStockExport, env));
     Check(stockExport.Count == 4 && stockExport[2].Steps[0].Process!.Arguments.Contains(@"C:\repo\izvoz\magento\3") && stockExport[2].Steps[0].OrganizationId == 3,
@@ -164,8 +198,47 @@ static class JobCatalogChecks
     Check(!nightly.SelectMany(g => g.Steps).Any(s => s.Process?.Arguments.Contains("--export-magento") == true || s.Process?.Arguments.Any(a => a.Contains("StockReplenishmentWorker")) == true),
       "Nočna uskladitev ne izvaža in ne pošilja dnevnega maila; to sta svoja posla.");
 
+    // Branje zaloge in dobaviteljev XML v nočni uskladitvi (preneseno iz WorkerSchedulerChecks).
+    var nightlyStock = nightly.Single(g => g.Name == "Zaloge dobaviteljev").Steps;
+    Check(nightlyStock.Count == 2 && nightlyStock[0].Kind == CycleStepKind.Process
+        && nightlyStock[0].Process!.Arguments.Contains("1,2,3,4") && nightlyStock[1].Kind == CycleStepKind.Note,
+      "Zaloge dobaviteljev: NW datoteka enkrat za vsa štiri podjetja, BT brez datoteke je zapis.");
+    var xmlNw = nightly.Single(g => g.Name == "Dobaviteljev XML (Nowodvorski)").Steps;
+    Check(xmlNw.Count == 4 && xmlNw.All(s => s.Environment?["PIM_XML_ROOT"] == @"C:\repo\PIM_Solution\fixtures\nw" && s.Environment?["PIM_XML_SOURCE_CODE"] == "NW_XML")
+      && xmlNw.Select(s => s.Environment?["PIM_XML_ORGANIZATION_ID"]).SequenceEqual(["1", "2", "3", "4"]),
+      "Brez prevzetega XML se na razvoju bere fixtures, za vsako podjetje.");
+    var xmlFiles = new Dictionary<string, IReadOnlyList<string>>(files, StringComparer.OrdinalIgnoreCase)
+    {
+      [@"C:\repo\PIM_Solution\fixtures\bt"] = [@"C:\repo\PIM_Solution\fixtures\bt\BRaytron_xml_2026_07_29.xml"],
+      [@"D:\prevzem\BT_XML"] = [@"D:\prevzem\BT_XML\braytron-izdelki.xml"],
+    };
+    var landedXml = Expand(JobCatalog.Plan(JobCatalog.NightlyReconciliation, env with
+    {
+      DirectoryExists = directory => xmlFiles.ContainsKey(directory),
+      ListFiles = directory => xmlFiles.TryGetValue(directory, out var list) ? list : [],
+    })).Single(g => g.Name == "Dobaviteljev XML (Braytron)").Steps;
+    Check(landedXml.Count == 4 && landedXml.All(s => s.Environment?["PIM_XML_ROOT"] == @"D:\prevzem\BT_XML"),
+      "Prevzeti dobaviteljev XML ima prednost pred fixtures.");
+
+    var serverPaths = paths with { SolutionRoot = "", PublishedWorkersRoot = @"D:\site\Workerji", PublishedWorker = worker => $@"D:\site\Workerji\{worker}\{worker}.exe" };
+    var serverNightly = Expand(JobCatalog.Plan(JobCatalog.NightlyReconciliation, env with { Paths = serverPaths, FixturesRoot = null }));
+    Check(serverNightly.SelectMany(g => g.Steps).Where(s => s.Kind == CycleStepKind.Process).All(s => s.Process!.FileName.EndsWith(".exe", StringComparison.Ordinal)),
+      "Na strežniku je vsak korak objavljen .exe, brez dotnet run.");
+    var serverXmlNw = serverNightly.Single(g => g.Name == "Dobaviteljev XML (Nowodvorski)").Steps;
+    Check(serverXmlNw.Count == 1 && serverXmlNw[0].Kind == CycleStepKind.Note, "Na strežniku brez prevzetega NW XML ni fixtures: korak je zapis.");
+
     var selfTest = Expand(JobCatalog.Plan(JobCatalog.SystemSelfTest, env));
     Check(selfTest[0].Steps[0].Environment!["PIM_TRIGGERED_BY"] == "Task", "Samotest ima isto pogodbo kot prej.");
+    // Razvoj proti strežniku (preneseno iz WorkerSchedulerChecks). --no-build je namenoma izpuščen:
+    // samotest teče na tem, kar je v repozitoriju zdaj.
+    Check(selfTest.Count == 1 && selfTest[0].Steps[0].Process?.Arguments.SequenceEqual(["run", "--project", @"C:\repo\PIM_Solution\tests\PIM.SelfTest.Nightly"]) == true
+      && selfTest[0].Steps[0].Environment!["PIM_SELFTEST_ORG"] == "2",
+      "Samotest na razvoju: dotnet run brez --no-build, za podjetje kataloga.");
+    Check(Expand(JobCatalog.Plan(JobCatalog.SystemSelfTest, env with { Paths = serverPaths }))[0].Steps[0].Process?.FileName
+        == @"D:\site\Workerji\PIM.SelfTest.Nightly\PIM.SelfTest.Nightly.exe",
+      "Samotest na strežniku: objavljen .exe ob workerjih.");
+    Check(Expand(JobCatalog.Plan(JobCatalog.SystemSelfTest, env with { Paths = paths with { SolutionRoot = "" } }))[0].Steps[0].Kind == CycleStepKind.Note,
+      "Brez objavljenega samotesta in brez izvorne kode je samotest zapis, ne klic.");
 
     // ─── Artefakti ───────────────────────────────────────────────────────────
     var artifacts = JobCatalog.ArtifactLocations(JobCatalog.WebCatalogExport, env);
@@ -233,6 +306,54 @@ static class JobCatalogChecks
     new(key, JobCatalog.Find(key)?.Label ?? key, "", flow, isResult, 0, "Internal", enabled, interval, daily, 600, sla, 2m,
       null, null, null, null, null, null, lastSucceeded, lastSucceeded, lastStatus, lastSucceeded, null, null, DateTime.UtcNow, "test",
       null, null, null, null, null, false, 0, null, null, null, null, null, null, null, null);
+
+  /// <summary>
+  /// Viri s pragom svežine (256): vsak vir mora kazati na postopek, ki ga posel res poganja, imeti
+  /// razumno mejo in enolično ime — sicer stran Nadzor ne najde faz in alarm SourceStale molči.
+  /// </summary>
+  public static void CheckSources()
+  {
+    var vsi = JobCatalog.All.SelectMany(job => job.Sources.Select(source => (job, source))).ToList();
+    Check(vsi.Count >= 5, "Katalog mora imeti vire vsaj za zalogo, cene, artikle in dobavitelje.");
+    foreach (var (job, source) in vsi)
+    {
+      Check(source.MaxAgeSeconds >= 60 && source.MaxAgeSeconds <= 7 * 86400, $"{job.Key}/{source.SourceCode}: meja svežine mora biti med minuto in tednom.");
+      Check(source.Label.Length > 0 && source.SourceCode.Length > 0 && source.Pipeline.Length > 0, $"{job.Key}: vir brez imena, šifre ali postopka.");
+      Check(job.Pipelines.Contains(source.Pipeline), $"{job.Key}/{source.SourceCode}: postopek {source.Pipeline} ni med postopki posla ({string.Join(", ", job.Pipelines)}).");
+      Check(source.MaxAgeSeconds >= (job.IntervalSeconds ?? 0), $"{job.Key}/{source.SourceCode}: meja svežine je krajša od razmika posla, alarm bi zvonil ob vsakem teku.");
+    }
+    Check(vsi.Select(x => (x.job.Key, x.source.Pipeline, x.source.SourceCode)).Distinct().Count() == vsi.Count, "Vir se v istem poslu ne sme ponoviti.");
+
+    var braytron = vsi.Single(x => x.source.SourceCode == "BT_STOCK");
+    Check(braytron.job.Key == JobCatalog.SupplierStockImport && braytron.source.MeasureNewData && braytron.source.Pipeline == "STOCK_FILE",
+      "Braytron zaloga se meri po NOVIH podatkih v bazi (STOCK_FILE), ne po stiku s strežnikom.");
+    var cene = vsi.Single(x => x.source.SourceCode == "GetPrices");
+    Check(cene.job.Key == JobCatalog.PriceImport && !cene.source.MeasureNewData, "Cene se merijo po stiku: tedni brez spremembe cene so normalni.");
+    Check(vsi.Count(x => x.job.Key == JobCatalog.SaopProductImport) == 8, "Vsak od osmih endpointov artiklov je svoj vir.");
+
+    // ─── Blok 6: viri preostalih workerjev (isti niz, kot ga worker zapiše v ops.JobPhaseRun) ────
+    (string Job, string Pipeline, string Source)[] bloka6 =
+    [
+      (JobCatalog.SaopOrderImport, "SAOP_ORDERS_VNK", "SAOP_ORDERS_VNK"),
+      (JobCatalog.SaopOrderImport, "SAOP_ORDERS_VND", "SAOP_ORDERS_VND"),
+      (JobCatalog.WebCatalogExport, "MAGENTO_PRODUCTS", "MAGENTO_PRODUCTS"),
+      (JobCatalog.WebStockExport, "MAGENTO_STOCK_PRICES", "MAGENTO_STOCK_PRICES"),
+      (JobCatalog.NightlyReconciliation, "GENERIC_XML", "NW_XML"),
+      (JobCatalog.NightlyReconciliation, "GENERIC_XML", "BT_XML"),
+      (JobCatalog.StockReplenishmentDigest, "STOCK_REPLENISHMENT_DIGEST", "STOCK_REPLENISHMENT_DIGEST"),
+    ];
+    foreach (var (job, pipeline, source) in bloka6)
+      Check(vsi.Any(x => x.job.Key == job && x.source.Pipeline == pipeline && x.source.SourceCode == source),
+        $"Blok 6: posel {job} mora imeti vir {pipeline}|{source}, ki ga worker piše.");
+    Check(vsi.Where(x => bloka6.Any(b => b.Source == x.source.SourceCode)).All(x => !x.source.MeasureNewData),
+      "Blok 6: naročila, izvozi, XML in dnevni mail se merijo po stiku (ura brez spremembe ni napaka).");
+    Check(vsi.Single(x => x.source.SourceCode == "MAGENTO_PRODUCTS").source.PerOrganization == false,
+      "katalog.csv nastane samo za podjetje kataloga; vir po podjetjih bi bil za druga podjetja za vedno prestar.");
+    Check(vsi.Single(x => x.source.SourceCode == "NW_XML").source.MaxAgeSeconds == 604800
+      && vsi.Single(x => x.source.SourceCode == "BT_XML").source.MaxAgeSeconds == 129600,
+      "Meji dobaviteljevega XML po načrtu: Nowodvorski 7 dni, Braytron 36 h.");
+    Console.WriteLine("F10 viri poslov PASS.");
+  }
 
   static bool HasCycle()
   {

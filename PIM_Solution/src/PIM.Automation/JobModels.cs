@@ -64,6 +64,11 @@ public sealed record JobRunRow(
   public TimeSpan Duration => (EndedUtc ?? DateTime.UtcNow) - StartedUtc;
 }
 
+/// <summary>Stanje kataloga podjetja pred in po SQL koraku (AutomationStore.ReadCatalogCountsAsync).</summary>
+/// <param name="Valid">Aktivni artikli, veljavni po profilu ERP_L1_SLO (te val.Promote objavi).</param>
+/// <param name="Published">Vrstice v pim.Product.</param>
+public sealed record CatalogCounts(long Products, long Valid, long Invalid, long Published);
+
 public sealed record JobStepRunRow(
   int StepOrder, string StepName, int? OrganizationId, string? Command, DateTime StartedUtc, DateTime? EndedUtc,
   int? ExitCode, string Status, string? Note);
@@ -88,14 +93,15 @@ public sealed record SchedulerLeaseInfo(
   public bool IsAutomationHost => Application.StartsWith(AutomationApplications.Prefix, StringComparison.Ordinal);
 }
 
-/// <summary>Vrednosti stolpca ops.SchedulerLease.Application; po predponi baza loči gostitelja od intraneta.</summary>
+/// <summary>Vrednosti stolpca ops.SchedulerLease.Application; po predponi baza in nadzor (--preveri) ločita gostitelja
+/// od kogarkoli drugega, ki bi držal najem (do migracije 254 je to lahko bil razporejevalnik v intranetu).</summary>
 public static class AutomationApplications
 {
   public const string Prefix = "AutomationHost";
   public const string Service = "AutomationHost:service";
   public const string Console = "AutomationHost:console";
 
-  /// <summary>Gostitelj vzame uro vsakemu z nižjo prednostjo (intranet: 0).</summary>
+  /// <summary>Gostitelj vzame uro vsakemu z nižjo prednostjo (do 254 intranet: 0).</summary>
   public const int HostPriority = 10;
 }
 

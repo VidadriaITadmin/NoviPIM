@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using PIM.Operations;
+using PIM.StockMapping;
 using PIM.SaopStockWorker;
 
 // Zaloga iz SAOP. Profil (kateri vmesnik, katera skladišča) je vrstica v
@@ -23,7 +24,10 @@ var bySchedule = false;
 // Datumi in kolicine prihoda (migracija 189, GetItemDeliveryDate) so locen, pocasnejsi zajem —
 // en artikel naenkrat, zato gre v nocni tek, ne v petminutni cikel zaloge same.
 var deliveryDates = false;
-var maxDeliveryLookups = 300;
+// David 2026-09-22: »vse mora prebrati«. Privzeto brez omejitve (0 = vsi artikli z zalogo iz SAOP);
+// omejitev z --max-dostave N ostane samo za ročni preizkus. Prej 300 na tek: krog čez 8.775 artiklov
+// IQLightinga je pri enem nočnem teku trajal skoraj mesec dni.
+var maxDeliveryLookups = 0;
 
 for (var index = 0; index < args.Length; index++)
 {
@@ -75,7 +79,7 @@ if (onlySettings || !live)
   Console.WriteLine($"  naslov:   {settings.BaseUrl}");
   Console.WriteLine($"  podjetja: {string.Join(", ", organizations)}");
   if (deliveryDates)
-    Console.WriteLine($"  dejanje:  datumi in kolicine prihoda (GetItemDeliveryDate), do {maxDeliveryLookups} artiklov na podjetje.");
+    Console.WriteLine($"  dejanje:  datumi in kolicine prihoda (GetItemDeliveryDate), {(maxDeliveryLookups > 0 ? $"do {maxDeliveryLookups}" : "vsi")} artikli na podjetje.");
   else
     Console.WriteLine("  profil in skladišča se preberejo iz stock.SaopProviderProfile in canon.Warehouse.");
   return 0;
@@ -99,6 +103,14 @@ http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("appli
 var Pipeline = deliveryDates ? "SAOP_DELIVERY" : "SAOP_STOCK";
 
 var runner = new SaopStockRunner(settings.ConnectionString, http, new Uri(settings.BaseUrl.TrimEnd('/') + "/"));
+
+// Faze (migracija 255): vsako podjetje pove, koliko zapisov je prišlo iz SAOP, koliko se jih je
+// zapisalo in koliko se jih je ujelo z artiklom. Gostitelj poda tek posla prek okolja.
+var phases = PhaseLog.FromEnvironment(settings.ConnectionString, $"{Environment.MachineName}:{Environment.ProcessId}");
+
+// Vir faze je ime postopka; podjetje nosi stolpec OrganizationId (isti ključ kot v ops.JobSource).
+static string SourceCode(int organizationId, bool deliveryDates) =>
+  deliveryDates ? "SAOP_DELIVERY" : "SAOP_STOCK";
 var napake = 0;
 foreach (var organizationId in organizations)
 {
@@ -126,6 +138,10 @@ foreach (var organizationId in organizations)
     continue;
   }
 
+  // Faze (migracija 255): klic SAOP, zapis posnetka in ujemanje z artikli so tri različne stvari,
+  // ki lahko vsaka zase odpovejo. Doslej je bila vidna samo izhodna koda celega podjetja.
+  var faza = await phases.BeginAsync(deliveryDates ? PhaseCodes.Fetch : PhaseCodes.Land,
+    SourceCode(organizationId, deliveryDates), organizationId, Pipeline, run.RunId);
   try
   {
     if (deliveryDates)
@@ -134,6 +150,8 @@ foreach (var organizationId in organizations)
       await run.CompleteAsync(true);
       Console.WriteLine($"[{organizationId}] datumi prihoda: preverjenih={izidDostave.ItemsChecked}, "
         + $"z dobavo={izidDostave.ItemsWithDelivery}.");
+      await faza.SucceededAsync(itemsIn: izidDostave.ItemsChecked, itemsOut: izidDostave.ItemsWithDelivery,
+        hasNewData: izidDostave.ItemsWithDelivery > 0, message: "datumi prihoda iz SAOP");
     }
     else
     {
@@ -141,12 +159,28 @@ foreach (var organizationId in organizations)
       await run.CompleteAsync(true);
       Console.WriteLine($"[{organizationId}] {izid.ProfileCode} ({izid.ProviderKind}): skladišč={izid.Warehouses}, "
         + $"zapisov={izid.RecordsRead}, uporabljenih={izid.Applied}, v karanteni={izid.Quarantined}, RunId={izid.RunId}.");
+      await faza.SucceededAsync(itemsIn: izid.RecordsRead, itemsOut: izid.Applied, itemsRejected: izid.Quarantined,
+        hasNewData: izid.Applied > 0, message: $"{izid.ProfileCode}, skladišč {izid.Warehouses}");
+
+      // »Uporabljeno« ni »najdeno«: pozicija brez artikla v PIM ostane neujeta (glej StockMatchCounts).
+      var ujemanje = await phases.BeginAsync(PhaseCodes.Match, SourceCode(organizationId, false), organizationId, Pipeline, run.RunId);
+      try
+      {
+        var (ujetih, neujetih) = await StockMatchCounts.ReadAsync(settings.ConnectionString, izid.RunId);
+        await ujemanje.SucceededAsync(itemsIn: izid.Applied, itemsOut: ujetih, itemsRejected: neujetih,
+          hasNewData: ujetih > 0, message: neujetih > 0 ? $"{neujetih} vrstic brez artikla v PIM" : null);
+      }
+      catch (Exception exception)
+      {
+        await ujemanje.FailedAsync($"Ujemanja ni bilo mogoče prešteti: {exception.Message}");
+      }
     }
   }
   catch (Exception exception)
   {
     // Padec enega podjetja ne sme ustaviti ostalih — isto pravilo kot pri katalogu.
     napake++;
+    await faza.FailedAsync(exception.Message);
     await run.CompleteAsync(false, exception.Message);
     Console.Error.WriteLine($"[{organizationId}] NAPAKA: {exception.Message}");
   }

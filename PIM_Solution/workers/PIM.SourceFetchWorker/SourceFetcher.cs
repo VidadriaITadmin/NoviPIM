@@ -57,9 +57,10 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
   async Task<FetchOutcome> FetchHttpAsync(FetchLocation location, FetchCredential? credential, CancellationToken cancellationToken)
   {
     var url = credential?.Url ?? location.Location;
+    // Manjkajoc naslov je NAPAKA, ne preskok (isti razlog kot pri FTP poverilnicah).
     if (string.IsNullOrWhiteSpace(url))
-      return new(location.SourceCode, location.Kind, false, 0, null,
-        $"Naslov ni nastavljen — vpisi ga v appsettings.Local.json pod {location.CredentialKey}.", null);
+      return new(location.SourceCode, location.Kind, false, 0, null, null,
+        $"Naslov ni nastavljen — vpisi ga v appsettings.Local.json pod {location.CredentialKey}.");
 
     using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     if (!response.IsSuccessStatusCode)
@@ -166,9 +167,11 @@ public sealed class SourceFetcher(HttpClient http, string targetRoot)
 
   async Task<FetchOutcome> FetchFtpAsync(FetchLocation location, FetchCredential? credential, CancellationToken cancellationToken)
   {
+    // Manjkajoce poverilnice so NAPAKA, ne preskok (blok 1 prenove nadzora, 2026-09-22): dokler je
+    // bilo to preskok, je vir molcal z izhodno kodo 0 in nadzor je kazal zeleno, podatki pa so se starali.
     if (credential is null || string.IsNullOrWhiteSpace(credential.BaseUri) || string.IsNullOrWhiteSpace(credential.UserName))
-      return new(location.SourceCode, location.Kind, false, 0, null,
-        $"Poverilnice niso nastavljene — vpisi jih v appsettings.Local.json pod {location.CredentialKey}.", null);
+      return new(location.SourceCode, location.Kind, false, 0, null, null,
+        $"Poverilnice niso nastavljene — vpisi jih v appsettings.Local.json pod {location.CredentialKey}.");
 
     var directory = (credential.RemoteDirectory ?? "/").Trim();
     if (!directory.StartsWith('/')) directory = "/" + directory;

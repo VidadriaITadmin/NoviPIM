@@ -31,15 +31,6 @@ public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string
   string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
   int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc,
   string? ApprovedBy, DateTime? ApprovedUtc, DateTime? SentUtc, string? LastError, string? SaopErrorKind);
-/// <param name="IntervalSeconds">Kako pogosto naj postopek tece; ura v Windows tiktaka na 5 minut.</param>
-/// <param name="NextScheduledUtc">Kdaj je postopek naslednjic na vrsti; null pomeni takoj.</param>
-public sealed record ScheduleRow(
-  int OrganizationId, string OrganizationName, string Provider, string Pipeline,
-  bool IsEnabled, int IntervalSeconds, int StaleAfterSeconds, DateTime? NextScheduledUtc,
-  DateTime? UpdatedUtc, string? UpdatedBy, string? Status,
-  DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc,
-  string? LastErrorRedacted);
-
 public sealed record SystemIntegrationRow(int OrganizationId, string OrganizationCode, string Provider, string Pipeline, bool IsEnabled,
   string? Status, DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc, DateTime? WatermarkUtc,
   DateTime? NextScheduledUtc, int OpenAlerts, int OutboxDeadCount, int OutboxDriftCount);
@@ -57,24 +48,36 @@ public sealed class ShippingRuleRow
   public int Priority { get; set; }
 }
 
-public sealed class IntranetDataService(IConfiguration configuration, PimWriteGuard guard)
+/// <summary>Piškotek z izbranim podjetjem strani, ki delajo z enim podjetjem (PimOrganizationScope).</summary>
+public static class OrganizationScope
+{
+  public const string CookieName = "pim_organizacija";
+}
+
+public sealed class IntranetDataService(IConfiguration configuration, PimWriteGuard guard, IHttpContextAccessor? httpContextAccessor = null)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
 
   /// <summary>
-  /// Privzeta aktivna organizacija aplikacije. Globalnega preklopnika organizacije ni vec;
-  /// vecorganizacijski pogledi izbiro ponudijo lokalno samo tam, kjer je poslovno smiselna.
+  /// Podjetje strani, ki delajo z enim podjetjem: izbira uporabnika iz piškotka
+  /// <see cref="OrganizationScope.CookieName"/> (PimOrganizationScope pod naslovom strani), sicer
+  /// prvo aktivno po šifri. Prej je bilo vedno prvo po šifri — DEMO —, zato so pravila, preslikave
+  /// in pragovi tiho kazali in urejali DEMO (pregled 2026-09-22). Izbira neaktivnega ali
+  /// neobstoječega podjetja se tiho zavrže. V krogu Blazorja je HttpContext zahtevek povezave, ki
+  /// nosi piškotek iz časa odprtja strani; preklop je POST s polno osvežitvijo, zato je ta svež.
   /// </summary>
   public async Task<OrganizationContext?> GetCurrentOrganizationAsync(CancellationToken cancellationToken = default)
   {
+    var selected = int.TryParse(httpContextAccessor?.HttpContext?.Request.Cookies[OrganizationScope.CookieName], out var value) ? value : (int?)null;
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
       SELECT TOP (1) OrganizationId, Name FROM dbo.OrganizationConfig
       WHERE IsActive = 1
-      ORDER BY OrganizationId;
+      ORDER BY CASE WHEN OrganizationId = @Selected THEN 0 ELSE 1 END, OrganizationId;
       """, connection);
+    command.Parameters.Add("@Selected", System.Data.SqlDbType.Int).Value = (object?)selected ?? DBNull.Value;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     return await reader.ReadAsync(cancellationToken)
       ? new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name")))
@@ -394,7 +397,10 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
 
   public Task ApproveOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.ApproveMessage",messageId,actor,cancellationToken);
   public Task CancelOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.CancelMessage",messageId,actor,cancellationToken);
-  public Task RetryOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.RetryMessage",messageId,actor,cancellationToken);
+  // Pregled 2026-09-22: »Ponovi« (out.RetryMessage → Retry, brez dogodka) in »Pošlji znova«
+  // (out.RequeueOutboxMessage → Pending + dogodek REQUEUE v obvestilih) sta bila dva gumba za isto
+  // dejanje z razlicnim ucinkom. Zdaj je en: vrnitev v vrsto z zapisom, kdo jo je sprozil.
+  public Task RetryOutboundAsync(long messageId,string actor,CancellationToken cancellationToken=default) => ExecuteOutboundActionAsync("out.RequeueOutboxMessage",messageId,actor,cancellationToken);
 
   async Task ExecuteOutboundActionAsync(string procedure,long messageId,string actor,CancellationToken cancellationToken)
   {
@@ -432,33 +438,6 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     await reader.NextResultAsync(cancellationToken);var alerts=new List<SystemAlertRow>();
     while(await reader.ReadAsync(cancellationToken))alerts.Add(new(reader.GetInt64(0),reader.GetInt32(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.GetDateTime(9),reader.GetDateTime(10),reader.IsDBNull(11)?null:reader.GetDateTime(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.IsDBNull(13)?null:reader.GetDateTime(13),reader.IsDBNull(14)?null:reader.GetString(14)));
     return new(integrations,alerts);
-  }
-
-  /// <summary>
-  /// Urniki vseh podjetij. Nacrtovano opravilo Windows je samo ura, ki tiktaka; ali postopek sme
-  /// teci in kako pogosto je zares na vrsti, pove ta vrstica v bazi.
-  /// </summary>
-  public async Task<IReadOnlyList<ScheduleRow>> GetSchedulesAsync(CancellationToken cancellationToken = default)
-  {
-    await using var connection = new SqlConnection(ConnectionString);
-    await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("intranet.GetSchedules", connection) { CommandType = System.Data.CommandType.StoredProcedure };
-    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    var rows = new List<ScheduleRow>();
-    while (await reader.ReadAsync(cancellationToken))
-      rows.Add(new(
-        reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-        reader.GetBoolean(4), reader.GetInt32(5), reader.GetInt32(6),
-        reader.IsDBNull(7) ? null : reader.GetDateTime(7),
-        reader.IsDBNull(8) ? null : reader.GetDateTime(8),
-        reader.IsDBNull(9) ? null : reader.GetString(9),
-        reader.IsDBNull(10) ? null : reader.GetString(10),
-        reader.IsDBNull(11) ? null : reader.GetDateTime(11),
-        reader.IsDBNull(12) ? null : reader.GetDateTime(12),
-        reader.IsDBNull(13) ? null : reader.GetDateTime(13),
-        reader.IsDBNull(14) ? null : reader.GetString(14)));
-
-    return rows;
   }
 
   public async Task SaveScheduleAsync(int organizationId, string pipeline, bool isEnabled, int intervalSeconds, string actor, CancellationToken cancellationToken = default)

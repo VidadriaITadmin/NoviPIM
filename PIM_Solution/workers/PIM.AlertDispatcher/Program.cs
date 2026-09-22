@@ -26,6 +26,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 
+// Faze (blok 6 prenove nadzora, 2026-09-22): IZRACUN za stopnjevanje, POSILJANJE za dostavo.
+// Izklopljena dostava je preskok z razlogom, neuspela dostava padla faza — doslej sta bili obe
+// na strani Nadzor videti enako kot uspešna dostava (izhodna koda 0 oziroma samo 1).
+const string DispatchPipeline = "ALERT_DISPATCH";
+var phases = PhaseLog.FromEnvironment(connectionString, $"{Environment.MachineName}:{Environment.ProcessId}");
+
 // Prejemniki se izpeljejo iz uporabnikov z naslovom in vlogo; vzdrževanje na dveh mestih bi
 // pomenilo, da nekdo dobi pravico in ne dobi obvestil.
 if (arguments.Contains("--sync-recipients"))
@@ -43,9 +49,22 @@ var escalationSeconds = int.TryParse(Value("--escalate-after"), out var parsedSe
 await using (var escalate = new SqlCommand("ops.EscalateOutboundEvents", connection) { CommandType = CommandType.StoredProcedure })
 {
   escalate.Parameters.Add("@AfterSeconds", SqlDbType.Int).Value = escalationSeconds;
-  var escalated = Convert.ToInt32(await escalate.ExecuteScalarAsync() ?? 0);
+  int escalated;
+  try
+  {
+    escalated = Convert.ToInt32(await escalate.ExecuteScalarAsync() ?? 0);
+  }
+  catch (Exception exception) when (exception is not OperationCanceledException)
+  {
+    await phases.RecordAsync(PhaseCodes.Compute, PhaseOutcome.Failed, DispatchPipeline, null, DispatchPipeline,
+      message: $"stopnjevanje odhodnih napak je padlo: {exception.Message}");
+    throw;
+  }
   if (escalated > 0)
     Console.WriteLine($"Stopnjevanih nepotrjenih napak (starejših od {escalationSeconds} s): {escalated}.");
+  await phases.RecordAsync(PhaseCodes.Compute, PhaseOutcome.Succeeded, DispatchPipeline, null, DispatchPipeline,
+    message: $"stopnjevanih nepotrjenih napak odhodne poti (starejših od {escalationSeconds} s): {escalated}",
+    hasNewData: escalated > 0, itemsOut: escalated);
 }
 
 var deliveryEnabled = string.Equals(Environment.GetEnvironmentVariable("PIM_ALERT_DELIVERY_ENABLED"), "true", StringComparison.OrdinalIgnoreCase);
@@ -58,6 +77,8 @@ if (!deliveryEnabled)
   await using var idleRun = await OperationsRun.BeginAsync(connectionString, 2, "ALERT_DISPATCH", $"{Environment.MachineName}:{Environment.ProcessId}");
   await idleRun.CompleteAsync(true);
   Console.WriteLine("Dostava opozoril je privzeto izključena (PIM_ALERT_DELIVERY_ENABLED ni true); omrežni klic ni bil izveden.");
+  await phases.RecordAsync(PhaseCodes.Send, PhaseOutcome.Skipped, DispatchPipeline, null, DispatchPipeline,
+    message: "dostava opozoril je izklopljena (PIM_ALERT_DELIVERY_ENABLED ni true); nič ni bilo poslano");
   return 0;
 }
 
@@ -69,6 +90,8 @@ var emailOptions = EmailAlertSender.FromEnvironment();
 if (!webhookOptions.Enabled && !emailOptions.Enabled)
 {
   Console.Error.WriteLine("Omogočena dostava zahteva PIM_ALERT_WEBHOOK_URL ali vklopljeno e-pošto (PIM_ALERT_EMAIL_ENABLED).");
+  await phases.RecordAsync(PhaseCodes.Send, PhaseOutcome.Failed, DispatchPipeline, null, DispatchPipeline,
+    message: "dostava je vklopljena, a ni ne PIM_ALERT_WEBHOOK_URL ne vklopljene e-pošte (PIM_ALERT_EMAIL_ENABLED)");
   return 2;
 }
 
@@ -110,13 +133,34 @@ try
   }
 
   Console.WriteLine($"Dostav: uspešnih {delivered}, neuspešnih {failed}, preskočenih (kanal izključen) {skipped}.");
+  await RecordDeliveryPhaseAsync(delivered, failed, skipped);
   await operationsRun.CompleteAsync(failed == 0, failed == 0 ? null : "Dostava opozorila ni uspela.");
   return failed == 0 ? 0 : 1;
 }
-catch
+catch (Exception exception)
 {
+  await phases.RecordAsync(PhaseCodes.Send, PhaseOutcome.Failed, DispatchPipeline, null, DispatchPipeline,
+    message: $"dostava opozoril je padla (uspešnih {delivered}, neuspešnih {failed}): {exception.Message}",
+    itemsOut: delivered, itemsRejected: failed);
   await operationsRun.CompleteAsync(false, "Dostava opozoril se je končala z napako.");
   throw;
+}
+
+// Faza POSILJANJE: neuspela dostava je padla faza; prazna vrsta je uspeh brez novih podatkov;
+// dostave, ki so čakale samo na izključen kanal, so preskok z razlogom.
+Task RecordDeliveryPhaseAsync(int delivered, int failed, int skipped)
+{
+  var obravnavanih = delivered + failed + skipped;
+  var stevila = $"uspešnih {delivered}, neuspešnih {failed}, preskočenih (kanal izključen) {skipped}";
+  var (izid, opomba) = failed > 0
+    ? (PhaseOutcome.Failed, $"dostava opozorila ni uspela: {stevila}")
+    : obravnavanih == 0
+      ? (PhaseOutcome.Succeeded, "v vrsti ni bilo dostav")
+      : delivered == 0
+        ? (PhaseOutcome.Skipped, $"vse dostave čakajo na izključen kanal: {stevila}")
+        : (PhaseOutcome.Succeeded, stevila);
+  return phases.RecordAsync(PhaseCodes.Send, izid, DispatchPipeline, null, DispatchPipeline, message: opomba,
+    hasNewData: delivered > 0, itemsIn: obravnavanih, itemsOut: delivered, itemsRejected: failed);
 }
 
 string? Value(string name)

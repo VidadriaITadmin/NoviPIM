@@ -101,8 +101,12 @@ using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
 http.DefaultRequestHeaders.Add("User-Agent", "PIM.SourceFetchWorker/1.0");
 var fetcher = new SourceFetcher(http, targetRoot);
 
-await using var run = await OperationsRun.BeginAsync(connectionString, organizationId.Value, "SOURCE_FETCH",
-  $"{Environment.MachineName}:{Environment.ProcessId}");
+var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
+await using var run = await OperationsRun.BeginAsync(connectionString, organizationId.Value, "SOURCE_FETCH", workerId);
+
+// Faze (migracija 255): vsak vir dobi svojo vrstico s tem, kaj se je z njim zgodilo. Brez tega je
+// bil prenos, ki se pet dni ni zgodil, videti enako kot uspesen prenos (BT_STOCK, 2026-09-22).
+var phases = PhaseLog.FromEnvironment(connectionString, workerId);
 
 var prevzetih = 0;
 var napake = new List<string>();
@@ -111,6 +115,7 @@ try
   foreach (var location in locations)
   {
     var credential = FetchCredential.Read(fetchSection, location.CredentialKey ?? "");
+    var phase = await phases.BeginAsync(PhaseCodes.Fetch, location.SourceCode, organizationId, "SOURCE_FETCH", run.RunId);
     var outcome = await fetcher.FetchAsync(location, credential);
     await run.HeartbeatAsync();
 
@@ -118,16 +123,28 @@ try
     {
       napake.Add($"{outcome.SourceCode}: {outcome.Error}");
       Console.Error.WriteLine($"[{outcome.SourceCode}] NAPAKA: {outcome.Error}");
+      await phase.FailedAsync(outcome.Error);
     }
     else if (outcome.Fetched)
     {
       prevzetih++;
       var arhiv = outcome.ArchivePath is null ? "" : $"; arhiv {Path.GetFileName(outcome.ArchivePath)}";
       Console.WriteLine($"[{outcome.SourceCode}] prevzeto {outcome.Bytes:N0} bajtov -> {outcome.TargetPath}{arhiv}");
+      await phase.SucceededAsync(byteCount: outcome.Bytes, hasNewData: true,
+        message: outcome.TargetPath is null ? null : Path.GetFileName(outcome.TargetPath));
+    }
+    else if (outcome.TargetPath is not null && outcome.Bytes > 0 && outcome.Skipped is { } nespremenjeno && nespremenjeno.Contains("nespremenjena", StringComparison.OrdinalIgnoreCase))
+    {
+      // Stik z dobaviteljem je bil, datoteka je ista: uspeh brez novih podatkov. Svezina vira se
+      // meri po stiku (dobavitelj je dosegljiv), starost podatkov pa po zadnji novi datoteki.
+      Console.WriteLine($"[{outcome.SourceCode}] nespremenjeno: {outcome.Skipped}");
+      await phase.SucceededAsync(byteCount: outcome.Bytes, hasNewData: false, message: nespremenjeno);
     }
     else
     {
       Console.WriteLine($"[{outcome.SourceCode}] preskoceno: {outcome.Skipped}");
+      // Stika ni bilo (razmik dobavitelja, lokalna mapa): ni uspeh in ne napaka, razlog pa mora biti zapisan.
+      await phase.SkippedAsync(outcome.Skipped ?? "Brez novega prevzema.");
     }
   }
 }

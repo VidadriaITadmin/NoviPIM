@@ -7,80 +7,133 @@
 
 <PageTitle>Zaloga</PageTitle>
 
-<PimPage Title="Zaloga" Subtitle="Kaj je na zalogi, kdaj je bil posnetek narejen in katera pozicija nima svojega artikla. Zaloga je samo za branje — PIM je nikoli ne piše nazaj v ERP." />
+<PimPage Title="Zaloga" Subtitle="Kaj je na zalogi pri nas in pri dobaviteljih, kaj prihaja in kje so posebnosti. Zaloga je samo za branje — PIM je nikoli ne piše nazaj v ERP.">
+  <Actions>
+    <a class="ghost-button" href="nastavitve/skladisca">Skladišča po podjetjih</a>
+  </Actions>
+</PimPage>
 
+@* Uporabnik 2026-09-22: »stran zaloge mi tudi preoblikuj kot izdelki in stranke, da ima izvoze,
+   samo da ne rabi uvozov … dodaj pametne in uporabne filtre, če ne drugega manjkajo skladišča«.
+   Isti delovni ritem kot /stranke: zavihki za prvo vprasanje (ali je zaloga), mirna orodna vrstica
+   z iskanjem, filtri na zahtevo, aktivni filtri kot znacke, izvoz natanko tega pogleda. Uvoza ni:
+   zaloga je samo za branje.
 
-<section class="ui-card toolbar" role="search" aria-labelledby="stocks-filter-title">
-  <h2 id="stocks-filter-title" class="visually-hidden">Filtriranje zaloge</h2>
-  <label class="visually-hidden" for="stock-search">Poišči po artiklu ali EAN</label>
-  <input id="stock-search" type="search" class="search-input" placeholder="Poišči po artiklu ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
+   Za razliko od strank je zalogovnih vrstic preko 20.000 in jih bere intranet.GetStockByItem,
+   zato filtri zivijo v naslovu in gredo v poizvedbo (stran po 50), ne v pomnilnik. Vsaka
+   sprememba filtra takoj velja — gumba »Uporabi« ni vec. *@
+<nav class="page-tabs" aria-label="Zaloga">
+  @foreach (var view in Views)
+  {
+    <button type="button" class="page-tab @(Availability == view.Code ? "active" : null)" aria-current="@(Availability == view.Code ? "page" : null)" @onclick="() => SetAvailability(view.Code)">
+      @view.Label
+    </button>
+  }
+</nav>
 
-  @* Uporabnik 2026-08-31: »zakaj zalogo prikazuje samo dobavitelja in SAOP DEMO, dej da bo se
-     ostale zaloge prikazovalo od SAOP (IQ, VID, Ediito)«. Privzeto so zato vsa podjetja;
-     SAOP zaloga obstaja pri vseh stirih. *@
-  <label class="visually-hidden" for="stock-organization">Podjetje</label>
-  <select id="stock-organization" class="filter-select" @bind="OrganizationDraft">
-    <option value="">Vsa podjetja</option>
-    @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
-  </select>
+<section class="ui-card toolbar stock-list-toolbar" role="search" aria-labelledby="stocks-filter-title">
+  <div class="card-toolbar">
+    <h2 id="stocks-filter-title" class="visually-hidden">Filtriranje zaloge</h2>
+    <div class="search-field">
+      <span class="search-icon" aria-hidden="true"></span>
+      <label class="visually-hidden" for="stock-search">Poišči po šifri artikla ali EAN</label>
+      <input id="stock-search" type="search" class="search-input" placeholder="Išči po šifri artikla ali EAN … (Enter)" @bind="Search" @bind:after="ApplyFilters" />
+    </div>
+    <button type="button" class="ghost-button filter-toggle @(FiltersOpen ? "open" : null)" aria-expanded="@FiltersOpen.ToString().ToLowerInvariant()" aria-controls="stocks-filter-panel" @onclick="ToggleFilters">
+      <span class="funnel" aria-hidden="true"></span>Filtri
+      @if (ActiveFilters.Count > 0) { <span class="filter-badge">@ActiveFilters.Count</span> }
+    </button>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 
-  <label class="visually-hidden" for="stock-source">Vir</label>
-  <select id="stock-source" class="filter-select" @bind="SourceDraft">
-    <option value="">Vsi viri</option>
-    @foreach (var source in SourceCodes)
+    @* Izvoz (migracija 190/191, 267): ista zdruzena vrstica na artikel kot tabela, isti filtri in
+       ista razvrstitev. Uporabnik 2026-09-10: »naj bo samo Excel«; 2026-09-22: brez uvoza. *@
+    <div class="toolbar-actions">
+      <a class="ghost-button @(TotalCount == 0 ? "disabled" : null)" href="@StockExportHref" download data-enhance-nav="false"
+         title="Zaloga tega pogleda v Excel: ena vrstica na artikel, SAOP in dobaviteljeva stran, prihodi, min/max in posnetka.">
+        Izvozi Excel (@TotalCount.ToString("N0"))
+      </a>
+    </div>
+  </div>
+
+  <div id="stocks-filter-panel" class="filter-panel" hidden="@(!FiltersOpen)">
+    <div class="filter-grid">
+      @* Uporabnik 2026-08-31: vsa podjetja privzeto — SAOP zaloga obstaja pri vseh. *@
+      <div class="filter-field">
+        <label for="stock-organization">Podjetje</label>
+        <select id="stock-organization" class="filter-select" @bind="OrganizationText" @bind:after="OrganizationChanged">
+          <option value="">Vsa podjetja</option>
+          @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+        </select>
+      </div>
+      @* Skladisce = SAOP vir podjetja (migracija 267). Vrstica ostane cela, z dobaviteljevim delom vred. *@
+      <div class="filter-field">
+        <label for="stock-warehouse">Skladišče (SAOP)</label>
+        <select id="stock-warehouse" class="filter-select" @bind="ErpSource" @bind:after="ApplyFilters">
+          <option value="">Vsa skladišča</option>
+          @foreach (var warehouse in WarehouseOptions) { <option value="@warehouse.Code">@warehouse.Label</option> }
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="stock-supplier">Dobavitelj</label>
+        <select id="stock-supplier" class="filter-select" @bind="SupplierSource" @bind:after="ApplyFilters">
+          <option value="">Vsi dobavitelji</option>
+          @foreach (var supplier in SupplierOptions) { <option value="@supplier">@supplier</option> }
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="stock-signal">Posebnosti</label>
+        <select id="stock-signal" class="filter-select" @bind="Signal" @bind:after="ApplyFilters">
+          <option value="">Vse vrstice</option>
+          @foreach (var signal in Signals) { <option value="@signal.Code">@signal.Label</option> }
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="stock-age">Svežina posnetka</label>
+        <select id="stock-age" class="filter-select" @bind="Age" @bind:after="ApplyFilters">
+          <option value="">Vseeno</option>
+          <option value="24">Posnetek do 24 ur</option>
+          <option value="72">Posnetek do 3 dni</option>
+          <option value="168">Posnetek do 7 dni</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="link-button" @onclick="ClearFilters">Počisti vse filtre</button>
+    </div>
+  </div>
+</section>
+
+@if (ActiveFilters.Count > 0)
+{
+  <section class="ui-card active-filters" aria-label="Aktivni filtri">
+    @foreach (var filter in ActiveFilters)
     {
-      <option value="@source">@source</option>
+      <button type="button" class="filter-chip" aria-label="Odstrani filter @filter.Label" @onclick="() => ClearFilter(filter.Key)">
+        @filter.Label<span class="chip-remove" aria-hidden="true"></span>
+      </button>
     }
-  </select>
+    <button type="button" class="filter-chip clear-all" @onclick="ClearFilters">Počisti vse</button>
+  </section>
+}
 
-  @* Uporabnik 2026-09-10, po pregledu strani z locenima vrsticama za isti artikel: »pa ne da so
-     dve vrstice amapk da se doda stolpce v tabeli ... da ima eno vrstico z vsemi temi podatki«.
-     Kontrola "vrsta vira" je zato odpadla dokoncno: vsaka vrstica zdaj ze kaze oboje (SAOP in
-     dobavitelja) hkrati, locevati po vrsti vira ni vec kaj. *@
+<section class="ui-card data-card stock-list-card" aria-label="Zalogovne pozicije">
+  <div class="table-toolbar">
+    <label for="stock-sort">Razvrstitev</label>
+    <select id="stock-sort" class="filter-select" @bind="Sort" @bind:after="ApplyFilters">
+      <option value="ITEM">Šifra artikla</option>
+      <option value="NAME">Naziv A–Ž</option>
+      <option value="ERP_DESC">Naša zaloga padajoče</option>
+      <option value="ERP_ASC">Naša zaloga naraščajoče</option>
+      <option value="SUPPLIER_DESC">Dobaviteljeva zaloga padajoče</option>
+      <option value="INCOMING">Najbližji prihod</option>
+    </select>
+  </div>
 
-  @* Uporabnik 2026-09-03: manjkal je filter »ima zalogo ali ne«. Uporablja isti @Availability,
-     ki ga intranet.GetStockByItem pozna (izracunano na sesteti kolicini obeh strani). Uporabnik
-     2026-09-10: doda se "Prihaja zaloga" — samo tiste artikle, ki imajo dejansko prihajajoco
-     kolicino (SAOP prek stock.ItemDeliveryDate, migracija 189, ali dobavitelj neposredno). *@
-  <label class="visually-hidden" for="stock-instock">Ima zalogo</label>
-  <select id="stock-instock" class="filter-select" @bind="InStockDraft">
-    <option value="">Zaloga: vseeno</option>
-    <option value="IN_STOCK">Na zalogi</option>
-    <option value="OUT_OF_STOCK">Brez zaloge</option>
-    <option value="INCOMING">Prihaja zaloga</option>
-  </select>
-
-  <label class="visually-hidden" for="stock-age">Svežina posnetka</label>
-  <select id="stock-age" class="filter-select" @bind="AgeDraft">
-    <option value="">Svežina: vseeno</option>
-    <option value="24">Posnetek do 24 ur</option>
-    <option value="72">Posnetek do 3 dni</option>
-    <option value="168">Posnetek do 7 dni</option>
-  </select>
-
-  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
-  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
-</section>
-
-@* Izvoz zaloge (migracija 190/191): ista zdruzena vrstica na artikel kot tabela spodaj, isti
-   filtri. Uporabnik 2026-09-10: »naj bo samo Excel« — CSV je odpadel. Uporabnik 2026-09-11:
-   »da se bo lahko vse kar bos filtreral izvozilo v excel« — podjetje ni vec pogoj za izvoz,
-   "vsa podjetja" se izvozi enako kot ena, stolpec Podjetje v listu jih loci. *@
-<section class="ui-card toolbar stock-export section-gap" aria-label="Izvoz zaloge">
-  <span class="toolbar-label">Izvoz zaloge:</span>
-  <a class="filter-button" href="@StockExportHref" target="_blank">Prenesi (Excel)</a>
-  <span class="muted">@ExportFilterSummary</span>
-</section>
-
-@* Vrstica oblačkov z aktivnimi filtri je odpadla: uporabnik jih je 2026-08-28 označil za
-   moteče. Kaj je nastavljeno, se vidi v samih kontrolah nad tabelo, poleg njih pa stoji
-   »Počisti«, ki je edino dejanje, ki ga je vrstica oblačkov res ponujala. *@
-<section class="ui-card data-card" aria-label="Zalogovne pozicije">
   <PimState Loading="Loading" Error="@Error" Empty="@(PageData is not null && PageData.Rows.Count == 0)"
             EmptyText="Za izbrane filtre ni zalogovnih pozicij." LoadingText="Nalaganje zaloge …">
     @if (PageData is not null)
     {
-      <PimTable Caption="Zaloge in dobavljivost v aktivni organizaciji" AriaLabel="Tabela zalogovnih pozicij" Columns="Columns">
+      <PimTable Caption="@ScopeCaption" AriaLabel="Tabela zalogovnih pozicij" Columns="Columns">
         <Rows>
           @foreach (var row in PageData.Rows)
           {
@@ -143,7 +196,13 @@
                 @if (row.HasErp) { <span>SAOP: @row.ErpSnapshotUtc?.ToPimLocal().ToString("dd.MM.yyyy HH:mm")</span> }
                 @if (row.HasSupplier) { <span class="product-meta">Dobavitelj: @row.SupplierSnapshotUtc?.ToPimLocal().ToString("dd.MM.yyyy HH:mm")</span> }
               </td>
-              <td><PimChip Text="@((row.ErpQuantity + row.SupplierQuantity) > 0 ? "Na zalogi" : "Brez zaloge")" Tone="@((row.ErpQuantity + row.SupplierQuantity) > 0 ? "good" : "bad")" /></td>
+              <td>
+                <PimChip Text="@((row.ErpQuantity + row.SupplierQuantity) > 0 ? "Na zalogi" : "Brez zaloge")" Tone="@((row.ErpQuantity + row.SupplierQuantity) > 0 ? "good" : "bad")" />
+                @if (RowFlags(row) is { Count: > 0 } flags)
+                {
+                  <span class="row-flags">@foreach (var flag in flags) { <span class="row-flag">@flag</span> }</span>
+                }
+              </td>
             </tr>
           }
         </Rows>
@@ -164,7 +223,7 @@
           @foreach (var source in Overview.Sources)
           {
             <tr>
-              <td><a href="@($"zaloge?vir={Uri.EscapeDataString(source.SourceCode)}")"><span class="source-code">@source.SourceCode</span></a></td>
+              <td><a href="@SourceHref(source.SourceCode)"><span class="source-code">@source.SourceCode</span></a></td>
               <td>@(source.ProviderKind ?? "—")</td>
               <td class="numeric">@source.PositionCount.ToString("N0")</td>
               <td class="numeric">@source.MatchedCount.ToString("N0")</td>
@@ -226,30 +285,38 @@
 </section>
 
 <p class="muted source-note">
-  Vir: <span class="code-value">intranet.GetStockByItem</span> (migracija 190, ena vrstica na artikel) in
-  <span class="code-value">intranet.GetStockOverview</span> (migracija 103). Datum in količina prihoda naše
-  zaloge prideta iz <span class="code-value">stock.ItemDeliveryDate</span> (migracija 189, SAOP
-  <span class="code-value">GetItemDeliveryDate</span>). Izpeljane težave nimajo gumba »reši« — izginejo, ko izgine vzrok.
+  Vir: <span class="code-value">intranet.GetStockByItem</span> (migracija 190, ena vrstica na artikel; filtri po skladišču,
+  dobavitelju in posebnostih 267) in <span class="code-value">intranet.GetStockOverview</span> (migracija 103). Datum in
+  količina prihoda naše zaloge prideta iz <span class="code-value">stock.ItemDeliveryDate</span> (migracija 189, SAOP
+  <span class="code-value">GetItemDeliveryDate</span>). Naša zaloga je vsota čez skladišča, ki jih PIM bere iz SAOP — katera so to,
+  pove stran <a href="nastavitve/skladisca">Skladišča</a>. Izpeljane težave nimajo gumba »reši« — izginejo, ko izgine vzrok.
 </p>
 
 @code {
+  sealed record Option(string Code, string Label);
+  sealed record FilterChip(string Key, string Label);
+
   [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
   [SupplyParameterFromQuery(Name = "vir")] public string? QuerySource { get; set; }
+  [SupplyParameterFromQuery(Name = "skladisce")] public string? QueryWarehouse { get; set; }
+  [SupplyParameterFromQuery(Name = "dobavitelj")] public string? QuerySupplier { get; set; }
+  [SupplyParameterFromQuery(Name = "posebnost")] public string? QuerySignal { get; set; }
   [SupplyParameterFromQuery(Name = "starost")] public int? QueryAge { get; set; }
   [SupplyParameterFromQuery(Name = "zaloga")] public string? QueryInStock { get; set; }
   [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? QuerySort { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
 
   StockItemPage? PageData;
   StockOverview? Overview;
+  WarehouseStockOverview? Warehouses;
   bool Loading = true;
+  bool FiltersOpen;
   string? Error;
-  string SearchDraft = "";
-  string SourceDraft = "";
-  string AgeDraft = "";
-  string InStockDraft = "";
-  string OrganizationDraft = "";
   IReadOnlyList<OrganizationContext> Organizations = [];
+
+  // Kontrole; vrednosti pridejo iz naslova in gredo ob vsaki spremembi nazaj v naslov.
+  string Search = "", OrganizationText = "", ErpSource = "", SupplierSource = "", Signal = "", Age = "", Availability = "", Sort = "ITEM";
 
   /// <summary>Obseg, za katerega je prebran povzetek; prazen niz je veljaven obseg (vsa podjetja).</summary>
   string? LoadedScope;
@@ -257,46 +324,62 @@
   const int Take = 50;
   const int StaleAfterMinutes = 24 * 60;
 
+  static readonly IReadOnlyList<Option> Views =
+  [
+    new("", "Vsa zaloga"),
+    new("IN_STOCK", "Na zalogi"),
+    new("OUT_OF_STOCK", "Brez zaloge"),
+    new("INCOMING", "Prihaja zaloga"),
+    new("SUPPLIER_ONLY", "Samo pri dobavitelju"),
+  ];
+
+  // Migracija 267. Minimalna/maksimalna zaloga je iz canon.ProductStockPolicy (SAOP), prihod iz
+  // stock.ItemDeliveryDate ali dobaviteljeve datoteke.
+  static readonly IReadOnlyList<Option> Signals =
+  [
+    new("BELOW_MIN", "Pod minimalno zalogo"),
+    new("ABOVE_MAX", "Nad maksimalno zalogo"),
+    new("LATE", "Prihod zamuja"),
+    new("NEGATIVE", "Negativna zaloga v SAOP"),
+    new("NO_ERP", "Ni v naši zalogi, samo pri dobavitelju"),
+    new("UNMATCHED", "Brez artikla v PIM"),
+  ];
+
+  static readonly IReadOnlyList<Option> Sorts =
+  [
+    new("ITEM", "šifra artikla"), new("NAME", "naziv A–Ž"), new("ERP_DESC", "naša zaloga padajoče"),
+    new("ERP_ASC", "naša zaloga naraščajoče"), new("SUPPLIER_DESC", "dobaviteljeva zaloga padajoče"), new("INCOMING", "najbližji prihod"),
+  ];
+
+  int? OrganizationId => int.TryParse(OrganizationText, out var value) ? value : null;
+  int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
+  long TotalCount => PageData?.TotalCount ?? 0;
+
+  /// <summary>Filter, ki velja za tabelo — izvoz ga vzame nespremenjenega (StockQuery, 267).</summary>
+  StockItemFilter AppliedFilter => StockQuery.FromQuery(name => name switch
+  {
+    "podjetje" => QueryOrganization, "isci" => QuerySearch, "vir" => QuerySource, "zaloga" => QueryInStock,
+    "starost" => QueryAge?.ToString(), "skladisce" => QueryWarehouse, "dobavitelj" => QuerySupplier,
+    "posebnost" => QuerySignal, "razvrsti" => QuerySort, _ => null,
+  }) with { Skip = Skip, Take = Take };
+
+  StockItemFilter DraftFilter => new(
+    OrganizationId, Search: Search, SourceCode: QuerySource, Availability: Availability,
+    MaxAgeHours: int.TryParse(Age, out var age) ? age : null,
+    ErpSource: ErpSource, SupplierSource: SupplierSource, Signal: Signal, Sort: Sort);
+
   /// <summary>
-  /// Izvoz (migracija 190/191) sledi popolnoma istim filtrom kot tabela — vkljucno s podjetjem:
-  /// "vsa podjetja" (prazen OrganizationDraft) se izvozi enako kot ena, brez parametra "podjetje".
+  /// Izvoz (migracija 190/191, 267) sledi popolnoma istim filtrom in razvrstitvi kot tabela —
+  /// "vsa podjetja" se izvozi enako kot eno, stolpec Podjetje v listu jih loci.
   /// </summary>
   string StockExportHref
   {
     get
     {
-      var parameters = new List<string>();
-      if (!string.IsNullOrWhiteSpace(OrganizationDraft)) parameters.Add("podjetje=" + Uri.EscapeDataString(OrganizationDraft));
-      if (!string.IsNullOrWhiteSpace(SourceDraft)) parameters.Add("virsifra=" + Uri.EscapeDataString(SourceDraft));
-      if (!string.IsNullOrWhiteSpace(SearchDraft)) parameters.Add("isci=" + Uri.EscapeDataString(SearchDraft.Trim()));
-      if (!string.IsNullOrWhiteSpace(InStockDraft)) parameters.Add("zaloga=" + InStockDraft);
-      if (!string.IsNullOrWhiteSpace(AgeDraft)) parameters.Add("starost=" + AgeDraft);
-      return parameters.Count == 0 ? "izvoz/zaloge.xlsx" : "izvoz/zaloge.xlsx?" + string.Join('&', parameters);
+      var query = StockQuery.ToQueryString(AppliedFilter);
+      return query.Length == 0 ? "izvoz/zaloge.xlsx" : "izvoz/zaloge.xlsx?" + query;
     }
   }
-
-  string ExportFilterSummary
-  {
-    get
-    {
-      var parts = new List<string>
-      {
-        string.IsNullOrWhiteSpace(OrganizationDraft)
-          ? "vsa podjetja"
-          : Organizations.FirstOrDefault(organization => organization.OrganizationId.ToString() == OrganizationDraft)?.Name ?? OrganizationDraft,
-      };
-      if (!string.IsNullOrWhiteSpace(SourceDraft)) parts.Add("vir " + SourceDraft);
-      if (!string.IsNullOrWhiteSpace(InStockDraft)) parts.Add(InStockDraft switch
-      {
-        "IN_STOCK" => "na zalogi", "OUT_OF_STOCK" => "brez zaloge", "INCOMING" => "prihaja zaloga", _ => InStockDraft,
-      });
-      if (!string.IsNullOrWhiteSpace(AgeDraft)) parts.Add("posnetek do " + AgeDraft + " ur");
-      if (!string.IsNullOrWhiteSpace(SearchDraft)) parts.Add("iskanje »" + SearchDraft.Trim() + "«");
-      return string.Join(", ", parts);
-    }
-  }
-
-  int Skip => Math.Max(0, ((QueryPage ?? 1) - 1) * Take);
 
   static readonly IReadOnlyList<PimColumn> Columns =
   [
@@ -316,33 +399,55 @@
     new("Razlog"), new("Pozicij", Numeric: true), new("Prvič"), new("Nazadnje"), new("Primer"),
   ];
 
-  IReadOnlyList<string> SourceCodes => Overview is null ? []
-    : Overview.Sources.Select(source => source.SourceCode).Distinct().OrderBy(code => code).ToList();
+  /// <summary>
+  /// SAOP skladisca kot jih PIM bere: en vir na podjetje. Ime je ime skladisca, kadar se bere eno;
+  /// kadar se bere vec, stran to pove, ker je kolicina njihova vsota (267).
+  /// </summary>
+  IReadOnlyList<Option> WarehouseOptions => Warehouses is null ? []
+    : Warehouses.Organizations
+      .Where(row => row.SourceCode is not null && (OrganizationId is null || row.OrganizationId == OrganizationId))
+      .Select(row => new Option(row.SourceCode!, WarehouseLabel(row) + " · " + row.OrganizationName))
+      .ToList();
+
+  // Viri dobaviteljev iz dejanskih posnetkov, ne iz vpisanega seznama.
+  IReadOnlyList<string> SupplierOptions => Warehouses?.SupplierSources ?? [];
+
+  string WarehouseLabel(OrganizationStockRow row)
+  {
+    var read = Warehouses?.Warehouses.Where(warehouse => warehouse.OrganizationId == row.OrganizationId && warehouse.IsRead).ToList() ?? [];
+    return row.WarehouseLabel
+      ?? (read.Count == 1 ? read[0].Name ?? read[0].WarehouseCode
+        : read.Count > 1 ? $"{read.Count} skladišč skupaj"
+        : row.SourceCode ?? "—");
+  }
 
   protected override async Task OnParametersSetAsync()
   {
-    SearchDraft = QuerySearch ?? "";
-    SourceDraft = QuerySource ?? "";
-    AgeDraft = QueryAge?.ToString() ?? "";
-    InStockDraft = QueryInStock ?? "";
-    OrganizationDraft = QueryOrganization ?? "";
+    Search = QuerySearch ?? "";
+    OrganizationText = QueryOrganization ?? "";
+    ErpSource = QueryWarehouse ?? "";
+    SupplierSource = QuerySupplier ?? "";
+    Signal = Signals.Any(signal => signal.Code == QuerySignal) ? QuerySignal! : "";
+    Age = QueryAge?.ToString() ?? "";
+    Availability = Views.Any(view => view.Code == QueryInStock) ? QueryInStock! : "";
+    Sort = Sorts.Any(sort => sort.Code == QuerySort) ? QuerySort! : "ITEM";
 
     Loading = true;
     Error = null;
     try
     {
       if (Organizations.Count == 0) Organizations = await Data.GetOrganizationsAsync();
+      Warehouses ??= await Stock.GetWarehouseStockAsync(null);
 
       // Prazno podjetje pomeni vsa; neveljavna stevilka v naslovu ne sme tiho pomeniti vseh.
-      var scope = int.TryParse(QueryOrganization, out var parsed) ? parsed : (int?)null;
+      var scope = OrganizationId;
       if (LoadedScope != (scope?.ToString() ?? ""))
       {
         LoadedScope = scope?.ToString() ?? "";
         Overview = await Stock.GetOverviewAsync(scope);
       }
 
-      PageData = await Stock.GetItemsAsync(new StockItemFilter(
-        scope, Skip, Take, QuerySearch, QuerySource, QueryInStock, QueryAge, "sl"));
+      PageData = await Stock.GetItemsAsync(AppliedFilter);
     }
     catch
     {
@@ -356,7 +461,36 @@
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{PageData?.TotalCount ?? 0:N0} pozicij";
+    : $"{TotalCount:N0} artiklov";
+
+  string ScopeCaption => OrganizationId is int scope
+    ? "Zaloga podjetja " + (Organizations.FirstOrDefault(row => row.OrganizationId == scope)?.Name ?? scope.ToString())
+    : $"Zaloga vseh podjetij ({Organizations.Count})";
+
+  List<FilterChip> ActiveFilters
+  {
+    get
+    {
+      var filters = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(QuerySearch)) filters.Add(new("search", $"Iskanje: {QuerySearch}"));
+      if (!string.IsNullOrWhiteSpace(QueryOrganization)) filters.Add(new("organization", $"Podjetje: {OrganizationLabel(QueryOrganization)}"));
+      if (!string.IsNullOrWhiteSpace(QueryWarehouse)) filters.Add(new("warehouse", $"Skladišče: {OptionLabel(WarehouseOptions, QueryWarehouse)}"));
+      if (!string.IsNullOrWhiteSpace(QuerySupplier)) filters.Add(new("supplier", $"Dobavitelj: {QuerySupplier}"));
+      if (!string.IsNullOrWhiteSpace(QuerySource)) filters.Add(new("source", $"Samo vir: {QuerySource}"));
+      if (!string.IsNullOrWhiteSpace(Availability)) filters.Add(new("availability", $"Zaloga: {OptionLabel(Views, Availability)}"));
+      if (!string.IsNullOrWhiteSpace(Signal)) filters.Add(new("signal", OptionLabel(Signals, Signal)));
+      if (QueryAge is { } age) filters.Add(new("age", $"Posnetek do {age} ur"));
+      return filters;
+    }
+  }
+
+  string OrganizationLabel(string value) =>
+    int.TryParse(value, out var id)
+      ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"neznano ({value})"
+      : value;
+
+  static string OptionLabel(IReadOnlyList<Option> options, string value) =>
+    options.FirstOrDefault(option => option.Code == value)?.Label ?? value;
 
   static string FreshnessLabel(int minutes) => minutes switch
   {
@@ -370,44 +504,78 @@
       ? "—"
       : $"{row.MinimumStock?.ToString("N0") ?? "—"} / {row.MaximumStock?.ToString("N0") ?? "—"}";
 
-  // Filtri in stran zivijo v naslovu; "" pomeni odstrani, null ohrani obstojecega.
-  string Href(string? search = null, string? source = null,
-    string? age = null, string? inStock = null, string? organization = null, int? page = null)
+  // Iste posebnosti kot filter (267), da vrstica pove, zakaj je v pogledu.
+  static List<string> RowFlags(StockItemRow row)
   {
-    var parameters = new List<string>();
-    Add("isci", Resolve(search, QuerySearch));
-    Add("vir", Resolve(source, QuerySource));
-    Add("starost", Resolve(age, QueryAge?.ToString()));
-    Add("zaloga", Resolve(inStock, QueryInStock));
-    Add("podjetje", Resolve(organization, QueryOrganization));
-    var resolvedPage = page ?? (search is null && source is null && age is null
-      && inStock is null && organization is null ? QueryPage : null);
-    if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
+    var today = DateTime.Today;
+    var flags = new List<string>();
+    if (row.HasErp && row.MinimumStock > 0 && row.ErpQuantity < row.MinimumStock) flags.Add("pod min.");
+    if (row.HasErp && row.MaximumStock > 0 && row.ErpQuantity > row.MaximumStock) flags.Add("nad max.");
+    if (row.HasErp && row.ErpQuantity < 0) flags.Add("negativna");
+    if ((row.ErpIncomingQuantity > 0 && row.ErpIncomingDate < today) || (row.SupplierIncoming > 0 && row.SupplierIncomingDate < today)) flags.Add("prihod zamuja");
+    return flags;
+  }
 
-    return parameters.Count == 0 ? "zaloge" : "zaloge?" + string.Join('&', parameters);
+  // Vir v tabeli svezine odpre zalogo, zozeno na ta vir: SAOP vir je skladisce, ostali so dobavitelji.
+  string SourceHref(string sourceCode) =>
+    (Warehouses?.SupplierSources.Contains(sourceCode) ?? false)
+      ? "zaloge?dobavitelj=" + Uri.EscapeDataString(sourceCode)
+      : "zaloge?skladisce=" + Uri.EscapeDataString(sourceCode);
 
-    void Add(string name, string? value)
+  void ToggleFilters() => FiltersOpen = !FiltersOpen;
+
+  void SetAvailability(string value)
+  {
+    Availability = value;
+    ApplyFilters();
+  }
+
+  // Skladisce drugega podjetja ob zamenjavi podjetja ne velja vec.
+  void OrganizationChanged()
+  {
+    if (ErpSource.Length > 0 && WarehouseOptions.All(option => option.Code != ErpSource)) ErpSource = "";
+    ApplyFilters();
+  }
+
+  void ApplyFilters() => NavigateTo(DraftFilter, page: 1);
+
+  void ClearFilters()
+  {
+    Search = OrganizationText = ErpSource = SupplierSource = Signal = Age = Availability = "";
+    NavigateTo(new StockItemFilter(null, Sort: Sort), page: 1);
+  }
+
+  void ClearFilter(string key)
+  {
+    var filter = DraftFilter;
+    filter = key switch
     {
-      if (!string.IsNullOrWhiteSpace(value)) parameters.Add(name + "=" + Uri.EscapeDataString(value));
-    }
-
-    static string? Resolve(string? requested, string? current) => requested is null ? current : requested;
+      "search" => filter with { Search = null },
+      "organization" => filter with { OrganizationId = null },
+      "warehouse" => filter with { ErpSource = null },
+      "supplier" => filter with { SupplierSource = null },
+      "source" => filter with { SourceCode = null },
+      "availability" => filter with { Availability = null },
+      "signal" => filter with { Signal = null },
+      "age" => filter with { MaxAgeHours = null },
+      _ => filter,
+    };
+    NavigateTo(filter, page: 1);
   }
-
-  Task ApplyFiltersAsync()
-  {
-    Navigation.NavigateTo(Href(
-      search: SearchDraft.Trim(), source: SourceDraft, age: AgeDraft,
-      inStock: InStockDraft, organization: OrganizationDraft, page: 1));
-    return Task.CompletedTask;
-  }
-
-  Task SearchKeyAsync(KeyboardEventArgs args) =>
-    args.Key == "Enter" ? ApplyFiltersAsync() : Task.CompletedTask;
 
   Task GoToSkipAsync(int skip)
   {
-    Navigation.NavigateTo(Href(page: skip / Take + 1));
+    NavigateTo(AppliedFilter, page: skip / Take + 1);
     return Task.CompletedTask;
+  }
+
+  // Filtri in stran zivijo v naslovu; ista pot kot izvoz (StockQuery).
+  void NavigateTo(StockItemFilter filter, int page)
+  {
+    var query = StockQuery.ToQueryString(filter);
+    if (page > 1) query = query.Length == 0 ? "stran=" + page : query + "&stran=" + page;
+    var target = query.Length == 0 ? "zaloge" : "zaloge?" + query;
+    if (!string.Equals(Navigation.ToBaseRelativePath(Navigation.Uri), target, StringComparison.Ordinal))
+      Navigation.NavigateTo(target);
   }
 }

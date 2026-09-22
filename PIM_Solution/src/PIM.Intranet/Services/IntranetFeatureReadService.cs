@@ -13,7 +13,6 @@ public sealed record AttributeValueRow(
   string AttributeCode, string Value, long ProductCount, string? Translation,
   string? SourceCode, bool UsedOnWeb, long MissingTranslationCount);
 
-public sealed record ExportPreview(IReadOnlyList<string> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows);
 
 /// <summary>
 /// Bralni modeli naslednje bazne faze. Manjkajoča procedura je pričakovano stanje in se vrne
@@ -89,32 +88,6 @@ public sealed class IntranetFeatureReadService(IConfiguration configuration)
     catch (SqlException error) when (PimReadModel.IsMissingReadModel(error))
     {
       return PimReadResult<AttributeValueRow>.Missing(procedure);
-    }
-  }
-
-  public async Task<(ExportPreview? Preview, string? MissingObject)> GetExportPreviewAsync(
-    int organizationId, int exportProfileId, int take = 20, CancellationToken cancellationToken = default)
-  {
-    const string procedure = "intranet.GetExportPreview";
-    try
-    {
-      await using var connection = await OpenAsync(cancellationToken);
-      await using var command = Procedure(procedure, connection);
-      command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-      command.Parameters.Add("@ExportProfileId", SqlDbType.Int).Value = exportProfileId;
-      command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
-      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-      var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
-      var rows = new List<IReadOnlyList<string?>>();
-      while (await reader.ReadAsync(cancellationToken))
-        rows.Add(Enumerable.Range(0, reader.FieldCount)
-          .Select(index => reader.IsDBNull(index) ? null : Convert.ToString(reader.GetValue(index)))
-          .ToArray());
-      return (new(columns, rows), null);
-    }
-    catch (SqlException error) when (PimReadModel.IsMissingReadModel(error))
-    {
-      return (null, procedure);
     }
   }
 

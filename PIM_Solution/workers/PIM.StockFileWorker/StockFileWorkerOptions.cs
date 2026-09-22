@@ -11,7 +11,8 @@ namespace PIM.StockFileWorker;
 public sealed record StockFileWorkerOptions(
   string FilePath,
   string SourceCode,
-  int OrganizationId,
+  /// <summary>Podjetja, ki jim gre ista prebrana datoteka (--organizations 2,3,4); vsaj eno.</summary>
+  IReadOnlyList<int> OrganizationIds,
   string Endpoint,
   string DateFormat,
   bool ReadOnly,
@@ -19,6 +20,9 @@ public sealed record StockFileWorkerOptions(
   bool BySchedule = false)
 {
   public const int DefaultOrganizationId = 2;
+
+  /// <summary>Prvo (pri enem podjetju edino) podjetje.</summary>
+  public int OrganizationId => OrganizationIds[0];
 
   /// <summary>Braytron piše datume po ISO, Nowodvorski po evropsko — privzetek sledi viru.</summary>
   public static string DefaultDateFormat(string sourceCode) =>
@@ -31,7 +35,7 @@ public sealed record StockFileWorkerOptions(
   public static StockFileWorkerOptions Parse(IReadOnlyList<string> args)
   {
     string? file = null, source = null, endpoint = null, dateFormat = null;
-    var organizationId = DefaultOrganizationId;
+    var organizationIds = new List<int>();
     var readOnly = false;
     var bySchedule = false;
 
@@ -48,9 +52,14 @@ public sealed record StockFileWorkerOptions(
           source = Next(args, ref index, name);
           break;
         case "--organization-id":
-          var text = Next(args, ref index, name);
-          if (!int.TryParse(text, out organizationId) || organizationId <= 0)
-            throw new ArgumentException($"--organization-id mora biti pozitivno celo število, dobil sem '{text}'.");
+        case "--organizations":
+          // Dobaviteljeva datoteka je ena za vsa podjetja: prebere se enkrat, zapiše vsakemu.
+          foreach (var part in Next(args, ref index, name).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+          {
+            if (!int.TryParse(part, out var organizationId) || organizationId <= 0)
+              throw new ArgumentException($"{name} mora biti pozitivno celo število (ali seznam z vejicami), dobil sem '{part}'.");
+            if (!organizationIds.Contains(organizationId)) organizationIds.Add(organizationId);
+          }
           break;
         case "--endpoint":
           endpoint = Next(args, ref index, name);
@@ -73,7 +82,8 @@ public sealed record StockFileWorkerOptions(
     source ??= SourceFromExtension(file);
     dateFormat ??= DefaultDateFormat(source);
     endpoint ??= $"file://{Path.GetFileName(file)}";
-    return new(Path.GetFullPath(file), source, organizationId, endpoint, dateFormat, readOnly, bySchedule);
+    if (organizationIds.Count == 0) organizationIds.Add(DefaultOrganizationId);
+    return new(Path.GetFullPath(file), source, organizationIds, endpoint, dateFormat, readOnly, bySchedule);
   }
 
   static string Next(IReadOnlyList<string> args, ref int index, string name)

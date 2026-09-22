@@ -91,14 +91,14 @@
         <ul class="issue-list">
           @foreach (var row in Issues)
           {
-            <li class="issue @(row.Severity == "ERROR" ? "error" : "warning")">
+            <li class="issue @(IsBlocking(row) ? "error" : "warning")">
               <span class="issue-mark" aria-hidden="true"></span>
               <div>
                 <p class="issue-message">@row.Message</p>
                 <p class="issue-meta">
                   <span class="code-value">@row.FieldCode</span>
                   <span>@row.ProfileCode</span>
-                  <span>@(row.Severity == "ERROR" ? "blokira" : "opozorilo")</span>
+                  <span>@IssueEffect(row)</span>
                   <span>@PimFormat.Ago(row.LastDetectedUtc)</span>
                 </p>
               </div>
@@ -213,4 +213,12 @@
 
   Task EnterSaves(KeyboardEventArgs args) =>
     args.Key == "Enter" ? EnterToSave.InvokeAsync() : Task.CompletedTask;
+
+  // Pregled 2026-09-22: napaka profila, ki ne ustavi nicesar (COMMERCIAL_L2), je bila tu »blokira«.
+  // Blokira samo napaka v profilu, ki ustavi ERP ali splet; ostalo je manjkajoc podatek ali opozorilo.
+  static bool IsBlocking(ProductCardIssue row) => row.Severity == "ERROR" && (row.BlocksErp || row.BlocksWeb);
+
+  static string IssueEffect(ProductCardIssue row) =>
+    IsBlocking(row) ? "blokira" : row.Severity == "ERROR" ? "manjka (ne blokira)" : "opozorilo";
 }
+

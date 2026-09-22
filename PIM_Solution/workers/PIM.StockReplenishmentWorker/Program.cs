@@ -57,6 +57,11 @@ if (recipients.Count == 0 && !dryRun)
   Console.WriteLine("OPOZORILO: nihče ni odkljukan za ta mail (Sistem → Uporabniki → Zaloga pod MID). Povzetek se sestavi, a nima komu iti.");
 }
 
+// Faze (blok 6 prenove nadzora, 2026-09-22): IZRACUN (artikli na ali pod MID) in POSILJANJE (poslanih /
+// neuspelih) na podjetje. SourceCode in Pipeline sta STOCK_REPLENISHMENT_DIGEST, kot vir posla v JobCatalog.
+// Zakaj: neuspelo pošiljanje je bilo doslej »uspešen« tek; zdaj je padla faza z razlogom.
+var phases = PhaseLog.FromEnvironment(connectionString, $"{Environment.MachineName}:{Environment.ProcessId}");
+
 var failedAny = false;
 foreach (var organization in organizations)
 {
@@ -64,6 +69,8 @@ foreach (var organization in organizations)
   await using var operationsRun = await OperationsRun.BeginAsync(
     connectionString, organization.Id, Pipeline, $"{Environment.MachineName}:{Environment.ProcessId}");
 
+  // Katera faza teče, ko pride izjema: padec mora ostati zapisan pri pravi fazi.
+  string? faza = PhaseCodes.Compute;
   try
   {
     await using var connection = new SqlConnection(connectionString);
@@ -74,6 +81,11 @@ foreach (var organization in organizations)
 
     var rows = await ReadBelowMidAsync(connection, organization.Id);
     Console.WriteLine($"  Artiklov na ali pod MID: {rows.Count} (dobaviteljev: {rows.Select(r => r.Supplier ?? "").Distinct().Count()}).");
+    // Tudi prazen seznam je svež izračun (mail gre ven z »danes ni nič«), zato uspeh z novimi podatki.
+    await phases.RecordAsync(PhaseCodes.Compute, PhaseOutcome.Succeeded, Pipeline, organization.Id, Pipeline,
+      message: $"artiklov na ali pod MID: {rows.Count}; MID osvežen za {refreshed} vrstic",
+      hasNewData: true, itemsIn: refreshed, itemsOut: rows.Count);
+    faza = PhaseCodes.Send;
 
     var generatedUtc = DateTime.UtcNow;
     var html = DigestHtmlBuilder.Build(organization.Name, generatedUtc, rows);
@@ -85,30 +97,54 @@ foreach (var organization in organizations)
       var path = Path.Combine(dryRunDirectory!, $"digest-{organization.Id}-{generatedUtc:yyyyMMdd-HHmmss}.html");
       await File.WriteAllTextAsync(path, html);
       Console.WriteLine($"  SUHI TEK: HTML zapisan v {path}; nič ni poslano.");
+      await phases.RecordAsync(PhaseCodes.Send, PhaseOutcome.Skipped, Pipeline, organization.Id, Pipeline,
+        message: $"suhi tek (--dry-run): HTML zapisan v {path}; nič ni poslano");
     }
     else
     {
       var delivered = 0;
+      var disabled = 0;
       foreach (var recipient in recipients)
       {
         var outcome = await sender.SendAsync(subject, html, recipient);
         Console.WriteLine($"  {recipient}: {outcome}");
         if (outcome == DigestSendOutcome.Delivered) delivered++;
+        else if (outcome == DigestSendOutcome.Disabled) disabled++;
       }
       Console.WriteLine($"  Poslano: {delivered} od {recipients.Count}.");
+      await RecordSendPhaseAsync(organization.Id, recipients.Count, delivered, disabled);
     }
+    faza = null;
 
     await operationsRun.CompleteAsync(true);
   }
   catch (Exception exception)
   {
     Console.Error.WriteLine($"  Organizacija {organization.Id} je padla: {exception.Message}");
+    if (faza is not null)
+      await phases.RecordAsync(faza, PhaseOutcome.Failed, Pipeline, organization.Id, Pipeline, message: exception.Message);
     await operationsRun.CompleteAsync(false, exception.Message[..Math.Min(2000, exception.Message.Length)]);
     failedAny = true;
   }
 }
 
 return failedAny ? 1 : 0;
+
+// Faza POSILJANJE: vsak neuspel naslov (trajna ali začasna napaka) naredi fazo padlo — prej je bil tek
+// v tem primeru »uspešen«. Brez prejemnikov ali z izklopljeno e-pošto je to preskok z razlogom.
+Task RecordSendPhaseAsync(int organizationId, int recipientCount, int delivered, int disabled)
+{
+  var neuspelih = recipientCount - delivered - disabled;
+  var (izid, opomba) = recipientCount == 0
+    ? (PhaseOutcome.Skipped, "nihče ni odkljukan za ta mail (Sistem → Uporabniki → Zaloga pod MID)")
+    : neuspelih > 0
+      ? (PhaseOutcome.Failed, $"pošiljanje ni uspelo za {neuspelih} od {recipientCount} prejemnikov")
+      : delivered == 0
+        ? (PhaseOutcome.Skipped, "pošiljanje e-pošte je izklopljeno (PIM_ALERT_EMAIL_ENABLED ni true ali manjka pošiljatelj)")
+        : (PhaseOutcome.Succeeded, $"poslano {delivered} od {recipientCount} prejemnikov");
+  return phases.RecordAsync(PhaseCodes.Send, izid, Pipeline, organizationId, Pipeline, message: opomba,
+    hasNewData: delivered > 0, itemsIn: recipientCount, itemsOut: delivered, itemsRejected: neuspelih);
+}
 
 static async Task<IReadOnlyList<(int Id, string Name)>> ReadOrganizationsAsync(string connectionString, IReadOnlyList<int> filter)
 {

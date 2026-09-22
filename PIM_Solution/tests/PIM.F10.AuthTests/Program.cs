@@ -33,7 +33,7 @@ foreach (var value in new[] { "AuthSource", "DOMAIN", "ActiveDirectoryService" }
   Assert(authText.Contains(value, StringComparison.Ordinal), "Avtentikacija ne podpira: " + value);
 
 var page = File.ReadAllText(usersPage);
-foreach (var value in new[] { "@page \"/system/uporabniki\"", "Authorize(Roles = \"ADMIN\")", "Najdi v AD", "Dodaj domenskega uporabnika" })
+foreach (var value in new[] { "@page \"/administracija\"", "Authorize(Roles = \"ADMIN\")", "Najdi v AD", "Dodaj domenskega uporabnika" })
   Assert(page.Contains(value, StringComparison.Ordinal), "Administratorska stran ne vsebuje: " + value);
 
 var provisioningText = File.ReadAllText(provisioner);
@@ -85,7 +85,7 @@ Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components",
 //
 // Trditev je namenoma vezana na KLIC (Data.…), ne na golo besedo: prej je test zadoscala
 // omemba imena v komentarju, zato je nadzorna plosca ostala zelena, ceprav klica ni imela vec.
-foreach (var pageName in new[] { "Dashboard.razor", "ProductDetail.razor", "Stocks.razor", "ValidationErrors.razor", "RawQuarantine.razor" })
+foreach (var pageName in new[] { "Dashboard.razor", "Stocks.razor", "ValidationErrors.razor", "RawQuarantine.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
   Assert(pageText.Contains("Data.GetCurrentOrganizationAsync", StringComparison.Ordinal)
@@ -109,7 +109,10 @@ Assert(stocksPage.Contains("<caption>", StringComparison.Ordinal) || stocksPage.
   "Tabela zalog mora imeti programsko določen napis.");
 var quarantinePage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "RawQuarantine.razor"));
 Assert(quarantinePage.Contains("<h1>Karantena</h1>", StringComparison.Ordinal), "Vidni naslov karantene mora biti dosleden.");
-foreach (var pageName in new[] { "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor", "DiscountRules.razor" })
+// SystemIntegrations.razor (/sistem/integracije) je odstranjena v bloku 7 prenove nadzora (2026-09-22);
+// alarme in izključitev podjetij zdaj kaže Nadzor, ki bere vsa podjetja, ne »aktivne organizacije«.
+// PipelineRuns.razor je od pregleda 2026-09-22 samo preusmeritev na /zajem/teki.
+foreach (var pageName in new[] { "Outbound.razor", "DiscountRules.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
   Assert(pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " mora uporabljati aktivno organizacijo iz baze.");
@@ -124,7 +127,7 @@ foreach (var (pageName, organizationSource) in new[] { ("Customers.razor", "GetO
   Assert(!pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " ne sme biti zaklenjena na prvo aktivno podjetje.");
   Assert(!pageText.Contains("Async(2,", StringComparison.Ordinal), pageName + " ne sme uporabljati hardkodirane organizacije 2.");
 }
-foreach (var pageName in new[] { "Customers.razor", "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor" })
+foreach (var pageName in new[] { "Customers.razor", "Outbound.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
   // Isto pravilo kot spodaj: razred sme priti iz skupnega gradnika. <PimTable> izrise
@@ -154,8 +157,9 @@ foreach (var pageName in new[] { "DiscountRules.razor", "CustomerDetail.razor", 
 var discountRulesPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "DiscountRules.razor"));
 Assert(!discountRulesPage.Contains("S1 3 %", StringComparison.Ordinal), "Pravila popustov ne smejo prikazovati statičnega stavka S1–S4.");
 Assert(discountRulesPage.Contains("GetValueTiersAsync", StringComparison.Ordinal), "Pravila popustov morajo prikazati pragove iz baze.");
-Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Counter.razor")).Contains("@page", StringComparison.Ordinal), "Counter ne sme biti javna PIM stran.");
-Assert(!File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Weather.razor")).Contains("@page", StringComparison.Ordinal), "Weather ne sme biti javna PIM stran.");
+// Pregled strani 2026-09-23: predlogi Blazor (Counter, Weather) in opuscena kartica ProductDetail so izbrisani.
+foreach (var removed in new[] { "Counter.razor", "Weather.razor", "ProductDetail.razor", "Partners.razor", "Exports.razor", "PipelineRuns.razor" })
+  Assert(!File.Exists(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", removed)), removed + " je odstranjena; stran brez vsebine ali druga pot na isto stran ne sme nazaj.");
 
 // Ponovni poskus je zapisovalna pot v ERP: obe strani morata imeti enako ozko avtorizacijo,
 // dejanje pa sme biti vidno samo pri neuspelem sporocilu. Skupinska pot mora uporabljati
@@ -425,6 +429,43 @@ foreach (var section in PimNavigation.Sections)
       Assert(pageRoles.Contains(role, StringComparer.Ordinal),
         $"Postavka menija »{item.Label}« je vidna vlogi {role}, stran {item.Route} pa je zanjo zaprta.");
   }
+
+// --- Blok 7 prenove nadzora (2026-09-22): katalog pravic sledi odstranjenim stranem ----------
+// Ključ strani, ki je ni več, bi v upravljanju vlog ostal kot kljukica brez učinka, shranjevanje
+// vloge pa bi ga zavrnilo kot neznanega. Stran posla mora spadati pod isto pravico kot Nadzor,
+// sicer bi skrbnik z dostopom do Nadzora ob kliku na posel dobil »brez dostopa«.
+foreach (var removedKey in new[] { "tab.system.jobs", "tab.system.runs", "tab.system.schedules", "tab.system.alerts", "tab.system.workers", "view.system.exports", "view.system.performance", "view.system.errors" })
+  Assert(!PimAccessCatalog.Keys.Contains(removedKey), "Katalog pravic še vsebuje ključ odstranjene strani: " + removedKey);
+foreach (var (path, expected) in new[]
+{
+  ("sistem", "tab.system.overview"),
+  ("sistem?pogled=postopki", "tab.system.overview"),
+  ("sistem/posel/SAOP_STOCK_IMPORT", "tab.system.overview"),
+  ("sistem/posel/WEB_CATALOG_EXPORT?tek=12", "tab.system.overview"),
+  ("sistem/samotest", "view.system.self-test"),
+  ("sistem/sled", "view.system.activity"),
+})
+  Assert(PimAccessCatalog.Resolve(path) == expected, $"Pot {path} mora zahtevati {expected}, zahteva pa {PimAccessCatalog.Resolve(path)}.");
+foreach (var removedPath in new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi" })
+  Assert(PimAccessCatalog.Resolve(removedPath) == "__unknown__", "Odstranjena pot ne sme imeti pravice: " + removedPath);
+foreach (var tab in PIM.Intranet.Components.Shared.NadzorTabs.Tabs)
+{
+  Assert(tab.PermissionKey is not null && PimAccessCatalog.Keys.Contains(tab.PermissionKey), $"Zavihek nadzora {tab.Key} nima ključa iz kataloga.");
+  Assert(PimAccessCatalog.ParentOf(tab.PermissionKey!) == PimAccessCatalog.System, $"Zavihek nadzora {tab.Key} mora spadati pod {PimAccessCatalog.System}.");
+  Assert(PimAccessCatalog.Resolve(tab.Href) == tab.PermissionKey, $"Zavihek nadzora {tab.Key} vodi na pot z drugo pravico kot jo sam zahteva.");
+}
+Assert(PIM.Intranet.Components.Shared.NadzorTabs.Tabs.Select(tab => tab.Key).SequenceEqual(["nadzor", "samotest", "sled"]),
+  "Nadzor ima natanko tri zavihke: Nadzor, Samotest, Sled sprememb.");
+foreach (var child in PimAccessCatalog.All.Where(item => item.ParentKey is not null))
+  Assert(PimAccessCatalog.Pages.Any(item => item.Key == child.ParentKey), $"Pravica {child.Key} kaže na neobstoječo stran {child.ParentKey}.");
+foreach (var pageDefinition in PimAccessCatalog.Pages)
+{
+  var children = PimAccessCatalog.ChildrenOf(pageDefinition.Key);
+  Assert(children.Count == 0 || children.Any(child => PimAccessCatalog.Resolve(child.Route) == child.Key),
+    $"Nobena podstran strani {pageDefinition.Key} se ne razreši v svoj ključ; vloga je ne bi mogla odpreti.");
+}
+Assert(PimAccessCatalog.All.Select(item => item.Key).Distinct(StringComparer.Ordinal).Count() == PimAccessCatalog.All.Count,
+  "Katalog pravic ima podvojen ključ.");
 
 
 Console.WriteLine("F10 auth contract PASS.");

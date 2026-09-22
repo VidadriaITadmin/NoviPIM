@@ -183,7 +183,8 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
       ORDER BY ISNULL(checkedRow.CheckedUtc, CONVERT(datetime2(3), '19000101')) ASC, candidates.NormalizedItemId;
       """, connection);
     command.Parameters.AddWithValue("@OrganizationId", organizationId);
-    command.Parameters.AddWithValue("@Max", maxLookups);
+    // 0 ali manj pomeni »vsi«: vrstni red (najdlje nepreverjeni najprej) ostane, meje ni.
+    command.Parameters.AddWithValue("@Max", maxLookups > 0 ? maxLookups : int.MaxValue);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var ids = new List<string>();
     while (await reader.ReadAsync(cancellationToken)) ids.Add(reader.GetString(0));

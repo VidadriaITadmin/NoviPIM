@@ -79,7 +79,8 @@ public static class SaopItemPlanner
 
     try
     {
-      var built = new SaopDocumentBuilder(shape, contract).Build(
+      // Planski podatki niso del tega dokumenta: gredo na svojo končno točko (263, SaopPlanningDocument).
+      var built = new SaopDocumentBuilder(shape, SaopPlanningDocument.Split(shape, contract).General).Build(
         decision.Intent, key, values, defaults, stampUtc,
         // Enak pogoj kot pri pošiljanju: ob ustvarjanju šifro dodeli SAOP.
         suggestFirstFreeCode: decision.Intent == SaopIntent.Add && shape.SuggestCodeElement is not null);

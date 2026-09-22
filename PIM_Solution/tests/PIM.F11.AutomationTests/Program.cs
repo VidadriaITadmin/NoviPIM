@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using PIM.Automation;
+using PIM.Operations;
 
 /*
   F11 — enotni model opravil (migracija 237) nad živo razvojno bazo.
@@ -26,6 +27,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 if (!string.Equals(new SqlConnectionStringBuilder(connectionString).InitialCatalog, "PIM", StringComparison.OrdinalIgnoreCase))
   throw new InvalidOperationException("Ta test je dovoljen samo v razvojni bazi PIM.");
 
+const string FazniVir = "F11_FAZE_TEST";
+const string SveziVir = "F11_SVEZINA_TEST";
 const string A = "TEST_JOB_A";
 const string B = "TEST_JOB_B";
 var store = new AutomationStore(connectionString);
@@ -121,6 +124,78 @@ try
   var steps = await store.GetStepsAsync(runs.First(r => r.JobKey == A && r.Summary == "F11 uspeh").JobRunId);
   Check(steps.Count == 1 && steps[0].Status == JobStepStatus.Succeeded, "Korak zagona je zapisan.");
 
+  // 8. Faze znotraj koraka (migracija 255, blok 2 prenove nadzora).
+  //
+  // Zakaj tu in ne v logičnih testih: prav vez med workerjem in bazo je tisto, česar doslej ni bilo.
+  // Preverja se pravilo, ki ga je zahteval uporabnik: »preskočeno« ne sme izpasti kot »uspelo«,
+  // faza brez konca pa ne sme ostati večno odprta.
+  var faze = PhaseLog.FromEnvironment(connectionString, "F11", _ => { });
+  Check(faze.WritesToDatabase, "Pisec faz s povezavo mora pisati v bazo.");
+
+  var uspesna = await faze.BeginAsync(PhaseCodes.Read, FazniVir, organizationId: 2, pipeline: "STOCK_FILE");
+  await uspesna.SucceededAsync(itemsIn: 1389, itemsOut: 1389, hasNewData: true, message: "F11 uspeh");
+  var vrstica = await RowAsync($"SELECT TOP 1 CONCAT(Status, N'|', CONVERT(int, HasNewData), N'|', ItemsOut, N'|', CASE WHEN EndedUtc IS NULL THEN N'odprta' ELSE N'zaprta' END, N'|', PhaseCode) FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND PhaseCode = N'{PhaseCodes.Read}' ORDER BY JobPhaseRunId DESC");
+  Check(vrstica == $"Succeeded|1|1389|zaprta|{PhaseCodes.Read}", "Uspešna faza z novimi podatki je zapisana s števili: " + vrstica);
+
+  var preskocena = await faze.BeginAsync(PhaseCodes.Fetch, FazniVir, organizationId: 2, pipeline: "SOURCE_FETCH");
+  await preskocena.SkippedAsync("dobavitelj dovoli prenos na 3 h");
+  var preskok = await RowAsync($"SELECT TOP 1 CONCAT(Status, N'|', CONVERT(int, HasNewData), N'|', Message) FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND PhaseCode = N'{PhaseCodes.Fetch}' ORDER BY JobPhaseRunId DESC");
+  Check(preskok == "Skipped|0|dobavitelj dovoli prenos na 3 h", "Preskočena faza ne sme veljati za uspeh: " + preskok);
+
+  // Faza, ki se ne konča sama (padec procesa sredi dela), mora obveljati za padlo.
+  await using (await faze.BeginAsync(PhaseCodes.Map, FazniVir, organizationId: 2, pipeline: "STOCK_FILE")) { }
+  var padla = await RowAsync($"SELECT TOP 1 CONCAT(Status, N'|', CASE WHEN EndedUtc IS NULL THEN N'odprta' ELSE N'zaprta' END) FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND PhaseCode = N'{PhaseCodes.Map}' ORDER BY JobPhaseRunId DESC");
+  Check(padla == "Failed|zaprta", "Nezaprta faza je padla faza: " + padla);
+
+  // Neznan tek posla (ročni zagon workerja) ne sme podreti poročanja o fazah.
+  Environment.SetEnvironmentVariable(PhaseLog.JobRunVariable, "999999999");
+  try
+  {
+    var brezTeka = PhaseLog.FromEnvironment(connectionString, "F11", _ => { });
+    Check(brezTeka.JobRunId == 999999999, "Tek posla se prebere iz okolja.");
+    var sirota = await brezTeka.BeginAsync(PhaseCodes.Land, FazniVir, organizationId: 2, pipeline: "STOCK_FILE");
+    await sirota.SucceededAsync(itemsOut: 0, hasNewData: false, message: "F11 brez teka");
+    var brez = await CountAsync($"SELECT COUNT(*) FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND PhaseCode = N'{PhaseCodes.Land}' AND JobRunId IS NULL AND Status = N'Succeeded' AND HasNewData = 0");
+    Check(brez == 1, "Neznan tek posla se shrani kot prazen, faza pa ostane zapisana.");
+  }
+  finally { Environment.SetEnvironmentVariable(PhaseLog.JobRunVariable, null); }
+
+  // Svežina vira: bere se zadnja faza z NOVIMI podatki, ne zadnji uspešen zagon.
+  var svezina = await RowAsync($"SELECT TOP 1 CONCAT(CASE WHEN LastNewDataUtc IS NULL THEN N'brez' ELSE N'ima' END, N'|', CASE WHEN LastCheckedUtc IS NULL THEN N'brez' ELSE N'ima' END) FROM (SELECT LastNewDataUtc = MAX(CASE WHEN Status = N'Succeeded' AND HasNewData = 1 THEN COALESCE(EndedUtc, StartedUtc) END), LastCheckedUtc = MAX(COALESCE(EndedUtc, StartedUtc)) FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND Pipeline = N'STOCK_FILE') s");
+  Check(svezina == "ima|ima", "Svežina vira mora poznati zadnje nove podatke: " + svezina);
+  var samoPreskok = await RowAsync($"SELECT TOP 1 CASE WHEN MAX(CASE WHEN Status = N'Succeeded' AND HasNewData = 1 THEN COALESCE(EndedUtc, StartedUtc) END) IS NULL THEN N'brez' ELSE N'ima' END FROM ops.JobPhaseRun WHERE SourceCode = N'{FazniVir}' AND Pipeline = N'SOURCE_FETCH'");
+  Check(samoPreskok == "brez", "Vir, ki je bil samo preskočen, nima svežih podatkov: " + samoPreskok);
+
+  // 9. Viri poslov in svežina (migracija 256): zastarel vir odpre SourceStale, sveži podatki ga zaprejo.
+  // Svoj vir, da faze iz 8. točke ne štejejo kot sveži podatki.
+  await ExecuteAsync($"""
+    UPDATE ops.JobDefinition SET IsEnabled = 1, UpdatedBy = N'F11' WHERE JobKey = N'{A}';
+    EXEC ops.EnsureJobSource N'{A}', N'{SveziVir}', N'STOCK_FILE', N'F11 vir', 600, 0, 1, 1, N'F11';
+    UPDATE ops.JobSource SET CreatedUtc = DATEADD(hour, -2, SYSUTCDATETIME()) WHERE JobKey = N'{A}' AND SourceCode = N'{SveziVir}';
+    """);
+  var stanje = await RowAsync($"SELECT State FROM ops.JobSourceState() WHERE JobKey = N'{A}' AND SourceCode = N'{SveziVir}'");
+  Check(stanje == "Stale", "Vir brez podatkov, star dlje od meje, je zastarel: " + stanje);
+  await store.EvaluateAlertsAsync("F11", CancellationToken.None);
+  Check(await CountAsync($"SELECT COUNT(*) FROM ops.Alert WHERE AlertKind = N'SourceStale' AND Pipeline = N'OPRAVILO:{A}' AND ResolvedUtc IS NULL") == 1,
+    "Zastarel vir odpre alarm SourceStale.");
+
+  var svezi = await faze.BeginAsync(PhaseCodes.Land, SveziVir, organizationId: 2, pipeline: "STOCK_FILE");
+  await svezi.SucceededAsync(itemsOut: 5, hasNewData: true, message: "F11 sveži podatki");
+  stanje = await RowAsync($"SELECT State FROM ops.JobSourceState() WHERE JobKey = N'{A}' AND SourceCode = N'{SveziVir}'");
+  Check(stanje == "Fresh", "Faza z novimi podatki naredi vir svež: " + stanje);
+  await store.EvaluateAlertsAsync("F11", CancellationToken.None);
+  Check(await CountAsync($"SELECT COUNT(*) FROM ops.Alert WHERE AlertKind = N'SourceStale' AND Pipeline = N'OPRAVILO:{A}' AND ResolvedUtc IS NULL") == 0,
+    "Sveži podatki zaprejo alarm SourceStale.");
+
+  var padec = await faze.BeginAsync(PhaseCodes.Land, SveziVir, organizationId: 2, pipeline: "STOCK_FILE");
+  await padec.FailedAsync("F11 namerni padec");
+  stanje = await RowAsync($"SELECT State FROM ops.JobSourceState() WHERE JobKey = N'{A}' AND SourceCode = N'{SveziVir}'");
+  Check(stanje == "Failed", "Padla faza za zadnjim uspehom pomeni Failed: " + stanje);
+
+  // Vir, ki ga koda ne našteje več, se izklopi in ne šteje več.
+  await ExecuteAsync($"EXEC ops.RetireJobSources N'{A}', N'', N'F11'");
+  Check(await CountAsync($"SELECT COUNT(*) FROM ops.JobSourceState() WHERE JobKey = N'{A}'") == 0, "Izklopljen vir izgine iz stanja.");
+
   Console.WriteLine("F11 avtomatizacija (enotni model opravil) PASS.");
   return 0;
 }
@@ -140,7 +215,9 @@ async Task CleanupAsync()
     DELETE FROM ops.DataCheckpoint WHERE JobKey IN (N'{A}', N'{B}');
     DELETE FROM ops.Artifact WHERE JobKey IN (N'{A}', N'{B}');
     DELETE FROM ops.Alert WHERE Pipeline IN (N'OPRAVILO:{A}', N'OPRAVILO:{B}');
+    DELETE FROM ops.JobSource WHERE JobKey IN (N'{A}', N'{B}');
     DELETE FROM ops.JobDefinition WHERE JobKey IN (N'{A}', N'{B}');
+    DELETE FROM ops.JobPhaseRun WHERE SourceCode IN (N'{FazniVir}', N'{SveziVir}');
     """);
 }
 
@@ -150,6 +227,14 @@ async Task ExecuteAsync(string sql)
   await connection.OpenAsync();
   await using var command = new SqlCommand(sql, connection);
   await command.ExecuteNonQueryAsync();
+}
+
+async Task<string?> RowAsync(string sql)
+{
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  await using var command = new SqlCommand(sql, connection);
+  return await command.ExecuteScalarAsync() as string;
 }
 
 async Task<long> CountAsync(string sql)

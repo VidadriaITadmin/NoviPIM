@@ -1,0 +1,630 @@
+PIM APLIKACIJA – DREVESNA STRUKTURA IN FUNKCIJE STRANI
+========================================================
+
+Pripravljeno: 22. 09. 2026
+Vir: dejanske Razor poti (@page), glavni meni (PimNavigation), katalog pravic
+(PimAccessCatalog) in uporabljene storitve.
+
+KAKO BRATI DOKUMENT
+-------------------
+- To je trenutni zemljevid aplikacije, ne predlog prihodnje rešitve.
+- Menijske postavke vidi uporabnik le, če mu vloga in sec.RolePermission to dovoljujeta.
+  Vloga je lahko ADMIN, CATALOG_EDITOR, COMMERCIAL ali VIEWER.
+- »Razdelilna stran« je vhod v področje; njeni zavihki in povezane strani niso dodatno
+  ponovljeni v levem meniju.
+- »Urejanje« v opisu pomeni, da je dejanje vidno le uporabniku z ustrezno pravico.
+
+DREVESNA STRUKTURA
+------------------
+/
+├─ Nadzor
+│  └─ /nadzorna-plosca                         Nadzorna plošča
+├─ Vhodni podatki
+│  └─ /zajem                                  Zajem podatkov
+│     ├─ /zajem/viri/{SourceCode}              Podrobnost vira
+│     ├─ /zajem/teki                           Teki
+│     ├─ /zajem/teki/{RunId}                   Podrobnost teka
+│     ├─ /zajem/tezave                         Težave
+│     ├─ /zajem/tezave/{IssueKind}/{IssueId}   Podrobnost težave
+│     ├─ /zajem/novi-artikli                   Novi artikli dobaviteljev
+│     ├─ /zajem/cakalna-vrsta                  Čakalna vrsta
+│     ├─ /zajem/neujemanja                     Neujemanja
+│     └─ /zajem/atributi                       Atributi iz virov
+├─ PIM katalog
+│  ├─ /izdelki                                 Seznam artiklov
+│  │  ├─ /izdelki/{ProductId}                  Kartica artikla
+│  │  ├─ /izdelki/uvoz                         Uvoz delovnega zvezka
+│  │  ├─ /izdelki/uvoz-odprodaje               Uvoz odprodaje
+│  │  └─ /izdelki/kategorije                   Uvrstitev v kategorije
+│  └─ /mediji                                  Mediji
+├─ Kakovost
+│  └─ /kakovost                                Kakovost podatkov
+│     ├─ /kakovost/artikli                     Pripravljenost artiklov
+│     ├─ /kakovost/napake                      Napake validacije
+│     ├─ /kakovost/karantena                   Napake uvoza / karantena
+│     ├─ /kakovost/prevodi                     Manjkajoči prevodi
+│     └─ /kakovost/kategorije                  Nepreslikane kategorije
+├─ Izhodi ERP in splet
+│  ├─ /saop                                    Izhod v SAOP
+│  │  ├─ /saop/artikli                         Artikli v SAOP
+│  │  ├─ /outbound                             Čakalna vrsta za izhod
+│  │  ├─ /saop/zgodovina                       Zgodovina zapisov
+│  │  ├─ /saop/odkloni                         Odkloni PIM–ERP
+│  │  └─ /saop/polja                           Polja za zapis v SAOP
+│  └─ /splet                                   Izhod na splet
+│     ├─ /splet/izvoz                          Pripravi spletni izvoz
+│     ├─ /splet/katalog                        Nadzor spletnega kataloga
+│     ├─ /splet/umaknjeni                      Umaknjeni s spleta
+│     ├─ /izvozi                               Datoteke in dostave (alias)
+│     ├─ /izvozi/profili/{ExportProfileId}     Podrobnost izvoznega profila
+│     ├─ /izvozi/obvestila                     Odhodna obvestila
+│     └─ /izvozi/mnozicno                      Množični izhod
+├─ Poslovanje
+│  ├─ /stranke                                 Seznam strank
+│  │  ├─ /stranke/{CustomerId}                 Kartica stranke
+│  │  └─ /stranke/uvoz                         Uvoz strank
+│  ├─ /partnerji                               Partnerji
+│  ├─ /zaloge                                  Zaloga
+│  ├─ /cene                                    Cene in ceniki
+│  │  └─ /cene/tisk                            Cenik za tisk
+│  └─ /preverbe                                Preverbe cen in zaloge
+├─ Upravljanje
+│  ├─ /nastavitve                              Nastavitve kataloga
+│  │  ├─ /nastavitve/atributi                  Atributi in podrobnost kode
+│  │  ├─ /nastavitve/kategorije                Kategorije
+│  │  ├─ /nastavitve/nabori-atributov          Nabori atributov po kategorijah
+│  │  ├─ /nastavitve/povezave-izdelkov         Povezave izdelkov
+│  │  ├─ /nastavitve/kanali                    Spletni kanali
+│  │  ├─ /nastavitve/jeziki                    Jeziki
+│  │  ├─ /nastavitve/skladisca                 Skladišča
+│  │  └─ /nastavitve/rezervacija-zaloge        Izjeme rezervacije zaloge
+│  └─ /pravila                                 Pravila in izvor podatkov
+│     ├─ /pravila/validacija                   Validacijski profili
+│     ├─ /pravila/slovar                       Slovar vrednosti
+│     ├─ /pravila/preslikave                   Izvor in preslikave polj
+│     ├─ /pravila-popustov                     Komercialna pravila
+│     └─ /pravila/nazivi                       Pravila za spletne nazive
+└─ Administracija (samo ADMIN)
+   ├─ /sistem                                  Nadzor sistema
+   │  ├─ /sistem/opravila                      Opravila
+   │  ├─ /sistem/zagoni                        Zagoni
+   │  ├─ /sistem/integracije                   Alarmi in podjetja
+   │  ├─ /sistem/sled                          Sled sprememb
+   │  ├─ /sistem/izvozi                        Zagoni izvozov
+   │  ├─ /sistem/zmogljivost                   Zmogljivost
+   │  ├─ /sistem/samotest                      Nočni samotest
+   │  └─ /sistem/napake                        Sistemske napake
+   └─ /administracija                          Sistemske zadeve
+      ├─ /administracija/uporabniki            Uporabniki
+      ├─ /administracija/vloge                 Vloge in dostop
+      └─ /administracija/mape                  Mesta shranjevanja
+
+PODATKOVNI TOK
+--------------
+Viri (SAOP, XML, datoteke) -> zajem in preslikave -> kanonični katalog -> PIM-lastna
+obogatitev (opisi, mediji, kategorije, kanali) -> kakovost/validacija/karantena ->
+odhod v SAOP ali priprava spletnega izvoza -> nadzor postopkov in sledljivost.
+
+1. NADZOR
+=========
+
+/nadzorna-plosca – Nadzorna plošča
+Dostop: vsi prijavljeni z page.dashboard. Podatki: IntranetDataService, čez vsa podjetja.
+Vsebuje kartice »Artikli v katalogu«, »Brez ERP blokad«, »V PIM sloju«, »Blokirani za
+splet« in »Zajemi v karanteni«, pregled po podjetjih, kakovost po profilih ter povezave
+na operativne sezname. Omogoča bralni pregled in hiter prehod do dela, ne ureja podatkov.
+Pomen števcov: katalog so vsi kanonični artikli; brez ERP blokad je podatek o ERP stanju;
+PIM sloj so zgodovinsko promovirani artikli; blokirani za splet so odprte spletne blokade;
+karantena so neuspešni vhodni zapisi, ne artikli. Kartice zato niso deli istega lijaka in
+se jih ne sešteva/odšteva.
+
+2. VHODNI PODATKI – ZAJEM
+=========================
+
+/zajem – Zajem podatkov (razdelilna stran)
+Dostop: page.ingest/tab.ingest.overview. Storitve: PipelineReadService,
+IntranetDataService, SupplierCandidateReadService. Vsebuje stanje in svežino virov,
+števce ter povezave na teke, težave, čakalno vrsto, neujemanja, kandidate in atribute.
+Omogoča orientacijo po vhodih in odpiranje delovnih pogledov, ne neposrednega uvoza.
+
+/zajem/viri/{SourceCode} – Podrobnost vira
+Dostop: pregled Vhodov. Storitve: PipelineReadService, IntranetDataService. Vsebuje
+identiteto vira, zadnji tek, svežino, statistiko in povezane težave. Omogoča prehod na
+izbrani tek ali seznam težav za ta vir.
+
+/zajem/teki – Teki vhodnih podatkov
+Dostop: tab.ingest.runs. Storitev: PipelineReadService. Vsebuje zgodovino izvedb,
+vir, čas, status in števce obdelanih/neuspelih zapisov. Omogoča filtriranje in odpiranje
+detajla izvedbe.
+
+/zajem/teki/{RunId} – Podrobnost teka
+Dostop: tab.ingest.runs. Storitve: PipelineReadService, IntranetDataService. Vsebuje
+korake, čase, dnevnike, statistiko in napake konkretnega teka. Omogoča diagnozo koraka,
+v katerem je obdelava odstopila, ter prehod do povezane težave.
+
+/zajem/tezave – Težave vhodnih podatkov
+Dostop: tab.ingest.issues. Storitve: PipelineReadService, IntranetDataService. Vsebuje
+težave po viru, tipu, stanju in času ter povezavo na karanteno/detajl. Omogoča filtriranje
+in pregled. Popravek se naredi v viru, slovarju ali preslikavi, ne z brisanjem težave.
+
+/zajem/tezave/{IssueKind}/{IssueId} – Podrobnost težave
+Dostop: tab.ingest.issues. Vsebuje opis, izvorni kontekst, status, čase in dokaze
+obdelave. Omogoča sled do teka ali vira ter dovoljeno obravnavo statusa.
+
+/zajem/novi-artikli – Novi artikli dobaviteljev
+Dostop: view.ingest.candidates. Storitve: SupplierCandidateReadService,
+SupplierCandidateWriteService, SupplierCandidateSaopService, IntranetDataService.
+Vsebuje kandidate, ujemanje z obstoječim katalogom, predlog odločitve in stanje SAOP.
+Omogoča sprejem v katalog, zavrnitev/spremembo obravnave in pripravo zapisa za SAOP,
+kadar ima uporabnik zapisovalno pravico.
+
+/zajem/cakalna-vrsta – Čakalna vrsta zajema
+Dostop: view.ingest.queue. Storitve: PipelineReadService, IntranetDataService. Vsebuje
+zapise, ki čakajo na obdelavo, z virom, statusom in časom. Omogoča pregled zastojev in
+prehod do vira/težave; ni isto kot izhodna SAOP čakalna vrsta.
+
+/zajem/neujemanja – Neujemanja
+Dostop: view.ingest.unmapped. Storitve: PipelineReadService, IntranetDataService.
+Vsebuje neprepoznane vrednosti, kode ali strukture. Omogoča prepoznavo potrebe po
+spremembi slovarja ali preslikave polj.
+
+/zajem/atributi – Atributi iz virov
+Dostop: ADMIN ali CATALOG_EDITOR; view.ingest.attributes. Storitve:
+AttributeMappingService, CategoryTreeService. Vsebuje odkrite atribute virov, stanje in
+vezavo na ciljni atribut. Omogoča urejanje preslikave vira na PIM atribut in kategorijski
+kontekst, da so naslednji zajemi pravilno pretvorjeni.
+3. PIM KATALOG
+==============
+
+/izdelki – Seznam artiklov
+Dostop: vsi prijavljeni z page.products/view.products.list. Storitve:
+ProductWorkbenchService, IntranetDataService, CategoryTreeService, ExportJobService,
+ProductWorkbookService. Vsebuje iskalnik, filtre (podjetje, status, kanal, kategorija),
+strežniško straničen seznam, osnovne statuse kakovosti/ERP/spleta in povezavo na kartico.
+Omogoča hitro iskanje po šifri/nazivu, pregled statusov, odpiranje kartice in, po pravici,
+izvoz ali delo z delovnim zvezkom. To je glavni delovni seznam, ne podvojena baza.
+
+/izdelki/{ProductId} – Kartica artikla
+Dostop: view.products.list; spremembe so omejene na ADMIN/CATALOG_EDITOR oziroma na
+lastnika komercialnega polja. Storitve: ProductWorkbenchService, ProductEditService,
+CatalogReadService, QualityReadService/QualityWriteService, SaopWriteService,
+SaopEndpointSnapshotService, ClearanceService, WebWithdrawalService, AiTextService.
+Vsebuje glavo (šifra, naziv, podjetje, ključni statusi in hitra dejanja), razdelke za
+splošne PIM podatke, ERP/SAOP, komercialne podatke, spletne kanale, medije, zalogo in
+kakovost. Pri poljih je jasno, ali je lastnik PIM ali ERP.
+Aktivnosti: stalni desni modul s časovnico dejanske zgodovine artikla; na širokem zaslonu
+je ob podatkih, na ozkem pod njimi. Prikaže prvih 8 dogodkov in »Prikaži vse« do 40,
+zato aktivnost ni več razpršena na več straneh. Dogodki se berejo iz podatkovne storitve,
+niso demonstracijski podatki.
+Omogoča urejanje dovoljenih PIM/komercialnih polj, pregled in popravek kanalov, medijev,
+uvrstitev in kakovostnih težav, pripravo oziroma spremljanje SAOP zapisa, umik s spleta z
+razlogom ter prehode na povezane delovne poglede.
+
+/izdelki/uvoz – Uvoz delovnega zvezka
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.products.import. Storitve:
+ProductWorkbookService, IntranetDataService, HeavyWorkGate, WebWithdrawalService.
+Vsebuje nalaganje Excel delovnega zvezka, uvozne vrstice in rezultat validacije.
+Omogoča nadzorovan množični uvoz/posodobitev; HeavyWorkGate prepreči sočasne velike uvoze.
+
+/izdelki/uvoz-odprodaje – Uvoz odprodaje
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL. Storitve: ClearanceService,
+IntranetDataService, HeavyWorkGate. Vsebuje datoteko/seznam artiklov za odprodajo in
+izid validacije. Omogoča množično označevanje stanja odprodaje v nadzorovanem postopku.
+
+/izdelki/kategorije in /izdelki/{ItemId}/kategorije – Uvrstitev izdelka
+Dostop: ADMIN ali CATALOG_EDITOR; view.products.categories. Storitve:
+CategoryMappingService, IntranetDataService, WebWithdrawalService. Vsebuje kategorije
+izdelka, primarno uvrstitev, spletne posledice in opozorila. Omogoča dodajanje,
+spreminjanje ali odstranjevanje uvrstitev; občutljiva sprememba lahko zahteva spletni umik
+ali ponovni pregled.
+
+/mediji – Mediji
+Dostop: page.media. Storitve: CatalogReadService, IntranetDataService. Vsebuje slike in
+dokumente artiklov, iskanje, filtre, predogled, povezavo na artikel, tip in vrstni red.
+Omogoča pregled in upravljanje povezav medijev v obsegu pravic uporabnika.
+
+4. KAKOVOST
+===========
+
+/kakovost – Kakovost podatkov (razdelilna stran)
+Dostop: page.quality. Storitve: GovernanceReadService, QualityReadService,
+CatalogReadService, CategoryTreeService, IntranetDataService. Vsebuje povzetek kakovosti,
+blokade, pripravljenost po profilih/kategorijah in povezave v delovne sezname. Omogoča
+pogled po kategorijah (?pogled=kategorije), profilih (?pogled=profili) in prehod do
+konkretne vrzeli.
+
+/kakovost/artikli – Pripravljenost artiklov
+Dostop: tab.quality.products. Storitve: QualityReadService, QualityWriteService,
+IntranetDataService. Vsebuje artikle z oceno pripravljenosti po kanalih/profilih, razlogi
+blokad in povezavo na kartico. Omogoča filtriranje prioritet, odpiranje artikla in
+izvajanje dovoljenih kakovostnih akcij.
+
+/kakovost/napake (tudi /napake-validacije) – Napake validacije
+Dostop: tab.quality.validation. Storitve: QualityReadService, GovernanceReadService,
+CatalogReadService, CategoryTreeService, IntranetDataService. Vsebuje manjkajoče/napačne
+vrednosti, pravilo, resnost, kanal/profil in povezavo na artikel. Omogoča filtriranje,
+izvoz in navigacijo do mesta popravka. Napaka pomeni, da artikel obstaja, vendar za
+izbrani namen ne izpolni zahtevanega pravila.
+
+/kakovost/karantena (tudi /karantena) – Napake uvoza
+Dostop: tab.quality.quarantine. Storitev: IntranetDataService. Vsebuje vhodne zapise,
+ki jih preslikava ni sprejela, z virom, razlogom in časom. Omogoča pregled in prehod do
+zajemne težave ali popravka preslikave. Karantena ni seznam neveljavnih artiklov.
+
+/kakovost/prevodi – Manjkajoči prevodi
+Dostop: tab.quality.translations. Storitev: PipelineReadService. Vsebuje vrednosti brez
+zahtevanega prevoda, jezik, atribut in izvorni kontekst. Omogoča prioritetni seznam za
+popravek v atributu, slovarju ali kartici, odvisno od lastništva polja.
+
+/kakovost/kategorije – Nepreslikane kategorije
+Dostop: tab.quality.categories. Storitve: CategoryMappingService, CategoryTreeService.
+Vsebuje dobaviteljeve poti brez notranje kategorije in stanje predlagane ciljne kategorije.
+Omogoča ustvarjanje/urejanje preslikave, kadar ima uporabnik pravico za katalog.
+
+5. IZHOD V SAOP
+===============
+
+/saop – Pregled izhoda v SAOP
+Dostop: ADMIN ali CATALOG_EDITOR; tab.saop.overview. Storitve: IntranetDataService,
+SaopWriteService, SaopOrganizationContext. Vsebuje skupno stanje odhodnih zapisov po
+vrsti entitete in podjetju, s povezavami v artikle, vrsto in zgodovino. Omogoča nadzor
+povratnega toka PIM -> ERP, ne neposrednega prepisovanja ERP polj.
+
+/saop/artikli – Artikli v SAOP
+Dostop: ADMIN ali CATALOG_EDITOR; tab.saop.items. Storitve: SaopItemWriteService,
+SaopWriteService, IntranetDataService, SaopOrganizationContext. Vsebuje artikle, ki
+čakajo na ustvaritev/spremembo v ERP, dokument/status, podjetje in zadnji odgovor.
+Omogoča pripravo dokumenta, odobritev/ponovni poskus in pregled odgovora ERP v okviru
+ustreznih pravic.
+
+/outbound – Čakalna vrsta za izhod
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; tab.saop.queue. Storitve:
+IntranetDataService, SaopWriteService, SaopItemWriteService. Vsebuje zapise za pošiljanje,
+status, vrsto operacije, napako in časovne podatke. Omogoča nadzorovano odobritev,
+ponovni poskus ali preklic dovoljenih operacij. To ni /zajem/cakalna-vrsta.
+
+/saop/zgodovina – Zgodovina zapisov v SAOP
+Dostop: ADMIN ali CATALOG_EDITOR; tab.saop.history. Storitve: IntranetDataService,
+SaopWriteService, SaopOrganizationContext. Vsebuje uspešne/neuspele operacije, odgovor
+ERP, datume, proces/uporabnika in entiteto. Omogoča revizijsko sledenje in prehod do vira.
+
+/saop/odkloni – Odkloni SAOP
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.saop.drifts. Storitev:
+IntranetDataService. Vsebuje primerjavo PIM in ERP za podatke, ki se ne ujemajo.
+Omogoča prepoznavo potrebe po uskladitvi; popravek se naredi pri lastniku podatka.
+
+/saop/polja – Polja za zapis v SAOP
+Dostop: view.saop.fields. Storitve: SaopWriteService, IntranetDataService. Vsebuje
+pogodbo polj za SAOP, izvor/cilj, stanje in predvideno vrednost za zapis. Omogoča pregled
+polj in pri dovoljenih vlogah upravljanje čakajočih vrednosti; čakajoča polja so v
+obrazcih jasno zaklenjena.
+
+6. IZHOD NA SPLET
+=================
+
+/splet – Datoteke in dostave
+Dostop: page.web/view.web.overview. Storitve: MagentoArtifactService,
+AdminConsoleService, QualityReadService. Vsebuje pripravljene CSV artefakte za Magento,
+predogled/prenos, zgodovino dostav in kazalnike kakovosti spletnega kataloga. Omogoča
+pregled in prenos pripravljenih datotek; prenos sam po sebi ni objava artikla.
+
+/splet/izvoz – Pripravi spletni izvoz
+Dostop: view.web.build. Storitve: WebExportBuildService, GovernanceReadService,
+CatalogReadService, IntranetDataService. Vsebuje izbor profila/kanala, predpogoje
+kakovosti in rezultat priprave. Omogoča ročni zagon kontrolirane priprave spletne datoteke.
+
+/splet/katalog – Nadzor spletnega kataloga
+Dostop: ADMIN ali CATALOG_EDITOR; view.web.catalog. Storitev: CatalogControlService.
+Vsebuje objave, odprodajo, blokade in stanje spletnega kataloga. Omogoča operativni nadzor,
+kaj je lahko na spletu in kaj zahteva ukrep.
+
+/splet/umaknjeni – Umaknjeni s spleta
+Dostop: view.web.withdrawals. Storitve: WebWithdrawalService, IntranetDataService.
+Vsebuje artikle, katerim je PIM odstranil vključitev za splet, razlog, čas in uporabnika.
+Omogoča filtriranje, pregled in dovoljene akcije vračanja/obravnave z revizijsko sledjo.
+
+/izvozi – Vstop v spletne izvoze
+Dostop: view.web.overview. Je združljivostni vstopni naslov in vodi v isti funkcionalni
+sklop kot /splet.
+
+/izvozi/profili/{ExportProfileId} – Podrobnost izvoznega profila
+Dostop: view.web.profiles. Storitve: GovernanceReadService, IntranetFeatureReadService,
+IntranetDataService. Vsebuje definicijo profila, stolpce/polja, ciljni kanal in lastnosti
+izvoza. Omogoča pregled, kaj bo posamezen profil zajel.
+
+/izvozi/obvestila – Odhodna obvestila
+Dostop: view.web.events. Vsebuje dogodke, uspehe in napake dostave/izvoznih obvestil.
+Omogoča sledenje težavam pošiljanja in rezultatu obdelave.
+
+/izvozi/mnozicno – Množični izhod
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.web.bulk. Storitve:
+SaopWriteService, IntranetDataService. Vsebuje izbor več zapisov, predogled nameravane
+operacije in rezultat. Omogoča varno množično pripravo izhodnih podatkov, ne neomejenega
+neposrednega pisanja v ERP.
+7. POSLOVANJE
+=============
+
+/stranke – Seznam strank
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; page.customers/view.customers.list.
+Storitve: CustomerListService, IntranetDataService. Vsebuje kupce, dobavitelje in
+proizvajalce, iskanje, filtre, osnovne poslovne oznake in povezavo na kartico. Omogoča
+iskanje, odpiranje kartice in upravljanje v dovoljenem poslovnem obsegu.
+
+/stranke/{CustomerId} – Kartica stranke
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL. Storitve: CustomerCardService,
+CustomerListService, IntranetDataService. Vsebuje splošne podatke, kontakte/naslove,
+poslovne nastavitve, povezave in zgodovino v obsegu modela stranke. Omogoča pregled in
+urejanje dovoljenih podatkov posamezne stranke z revizijskim kontekstom.
+
+/stranke/uvoz – Uvoz strank
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL. Storitve: CustomerWorkbookService,
+IntranetDataService, HeavyWorkGate. Vsebuje nalaganje delovnega zvezka, validacijo vrstic
+in poročilo rezultata. Omogoča nadzorovan množični uvoz/posodobitev strank.
+
+/partnerji – Partnerji
+Dostop: view.customers.partners. To je usmeritvena stran v poslovni sklop
+strank/partnerjev; uporablja dovoljenje področja Stranke in uporabnika vodi na ustrezen
+seznam partnerjev.
+
+/zaloge – Zaloga
+Dostop: page.stocks. Storitve: StockReadService, IntranetDataService. Vsebuje stanje
+zalog po artiklu, skladišču/podjetju, razpoložljivost in svežino. Omogoča filtre, iskanje
+in prehod na artikel; to je prvenstveno bralni pogled ERP zaloge.
+
+/cene – Cene in ceniki
+Dostop: page.prices. Podatki: cenovni bralni modeli prek IntranetDataService. Vsebuje
+cene, cenike, veljavnost, poslovni kontekst in povezave na artikle/stranke. Omogoča
+pregled, filtriranje in prehod na tisk; zapis je omejen s poslovnimi pravicami.
+
+/cene/tisk – Cenik za tisk
+Dostop: page.prices. Storitve: PriceSheetService, IntranetDataService, IJSRuntime.
+Vsebuje oblikovan predogled cenika in nastavitve izpisa. Omogoča pripravo tiskljivega
+cenika in tisk/izvoz v brskalniku.
+
+/preverbe – Preverbe cen in zaloge
+Dostop: page.checks. Storitve: IntranetFeatureReadService, GovernanceReadService,
+RulesWriteService, IntranetDataService. Vsebuje opozorila o cenah, maržah in zalogi ter
+pravila, iz katerih opozorilo izvira. Omogoča filtriranje, pregled razloga, prehod do
+popravka in za pooblaščene upravljanje pravil. Preverbe opozarjajo; same ne blokirajo
+izvoza.
+
+8. NASTAVITVE KATALOGA
+======================
+
+/nastavitve – Nastavitve kataloga (razdelilna stran)
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; page.catalog-settings. Vsebuje kartice in
+povezave v šifrante/strukture kataloga. Omogoča izbiro delovnega pogleda; ni en sam obrazec
+za urejanje vseh nastavitev.
+
+/nastavitve/atributi – Atributi
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.attributes. Storitve:
+AttributeMappingService, CategoryTreeService. Vsebuje šifrant atributov, tipe, prevode,
+vezave na kategorije in stanje uporabe. Omogoča ustvarjanje/urejanje atributov in odpiranje
+podrobnosti posamezne kode.
+
+/nastavitve/atributi/{AttributeCode} – Podrobnost atributa
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL. Storitve: IntranetFeatureReadService,
+IntranetDataService. Vsebuje kodo, naziv, tip, pravila uporabe, prevode in povezan kontekst.
+Omogoča podroben pregled in dovoljene spremembe definicije atributa.
+
+/nastavitve/kategorije – Kategorije
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.categories. Storitve:
+CategoryTreeService, IntranetDataService. Vsebuje drevo kategorij, vozlišča, hierarhijo,
+lastnosti in stanja. Omogoča dodajanje, preimenovanje, premikanje in urejanje kategorij po
+pravicah. Sprememba drevesa vpliva na atribute, preslikave in spletne kanale.
+
+/nastavitve/nabori-atributov – Nabori atributov po kategorijah
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.attribute-sets. Storitev:
+CategoryTreeService. Vsebuje povezavo kategorija -> nabor atributov, obveznost in vrstni
+red. Omogoča določitev atributov, ki veljajo v kategoriji; to je podlaga za validacijo in
+obrazec kartice artikla.
+
+/nastavitve/povezave-izdelkov – Povezave izdelkov
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.product-links. Storitve:
+ProductLinkReadService, IntranetDataService. Vsebuje variante, pribor, nadomestke,
+podobne in druge tipizirane povezave artiklov. Omogoča pregled/upravljanje povezav v
+obsegu pravic.
+
+/nastavitve/kanali – Spletni kanali
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.channels. Storitev:
+CatalogReadService. Vsebuje definicije spletnih mest/kanalov, jezikov in ciljnih izvozov.
+Omogoča pregled konfiguracije in dovoljene spremembe kanala.
+
+/nastavitve/jeziki – Jeziki
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.languages. Storitve:
+CatalogReadService, IntranetDataService. Vsebuje jezikovne šifre, nazive in povezave na
+prevodne procese. Omogoča upravljanje jezikovnega šifranta v dovoljenem obsegu.
+
+/nastavitve/skladisca – Skladišča
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.warehouses. Storitve:
+CatalogReadService, IntranetDataService. Vsebuje šifrant skladišč po podjetjih in
+identifikacijske podatke. Omogoča pregled/upravljanje dovoljenega šifranta.
+
+/nastavitve/rezervacija-zaloge – Izjeme rezervacije zaloge
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.catalog.reservations. Storitve:
+CatalogReadService, SaopWriteService, IntranetDataService. Vsebuje artikle oziroma
+pravila, izločena iz rezervacije, in razloge. Omogoča dodajanje/odstranjevanje dovoljene
+izjeme z nadzorovanim SAOP kontekstom.
+
+9. PRAVILA IN IZVOR PODATKOV
+============================
+
+/pravila – Pravila in izvor podatkov (razdelilna stran)
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; page.rules. Vsebuje povezave v validacijo,
+slovar, preslikave, komercialna pravila in spletne nazive. Omogoča vstop v konfiguracijo,
+ki vpliva na celoten podatkovni tok.
+
+/pravila/validacija – Validacijski profili
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.rules.validation. Storitve:
+GovernanceReadService, RulesWriteService, IntranetDataService. Vsebuje profile, obvezna
+polja, resnost, kanale in pravila blokade. Omogoča ustvarjanje/spremembo pravil; ta
+pravila določajo pripravljenost artikla za kanal in vplivajo na kakovost/izvoz.
+
+/pravila/slovar – Slovar vrednosti
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.rules.dictionary. Storitve:
+GovernanceReadService, RulesWriteService. Vsebuje normalizirane vrednosti, prevode, kode
+in dovoljene variante. Omogoča urejanje slovarja, ki poenoti podatke iz različnih virov.
+
+/pravila/preslikave – Izvor in preslikave polj
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.rules.mappings. Storitve:
+GovernanceReadService, RulesWriteService, IntranetDataService. Vsebuje izvorno polje,
+ciljno PIM polje, transformacijo, prioriteto in stanje preslikave. Omogoča nastavitev,
+kako podatek iz vira pride v kanonični/PIM model; to je glavno mesto za odpravo neujemanj.
+
+/pravila-popustov – Komercialna pravila
+Dostop: ADMIN, CATALOG_EDITOR ali COMMERCIAL; view.rules.discounts. Storitev:
+IntranetDataService. Vsebuje popuste, pragove, izjeme, veljavnosti in poslovne pogoje.
+Omogoča urejanje komercialnih pravil v obsegu poslovne vloge.
+
+/pravila/nazivi – Pravila za spletne nazive
+Dostop: ADMIN ali CATALOG_EDITOR; view.rules.titles. Storitve: TitleRuleService,
+CatalogReadService, CategoryTreeService, AttributeMappingService, IntranetDataService.
+Vsebuje sestavne dele naziva, pravila po kategoriji/kanalu, predogled in povezane atribute.
+Omogoča sestavo in testiranje pravil za spletne nazive artiklov.
+10. ADMINISTRACIJA – NADZOR SISTEMA
+===================================
+
+/sistem – Nadzor sistema
+Dostop: samo ADMIN; page.system/tab.system.overview. Storitve: AdminConsoleService,
+IntranetDataService, AutomationStore. Vsebuje poslovne kartice stanja, naslednje korake,
+pregled postopkov in povezave do opravil, zagonov, alarmov ter tehničnih pogledov.
+Omogoča nadzor sistema in odpiranje administrativnih podstrani. Posebni naslov
+/sistem?pogled=postopki prikazuje tehnične razporede postopkov.
+
+/sistem/opravila – Opravila
+Dostop: samo ADMIN; tab.system.jobs. Storitve: AutomationStore, AdminConsoleService.
+Vsebuje urnike, aktivnost, opis in zadnje stanje avtomatiziranih poslov. Omogoča
+vklop/izklop in ročni zagon dovoljenih opravil ter prehod v zgodovino zagonov.
+
+/sistem/zagoni – Zagoni
+Dostop: samo ADMIN; tab.system.runs. Storitve: AutomationStore, WorkerConsoleService,
+AdminConsoleService. Vsebuje zgodovino zagonov, korake, trajanja, napake, izpis in rezultat.
+Omogoča tehnično diagnozo in nadzor ponovnih zagonov.
+
+/sistem/integracije (tudi /system/integracije) – Alarmi in podjetja
+Dostop: samo ADMIN; tab.system.alerts. Storitve: IntranetDataService,
+AdminConsoleService. Vsebuje alarme, obvestila, podjetja/integracije, izključitve in
+stanje povezav. Omogoča obravnavo alarmov in upravljanje nastavitev nadzora integracij.
+
+/sistem/sled – Sled sprememb
+Dostop: samo ADMIN; view.system.activity. Storitev: AdminConsoleService. Vsebuje kdo je
+kaj spremenil, kdaj, na kateri entiteti in po potrebi vsebino spremembe. Omogoča revizijski
+pregled. To je globalna sled; kartica artikla prikazuje le lokalno časovnico artikla.
+
+/sistem/izvozi – Zagoni izvozov
+Dostop: samo ADMIN; view.system.exports. Storitev: AdminConsoleService. Vsebuje izide,
+čase, velikosti in napake izvoznih opravil. Omogoča preverjanje, ali je bil izvoz izdelan
+in ali je dostava uspela.
+
+/sistem/zmogljivost – Zmogljivost postopkov
+Dostop: samo ADMIN; view.system.performance. Storitev: AdminConsoleService. Vsebuje
+trajanja, količine, trende in ozka grla postopkov. Omogoča prepoznavo počasnih procesov.
+
+/sistem/samotest – Nočni samotest
+Dostop: samo ADMIN; view.system.self-test. Storitev: AdminConsoleService. Vsebuje izid
+nočnega samotesta, korake, opozorila in napake. Omogoča pregled zdravja sistema in po
+pravicah ponovni zagon dovoljenih korakov.
+
+/sistem/napake – Sistemske napake
+Dostop: samo ADMIN; view.system.errors. Storitev: GovernanceReadService. Vsebuje tehnični
+dnevnik napak, čas, vir, stopnjo in opis. Omogoča filtriranje in diagnostični pregled;
+ni namenjeno popravljanju poslovnih podatkov.
+
+11. ADMINISTRACIJA – SISTEMSKE ZADEVE
+=====================================
+
+/administracija (tudi /administracija/uporabniki, /sistem/uporabniki,
+/system/uporabniki) – Uporabniki
+Dostop: samo ADMIN; page.administration/tab.admin.users. Storitve:
+IntranetUserAdministrationService, RoleAdministrationService. Vsebuje lokalne in
+domenske račune, aktivnost, vloge in osnovne podatke. Omogoča dodajanje,
+aktiviranje/deaktiviranje in urejanje uporabnikov ter dodeljevanje vlog.
+
+/administracija/vloge (tudi /sistem/vloge) – Vloge in dostop
+Dostop: samo ADMIN; tab.admin.roles. Storitev: RoleAdministrationService. Vsebuje vloge,
+opis in hierarhični katalog dovoljenj do strani/zavihkov. Omogoča dodelitev ali odvzem
+pravice vlogi. Levi meni se sestavi iz dovoljenih ključev, zato uporabnik ne vidi povezave
+do pogleda, ki mu ni dodeljen.
+
+/administracija/mape (tudi /sistem/mape) – Mesta shranjevanja
+Dostop: samo ADMIN; tab.admin.paths. Storitve: AdminConsoleService, IntranetDataService.
+Vsebuje konfigurirana mesta za datoteke, izvoze in artefakte z zdravstvenim stanjem.
+Omogoča pregled in upravljanje dovoljene konfiguracije shranjevanja.
+
+12. PODPORNE IN ZDRUŽLJIVOSTNE POTI
+===================================
+
+/ – Domov
+Uporabnika preusmeri na /nadzorna-plosca; nima samostojne vsebine.
+
+/prijava – Prijava
+Vstopna stran za avtentikacijo. Po uspešni prijavi se odpre dovoljena začetna stran.
+
+/brez-dostopa – Brez dostopa
+Pokaže razlago, da prijavljeni uporabnik nima potrebne vloge oziroma dovoljenja.
+
+/Error – Napaka
+Tehnična stran za neobdelano napako. Ne razkriva poslovnih podatkov in vodi na varno pot.
+
+/teki-obdelave – Združljivostni naslov
+Razreši se kot pogled »Teki« v področju zajema. Prednost ima /zajem/teki.
+
+/napake-validacije in /karantena – Združljivostna naslova
+Kažeta na ista kakovostna pogleda kot /kakovost/napake in /kakovost/karantena.
+
+ProductDetail.razor – notranja komponenta brez javne @page poti
+V izvorni kodi obstaja starejši prikaz podrobnosti, vendar ni del navigacije. Uporabniška
+kartica artikla je /izdelki/{ProductId} (ProductCard.razor).
+
+13. LASTNIŠTVO PODATKOV IN PRAVILA UREJANJA
+============================================
+
+- ERP/SAOP je lastnik izvornih ERP podatkov. PIM jih prikazuje in po potrebi pripravi
+  nadzorovan dokument/spremembo za povratni zapis; ne sme jih tiho prepisati.
+- PIM je lastnik katalogskih dopolnitev: opisi, mediji, spletni kanali, kategorizacija,
+  prevodi in druga PIM-lastna polja.
+- Pravila, slovarji, validacije in preslikave so konfiguracija sistema. Njihova sprememba
+  lahko vpliva na veliko artiklov, zato niso skrita v vsakdanji kartici artikla.
+- Kakovost je delovni seznam za vrzeli. Popravek se naredi tam, kjer je lastnik podatka:
+  na kartici, v atributu/kategoriji, slovarju ali preslikavi.
+- Globalna sled sprememb je administratorski pogled. Aktivnosti na kartici artikla so
+  lokalna časovnica, da ima uporabnik relevantne dogodke na enem mestu.
+
+14. GLAVNE STORITVE MED UPORABNIŠKIM VMESNIKOM IN BAZO
+=======================================================
+
+IntranetDataService       skupni bralni modeli, organizacija, šifranti in operativni podatki
+ProductWorkbenchService   seznam in sestavljena kartica artikla
+ProductEditService        dovoljene spremembe artikla
+CatalogReadService        katalogi, mediji, kanali in skladišča
+QualityRead/WriteService  kakovostne vrzeli, blokade in dovoljene akcije
+PipelineReadService       viri, teki, čakalne vrste in težave zajema
+RulesWriteService         validacije, slovar in preslikave
+CategoryTreeService       kategorijsko drevo in nabori atributov
+SaopWriteService          nadzorovani izhodni zapisi v SAOP
+WebExportBuildService     priprava spletnega izvoza
+WebWithdrawalService      umiki s spleta z razlogom in sledjo
+Customer*Service          seznami, kartice in uvoz strank
+AdminConsoleService       postopki, alarmi, aktivnosti in izvozi
+AutomationStore           urniki, opravila in zagoni
+RoleAdministrationService vloge in dovoljenja
+
+KAKO POSODOBITI TA DOKUMENT OB NOVI STRANI
+===========================================
+
+Ob dodani ali odstranjeni strani preveri vseh pet točk:
+1. @page pot v Components/Pages;
+2. vpis v PimNavigation, če mora biti stran v levem meniju;
+3. vpis v PimAccessCatalog in Resolve(), da se pravica pravilno preveri;
+4. ustrezen [Authorize] na strani;
+5. hitri zemljevid in opis v tej datoteki.
+
+Konec dokumenta.
+TEHNIČNI ZAPIS PARAMETRSKIH POTI
+================================
+V uporabniškem delu so parametri zapisani krajše, spodaj pa so točne @page poti iz kode:
+- /izdelki/{ProductId:long}
+- /izvozi/profili/{ExportProfileId:int}
+- /stranke/{CustomerId:long}
+- /zajem/teki/{RunId:guid}
+- /zajem/tezave/{IssueKind}/{IssueId:long}

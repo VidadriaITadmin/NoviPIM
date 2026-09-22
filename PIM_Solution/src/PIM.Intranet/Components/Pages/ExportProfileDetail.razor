@@ -2,11 +2,11 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.GovernanceReadService Governance
-@inject PIM.Intranet.Services.IntranetFeatureReadService Features
+@inject PIM.Intranet.Services.WebExportBuildService Export
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>@(Profile?.Name ?? "Izvozni profil")</PageTitle>
-<PimPage Title="@(Profile?.Name ?? "Izvozni profil")" Subtitle="Stolpci se berejo iz registra, zato sprememba profila takoj velja povsod, kjer se ta profil uporablja." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="@(Profile?.Name ?? "Izvozni profil")" Subtitle="Stolpci se berejo iz registra, zato sprememba profila takoj velja povsod, kjer se ta profil uporablja." Crumbs="Crumbs" />
 
 <section class="ui-card data-card" aria-label="Stolpci izvoznega profila">
   <PimState Loading="Loading" Error="@Error" Empty="@(Columns.Count == 0)" EmptyText="Profil nima stolpcev." LoadingText="Nalaganje stolpcev …">
@@ -29,16 +29,19 @@
 </section>
 
 <h2 class="section-title">Predogled prvih 20 vrstic</h2>
-@if (PreviewMissing is not null)
+@* Pregled 2026-09-22: predogled je klical intranet.GetExportPreview, ki ga ni bilo nikoli, zato je
+   stran vedno kazala »manjka«. Zdaj bere isti nabor kot »Pripravi spletni izvoz« in prenos CSV
+   (intranet.GetWebExportRows → out.GetExportRows), torej natanko to, kar gre v datoteko. *@
+@if (PreviewNote is not null)
 {
-  <PimMissing Object="@PreviewMissing" What="dejanski predogled izvozne datoteke z glavami stolpcev iz izbranega profila" Needs="PIM.B2bWorker oziroma skupno projekcijo izvoza, da intranet ne podvoji poslovne logike" />
+  <p class="note-panel">@PreviewNote</p>
 }
 else if (Preview is not null)
 {
   <section class="ui-card data-card" aria-label="Predogled izvozne datoteke">
     <div class="table-scroll" role="region" tabindex="0" aria-label="Prvih 20 vrstic izvoza">
       <table class="data-table">
-        <caption>Predogled podatkov profila @Profile?.ProfileCode</caption>
+        <caption>Predogled podatkov profila @Profile?.ProfileCode — @Preview.TotalCount.ToString("N0") vrstic v celotni datoteki</caption>
         <thead><tr>@foreach (var name in Preview.Columns) { <th scope="col">@name</th> }</tr></thead>
         <tbody>@foreach (var row in Preview.Rows) { <tr>@foreach (var value in row) { <td>@(value ?? "—")</td> }</tr> }</tbody>
       </table>
@@ -51,8 +54,8 @@ else if (Preview is not null)
 
   PIM.Intranet.Services.ExportProfileRow? Profile;
   IReadOnlyList<PIM.Intranet.Services.ExportColumnRow> Columns = [];
-  PIM.Intranet.Services.ExportPreview? Preview;
-  string? PreviewMissing;
+  PIM.Intranet.Services.WebExportPage? Preview;
+  string? PreviewNote;
   bool Loading = true;
   string? Error;
 
@@ -73,7 +76,20 @@ else if (Preview is not null)
       Columns = await Governance.GetExportColumnsAsync(ExportProfileId, onlyUnmapped: false);
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      (Preview, PreviewMissing) = await Features.GetExportPreviewAsync(organization.OrganizationId, ExportProfileId, 20);
+      Preview = null;
+      PreviewNote = null;
+      if (!Profile.CanBuildOnDemand)
+        PreviewNote = "Za ta profil izvoz na zahtevo ne zna sestaviti vrstic, zato predogleda ni.";
+      else
+      {
+        try
+        {
+          Preview = await Export.PreviewAsync(organization.OrganizationId, ExportProfileId, webSite: null,
+            onlyPublished: Profile.OnlyPublishedDefault, search: null, skip: 0, take: 20);
+          if (Preview.Rows.Count == 0) PreviewNote = $"Profil za podjetje {organization.Name} trenutno nima nobene vrstice.";
+        }
+        catch { PreviewNote = "Predogleda trenutno ni mogoče pripraviti."; }
+      }
     }
     catch { Error = "Izvoznega profila trenutno ni mogoče naložiti."; }
     finally { Loading = false; }

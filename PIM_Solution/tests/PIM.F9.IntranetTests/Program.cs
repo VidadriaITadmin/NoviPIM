@@ -1,8 +1,10 @@
 var root = FindRoot();
-var page = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Pages/SystemIntegrations.razor"));
-var service = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Services/IntranetDataService.cs"));
-foreach (var value in new[] { "@page \"/system/integracije\"", "Authorize(Roles = \"ADMIN\"", "Integracije sistema", "Zadnji srčni utrip", "Potrdi", "Razreši" }) Assert(page.Contains(value, StringComparison.Ordinal), "stran manjka: " + value);
-foreach (var value in new[] { "GetSystemIntegrations", "AcknowledgeAlert", "ResolveAlert", "@OrganizationId", "@Actor" }) Assert(service.Contains(value, StringComparison.Ordinal), "storitev manjka: " + value);
+// Stran /system/integracije je odstranjena (prenova nadzora, blok 7); njeno vlogo (gostitelj, obvestila s
+// potrditvijo in razrešitvijo ter sled dejanja) zdaj nosi stran Nadzor na /sistem prek MonitorService.
+var page = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Pages/Monitor.razor"));
+var service = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Services/MonitorService.cs"));
+foreach (var value in new[] { "@page \"/sistem\"", "Authorize(Roles = \"ADMIN\"", "Gostitelj avtomatike", "utrip", "Potrdi", "Razreši" }) Assert(page.Contains(value, StringComparison.Ordinal), "stran manjka: " + value);
+foreach (var value in new[] { "intranet.AcknowledgeAlert", "intranet.ResolveAlert", "@OrganizationId", "@Actor", "ALERT_ACK", "ALERT_RESOLVE" }) Assert(service.Contains(value, StringComparison.Ordinal), "storitev manjka: " + value);
 Assert(!page.Contains("TODO", StringComparison.OrdinalIgnoreCase), "stran vsebuje placeholder");
 Console.WriteLine("F9 intranet: administratorski slovenski pregled in audit dejanja PASS.");
 

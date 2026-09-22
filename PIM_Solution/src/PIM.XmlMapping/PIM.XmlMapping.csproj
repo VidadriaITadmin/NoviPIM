@@ -7,4 +7,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- MappingPhaseReport piše fazo PRESLIKAVA prek PhaseLog (blok 6 prenove nadzora, 2026-09-22). -->
+    <ProjectReference Include="../PIM.Operations/PIM.Operations.csproj" />
+  </ItemGroup>
 </Project>

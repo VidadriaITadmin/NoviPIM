@@ -36,6 +36,11 @@ Equal("ftp://x", izrecno.Endpoint, "--endpoint se upošteva.");
 Equal(true, izrecno.ReadOnly, "--samo-preberi se upošteva.");
 Equal("yyyy-MM-dd", izrecno.DateFormat, "Oblika datuma sledi izbranemu viru, ne končnici.");
 
+// Dobaviteljeva datoteka se prebere enkrat za vsa podjetja (posel zaloge dobaviteljev, 2026-09-22).
+var vsa = StockFileWorkerOptions.Parse(["--file", nwPath, "--organizations", "2, 3,4,3"]);
+Equal("2,3,4", string.Join(",", vsa.OrganizationIds), "--organizations: vsa podjetja, brez ponovitev, v danem vrstnem redu.");
+Throws(() => StockFileWorkerOptions.Parse(["--file", nwPath, "--organizations", "2,x"]), "Nečloveško podjetje v seznamu mora pasti.");
+
 Throws(() => StockFileWorkerOptions.Parse(["--source", "NW_STOCK"]), "Brez --file mora pasti.");
 Throws(() => StockFileWorkerOptions.Parse(["--file", nwPath, "--organization-id", "nula"]), "Nečloveško podjetje mora pasti.");
 Throws(() => StockFileWorkerOptions.Parse(["--file", nwPath, "--organization-id", "0"]), "Podjetje 0 mora pasti.");

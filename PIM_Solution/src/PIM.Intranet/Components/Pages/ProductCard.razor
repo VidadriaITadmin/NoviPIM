@@ -46,7 +46,16 @@
               else if (Conflicts.Count > 0) { <span class="save-error">@Conflicts.Count polj ni bilo shranjenih — nekdo jih je vmes spremenil</span> }
               else if (SaveError is not null) { <span class="save-error">@SaveError</span> }
               else if (SaveMessage is not null) { <span class="save-ok">@SaveMessage</span> }
-              else if (Drafts.Count > 0) { <span class="save-dirty">@Drafts.Count neshranjenih</span> }
+              else if (Drafts.Count > 0)
+              {
+                @* Pregled 2026-09-22: en gumb, dve poti. Besedila in lastnosti veljajo takoj, polja SAOP
+                   pa gredo v odobritev na Izhod v SAOP. Uporabnik mora to vedeti PRED klikom. *@
+                <span class="save-dirty">@Drafts.Count neshranjenih</span>
+                <span class="save-split">
+                  @if (DraftNowCount > 0) { <span class="save-now" title="Besedila in lastnosti v lasti PIM: po shranjevanju veljajo takoj.">@DraftNowCount velja takoj</span> }
+                  @if (DraftSaopCount > 0) { <span class="save-saop" title="Polja v lasti SAOP: po shranjevanju čakajo na odobritev na strani Izhod v SAOP in veljajo šele, ko jih SAOP potrdi.">@DraftSaopCount gre v odobritev SAOP</span> }
+                </span>
+              }
             </span>
             <button type="button" class="ghost-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="DiscardChanges">Prekliči</button>
             <button type="button" class="primary-button" disabled="@(Drafts.Count == 0 || Busy)" @onclick="SaveChangesAsync">
@@ -735,6 +744,12 @@
   /// ne shrani ali preklice; menjava sklopa jih ne izgubi, ker je kartica en obrazec.</summary>
   readonly Dictionary<string, string?> Drafts = new(StringComparer.OrdinalIgnoreCase);
   readonly Dictionary<string, ProductChannelField> DraftFields = new(StringComparer.OrdinalIgnoreCase);
+
+  /// <summary>Osnutki, ki po shranjevanju veljajo takoj (besedila, lastnosti v lasti PIM).</summary>
+  int DraftNowCount => DraftFields.Values.Count(draft => draft.Edit != ProductFieldEdit.Saop && Drafts.ContainsKey(draft.FieldKey));
+
+  /// <summary>Osnutki polj SAOP: po shranjevanju čakajo na odobritev v odhodni vrsti.</summary>
+  int DraftSaopCount => DraftFields.Values.Count(draft => draft.Edit == ProductFieldEdit.Saop && Drafts.ContainsKey(draft.FieldKey));
   bool Busy;
   string? SaveMessage;
   string? SaveError;
@@ -1444,7 +1459,7 @@
         var result = await Edits.SaveTextsAsync(OrganizationId, ProductId,
           texts.Select(field => new ProductTextEdit(field.Language!, field.TextType!, Drafts[field.FieldKey],
             field.Value, CheckExpected: true)), actor, note);
-        outcome.Add($"{result.ChangedCount:N0} besedil shranjenih");
+        outcome.Add($"{result.ChangedCount:N0} besedil shranjenih — velja takoj");
         Conflicts.AddRange(result.Conflicts);
         foreach (var field in texts) saved.Add(field.FieldKey);
       }
@@ -1455,7 +1470,7 @@
         var result = await Edits.SaveAttributesAsync(OrganizationId, ProductId,
           attributes.Select(field => new ProductAttributeEdit(field.AttributeCode!, Drafts[field.FieldKey],
             field.Value, CheckExpected: true)), actor, note);
-        outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih");
+        outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih — velja takoj");
         Conflicts.AddRange(result.Conflicts);
         foreach (var field in attributes) saved.Add(field.FieldKey);
       }
@@ -1470,8 +1485,8 @@
             field.Format == "bool" ? PIM.Operations.ProductWorkbookContract.BoolValue(Drafts[field.FieldKey]) ?? Drafts[field.FieldKey] : Drafts[field.FieldKey])),
           actor, "CARD", note);
         outcome.Add(result.Rejected == 0
-          ? $"{result.Queued:N0} polj uvrščenih v vrsto za SAOP (skupina {result.OutboundBatchId})"
-          : $"{result.Queued:N0} polj v vrsti za SAOP, {result.Rejected:N0} zavrnjenih (skupina {result.OutboundBatchId})");
+          ? $"{result.Queued:N0} polj uvrščenih v vrsto za SAOP — velja šele po odobritvi na Izhod v SAOP (skupina {result.OutboundBatchId})"
+          : $"{result.Queued:N0} polj v vrsti za SAOP — velja šele po odobritvi, {result.Rejected:N0} zavrnjenih (skupina {result.OutboundBatchId})");
         if (result.Rejected > 0)
         {
           // Razlog zavrnitve pride iz baze skupaj s Queued/Rejected stevci (SaopWriteService.EnqueueAsync),

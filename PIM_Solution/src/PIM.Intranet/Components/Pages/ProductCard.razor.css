@@ -56,6 +56,10 @@
 .save-ok { color: var(--pim-good-text); font-weight: 600; }
 .save-error { color: var(--pim-bad-text); font-weight: 600; }
 .save-dirty { color: var(--pim-warn-text); font-weight: 600; }
+.save-split { display: inline-flex; flex-wrap: wrap; gap: .35rem; margin-left: .5rem; }
+.save-split > span { border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 600; padding: .1rem .5rem; white-space: nowrap; }
+.save-now { background: var(--pim-good-bg); border-color: var(--pim-good-border); color: var(--pim-good-text); }
+.save-saop { background: #eef2ff; border-color: #c7d2fe; color: var(--pim-accent); }
 
 .ghost-button {
   background: var(--pim-surface);

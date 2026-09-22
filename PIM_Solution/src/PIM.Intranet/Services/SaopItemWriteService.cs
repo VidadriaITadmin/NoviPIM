@@ -221,6 +221,42 @@ public sealed class SaopItemWriteService(IConfiguration configuration, ILogger<S
     return new(key, exists, sourceKey, values, defaults);
   }
 
+  /// <summary>
+  /// XML kandidat se pred ustvarjanjem v ERP-u še ne sme pretvarjati v <c>canon.Product</c>.
+  /// Ta pogled vrne isto stanje kot kartica artikla, le da vrednosti dobi neposredno iz kandidata.
+  /// </summary>
+  public async Task<SaopItemState> GetSupplierCandidateStateAsync(
+    int organizationId, long supplierProductCandidateId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = await OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC out.GetSupplierCandidateSaopWriteState @OrganizationId, @SupplierProductCandidateId;", connection);
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@SupplierProductCandidateId", SqlDbType.BigInt).Value = supplierProductCandidateId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+    if (!await reader.ReadAsync(cancellationToken))
+      throw new InvalidOperationException("Kandidat za SAOP ne obstaja ali ne čaka več na ERP.");
+    var itemId = PimDb.TextOrEmpty(reader, "ItemID");
+    var sourceKey = PimDb.TextOrEmpty(reader, "SourceKey");
+    var exists = PimDb.Bool(reader, "ExistsInSaop");
+
+    var values = new Dictionary<string, string?>(StringComparer.Ordinal);
+    await reader.NextResultAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      values[PimDb.TextOrEmpty(reader, "FieldKey")] = PimDb.Text(reader, "Value");
+
+    var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
+    await reader.NextResultAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      defaults[$"{PimDb.TextOrEmpty(reader, "Section")}/{PimDb.TextOrEmpty(reader, "ElementName")}"] =
+        PimDb.TextOrEmpty(reader, "Value");
+
+    logger.LogInformation(
+      "SAOP kandidat: stanje {Kandidat} (organizacija {Organizacija}) — XML vrednosti {Vrednosti}, privzetkov {Privzetkov}.",
+      supplierProductCandidateId, organizationId, values.Count, defaults.Count);
+    return new(itemId, exists, sourceKey, values, defaults);
+  }
   /* --- predogled dokumenta ----------------------------------------------- */
 
   /// <summary>

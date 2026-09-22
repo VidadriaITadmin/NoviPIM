@@ -34,7 +34,7 @@ public sealed record CandidateSaopPreparation(
 }
 
 /// <param name="Preparation">Že prebrano stanje, kadar ga ima stran; sicer ga storitev prebere sama.</param>
-public sealed record CandidateSaopQueueItem(string ItemId, IReadOnlyDictionary<string, string?> Inputs, CandidateSaopPreparation? Preparation = null);
+public sealed record CandidateSaopQueueItem(long SupplierProductCandidateId, string ItemId, IReadOnlyDictionary<string, string?> Inputs, CandidateSaopPreparation? Preparation = null);
 
 /// <param name="OutboundBatchId">Skupina v <c>out.OutboundBatch</c>; null, kadar ni šlo v vrsto nič.</param>
 /// <param name="Approved">Sporočil, odobrenih takoj po uvrstitvi (samo ob <c>approve</c>).</param>
@@ -67,14 +67,14 @@ public sealed class SupplierCandidateSaopService(
   readonly Dictionary<int, SaopItemContract> contracts = new();
   readonly Dictionary<int, SaopChannelState> channels = new();
 
-  public async Task<CandidateSaopPreparation> PrepareAsync(int organizationId, string itemId, CancellationToken cancellationToken = default)
+  public async Task<CandidateSaopPreparation> PrepareAsync(int organizationId, long supplierProductCandidateId, CancellationToken cancellationToken = default)
   {
     if (!contracts.TryGetValue(organizationId, out var contract))
       contracts[organizationId] = contract = await documents.GetContractAsync(organizationId, cancellationToken);
     if (!channels.TryGetValue(organizationId, out var channel))
       channels[organizationId] = channel = await documents.GetChannelStateAsync(organizationId, cancellationToken);
-    var state = await documents.GetItemStateAsync(organizationId, itemId, cancellationToken);
-    return new(organizationId, itemId, contract, state, channel);
+    var state = await documents.GetSupplierCandidateStateAsync(organizationId, supplierProductCandidateId, cancellationToken);
+    return new(organizationId, state.ItemId, contract, state, channel);
   }
 
   /// <summary>
@@ -94,7 +94,7 @@ public sealed class SupplierCandidateSaopService(
 
     foreach (var item in items)
     {
-      var preparation = item.Preparation ?? await PrepareAsync(organizationId, item.ItemId, cancellationToken);
+      var preparation = item.Preparation ?? await PrepareAsync(organizationId, item.SupplierProductCandidateId, cancellationToken);
       if (preparation.State.ExistsInSaop)
       {
         skipped.Add($"{item.ItemId}: SAOP artikel že pozna (CONFIRMED_IN_ERP); spremembe gredo s kartice artikla.");

@@ -20,17 +20,48 @@
     var general = Card.General;
     <PimPage Title="@general.Name" Subtitle="@($"{OrganizationName} · šifra {general.CustomerKey} · {RoleSummary}")" Crumbs="Crumbs" />
 
-    <nav class="page-tabs" role="tablist" aria-label="Sklopi kartice stranke">
-      @foreach (var tab in Tabs)
-      {
-        <button type="button" role="tab" id="tab-@tab.Key" aria-controls="panel-@tab.Key"
-                aria-selected="@((Section == tab.Key).ToString().ToLowerInvariant())"
-                class="page-tab @(Section == tab.Key ? "active" : null)" @onclick="() => Section = tab.Key">
-          @tab.Label
-          @if (tab.Count is > 0) { <span class="tab-count">@tab.Count</span> }
-        </button>
-      }
-    </nav>
+    <section class="customer-hero" aria-labelledby="customer-identity-title">
+      <div class="customer-mark" aria-hidden="true">@CustomerInitials(general.Name)</div>
+      <div class="customer-identity">
+        <h2 id="customer-identity-title" class="visually-hidden">Identiteta stranke</h2>
+        <p class="identity-line">
+          <span class="organization-badge">@OrganizationName</span>
+          <span class="code-value">@general.CustomerKey</span>
+          @if (!string.IsNullOrWhiteSpace(general.City)) { <span>@general.City</span> }
+          @if (!string.IsNullOrWhiteSpace(general.TaxNumber)) { <span>DŠ @general.TaxNumber</span> }
+        </p>
+        <div class="header-chips" aria-label="Stanje stranke">
+          <span class="flag-chip @(general.IsActive == true ? "on" : "off")">@(general.IsActive == true ? "Aktivna" : "Neaktivna")</span>
+          <span class="flag-chip @ExportChipClass()">@ExportChipText()</span>
+          <span class="flag-chip @(general.MagentoGroupKey is null ? "off" : "on")">Magento: @(general.MagentoGroupKey ?? "brez skupine")</span>
+          <PimChip Text="@RoleSummary" Prefix="Vloga: " />
+        </div>
+        <span class="customer-hero-updated">SAOP: @general.UpdatedUtc.ToPimLocal().ToString("g")</span>
+      </div>
+      <div class="customer-summary" aria-label="Povzetek stranke">
+        <div><span class="summary-value">@Card.Branches.Count.ToString("N0")</span><span class="summary-label">enot in tranzitov</span></div>
+        <div><span class="summary-value">@Card.Notes.Count.ToString("N0")</span><span class="summary-label">zaznamkov</span></div>
+        <div><span class="summary-value">@(Card.Contacts.SourceAvailable ? "ERP" : "Ročno")</span><span class="summary-label">vir kontaktov</span></div>
+      </div>
+    </section>
+
+    <div class="customer-workspace">
+      <aside class="customer-section-nav-column">
+        <nav class="customer-section-nav" role="tablist" aria-label="Sklopi kartice stranke" aria-orientation="vertical">
+          @foreach (var tab in Tabs)
+          {
+            var active = Section == tab.Key;
+            <button type="button" role="tab" id="tab-@tab.Key" aria-controls="panel-@tab.Key"
+                    aria-selected="@active.ToString().ToLowerInvariant()"
+                    class="@(active ? "active" : null)" @onclick="() => Section = tab.Key">
+              <span>@tab.Label</span>
+              @if (tab.Count is > 0) { <span class="nav-badge">@tab.Count.Value.ToString("N0")</span> }
+            </button>
+          }
+        </nav>
+      </aside>
+
+      <div class="customer-section-content">
 
     <section id="panel-general" role="tabpanel" aria-labelledby="tab-general" hidden="@(Section != "general")">
       <section class="ui-card panel">
@@ -352,6 +383,9 @@
                   Needs="odločitev, kateri vir jih prinese — SAOP finančni moduli ali ločen zajem" />
     </section>
 
+      </div>
+    </div>
+
     @if (Message is not null) { <p class="message-state info-message" role="status">@Message</p> }
     @if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
   }
@@ -437,6 +471,17 @@
 
   public static string KindLabel(string? value) =>
     Kinds.FirstOrDefault(kind => string.Equals(kind.Code, value, StringComparison.Ordinal))?.Label ?? "vrsta ni določena";
+
+  static string CustomerInitials(string? name)
+  {
+    var parts = (name ?? "Stranka").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    return initials.Length > 0 ? initials : "S";
+  }
+
+  string ExportChipClass() => Role?.InCustomerExport == true ? "on" : "off";
+
+  string ExportChipText() => Role?.InCustomerExport == true ? "V stranke.csv" : "Ni v stranke.csv";
 
   // Podnaslov pove vlogo, kot jo vidi seznam: rocna vrsta, ce obstaja, sicer izracun (250).
   string RoleSummary => Role is null ? KindLabel(Card?.General.CustomerKind) : $"{Role.RoleLabel} ({Role.RoleSourceLabel})";

@@ -8,6 +8,12 @@ using PIM.Operations;
 
 namespace PIM.B2bWorker;
 
+/// <summary>
+/// Ena zapisana izvozna datoteka: kar gre v fazo DATOTEKA (blok 6 prenove nadzora) — ime, vrstice,
+/// stolpci in velikost. Velikost je null, kadar je datoteke po zamenjavi ni bilo mogoče prebrati.
+/// </summary>
+public sealed record ExportFileResult(string ProfileCode, string FilePath, int Rows, int Columns, long? Bytes);
+
 public static class MagentoExportCommand
 {
     // Oblika datoteke (kateri stolpci, v kakšnem vrstnem redu, s katero glavo in iz katere
@@ -43,7 +49,8 @@ public static class MagentoExportCommand
     /// odvisno, kdo dobi odjavno vrstico (prazne »Spletne strani«) in kdaj ta iz datoteke izpade — preizkus,
     /// ki piše v začasno mapo, bi sicer začel odjavno okno, ne da bi Magento datoteko sploh videl.
     /// </param>
-    public static async Task ExecuteAsync(int organizationId, string outputDir, string connectionString, bool publishToMagento, CancellationToken ct = default)
+    /// <returns>Zapisani datoteki (katalog.csv, stranke.csv) za fazo DATOTEKA.</returns>
+    public static async Task<IReadOnlyList<ExportFileResult>> ExecuteAsync(int organizationId, string outputDir, string connectionString, bool publishToMagento, CancellationToken ct = default)
     {
         if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDir, nameof(outputDir));
@@ -197,6 +204,12 @@ public static class MagentoExportCommand
                 filePath: customerPath, error: failure, ct: CancellationToken.None);
             directoryLock?.Dispose();
         }
+
+        return
+        [
+            new(MagentoProductSchema.ProfileCode, productPath, productCount, productProfile.Columns.Count, FileSize(productPath)),
+            new(MagentoCustomerSchema.ProfileCode, customerPath, customerCount, customerProfile.Columns.Count, FileSize(customerPath)),
+        ];
     }
 
     /// <summary>
@@ -206,6 +219,10 @@ public static class MagentoExportCommand
     /// polovicne. Vrne stevilo zapisanih vrstic.
     /// </summary>
     public static async Task<int> ExportProfileAsync(string profileCode, int organizationId, string outputDir, string? fileName, string connectionString, CancellationToken ct = default)
+        => (await ExportProfileFileAsync(profileCode, organizationId, outputDir, fileName, connectionString, ct)).Rows;
+
+    /// <summary>Kot <see cref="ExportProfileAsync"/>, a vrne celo datoteko (ime, vrstice, stolpci, velikost) za fazo DATOTEKA.</summary>
+    public static async Task<ExportFileResult> ExportProfileFileAsync(string profileCode, int organizationId, string outputDir, string? fileName, string connectionString, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profileCode, nameof(profileCode));
         if (organizationId <= 0) throw new ArgumentOutOfRangeException(nameof(organizationId), "OrganizationId mora biti pozitivno celo število.");
@@ -238,7 +255,7 @@ public static class MagentoExportCommand
             File.Move(tempPath, targetPath, overwrite: true);
             await ExportRunLog.CompleteAsync(connection, runKey, succeeded: true,
                 rowCount: count, columnCount: profile.Columns.Count, filePath: targetPath, ct: CancellationToken.None);
-            return count;
+            return new ExportFileResult(profileCode, targetPath, count, profile.Columns.Count, FileSize(targetPath));
         }
         catch (Exception exception)
         {
@@ -420,6 +437,14 @@ public static class MagentoExportCommand
         try { step(); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Velikost zapisane datoteke za fazo DATOTEKA; branje velikosti ne sme podreti uspelega izvoza.</summary>
+    private static long? FileSize(string path)
+    {
+        try { return File.Exists(path) ? new FileInfo(path).Length : null; }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     /// <summary>Odstrani zacasno datoteko, ce je se ostala. Napake pri ciscenju ne skrijejo prvotne.</summary>

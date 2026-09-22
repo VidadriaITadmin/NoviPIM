@@ -82,7 +82,6 @@ public static class PimAccessCatalog
 
     Page(Customers, "Stranke", "Kupci, dobavitelji in proizvajalci.", "stranke", "Poslovanje"),
     View("view.customers.list", "Stranke in kartice", "Seznam ter podrobnosti strank.", "stranke", Customers),
-    View("view.customers.partners", "Partnerji", "Pregled poslovnih partnerjev.", "partnerji", Customers),
     Page(Stocks, "Zaloga", "Količine, svežina in razpoložljivost.", "zaloge", "Poslovanje"),
     Page(Prices, "Cene in ceniki", "Cene, ceniki in tisk.", "cene", "Poslovanje"),
     Page(Checks, "Preverbe cen in zaloge", "Opozorila o cenah, maržah in zalogi.", "preverbe", "Poslovanje"),
@@ -104,21 +103,16 @@ public static class PimAccessCatalog
     View("view.rules.discounts", "Komercialna pravila", "Popusti, pragovi in izjeme.", "pravila-popustov", Rules, true),
     View("view.rules.titles", "Spletni nazivi", "Sestava spletnih nazivov.", "pravila/nazivi", Rules, true),
 
-    Page(System, "Nadzor sistema", "Postopki, alarmi in tehnično zdravje.", "sistem", "Administracija"),
-    View("tab.system.overview", "Pregled", "Poslovne kartice, stanje in naslednji korak.", "sistem", System, true),
-    View("tab.system.jobs", "Opravila", "Urniki, vklop in ročni zagon poslov.", "sistem/opravila", System, true),
-    View("tab.system.runs", "Zagoni", "Zgodovina zagonov, koraki, napake in izpis.", "sistem/zagoni", System, true),
-    View("tab.system.schedules", "Postopki (tehnično)", "Razporedi postopkov ops.ScheduleProfile.", "sistem?pogled=postopki", System, true),
-    View("tab.system.workers", "Izvajalniki", "Tehnični pogled: procesi, izpis in dnevniki.", "sistem/workerji", System, true),
-    View("tab.system.alerts", "Alarmi in podjetja", "Napake, obvestila in izključitve.", "sistem/integracije", System, true),
-    View("view.system.activity", "Sled sprememb", "Kdo je kaj spremenil in kdaj.", "sistem/sled", System),
-    View("view.system.exports", "Zagoni izvozov", "Izidi in napake izvozov.", "sistem/izvozi", System),
-    View("view.system.performance", "Zmogljivost", "Trajanja in ozka grla.", "sistem/zmogljivost", System),
-    View("view.system.self-test", "Samotest", "Rezultati nočnega samotesta.", "sistem/samotest", System),
-    View("view.system.errors", "Sistemske napake", "Tehnični dnevnik napak.", "sistem/napake", System),
+    // Blok 7 prenove nadzora (2026-09-22): Opravila, Zagoni, Postopki, Alarmi, Izvozi, Zmogljivost in
+    // Sistemske napake so odstranjeni — vse o poslu je na Nadzoru in strani posla (sistem/posel/<KEY>),
+    // ki ju pokriva ista pravica. Osirotele ključe iz sec.RolePermission briše migracija 259 (259_NadzorPoslov.sql).
+    Page(System, "Nadzor sistema", "Ali podatki prihajajo, kje je napaka in kaj narediti.", "sistem", "Administracija"),
+    View("tab.system.overview", "Nadzor", "Posli, njihovi koraki, faze, izpis in urnik.", "sistem", System, true),
+    View("view.system.self-test", "Samotest", "Rezultati nočnega samotesta.", "sistem/samotest", System, true),
+    View("view.system.activity", "Sled sprememb", "Kdo je kaj spremenil in kdaj.", "sistem/sled", System, true),
 
     Page(Administration, "Sistemske zadeve", "Uporabniki, vloge in mesta shranjevanja.", "administracija", "Administracija"),
-    View("tab.admin.users", "Uporabniki", "Lokalni in domenski računi.", "administracija/uporabniki", Administration, true),
+    View("tab.admin.users", "Uporabniki", "Lokalni in domenski računi.", "administracija", Administration, true),
     View("tab.admin.roles", "Vloge", "Vloge in dovoljenja za dostop.", "administracija/vloge", Administration, true),
     View("tab.admin.paths", "Mesta shranjevanja", "Kam gredo datoteke in izvozi.", "administracija/mape", Administration, true),
   ];
@@ -143,23 +137,16 @@ public static class PimAccessCatalog
     if (path is "" or "prijava" or "brez-dostopa" or "error") return null;
     if (path == "nadzorna-plosca") return Dashboard;
 
-    if (path is "administracija" or "administracija/uporabniki" or "system/uporabniki" or "sistem/uporabniki") return "tab.admin.users";
-    if (path is "administracija/vloge" or "sistem/vloge") return "tab.admin.roles";
-    if (path is "administracija/mape" or "sistem/mape") return "tab.admin.paths";
+    if (path == "administracija") return "tab.admin.users";
+    if (path == "administracija/vloge") return "tab.admin.roles";
+    if (path == "administracija/mape") return "tab.admin.paths";
 
-    if (path == "sistem") return query.Contains("pogled=postopki", StringComparison.Ordinal) ? "tab.system.schedules" : "tab.system.overview";
-    if (path == "sistem/workerji") return "tab.system.workers";
-    if (path == "sistem/opravila") return "tab.system.jobs";
-    if (path == "sistem/zagoni") return "tab.system.runs";
-    if (path is "sistem/integracije" or "system/integracije") return "tab.system.alerts";
+    if (path == "sistem" || path.StartsWith("sistem/posel/", StringComparison.Ordinal)) return "tab.system.overview";
     if (path == "sistem/sled") return "view.system.activity";
-    if (path == "sistem/izvozi") return "view.system.exports";
-    if (path == "sistem/zmogljivost") return "view.system.performance";
     if (path == "sistem/samotest") return "view.system.self-test";
-    if (path is "sistem/napake" or "sistem/urniki") return "view.system.errors";
 
     if (path == "zajem") return "tab.ingest.overview";
-    if (path.StartsWith("zajem/teki", StringComparison.Ordinal) || path == "teki-obdelave") return "tab.ingest.runs";
+    if (path.StartsWith("zajem/teki", StringComparison.Ordinal)) return "tab.ingest.runs";
     if (path.StartsWith("zajem/tezave", StringComparison.Ordinal)) return "tab.ingest.issues";
     if (path == "zajem/novi-artikli") return "view.ingest.candidates";
     if (path == "zajem/cakalna-vrsta") return "view.ingest.queue";
@@ -179,8 +166,8 @@ public static class PimAccessCatalog
       return Quality;
     }
     if (path == "kakovost/artikli") return "tab.quality.products";
-    if (path is "kakovost/napake" or "napake-validacije") return "tab.quality.validation";
-    if (path is "kakovost/karantena" or "karantena") return "tab.quality.quarantine";
+    if (path == "kakovost/napake") return "tab.quality.validation";
+    if (path == "kakovost/karantena") return "tab.quality.quarantine";
     if (path == "kakovost/prevodi") return "tab.quality.translations";
     if (path == "kakovost/kategorije") return "tab.quality.categories";
 
@@ -191,7 +178,7 @@ public static class PimAccessCatalog
     if (path == "saop/odkloni") return "view.saop.drifts";
     if (path == "saop/polja") return "view.saop.fields";
 
-    if (path is "splet" or "izvozi") return "view.web.overview";
+    if (path == "splet") return "view.web.overview";
     if (path == "splet/izvoz") return "view.web.build";
     if (path == "splet/katalog") return "view.web.catalog";
     if (path == "splet/umaknjeni") return "view.web.withdrawals";
@@ -200,9 +187,8 @@ public static class PimAccessCatalog
     if (path == "izvozi/mnozicno") return "view.web.bulk";
 
     if (path == "stranke" || path.StartsWith("stranke/", StringComparison.Ordinal)) return "view.customers.list";
-    if (path == "partnerji") return "view.customers.partners";
     if (path == "zaloge") return Stocks;
-    if (path == "cene" || path == "cene/tisk") return Prices;
+    if (path == "cene" || path == "cene/tisk" || path == "cene/uvoz") return Prices;
     if (path == "preverbe") return Checks;
 
     if (path == "nastavitve") return CatalogSettings;

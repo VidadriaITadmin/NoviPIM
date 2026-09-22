@@ -27,25 +27,17 @@
   }
 </nav>
 
-<section class="ui-card data-card" aria-label="Seznam strank">
-  <div class="card-toolbar" role="search" aria-labelledby="customers-filter-title">
+<section class="ui-card toolbar customer-list-toolbar" role="search" aria-labelledby="customers-filter-title">
+  <div class="card-toolbar" aria-labelledby="customers-filter-title">
     <h2 id="customers-filter-title" class="visually-hidden">Filtriranje strank</h2>
-    <label class="visually-hidden" for="customer-search">Poišči stranko</label>
-    <input id="customer-search" type="search" class="search-input" placeholder="Šifra, naziv, davčna ali kraj …" @bind="Search" @bind:event="oninput" @bind:after="Recompute" />
-    <label class="visually-hidden" for="customer-organization">Podjetje</label>
-    <select id="customer-organization" class="filter-select" @bind="OrganizationText" @bind:after="Recompute">
-      <option value="">Vsa podjetja</option>
-      @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
-    </select>
-    <label class="visually-hidden" for="customer-type">Tip stranke</label>
-    <select id="customer-type" class="filter-select" @bind="Type" @bind:after="Recompute">
-      <option value="">Vsi tipi</option>
-      <option value="NONE">Brez tipa</option>
-      @foreach (var type in Types) { <option value="@type.Code">@type.Name</option> }
-    </select>
+    <div class="search-field">
+      <span class="search-icon" aria-hidden="true"></span>
+      <label class="visually-hidden" for="customer-search">Poišči stranko</label>
+      <input id="customer-search" type="search" class="search-input" placeholder="Išči po šifri, nazivu, davčni ali kraju …" @bind="Search" @bind:event="oninput" @bind:after="Recompute" />
+    </div>
     <button type="button" class="ghost-button filter-toggle @(FiltersOpen ? "open" : null)" aria-expanded="@FiltersOpen.ToString().ToLowerInvariant()" aria-controls="customers-filter-panel" @onclick="() => FiltersOpen = !FiltersOpen">
-      Več filtrov
-      @if (MoreFilterCount > 0) { <span class="filter-badge">@MoreFilterCount</span> }
+      <span class="funnel" aria-hidden="true"></span>Filtri
+      @if (ActiveFilters.Count > 0) { <span class="filter-badge">@ActiveFilters.Count</span> }
     </button>
     <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 
@@ -62,6 +54,21 @@
 
   <div id="customers-filter-panel" class="filter-panel" hidden="@(!FiltersOpen)">
     <div class="filter-grid">
+      <div class="filter-field">
+        <label for="customer-organization">Podjetje</label>
+        <select id="customer-organization" class="filter-select" @bind="OrganizationText" @bind:after="Recompute">
+          <option value="">Vsa podjetja</option>
+          @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="customer-type">Tip stranke</label>
+        <select id="customer-type" class="filter-select" @bind="Type" @bind:after="Recompute">
+          <option value="">Vsi tipi</option>
+          <option value="NONE">Brez tipa</option>
+          @foreach (var type in Types) { <option value="@type.Code">@type.Name</option> }
+        </select>
+      </div>
       <div class="filter-field">
         <label for="customer-activity">Aktivnost</label>
         <select id="customer-activity" class="filter-select" @bind="Activity" @bind:after="Recompute">
@@ -117,8 +124,36 @@
     </div>
   </div>
 
+</section>
+
+  @if (ActiveFilters.Count > 0)
+  {
+    <section class="ui-card active-filters" aria-label="Aktivni filtri">
+      @foreach (var filter in ActiveFilters)
+      {
+        <button type="button" class="filter-chip" aria-label="Odstrani filter @filter.Label" @onclick="() => ClearFilter(filter.Key)">
+          @filter.Label<span class="chip-remove" aria-hidden="true"></span>
+        </button>
+      }
+      <button type="button" class="filter-chip clear-all" @onclick="ClearFilters">Počisti vse</button>
+    </section>
+  }
+
+<section class="ui-card data-card customer-list-card" aria-label="Seznam strank">
+  <div class="table-toolbar">
+    <label for="customer-sort">Razvrstitev</label>
+    <select id="customer-sort" class="filter-select" @bind="Sort" @bind:after="SortChanged">
+      <option value="NAME">Naziv A–Ž</option>
+      <option value="NAME:desc">Naziv Ž–A</option>
+      <option value="KEY">Šifra naraščajoče</option>
+      <option value="KEY:desc">Šifra padajoče</option>
+      <option value="ORGANIZATION">Po podjetju</option>
+      <option value="ROLE">Po vlogi</option>
+    </select>
+  </div>
+
   <PimState Loading="Loading" Error="@Error" Empty="@(Filtered.Count == 0)" EmptyText="Za izbrane filtre ni strank." LoadingText="Nalaganje strank …">
-    <PimTable Caption="@ScopeCaption" Columns="Columns">
+    <PimTable Caption="@ScopeCaption" AriaLabel="Tabela strank" Columns="Columns">
       <Rows>
         @* Cela vrstica odpre stranko. Povezave v celicah zato ni: podcrtano besedilo sredi
            vrstice, ki je vsa klikljiva, obljublja dve razlicni dejanji, pa je le eno. Iz istega
@@ -174,6 +209,7 @@
 @code {
   sealed record KindView(string Code, string Label);
   sealed record TypeOption(string Code, string Name);
+  sealed record FilterChip(string Key, string Label);
 
   [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
   [SupplyParameterFromQuery(Name = "vloga")] public string? QueryRole { get; set; }
@@ -187,6 +223,7 @@
   string? Error;
   string Search = "", Kind = "", Type = "", OrganizationText = "";
   string Activity = "", Source = "", Discount = "", Export = "", Magento = "";
+  string Sort = "NAME";
   int Page;
   const int PageSize = 25;
 
@@ -213,10 +250,36 @@
   PIM.Intranet.Services.CustomerListQuery Query => new(
     OrganizationId, Kind, Search, Type, Activity, Source, Export, Discount, Magento);
 
-  IEnumerable<PIM.Intranet.Services.CustomerListRow> PageRows => Filtered.Skip(Page * PageSize).Take(PageSize);
+  IEnumerable<PIM.Intranet.Services.CustomerListRow> OrderedRows => Sort switch
+  {
+    "NAME:desc" => Filtered.OrderByDescending(row => row.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.CustomerKey, StringComparer.OrdinalIgnoreCase),
+    "KEY" => Filtered.OrderBy(row => row.CustomerKey, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase),
+    "KEY:desc" => Filtered.OrderByDescending(row => row.CustomerKey, StringComparer.OrdinalIgnoreCase).ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase),
+    "ORGANIZATION" => Filtered.OrderBy(row => row.OrganizationName, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase),
+    "ROLE" => Filtered.OrderBy(row => row.RoleLabel, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase),
+    _ => Filtered.OrderBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(row => row.CustomerKey, StringComparer.OrdinalIgnoreCase),
+  };
+
+  IEnumerable<PIM.Intranet.Services.CustomerListRow> PageRows => OrderedRows.Skip(Page * PageSize).Take(PageSize);
   int PageCount => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (decimal)PageSize));
 
-  int MoreFilterCount => new[] { Activity, Source, Discount, Export, Magento }.Count(value => value.Length > 0);
+  List<FilterChip> ActiveFilters
+  {
+    get
+    {
+      var filters = new List<FilterChip>();
+      if (!string.IsNullOrWhiteSpace(Search)) filters.Add(new("search", $"Iskanje: {Search}"));
+      if (!string.IsNullOrWhiteSpace(OrganizationText)) filters.Add(new("organization", $"Podjetje: {OrganizationLabel(OrganizationText)}"));
+      if (!string.IsNullOrWhiteSpace(Kind)) filters.Add(new("kind", $"Vloga: {ViewLabel(Kind)}"));
+      if (!string.IsNullOrWhiteSpace(Type)) filters.Add(new("type", $"Tip: {TypeLabel(Type)}"));
+      if (!string.IsNullOrWhiteSpace(Activity)) filters.Add(new("activity", $"Aktivnost: {ActivityLabel(Activity)}"));
+      if (!string.IsNullOrWhiteSpace(Source)) filters.Add(new("source", $"Vir: {SourceLabel(Source)}"));
+      if (!string.IsNullOrWhiteSpace(Discount)) filters.Add(new("discount", $"Popusti: {DiscountLabel(Discount)}"));
+      if (!string.IsNullOrWhiteSpace(Export)) filters.Add(new("export", $"Izvoz: {ExportLabel(Export)}"));
+      if (!string.IsNullOrWhiteSpace(Magento)) filters.Add(new("magento", $"Magento: {MagentoLabel(Magento)}"));
+      return filters;
+    }
+  }
 
   string ExportHref => "izvoz/stranke.xlsx" + (Query.ToQueryString() is { Length: > 0 } query ? "?" + query : "");
 
@@ -256,9 +319,85 @@
 
   void ClearFilters()
   {
-    Activity = Source = Discount = Export = Magento = "";
+    Search = Kind = Type = OrganizationText = Activity = Source = Discount = Export = Magento = "";
     Recompute();
   }
+
+  void ClearFilter(string key)
+  {
+    switch (key)
+    {
+      case "search": Search = ""; break;
+      case "organization": OrganizationText = ""; break;
+      case "kind": Kind = ""; break;
+      case "type": Type = ""; break;
+      case "activity": Activity = ""; break;
+      case "source": Source = ""; break;
+      case "discount": Discount = ""; break;
+      case "export": Export = ""; break;
+      case "magento": Magento = ""; break;
+    }
+    Recompute();
+  }
+
+  void SortChanged() => Page = 0;
+
+  string OrganizationLabel(string value) =>
+    int.TryParse(value, out var id)
+      ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"neznano ({value})"
+      : value;
+
+  string TypeLabel(string value) => value == "NONE"
+    ? "brez tipa"
+    : Types.FirstOrDefault(row => string.Equals(row.Code, value, StringComparison.OrdinalIgnoreCase))?.Name ?? value;
+
+  string ViewLabel(string value) => Views.FirstOrDefault(row => string.Equals(row.Code, value, StringComparison.OrdinalIgnoreCase)) is { } view
+    ? view.Label
+    : value;
+
+  static string ActivityLabel(string value) => value switch
+  {
+    "ACTIVE" => "samo aktivne",
+    "INACTIVE" => "samo neaktivne",
+    _ => value,
+  };
+
+  static string SourceLabel(string value) => value switch
+  {
+    "MANUAL" => "ročno na kartici",
+    "PRODUCTS" => "iz izdelkov podjetja",
+    "SAOP" => "iz SAOP",
+    "TYPE" => "iz tipa stranke",
+    "DEFAULT" => "privzeto",
+    _ => value,
+  };
+
+  static string DiscountLabel(string value) => value switch
+  {
+    "PACKAGING" => "polno pakiranje",
+    "VALUE" => "vrednostni rabat",
+    "B2BPLUS" => "B2B+",
+    "OWN_TIERS" => "lastni pragovi",
+    "GROUP" => "skupinski popusti",
+    "SPECIAL" => "posebni S",
+    "EXPORT_GROUPS" => "skupine popustov",
+    "NONE" => "brez popustov",
+    _ => value,
+  };
+
+  static string ExportLabel(string value) => value switch
+  {
+    "YES" => "gre v stranke.csv",
+    "NO" => "ne gre v stranke.csv",
+    _ => value,
+  };
+
+  static string MagentoLabel(string value) => value switch
+  {
+    "YES" => "ima skupino",
+    "NO" => "brez skupine",
+    _ => value,
+  };
 
   void Previous() => Page = Math.Max(0, Page - 1);
   void Next() => Page = Math.Min(PageCount - 1, Page + 1);

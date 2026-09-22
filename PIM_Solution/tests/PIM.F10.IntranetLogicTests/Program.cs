@@ -77,8 +77,10 @@ foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v
   Expect(navLabels.Contains(expected), $"V meniju manjka postavka »{expected}«.");
 
 WorkerConsoleChecks.Run();
-WorkerSchedulerChecks.Run();
 JobCatalogChecks.Run();
+JobCatalogChecks.CheckSources();
+PhaseLogChecks.Run();
+MonitorPolicyChecks.Run();
 TextOwnershipChecks.Run();
 Console.WriteLine("F10 intranet logic PASS.");
 

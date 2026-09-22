@@ -11,9 +11,9 @@ public sealed record MagentoArtifact(string FileName, DateTime PublishedUtc, lon
 public sealed record MagentoArtifactPage(MagentoArtifact Artifact, WebExportPage Page, int FileRows);
 
 /// <summary>
-/// Izhodna mapa, kot jo vidi TA proces intraneta (242). Worker, ki datoteki izdela, lahko teče pod drugim
-/// računom (Windows naloga, storitev), zato »zapisljiva« tu pove samo, ali bi vanjo lahko pisal intranet
-/// (razporejevalnik v aplikaciji); za drug račun pove napaka zadnjega poskusa v out.ExportRun.
+/// Izhodna mapa, kot jo vidi TA proces intraneta (242). Worker, ki datoteki izdela, teče pod računom
+/// gostitelja avtomatike (storitev PIM.AutomationHost), zato »zapisljiva« tu pove samo, ali bi vanjo lahko
+/// pisal intranet; za račun gostitelja pove napaka zadnjega poskusa v out.ExportRun.
 /// </summary>
 /// <param name="Source">Od kod pot: okolje PIM_EXPORT_ROOT, register ops.SystemPath (EXPORT_ROOT) ali vgrajeni privzetek.</param>
 public sealed record MagentoOutputFolder(string Root, string Source, bool Exists, bool WritableByThisProcess, string Account, bool HasCompletePair);
@@ -28,7 +28,7 @@ public sealed class MagentoArtifactService(IConfiguration configuration)
     _ => throw new ArgumentException("Neznana datoteka Magento."),
   };
 
-  /// <summary>Isti vrstni red kot PIM.B2bWorker (Program.cs) in WorkerCycleRunner: okolje, register, privzetek.</summary>
+  /// <summary>Isti vrstni red kot PIM.B2bWorker (Program.cs) in gostitelj avtomatike PIM.AutomationHost (AutomationEnvironment): okolje, register, privzetek.</summary>
   async Task<(string Root, string Source)> ResolveRootAsync(CancellationToken ct)
   {
     var root = Environment.GetEnvironmentVariable("PIM_EXPORT_ROOT");

@@ -19,9 +19,65 @@ public sealed record StockItemRow(
 public sealed record StockItemPage(IReadOnlyList<StockItemRow> Rows, long TotalCount);
 
 /// <param name="OrganizationId">null pomeni vsa podjetja (migracija 134).</param>
+/// <param name="ErpSource">SAOP vir (skladišče podjetja); za razliko od SourceCode vrstice ne oklesti (267).</param>
+/// <param name="SupplierSource">Dobaviteljev vir; vrstica ostane cela (267).</param>
+/// <param name="Signal">BELOW_MIN, ABOVE_MAX, NEGATIVE, LATE, UNMATCHED, NO_ERP (267).</param>
+/// <param name="Sort">ITEM, NAME, ERP_DESC, ERP_ASC, SUPPLIER_DESC, INCOMING (267).</param>
 public sealed record StockItemFilter(
   int? OrganizationId, int Skip = 0, int Take = 50, string? Search = null, string? SourceCode = null,
-  string? Availability = null, int? MaxAgeHours = null, string Language = "sl");
+  string? Availability = null, int? MaxAgeHours = null, string Language = "sl",
+  string? ErpSource = null, string? SupplierSource = null, string? Signal = null, string? Sort = null);
+
+/// <summary>
+/// Imena parametrov v naslovu, skupna strani /zaloge in izvozu /izvoz/zaloge.xlsx — izvoz je
+/// natanko to, kar tabela kaže (isti filtri in ista razvrstitev).
+/// </summary>
+public static class StockQuery
+{
+  public static StockItemFilter FromQuery(Func<string, string?> value) => new(
+    int.TryParse(value("podjetje"), out var organization) && organization > 0 ? organization : null,
+    Search: value("isci"), SourceCode: value("vir"), Availability: value("zaloga"),
+    MaxAgeHours: int.TryParse(value("starost"), out var age) && age > 0 ? age : null,
+    ErpSource: value("skladisce"), SupplierSource: value("dobavitelj"), Signal: value("posebnost"), Sort: value("razvrsti"));
+
+  public static string ToQueryString(StockItemFilter filter)
+  {
+    var parameters = new List<string>();
+    Add("podjetje", filter.OrganizationId?.ToString());
+    Add("isci", filter.Search?.Trim());
+    Add("vir", filter.SourceCode);
+    Add("skladisce", filter.ErpSource);
+    Add("dobavitelj", filter.SupplierSource);
+    Add("zaloga", filter.Availability);
+    Add("posebnost", filter.Signal);
+    Add("starost", filter.MaxAgeHours?.ToString());
+    if (!string.IsNullOrWhiteSpace(filter.Sort) && filter.Sort != "ITEM") Add("razvrsti", filter.Sort);
+    return string.Join('&', parameters);
+
+    void Add(string name, string? text)
+    {
+      if (!string.IsNullOrWhiteSpace(text)) parameters.Add(name + "=" + Uri.EscapeDataString(text));
+    }
+  }
+}
+
+/// <summary>Skladišče iz šifranta; IsRead pove, ali je v SAOP zalogi, ki jo PIM bere (267).</summary>
+public sealed record WarehouseStockRow(
+  int OrganizationId, string OrganizationName, string WarehouseCode, string? Name, string? WarehouseType,
+  string? GroupCode, bool IsActive, DateTime UpdatedUtc, bool IsRead);
+
+/// <summary>
+/// SAOP zaloga podjetja, kot jo PIM bere: vsota čez prebrana skladišča, ne po posameznem (267).
+/// AvailableQuantity je null, kadar vir razpoložljive količine ne javi (navaden GetStocks).
+/// </summary>
+public sealed record OrganizationStockRow(
+  int OrganizationId, string OrganizationName, string? SourceCode, DateTime? SnapshotUtc, string? WarehouseLabel,
+  long ItemCount, long InStockCount, long NegativeCount, long MatchedCount, decimal Quantity,
+  decimal? AvailableQuantity, long IncomingCount);
+
+public sealed record WarehouseStockOverview(
+  IReadOnlyList<WarehouseStockRow> Warehouses, IReadOnlyList<OrganizationStockRow> Organizations,
+  IReadOnlyList<string> SupplierSources);
 
 public sealed record StockTotals(
   long PositionCount, long MatchedCount, long UnmatchedCount, long InStockCount,
@@ -71,6 +127,10 @@ public sealed class StockReadService(IConfiguration configuration)
     command.Parameters.Add("@Availability", SqlDbType.NVarChar, 20).Value = Optional(filter.Availability);
     command.Parameters.Add("@MaxAgeHours", SqlDbType.Int).Value = filter.MaxAgeHours is null ? DBNull.Value : filter.MaxAgeHours.Value;
     command.Parameters.Add("@Language", SqlDbType.NVarChar, 20).Value = filter.Language;
+    command.Parameters.Add("@ErpSource", SqlDbType.NVarChar, 100).Value = Optional(filter.ErpSource);
+    command.Parameters.Add("@SupplierSource", SqlDbType.NVarChar, 100).Value = Optional(filter.SupplierSource);
+    command.Parameters.Add("@Signal", SqlDbType.NVarChar, 20).Value = Optional(filter.Signal);
+    command.Parameters.Add("@Sort", SqlDbType.NVarChar, 20).Value = Optional(filter.Sort);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new StockItemRow(
@@ -106,10 +166,9 @@ public sealed class StockReadService(IConfiguration configuration)
   /// (intranet.GetStockByItem, migracija 190), samo s slovenskimi imeni stolpcev in skrajšanim
   /// nazivom. Strani prebere zaporedoma, dokler ne zbere vsega ali doseže MaxExportRows.
   /// </summary>
-  /// <param name="organizationId">null pomeni vsa podjetja — izvoz sledi popolnoma isti izbiri kot tabela.</param>
+  /// <param name="filter">Isti filter kot tabela (brez Skip/Take) — izvoz sledi popolnoma isti izbiri, tudi razvrstitvi.</param>
   public async Task<byte[]> BuildStockWorkbookAsync(
-    int? organizationId, string? sourceCode, string? search, string? availability, int? maxAgeHours,
-    CancellationToken cancellationToken = default)
+    StockItemFilter filter, CancellationToken cancellationToken = default)
   {
     // 20.000 = zgornja meja @Take v intranet.GetStockByItem (migracija 218; prej 200). Vsak klic
     // znova sestavi celotno #StockByItem, zato je bil izvoz z 2.000 (dejansko 200) na klic
@@ -119,8 +178,7 @@ public sealed class StockReadService(IConfiguration configuration)
     var skip = 0;
     while (rows.Count < MaxExportRows)
     {
-      var page = await GetItemsAsync(
-        new StockItemFilter(organizationId, skip, PageSize, search, sourceCode, availability, maxAgeHours), cancellationToken);
+      var page = await GetItemsAsync(filter with { Skip = skip, Take = PageSize }, cancellationToken);
       rows.AddRange(page.Rows);
       if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
       skip += PageSize;
@@ -137,6 +195,7 @@ public sealed class StockReadService(IConfiguration configuration)
       new("Dobavitelj", Width: 20), new("Dobaviteljeva količina", WorkbookCellKind.Number),
       new("Dobaviteljeva prihodna količina", WorkbookCellKind.Number), new("Dobaviteljev datum prihoda", Width: 18),
       new("Podjetje", Width: 16), new("SAOP posnetek", WorkbookCellKind.DateTime), new("Dobaviteljev posnetek", WorkbookCellKind.DateTime),
+      new("Stanje", Width: 14),
     ];
 
     var cells = rows.Select(row => (IReadOnlyList<object?>)new object?[]
@@ -148,10 +207,49 @@ public sealed class StockReadService(IConfiguration configuration)
       row.HasSupplier ? row.SupplierCode : null, row.HasSupplier ? row.SupplierQuantity : null,
       row.HasSupplier ? row.SupplierIncoming : null, row.HasSupplier ? row.SupplierIncomingDate : null,
       row.OrganizationName, row.HasErp ? row.ErpSnapshotUtc : null, row.HasSupplier ? row.SupplierSnapshotUtc : null,
+      row.ErpQuantity + row.SupplierQuantity > 0 ? "Na zalogi" : "Brez zaloge",
     });
 
     IReadOnlyList<string>? notes = truncated ? [$"Zapisanih je prvih {MaxExportRows:N0} vrstic; datoteka je odrezana."] : null;
     return WorkbookWriter.Write("Zaloga", columns, cells, notes);
+  }
+
+  /// <summary>
+  /// Skladišča po podjetju in SAOP zaloga, ki jo PIM bere (intranet.GetWarehouseStock, 267).
+  /// Pozicije zaloge nimajo šifre skladišča: SAOP vrne vsoto čez izbrana skladišča, zato je
+  /// količina po skladišču natančna samo, kadar podjetje bere eno samo skladišče.
+  /// </summary>
+  /// <param name="organizationId">null pomeni vsa aktivna podjetja.</param>
+  public async Task<WarehouseStockOverview> GetWarehouseStockAsync(
+    int? organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetWarehouseStock", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 60,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var warehouses = await ReadAsync(reader, row => new WarehouseStockRow(
+      PimDb.Int32(row, "OrganizationId"), PimDb.TextOrEmpty(row, "OrganizationName"), PimDb.TextOrEmpty(row, "WarehouseCode"),
+      PimDb.Text(row, "Name"), PimDb.Text(row, "WarehouseType"), PimDb.Text(row, "GroupCode"),
+      PimDb.Bool(row, "IsActive"), PimDb.DateTimeValue(row, "UpdatedUtc"), PimDb.Bool(row, "IsRead")), cancellationToken);
+
+    await NextAsync(reader, cancellationToken);
+    var organizations = await ReadAsync(reader, row => new OrganizationStockRow(
+      PimDb.Int32(row, "OrganizationId"), PimDb.TextOrEmpty(row, "OrganizationName"), PimDb.Text(row, "SourceCode"),
+      PimDb.NullableDateTime(row, "SnapshotUtc"), PimDb.Text(row, "WarehouseLabel"),
+      PimDb.Int64(row, "ItemCount"), PimDb.Int64(row, "InStockCount"), PimDb.Int64(row, "NegativeCount"),
+      PimDb.Int64(row, "MatchedCount"), PimDb.Decimal(row, "Quantity"), PimDb.NullableDecimal(row, "AvailableQuantity"),
+      PimDb.Int64(row, "IncomingCount")), cancellationToken);
+
+    await NextAsync(reader, cancellationToken);
+    var suppliers = await ReadAsync(reader, row => PimDb.TextOrEmpty(row, "SourceCode"), cancellationToken);
+
+    return new(warehouses, organizations, suppliers);
   }
 
   /// <param name="organizationId">null pomeni vsa podjetja (migracija 134).</param>

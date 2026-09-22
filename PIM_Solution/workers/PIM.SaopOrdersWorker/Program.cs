@@ -87,6 +87,11 @@ using var client = new SaopOrdersApiClient(settings);
 var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
 var failedAny = false;
 
+// Faze (blok 6 prenove nadzora, 2026-09-22): PRENOS, MEJNIK in PRESLIKAVA za VNK in VND posebej.
+// SourceCode in Pipeline faze sta ime razporeda (SAOP_ORDERS_VNK / SAOP_ORDERS_VND) — isti niz kot vir
+// posla SAOP_ORDER_IMPORT v JobCatalog. Podjetje brez knjige je preskok z razlogom, ne tišina.
+var phases = PhaseLog.FromEnvironment(connectionString, workerId);
+
 foreach (var organization in organizations)
 {
   Console.WriteLine($"[{organization.Id}] {organization.Name} ({organization.SourceCode})");
@@ -97,6 +102,11 @@ foreach (var organization in organizations)
   if (sourceConnectorId is null)
   {
     Console.Error.WriteLine($"  Ni aktivnega map.SourceConnector za {organization.SourceCode}; preskočeno.");
+    foreach (var brezVira in new[] { "SAOP_ORDERS_VNK", "SAOP_ORDERS_VND" })
+    {
+      await phases.RecordAsync(PhaseCodes.Fetch, PhaseOutcome.Failed, brezVira, organization.Id, brezVira,
+        message: $"ni aktivnega map.SourceConnector za {organization.SourceCode}; naročil ni mogoče zajeti");
+    }
     continue;
   }
 
@@ -130,6 +140,9 @@ foreach (var organization in organizations)
   async Task RegisterSkippedAsync(string pipeline, string label, string setting)
   {
     Console.WriteLine($"  {label}: brez nastavljene knjige (Saop:Organizations:{setting}), preskočeno.");
+    // Preskok ni stik z virom: brez knjige naročila ne prihajajo in nadzor mora to videti z razlogom.
+    await phases.RecordAsync(PhaseCodes.Fetch, PhaseOutcome.Skipped, pipeline, organization.Id, pipeline,
+      message: $"brez nastavljene knjige (Saop:Organizations:{setting}); naročila se ne zajemajo");
     try
     {
       await using var skipped = await OperationsRun.BeginAsync(connectionString, organization.Id, pipeline, workerId);
@@ -143,7 +156,7 @@ foreach (var organization in organizations)
 
   // Eno samo ime organizacije (VNK/VND se ne ločita v tem klicu), zato lokalna funkcija zapre
   // nad zunanjimi spremenljivkami organization/connection/sourceConnectorId.
-  async Task<bool> RunOrderKindAsync(string pipeline, string label, Func<SqlConnection, Guid, Task<int>> fetchAsync)
+  async Task<bool> RunOrderKindAsync(string pipeline, string label, Func<SqlConnection, Guid, Task<OrderFetch>> fetchAsync)
   {
     OperationsRun? run = null;
     try
@@ -155,15 +168,49 @@ foreach (var organization in organizations)
       Console.Error.WriteLine(exception.Number == 51100
         ? $"  {label}: razpored za {pipeline} ni omogočen; podjetje je preskočeno."
         : $"  {label}: {pipeline} že teče; ta zagon se je umaknil.");
+      await phases.RecordAsync(PhaseCodes.Fetch, exception.Number == 51100 ? PhaseOutcome.Failed : PhaseOutcome.Skipped,
+        pipeline, organization.Id, pipeline,
+        message: exception.Number == 51100
+          ? $"razpored {pipeline} za podjetje ni omogočen; naročila niso bila zajeta"
+          : $"{pipeline} že teče; ta zagon se je umaknil");
       return exception.Number == 51101; // ze tece ni napaka, izklopljen razpored je
     }
 
+    // Katera faza teče, ko pride izjema: padec mora ostati zapisan pri pravi fazi.
+    string? faza = PhaseCodes.Fetch;
     try
     {
-      var landed = await fetchAsync(connection, run.RunId);
+      var fetched = await fetchAsync(connection, run.RunId);
+      // Dokument, ki ga SAOP ni vrnil, naredi fazo rdečo s številkami dokumentov; ostala naročila so zajeta.
+      await phases.RecordAsync(PhaseCodes.Fetch, fetched.Failed.Count > 0 ? PhaseOutcome.Failed : PhaseOutcome.Succeeded,
+        pipeline, organization.Id, pipeline, run.RunId,
+        fetched.Failed.Count > 0
+          ? $"SAOP ni vrnil {fetched.Failed.Count} dokumentov: {string.Join(", ", fetched.Failed.Take(10))}{(fetched.Failed.Count > 10 ? " …" : "")}; zajetih {fetched.Landed} od {fetched.Keys}"
+          : fetched.Keys == 0
+            ? $"ni sprememb od {fetched.ModifiedFrom:yyyy-MM-dd}"
+            : $"spremenjenih naročil od {fetched.ModifiedFrom:yyyy-MM-dd}: {fetched.Keys}, pristanjenih strani {fetched.Landed}",
+        hasNewData: fetched.Landed > 0, itemsIn: fetched.Keys, itemsOut: fetched.Landed, itemsRejected: fetched.Failed.Count);
       await run.HeartbeatAsync();
+      faza = PhaseCodes.Map;
       await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(run.RunId, organization.Id, organization.SourceCode);
-      Console.WriteLine($"  {label}: pristanjenih strani {landed}. RunId={run.RunId}");
+      faza = null;
+      await MappingPhaseReport.RecordAsync(phases, connectionString, run.RunId, pipeline, organization.Id, pipeline);
+
+      // Vodni žig po preslikavi: premakne se, ko v tem teku ne ostane nič Pending.
+      faza = PhaseCodes.Watermark;
+      var pending = await CountPendingAsync(connection, run.RunId, organization.Id, organization.SourceCode, fetched.EntityType);
+      if (pending == 0)
+        await AdvanceWatermarkAsync(connection, fetched.SourceConnectorId, fetched.EntityType, fetched.FetchStartedUtc);
+      else
+        Console.WriteLine($"  OPOZORILO: {pending} vrstic {fetched.EntityType} ostaja Pending po preslikavi; vodni žig ni premaknjen.");
+      await phases.RecordAsync(PhaseCodes.Watermark, pending == 0 ? PhaseOutcome.Succeeded : PhaseOutcome.Skipped,
+        pipeline, organization.Id, pipeline, run.RunId,
+        pending == 0
+          ? $"vodni žig premaknjen na {fetched.FetchStartedUtc:yyyy-MM-dd HH:mm} UTC"
+          : $"vodni žig ni premaknjen: {pending} strani po preslikavi še čaka; isto obdobje bo zajeto znova",
+        hasNewData: pending == 0);
+      faza = null;
+      Console.WriteLine($"  {label}: pristanjenih strani {fetched.Landed}. RunId={run.RunId}");
       await run.CompleteAsync(true);
       return true;
     }
@@ -171,6 +218,10 @@ foreach (var organization in organizations)
     {
       // Padec ene organizacije ali enega toka (VNK/VND) ne sme ustaviti ostalih.
       Console.Error.WriteLine($"  {label} za organizacijo {organization.Id} je padlo: {exception.Message}");
+      if (faza == PhaseCodes.Map)
+        await MappingPhaseReport.RecordFailureAsync(phases, run.RunId, pipeline, organization.Id, pipeline, exception);
+      else if (faza is not null)
+        await phases.RecordAsync(faza, PhaseOutcome.Failed, pipeline, organization.Id, pipeline, run.RunId, exception.Message);
       await run.CompleteAsync(false, exception.Message[..Math.Min(2000, exception.Message.Length)]);
       return false;
     }
@@ -189,7 +240,7 @@ return failedAny ? 1 : 0;
 /// nobena vrstica Pending — enak vrstni red kot pri PIM.KatalogWorker (glej SaopIngestRunner),
 /// ker je premik pred potrjeno preslikavo že enkrat pomenil tiho izgubljeno okno podatkov.
 /// </summary>
-static async Task<int> RunSalesOrdersAsync(
+static async Task<OrderFetch> RunSalesOrdersAsync(
   SaopOrdersApiClient client, SqlConnection connection, OrdersSettings settings, SaopOrganization organization,
   int sourceConnectorId, Guid runId, bool full)
 {
@@ -207,28 +258,31 @@ static async Task<int> RunSalesOrdersAsync(
 
   Console.WriteLine($"  Naročila kupcev (VNK): {keys.Count} spremenjenih od {modifiedFrom:yyyy-MM-dd}.");
   var landed = 0;
+  var failed = new List<string>();
   foreach (var key in keys.DistinctBy(k => (k.Year, k.Book, k.Number)))
   {
-    var xml = await client.GetSalesOrderDetailAsync(organization.Id, key);
+    // En pokvarjen dokument v SAOP (npr. 2024/VND/214 vrne 500) ne sme ustaviti zajema ostalih
+    // (David 2026-09-22): zapišemo ga kot napako s številko dokumenta in gremo naprej.
+    string xml;
+    try { xml = await client.GetSalesOrderDetailAsync(organization.Id, key); }
+    catch (Exception exception) when (exception is not OperationCanceledException)
+    {
+      failed.Add($"{key.Year}/{key.Book}/{key.Number}");
+      Console.Error.WriteLine($"  NAPAKA: dokument {key.Year}/{key.Book}/{key.Number} ni prebran: {exception.Message[..Math.Min(300, exception.Message.Length)]}");
+      continue;
+    }
     await RawInboxWriter.WriteAsync(connection, runId, organization.Id, organization.SourceCode, entityType, key.Number, xml);
     landed++;
   }
 
-  var pending = await CountPendingAsync(connection, runId, organization.Id, organization.SourceCode, entityType);
-  if (pending == 0)
-  {
-    await AdvanceWatermarkAsync(connection, sourceConnectorId, entityType, fetchStartedUtc);
-  }
-  else
-  {
-    Console.WriteLine($"  OPOZORILO: {pending} vrstic {entityType} ostaja Pending; vodni žig ni premaknjen.");
-  }
-
-  return landed;
+  // Vodni žig se odloči šele PO preslikavi (RunOrderKindAsync): pred njo so sveže zapisane strani vedno
+  // Pending, zato se žig ni premaknil nikoli, ko je tek kaj prinesel, in vsak tek je znova prenesel vse
+  // (Vidadria 2026-09-22: 634 naročil vsako uro).
+  return new OrderFetch(keys.Count, landed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
 }
 
 /// <summary>VND: enak vzorec kot RunSalesOrdersAsync, glej tam.</summary>
-static async Task<int> RunPurchaseOrdersAsync(
+static async Task<OrderFetch> RunPurchaseOrdersAsync(
   SaopOrdersApiClient client, SqlConnection connection, OrdersSettings settings, SaopOrganization organization,
   int sourceConnectorId, Guid runId, bool full)
 {
@@ -246,24 +300,27 @@ static async Task<int> RunPurchaseOrdersAsync(
 
   Console.WriteLine($"  Naročila dobaviteljem (VND): {keys.Count} spremenjenih od {modifiedFrom:yyyy-MM-dd}.");
   var landed = 0;
+  var failed = new List<string>();
   foreach (var key in keys.DistinctBy(k => (k.Year, k.Book, k.Number)))
   {
-    var xml = await client.GetPurchaseOrderDetailAsync(organization.Id, key);
+    // En pokvarjen dokument v SAOP (npr. 2024/VND/214 vrne 500) ne sme ustaviti zajema ostalih
+    // (David 2026-09-22): zapišemo ga kot napako s številko dokumenta in gremo naprej.
+    string xml;
+    try { xml = await client.GetPurchaseOrderDetailAsync(organization.Id, key); }
+    catch (Exception exception) when (exception is not OperationCanceledException)
+    {
+      failed.Add($"{key.Year}/{key.Book}/{key.Number}");
+      Console.Error.WriteLine($"  NAPAKA: dokument {key.Year}/{key.Book}/{key.Number} ni prebran: {exception.Message[..Math.Min(300, exception.Message.Length)]}");
+      continue;
+    }
     await RawInboxWriter.WriteAsync(connection, runId, organization.Id, organization.SourceCode, entityType, key.Number, xml);
     landed++;
   }
 
-  var pending = await CountPendingAsync(connection, runId, organization.Id, organization.SourceCode, entityType);
-  if (pending == 0)
-  {
-    await AdvanceWatermarkAsync(connection, sourceConnectorId, entityType, fetchStartedUtc);
-  }
-  else
-  {
-    Console.WriteLine($"  OPOZORILO: {pending} vrstic {entityType} ostaja Pending; vodni žig ni premaknjen.");
-  }
-
-  return landed;
+  // Vodni žig se odloči šele PO preslikavi (RunOrderKindAsync): pred njo so sveže zapisane strani vedno
+  // Pending, zato se žig ni premaknil nikoli, ko je tek kaj prinesel, in vsak tek je znova prenesel vse
+  // (Vidadria 2026-09-22: 634 naročil vsako uro).
+  return new OrderFetch(keys.Count, landed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
 }
 
 static async Task<int?> ReadSourceConnectorIdAsync(SqlConnection connection, int organizationId, string sourceCode)
@@ -358,3 +415,10 @@ static void PrintUsage()
     SAOP_ORDERS_VND (migracija 210) — vsak s svojim vklopom/izklopom na /sistem/urniki.
     """);
 }
+
+/// <summary>
+/// Izid zajema enega toka (VNK/VND) za faze PRENOS in MEJNIK (blok 6 prenove nadzora):
+/// koliko ključev je SAOP javil, koliko strani je pristalo in ali se je vodni žig premaknil.
+/// </summary>
+/// <param name="Failed">Dokumenti, ki jih SAOP ni vrnil (leto/knjiga/številka); ostali so zajeti.</param>
+sealed record OrderFetch(int Keys, int Landed, int Pending, bool WatermarkAdvanced, DateTime ModifiedFrom, DateTime FetchStartedUtc, IReadOnlyList<string> Failed, string EntityType, int SourceConnectorId);

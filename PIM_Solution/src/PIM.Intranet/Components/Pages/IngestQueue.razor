@@ -5,7 +5,7 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Čakalna vrsta zajema</PageTitle>
-<PimPage Title="Čakalna vrsta zajema" Subtitle="Zajete strani po viru, entiteti in stanju. Stanje »Pending« ni napaka: stran je shranjena in počaka na preslikavo." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="Čakalna vrsta zajema" Subtitle="Zajete strani po viru, entiteti in stanju. Stanje »Pending« ni napaka: stran je shranjena in počaka na preslikavo." Crumbs="Crumbs" />
 
 <section class="ui-card data-card section-gap" aria-label="Povzetek čakalne vrste">
   <PimState Loading="Loading" Error="@Error" Empty="@(Groups.Count == 0)" EmptyText="Za to organizacijo ni zajetih strani." LoadingText="Nalaganje čakalne vrste …">

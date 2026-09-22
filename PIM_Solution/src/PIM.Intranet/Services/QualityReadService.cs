@@ -499,7 +499,7 @@ public sealed class QualityReadService(IConfiguration configuration)
         (SELECT ISNULL(SUM(CAST(ProductCount AS bigint)), 0) FROM map.SourceCategoryToMap) AS CoveredProductCount,
         (SELECT COUNT_BIG(*) FROM canon.Product product
          WHERE product.IsActive = 1
-           AND (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+           AND ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
            AND NOT EXISTS (SELECT 1 FROM canon.ProductCategory category WHERE category.ProductId = product.ProductId)) AS TotalMissingProductCount;
       """, connection) { CommandTimeout = 120 };
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;

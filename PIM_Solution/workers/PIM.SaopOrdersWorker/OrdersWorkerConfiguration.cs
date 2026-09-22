@@ -8,10 +8,9 @@ namespace PIM.SaopOrdersWorker;
 /// <param name="SourceCode">Koda vira; mora obstajati v <c>map.SourceConnector</c>, sicer preslikave ni.</param>
 /// <param name="SalesOrderBook">
 /// Šifra "knjige" naročil kupcev v SAOP (npr. "VNK"). Knjige so nastavitev posameznega podjetja, ne
-/// univerzalna konstanta — organizacija brez te nastavitve (null/prazno) se pri zajemu naročil
-/// kupcev preskoči, ne pade.
+/// univerzalna konstanta, zato jo nastavitev lahko prepiše; brez nastavitve velja "VNK".
 /// </param>
-/// <param name="PurchaseOrderBook">Enako za naročila dobaviteljem (npr. "VND").</param>
+/// <param name="PurchaseOrderBook">Enako za naročila dobaviteljem; brez nastavitve velja "VND".</param>
 public sealed record SaopOrganization(
   int Id, string Name, string SourceCode, bool IsActive = true,
   string? SalesOrderBook = null, string? PurchaseOrderBook = null);
@@ -87,10 +86,20 @@ public static class OrdersWorkerConfiguration
       var isActive = !element.TryGetProperty("IsActive", out var activeElement) || activeElement.ValueKind != JsonValueKind.False;
       var salesOrderBook = element.TryGetProperty("SalesOrderBook", out var salesBookElement) ? salesBookElement.GetString() : null;
       var purchaseOrderBook = element.TryGetProperty("PurchaseOrderBook", out var purchBookElement) ? purchBookElement.GetString() : null;
+      // David 2026-09-22: naročila kupcev so v knjigi VNK, naročila dobaviteljem v knjigi VND. Brez izrecne
+      // nastavitve je zajem doslej molčal (»brez nastavljene knjige, preskočeno«) pri vseh podjetjih. Izrecna
+      // nastavitev v appsettings.Local.json še vedno prepiše privzetek.
+      if (string.IsNullOrWhiteSpace(salesOrderBook)) salesOrderBook = DefaultSalesOrderBook;
+      if (string.IsNullOrWhiteSpace(purchaseOrderBook)) purchaseOrderBook = DefaultPurchaseOrderBook;
       organizations.Add(new SaopOrganization(id, name, sourceCode, isActive, salesOrderBook, purchaseOrderBook));
     }
     return organizations;
   }
+
+  /// <summary>Privzeta knjiga naročil kupcev v SAOP.</summary>
+  public const string DefaultSalesOrderBook = "VNK";
+  /// <summary>Privzeta knjiga naročil dobaviteljem v SAOP.</summary>
+  public const string DefaultPurchaseOrderBook = "VND";
 
   private static string? Env(string name)
   {

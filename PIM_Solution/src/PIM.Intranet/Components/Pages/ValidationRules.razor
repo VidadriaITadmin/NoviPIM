@@ -7,7 +7,7 @@
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Validacijski profili</PageTitle>
-<PimPage Title="Validacijski profili" Subtitle="Zahteve so razvrščene po istem poslovnem nivoju kot kartica izdelka in seznam napak. Vsako zahtevo lahko urediš tu: validacija se ravna po tem, kar tu piše." Crumbs="Crumbs">
+<PimPage OrganizationScope="true" Title="Validacijski profili" Subtitle="Katera polja mora imeti artikel in kaj se zgodi, če manjkajo. Validacija se ravna natanko po tem, kar piše tu." Crumbs="Crumbs">
   <Actions>
     <a class="secondary" href="kakovost/napake">Odpri napake izdelkov</a>
     <a class="primary-button" href="izvoz/validacijski-profili.xlsx" title="En list na nivo (ERP_SLO, ERP_EU/THIRD, KOMERCIALA, SPLET), s prevedenim imenom polja iz kartice izdelka.">Izvozi Excel</a>
@@ -16,85 +16,108 @@
 
 <PimTabs Active="validation" Tabs="RulesTabs.Tabs" Label="Pravila in izvor podatkov" />
 
-<section class="ui-card rule-guide" aria-labelledby="validation-guide-title">
-  <div>
-    <h2 id="validation-guide-title">Kdaj spremeniš validacijo?</h2>
-    <p>Ko mora biti polje obvezno, ko naj težava samo opozori ali ko zahteva ne sme več blokirati izhoda.</p>
-  </div>
-  <ol class="rule-steps">
-    <li><strong>Najdi zahtevo</strong><span>Filtriraj po profilu ali kodi polja.</span></li>
-    <li><strong>Nastavi vpliv</strong><span>Napaka blokira, opozorilo pa samo opozori.</span></li>
-    <li><strong>Preveri rezultat</strong><span>Validacija se po shranjevanju samodejno ponovi.</span></li>
-  </ol>
-</section>
+@* Pregled 2026-09-22: stran se ni nalozila (napacen stolpec v seznamu znanih polj), sprememba
+   resnosti pa je zadela nakljucno vrstico z istim poljem v drugi kategoriji. Zdaj: zahteve po
+   profilih (en profil = ena odlocitev, kaj ustavi), vsaka vrstica pove, za katere artikle velja,
+   resnost je preklop Napaka/Opozorilo, kategorijske vrstice gredo prek nabora atributov (266). *@
 
-@if (Message is not null) { <p class="message-state" role="status">@Message</p> }
-@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+@if (Busy)
+{
+  <div class="rules-progress" role="status" aria-live="polite">
+    <span class="rules-spinner" aria-hidden="true"></span>
+    <div><strong>Shranjujem in ponovno preverjam artikle …</strong><span>Validacija gre čez vse aktivne artikle; to traja nekaj trenutkov.</span></div>
+  </div>
+}
+@if (Message is not null) { <p class="rules-flash good" role="status">@Message</p> }
+@if (SaveError is not null) { <p class="rules-flash bad" role="alert">@SaveError</p> }
 
 @if (!Loading && Error is null)
 {
   <div class="rule-summary" aria-label="Povzetek validacijskih zahtev">
     <div class="rule-summary-item"><span>Aktivne zahteve</span><strong>@ActiveCount.ToString("N0")</strong></div>
-    <div class="rule-summary-item bad"><span>Blokirajoče napake</span><strong>@BlockingRequirementCount.ToString("N0")</strong></div>
-    <div class="rule-summary-item warn"><span>Opozorila</span><strong>@WarningCount.ToString("N0")</strong></div>
-    <div class="rule-summary-item"><span>Čakajo na znano polje</span><strong>@WaitingCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item bad"><span>Napake, ki ustavijo izhod</span><strong>@BlockingRequirementCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item warn"><span>Samo opozorila</span><strong>@WarningCount.ToString("N0")</strong></div>
+    <div class="rule-summary-item"><span>Umaknjene / čakajo na polje</span><strong>@WaitingCount.ToString("N0")</strong></div>
   </div>
 }
 
-@* L1: uporabnik 2026-08-28 — »to bi bilo misljeno da uporabniki spreminjajo in da se potem
-   validacija na podlagi tega dela; treba je omogocit da dodajajo napake in opozorila«.
-   Zahteva se ne brise, ker odprte napake kazejo nanjo; umik je preklop v neaktivno. *@
-<details class="ui-card compact-details section-gap">
-  <summary>Dodaj novo zahtevo</summary>
-  <div class="compact-details-body">
-    <div class="form-grid">
-      <label class="form-field">Kje naj zahteva velja?
-        <select class="filter-select" @bind="NewProfileId">
-          <option value="0">Izberi profil</option>
-          @foreach (var profile in Profiles) { <option value="@profile.ValidationProfileId">@profile.ProfileCode — @profile.Name</option> }
-        </select>
-      </label>
-      <label class="form-field">Katero polje je zahtevano?
-        <input class="form-input" placeholder="npr. Product.EAN" list="validation-fields" @bind="NewFieldCode" />
-      </label>
-      <label class="form-field">Kaj naj se zgodi, če manjka?
-        <select class="filter-select" @bind="NewSeverity">
-          <option value="ERROR">Napaka — blokira izhod</option>
-          <option value="WARNING">Opozorilo — izhoda ne blokira</option>
-        </select>
-      </label>
-      <div class="form-action">
-        <button type="button" class="primary-button" disabled="@(Busy || NewProfileId == 0 || NewFieldCode.Trim().Length == 0)" @onclick="AddRequirementAsync">Dodaj in ponovno preveri</button>
-      </div>
+@* L1: uporabnik 2026-08-28 — »treba je omogocit da dodajajo napake in opozorila«. Zahteva se ne
+   brise, ker odprte napake kazejo nanjo; umik je preklop v neaktivno. *@
+<section class="ui-card rules-add section-gap" aria-labelledby="rules-add-title">
+  <div class="rules-add-head">
+    <div>
+      <h2 id="rules-add-title">Dodaj obvezno polje</h2>
+      <p>Izberi profil, polje in kaj naj se zgodi, ko polje pri artiklu manjka.</p>
     </div>
-    <datalist id="validation-fields">
-      @foreach (var field in KnownFieldCodes) { <option value="@field"></option> }
-    </datalist>
-    <p class="card-note">Če PIM kode polja še ne pozna, jo varno shrani kot neaktivno. Takšna zahteva je vidna v razdelku »Čakajo na polje« in ne ustvarja lažne blokade.</p>
   </div>
-</details>
+  <div class="rules-add-grid">
+    <div class="rules-field">
+      <label for="new-profile">1. Profil</label>
+      <select id="new-profile" class="filter-select" @bind="NewProfileId" disabled="@Busy">
+        <option value="0">Izberi profil …</option>
+        @foreach (var profile in OrderedProfiles.Where(profile => profile.IsActive))
+        {
+          <option value="@profile.ValidationProfileId">@profile.Name</option>
+        }
+      </select>
+      @if (NewProfile is { } selectedProfile)
+      {
+        <small class="rules-hint">@Effect(selectedProfile)</small>
+      }
+    </div>
+    <div class="rules-field">
+      <label for="new-field">2. Polje</label>
+      <PimPicker Id="new-field" Options="FieldOptions" @bind-Value="NewFieldCode" Disabled="@Busy"
+                 Placeholder="Vpiši ime polja, npr. EAN, teža …" AllowCreate="true" CreateLabel="Uporabi kodo"
+                 OnCreate="code => NewFieldCode = code.Trim()" />
+      <small class="rules-hint">Polje, ki ga PIM še ne pozna, se shrani kot umaknjeno in ne ustavi ničesar, dokler ga podatki ne prinesejo.</small>
+    </div>
+    <fieldset class="rules-field rules-severity-choice" disabled="@Busy">
+      <legend>3. Ko polje manjka</legend>
+      <label class="severity-card bad @(NewSeverity == "ERROR" ? "is-selected" : null)">
+        <input type="radio" name="new-severity" checked="@(NewSeverity == "ERROR")" @onchange="@(() => NewSeverity = "ERROR")" />
+        <strong>Napaka</strong>
+        <span>@(NewProfile is { } profileForError && !Blocks(profileForError) ? "Nivo ni popoln; izhoda ta profil ne ustavi." : "Artikel ne gre naprej, dokler polje ni izpolnjeno.")</span>
+      </label>
+      <label class="severity-card warn @(NewSeverity == "WARNING" ? "is-selected" : null)">
+        <input type="radio" name="new-severity" checked="@(NewSeverity == "WARNING")" @onchange="@(() => NewSeverity = "WARNING")" />
+        <strong>Opozorilo</strong>
+        <span>Vidno pri artiklu in v kakovosti, ničesar ne ustavi.</span>
+      </label>
+    </fieldset>
+    <div class="rules-add-action">
+      <button type="button" class="primary-button" disabled="@(Busy || NewProfileId == 0 || string.IsNullOrWhiteSpace(NewFieldCode))" @onclick="AddRequirementAsync">Dodaj in preveri artikle</button>
+    </div>
+  </div>
+</section>
 
-@* P2-16, pregled 2026-09-08: stran je nosila 623 vrstic s 623 izbirniki resnosti, zato je ena
-   sprememba pomenila iskanje po vsem seznamu. Zahteve ostanejo vse — skrivanje bi bilo laz — dobijo
-   pa filter po profilu, polju in resnosti ter pošteno število »prikazano X od Y«. *@
+@* P2-16, pregled 2026-09-08: 600+ zahtev na eni strani — filter po profilu, resnosti, obsegu in
+   iskanje po polju ali kategoriji, s poštenim »prikazano X od Y«. *@
 <section class="ui-card toolbar section-gap" role="search" aria-labelledby="rules-filter-title">
   <h2 id="rules-filter-title" class="visually-hidden">Filtriranje zahtev</h2>
 
   <label class="visually-hidden" for="rules-profile">Profil</label>
   <select id="rules-profile" class="filter-select" @bind="FilterProfile">
     <option value="">Vsi profili</option>
-    @foreach (var profile in Profiles) { <option value="@profile.ProfileCode">@profile.ProfileCode</option> }
+    @foreach (var profile in OrderedProfiles) { <option value="@profile.ProfileCode">@profile.Name</option> }
   </select>
 
   <label class="visually-hidden" for="rules-severity">Resnost</label>
   <select id="rules-severity" class="filter-select" @bind="FilterSeverity">
-    <option value="">Vse resnosti</option>
-    <option value="ERROR">Napaka — blokira</option>
-    <option value="WARNING">Opozorilo — ne blokira</option>
+    <option value="">Napake in opozorila</option>
+    <option value="ERROR">Samo napake</option>
+    <option value="WARNING">Samo opozorila</option>
   </select>
 
-  <label class="visually-hidden" for="rules-search">Iskanje po polju</label>
-  <input id="rules-search" class="form-input" type="search" placeholder="Išči po kodi polja …"
+  <label class="visually-hidden" for="rules-scope">Velja za</label>
+  <select id="rules-scope" class="filter-select" @bind="FilterScope">
+    <option value="">Vse zahteve</option>
+    <option value="PROFILE">Za vse artikle profila</option>
+    <option value="CATEGORY">Po kategorijah</option>
+  </select>
+
+  <label class="visually-hidden" for="rules-search">Iskanje</label>
+  <input id="rules-search" class="form-input rules-search" type="search" placeholder="Išči polje ali kategorijo …"
          @bind="FilterField" @bind:event="oninput" />
 
   @if (HasFilter)
@@ -105,83 +128,151 @@
 </section>
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Profiles.Count == 0)" EmptyText="Validacijskih profilov ni." LoadingText="Nalaganje profilov in zahtev …">
-  @foreach (var layer in Layers)
+  @foreach (var profile in OrderedProfiles)
   {
-    var rows = RowsFor(layer, true);
+    var rows = RowsFor(profile);
     if (rows.Count == 0 && HasFilter) { continue; }
-    <section class="ui-card data-card section-gap" aria-labelledby="@($"rules-{layer}")">
-      <h2 id="@($"rules-{layer}")">@ValidationLayer.Label(layer)</h2>
-      <PimTable Caption="@($"Aktivne zahteve nivoja {ValidationLayer.Label(layer)}")" Columns="RequirementColumns">
-        <Rows>
-          @foreach (var row in rows)
-          {
-            <tr>
-              <td><strong>@row.Profile.Name</strong><div class="tree-path">@row.Profile.ProfileCode</div></td>
-              <td><span class="code-value">@row.Requirement.FieldCode</span></td>
-              <td>
-                <label class="visually-hidden" for="@("sev-" + row.Requirement.FieldRequirementId)">Resnost zahteve @row.Requirement.FieldCode</label>
-                <select id="@("sev-" + row.Requirement.FieldRequirementId)" class="filter-select severity-select" disabled="@Busy"
-                        value="@(row.Requirement.Severity ?? "ERROR")"
-                        @onchange="args => ChangeSeverityAsync(row, args.Value?.ToString())">
-                  <option value="ERROR">Napaka</option>
-                  <option value="WARNING">Opozorilo</option>
-                </select>
-              </td>
-              <td>@(row.Requirement.IsRequired ? "Obvezno" : "Neobvezno")</td>
-              <td>@Blocks(row.Profile)</td>
-              <td>@if (ValidationLayer.IsShared(row.Profile.Scope)) { <PimChip Text="Skupno" Tone="info" /> }</td>
-              <td class="numeric">@row.Requirement.OpenIssueCount.ToString("N0")</td>
-              <td>
-                @* Umik zahteve ni brisanje: odprte napake kazejo nanjo. *@
-                <button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, false)">Umakni</button>
-              </td>
-            </tr>
-          }
-        </Rows>
-      </PimTable>
-      @if (rows.Count == 0) { <div class="note-panel">Ta nivo nima aktivnih zahtev.</div> }
-    </section>
+    var total = AllRows.Count(row => row.Profile.ValidationProfileId == profile.ValidationProfileId && row.Requirement.IsActive);
+    <details class="ui-card rules-profile section-gap" open="@(HasFilter || total <= 25)">
+      <summary>
+        <span class="rules-profile-title">
+          <strong>@profile.Name</strong>
+          <span class="code-value">@profile.ProfileCode</span>
+        </span>
+        <span class="rules-profile-effect">
+          @foreach (var layer in LayersOf(profile)) { <PimChip Text="@ValidationLayer.Label(layer)" Tone="info" Prefix="Nivo: " /> }
+          @if (profile.BlocksErp) { <PimChip Text="ERP" Tone="bad" Prefix="Ustavi: " /> }
+          @if (profile.BlocksWeb) { <PimChip Text="Splet" Tone="warn" Prefix="Ustavi: " /> }
+          @if (!Blocks(profile)) { <PimChip Text="Ne ustavi" Tone="info" Prefix="" /> }
+          @if (!profile.IsActive) { <PimChip Text="Profil izklopljen" Tone="info" Prefix="" /> }
+        </span>
+        <span class="rules-profile-counts">
+          <span><strong>@total.ToString("N0")</strong> zahtev</span>
+          <span title="Artikli izbranega podjetja brez odprte napake v tem profilu"><strong class="good-text">@profile.ValidCount.ToString("N0")</strong> veljavnih</span>
+          <span title="Artikli izbranega podjetja z vsaj eno odprto napako v tem profilu"><strong class="bad-text">@profile.InvalidCount.ToString("N0")</strong> neveljavnih</span>
+        </span>
+      </summary>
+      <p class="rules-profile-note">@Effect(profile)</p>
+      @if (rows.Count == 0)
+      {
+        <div class="note-panel">Profil nima aktivnih zahtev.</div>
+      }
+      else
+      {
+        <div class="table-scroll">
+          <table class="data-table rules-table">
+            <caption class="visually-hidden">Zahteve profila @profile.Name</caption>
+            <thead><tr><th scope="col">Polje</th><th scope="col">Velja za</th><th scope="col">Ko polje manjka</th><th scope="col" class="numeric">Odprtih težav</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead>
+            <tbody>
+              @foreach (var row in rows)
+              {
+                var requirement = row.Requirement;
+                var isError = IsError(requirement);
+                <tr>
+                  <td>
+                    <strong class="rules-field-name">@QualityFieldPolicy.FieldName(requirement.FieldCode)</strong>
+                    <span class="rules-field-meta">@QualityFieldPolicy.EntityLabel(requirement.FieldCode) · <span class="code-value">@requirement.FieldCode</span></span>
+                  </td>
+                  <td>
+                    @if (requirement.CategoryCode is not null)
+                    {
+                      <span class="rules-scope">Kategorija <strong>@requirement.CategoryPath</strong></span>
+                      <a class="rules-scope-link" href="@($"nastavitve/nabori-atributov?drevo={Uri.EscapeDataString(requirement.CategoryTreeCode ?? "")}")" title="Kategorijske zahteve nastanejo iz nabora atributov; sprememba tu popravi tudi nabor.">iz nabora atributov</a>
+                    }
+                    else if (requirement.OriginScope == "FOREIGN")
+                    {
+                      <span class="rules-scope">Samo artikli s tujim poreklom</span>
+                    }
+                    else
+                    {
+                      <span class="rules-scope">Vsi artikli profila</span>
+                    }
+                  </td>
+                  <td>
+                    <div class="severity-toggle" role="group" aria-label="@($"Resnost zahteve {requirement.FieldCode}")">
+                      <button type="button" class="@(isError ? "is-on bad" : null)" aria-pressed="@(isError ? "true" : "false")" disabled="@Busy"
+                              title="@(Blocks(profile) ? "Napaka: artikel ne gre naprej, dokler polje ni izpolnjeno." : "Napaka: nivo ni popoln; ta profil izhoda ne ustavi.")"
+                              @onclick="() => MakeErrorAsync(row)">Napaka</button>
+                      <button type="button" class="@(!isError ? "is-on warn" : null)" aria-pressed="@(!isError ? "true" : "false")" disabled="@Busy"
+                              title="Opozorilo: vidno, a ničesar ne ustavi."
+                              @onclick="() => MakeWarningAsync(row)">Opozorilo</button>
+                    </div>
+                  </td>
+                  <td class="numeric">
+                    @if (requirement.OpenIssueCount > 0)
+                    {
+                      <a href="@QualityFieldPolicy.IssuesHref(requirement.FieldCode)">@requirement.OpenIssueCount.ToString("N0")</a>
+                    }
+                    else
+                    {
+                      <span class="muted">0</span>
+                    }
+                  </td>
+                  <td class="rules-row-action">
+                    @* Umik zahteve ni brisanje: odprte napake kazejo nanjo. *@
+                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, false)"
+                            title="Zahteva preneha veljati; odprte težave se zaprejo ob preverjanju.">Umakni</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </details>
   }
 
-  <details class="ui-card compact-details section-gap">
-    <summary id="waiting-fields-title">Čakajo na polje (@WaitingCount.ToString("N0"))</summary>
-    <div class="compact-details-body">
-      <p class="muted">To so umaknjene zahteve ali kode, ki jih podatkovni model še ne pozna. Ne blokirajo izdelkov.</p>
-      <PimTable Caption="Neaktivne zahteve, ki čakajo na polje" Columns="WaitingColumns">
-        <Rows>
-          @foreach (var row in AllRows.Where(row => !row.Requirement.IsActive).OrderBy(row => row.Profile.ProfileCode).ThenBy(row => row.Requirement.FieldCode))
-          {
-            <tr>
-              <td>@LayerNames(row.Profile)</td>
-              <td><strong>@row.Profile.ProfileCode</strong></td>
-              <td><span class="code-value">@row.Requirement.FieldCode</span></td>
-              <td>@(row.Requirement.Severity ?? "—")</td>
-              <td>@(row.Requirement.IsRequired ? "Obvezno" : "Neobvezno")</td>
-              <td class="numeric">@row.Requirement.OpenIssueCount.ToString("N0")</td>
-              <td><button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, true)">Vklopi in preveri</button></td>
-            </tr>
-          }
-        </Rows>
-      </PimTable>
-      @if (WaitingCount == 0) { <div class="note-panel">Ni neaktivnih zahtev.</div> }
-    </div>
+  <details class="ui-card rules-profile section-gap">
+    <summary>
+      <span class="rules-profile-title"><strong>Zahteve, ki čakajo na polje ali so umaknjene</strong></span>
+      <span class="rules-profile-counts"><span><strong>@WaitingCount.ToString("N0")</strong> zahtev</span></span>
+    </summary>
+    <p class="rules-profile-note">Te zahteve ne ustvarjajo težav. Vklopi jo, ko mora spet veljati.</p>
+    @if (WaitingCount == 0)
+    {
+      <div class="note-panel">Ni umaknjenih zahtev.</div>
+    }
+    else
+    {
+      <div class="table-scroll">
+        <table class="data-table rules-table">
+          <caption class="visually-hidden">Umaknjene zahteve</caption>
+          <thead><tr><th scope="col">Polje</th><th scope="col">Profil</th><th scope="col">Velja za</th><th scope="col">Resnost ob vklopu</th><th scope="col"><span class="visually-hidden">Dejanje</span></th></tr></thead>
+          <tbody>
+            @foreach (var row in AllRows.Where(row => !row.Requirement.IsActive && MatchesText(row)).OrderBy(row => row.Profile.ProfileCode).ThenBy(row => row.Requirement.FieldCode))
+            {
+              <tr>
+                <td>
+                  <strong class="rules-field-name">@QualityFieldPolicy.FieldName(row.Requirement.FieldCode)</strong>
+                  <span class="rules-field-meta"><span class="code-value">@row.Requirement.FieldCode</span></span>
+                </td>
+                <td>@row.Profile.Name</td>
+                <td>@(row.Requirement.CategoryPath ?? "Vsi artikli profila")</td>
+                <td>@(IsError(row.Requirement) ? "Napaka" : "Opozorilo")</td>
+                <td class="rules-row-action"><button type="button" class="small-action" disabled="@Busy" @onclick="() => SetActiveAsync(row, true)">Vklopi</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
   </details>
 </PimState>
 
 @code {
   sealed record RequirementWithProfile(ValidationProfileRow Profile, FieldRequirementRow Requirement);
 
-  static readonly PimValidationLayer[] Layers = Enum.GetValues<PimValidationLayer>();
   IReadOnlyList<ValidationProfileRow> Profiles = [];
   IReadOnlyList<RequirementWithProfile> AllRows = [];
   IReadOnlyList<string> KnownFields = [];
+  IReadOnlyList<PimPickerOption> FieldOptions = [];
   bool Loading = true;
   bool Busy;
   string? Error;
   string? Message;
   string? SaveError;
   int NewProfileId;
-  string NewFieldCode = "";
+  string? NewFieldCode;
   string NewSeverity = "ERROR";
   bool InitialFilterApplied;
 
@@ -189,16 +280,12 @@
   public string? RequestedProfile { get; set; }
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Validacijski profili")];
-  static readonly IReadOnlyList<PimColumn> RequirementColumns =
-  [new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Vpliv"), new("Vrsta"), new("Odprtih", Numeric: true), new("Dejanje")];
-  static readonly IReadOnlyList<PimColumn> WaitingColumns =
-  [new("Nivo"), new("Profil"), new("Polje"), new("Resnost"), new("Obveznost"), new("Odprtih", Numeric: true), new("Dejanje")];
 
   protected override Task OnInitializedAsync() => ReloadAsync();
 
   async Task ReloadAsync()
   {
-    Loading = true;
+    Loading = AllRows.Count == 0;
     Error = null;
     try
     {
@@ -206,20 +293,29 @@
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       if (KnownFields.Count == 0) KnownFields = await Governance.GetCanonicalFieldCodesAsync();
       Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
-      var tasks = Profiles.Select(async profile =>
-        (Profile: profile, Requirements: await Governance.GetFieldRequirementsAsync(profile.ValidationProfileId, organization.OrganizationId)));
-      var results = await Task.WhenAll(tasks);
-      AllRows = results.SelectMany(result => result.Requirements.Select(requirement => new RequirementWithProfile(result.Profile, requirement))).ToArray();
-      if (NewProfileId == 0) NewProfileId = Profiles.FirstOrDefault()?.ValidationProfileId ?? 0;
+      var results = new List<RequirementWithProfile>();
+      foreach (var profile in Profiles)
+        foreach (var requirement in await Governance.GetFieldRequirementsAsync(profile.ValidationProfileId, organization.OrganizationId))
+          results.Add(new(profile, requirement));
+      AllRows = results;
+      FieldOptions = KnownFields.Concat(AllRows.Select(row => row.Requirement.FieldCode))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(code => QualityFieldPolicy.EntityLabel(code)).ThenBy(code => QualityFieldPolicy.FieldName(code))
+        .Select(code => new PimPickerOption(code, QualityFieldPolicy.FieldName(code), code, Group: QualityFieldPolicy.EntityLabel(code)))
+        .ToArray();
       if (!InitialFilterApplied)
       {
         var requested = (RequestedProfile ?? "").Trim();
-        if (requested.Length > 0 && Profiles.Any(profile => string.Equals(profile.ProfileCode, requested, StringComparison.OrdinalIgnoreCase)))
-          FilterProfile = Profiles.First(profile => string.Equals(profile.ProfileCode, requested, StringComparison.OrdinalIgnoreCase)).ProfileCode;
+        var match = Profiles.FirstOrDefault(profile => string.Equals(profile.ProfileCode, requested, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) { FilterProfile = match.ProfileCode; NewProfileId = match.ValidationProfileId; }
         InitialFilterApplied = true;
       }
     }
-    catch { Error = "Validacijskih profilov in zahtev trenutno ni mogoče naložiti."; }
+    catch (Exception exception)
+    {
+      Error = "Validacijskih profilov in zahtev trenutno ni mogoče naložiti.";
+      Console.Error.WriteLine($"Validacijski profili: {exception}");
+    }
     finally { Loading = false; }
   }
 
@@ -228,29 +324,37 @@
 
   async Task AddRequirementAsync()
   {
+    var fieldCode = (NewFieldCode ?? "").Trim();
+    if (NewProfileId == 0 || fieldCode.Length == 0) return;
+    var profile = NewProfile;
     Busy = true; Message = null; SaveError = null;
     try
     {
-      var saved = await Rules.SaveRequirementAsync(NewProfileId, NewFieldCode.Trim(), NewSeverity, true, true, await ActorAsync());
+      var saved = await Rules.SaveRequirementAsync(NewProfileId, fieldCode, NewSeverity, true, true, await ActorAsync());
       Message = saved.FieldKnown
-        ? "Zahteva je dodana; velja ob naslednji validaciji."
-        : $"Polje {NewFieldCode.Trim()} ni v katalogu, zato je zahteva zapisana kot neaktivna in čaka na polje.";
-      NewFieldCode = "";
+        ? $"Dodano: {QualityFieldPolicy.FieldName(fieldCode)} je v profilu »{profile?.Name}« {(NewSeverity == "ERROR" ? "napaka" : "opozorilo")}. Artikli so ponovno preverjeni."
+        : $"Polje {fieldCode} PIM-u še ni znano, zato je zahteva shranjena kot umaknjena in ne ustavi ničesar.";
+      NewFieldCode = null;
       await ReloadAsync();
     }
-    catch { SaveError = "Zahteve ni bilo mogoče shraniti."; }
+    catch (Exception exception) { SaveError = Explain(exception, "Zahteve ni bilo mogoče shraniti."); }
     finally { Busy = false; }
   }
 
-  async Task ChangeSeverityAsync(RequirementWithProfile row, string? severity)
+  Task MakeErrorAsync(RequirementWithProfile row) => ChangeSeverityAsync(row, "ERROR");
+  Task MakeWarningAsync(RequirementWithProfile row) => ChangeSeverityAsync(row, "WARNING");
+
+  async Task ChangeSeverityAsync(RequirementWithProfile row, string severity)
   {
-    if (string.IsNullOrWhiteSpace(severity) || severity == row.Requirement.Severity) return;
-    await SaveAsync(row, severity, row.Requirement.IsActive, $"Resnost zahteve {row.Requirement.FieldCode} je spremenjena.");
+    if (string.Equals(severity, row.Requirement.Severity ?? "ERROR", StringComparison.OrdinalIgnoreCase)) return;
+    await SaveAsync(row, severity, row.Requirement.IsActive,
+      $"{QualityFieldPolicy.FieldName(row.Requirement.FieldCode)} je zdaj {(severity == "ERROR" ? "napaka" : "opozorilo")}{ScopeSuffix(row.Requirement)}. Artikli so ponovno preverjeni.");
   }
 
   Task SetActiveAsync(RequirementWithProfile row, bool active) =>
     SaveAsync(row, row.Requirement.Severity ?? "ERROR", active,
-      active ? $"Zahteva {row.Requirement.FieldCode} je vklopljena." : $"Zahteva {row.Requirement.FieldCode} je umaknjena; odprte napake se zaprejo ob naslednji validaciji.");
+      active ? $"Zahteva {QualityFieldPolicy.FieldName(row.Requirement.FieldCode)} spet velja{ScopeSuffix(row.Requirement)}."
+             : $"Zahteva {QualityFieldPolicy.FieldName(row.Requirement.FieldCode)} je umaknjena{ScopeSuffix(row.Requirement)}; njene odprte težave so zaprte.");
 
   async Task SaveAsync(RequirementWithProfile row, string severity, bool active, string message)
   {
@@ -258,47 +362,81 @@
     try
     {
       await Rules.SaveRequirementAsync(row.Profile.ValidationProfileId, row.Requirement.FieldCode,
-        severity, row.Requirement.IsRequired, active, await ActorAsync());
+        severity, row.Requirement.IsRequired, active, await ActorAsync(), fieldRequirementId: row.Requirement.FieldRequirementId);
       Message = message;
       await ReloadAsync();
     }
-    catch { SaveError = "Spremembe ni bilo mogoče shraniti."; }
+    catch (Exception exception) { SaveError = Explain(exception, "Spremembe ni bilo mogoče shraniti."); }
     finally { Busy = false; }
   }
 
-  string FilterProfile = "", FilterSeverity = "", FilterField = "";
-  bool HasFilter => FilterProfile.Length > 0 || FilterSeverity.Length > 0 || FilterField.Trim().Length > 0;
+  /// <summary>Poslovna zavrnitev postopka (THROW 5xxxx) je uporabniku razumljiva; ostalo ne.</summary>
+  static string Explain(Exception exception, string fallback) =>
+    exception is Microsoft.Data.SqlClient.SqlException { Number: >= 50000 } sql ? sql.Message
+    : exception is UnauthorizedAccessException ? "Za to spremembo nimaš pravice."
+    : fallback;
 
-  /// <summary>Aktivne zahteve, ki ustrezajo filtru; imenovalec za »prikazano X od Y«.</summary>
+  static string ScopeSuffix(FieldRequirementRow requirement) =>
+    requirement.CategoryPath is { } path ? $" v kategoriji {path}" : "";
+
+  string FilterProfile = "", FilterSeverity = "", FilterScope = "", FilterField = "";
+  bool HasFilter => FilterProfile.Length > 0 || FilterSeverity.Length > 0 || FilterScope.Length > 0 || FilterField.Trim().Length > 0;
+
+  ValidationProfileRow? NewProfile => Profiles.FirstOrDefault(profile => profile.ValidationProfileId == NewProfileId);
+
+  static readonly PimValidationLayer[] Layers = Enum.GetValues<PimValidationLayer>();
+
+  static IReadOnlyList<PimValidationLayer> LayersOf(ValidationProfileRow profile) =>
+    ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb);
+
+  /// <summary>
+  /// Isti nivoji in isti vrstni red kot kartica izdelka in seznam napak (ERP_SLO, ERP_EU/THIRD,
+  /// KOMERCIALA, SPLET); skupno jedro velja za več nivojev, zato je pred njimi.
+  /// </summary>
+  IReadOnlyList<ValidationProfileRow> OrderedProfiles => Profiles
+    .OrderByDescending(profile => profile.IsActive)
+    .ThenByDescending(profile => ValidationLayer.IsShared(profile.Scope))
+    .ThenBy(profile => LayersOf(profile).Select(layer => Array.IndexOf(Layers, layer)).DefaultIfEmpty(Layers.Length).Min())
+    .ThenBy(profile => profile.ProfileCode).ToArray();
+
   int ActiveCount => AllRows.Count(row => row.Requirement.IsActive);
   int VisibleCount => AllRows.Count(row => row.Requirement.IsActive && Matches(row));
-  int BlockingRequirementCount => AllRows.Count(row => row.Requirement.IsActive
-    && string.Equals(row.Requirement.Severity ?? "ERROR", "ERROR", StringComparison.OrdinalIgnoreCase)
-    && (row.Profile.BlocksErp || row.Profile.BlocksWeb));
-  int WarningCount => AllRows.Count(row => row.Requirement.IsActive
-    && string.Equals(row.Requirement.Severity, "WARNING", StringComparison.OrdinalIgnoreCase));
+  int BlockingRequirementCount => AllRows.Count(row => row.Requirement.IsActive && IsError(row.Requirement) && Blocks(row.Profile));
+  int WarningCount => AllRows.Count(row => row.Requirement.IsActive && !IsError(row.Requirement));
   int WaitingCount => AllRows.Count(row => !row.Requirement.IsActive);
-  IReadOnlyList<string> KnownFieldCodes => KnownFields.Concat(AllRows.Select(row => row.Requirement.FieldCode))
-    .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value).ToArray();
 
-  void ClearFilters() => (FilterProfile, FilterSeverity, FilterField) = ("", "", "");
+  void ClearFilters() => (FilterProfile, FilterSeverity, FilterScope, FilterField) = ("", "", "", "");
+
+  static bool IsError(FieldRequirementRow requirement) =>
+    !string.Equals(requirement.Severity, "WARNING", StringComparison.OrdinalIgnoreCase);
+
+  static bool Blocks(ValidationProfileRow profile) => profile.BlocksErp || profile.BlocksWeb;
+
+  bool MatchesText(RequirementWithProfile row)
+  {
+    var text = FilterField.Trim();
+    return text.Length == 0
+      || row.Requirement.FieldCode.Contains(text, StringComparison.OrdinalIgnoreCase)
+      || (row.Requirement.CategoryPath?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
+  }
 
   bool Matches(RequirementWithProfile row) =>
     (FilterProfile.Length == 0 || string.Equals(row.Profile.ProfileCode, FilterProfile, StringComparison.OrdinalIgnoreCase))
-    && (FilterSeverity.Length == 0 || string.Equals(row.Requirement.Severity ?? "ERROR", FilterSeverity, StringComparison.OrdinalIgnoreCase))
-    && (FilterField.Trim().Length == 0 || row.Requirement.FieldCode.Contains(FilterField.Trim(), StringComparison.OrdinalIgnoreCase));
+    && (FilterSeverity.Length == 0 || (FilterSeverity == "ERROR") == IsError(row.Requirement))
+    && (FilterScope.Length == 0 || (FilterScope == "CATEGORY") == (row.Requirement.CategoryCode is not null))
+    && MatchesText(row);
 
-  IReadOnlyList<RequirementWithProfile> RowsFor(PimValidationLayer layer, bool active) => AllRows
-    .Where(row => row.Requirement.IsActive == active)
+  IReadOnlyList<RequirementWithProfile> RowsFor(ValidationProfileRow profile) => AllRows
+    .Where(row => row.Profile.ValidationProfileId == profile.ValidationProfileId && row.Requirement.IsActive)
     .Where(Matches)
-    .Where(row => ValidationLayer.Resolve(row.Profile.ProfileCode, row.Profile.Scope, row.Profile.BlocksErp, row.Profile.BlocksWeb).Contains(layer))
-    .OrderBy(row => row.Profile.ProfileCode).ThenBy(row => row.Requirement.FieldCode).ToArray();
+    .OrderBy(row => row.Requirement.CategoryCode is null ? 0 : 1)
+    .ThenBy(row => row.Requirement.FieldCode).ThenBy(row => row.Requirement.CategoryPath).ToArray();
 
-  static string Blocks(ValidationProfileRow profile) => (profile.BlocksErp, profile.BlocksWeb) switch
+  static string Effect(ValidationProfileRow profile) => (profile.BlocksErp, profile.BlocksWeb) switch
   {
-    (true, true) => "ERP in splet", (true, false) => "ERP", (false, true) => "Splet", _ => "Ne blokira",
+    (true, true) => "Napaka v tem profilu ustavi zapis artikla v SAOP in objavo na spletu. Opozorilo ne ustavi ničesar.",
+    (true, false) => "Napaka v tem profilu ustavi zapis artikla v SAOP. Opozorilo ne ustavi ničesar.",
+    (false, true) => "Napaka v tem profilu ustavi objavo artikla na tem spletnem mestu. Opozorilo ne ustavi ničesar.",
+    _ => "Ta profil ne ustavi ničesar: napaka pomeni samo, da nivo še ni popoln (vidno v kakovosti in na kartici).",
   };
-
-  static string LayerNames(ValidationProfileRow profile) => string.Join(", ",
-    ValidationLayer.Resolve(profile.ProfileCode, profile.Scope, profile.BlocksErp, profile.BlocksWeb).Select(ValidationLayer.Code));
 }

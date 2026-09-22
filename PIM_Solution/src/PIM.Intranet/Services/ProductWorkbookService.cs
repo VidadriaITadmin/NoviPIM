@@ -386,6 +386,11 @@ public sealed class ProductWorkbookService(
 
       var pim = new Dictionary<string, string>(StringComparer.Ordinal);
       var saopValues = new Dictionary<string, string>(StringComparer.Ordinal);
+      // Kateri stolpec je v tej vrstici že dal vrednost polju. Dva stolpca za isto polje (naslov
+      // in ime elementa, ali stara datoteka) ne smeta tiho povoziti drug drugega: drugi je prej
+      // zmagal in uvoz je spremembo v prvem zamolčal kot »v PIM že tako zapisano«.
+      var sourceOf = new Dictionary<string, string>(StringComparer.Ordinal);
+      var conflicting = new HashSet<string>(StringComparer.Ordinal);
       foreach (var match in matches)
       {
         if (match.Column is null || match.Column.Target == ProductWorkbookTarget.ReadOnly) continue;
@@ -404,7 +409,7 @@ public sealed class ProductWorkbookService(
           }
           value = flag;
         }
-        else if (match.Column.ValueFormat is "decimal4" or "decimal8")
+        else if (match.Column.IsNumber)
         {
           // Število gre naprej v zapisu s piko — tako ga razume SAOP in hrani katalog. Besedilo
           // namesto števila bi v vrsti čakalo, dokler ga graditelj dokumenta ne zavrne.
@@ -415,8 +420,22 @@ public sealed class ProductWorkbookService(
           }
           value = number;
         }
-        if (match.Column.Target == ProductWorkbookTarget.Pim) pim[match.Column.FieldKey] = value;
-        else saopValues[match.Column.FieldKey] = value;
+        var target = match.Column.Target == ProductWorkbookTarget.Pim ? pim : saopValues;
+        var fieldKey = match.Column.FieldKey;
+        if (conflicting.Contains(fieldKey)) continue;
+        if (sourceOf.TryGetValue(fieldKey, out var earlier)
+          && (pim.TryGetValue(fieldKey, out var previous) || saopValues.TryGetValue(fieldKey, out previous)))
+        {
+          if (SameValue(value, previous, match.Column.IsNumber)) continue;
+          problems.Add($"Vrstica {rowNumber}: stolpca »{earlier}« (»{previous}«) in »{match.Header}« (»{value}«) "
+            + "pišeta isto polje z različno vrednostjo; polje se preskoči. Popravi enega od njiju.");
+          pim.Remove(fieldKey);
+          saopValues.Remove(fieldKey);
+          conflicting.Add(fieldKey);
+          continue;
+        }
+        sourceOf[fieldKey] = match.Header;
+        target[fieldKey] = value;
       }
 
       if (pim.Count == 0 && saopValues.Count == 0) continue;
@@ -430,7 +449,9 @@ public sealed class ProductWorkbookService(
 
     var boolFields = matches.Where(match => match.Column?.IsBool == true)
       .Select(match => match.Column!.FieldKey).ToHashSet(StringComparer.Ordinal);
-    rows = await OnlyChangedAsync(rows, siteByToken: SiteLookup(sites), boolFields, problems, cancellationToken);
+    var numberFields = matches.Where(match => match.Column?.IsNumber == true)
+      .Select(match => match.Column!.FieldKey).ToHashSet(StringComparer.Ordinal);
+    rows = await OnlyChangedAsync(rows, siteByToken: SiteLookup(sites), boolFields, numberFields, problems, cancellationToken);
 
     if (rows.Count == 0) problems.Add("V zvezku ni nobene vrstice, ki bi kaj spremenila. Kar je v datoteki, je v PIM že tako zapisano.");
     return new(rows, unknown, readOnly, problems, newAttributes);
@@ -509,7 +530,7 @@ public sealed class ProductWorkbookService(
   /// </summary>
   async Task<List<ProductWorkbookRowChange>> OnlyChangedAsync(
     List<ProductWorkbookRowChange> rows, IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken,
-    IReadOnlySet<string> boolFields, List<string> problems, CancellationToken cancellationToken)
+    IReadOnlySet<string> boolFields, IReadOnlySet<string> numberFields, List<string> problems, CancellationToken cancellationToken)
   {
     if (rows.Count == 0) return rows;
 
@@ -540,16 +561,35 @@ public sealed class ProductWorkbookService(
 
       var pim = new Dictionary<string, string>(StringComparer.Ordinal);
       foreach (var pair in row.PimValues)
-        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields)) pim[pair.Key] = pair.Value;
+        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields, numberFields)) pim[pair.Key] = pair.Value;
 
       var saopValues = new Dictionary<string, string>(StringComparer.Ordinal);
       foreach (var pair in row.SaopValues)
-        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields)) saopValues[pair.Key] = pair.Value;
+        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields, numberFields)) saopValues[pair.Key] = pair.Value;
+
+      // Šifra, ki se razlikuje samo po vodilnih ničlah (»02« -> »2«), je sprememba — a pogosto je
+      // ni naredil človek, ampak Excel, ki vpis v navadno celico spremeni v število. Uvoz je ne
+      // zamolči in je ne pošlje tiho: v predogledu jo izrecno pokaže.
+      foreach (var pair in pim.Concat(saopValues))
+        if (!numberFields.Contains(pair.Key) && Stored(pair.Key, key.ProductId, current) is { } stored
+          && OnlyLeadingZerosDiffer(pair.Value, stored))
+          problems.Add($"Vrstica {row.RowNumber} (artikel {row.ItemId}): {pair.Key} »{stored.Trim()}« -> »{pair.Value}« "
+            + "se razlikuje samo po vodilnih ničlah. Če jih je odrezal Excel, celico zapiši kot besedilo ('" + stored.Trim() + ").");
 
       if (pim.Count == 0 && saopValues.Count == 0) continue;
       result.Add(row with { PimValues = pim, SaopValues = saopValues });
     }
     return result;
+  }
+
+  /// <summary>»02« in »2«, »0000001« in »1«: isto celo število, različen zapis.</summary>
+  public static bool OnlyLeadingZerosDiffer(string incoming, string stored)
+  {
+    var left = incoming.Trim();
+    var right = stored.Trim();
+    return left != right && left.Length > 0 && right.Length > 0
+      && left.All(char.IsAsciiDigit) && right.All(char.IsAsciiDigit)
+      && left.TrimStart('0') == right.TrimStart('0');
   }
 
   static string? Stored(string fieldKey, long productId, WorkbookData current)
@@ -562,7 +602,8 @@ public sealed class ProductWorkbookService(
 
   static bool Changed(
     string fieldKey, string incoming, ProductKey key, WorkbookData current,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken, IReadOnlySet<string> boolFields)
+    IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken, IReadOnlySet<string> boolFields,
+    IReadOnlySet<string> numberFields)
   {
     if (fieldKey == ProductWorkbookContract.WebPublishField)
     {
@@ -610,7 +651,7 @@ public sealed class ProductWorkbookService(
       return !SameList(ProductWorkbookContract.SplitList(incoming), stored);
     }
 
-    return !SameValue(incoming, Stored(fieldKey, key.ProductId, current));
+    return !SameValue(incoming, Stored(fieldKey, key.ProductId, current), numberFields.Contains(fieldKey));
   }
 
   /* ─── Uvoz: zapis ─────────────────────────────────────────────────────────────────── */
@@ -1448,6 +1489,9 @@ public sealed class ProductWorkbookService(
     var productIds = sent.Where(row => keys.ContainsKey(row.EntityKey))
       .Select(row => keys[row.EntityKey].ProductId).Distinct().ToList();
     var current = await ReadBatchedAsync(productIds, fieldCodes, cancellationToken);
+    var numberFields = (await WritableSaopFieldsAsync(cancellationToken))
+      .Where(field => field.ValueFormat is "decimal4" or "decimal8")
+      .Select(field => field.FieldKey).ToHashSet(StringComparer.Ordinal);
 
     var fields = new List<object>();
     foreach (var row in sent)
@@ -1459,7 +1503,7 @@ public sealed class ProductWorkbookService(
       // kanonicna vrednost POMENSKO ista kot poslana (SameValue, ista logika kot pri primerjavi
       // ob uvozu delovnega lista), se za hash uporabi izvirno poslano besedilo — s tem se pravi
       // odklon (dejansko drugacna vrednost) se vedno pravilno zazna, samo drugacen zapis ne vec.
-      var value = SameValue(row.OriginalValue, stored) ? row.OriginalValue : stored;
+      var value = SameValue(row.OriginalValue, stored, numberFields.Contains(row.FieldKey)) ? row.OriginalValue : stored;
       fields.Add(new { entityKey = row.EntityKey, field = row.FieldKey, value, qualifier = row.Qualifier });
     }
     if (fields.Count == 0) return new(0, waiting);
@@ -1517,8 +1561,12 @@ public sealed class ProductWorkbookService(
   /// Excel zapise stevilo kot 1.5, baza pa 1.5000 — brez tega bi vsak uvoz nespremenjene
   /// datoteke prijavil spremembo pri vsakem stevilcnem polju in napolnil odhodno vrsto z
   /// niclami sprememb.
+  ///
+  /// Po vrednosti se primerja SAMO stevilsko polje (<paramref name="numeric"/>). Prej je veljalo za
+  /// vsa polja, zato »02« -> »2« ali »0000001« -> »1« v sifri (DDV, dobavitelj, skupina) uvoz ni
+  /// zaznal kot spremembe.
   /// </summary>
-  static bool SameValue(string incoming, string? current)
+  static bool SameValue(string incoming, string? current, bool numeric)
   {
     // Prelom vrstice se zapise enotno kot LF; zvezek ne loci CRLF od LF, baza pa ju nosi oba.
     var left = Normalize(incoming);
@@ -1526,7 +1574,7 @@ public sealed class ProductWorkbookService(
     if (string.Equals(left, right, StringComparison.Ordinal)) return true;
     // NumberStyles.Any dovoli locilo tisocic — InvariantCulture bi "2,2" prebral kot 22, ne 2,2.
     // Enak varen vzorec (najprej InvariantCulture, nato sl-SI) kot v SaopDocumentBuilder.Decimal.
-    if (TryParseNumber(left, out var leftNumber) && TryParseNumber(right, out var rightNumber))
+    if (numeric && TryParseNumber(left, out var leftNumber) && TryParseNumber(right, out var rightNumber))
       return leftNumber == rightNumber;
     return false;
 

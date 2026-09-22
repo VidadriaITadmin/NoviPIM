@@ -24,21 +24,7 @@ public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMe
 public sealed record MediaFilter(
   int? OrganizationId = null, string? Search = null, string? Role = null, string? AddressState = null, string? Kind = null,
   string? Host = null, string? Activity = null, int? AddedDays = null, string? Sort = null);
-public sealed record PriceRow(long ProductPriceId, long ProductId, string ItemId, string PriceList, decimal Net, decimal VatRate, DateTime ValidFrom, bool IsActive);
 
-/// <summary>
-/// Ena vrstica na izdelek, ne na ceno.
-///
-/// Uporabnik 2026-08-28: »mogoce bi bilo bolje, da bi bil samo en artikel in potem v tabeli
-/// stevilo cenikov ali pa napis max treh cenikov, potem se doda pluse, ker je prevec potem
-/// artiklov«. Merjeno: 300.197 cenovnih vrstic pri 157.216 izdelkih — seznam po cenah je isti
-/// izdelek ponovil do dvajsetkrat.
-/// </summary>
-/// <param name="PriceListCount">Koliko cenikov ima izdelek; iz njega nastane napis »+N«.</param>
-/// <param name="PriceListPreview">Prvi trije ceniki po abecedi, loceni z vejico.</param>
-public sealed record ProductPriceGroupRow(
-  long ProductId, string ItemId, string? Name, int PriceListCount, string PriceListPreview,
-  decimal? MinNet, decimal? MaxNet, DateTime? LastValidFrom, int ActiveCount);
 public sealed record PartnerRow(string Name, long ProductCount, long ActiveCount);
 public sealed record AttributeRow(string AttributeCode, long ProductCount, long ValueCount, string? SampleValue);
 public sealed record CategoryRow(int CategoryId, string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath, bool IsActive, long ProductCount, long DescendantProductCount);
@@ -152,7 +138,7 @@ public sealed class CatalogReadService(PimDb database)
     FROM canon.Product product
     INNER JOIN dbo.OrganizationConfig organization
       ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
-    WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+    WHERE ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
       AND product.ProductId IN (SELECT ProductId FROM canon.ProductMedia UNION SELECT ProductId FROM canon.ProductDocument)
       AND ({Lowered("product.ItemID")} LIKE @Term{index} OR {Lowered("product.EAN")} LIKE @Term{index}
         OR {Lowered("product.Supplier")} LIKE @Term{index} OR {Lowered("product.Manufacturer")} LIKE @Term{index}
@@ -191,7 +177,7 @@ public sealed class CatalogReadService(PimDb database)
         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
         INNER JOIN dbo.OrganizationConfig organization
           ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
-        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+        WHERE ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
         UNION ALL
         SELECT N'DOKUMENT', document.ProductDocumentId, document.ProductId, product.ItemID,
                product.IsActive,
@@ -201,7 +187,7 @@ public sealed class CatalogReadService(PimDb database)
         INNER JOIN canon.Product product ON product.ProductId = document.ProductId
         INNER JOIN dbo.OrganizationConfig organization
           ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
-        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+        WHERE ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
       ), medij AS (
         SELECT vsi.Source, vsi.SourceId, vsi.ProductId, vsi.ItemID, vsi.OrganizationId, vsi.OrganizationName,
                vsi.ProductActive, vsi.Url, vsi.Role, vsi.SortOrder, vsi.Title, vsi.CreatedUtc,
@@ -336,7 +322,7 @@ public sealed class CatalogReadService(PimDb database)
         FROM canon.Product product
         INNER JOIN dbo.OrganizationConfig organization
           ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
-        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+        WHERE ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
       )
       SELECT
         (SELECT COUNT_BIG(DISTINCT media.ProductId) FROM canon.ProductMedia media
@@ -361,130 +347,6 @@ public sealed class CatalogReadService(PimDb database)
       }, cancellationToken);
     return rows.Count > 0 ? rows[0] : new(0, 0, 0, 0);
   }
-
-  // ─── Cene ─────────────────────────────────────────────────────────────────
-  public Task<IReadOnlyList<PimOption>> GetPriceListsAsync(int organizationId, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("""
-      SELECT price.PriceList, COUNT_BIG(*) AS RowCountValue
-      FROM canon.ProductPrice price
-      INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-      GROUP BY price.PriceList
-      ORDER BY price.PriceList;
-      """,
-      reader => new PimOption(PimDb.TextOrEmpty(reader, "PriceList"),
-        $"{PimDb.TextOrEmpty(reader, "PriceList")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
-      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
-
-  public Task<(IReadOnlyList<PriceRow> Rows, long TotalCount)> GetPricesAsync(
-    int organizationId, string? priceList, string? search, int skip, int take, CancellationToken cancellationToken = default) =>
-    database.PageAsync("""
-      SELECT price.ProductPriceId, price.ProductId, product.ItemID, price.PriceList, price.Net, price.VatRate, price.ValidFrom, price.IsActive
-      FROM canon.ProductPrice price
-      INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-        AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%')
-      ORDER BY product.ItemID, price.PriceList, price.ValidFrom DESC
-      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
-
-      SELECT COUNT_BIG(*)
-      FROM canon.ProductPrice price
-      INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-      WHERE product.OrganizationId = @OrganizationId
-        AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-        AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%');
-      """,
-      reader => new PriceRow(
-        PimDb.Int64(reader, "ProductPriceId"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
-        PimDb.TextOrEmpty(reader, "PriceList"), PimDb.Decimal(reader, "Net"), PimDb.Decimal(reader, "VatRate"),
-        PimDb.DateTimeValue(reader, "ValidFrom"), PimDb.Bool(reader, "IsActive")),
-      command =>
-      {
-        Bind(command, organizationId, search, skip, take);
-        command.Parameters.AddWithValue("@PriceList", string.IsNullOrWhiteSpace(priceList) ? DBNull.Value : priceList);
-      }, cancellationToken);
-
-  /// <summary>Cene, zgoscene na izdelek. Podrobnost cenikov se odpre v vrstici, brez odhoda s strani.</summary>
-  /// <param name="minPriceLists">Zozi na izdelke z vsaj toliko ceniki; 0 pomeni brez omejitve.</param>
-  public Task<(IReadOnlyList<ProductPriceGroupRow> Rows, long TotalCount)> GetProductPriceGroupsAsync(
-    int organizationId, string? priceList, string? search, int minPriceLists, int skip, int take,
-    CancellationToken cancellationToken = default) =>
-    database.PageAsync("""
-      WITH grouped AS
-      (
-        SELECT price.ProductId,
-          PriceListCount = COUNT(DISTINCT price.PriceList),
-          ActiveCount = COUNT(DISTINCT CASE WHEN price.IsActive = 1 THEN price.PriceList END),
-          MinNet = MIN(price.Net), MaxNet = MAX(price.Net), LastValidFrom = MAX(price.ValidFrom)
-        FROM canon.ProductPrice price
-        INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-        WHERE product.OrganizationId = @OrganizationId
-          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-          AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%')
-        GROUP BY price.ProductId
-        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
-      )
-      SELECT grouped.ProductId, product.ItemID, Name = title.Value,
-        grouped.PriceListCount, grouped.ActiveCount, grouped.MinNet, grouped.MaxNet, grouped.LastValidFrom,
-        PriceListPreview = STUFF((
-          SELECT TOP (3) ', ' + preview.PriceList
-          FROM (SELECT DISTINCT inner_price.PriceList FROM canon.ProductPrice inner_price WHERE inner_price.ProductId = grouped.ProductId) AS preview
-          ORDER BY preview.PriceList
-          FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, '')
-      FROM grouped
-      INNER JOIN canon.Product product ON product.ProductId = grouped.ProductId
-      OUTER APPLY
-      (
-        SELECT TOP (1) textValue.Value
-        FROM canon.ProductText textValue
-        WHERE textValue.ProductId = grouped.ProductId AND textValue.TextType IN ('WEB_TITLE', 'TITLE_ERP')
-        ORDER BY CASE WHEN textValue.TextType = 'WEB_TITLE' THEN 0 ELSE 1 END,
-          CASE WHEN textValue.Lang = 'sl' THEN 0 ELSE 1 END, textValue.Lang
-      ) AS title
-      ORDER BY product.ItemID
-      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
-
-      SELECT COUNT_BIG(*) FROM
-      (
-        SELECT price.ProductId
-        FROM canon.ProductPrice price
-        INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-        WHERE product.OrganizationId = @OrganizationId
-          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-          AND (@Search IS NULL OR product.ItemID LIKE '%' + @Search + '%')
-        GROUP BY price.ProductId
-        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
-      ) AS counted;
-      """,
-      reader => new ProductPriceGroupRow(
-        PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"), PimDb.Text(reader, "Name"),
-        PimDb.Int32(reader, "PriceListCount"), PimDb.TextOrEmpty(reader, "PriceListPreview"),
-        PimDb.Decimal(reader, "MinNet"), PimDb.Decimal(reader, "MaxNet"),
-        PimDb.NullableDateTime(reader, "LastValidFrom"), PimDb.Int32(reader, "ActiveCount")),
-      command =>
-      {
-        Bind(command, organizationId, search, skip, take);
-        command.Parameters.AddWithValue("@PriceList", string.IsNullOrWhiteSpace(priceList) ? DBNull.Value : priceList);
-        command.Parameters.AddWithValue("@MinPriceLists", Math.Max(1, minPriceLists));
-      }, cancellationToken);
-
-  /// <summary>Vsi ceniki enega izdelka; odpre se v vrstici seznama, ne na drugi strani.</summary>
-  public Task<IReadOnlyList<PriceRow>> GetPricesForProductAsync(
-    long productId, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("""
-      SELECT price.ProductPriceId, price.ProductId, product.ItemID, price.PriceList,
-        price.Net, price.VatRate, price.ValidFrom, price.IsActive
-      FROM canon.ProductPrice price
-      INNER JOIN canon.Product product ON product.ProductId = price.ProductId
-      WHERE price.ProductId = @ProductId
-      ORDER BY price.PriceList, price.ValidFrom DESC;
-      """,
-      reader => new PriceRow(
-        PimDb.Int64(reader, "ProductPriceId"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
-        PimDb.TextOrEmpty(reader, "PriceList"), PimDb.Decimal(reader, "Net"), PimDb.Decimal(reader, "VatRate"),
-        PimDb.DateTimeValue(reader, "ValidFrom"), PimDb.Bool(reader, "IsActive")),
-      command => command.Parameters.AddWithValue("@ProductId", productId), cancellationToken);
 
   // ─── Partnerji ────────────────────────────────────────────────────────────
   // Dobavitelj in proizvajalec sta danes polji na izdelku, ne svoja sifranta. Stran zato
@@ -594,7 +456,7 @@ public sealed class CatalogReadService(PimDb database)
       INNER JOIN dbo.OrganizationConfig organization ON organization.OrganizationId = product.OrganizationId
       LEFT JOIN canon.ProductText text
         ON text.ProductId = product.ProductId AND text.TextType = N'TITLE_ERP' AND text.Lang = N'sl'
-      WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+      WHERE ((@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR product.OrganizationId = @OrganizationId)
         AND planning.ExcludeQuantityReservation = 1 AND product.IsActive = 1
       ORDER BY organization.Name, product.ItemID;
       """,
@@ -621,7 +483,7 @@ public sealed class CatalogReadService(PimDb database)
     database.QueryAsync("""
       SELECT LanguageRowId, LanguageId AS SaopLanguageId, LanguageCode, Name, OrganizationId, IsActive, UpdatedUtc
       FROM canon.Language
-      WHERE (@OrganizationId IS NULL OR OrganizationId = @OrganizationId)
+      WHERE ((@OrganizationId IS NULL AND OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)) OR OrganizationId = @OrganizationId)
       ORDER BY OrganizationId, LanguageCode;
       """,
       reader => new LanguageRow(PimDb.Int32(reader, "LanguageRowId"), PimDb.TextOrEmpty(reader, "SaopLanguageId"),

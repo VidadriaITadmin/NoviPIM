@@ -1,48 +1,216 @@
 @page "/nastavitve/skladisca"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
-@inject PIM.Intranet.Services.CatalogReadService Catalog
+@inject PIM.Intranet.Services.StockReadService Stock
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Skladišča</PageTitle>
-<PimPage Title="Skladišča" Subtitle="Šifrant skladišč izbrane organizacije; količine zaloge so na ločeni strani Zaloga." Crumbs="Crumbs" />
+<PimPage Title="Skladišča" Subtitle="Skladišča vseh podjetij iz SAOP šifranta in zaloga, ki jo PIM iz njih bere. Količine po artiklih so na strani Zaloga." Crumbs="Crumbs">
+  <Actions>
+    <a class="ghost-button" href="zaloge">Odpri zalogo</a>
+  </Actions>
+</PimPage>
 
-<section class="ui-card data-card" aria-label="Seznam skladišč">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni skladišč." LoadingText="Nalaganje skladišč …">
-    <PimTable Caption="Skladišča izbrane organizacije" Columns="Columns">
-      <Rows>
-        @foreach (var row in Rows)
-        {
-          <tr>
-            <td><span class="code-value">@row.WarehouseCode</span></td>
-            <td>@(row.Name ?? "—")</td>
-            <td>@(row.WarehouseType ?? "—")</td>
-            <td>@(row.GroupCode ?? "—")</td>
-            <td><PimChip Text="@(row.IsActive ? "Aktivno" : "Neaktivno")" Tone="@(row.IsActive ? "good" : null)" /></td>
-            <td>@row.UpdatedUtc.ToPimLocal().ToString("g")</td>
-          </tr>
-        }
-      </Rows>
-    </PimTable>
-  </PimState>
+@* Uporabnik 2026-09-22: »pod stranjo skladišča bi lahko dodali seznam skladišč po podjetju in na
+   vsakem skladišču celotno zalogo, ali drugače ne vidim, zakaj bi bila ta stran uporabna«.
+
+   Prej: sifrant enega (aktivnega) podjetja brez kolicin. Zdaj: vsa podjetja, pri vsakem skladiscu
+   pove, ali je v zalogi, ki jo PIM bere, in zaloga podjetja s povezavo na filtrirano Zalogo in
+   izvoz. Pozicije zaloge nimajo sifre skladisca — SAOP GetStocks vrne vsoto cez izbrana
+   skladisca (migracija 267) — zato stran kolicino pripise skladiscu samo, kadar podjetje bere
+   eno samo; kadar jih bere vec, pove, da je to njihova vsota, in je ne izmisli po skladiscih. *@
+<section class="ui-card toolbar warehouse-toolbar" role="search" aria-labelledby="warehouses-filter-title">
+  <div class="card-toolbar">
+    <h2 id="warehouses-filter-title" class="visually-hidden">Filtriranje skladišč</h2>
+    <label class="visually-hidden" for="warehouse-search">Poišči skladišče</label>
+    <input id="warehouse-search" type="search" class="search-input" placeholder="Išči po šifri ali imenu skladišča …" @bind="Search" @bind:event="oninput" />
+    <label class="visually-hidden" for="warehouse-organization">Podjetje</label>
+    <select id="warehouse-organization" class="filter-select" @bind="OrganizationText">
+      <option value="">Vsa podjetja</option>
+      @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
+    </select>
+    <label class="visually-hidden" for="warehouse-view">Prikaz</label>
+    <select id="warehouse-view" class="filter-select" @bind="View">
+      <option value="">Vsa skladišča</option>
+      <option value="READ">Samo z zalogo v PIM</option>
+      <option value="ACTIVE">Samo aktivna</option>
+      <option value="INACTIVE">Samo neaktivna</option>
+    </select>
+    <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  </div>
 </section>
 
+<PimState Loading="Loading" Error="@Error" Empty="@(Groups.Count == 0)" EmptyText="Za izbrane filtre ni skladišč." LoadingText="Nalaganje skladišč …">
+  @foreach (var group in Groups)
+  {
+    var stock = group.Stock;
+    var read = group.ReadWarehouses;
+    <section class="ui-card organization-card" aria-labelledby="org-@group.OrganizationId">
+      <header class="organization-head">
+        <div>
+          <h2 id="org-@group.OrganizationId">@group.OrganizationName</h2>
+          <p class="organization-note">
+            @if (stock?.SourceCode is null)
+            {
+              <span>PIM za to podjetje nima SAOP posnetka zaloge.</span>
+            }
+            else if (read.Count == 1)
+            {
+              <span>PIM bere zalogo skladišča <strong>@(read[0].Name ?? read[0].WarehouseCode)</strong> (@read[0].WarehouseCode).</span>
+            }
+            else if (read.Count > 1)
+            {
+              <span>PIM bere zalogo <strong>@read.Count skladišč</strong> kot eno vsoto — SAOP je v tem branju po skladiščih ne loči.</span>
+            }
+            else
+            {
+              <span>Katera skladišča so v zalogi, iz posnetka ni razvidno.</span>
+            }
+            <span class="muted"> @group.Warehouses.Count od @group.TotalWarehouseCount skladišč v šifrantu.</span>
+          </p>
+        </div>
+        @if (stock?.SourceCode is { } source)
+        {
+          <div class="organization-actions">
+            <a class="ghost-button" href="@StockHref(group.OrganizationId, source)">Odpri zalogo</a>
+            <a class="ghost-button" href="@ExportHref(group.OrganizationId, source)" download data-enhance-nav="false"
+               title="Zaloga tega skladišča v Excel, ena vrstica na artikel.">Izvozi Excel</a>
+          </div>
+        }
+      </header>
+
+      @if (stock?.SourceCode is not null)
+      {
+        <dl class="stock-summary">
+          <div><dt>Artiklov</dt><dd>@stock.ItemCount.ToString("N0")</dd></div>
+          <div><dt>Na zalogi</dt><dd><a href="@(StockHref(group.OrganizationId, stock.SourceCode) + "&zaloga=IN_STOCK")">@stock.InStockCount.ToString("N0")</a></dd></div>
+          <div><dt>Skupna količina</dt><dd>@stock.Quantity.ToString("N2")</dd></div>
+          <div><dt>Razpoložljivo</dt><dd>@(stock.AvailableQuantity?.ToString("N2") ?? "vir ne javi")</dd></div>
+          <div><dt>Prihaja</dt><dd><a href="@(StockHref(group.OrganizationId, stock.SourceCode) + "&zaloga=INCOMING")">@stock.IncomingCount.ToString("N0") art.</a></dd></div>
+          @if (stock.NegativeCount > 0)
+          {
+            <div><dt>Negativna</dt><dd><a href="@(StockHref(group.OrganizationId, stock.SourceCode) + "&posebnost=NEGATIVE")">@stock.NegativeCount.ToString("N0") art.</a></dd></div>
+          }
+          <div><dt>Posnetek</dt><dd>@(stock.SnapshotUtc?.ToPimLocal().ToString("dd.MM.yyyy HH:mm") ?? "—")</dd></div>
+        </dl>
+      }
+
+      @if (group.Warehouses.Count > 0)
+      {
+        <PimTable Caption="@($"Skladišča podjetja {group.OrganizationName}")" AriaLabel="@($"Skladišča {group.OrganizationName}")" Columns="Columns">
+          <Rows>
+            @foreach (var row in group.Warehouses)
+            {
+              <tr class="@(row.IsRead ? "is-read" : null)">
+                <td><span class="code-value">@row.WarehouseCode</span></td>
+                <td>@(row.Name ?? "—")</td>
+                <td>@(row.WarehouseType ?? "—")</td>
+                <td>@(row.GroupCode ?? "—")</td>
+                <td>
+                  <PimChip Text="@(row.IsRead ? "Bere se" : "Ne bere se")" Tone="@(row.IsRead ? "good" : null)" Prefix="Zaloga v PIM: " />
+                </td>
+                <td class="numeric">
+                  @if (!row.IsRead || stock?.SourceCode is null) { <span class="muted">—</span> }
+                  else if (read.Count == 1)
+                  {
+                    @stock.Quantity.ToString("N2")
+                    <span class="cell-meta">@stock.InStockCount.ToString("N0") art. na zalogi</span>
+                  }
+                  else { <span class="cell-meta">v vsoti @read.Count skladišč</span> }
+                </td>
+                <td><PimChip Text="@(row.IsActive ? "Aktivno" : "Neaktivno")" Tone="@(row.IsActive ? "good" : null)" /></td>
+                <td>@row.UpdatedUtc.ToPimLocal().ToString("dd.MM.yyyy")</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+      else
+      {
+        <p class="muted empty-note">Za izbrane filtre v tem podjetju ni skladišč.</p>
+      }
+    </section>
+  }
+</PimState>
+
+<p class="muted source-note">
+  Vir: <span class="code-value">intranet.GetWarehouseStock</span> (migracija 267) — šifrant <span class="code-value">canon.Warehouse</span>
+  iz SAOP in zadnji aktivni SAOP posnetek zaloge. Katera skladišča se berejo, pove naslov posnetka
+  (<span class="code-value">warehouseIdList</span>), za registrirani pogled pa profil vira zaloge. Zaloga po posameznem
+  skladišču bi zahtevala ločeno branje vsakega skladišča iz SAOP.
+</p>
+
 @code {
-  IReadOnlyList<PIM.Intranet.Services.WarehouseRow> Rows = [];
+  sealed record OrganizationGroup(
+    int OrganizationId, string OrganizationName, PIM.Intranet.Services.OrganizationStockRow? Stock,
+    IReadOnlyList<PIM.Intranet.Services.WarehouseStockRow> Warehouses,
+    IReadOnlyList<PIM.Intranet.Services.WarehouseStockRow> ReadWarehouses, int TotalWarehouseCount);
+
+  PIM.Intranet.Services.WarehouseStockOverview? Overview;
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
   bool Loading = true;
   string? Error;
+  string Search = "", OrganizationText = "", View = "";
+
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Skladišča")];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Šifra"), new("Ime"), new("Vrsta"), new("Skupina"), new("Stanje"), new("Posodobljeno")];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Šifra"), new("Ime"), new("Vrsta"), new("Skupina"), new("Zaloga v PIM"), new("Količina", Numeric: true), new("Stanje"), new("Posodobljeno"),
+  ];
 
   protected override async Task OnInitializedAsync()
   {
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      Rows = await Catalog.GetWarehousesAsync(organization.OrganizationId);
+      Organizations = await Data.GetOrganizationsAsync();
+      Overview = await Stock.GetWarehouseStockAsync(null);
     }
     catch { Error = "Skladišč trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
+
+  // Skladisca, ki jih PIM bere, so na vrhu podjetja; ostala po sifri.
+  IReadOnlyList<OrganizationGroup> Groups
+  {
+    get
+    {
+      if (Overview is null) return [];
+      var organizationId = int.TryParse(OrganizationText, out var parsed) ? parsed : (int?)null;
+      var search = Search.Trim();
+      return Overview.Organizations
+        .Where(stock => organizationId is null || stock.OrganizationId == organizationId)
+        .Select(stock =>
+        {
+          var all = Overview.Warehouses.Where(row => row.OrganizationId == stock.OrganizationId).ToList();
+          var visible = all
+            .Where(row => View switch
+            {
+              "READ" => row.IsRead,
+              "ACTIVE" => row.IsActive,
+              "INACTIVE" => !row.IsActive,
+              _ => true,
+            })
+            .Where(row => search.Length == 0
+              || row.WarehouseCode.Contains(search, StringComparison.OrdinalIgnoreCase)
+              || (row.Name?.Contains(search, StringComparison.CurrentCultureIgnoreCase) ?? false))
+            .OrderByDescending(row => row.IsRead).ThenBy(row => row.WarehouseCode, StringComparer.Ordinal)
+            .ToList();
+          return new OrganizationGroup(stock.OrganizationId, stock.OrganizationName, stock, visible,
+            all.Where(row => row.IsRead).ToList(), all.Count);
+        })
+        .Where(group => group.Warehouses.Count > 0 || (search.Length == 0 && View.Length == 0))
+        .ToList();
+    }
+  }
+
+  string ResultSummary => Loading ? "Nalaganje …"
+    : Error is not null ? "Rezultati niso na voljo"
+    : $"{Groups.Sum(group => group.Warehouses.Count):N0} skladišč";
+
+  static string StockHref(int organizationId, string sourceCode) =>
+    $"zaloge?podjetje={organizationId}&skladisce={Uri.EscapeDataString(sourceCode)}";
+
+  // Isti parametri kot /zaloge (StockQuery), zato je datoteka natanko to, kar odpre »Odpri zalogo«.
+  static string ExportHref(int organizationId, string sourceCode) =>
+    $"izvoz/zaloge.xlsx?podjetje={organizationId}&skladisce={Uri.EscapeDataString(sourceCode)}";
 }

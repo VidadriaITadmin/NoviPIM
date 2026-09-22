@@ -40,7 +40,7 @@
           <div class="notification-panel">
             <div class="notification-panel-header">
               <strong>Obvestila</strong>
-              @if (RecentAlerts.Any(alert => !alert.IsSeen))
+              @if (RecentAlerts.Count > 0)
               {
                 <form method="post" action="obvestila/precitaj-vse">
                   <AntiforgeryToken />
@@ -51,43 +51,37 @@
             </div>
             @if (RecentAlerts.Count == 0)
             {
-              <p class="notification-empty">Trenutno ni odprtih obvestil.</p>
+              <p class="notification-empty">Trenutno ni novih obvestil.</p>
             }
             else
             {
               <ul class="notification-list">
                 @foreach (var alert in RecentAlerts)
                 {
-                  <li class="notification-item severity-@Chip(alert.Severity) @(alert.IsSeen ? null : "notification-unseen")">
-                    @* Cel zapis je povezava na stran, kjer je opozorilo dejansko videti in resljivo
-                       (npr. konkretni artikli pri izlocitvah iz rezervacije, ne samo stevilo) — glej
-                       AlertHref spodaj. Redigiran povzetek (Sifra artikla, stevilo, vir ...) je zdaj
-                       viden tukaj, ne samo na /sistem/integracije, ker uporabnik prej ni vedel, KAJ
-                       tocno je narobe, dokler ni odprl polnega pregleda. *@
-                    <a class="notification-item-body" href="@AlertHref(alert)" title="@($"Odpri: {alert.Title}")">
-                      <div class="notification-item-top">
-                        <span class="notification-title">@alert.Title</span>
-                        <span class="notification-severity-label">@alert.Severity</span>
-                      </div>
-                      @if (!string.IsNullOrWhiteSpace(alert.PayloadSummaryRedacted))
-                      {
-                        <span class="notification-detail">@alert.PayloadSummaryRedacted</span>
-                      }
-                      <span class="notification-meta">@alert.OrganizationName · @alert.Pipeline · @alert.LastSeenUtc.ToPimLocal().ToString("g")</span>
-                    </a>
-                    @if (!alert.IsSeen)
-                    {
-                      <form method="post" action="@($"obvestila/precitaj/{alert.AlertId}")">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="vrniNa" value="@ReturnPath" />
-                        <button type="submit" class="notification-mark-one" aria-label="@($"Označi kot prebrano: {alert.Title}")" title="Označi kot prebrano">✓</button>
-                      </form>
-                    }
+                  <li class="notification-item severity-@Chip(alert.Severity) notification-unseen">
+                    @* Odpiranje obvestila ga v istem POST-u oznaci kot prebranega in nato odpre pravo
+                       datoteko/pogled. Po preusmeritvi se glava znova izrise z novim stevcem, zato
+                       zvonec ne obdrzi starega stevila in seznam ne polni ze pregledanih zapisov. *@
+                    <form method="post" action="@($"obvestila/precitaj/{alert.AlertId}")" class="notification-item-form">
+                      <AntiforgeryToken />
+                      <input type="hidden" name="vrniNa" value="@AlertHref(alert)" />
+                      <button type="submit" class="notification-item-body" title="@($"Odpri in označi kot prebrano: {alert.Title}")">
+                        <div class="notification-item-top">
+                          <span class="notification-title">@alert.Title</span>
+                          <span class="notification-severity-label">@alert.Severity</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(alert.PayloadSummaryRedacted))
+                        {
+                          <span class="notification-detail">@alert.PayloadSummaryRedacted</span>
+                        }
+                        <span class="notification-meta">@alert.OrganizationName · @alert.Pipeline · @alert.LastSeenUtc.ToPimLocal().ToString("g")</span>
+                      </button>
+                    </form>
                   </li>
                 }
               </ul>
             }
-            <a class="notification-panel-link" href="sistem/integracije">Odpri vsa obvestila</a>
+            <a class="notification-panel-link" href="sistem">Odpri vsa obvestila</a>
           </div>
         </details>
       }
@@ -120,17 +114,23 @@
   // Klik na obvestilo mora odpreti stran, kjer je videti in resljivo prav TO, o cemer opozorilo
   // govori — ne vedno isti splosni pregled. Preslikava je po AlertKind (glej migracijo 222 za
   // popoln seznam vrst, ki jih baza sploh kdaj zapise); privzeto se uporabi celoten pregled.
+  // Blok 7 prenove nadzora: alarm posla (Pipeline "OPRAVILO:<KEY>", npr. JobFailed, SourceStale)
+  // odpre stran tega posla s koraki, fazami in izpisom; gostitelj in postopki odprejo Nadzor, kjer
+  // je gostitelj in vsak posel s svojim postopkom. Podatkovni alarmi zgoraj ostanejo na strani
+  // podatkov, ker jih tam tudi rešiš.
   static string AlertHref(AdminAlertRow alert) => alert.AlertKind switch
   {
     "ReservationExcluded" => "nastavitve/rezervacija-zaloge",
     "StockSnapshotStale" or "StockSnapshotEmpty" => "zaloge",
     "OutboundDead" or "OutboundDrift" or "OutboundUnacknowledged" => "izvozi/obvestila",
-    "StaleHeartbeat" or "StalledWatermark" or "PipelinePaused" or "PipelineDisabled" or "PipelineOverdue" => "teki-obdelave",
-    "CycleOverdue" => "sistem?pogled=postopki",
-    "ExportRejected" => "sistem/izvozi",
+    "ExportRejected" => "splet",
     // 251: artikli, ki jim je PIM odstranil kljukico spletisca, z razlogom in pregledom.
     "WebShopWithdrawn" => "splet/umaknjeni",
-    _ => "sistem/integracije",
+    _ when alert.Pipeline is { } pipeline && pipeline.StartsWith("OPRAVILO:", StringComparison.Ordinal) && pipeline.Length > "OPRAVILO:".Length
+      => "sistem/posel/" + Uri.EscapeDataString(pipeline["OPRAVILO:".Length..]),
+    _ when alert.Pipeline == "GOSTITELJ" => "sistem",
+    "StaleHeartbeat" or "StalledWatermark" or "PipelinePaused" or "PipelineDisabled" or "PipelineOverdue" => "sistem",
+    _ => "sistem",
   };
 
   protected override async Task OnInitializedAsync()

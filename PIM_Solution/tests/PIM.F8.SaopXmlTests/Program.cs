@@ -325,6 +325,27 @@ Equal(SaopErrorKind.CodebookMissing, polje.Kind, "SAOP je povedal, katero polje 
 Equal("Country", polje.Field, "Ime polja mora biti izlusceno");
 Equal(true, polje.Instruction.Contains("SPLDrzave"), "Navodilo mora povedati, kateri sifrant je vir resnice");
 
+// --- 11) 263: izlocitev iz rezervacije gre na UpdateItemsPlanningData, ne v ItemsGeneralData --
+// SAOP pozna ItemExcludeQtyReservation samo v PlanningData; v PropertiesData je vrnil 500.
+// Oblika je ista kot pri starem PIM (PIM_test/src/Services/SaopPlanningXmlBuilder.cs).
+var zRezervacijo = Contract().Append(
+  new("PlanningData", "ItemExcludeQtyReservation", "Planning.ExcludeQtyReservation", 490, false, "bool", "true", "false")).ToArray();
+var (splosna, planska) = SaopPlanningDocument.Split(SaopKnownShapes.Product, zRezervacijo);
+Equal(false, splosna.Any(field => field.Section == SaopPlanningDocument.Section), "Splosni dokument nima planskih polj");
+Equal(2, planska.Count, "Planski dokument ima kljuc in kljukico");
+Equal(0, SaopPlanningDocument.Split(SaopKnownShapes.Customer, zRezervacijo).Planning.Count, "Delitev velja samo za izdelek");
+
+var planXml = new SaopDocumentBuilder(SaopKnownShapes.ProductPlanning, planska).Build(SaopIntent.Update, "ACB.C3986100N",
+  new Dictionary<string, string?> { ["Planning.ExcludeQtyReservation"] = "0" }, new Dictionary<string, string>(), stamp).Xml;
+Equal(true, planXml.Contains("<ItemsPlanningData>") && planXml.Contains("<ItemPlanningData>"), "Koren in ovoj planskih podatkov");
+Equal(true, planXml.Contains("<ItemID>ACB.C3986100N</ItemID>"), "Planski dokument je naslovljen s sifro");
+Equal(true, planXml.Contains("<PlanningData>") && planXml.Contains("<ItemExcludeQtyReservation>false</ItemExcludeQtyReservation>"),
+  "Kljukica je v PlanningData kot true/false");
+Equal(false, planXml.Contains("ItemLastModified"), "Planski dokument nima casovnega ziga");
+Equal("PATCH", SaopKnownShapes.ProductPlanning.Operation(SaopIntent.Update), "Planski podatki gredo s PATCH");
+Equal("api/Item/UpdateItemsPlanningData", SaopKnownShapes.ProductPlanning.Path(SaopIntent.Update), "Pot za planske podatke");
+Equal("api/Item/UpdateItemsPlanningData", SaopKnownShapes.ProductPlanning.Path(SaopIntent.Add), "Planski podatki nimajo poti za ustvarjanje");
+
 Console.WriteLine("F8 SAOP XML: štiri entitete, ADD proti resničnemu dokumentu, PATCH samo izpolnjena polja, oblika vrednosti, "
   + "branje odgovora, kodiranje, prevod vseh šestih napak in izbira ADD/PATCH PASS.");
 return 0;

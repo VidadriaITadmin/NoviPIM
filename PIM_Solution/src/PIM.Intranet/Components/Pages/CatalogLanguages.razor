@@ -5,7 +5,7 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 
 <PageTitle>Jeziki</PageTitle>
-<PimPage Title="Jeziki" Subtitle="SAOP-ova identifikacijska šifra in jezikovna koda, ki jo katalog uporablja pri besedilih." Crumbs="Crumbs" />
+<PimPage OrganizationScope="true" Title="Jeziki" Subtitle="SAOP-ova identifikacijska šifra in jezikovna koda, ki jo katalog uporablja pri besedilih." Crumbs="Crumbs" />
 
 <section class="ui-card data-card" aria-label="Seznam jezikov">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za organizacijo ni jezikov." LoadingText="Nalaganje jezikov …">

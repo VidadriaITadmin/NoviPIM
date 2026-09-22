@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace PIM.Automation;
 
-/// <summary>Zagon procesa z izpisom v živo; skupen ročnemu zagonu workerja in korakom cikla.</summary>
+/// <summary>Zagon procesa z izpisom v živo; skupen korakom poslov (JobRunner), gradnji workerjev ob zagonu gostitelja in nadzoru --preveri.</summary>
 public static class WorkerProcess
 {
   /// <param name="environment">Spremenljivke otroka poleg podedovanih; gostiteljeve (VS, IIS) se odstranijo.</param>
