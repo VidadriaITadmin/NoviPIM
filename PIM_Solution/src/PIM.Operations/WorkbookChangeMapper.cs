@@ -69,8 +69,8 @@ public static class WorkbookChangeMapper
     for (var index = 0; index < sheet.Rows.Count; index++)
     {
       var cells = sheet.Rows[index];
-      // Prva vrstica zvezka so naslovi, zato je prva podatkovna vrstica druga.
-      var rowNumber = index + 2;
+      // Številka, ki jo uporabnik vidi v Excelu (list s skupinami ima dve naslovni vrstici).
+      var rowNumber = sheet.RowNumber(index);
       var itemId = cells[keyColumn.Value].Trim();
       if (itemId.Length == 0) continue;
 

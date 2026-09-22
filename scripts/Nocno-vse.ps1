@@ -17,7 +17,7 @@
     5. Zaloge dobavitelja datoteka na disku -> stock.*, za vsa podjetja
     6. SAOP zaloga        kolicine iz ERP (samo, ce je izrecno dovoljeno)
     7. Validacija+objava  sele ko so vsi podatki v katalogu, ima objava kaj objaviti
-    8. Izvoz              Magento CSV iz objave
+    8. Izvoz              (od 2026-09-21 loceno: Magento-cikel.ps1 oziroma cikel magento-csv)
 
   Zakaj je korak 4 svoj korak in ne del zajema. Zaostanek v raw.Inbox ne nastane zaradi okvare,
   ampak po zasnovi: ko se preslikava dopolni (nova koncna tocka, novo polje), so strani ze
@@ -59,8 +59,8 @@ param(
   # Podjetja, ki jih obdelamo pri virih, kjer podjetje ni del datoteke.
   [int[]]$Podjetja = @(1, 2, 3, 4),
 
-  # Podjetje, katerega artikli in stranke gredo v katalog.csv/stranke.csv (korak 8). Samo eno,
-  # namenoma — glej opis parametra -PodjetjeKataloga v Katalog-cikel.ps1 (uporabnik 2026-09-15).
+  # Od 2026-09-21 brez ucinka: katalog.csv/stranke.csv izdeluje Magento-cikel.ps1 (cikel magento-csv).
+  # Parameter ostaja sprejet zaradi zdruzljivosti klicev.
   [int]$PodjetjeKataloga = 2,
 
   # Zivi klic na SAOP za kolicine zaloge. Privzeto izklopljen (AGENTS.md #4.5).
@@ -69,7 +69,7 @@ param(
   # Preskoci prevzem datotek od dobaviteljev; uporabno, kadar datoteke prinasa kdo drug.
   [switch]$BrezPrevzema,
 
-  # Preskoci izvoz; uporabno, kadar se izvozna mapa se ne dostavlja nikamor.
+  # Od 2026-09-21 brez ucinka (izvoz CSV je v Magento-cikel.ps1); ostaja zaradi zdruzljivosti klicev.
   [switch]$BrezIzvoza,
 
   # Preskoci gradnjo. Privzeto se zgradi enkrat na zacetku, ker workerji tecejo z --no-build.
@@ -388,14 +388,10 @@ Korak 'Validacija in objava' {
 }
 
 # --- 8. Izvoz ---------------------------------------------------------------
-if (-not $BrezIzvoza) {
-  Korak 'Izvoz kataloga in strank' {
-    # En par datotek (katalog.csv, stranke.csv), samo -PodjetjeKataloga; ne po en na podjetje.
-    # Ciljna mapa ni vec tu: worker jo sam razresi (register ops.SystemPath, kljuc EXPORT_ROOT;
-    # glej scripts\Nastavi-izvozno-pot.ps1).
-    PozeniWorker 'workers\PIM.B2bWorker' @('--export-magento', '--organization-id', "$PodjetjeKataloga")
-  }
-}
+# Od 2026-09-21 nocni tok para katalog.csv/stranke.csv ne izdeluje vec: to je samostojen cikel
+# (Magento-cikel.ps1, naloga "PIM magento"; v intranetu cikel magento-csv), ki tece vsakih 5 minut
+# iz objave. Neuspesen vhod iz SAOP tako ni videti kot neuspesna izdelava CSV in obratno.
+if ($BrezIzvoza) { Zapisi 'Opomba: -BrezIzvoza nima vec ucinka; izvoz CSV je v Magento-cikel.ps1.' }
 
 # --- povzetek ---------------------------------------------------------------
 # Povzetek pove tudi, kaj je ostalo neobdelano. Brez tega je "vse OK" lahko pomenilo, da so

@@ -5,20 +5,21 @@ using System.Text;
 using PIM.Intranet.Services;
 
 var repositoryRoot = FindRoot();
+await ArtifactChecks();
 var buildServicePath = Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Services", "WebExportBuildService.cs");
 var buildPagePath = Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Components", "Pages", "WebExportBuild.razor");
 Assert(File.Exists(buildServicePath), "Manjka pretočni servis WebExportBuildService.");
 Assert(File.Exists(buildPagePath), "Manjka stran /splet/izvoz.");
 
 var buildServiceText = File.ReadAllText(buildServicePath);
-foreach (var contract in new[] { "PreviewAsync", "WriteCsvAsync", "SqlDataReader", "StreamWriter", "UTF8Encoding(true)", "CommandTimeout = 600", "@Take", "PIM_splet_" })
+foreach (var contract in new[] { "PreviewAsync", "WriteCsvAsync", "SqlDataReader", "StreamWriter", "UTF8Encoding(false)", "CommandTimeout = 600", "@Take", "PIM_splet_" })
   Assert(buildServiceText.Contains(contract, StringComparison.Ordinal), "Pretočni servis nima pogodbe: " + contract);
 var buildPageText = File.ReadAllText(buildPagePath);
 foreach (var contract in new[] { "@page \"/splet/izvoz\"", "Samo objavljeni", "Prikaži", "Prenesi CSV", "200", "PreviewAsync" })
   Assert(buildPageText.Contains(contract, StringComparison.Ordinal), "Stran izvoza nima: " + contract);
 var webPageText = File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Components", "Pages", "Web.razor"));
 Assert(webPageText.Contains("href=\"splet/izvoz\"", StringComparison.Ordinal)
-    && webPageText.Contains("Pripravi izvoz", StringComparison.Ordinal),
+    && webPageText.Contains("Predogled trenutnih podatkov PIM", StringComparison.Ordinal),
   "/splet mora biti edina vstopna točka do nove strani.");
 var programText = File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "Program.cs"));
 Assert(programText.Contains("WebExportBuildService", StringComparison.Ordinal)
@@ -45,9 +46,9 @@ Assert(!programText.Contains("MapGet(\"/izvoz/splet/{fileName}\"", StringCompari
 Assert(!File.ReadAllText(Path.Combine(repositoryRoot, "src", "PIM.Intranet", "appsettings.json"))
     .Contains("WebExport", StringComparison.Ordinal),
   "Nastavitve intraneta ne smejo vec obljubljati mape s spletnimi izvozi.");
-foreach (var contract in new[] { "izvoz/splet-na-zahtevo", "TogglePreviewAsync", "DownloadHref", "OnlyPublishedDefault" })
+foreach (var contract in new[] { "izvoz/magento-datoteka", "Artifacts.PreviewAsync", "Poišči v datoteki", "Prenesi izdelano datoteko" })
   Assert(webPageText.Contains(contract, StringComparison.Ordinal),
-    "Stran /splet mora izvoz pripraviti iz registra, ne z diska: manjka " + contract);
+    "Stran /splet mora pokazati dejanski izhod workerja: manjka " + contract);
 
 {
   var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString();
@@ -60,8 +61,10 @@ foreach (var contract in new[] { "izvoz/splet-na-zahtevo", "TogglePreviewAsync",
     await using var connection = new SqlConnection(connectionString);
     await connection.OpenAsync();
 
-    // --- Kanonicni profil: oblika pride iz registra, kot od migracije 139 --------------
-    var profileId = await ProfileIdAsync(connection, "WEB_B2C_PRODUCTS");
+    // --- Profil iz registra: oblika pride iz out.ExportColumn, kot od migracije 139 -----
+    // Profil WEB_B2C_PRODUCTS je migracija 217 odstranila (pripadal je izključno ukinjenemu
+    // validacijskemu profilu WEB_B2C); isti pogodbi zdaj zadosti glavni spletni profil.
+    var profileId = await ProfileIdAsync(connection, "MAGENTO_PRODUCTS");
     var expectedColumns = await ColumnNamesAsync(connection, profileId);
     var previewPage = await ReadWebExportAsync(connection, "intranet.GetWebExportRows", 2, profileId, onlyPublished: false, take: 2);
 
@@ -138,11 +141,11 @@ foreach (var contract in new[] { "izvoz/splet-na-zahtevo", "TogglePreviewAsync",
     await using var csv = new MemoryStream();
     await build.WriteCsvAsync(2, profileId, null, false, itemId, csv);
     var bytes = csv.ToArray();
-    Assert(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
-      "CSV mora imeti UTF-8 BOM za Excel in slovenske znake.");
-    var csvText = new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
-    Assert(csvText.StartsWith(string.Join(';', expectedColumns) + Environment.NewLine, StringComparison.Ordinal),
-      "CSV glava mora ohraniti registrski vrstni red in podpičje.");
+    Assert(bytes.Length >= 3 && !(bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF),
+      "CSV uporablja isto UTF-8 pogodbo brez BOM kot worker.");
+    var csvText = new UTF8Encoding(false).GetString(bytes);
+    Assert(csvText.StartsWith(string.Join(',', expectedColumns.Select(WebExportBuildService.Escape)) + "\n", StringComparison.Ordinal),
+      "CSV glava mora ohraniti registrski vrstni red, vejico in LF.");
     Assert(WebExportBuildService.Escape("a;\"b") == "\"a;\"\"b\"",
       "Podpičje in dvojni narekovaj morata biti pravilno ubežana.");
     Assert(WebExportBuildService.FileName("WEB_B2C_PRODUCTS", new DateTime(2026, 9, 2, 14, 5, 0))
@@ -156,6 +159,40 @@ return 0;
 static void Assert(bool condition, string message)
 {
   if (!condition) throw new InvalidOperationException(message);
+}
+
+static async Task ArtifactChecks()
+{
+  var directory = Path.Combine(Path.GetTempPath(), "pim-artifact-" + Guid.NewGuid().ToString("N"));
+  Directory.CreateDirectory(directory);
+  var originalRoot = Environment.GetEnvironmentVariable("PIM_EXPORT_ROOT");
+  try
+  {
+    Environment.SetEnvironmentVariable("PIM_EXPORT_ROOT", directory);
+    var service = new MagentoArtifactService(new ConfigurationBuilder().Build());
+    await File.WriteAllTextAsync(Path.Combine(directory, "katalog.csv"), "SKU,Naziv\n001,\"Svetilka, velika\"\n002,\"Dve\nvrstici\"\n003,Zadnja\n", new UTF8Encoding(false));
+    var rejected = false;
+    try { await service.StatusAsync("MAGENTO_PRODUCTS"); } catch (InvalidOperationException) { rejected = true; }
+    Assert(rejected, "Nedokončan par se ne sme ponuditi za prenos.");
+    await File.WriteAllTextAsync(Path.Combine(directory, "magento-export.complete"), $"1234abcd\n{DateTime.UtcNow:O}\nizdelki=3\nstranke=0\n");
+    var page = await service.PreviewAsync("MAGENTO_PRODUCTS", null, 1, 1);
+    Assert(page.FileRows == 3 && page.Page.TotalCount == 3 && page.Page.Rows.Single()[0] == "002"
+      && page.Page.Rows[0][1]!.Contains('\n'), "Pravi CSV parser ohrani vodilne ničle, vejice in večvrstične celice; paging šteje zapise.");
+    var filtered = await service.PreviewAsync("MAGENTO_PRODUCTS", "velika", 0);
+    Assert(filtered.Page.TotalCount == 1 && filtered.Page.Rows[0][0] == "001", "Iskanje deluje nad izdelano datoteko.");
+    var opened = await service.OpenAsync("MAGENTO_PRODUCTS");
+    await using (var stream = opened.Stream)
+    {
+      using var actual = new MemoryStream();
+      await stream.CopyToAsync(actual);
+      var expectedBytes = await File.ReadAllBytesAsync(Path.Combine(directory, "katalog.csv"));
+      Assert(actual.ToArray().AsSpan().SequenceEqual(expectedBytes), "Prenos vrne točne bajte izdelane datoteke.");
+    }
+    rejected = false;
+    try { await service.OpenAsync("../appsettings.Local.json"); } catch (ArgumentException) { rejected = true; }
+    Assert(rejected, "Dovoljeni sta le pogodbeni datoteki; poljubna pot je zavrnjena.");
+  }
+  finally { Environment.SetEnvironmentVariable("PIM_EXPORT_ROOT", originalRoot); Directory.Delete(directory, true); }
 }
 
 static async Task<int> ProfileIdAsync(SqlConnection connection, string code)

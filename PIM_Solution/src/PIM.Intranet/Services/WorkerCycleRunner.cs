@@ -1,4 +1,5 @@
 using System.Globalization;
+using PIM.Automation;
 using PIM.Operations;
 
 namespace PIM.Intranet.Services;
@@ -132,11 +133,14 @@ public sealed class WorkerCycleRunner(WorkerSchedulerStore store, IConfiguration
               break;
 
             default:
-              exitCode = await RunProcessAsync(run, step, childEnvironment, write, cancellationToken);
+              string? lastError;
+              (exitCode, lastError) = await RunProcessAsync(run, step, childEnvironment, write, cancellationToken);
               status = cancellationToken.IsCancellationRequested ? "Cancelled" : exitCode == 0 ? "Succeeded" : "Failed";
               if (status == "Failed")
               {
-                note = $"izhodna koda {exitCode}";
+                // Zadnja vrstica napake iz procesa gre v ops.WorkerCycleStep, ne samo izhodna koda:
+                // "izhodna koda -532462766" ne pove, da gre za pravice do izhodne mape.
+                note = lastError is null ? $"izhodna koda {exitCode}" : $"izhodna koda {exitCode}: {lastError}";
                 write($"   NAPAKA: {step.Name} je končal z izhodno kodo {exitCode}.");
               }
               break;
@@ -154,6 +158,8 @@ public sealed class WorkerCycleRunner(WorkerSchedulerStore store, IConfiguration
             groupFailed = true;
             failure = note ?? step.Name;
             // Padec enega koraka preskoči preostale v isti skupini — isto kot throw v skriptinem Korak.
+            // Preskočeni koraki se zapišejo: sicer je v zgodovini videti, kot da jih načrt sploh ni imel.
+            order = await RecordSkippedAsync(run, queue, order, step.Name, write);
             break;
           }
           if (status == "Cancelled") break;
@@ -225,21 +231,55 @@ public sealed class WorkerCycleRunner(WorkerSchedulerStore store, IConfiguration
     return environment;
   }
 
-  static async Task<int> RunProcessAsync(
+  /// <summary>
+  /// Koraki, ki po padcu v isti skupini niso tekli, gredo v ops.WorkerCycleStep kot Skipped z vzrokom.
+  /// Vrne zadnjo uporabljeno zaporedno številko koraka.
+  /// </summary>
+  async Task<int> RecordSkippedAsync(WorkerRun run, Queue<CycleStep> remaining, int order, string failedStep, Action<string> write)
+  {
+    var now = DateTime.UtcNow;
+    foreach (var skipped in remaining)
+    {
+      if (skipped.Kind == CycleStepKind.Expand) continue;
+      order++;
+      write($"   preskočeno: {skipped.Name} (po napaki v koraku {failedStep})");
+      if (run.CycleRunId is not { } id) continue;
+      try { await store.RecordStepAsync(id, order, skipped.Name, skipped.OrganizationId, skipped.Command, now, now, null, "Skipped", $"preskočeno po napaki v koraku {failedStep}", CancellationToken.None); }
+      catch (Exception exception) { logger.LogWarning(exception, "Preskočenega koraka {Step} ni bilo mogoče zapisati v ops.WorkerCycleStep.", skipped.Name); }
+    }
+    return order;
+  }
+
+  /// <returns>Izhodna koda in vrstica napake, ki jo je proces poslal na stderr (brez oznake STDERR), ali null.</returns>
+  static async Task<(int ExitCode, string? LastError)> RunProcessAsync(
     WorkerRun run, CycleStep step, IReadOnlyDictionary<string, string> baseEnvironment, Action<string> write, CancellationToken cancellationToken)
   {
     var environment = new Dictionary<string, string>(baseEnvironment, StringComparer.OrdinalIgnoreCase);
     if (step.Environment is { } extra)
       foreach (var (name, value) in extra) environment[name] = value;
 
+    string? lastError = null;
+    void Observe(string line)
+    {
+      write("   " + line);
+      // Prva vrstica izjeme .NET ("Unhandled exception. System.X: sporočilo") pove vzrok; sledi
+      // sklad, ki ga ne obdržimo. Ostale napake workerjev so enovrstične in obvelja zadnja.
+      if (!line.StartsWith("STDERR: ", StringComparison.Ordinal)) return;
+      var text = line["STDERR: ".Length..].Trim();
+      if (text.Length == 0 || text.StartsWith("at ", StringComparison.Ordinal) || text.StartsWith("--- End of", StringComparison.Ordinal)) return;
+      if (lastError is not null && lastError.StartsWith("Unhandled exception.", StringComparison.Ordinal)) return;
+      lastError = text.Length > 300 ? text[..300] : text;
+    }
+
     try
     {
-      return await WorkerProcess.RunAsync(step.Process!, environment, line => write("   " + line), process => run.CurrentProcess = process, cancellationToken);
+      var exitCode = await WorkerProcess.RunAsync(step.Process!, environment, Observe, process => run.CurrentProcess = process, cancellationToken);
+      return (exitCode, exitCode == 0 ? null : lastError);
     }
     catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
     {
       write($"   NAPAKA: procesa ni bilo mogoče zagnati ({step.Process!.FileName}): {exception.Message}");
-      return -1;
+      return (-1, exception.Message);
     }
   }
 

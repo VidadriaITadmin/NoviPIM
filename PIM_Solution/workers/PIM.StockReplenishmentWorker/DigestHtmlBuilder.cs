@@ -38,7 +38,7 @@ public static class DigestHtmlBuilder
         html.Append($"<h3 style=\"font-size:14px;color:#333;margin-top:16px;\">{Encode(byDepartment.Key)}</h3>");
         html.Append("""<table style="border-collapse:collapse;width:100%;margin-bottom:8px;">""");
         html.Append("<thead><tr style=\"background:#f0f0f0;text-align:left;\">");
-        foreach (var header in new[] { "Šifra", "Naziv", "ABC/Oddelek", "Trenutna zaloga", "MAX", "MID", "MIN", "Prihaja (VND)" })
+        foreach (var header in new[] { "Šifra", "Naziv", "ABC/Oddelek", "Razpoložljiva zaloga", "MAX", "MID", "MIN", "Prihaja (VND)" })
         {
           html.Append($"<th style=\"padding:4px 8px;border:1px solid #ddd;\">{Encode(header)}</th>");
         }

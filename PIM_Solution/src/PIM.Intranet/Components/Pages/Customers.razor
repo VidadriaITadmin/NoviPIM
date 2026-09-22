@@ -2,19 +2,27 @@
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.CustomerListService CustomerList
 @inject NavigationManager Navigation
 
 <PageTitle>Stranke</PageTitle>
-<PimPage Title="Stranke" Subtitle="Kupci, dobavitelji in proizvajalci aktivne organizacije z njihovimi B2B nastavitvami." />
+<PimPage Title="Stranke" Subtitle="Kupci, dobavitelji in proizvajalci vseh podjetij z B2B nastavitvami in popusti. Privzeto so vsa podjetja; filter zoži na eno." />
 
-@* Vrsta stranke je zavihek, ker je to prvo vprasanje pri iskanju stranke. Uporabnik je
+@* Vloga stranke je zavihek, ker je to prvo vprasanje pri iskanju stranke. Uporabnik je
    2026-08-28 dodal proizvajalca in odpisal locno stran »Partnerji«: dobavitelj in proizvajalec
-   sta vrsti stranke, ne svoja entiteta. *@
-<nav class="page-tabs" aria-label="Vrsta stranke">
+   sta vrsti stranke, ne svoja entiteta.
+
+   2026-09-22 (migracija 250): zavihki so bili prazni, ker je vrsta samo rocna in je ni nihce
+   vpisal. Vloga se zdaj izracuna znotraj podjetja stranke — dobavitelj/proizvajalec iz izdelkov
+   tega podjetja in SAOP vrste partnerja — rocna vrsta s kartice jo prepise. Partner je lahko v
+   vec zavihkih (dobavitelj in proizvajalec hkrati). Stevilke v zavihkih upostevajo vse ostale
+   filtre, tudi podjetje: Nowodvorski je v Vidadrii dobavitelj 0001209, v IQLighting pa
+   proizvajalec 00001625 — z izbrano Vidadrio se pokaze samo prvi. *@
+<nav class="page-tabs" aria-label="Vloga stranke">
   @foreach (var view in Views)
   {
     <button type="button" class="page-tab @(Kind == view.Code ? "active" : null)" aria-current="@(Kind == view.Code ? "page" : null)" @onclick="() => SetKind(view.Code)">
-      @view.Label (@KindCount(view.Code))
+      @view.Label (@KindCount(view.Code).ToString("N0"))
     </button>
   }
 </nav>
@@ -23,30 +31,127 @@
   <div class="card-toolbar" role="search" aria-labelledby="customers-filter-title">
     <h2 id="customers-filter-title" class="visually-hidden">Filtriranje strank</h2>
     <label class="visually-hidden" for="customer-search">Poišči stranko</label>
-    <input id="customer-search" type="search" class="search-input" placeholder="Poišči po šifri ali nazivu …" @bind="Search" @bind:event="oninput" />
-    <label class="visually-hidden" for="customer-type">Tip stranke</label>
-    <select id="customer-type" class="filter-select" @bind="Type">
-      <option value="">Vsi tipi</option>
-      @foreach (var type in Types) { <option value="@type">@type</option> }
+    <input id="customer-search" type="search" class="search-input" placeholder="Šifra, naziv, davčna ali kraj …" @bind="Search" @bind:event="oninput" @bind:after="Recompute" />
+    <label class="visually-hidden" for="customer-organization">Podjetje</label>
+    <select id="customer-organization" class="filter-select" @bind="OrganizationText" @bind:after="Recompute">
+      <option value="">Vsa podjetja</option>
+      @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
     </select>
+    <label class="visually-hidden" for="customer-type">Tip stranke</label>
+    <select id="customer-type" class="filter-select" @bind="Type" @bind:after="Recompute">
+      <option value="">Vsi tipi</option>
+      <option value="NONE">Brez tipa</option>
+      @foreach (var type in Types) { <option value="@type.Code">@type.Name</option> }
+    </select>
+    <button type="button" class="ghost-button filter-toggle @(FiltersOpen ? "open" : null)" aria-expanded="@FiltersOpen.ToString().ToLowerInvariant()" aria-controls="customers-filter-panel" @onclick="() => FiltersOpen = !FiltersOpen">
+      Več filtrov
+      @if (MoreFilterCount > 0) { <span class="filter-badge">@MoreFilterCount</span> }
+    </button>
     <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+
+    @* Isti vzorec kot pri izdelkih: datoteka ven, popravljena datoteka nazaj. Izvoz so natanko
+       vrstice pogleda (vsi filtri in zavihek), uvoz pa vrstico najde po podjetju in sifri. *@
+    <div class="toolbar-actions">
+      <a class="ghost-button @(Filtered.Count == 0 ? "disabled" : null)" href="@ExportHref" download data-enhance-nav="false"
+         title="Stranke tega pogleda v Excel: vloga, tip, B2B nastavitve, pragovi, skupinski popusti, posebni S in kontakti. Uredi in vrni prek »Uvozi Excel«.">
+        Izvozi Excel (@Filtered.Count.ToString("N0"))
+      </a>
+      <a class="ghost-button" href="stranke/uvoz" title="Urejena datoteka se vrne v PIM: vrsta, tip, popusti in kontakti se zapišejo takoj in gredo v stranke.csv in katalog.csv.">Uvozi Excel</a>
+    </div>
+  </div>
+
+  <div id="customers-filter-panel" class="filter-panel" hidden="@(!FiltersOpen)">
+    <div class="filter-grid">
+      <div class="filter-field">
+        <label for="customer-activity">Aktivnost</label>
+        <select id="customer-activity" class="filter-select" @bind="Activity" @bind:after="Recompute">
+          <option value="">Vse</option>
+          <option value="ACTIVE">Samo aktivne</option>
+          <option value="INACTIVE">Samo neaktivne</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="customer-source">Vir vloge</label>
+        <select id="customer-source" class="filter-select" @bind="Source" @bind:after="Recompute">
+          <option value="">Vsi</option>
+          <option value="MANUAL">Ročno na kartici</option>
+          <option value="PRODUCTS">Iz izdelkov podjetja</option>
+          <option value="SAOP">Iz SAOP (vrsta D/K)</option>
+          <option value="TYPE">Iz tipa stranke</option>
+          <option value="DEFAULT">Privzeto (kupec)</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="customer-discount">Popusti</label>
+        <select id="customer-discount" class="filter-select" @bind="Discount" @bind:after="Recompute">
+          <option value="">Vsi</option>
+          <option value="PACKAGING">Popust polno pakiranje</option>
+          <option value="VALUE">Vrednostni rabat</option>
+          <option value="B2BPLUS">B2B+</option>
+          <option value="OWN_TIERS">Lastni pragovi</option>
+          <option value="GROUP">Skupinski popusti stranke</option>
+          <option value="SPECIAL">Posebni S po izdelku</option>
+          <option value="EXPORT_GROUPS">Skupine popustov v stranke.csv</option>
+          <option value="NONE">Brez popustov</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="customer-export">V stranke.csv</label>
+        <select id="customer-export" class="filter-select" @bind="Export" @bind:after="Recompute">
+          <option value="">Vse</option>
+          <option value="YES">Gre v stranke.csv</option>
+          <option value="NO">Ne gre v stranke.csv</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="customer-magento">Magento skupina</label>
+        <select id="customer-magento" class="filter-select" @bind="Magento" @bind:after="Recompute">
+          <option value="">Vse</option>
+          <option value="YES">Ima skupino</option>
+          <option value="NO">Brez skupine</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="link-button" @onclick="ClearFilters">Počisti vse filtre</button>
+    </div>
   </div>
 
   <PimState Loading="Loading" Error="@Error" Empty="@(Filtered.Count == 0)" EmptyText="Za izbrane filtre ni strank." LoadingText="Nalaganje strank …">
-    <PimTable Caption="Stranke v aktivni organizaciji" Columns="Columns">
+    <PimTable Caption="@ScopeCaption" Columns="Columns">
       <Rows>
         @* Cela vrstica odpre stranko. Povezave v celicah zato ni: podcrtano besedilo sredi
            vrstice, ki je vsa klikljiva, obljublja dve razlicni dejanji, pa je le eno. Iz istega
            razloga je odpadla puscica na koncu vrstice. *@
         @foreach (var row in PageRows)
         {
-          <tr class="row-link" tabindex="0" @onclick="() => Open(row)" @onkeydown="args => OpenKey(args, row)" aria-label="Odpri stranko @row.Name">
+          <tr class="row-link" tabindex="0" @onclick="() => Open(row)" @onkeydown="args => OpenKey(args, row)" aria-label="Odpri stranko @row.Name, @row.OrganizationName">
             <td><span class="code-value">@row.CustomerKey</span></td>
-            <td>@row.Name</td>
-            <td>@KindLabel(row.CustomerKind)</td>
-            <td>@(row.CustomerType ?? "—")</td>
+            <td>
+              <span class="customer-name">@row.Name</span>
+              @if (row.City is not null || row.TaxNumber is not null)
+              {
+                <span class="customer-meta">@string.Join(" · ", new[] { row.City, row.TaxNumber is null ? null : "DŠ " + row.TaxNumber }.Where(part => part is not null))</span>
+              }
+            </td>
+            <td>@row.OrganizationName</td>
+            <td>
+              <span class="customer-name">@row.RoleLabel</span>
+              <span class="customer-meta">@RoleMeta(row)</span>
+            </td>
+            <td>@(row.CustomerTypeName ?? "—")</td>
             <td>@(row.MagentoGroupKey ?? "—")</td>
-            <td><PimChip Text="@(row.B2bPlusEnabled ? "Da" : "Ne")" Tone="@(row.B2bPlusEnabled ? "good" : null)" Prefix="B2B+: " /></td>
+            <td>
+              @if (DiscountFlags(row) is { Count: > 0 } flags)
+              {
+                <span class="rule-flags">@foreach (var flag in flags) { <span class="rule-flag">@flag</span> }</span>
+              }
+              else { <span class="muted">—</span> }
+            </td>
+            <td>
+              <PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" Prefix="Stanje: " />
+              @if (row.InCustomerExport) { <span class="customer-meta">v stranke.csv</span> }
+            </td>
           </tr>
         }
       </Rows>
@@ -59,18 +164,39 @@
   </PimState>
 </section>
 
+<p class="muted source-note">
+  Vloga se izračuna znotraj podjetja stranke (migracija 250): <strong>dobavitelj</strong> je šifra, ki je dobavitelj vsaj enega
+  izdelka tega podjetja, ali SAOP vrsta partnerja D; <strong>proizvajalec</strong> je šifra, ki je proizvajalec vsaj enega izdelka;
+  <strong>kupec</strong> ima tip stranke, SAOP vrsto K ali nobene druge vloge. Ročna vrsta na kartici (ali v uvozu) izračun prepiše.
+  Ista firma ima v vsakem podjetju svojo šifro, zato je v seznamu enkrat za vsako podjetje.
+</p>
+
 @code {
   sealed record KindView(string Code, string Label);
+  sealed record TypeOption(string Code, string Name);
 
-  IReadOnlyList<PIM.Intranet.Services.CustomerRow>? Rows;
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "vloga")] public string? QueryRole { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+
+  IReadOnlyList<PIM.Intranet.Services.CustomerListRow>? Rows;
+  IReadOnlyList<PIM.Intranet.Services.OrganizationContext> Organizations = [];
+  IReadOnlyList<TypeOption> Types = [];
   bool Loading = true;
+  bool FiltersOpen;
   string? Error;
-  string Search = "", Kind = "", Type = "";
+  string Search = "", Kind = "", Type = "", OrganizationText = "";
+  string Activity = "", Source = "", Discount = "", Export = "", Magento = "";
   int Page;
   const int PageSize = 25;
 
+  // Vrstice ob vseh filtrih razen vloge (iz njih stejejo zavihki) in ob vseh filtrih skupaj.
+  // Izracunata se ob vsaki spremembi filtra, ne ob vsakem izrisu — strank je skoraj 12.000.
+  List<PIM.Intranet.Services.CustomerListRow> Scoped = [];
+  List<PIM.Intranet.Services.CustomerListRow> Filtered = [];
+
   static readonly IReadOnlyList<PimColumn> Columns =
-    [new("Šifra"), new("Naziv"), new("Vrsta"), new("Tip stranke"), new("Magento skupina"), new("B2B+")];
+    [new("Šifra"), new("Naziv"), new("Podjetje"), new("Vloga"), new("Tip stranke"), new("Magento skupina"), new("Popusti"), new("Stanje")];
 
   // Vrste, ki jih je nastel uporabnik 2026-08-28. Proizvajalec je nov.
   static readonly IReadOnlyList<KindView> Views =
@@ -82,51 +208,90 @@
     new("MANUFACTURER", "Proizvajalci"),
   ];
 
-  IEnumerable<string> Types => (Rows ?? [])
-    .Select(row => row.CustomerType).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!)
-    .Distinct().Order();
+  int? OrganizationId => int.TryParse(OrganizationText, out var value) ? value : null;
 
-  IReadOnlyList<PIM.Intranet.Services.CustomerRow> Filtered => (Rows ?? [])
-    .Where(row => (Kind == "" || row.CustomerKind == Kind)
-      && (Type == "" || row.CustomerType == Type)
-      && (Search == "" || row.CustomerKey.Contains(Search, StringComparison.OrdinalIgnoreCase)
-        || row.Name.Contains(Search, StringComparison.OrdinalIgnoreCase)))
-    .ToList();
+  PIM.Intranet.Services.CustomerListQuery Query => new(
+    OrganizationId, Kind, Search, Type, Activity, Source, Export, Discount, Magento);
 
-  IEnumerable<PIM.Intranet.Services.CustomerRow> PageRows => Filtered.Skip(Page * PageSize).Take(PageSize);
+  IEnumerable<PIM.Intranet.Services.CustomerListRow> PageRows => Filtered.Skip(Page * PageSize).Take(PageSize);
   int PageCount => Math.Max(1, (int)Math.Ceiling(Filtered.Count / (decimal)PageSize));
+
+  int MoreFilterCount => new[] { Activity, Source, Discount, Export, Magento }.Count(value => value.Length > 0);
+
+  string ExportHref => "izvoz/stranke.xlsx" + (Query.ToQueryString() is { Length: > 0 } query ? "?" + query : "");
+
+  string ScopeCaption => OrganizationId is int scope
+    ? "Stranke podjetja " + (Organizations.FirstOrDefault(row => row.OrganizationId == scope)?.Name ?? scope.ToString())
+    : $"Stranke vseh podjetij ({Organizations.Count})";
 
   protected override async Task OnInitializedAsync()
   {
+    // Povezava s kartice ali od drugod lahko prinese podjetje, vlogo in iskanje (npr. »stranke?podjetje=3&vloga=SUPPLIER«).
+    OrganizationText = QueryOrganization ?? "";
+    Kind = Views.Any(view => view.Code == QueryRole) ? QueryRole! : "";
+    Search = QuerySearch ?? "";
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      Rows = await Data.GetCustomersAsync(organization.OrganizationId);
+      Organizations = await Data.GetOrganizationsAsync();
+      Rows = await CustomerList.GetAsync(null);
+      Types = Rows.Where(row => row.CustomerTypeCode is not null)
+        .GroupBy(row => row.CustomerTypeCode!)
+        .Select(group => new TypeOption(group.Key, group.First().CustomerTypeName ?? group.Key))
+        .OrderBy(type => type.Name, StringComparer.CurrentCulture).ToList();
+      Recompute();
     }
     catch { Error = "Strank trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
 
-  void SetKind(string value) { Kind = value; Page = 0; }
+  void Recompute()
+  {
+    var query = Query;
+    Scoped = PIM.Intranet.Services.CustomerListService.Apply(Rows ?? [], query, ignoreRole: true).ToList();
+    Filtered = Scoped.Where(row => PIM.Intranet.Services.CustomerListService.MatchesRole(row, Kind)).ToList();
+    Page = 0;
+  }
+
+  void SetKind(string value) { Kind = value; Recompute(); }
+
+  void ClearFilters()
+  {
+    Activity = Source = Discount = Export = Magento = "";
+    Recompute();
+  }
+
   void Previous() => Page = Math.Max(0, Page - 1);
   void Next() => Page = Math.Min(PageCount - 1, Page + 1);
-  void Open(PIM.Intranet.Services.CustomerRow row) => Navigation.NavigateTo($"stranke/{row.CustomerId}");
-  void OpenKey(KeyboardEventArgs args, PIM.Intranet.Services.CustomerRow row) { if (args.Key is "Enter" or " ") Open(row); }
+  void Open(PIM.Intranet.Services.CustomerListRow row) => Navigation.NavigateTo($"stranke/{row.CustomerId}");
+  void OpenKey(KeyboardEventArgs args, PIM.Intranet.Services.CustomerListRow row) { if (args.Key is "Enter" or " ") Open(row); }
 
-  static string KindLabel(string? value) => value switch
+  // Stevci zavihkov izhajajo iz ze nalozenih vrstic ob trenutnih filtrih; nove poizvedbe za to niso potrebne.
+  int KindCount(string kind) => Scoped.Count(row => PIM.Intranet.Services.CustomerListService.MatchesRole(row, kind));
+
+  static string RoleMeta(PIM.Intranet.Services.CustomerListRow row)
   {
-    "CUSTOMER" => "Kupec",
-    "SUPPLIER" => "Dobavitelj",
-    "BOTH" => "Kupec in dobavitelj",
-    "MANUFACTURER" => "Proizvajalec",
-    _ => "—",
-  };
+    var parts = new List<string> { row.RoleSourceLabel };
+    if (row.PayerKindLabel is { } payerKind) parts.Add(payerKind);
+    if (row.SuppliedProductCount > 0) parts.Add($"dobavlja {row.SuppliedProductCount:N0} izd.");
+    if (row.ManufacturedProductCount > 0) parts.Add($"proizvaja {row.ManufacturedProductCount:N0} izd.");
+    return string.Join(" · ", parts);
+  }
 
-  // Stevci zavihkov izhajajo iz ze nalozenih vrstic; nove poizvedbe za to niso potrebne.
-  int KindCount(string kind) => (Rows ?? []).Count(row => kind == "" || row.CustomerKind == kind);
+  // Kaj od komercialnih pravil ima stranka nastavljeno — isto, kar gre v stranke.csv in katalog.csv.
+  static List<string> DiscountFlags(PIM.Intranet.Services.CustomerListRow row)
+  {
+    var flags = new List<string>();
+    if (row.PackagingDiscountEnabled) flags.Add("pakiranje");
+    if (row.ValueDiscountEnabled) flags.Add("vrednostni");
+    if (row.B2bPlusEnabled) flags.Add("B2B+");
+    if (row.HasOwnTiers) flags.Add("lastni pragovi");
+    if (row.GroupDiscountCount > 0) flags.Add($"skupinski {row.GroupDiscountCount}");
+    if (row.SpecialDiscountCount > 0) flags.Add($"posebni S {row.SpecialDiscountCount}");
+    if (row.ExportGroupDiscountCount > 0) flags.Add($"skupine popustov {row.ExportGroupDiscountCount}");
+    return flags;
+  }
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Filtered.Count} rezultatov";
+    : $"{Filtered.Count:N0} rezultatov";
 }

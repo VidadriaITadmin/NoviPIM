@@ -1,0 +1,189 @@
+@page "/izdelki/uvoz-odprodaje"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using PIM.Intranet.Services
+@inject ClearanceService Clearance
+@inject IntranetDataService Data
+@inject HeavyWorkGate Gate
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Uvoz odprodaje</PageTitle>
+
+<PimPage Title="Uvoz odprodajnega seznama"
+         Subtitle="Dobaviteljev Excel (npr. odprodaja/razprodaja zaloge) po šifri artikla. Prepozna stolpce Šifra, Količina, Cena in Popust — ostale prezre." />
+
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<section class="ui-card panel">
+  <h2>1. Vir in podjetje</h2>
+  <div class="form-grid">
+    <label class="form-field" for="clearance-organization">
+      Podjetje
+      <select id="clearance-organization" class="filter-select" @bind="OrganizationText">
+        @foreach (var organization in Organizations)
+        {
+          <option value="@organization.OrganizationId">@organization.Name</option>
+        }
+      </select>
+    </label>
+    <label class="form-field" for="clearance-vir">
+      Vir (ime dobavitelja/seznama)
+      <input id="clearance-vir" class="form-input" @bind="Vir" placeholder="npr. Azzardo 2026-09" />
+    </label>
+  </div>
+  <p class="hint">
+    Vir je ključ: ponovni uvoz pod istim virom posodobi obstoječe vrstice in <strong>samodejno
+    konča</strong> tiste, ki jih v novi datoteki ni več. Za nov, ločen seznam uporabi drugo ime vira.
+  </p>
+  <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+</section>
+
+@if (Preview is not null)
+{
+  <section class="ui-card panel section-gap">
+    <h2>2. Kaj bo uvoz naredil</h2>
+    <p role="status">
+      Vrstic: <strong>@Preview.Rows.Count</strong> —
+      ujemajočih šifer: <strong>@Preview.MatchedCount</strong>,
+      neujemajočih: <strong>@Preview.UnmatchedCount</strong>.
+    </p>
+    @foreach (var problem in Preview.Problems) { <p class="message-state warn-message">@problem</p> }
+
+    @if (Preview.UnmatchedCount > 0)
+    {
+      <p class="message-state warn-message">
+        Neujemajoče šifre (podjetje @Preview.OrganizationId nima artikla s to šifro), uvoz jih preskoči:
+        @string.Join(", ", Preview.Rows.Where(row => row.ProductId is null).Take(30).Select(row => row.Sifra))
+        @(Preview.UnmatchedCount > 30 ? $" … in še {Preview.UnmatchedCount - 30}." : "")
+      </p>
+    }
+
+    @if (Preview.Rows.Count > 0)
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza odprodaje">
+        <table class="data-table">
+          <caption>Predogled prvih 20 vrstic</caption>
+          <thead>
+            <tr>
+              <th scope="col">Vrstica</th><th scope="col">Šifra</th><th scope="col">Ujema</th>
+              <th scope="col">Količina</th><th scope="col">Redna cena</th><th scope="col">Popust %</th><th scope="col">Odprodajna cena</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Preview.Rows.Take(20))
+            {
+              <tr>
+                <td>@row.RowNumber</td>
+                <td>@row.Sifra</td>
+                <td>@(row.ProductId is null ? "ne" : "da")</td>
+                <td>@row.Kolicina</td>
+                <td>@row.RednaCena</td>
+                <td>@row.PopustOdstotek</td>
+                <td>@row.OdprodajnaCena</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (Preview.Rows.Count > 20)
+      {
+        <p class="hint">… in še @(Preview.Rows.Count - 20) vrstic.</p>
+      }
+
+      <button type="button" class="primary-button" disabled="@(Busy || Preview.MatchedCount == 0)" @onclick="ApplyAsync">
+        Uvozi @Preview.MatchedCount ujemajočih vrstic
+      </button>
+    }
+  </section>
+}
+
+@if (Outcome is not null)
+{
+  <section class="ui-card data-card section-gap" aria-label="Izid uvoza">
+    <h2>3. Izid</h2>
+    <p role="status">
+      Prejetih vrstic: <strong>@Outcome.RequestedCount</strong>.
+      Zapisanih (ujemajočih): <strong>@Outcome.MatchedCount</strong>.
+      Preskočenih: <strong>@Outcome.UnmatchedCount</strong>.
+    </p>
+    @if (Outcome.NeujemajoceSifre.Count > 0)
+    {
+      <p class="hint">Neujemajoče šifre: @string.Join(", ", Outcome.NeujemajoceSifre.Take(30))@(Outcome.NeujemajoceSifre.Count > 30 ? " …" : "")</p>
+    }
+  </section>
+}
+
+@code {
+  const long MaxUploadBytes = 16 * 1024 * 1024;
+
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  ClearanceImportPreview? Preview;
+  ClearanceImportOutcome? Outcome;
+  string OrganizationText = "2";
+  string Vir = "";
+  string? FileName;
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  int OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : 2;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  async Task<IDisposable> EnterImportLaneAsync()
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    Message = $"Uvoz čaka v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync();
+  }
+
+  async Task OnFileAsync(InputFileChangeEventArgs args)
+  {
+    Error = null; Message = null; Preview = null; Outcome = null;
+    if (string.IsNullOrWhiteSpace(Vir)) { Error = "Vnesi vir (ime dobavitelja/seznama) pred izbiro datoteke."; return; }
+    try
+    {
+      var file = args.File;
+      if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 16 MB. Razdeli jo na več datotek."; return; }
+      FileName = file.Name;
+
+      using var buffer = new MemoryStream();
+      await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
+      buffer.Position = 0;
+      using (await EnterImportLaneAsync())
+        Preview = await Clearance.PreviewAsync(buffer, OrganizationId, Vir.Trim(), FileName);
+      Message = null;
+    }
+    catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
+    catch (Exception failure) { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel: " + failure.Message; }
+  }
+
+  async Task ApplyAsync()
+  {
+    if (Preview is null) return;
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await ActorAsync();
+      using (await EnterImportLaneAsync())
+        Outcome = await Clearance.ApplyAsync(Preview, actor);
+      Message = $"Uvoz končan: {Outcome.MatchedCount} vrstic zapisanih.";
+      Preview = null;
+    }
+    catch (Exception failure) { Error = "Uvoz ni uspel: " + failure.Message; }
+    finally { Busy = false; }
+  }
+}

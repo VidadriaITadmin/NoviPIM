@@ -7,8 +7,8 @@ using PIM.Operations;
 
 namespace PIM.Intranet.Services;
 
-/// <param name="PimValues">Kar se zapiše takoj; ključ je kanonična koda polja.</param>
-/// <param name="SaopValues">Kar gre v odhodno vrsto in čaka odobritev.</param>
+/// <param name="PimValues">Spletni podatki, atributi, slike: zapišejo se takoj; ključ je kanonična koda polja.</param>
+/// <param name="SaopValues">ERP polja: zapišejo se v PIM takoj in gredo v odhodno vrsto za SAOP (245).</param>
 public sealed record ProductWorkbookRowChange(
   int RowNumber, int OrganizationId, string OrganizationName, string ItemId,
   IReadOnlyDictionary<string, string> PimValues,
@@ -16,20 +16,36 @@ public sealed record ProductWorkbookRowChange(
 
 /// <param name="UnknownColumns">Naslovi, ki jim ne ustreza noben stolpec pogodbe.</param>
 /// <param name="ReadOnlyColumns">Naslovi, ki jih uvoz namenoma ne bere.</param>
+/// <param name="NewAttributes">Atributi, ki jih šifrant še ne pozna, stolpec pa je pod skupino
+/// atributov; uvoz jih ustvari, preden zapiše vrednosti.</param>
 public sealed record ProductWorkbookPreview(
   IReadOnlyList<ProductWorkbookRowChange> Rows,
   IReadOnlyList<string> UnknownColumns,
   IReadOnlyList<string> ReadOnlyColumns,
-  IReadOnlyList<string> Problems)
+  IReadOnlyList<string> Problems,
+  IReadOnlyList<string>? NewAttributes = null)
 {
   public int PimChangeCount => Rows.Sum(row => row.PimValues.Count);
   public int SaopChangeCount => Rows.Sum(row => row.SaopValues.Count);
 }
 
 /// <param name="OutboundBatchIds">Skupine, ki čakajo odobritev na /izvozi/mnozicno.</param>
+/// <param name="ErpWritten">ERP vrednosti, zapisane v katalog PIM takoj (245).</param>
+/// <param name="MediaAdded">Dodane slike in dokumenti.</param>
+/// <param name="MediaRemoved">Odstranjene slike in dokumenti (naslov, ki ga v celici ni več).</param>
+/// <param name="CreatedAttributes">Atributi, ki jih je uvoz ustvaril v šifrantu.</param>
 public sealed record ProductWorkbookOutcome(
   int RowsTouched, int PimChanges, int SaopQueued, int SaopDuplicates, int SaopRejected,
-  IReadOnlyList<long> OutboundBatchIds, IReadOnlyList<string> Problems);
+  IReadOnlyList<long> OutboundBatchIds, IReadOnlyList<string> Problems,
+  int ErpWritten = 0, int MediaAdded = 0, int MediaRemoved = 0,
+  IReadOnlyList<string>? CreatedAttributes = null);
+
+/// <summary>Kje je gradnja zvezka: branje seznama pogleda (stran za stranjo) ali pisanje vrstic.</summary>
+public enum ProductWorkbookPhase { Listing, Writing }
+
+/// <param name="Done">Prebranih (Listing) oziroma zapisanih (Writing) vrstic do zdaj.</param>
+/// <param name="Total">Vseh vrstic pogleda; pri Writing tudi po zožitvi na izbrane vrstice.</param>
+public readonly record struct ProductWorkbookProgress(ProductWorkbookPhase Phase, int Done, int Total);
 
 /// <summary>
 /// Delovni list izdelkov: en zvezek, ki gre ven in se vrne nazaj.
@@ -45,10 +61,13 @@ public sealed record ProductWorkbookOutcome(
 /// stolpec ne more zdrsniti samo na eni strani.
 ///
 /// Kam gre kaj pri uvozu, ne odloča ta koda:
-///   - ERP polja: register <c>out.SaopXmlField</c> pove, katero polje sme PIM pisati. Taka
-///     vrednost gre v odhodno vrsto in čaka odobritev, ne v katalog.
+///   - ERP polja: register <c>out.SaopXmlField</c> pove, katero polje sme PIM pisati. Od 245
+///     gre taka vrednost v katalog PIM TAKOJ (pim.SaveProductErpFieldsBulk) in hkrati v
+///     odhodno vrsto, kjer za pot v SAOP čaka odobritev. Uporabnik 2026-09-22: »ERP brez
+///     čakanja SAOPa in omejitev«.
 ///   - Spletni podatek je last PIM in se zapiše takoj, skozi iste procedure kot kartica
-///     izdelka, torej z zgodovino in takojšnjo ponovno validacijo.
+///     izdelka, torej z zgodovino in takojšnjo ponovno validacijo. Enako slike in dokumenti
+///     (pim.SaveProductMediaBulk) in atributi — tudi taki, ki jih šifrant še ne pozna.
 ///
 /// Dve pravili lista: prazna celica pomeni »ne dotikaj se«, seznam v celici je ločen z »|«.
 /// </summary>
@@ -60,8 +79,12 @@ public sealed class ProductWorkbookService(
   ProductEditService edit,
   CategoryMappingService categories,
   SaopWriteService saop,
-  IntranetDataService data)
+  IntranetDataService data,
+  AttributeMappingService attributeDefinitions)
 {
+  /// <summary>Kljukica »izloči iz rezervacije zaloge« (register SAOP, element ItemExcludeQtyReservation).</summary>
+  const string ReservationExclusionField = "Planning.ExcludeQtyReservation";
+
   /// <summary>Zgornja meja vrstic izvoza: fizična meja lista .xlsx, ne poslovna (WorkbookTable.MaxRows).</summary>
   public const int MaxRows = WorkbookTable.MaxRows;
 
@@ -96,39 +119,43 @@ public sealed class ProductWorkbookService(
   /// v pomnilniku vec kot en paket teh podatkov. Do zdaj je sel ves pogled v en klic z mejo
   /// @Take (20.000) in en klic intranet.GetProductWorkbook za vse izdelke hkrati.
   /// </remarks>
-  /// <param name="includeGroups">Katere skupine stolpcev (<see cref="ProductWorkbookContract.GroupErp"/>
-  /// ipd.) gredo v datoteko; null pomeni vse. Skupina »Ključ« gre v datoteko vedno, brez nje
-  /// vrstice ne bi bilo mogoce prebrati nazaj. Uporabnik izbere skupine v pojavnem oknu »Stolpci«
-  /// na /izdelki, da je datoteka manjša in uvoz nazaj hitrejši — uvoz s tem ne potrebuje nobene
-  /// spremembe, ker ProductWorkbookContract.Match itak bere samo stolpce, ki so v datoteki.</param>
+  /// <param name="includeFieldKeys">Katera posamezna polja (<see cref="ProductWorkbookColumn.FieldKey"/>)
+  /// gredo v datoteko; null pomeni vsa. Skupina »Ključ« gre v datoteko vedno, brez nje vrstice ne
+  /// bi bilo mogoce prebrati nazaj. Uporabnik izbere polja v pojavnem oknu »Stolpci« na /izdelki
+  /// (glej <see cref="DescribeColumnsAsync"/>), da je datoteka manjša in uvoz nazaj hitrejši — uvoz
+  /// s tem ne potrebuje nobene spremembe, ker ProductWorkbookContract.Match itak bere samo stolpce,
+  /// ki so v datoteki.</param>
   public async Task<byte[]> BuildAsync(
     ProductListFilter filter, IReadOnlyCollection<string>? onlySelectionKeys = null,
-    IReadOnlySet<string>? includeGroups = null,
+    IReadOnlySet<string>? includeFieldKeys = null,
     CancellationToken cancellationToken = default)
   {
     using var stream = new MemoryStream();
-    await BuildToAsync(stream, filter, onlySelectionKeys, includeGroups, progress: null, cancellationToken);
+    await BuildToAsync(stream, filter, onlySelectionKeys, includeFieldKeys, progress: null, cancellationToken);
     return stream.ToArray();
   }
 
   /// <summary>
   /// Isto kot <see cref="BuildAsync"/>, a zvezek pise naravnost v dani tok (datoteko na disku,
-  /// glej ExportJobService/ExportResultStore) in sproti javlja stevilo zapisanih vrstic.
-  /// Vrne stevilo vrstic v datoteki.
+  /// glej ExportJobService/ExportResultStore) in sproti javlja napredek: najprej branje seznama
+  /// (stran za stranjo), potem zapisane vrstice od vseh — iz tega okno izvoza v kotu strani
+  /// izrise vrstico napredka in oceno, koliko je se do konca. Vrne stevilo vrstic v datoteki.
   /// </summary>
   public async Task<int> BuildToAsync(
     Stream destination, ProductListFilter filter, IReadOnlyCollection<string>? onlySelectionKeys,
-    IReadOnlySet<string>? includeGroups, IProgress<int>? progress, CancellationToken cancellationToken)
+    IReadOnlySet<string>? includeFieldKeys, IProgress<ProductWorkbookProgress>? progress, CancellationToken cancellationToken)
   {
-    var rows = await ListRowsAsync(filter, cancellationToken);
+    var rows = await ListRowsAsync(filter, progress, cancellationToken);
     if (onlySelectionKeys is { Count: > 0 })
       rows = rows.Where(row => onlySelectionKeys.Contains($"{row.OrganizationId}|{row.ItemId}", StringComparer.OrdinalIgnoreCase)).ToList();
+    progress?.Report(new(ProductWorkbookPhase.Writing, 0, rows.Count));
 
     var sites = await ActiveWebSitesAsync(cancellationToken);
     var saopFields = await WritableSaopFieldsAsync(cancellationToken);
-    var languages = await LanguagesAsync(filter.OrganizationId, cancellationToken);
+    var languages = await LanguagesAsync(filter.WithPartnerScope().OrganizationId, cancellationToken);
     bool Included(ProductWorkbookColumn column) =>
-      includeGroups is null || column.Group == ProductWorkbookContract.GroupKey || includeGroups.Contains(column.Group);
+      column.Group == ProductWorkbookContract.GroupKey
+      || includeFieldKeys is null || includeFieldKeys.Contains(column.FieldKey);
 
     // Prvi obhod da stolpce brez atributov; iz njih izhajajo kode polj, ki jih je treba
     // prebrati. Sifrant atributov dopolni stolpce v drugem obhodu.
@@ -136,8 +163,7 @@ public sealed class ProductWorkbookService(
     var fieldCodes = probe
       .Where(column => column.Target != ProductWorkbookTarget.ReadOnly)
       .Select(column => column.FieldKey)
-      .Where(key => !key.StartsWith(ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal)
-        && key != ProductWorkbookContract.WebPublishField && key != ProductWorkbookContract.WebSitesField)
+      .Where(key => !IsListField(key) && key != ProductWorkbookContract.WebPublishField)
       .Distinct(StringComparer.Ordinal).ToList();
 
     // Nabor stolpcev se doloci enkrat, pred vrsticami: datoteka ima en nabor, ne enega na paket.
@@ -146,9 +172,8 @@ public sealed class ProductWorkbookService(
     // Brez kategorije je to celoten sifrant: isti, s katerim uvoz prepozna stolpce datoteke z
     // neznanim naborom izdelkov (PreviewAsync). Prej ga je dolocal seznam vseh izdelkov pogleda
     // v enem klicu, kar pri katalogu brez zgornje meje ne gre vec.
-    var wantsAttributes = includeGroups is null
-      || includeGroups.Contains(ProductWorkbookContract.GroupAttributesInSet)
-      || includeGroups.Contains(ProductWorkbookContract.GroupAttributesOutside);
+    var wantsAttributes = includeFieldKeys is null
+      || includeFieldKeys.Any(key => key.StartsWith(ProductWorkbookContract.AttributeFieldPrefix, StringComparison.Ordinal));
     var registry = await ReadAsync([], [], filter.CategoryTreeCode, filter.CategoryCode, cancellationToken);
     var attributes = !wantsAttributes ? []
       : filter.CategoryCode is null
@@ -172,7 +197,8 @@ public sealed class ProductWorkbookService(
   }
 
   /// <summary>Vse vrstice pogleda, stran za stranjo; baza sama pove, koliko jih je (TotalCount).</summary>
-  async Task<List<ProductListRow>> ListRowsAsync(ProductListFilter filter, CancellationToken cancellationToken)
+  async Task<List<ProductListRow>> ListRowsAsync(
+    ProductListFilter filter, IProgress<ProductWorkbookProgress>? progress, CancellationToken cancellationToken)
   {
     var rows = new List<ProductListRow>();
     var skip = 0;
@@ -180,6 +206,7 @@ public sealed class ProductWorkbookService(
     {
       var page = await workbench.GetProductListAsync(filter with { Skip = skip, Take = ListPageSize }, cancellationToken);
       rows.AddRange(page.Rows);
+      progress?.Report(new(ProductWorkbookPhase.Listing, rows.Count, (int)Math.Min(page.TotalCount, MaxRows)));
       if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
       skip += ListPageSize;
     }
@@ -193,7 +220,7 @@ public sealed class ProductWorkbookService(
   /// </summary>
   async IAsyncEnumerable<IReadOnlyList<object?>> CellsAsync(
     List<ProductListRow> rows, IReadOnlyList<string> fieldCodes, IReadOnlyList<ProductWorkbookColumn> definition,
-    IReadOnlyDictionary<string, string> siteNames, IProgress<int>? progress,
+    IReadOnlyDictionary<string, string> siteNames, IProgress<ProductWorkbookProgress>? progress,
     [EnumeratorCancellation] CancellationToken cancellationToken)
   {
     for (var offset = 0; offset < rows.Count; offset += BatchSize)
@@ -202,7 +229,7 @@ public sealed class ProductWorkbookService(
       var sheet = await ReadAsync(batch.Select(row => row.ProductId).ToList(), fieldCodes, null, null, cancellationToken);
       foreach (var row in batch)
         yield return definition.Select(column => Cell(column, row, sheet, siteNames)).ToArray();
-      progress?.Report(offset + batch.Count);
+      progress?.Report(new(ProductWorkbookPhase.Writing, offset + batch.Count, rows.Count));
     }
   }
 
@@ -232,7 +259,7 @@ public sealed class ProductWorkbookService(
       case "Row.Completeness": return row.Completeness;
       case "Row.OpenIssueCount": return row.OpenIssueCount;
       case "Row.LastChangedUtc": return row.LastChangedUtc;
-      case ProductWorkbookContract.WebPublishField: return ProductWorkbookContract.YesNo(row.WebPublish);
+      case ProductWorkbookContract.WebPublishField: return ProductWorkbookContract.SheetYesNo(row.WebPublish);
       case ProductWorkbookContract.WebSitesField:
         return ProductWorkbookContract.JoinList(sheet.SitesOf(row.ProductId)
           .Select(code => siteNames.TryGetValue(code, out var name) ? name : code)
@@ -255,8 +282,16 @@ public sealed class ProductWorkbookService(
       return sheet.AttributeValues.TryGetValue((row.ProductId, code), out var attribute) ? attribute : null;
     }
 
-    return sheet.Values.TryGetValue((row.ProductId, column.FieldKey), out var found) ? found : null;
+    var stored = sheet.Values.TryGetValue((row.ProductId, column.FieldKey), out var found) ? found : null;
+    // Logično polje v Excelu je D/N, kot v dokumentih SAOP (uporabnik 2026-09-22); uvoz sprejme
+    // tudi 1/0 in da/ne. Kljukica brez vrstice planiranja je N, ne prazna celica.
+    return column.IsBool ? ProductWorkbookContract.SheetYesNo(ProductWorkbookContract.ParseYesNo(stored) ?? false) : stored;
   }
+
+  /// <summary>Polja, ki niso ena vrednost v canon.FieldValue, ampak seznam, ki ga uvoz primerja posebej.</summary>
+  static bool IsListField(string fieldKey) =>
+    fieldKey.StartsWith(ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal)
+    || fieldKey is ProductWorkbookContract.WebSitesField or ProductWorkbookContract.ImagesField or ProductWorkbookContract.DocumentsField;
 
   /// <summary>Ime datoteke z datumom, da se izvozi ne prepisujejo v mapi prenosov.</summary>
   public static string FileName(DateTime nowUtc) =>
@@ -268,6 +303,7 @@ public sealed class ProductWorkbookService(
     "INVALID" => "blokiran",
     "PENDING" => "čaka validacijo",
     "NOT_CONFIGURED" => "ni profila",
+    "NOT_ON_WEB" => "ni na spletu",
     _ => status,
   };
 
@@ -290,14 +326,15 @@ public sealed class ProductWorkbookService(
 
     var sheet = WorkbookTable.Read(file, sheetName: null, headerHints: ProductWorkbookContract.HeaderHints);
     var definition = ProductWorkbookContract.Build(new(saopFields, sites, WebTextTypes, languages, attributes));
-    var matches = ProductWorkbookContract.Match(sheet.Headers, definition);
+    var problems = new List<string>();
+    var (matches, newAttributes) = await MatchAttributesAsync(
+      ProductWorkbookContract.Match(sheet.Headers, definition), sheet, cancellationToken);
 
     var keyColumn = matches.FirstOrDefault(match => match.Column?.FieldKey == ProductWorkbookContract.ItemIdField);
     if (keyColumn is null)
       throw new WorkbookReadException("Zvezek nima stolpca s šifro artikla. Poimenuj ga »Šifra artikla« ali »ItemID«.");
     var organizationColumn = matches.FirstOrDefault(match => match.Column?.FieldKey == ProductWorkbookContract.OrganizationField);
 
-    var problems = new List<string>();
     if (organizationColumn is null && defaultOrganizationId is null)
       problems.Add("Zvezek nima stolpca »Podjetje«, podjetje pa ni izbrano. Šifra artikla je enolična samo znotraj podjetja.");
 
@@ -307,8 +344,9 @@ public sealed class ProductWorkbookService(
     for (var index = 0; index < sheet.Rows.Count; index++)
     {
       var cells = sheet.Rows[index];
-      // Prva podatkovna vrstica je druga za naslovi; list s skupinami ima naslova dva.
-      var rowNumber = index + 2;
+      // Številka, ki jo uporabnik vidi v Excelu. Prej index + 2, kar je pri listu s skupinami
+      // (dve naslovni vrstici) kazalo eno vrstico prenizko.
+      var rowNumber = sheet.RowNumber(index);
       var itemId = cells[keyColumn.Index].Trim();
       if (itemId.Length == 0) continue;
 
@@ -354,6 +392,29 @@ public sealed class ProductWorkbookService(
         var value = cells[match.Index].Trim();
         // Prazna celica pomeni »ne dotikaj se«. Brez tega bi en uvoz izpraznil cel katalog.
         if (value.Length == 0) continue;
+        if (match.Column.IsBool)
+        {
+          // V listu je D/N (sprejeto tudi da/ne, 1/0); naprej gre kot 1/0 — tako ga hrani katalog,
+          // graditelj dokumenta pa ga po registru pretvori v obliko SAOP (D/N, d/N, true/false).
+          // Nerazumljivo (»mogoče«) se pove in preskoči, ne ugiba.
+          if (ProductWorkbookContract.BoolValue(value) is not { } flag)
+          {
+            problems.Add($"Vrstica {rowNumber}: »{match.Header}« = »{value}« ni D ali N; polje se preskoči.");
+            continue;
+          }
+          value = flag;
+        }
+        else if (match.Column.ValueFormat is "decimal4" or "decimal8")
+        {
+          // Število gre naprej v zapisu s piko — tako ga razume SAOP in hrani katalog. Besedilo
+          // namesto števila bi v vrsti čakalo, dokler ga graditelj dokumenta ne zavrne.
+          if (Number(value) is not { } number)
+          {
+            problems.Add($"Vrstica {rowNumber}: »{match.Header}« = »{value}« ni število; polje se preskoči.");
+            continue;
+          }
+          value = number;
+        }
         if (match.Column.Target == ProductWorkbookTarget.Pim) pim[match.Column.FieldKey] = value;
         else saopValues[match.Column.FieldKey] = value;
       }
@@ -367,10 +428,75 @@ public sealed class ProductWorkbookService(
     var readOnly = matches.Where(match => match.Column?.Target == ProductWorkbookTarget.ReadOnly)
       .Select(match => match.Header).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-    rows = await OnlyChangedAsync(rows, siteByToken: SiteLookup(sites), problems, cancellationToken);
+    var boolFields = matches.Where(match => match.Column?.IsBool == true)
+      .Select(match => match.Column!.FieldKey).ToHashSet(StringComparer.Ordinal);
+    rows = await OnlyChangedAsync(rows, siteByToken: SiteLookup(sites), boolFields, problems, cancellationToken);
 
     if (rows.Count == 0) problems.Add("V zvezku ni nobene vrstice, ki bi kaj spremenila. Kar je v datoteki, je v PIM že tako zapisano.");
-    return new(rows, unknown, readOnly, problems);
+    return new(rows, unknown, readOnly, problems, newAttributes);
+  }
+
+  /// <summary>
+  /// Stolpci atributov, ki jih pogodba ni poznala. Pogodba pozna samo atribute, ki so v kakšnem
+  /// naboru, imajo kje vrednost ali jih zahteva validacija (intranet.GetProductWorkbook); vse
+  /// drugo je padlo med neprepoznane in vrednosti so se tiho izgubile. Zdaj:
+  ///   - naslov, ki je ime ali koda atributa iz šifranta, je ta atribut (ključ vrednosti je
+  ///     slovensko ime, kot v canon.ProductAttribute);
+  ///   - naslov pod skupino atributov (vrstica nad naslovi, npr. »Atributi kategorije — nabor«),
+  ///     ki ga šifrant ne pozna, je NOV atribut — uvoz ga ustvari ob zapisu (ApplyAsync).
+  /// Naslov brez skupine, ki ga ni v šifrantu, ostane neprepoznan: brez skupine ne vemo, ali je
+  /// atribut ali tipkarska napaka v imenu drugega stolpca.
+  /// </summary>
+  async Task<(IReadOnlyList<ProductWorkbookHeaderMatch> Matches, IReadOnlyList<string> NewAttributes)> MatchAttributesAsync(
+    IReadOnlyList<ProductWorkbookHeaderMatch> matches, WorkbookSheet sheet, CancellationToken cancellationToken)
+  {
+    if (matches.All(match => match.Column is not null || string.IsNullOrWhiteSpace(match.Header)))
+      return (matches, []);
+
+    var known = await AttributeNamesAsync(cancellationToken);
+    var used = matches.Where(match => match.Column is not null)
+      .Select(match => match.Column!.FieldKey).ToHashSet(StringComparer.Ordinal);
+    var result = new List<ProductWorkbookHeaderMatch>(matches.Count);
+    var created = new List<string>();
+    foreach (var match in matches)
+    {
+      if (match.Column is not null || string.IsNullOrWhiteSpace(match.Header)) { result.Add(match); continue; }
+      var group = sheet.GroupOf(match.Index);
+      var header = match.Header.Trim();
+      string? name = known.TryGetValue(WorkbookHeader.Normalize(header), out var existing) ? existing : null;
+      if (name is null && ProductWorkbookContract.IsAttributeGroup(group))
+      {
+        name = header;
+        created.Add(header);
+      }
+      var column = name is null ? null : ProductWorkbookContract.AttributeColumn(group, header, name);
+      // Isti atribut dvakrat (ime in koda v dveh stolpcih): drugi bi povozil prvega.
+      result.Add(column is not null && used.Add(column.FieldKey) ? match with { Column = column } : match);
+    }
+    return (result, created.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+  }
+
+  /// <summary>Ime atributa po normaliziranem slovenskem imenu ali kodi; vrednost je slovensko ime (ključ vrednosti).</summary>
+  async Task<Dictionary<string, string>> AttributeNamesAsync(CancellationToken cancellationToken)
+  {
+    var names = new Dictionary<string, string>(StringComparer.Ordinal);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT definition.AttributeCode, Name = COALESCE(translation.Name, definition.AttributeCode)
+      FROM canon.AttributeDefinition AS definition
+      LEFT JOIN canon.AttributeTranslation AS translation
+        ON translation.AttributeCode = definition.AttributeCode AND translation.LanguageCode = N'sl'
+      ORDER BY definition.IsActive DESC, definition.AttributeCode;
+      """, connection) { CommandTimeout = 60 };
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var name = PimDb.TextOrEmpty(reader, "Name");
+      names.TryAdd(WorkbookHeader.Normalize(name), name);
+      names.TryAdd(WorkbookHeader.Normalize(PimDb.TextOrEmpty(reader, "AttributeCode")), name);
+    }
+    return names;
   }
 
   /// <summary>
@@ -383,7 +509,7 @@ public sealed class ProductWorkbookService(
   /// </summary>
   async Task<List<ProductWorkbookRowChange>> OnlyChangedAsync(
     List<ProductWorkbookRowChange> rows, IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken,
-    List<string> problems, CancellationToken cancellationToken)
+    IReadOnlySet<string> boolFields, List<string> problems, CancellationToken cancellationToken)
   {
     if (rows.Count == 0) return rows;
 
@@ -394,8 +520,7 @@ public sealed class ProductWorkbookService(
 
     var fieldCodes = rows
       .SelectMany(row => row.PimValues.Keys.Concat(row.SaopValues.Keys))
-      .Where(key => !key.StartsWith(ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal)
-        && key != ProductWorkbookContract.WebPublishField && key != ProductWorkbookContract.WebSitesField)
+      .Where(key => !IsListField(key))
       .Distinct(StringComparer.Ordinal).ToList();
 
     var productIds = rows.Where(row => keys.ContainsKey((row.OrganizationId, row.ItemId)))
@@ -415,11 +540,11 @@ public sealed class ProductWorkbookService(
 
       var pim = new Dictionary<string, string>(StringComparer.Ordinal);
       foreach (var pair in row.PimValues)
-        if (Changed(pair.Key, pair.Value, key, current, siteByToken)) pim[pair.Key] = pair.Value;
+        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields)) pim[pair.Key] = pair.Value;
 
       var saopValues = new Dictionary<string, string>(StringComparer.Ordinal);
       foreach (var pair in row.SaopValues)
-        if (Changed(pair.Key, pair.Value, key, current, siteByToken)) saopValues[pair.Key] = pair.Value;
+        if (Changed(pair.Key, pair.Value, key, current, siteByToken, boolFields)) saopValues[pair.Key] = pair.Value;
 
       if (pim.Count == 0 && saopValues.Count == 0) continue;
       result.Add(row with { PimValues = pim, SaopValues = saopValues });
@@ -437,15 +562,36 @@ public sealed class ProductWorkbookService(
 
   static bool Changed(
     string fieldKey, string incoming, ProductKey key, WorkbookData current,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken)
+    IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken, IReadOnlySet<string> boolFields)
   {
     if (fieldKey == ProductWorkbookContract.WebPublishField)
     {
-      // Zastavica ni v canon.FieldValue, zato je edina primerjava tista s canon.Product.
-      // Brez nje bi vsaka vrstica prijavila spremembo objave, tudi ce je nihce ni spremenil.
+      // Zastavica je ze v canon.Product (ResolveProductIdsAsync); ni je treba brati posebej.
       var parsed = ProductWorkbookContract.ParseYesNo(incoming);
       // Nerazumljivo vrednost pustimo naprej: uvoz jo prijavi kot napako vrstice, ne kot tisino.
       return parsed is null || parsed.Value != key.WebPublish;
+    }
+
+    if (boolFields.Contains(fieldKey))
+    {
+      // »da« in »1« sta ista vrednost; kljukica, ki je se nikoli ni bilo (ni vrstice planiranja),
+      // velja za »ne« — tako jo kaze tudi kartica izdelka.
+      var parsed = ProductWorkbookContract.ParseYesNo(incoming);
+      var stored = ProductWorkbookContract.ParseYesNo(Stored(fieldKey, key.ProductId, current)) ?? false;
+      return parsed is null || parsed.Value != stored;
+    }
+
+    if (fieldKey == ProductWorkbookContract.ImagesField)
+    {
+      // Vrstni red slik je pomen (prva je glavna), zato se primerja po vrsti.
+      var stored = current.Media.TryGetValue(key.ProductId, out var images) ? ProductWorkbookContract.SplitList(images) : [];
+      return !ProductWorkbookContract.SplitList(incoming).SequenceEqual(stored, StringComparer.Ordinal);
+    }
+
+    if (fieldKey == ProductWorkbookContract.DocumentsField)
+    {
+      var stored = current.Documents.TryGetValue(key.ProductId, out var documents) ? ProductWorkbookContract.SplitList(documents) : [];
+      return !SameList(ProductWorkbookContract.SplitList(incoming), stored);
     }
 
     if (fieldKey == ProductWorkbookContract.WebSitesField)
@@ -485,12 +631,32 @@ public sealed class ProductWorkbookService(
     // katero stran), namesto da bi to za vsako slabo vrstico posebej povedala šele baza
     // (pim.SetProductCategories, napaka 106007, vedno samo prva najdena). Ta seznam ponovi isti
     // pogoj vnaprej; baza ob dejanskem zapisu ostaja zadnja beseda.
-    var touchedSiteCodes = preview.Rows
-      .SelectMany(row => row.PimValues.Keys)
-      .Where(key => key.StartsWith(ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal))
-      .Select(key => key[ProductWorkbookContract.CategoryFieldPrefix.Length..])
-      .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    var validCategoryPaths = await ValidCategoryPathsBySiteAsync(touchedSiteCodes, cancellationToken);
+    // 245: poti se preberejo za VSE strani, ne le za tiste s stolpcem v datoteki — jezikovna
+    // razlicica (Videlektro (ANG)) brez svojega stolpca dobi kategorijo iz primarne strani istega
+    // drevesa (ista kategorija, pot v svojem jeziku), glej ApplySitesAsync.
+    var touchesSites = preview.Rows.SelectMany(row => row.PimValues.Keys).Any(key =>
+      key == ProductWorkbookContract.WebSitesField
+      || key.StartsWith(ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal));
+    var validCategoryPaths = touchesSites
+      ? await CategoryPathsBySiteAsync(sites.Select(site => site.Code).ToList(), cancellationToken)
+      : new Dictionary<string, SiteCategoryPaths>(StringComparer.OrdinalIgnoreCase);
+
+    // Atributi, ki jih šifrant ne pozna (stolpec pod skupino atributov): najprej v šifrant, nato
+    // vrednosti. Brez tega so se vrednosti tiho izgubile (stolpec je bil »neprepoznan«).
+    var createdAttributes = new List<string>();
+    foreach (var name in preview.NewAttributes ?? [])
+    {
+      try
+      {
+        await attributeDefinitions.CreateDefinitionAsync(name, null, null, "TEXT", null, false,
+          "Ustvarjen ob uvozu delovnega lista izdelkov.", null, actor, cancellationToken);
+        createdAttributes.Add(name);
+      }
+      catch (Exception failure)
+      {
+        problems.Add($"Atributa »{name}« ni bilo mogoče ustvariti v šifrantu — {failure.Message} Vrednosti so zapisane pod tem imenom.");
+      }
+    }
 
     // Zapisovalne procedure delajo z ProductId; datoteka nosi sifro. Preslikava gre v enem
     // klicu na podjetje, ne v enem klicu na vrstico.
@@ -513,6 +679,8 @@ public sealed class ProductWorkbookService(
     var pimChanges = 0;
     var touchedRows = new HashSet<int>();
     var saopByOrganization = new Dictionary<int, List<(string ItemId, string FieldKey, string? Value)>>();
+    var erpByOrganization = new Dictionary<int, List<ProductErpBulkEdit>>();
+    var mediaByOrganization = new Dictionary<int, List<ProductMediaBulkEdit>>();
 
     // 218: besedila in atributi se ne zapisujejo vrstica za vrstico (procedura + validacija
     // izdelka na vrstico, izmerjeno 10 s na vrstico pred 218), ampak zbrano po podjetjih in v
@@ -561,16 +729,22 @@ public sealed class ProductWorkbookService(
         bulkRows.Add(row.RowNumber);
       }
 
-      // 3) Objava na spletu ne gre skozi tu: register jo pozna kot element WebPublish, torej
-      //    potuje v SAOP in je med ERP polji spodaj. Tu se preveri samo, ali je zapisana
-      //    vrednost sploh razumljiva — »mogoce« ni ne da ne ne.
-      var erp = row.SaopValues;
-      if (erp.TryGetValue(ProductWorkbookContract.WebPublishField, out var publishText)
-        && ProductWorkbookContract.ParseYesNo(publishText) is null)
+      // 3) Slike in dokumenti — celica je cel seznam; kar izdelek ima, v celici pa ni, se izbriše.
+      //    Kaj je slika in kaj dokument, pove ista MediaKindPolicy kot izvoz (current.Media/Documents).
+      foreach (var (field, kind, stored) in new[]
       {
-        problems.Add($"Vrstica {row.RowNumber}: objava na spletu »{publishText}« ni da ali ne; polje se preskoči.");
-        erp = erp.Where(pair => pair.Key != ProductWorkbookContract.WebPublishField)
-          .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        (ProductWorkbookContract.ImagesField, ProductMediaBulkEdit.Images, current.Media),
+        (ProductWorkbookContract.DocumentsField, ProductMediaBulkEdit.Documents, current.Documents),
+      })
+      {
+        if (!row.PimValues.TryGetValue(field, out var cell)) continue;
+        var urls = ProductWorkbookContract.SplitList(cell);
+        var before = stored.TryGetValue(productId, out var joined) ? ProductWorkbookContract.SplitList(joined) : [];
+        var remove = before.Where(url => !urls.Contains(url, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (!mediaByOrganization.TryGetValue(row.OrganizationId, out var mediaList))
+          mediaByOrganization[row.OrganizationId] = mediaList = [];
+        mediaList.Add(new(productId, kind, urls, remove));
+        bulkRows.Add(row.RowNumber);
       }
 
       // 4) Spletne strani in kategorije
@@ -578,12 +752,19 @@ public sealed class ProductWorkbookService(
         row, productId, current, siteByToken, sites, validCategoryPaths, actor, note, problems, cancellationToken);
       if (siteChanges > 0) { pimChanges += siteChanges; rowChanged = true; }
 
-      // 5) ERP polja gredo v vrsto, ne v katalog
-      if (erp.Count > 0)
+      // 5) ERP polja: v odhodno vrsto za SAOP (čaka odobritev) IN v katalog PIM takoj (245).
+      //    Logična polja (objava, aktiven, kljukica za rezervacijo) so že v predogledu 1/0.
+      if (row.SaopValues.Count > 0)
       {
         if (!saopByOrganization.TryGetValue(row.OrganizationId, out var list))
           saopByOrganization[row.OrganizationId] = list = [];
-        foreach (var pair in erp) list.Add((row.ItemId, pair.Key, pair.Value));
+        if (!erpByOrganization.TryGetValue(row.OrganizationId, out var erpList))
+          erpByOrganization[row.OrganizationId] = erpList = [];
+        foreach (var pair in row.SaopValues)
+        {
+          list.Add((row.ItemId, pair.Key, pair.Value));
+          erpList.Add(new(productId, pair.Key, pair.Value));
+        }
         rowChanged = true;
       }
 
@@ -630,10 +811,32 @@ public sealed class ProductWorkbookService(
         bulkDone += chunk.Length;
         progress?.Report($"Zapisujem besedila in atribute: {bulkDone:N0} od {bulkTotal:N0} izdelkov …");
       }
+    // Slike in dokumenti: po podjetjih, v paketih po BulkProducts izdelkov.
+    var mediaAdded = 0; var mediaRemoved = 0;
+    foreach (var (organizationId, edits) in mediaByOrganization)
+      foreach (var chunk in edits.GroupBy(item => item.ProductId).Chunk(BulkProducts))
+      {
+        progress?.Report("Zapisujem slike in dokumente …");
+        try
+        {
+          var outcome = await edit.SaveMediaBulkAsync(organizationId, chunk.SelectMany(group => group).ToList(), actor, note, cancellationToken);
+          mediaAdded += (int)outcome.AddedCount;
+          mediaRemoved += (int)outcome.RemovedCount;
+          foreach (var skip in outcome.Skipped) problems.Add($"{Describe(skip.ProductId)}: slike in dokumenti niso zapisani — {skip.Reason}");
+        }
+        catch (Exception failure)
+        {
+          problems.Add($"Slike in dokumenti za {chunk.Length:N0} izdelkov (podjetje {organizationId}) niso zapisani — {failure.Message}");
+        }
+      }
+    pimChanges += mediaAdded + mediaRemoved;
+
     touchedRows.UnionWith(bulkRows);
     var touched = touchedRows.Count;
     progress?.Report("Uvrščam ERP polja v vrsto za SAOP …");
 
+    // Najprej vrsta, potem katalog: vrsta vrednosti ne primerja s katalogom, zato vrstni red na
+    // izid ne vpliva, a če zapis v katalog pade, sprememba za SAOP ni izgubljena.
     var batches = new List<long>();
     var queued = 0; var duplicates = 0; var rejected = 0;
     foreach (var (organizationId, changes) in saopByOrganization)
@@ -645,12 +848,33 @@ public sealed class ProductWorkbookService(
         batches.Add(outcome.OutboundBatchId);
         queued += outcome.Queued; duplicates += outcome.Duplicates; rejected += outcome.Rejected;
         foreach (var line in outcome.Rows.Where(line => line.Status == "Rejected"))
-          problems.Add($"Artikel {line.ItemId}, polje {line.FieldKey}: zavrnjeno — {line.Reason}");
+          problems.Add($"Artikel {line.ItemId}, polje {line.FieldKey}: ni uvrščeno v vrsto za SAOP — {line.Reason}");
       }
-      catch (Exception failure) { problems.Add($"ERP spremembe podjetja {organizationId} niso uvrščene — {failure.Message}"); }
+      catch (Exception failure) { problems.Add($"ERP spremembe podjetja {organizationId} niso uvrščene v vrsto za SAOP — {failure.Message}"); }
     }
 
-    return new(touched, pimChanges, queued, duplicates, rejected, batches, problems);
+    // 245: ERP vrednost gre v katalog PIM takoj, ne šele ko jo zajem prinese nazaj iz SAOP.
+    progress?.Report("Zapisujem ERP polja v PIM …");
+    var erpWritten = 0;
+    foreach (var (organizationId, edits) in erpByOrganization)
+      foreach (var chunk in edits.GroupBy(item => item.ProductId).Chunk(BulkProducts))
+      {
+        try
+        {
+          var outcome = await edit.SaveErpFieldsBulkAsync(organizationId, chunk.SelectMany(group => group).ToList(), actor, note, cancellationToken);
+          erpWritten += (int)outcome.ChangedCount;
+          foreach (var skip in outcome.Skipped)
+            problems.Add($"{Describe(skip.ProductId)}, polje {skip.FieldKey}: ni zapisano v PIM — {skip.Reason}");
+        }
+        catch (Exception failure)
+        {
+          problems.Add($"ERP polja za {chunk.Length:N0} izdelkov (podjetje {organizationId}) niso zapisana v PIM — {failure.Message}");
+        }
+      }
+    pimChanges += erpWritten;
+
+    return new(touched, pimChanges, queued, duplicates, rejected, batches, problems,
+      erpWritten, mediaAdded, mediaRemoved, createdAttributes);
   }
 
   /// <summary>
@@ -664,7 +888,7 @@ public sealed class ProductWorkbookService(
   async Task<int> ApplySitesAsync(
     ProductWorkbookRowChange row, long productId, WorkbookData current,
     IReadOnlyDictionary<string, IReadOnlyList<string>> siteByToken, IReadOnlyList<WorkbookWebSite> sites,
-    IReadOnlyDictionary<string, HashSet<string>> validCategoryPaths,
+    IReadOnlyDictionary<string, SiteCategoryPaths> validCategoryPaths,
     string actor, string? note, List<string> problems, CancellationToken cancellationToken)
   {
     var written = 0;
@@ -691,20 +915,35 @@ public sealed class ProductWorkbookService(
 
     var affected = new HashSet<string>(incoming.Keys, StringComparer.OrdinalIgnoreCase);
     if (listed is not null) { affected.UnionWith(listed); affected.UnionWith(currentSites); }
+    else
+    {
+      // Brez stolpca »Spletne strani«: jezikovne različice strani iz stolpca kategorij pridejo v
+      // poštev za sledenje (drugi obhod spodaj). Izvoz obe različici izpiše kot eno ime
+      // (»Videlektro«) in uvoz to ime razširi na obe — brez tega bi prvi uvoz izdelek postavil
+      // samo na slovensko stran, naslednji uvoz iste, nespremenjene datoteke pa še na angleško.
+      foreach (var site in incoming.Keys.ToList())
+      {
+        var tree = sites.FirstOrDefault(candidate => string.Equals(candidate.Code, site, StringComparison.OrdinalIgnoreCase))?.CategoryTreeCode;
+        foreach (var sibling in sites.Where(candidate => tree is not null && candidate.CategoryTreeCode == tree))
+          affected.Add(sibling.Code);
+      }
+    }
 
+    // Prvi obhod: cilj za vsako stran, ki ga vrstica ali dosedanje stanje določa samo.
+    var targets = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+    var withoutCategory = new List<string>();
     foreach (var site in affected)
     {
       var stays = listed is null || listed.Contains(site, StringComparer.OrdinalIgnoreCase);
-      IReadOnlyList<string> target;
-      if (!stays) target = [];
-      else if (incoming.TryGetValue(site, out var given) && given.Count > 0)
+      if (!stays) { targets[site] = []; continue; }
+      if (incoming.TryGetValue(site, out var given) && given.Count > 0)
       {
         // Preverimo tu, ne šele v bazi: uporabnik izve TOČNO katera pot(i) v celici ne obstajajo
         // — vse naenkrat, ne le prva (pim.SetProductCategories, THROW 106007, vrne vedno samo
         // eno). Brez znanega drevesa (stran med uvozom izgine, siteCodes prazen) se preskoči in
         // odloci baza, tako kot doslej.
         var unknownPaths = validCategoryPaths.TryGetValue(site, out var valid)
-          ? given.Where(path => !valid.Contains(path)).ToList()
+          ? given.Where(path => !valid.Paths.Contains(path)).ToList()
           : [];
         if (unknownPaths.Count > 0)
         {
@@ -714,20 +953,35 @@ public sealed class ProductWorkbookService(
               + "pot na /kategorije/preslikave; stran ostane pri prejšnjih kategorijah.");
           continue;
         }
-        target = given;
+        targets[site] = given;
+        continue;
       }
-      else
-      {
-        var existing = current.Categories.TryGetValue((productId, site), out var paths)
-          ? ProductWorkbookContract.SplitList(paths) : [];
-        if (existing.Count == 0)
-        {
-          problems.Add($"Vrstica {row.RowNumber}: stran »{SiteName(sites, site)}« nima kategorije — izdelek nanjo ne gre. Izpolni stolpec »Kategorije — {SiteName(sites, site)}«.");
-          continue;
-        }
-        target = existing;
-      }
+      withoutCategory.Add(site);
+    }
 
+    // Drugi obhod (245): jezikovna različica brez svoje celice (Videlektro (ANG), prazen stolpec)
+    // sledi drugi strani istega drevesa — ista koda kategorije, pot v jeziku te strani:
+    //   - nima nobene kategorije: dobi kategorijo druge strani. Prej je vsaka vrstica
+    //     Objemke.xlsx dobila opozorilo »nima kategorije« in izdelek na angleško stran ni šel,
+    //     čeprav je kategorija v obeh jezikih ista;
+    //   - ima kategorijo, ki je bila do zdaj ista kot na drugi strani: gre z njo na novo. Brez
+    //     tega bi sprememba slovenske kategorije angleško pustila v stari;
+    //   - ima drugačno kategorijo kot druga stran: ostane, ker jo je nekdo tako postavil namenoma.
+    foreach (var site in withoutCategory)
+    {
+      var existing = current.Categories.TryGetValue((productId, site), out var paths)
+        ? ProductWorkbookContract.SplitList(paths) : [];
+      if (FollowSibling(site, existing, productId, incoming, targets, current, sites, validCategoryPaths) is { } followed)
+      {
+        targets[site] = followed;
+        continue;
+      }
+      if (existing.Count > 0) { targets[site] = existing; continue; }
+      problems.Add($"Vrstica {row.RowNumber}: stran »{SiteName(sites, site)}« nima kategorije — izdelek nanjo ne gre. Izpolni stolpec »Kategorije — {SiteName(sites, site)}«.");
+    }
+
+    foreach (var (site, target) in targets)
+    {
       var before = current.Categories.TryGetValue((productId, site), out var stored)
         ? ProductWorkbookContract.SplitList(stored) : [];
       if (before.OrderBy(path => path, StringComparer.Ordinal)
@@ -750,6 +1004,51 @@ public sealed class ProductWorkbookService(
 
   static string SiteName(IReadOnlyList<WorkbookWebSite> sites, string code) =>
     sites.FirstOrDefault(site => string.Equals(site.Code, code, StringComparison.OrdinalIgnoreCase))?.Name ?? code;
+
+  /// <summary>
+  /// Kategorije, ki jih jezikovna različica brez svoje celice prevzame od druge strani istega
+  /// drevesa (pravila glej v ApplySitesAsync). Null pomeni »ne sledi« — stran ostane, kot je,
+  /// ali dobi opozorilo, kadar kategorije nima.
+  /// </summary>
+  static IReadOnlyList<string>? FollowSibling(
+    string site, IReadOnlyList<string> existing, long productId,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> incoming, IReadOnlyDictionary<string, IReadOnlyList<string>> targets,
+    WorkbookData current, IReadOnlyList<WorkbookWebSite> sites, IReadOnlyDictionary<string, SiteCategoryPaths> paths)
+  {
+    var tree = sites.FirstOrDefault(candidate => string.Equals(candidate.Code, site, StringComparison.OrdinalIgnoreCase))?.CategoryTreeCode;
+    if (tree is null) return null;
+    // Najprej strani s celico v tej vrstici (sprememba), nato tiste, ki ostanejo pri svojem.
+    var siblings = sites
+      .Where(candidate => candidate.CategoryTreeCode == tree && !string.Equals(candidate.Code, site, StringComparison.OrdinalIgnoreCase))
+      .OrderByDescending(candidate => incoming.ContainsKey(candidate.Code));
+    foreach (var sibling in siblings)
+    {
+      if (!targets.TryGetValue(sibling.Code, out var chosen) || chosen.Count == 0) continue;
+      if (Translate(chosen, sibling.Code, site, paths) is not { } translated) continue;
+      if (existing.Count == 0) return translated;
+      if (!incoming.ContainsKey(sibling.Code)) continue;
+      var siblingBefore = current.Categories.TryGetValue((productId, sibling.Code), out var stored)
+        ? ProductWorkbookContract.SplitList(stored) : [];
+      if (Translate(siblingBefore, sibling.Code, site, paths) is { } before && SameList(before, existing))
+        return translated;
+    }
+    return null;
+  }
+
+  /// <summary>Poti ene strani v jezik druge strani istega drevesa (pot → koda kategorije → pot);
+  /// null, kadar se katera ne prevede — takrat ne ugibamo.</summary>
+  static IReadOnlyList<string>? Translate(
+    IReadOnlyList<string> categoryPaths, string fromSite, string toSite, IReadOnlyDictionary<string, SiteCategoryPaths> paths)
+  {
+    if (categoryPaths.Count == 0 || !paths.TryGetValue(fromSite, out var from) || !paths.TryGetValue(toSite, out var to)) return null;
+    var translated = new List<string>(categoryPaths.Count);
+    foreach (var path in categoryPaths)
+    {
+      if (!from.CodeByPath.TryGetValue(path, out var code) || !to.PathByCode.TryGetValue(code, out var mine)) return null;
+      translated.Add(mine);
+    }
+    return translated;
+  }
 
   /// <summary>
   /// Ime in koda strani sta oba sprejeta; uporabnik pise ime, datoteka nosi ime. Ime primarne
@@ -795,16 +1094,21 @@ public sealed class ProductWorkbookService(
   /// če bi bila baza strožja, bi napačno pot vseeno ujela ona sama ob zapisu; ta seznam sme biti
   /// kvečjemu preveč popustljiv, nikoli preveč strog, sicer bi zavrnil pot, ki jo baza sprejme.
   /// </summary>
-  async Task<IReadOnlyDictionary<string, HashSet<string>>> ValidCategoryPathsBySiteAsync(
+  /// <param name="Paths">Veljavne poti strani (za preverjanje celice).</param>
+  /// <param name="CodeByPath">Pot → koda kategorije; <paramref name="PathByCode"/> obratno. Z njima se
+  /// kategorija prevede med jezikovnima različicama iste strani (SiblingCategories).</param>
+  sealed record SiteCategoryPaths(HashSet<string> Paths, Dictionary<string, string> CodeByPath, Dictionary<string, string> PathByCode);
+
+  async Task<IReadOnlyDictionary<string, SiteCategoryPaths>> CategoryPathsBySiteAsync(
     IReadOnlyList<string> siteCodes, CancellationToken cancellationToken)
   {
-    var result = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+    var result = new Dictionary<string, SiteCategoryPaths>(StringComparer.OrdinalIgnoreCase);
     if (siteCodes.Count == 0) return result;
 
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
-      SELECT site.WebSiteCode, path.CategoryPath
+      SELECT site.WebSiteCode, path.CategoryCode, path.CategoryPath
       FROM canon.WebSite AS site
       INNER JOIN canon.CategoryPathTranslated AS path
         ON path.CategoryTreeCode = site.CategoryTreeCode AND path.LanguageCode = site.LanguageCode
@@ -816,8 +1120,14 @@ public sealed class ProductWorkbookService(
     while (await reader.ReadAsync(cancellationToken))
     {
       var site = PimDb.TextOrEmpty(reader, "WebSiteCode");
-      if (!result.TryGetValue(site, out var paths)) result[site] = paths = new(StringComparer.OrdinalIgnoreCase);
-      paths.Add(PimDb.TextOrEmpty(reader, "CategoryPath"));
+      if (!result.TryGetValue(site, out var paths))
+        result[site] = paths = new(new(StringComparer.OrdinalIgnoreCase),
+          new(StringComparer.OrdinalIgnoreCase), new(StringComparer.OrdinalIgnoreCase));
+      var path = PimDb.TextOrEmpty(reader, "CategoryPath");
+      var code = PimDb.TextOrEmpty(reader, "CategoryCode");
+      paths.Paths.Add(path);
+      paths.CodeByPath.TryAdd(path, code);
+      paths.PathByCode.TryAdd(code, path);
     }
     return result;
   }
@@ -860,6 +1170,26 @@ public sealed class ProductWorkbookService(
       .Where(language => language.IsActive).Select(language => language.LanguageCode);
     var ordered = PimLanguages.Order(registered.Append("sl"));
     return ordered.Count > 0 ? ordered : PimLanguages.Preferred;
+  }
+
+  /// <summary>
+  /// Stolpci, ki bi šli v datoteko za dani filter — brez branja izdelkov. Uporablja pojavno okno
+  /// »Stolpci« na /izdelki (glej Products.razor), da uporabnik izbira posamezna polja in ne le
+  /// skupine: seznam je odvisen od konteksta (kategorija doloca nabor atributov, podjetje jezike),
+  /// zato ga mora prebrati stran, ne trdo kodirati. Ista pravila kot v BuildToAsync (register brez
+  /// seznama izdelkov, nabor atributov po kategoriji), da se pojavno okno in dejanski izvoz ne razideta.
+  /// </summary>
+  public async Task<IReadOnlyList<ProductWorkbookColumn>> DescribeColumnsAsync(
+    ProductListFilter filter, CancellationToken cancellationToken = default)
+  {
+    var sites = await ActiveWebSitesAsync(cancellationToken);
+    var saopFields = await WritableSaopFieldsAsync(cancellationToken);
+    var languages = await LanguagesAsync(filter.WithPartnerScope().OrganizationId, cancellationToken);
+    var registry = await ReadAsync([], [], filter.CategoryTreeCode, filter.CategoryCode, cancellationToken);
+    var attributes = filter.CategoryCode is null
+      ? OrderAttributes(registry.Attributes)
+      : OrderAttributes(registry.Attributes).Where(attribute => attribute.InSet).ToList();
+    return ProductWorkbookContract.Build(new(saopFields, sites, WebTextTypes, languages, attributes));
   }
 
   sealed record WorkbookAttributeRow(
@@ -1022,7 +1352,33 @@ public sealed class ProductWorkbookService(
         };
       }
 
+    if (productIds.Count > 0 && fieldCodes.Contains(ReservationExclusionField, StringComparer.Ordinal))
+      await ReadReservationExclusionAsync(productIds, values, cancellationToken);
+
     return new(values, categoryPaths, attributeValues, media, documents, attributes, required);
+  }
+
+  /// <summary>
+  /// Kljukica »izloči iz rezervacije zaloge« (canon.ProductPlanning). intranet.GetProductWorkbook
+  /// je ne bere, zato je bil stolpec »Kljukica za rezervacijo« v izvozu vedno prazen, uvoz pa je
+  /// vsako izpolnjeno celico štel za spremembo. Ločena poizvedba namesto predelave te procedure
+  /// (218), ki jo berejo vsi izvozi. Izdelek brez vrstice planiranja ima kljukico »ne«.
+  /// </summary>
+  async Task ReadReservationExclusionAsync(
+    IReadOnlyList<long> productIds, Dictionary<(long, string), string?> values, CancellationToken cancellationToken)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT product.ProductId, Value = CONVERT(nvarchar(1), ISNULL(planning.ExcludeQuantityReservation, 0))
+      FROM canon.Product AS product
+      LEFT JOIN canon.ProductPlanning AS planning ON planning.ProductId = product.ProductId
+      WHERE product.ProductId IN (SELECT CONVERT(bigint, value) FROM OPENJSON(@ProductIdsJson));
+      """, connection) { CommandTimeout = 120 };
+    command.Parameters.Add("@ProductIdsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(productIds);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      values[(PimDb.Int64(reader, "ProductId"), ReservationExclusionField)] = PimDb.Text(reader, "Value");
   }
 
   sealed record ProductKey(long ProductId, bool WebPublish);
@@ -1051,6 +1407,111 @@ public sealed class ProductWorkbookService(
     return found;
   }
 
+  sealed record SentEchoRow(string EntityKey, string FieldKey, string OriginalValue, string? Qualifier, DateTime SentUtc);
+
+  /// <param name="Checked">Sporocil, za katera je bila potrditev dejansko poskusena.</param>
+  /// <param name="Waiting">Sporocil, ki so bila poslana PO zadnjem uspesnem teku SAOP_PRODUCTS —
+  /// se ni bilo priloznosti, da bi kanon dobil novo vrednost, zato so bila namerno preskocena.</param>
+  public sealed record VerifyEchoOutcome(int Checked, int Waiting);
+
+  /// <summary>
+  /// Potrdi vsa sporocila v stanju "Sent" tega podjetja proti trenutni kanonicni vrednosti PIM
+  /// (migracija 243, glej njen komentar): dokler noben klicatelj ne pokliche out.VerifyEcho, se
+  /// odobreno in poslano sporocilo ne premakne nikoli naprej od "Sent" — na kartici artikla
+  /// ostane trajno "caka SAOP", tudi ce je SAOP spremembo dejansko sprejel. Bere trenutne
+  /// vrednosti po isti poti kot primerjava "kaj se je spremenilo" pri uvozu delovnega lista
+  /// (Stored/ReadBatchedAsync), da polje-tabela preslikave ni podvojena na dveh mestih.
+  ///
+  /// 22.9.2026, druga napaka po prvem popravku: gumb je sporocilo, poslano pred nekaj sekundami,
+  /// takoj oznacil kot "Drift", ceprav vhodna sinhronizacija (SAOP_PRODUCTS, urna) sploh se ni
+  /// utegnila pognati — kanonicna vrednost v PIM je bila zato se stara, ne napacna, in
+  /// out.VerifyEcho pa Drift oznaci TRAJNO (isce samo Status=Sent, torej se kasnejsi, pravilen
+  /// poskus ne more vec popraviti). Zato se sporocilo preveri samo, ce je SAOP_PRODUCTS za to
+  /// podjetje uspesno tekel PO tem, ko je bilo sporocilo poslano — drugace ostane "Sent" in
+  /// caka na naslednji klik, ko bo kanon dejansko imel prilozica, da se ujema.
+  /// </summary>
+  public async Task<VerifyEchoOutcome> VerifyPendingEchoesAsync(int organizationId, CancellationToken cancellationToken = default)
+  {
+    var allSent = await ReadSentMessagesAsync(organizationId, cancellationToken);
+    if (allSent.Count == 0) return new(0, 0);
+
+    var lastSync = await ReadSaopProductsLastSyncAsync(organizationId, cancellationToken);
+    var sent = lastSync is null ? [] : allSent.Where(row => row.SentUtc <= lastSync).ToList();
+    var waiting = allSent.Count - sent.Count;
+    if (sent.Count == 0) return new(0, waiting);
+
+    var itemIds = sent.Select(row => row.EntityKey).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    var keys = await ResolveProductIdsAsync(organizationId, itemIds, cancellationToken);
+    if (keys.Count == 0) return new(0, waiting);
+
+    var fieldCodes = sent.Select(row => row.FieldKey).Distinct(StringComparer.Ordinal).ToList();
+    var productIds = sent.Where(row => keys.ContainsKey(row.EntityKey))
+      .Select(row => keys[row.EntityKey].ProductId).Distinct().ToList();
+    var current = await ReadBatchedAsync(productIds, fieldCodes, cancellationToken);
+
+    var fields = new List<object>();
+    foreach (var row in sent)
+    {
+      if (!keys.TryGetValue(row.EntityKey, out var key)) continue;
+      var stored = Stored(row.FieldKey, key.ProductId, current) ?? "";
+      // Hash primerja izvirno besedilo bajt-za-bajt (out.EnqueueMessage, 046) — "2,2" in "2.2000"
+      // sta ista stevilka, a razlicen niz, in bi se hash nikoli ne ujel. Kadar je trenutna
+      // kanonicna vrednost POMENSKO ista kot poslana (SameValue, ista logika kot pri primerjavi
+      // ob uvozu delovnega lista), se za hash uporabi izvirno poslano besedilo — s tem se pravi
+      // odklon (dejansko drugacna vrednost) se vedno pravilno zazna, samo drugacen zapis ne vec.
+      var value = SameValue(row.OriginalValue, stored) ? row.OriginalValue : stored;
+      fields.Add(new { entityKey = row.EntityKey, field = row.FieldKey, value, qualifier = row.Qualifier });
+    }
+    if (fields.Count == 0) return new(0, waiting);
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("out.VerifyEchoBatch", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@EntityType", SqlDbType.NVarChar, 100).Value = "Product";
+    command.Parameters.Add("@FieldsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(fields);
+    command.Parameters.Add("@ObservedUtc", SqlDbType.DateTime2).Value = DateTime.UtcNow;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return new(fields.Count, waiting);
+  }
+
+  async Task<List<SentEchoRow>> ReadSentMessagesAsync(int organizationId, CancellationToken cancellationToken)
+  {
+    var rows = new List<SentEchoRow>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT EntityKey, FieldSummary, JSON_VALUE(PayloadJson,'$.value') AS Vrednost, JSON_VALUE(PayloadJson,'$.qualifier') AS Qualifier, SentUtc
+      FROM out.OutboxMessage
+      WHERE OrganizationId = @OrganizationId AND EntityType = N'Product' AND Status = N'Sent' AND SentUtc IS NOT NULL;
+      """, connection) { CommandTimeout = 60 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.TextOrEmpty(reader, "EntityKey"), PimDb.TextOrEmpty(reader, "FieldSummary"),
+        PimDb.TextOrEmpty(reader, "Vrednost"), PimDb.Text(reader, "Qualifier"), PimDb.DateTimeValue(reader, "SentUtc")));
+    return rows;
+  }
+
+  /// <summary>Zadnji USPESEN tek SAOP_PRODUCTS za to podjetje, ali null, ce se ni nikoli uspesno tekel.</summary>
+  async Task<DateTime?> ReadSaopProductsLastSyncAsync(int organizationId, CancellationToken cancellationToken)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT LastSuccessfulRunUtc FROM ops.IntegrationHealth
+      WHERE OrganizationId = @OrganizationId AND Pipeline = N'SAOP_PRODUCTS';
+      """, connection) { CommandTimeout = 30 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    var value = await command.ExecuteScalarAsync(cancellationToken);
+    return value is null or DBNull ? null : Convert.ToDateTime(value, CultureInfo.InvariantCulture);
+  }
+
   /// <summary>
   /// Ali je vrednost iz datoteke ista kot zapisana. Primerjava ni gola primerjava nizov:
   /// Excel zapise stevilo kot 1.5, baza pa 1.5000 — brez tega bi vsak uvoz nespremenjene
@@ -1063,13 +1524,26 @@ public sealed class ProductWorkbookService(
     var left = Normalize(incoming);
     var right = Normalize(current);
     if (string.Equals(left, right, StringComparison.Ordinal)) return true;
-    if (decimal.TryParse(left, NumberStyles.Any, CultureInfo.InvariantCulture, out var leftNumber)
-      && decimal.TryParse(right, NumberStyles.Any, CultureInfo.InvariantCulture, out var rightNumber))
+    // NumberStyles.Any dovoli locilo tisocic — InvariantCulture bi "2,2" prebral kot 22, ne 2,2.
+    // Enak varen vzorec (najprej InvariantCulture, nato sl-SI) kot v SaopDocumentBuilder.Decimal.
+    if (TryParseNumber(left, out var leftNumber) && TryParseNumber(right, out var rightNumber))
       return leftNumber == rightNumber;
     return false;
 
+    static bool TryParseNumber(string value, out decimal number) =>
+      decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
+        || decimal.TryParse(value, NumberStyles.Float, CultureInfo.GetCultureInfo("sl-SI"), out number);
+
     static string Normalize(string? value) =>
       (value ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n").Trim();
+  }
+
+  /// <summary>Število iz celice z decimalno vejico ali piko, zapisano s piko; null, kadar ni število.</summary>
+  static string? Number(string cell)
+  {
+    var text = cell.Replace(" ", string.Empty).Replace(' '.ToString(), string.Empty).Replace(',', '.');
+    return decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+      ? number.ToString(CultureInfo.InvariantCulture) : null;
   }
 
   /// <summary>Seznama sta ista, kadar vsebujeta iste vrednosti; vrstni red v celici ni pomen.</summary>

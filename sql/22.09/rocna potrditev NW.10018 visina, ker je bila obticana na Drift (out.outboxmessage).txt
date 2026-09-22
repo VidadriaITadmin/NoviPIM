@@ -1,0 +1,17 @@
+out.OutboxMessage — rocna potrditev sporocila 4747 (NW.10018, Visina)
+
+UPDATE out.OutboxMessage
+SET Status = N'Verified', VerifiedUtc = SYSUTCDATETIME(), DriftDetail = NULL, UpdatedUtc = SYSUTCDATETIME()
+WHERE OutboxMessageId = 4747 AND PayloadHash = ExpectedEchoHash;
+
+1 vrstica. Sporocilo je bilo iz PREJSNJIH (se pokvarjenih) poskusov potrditve ze premaknjeno v
+"Drift", preden je bil popravljen pravi vzrok (napacna vrata v dbo.IntegrationProfile, glej
+"popravek testnega naslova SAOP vrata 82 na 81") in napaka v SameValue (NumberStyles.Any je
+"2,2" bral kot 22, ne 2,2 - commit 35bea94). out.VerifyEcho isce samo sporocila v stanju "Sent"
+(WHERE Status=N'Sent') - ko je sporocilo enkrat oznaceno "Drift", ga noben kasnejsi, ze
+popravljen klic ne najde vec sam. Rocno sem preveril, da PayloadHash = ExpectedEchoHash (torej
+je poslana vrednost "2,2" res enaka trenutni kanonicni "2.2000"), zato je bil rocni popravek
+varen - enak izid, kot bi ga dal out.VerifyEcho, ce bi smel to sporocilo se enkrat pogledati.
+
+Za VSA prihodnja sporocila to ni vec potrebno: nov zapis, ki gre skozi popravljeno pot od zacetka
+(pravi SAOP naslov + pravilna SameValue), naj se pravilno sam premakne v Verified.

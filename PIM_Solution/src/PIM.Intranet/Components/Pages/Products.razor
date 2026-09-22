@@ -8,7 +8,9 @@
 @inject CategoryTreeService Categories
 @inject NavigationManager Navigation
 @inject ExportJobService ExportJobs
+@inject ProductWorkbookService Workbook
 @inject IJSRuntime Js
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Izdelki</PageTitle>
 
@@ -45,13 +47,15 @@
       @* Katere skupine stolpcev gredo v datoteko — uporabnikova zahteva: manj podatkov je manjši
          izvoz IN hitrejši uvoz nazaj (posodobi se samo, kar je v datoteki). Privzeto vse; ključ
          (podjetje, šifra, naziv) gre v datoteko vedno in tu ni izbirljiv. *@
-      <button type="button" class="ghost-button" @onclick="OpenColumnPicker"
-              title="Izberi, katere skupine stolpcev gredo v izvoz. Manj stolpcev je manjša datoteka in hitrejši uvoz nazaj — uvoz posodobi samo stolpce, ki so v datoteki.">
+      <button type="button" class="ghost-button" @onclick="OpenColumnPickerAsync"
+              title="Izberi, katera polja gredo v izvoz. Manj stolpcev je manjša datoteka in hitrejši uvoz nazaj — uvoz posodobi samo stolpce, ki so v datoteki.">
         Stolpci
-        @if (IncludedGroups.Count < AllWorkbookGroups.Length) { <span class="filter-badge">@IncludedGroups.Count</span> }
+        @if (IncludedFieldKeys is not null) { <span class="filter-badge">@SelectedColumnCount/@TotalColumnCount</span> }
       </button>
       <button type="button" class="primary-button" disabled="@(ExportState is ExportRunStatus.Running or ExportRunStatus.Queued)" @onclick="StartExportAsync"
-              title="ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj. Gradi se v ozadju, prenos se sproži sam.">
+              title="@(ExportState is ExportRunStatus.Running or ExportRunStatus.Queued
+                ? "Tvoj izvoz že teče — prenos je odprt v brskalniku, napredek je v oknu spodaj desno, na vsaki strani."
+                : "ERP, splet, spletne strani, kategorije in atributi v eni datoteki; uredi jo v Excelu in vrni nazaj. Prenos se v brskalniku odpre takoj, datoteka pride, ko je gotova — vmes lahko greš na drugo stran.")">
         @if (ExportState is ExportRunStatus.Running or ExportRunStatus.Queued) { <span class="opening-spinner" aria-hidden="true"></span> }
         Izvozi Excel @ExportScopeLabel
       </button>
@@ -186,33 +190,81 @@
   </div>
 </section>
 
-@* Izbira stolpcev za izvoz. Ključ (podjetje, šifra, naziv) ni na seznamu, ker gre v datoteko
-   vedno — brez njega uvoz vrstice sploh ne bi znal najti. Uvoz sam se ne spremeni: prepozna
-   vsak stolpec, ki je v datoteki, in ostalo pusti pri miru (ProductWorkbookContract.Match), zato
-   manjši izvoz pomeni tudi manjši, hitrejši uvoz nazaj — brez posebne poti zanj. *@
+@* Izbira stolpcev za izvoz, polje za poljem. Ključ (podjetje, šifra, naziv) ni na seznamu, ker
+   gre v datoteko vedno — brez njega uvoz vrstice sploh ne bi znal najti. Uvoz sam se ne spremeni:
+   prepozna vsak stolpec, ki je v datoteki, in ostalo pusti pri miru (ProductWorkbookContract.Match),
+   zato manjši izvoz pomeni tudi manjši, hitrejši uvoz nazaj — brez posebne poti zanj. Seznam polj
+   pride s strežnika (DescribeColumnsAsync), ker je odvisen od konteksta: kategorija določa nabor
+   atributov, podjetje jezike. *@
 @if (ColumnPickerOpen)
 {
   <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Izberi stolpce izvoza" @onclick="CloseColumnPicker">
-    <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
+    <div class="xml-lightbox-panel column-picker-panel" @onclick:stopPropagation="true">
       <header>
         <div>
           <strong>Kateri stolpci gredo v datoteko</strong>
-          <span>Ključ (podjetje, šifra, naziv) je v izvozu vedno. Manj izbranih skupin je manjša datoteka; uvoz nazaj posodobi samo stolpce, ki so v njej.</span>
+          <span>Ključ (podjetje, šifra, naziv) je v izvozu vedno. Izberi samo polja, ki jih res potrebuješ — manjša datoteka pomeni tudi hitrejši uvoz nazaj.</span>
         </div>
         <button type="button" class="small-action" @onclick="CloseColumnPicker">Zapri</button>
       </header>
-      <div class="xml-lightbox-body">
-        @foreach (var group in AllWorkbookGroups)
+
+      @if (!ColumnPickerLoading && ColumnPickerError is null && AvailableColumns.Count > 0)
+      {
+        <div class="column-picker-toolbar">
+          <div class="search-field column-picker-search">
+            <span class="search-icon" aria-hidden="true"></span>
+            <input type="search" class="search-input" placeholder="Išči polje …" @bind="ColumnSearch" @bind:event="oninput" aria-label="Išči polje izvoza" />
+          </div>
+          <span class="column-picker-count" role="status" aria-live="polite">@SelectedColumnCount od @TotalColumnCount polj izbranih</span>
+          <div class="column-picker-bulk">
+            <button type="button" class="link-button" @onclick="SelectAllColumns">Izberi vse</button>
+            <button type="button" class="link-button" @onclick="SelectNoColumns">Počisti vse</button>
+          </div>
+        </div>
+      }
+
+      <div class="xml-lightbox-body column-picker-body">
+        @if (ColumnPickerLoading)
         {
-          <label class="column-picker-row">
-            <input type="checkbox" checked="@IncludedGroups.Contains(group)"
-                   @onchange="@(args => ToggleColumnGroup(group, (bool)(args.Value ?? false)))" />
-            @group
-          </label>
+          <p class="muted column-picker-status"><span class="opening-spinner" aria-hidden="true"></span> Nalagam seznam polj …</p>
+        }
+        else if (ColumnPickerError is not null)
+        {
+          <p class="notice">@ColumnPickerError</p>
+        }
+        else if (FilteredGroups.Count == 0)
+        {
+          <p class="muted column-picker-status">Nobeno polje ne ustreza iskanju »@ColumnSearch«.</p>
+        }
+        else
+        {
+          @foreach (var group in FilteredGroups)
+          {
+            <section class="column-picker-group">
+              <header class="column-picker-group-header">
+                <span class="column-picker-group-title">@group.Group</span>
+                <span class="column-picker-group-count">@GroupSelectedCount(group.Group)/@GroupTotalCount(group.Group)</span>
+                <span class="column-picker-group-actions">
+                  <button type="button" class="link-button" @onclick="@(() => ToggleGroup(group.Group, true))">vse</button>
+                  <button type="button" class="link-button" @onclick="@(() => ToggleGroup(group.Group, false))">nič</button>
+                </span>
+              </header>
+              <div class="column-picker-fields">
+                @foreach (var column in group.Columns)
+                {
+                  <label class="column-picker-row">
+                    <input type="checkbox" checked="@IsIncluded(column.FieldKey)"
+                           @onchange="@(args => ToggleColumn(column.FieldKey, (bool)(args.Value ?? false)))" />
+                    <span>@column.Header</span>
+                  </label>
+                }
+              </div>
+            </section>
+          }
         }
       </div>
       <footer>
-        <button type="button" class="link-button" @onclick="SelectAllColumnGroups">Izberi vse</button>
+        <span class="muted column-picker-footnote">Izbira velja za naslednji izvoz.</span>
         <button type="button" class="primary-button" @onclick="CloseColumnPicker">Uporabi</button>
       </footer>
     </div>
@@ -230,33 +282,9 @@
   </section>
 }
 
-@* Izvoz gradi zvezek v ozadju (ExportJobService) — uporabnik 2026-09-17: brez zgornje meje
-   vrstic, klik pa ne sme cakati na odgovor. To sporoca napredek in ob koncu sprozi prenos. *@
-@if (ExportState is not null)
-{
-  <p class="notice export-notice export-notice-@ExportState.ToString()!.ToLowerInvariant()" role="status">
-    @switch (ExportState)
-    {
-      case ExportRunStatus.Queued:
-        <span class="opening-spinner" aria-hidden="true"></span>
-        <span>Izvoz čaka v vrsti (pred tabo: @ExportQueuePosition). Hkrati tečeta največ dva izvoza, da strani ostanejo odzivne; tvoj se začne sam.</span>
-        break;
-      case ExportRunStatus.Running:
-        <span class="opening-spinner" aria-hidden="true"></span>
-        <span>Zvezek se gradi v ozadju@(ExportRowCount is > 0 ? $" — zapisanih {ExportRowCount:N0} vrstic" : "") — lahko nadaljuješ z delom, ko bo gotov, se prenos začne sam.</span>
-        break;
-      case ExportRunStatus.Completed:
-        <span>Izvoz je pripravljen, prenos se je začel. Če se ni, ga <a href="@ExportDownloadUrl">prenesi ročno</a>.</span>
-        <button type="button" class="link-button" @onclick="DismissExportNotice">Skrij</button>
-        break;
-      case ExportRunStatus.Failed:
-        <span>Izvoz ni uspel: @ExportErrorMessage</span>
-        <button type="button" class="link-button" @onclick="DismissExportNotice">Skrij</button>
-        break;
-    }
-  </p>
-}
-
+@* Napredek izvoza in prenos nista več tu, ampak v oknu izvozov v kotu vsake strani (MainLayout
+   #pim-export-tray): uporabnik 2026-09-22 je kliknil »Izvozi«, takoj za tem »Uvozi«, in obvestilo
+   je izginilo skupaj s to stranjo, izvoz pa je tekel naprej brez sledi. Glej ExportJobService. *@
 @* Razvrstitev ni filter — ne zozi nabora, samo obrne vrstni red — zato stoji nad tabelo,
    kjer ucinkuje, in ne v panelu filtrov. Deluje takoj ob izbiri, brez gumba Uporabi. *@
 <div class="table-toolbar">
@@ -399,13 +427,17 @@
 
   // Seznami za PimPicker: isce se po imenu, sifra pa je vseeno del iskanega besedila (Key), da
   // najde tudi tisti, ki pozna samo sifro proizvajalca/dobavitelja, ne njegovega imena.
-  List<PimPickerOption> ManufacturerOptions =>
-    Facets.Where(row => row.FacetKind == "MANUFACTURER")
-      .Select(facet => new PimPickerOption(facet.FacetValue, PartnerLabel(facet), Badge: facet.ProductCount.ToString("N0"))).ToList();
+  // Brez izbranega podjetja je partner par (podjetje, sifra) in seznam je razdeljen po podjetjih
+  // (250): Nowodvorski je v Vidadrii 0001209, v IQLighting 00001625 — dva vnosa, vsak s svojimi
+  // izdelki. Z izbranim podjetjem so vnosi samo tega podjetja, brez naslovov skupin.
+  List<PimPickerOption> ManufacturerOptions => PartnerOptions(Facets.Where(row => row.FacetKind == "MANUFACTURER"));
 
-  List<PimPickerOption> SupplierOptions =>
-    Facets.Where(row => row.FacetKind == "SUPPLIER")
-      .Select(facet => new PimPickerOption(facet.FacetValue, PartnerLabel(facet), Badge: facet.ProductCount.ToString("N0"))).ToList();
+  List<PimPickerOption> SupplierOptions => PartnerOptions(Facets.Where(row => row.FacetKind == "SUPPLIER"));
+
+  static List<PimPickerOption> PartnerOptions(IEnumerable<ProductListFacet> facets) =>
+    facets.OrderBy(facet => facet.OrganizationName ?? "", StringComparer.CurrentCulture)
+      .Select(facet => new PimPickerOption(facet.FacetValue, PartnerLabel(facet), Badge: facet.ProductCount.ToString("N0"),
+        Group: facet.OrganizationName)).ToList();
 
   // Ime, dolgo do 32 znakov (sicer obrezano z "…"), in nato sifra v oklepaju — ista sifra kot na
   // strani Stranke (canon.PartnerName.PartnerCode). Ce imena ni (FacetLabel pade nazaj na sifro
@@ -413,12 +445,21 @@
   const int PartnerLabelMaxLength = 32;
   static string PartnerLabel(ProductListFacet facet)
   {
+    var code = facet.FacetCode ?? facet.FacetValue;
     var name = facet.FacetLabel.Length > PartnerLabelMaxLength
       ? facet.FacetLabel[..PartnerLabelMaxLength] + "…"
       : facet.FacetLabel;
-    return string.Equals(facet.FacetLabel, facet.FacetValue, StringComparison.Ordinal)
+    return string.Equals(facet.FacetLabel, code, StringComparison.Ordinal)
       ? name
-      : $"{name} ({facet.FacetValue})";
+      : $"{name} ({code})";
+  }
+
+  // Čip aktivnega filtra pove ime in podjetje, ne samo šifre (»3:0001209« ni za ljudi).
+  string PartnerChip(string kind, string value)
+  {
+    var facet = Facets.FirstOrDefault(row => row.FacetKind == kind && string.Equals(row.FacetValue, value, StringComparison.Ordinal));
+    if (facet is null) return value;
+    return facet.OrganizationName is { Length: > 0 } organization ? $"{PartnerLabel(facet)} · {organization}" : PartnerLabel(facet);
   }
 
   List<PimPickerOption> GroupOptions =>
@@ -454,7 +495,8 @@
   /// U1, pregled 2026-09-08: napis tabele je pisal »Izdelki v aktivni organizaciji«, stran pa je
   /// privzeto kazala vsa podjetja. Napis odslej pove dejanski obseg, ne domnevnega.
   /// </summary>
-  string ScopeCaption => OrganizationScope is int scope
+  string ScopeCaption => (OrganizationScope ?? PartnerFilter.Split(QuerySupplier).OrganizationId
+      ?? PartnerFilter.Split(QueryManufacturer).OrganizationId) is int scope
     ? "Izdelki podjetja " + (Organizations.FirstOrDefault(row => row.OrganizationId == scope)?.Name ?? scope.ToString())
     : $"Izdelki vseh podjetij ({Organizations.Count})";
 
@@ -478,6 +520,14 @@
   protected override async Task OnInitializedAsync()
   {
     ExportJobs.Changed += OnExportJobChanged;
+    // Izvoz pripada uporabniku, ne tej strani: ce se ta se gradi (uporabnik je vmes odsel na
+    // uvoz in se vrnil), gumb ostane zaklenjen, dokler ni gotov, namesto da bi sprozil drugega.
+    ExportOwner = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+    if (ExportJobs.ForOwner(ExportOwner).FirstOrDefault(job => job.IsActive) is { } running)
+    {
+      ExportJobId = running.JobId;
+      ExportState = running.Status;
+    }
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
   }
@@ -512,7 +562,8 @@
       if (LoadedScope != scopeKey)
       {
         LoadedScope = scopeKey;
-        Facets = await Workbench.GetProductListFacetsAsync(scope);
+        // 500 je zgornja meja procedure; 100 je bilo premalo (Vidadria ima 124 dobaviteljev).
+        Facets = await Workbench.GetProductListFacetsAsync(scope, take: 500);
       }
 
       // Drevesa kategorij se ne spreminjajo med filtriranjem; preberejo se enkrat na sejo strani.
@@ -581,8 +632,8 @@
       if (!string.IsNullOrWhiteSpace(QuerySearch)) chips.Add(new($"Iskanje: {QuerySearch}", Href(search: "")));
       if (!string.IsNullOrWhiteSpace(QueryOrganization)) chips.Add(new($"Podjetje: {OrganizationLabel(QueryOrganization)}", Href(organization: "")));
       if (ActiveView != "ALL") chips.Add(new($"Napaka: {ViewLabel(ActiveView)}", Href(view: "")));
-      if (!string.IsNullOrWhiteSpace(QueryManufacturer)) chips.Add(new($"Proizvajalec: {QueryManufacturer}", Href(manufacturer: "")));
-      if (!string.IsNullOrWhiteSpace(QuerySupplier)) chips.Add(new($"Dobavitelj: {QuerySupplier}", Href(supplier: "")));
+      if (!string.IsNullOrWhiteSpace(QueryManufacturer)) chips.Add(new($"Proizvajalec: {PartnerChip("MANUFACTURER", QueryManufacturer)}", Href(manufacturer: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySupplier)) chips.Add(new($"Dobavitelj: {PartnerChip("SUPPLIER", QuerySupplier)}", Href(supplier: "")));
       if (!string.IsNullOrWhiteSpace(QueryGroup)) chips.Add(new($"Skupina: {QueryGroup}", Href(group: "")));
       if (!string.IsNullOrWhiteSpace(QueryDepartment)) chips.Add(new($"ABC klasifikacija: {QueryDepartment}", Href(department: "")));
       if (!string.IsNullOrWhiteSpace(QueryErp)) chips.Add(new($"ERP: {StatusLabel(QueryErp)}", Href(erp: "")));
@@ -641,38 +692,87 @@
   // ozadju (StartExportAsync), ne vec skozi dolzino naslova (ExportJobService).
   string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Selected.Count:N0})";
 
-  // Stanje trenutnega izvoza v ozadju; null = se ni bilo sproženo (ali je uporabnik skril
-  // sporocilo). JobId sluzi kot filter na dogodku ExportJobs.Changed — nastavljen je PRED
-  // klicem StartWorkbookExport, da noben dogodek (tudi zelo hiter) ne uide (glej OnExportJobChanged).
+  // Stanje uporabnikovega izvoza v ozadju, samo za zaklep gumba; napredek, napako in prenos
+  // kaze okno izvozov v kotu strani. JobId sluzi kot filter na dogodku ExportJobs.Changed —
+  // nastavljen je PRED klicem StartWorkbookExport, da noben dogodek (tudi zelo hiter) ne uide.
   Guid? ExportJobId;
   ExportRunStatus? ExportState;
-  string? ExportDownloadUrl;
-  string? ExportErrorMessage;
-  // Polozaj v vrsti (Queued) in napredek (Running) — oboje pride z dogodkom ExportJobs.Changed.
-  int ExportQueuePosition;
-  int? ExportRowCount;
+  string ExportOwner = "neznan";
 
-  // Skupine stolpcev, ki jih uporabnik lahko izklopi (pojavno okno »Stolpci«). Ključ ni na
-  // seznamu in gre v izvoz vedno — glej ProductWorkbookService.BuildAsync/Included. Privzeto so
-  // izbrane vse; uvoz nazaj potrebuje ta seznam samo posredno (manj stolpcev v datoteki).
-  static readonly string[] AllWorkbookGroups =
-  [
-    ProductWorkbookContract.GroupErp,
-    ProductWorkbookContract.GroupWeb,
-    ProductWorkbookContract.GroupAttributesInSet,
-    ProductWorkbookContract.GroupAttributesOutside,
-    ProductWorkbookContract.GroupState,
-  ];
+  // Posamezna polja, ki jih uporabnik lahko izklopi (pojavno okno »Stolpci«). Ključ (podjetje,
+  // šifra, naziv) ni na seznamu in gre v izvoz vedno — glej ProductWorkbookService.BuildAsync/
+  // Included. IncludedFieldKeys == null pomeni »vsa polja«, kar je tudi privzeto stanje; s tem
+  // izvoz, ki okna nikoli ne odpre, ostane popolnoma enak, kot je bil doslej. Seznam polj sam je
+  // odvisen od konteksta (kategorija doloca nabor atributov, podjetje jezike), zato pride s
+  // streznika ob vsakem odpiranju okna, ne iz staticnega seznama skupin kot prej.
   bool ColumnPickerOpen;
-  HashSet<string> IncludedGroups = new(AllWorkbookGroups, StringComparer.Ordinal);
+  bool ColumnPickerLoading;
+  string? ColumnPickerError;
+  IReadOnlyList<ProductWorkbookColumn> AvailableColumns = [];
+  HashSet<string>? IncludedFieldKeys;
+  string ColumnSearch = "";
 
-  void OpenColumnPicker() => ColumnPickerOpen = true;
-  void CloseColumnPicker() => ColumnPickerOpen = false;
-  void ToggleColumnGroup(string group, bool included)
+  int TotalColumnCount => AvailableColumns.Count;
+  int SelectedColumnCount => IncludedFieldKeys?.Count ?? AvailableColumns.Count;
+
+  sealed record ColumnPickerGroup(string Group, IReadOnlyList<ProductWorkbookColumn> Columns);
+
+  // Iskanje filtrira polja, ne skupin: skupina brez zadetka preprosto izgine iz seznama. Vrstni
+  // red skupin in polj znotraj njih je isti kot v datoteki (ProductWorkbookContract.Build) —
+  // levo je tisto, po čemer se vrstica najde, potem tisto, kar uporabnik vpisuje.
+  List<ColumnPickerGroup> FilteredGroups =>
+    AvailableColumns
+      .Where(column => string.IsNullOrWhiteSpace(ColumnSearch)
+        || column.Header.Contains(ColumnSearch, StringComparison.OrdinalIgnoreCase))
+      .GroupBy(column => column.Group)
+      .Select(group => new ColumnPickerGroup(group.Key, group.ToList()))
+      .ToList();
+
+  bool IsIncluded(string fieldKey) => IncludedFieldKeys is null || IncludedFieldKeys.Contains(fieldKey);
+
+  int GroupTotalCount(string group) => AvailableColumns.Count(column => column.Group == group);
+  int GroupSelectedCount(string group) => AvailableColumns.Count(column => column.Group == group && IsIncluded(column.FieldKey));
+
+  async Task OpenColumnPickerAsync()
   {
-    if (included) IncludedGroups.Add(group); else IncludedGroups.Remove(group);
+    ColumnPickerOpen = true;
+    ColumnPickerLoading = true;
+    ColumnPickerError = null;
+    ColumnSearch = "";
+    StateHasChanged();
+    try
+    {
+      AvailableColumns = (await Workbook.DescribeColumnsAsync(BuildExportFilter()))
+        .Where(column => column.Group != ProductWorkbookContract.GroupKey).ToList();
+    }
+    catch
+    {
+      AvailableColumns = [];
+      ColumnPickerError = "Seznama polj trenutno ni mogoče naložiti.";
+    }
+    finally
+    {
+      ColumnPickerLoading = false;
+    }
   }
-  void SelectAllColumnGroups() => IncludedGroups = new(AllWorkbookGroups, StringComparer.Ordinal);
+
+  void CloseColumnPicker() => ColumnPickerOpen = false;
+
+  void ToggleColumn(string fieldKey, bool included)
+  {
+    IncludedFieldKeys ??= AvailableColumns.Select(column => column.FieldKey).ToHashSet(StringComparer.Ordinal);
+    if (included) IncludedFieldKeys.Add(fieldKey); else IncludedFieldKeys.Remove(fieldKey);
+  }
+
+  void ToggleGroup(string group, bool included)
+  {
+    IncludedFieldKeys ??= AvailableColumns.Select(column => column.FieldKey).ToHashSet(StringComparer.Ordinal);
+    foreach (var column in AvailableColumns.Where(column => column.Group == group))
+      if (included) IncludedFieldKeys.Add(column.FieldKey); else IncludedFieldKeys.Remove(column.FieldKey);
+  }
+
+  void SelectAllColumns() => IncludedFieldKeys = null;
+  void SelectNoColumns() => IncludedFieldKeys = new(StringComparer.Ordinal);
 
   // Izvoz uporabi natanko iste filtre kot pogled: kar vidis, je to, kar se izvozi. Oblika je
   // delovni zvezek, ker ga uporabnik odpre v Excelu brez carovnika za uvoz.
@@ -683,56 +783,44 @@
     "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
     CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory));
 
-  void StartExportAsync()
+  async Task StartExportAsync()
   {
-    ExportErrorMessage = null;
-    ExportDownloadUrl = null;
     ExportState = ExportRunStatus.Queued;
-    ExportQueuePosition = 0;
-    ExportRowCount = null;
 
     var jobId = Guid.NewGuid();
     ExportJobId = jobId;
     var selection = Selected.Count > 0
       ? Selected.Values.Select(item => $"{item.OrganizationId}|{item.ItemId}").ToList()
       : null;
-    // Vse skupine izbrane = brez omejitve (null); tako izvoz z nespremenjeno izbiro ostane
-    // popolnoma isti kot doslej, brez odvisnosti od vrstnega reda AllWorkbookGroups.
-    var includeGroups = IncludedGroups.Count >= AllWorkbookGroups.Length ? null : (IReadOnlySet<string>)IncludedGroups;
+    // null pomeni »vsa polja« — privzeto stanje, dokler uporabnik ne odpre okna »Stolpci« in
+    // kaj odkljuka; tako izvoz z nespremenjeno izbiro ostane popolnoma isti kot doslej.
     ExportJobs.StartWorkbookExport(
-      jobId, ProductWorkbookService.FileName(DateTime.UtcNow), BuildExportFilter(), selection, includeGroups);
+      jobId, ExportOwner, ProductWorkbookService.FileName(DateTime.UtcNow), BuildExportFilter(), selection, IncludedFieldKeys);
+    try
+    {
+      // Prenos se odpre ZDAJ, dokler brskalnik klik se steje za uporabnikovo dejanje (nekaj
+      // sekund) — ne ob koncu gradnje. Tak prenos brskalnik pokaze v svojem polju prenosov
+      // takoj in ga ne zadrzi kot sumljivega (»Obdrži«). Glej ExportDownloadEndpoint.
+      await Js.InvokeVoidAsync("pimDownloadFile", $"izvoz/zvezek/{jobId}");
+      // Okno izvozov (wwwroot/js/pim-export.js) sicer bere stanje ob nalaganju strani; tu ga
+      // zbudimo takoj, da napredek pokaze od prvega trenutka, ne sele ob naslednji navigaciji.
+      await Js.InvokeVoidAsync("pimExports.refresh");
+    }
+    catch (JSException) { }
+    catch (JSDisconnectedException) { }
   }
 
-  // Dogodek pride iz ExportJobService, torej lahko iz drugega vezja niti (Task.Run v ozadju) —
-  // zato InvokeAsync, ne neposredna sprememba polj. Prenos se sprozi tu, ne v markupu, ker mora
-  // steci natanko enkrat, takoj ko je token znan.
+  // Dogodek pride iz ExportJobService, torej iz niti gradnje — zato InvokeAsync, ne neposredna
+  // sprememba polj. Tu se samo odklene gumb; prenos sprozi okno izvozov, ki ga vidi tudi stran,
+  // na katero je uporabnik medtem odsel.
   void OnExportJobChanged(ExportJobState state)
   {
-    if (state.JobId != ExportJobId) return;
-    _ = InvokeAsync(async () =>
+    if (state.JobId != ExportJobId || state.Status == ExportState) return;
+    _ = InvokeAsync(() =>
     {
       ExportState = state.Status;
-      ExportErrorMessage = state.Error;
-      ExportQueuePosition = state.QueuePosition;
-      ExportRowCount = state.RowCount;
-      if (state.Status == ExportRunStatus.Completed && state.DownloadToken is { } token)
-      {
-        ExportDownloadUrl = $"izvoz/prenos/{token}";
-        StateHasChanged();
-        await Js.InvokeVoidAsync("pimDownloadFile", ExportDownloadUrl);
-      }
-      else
-      {
-        StateHasChanged();
-      }
+      StateHasChanged();
     });
-  }
-
-  void DismissExportNotice()
-  {
-    ExportState = null;
-    ExportDownloadUrl = null;
-    ExportErrorMessage = null;
   }
 
   public void Dispose() => ExportJobs.Changed -= OnExportJobChanged;
@@ -862,6 +950,8 @@
     "INVALID" => "Blokiran",
     "PENDING" => "Čaka validacijo",
     "NOT_CONFIGURED" => "Ni profila",
+    // 248: izdelek brez kljukice spletišča ni ne pripravljen ne blokiran — na splet ne gre.
+    "NOT_ON_WEB" => "Ni na spletu",
     _ => status ?? "—",
   };
 
@@ -869,7 +959,7 @@
   {
     "VALID" => "good",
     "INVALID" => "bad",
-    "NOT_CONFIGURED" => "",
+    "NOT_CONFIGURED" or "NOT_ON_WEB" => "",
     _ => "warn",
   };
 }

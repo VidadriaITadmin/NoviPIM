@@ -16,6 +16,10 @@ public sealed record QualityIssueRow(
 public sealed record QualityIssuePage(
   IReadOnlyList<QualityProductRow> Products, IReadOnlyList<QualityIssueRow> Issues, long TotalCount);
 
+/// <summary>Potrdljivo polje (249): ali je skrbnik za ta artikel potrdil, da podatka ni, in kdo/kdaj.</summary>
+public sealed record ProductFieldWaiverRow(
+  string FieldCode, string Label, bool IsWaived, string? Reason, string? CreatedBy, DateTime? CreatedUtc);
+
 /// <param name="CategoryTreeCode">Drevo za obseg kategorije (177); skupaj s <paramref name="CategoryCode"/>.</param>
 /// <param name="CategoryCode">Kategorija in vse njene podkategorije; null = brez obsega.</param>
 public sealed record QualityIssueFilter(
@@ -63,16 +67,91 @@ public sealed record QualityBulkLever(long PendingCount, long CoveredProductCoun
 public sealed record QualityOverview(
   QualityTotals Totals, IReadOnlyList<QualityRuleImpact> Rules, IReadOnlyList<QualitySupplierImpact> Suppliers);
 
+/// <param name="WebExportState">Stanje po izvoznih pravilih katalog.csv (242), glej <see cref="WebExportStates"/>.</param>
+/// <param name="IsInCatalogCsv">Ali bo izdelek vrstica v katalog.csv: objavljen ali odjavna vrstica (251).</param>
+/// <param name="IsWithdrawalRow">Vrstica gre v katalog.csv s praznimi »Spletne strani«: artikel je bil na spletu in ni več (251).</param>
 public sealed record ProductReadinessRow(
   long ProductId, int OrganizationId, string ItemId, string? Ean, string Name,
   bool WebPublish, string ValidationStatus, decimal Completeness, DateTime? LastValidatedUtc,
   bool IsValidationStale, long ErrorCount, long WarningCount, long ErpBlockingCount,
   long WebBlockingCount, bool HasGlobalHold, bool HasErpHold, bool HasWebHold,
-  bool IsErpReady, bool IsWebReady);
+  bool IsErpReady, bool IsWebReady,
+  bool IsPromoted = false, bool IsExcludedFromCatalog = false, int SiteFlagCount = 0, int SiteCategoryCount = 0,
+  int AllowedSiteCount = 0, string WebExportState = "", bool IsInCatalogCsv = false, bool IsWithdrawalRow = false);
 
 public sealed record ProductReadinessTotals(
   long TotalCount, long ErpReadyCount, long ErpBlockedCount, long WebReadyCount,
-  long WebBlockedCount, long HoldCount, long StaleCount);
+  long WebBlockedCount, long HoldCount, long StaleCount,
+  long InCsvCount = 0, long NoSiteCount = 0, long PublishedCount = 0);
+
+/// <summary>Eno spletišče izdelka po izvoznih pravilih: kljukica, kategorija, neveljavni profili, ki blokirajo splet.</summary>
+public sealed record ProductWebSiteState(
+  string WebSiteCode, string WebSiteName, string CategoryTreeCode, string TreeLabel,
+  bool IsChecked, bool HasCategory, string? InvalidBlockingProfiles, bool IsAllowed);
+
+/// <summary>Stanje enega izdelka za katalog.csv (intranet.GetProductWebExportState, 242) — kartica izdelka.</summary>
+public sealed record ProductWebExportState(ProductReadinessRow Row, IReadOnlyList<ProductWebSiteState> Sites);
+
+/// <summary>Sestava kataloga podjetja po izvoznih pravilih (intranet.GetWebExportSummary, 242) — stran /splet.</summary>
+public sealed record WebExportSummary(
+  long ActiveCount, long PromotedCount, long PublishedCount, long InCsvCount, long NoSiteCount,
+  long NotPromotedCount, long ExcludedCount, long HoldCount, long NoCategoryCount, long BlockedErrorsCount,
+  long StaleCount, DateTime? OldestValidationUtc, long CustomerCount);
+
+/// <summary>
+/// Stanje izdelka glede na dejanska izvozna pravila katalog.csv (out.GetExportRows: kljukice spletišč 201,
+/// kategorija spletišča 146, zadržek 194, izključitev 204, veljavnost blokirajočih profilov, odjavne vrstice 251).
+/// Isto besedilo na /kakovost/artikli, /splet in kartici izdelka, da uporabnik povsod vidi isti razlog.
+/// </summary>
+public static class WebExportStates
+{
+  public const string Published = "PUBLISHED";
+  public const string NoSite = "NO_SITE";
+  public const string NotPromoted = "NOT_PROMOTED";
+  public const string Excluded = "EXCLUDED";
+  public const string Hold = "HOLD";
+  public const string NoCategory = "NO_CATEGORY";
+  public const string BlockedErrors = "BLOCKED_ERRORS";
+  public const string Inactive = "INACTIVE";
+
+  public static string Label(string state) => state switch
+  {
+    Published => "Objavljen na spletu",
+    NoSite => "Brez spletnega mesta",
+    NotPromoted => "Ni objavljen v PIM",
+    Excluded => "Izključen iz kataloga",
+    Hold => "Ročni zadržek",
+    NoCategory => "Brez kategorije spletišča",
+    BlockedErrors => "Blokirajoče napake",
+    Inactive => "Neaktiven",
+    _ => state,
+  };
+
+  public static string? Tone(string state) => state switch
+  {
+    Published => "good",
+    NoSite => null,
+    NotPromoted or Inactive => "warn",
+    _ => "bad",
+  };
+
+  /// <summary>Zakaj artikel je ali ni v katalog.csv — v enem stavku, brez tehničnih imen.</summary>
+  public static string Explain(string state) => state switch
+  {
+    Published => "Vsaj eno označeno spletišče ima kategorijo in veljavno spletno validacijo: vrstica je v katalog.csv z izpolnjenim stolpcem Spletne strani.",
+    NoSite => "Nobeno spletišče ni označeno; v katalog.csv ga ni. Če je bil prej na spletu, gre še nekaj dni kot odjavna vrstica s praznimi Spletne strani — signal Magentu, da ga umakne (251).",
+    NotPromoted => "Artikel še ni objavljen v PIM (objava teče po uspešni validaciji); v katalog.csv ga ni.",
+    Excluded => "Izključen s pravilom kataloga (Nadzor kataloga); v katalog.csv ga ni.",
+    Hold => "Ročni zadržek za splet ali za vse kanale; v katalog.csv ga ni.",
+    NoCategory => "Spletišče je označeno, artikel pa na njem nima kategorije; v katalog.csv ga ni.",
+    BlockedErrors => "Označeno spletišče ima neveljaven profil, ki blokira splet (blokirajoče napake); v katalog.csv ga ni.",
+    Inactive => "Artikel ni aktiven; v katalog.csv ga ni.",
+    _ => "",
+  };
+
+  /// <summary>Samo objavljen artikel; odjavna vrstica (251) ni stanje, ampak <see cref="ProductReadinessRow.IsWithdrawalRow"/>.</summary>
+  public static bool InCatalogCsv(string state) => state is Published;
+}
 
 public sealed record ProductReadinessPage(
   IReadOnlyList<ProductReadinessRow> Rows, ProductReadinessTotals Totals);
@@ -103,20 +182,83 @@ public sealed class QualityReadService(IConfiguration configuration)
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = skip;
     command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    var rows = await ReadAsync(reader, row => new ProductReadinessRow(
-      PimDb.Int64(row,"ProductId"),PimDb.Int32(row,"OrganizationId"),PimDb.TextOrEmpty(row,"ItemID"),
-      PimDb.Text(row,"EAN"),PimDb.TextOrEmpty(row,"ProductName"),PimDb.Bool(row,"WebPublish"),
-      PimDb.TextOrEmpty(row,"ValidationStatus"),PimDb.Decimal(row,"Completeness"),PimDb.NullableDateTime(row,"LastValidatedUtc"),
-      PimDb.Bool(row,"IsValidationStale"),PimDb.Int64(row,"ErrorCount"),PimDb.Int64(row,"WarningCount"),
-      PimDb.Int64(row,"ErpBlockingCount"),PimDb.Int64(row,"WebBlockingCount"),PimDb.Bool(row,"HasGlobalHold"),
-      PimDb.Bool(row,"HasErpHold"),PimDb.Bool(row,"HasWebHold"),PimDb.Bool(row,"IsErpReady"),PimDb.Bool(row,"IsWebReady")), cancellationToken);
+    var rows = await ReadAsync(reader, row => ReadReadiness(row), cancellationToken);
     await NextAsync(reader,cancellationToken);
     var totals = new ProductReadinessTotals(0,0,0,0,0,0,0);
     if (await reader.ReadAsync(cancellationToken)) totals = new(
       PimDb.Int64(reader,"TotalCount"),PimDb.Int64(reader,"ErpReadyCount"),PimDb.Int64(reader,"ErpBlockedCount"),
       PimDb.Int64(reader,"WebReadyCount"),PimDb.Int64(reader,"WebBlockedCount"),PimDb.Int64(reader,"HoldCount"),
-      PimDb.Int64(reader,"StaleCount"));
+      PimDb.Int64(reader,"StaleCount"),PimDb.Int64(reader,"InCsvCount"),PimDb.Int64(reader,"NoSiteCount"),
+      PimDb.Int64(reader,"PublishedCount"));
     return new(rows,totals);
+  }
+
+  /// <summary>Vrstica pogleda val.ProductChannelReadiness (242) — ista preslikava za seznam in za kartico.</summary>
+  static ProductReadinessRow ReadReadiness(SqlDataReader row) => new(
+    PimDb.Int64(row,"ProductId"),PimDb.Int32(row,"OrganizationId"),PimDb.TextOrEmpty(row,"ItemID"),
+    PimDb.Text(row,"EAN"),PimDb.TextOrEmpty(row,"ProductName"),PimDb.Bool(row,"WebPublish"),
+    PimDb.TextOrEmpty(row,"ValidationStatus"),PimDb.Decimal(row,"Completeness"),PimDb.NullableDateTime(row,"LastValidatedUtc"),
+    PimDb.Bool(row,"IsValidationStale"),PimDb.Int64(row,"ErrorCount"),PimDb.Int64(row,"WarningCount"),
+    PimDb.Int64(row,"ErpBlockingCount"),PimDb.Int64(row,"WebBlockingCount"),PimDb.Bool(row,"HasGlobalHold"),
+    PimDb.Bool(row,"HasErpHold"),PimDb.Bool(row,"HasWebHold"),PimDb.Bool(row,"IsErpReady"),PimDb.Bool(row,"IsWebReady"),
+    PimDb.Bool(row,"IsPromoted"),PimDb.Bool(row,"IsExcludedFromCatalog"),PimDb.Int32(row,"SiteFlagCount"),
+    PimDb.Int32(row,"SiteCategoryCount"),PimDb.Int32(row,"AllowedSiteCount"),PimDb.TextOrEmpty(row,"WebExportState"),
+    PimDb.Bool(row,"IsInCatalogCsv"),PimDb.Bool(row,"IsWithdrawalRow"));
+
+  /// <summary>
+  /// Potrdljiva polja (249, <c>val.WaivableField</c>) z morebitno veljavno potrditvijo skrbnika za ta
+  /// artikel: kartica pokaže gumb za potrditev pri odprti težavi in seznam veljavnih potrditev.
+  /// </summary>
+  public async Task<IReadOnlyList<ProductFieldWaiverRow>> GetProductFieldWaiversAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductFieldWaivers", connection)
+    { CommandType = CommandType.StoredProcedure, CommandTimeout = 30 };
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = new List<ProductFieldWaiverRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(PimDb.TextOrEmpty(reader, "FieldCode"), PimDb.TextOrEmpty(reader, "Label"), PimDb.Bool(reader, "IsWaived"),
+        PimDb.Text(reader, "Reason"), PimDb.Text(reader, "CreatedBy"), PimDb.NullableDateTime(reader, "CreatedUtc")));
+    return rows;
+  }
+
+  /// <summary>En izdelek: stanje za katalog.csv in razlog po spletiščih (kartica izdelka). null, če izdelka ni.</summary>
+  public async Task<ProductWebExportState?> GetProductWebExportStateAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetProductWebExportState", connection)
+    { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var rows = await ReadAsync(reader, row => ReadReadiness(row), cancellationToken);
+    if (rows.Count == 0) return null;
+    await NextAsync(reader, cancellationToken);
+    var sites = await ReadAsync(reader, row => new ProductWebSiteState(
+      PimDb.TextOrEmpty(row,"WebSiteCode"),PimDb.TextOrEmpty(row,"WebSiteName"),PimDb.TextOrEmpty(row,"CategoryTreeCode"),
+      PimDb.TextOrEmpty(row,"TreeLabel"),PimDb.Bool(row,"IsChecked"),PimDb.Bool(row,"HasCategory"),
+      PimDb.Text(row,"InvalidBlockingProfiles"),PimDb.Bool(row,"IsAllowed")), cancellationToken);
+    return new(rows[0], sites);
+  }
+
+  /// <summary>Sestava kataloga podjetja po izvoznih pravilih — koliko vrstic bo v katalog.csv in zakaj ostalih ni.</summary>
+  public async Task<WebExportSummary> GetWebExportSummaryAsync(int organizationId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetWebExportSummary", connection)
+    { CommandType = CommandType.StoredProcedure, CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return new(0,0,0,0,0,0,0,0,0,0,0,null,0);
+    return new(
+      PimDb.Int64(reader,"ActiveCount"),PimDb.Int64(reader,"PromotedCount"),PimDb.Int64(reader,"PublishedCount"),
+      PimDb.Int64(reader,"InCsvCount"),PimDb.Int64(reader,"NoSiteCount"),PimDb.Int64(reader,"NotPromotedCount"),
+      PimDb.Int64(reader,"ExcludedCount"),PimDb.Int64(reader,"HoldCount"),PimDb.Int64(reader,"NoCategoryCount"),
+      PimDb.Int64(reader,"BlockedErrorsCount"),PimDb.Int64(reader,"StaleCount"),PimDb.NullableDateTime(reader,"OldestValidationUtc"),
+      PimDb.Int64(reader,"CustomerCount"));
   }
 
   public async Task<QualityIssuePage> GetIssuesAsync(

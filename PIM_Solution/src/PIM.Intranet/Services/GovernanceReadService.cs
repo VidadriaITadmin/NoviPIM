@@ -19,12 +19,9 @@ public sealed record ExportProfileRow(int ExportProfileId, string ProfileCode, s
     || (ValueSourceCode == "CANON" && EntityType.Contains("PRODUCT", StringComparison.OrdinalIgnoreCase));
 
   /// <summary>
-  /// Ali izvoz zajame samo objavljeno. Pri izdelkih za Magento je <c>false</c>: datoteka, ki
-  /// dejansko odide, je od nekdaj vseboval ves katalog podjetja in predogled mora pokazati
-  /// isto. Pri strankah pomeni WebEnabled, pri kanonicnih izdelkih pa WebPublish — tam je
-  /// omejitev na objavljeno pravi privzetek.
+  /// Isti privzetek kot worker. Izbor vrstic in umike brez spletne strani določa SQL profil.
   /// </summary>
-  public bool OnlyPublishedDefault => ValueSourceCode != "PIM_PRODUCT";
+  public bool OnlyPublishedDefault => true;
 
   /// <summary>Kaj je v datoteki, povedano cloveku: izdelki ali stranke.</summary>
   public string ContentKind => EntityType.Contains("CUSTOMER", StringComparison.OrdinalIgnoreCase) ? "Stranke"

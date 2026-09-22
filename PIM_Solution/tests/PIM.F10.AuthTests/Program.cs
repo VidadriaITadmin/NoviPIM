@@ -109,10 +109,19 @@ Assert(stocksPage.Contains("<caption>", StringComparison.Ordinal) || stocksPage.
   "Tabela zalog mora imeti programsko določen napis.");
 var quarantinePage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "RawQuarantine.razor"));
 Assert(quarantinePage.Contains("<h1>Karantena</h1>", StringComparison.Ordinal), "Vidni naslov karantene mora biti dosleden.");
-foreach (var pageName in new[] { "Customers.razor", "CustomerDetail.razor", "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor", "DiscountRules.razor" })
+foreach (var pageName in new[] { "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor", "DiscountRules.razor" })
 {
   var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
   Assert(pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " mora uporabljati aktivno organizacijo iz baze.");
+  Assert(!pageText.Contains("Async(2,", StringComparison.Ordinal), pageName + " ne sme uporabljati hardkodirane organizacije 2.");
+}
+// Stranke kazejo vsa podjetja (250): »aktivna organizacija« je bila vedno prva (DEMO) in stranke
+// drugih podjetij niso bile vidne. Seznam ima podjetje za filter, kartica vzame podjetje stranke.
+foreach (var (pageName, organizationSource) in new[] { ("Customers.razor", "GetOrganizationsAsync"), ("CustomerDetail.razor", "GetCustomerOrganizationAsync") })
+{
+  var pageText = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", pageName));
+  Assert(pageText.Contains(organizationSource, StringComparison.Ordinal), pageName + " mora podjetje vzeti iz " + organizationSource + ".");
+  Assert(!pageText.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal), pageName + " ne sme biti zaklenjena na prvo aktivno podjetje.");
   Assert(!pageText.Contains("Async(2,", StringComparison.Ordinal), pageName + " ne sme uporabljati hardkodirane organizacije 2.");
 }
 foreach (var pageName in new[] { "Customers.razor", "PipelineRuns.razor", "Outbound.razor", "SystemIntegrations.razor" })
@@ -279,6 +288,26 @@ await AssertRefusedAsync("RulesWriteService.SaveCheckThresholdAsync",
 await AssertReachesDatabaseAsync("ProductEditService.SaveTextsAsync z vlogo CATALOG_EDITOR",
   () => new ProductEditService(unusableConfiguration, editorGuard)
     .SaveTextsAsync(1, 1, [new ProductTextEdit("sl", "WEB_TITLE", "x")], "qa_editor"));
+
+// --- Geslo: dolzina je samo priporocilo (zahteva 2026-09-22) -----------------------------
+// Uporabnik: »nobenih omejitev glede znakov, lahko je samo priporocilo«. Kratko geslo mora zato
+// priti mimo servisa do baze (tu nedosegljive), prazno pa se zavrne prej, ker ga prijava ne sprejme.
+var userAdministration = new IntranetUserAdministrationService(unusableConfiguration,
+  new ActiveDirectoryService(unusableConfiguration), new UserSecurityStateService(unusableConfiguration));
+await AssertPasswordReachesDatabaseAsync("ResetPasswordAsync s kratkim geslom",
+  () => userAdministration.ResetPasswordAsync("qa_ni_uporabnik", "abc"));
+await AssertPasswordReachesDatabaseAsync("CreateLocalUserAsync s kratkim geslom",
+  () => userAdministration.CreateLocalUserAsync("qa_ni_uporabnik", "QA", "1", "VIEWER", null));
+foreach (var emptyPassword in new[] { "", "   " })
+{
+  var refused = false;
+  try { await userAdministration.ResetPasswordAsync("qa_ni_uporabnik", emptyPassword); }
+  catch (InvalidOperationException) { refused = true; }
+  Assert(refused, "Prazno geslo mora biti zavrnjeno pred bazo, sicer bi racun ostal zaklenjen.");
+}
+Assert(IntranetUserAdministrationService.PasswordAdvice("abc") is not null, "Kratko geslo mora dobiti priporocilo.");
+Assert(IntranetUserAdministrationService.PasswordAdvice("dolgo geslo iz besed") is null, "Dovolj dolgo geslo ne sme dobiti priporocila.");
+Assert(IntranetUserAdministrationService.PasswordAdvice("") is null, "Prazno polje ne sme kazati priporocila.");
 
 // Zadnja vrata za procese brez uporabnika smejo obstajati samo za teste in orodja.
 foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.cs", SearchOption.AllDirectories)
@@ -472,6 +501,25 @@ static async Task AssertReachesDatabaseAsync(string what, Func<Task> call)
   catch
   {
     return;
+  }
+
+  throw new InvalidOperationException($"{what} bi moral obtičati na nedosegljivi bazi, ne uspeti.");
+}
+
+/// <summary>Kratko geslo ne sme obticati na preverjanju gesla, ampak sele na (nedosegljivi) bazi.</summary>
+static async Task AssertPasswordReachesDatabaseAsync(string what, Func<Task> call)
+{
+  try
+  {
+    await call();
+  }
+  catch (Microsoft.Data.SqlClient.SqlException)
+  {
+    return;
+  }
+  catch (Exception other)
+  {
+    throw new InvalidOperationException($"{what} je bil zavrnjen pred bazo ({other.GetType().Name}: {other.Message}); dolzina gesla ne sme biti pogoj.");
   }
 
   throw new InvalidOperationException($"{what} bi moral obtičati na nedosegljivi bazi, ne uspeti.");

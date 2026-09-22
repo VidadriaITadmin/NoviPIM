@@ -21,7 +21,8 @@ public sealed class ExportResultStore : IDisposable
 {
   sealed record Entry(string Path, string FileName, string ContentType, DateTime ExpiresUtc);
 
-  static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
+  /// <summary>Kako dolgo neprevzeta datoteka čaka; toliko živi tudi obvestilo o izvozu (ExportJobService).</summary>
+  public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
   readonly string directory = Path.Combine(Path.GetTempPath(), "PIM.Intranet", "izvozi");
   readonly ConcurrentDictionary<Guid, Entry> entries = new();
   readonly Timer sweeper;

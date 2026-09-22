@@ -137,14 +137,6 @@
   padding: .6rem .9rem;
 }
 
-/* Izvoz v ozadju: med gradnjo ostane opozorilne barve, ob koncu preklopi na dobro/slabo, da
-   uporabnik loci "gotovo" od "ni uspelo", ne da bi bral besedilo. */
-.export-notice { align-items: center; display: flex; gap: .5rem; }
-.export-notice .opening-spinner { border-color: #fde68a; border-top-color: var(--pim-warn-text); }
-.export-notice-completed { background: var(--pim-good-bg); border-color: var(--pim-good-border, var(--pim-good-bg)); color: var(--pim-good-text); }
-.export-notice-failed { background: var(--pim-bad-bg); border-color: var(--pim-bad-border, var(--pim-bad-bg)); color: var(--pim-bad-text); }
-.export-notice .link-button { color: inherit; margin-left: auto; text-decoration: underline; }
-
 .data-card { padding: 0; }
 
 /* Cela vrstica vodi na kartico; naziv je zato navadno besedilo, ne povezava. */
@@ -213,9 +205,44 @@
 
 .table-scroll { overflow-x: auto; }
 
-/* Pojavno okno »Stolpci« uporabi skupno .xml-lightbox (app.css); tu je samo vrstica s kljukico. */
-.column-picker-row { align-items: center; display: flex; gap: .55rem; padding: .4rem 0; }
+/* Pojavno okno »Stolpci« uporabi skupno .xml-lightbox (app.css) za ogrodje; tu je vsebina:
+   iskanje, skupine s hitrimi dejanji in mreža kljukic po poljih. Panel je širši od privzetega
+   (56rem), ker ima lahko ena skupina (ERP, atributi) več deset polj. */
+.column-picker-panel { max-width: 46rem; }
+
+.column-picker-toolbar {
+  align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap;
+  gap: .6rem .9rem; padding: .7rem 1rem;
+}
+.column-picker-search { flex: 1 1 14rem; min-width: 10rem; }
+.column-picker-count { color: var(--pim-text-muted); font-size: .78rem; white-space: nowrap; }
+.column-picker-bulk { display: flex; gap: .4rem; white-space: nowrap; }
+
+.column-picker-body { padding: .5rem 1rem 1rem; }
+.column-picker-status { align-items: center; display: flex; gap: .5rem; justify-content: center; padding: 1.5rem 0; }
+
+.column-picker-group + .column-picker-group { margin-top: 1rem; }
+.column-picker-group-header {
+  align-items: center; background: var(--pim-surface-subtle); border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-xs); display: flex; gap: .6rem; padding: .4rem .65rem;
+  position: sticky; top: 0;
+}
+.column-picker-group-title { color: var(--pim-text-strong); flex: 1 1 auto; font-size: .78rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.column-picker-group-count { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: 999px; color: var(--pim-text-muted); font-size: .7rem; padding: .05rem .45rem; }
+.column-picker-group-actions { display: flex; gap: .3rem; }
+.column-picker-group-actions .link-button { font-size: .74rem; padding: .1rem .3rem; }
+
+.column-picker-fields { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); padding: .3rem .1rem 0; }
+.column-picker-row { align-items: center; display: flex; gap: .55rem; padding: .35rem 0; }
 .column-picker-row input[type="checkbox"] { flex: 0 0 auto; height: 1rem; width: 1rem; }
+.column-picker-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.column-picker-footnote { font-size: .76rem; margin-right: auto; }
+
+@media (max-width: 640px) {
+  .column-picker-fields { grid-template-columns: 1fr; }
+  .column-picker-count { order: 1; width: 100%; }
+}
 
 .search-input:focus-visible,
 .filter-select:focus-visible,

@@ -1,0 +1,212 @@
+@page "/stranke/uvoz"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using PIM.Intranet.Services
+@inject CustomerWorkbookService Workbook
+@inject IntranetDataService Data
+@inject HeavyWorkGate Gate
+@inject AuthenticationStateProvider Authentication
+
+<PageTitle>Uvoz strank</PageTitle>
+
+<PimPage Title="Uvoz delovnega lista strank" Crumbs="Crumbs"
+         Subtitle="Ista datoteka, ki jo izvozi gumb »Izvozi Excel« na strani Stranke. Vrsta, tip, B2B nastavitve, pragovi, skupinski popusti, posebni S in kontakti se zapišejo takoj — skozi iste poti in z isto zgodovino kot na kartici stranke." />
+
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<section class="ui-card panel">
+  <h2>1. Izberi datoteko</h2>
+  <div class="form-grid">
+    <label class="form-field" for="import-organization">
+      Podjetje za vrstice brez stolpca »Podjetje«
+      <select id="import-organization" class="filter-select" @bind="OrganizationText">
+        <option value="">— iz stolpca v datoteki —</option>
+        @foreach (var organization in Organizations)
+        {
+          <option value="@organization.OrganizationId">@organization.Name</option>
+        }
+      </select>
+    </label>
+  </div>
+  <p class="hint">
+    Naslovov stolpcev ne spreminjaj — po njih uvoz prepozna, kaj je kaj. <strong>Prazna celica pomeni,
+    da se polja ne dotaknemo</strong>; znak <code>-</code> pomeni »izprazni« (odstrani tip, prag, vse
+    skupinske popuste …). Seznam v celici loči z <code>|</code> in je cel seznam: kar ga v celici ni več, se umakne.
+  </p>
+  <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+</section>
+
+@if (Preview is not null)
+{
+  <section class="ui-card panel section-gap">
+    <h2>2. Kaj bo uvoz naredil</h2>
+    <p role="status">
+      Prebranih strank: <strong>@Preview.RowsRead.ToString("N0")</strong> —
+      s spremembami: <strong>@Preview.Rows.Count.ToString("N0")</strong>
+      (@Preview.ChangeCount.ToString("N0") sprememb), brez sprememb: <strong>@Preview.UnchangedRows.ToString("N0")</strong>.
+    </p>
+
+    @if (Preview.ReadOnlyColumns.Count > 0)
+    {
+      <p class="hint">Stolpci samo za branje (prezrti): @string.Join(", ", Preview.ReadOnlyColumns)</p>
+    }
+    @if (Preview.UnknownColumns.Count > 0)
+    {
+      <p class="message-state warn-message">Stolpci brez ustreznega polja (ne bodo uvoženi): @string.Join(", ", Preview.UnknownColumns)</p>
+    }
+    @foreach (var problem in Preview.Problems.Take(50)) { <p class="message-state warn-message">@problem</p> }
+    @if (Preview.Problems.Count > 50) { <p class="hint">… in še @(Preview.Problems.Count - 50) napak — te vrstice oziroma polja se ne uvozijo.</p> }
+    @foreach (var warning in Preview.Warnings.Take(20)) { <p class="hint">Opozorilo: @warning</p> }
+    @if (Preview.Warnings.Count > 20) { <p class="hint">… in še @(Preview.Warnings.Count - 20) opozoril.</p> }
+
+    @if (Preview.Rows.Count > 0)
+    {
+      <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza strank">
+        <table class="data-table">
+          <caption>Predogled prvih 50 strank s spremembami</caption>
+          <thead>
+            <tr>
+              <th scope="col">Vrstica</th><th scope="col">Podjetje</th><th scope="col">Stranka</th>
+              <th scope="col">Sprememba</th><th scope="col">V izvozu</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Preview.Rows.Take(50))
+            {
+              <tr>
+                <td>@row.RowNumber</td>
+                <td>@row.Current.OrganizationName</td>
+                <td><span class="code-value">@row.Current.CustomerKey</span> @row.Current.Name</td>
+                <td>
+                  <ul class="change-list">
+                    @foreach (var change in row.Changes)
+                    {
+                      <li><strong>@change.Label:</strong> @(change.OldValue ?? "—") → @(change.NewValue ?? "—")</li>
+                    }
+                  </ul>
+                </td>
+                <td>@ExportTargets(row)</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (Preview.Rows.Count > 50) { <p class="hint">… in še @(Preview.Rows.Count - 50) strank.</p> }
+
+      <div class="panel-actions">
+        <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyAsync">
+          Uvozi @Preview.ChangeCount.ToString("N0") sprememb pri @Preview.Rows.Count.ToString("N0") strankah
+        </button>
+      </div>
+    }
+  </section>
+}
+
+@if (Outcome is not null)
+{
+  <section class="ui-card panel section-gap" aria-label="Izid uvoza">
+    <h2>3. Izid</h2>
+    <p role="status">
+      Spremenjenih strank: <strong>@Outcome.CustomersTouched.ToString("N0")</strong>
+      (@string.Join(", ", Outcome.Organizations)), zapisanih sprememb: <strong>@Outcome.ValuesWritten.ToString("N0")</strong>.
+    </p>
+    <p>
+      V <strong>stranke.csv</strong> gre @Outcome.CustomerExportRows.ToString("N0") spremenjenih strank (aktivne z B2B profilom);
+      v <strong>katalog.csv</strong> se spremeni stolpec »Posebni popust za stranko« pri @Outcome.CatalogProducts.ToString("N0") izdelkih.
+      Obe datoteki se zgradita za podjetje spletnega kataloga ob naslednjem izvozu — ročno na
+      <a href="splet/izvoz">Izhod na splet → Pripravi izvoz</a>.
+    </p>
+    @foreach (var problem in Outcome.Problems.Take(50)) { <p class="message-state warn-message">@problem</p> }
+    @if (Outcome.Problems.Count > 50) { <p class="hint">… in še @(Outcome.Problems.Count - 50) opozoril.</p> }
+    <p><a href="stranke">Nazaj na seznam strank</a></p>
+  </section>
+}
+
+@code {
+  // Zvezek se prebere v pomnilnik; meja je varovalka pred datoteko, ki bi pojedla strežnik.
+  const long MaxUploadBytes = 16 * 1024 * 1024;
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Stranke", "stranke"), new("Uvoz")];
+
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  CustomerWorkbookPreview? Preview;
+  CustomerWorkbookOutcome? Outcome;
+  string OrganizationText = "";
+  bool Busy;
+  string? Error;
+  string? Message;
+
+  int? OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : null;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+  }
+
+  // Kam sprememba te stranke odide: stranke.csv za aktivne z B2B profilom, katalog.csv za posebni S.
+  static string ExportTargets(CustomerWorkbookRowChange row)
+  {
+    var targets = new List<string>();
+    var toCustomers = row.Current.InCustomerExport || (row.Profile is not null && row.Current.SourceIsActive);
+    if (toCustomers && (row.Profile is not null || row.Tiers.Count > 0 || row.Groups.Count > 0 || row.Contact is not null)) targets.Add("stranke.csv");
+    if (row.Specials.Count > 0) targets.Add("katalog.csv");
+    if (row.Profile is { } profile && profile.Kind != row.Current.ManualKind && targets.Count == 0) targets.Add("samo PIM (vloga)");
+    return targets.Count == 0 ? "samo PIM" : string.Join(", ", targets);
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+
+  // Ista vrata kot uvoz izdelkov (HeavyWorkGate.Imports): hkrati tece najvec Limit uvozov.
+  async Task<IDisposable> EnterImportLaneAsync()
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    Message = $"Uvoz čaka v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync();
+  }
+
+  async Task OnFileAsync(InputFileChangeEventArgs args)
+  {
+    Error = null; Message = null; Preview = null; Outcome = null;
+    try
+    {
+      var file = args.File;
+      if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 16 MB. Razdeli jo na več datotek."; return; }
+
+      // Zvezek gre najprej v pomnilnik: bralnik potrebuje iskanje po toku, česar tok brskalnika ne zna.
+      using var buffer = new MemoryStream();
+      await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
+      buffer.Position = 0;
+      using (await EnterImportLaneAsync())
+        Preview = await Workbook.PreviewAsync(buffer, OrganizationId);
+      Message = null;
+    }
+    catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
+    catch (Exception failure) { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel: " + failure.Message; }
+  }
+
+  async Task ApplyAsync()
+  {
+    if (Preview is null) return;
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var progress = new Progress<string>(text => { Message = text; _ = InvokeAsync(StateHasChanged); });
+      using (await EnterImportLaneAsync())
+        Outcome = await Workbook.ApplyAsync(Preview, actor, progress);
+      Message = $"Uvoz končan: {Outcome.ValuesWritten:N0} sprememb zapisanih pri {Outcome.CustomersTouched:N0} strankah.";
+      // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
+      Preview = null;
+    }
+    catch (Exception failure) { Error = "Uvoz ni uspel: " + failure.Message; }
+    finally { Busy = false; }
+  }
+}

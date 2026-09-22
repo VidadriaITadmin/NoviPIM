@@ -78,10 +78,45 @@ public sealed record ProductListFilter(
   string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
   bool SortDescending = false, string Language = "sl", string? Department = null,
   string? Activity = null, string? WebPublish = null, string? CompletenessBand = null,
-  string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null);
+  string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null)
+{
+  /// <summary>
+  /// Proizvajalec in dobavitelj sta SAOP šifri partnerja znotraj podjetja: ista šifra je v drugem
+  /// podjetju lahko druga firma (0000499 je v Vidadrii DETAS, v Ediitu LUCEPLAN). Brez izbranega
+  /// podjetja zato filter nosi podjetje s sabo — »3:0001209« (migracija 250) — in tu postane
+  /// podjetje 3 + šifra 0001209, da seznam ne pomeša izdelkov dveh firm z isto šifro.
+  /// </summary>
+  public ProductListFilter WithPartnerScope()
+  {
+    var (supplierOrganization, supplier) = PartnerFilter.Split(Supplier);
+    var (manufacturerOrganization, manufacturer) = PartnerFilter.Split(Manufacturer);
+    return this with
+    {
+      OrganizationId = OrganizationId ?? supplierOrganization ?? manufacturerOrganization,
+      Supplier = supplier,
+      Manufacturer = manufacturer,
+    };
+  }
+}
+
+/// <summary>Vrednost filtra partnerja: gola šifra ali »podjetje:šifra« (250).</summary>
+public static class PartnerFilter
+{
+  public static (int? OrganizationId, string? Code) Split(string? value)
+  {
+    if (string.IsNullOrWhiteSpace(value)) return (null, null);
+    var separator = value.IndexOf(':');
+    return separator > 0 && int.TryParse(value[..separator], out var organizationId)
+      ? (organizationId, value[(separator + 1)..])
+      : (null, value);
+  }
+}
 
 /// <param name="FacetLabel">Kar uporabnik bere; pri partnerjih ime, sicer enako <paramref name="FacetValue"/>.</param>
-public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount, string FacetLabel);
+/// <param name="FacetCode">Šifra brez podjetja; pri partnerju brez izbranega podjetja je FacetValue »podjetje:šifra«.</param>
+/// <param name="OrganizationName">Podjetje partnerja, kadar seznam ni zožen na eno podjetje.</param>
+public sealed record ProductListFacet(string FacetKind, string FacetValue, long ProductCount, string FacetLabel,
+  string? FacetCode = null, string? OrganizationName = null);
 
 public sealed record ProductCardView(
   ProductCardHeader Header,
@@ -290,6 +325,9 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
   public async Task<ProductListPage> GetProductListAsync(
     ProductListFilter filter, CancellationToken cancellationToken = default)
   {
+    // Vse poti (stran, izvoz CSV/Excel, delovni list) gredo skozi to metodo: »podjetje:šifra«
+    // partnerja se razreši tu, na enem mestu.
+    filter = filter.WithPartnerScope();
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("intranet.GetProductList", connection)
@@ -365,7 +403,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     {
       facets.AddRange(await ReadAsync(reader, row => new ProductListFacet(
         PimDb.TextOrEmpty(row, "FacetKind"), PimDb.TextOrEmpty(row, "FacetValue"),
-        PimDb.Int64(row, "ProductCount"), PimDb.TextOrEmpty(row, "FacetLabel")), cancellationToken));
+        PimDb.Int64(row, "ProductCount"), PimDb.TextOrEmpty(row, "FacetLabel"),
+        PimDb.Text(row, "FacetCode"), PimDb.Text(row, "OrganizationName")), cancellationToken));
       more = await reader.NextResultAsync(cancellationToken);
     }
 

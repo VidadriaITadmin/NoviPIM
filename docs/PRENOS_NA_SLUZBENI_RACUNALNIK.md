@@ -352,8 +352,10 @@ dotnet run --project src\PIM.Migrator -- --ustvari-admina david
 **Kaj se zgodi:**
 
 1. Vpraša **`Prikazno ime za david:`** → vpiši ime in priimek, Enter.
-2. Vpraša **`Geslo (vsaj 10 znakov):`** → vtipkaj geslo, Enter.
+2. Vpraša **`Geslo:`** → vtipkaj geslo, Enter.
    *Med tipkanjem se ne bo videlo nič — niti zvezdic. Tako je prav.*
+   Dolžina ni omejena, geslo le ne sme biti prazno. Pri geslu, krajšem od 10 znakov, izpiše samo
+   priporočilo; račun se vseeno ustvari.
 3. Vpraša **`Ponovi geslo:`** → isto geslo, Enter.
 
 **Mora pisati:**
@@ -362,7 +364,7 @@ dotnet run --project src\PIM.Migrator -- --ustvari-admina david
 Skrbnik david je ustvarjen. Prijavi se na /prijava in geslo takoj spremeni na /sistem/uporabniki.
 ```
 
-Če javi *»Gesli se ne ujemata«*, ponovi ukaz.
+Če javi *»Gesli se ne ujemata«* ali *»Geslo ne sme biti prazno«*, ponovi ukaz.
 
 ---
 

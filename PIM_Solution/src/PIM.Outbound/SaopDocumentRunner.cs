@@ -180,7 +180,7 @@ public sealed class SaopDocumentRunner(
       await CompleteAsync(connection, built.MessageIds, succeeded: true, outcome.StatusCode, Redact(outcome.RawResponse),
         outcome.CorrelationId, reason: null, errorClass: null, errorKind: null, retryable: false,
         assignedItemId: outcome.Response.AssignedItemId, cancellationToken);
-      return (true, $"{built.EntityKey}: {shape.Operation(built.Intent)} uspešno"
+      return (true, $"{built.EntityKey}: {IntentLabel(built.Intent)} ({shape.Operation(built.Intent)}) uspešno"
         + (outcome.Response.AssignedItemId is { } assigned ? $", SAOP je dodelil šifro {assigned}" : string.Empty));
     }
 
@@ -193,7 +193,7 @@ public sealed class SaopDocumentRunner(
     if (SaopErrorTranslator.Retry(advice) is { } correctedIntent && correctedIntent != built.Intent)
     {
       var corrected = Build(shape, builder, claimed, correctedIntent);
-      var correctionNote = $"{built.EntityKey}: {advice.Summary} PIM je takoj poskusil z metodo {shape.Operation(correctedIntent)}.";
+      var correctionNote = $"{built.EntityKey}: {advice.Summary} PIM je takoj poskusil z metodo {IntentLabel(correctedIntent)} ({shape.Operation(correctedIntent)}).";
       outcome = await sender.SendAsync(claimed.OrganizationId, shape.Path(corrected.Intent),
         shape.Operation(corrected.Intent), corrected.Xml, cancellationToken, claimed.BaseUrl);
 
@@ -202,7 +202,7 @@ public sealed class SaopDocumentRunner(
         await CompleteAsync(connection, built.MessageIds, succeeded: true, outcome.StatusCode,
           Redact(outcome.RawResponse), outcome.CorrelationId, reason: null, errorClass: null, errorKind: null,
           retryable: false, assignedItemId: outcome.Response.AssignedItemId, cancellationToken);
-        return (true, $"{correctionNote} {shape.Operation(corrected.Intent)} uspešno po samopopravku"
+        return (true, $"{correctionNote} {IntentLabel(corrected.Intent)} ({shape.Operation(corrected.Intent)}) uspešno po samopopravku"
           + (outcome.Response.AssignedItemId is { } dodeljena ? $", SAOP je dodelil šifro {dodeljena}" : string.Empty));
       }
 
@@ -259,6 +259,26 @@ public sealed class SaopDocumentRunner(
       foreach (var (key, value) in canonical) values[key] = value;
     foreach (var change in changes) values[change.FieldKey] = change.Value;
 
+    // 243, drugi del: preverjeno na živo (NW.10018, 22.9.2026) — SAOP na PATCH z delnim gnezdenim
+    // ovojem (npr. samo <PropertiesData><ItemWidth>…</PropertiesData>, brez sosednjih polj istega
+    // ovoja) odgovori z uspehom, a vrednosti tiho ne shrani; isto polje, urejeno ročno v SAOP
+    // aplikaciji, se shrani takoj. Zato se pri spremembi ovoj, ki ima vsaj eno spremenjeno polje,
+    // dopolni s trenutnim kanoničnim stanjem OSTALIH polj ISTEGA ovoja — ne celega zapisa, da
+    // polja, ki jih urednik ni nameraval spremeniti in niso v istem ovoju, ostanejo nedotaknjena.
+    if (decision.Intent == SaopIntent.Update)
+    {
+      var changedSections = builder.Fields
+        .Where(field => field.FieldKey is not null && field.Section != SaopDocumentBuilder.RootSection
+          && values.ContainsKey(field.FieldKey))
+        .Select(field => field.Section)
+        .ToHashSet(StringComparer.Ordinal);
+      if (changedSections.Count > 0)
+        foreach (var field in builder.Fields)
+          if (field.FieldKey is not null && changedSections.Contains(field.Section) && !values.ContainsKey(field.FieldKey)
+            && canonical.TryGetValue(field.FieldKey, out var current) && !string.IsNullOrWhiteSpace(current))
+            values[field.FieldKey] = current;
+    }
+
     var built = builder.Build(decision.Intent, entityKey, values, defaults, DateTime.UtcNow,
       suggestFirstFreeCode: decision.Intent == SaopIntent.Add && shape.SuggestCodeElement is not null);
 
@@ -268,6 +288,9 @@ public sealed class SaopDocumentRunner(
 
   static SaopErrorKind? ParseErrorKind(string? value) =>
     Enum.TryParse<SaopErrorKind>(value, ignoreCase: true, out var parsed) ? parsed : null;
+
+  /// <summary>Bralcu razumljiva beseda namesto HTTP metode (POST/PATCH) v sporočilih o pošiljanju.</summary>
+  static string IntentLabel(SaopIntent intent) => intent == SaopIntent.Add ? "Nov artikel" : "Posodobitev";
 
   /* --- branje iz baze --------------------------------------------------- */
 

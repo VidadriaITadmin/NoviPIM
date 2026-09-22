@@ -55,6 +55,9 @@ DECLARE @old nvarchar(max), @new nvarchar(max), @definition nvarchar(max);
 
 SET @definition = OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'));
 IF @definition IS NULL THROW 52220, N'214: out.GetExportRows ne obstaja.', 1;
+/* ziva definicija ima mesano CRLF/LF (znan autocrlf zaplet) - normaliziraj na LF, da NCHAR(10)
+   primerjave spodaj delujejo ne glede na to, kako je bila procedura prej shranjena. */
+SET @definition = REPLACE(@definition, NCHAR(13) + NCHAR(10), NCHAR(10));
 
 IF @definition NOT LIKE N'%/* ShopFilter214 */%'
 BEGIN
@@ -94,6 +97,7 @@ END;
 
 SET @definition = OBJECT_DEFINITION(OBJECT_ID(N'intranet.GetPriceListSheet'));
 IF @definition IS NULL THROW 52225, N'214: intranet.GetPriceListSheet ne obstaja.', 1;
+SET @definition = REPLACE(@definition, NCHAR(13) + NCHAR(10), NCHAR(10));
 
 IF @definition NOT LIKE N'%/* ShopFilter214 */%'
 BEGIN

@@ -34,6 +34,8 @@
 .user-identity strong { color: var(--pim-text-strong); font-size: .8rem; }
 .user-identity small { color: var(--pim-text-muted); font-size: .66rem; margin-top: .12rem; }
 .missing-email { color: var(--pim-warn-text); font-size: .74rem; font-weight: 600; }
+.password-advice { color: var(--pim-warn-text); font-size: .72rem; font-weight: 600; margin: .6rem 0 0; }
+.password-advice:empty { margin: 0; }
 .last-seen, .account-source { color: var(--pim-text-muted); display: block; font-size: .64rem; margin-top: .25rem; }
 .role-chip-list { display: flex; flex-wrap: wrap; gap: .25rem; max-width: 22rem; }
 .role-chip { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 999px; color: var(--pim-neutral-text); font-size: .62rem; font-weight: 650; padding: .18rem .42rem; }

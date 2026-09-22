@@ -113,6 +113,29 @@ da vse pripraviti in pogledati, preden se kanal odpre.
 > Zapiranje kanala je ena vrstica:
 > `UPDATE dbo.IntegrationProfile SET IsEnabled = 0 WHERE TargetKind = N'SAOP_PRODUCT';`
 
+## 1b. Novi artikli iz dobaviteljevega XML: stran `/zajem/novi-artikli`
+
+Dodano 2026-09-21 (migraciji 240 in 241). Artikel, ki ga dobavitelj pošlje v XML-ju (NW, BT), v
+PIM pa ga ni, postane **kandidat**. Urednik ga na strani **Vhodni podatki → Novi artikli**:
+
+1. **uvozi v PIM** (»Uvozi«): nastane `canon.Product` z `ItemID = EAN` in
+   `ErpExistence = NOT_YET_IN_ERP`, napolnjen s podatki iz XML (atributi, slike, dokumenti,
+   kategorija);
+2. **porine v čakalno vrsto SAOP** (»V vrsto SAOP …«): vpiše obvezne šifrante ERP (naziv, enota,
+   skupina, oddelek, dobavitelj …), stran pokaže isti dokument, kot ga bo poslal worker
+   (`SaopItemPlanner`), in ga uvrsti prek `out.EnqueueSaopItemChanges` (vir `XML`). Metoda je
+   izpeljana: `NOT_YET_IN_ERP` → **POST**, `SuggestFirstFreeCode`. »Uvrsti in odobri« odobri po
+   artiklu (`out.ApproveItemDocument`), »Pošlji zdaj« pošlje takoj (isti mehanizem kot na
+   `/outbound`).
+3. Ko SAOP dokument sprejme, `out.CompleteItemDocument` (241) artikel označi `CONFIRMED_IN_ERP` in
+   **prevzame šifro, ki jo je dodelil SAOP** (`canon.Product.ItemID`, EAN ostane). Naslednji zajem
+   SAOP artikel po tej šifri najde in posodobi. Če šifro v PIM že ima drug artikel, se ne
+   preimenuje nič: opozorilo v `ops.OutboundEvent` in ročna uskladitev.
+
+Stanje vsakega uvoženega kandidata (še ni v ERP / v vrsti / poslan / SAOP zavrnil / v ERP) je na
+isti strani, s filtrom in števci. Nepopoln dokument (manjka obvezno polje) v vrsto ne gre — SAOP bi
+ga zavrnil in poskus bi bil porabljen.
+
 ---
 
 ## 2. Naroči spremembo (v vrsto, ne v SAOP)

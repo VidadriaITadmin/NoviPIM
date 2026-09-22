@@ -46,7 +46,6 @@
               <label for="@controlId">
                 <span class="field-label">@row.Label</span>
                 @if (row.Required) { <span class="tag tag-required">obvezno</span> }
-                @if (row.Pending) { <span class="tag tag-pending">čaka SAOP</span> }
                 @if (row.Edit == ProductFieldEdit.Saop) { <span class="tag tag-saop">SAOP</span> }
               </label>
 
@@ -59,8 +58,8 @@
                 <select id="@controlId" class="field-input" disabled="@row.Pending"
                         value="@Draft(row)" @onchange="args => Change(row, args)">
                   <option value="">— ni določeno —</option>
-                  <option value="da">da</option>
-                  <option value="ne">ne</option>
+                  <option value="da">Da</option>
+                  <option value="ne">Ne</option>
                 </select>
               }
               else if (row.Format == "multiline")
@@ -70,14 +69,13 @@
               }
               else
               {
-                <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)"
-                       disabled="@row.Pending" value="@Draft(row)" @onchange="args => Change(row, args)"
+                <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)" disabled="@row.Pending"
+                       value="@Draft(row)" @onchange="args => Change(row, args)"
                        @onkeyup="args => EnterSaves(args)" />
               }
 
               <p class="field-note">
                 @if (ShowFieldKeys) { <span class="code-value">@row.FieldKey</span> }
-                @if (row.Edit == ProductFieldEdit.Saop) { <span>sprememba čaka odobritev</span> }
                 @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <span>ni v bralnem modelu</span> }
                 @if (ReadOnly && row.Edit != ProductFieldEdit.None) { <span>tvoja vloga tega polja ne sme urejati</span> }
               </p>
@@ -104,11 +102,46 @@
                   <span>@PimFormat.Ago(row.LastDetectedUtc)</span>
                 </p>
               </div>
+              @* 249: EAN, proizvajalec, dobavitelj so obvezni, a »skrbnik lahko potrdi, da artikel tega nima«
+                 (sodelavka, Excel 11. 9.). Gumb vidi samo skrbnik in samo pri polju, ki ga baza dovoli potrditi. *@
+              @if (CanWaive && Waivable(row.FieldCode) is { IsWaived: false } waivable)
+              {
+                <button type="button" class="ghost-button issue-waive" title="Potrditev velja, dokler je skrbnik ne prekliče; artikel se takoj ponovno validira."
+                        @onclick="() => WaiverChanged.InvokeAsync((row.FieldCode, true))">@waivable.Label — potrdi</button>
+              }
             </li>
           }
         </ul>
       </PimState>
     </section>
+
+    @if (Waivers.Any(row => row.IsWaived))
+    {
+      <section class="field-group">
+        <h3 class="group-title">Potrditve skrbnika</h3>
+        <ul class="issue-list">
+          @foreach (var row in Waivers.Where(row => row.IsWaived))
+          {
+            <li class="issue waived">
+              <span class="issue-mark" aria-hidden="true"></span>
+              <div>
+                <p class="issue-message">@row.Label</p>
+                <p class="issue-meta">
+                  <span class="code-value">@row.FieldCode</span>
+                  <span>potrdil @row.CreatedBy</span>
+                  <span>@PimFormat.Ago(row.CreatedUtc)</span>
+                  @if (!string.IsNullOrWhiteSpace(row.Reason)) { <span>@row.Reason</span> }
+                </p>
+              </div>
+              @if (CanWaive)
+              {
+                <button type="button" class="ghost-button issue-waive" @onclick="() => WaiverChanged.InvokeAsync((row.FieldCode, false))">Prekliči</button>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
   </div>
 </section>
 
@@ -125,6 +158,18 @@
   [Parameter, EditorRequired] public required IReadOnlyList<ProductCardIssue> Issues { get; set; }
   [Parameter] public bool Hidden { get; set; }
   [Parameter] public RenderFragment? Toolbar { get; set; }
+
+  /// <summary>Potrdljiva polja (249) z morebitno veljavno potrditvijo skrbnika za ta artikel.</summary>
+  [Parameter] public IReadOnlyList<ProductFieldWaiverRow> Waivers { get; set; } = [];
+
+  /// <summary>Ali sme prijavljeni uporabnik potrjevati — samo skrbnik (politika <c>FieldWaiver</c>).</summary>
+  [Parameter] public bool CanWaive { get; set; }
+
+  /// <summary>(koda polja, potrdi/prekliči) — kartica zapiše potrditev in se znova naloži.</summary>
+  [Parameter] public EventCallback<(string FieldCode, bool Active)> WaiverChanged { get; set; }
+
+  ProductFieldWaiverRow? Waivable(string fieldCode) =>
+    Waivers.FirstOrDefault(row => string.Equals(row.FieldCode, fieldCode, StringComparison.OrdinalIgnoreCase));
 
   /// <summary>
   /// Vloga brez pravice pisanja (A1, pregled 2026-09-08). Obrazec se takrat izrise kot vrednosti
@@ -152,8 +197,13 @@
   string ControlId(ProductChannelField field) =>
     PanelId + "-" + new string(field.FieldKey.Select(character => char.IsLetterOrDigit(character) ? char.ToLowerInvariant(character) : '-').ToArray());
 
-  string? Draft(ProductChannelField field) =>
-    Drafts.TryGetValue(field.FieldKey, out var value) ? value : field.Value;
+  string? Draft(ProductChannelField field)
+  {
+    if (Drafts.TryGetValue(field.FieldKey, out var value)) return value;
+    // Izhodiscna vrednost pride kot "Da"/"Ne" (YesNo v kartici), vrednosti opcij spodaj pa so "da"/"ne" —
+    // brez uskladitve select vedno pokaze prazno izbiro, ceprav vrednost obstaja.
+    return field.Format == "bool" ? field.Value?.ToLowerInvariant() : field.Value;
+  }
 
   static string Display(ProductChannelField field) =>
     !field.InReadModel ? "ni v bralnem modelu" : string.IsNullOrWhiteSpace(field.Value) ? "—" : field.Value;

@@ -4,3 +4,25 @@
 .detail-panel{min-height:24rem;padding:0;position:sticky;top:.75rem}.detail-empty{align-items:center;color:var(--pim-text-muted);display:flex;flex-direction:column;gap:.35rem;justify-content:center;min-height:24rem;text-align:center}.detail-head{align-items:flex-start;display:flex;justify-content:space-between;padding:1rem}.detail-head h2{font-size:1.15rem;margin:0 0 .2rem}.detail-tabs{border-bottom:1px solid var(--pim-border);display:flex;overflow:auto;padding:0 .7rem}.detail-tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:.6rem .5rem;white-space:nowrap}.detail-tabs button.is-active{border-color:var(--pim-primary);color:var(--pim-primary);font-weight:600}.detail-body{display:grid;gap:.75rem;padding:1rem}.detail-facts{display:grid;grid-template-columns:7rem 1fr;margin:0}.detail-facts dt,.detail-facts dd{border-bottom:1px solid var(--pim-border-soft);margin:0;padding:.4rem 0}.detail-facts dt{color:var(--pim-text-muted)}.editor-field{display:flex;flex-direction:column;gap:.25rem}.editor-label{color:var(--pim-text-muted);font-size:.72rem;font-weight:600;text-transform:uppercase}
 @media(max-width:1100px){.master-detail{grid-template-columns:1fr}.detail-panel{position:static}}@media(max-width:720px){.attribute-head{display:none}.attribute-row{grid-template-columns:1.2rem 1fr auto}.attribute-row>:nth-child(3),.attribute-row>:nth-child(4){display:none}}
 .translation-list { display:flex; flex-wrap: wrap; }
+
+/* 238: nov atribut, urejanje osnovnih lastnosti in brisanje. */
+.new-attribute { border: 2px solid var(--pim-text); padding: 0 1rem .9rem; }
+.new-attribute > summary { cursor: pointer; font-weight: 600; padding: .9rem 0; }
+.new-attribute[open] > summary { border-bottom: 1px solid var(--pim-border); margin-bottom: .75rem; }
+.create-grid { display: grid; gap: .65rem .9rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.create-grid .create-wide { grid-column: 1 / -1; }
+.create-grid .create-check { align-self: end; padding-bottom: .45rem; }
+.create-grid .editor-label em { color: var(--pim-text-muted); font-style: normal; font-weight: 400; margin-left: .3rem; text-transform: none; }
+.create-grid .code-input { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; text-transform: uppercase; }
+.create-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.detail-actions { display: flex; gap: .5rem; }
+.detail-body textarea.form-input { resize: vertical; }
+.attribute-row.is-inactive .attribute-main { opacity: .6; }
+.danger-zone { border: 1px solid var(--pim-bad-text, #b42318); border-radius: .4rem; padding: .25rem .75rem .75rem; }
+.danger-zone > summary { color: var(--pim-bad-text, #b42318); cursor: pointer; font-weight: 600; padding: .5rem 0; }
+.danger-zone .usage-list { margin: .4rem 0 .6rem; padding-left: 1.1rem; }
+.danger-zone .danger-check { color: var(--pim-bad-text, #b42318); font-weight: 600; margin: .4rem 0; }
+.danger-zone .editor-field { margin: .5rem 0; }
+.danger-primary { background: var(--pim-bad-text, #b42318); border: 0; border-radius: .35rem; color: #fff; font-weight: 600; padding: .5rem .9rem; }
+.danger-primary:disabled { opacity: .45; }
+.muted { color: var(--pim-text-muted); }

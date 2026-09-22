@@ -1,0 +1,14 @@
+out.OutboxMessage — preklic 15 zataknjenih testnih sporočil (NW.10018, podjetje 3)
+
+UPDATE out.OutboxMessage
+SET Status = N'Cancelled', LastError = N'Rocno preklicano: testni zapisi pred popravkom pisanja v gnezdene ovoje (jaka.steblaj, 22.9.2026)', NextAttemptUtc = NULL, UpdatedUtc = SYSUTCDATETIME()
+WHERE OutboxMessageId IN (4723,4724,4725,4726,4727,4733,4734,4735,4736,4737,4738,4739,4740,4741,4742) AND Status IN ('Sent','Drift');
+
+15 vrstic. Trije kroge istega testnega zapisa (Product.VatRateId, ProductAttribute.Garancija,
+ProductCommercial.PackageWidth/PackageHeight, Planning.ExcludeQtyReservation) za NW.10018,
+podjetje 3 — vsi so obtičali na Sent oz. kasneje Drift, ker je bil vzrok napaka v pisalni poti
+(SAOP PATCH z delnim gnezdenim ovojem PropertiesData/GeneralData tiho ne shrani spremembe;
+potrjeno neposredno v SAOP aplikaciji in prek API branja). Popravek je v
+src/PIM.Outbound/SaopDocumentRunner.cs (commit db650fd) — SaopDocumentRunner.Assemble zdaj pri
+spremembi dopolni gnezden ovoj s trenutnim stanjem ostalih polj istega ovoja. Preklic teh
+sporočil je bil potreben, da se polja na kartici artikla sploh znova odklenejo za nov test.

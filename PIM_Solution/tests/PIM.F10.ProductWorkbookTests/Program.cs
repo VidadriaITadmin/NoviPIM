@@ -109,6 +109,45 @@ Check("naslovna vrstica je vrstica z imeni stolpcev, ne s skupinami",
 Check("opomba pod tabelo ne postane vrstica z artiklom",
   sheet.Rows.Count(row => row[1].Length > 0) == 1);
 
+// 245 (Objemke.xlsx): opozorila so kazala eno vrstico prenizko, stolpec pod skupino atributov,
+// ki ga šifrant ne pozna, pa je tiho padel med neprepoznane.
+Check("številka vrstice je tista iz Excela (skupine + naslovi = prva podatkovna je 3)",
+  sheet.RowNumber(0) == 3, $"dobljeno {sheet.RowNumber(0)}");
+var gardeHeader = columns.ToList().FindIndex(column => column.FieldKey == "ProductAttribute.Garancija");
+Check("skupina stolpca se prebere iz vrstice nad naslovi (združena celica velja v desno)",
+  gardeHeader >= 0 && ProductWorkbookContract.IsAttributeGroup(sheet.GroupOf(gardeHeader))
+  && sheet.GroupOf(1) == ProductWorkbookContract.GroupKey);
+Check("skupina atributov se prepozna", ProductWorkbookContract.IsAttributeGroup("Atributi kategorije — nabor")
+  && ProductWorkbookContract.IsAttributeGroup(ProductWorkbookContract.GroupAttributesOutside)
+  && !ProductWorkbookContract.IsAttributeGroup(ProductWorkbookContract.GroupWeb));
+Check("slike in dokumenti se uvozijo (niso več samo za branje)",
+  columns.Where(column => column.FieldKey is ProductWorkbookContract.ImagesField or ProductWorkbookContract.DocumentsField)
+    .All(column => column.Target == ProductWorkbookTarget.Pim)
+  && columns.Count(column => column.FieldKey is ProductWorkbookContract.ImagesField or ProductWorkbookContract.DocumentsField) == 2);
+Check("logična vrednost gre naprej kot 1/0",
+  ProductWorkbookContract.BoolValue("da") == "1" && ProductWorkbookContract.BoolValue("X") == "1"
+  && ProductWorkbookContract.BoolValue("ne") == "0" && ProductWorkbookContract.BoolValue("mogoče") is null);
+Check("D in N (kot v SAOP POST/PATCH) se prebereta in izvoz ju piše",
+  ProductWorkbookContract.ParseYesNo("D") == true && ProductWorkbookContract.ParseYesNo("n") == false
+  && ProductWorkbookContract.SheetYesNo(true) == "D" && ProductWorkbookContract.SheetYesNo(false) == "N");
+Check("ERP polje nosi obliko iz registra (logično polje se prepozna)",
+  new ProductWorkbookColumn("g", "Kljukica", "Planning.ExcludeQtyReservation", ProductWorkbookTarget.Saop, ValueFormat: "bool").IsBool
+  && !columns.First(column => column.FieldKey == "Product.UoM").IsBool);
+
+Console.WriteLine();
+Console.WriteLine("=== Ocena preostanka izvoza v ozadju (brez baze) ===");
+
+// Okno izvozov v kotu strani pove, koliko je se do konca (uporabnik 2026-09-22: »da se ti
+// pokaze un bar koliko se ima do konca«). Ocena je dosedanja hitrost pisanja, nic vec.
+var writingFrom = new DateTime(2026, 9, 22, 15, 0, 0, DateTimeKind.Utc);
+var halfway = new ExportJobState(Guid.NewGuid(), ExportRunStatus.Running, RowCount: 50_000,
+  Phase: ProductWorkbookPhase.Writing, TotalRows: 100_000, WritingStartedUtc: writingFrom);
+Check("ocena preostanka sledi dosedanji hitrosti", halfway.RemainingSeconds(writingFrom.AddSeconds(60)) == 60,
+  halfway.RemainingSeconds(writingFrom.AddSeconds(60))?.ToString());
+Check("prve sekunde pisanja so brez ocene", halfway.RemainingSeconds(writingFrom.AddSeconds(2)) is null);
+Check("branje seznama je brez ocene", (halfway with { Phase = ProductWorkbookPhase.Listing }).RemainingSeconds(writingFrom.AddSeconds(60)) is null);
+Check("koncan izvoz je brez ocene", (halfway with { Status = ExportRunStatus.Completed }).RemainingSeconds(writingFrom.AddSeconds(60)) is null);
+
 Console.WriteLine();
 Console.WriteLine("=== Krog izvoz → uvoz nad razvojno bazo ===");
 
@@ -136,7 +175,8 @@ var edit = new ProductEditService(configuration, guard);
 var categoryMapping = new CategoryMappingService(database, configuration);
 var saop = new SaopWriteService(configuration, guard, NullLogger<SaopWriteService>.Instance);
 var data = new IntranetDataService(configuration, guard);
-var workbook = new ProductWorkbookService(configuration, workbench, export, catalog, edit, categoryMapping, saop, data);
+var attributeDefinitions = new AttributeMappingService(database, configuration, guard);
+var workbook = new ProductWorkbookService(configuration, workbench, export, catalog, edit, categoryMapping, saop, data, attributeDefinitions);
 
 byte[] bytes;
 ProductListFilter narrowed = new(null, 0, 25);
@@ -172,6 +212,80 @@ Check("izvoz ima stolpec kategorij vsaj ene strani",
 
 var sites = await workbook.ActiveWebSitesAsync();
 Check("register spletnih strani ni prazen", sites.Count > 0, string.Join(", ", sites.Select(site => site.Name)));
+
+// --- Pojavno okno »Stolpci«: izbira posameznih polj, ne le skupin ----------------------
+// DescribeColumnsAsync je vir resnice za okno na /izdelki; ce se razide z dejanskim izvozom
+// (BuildAsync brez omejitve), bi uporabnik v oknu videl polja, ki jih datoteka sploh ne dobi,
+// ali obratno.
+var described = await workbook.DescribeColumnsAsync(narrowed);
+var describedHeaders = described.Select(column => column.Header).ToHashSet(StringComparer.Ordinal);
+var exportedHeaderSet = exported.Headers.ToHashSet(StringComparer.Ordinal);
+Check("seznam polj za pojavno okno ustreza dejanskemu izvozu (brez omejitve)",
+  describedHeaders.SetEquals(exportedHeaderSet),
+  $"samo v oknu: {string.Join(", ", describedHeaders.Except(exportedHeaderSet).Take(5))}; "
+  + $"samo v izvozu: {string.Join(", ", exportedHeaderSet.Except(describedHeaders).Take(5))}");
+
+// Izbira enega samega polja (mimo kljuca) mora dati datoteko s kljucem in natanko tem poljem —
+// to je pogodba, na kateri sloni pojavno okno (ProductWorkbookService.BuildToAsync/Included).
+var singleField = described.FirstOrDefault(column => column.Group == ProductWorkbookContract.GroupState)
+  ?? described.First();
+var narrowExport = WorkbookTable.Read(
+  new MemoryStream(await workbook.BuildAsync(narrowed, includeFieldKeys: new HashSet<string> { singleField.FieldKey })),
+  null, ProductWorkbookContract.HeaderHints);
+var expectedNarrowHeaders = new HashSet<string>(StringComparer.Ordinal)
+  { "Podjetje", "Šifra artikla", "Naziv", singleField.Header };
+Check($"izbira enega polja ({singleField.Header}) da kljuc plus natanko to polje",
+  narrowExport.Headers.ToHashSet(StringComparer.Ordinal).SetEquals(expectedNarrowHeaders),
+  string.Join(", ", narrowExport.Headers));
+
+// --- Izvoz v ozadju pripada uporabniku ---------------------------------------------------
+// Uporabnik 2026-09-22 je kliknil »Izvozi«, takoj za tem »Uvozi«: gradnja je tekla naprej, a jo
+// je poznala samo zapuscena stran — ne napredka ne prenosa. Opravilo zato nosi lastnika in ga
+// okno izvozov najde z vsake strani (GET /izvoz/opravila). Tu tece pravi izvoz skozi vrata.
+{
+  var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+  Microsoft.Extensions.DependencyInjection.ServiceCollectionServiceExtensions.AddSingleton(services, workbook);
+  using var provider = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services);
+  using var store = new ExportResultStore();
+  var exports = new ExportJobService(
+    Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(provider),
+    store, new HeavyWorkGate(configuration), NullLogger<ExportJobService>.Instance);
+
+  var jobId = Guid.NewGuid();
+  var states = new List<ExportJobState>();
+  var finished = new TaskCompletionSource<ExportJobState>(TaskCreationOptions.RunContinuationsAsynchronously);
+  exports.Changed += state =>
+  {
+    if (state.JobId != jobId) return;
+    lock (states) states.Add(state);
+    if (!state.IsActive) finished.TrySetResult(state);
+  };
+  exports.StartWorkbookExport(jobId, "ana", "preizkus.xlsx", narrowed, selection: null);
+  Check("izvoz je viden lastniku takoj ob zagonu, preden zacne", exports.ForOwner("ana").Any(job => job.JobId == jobId && job.IsActive));
+
+  var done = await finished.Task.WaitAsync(TimeSpan.FromMinutes(5));
+  Check("izvoz v ozadju se konca", done.Status == ExportRunStatus.Completed, done.Error);
+  List<ExportJobState> seen;
+  lock (states) seen = states.ToList();
+  Check("napredek pove branje seznama z imenovalcem",
+    seen.Any(state => state.Phase == ProductWorkbookPhase.Listing && state.TotalRows > 0));
+  Check("napredek pove pisanje vrstic od vseh",
+    seen.Any(state => state.Phase == ProductWorkbookPhase.Writing && state.TotalRows == done.RowCount && state.WritingStartedUtc is not null));
+  Check("po koncu ni vec sporocila »tece« (napredek ne prehiti konca)", seen.Last().Status == ExportRunStatus.Completed);
+  Check("koncano stanje nosi lastnika, cas in zeton",
+    done.Owner == "ana" && done.FinishedUtc >= done.StartedUtc && done.DownloadToken is not null);
+  Check("izvoz vidi samo lastnik", exports.ForOwner("ANA").Count == 1 && exports.ForOwner("bor").Count == 0);
+  Check("tuji uporabnik obvestila ne more zapreti", !exports.Dismiss(jobId, "bor"));
+  // Prenos, ki ga odpre klik (GET /izvoz/zvezek), caka na konec gradnje in dobi koncano stanje;
+  // tujemu uporabniku ga ne da. HTTP pot (glava takoj, preklic, prekinitev ob napaki) je
+  // ExportDownloadEndpoint.
+  Check("odprt prenos tujega uporabnika ne dobi izvoza", await exports.WaitForBrowserAsync(jobId, "bor", CancellationToken.None) is null);
+  Check("odprt prenos dobi koncan izvoz", (await exports.WaitForBrowserAsync(jobId, "ana", CancellationToken.None))?.Status == ExportRunStatus.Completed);
+  exports.MarkDownloaded(done.DownloadToken!.Value);
+  Check("prevzem datoteke se zabelezi", exports.Get(jobId)?.Downloaded == true);
+  Check("lastnik obvestilo zapre in ga ni vec", exports.Dismiss(jobId, "ana") && exports.ForOwner("ana").Count == 0);
+  if (store.TryGet(done.DownloadToken.Value, out var producedPath, out _, out _)) File.Delete(producedPath);
+}
 
 // --- Izvoz po kategoriji ----------------------------------------------------------------
 // Kategorija mora zoziti dvoje hkrati: vrstice (izdelki te kategorije in njenih potomcev) in

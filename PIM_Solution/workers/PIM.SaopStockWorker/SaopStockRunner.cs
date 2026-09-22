@@ -127,6 +127,8 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
     return payload;
   }
 
+  const int ItemDeliveryPauseMilliseconds = 250;
+
   /// <summary>
   /// Datum in kolicina prihoda za do @MaxLookups artiklov (migracija 189, SAOP
   /// GetItemDeliveryDate — en artikel naenkrat). Kandidati so artikli iz aktivnega SAOP posnetka
@@ -144,9 +146,13 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
     var checkedUtc = DateTime.UtcNow;
     var withDelivery = 0;
 
+    var first = true;
     foreach (var itemId in itemIds)
     {
       cancellationToken.ThrowIfCancellationRequested();
+      // Premor med klici na artikel (ekipa SAOP 2026-09-22: do 300 zaporednih klicev brez premora je rafal).
+      if (!first) await Task.Delay(ItemDeliveryPauseMilliseconds, cancellationToken);
+      first = false;
       var request = SaopStockProviderRegistry.CreateItemDeliveryDateRequest(itemId, baseUrl);
       var payload = await SendAsync(request, organizationId, cancellationToken);
       var deliveries = ParseItemDeliveryDates(payload);

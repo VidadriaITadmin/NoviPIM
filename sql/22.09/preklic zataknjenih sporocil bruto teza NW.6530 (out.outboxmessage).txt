@@ -1,0 +1,13 @@
+out.OutboxMessage — preklic šestih zataknjenih odhodnih sporočil (NW.6530: Bruto teža + Izloči iz rezervacije zaloge)
+
+UPDATE out.OutboxMessage
+SET Status = N'Cancelled', LastError = N'Rocno preklicano: umazana vrednost iz Excel uvoza (1.1399999999999999), PIM ze ima pravilno 1.14 (jaka.steblaj, 22.9.2026)', NextAttemptUtc = NULL, UpdatedUtc = SYSUTCDATETIME()
+WHERE OutboxMessageId IN (4699, 4701, 4703) AND Status = 'Sent';
+
+UPDATE out.OutboxMessage
+SET Status = N'Cancelled', LastError = N'Rocno preklicano: testni zapis brez bralnega modela, ne more nikoli priti do Verified (jaka.steblaj, 22.9.2026)', NextAttemptUtc = NULL, UpdatedUtc = SYSUTCDATETIME()
+WHERE OutboxMessageId IN (4700, 4702, 4704) AND Status = 'Sent';
+
+6 vrstic (OutboxMessageId 4699-4704, po dve na podjetje 1/2/3). Prvi UPDATE: bug v WorkbookTable.cs (branje .xlsx) je surovo binarno natancnost Excel-ove izracunane stevilke prenasal naprej brez ciscenja (1,14 -> "1.1399999999999999" pri uvozu delovnega lista). Vrednost je bila odobrena in poslana v SAOP; ker se pri potrditvi ne bi nikoli ujela s cisto vrednostjo, ki jo SAOP vrne nazaj, bi polje "Bruto teza" za NW.6530 ostalo trajno "caka SAOP". Koda je popravljena (commit 1c094f4). Kanonicna vrednost v PIM je bila ves cas pravilna (1,14) — samo cakajoca vrstica je bila napacna.
+
+Drugi UPDATE: polje Planning.ExcludeQtyReservation ("Izloci iz rezervacije zaloge") ni v bralnem modelu (ni vhodne sinhronizacije nazaj iz SAOP), zato sporocilo zanj strukturno nikoli ne more priti do "Verified" — testni zapis iz istega uvoza bi ostal "Sent" za vedno. Preverjeno v bazi: to je edini prizadeti artikel/polje (3 vrstice skupaj, brez sirsega vpliva). Odprto produktno vprasanje za Davida: ali naj polja brez bralnega modela sploh gredo skozi dvofazno potrjevanje.

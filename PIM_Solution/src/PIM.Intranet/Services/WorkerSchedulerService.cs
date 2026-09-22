@@ -1,5 +1,7 @@
 using System.Net.Http;
 
+using PIM.Automation;
+
 namespace PIM.Intranet.Services;
 
 /// <summary>
@@ -73,9 +75,13 @@ public sealed class WorkerSchedulerService(
 
   string Owner => WorkerCycles.OwnerName(hostName, Environment.ProcessId, application);
 
+  // Od 2026-09-22 privzeto IZKLOPLJEN: workerje poganja samo PIM.AutomationHost. Prej je vsak zagon
+  // intraneta (VS, testna kopija, recikel IIS) prevzel prost najem, pognal vse zapadle cikle hkrati in ob
+  // koncu pustil viseče zagone in sirote. Vklop samo še izrecno: Scheduler:Enabled=true ali
+  // PIM_SCHEDULER_ENABLED=true (zasilna rezerva, dokler storitev ni nameščena).
   bool Enabled =>
-    !string.Equals(Environment.GetEnvironmentVariable("PIM_SCHEDULER_ENABLED"), "false", StringComparison.OrdinalIgnoreCase)
-    && !string.Equals(configuration["Scheduler:Enabled"], "false", StringComparison.OrdinalIgnoreCase);
+    string.Equals(Environment.GetEnvironmentVariable("PIM_SCHEDULER_ENABLED"), "true", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(configuration["Scheduler:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
 
   int TickSeconds => Clamp(configuration.GetValue<int?>("Scheduler:TickSeconds") ?? 30, 10, 300);
   int LeaseSeconds => Clamp(configuration.GetValue<int?>("Scheduler:LeaseSeconds") ?? 90, 30, 600);
@@ -88,7 +94,7 @@ public sealed class WorkerSchedulerService(
 
     if (!Enabled)
     {
-      Note("Razporejevalnik je izklopljen z nastavitvijo (Scheduler:Enabled oziroma PIM_SCHEDULER_ENABLED=false). Cikli tu ne tečejo.");
+      Note("Razporejevalnik v intranetu je izklopljen (privzeto). Workerje poganja storitev PIM.AutomationHost; vklop samo izrecno s Scheduler:Enabled=true.");
       return;
     }
 

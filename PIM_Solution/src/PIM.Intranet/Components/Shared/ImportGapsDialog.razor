@@ -1,0 +1,389 @@
+@inject CategoryMappingService Mapping
+@inject CategoryTreeService TreeService
+@inject AttributeMappingService Attributes
+@inject SupplierCandidateWriteService CandidatesWrite
+@inject AuthenticationStateProvider Authentication
+
+@* Uporabnik 2026-09-22: uvoz ne sme obticati na manjkajoci kategoriji ali atributu. Vrzeli se
+   pokazejo po sklopih, vsako se zapre z enim klikom (ustvari/preslikaj), nato gre isto surovo XML
+   vira se enkrat skozi preslikavo (244) - brez ponovnega nalaganja datoteke. *@
+
+<div class="gaps-backdrop" role="presentation" @onclick="CloseFromBackdropAsync">
+  <section class="gaps-dialog" role="dialog" aria-modal="true" aria-labelledby="gaps-title" @onclick:stopPropagation>
+    <header class="dialog-header">
+      <div>
+        <span class="dialog-kicker">@Kicker</span>
+        <h2 id="gaps-title">@(Title ?? "Vrzeli preslikave")</h2>
+        <p class="dialog-scope">Vir: @string.Join(", ", Scopes.Select(scope => scope.SourceCode).Distinct()) · vsa podjetja s tem virom</p>
+      </div>
+      <button type="button" class="dialog-close" aria-label="Zapri" disabled="@Busy" @onclick="CloseAsync">×</button>
+    </header>
+
+    <div class="dialog-body">
+      @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+      @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+      @if (Loading)
+      {
+        <p class="muted">Iščem nepreslikane kategorije in atribute …</p>
+      }
+      else
+      {
+        @if (CategoryGaps.Count == 0 && AttributeGaps.Count == 0 && ShownErrors.Count == 0)
+        {
+          <p class="gaps-clean">Ni odprtih vrzeli: vse kategorije in atributi teh virov so preslikani.</p>
+        }
+
+        @if (CategoryGaps.Count > 0)
+        {
+          <section class="gap-group" aria-labelledby="gap-categories">
+            <h3 id="gap-categories">Manjkajoče kategorije <span class="gap-count">@CategoryGaps.Count@(CategoryMore ? "+" : "")</span></h3>
+            <p class="gap-help">Pot, ki jo je poslal dobavitelj, v našem drevesu nima cilja — izdelki brez nje nimajo uvrstitve na spletu. Seznam velja za cel vir, ne le za pravkar uvožene artikle.</p>
+            <ul class="gap-list">
+              @foreach (var row in CategoryGaps)
+              {
+                var key = CategoryKey(row);
+                <li class="gap-row">
+                  <div class="gap-main">
+                    <div>
+                      <strong>@DescribePath(row)</strong>
+                      <div class="muted">drevo <span class="code-value">@row.CategoryTreeCode</span> · vir <span class="code-value">@row.SourceCode</span></div>
+                    </div>
+                    <span class="gap-products">@row.ProductCount.ToString("N0") izdelkov</span>
+                    <button type="button" class="small-action primary-action" disabled="@Busy" @onclick="() => ToggleCategoryAsync(row)">
+                      @(Editing == key ? "Skrij" : "Ustvari / preslikaj")
+                    </button>
+                  </div>
+                  @if (Editing == key)
+                  {
+                    <div class="gap-editor">
+                      <div class="editor-block">
+                        <span class="editor-title">Ustvari novo kategorijo</span>
+                        <label class="form-field">Ime
+                          <input class="form-input" @bind="NewCategoryName" @bind:event="oninput" />
+                        </label>
+                        <label class="form-field">Nadrejena kategorija (prazno = koren drevesa)
+                          <PimPicker Options="CategoryOptionsFor(row.CategoryTreeCode)" @bind-Value="NewCategoryParent"
+                                     Placeholder="Nadrejena kategorija …" EmptyText="V tem drevesu ni kategorij." />
+                        </label>
+                        <button type="button" class="button-primary" disabled="@(Busy || string.IsNullOrWhiteSpace(NewCategoryName))"
+                                @onclick="() => CreateCategoryAndMapAsync(row)">Ustvari in preslikaj</button>
+                      </div>
+                      <div class="editor-block">
+                        <span class="editor-title">ali poveži z obstoječo</span>
+                        <PimPicker Options="CategoryOptionsFor(row.CategoryTreeCode)" @bind-Value="ChosenCategory"
+                                   Placeholder="Vpiši del imena ali poti …" EmptyText="V tem drevesu ni kategorij." />
+                        <button type="button" disabled="@(Busy || string.IsNullOrWhiteSpace(ChosenCategory))"
+                                @onclick="() => MapCategoryAsync(row, ChosenCategory!)">Preslikaj</button>
+                      </div>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+            @if (CategoryMore) { <p class="gap-help">Prikazanih je prvih @MaxRows po številu izdelkov; ostale so na <a href="kakovost/kategorije">Preslikave kategorij</a>.</p> }
+          </section>
+        }
+
+        @if (AttributeGaps.Count > 0)
+        {
+          <section class="gap-group" aria-labelledby="gap-attributes">
+            <h3 id="gap-attributes">Manjkajoči atributi <span class="gap-count">@AttributeGaps.Count</span></h3>
+            <p class="gap-help">Atribut, ki ga je poslal dobavitelj, v našem registru nima lastnosti — vrednost pri izdelku ostane prazna.</p>
+            <ul class="gap-list">
+              @foreach (var row in AttributeGaps)
+              {
+                var key = AttributeKey(row);
+                <li class="gap-row">
+                  <div class="gap-main">
+                    <div>
+                      <strong>@AttributeLabel(row)</strong>
+                      <div class="muted">
+                        <span class="code-value">@row.SourceAttributeName</span> · vir <span class="code-value">@row.SourceCode</span>
+                        @if (row.SampleValue is not null) { <text> · npr. @row.SampleValue@(row.SampleUnit is null ? "" : " " + row.SampleUnit)</text> }
+                      </div>
+                    </div>
+                    <span class="gap-products">@row.ProductCount.ToString("N0") izdelkov</span>
+                    <div class="gap-actions">
+                      <button type="button" class="small-action primary-action" disabled="@Busy" @onclick="() => CreateAttributeAndMapAsync(row)">Ustvari »@AttributeLabel(row)«</button>
+                      <button type="button" class="small-action" disabled="@Busy" @onclick="() => ToggleAttributeAsync(row)">@(Editing == key ? "Skrij" : "Poveži z obstoječim …")</button>
+                    </div>
+                  </div>
+                  @if (Editing == key)
+                  {
+                    <div class="gap-editor">
+                      <div class="editor-block">
+                        <span class="editor-title">Naša lastnost</span>
+                        <PimPicker Options="DefinitionOptions" @bind-Value="ChosenAttribute"
+                                   Placeholder="Vpiši ime ali kodo lastnosti …" />
+                        <label class="form-field">Jezik vrednosti
+                          <select class="filter-select" @bind="ChosenLanguage">
+                            <option value="">brez jezika</option>
+                            @foreach (var language in Languages) { <option value="@language.LanguageCode">@language.LanguageCode</option> }
+                          </select>
+                        </label>
+                        <label class="filter-check"><input type="checkbox" @bind="ChosenIsUnit" /> Vir nosi enoto te lastnosti, ne vrednosti</label>
+                        <button type="button" disabled="@(Busy || string.IsNullOrWhiteSpace(ChosenAttribute))"
+                                @onclick="() => MapAttributeAsync(row, ChosenAttribute!, ChosenLanguage, ChosenIsUnit)">Preslikaj</button>
+                      </div>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          </section>
+        }
+
+        @if (ShownErrors.Count > 0)
+        {
+          <section class="gap-group" aria-labelledby="gap-errors">
+            <h3 id="gap-errors">Druge napake uvoza <span class="gap-count is-bad">@ShownErrors.Count</span></h3>
+            <ul class="error-list">
+              @foreach (var line in ShownErrors) { <li>@line</li> }
+            </ul>
+          </section>
+        }
+
+        @if (Resolved > 0 || ReprocessNotes.Count > 0)
+        {
+          <section class="gap-group reprocess-log" aria-label="Izid">
+            @if (Resolved > 0) { <p>Zaprtih vrzeli v tem oknu: <strong>@Resolved</strong>. Veljajo, ko gre vir še enkrat skozi preslikavo.</p> }
+            @foreach (var note in ReprocessNotes) { <p class="muted">@note</p> }
+          </section>
+        }
+      }
+    </div>
+
+    <footer class="dialog-footer">
+      <p class="footer-note">Isto datoteko vira ponovno pošlje skozi preslikavo — brez ponovnega nalaganja. Pri velikem podjetju traja lahko 10 minut in več; okna ne zapiraj.</p>
+      <button type="button" disabled="@Busy" @onclick="CloseAsync">Zapri</button>
+      <button type="button" class="button-primary" disabled="@(Busy || Loading)" @onclick="ReprocessAsync">
+        @(Reprocessing ? "Preslikujem vir …" : "Ponovno preslikaj vir")
+      </button>
+    </footer>
+  </section>
+</div>
+
+@code {
+  public sealed record Scope(int OrganizationId, string OrganizationName, string SourceCode);
+
+  [Parameter, EditorRequired] public required IReadOnlyList<Scope> Scopes { get; set; }
+  [Parameter] public string? Title { get; set; }
+  [Parameter] public IReadOnlyList<string> ImportErrors { get; set; } = [];
+  [Parameter] public EventCallback OnClose { get; set; }
+  [Parameter] public EventCallback OnReprocessed { get; set; }
+
+  const int MaxRows = 100;
+
+  List<CategoryMappingService.MappingRow> CategoryGaps = [];
+  List<AttributeMappingService.SourceAttributeRow> AttributeGaps = [];
+  bool CategoryMore;
+  bool Loading = true, Busy, Reprocessing;
+  string? Error, Message;
+  int Resolved;
+  readonly List<string> ReprocessNotes = [];
+
+  string? Editing;
+  string NewCategoryName = "";
+  string? NewCategoryParent, ChosenCategory, ChosenAttribute;
+  string ChosenLanguage = "";
+  bool ChosenIsUnit;
+
+  readonly Dictionary<string, IReadOnlyList<PimPickerOption>> PickerCache = new(StringComparer.OrdinalIgnoreCase);
+  IReadOnlyList<PimPickerOption> DefinitionOptions = [];
+  IReadOnlyList<CategoryTreeService.LanguageOptionRow> Languages = [];
+
+  List<string> ShownErrors = [];
+
+  string Kicker => Loading ? "Preverjam" : CategoryGaps.Count + AttributeGaps.Count + ShownErrors.Count == 0 ? "Brez vrzeli" : "Vrzeli po sklopih";
+
+  protected override Task OnInitializedAsync()
+  {
+    ShownErrors = ImportErrors.ToList();
+    return LoadGapsAsync();
+  }
+
+  async Task LoadGapsAsync()
+  {
+    Loading = true;
+    try
+    {
+      var categories = new List<CategoryMappingService.MappingRow>();
+      var attributes = new List<AttributeMappingService.SourceAttributeRow>();
+      var more = false;
+      foreach (var source in Scopes.Select(scope => scope.SourceCode).Distinct(StringComparer.OrdinalIgnoreCase))
+      {
+        var (rows, _) = await Mapping.GetMappingsAsync(source, null, "Nepreslikano", null, 1, MaxRows);
+        var withProducts = rows.Where(row => row.ProductCount > 0).ToList();
+        categories.AddRange(withProducts);
+        more |= rows.Count == MaxRows && withProducts.Count == MaxRows;
+        attributes.AddRange((await Attributes.GetSourceAttributesAsync(source, "Nepreslikano", null)).Where(row => row.ProductCount > 0));
+      }
+      CategoryGaps = categories.OrderByDescending(row => row.ProductCount).ToList();
+      AttributeGaps = attributes.OrderByDescending(row => row.ProductCount).ToList();
+      CategoryMore = more;
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Loading = false; }
+  }
+
+  static string CategoryKey(CategoryMappingService.MappingRow row) => $"c|{row.SourceCode}|{row.CategoryTreeCode}|{row.SourcePathKey}";
+  static string AttributeKey(AttributeMappingService.SourceAttributeRow row) => $"a|{row.SourceCode}|{row.SourceAttributeName}";
+  static string AttributeLabel(AttributeMappingService.SourceAttributeRow row) => row.SourceLabel ?? row.SourceAttributeName;
+
+  static string DescribePath(CategoryMappingService.MappingRow row) =>
+    string.Join(" › ", new[] { row.SourceLevel1, row.SourceLevel2, row.SourceLevel3 }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+  static string DeepestLevel(CategoryMappingService.MappingRow row) =>
+    new[] { row.SourceLevel3, row.SourceLevel2, row.SourceLevel1 }.FirstOrDefault(part => !string.IsNullOrWhiteSpace(part))?.Trim() ?? "";
+
+  async Task<string> ActorAsync() => (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+
+  /* --- kategorije --------------------------------------------------------- */
+
+  async Task ToggleCategoryAsync(CategoryMappingService.MappingRow row)
+  {
+    var key = CategoryKey(row);
+    if (Editing == key) { Editing = null; return; }
+    Editing = key;
+    Error = null;
+    NewCategoryName = DeepestLevel(row);
+    NewCategoryParent = null;
+    ChosenCategory = null;
+    await EnsureTreeAsync(row.CategoryTreeCode);
+  }
+
+  async Task EnsureTreeAsync(string tree)
+  {
+    if (PickerCache.ContainsKey(tree)) return;
+    try
+    {
+      PickerCache[tree] = (await Mapping.GetTreeNodesAsync(tree, null))
+        .Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1))
+        .ToList();
+    }
+    catch (Exception exception) { Error = exception.Message; PickerCache[tree] = []; }
+  }
+
+  IReadOnlyList<PimPickerOption> CategoryOptionsFor(string tree) => PickerCache.TryGetValue(tree, out var options) ? options : [];
+
+  async Task CreateCategoryAndMapAsync(CategoryMappingService.MappingRow row)
+  {
+    var name = NewCategoryName.Trim();
+    if (name.Length == 0) return;
+    await RunAsync(async actor =>
+    {
+      var code = await TreeService.CreateCategoryAsync(row.CategoryTreeCode, NewCategoryParent, name, actor);
+      PickerCache.Remove(row.CategoryTreeCode);
+      await Mapping.SaveMappingAsync(row.SourceCode, row.CategoryTreeCode, row.SourcePathKey, code, actor, "Ustvarjeno iz okna vrzeli po uvozu.");
+      CategoryGaps.Remove(row);
+      return $"Kategorija »{name}« ({code}) je ustvarjena in preslikana za pot {DescribePath(row)}.";
+    });
+  }
+
+  async Task MapCategoryAsync(CategoryMappingService.MappingRow row, string categoryCode)
+  {
+    await RunAsync(async actor =>
+    {
+      await Mapping.SaveMappingAsync(row.SourceCode, row.CategoryTreeCode, row.SourcePathKey, categoryCode, actor, "Preslikano iz okna vrzeli po uvozu.");
+      CategoryGaps.Remove(row);
+      return $"Pot {DescribePath(row)} je preslikana.";
+    });
+  }
+
+  /* --- atributi ----------------------------------------------------------- */
+
+  async Task ToggleAttributeAsync(AttributeMappingService.SourceAttributeRow row)
+  {
+    var key = AttributeKey(row);
+    if (Editing == key) { Editing = null; return; }
+    Editing = key;
+    Error = null;
+    ChosenAttribute = null;
+    ChosenLanguage = "";
+    ChosenIsUnit = false;
+    if (DefinitionOptions.Count > 0) return;
+    try
+    {
+      DefinitionOptions = (await Attributes.GetDefinitionsAsync(null, false, false, false))
+        .Select(definition => new PimPickerOption(definition.AttributeCode, definition.AttributeName ?? definition.AttributeCode, definition.AttributeCode))
+        .ToList();
+      Languages = await TreeService.GetLanguagesAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task CreateAttributeAndMapAsync(AttributeMappingService.SourceAttributeRow row)
+  {
+    var name = AttributeLabel(row);
+    await RunAsync(async actor =>
+    {
+      // Ensure: obstojeca lastnost z istim imenom ali kodo se ponovno uporabi, ne podvoji.
+      var code = await TreeService.EnsureAttributeDefinitionAsync(name, actor);
+      await Attributes.SaveMapAsync(row.SourceCode, row.SourceAttributeName, code, null, false, actor, "Ustvarjeno iz okna vrzeli po uvozu.");
+      AttributeGaps.Remove(row);
+      DefinitionOptions = [];
+      return $"Atribut »{name}« ({code}) je v registru in preslikan.";
+    });
+  }
+
+  async Task MapAttributeAsync(AttributeMappingService.SourceAttributeRow row, string attributeCode, string language, bool isUnit)
+  {
+    await RunAsync(async actor =>
+    {
+      await Attributes.SaveMapAsync(row.SourceCode, row.SourceAttributeName, attributeCode,
+        string.IsNullOrWhiteSpace(language) ? null : language, isUnit, actor, "Preslikano iz okna vrzeli po uvozu.");
+      AttributeGaps.Remove(row);
+      return $"Atribut »{AttributeLabel(row)}« je preslikan na {attributeCode}.";
+    });
+  }
+
+  async Task RunAsync(Func<string, Task<string>> action)
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      Message = await action(await ActorAsync());
+      Resolved++;
+      Editing = null;
+    }
+    // Pravila (podvojeno ime pod istim starsem, neznana lastnost ...) so v bazi; sporocilo pokazemo, kot ga pove ona.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  /* --- ponovna preslikava vira (244) ----------------------------------------- */
+
+  async Task ReprocessAsync()
+  {
+    Busy = true; Reprocessing = true; Error = null; Message = null;
+    ReprocessNotes.Clear();
+    var failed = false;
+    try
+    {
+      var actor = await ActorAsync();
+      foreach (var scope in Scopes)
+      {
+        var result = await CandidatesWrite.ReprocessSourceAsync(scope.OrganizationId, scope.SourceCode, actor);
+        if (result.Runs > 0)
+          ReprocessNotes.Add($"{scope.SourceCode} ({scope.OrganizationName}): {result.Runs:N0} zajemov, {result.Pages:N0} strani je šlo znova skozi preslikavo.");
+        if (!string.IsNullOrWhiteSpace(result.Errors)) { failed = true; ReprocessNotes.Add($"{scope.SourceCode} ({scope.OrganizationName}) napake: {result.Errors}"); }
+      }
+      if (ReprocessNotes.Count == 0) ReprocessNotes.Add("Za izbrane vire v bazi ni zajemov — ni bilo česa preslikati.");
+      await LoadGapsAsync();
+      // Napake prejsnjega uvoza so opisovale stanje pred ponovno preslikavo; veljavne so zdaj le nove.
+      if (!failed) ShownErrors = [];
+      Message = failed
+        ? "Preslikava je končana, nekateri zajemi pa so padli — glej spodaj."
+        : CategoryGaps.Count + AttributeGaps.Count == 0
+          ? "Vir je šel znova skozi preslikavo brez napak; vse kategorije in atributi so preslikani."
+          : "Vir je šel znova skozi preslikavo. Nekaj vrzeli je še odprtih — zapri jih in ponovi.";
+      await OnReprocessed.InvokeAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; Reprocessing = false; }
+  }
+
+  Task CloseAsync() => Busy ? Task.CompletedTask : OnClose.InvokeAsync();
+  Task CloseFromBackdropAsync() => CloseAsync();
+}

@@ -6,14 +6,22 @@
 
 <PageTitle>Mediji</PageTitle>
 
-@* Faza toka: PIM (2). Vir: canon.ProductMedia. Bralna stran — trajni popravek naslova je
-   naloga preslikave vira, ne te strani. Vrsta medija se izpelje v MediaKindPolicy, ker je
-   baza nima; isti izraz filtrira in steje, da se ploscica in filter ne razideta. *@
-<PimPage Title="Mediji" Subtitle="Slike, videi in dokumenti izdelkov v izbrani organizaciji, na enem mestu.">
+@* Faza toka: PIM (2). Vir: canon.ProductMedia in canon.ProductDocument — vse, kar pride iz
+   uvozov (XML, Excel, SAOP), pristane tu; pim.ProductMedia je le podmnozica za izvoz. Bralna
+   stran — trajni popravek naslova je naloga preslikave vira, ne te strani. Vrsta medija se
+   izpelje v MediaKindPolicy, ker je baza nima; isti izraz filtrira in steje, da se ploscica in
+   filter ne razideta. *@
+<PimPage Title="Mediji" Subtitle="Slike, videi in dokumenti izdelkov vseh aktivnih podjetij, na enem mestu — najnovejši najprej.">
   <Actions>
     <div class="media-meta">
       <span class="media-meta-item"><strong>@Number(Summary?.ProductsWithMedia)</strong> izdelkov ima medij</span>
-      <a class="media-meta-item warn" href="izdelki?pogled=BREZ_SLIKE"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
+      <a class="media-meta-item warn" href="@WithoutImageHref"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
+      @if (Summary?.AddedLastWeek > 0)
+      {
+        <button type="button" class="media-meta-item fresh" title="Pokaži medije, vnesene v zadnjih 7 dneh, najnovejše najprej" @onclick="ShowRecentAsync">
+          <strong>@Number(Summary.AddedLastWeek)</strong> novih v 7 dneh
+        </button>
+      }
     </div>
   </Actions>
 </PimPage>
@@ -21,48 +29,78 @@
 <section class="ui-card toolbar media-toolbar" role="search" aria-labelledby="media-filter-title">
   <h2 id="media-filter-title" class="visually-hidden">Iskanje in filtriranje medijev</h2>
 
-  <div class="media-search">
-    <svg class="media-search-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6" /><path d="M13.5 13.5 17 17" /></svg>
-    <label class="visually-hidden" for="media-search">Išči po artiklu, naslovu ali vlogi</label>
-    <input id="media-search" type="search" class="search-input" autocomplete="off"
-           placeholder="Išči po artiklu, naslovu ali vlogi — več besed zoži iskanje (npr. »203 pdf«)"
-           value="@Search" @oninput="OnSearchInputAsync" />
+  <div class="media-toolbar-row">
+    <div class="media-search">
+      <svg class="media-search-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6" /><path d="M13.5 13.5 17 17" /></svg>
+      <label class="visually-hidden" for="media-search">Išči po artiklu, nazivu, EAN, naslovu, vlogi ali dobavitelju</label>
+      <input id="media-search" type="search" class="search-input" autocomplete="off"
+             placeholder="Išči po šifri, nazivu, EAN, naslovu, vlogi, dobavitelju — več besed zoži iskanje (npr. »203 pdf«)"
+             value="@Search" @oninput="OnSearchInputAsync" />
+    </div>
+
+    @* U1, pregled 2026-09-08: stran je kazala samo prvo podjetje in tega ni povedala, izbirnika pa
+       ni bilo. Uporabnik 2026-09-22: privzeto je bil izbran DEMO in slik Vidadrie ni bilo mogoce
+       najti. Privzeto so zdaj vsa aktivna podjetja iz dbo.OrganizationConfig. *@
+    <label class="visually-hidden" for="media-organization">Podjetje</label>
+    <select id="media-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationChangedAsync">
+      <option value="">Vsa podjetja</option>
+      @foreach (var organization in Organizations)
+      {
+        <option value="@organization.OrganizationId">@organization.Name</option>
+      }
+    </select>
+
+    <label class="visually-hidden" for="media-sort">Razvrstitev</label>
+    <select id="media-sort" class="filter-select" @bind="Sort" @bind:after="ApplyAsync">
+      <option value="">Najnovejši najprej</option>
+      <option value="STARI">Najstarejši najprej</option>
+      <option value="ARTIKEL">Artikel A → Ž</option>
+      <option value="ARTIKEL_DESC">Artikel Ž → A</option>
+      <option value="VLOGA">Vloga</option>
+      <option value="VRSTA">Vrsta medija</option>
+      <option value="NASLOV">Naslov</option>
+    </select>
+
+    <div class="media-view" role="group" aria-label="Način prikaza">
+      <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@GridView" @onclick="() => SetView(true)">Mreža</button>
+      <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(!GridView)" @onclick="() => SetView(false)">Seznam</button>
+    </div>
   </div>
 
-  @* U1, pregled 2026-09-08: stran je kazala samo prvo podjetje in tega ni povedala, izbirnika pa
-     ni bilo. Napis tabele je govoril o »izbrani organizaciji«, izbrati je ni bilo mogoce. *@
-  <label class="visually-hidden" for="media-organization">Podjetje</label>
-  <select id="media-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="OrganizationChangedAsync">
-    @foreach (var organization in Organizations)
+  <div class="media-toolbar-row">
+    <label class="visually-hidden" for="media-role">Vloga medija</label>
+    <select id="media-role" class="filter-select" @bind="Role" @bind:after="ApplyAsync">
+      <option value="">Vse vloge</option>
+      @foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }
+    </select>
+
+    <label class="visually-hidden" for="media-host">Strežnik, s katerega je medij</label>
+    <select id="media-host" class="filter-select" @bind="HostFilter" @bind:after="ApplyAsync">
+      <option value="">Vsi strežniki</option>
+      @foreach (var option in Hosts) { <option value="@option.Value">@option.Label</option> }
+    </select>
+
+    <label class="visually-hidden" for="media-added">Čas vnosa</label>
+    <select id="media-added" class="filter-select" @bind="Added" @bind:after="ApplyAsync">
+      <option value="">Dodano kadarkoli</option>
+      <option value="1">Zadnjih 24 ur</option>
+      <option value="7">Zadnjih 7 dni</option>
+      <option value="30">Zadnjih 30 dni</option>
+      <option value="90">Zadnjih 90 dni</option>
+    </select>
+
+    <label class="visually-hidden" for="media-activity">Stanje izdelka</label>
+    <select id="media-activity" class="filter-select" @bind="Activity" @bind:after="ApplyAsync">
+      <option value="">Aktivni in neaktivni izdelki</option>
+      <option value="AKTIVNI">Samo aktivni izdelki</option>
+      <option value="NEAKTIVNI">Samo neaktivni izdelki</option>
+    </select>
+
+    @if (HasFilters)
     {
-      <option value="@organization.OrganizationId">@organization.Name</option>
+      <button type="button" class="ghost-button" @onclick="ClearAsync">Počisti</button>
     }
-  </select>
-
-  <label class="visually-hidden" for="media-role">Vloga medija</label>
-  <select id="media-role" class="filter-select" @bind="Role" @bind:after="ApplyAsync">
-    <option value="">Vse vloge</option>
-    @foreach (var option in Roles) { <option value="@option.Value">@option.Label</option> }
-  </select>
-
-  <label class="visually-hidden" for="media-sort">Razvrstitev</label>
-  <select id="media-sort" class="filter-select" @bind="Sort" @bind:after="ApplyAsync">
-    <option value="">Artikel A → Ž</option>
-    <option value="ARTIKEL_DESC">Artikel Ž → A</option>
-    <option value="VLOGA">Vloga</option>
-    <option value="VRSTA">Vrsta medija</option>
-    <option value="NASLOV">Naslov</option>
-  </select>
-
-  <div class="media-view" role="group" aria-label="Način prikaza">
-    <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@GridView" @onclick="() => SetView(true)">Mreža</button>
-    <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(!GridView)" @onclick="() => SetView(false)">Seznam</button>
   </div>
-
-  @if (HasFilters)
-  {
-    <button type="button" class="ghost-button" @onclick="ClearAsync">Počisti</button>
-  }
 </section>
 
 <nav class="media-kinds" aria-label="Vrsta medija">
@@ -92,13 +130,21 @@
               @if (MediaUrlPolicy.VisibleNote(url) is string warning) { <span class="note-badge" title="@warning">!</span> }
             </button>
             <div class="media-tile-body">
-              <a class="media-item" href="izdelki/@row.ProductId">@row.ItemId</a>
+              <span class="media-item-line">
+                <a class="media-item" href="izdelki/@row.ProductId">@row.ItemId</a>
+                @if (!row.ProductActive) { <span class="inactive-badge" title="Izdelek ni aktiven">neaktiven</span> }
+              </span>
+              @if (!string.IsNullOrWhiteSpace(row.ProductName))
+              {
+                <span class="media-product" title="@row.ProductName">@row.ProductName</span>
+              }
               @if (!string.IsNullOrWhiteSpace(row.Title))
               {
                 <span class="media-title" title="@row.Title">@row.Title</span>
               }
               <span class="media-role" title="@row.Role">@row.Role · #@row.SortOrder</span>
               <span class="media-file" title="@url.Display">@MediaKindPolicy.FileName(row.Url)</span>
+              <span class="media-added" title="@AddedTitle(row)">@(OrganizationId is null ? row.OrganizationName + " · " : "")@AddedShort(row)</span>
               @if (url.Href is not null)
               {
                 <a class="media-open" href="@url.Href" target="_blank" rel="noopener noreferrer">Odpri izvirnik</a>
@@ -114,7 +160,7 @@
     }
     else
     {
-      <PimTable Caption="@($"Mediji izdelkov — {Organizations.FirstOrDefault(row => row.OrganizationId == OrganizationId)?.Name ?? "podjetje ni izbrano"}")" Columns="Columns">
+      <PimTable Caption="@($"Mediji izdelkov — {ScopeLabel}")" Columns="Columns">
         <Rows>
           @foreach (var row in Rows)
           {
@@ -123,11 +169,17 @@
               <td class="media-thumb">
                 <button type="button" class="thumb-button" title="Povečaj predogled" @onclick="() => Open(row)">@Preview(row, url, true)</button>
               </td>
-              <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
+              <td>
+                <a href="izdelki/@row.ProductId">@row.ItemId</a>
+                @if (!row.ProductActive) { <span class="inactive-badge" title="Izdelek ni aktiven">neaktiven</span> }
+                @if (!string.IsNullOrWhiteSpace(row.ProductName)) { <small class="row-product">@row.ProductName</small> }
+              </td>
+              <td>@row.OrganizationName</td>
               <td><span class="kind-badge @KindTone(row.Kind)">@row.Kind</span></td>
               <td><span class="code-value">@row.Role</span></td>
               <td>@(string.IsNullOrWhiteSpace(row.Title) ? "—" : row.Title)</td>
               <td class="numeric">@row.SortOrder</td>
+              <td class="nowrap" title="@AddedTitle(row)">@AddedShort(row)</td>
               <td>@Address(url)</td>
             </tr>
           }
@@ -147,6 +199,7 @@
         <div>
           <strong>@selected.ItemId</strong>
           <span>@selected.Role · #@selected.SortOrder · @selected.Kind@(string.IsNullOrWhiteSpace(selected.Title) ? "" : " · " + selected.Title)</span>
+          <span>@selected.OrganizationName@(string.IsNullOrWhiteSpace(selected.ProductName) ? "" : " · " + selected.ProductName) · @AddedTitle(selected)</span>
         </div>
         <button type="button" class="ghost-button" @onclick="Close">Zapri</button>
       </header>
@@ -201,9 +254,11 @@
   [SupplyParameterFromQuery(Name = "naslov")] public string? QueryAddressState { get; set; }
   [SupplyParameterFromQuery(Name = "izdelek")] public string? QueryProduct { get; set; }
   [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryKind { get; set; }
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
 
   IReadOnlyList<MediaRow> Rows = [];
   IReadOnlyList<PimOption> Roles = [];
+  IReadOnlyList<PimOption> Hosts = [];
   IReadOnlyList<MediaKindCount> KindCounts = [];
   MediaSummary? Summary;
   MediaRow? Selected;
@@ -218,12 +273,21 @@
   string AddressState = "";
   string Kind = "";
   string Sort = "";
+  string HostFilter = "";
+  string Added = "";
+  string Activity = "";
   int Skip;
+  /// <summary>null pomeni vsa aktivna podjetja.</summary>
   int? OrganizationId;
+  // Iskanje z zamikom, menjava podjetja in listanje lahko sprozijo branje, preden se prejsnje
+  // konca. Brez stevca bi pocasnejsi star odgovor prepisal novega in na zaslonu bi ostali
+  // rezultati filtra, ki ni vec izbran.
+  int LoadVersion;
+  int ScopeVersion;
   int PageSize => GridView ? 48 : 50;
 
   static readonly IReadOnlyList<PimColumn> Columns =
-    [new("Predogled"), new("Artikel"), new("Vrsta"), new("Vloga"), new("Naziv"), new("Vrstni red", true), new("Naslov medija")];
+    [new("Predogled"), new("Artikel"), new("Podjetje"), new("Vrsta"), new("Vloga"), new("Naziv"), new("Vrstni red", true), new("Dodano"), new("Naslov medija")];
 
   static readonly string[] KindOrder = [MediaKindPolicy.ImageCode, MediaKindPolicy.VideoCode, MediaKindPolicy.DocumentCode, MediaKindPolicy.OtherCode];
 
@@ -243,7 +307,20 @@
     }
   }
 
-  bool HasFilters => Search.Length > 0 || Role.Length > 0 || AddressState.Length > 0 || Kind.Length > 0 || Sort.Length > 0;
+  bool HasFilters => Search.Length > 0 || Role.Length > 0 || AddressState.Length > 0 || Kind.Length > 0 || Sort.Length > 0
+    || HostFilter.Length > 0 || Added.Length > 0 || Activity.Length > 0;
+
+  MediaFilter CurrentFilter => new(
+    OrganizationId, Search, Role, AddressState, Kind, HostFilter, Activity,
+    int.TryParse(Added, out var days) ? days : null, Sort);
+
+  string ScopeLabel => OrganizationId is int id
+    ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"podjetje {id}"
+    : "vsa aktivna podjetja";
+
+  // Seznam izdelkov pozna filtra »slika=NO« in »aktivnost=ACTIVE«; nekdanji
+  // izdelki?pogled=BREZ_SLIKE je seznam tiho odprl brez filtra.
+  string WithoutImageHref => "izdelki?slika=NO&aktivnost=ACTIVE" + (OrganizationId is int id ? $"&podjetje={id}" : "");
 
   protected override async Task OnInitializedAsync()
   {
@@ -251,52 +328,96 @@
     Search = QueryProduct ?? "";
     Kind = QueryKind ?? "";
     try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
-    var organization = await Data.GetCurrentOrganizationAsync();
-    if (organization is null) { Error = "Aktivna organizacija ni na voljo."; Loading = false; return; }
-    OrganizationId = organization.OrganizationId;
-    OrganizationDraft = organization.OrganizationId.ToString();
+    // Brez izbire v naslovu so privzeto vsa aktivna podjetja — ne prvo po sifri (DEMO).
+    if (int.TryParse(QueryOrganization, out var chosen) && Organizations.Any(row => row.OrganizationId == chosen))
+    {
+      OrganizationId = chosen;
+      OrganizationDraft = chosen.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
     await LoadScopeAsync();
   }
 
-  /// <summary>Povzetek in vloge veljajo za eno podjetje, zato se ob menjavi preberejo znova.</summary>
+  /// <summary>
+  /// Povzetek, vloge in strezniki veljajo za izbran obseg podjetij, zato se ob menjavi preberejo
+  /// znova — hkrati s seznamom, ne pred njim.
+  /// </summary>
   async Task LoadScopeAsync()
   {
-    if (OrganizationId is null) return;
-    try
+    var version = ++ScopeVersion;
+    var organizationId = OrganizationId;
+    async Task ReadScopeAsync()
     {
-      var summaryTask = Catalog.GetMediaSummaryAsync(OrganizationId.Value);
-      var rolesTask = Catalog.GetMediaRolesAsync(OrganizationId.Value);
-      await Task.WhenAll(summaryTask, rolesTask);
-      Summary = await summaryTask; Roles = await rolesTask;
+      try
+      {
+        var summaryTask = Catalog.GetMediaSummaryAsync(organizationId);
+        var rolesTask = Catalog.GetMediaRolesAsync(organizationId);
+        var hostsTask = Catalog.GetMediaHostsAsync(organizationId);
+        await Task.WhenAll(summaryTask, rolesTask, hostsTask);
+        if (version != ScopeVersion) return;
+        Summary = await summaryTask; Roles = await rolesTask; Hosts = await hostsTask;
+      }
+      catch
+      {
+        if (version != ScopeVersion) return;
+        Summary = null; Roles = []; Hosts = [];
+      }
     }
-    catch { Summary = null; Roles = []; }
-    await LoadAsync();
+    await Task.WhenAll(ReadScopeAsync(), LoadAsync());
   }
 
   async Task OrganizationChangedAsync()
   {
-    if (!int.TryParse(OrganizationDraft, out var chosen) || chosen == OrganizationId) return;
+    int? chosen = int.TryParse(OrganizationDraft, out var id) ? id : null;
+    if (chosen == OrganizationId) return;
     OrganizationId = chosen;
     Skip = 0;
+    // Vloge in strezniki so seznam izbranega obsega; izbira iz drugega podjetja bi tiho izpraznila rezultat.
     Role = "";
+    HostFilter = "";
     await LoadScopeAsync();
   }
 
   async Task LoadAsync()
   {
-    if (OrganizationId is null) return;
-    Loading = true; Error = null; Failed.Clear();
+    var version = ++LoadVersion;
+    var filter = CurrentFilter;
+    Loading = true; Error = null;
     try
     {
-      var rowsTask = Catalog.GetMediaAsync(OrganizationId.Value, Search, Role, AddressState, Kind, Sort, Skip, PageSize);
-      var countsTask = Catalog.GetMediaKindCountsAsync(OrganizationId.Value, Search, Role, AddressState);
+      var rowsTask = Catalog.GetMediaAsync(filter, Skip, PageSize);
+      var countsTask = Catalog.GetMediaKindCountsAsync(filter);
       await Task.WhenAll(rowsTask, countsTask);
+      if (version != LoadVersion) return;
       (Rows, Total) = await rowsTask;
       KindCounts = await countsTask;
+      Failed.Clear();
     }
-    catch { Error = "Medijev trenutno ni mogoče naložiti."; Rows = []; }
-    finally { Loading = false; }
+    catch
+    {
+      if (version != LoadVersion) return;
+      Error = "Medijev trenutno ni mogoče naložiti."; Rows = []; Total = 0;
+    }
+    finally
+    {
+      if (version == LoadVersion) Loading = false;
+    }
   }
+
+  /// <summary>Ploscica »novih v 7 dneh« je bliznjica do filtra, ne okras.</summary>
+  async Task ShowRecentAsync()
+  {
+    Added = "7";
+    Sort = "";
+    await ApplyAsync();
+  }
+
+  static string AddedShort(MediaRow row) =>
+    row.CreatedUtc is null ? "čas vnosa ni znan" : PimTime.Format(row.CreatedUtc);
+
+  // Migracija 249: cas slik je iz zgodovine sprememb (od 20. 8. 2026), cas dokumentov iz prvega
+  // uvoza s tem naslovom. Brez casa ostane samo medij, ki je obstajal pred belezenjem.
+  static string AddedTitle(MediaRow row) =>
+    row.CreatedUtc is null ? "Dodano pred začetkom beleženja (20. 8. 2026)" : "Dodano " + PimTime.FormatWithAge(row.CreatedUtc);
 
   /// <summary>Iskanje se sproži samo, z zamikom — brez gumba in brez poizvedbe na vsak pritisk.</summary>
   async Task OnSearchInputAsync(ChangeEventArgs args)
@@ -412,7 +533,11 @@
 
   async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
   async Task SelectKindAsync(string kind) { Kind = kind; await ApplyAsync(); }
-  async Task ClearAsync() { Search = ""; Role = ""; AddressState = ""; Kind = ""; Sort = ""; await ApplyAsync(); }
+  async Task ClearAsync()
+  {
+    Search = ""; Role = ""; AddressState = ""; Kind = ""; Sort = ""; HostFilter = ""; Added = ""; Activity = "";
+    await ApplyAsync();
+  }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
   async Task SetView(bool grid) { if (GridView == grid) return; GridView = grid; Skip = 0; await LoadAsync(); }
   void Open(MediaRow row) => Selected = row;

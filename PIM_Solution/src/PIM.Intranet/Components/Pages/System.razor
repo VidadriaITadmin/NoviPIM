@@ -5,6 +5,7 @@
 @implements IDisposable
 @inject PIM.Intranet.Services.AdminConsoleService Nadzor
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Automation.AutomationStore Opravila
 @inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
 
@@ -175,6 +176,42 @@
   }
   else
   {
+    @* ── Poslovne kartice (237): »Ali poslovanje trenutno deluje in kaj moram narediti?« ──
+       Merilo je rezultat toka (starost zadnje uspešno objavljene datoteke, blokada po verigi
+       predhodnikov), ne izhodna koda procesa. Vsaka kartica pove stanje, starost zadnjega
+       uspeha, kaj teče, naslednji termin, vzrok, posledico in en jasen ukrep. *@
+    <section class="flow-grid" aria-label="Poslovni tokovi">
+      @foreach (var kartica in Kartice)
+      {
+        <article class="ui-card flow-card @kartica.Tone">
+          <div class="flow-head">
+            <h2>@kartica.Label</h2>
+            <PimChip Text="@kartica.StateLabel" Tone="@kartica.Tone" Prefix="Stanje: " />
+          </div>
+          <p class="flow-description">@kartica.Description</p>
+          <dl class="flow-facts">
+            <div><dt>Zadnji uspeh</dt><dd>@PimTime.FormatWithAge(kartica.LastSuccessUtc, "še nikoli")</dd></div>
+            <div><dt>Trenutno teče</dt><dd>@(kartica.RunningLabel ?? "nič")</dd></div>
+            <div><dt>Naslednji termin</dt><dd>@PimTime.Format(kartica.NextDueUtc, "—")</dd></div>
+            @if (kartica.Cause is not null) { <div><dt>Vzrok</dt><dd class="flow-cause">@kartica.Cause</dd></div> }
+            @if (kartica.Consequence is not null) { <div><dt>Posledica</dt><dd>@kartica.Consequence</dd></div> }
+            @if (kartica.Cause is null && kartica.VersionLabel is not null) { <div><dt>Splet uporablja</dt><dd>@kartica.VersionLabel</dd></div> }
+          </dl>
+          <div class="flow-actions">
+            <a class="small-action" href="@($"sistem/zagoni?posel={kartica.ResultJobKey}")">Odpri zagone</a>
+            @if (kartica.ActionJobKey is { } ukrep && kartica.ActionLabel is { } oznaka)
+            {
+              <button type="button" class="small-action primary-small" disabled="@Busy" @onclick="() => PozeniOpraviloAsync(ukrep, oznaka)">@oznaka</button>
+            }
+            else if (kartica.ActionLabel is { } opomba)
+            {
+              <a class="small-action" href="sistem/opravila">@opomba</a>
+            }
+          </div>
+        </article>
+      }
+    </section>
+
     @* ── Pregled: kratek trak pozornosti + kljucne stevilke ─────────────────── *@
     @if (Pozornost.Count == 0)
     {
@@ -233,7 +270,8 @@
 
   AdminPulse Pulse = AdminPulse.Empty;
   IReadOnlyList<StockFreshnessRow> Zaloga = [];
-  readonly Dictionary<string, int> Urejeni = [];
+  IReadOnlyList<FlowCard> Kartice = [];
+  readonly MinuteEditState Urejeni = new();
   global::System.Threading.Timer? Ura;
   string Uporabnik = "neznan";
   bool Loading = true;
@@ -297,6 +335,15 @@
       Urejeni.Clear();
       OsvezenoUtc = DateTime.UtcNow;
 
+      // Poslovne kartice (237): brez migracije 237 ostanejo prazne, utrip pa še vedno dela.
+      try
+      {
+        var (posli, odvisnosti, artefakti) = await Opravila.GetDefinitionsAsync();
+        var gostitelj = await Opravila.GetHostAsync();
+        Kartice = AutomationOverview.Build(posli, odvisnosti, artefakti, gostitelj, DateTime.UtcNow);
+      }
+      catch { Kartice = []; }
+
       // Kdor je konzolo odprl, je alarme videl. Zvonček od tega trenutka ne trdi drugače.
       await Nadzor.MarkAlertsSeenAsync(Uporabnik);
     }
@@ -314,16 +361,11 @@
   void PreklopiSamodejno(ChangeEventArgs e) => SamodejnoOsvezevanje = e.Value is true;
 
   // ── Krmiljenje postopkov ──────────────────────────────────────────────────
-  int Minute(WorkerPulseRow row, string kljuc) =>
-    Urejeni.TryGetValue(kljuc, out var vrednost) ? vrednost : row.IntervalMinutes;
+  int Minute(WorkerPulseRow row, string kljuc) => Urejeni.Value(kljuc, row.IntervalMinutes);
 
-  bool Spremenjen(WorkerPulseRow row, string kljuc) =>
-    Urejeni.TryGetValue(kljuc, out var vrednost) && vrednost != row.IntervalMinutes;
+  bool Spremenjen(WorkerPulseRow row, string kljuc) => Urejeni.Changed(kljuc, row.IntervalMinutes);
 
-  void NastaviMinute(string kljuc, string? vnos)
-  {
-    if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) Urejeni[kljuc] = minute;
-  }
+  void NastaviMinute(string kljuc, string? vnos) => Urejeni.Set(kljuc, vnos);
 
   Task PreklopiAsync(WorkerPulseRow row) => ShraniAsync(
     row, !row.IsEnabled, row.IntervalSeconds,
@@ -365,12 +407,39 @@
     finally { Busy = false; }
   }
 
+  /// Ročni zagon iz poslovne kartice je zahteva, ki jo prevzame gostitelj avtomatike (237).
+  async Task PozeniOpraviloAsync(string jobKey, string oznaka)
+  {
+    Busy = true;
+    Error = null;
+    Message = null;
+    try
+    {
+      await Opravila.RequestRunAsync(jobKey, Uporabnik);
+      await Nadzor.LogActivityAsync(Uporabnik, "JOB_RUN_REQUEST", "Opravilo", $"Zahteva za zagon posla {jobKey} s pregleda ({oznaka}).", entityKey: jobKey);
+      Message = $"Zahteva »{oznaka}« je oddana; gostitelj avtomatike jo prevzame ob naslednjem tiku. Potek spremljaj na Zagonih.";
+      await NaloziAsync();
+    }
+    catch (Exception exception)
+    {
+      Error = "Zahteve ni bilo mogoče oddati: " + exception.Message;
+    }
+    finally { Busy = false; }
+  }
+
   // ── Kaj potrebuje pozornost ───────────────────────────────────────────────
   List<AttentionRow> Pozornost
   {
     get
     {
       var vrstice = new List<AttentionRow>();
+
+      // Poslovni tokovi (237) so prvi: to je odgovor na »ali poslovanje deluje«.
+      foreach (var kartica in Kartice.Where(k => k.State != FlowState.Ok))
+        vrstice.Add(new(kartica.State is FlowState.Failed or FlowState.HostDown ? "bad" : "warn",
+          $"{kartica.Label}: {kartica.StateLabel}",
+          kartica.Cause ?? kartica.Consequence ?? "",
+          "sistem/opravila", "Opravila"));
 
       foreach (var postopek in Pulse.Workers.Where(row => row.Health is WorkerHealth.Silent))
         vrstice.Add(new("bad",

@@ -137,6 +137,7 @@ public static class ShippingPolicyCsvGenerator
 /// </summary>
 public static class RegistryCsvWriter
 {
+  public static string Escape(string? value) => ConfiguredCsvWriter.Escape(value);
   /// <returns>Število zapisanih vrstic brez glave.</returns>
   public static async Task<int> WriteAsync(
     string path,
@@ -175,7 +176,9 @@ internal static class ConfiguredCsvWriter
   public static ExportColumnDefinition[] Ordered(IEnumerable<ExportColumnDefinition> definitions)
   {
     var columns = definitions.Where(column => column.IsActive).OrderBy(column => column.SortOrder).ThenBy(column => column.ColumnCode, StringComparer.Ordinal).ToArray();
-    if (columns.Length == 0 || columns.Select(column => column.SortOrder).Distinct().Count() != columns.Length)
+    if (columns.Length == 0 || columns.Select(column => column.SortOrder).Distinct().Count() != columns.Length
+        || columns.Any(column => string.IsNullOrWhiteSpace(column.OutputColumnName) || column.OutputColumnName != column.OutputColumnName.Trim())
+        || columns.Select(column => column.OutputColumnName).Distinct(StringComparer.Ordinal).Count() != columns.Length)
       throw new ExportContractException("Izvozni profil nima enoličnih aktivnih stolpcev.");
     return columns;
   }

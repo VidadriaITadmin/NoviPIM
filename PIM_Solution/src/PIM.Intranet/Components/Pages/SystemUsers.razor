@@ -25,6 +25,10 @@
 {
   <p class="message-state @(MessageOk ? "success-message" : "error-message")" role="alert" aria-live="polite">@Message</p>
 }
+@if (Nasvet is not null)
+{
+  <p class="message-state warn-message" role="status">@Nasvet</p>
+}
 
 <div class="user-summary-grid" aria-label="Povzetek uporabnikov">
   <div class="ui-card user-summary"><span>Vseh računov</span><strong>@(Rows?.Count ?? 0)</strong></div>
@@ -73,7 +77,7 @@
     else
     {
       <div class="create-flow" aria-labelledby="dodaj-lokalnega">
-        <div class="flow-step"><span>1</span><div><strong id="dodaj-lokalnega">Dodaj lokalnega uporabnika</strong><small>Za osebe brez domenskega računa. Geslo naj ima vsaj 10 znakov.</small></div></div>
+        <div class="flow-step"><span>1</span><div><strong id="dodaj-lokalnega">Dodaj lokalnega uporabnika</strong><small>Za osebe brez domenskega računa. Priporočamo geslo z vsaj @IntranetUserAdministrationService.RecommendedPasswordLength znaki, ni pa obvezno.</small></div></div>
         <div class="local-create-grid">
           <label class="form-field" for="novoIme">Uporabniško ime
             <input id="novoIme" class="form-input" @bind="NovoUporabnisko" placeholder="npr. mnovak" />
@@ -85,7 +89,7 @@
             <input id="novoEposta" type="email" class="form-input" @bind="NovoEposta" placeholder="ime.priimek@podjetje.si" />
           </label>
           <label class="form-field" for="novoGeslo">Začetno geslo
-            <input id="novoGeslo" type="password" class="form-input" @bind="NovoGeslo" autocomplete="new-password" placeholder="vsaj 10 znakov" />
+            <input id="novoGeslo" type="password" class="form-input" @bind="NovoGeslo" @bind:event="oninput" autocomplete="new-password" aria-describedby="novoGeslo-nasvet" />
           </label>
           <label class="form-field" for="novaVloga">Začetna vloga
             <select id="novaVloga" class="filter-select" @bind="NovaVloga">
@@ -94,6 +98,9 @@
           </label>
           <button type="button" class="primary-button create-local-action" @onclick="DodajLokalnega" disabled="@Busy">Ustvari račun</button>
         </div>
+        @* Odstavek je vedno v DOM-u (prazen, ko nasveta ni): bralnik zaslona napove samo spremembo
+           obstojecega aria-live obmocja, ne obmocja, ki se pojavi skupaj z besedilom. *@
+        <p id="novoGeslo-nasvet" class="password-advice" aria-live="polite">@IntranetUserAdministrationService.PasswordAdvice(NovoGeslo)</p>
       </div>
     }
   </section>
@@ -177,8 +184,10 @@
                         @if (!domenski)
                         {
                           <label class="form-field" for="@($"geslo-{safe}")">Novo geslo
-                            <input id="@($"geslo-{safe}")" type="password" class="form-input" autocomplete="new-password" placeholder="vsaj 10 znakov"
-                                   value="@Vrednost(Gesla, user.UserName, null)" @onchange="args => Gesla[user.UserName] = args.Value?.ToString()" />
+                            @* @bind (ne rocni value + @oninput): samo @bind uskladi streznisko kopijo z vrednostjo
+                               v brskalniku, sicer lahko ob hitrem tipkanju zamuda izbrise znak v skritem polju. *@
+                            <input id="@($"geslo-{safe}")" type="password" class="form-input" autocomplete="new-password" aria-describedby="@($"geslo-{safe}-nasvet")"
+                                   @bind:get="Vrednost(Gesla, user.UserName, null)" @bind:set="value => Gesla[user.UserName] = value" @bind:event="oninput" />
                           </label>
                         }
                         <div class="profile-actions">
@@ -194,6 +203,10 @@
                           }
                         </div>
                       </div>
+                      @if (!domenski)
+                      {
+                        <p id="@($"geslo-{safe}-nasvet")" class="password-advice" aria-live="polite">@IntranetUserAdministrationService.PasswordAdvice(Vrednost(Gesla, user.UserName, null))</p>
+                      }
                     </section>
 
                     <section class="user-edit-section" aria-labelledby="@($"roles-{safe}")">
@@ -260,6 +273,8 @@
   bool Busy;
   bool MessageOk;
   string? Message;
+  /// <summary>Priporocilo ob uspehu (npr. kratko geslo). Opozorilo, ne napaka: dejanje je ze izvedeno.</summary>
+  string? Nasvet;
   ActiveDirectoryUser? Found;
   IReadOnlyList<IntranetUserRow>? Rows;
   IReadOnlyList<ManagedRoleRow> RoleRows = [];
@@ -282,6 +297,7 @@
     ("OutboundDrift", "Odklon odhodnih sporočil"), ("StalledWatermark", "Zastal vodni žig"),
     ("PipelineDisabled", "Onemogočen cevovod"), ("ReservationExcluded", "Izločeno iz rezervacije zaloge"),
     ("OutboundUnacknowledged", "Nepotrjena odhodna napaka"),
+    ("WebShopWithdrawn", "Artikli umaknjeni s spleta"),
   ];
 
   IReadOnlyList<IntranetUserRow> FilteredRows => (Rows ?? []).Where(user =>
@@ -327,15 +343,17 @@
     ? new HashSet<string>(StringComparer.Ordinal)
     : csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal);
 
-  async Task Izvedi(Func<Task> dejanje, string uspeh)
+  async Task Izvedi(Func<Task> dejanje, string uspeh, string? nasvet = null)
   {
     Busy = true;
     Message = null;
+    Nasvet = null;
     try
     {
       await dejanje();
       MessageOk = true;
       Message = uspeh;
+      Nasvet = nasvet;
       await Reload();
     }
     catch (Exception exception)
@@ -356,11 +374,15 @@
     Naslovi.Remove(user.UserName);
   }, $"Podatki za {user.UserName} so shranjeni.");
 
-  Task PonastaviGeslo(string userName) => Izvedi(async () =>
+  Task PonastaviGeslo(string userName)
   {
-    await Users.ResetPasswordAsync(userName, Vrednost(Gesla, userName, null));
-    Gesla.Remove(userName);
-  }, $"Geslo za {userName} je nastavljeno.");
+    var geslo = Vrednost(Gesla, userName, null);
+    return Izvedi(async () =>
+    {
+      await Users.ResetPasswordAsync(userName, geslo);
+      Gesla.Remove(userName);
+    }, $"Geslo za {userName} je nastavljeno.", IntranetUserAdministrationService.PasswordAdvice(geslo));
+  }
 
   Task Preklopi(IntranetUserRow user) => Izvedi(() => Users.SetEnabledAsync(user.UserName, !user.IsEnabled),
     user.IsEnabled ? $"{user.UserName} je onemogočen." : $"{user.UserName} je omogočen.");
@@ -373,12 +395,13 @@
   {
     await Users.CreateLocalUserAsync(NovoUporabnisko, NovoPrikazno, NovoGeslo, NovaVloga, NovoEposta);
     NovoUporabnisko = ""; NovoPrikazno = ""; NovoEposta = ""; NovoGeslo = ""; ShowCreate = false;
-  }, "Lokalni račun je ustvarjen.");
+  }, "Lokalni račun je ustvarjen.", IntranetUserAdministrationService.PasswordAdvice(NovoGeslo));
 
   void Find()
   {
     Found = null;
     Message = null;
+    Nasvet = null;
     var result = Users.FindDomainUser(DomainIdentity);
     if (result.Success) Found = result.User;
     else { Message = result.Error; MessageOk = false; }

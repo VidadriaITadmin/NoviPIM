@@ -53,9 +53,21 @@ internal static class ExportRunLog
       string? hash = null;
       if (succeeded && filePath is not null && File.Exists(filePath))
       {
-        var info = new FileInfo(filePath);
-        bytes = info.Length;
-        hash = await HashAsync(filePath, ct);
+        // Velikost in hash sta ločena: velikost pove tudi, kadar hasha ni bilo mogoče prebrati.
+        try { bytes = new FileInfo(filePath).Length; }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        hash = await TryHashAsync(filePath, ct);
+      }
+
+      // Po preteku ukaza (timeout) ali pretrgani povezavi je SqlConnection zaprt oziroma pokvarjen.
+      // Zaključek se mora zabeležiti kljub temu: sicer vrstica ostane v Running, v finally klicatelja
+      // pa nova izjema ("requires an open and available Connection") prekrije pravi vzrok. Izmerjeno
+      // 2026-09-21: izvoz podjetja 2 je po 635 s padel, pravi vzrok — pretek 600 s v out.GetExportRows —
+      // je ostal neviden, zapisa MAGENTO_PRODUCTS/MAGENTO_CUSTOMERS pa v Running.
+      if (connection.State != ConnectionState.Open)
+      {
+        try { connection.Close(); } catch (InvalidOperationException) { }
+        await connection.OpenAsync(CancellationToken.None);
       }
 
       await using var command = new SqlCommand("out.CompleteExportRun", connection) { CommandType = CommandType.StoredProcedure };
@@ -69,16 +81,36 @@ internal static class ExportRunLog
         filePath is null ? DBNull.Value : Path.GetFileName(filePath);
       command.Parameters.Add("@ErrorRedacted", SqlDbType.NVarChar, 2000).Value =
         error is null ? DBNull.Value : Skrajsaj(error);
-      await command.ExecuteNonQueryAsync(ct);
+      // Zaključek ne sme biti odvisen od preklica, ki je morda ustavil sam izvoz.
+      await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
-    catch (SqlException exception)
+    catch (Exception exception) when (exception is SqlException or InvalidOperationException or IOException)
     {
-      Console.Error.WriteLine($"Opozorilo: zaključka izvoza ni bilo mogoče zabeležiti ({exception.Number}).");
+      // Zapis ne sme podreti izvoza in ne sme prekriti prvotne napake (glej opis razreda).
+      Console.Error.WriteLine($"Opozorilo: zaključka izvoza ni bilo mogoče zabeležiti ({exception.GetType().Name}: {exception.Message}).");
     }
-    catch (IOException)
+  }
+
+  /// <summary>
+  /// Hash z do tremi poskusi: datoteka je pravkar objavljena in jo lahko za hip izključujoče drži
+  /// protivirusni program ali bralec. Če ne uspe, se zaključek zabeleži brez hasha — status ostane
+  /// Succeeded, ker datoteka JE objavljena (oznaka magento-export.complete obstaja); zapis ne sme
+  /// ostati v Running, izid pa ne sme biti prikazan kot padec. Velikost datoteke ostane zapisana.
+  /// </summary>
+  internal static async Task<string?> TryHashAsync(string path, CancellationToken ct)
+  {
+    for (var attempt = 1; ; attempt++)
     {
-      // Datoteka je nastala, a je zaklenjena ali že premaknjena; velikost in hash nista dokaz,
-      // brez katerega izvoz ne bi veljal.
+      try { return await HashAsync(path, ct); }
+      catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+      {
+        if (attempt >= 3)
+        {
+          Console.Error.WriteLine($"Opozorilo: kontrolne vsote izvoza ni bilo mogoče prebrati ({exception.Message}); zaključek se zabeleži brez nje.");
+          return null;
+        }
+        await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), CancellationToken.None);
+      }
     }
   }
 

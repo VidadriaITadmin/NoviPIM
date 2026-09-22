@@ -9,9 +9,15 @@ internal static class CatalogLifecycleTests
         var item = "F7_CAT_" + Guid.NewGuid().ToString("N");
         try
         {
-            await Execute("""
+            // Temp tabeli nastaneta v lastnem, neparametriziranem paketu. Parametriziran ukaz (@Item) gre
+            // prek sp_executesql in temp tabele, ustvarjene v njem, izginejo ob koncu tistega paketa —
+            // naslednji paket je padel z 208 "Invalid object name '#CatalogTestStock'" (2026-09-21).
+            await using (var createFixtures = new SqlCommand("""
                 CREATE TABLE #CatalogTest(ProductId bigint,PimProductId bigint,ItemID nvarchar(100),CustomerId bigint NULL);
                 CREATE TABLE #CatalogTestStock(SnapshotId bigint,Contribution nvarchar(20));
+                """, connection, transaction) { CommandTimeout = 180 })
+                await createFixtures.ExecuteNonQueryAsync();
+            await Execute("""
                 INSERT canon.Product(OrganizationId,ItemID,Department,ItemGroup,DiscountGroup,ValidationStatus)
                 VALUES(2,@Item,N'X',N'F7_GROUP',N'F7_ERP',N'VALID');
                 DECLARE @ProductId bigint=SCOPE_IDENTITY();
@@ -117,7 +123,8 @@ internal static class CatalogLifecycleTests
                 "stale observations do not reopen review");
 
             await Execute("""
-                INSERT b2b.Customer(OrganizationId,CustomerKey,Name) VALUES(2,@Item,N'F7 catalog customer');
+                /* 202: v stranke.csv gre samo aktivna stranka (customer.IsActive = 1) — fixture to pove izrecno. */
+                INSERT b2b.Customer(OrganizationId,CustomerKey,Name,IsActive) VALUES(2,@Item,N'F7 catalog customer',1);
                 DECLARE @Customer bigint=SCOPE_IDENTITY();
                 UPDATE #CatalogTest SET CustomerId=@Customer;
                 INSERT pim.CustomerWebProfile(CustomerId,CustomerTypeCode) VALUES(@Customer,N'INSTALLER');

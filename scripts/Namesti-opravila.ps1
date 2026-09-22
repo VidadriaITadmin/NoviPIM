@@ -12,16 +12,19 @@
   (Sql.ps1, -Vseeno za rocni zagon). Naloge odstrani z -Odstrani; registriraj jih samo, kadar intranet
   ne tece nikjer in cikle hoces poganjati z racunalnika brez njega.
 
-  Registrira stiri naloge pod tvojim racunom:
+  Registrira pet nalog pod tvojim racunom:
 
-    PIM nocni tok   vsak dan ob $Ura   cel tok: katalog, XML, zaloga, validacija, izvoz
-    PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP, Braytron XML, promote, cena+zaloga
-    PIM katalog     vsako uro          promote + poln izvoz (katalog.csv/stranke.csv)
+    PIM nocni tok   vsak dan ob $Ura   cel tok: katalog, XML, zaloga, validacija, objava
+    PIM zaloga      vsakih 5 minut     SAOP, Nowodvorski FTP, Braytron XML, cena+zaloga (hitri profil)
+    PIM katalog     vsako uro          SAOP katalog (delta), narocila, validacija + objava
+    PIM magento     vsakih 15 minut    katalog.csv/stranke.csv iz objave; validacija le, ce je starejsa od 90 min
     PIM nadzor      vsakih 5 minut     nadzornik zastalih obdelav in razposiljanje alarmov
 
-  PIM katalog je locena od PIM zaloga zato, ker je poln izvoz (215 stolpcev) tezji od hitrega
-  profila cena+zaloga (14 stolpcev) — uporabnik 2026-09-10 je hotel katalog na uro, ceno in
-  zalogo pa pogosteje; ti dve nalogi to locita, ne da bi poln izvoz tekel vsakih 5 minut.
+  PIM magento je od 2026-09-21 locena od PIM katalog in PIM zaloga: izdelava CSV za Magento bere
+  samo PIM in ne klice SAOP, zato neuspesen vhod ne sme biti videti kot neuspesna izdelava CSV in
+  obratno (isti razlog kot cikel magento-csv v intranetu). Poln izvoz (180 stolpcev) ne tece vec
+  v petminutnem zalogovnem ciklu; tece vsakih 5 minut sam, validacijo pa ponovi le, kadar urni
+  PIM katalog ni tekel (Magento-cikel.ps1 -StarostValidacije).
 
   Nadzor je edini del, ki pove, da se je nekaj ustavilo. Brez njega odpoved ostane tiha -
   izmerjeno 28. 8. 2026 je zaloga padla 18-krat zapored in tega ni izvedel nihce.
@@ -45,7 +48,7 @@
   Ura nocnega toka v obliki HH:mm. Privzeto 02:30.
 
 .PARAMETER Odstrani
-  Namesto registracije vse stiri naloge odstrani.
+  Namesto registracije vseh pet nalog odstrani.
 
 .PARAMETER BrezZaloge
   Registriraj samo nocni tok, brez zalogovnega cikla.
@@ -73,6 +76,7 @@ $koren = Split-Path -Parent $mestoSkripte
 $nocno   = Join-Path $mestoSkripte 'Nocno-vse.ps1'
 $cikel   = Join-Path $mestoSkripte 'Zaloga-cikel.ps1'
 $katalog = Join-Path $mestoSkripte 'Katalog-cikel.ps1'
+$magento = Join-Path $mestoSkripte 'Magento-cikel.ps1'
 $nadzor  = Join-Path $mestoSkripte 'Nadzor.ps1'
 
 # Objava v eno mapo (deploy\Publish-All.ps1): Workerji\ ob korenu velja brez -MapaWorkerjev. Podamo jo
@@ -83,7 +87,7 @@ if ([string]::IsNullOrWhiteSpace($MapaWorkerjev) -and (Test-Path (Join-Path $kor
 
 # Stari imeni sta v seznamu zato, da jih -Odstrani pospravi tudi pri tistih, ki so ju ze imeli
 # registrirani; nova namestitev ju ne ustvari vec.
-$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM katalog', 'PIM nadzor', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
+$imena = @('PIM nocni tok', 'PIM zaloga', 'PIM katalog', 'PIM magento', 'PIM nadzor', 'PIM prevzem datotek', 'PIM zaloga iz datotek', 'PIM zaloga iz SAOP')
 
 if ($Odstrani) {
   foreach ($ime in $imena) {
@@ -98,7 +102,7 @@ if ($Odstrani) {
 
 . (Join-Path $mestoSkripte 'Izvajalec.ps1')
 
-foreach ($pot in @($nocno, $cikel, $katalog, $nadzor)) {
+foreach ($pot in @($nocno, $cikel, $katalog, $magento, $nadzor)) {
   if (-not (Test-Path $pot)) { throw "Ni najdena skripta $pot." }
 }
 
@@ -167,6 +171,12 @@ if (-not $BrezZaloge) {
   # Vsako uro, locena od petminutne zaloge (glej opis Katalog-cikel.ps1: poln izvoz je tezji od
   # hitrega profila cena+zaloga in ne sodi v isti petminutni ritem).
   Registriraj 'PIM katalog' $katalog @() (Ponavljajoc 60 6) (New-TimeSpan -Minutes 45)
+
+  # CSV za Magento: vsakih 15 minut iz objave (242; enako kot cikel magento-csv v intranetu), zamik 3 min.
+  # Validacijo ponovi samo, kadar je starejsa od 90 min (Magento-cikel.ps1 -StarostValidacije). Izdelava
+  # para podjetja 2 (89.491 vrstic x 180 stolpcev) traja minute (izmerjeno 2026-09-21: 10 min pod
+  # obremenitvijo); pri 5 min bi tekla skoraj neprekinjeno. Meja 30 min pokrije tudi tik z validacijo.
+  Registriraj 'PIM magento' $magento @() (Ponavljajoc 15 3) (New-TimeSpan -Minutes 30)
 
   # Nadzor je zamaknjen za dve minuti od zaloge: ce bi tekla hkrati, bi nadzornik lahko razglasil
   # za zastalo izvajanje, ki se je pravkar zacelo.

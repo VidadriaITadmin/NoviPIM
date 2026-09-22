@@ -23,7 +23,7 @@
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrano resnost ni dogodkov." LoadingText="Nalaganje dnevnika …">
     <PimTable Caption="Najnovejši tehnični dogodki" Columns="Columns">
       <Rows>
-        @foreach (var row in Rows)
+        @foreach (var row in PageRows)
         {
           <tr>
             <td>@row.OccurredUtc.ToPimLocal().ToString("g")</td>
@@ -36,6 +36,10 @@
         }
       </Rows>
     </PimTable>
+    @if (Rows.Count > PageSize)
+    {
+      <PimPager Skip="PageSkip" Take="PageSize" Total="Rows.Count" SkipChanged="OnSkipChanged" Label="Strani dnevnika napak" />
+    }
   </PimState>
 </section>
 
@@ -44,9 +48,15 @@
   string Severity = "";
   bool Loading = true;
   string? Error;
+  int PageSkip;
   const int Take = 300;
+  const int PageSize = 50;
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Dnevnik napak")];
   static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Resnost"), new("Plast"), new("Koda"), new("Sporočilo"), new("Tek")];
+
+  // Vseh do 300 vrstic je že v pomnilniku (Governance.GetErrorLogAsync); stran tu je zato
+  // samo izsek te množice, brez nove poizvedbe na vsak klik "Naslednja".
+  IEnumerable<PIM.Intranet.Services.ErrorLogRow> PageRows => Rows.Skip(PageSkip).Take(PageSize);
 
   protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -54,10 +64,13 @@
   {
     Loading = true;
     Error = null;
+    PageSkip = 0;
     try { Rows = await Governance.GetErrorLogAsync(Severity, Take); }
     catch { Error = "Dnevnika napak trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
+
+  void OnSkipChanged(int skip) => PageSkip = skip;
 
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
   static string? SeverityTone(string value) => value switch { "Critical" or "Error" => "bad", "Warning" => "warn", "Info" => "good", _ => null };

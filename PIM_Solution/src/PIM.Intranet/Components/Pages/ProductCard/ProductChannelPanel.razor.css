@@ -130,6 +130,10 @@ textarea.field-input { line-height: 1.5; min-height: 6rem; resize: vertical; }
 .issue.error .issue-mark { background: var(--pim-bad-text); }
 .issue.warning .issue-mark { background: var(--pim-warn-text); }
 
+/* Potrditev skrbnika (249): zelena pika, gumb ob desnem robu vrstice. */
+.issue.waived .issue-mark { background: var(--pim-good-text); }
+.issue-waive { align-self: center; flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
+
 .issue-message { color: var(--pim-text-strong); font-size: .86rem; font-weight: 600; margin: 0; }
 .issue-meta { align-items: center; color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .72rem; gap: .55rem; margin: .2rem 0 0; }
 .issue-meta > span + span::before { content: "·"; margin-right: .55rem; }
@@ -148,3 +152,6 @@ textarea.field-input { line-height: 1.5; min-height: 6rem; resize: vertical; }
 /* U3: tehnični ključ je razvijalčev podatek, ne urednikov. Preklop stoji v glavi panela, da je
    dosegljiv, in je privzeto izklopljen, da obrazec ni posut s kodami. */
 .key-toggle { align-items: center; color: var(--pim-text-muted); cursor: pointer; display: inline-flex; font-size: .78rem; gap: .35rem; }
+
+/* 239: ERP opisi so samo prikaz, a vecvrsticni — prelomi ostanejo. */
+.field.wide .field-value { white-space: pre-wrap; }

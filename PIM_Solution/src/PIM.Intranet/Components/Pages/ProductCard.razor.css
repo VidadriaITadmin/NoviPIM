@@ -77,7 +77,7 @@
   align-items: start;
   display: grid;
   gap: 1rem;
-  grid-template-columns: 15.5rem minmax(0, 1fr);
+  grid-template-columns: 15.5rem minmax(0, 1fr) minmax(17rem, 22rem);
 }
 
 .section-nav-column { min-width: 0; }
@@ -137,6 +137,30 @@
 .section-heading { margin: 0 0 .1rem; }
 .section-heading h2 { color: var(--pim-text-strong); font-size: 1.15rem; margin: 0 0 .25rem; }
 .section-heading p { color: var(--pim-text-muted); font-size: .82rem; margin: 0; }
+
+/* Aktivnosti so en sam, vedno viden modul in berejo ProductCardView.History. */
+.activity-column { min-width: 0; }
+.activity-card { padding: 1rem; position: sticky; top: 1rem; }
+.activity-head { align-items: flex-start; display: flex; gap: .75rem; justify-content: space-between; margin-bottom: .9rem; }
+.activity-head h2 { color: var(--pim-text-strong); font-size: 1rem; margin: 0 0 .18rem; }
+.activity-head p { color: var(--pim-text-muted); font-size: .75rem; margin: 0; }
+.activity-count { align-items: center; background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: 999px; color: var(--pim-text-strong); display: inline-flex; font-size: .72rem; font-weight: 700; justify-content: center; min-width: 1.8rem; padding: .2rem .45rem; }
+.activity-empty { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .82rem; margin: 0; padding-top: .9rem; }
+.activity-timeline { list-style: none; margin: 0; padding: .1rem 0 0 1.5rem; position: relative; }
+.activity-timeline::before { background: var(--pim-border); bottom: 1rem; content: ""; left: .35rem; position: absolute; top: .55rem; width: 2px; }
+.activity-event { border-bottom: 1px solid var(--pim-border); padding: 0 0 1rem; position: relative; }
+.activity-event + .activity-event { padding-top: 1rem; }
+.activity-event:last-child { border-bottom: 0; padding-bottom: .1rem; }
+.activity-marker { background: var(--pim-accent); border: 3px solid var(--pim-good-bg); border-radius: 50%; height: .78rem; left: -1.5rem; position: absolute; top: .15rem; width: .78rem; }
+.activity-event time { color: var(--pim-text-muted); display: block; font-size: .7rem; font-variant-numeric: tabular-nums; margin-bottom: .25rem; }
+.activity-event h3 { color: var(--pim-text-strong); font-size: .82rem; line-height: 1.35; margin: 0 0 .25rem; overflow-wrap: anywhere; }
+.activity-change { color: var(--pim-text); font-size: .78rem; line-height: 1.45; margin: 0; overflow-wrap: anywhere; }
+.activity-meta { color: var(--pim-text-muted); display: flex; flex-wrap: wrap; font-size: .7rem; gap: .2rem .45rem; margin: .4rem 0 0; }
+.activity-meta span + span::before { content: "·"; margin-right: .45rem; }
+.activity-note { background: var(--pim-surface-subtle); border-radius: var(--pim-radius-xs); color: var(--pim-text-muted); font-size: .72rem; line-height: 1.4; margin: .55rem 0 0; padding: .4rem .5rem; overflow-wrap: anywhere; }
+.activity-toggle { background: transparent; border: 0; border-top: 1px solid var(--pim-border); color: var(--pim-primary); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 700; margin-top: .85rem; padding: .75rem 0 0; text-align: left; width: 100%; }
+.activity-toggle:hover { color: var(--pim-text-strong); }
+.activity-toggle:focus-visible { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
 /* --- pregled ----------------------------------------------------------------------- */
 
@@ -212,8 +236,15 @@
 .tab-panel:focus-visible,
 .media-link:focus-visible { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 
+@media (max-width: 1240px) {
+  .product-workspace { grid-template-columns: 13.5rem minmax(0, 1fr); }
+  .activity-column { grid-column: 2; }
+  .activity-card { position: static; }
+}
+
 @media (max-width: 900px) {
   .product-workspace { grid-template-columns: 1fr; }
+  .activity-column { grid-column: auto; }
   .section-nav-card { overflow-x: auto; position: static; }
   .product-section-nav { flex-direction: row; min-width: max-content; }
   .product-section-nav button { min-width: max-content; }
@@ -260,3 +291,11 @@
 .conflict-mine, .conflict-theirs { font-size: .82rem; }
 .conflict-mine { color: var(--pim-text-muted); }
 .conflict-theirs { font-weight: 600; }
+
+/* AI predlog na zavihku Splet (2026-09-21): jezik + gumb ob izbirniku spletnega mesta. */
+.ai-tools { align-items: center; display: inline-flex; flex-wrap: wrap; gap: .4rem; margin-left: .75rem; }
+.ai-tools .ai-hint { font-size: .78rem; }
+
+/* 251: pasica samodejnega umika s spleta nad spletišči. */
+.web-withdrawn ul { margin: .4rem 0; padding-left: 1.2rem; }
+.web-withdrawn li { margin: .15rem 0; }

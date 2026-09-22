@@ -6,12 +6,13 @@
 @inject ProductWorkbookService Workbook
 @inject IntranetDataService Data
 @inject HeavyWorkGate Gate
+@inject WebWithdrawalService Withdrawals
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Uvoz delovnega lista</PageTitle>
 
 <PimPage Title="Uvoz delovnega lista izdelkov"
-         Subtitle="Ista datoteka, ki jo izvozi gumb »Delovni list« na strani Izdelki. Spletni podatki se zapišejo takoj, ERP polja gredo v vrsto za SAOP in čakajo odobritev." />
+         Subtitle="Ista datoteka, ki jo izvozi gumb »Delovni list« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
@@ -44,13 +45,19 @@
     <h2>2. Kaj bo uvoz naredil</h2>
     <p role="status">
       Vrstic: <strong>@Preview.Rows.Count</strong> —
-      takoj v PIM: <strong>@Preview.PimChangeCount</strong>,
-      v vrsto za SAOP: <strong>@Preview.SaopChangeCount</strong>.
+      spletni podatki, atributi, slike: <strong>@Preview.PimChangeCount</strong>,
+      ERP polja (v PIM takoj in v vrsto za SAOP): <strong>@Preview.SaopChangeCount</strong>.
     </p>
 
     @if (Preview.ReadOnlyColumns.Count > 0)
     {
       <p class="hint">Stolpci samo za branje (prezrti): @string.Join(", ", Preview.ReadOnlyColumns)</p>
+    }
+    @if (Preview.NewAttributes is { Count: > 0 } newAttributes)
+    {
+      <p class="message-state warn-message">
+        Novi atributi — šifrant jih še ne pozna, uvoz jih ustvari: @string.Join(", ", newAttributes)
+      </p>
     }
     @if (Preview.UnknownColumns.Count > 0)
     {
@@ -68,7 +75,7 @@
           <thead>
             <tr>
               <th scope="col">Vrstica</th><th scope="col">Podjetje</th><th scope="col">Artikel</th>
-              <th scope="col">Takoj v PIM</th><th scope="col">V vrsto za SAOP</th>
+              <th scope="col">Splet, atributi, slike</th><th scope="col">ERP (PIM + vrsta za SAOP)</th>
             </tr>
           </thead>
           <tbody>
@@ -98,8 +105,9 @@
         Uvozi @(Preview.PimChangeCount + Preview.SaopChangeCount) sprememb
       </button>
       <p class="hint">
-        Spletni podatki se zapišejo takoj in gredo skozi zgodovino sprememb ter ponovno
-        validacijo. ERP polja se samo uvrstijo v vrsto; nič ne odide v SAOP brez odobritve.
+        Vse se zapiše v PIM takoj in gre skozi zgodovino sprememb ter ponovno validacijo — tudi
+        ERP polja, ki ne čakajo več na SAOP. V SAOP pa ERP sprememba odide šele po odobritvi v
+        vrsti. Slike in dokumenti: celica je cel seznam; naslov, ki ga v celici ni več, izdelek izgubi.
       </p>
     }
   </section>
@@ -111,11 +119,17 @@
     <h2>3. Izid</h2>
     <p role="status">
       Spremenjenih izdelkov: <strong>@Outcome.RowsTouched</strong>.
-      Zapisano v PIM: <strong>@Outcome.PimChanges</strong>.
+      Zapisano v PIM: <strong>@Outcome.PimChanges</strong>
+      (od tega ERP polj: <strong>@Outcome.ErpWritten</strong>,
+      slik in dokumentov dodanih: <strong>@Outcome.MediaAdded</strong>, odstranjenih: <strong>@Outcome.MediaRemoved</strong>).
       Uvrščeno v vrsto za SAOP: <strong>@Outcome.SaopQueued</strong>,
       že v vrsti: <strong>@Outcome.SaopDuplicates</strong>,
       zavrnjeno: <strong>@Outcome.SaopRejected</strong>.
     </p>
+    @if (Outcome.CreatedAttributes is { Count: > 0 } created)
+    {
+      <p>Ustvarjeni atributi: @string.Join(", ", created) — v nabor kategorije jih dodaš na <a href="nastavitve/nabori-atributov">Nabori atributov</a>, sicer ne gredo na splet.</p>
+    }
     @if (Outcome.OutboundBatchIds.Count > 0)
     {
       <p>
@@ -137,6 +151,18 @@
     {
       <p class="hint">… in še @(Outcome.Problems.Count - 50) opozoril.</p>
     }
+    @* 251: uvoz je lahko pobrisal sliko, kategorijo ali obvezno polje — artikel, ki zato na označeno
+       spletišče ne sme več, je PIM (ob vklopljenem samodejnem umiku) odkljukal. *@
+    @if (Withdrawn.Count > 0)
+    {
+      var lines = WebWithdrawalText.PerProduct(Withdrawn);
+      <p class="message-state warn-message" role="status">
+        Umaknjeni s spleta: <strong>@lines.Count</strong> artiklov po tem uvozu ni več veljavnih za splet, zato jim je PIM odstranil kljukice spletišč.
+        Seznam in pregled: <a href="splet/umaknjeni">Umaknjeni s spleta</a>.
+      </p>
+      @foreach (var line in lines.Take(50)) { <p class="message-state warn-message">@line.</p> }
+      @if (lines.Count > 50) { <p class="hint">… in še @(lines.Count - 50) artiklov.</p> }
+    }
   </section>
 }
 
@@ -147,6 +173,8 @@
   IReadOnlyList<OrganizationContext> Organizations = [];
   ProductWorkbookPreview? Preview;
   ProductWorkbookOutcome? Outcome;
+  /// <summary>Kljukice spletišč, ki jih je PIM po tem uvozu umaknil (251).</summary>
+  List<WebShopWithdrawalRow> Withdrawn = [];
   string OrganizationText = "";
   string Note = "";
   bool Busy;
@@ -210,7 +238,7 @@
   async Task ApplyAsync()
   {
     if (Preview is null) return;
-    Busy = true; Error = null; Message = null;
+    Busy = true; Error = null; Message = null; Withdrawn = [];
     try
     {
       var actor = await ActorAsync();
@@ -218,9 +246,18 @@
       // Progress<T> ga vrne na vezje strani, zato je StateHasChanged tu varen.
       var progress = new Progress<string>(text => { Message = text; _ = InvokeAsync(StateHasChanged); });
       using (await EnterImportLaneAsync())
+      {
         Outcome = await Workbook.ApplyAsync(Preview, actor,
           string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), progress);
-      Message = $"Uvoz končan: {Outcome.PimChanges} vrednosti zapisanih, {Outcome.SaopQueued} uvrščenih v vrsto.";
+        // 251: artikli datoteke, ki po uvozu na označeno spletišče ne smejo več (npr. pobrisana slika) —
+        // kategorije uvoz zapiše brez validacije, zato kandidate najprej ponovno validiramo.
+        ((IProgress<string>)progress).Report("Preverjam, ali kak artikel po uvozu ni več veljaven za splet …");
+        foreach (var organization in Preview.Rows.GroupBy(row => row.OrganizationId))
+          Withdrawn.AddRange(await Withdrawals.AfterChangeByItemsAsync(organization.Key,
+            organization.Select(row => row.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            "DELOVNI_LIST", actor, revalidate: true));
+      }
+      Message = $"Uvoz končan: {Outcome.PimChanges} vrednosti zapisanih v PIM, {Outcome.SaopQueued} ERP sprememb uvrščenih v vrsto za SAOP.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
       Preview = null;
     }

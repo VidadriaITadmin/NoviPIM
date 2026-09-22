@@ -85,10 +85,14 @@ public sealed class SaopDocumentBuilder
   static readonly HashSet<string> FalseWords = new(StringComparer.OrdinalIgnoreCase) { "0", "false", "n", "ne" };
 
   /// <summary>Ovoj, ki pomeni »neposredno pod korenom oziroma pod gnezdenim ovojem«.</summary>
-  const string RootSection = "Item";
+  public const string RootSection = "Item";
 
   readonly SaopDocumentShape shape;
   readonly IReadOnlyList<SaopXmlField> contract;
+
+  /// <summary>Pogodba polj, urejena po vrstnem redu pošiljanja — glej <see cref="SaopDocumentRunner"/>,
+  /// ki jo potrebuje za dopolnitev spremenjenega gnezdenega ovoja (243, drugi del).</summary>
+  public IReadOnlyList<SaopXmlField> Fields => contract;
 
   public SaopDocumentBuilder(SaopDocumentShape shape, IEnumerable<SaopXmlField> contract)
   {

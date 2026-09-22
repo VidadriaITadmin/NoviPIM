@@ -46,10 +46,10 @@ param(
   [ValidateSet('Saop', 'Dobavitelji', 'Vse')] [string]$Kaj = 'Vse',
   [int[]]$Podjetja = @(1, 2, 3, 4),
 
-  # Podjetje, katerega katalog.csv in stranke.csv se s svezo zalogo in cenami obnovita vsakih
-  # pet minut. Samo eno, namenoma — glej opis parametra -PodjetjeKataloga v Katalog-cikel.ps1
-  # (uporabnik 2026-09-15: en katalog, ne po en na podjetje). Zaloga in cene se iz SAOP se vedno
-  # berejo za vsa -Podjetja: VID zaloga in VID cenik vstopata v IQ katalog.
+  # Od 2026-09-21 brez ucinka: katalog.csv in stranke.csv izdeluje samostojen cikel
+  # (Magento-cikel.ps1, naloga "PIM magento"; v intranetu cikel magento-csv). Parameter ostaja
+  # sprejet zaradi zdruzljivosti klicev. Zaloga in cene se iz SAOP se vedno berejo za vsa
+  # -Podjetja: VID zaloga in VID cenik vstopata v IQ katalog.
   [int]$PodjetjeKataloga = 2,
   [string]$KorenRepozitorija = '',
 
@@ -187,14 +187,12 @@ if ($Kaj -eq 'Vse') {
 # skozi validacijo — vsebuje samo izdelke, ki so ze na spletu. Uporabnik 2026-09-02: "zaloge in
 # cene morajo biti zelo redno osvezene". Datoteka: izvoz\magento\<podjetje>\magento-stock-prices.csv.
 #
-# Poln izvoz (--export-magento) je tu poleg hitrega profila zato, ker slednji ne prenese
-# odstranitve odprodajnega popusta ali novega/ukinjenega izdelka - samo poln izvoz to zajame.
-# Uporabnik 2026-09-15: »zaloge se posebej pa cene nekako filajo v ta katalog.csv« - katalog.csv
-# in stranke.csv dobita sveze cene in zalogo vsakih 5 minut, brez validacije (ta je na uro v
-# Katalog-cikel.ps1). Poln izvoz tece SAMO za -PodjetjeKataloga (en katalog); do 2026-09-15 je
-# tekel za vsa stiri podjetja in bil en od dveh vzrokov za deadlocke na val.RunValidation (glej
-# Katalog-cikel.ps1 in Sql.ps1). Ce bi bila obremenitev se vedno previsoka, je prva stvar za umik
-# prav ta drugi klic, ne prvi.
+# Poln par katalog.csv/stranke.csv od 2026-09-21 ni vec tu: izdeluje ga samostojen cikel
+# (Magento-cikel.ps1, naloga "PIM magento"; v intranetu cikel magento-csv) vsakih 5 minut iz
+# objave, brez klica SAOP. Ta cikel pise samo hitri profil cena+zaloga (14 stolpcev). Do takrat je
+# poln izvoz tekel tu ob vsakem tiku in ob vsakem tiku padel na pravicah do izhodne mape
+# (2026-09-21: 76 padcev v 48 urah), zato je bil cel zalogovni cikel videti neuspesen, ceprav so
+# zaloge prisle; uporabnik: izdelava CSV je neodvisna od branja/pisanja SAOP.
 if ($Kaj -eq 'Vse') {
   Korak 'Izvoz cen in zaloge za splet' {
     foreach ($o in $Podjetja) {
@@ -202,12 +200,6 @@ if ($Kaj -eq 'Vse') {
       if (-not (Test-Path $izhod)) { New-Item -ItemType Directory -Path $izhod -Force | Out-Null }
       PozeniWorker 'workers\PIM.B2bWorker' @('--export-profile', 'MAGENTO_STOCK_PRICES', '--organization-id', "$o", '--output-dir', $izhod, '--file-name', 'magento-stock-prices.csv')
     }
-  }
-
-  Korak "Osvezitev kataloga in strank s cenami in zalogo (podjetje $PodjetjeKataloga)" {
-    # Ciljna mapa ni vec tu: worker jo sam razresi (register ops.SystemPath, kljuc EXPORT_ROOT;
-    # glej scripts\Nastavi-izvozno-pot.ps1) — ista kot pri urnem izvozu v Katalog-cikel.ps1.
-    PozeniWorker 'workers\PIM.B2bWorker' @('--export-magento', '--organization-id', "$PodjetjeKataloga")
   }
 }
 

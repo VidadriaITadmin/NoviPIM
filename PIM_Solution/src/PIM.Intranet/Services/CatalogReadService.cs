@@ -2,13 +2,28 @@ using Microsoft.Data.SqlClient;
 
 namespace PIM.Intranet.Services;
 
-public sealed record MediaRow(string Source, long SourceId, long ProductId, string ItemId, string Url, string Role, int SortOrder, string? Title, string Kind)
+/// <param name="CreatedUtc">Cas vnosa v PIM (migracija 249); null pomeni pred zacetkom belezenja.</param>
+public sealed record MediaRow(
+  string Source, long SourceId, long ProductId, string ItemId, string Url, string Role, int SortOrder, string? Title, string Kind,
+  int OrganizationId, string OrganizationName, string? ProductName, bool ProductActive, DateTime? CreatedUtc)
 {
   /// <summary>Enolicen kljuc cez oba vira; sam ProductMediaId bi trcil z ProductDocumentId.</summary>
   public string Key => Source + "-" + SourceId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 public sealed record MediaKindCount(string Kind, long RowCount);
-public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia, long SchemeLessCount);
+/// <param name="AddedLastWeek">Slike in dokumenti, vneseni v zadnjih sedmih dneh.</param>
+public sealed record MediaSummary(long ProductsWithMedia, long ProductsWithoutMedia, long TotalMedia, long AddedLastWeek);
+
+/// <summary>
+/// Filtri strani Mediji. Prazno ali null pomeni "brez omejitve"; podjetje null pomeni vsa
+/// aktivna podjetja iz <c>dbo.OrganizationConfig</c>.
+/// </summary>
+/// <param name="Host">Streznik brez "www."; <see cref="CatalogReadService.NoMediaHost"/> pomeni naslov brez streznika.</param>
+/// <param name="Activity"><c>AKTIVNI</c> ali <c>NEAKTIVNI</c> izdelki.</param>
+/// <param name="AddedDays">Samo mediji, vneseni v zadnjih toliko dneh.</param>
+public sealed record MediaFilter(
+  int? OrganizationId = null, string? Search = null, string? Role = null, string? AddressState = null, string? Kind = null,
+  string? Host = null, string? Activity = null, int? AddedDays = null, string? Sort = null);
 public sealed record PriceRow(long ProductPriceId, long ProductId, string ItemId, string PriceList, decimal Net, decimal VatRate, DateTime ValidFrom, bool IsActive);
 
 /// <summary>
@@ -44,98 +59,216 @@ public sealed class CatalogReadService(PimDb database)
   // ─── Mediji ───────────────────────────────────────────────────────────────
   // Uporabnik je odlocil, da medij za zdaj ostane naslov v bazi; datotecno skladisce pride
   // pozneje. Stran zato prikazuje povezavo, vlogo in vrstni red, ne pa nalaganja datotek.
+
+  /// <summary>Vrednost filtra streznika za naslove brez streznika (relativne ali pokvarjene).</summary>
+  public const string NoMediaHost = "-";
+
   public Task<(IReadOnlyList<MediaRow> Rows, long TotalCount)> GetMediaAsync(
-    int organizationId, string? search, string? role, string? addressState, string? kind, string? sort,
-    int skip, int take, CancellationToken cancellationToken = default)
+    MediaFilter filter, int skip, int take, CancellationToken cancellationToken = default)
   {
-    var terms = SearchTerms(search);
+    var terms = SearchTerms(filter.Search);
     var source = MediaSource(terms);
+    var query = MediaQuery(terms);
+    var order = MediaOrderBy(filter.Sort);
+    // Naziv izdelka se prebere sele za vrstice na strani: za vse zapise bi bil to en OUTER APPLY
+    // na vrstico, na zaslonu pa jih je najvec 50.
     return database.PageAsync($"""
-      {source}
-      SELECT Source, SourceId, ProductId, ItemID, Url, Role, SortOrder, Title, Kind
-      FROM medij
-      WHERE (@Kind IS NULL OR Kind = @Kind)
-      ORDER BY {MediaOrderBy(sort)}
-      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
+      {query}, stran AS (
+        SELECT Source, SourceId, ProductId, ItemID, OrganizationId, OrganizationName, ProductActive,
+               Url, Role, SortOrder, Title, Kind, CreatedUtc
+        FROM medij
+        WHERE (@Kind IS NULL OR Kind = @Kind)
+        ORDER BY {order}
+        OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY
+      )
+      SELECT stran.Source, stran.SourceId, stran.ProductId, stran.ItemID, stran.OrganizationId, stran.OrganizationName,
+             stran.ProductActive, stran.Url, stran.Role, stran.SortOrder, stran.Title, stran.Kind, stran.CreatedUtc,
+             naziv.Value AS ProductName
+      FROM stran
+      OUTER APPLY
+      (
+        SELECT TOP (1) besedilo.Value
+        FROM canon.ProductText AS besedilo
+        WHERE besedilo.ProductId = stran.ProductId AND besedilo.TextType IN (N'WEB_TITLE', N'TITLE_ERP')
+        ORDER BY CASE WHEN besedilo.TextType = N'WEB_TITLE' THEN 0 ELSE 1 END,
+          CASE WHEN besedilo.Lang = N'sl' THEN 0 ELSE 1 END, besedilo.Lang
+      ) AS naziv
+      ORDER BY {order}
+      {Recompile};
 
       {source}
-      SELECT COUNT_BIG(*) FROM medij WHERE (@Kind IS NULL OR Kind = @Kind);
+      SELECT COUNT_BIG(*) FROM medij WHERE (@Kind IS NULL OR Kind = @Kind) {Recompile};
       """,
       reader => new MediaRow(
         PimDb.TextOrEmpty(reader, "Source"), PimDb.Int64(reader, "SourceId"), PimDb.Int64(reader, "ProductId"),
         PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "Url"), PimDb.TextOrEmpty(reader, "Role"),
-        PimDb.Int32(reader, "SortOrder"), PimDb.Text(reader, "Title"), PimDb.TextOrEmpty(reader, "Kind")),
-      command => BindMedia(command, organizationId, terms, role, addressState, kind, skip, take), cancellationToken);
+        PimDb.Int32(reader, "SortOrder"), PimDb.Text(reader, "Title"), PimDb.TextOrEmpty(reader, "Kind"),
+        PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"), PimDb.Text(reader, "ProductName"),
+        PimDb.Bool(reader, "ProductActive"), PimDb.NullableDateTime(reader, "CreatedUtc")),
+      command => BindMedia(command, filter, terms, skip, take), cancellationToken);
   }
 
   /// <summary>
   /// Stevci po vrsti medija za isto zozitev, brez filtra vrste. Stran jih pokaze kot filtre,
   /// zato morajo povedati, koliko zapisov bo klik dejansko prinesel.
   /// </summary>
-  public Task<IReadOnlyList<MediaKindCount>> GetMediaKindCountsAsync(
-    int organizationId, string? search, string? role, string? addressState, CancellationToken cancellationToken = default)
+  public Task<IReadOnlyList<MediaKindCount>> GetMediaKindCountsAsync(MediaFilter filter, CancellationToken cancellationToken = default)
   {
-    var terms = SearchTerms(search);
+    var terms = SearchTerms(filter.Search);
     return database.QueryAsync($"""
-      {MediaSource(terms)}
-      SELECT Kind, COUNT_BIG(*) AS RowCountValue FROM medij GROUP BY Kind;
+      {MediaQuery(terms)}
+      SELECT Kind, COUNT_BIG(*) AS RowCountValue FROM medij GROUP BY Kind {Recompile};
       """,
       reader => new MediaKindCount(PimDb.TextOrEmpty(reader, "Kind"), PimDb.Int64(reader, "RowCountValue")),
-      command => BindMedia(command, organizationId, terms, role, addressState, null, 0, 0), cancellationToken);
+      command => BindMedia(command, filter with { Kind = null }, terms, 0, 0), cancellationToken);
   }
 
   /// <summary>
   /// Skupni izvor vseh poizvedb medijev.
   ///
-  /// Dve odlocitvi sta tu namerni. Prva: slike (<c>canon.ProductMedia</c>) in dokumenti
+  /// Tri odlocitve so tu namerne. Prva: slike (<c>canon.ProductMedia</c>) in dokumenti
   /// (<c>canon.ProductDocument</c>) sta dve tabeli, uporabnik pa ju vidi kot en predal —
   /// zato <c>UNION ALL</c> in stolpec <c>Source</c>, ne dve locni strani. Druga: vrsta se
   /// izracuna v skupnem izrazu <see cref="MediaKindPolicy.SqlKindExpression"/>, ki nastane iz
-  /// istih seznamov kot razvrstitev v C#, da se ploscica in filter ne moreta raziti.
+  /// istih seznamov kot razvrstitev v C#, da se ploscica in filter ne moreta raziti. Tretja:
+  /// obseg so aktivna podjetja iz <c>dbo.OrganizationConfig</c>, ne prvo podjetje po sifri.
+  /// Uporabnik 2026-09-22: stran je privzeto pokazala DEMO, 82 slik Vidadrie, uvozenih isti dan,
+  /// pa se ni dalo najti — zdelo se je, da jih v bazi ni.
   /// </summary>
+  /// <summary>
+  /// Zadetki iskanja na ravni izdelka, izracunani enkrat pred poizvedbo medijev: za vsako besedo
+  /// tabela izdelkov, pri katerih jo najde sifra, EAN, dobavitelj, proizvajalec, podjetje ali
+  /// naziv. Na vrstico medija ostanejo samo naslov, vloga in naziv dokumenta.
+  ///
+  /// Hitrost (merjeno 2026-09-22, ~48.000 medijev pri ~7.700 izdelkih): EXISTS po nazivu za
+  /// vsak medij je trajal ~9 s; tudi kot CTE ga je optimizator ponavljal za vsako vrstico
+  /// (~2 s). Tabelna spremenljivka je izracunana enkrat. Primerjave so LOWER + binarna kolacija
+  /// — vzorec pride v malih crkah, zato iskanje ostane neobcutljivo na velikost crk.
+  /// </summary>
+  static string MediaSearchPrelude(IReadOnlyList<string> terms) => string.Concat(terms.Select((_, index) => $"""
+    DECLARE @Zadetki{index} TABLE (ProductId bigint NOT NULL PRIMARY KEY);
+    INSERT @Zadetki{index} (ProductId)
+    SELECT product.ProductId
+    FROM canon.Product product
+    INNER JOIN dbo.OrganizationConfig organization
+      ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+    WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+      AND product.ProductId IN (SELECT ProductId FROM canon.ProductMedia UNION SELECT ProductId FROM canon.ProductDocument)
+      AND ({Lowered("product.ItemID")} LIKE @Term{index} OR {Lowered("product.EAN")} LIKE @Term{index}
+        OR {Lowered("product.Supplier")} LIKE @Term{index} OR {Lowered("product.Manufacturer")} LIKE @Term{index}
+        OR {Lowered("organization.Name")} LIKE @Term{index}
+        OR EXISTS (SELECT 1 FROM canon.ProductText besedilo
+                   WHERE besedilo.ProductId = product.ProductId
+                     AND besedilo.TextType IN (N'WEB_TITLE', N'TITLE_ERP', N'SEARCH_NAME')
+                     AND {Lowered("besedilo.Value")} LIKE @Term{index}))
+    {Recompile};
+
+    """));
+
+  /// <summary>Uvod in izvor skupaj — za poizvedbo, ki izvor uporabi enkrat.</summary>
+  static string MediaQuery(IReadOnlyList<string> terms) => "SET NOCOUNT ON;\n" + MediaSearchPrelude(terms) + MediaSource(terms);
+
   static string MediaSource(IReadOnlyList<string> terms)
   {
     var kind = MediaKindPolicy.SqlKindExpression("Url", "Role");
-    var search = terms.Count == 0
-      ? string.Empty
-      : string.Concat(terms.Select((_, index) =>
-          $"\n          AND (ItemID LIKE @Term{index} OR Url LIKE @Term{index} OR Role LIKE @Term{index}"
-          + $" OR (Title IS NOT NULL AND Title LIKE @Term{index}))"));
+    // Vsaka beseda mora najti zadetek v katerem koli polju: sifra, EAN, naslov, vloga, naziv
+    // dokumenta, dobavitelj, proizvajalec, podjetje ali naziv izdelka. Polja izdelka so
+    // izracunana vnaprej (MediaSearchPrelude), polja medija se primerjajo tu.
+    var nameJoins = string.Concat(terms.Select((_, index) =>
+      $"\n        LEFT JOIN @Zadetki{index} zadetek{index} ON zadetek{index}.ProductId = vsi.ProductId"));
+    var search = string.Concat(terms.Select((_, index) =>
+      $"\n          AND (zadetek{index}.ProductId IS NOT NULL"
+      + string.Concat(new[] { "Url", "Role", "Title" }.Select(column => $" OR {Lowered("vsi." + column)} LIKE @Term{index}"))
+      + ")"));
 
     return $"""
       WITH vsi AS (
         SELECT N'MEDIJ' AS Source, media.ProductMediaId AS SourceId, media.ProductId, product.ItemID,
-               media.Url, media.Role, media.SortOrder, CONVERT(nvarchar(400), NULL) AS Title
+               product.IsActive AS ProductActive,
+               product.OrganizationId, organization.Name AS OrganizationName,
+               media.Url, media.Role, media.SortOrder, CONVERT(nvarchar(400), NULL) AS Title, media.CreatedUtc
         FROM canon.ProductMedia media
         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-        WHERE product.OrganizationId = @OrganizationId
+        INNER JOIN dbo.OrganizationConfig organization
+          ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
         UNION ALL
         SELECT N'DOKUMENT', document.ProductDocumentId, document.ProductId, product.ItemID,
-               document.Url, document.Role, document.SortOrder, CONVERT(nvarchar(400), document.Title)
+               product.IsActive,
+               product.OrganizationId, organization.Name,
+               document.Url, document.Role, document.SortOrder, CONVERT(nvarchar(400), document.Title), document.CreatedUtc
         FROM canon.ProductDocument document
         INNER JOIN canon.Product product ON product.ProductId = document.ProductId
-        WHERE product.OrganizationId = @OrganizationId
+        INNER JOIN dbo.OrganizationConfig organization
+          ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
       ), medij AS (
-        SELECT Source, SourceId, ProductId, ItemID, Url, Role, SortOrder, Title, {kind} AS Kind
-        FROM vsi
-        WHERE (@Role IS NULL OR Role = @Role)
+        SELECT vsi.Source, vsi.SourceId, vsi.ProductId, vsi.ItemID, vsi.OrganizationId, vsi.OrganizationName,
+               vsi.ProductActive, vsi.Url, vsi.Role, vsi.SortOrder, vsi.Title, vsi.CreatedUtc,
+               {kind} AS Kind, gostitelj.Host
+        FROM vsi{nameJoins}
+        {MediaHostApply}
+        WHERE (@Role IS NULL OR vsi.Role = @Role)
+          AND (@Activity IS NULL
+            OR (@Activity = N'AKTIVNI' AND vsi.ProductActive = 1)
+            OR (@Activity = N'NEAKTIVNI' AND vsi.ProductActive = 0))
+          AND (@AddedSince IS NULL OR vsi.CreatedUtc >= @AddedSince)
+          AND (@Host IS NULL OR gostitelj.Host = @Host)
           AND (@AddressState IS NULL
-            OR (@AddressState = N'OK' AND Url LIKE N'https://%')
-            OR (@AddressState = N'CORRECTED' AND (Url LIKE N'//%' OR Url LIKE N'www.%'))
-            OR (@AddressState = N'HTTP' AND Url LIKE N'http://%')
-            OR (@AddressState = N'INVALID' AND Url NOT LIKE N'https://%' AND Url NOT LIKE N'http://%'
-                AND Url NOT LIKE N'//%' AND Url NOT LIKE N'www.%')){search}
+            OR (@AddressState = N'OK' AND vsi.Url LIKE N'https://%')
+            OR (@AddressState = N'CORRECTED' AND (vsi.Url LIKE N'//%' OR vsi.Url LIKE N'www.%'))
+            OR (@AddressState = N'HTTP' AND vsi.Url LIKE N'http://%')
+            OR (@AddressState = N'INVALID' AND vsi.Url NOT LIKE N'https://%' AND vsi.Url NOT LIKE N'http://%'
+                AND vsi.Url NOT LIKE N'//%' AND vsi.Url NOT LIKE N'www.%')){search}
       )
       """;
   }
 
+  static string Lowered(string column) => $"LOWER({column}) COLLATE Latin1_General_BIN2";
+
+  /// <summary>
+  /// Vsak stavek medijev se prevede za dane vrednosti. Filtri so oblike <c>@X IS NULL OR …</c>;
+  /// z obstojecim nacrtom bi baza vrsto in streznik racunala za vseh ~48.000 zapisov tudi takrat,
+  /// ko filter ni izbran. Prevajanje je poceni v primerjavi s tem.
+  /// </summary>
+  const string Recompile = "OPTION (RECOMPILE)";
+
+  /// <summary>
+  /// Streznik naslova brez sheme in brez "www." (<c>vipelektro.si</c>). Naslov brez streznika
+  /// (relativna pot, pokvarjen zapis) da prazen niz — tak medij se v brskalniku ne nalozi.
+  /// Binarna kolacija iz istega razloga kot v <see cref="MediaKindPolicy.SqlKindExpression"/>.
+  /// </summary>
+  const string MediaHostApply = """
+        CROSS APPLY (SELECT U = LOWER(LTRIM(RTRIM(vsi.Url))) COLLATE Latin1_General_BIN2) AS naslov
+        CROSS APPLY (SELECT Rest = CASE
+            WHEN naslov.U LIKE N'%://%' THEN SUBSTRING(naslov.U, CHARINDEX(N'://', naslov.U) + 3, 4000)
+            WHEN naslov.U LIKE N'//%' THEN SUBSTRING(naslov.U, 3, 4000)
+            WHEN naslov.U LIKE N'www.%' THEN naslov.U
+            ELSE N'' END) AS pot
+        CROSS APPLY (SELECT Name = LEFT(pot.Rest, PATINDEX(N'%[/?#:]%', pot.Rest + N'/') - 1)) AS surovi
+        CROSS APPLY (SELECT Host = CONVERT(nvarchar(200),
+            CASE WHEN surovi.Name LIKE N'www.%' THEN SUBSTRING(surovi.Name, 5, 200) ELSE surovi.Name END)) AS gostitelj
+""";
+
+  /// <summary>
+  /// Vsak vrstni red se konca z virom in sifro zapisa. Brez enolicnega konca SQL Server vrstic
+  /// z enakim kljucem ne vrne vedno v istem zaporedju in ista slika bi se pojavila na dveh
+  /// straneh, druga pa na nobeni.
+  /// </summary>
+  /// <remarks>
+  /// Znotraj izdelka gredo slike (MEDIJ) pred dokumente in po svojem zaporedju — izracunane
+  /// vrste tu namerno ni: v kljucu razvrscanja bi jo baza morala izracunati za vse zapise.
+  /// </remarks>
   static string MediaOrderBy(string? sort) => sort switch
   {
-    "ARTIKEL_DESC" => "ItemID DESC, Kind, Role, SortOrder",
-    "VLOGA" => "Role, ItemID, SortOrder",
-    "VRSTA" => "Kind, ItemID, Role, SortOrder",
-    "NASLOV" => "Url, ItemID",
-    _ => "ItemID, Kind, Role, SortOrder"
+    "STARI" => "CreatedUtc, ItemID, OrganizationId, Source DESC, SortOrder, Role, SourceId",
+    "ARTIKEL" => "ItemID, OrganizationId, Source DESC, SortOrder, Role, SourceId",
+    "ARTIKEL_DESC" => "ItemID DESC, OrganizationId, Source DESC, SortOrder, Role, SourceId",
+    "VLOGA" => "Role, ItemID, OrganizationId, SortOrder, Source DESC, SourceId",
+    "VRSTA" => "Kind, ItemID, OrganizationId, Source DESC, SortOrder, Role, SourceId",
+    "NASLOV" => "Url, ItemID, OrganizationId, Source DESC, SourceId",
+    // Privzeto: najnovejsi najprej. Brez casa (pred belezenjem) pade na konec.
+    _ => "CreatedUtc DESC, ItemID, OrganizationId, Source DESC, SortOrder, Role, SourceId"
   };
 
   /// <summary>Vzorec LIKE nastane v kodi, zato morajo nadomestni znaki iz vnosa ostati navadni znaki.</summary>
@@ -149,66 +282,83 @@ public sealed class CatalogReadService(PimDb database)
       .Take(6).ToArray();
   }
 
-  static void BindMedia(SqlCommand command, int organizationId, IReadOnlyList<string> terms,
-    string? role, string? addressState, string? kind, int skip, int take)
+  static void BindMedia(SqlCommand command, MediaFilter filter, IReadOnlyList<string> terms, int skip, int take)
   {
-    command.Parameters.AddWithValue("@OrganizationId", organizationId);
-    command.Parameters.AddWithValue("@Role", string.IsNullOrWhiteSpace(role) ? DBNull.Value : role);
-    command.Parameters.AddWithValue("@AddressState", string.IsNullOrWhiteSpace(addressState) ? DBNull.Value : addressState);
-    command.Parameters.AddWithValue("@Kind", string.IsNullOrWhiteSpace(kind) ? DBNull.Value : kind);
+    command.Parameters.Add("@OrganizationId", System.Data.SqlDbType.Int).Value =
+      filter.OrganizationId is int organizationId ? organizationId : DBNull.Value;
+    command.Parameters.AddWithValue("@Role", NullIfBlank(filter.Role));
+    command.Parameters.AddWithValue("@AddressState", NullIfBlank(filter.AddressState));
+    command.Parameters.AddWithValue("@Kind", NullIfBlank(filter.Kind));
+    command.Parameters.AddWithValue("@Host", filter.Host == NoMediaHost ? string.Empty : NullIfBlank(filter.Host));
+    command.Parameters.AddWithValue("@Activity", NullIfBlank(filter.Activity));
+    command.Parameters.Add("@AddedSince", System.Data.SqlDbType.DateTime2).Value =
+      filter.AddedDays is int days and > 0 ? DateTime.UtcNow.AddDays(-days) : DBNull.Value;
     command.Parameters.AddWithValue("@Skip", skip);
     command.Parameters.AddWithValue("@Take", take);
+    // Stolpci se primerjajo kot LOWER(...) v binarni kolaciji, zato mora biti tudi vzorec v malih crkah.
     for (var index = 0; index < terms.Count; index++)
-      command.Parameters.AddWithValue($"@Term{index}", "%" + LikeSafe(terms[index]) + "%");
+      command.Parameters.AddWithValue($"@Term{index}", "%" + LikeSafe(terms[index].ToLowerInvariant()) + "%");
   }
 
+  static object NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
   /// <summary>Vloge obeh virov v enem sifrantu — dokumenti nosijo vecino pomenljivih vlog.</summary>
-  public Task<IReadOnlyList<PimOption>> GetMediaRolesAsync(int organizationId, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("""
-      SELECT Role, SUM(RowCountValue) AS RowCountValue FROM (
-        SELECT media.Role, COUNT_BIG(*) AS RowCountValue
-        FROM canon.ProductMedia media
-        INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-        WHERE product.OrganizationId = @OrganizationId
-        GROUP BY media.Role
-        UNION ALL
-        SELECT document.Role, COUNT_BIG(*)
-        FROM canon.ProductDocument document
-        INNER JOIN canon.Product product ON product.ProductId = document.ProductId
-        WHERE product.OrganizationId = @OrganizationId
-        GROUP BY document.Role
-      ) AS vloge
-      GROUP BY Role ORDER BY Role;
+  public Task<IReadOnlyList<PimOption>> GetMediaRolesAsync(int? organizationId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync($"""
+      {MediaSource([])}
+      SELECT Role, COUNT_BIG(*) AS RowCountValue FROM medij GROUP BY Role ORDER BY Role {Recompile};
       """,
       reader => new PimOption(PimDb.TextOrEmpty(reader, "Role"),
         $"{PimDb.TextOrEmpty(reader, "Role")} ({PimDb.Int64(reader, "RowCountValue"):N0})"),
-      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+      command => BindMedia(command, new MediaFilter(OrganizationId: organizationId), [], 0, 0), cancellationToken);
 
-  public async Task<MediaSummary> GetMediaSummaryAsync(int organizationId, CancellationToken cancellationToken = default)
+  /// <summary>Strezniki, s katerih prihajajo mediji, najpogostejsi najprej.</summary>
+  public Task<IReadOnlyList<PimOption>> GetMediaHostsAsync(int? organizationId, CancellationToken cancellationToken = default) =>
+    database.QueryAsync($"""
+      {MediaSource([])}
+      SELECT Host, COUNT_BIG(*) AS RowCountValue FROM medij GROUP BY Host ORDER BY COUNT_BIG(*) DESC, Host {Recompile};
+      """,
+      reader =>
+      {
+        var host = PimDb.TextOrEmpty(reader, "Host");
+        var count = PimDb.Int64(reader, "RowCountValue");
+        return host.Length == 0
+          ? new PimOption(NoMediaHost, $"Brez strežnika ({count:N0})")
+          : new PimOption(host, $"{host} ({count:N0})");
+      },
+      command => BindMedia(command, new MediaFilter(OrganizationId: organizationId), [], 0, 0), cancellationToken);
+
+  public async Task<MediaSummary> GetMediaSummaryAsync(int? organizationId, CancellationToken cancellationToken = default)
   {
     var rows = await database.QueryAsync("""
+      WITH izdelki AS (
+        SELECT product.ProductId, product.IsActive
+        FROM canon.Product product
+        INNER JOIN dbo.OrganizationConfig organization
+          ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+      )
       SELECT
         (SELECT COUNT_BIG(DISTINCT media.ProductId) FROM canon.ProductMedia media
-         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-         WHERE product.OrganizationId = @OrganizationId) AS WithMedia,
-        (SELECT COUNT_BIG(*) FROM canon.Product product
-         WHERE product.OrganizationId = @OrganizationId AND product.IsActive = 1
-           AND NOT EXISTS (SELECT 1 FROM canon.ProductMedia media WHERE media.ProductId = product.ProductId)) AS WithoutMedia,
-        (SELECT COUNT_BIG(*) FROM canon.ProductMedia media
-         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-         WHERE product.OrganizationId = @OrganizationId) AS TotalMedia,
-        (SELECT COUNT_BIG(*) FROM canon.ProductMedia media
-         INNER JOIN canon.Product product ON product.ProductId = media.ProductId
-         WHERE product.OrganizationId = @OrganizationId
-           AND (media.Url LIKE N'//%' OR media.Url LIKE N'www.%'))
-        + (SELECT COUNT_BIG(*) FROM canon.ProductDocument document
-           INNER JOIN canon.Product product ON product.ProductId = document.ProductId
-           WHERE product.OrganizationId = @OrganizationId
-             AND (document.Url LIKE N'//%' OR document.Url LIKE N'www.%')) AS SchemeLessCount;
+         INNER JOIN izdelki ON izdelki.ProductId = media.ProductId) AS WithMedia,
+        (SELECT COUNT_BIG(*) FROM izdelki
+         WHERE izdelki.IsActive = 1
+           AND NOT EXISTS (SELECT 1 FROM canon.ProductMedia media WHERE media.ProductId = izdelki.ProductId)) AS WithoutMedia,
+        (SELECT COUNT_BIG(*) FROM canon.ProductMedia media INNER JOIN izdelki ON izdelki.ProductId = media.ProductId)
+        + (SELECT COUNT_BIG(*) FROM canon.ProductDocument document INNER JOIN izdelki ON izdelki.ProductId = document.ProductId) AS TotalMedia,
+        (SELECT COUNT_BIG(*) FROM canon.ProductMedia media INNER JOIN izdelki ON izdelki.ProductId = media.ProductId
+         WHERE media.CreatedUtc >= @Since)
+        + (SELECT COUNT_BIG(*) FROM canon.ProductDocument document INNER JOIN izdelki ON izdelki.ProductId = document.ProductId
+           WHERE document.CreatedUtc >= @Since) AS AddedLastWeek;
       """,
       reader => new MediaSummary(PimDb.Int64(reader, "WithMedia"), PimDb.Int64(reader, "WithoutMedia"),
-        PimDb.Int64(reader, "TotalMedia"), PimDb.Int64(reader, "SchemeLessCount")),
-      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+        PimDb.Int64(reader, "TotalMedia"), PimDb.Int64(reader, "AddedLastWeek")),
+      command =>
+      {
+        command.Parameters.Add("@OrganizationId", System.Data.SqlDbType.Int).Value =
+          organizationId is int id ? id : DBNull.Value;
+        command.Parameters.Add("@Since", System.Data.SqlDbType.DateTime2).Value = DateTime.UtcNow.AddDays(-7);
+      }, cancellationToken);
     return rows.Count > 0 ? rows[0] : new(0, 0, 0, 0);
   }
 

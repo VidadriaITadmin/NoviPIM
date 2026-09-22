@@ -136,10 +136,16 @@ public static class MediaKindPolicy
   /// dodana koncnica velja hkrati za ploscico in za filter. V izrazu ni nobene uporabnikove
   /// vrednosti — samo imeni stolpcev, ki ju poda klicatelj, in nase konstante.
   /// </summary>
+  /// <remarks>
+  /// Primerjave tecejo v binarni kolaciji. Izraz ima vec kot sto <c>LIKE '%…'</c> na vrstico;
+  /// v slovenski kolaciji je to pri ~48.000 medijih pomenilo ~3 s na branje strani (merjeno
+  /// 2026-09-22), binarno ~0,3 s. Pomen se ne spremeni: naslov je ze v malih, vloga v velikih
+  /// crkah, <see cref="Classify"/> pa primerja ordinalno — binarno je temu celo blize.
+  /// </remarks>
   public static string SqlKindExpression(string urlColumn, string roleColumn)
   {
-    var url = $"LOWER({urlColumn})";
-    var role = $"UPPER({roleColumn})";
+    var url = $"LOWER({urlColumn}) COLLATE Latin1_General_BIN2";
+    var role = $"UPPER({roleColumn}) COLLATE Latin1_General_BIN2";
     var builder = new StringBuilder("CASE");
     Branch(builder, ExtensionTest(url, ImageExtensions), ImageCode);
     Branch(builder, ExtensionTest(url, VideoExtensions), VideoCode);

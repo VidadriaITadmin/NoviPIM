@@ -1,3 +1,4 @@
+using PIM.Automation;
 using PIM.Intranet.Services;
 
 /// <summary>
@@ -13,7 +14,7 @@ static class WorkerSchedulerChecks
   {
     // ─── Katalog ciklov ──────────────────────────────────────────────────────
     var keys = WorkerCycles.All.Select(cycle => cycle.Key).ToList();
-    Check(keys.Distinct().Count() == keys.Count && keys.Count == 5, "Pet ciklov z enoličnimi ključi: isti, kot jih je poganjalo pet Windows nalog.");
+    Check(keys.Distinct().Count() == keys.Count && keys.Count == 6, "Šest enoličnih ciklov, vključno s samostojnim CSV za Magento.");
     Check(WorkerCycles.All.All(cycle => (cycle.IntervalSeconds is not null) != (cycle.DailyAtLocal is not null)),
       "Cikel ima bodisi razmik bodisi dnevno uro.");
     Check(WorkerCycles.LegacyTasks.All(task => WorkerCycles.Find(task.CycleKey) is not null)
@@ -88,7 +89,7 @@ static class WorkerSchedulerChecks
     var zaloga = Expand(WorkerCycles.Plan(WorkerCycles.Zaloga, new(BySchedule: true), env));
     var names = zaloga.Select(group => group.Name).ToList();
     Check(names.SequenceEqual(["Zaloga NW_STOCK", "Zaloga BT_STOCK", "Zaloga iz SAOP (kolicine)", "Osvezitev cen kataloga",
-        "Izvoz cen in zaloge za splet", "Osvezitev kataloga in strank s cenami in zalogo (podjetje 2)", "Zaloga iz SAOP (datumi prihoda)"]),
+        "Izvoz cen in zaloge za splet", "Zaloga iz SAOP (datumi prihoda)"]),
       "Skupine zalogovnega cikla so iste kot koraki v Zaloga-cikel.ps1, na koncu še datumi dobave: " + string.Join(" | ", names));
     var nw = zaloga[0].Steps;
     Check(nw[0].Process!.Arguments.SequenceEqual(["run", "--project", @"C:\repo\PIM_Solution\workers\PIM.SourceFetchWorker", "--no-build", "--", "--source", "NW_STOCK", "--target", @"D:\prevzem", "--po-urniku"]),
@@ -105,27 +106,40 @@ static class WorkerSchedulerChecks
     var izvoz = zaloga[4].Steps;
     Check(izvoz.Count == 4 && izvoz[2].Process!.Arguments.Contains(@"C:\repo\izvoz\magento\3") && izvoz[2].Process!.Arguments.Contains("MAGENTO_STOCK_PRICES") && izvoz[2].OrganizationId == 3,
       "Cene in zaloga za splet: en proces na podjetje, brez registra v mapo ob korenu.");
-    Check(zaloga[5].Steps[0].Process!.Arguments.SequenceEqual(["run", "--project", @"C:\repo\PIM_Solution\workers\PIM.B2bWorker", "--no-build", "--", "--export-magento", "--organization-id", "2"]),
-      "Katalog in stranke: samo podjetje 2, mapo razreši worker sam.");
-    Check(zaloga[6].Steps[0].Process!.Arguments.Contains("--dostave") && zaloga[6].Steps[0].Process!.Arguments.Contains("--po-urniku"),
+    var magento = Expand(WorkerCycles.Plan(WorkerCycles.Magento, new(), env));
+    Check(magento.Count == 1 && magento[0].Steps.Count == 1
+      && magento[0].Steps[0].Process!.Arguments.Contains("--export-magento")
+      && magento[0].Steps[0].Process!.Arguments.Contains("--osvezi-validacijo")
+      && magento[0].Steps[0].Process!.Arguments.Contains("--starost-validacije")
+      && magento[0].Steps[0].Process!.Arguments.Contains(WorkerCycles.MagentoValidationMaxAgeMinutes.ToString())
+      && magento[0].Steps[0].Environment is null
+      && WorkerCycles.Find(WorkerCycles.Magento)!.Reach == WorkerJobReach.Internal,
+      "Magento CSV ovrednoti in izvozi podatke PIM samostojno brez klica SAOP; validacijo ponovi le, če je starejša od meje.");
+    Check(WorkerCycles.LegacyTasks.Any(task => task.Task == "PIM magento" && task.CycleKey == WorkerCycles.Magento)
+      && WorkerJobs.WindowsTasks.Any(task => task.Task == "PIM magento" && task.JobKey == "magento-csv"),
+      "Windows naloga PIM magento (Namesti-opravila.ps1) je preslikana na cikel magento-csv.");
+    Check(WorkerCycles.Find(WorkerCycles.Magento)!.IntervalSeconds == WorkerCycles.MagentoIntervalSeconds && WorkerCycles.MagentoIntervalSeconds == 900,
+      "242: privzeti razmik cikla magento-csv je 15 min — izvoz podjetja 2 traja minute in pri 5 min bi tekel neprekinjeno.");
+    Check(zaloga[5].Steps[0].Process!.Arguments.Contains("--dostave") && zaloga[5].Steps[0].Process!.Arguments.Contains("--po-urniku"),
       "Datumi dobave vedno po svojem razporedu (30 min), tudi znotraj petminutnega cikla.");
 
     var rocno = Expand(WorkerCycles.Plan(WorkerCycles.Zaloga, new(), env));
     Check(!rocno[0].Steps[0].Process!.Arguments.Contains("--po-urniku") && !rocno[2].Steps[0].Process!.Arguments.Contains("--po-urniku"),
       "Ročni zagon ne čaka na razpored postopkov (kot skripta brez -PoUrniku).");
-    Check(rocno[6].Steps[0].Process!.Arguments.Contains("--po-urniku"), "Datumi dobave so po razporedu tudi pri ročnem zagonu (počasen klic na artikel).");
+    Check(rocno[5].Steps[0].Process!.Arguments.Contains("--po-urniku"), "Datumi dobave so po razporedu tudi pri ročnem zagonu (počasen klic na artikel).");
 
     var dobavitelji = Expand(WorkerCycles.Plan(WorkerCycles.Zaloga, new(OnlySuppliers: true), env));
     Check(dobavitelji.Count == 2 && dobavitelji.All(group => group.Steps.All(step => step.Environment is null || !step.Environment.ContainsKey("PIM_SAOP_MODE"))),
       "Samo dobavitelji: brez enega samega klica na SAOP.");
 
     var withExportRoot = Expand(WorkerCycles.Plan(WorkerCycles.Zaloga, new(), env with { ExportRoot = @"E:\izvoz" }));
-    Check(!withExportRoot[4].Steps[0].Process!.Arguments.Contains("--output-dir"), "Z nastavljenim EXPORT_ROOT mapo razreši worker sam.");
+    Check(withExportRoot[4].Steps[0].Process!.Arguments.SkipWhile(a => a != "--output-dir").Skip(1).First().StartsWith(@"E:\izvoz\", StringComparison.Ordinal),
+      "Z nastavljenim EXPORT_ROOT ima vsako podjetje svojo podmapo (2026-09-22: prej so si magento-stock-prices.csv prepisovala).");
 
     // ─── Načrt: katalog ─────────────────────────────────────────────────────
     var katalog = Expand(WorkerCycles.Plan(WorkerCycles.Katalog, new(BySchedule: true), env));
     Check(katalog.Select(group => group.Name).SequenceEqual(["SAOP katalog (delta)", "Narocila iz SAOP (VNK/VND)",
-        "Osvezitev objave (podjetje 1)", "Osvezitev objave (podjetje 2)", "Osvezitev objave (podjetje 3)", "Osvezitev objave (podjetje 4)", "Izvoz kataloga in strank (podjetje 2)"]),
+        "Osvezitev objave (podjetje 1)", "Osvezitev objave (podjetje 2)", "Osvezitev objave (podjetje 3)", "Osvezitev objave (podjetje 4)"]),
       "Urni katalog: SAOP delta, naročila, objava vseh podjetij, izvoz podjetja 2: " + string.Join(" | ", katalog.Select(group => group.Name)));
     Check(katalog[0].Steps[0].Process!.Arguments.Contains("--max-parallel") && katalog[0].Steps[0].Environment!["PIM_SAOP_MODE"] == "Live", "SAOP delta teče v živo, štiri podjetja hkrati.");
     var objava = katalog[2].Steps[0];
@@ -146,9 +160,12 @@ static class WorkerSchedulerChecks
       "Na razvoju se workerji nočnega toka zgradijo enkrat na začetku, vsak posebej (ne PIM.sln).");
     Check(nocniNames.Skip(1).SequenceEqual(["SAOP katalog", "Prevzem dobaviteljevih datotek", "Dobaviteljev XML (Nowodvorski)", "Dobaviteljev XML (Braytron)",
         "Preslikava zaostanka v raw.Inbox", "Zaloge dobaviteljev", "Zaloga iz SAOP (kolicine)", "Zaloga iz SAOP (datumi prihoda)", "Validacija in objava",
-        "Izvoz kataloga in strank", "Zaloga pod MID (dnevni mail)"]),
+        "Zaloga pod MID (dnevni mail)"]),
       "Vrstni red nočnega toka je isti kot v Nocno-vse.ps1, na koncu dnevni mail: " + string.Join(" | ", nocniNames));
     Check(nocni[1].Steps[0].Process!.Arguments.Contains("--full"), "Prvi dan v mesecu je zajem kataloga poln.");
+    Check(new[] { zaloga, katalog, nocni }.All(groups => groups.SelectMany(group => group.Steps)
+      .All(step => step.Process?.Arguments.Contains("--export-magento") != true)),
+      "Vhodni cikli ne izdelujejo katalog.csv; napaka SAOP ne blokira neodvisnega CSV cikla.");
     Check(!Expand(WorkerCycles.Plan(WorkerCycles.NocniTok, new(), env))[1].Steps[0].Process!.Arguments.Contains("--full"), "Ostale dni je delta.");
     var xmlNw = nocni[3].Steps;
     Check(xmlNw.Count == 4 && xmlNw[0].Environment!["PIM_XML_ROOT"] == @"C:\repo\PIM_Solution\fixtures\nw" && xmlNw[0].Environment!["PIM_XML_SOURCE_CODE"] == "NW_XML" && xmlNw[3].Environment!["PIM_XML_ORGANIZATION_ID"] == "4",

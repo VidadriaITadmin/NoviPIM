@@ -47,6 +47,18 @@ foreach (var channelName in new[] { "ERP (SAOP)", "Komerciala", "Splet" })
   Assert(card.Contains(channelName, StringComparison.Ordinal), "Manjka kanalski povzetek: " + channelName);
 Assert(Regex.Matches(card, "class=\"ui-card channel-card").Count == 3, "Glava mora imeti natanko tri klikljive kanalske kartice.");
 Assert(card.Contains("nikoli ne blokira", StringComparison.Ordinal), "Komercialna opozorila morajo izrecno povedati, da ne blokirajo.");
+// 242: kartica pove, zakaj artikel je ali ni v katalog.csv (isto pravilo kot izvoz), kdaj je bil validiran,
+// in ponudi »Preveri zdaj« samo vlogam s pravico pisanja; preverba ne pošilja v SAOP in ne izdela CSV.
+Assert(card.Contains("Objava za splet (katalog.csv)", StringComparison.Ordinal)
+  && card.Contains("WebExportStates.Label", StringComparison.Ordinal)
+  && card.Contains("WebExportStates.Explain", StringComparison.Ordinal)
+  && card.Contains("GetProductWebExportStateAsync", StringComparison.Ordinal),
+  "Kartica mora prikazati stanje objave za splet po izvoznih pravilih z razlogom.");
+Assert(card.Contains("Preveri zdaj", StringComparison.Ordinal)
+  && card.Contains("QualityWrite.ValidateAsync", StringComparison.Ordinal)
+  && card.Contains("Policy=\"@PimPolicies.BusinessWrite\"", StringComparison.Ordinal)
+  && card.Contains("ne pošilja v SAOP in ne izdela CSV", StringComparison.Ordinal),
+  "Gumb »Preveri zdaj« mora biti varovan s pravico pisanja in mora povedati, česa ne naredi.");
 
 // Sklopi so nastali v dveh korakih. 2026-08-28: »Zakaj imava medij in zaloga skupaj — ne vem«
 // (mediji in zaloga sta se locila). 2026-08-31: »komercialne podatke in pa splet podatke bi
@@ -63,6 +75,21 @@ var expectedSections = new Dictionary<string, string>
 };
 Assert(Regex.Matches(card, "new\\(\"(overview|core|commercial|web|media|stock|quality-history)\", ").Count == 7,
   "Kartica ima sedem sklopov; komerciala in splet sta locena.");
+
+// Aktivnosti so enoten, stalno viden modul ob kartici. Vir ostane ProductCardView.History,
+// ki ga vrne intranet.GetProductCard; dogodki ne smejo biti trdo kodirani.
+Assert(card.Contains("activity-card", StringComparison.Ordinal)
+    && card.Contains("class=\"activity-timeline\"", StringComparison.Ordinal),
+  "Kartica mora imeti en sam viden modul aktivnosti s casovnico.");
+Assert(card.Contains("Detail.History", StringComparison.Ordinal)
+    && card.Contains("VisibleActivities", StringComparison.Ordinal)
+    && card.Contains("ActivitySummary", StringComparison.Ordinal),
+  "Aktivnosti morajo izhajati iz dejanske revizijske sledi, ne iz trdo kodiranih dogodkov.");
+Assert(!card.Contains("Caption=\"Revizijska sled sprememb izdelka\"", StringComparison.Ordinal),
+  "Revizijska sled ne sme biti podvojena v zavihku; vsa aktivnost je v enem modulu.");
+Assert(css.Contains(".activity-timeline", StringComparison.Ordinal)
+    && css.Contains(".activity-card { padding: 1rem; position: sticky", StringComparison.Ordinal),
+  "Casovnica mora imeti svoj odziven, viden slog ob kartici.");
 foreach (var retired in new[] { "media-stock", "panel-sales", "tab-sales" })
   Assert(!card.Contains(retired, StringComparison.Ordinal), "Odpisani skupni sklop se ne sme vrniti: " + retired + ".");
 foreach (var section in expectedSections)
@@ -119,7 +146,7 @@ var webBlock = BlockOf(card, "WebFields");
 foreach (var key in new[]
 {
   "Product.ItemID", "Product.EAN", "Product.UoM", "Product.AccountingGroup", "Product.DiscountGroup",
-  "Product.Supplier", "Product.Manufacturer", "Product.VatRate", "ProductPlanning",
+  "Product.Supplier", "Product.Manufacturer", "Product.VatRate", "Planning.ExcludeQtyReservation",
   "ProductAttribute.Garancija", "SEARCH_NAME", "TITLE_ERP", "TITLE_ERP2",
   "ProductCommercial.NetWeight", "ProductCommercial.GrossWeight",
   "ProductCommercial.CustomsTariff", "ProductCommercial.CountryOfOrigin",
@@ -135,7 +162,7 @@ foreach (var key in new[]
 // Komerciala nosi uvrstitev artikla, aktivnost in nabavne pogoje (PIM_test: kartica
 // »Komerciala — klasifikacija in objava«). ABC klasifikacija in skupina artikla sta
 // komercialni razvrstitvi, ne sifranta ERP.
-foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.IsActive",
+foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.IsActive", "Product.WebPublish",
                             "ProductCommercial.Purchase", "ProductStockAccounting" })
 {
   Assert(comBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Komerciala: " + key);
@@ -143,7 +170,7 @@ foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.
 }
 
 // Splet nosi objavo, spletna besedila, kategorije in atribute.
-foreach (var key in new[] { "Product.WebPublish", "WEB_TITLE", "ProductCategory.", "canon.WebSite" })
+foreach (var key in new[] { "WEB_TITLE", "ProductCategory.", "canon.WebSite" })
 {
   Assert(webBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Splet: " + key);
   Assert(!erpBlock.Contains(key, StringComparison.Ordinal) && !comBlock.Contains(key, StringComparison.Ordinal),

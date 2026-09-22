@@ -7,6 +7,25 @@
 .auto-refresh { align-items: center; color: var(--pim-text-soft); display: inline-flex; font-size: 12px; gap: .35rem; }
 .auto-refresh input { accent-color: var(--pim-primary); }
 
+/* --- poslovne kartice (237) ----------------------------------------------- */
+/* Štiri kartice, vsaka en poslovni tok. Rob v barvi stanja in značka stanja hkrati — barva ni
+   edini nosilec informacije. */
+.flow-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); margin: 1rem 0; }
+.flow-card { border-left: 4px solid var(--pim-neutral-border); padding: 1rem 1.15rem; }
+.flow-card.good { border-left-color: var(--pim-good-bar); }
+.flow-card.warn { border-left-color: var(--pim-warn-bar); }
+.flow-card.bad { background: var(--pim-bad-bg); border-left-color: var(--pim-bad-text); }
+.flow-head { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: space-between; }
+.flow-head h2 { color: var(--pim-text-strong); font-size: 1rem; font-weight: 650; margin: 0; }
+.flow-description { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; margin: .25rem 0 .6rem; }
+.flow-facts { display: grid; gap: .3rem; margin: 0 0 .7rem; }
+.flow-facts > div { display: grid; font-size: .8rem; gap: .1rem .6rem; grid-template-columns: 7.5rem 1fr; line-height: 1.45; }
+.flow-facts dt { color: var(--pim-text-soft); font-weight: 650; margin: 0; }
+.flow-facts dd { color: var(--pim-text); margin: 0; word-break: break-word; }
+.flow-cause { color: var(--pim-bad-strong); font-weight: 600; }
+.flow-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.primary-small { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 650; }
+
 /* --- kaj potrebuje pozornost ---------------------------------------------- */
 /* Prenova 2026-09-10: to je zdaj kratek trak (do 3 vrstice), ne vec seznam vsega — ce je vse v
    redu, se sploh ne izriše (glej .success-message v System.razor namesto lastne "cistega" barve). */

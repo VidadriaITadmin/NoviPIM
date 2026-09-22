@@ -26,12 +26,26 @@ public static class PimPolicies
   /// <summary>Potrjevanje in resevanje alarmov.</summary>
   public const string AlertWrite = "AlertWrite";
 
+  /// <summary>
+  /// Potrditev, da artikel nima EAN / proizvajalca / dobavitelja (249). Sodelavka (Excel 11. 9.):
+  /// »to lahko potrdi samo skrbnik« — zato samo ADMIN, ne urednik kataloga.
+  /// </summary>
+  public const string FieldWaiver = "FieldWaiver";
+
+  /// <summary>
+  /// Vklop samodejnega umika s spleta in odjavno okno (251): odloča, kdaj PIM sam odkljuka spletišča
+  /// in kaj gre v katalog.csv za Magento — zato samo ADMIN.
+  /// </summary>
+  public const string WebPublicationSettings = "WebPublicationSettings";
+
   static readonly Dictionary<string, string[]> PolicyRoles = new(StringComparer.Ordinal)
   {
+    [WebPublicationSettings] = [PimRoles.Admin],
     [CatalogWrite] = [PimRoles.Admin, PimRoles.CatalogEditor],
     [SaopWrite] = [PimRoles.Admin, PimRoles.CatalogEditor],
     [BusinessWrite] = [PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial],
     [AlertWrite] = [PimRoles.Admin, PimRoles.Commercial],
+    [FieldWaiver] = [PimRoles.Admin],
   };
 
   public static IReadOnlyCollection<string> Names => PolicyRoles.Keys;

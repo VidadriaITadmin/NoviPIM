@@ -11,13 +11,17 @@
 <PageTitle>Pripravljenost artiklov</PageTitle>
 <PimPage Title="Kakovost podatkov" Subtitle="En artikel, jasna pripravljenost za vsak izhodni kanal in neposredna pot do popravka." />
 <PimTabs Active="artikli" Tabs="QualityTabs.Tabs" Label="Pogledi kakovosti" />
+<p class="card-note">Stolpec »Splet / katalog.csv« kaže stanje po istih pravilih, po katerih nastane katalog.csv: kljukice spletišč na kartici, kategorija na označenem spletišču, ročni zadržek, izključitev iz kataloga in veljavnost profilov, ki blokirajo splet. Artikel brez vsake kljukice je v datoteki s praznim stolpcem »Spletne strani« (signal Magentu za umik). Oznaka »ERP: za splet« iz SAOP je informativna in o objavi ne odloča. Ocena ERP je informativna; dejanske popravke preveri SAOP ob prejemu. Validacija, starejša od dveh ur, potrebuje novo preverbo. »Preveri zdaj« preveri podatke v PIM-u; ne pošilja podatkov v SAOP in ne izdela CSV.</p>
 
 @if (Page is not null)
 {
   <div class="kpi-grid">
     <PimStat Label="Pripravljeni za ERP" Value="@Page.Totals.ErpReadyCount.ToString("N0")" />
     <PimStat Label="ERP blokirani" Value="@Page.Totals.ErpBlockedCount.ToString("N0")" Href="kakovost/artikli?stanje=ERP_BLOCKED" />
-    <PimStat Label="Splet blokirani" Value="@Page.Totals.WebBlockedCount.ToString("N0")" Href="kakovost/artikli?stanje=WEB_BLOCKED" />
+    <PimStat Label="Objavljeni na spletu" Value="@Page.Totals.PublishedCount.ToString("N0")" Href="kakovost/artikli?stanje=PUBLISHED" Note="v katalog.csv s spletno stranjo" />
+    <PimStat Label="Splet blokirani" Value="@Page.Totals.WebBlockedCount.ToString("N0")" Href="kakovost/artikli?stanje=WEB_BLOCKED" Note="kljukica je, objave ni" />
+    <PimStat Label="Brez spletnega mesta" Value="@Page.Totals.NoSiteCount.ToString("N0")" Href="kakovost/artikli?stanje=NO_SITE" Note="v katalog.csv samo kot odjava, če so bili prej na spletu" />
+    <PimStat Label="Vrstic v katalog.csv" Value="@Page.Totals.InCsvCount.ToString("N0")" Href="kakovost/artikli?stanje=IN_CSV" />
     <PimStat Label="Ročni zadržki" Value="@Page.Totals.HoldCount.ToString("N0")" Href="kakovost/artikli?stanje=HOLD" />
     <PimStat Label="Zastarela validacija" Value="@Page.Totals.StaleCount.ToString("N0")" Href="kakovost/artikli?stanje=STALE" Note="starejša od 2 ur" />
   </div>
@@ -27,7 +31,7 @@
   <label class="visually-hidden" for="quality-org">Podjetje</label>
   <select id="quality-org" class="filter-select" @bind="OrganizationDraft"><option value="">Vsa podjetja</option>@foreach (var org in Organizations) { <option value="@org.OrganizationId">@org.Name</option> }</select>
   <label class="visually-hidden" for="quality-state">Stanje</label>
-  <select id="quality-state" class="filter-select" @bind="StateDraft"><option value="">Vsi artikli</option><option value="ERP_BLOCKED">Blokirani za ERP</option><option value="WEB_BLOCKED">Blokirani za splet</option><option value="READY">Pripravljeni</option><option value="HOLD">Ročno zadržani</option><option value="STALE">Zastarela validacija</option></select>
+  <select id="quality-state" class="filter-select" @bind="StateDraft"><option value="">Vsi artikli</option><option value="ERP_BLOCKED">Blokirani za ERP</option><option value="WEB_BLOCKED">Blokirani za splet</option><option value="PUBLISHED">Objavljeni na spletu</option><option value="NO_SITE">Brez spletnega mesta (v CSV prazno)</option><option value="IN_CSV">V katalog.csv</option><option value="NOT_IN_CSV">Niso v katalog.csv</option><option value="READY">Pripravljeni</option><option value="HOLD">Ročno zadržani</option><option value="STALE">Zastarela validacija</option></select>
   <input class="search-input" type="search" placeholder="Šifra, EAN ali naziv …" @bind="SearchDraft" @bind:event="oninput" />
   <button type="button" class="filter-button" @onclick="Apply">Uporabi filtre</button>
   <span class="result-count">@(Page is null ? "—" : $"{Page.Totals.TotalCount:N0} artiklov")</span>
@@ -37,15 +41,21 @@
 
 <section class="ui-card data-card section-gap"><PimState Loading="Loading" Error="@Error" Empty="@(Page?.Rows.Count == 0)" EmptyText="Za izbrane filtre ni artiklov.">
   <div class="table-scroll"><table class="data-table"><caption>Pripravljenost artiklov po kanalih</caption>
-  <thead><tr><th>Artikel</th><th>ERP</th><th>Splet</th><th>Težave</th><th>Validirano</th><th>Ročni zadržek</th><th></th></tr></thead>
+  <thead><tr><th>Artikel</th><th>ERP</th><th>Splet / katalog.csv</th><th>Težave</th><th>Validirano</th><th>Ročni zadržek</th><th></th></tr></thead>
   <tbody>@foreach (var row in Page?.Rows ?? Array.Empty<ProductReadinessRow>()) { <tr>
     <td><strong>@row.ItemId</strong><div class="tree-path">@row.Name · @(row.Ean ?? "brez EAN")</div></td>
-    <td><PimChip Text="@(row.IsErpReady ? "Pripravljen" : "Blokiran")" Tone="@(row.IsErpReady ? "good" : "bad")" />@if (row.ErpBlockingCount > 0) { <div class="tree-path">@row.ErpBlockingCount.ToString("N0") blokad</div> }</td>
-    <td>@if (!row.WebPublish) { <PimChip Text="Ni za objavo" Tone="neutral" /> } else { <PimChip Text="@(row.IsWebReady ? "Pripravljen" : "Blokiran")" Tone="@(row.IsWebReady ? "good" : "bad")" /> }@if (row.WebBlockingCount > 0) { <div class="tree-path">@row.WebBlockingCount.ToString("N0") blokad</div> }</td>
+    <td><PimChip Text="@(row.IsValidationStale ? "Potrebna preverba" : row.IsErpReady ? "Pripravljen" : "Blokiran")" Tone="@(row.IsValidationStale ? "warn" : row.IsErpReady ? "good" : "bad")" />@if (row.ErpBlockingCount > 0) { <div class="tree-path">@row.ErpBlockingCount.ToString("N0") blokad</div> }</td>
+    <td>
+      @* 242: isto pravilo kot out.GetExportRows — kljukice spletišč, kategorija, zadržek, izključitev, veljavni profili, pravilo 220. *@
+      <PimChip Text="@WebExportStates.Label(row.WebExportState)" Tone="@WebExportStates.Tone(row.WebExportState)" />
+      @if (row.SiteFlagCount > 0 && row.IsValidationStale) { <PimChip Text="Potrebna preverba" Tone="warn" /> }
+      else if (row.WebExportState == WebExportStates.Published && !row.IsWebReady) { <PimChip Text="Napake od zadnje objave" Tone="warn" /> }
+      <div class="tree-path" title="@WebExportStates.Explain(row.WebExportState)">@(row.IsWithdrawalRow ? "v katalog.csv kot odjava" : row.IsInCatalogCsv ? "v katalog.csv" : "ni v katalog.csv") · spletišča @row.AllowedSiteCount/@row.SiteFlagCount · ERP: @(row.WebPublish ? "za splet" : "ni za splet")@if (row.WebBlockingCount > 0) { <text> · @row.WebBlockingCount.ToString("N0") blokad</text> }</div>
+    </td>
     <td>@row.ErrorCount.ToString("N0") napak · @row.WarningCount.ToString("N0") opozoril</td>
     <td>@(row.LastValidatedUtc?.ToPimLocal().ToString("g") ?? "Nikoli") @if (row.IsValidationStale) { <PimChip Text="Zastarelo" Tone="warn" /> }</td>
     <td>@if (row.HasGlobalHold || row.HasErpHold || row.HasWebHold) { <PimChip Text="@(row.HasGlobalHold ? "Vsi kanali" : row.HasErpHold ? "ERP" : "Splet")" Tone="bad" /><button class="small-action" disabled="@Busy" @onclick="() => ReleaseAsync(row)">Sprosti</button> } else if (EditingProductId == row.ProductId) { <select class="filter-select" @bind="HoldChannel"><option value="ALL">Vsi kanali</option><option value="ERP">ERP</option><option value="WEB">Splet</option></select><input class="form-input" placeholder="Obvezen razlog …" @bind="HoldReason" /><button class="small-action warn-action" disabled="@(Busy || string.IsNullOrWhiteSpace(HoldReason))" @onclick="() => HoldAsync(row)">Zadrži</button><button class="small-action" @onclick="() => EditingProductId = null">Prekliči</button> } else { <button class="small-action" @onclick="() => BeginHold(row.ProductId)">Zadrži …</button> }</td>
-    <td><a href="@($"izdelki/{row.ProductId}")">Odpri in popravi →</a></td>
+    <td><a href="@($"izdelki/{row.ProductId}")">Odpri in popravi →</a><AuthorizeView Policy="@PimPolicies.BusinessWrite"><button class="small-action" disabled="@Busy" @onclick="() => ValidateAsync(row)">Preveri zdaj</button></AuthorizeView></td>
   </tr> }</tbody></table></div>
   @if (Page is not null) { <PimPager Skip="Skip" Take="Take" Total="Page.Totals.TotalCount" SkipChanged="PageTo" /> }
 </PimState></section>
@@ -63,6 +73,7 @@
   void Apply()=>Navigation.NavigateTo(Href(1)); Task PageTo(int skip){Navigation.NavigateTo(Href(skip/Take+1));return Task.CompletedTask;}
   string Href(int page){var q=new List<string>();if(OrganizationDraft.Length>0)q.Add("podjetje="+Uri.EscapeDataString(OrganizationDraft));if(SearchDraft.Trim().Length>0)q.Add("isci="+Uri.EscapeDataString(SearchDraft.Trim()));if(StateDraft.Length>0)q.Add("stanje="+Uri.EscapeDataString(StateDraft));if(page>1)q.Add("stran="+page);return "kakovost/artikli"+(q.Count==0?"":"?"+string.Join('&',q));}
   void BeginHold(long id){EditingProductId=id;HoldChannel="ALL";HoldReason="";} async Task<string> ActorAsync()=>(await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name??"neznan";
+  async Task ValidateAsync(ProductReadinessRow row){Busy=true;ActionError=null;Message=null;try{await QualityWrite.ValidateAsync(row.ProductId);Message=$"Preverba za {row.ItemId} je končana. Stanje in blokade so osveženi.";await LoadAsync();}catch{ActionError="Validacije ni bilo mogoče dokončati. Preveri pravice, povezavo in dnevnik aplikacije.";}finally{Busy=false;}}
   async Task HoldAsync(ProductReadinessRow row){Busy=true;ActionError=null;try{await QualityWrite.SetHoldAsync(row.ProductId,HoldChannel,HoldReason,true,await ActorAsync());Message=$"Artikel {row.ItemId} je zadržan.";EditingProductId=null;await LoadAsync();}catch(Exception ex){ActionError=ex.Message;}finally{Busy=false;}}
   async Task ReleaseAsync(ProductReadinessRow row){Busy=true;ActionError=null;try{var actor=await ActorAsync();if(row.HasGlobalHold)await QualityWrite.SetHoldAsync(row.ProductId,"ALL",null,false,actor);if(row.HasErpHold)await QualityWrite.SetHoldAsync(row.ProductId,"ERP",null,false,actor);if(row.HasWebHold)await QualityWrite.SetHoldAsync(row.ProductId,"WEB",null,false,actor);Message=$"Zadržek za {row.ItemId} je sproščen.";await LoadAsync();}catch(Exception ex){ActionError=ex.Message;}finally{Busy=false;}}
 }

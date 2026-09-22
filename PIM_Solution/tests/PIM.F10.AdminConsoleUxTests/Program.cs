@@ -303,6 +303,74 @@ foreach (var pogodba in new[] { "Konzola.Start", "Konzola.Cancel", "Potrdi zagon
 Assert(!workersPage.Contains("pwsh -File", StringComparison.Ordinal), "Ukaz za registracijo mora biti powershell; pwsh ni nujno namescen.");
 Assert(pimTab.Contains("\"sistem/workerji\"", StringComparison.Ordinal), "Workerji morajo biti zavihek nadzora.");
 
+// ── 12. Enotni model opravil (237): gostitelj avtomatike, Opravila, Zagoni, poslovne kartice ────
+// Uporabnik 2026-09-21: IIS je nadzorna konzola, ne motor avtomatike; glavna stran odgovarja na
+// "ali poslovanje deluje in kaj moram narediti" s štirimi poslovnimi karticami; ročni zagon je
+// zahteva, ki jo prevzame gostitelj; izvoz ne validira; naročila so ločena od kataloga.
+foreach (var (file, route) in new[] { ("SystemJobs.razor", "/sistem/opravila"), ("SystemJobRuns.razor", "/sistem/zagoni") })
+{
+  var markup = Read(Path.Combine(pages, file));
+  Assert(markup.Contains($"@page \"{route}\"", StringComparison.Ordinal), $"{file} mora biti na poti {route}.");
+  Assert(markup.Contains("[Authorize(Roles = \"ADMIN\")]", StringComparison.Ordinal), $"{file} mora biti dostopna samo vlogi ADMIN.");
+  Assert(markup.Contains("PimTime.", StringComparison.Ordinal), $"{file} mora čas kazati prek PimTime.");
+  Assert(markup.Contains("<PimTabs", StringComparison.Ordinal) && markup.Contains("NadzorTabs.Tabs", StringComparison.Ordinal), $"{file} mora prikazati skupni zavihek NadzorTabs.");
+  var css = Path.Combine(pages, Path.GetFileNameWithoutExtension(file) + ".razor.css");
+  Assert(File.Exists(css) && !File.ReadAllText(css).Contains("::deep", StringComparison.Ordinal), "Manjka ali uhaja izoliran slog: " + css);
+}
+var jobsPage = Read(Path.Combine(pages, "SystemJobs.razor"));
+foreach (var pogodba in new[] { "RequestRunAsync", "RequestCancelAsync", "SaveScheduleAsync", "LogActivityAsync", "Potrdi zagon", "GetHostAsync", "JOB_RUN_REQUEST" })
+  Assert(jobsPage.Contains(pogodba, StringComparison.Ordinal), "Stran Opravila nima pogodbe: " + pogodba);
+var runsPage = Read(Path.Combine(pages, "SystemJobRuns.razor"));
+foreach (var pogodba in new[] { "EffectiveStatus", "GetStepsAsync", "ReadLog", "RequestCancelAsync", "BlockedByJobKey" })
+  Assert(runsPage.Contains(pogodba, StringComparison.Ordinal), "Stran Zagoni nima pogodbe: " + pogodba);
+foreach (var pogodba in new[] { "flow-grid", "AutomationOverview.Build", "RequestRunAsync", "Odpri zagone" })
+  Assert(console.Contains(pogodba, StringComparison.Ordinal), "Pregled nima poslovnih kartic (237): " + pogodba);
+foreach (var pogodba in new[] { "\"sistem/opravila\"", "\"sistem/zagoni\"", "Izvajalniki" })
+  Assert(pimTab.Contains(pogodba, StringComparison.Ordinal), "Zavihki nadzora ne poznajo: " + pogodba);
+Assert(!pimTab.Contains("\"sistem?pogled=postopki\"", StringComparison.Ordinal), "Tehnični razporedi postopkov niso več zavihek (dvojno razporejanje).");
+
+var catalog = Read(Path.Combine(root, "src", "PIM.Automation", "JobCatalog.cs"));
+Assert(!catalog.Contains("--osvezi-validacijo", StringComparison.Ordinal), "Izvoz v enotnem modelu ne sme validirati (--osvezi-validacijo).");
+Assert(!catalog.Contains("--po-urniku", StringComparison.Ordinal), "Posel ima en urnik — gostitelja; --po-urniku je dvojno razporejanje.");
+var hostProgram = Read(Path.Combine(root, "workers", "PIM.AutomationHost", "Program.cs"));
+Assert(hostProgram.Contains("AddWindowsService", StringComparison.Ordinal) && hostProgram.Contains("--preveri", StringComparison.Ordinal),
+  "Gostitelj mora teči kot Windows storitev in imeti zunanji nadzor (--preveri).");
+var migration237 = Read(Path.Combine(root, "sql", "migrations", "237_EnotniModelOpravil.sql"));
+foreach (var objekt in new[]
+{
+  "ops.JobDefinition", "ops.JobDependency", "ops.JobRun", "ops.JobStepRun", "ops.DataCheckpoint", "ops.Artifact",
+  "ops.ClaimJobRun", "ops.HeartbeatJobRun", "ops.CompleteJobRun", "ops.AbandonStaleJobRuns", "ops.EvaluateJobAlerts",
+  "ops.RequestJobRun", "ops.RequestJobCancel", "intranet.GetJobDefinitions", "intranet.GetJobRuns", "intranet.GetAutomationHost", "intranet.SaveJobSchedule",
+  "AutomationHostDown", "Priority",
+})
+  Assert(migration237.Contains(objekt, StringComparison.Ordinal), "Migracija 237 ne ustvari " + objekt + ".");
+Assert(File.Exists(Path.Combine(root, "deploy", "Install-AutomationHost.ps1")), "Manjka deploy/Install-AutomationHost.ps1.");
+Assert(File.Exists(Path.Combine(repositoryRoot, "scripts", "Namesti-nadzor-avtomatike.ps1")), "Manjka scripts/Namesti-nadzor-avtomatike.ps1.");
+var installer = Read(Path.Combine(root, "deploy", "Install-AutomationHost.ps1"));
+Assert(installer.Contains("New-Service", StringComparison.Ordinal) && installer.Contains("sc.exe", StringComparison.Ordinal) && installer.Contains("failure", StringComparison.Ordinal),
+  "Namestitev gostitelja mora nastaviti samodejni ponovni zagon storitve (sc.exe failure).");
+Assert(Read(Path.Combine(repositoryRoot, "scripts", "Namesti-nadzor-avtomatike.ps1")).Contains("--preveri", StringComparison.Ordinal),
+  "Zunanji nadzor mora klicati PIM.AutomationHost --preveri.");
+
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+  await using var connection = new SqlConnection(connectionString);
+  await connection.OpenAsync();
+  foreach (var objekt in new[] { "ops.JobDefinition", "ops.JobRun", "ops.JobStepRun", "ops.JobDependency", "ops.DataCheckpoint", "ops.Artifact", "ops.ClaimJobRun", "ops.EvaluateJobAlerts", "intranet.GetJobDefinitions", "intranet.GetAutomationHost" })
+  {
+    await using var command = new SqlCommand("SELECT COUNT_BIG(*) FROM sys.objects WHERE object_id = OBJECT_ID(@Ime);", connection);
+    command.Parameters.AddWithValue("@Ime", objekt);
+    Assert(Convert.ToInt64(await command.ExecuteScalarAsync()) == 1, "V bazi manjka " + objekt + "; uporabi migracijo 237.");
+  }
+  await using (var definitions = new SqlCommand("intranet.GetJobDefinitions", connection) { CommandType = System.Data.CommandType.StoredProcedure })
+  {
+    await using var reader = await definitions.ExecuteReaderAsync();
+    var naborov = 1;
+    while (await reader.NextResultAsync()) naborov++;
+    Assert(naborov == 3, $"intranet.GetJobDefinitions mora vrniti 3 nabore, vrnil je {naborov}.");
+  }
+}
+
 Console.WriteLine("F10 admin console UX contract PASS.");
 
 static string Read(string path)

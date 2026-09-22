@@ -45,33 +45,56 @@
 
 @* 178. Do zdaj je kategorije vstavljala samo migracija; urednik jih zdaj doda tu. Izbirnik starsa
    isce po imenu in poti; ime se pred shranjevanjem primerja z obstojecimi (isto ime pod istim starsem
-   ustavi, podobno ime opozori). *@
+   ustavi, podobno ime opozori).
+   237: drevo je eno, imena pa po jezikih. Uporabnik 2026-09-21: »dodajanje angleške podkategorije
+   ni možno ker jo doda v slovensko drevo« — obrazec je ponujal samo slovensko ime, zato je anglesko
+   ime pristalo kot slovensko. Zdaj je polje za vsak jezik; slovensko ostane obvezno, ker iz njega
+   nastaneta koda in kanonicna pot (178/223), izbirnik starsa pa govori jezik, ki je v ospredju. *@
 <details class="ui-card section-gap new-category" open="@CreatePanelOpen">
-  <summary id="new-category-title" class="card-caption">+ Dodaj korensko kategorijo</summary>
+  <summary id="new-category-title" class="card-caption">+ Dodaj kategorijo (korensko ali podkategorijo)</summary>
   <div class="editor-actions">
     <label class="editor-field" for="new-tree">
       <span class="editor-label">Drevo</span>
-      <select id="new-tree" class="filter-select" @bind="NewTree" @bind:after="LoadNewParentOptionsAsync">
+      <select id="new-tree" class="filter-select" @bind="NewTree" @bind:after="() => LoadNewParentOptionsAsync(false)">
         @foreach (var treeOption in Trees) { <option value="@treeOption">@treeOption</option> }
       </select>
     </label>
     <label class="editor-field parent-field" for="new-parent">
-      <span class="editor-label">Nadrejena kategorija (prazno = koren)</span>
+      <span class="editor-label">Nadrejena kategorija (prazno = koren) · imena v jeziku @Language</span>
       <PimPicker Id="new-parent" Options="NewParentOptions" @bind-Value="NewParent" Placeholder="Vpiši ime ali pot nadrejene …" />
     </label>
-    <label class="editor-field" for="new-name">
-      <span class="editor-label">Ime (slovensko)</span>
-      <input id="new-name" class="form-input" @bind="NewName" @bind:event="oninput" placeholder="npr. Pametna svetila" />
-    </label>
+  </div>
+  <div class="editor-grid name-grid">
+    @foreach (var language in Languages)
+    {
+      var lang = language.LanguageCode;
+      var isSlovene = string.Equals(lang, "sl", StringComparison.OrdinalIgnoreCase);
+      <label class="editor-field @(string.Equals(lang, Language, StringComparison.OrdinalIgnoreCase) ? "is-focus" : null)" for="@("new-name-" + lang)">
+        <span class="editor-label">
+          Ime · @lang · @language.Name
+          @if (isSlovene) { <em>obvezno — iz njega nastaneta koda in pot</em> }
+          else if (string.Equals(lang, Language, StringComparison.OrdinalIgnoreCase)) { <em>jezik v ospredju</em> }
+        </span>
+        <input id="@("new-name-" + lang)" class="form-input" value="@NewNameFor(lang)"
+               @oninput="args => SetNewName(lang, args.Value?.ToString())"
+               placeholder="@(isSlovene ? "npr. Pametna svetila" : "npr. Smart lighting")" />
+      </label>
+    }
+  </div>
+  <div class="editor-actions">
     <button type="button" class="button-primary" disabled="@(Busy || string.IsNullOrWhiteSpace(NewName) || NewSiblingDuplicate is not null)" @onclick="CreateCategoryAsync">Ustvari kategorijo</button>
+    @if (string.IsNullOrWhiteSpace(NewName) && NewNames.Values.Any(value => !string.IsNullOrWhiteSpace(value)))
+    {
+      <span class="editor-note">Vpiši še slovensko ime: kategorija se ustvari v enem drevesu z imeni v vseh jezikih, slovensko ime pa določa kodo in pot.</span>
+    }
   </div>
   @if (NewSiblingDuplicate is { } duplicate)
   {
-    <p class="message-state error-message" role="alert">Pod isto nadrejeno kategorijo že obstaja »@duplicate.CategoryName« (@duplicate.CategoryPath) — ne podvoji je.</p>
+    <p class="message-state error-message" role="alert">Pod isto nadrejeno kategorijo že obstaja »@duplicate.DisplayName« (@duplicate.DisplayPath) — ne podvoji je.</p>
   }
   else if (NewSimilar.Count > 0)
   {
-    <p class="message-state" role="status">Podobno ime že obstaja: @string.Join("; ", NewSimilar.Take(5).Select(option => option.CategoryPath)). Preveri, preden ustvariš novo.</p>
+    <p class="message-state" role="status">Podobno ime že obstaja: @string.Join("; ", NewSimilar.Take(5).Select(option => option.DisplayPath)). Preveri, preden ustvariš novo.</p>
   }
 </details>
 
@@ -227,7 +250,7 @@
             <div class="node-editor attribute-editor" aria-label="@($"Nabor atributov za {row.CategoryName}")">
               <div class="editor-head">
                 <span class="editor-origin">Atributi za: @row.CategoryName</span>
-                <span class="editor-path">@row.CategoryPath</span>
+                <span class="editor-path">@row.CategoryPathDisplay</span>
                 <span class="editor-note">Obvezen atribut blokira splet, priporočen opozori, izločen razveljavi podedovanega. Velja tudi za podkategorije.</span>
               </div>
               @if (AttributeSetLoading) { <p class="message-state">Nalaganje nabora …</p> }
@@ -316,7 +339,7 @@
             <div class="node-editor">
               <div class="editor-head">
                 <span class="editor-origin">sl: @row.CategoryName</span>
-                <span class="editor-path">@row.CategoryPath</span>
+                <span class="editor-path">@row.CategoryPathDisplay</span>
                 <span class="editor-code">@row.CategoryCode</span>
               </div>
               <div class="editor-grid">
@@ -353,7 +376,7 @@
   }
   else
   {
-    <header><h2>@DisplayName(Selected)</h2><span class="code-value">@Selected.CategoryCode</span><p>@Selected.CategoryPath</p></header>
+    <header><h2>@DisplayName(Selected)</h2><span class="code-value">@Selected.CategoryCode</span><p>@Selected.CategoryPathDisplay</p></header>
     <nav class="category-tabs" aria-label="Podrobnosti kategorije">
       <button type="button" class="@(CategoryTab == "BASIC" ? "is-active" : null)" @onclick='() => CategoryTab = "BASIC"'>Osnovno</button>
       <button type="button" class="@(CategoryTab == "TRANSLATIONS" ? "is-active" : null)" @onclick='() => CategoryTab = "TRANSLATIONS"'>Prevodi</button>
@@ -547,30 +570,57 @@
   // 178: nova kategorija.
   string NewTree = "";
   string? NewParent;
-  string NewName = "";
+  /// <summary>Imena nove kategorije po jeziku (237); slovensko je koren kode in poti.</summary>
+  readonly Dictionary<string, string> NewNames = new(StringComparer.OrdinalIgnoreCase);
+  string NewName => NewNameFor("sl");
+  /// <summary>Jezik, v katerem so bile možnosti starša nazadnje prebrane; ob menjavi jezika se preberejo znova.</summary>
+  string OptionsLanguage = "";
   IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> NewParentNodes = [];
   IReadOnlyList<PimPickerOption> NewParentOptions = [];
 
-  async Task LoadNewParentOptionsAsync()
+  string NewNameFor(string languageCode) => NewNames.TryGetValue(languageCode, out var value) ? value : "";
+  void SetNewName(string languageCode, string? value) => NewNames[languageCode] = value ?? "";
+
+  /// <param name="keepParent">Ob menjavi jezika ostane izbrani starš; ob menjavi drevesa se izbira izprazni.</param>
+  async Task LoadNewParentOptionsAsync(bool keepParent)
   {
-    NewParent = null;
+    if (!keepParent) NewParent = null;
     if (string.IsNullOrWhiteSpace(NewTree)) { NewParentNodes = []; NewParentOptions = []; return; }
     try
     {
-      NewParentNodes = await Tree.GetCategoryOptionsAsync(NewTree);
-      NewParentOptions = NewParentNodes.Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1)).ToList();
+      NewParentNodes = await Tree.GetCategoryOptionsAsync(NewTree, Language);
+      OptionsLanguage = Language;
+      NewParentOptions = NewParentNodes.Select(node => new PimPickerOption(node.CategoryCode, node.DisplayName, node.DisplayPath, node.LevelNo - 1)).ToList();
+      if (keepParent && NewParent is not null && NewParentNodes.All(node => node.CategoryCode != NewParent)) NewParent = null;
     }
     catch (Exception exception) { Error = exception.Message; NewParentNodes = []; NewParentOptions = []; }
   }
 
-  PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow? NewSiblingDuplicate =>
-    string.IsNullOrWhiteSpace(NewName) ? null
-    : NewParentNodes.FirstOrDefault(node => string.Equals(node.ParentCategoryCode ?? "", NewParent ?? "", StringComparison.OrdinalIgnoreCase)
-        && PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName));
+  /// <summary>Isto ime pod istim staršem — po slovenskem imenu (koda) ali po imenu v jeziku v ospredju.</summary>
+  PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow? NewSiblingDuplicate
+  {
+    get
+    {
+      var focused = NewNameFor(Language);
+      if (string.IsNullOrWhiteSpace(NewName) && string.IsNullOrWhiteSpace(focused)) return null;
+      return NewParentNodes.FirstOrDefault(node => string.Equals(node.ParentCategoryCode ?? "", NewParent ?? "", StringComparison.OrdinalIgnoreCase)
+        && ((!string.IsNullOrWhiteSpace(NewName) && PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName))
+          || (!string.IsNullOrWhiteSpace(focused) && PIM.Intranet.Services.PimText.SameName(node.DisplayName, focused))));
+    }
+  }
 
-  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> NewSimilar =>
-    string.IsNullOrWhiteSpace(NewName) ? []
-    : NewParentNodes.Where(node => PIM.Intranet.Services.PimText.SimilarName(node.CategoryName, NewName) || PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName)).Take(5).ToList();
+  IReadOnlyList<PIM.Intranet.Services.CategoryTreeService.CategoryOptionRow> NewSimilar
+  {
+    get
+    {
+      var focused = NewNameFor(Language);
+      if (string.IsNullOrWhiteSpace(NewName) && string.IsNullOrWhiteSpace(focused)) return [];
+      return NewParentNodes.Where(node =>
+          (!string.IsNullOrWhiteSpace(NewName) && (PIM.Intranet.Services.PimText.SimilarName(node.CategoryName, NewName) || PIM.Intranet.Services.PimText.SameName(node.CategoryName, NewName)))
+          || (!string.IsNullOrWhiteSpace(focused) && (PIM.Intranet.Services.PimText.SimilarName(node.DisplayName, focused) || PIM.Intranet.Services.PimText.SameName(node.DisplayName, focused))))
+        .Take(5).ToList();
+    }
+  }
 
   async Task CreateCategoryAsync()
   {
@@ -580,12 +630,18 @@
     Error = null;
     try
     {
-      var code = await Tree.CreateCategoryAsync(NewTree, NewParent, NewName.Trim(), await ActorAsync());
-      Message = $"Kategorija »{NewName.Trim()}« je ustvarjena ({code}). Prevode dodaš z gumbom Uredi, nabor atributov z gumbom Atributi.";
-      NewName = "";
-      await LoadNewParentOptionsAsync();
+      var name = NewName.Trim();
+      var translations = NewNames
+        .Where(pair => !string.Equals(pair.Key, "sl", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pair.Value))
+        .ToDictionary(pair => pair.Key, pair => pair.Value.Trim(), StringComparer.OrdinalIgnoreCase);
+      var code = await Tree.CreateCategoryAsync(NewTree, NewParent, name, await ActorAsync(), translations);
+      var languages = translations.Count == 0 ? "samo slovensko ime" : "imena: sl, " + string.Join(", ", translations.Keys.OrderBy(key => key, StringComparer.Ordinal));
+      Message = $"Kategorija »{name}« je ustvarjena ({code}; {languages}). Manjkajoča imena dodaš na zavihku Prevodi, nabor atributov na zavihku Atributi.";
+      NewNames.Clear();
+      await LoadNewParentOptionsAsync(true);
       await LoadCoverageAsync();
       await LoadAsync();
+      Selected = Rows.FirstOrDefault(row => row.CategoryTreeCode == NewTree && row.CategoryCode == code);
     }
     catch (Exception exception) { Error = exception.Message; }
     finally { Busy = false; }
@@ -642,9 +698,9 @@
   {
     if (Selected is null) return;
     NewTree = Selected.CategoryTreeCode;
-    await LoadNewParentOptionsAsync();
+    await LoadNewParentOptionsAsync(false);
     NewParent = Selected.CategoryCode;
-    NewName = "";
+    NewNames.Clear();
     CreatePanelOpen = true;
   }
 
@@ -716,7 +772,9 @@
     MoveToRoot = rootTarget;
     try
     {
-      var nodesTask = Tree.GetCategoryOptionsAsync(MoveTree);
+      // 237: cilj premika se izbira v jeziku, ki je v ospredju; izkljucitev lastnega poddrevesa
+      // ostane po slovenski poti, ker je ta kanonicna in edina zanesljiva predpona.
+      var nodesTask = Tree.GetCategoryOptionsAsync(MoveTree, Language);
       var impactTask = Tree.GetChangeImpactAsync(selection);
       await Task.WhenAll(nodesTask, impactTask);
       MoveNodes = await nodesTask;
@@ -727,7 +785,7 @@
         .Select(node => node.CategoryPath).ToArray();
       MoveTargetOptions = MoveNodes
         .Where(node => !selectedPaths.Any(path => node.CategoryPath == path || node.CategoryPath.StartsWith(path + " > ", StringComparison.Ordinal)))
-        .Select(node => new PimPickerOption(node.CategoryCode, node.CategoryName, node.CategoryPath, node.LevelNo - 1))
+        .Select(node => new PimPickerOption(node.CategoryCode, node.DisplayName, node.DisplayPath, node.LevelNo - 1))
         .ToList();
 
       if (!rootTarget && preferredTarget is not null)
@@ -760,7 +818,7 @@
 
   string? MoveDestinationLabel => MoveToRoot
     ? $"{MoveTree} · koren drevesa"
-    : MoveTarget is null ? null : MoveNodes.FirstOrDefault(node => node.CategoryCode == MoveTarget)?.CategoryPath;
+    : MoveTarget is null ? null : MoveNodes.FirstOrDefault(node => node.CategoryCode == MoveTarget)?.DisplayPath;
 
   void CloseMoveDialog()
   {
@@ -790,8 +848,12 @@
       Collapsed.Clear();
       Branch = "";
       await RefreshTreeAfterChangeAsync();
+      var selectedNewCode = result.CodeChanges?.FirstOrDefault(change =>
+          change.CategoryTreeCode == movedSelection[0].CategoryTreeCode
+          && change.OldCategoryCode == movedSelection[0].CategoryCode)
+        ?.NewCategoryCode ?? movedSelection[0].CategoryCode;
       Selected = Rows.FirstOrDefault(row => row.CategoryTreeCode == movedSelection[0].CategoryTreeCode
-        && row.CategoryCode == movedSelection[0].CategoryCode);
+        && row.CategoryCode == selectedNewCode);
       Message = result.RootCount == 1
         ? $"Veja je premaknjena. Posodobljenih kategorij: {result.CategoryCount:N0}; prestavljenih uvrstitev izdelkov: {result.AssignmentCount:N0}."
         : $"Premaknjenih vej: {result.RootCount:N0}. Posodobljenih kategorij: {result.CategoryCount:N0}; prestavljenih uvrstitev izdelkov: {result.AssignmentCount:N0}.";
@@ -866,7 +928,7 @@
     if (!Trees.Contains(NewTree, StringComparer.OrdinalIgnoreCase))
       NewTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
     Roots = [];
-    await LoadNewParentOptionsAsync();
+    await LoadNewParentOptionsAsync(false);
     await LoadCoverageAsync();
     await LoadAsync();
   }
@@ -897,7 +959,7 @@
         .OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray();
       Trees = await Tree.GetTreeCodesAsync();
       NewTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
-      await LoadNewParentOptionsAsync();
+      await LoadNewParentOptionsAsync(false);
       Organizations = await Data.GetOrganizationsAsync();
       Coverage = await Tree.GetCoverageAsync(null);
       // Uporabnik 2026-08-28: »ko odprem naj mi najprej prikaze slovenske kategorije, ne
@@ -939,6 +1001,10 @@
     Editing = null;
     try
     {
+      // 237: izbirnik starsa govori jezik, ki je v ospredju; ob menjavi jezika se prebere znova,
+      // izbrani stars pa ostane (koda se ne spremeni, samo napis).
+      if (!string.IsNullOrWhiteSpace(NewTree) && !string.Equals(OptionsLanguage, Language, StringComparison.OrdinalIgnoreCase))
+        await LoadNewParentOptionsAsync(true);
       int? organizationId = int.TryParse(OrganizationFilter, out var parsedOrganization) ? parsedOrganization : null;
       int? level = int.TryParse(Level, out var parsedLevel) ? parsedLevel : null;
       Rows = await Tree.GetTreeAsync(TreeCode, organizationId, Language, Search, Branch, OnlyMissing, OnlyWithProducts, level);

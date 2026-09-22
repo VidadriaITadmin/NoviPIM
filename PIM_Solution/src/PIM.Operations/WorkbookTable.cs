@@ -7,7 +7,23 @@ namespace PIM.Operations;
 
 /// <param name="Headers">Naslovi stolpcev v vrstnem redu, kot so v zvezku.</param>
 /// <param name="Rows">Vrstice; vsaka ima toliko celic, kolikor je naslovov.</param>
-public sealed record WorkbookSheet(string Name, IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows);
+/// <param name="RowNumbers">Številka vrstice v Excelu (kot jo uporabnik vidi na robu lista) za vsako
+/// vrstico v <paramref name="Rows"/>. Brez tega so opozorila uvoza kazala eno vrstico prenizko pri
+/// listu s skupinami (dve naslovni vrstici) in napačno, kadar so vmes prazne vrstice.</param>
+/// <param name="Groups">Skupina nad vsakim naslovom (vrstica tik nad naslovi; združena celica velja
+/// za vse stolpce do naslednje skupine). Prazno, kadar lista skupin nima.</param>
+public sealed record WorkbookSheet(
+  string Name, IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows,
+  IReadOnlyList<int>? RowNumbers = null, IReadOnlyList<string>? Groups = null)
+{
+  /// <summary>Številka vrstice v Excelu za vrstico z danim indeksom v <see cref="Rows"/>.</summary>
+  public int RowNumber(int index) =>
+    RowNumbers is { } numbers && index < numbers.Count ? numbers[index] : index + 2;
+
+  /// <summary>Skupina stolpca z danim indeksom; prazen niz, kadar je ni.</summary>
+  public string GroupOf(int index) =>
+    Groups is { } groups && index < groups.Count ? groups[index] : string.Empty;
+}
 
 public sealed class WorkbookReadException(string message) : InvalidOperationException(message);
 
@@ -63,28 +79,47 @@ public static class WorkbookTable
     if (headerHints is { Count: > 0 })
     {
       var wanted = headerHints.Select(WorkbookHeader.Normalize).Where(hint => hint.Length > 0).ToHashSet(StringComparer.Ordinal);
-      headerIndex = rows.FindIndex(row => row.Any(cell => wanted.Contains(WorkbookHeader.Normalize(cell))));
+      headerIndex = rows.FindIndex(row => row.Cells.Any(cell => wanted.Contains(WorkbookHeader.Normalize(cell))));
     }
     if (headerIndex < 0)
-      headerIndex = rows.FindIndex(row => row.Count(cell => !string.IsNullOrWhiteSpace(cell)) >= 2);
+      headerIndex = rows.FindIndex(row => row.Cells.Count(cell => !string.IsNullOrWhiteSpace(cell)) >= 2);
     if (headerIndex < 0) throw new WorkbookReadException("Na listu ni vrstice z naslovi stolpcev.");
 
-    var headers = rows[headerIndex].Select(cell => cell.Trim()).ToArray();
+    var headers = rows[headerIndex].Cells.Select(cell => cell.Trim()).ToArray();
     var width = headers.Length;
     var data = new List<IReadOnlyList<string>>();
+    var numbers = new List<int>();
 
     for (var index = headerIndex + 1; index < rows.Count; index++)
     {
-      var row = rows[index];
+      var row = rows[index].Cells;
       if (row.All(string.IsNullOrWhiteSpace)) continue;
       // Vrstica je lahko krajša ali daljša od naslovov; poravna se na širino naslovov, da
       // uvoz nikoli ne bere stolpca, ki ga ni.
       var cells = new string[width];
       for (var column = 0; column < width; column++) cells[column] = column < row.Count ? row[column].Trim() : string.Empty;
       data.Add(cells);
+      numbers.Add(rows[index].Number);
     }
 
-    return new(name ?? "list1", headers, data);
+    return new(name ?? "list1", headers, data, numbers, headerIndex > 0 ? Groups(rows[headerIndex - 1].Cells, width) : null);
+  }
+
+  /// <summary>
+  /// Vrstica skupin nad naslovi. <see cref="WorkbookWriter"/> skupino zapiše v prvo celico in
+  /// celice do naslednje skupine združi, zato ime velja v desno do naslednjega nepraznega.
+  /// </summary>
+  static string[] Groups(List<string> row, int width)
+  {
+    var groups = new string[width];
+    var current = string.Empty;
+    for (var column = 0; column < width; column++)
+    {
+      var cell = column < row.Count ? row[column].Trim() : string.Empty;
+      if (cell.Length > 0) current = cell;
+      groups[column] = current;
+    }
+    return groups;
   }
 
   public static WorkbookSheet Read(string path, string? sheetName = null, IReadOnlyCollection<string>? headerHints = null)
@@ -132,16 +167,21 @@ public static class WorkbookTable
       .ToList();
   }
 
-  static List<List<string>> ReadRows(ZipArchive archive, string part, List<string> shared)
+  /// <param name="Number">Številka vrstice v Excelu (atribut <c>r</c>); Excel prazne vrstice izpusti.</param>
+  sealed record SheetRow(int Number, List<string> Cells);
+
+  static List<SheetRow> ReadRows(ZipArchive archive, string part, List<string> shared)
   {
     var entry = archive.GetEntry(part) ?? throw new WorkbookReadException($"Lista {part} ni v zvezku.");
     using var stream = entry.Open();
     var root = XDocument.Load(stream).Root ?? throw new WorkbookReadException("List je prazen.");
 
-    var rows = new List<List<string>>();
+    var rows = new List<SheetRow>();
     foreach (var row in root.Descendants(XName.Get("row", Ns)))
     {
       if (rows.Count >= MaxRows) throw new WorkbookReadException($"Zvezek ima več kot {MaxRows} vrstic; razdeli ga na več datotek.");
+      var number = int.TryParse(row.Attribute("r")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var stated)
+        ? stated : (rows.Count == 0 ? 1 : rows[^1].Number + 1);
       var cells = new List<string>();
       foreach (var cell in row.Elements(XName.Get("c", Ns)))
       {
@@ -150,7 +190,7 @@ public static class WorkbookTable
         if (column >= 0) while (cells.Count < column) cells.Add(string.Empty);
         cells.Add(CellValue(cell, shared));
       }
-      rows.Add(cells);
+      rows.Add(new(number, cells));
     }
     return rows;
   }
@@ -163,9 +203,19 @@ public static class WorkbookTable
 
     var value = cell.Element(XName.Get("v", Ns))?.Value;
     if (value is null) return string.Empty;
-    if (type != "s") return value;
-    return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
-      && index >= 0 && index < shared.Count ? shared[index] : string.Empty;
+    if (type == "s")
+      return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+        && index >= 0 && index < shared.Count ? shared[index] : string.Empty;
+
+    // Za izracunano stevilo Excel v <v> zapise polno binarno natancnost, tudi ce list kaze lepo
+    // zaokrozeno vrednost (1,14 postane "1.1399999999999999"). To sumo je iz uvoza v SAOP nosila
+    // naprej: poslana vrednost se ni nikoli ujela s tem, kar SAOP prebere nazaj, zato je polje
+    // ostalo za vedno "caka SAOP". Ponoven izpis istega double v najkrajsi obliki, ki se se vedno
+    // prebere nazaj v isto vrednost, to sumo pobere; na besedilu, logicni vrednosti ali napaki
+    // celice (ki niso stevilo) se nic ne spremeni.
+    return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+      ? number.ToString(CultureInfo.InvariantCulture)
+      : value;
   }
 
   static int ColumnIndex(string? reference)

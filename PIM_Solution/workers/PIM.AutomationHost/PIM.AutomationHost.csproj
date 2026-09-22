@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- Gostitelj avtomatike (migracija 237): en dolgoživ proces, ki poganja posle iz ops.JobDefinition.
+       Na strežniku Windows storitev (deploy\Install-AutomationHost.ps1), na razvoju navadna konzola
+       (dotnet run ali PIM.AutomationHost.exe). Isti program v obeh vlogah. Objava intraneta ga odloži v
+       Workerji\PIM.AutomationHost\ ob druge workerje (PIM.Intranet.csproj, PimPublishWorkersAndScripts). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PIM.AutomationHost</RootNamespace>
+    <AssemblyName>PIM.AutomationHost</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PIM.Automation\PIM.Automation.csproj" />
+    <ProjectReference Include="..\..\src\PIM.Operations\PIM.Operations.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

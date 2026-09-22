@@ -54,8 +54,8 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     command.CommandTimeout = 600;
 
     await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
-    await using var writer = new StreamWriter(output, new UTF8Encoding(true), 65_536, leaveOpen: true);
-    await writer.WriteLineAsync(string.Join(';', Enumerable.Range(0, reader.FieldCount)
+    await using var writer = new StreamWriter(output, new UTF8Encoding(false), 65_536, leaveOpen: true) { NewLine = "\n" };
+    await writer.WriteLineAsync(string.Join(',', Enumerable.Range(0, reader.FieldCount)
       .Select(index => Escape(reader.GetName(index)))).AsMemory(), cancellationToken);
 
     long rows = 0;
@@ -66,7 +66,7 @@ public sealed class WebExportBuildService(IConfiguration configuration)
         cells[index] = Escape(reader.IsDBNull(index)
           ? null
           : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture));
-      await writer.WriteLineAsync(string.Join(';', cells).AsMemory(), cancellationToken);
+      await writer.WriteLineAsync(string.Join(',', cells).AsMemory(), cancellationToken);
       rows++;
     }
     await writer.FlushAsync(cancellationToken);
@@ -96,9 +96,7 @@ public sealed class WebExportBuildService(IConfiguration configuration)
 
   public static string Escape(string? value)
   {
-    if (string.IsNullOrEmpty(value)) return string.Empty;
-    var escaped = value.Replace("\"", "\"\"", StringComparison.Ordinal);
-    return value.IndexOfAny([';', '"', '\r', '\n']) >= 0 ? $"\"{escaped}\"" : escaped;
+    return PIM.B2b.RegistryCsvWriter.Escape(value);
   }
 
   SqlCommand Command(

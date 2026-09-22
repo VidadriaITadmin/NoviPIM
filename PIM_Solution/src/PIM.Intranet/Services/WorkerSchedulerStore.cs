@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using PIM.Automation;
 using PIM.Operations;
 
 namespace PIM.Intranet.Services;
@@ -9,9 +10,12 @@ namespace PIM.Intranet.Services;
 /// uro samo za alarme zastalosti, dokler ga ne zamenja intranet, ki cikle lahko požene.</param>
 public sealed record SchedulerLease(
   bool IsOwner, string Owner, string HostName, int ProcessId, string Application,
-  DateTime AcquiredUtc, DateTime HeartbeatUtc, DateTime ExpiresUtc, long TickCount, bool CanRunCycles)
+  DateTime AcquiredUtc, DateTime HeartbeatUtc, DateTime ExpiresUtc, long TickCount, bool CanRunCycles, int Priority = 0)
 {
   public bool IsLive(DateTime nowUtc) => ExpiresUtc > nowUtc;
+
+  /// <summary>Uro drži gostitelj avtomatike (237): intranet je takrat samo nadzorna konzola in starih ciklov ne poganja.</summary>
+  public bool IsAutomationHost => Application.StartsWith(AutomationApplications.Prefix, StringComparison.Ordinal);
 }
 
 /// <summary>Vrstica ops.WorkerCycle z zadnjim stanjem (intranet.GetWorkerCycles).</summary>
@@ -20,7 +24,17 @@ public sealed record WorkerCycleRow(
   decimal WarnAfterMultiplier, DateTime? NextDueUtc, long? RunningRunId, DateTime? RunningSinceUtc, string? RunningHost,
   DateTime? LastStartedUtc, DateTime? LastEndedUtc, string? LastStatus, int? LastExitCode, int? LastDurationMs,
   string? LastTriggeredBy, string? LastHost, int? LastStepsFailed, string? LastError,
-  DateTime UpdatedUtc, string UpdatedBy, string? RunningStep, DateTime? RunningHeartbeatUtc, int OpenOverdueAlerts);
+  DateTime UpdatedUtc, string UpdatedBy, string? RunningStep, DateTime? RunningHeartbeatUtc, int OpenOverdueAlerts,
+  DateTime? LastSucceededUtc = null)
+{
+  /// <summary>
+  /// Termin je že mimo, tek pa še traja: ura ga ne požene še enkrat (ops.ClaimWorkerCycle zavrne z
+  /// »Running«), naslednji zagon pride šele po koncu tega. To je prikazano kot preprečeno prekrivanje,
+  /// ne kot zamuda — cikel, ki traja dlje od svojega razmika, sicer ni napaka, je pa znak, da je
+  /// razmik prekratek.
+  /// </summary>
+  public bool OverlapPrevented(DateTime nowUtc) => RunningRunId is not null && NextDueUtc is { } due && due <= nowUtc;
+}
 
 public sealed record WorkerCycleRunRow(
   long WorkerCycleRunId, string CycleKey, string? Label, DateTime StartedUtc, DateTime? EndedUtc, string Status, int? ExitCode,
@@ -66,6 +80,8 @@ public sealed class WorkerSchedulerStore(IConfiguration configuration)
     command.Parameters.Add("@Application", SqlDbType.NVarChar, 200).Value = application;
     command.Parameters.Add("@TtlSeconds", SqlDbType.Int).Value = ttlSeconds;
     command.Parameters.Add("@CanRunCycles", SqlDbType.Bit).Value = canRunCycles;
+    // 237: intranet ima prednost 0 — gostitelj avtomatike (10) mu uro vzame, tudi kadar je najem živ.
+    command.Parameters.Add("@Priority", SqlDbType.Int).Value = 0;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     return await reader.ReadAsync(cancellationToken) ? ReadLease(reader, reader.GetBoolean(reader.GetOrdinal("IsOwner"))) : null;
   }
@@ -83,7 +99,7 @@ public sealed class WorkerSchedulerStore(IConfiguration configuration)
   {
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand(
-      "SELECT Owner, HostName, ProcessId, Application, AcquiredUtc, HeartbeatUtc, ExpiresUtc, TickCount, CanRunCycles FROM ops.SchedulerLease WHERE LeaseKey = N'PIM';",
+      "SELECT Owner, HostName, ProcessId, Application, AcquiredUtc, HeartbeatUtc, ExpiresUtc, TickCount, CanRunCycles, Priority FROM ops.SchedulerLease WHERE LeaseKey = N'PIM';",
       connection);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     return await reader.ReadAsync(cancellationToken) ? ReadLease(reader, false) : null;
@@ -93,7 +109,8 @@ public sealed class WorkerSchedulerStore(IConfiguration configuration)
     isOwner, Text(reader, "Owner"), Text(reader, "HostName"), reader.GetInt32(reader.GetOrdinal("ProcessId")),
     Text(reader, "Application"), reader.GetDateTime(reader.GetOrdinal("AcquiredUtc")),
     reader.GetDateTime(reader.GetOrdinal("HeartbeatUtc")), reader.GetDateTime(reader.GetOrdinal("ExpiresUtc")),
-    reader.GetInt64(reader.GetOrdinal("TickCount")), reader.GetBoolean(reader.GetOrdinal("CanRunCycles")));
+    reader.GetInt64(reader.GetOrdinal("TickCount")), reader.GetBoolean(reader.GetOrdinal("CanRunCycles")),
+    reader.GetInt32(reader.GetOrdinal("Priority")));
 
   // ─── Cikli ────────────────────────────────────────────────────────────────
 
@@ -128,7 +145,8 @@ public sealed class WorkerSchedulerStore(IConfiguration configuration)
         NullableInt(reader, "LastExitCode"), NullableInt(reader, "LastDurationMs"), NullableText(reader, "LastTriggeredBy"),
         NullableText(reader, "LastHost"), NullableInt(reader, "LastStepsFailed"), NullableText(reader, "LastError"),
         reader.GetDateTime(reader.GetOrdinal("UpdatedUtc")), Text(reader, "UpdatedBy"),
-        NullableText(reader, "RunningStep"), NullableDate(reader, "RunningHeartbeatUtc"), Int(reader, "OpenOverdueAlerts")));
+        NullableText(reader, "RunningStep"), NullableDate(reader, "RunningHeartbeatUtc"), Int(reader, "OpenOverdueAlerts"),
+        NullableDate(reader, "LastSucceededUtc")));
     return rows;
   }
 

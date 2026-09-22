@@ -85,7 +85,9 @@ function Invoke-Sqlcmd2 {
     [string]$Query,
     [string]$InputFile
   )
-  $args = @($ConnArgs) + @('-I', '-b')
+  # -f 65001: brez tega sqlcmd -i bere datoteko v OS codepage namesto UTF-8, kar Ĺˇumnike
+  # (Ĺľivljenjska, DolĹľina ...) v N'...' literalih podvojeno napacno prekodira.
+  $args = @($ConnArgs) + @('-I', '-b', '-f', '65001')
   if ($InputFile) { $args += @('-i', $InputFile) }
   elseif ($Query) { $args += @('-Q', $Query) }
   else { throw "Invoke-Sqlcmd2 rabi -Query ali -InputFile." }

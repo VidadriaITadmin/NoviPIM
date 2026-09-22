@@ -366,8 +366,10 @@
 .attribute-suggestions ul { list-style: none; padding: 0; margin: .3rem 0 0; display: grid; gap: .25rem; }
 .attribute-suggestions li { display: flex; gap: .6rem; align-items: center; font-size: .85rem; }
 
-/* 178: nova kategorija */
-.new-category { padding: .9rem 1rem; }
+/* 178: nova kategorija. Debela temna obroba (namesto tanke --pim-border skupne vsem .ui-card), da
+   se akcija "dodaj korensko kategorijo" vidno loci od filtrov in drevesa pod njo - uporabnik je
+   opozoril, da se brez tega ta plosca izgubi med ostalimi. */
+.new-category { border: 2px solid var(--pim-text); padding: .9rem 1rem; }
 .new-category .card-caption { font-size: .95rem; margin: 0 0 .6rem; }
 .new-category .editor-actions { align-items: end; display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
 .new-category .editor-field { display: flex; flex-direction: column; gap: .2rem; }
@@ -457,3 +459,9 @@
   .category-dialog-backdrop { align-items: end; padding: 0; }
   .category-dialog { border-radius: var(--pim-radius) var(--pim-radius) 0 0; max-height: 92vh; }
 }
+
+/* 237: imena nove kategorije po jezikih - eno polje na jezik, jezik v ospredju je poudarjen. */
+.new-category .name-grid { margin: .6rem 0 .4rem; }
+.new-category .name-grid .editor-field.is-focus .form-input { border-color: var(--pim-text); }
+.new-category .editor-label em { color: var(--pim-text-muted); font-style: normal; font-weight: 400; margin-left: .35rem; text-transform: none; }
+.new-category .editor-note { color: var(--pim-text-muted); font-size: .85rem; }

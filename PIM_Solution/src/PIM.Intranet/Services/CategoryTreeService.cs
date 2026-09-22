@@ -24,6 +24,12 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   /// zadetek brez njih iztrgan iz drevesa in bralec ne vidi, kje stoji.
   /// </param>
   /// <param name="Translations">Vsi zapisani prevodi te kategorije, po jeziku.</param>
+  /// <param name="CategoryPathDisplay">
+  /// Pot v jeziku, ki ga je klicatelj izbral (@LanguageCode) - za prikaz drobtinice uporabniku.
+  /// Manjkajoc prevod posameznega prednika pade nazaj na njegovo slovensko ime (235). Ločeno od
+  /// <see cref="CategoryPath"/>, ki ostane slovenska "kanonicna" pot in ga stran uporablja za
+  /// zlaganje vej in iskanje.
+  /// </param>
   public sealed record TreeRow(
     string CategoryTreeCode,
     string CategoryCode,
@@ -31,6 +37,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     int LevelNo,
     string CategoryName,
     string CategoryPath,
+    string CategoryPathDisplay,
     bool IsActive,
     int MissingLanguages,
     string? MissingLanguageList,
@@ -63,6 +70,7 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
         PimDb.Int32(reader, "LevelNo"),
         PimDb.TextOrEmpty(reader, "CategoryName"),
         PimDb.TextOrEmpty(reader, "CategoryPath"),
+        PimDb.TextOrEmpty(reader, "CategoryPathDisplay"),
         PimDb.Bool(reader, "IsActive"),
         PimDb.Int32(reader, "MissingLanguages"),
         PimDb.Text(reader, "MissingLanguageList"),
@@ -452,17 +460,32 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return code.Value as string ?? throw new InvalidOperationException($"Atributa »{name}« ni bilo mogoče ustvariti.");
   }
 
-  /// <summary>Nova kategorija pod starsem (null = koren) — 178. Postopek zavrne isto ime pod istim starsem. Vrne kodo.</summary>
-  public async Task<string> CreateCategoryAsync(string categoryTreeCode, string? parentCategoryCode, string name, string actor, CancellationToken cancellationToken = default)
+  /// <summary>
+  /// Nova kategorija pod starsem (null = koren) — 178. Postopek zavrne isto ime pod istim starsem. Vrne kodo.
+  /// </summary>
+  /// <param name="translations">
+  /// Imena v ostalih jezikih (koda jezika → ime), zapisana v isti transakciji (237). Slovensko ime
+  /// je <paramref name="name"/>; ce je v slovarju tudi »sl«, se preskoci, da se koda ne preimenuje.
+  /// Uporabnik 2026-09-21: v angleskem pogledu drevesa je bilo mogoce vpisati samo slovensko ime,
+  /// zato je anglesko ime pristalo kot slovensko in kategorija »v slovenskem drevesu«.
+  /// </param>
+  public async Task<string> CreateCategoryAsync(
+    string categoryTreeCode, string? parentCategoryCode, string name, string actor,
+    IReadOnlyDictionary<string, string>? translations = null, CancellationToken cancellationToken = default)
   {
     await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var others = (translations ?? new Dictionary<string, string>())
+      .Where(pair => !string.Equals(pair.Key, "sl", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pair.Value))
+      .Select(pair => new { lang = pair.Key, name = pair.Value.Trim() })
+      .ToList();
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
-    await using var command = new SqlCommand("EXEC canon.SaveCategory @CategoryTreeCode, @ParentCategoryCode, @Name, @Actor, @CategoryCode OUTPUT;", connection);
+    await using var command = new SqlCommand("EXEC canon.SaveCategory @CategoryTreeCode, @ParentCategoryCode, @Name, @Actor, @CategoryCode OUTPUT, @TranslationsJson;", connection);
     command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
     command.Parameters.AddWithValue("@ParentCategoryCode", Nullable(parentCategoryCode));
     command.Parameters.AddWithValue("@Name", name);
     command.Parameters.AddWithValue("@Actor", actor);
+    command.Parameters.AddWithValue("@TranslationsJson", others.Count == 0 ? DBNull.Value : JsonSerializer.Serialize(others));
     var code = command.Parameters.Add("@CategoryCode", System.Data.SqlDbType.NVarChar, 200);
     code.Direction = System.Data.ParameterDirection.Output;
     await command.ExecuteNonQueryAsync(cancellationToken);
@@ -488,7 +511,14 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   }
 
   public sealed record CategoryChangeResult(
-    int RootCount, int CategoryCount, long AssignmentCount, long MappingCount = 0);
+    int RootCount, int CategoryCount, long AssignmentCount, long MappingCount = 0,
+    IReadOnlyList<CategoryCodeChange>? CodeChanges = null);
+
+  /// <summary>
+  /// Stara/nova koda ene premaknjene korenske veje (migracija 229 — koda ni vec stabilna, ker
+  /// vsebuje predpono starsa). Uporabi se za ponovno izbiro vozlisca v UI po premiku.
+  /// </summary>
+  public sealed record CategoryCodeChange(string CategoryTreeCode, string OldCategoryCode, string NewCategoryCode);
 
   /// <summary>Predogled dejanskega vpliva pred premikom ali trajnim brisanjem.</summary>
   public async Task<CategoryChangeImpact> GetChangeImpactAsync(
@@ -516,8 +546,10 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
   }
 
   /// <summary>
-  /// Premakne eno ali vec vej pod istega starsa (null = koren). Kode ostanejo stabilne; baza v isti
-  /// transakciji posodobi nivoje, vse jezikovne poti in uvrstitve izdelkov.
+  /// Premakne eno ali vec vej pod istega starsa (null = koren). Baza v isti transakciji posodobi
+  /// nivoje, vse jezikovne poti, kodo (in vse tabele, ki jo hranijo — 229) ter uvrstitve izdelkov
+  /// premaknjenega poddrevesa. Vrnjeni CodeChanges povedo, katera stara koda je postala katera nova,
+  /// da klicatelj po ponovnem nalaganju drevesa lahko spet izbere isto vozlisce.
   /// </summary>
   public async Task<CategoryChangeResult> MoveCategoriesAsync(
     IReadOnlyCollection<CategoryRef> categories, string targetTreeCode, string? targetParentCategoryCode,
@@ -539,9 +571,22 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     if (!await reader.ReadAsync(cancellationToken))
       throw new InvalidOperationException("Premik kategorij ni vrnil rezultata.");
-    var result = new CategoryChangeResult(
-      PimDb.Int32(reader, "RootCount"), PimDb.Int32(reader, "CategoryCount"),
-      PimDb.Int64(reader, "AssignmentCount"));
+    var rootCount = PimDb.Int32(reader, "RootCount");
+    var categoryCount = PimDb.Int32(reader, "CategoryCount");
+    var assignmentCount = PimDb.Int64(reader, "AssignmentCount");
+
+    var codeChanges = new List<CategoryCodeChange>();
+    if (await reader.NextResultAsync(cancellationToken))
+    {
+      while (await reader.ReadAsync(cancellationToken))
+      {
+        codeChanges.Add(new CategoryCodeChange(
+          PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "OldCategoryCode"),
+          PimDb.TextOrEmpty(reader, "NewCategoryCode")));
+      }
+    }
+
+    var result = new CategoryChangeResult(rootCount, categoryCount, assignmentCount, CodeChanges: codeChanges);
     ClearPickerCache(categories.Select(category => category.CategoryTreeCode).Append(targetTreeCode));
     return result;
   }
@@ -574,17 +619,42 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return result;
   }
 
-  /// <param name="CategoryPath">Slovenska pot; v izbirniku je zamaknjena po ravni.</param>
-  public sealed record CategoryOptionRow(string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath);
+  /// <param name="CategoryPath">Slovenska (kanonicna) pot; po njej se drevo zlaga in isce.</param>
+  /// <param name="DisplayName">Ime v jeziku klicatelja; brez prevoda slovensko ime (237).</param>
+  /// <param name="DisplayPath">Pot v jeziku klicatelja prek canon.CategoryPathTranslated (059); brez prevoda slovenska pot.</param>
+  public sealed record CategoryOptionRow(
+    string CategoryTreeCode, string CategoryCode, string? ParentCategoryCode, int LevelNo, string CategoryName, string CategoryPath,
+    string DisplayName, string DisplayPath);
 
-  /// <summary>Kategorije drevesa po poti — za vecnivojski filter (izbira kategorije zajame tudi podkategorije).</summary>
-  public Task<IReadOnlyList<CategoryOptionRow>> GetCategoryOptionsAsync(string categoryTreeCode, CancellationToken cancellationToken = default) =>
+  /// <summary>
+  /// Kategorije drevesa po poti — za vecnivojski filter in izbirnike starsa/cilja premika.
+  /// Uporabnik 2026-09-21: v angleskem pogledu drevesa je izbirnik starsa kazal slovenske poti;
+  /// zdaj ime in pot prideta v <paramref name="languageCode"/>, slovenska pot pa ostane za
+  /// notranjo logiko (predpone poti pri premiku).
+  /// </summary>
+  public Task<IReadOnlyList<CategoryOptionRow>> GetCategoryOptionsAsync(string categoryTreeCode, string languageCode = "sl", CancellationToken cancellationToken = default) =>
     database.QueryAsync(
-      "SELECT CategoryTreeCode, CategoryCode, ParentCategoryCode, LevelNo, CategoryName, CategoryPath FROM canon.Category WHERE CategoryTreeCode = @Tree AND IsActive = 1 ORDER BY CategoryPath;",
+      """
+      SELECT node.CategoryTreeCode, node.CategoryCode, node.ParentCategoryCode, node.LevelNo, node.CategoryName, node.CategoryPath,
+        DisplayName = COALESCE(NULLIF(prevod.CategoryName, N''), node.CategoryName),
+        DisplayPath = COALESCE(NULLIF(pot.CategoryPath, N''), node.CategoryPath)
+      FROM canon.Category AS node
+      LEFT JOIN canon.CategoryTranslation AS prevod
+        ON prevod.CategoryTreeCode = node.CategoryTreeCode AND prevod.CategoryCode = node.CategoryCode AND prevod.LanguageCode = @Lang
+      LEFT JOIN canon.CategoryPathTranslated AS pot
+        ON pot.CategoryTreeCode = node.CategoryTreeCode AND pot.CategoryCode = node.CategoryCode AND pot.LanguageCode = @Lang
+      WHERE node.CategoryTreeCode = @Tree AND node.IsActive = 1
+      ORDER BY node.CategoryPath;
+      """,
       reader => new CategoryOptionRow(
         PimDb.TextOrEmpty(reader, "CategoryTreeCode"), PimDb.TextOrEmpty(reader, "CategoryCode"), PimDb.Text(reader, "ParentCategoryCode"),
-        PimDb.Int32(reader, "LevelNo"), PimDb.TextOrEmpty(reader, "CategoryName"), PimDb.TextOrEmpty(reader, "CategoryPath")),
-      command => command.Parameters.AddWithValue("@Tree", categoryTreeCode), cancellationToken);
+        PimDb.Int32(reader, "LevelNo"), PimDb.TextOrEmpty(reader, "CategoryName"), PimDb.TextOrEmpty(reader, "CategoryPath"),
+        PimDb.TextOrEmpty(reader, "DisplayName"), PimDb.TextOrEmpty(reader, "DisplayPath")),
+      command =>
+      {
+        command.Parameters.AddWithValue("@Tree", categoryTreeCode);
+        command.Parameters.AddWithValue("@Lang", string.IsNullOrWhiteSpace(languageCode) ? "sl" : languageCode);
+      }, cancellationToken);
 
   /// <summary>Ucinkoviti nabor vira postane lastni nabor cilja. Vrne stevilo prepisanih vrstic.</summary>
   public async Task<int> CopyAttributeSetAsync(

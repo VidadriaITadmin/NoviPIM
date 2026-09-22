@@ -1,30 +1,27 @@
 <#
 .SYNOPSIS
-  Urni izvoz celotnega kataloga in strank za splet (katalog.csv, stranke.csv).
+  Urni cikel kataloga: SAOP katalog (delta), narocila iz SAOP, validacija in objava vseh podjetij.
 
 .DESCRIPTION
-  Locen od Nocno-vse.ps1 in Zaloga-cikel.ps1, namenoma:
+  Locen od Nocno-vse.ps1, Zaloga-cikel.ps1 in Magento-cikel.ps1, namenoma:
 
-    Nocno-vse.ps1     enkrat na dan, cel vhodni tok (SAOP, dobaviteljev XML, zaloge, validacija,
-                       objava, izvoz) — tezek, ker zajema navzven (SAOP, FTP, HTTPS).
+    Nocno-vse.ps1      enkrat na dan, cel vhodni tok (SAOP, dobaviteljev XML, zaloge, validacija,
+                       objava) - tezek, ker zajema navzven (SAOP, FTP, HTTPS).
     Zaloga-cikel.ps1   vsakih 5 minut, samo zaloga in hiter profil cena+zaloga (MAGENTO_STOCK_PRICES).
-    Katalog-cikel.ps1  (ta skripta) vsako uro, samo objava + poln izvoz (MAGENTO_PRODUCTS,
-                       MAGENTO_CUSTOMERS) — brez zunanjih klicev, zato je poceni pognati pogosteje
-                       kot enkrat na dan.
+    Katalog-cikel.ps1  (ta skripta) vsako uro: SAOP katalog (delta), narocila, validacija in objava
+                       v pim.* za vsa podjetja.
+    Magento-cikel.ps1  vsakih 5 minut, samo izdelava katalog.csv in stranke.csv iz objave
+                       (MAGENTO_PRODUCTS, MAGENTO_CUSTOMERS) - bere PIM, ne klice SAOP.
 
-  Uporabnik 2026-09-10: katalog naj se osvezuje vsako uro; cena in zaloga (ki sta stolpca v isti
-  datoteki) pa pogosteje — to pokrije Zaloga-cikel.ps1 s petminutnim val.Promote. Ta skripta pred
-  vsakim izvozom se enkrat pozene val.RunValidation + val.Promote (poceni, ista operacija kot v
-  Zaloga-cikel.ps1), da urni izvoz ne zamudi objave, ki jo je Zaloga-cikel.ps1 naredil minuto prej.
+  Do 2026-09-21 je ta skripta na koncu izdelala tudi par CSV za Magento. Odslej ga izdeluje
+  samostojen cikel (Magento-cikel.ps1 oziroma cikel magento-csv v intranetu): neuspesen vhod iz
+  SAOP ne sme biti videti kot neuspesna izdelava CSV in obratno (uporabnik: katalog.csv je
+  PIM -> Magento, izdelava CSV je neodvisna od branja/pisanja SAOP). Validacija in objava ostajata
+  tu za vsa podjetja, ker VID zaloga in VID cenik v IQ katalog vstopata prek objavljenega sloja
+  podjetja 3; cikel CSV ju ponovi le, kadar ta urni cikel ni tekel (meja 90 min).
 
-  Datoteki gresta v izvoz\magento\<podjetje>\ — ista mapa in ista imena (katalog.csv,
-  stranke.csv), kot ju pise nocni tok (MagentoExportCommand.ExecuteAsync). Kdorkoli iz
-  te mape bere (uvoznik na spletni strani), z urnim ciklom ne dobi drugacnega imena ali poti,
-  samo pogostejso osvezitev.
-
-  To ni isto kot predogled/prenos na /splet v intranetu: tisti bere iz baze na zahtevo, ta
-  skripta pise datoteko na disk. Glej primerjavo v out.ExportRun (TriggeredBy = Scheduler za to
-  skripto, Human za prenos iz brskalnika) — oboje je vidno na /splet pod "Zgodovina dostav".
+  To ni isto kot predogled na /splet/izvoz v intranetu: tisti bere iz baze na zahtevo. Dejanski
+  datoteki in njuno zgodovino (out.ExportRun, TriggeredBy = Scheduler za cikel) kaze /splet.
 
 .PARAMETER Podjetja
   Podjetja, za katera tecejo narocila, validacija in objava. Privzeto vsa stiri.
@@ -36,6 +33,8 @@
   en katalog z IQ artikli, skupno IQ+VID zalogo (146) in B2B ceno iz VID cenika (213). Pred tem
   je zanka tekla cez vsa stiri podjetja (in @(2) je bil ob 210 pomotoma »popravljen« nazaj na
   vsa stiri — to NI bil ostanek pilota, ampak namera). Ne vracaj na seznam.
+  Od 2026-09-21 ta skripta izvoza ne izdeluje vec (glej Magento-cikel.ps1); parameter ostaja
+  sprejet zaradi zdruzljivosti klicev.
 
 .PARAMETER KorenRepozitorija
   Koren repozitorija; privzeto se izpelje iz mesta skripte.
@@ -132,14 +131,10 @@ foreach ($o in $Podjetja) {
   }
 }
 
-# En par datotek, samo podjetje iz -PodjetjeKataloga (glej opis parametra). Validacija in objava
-# zgoraj tecejo za vsa podjetja, ker VID zaloga in VID cenik v ta katalog vstopata prek objavljenega
-# sloja podjetja 3 — brez njegove objave bi bila IQ datoteka stara pri zalogi in B2B ceni.
-Korak "Izvoz kataloga in strank (podjetje $PodjetjeKataloga)" {
-  # Ciljna mapa ni vec tu: worker jo sam razresi (register ops.SystemPath, kljuc EXPORT_ROOT;
-  # glej scripts\Nastavi-izvozno-pot.ps1), da je ena sprememba dovolj za urnik in nocni tok skupaj.
-  PozeniWorker 'workers\PIM.B2bWorker' @('--export-magento', '--organization-id', "$PodjetjeKataloga")
-}
+# Izvoz kataloga in strank (katalog.csv, stranke.csv) od 2026-09-21 ni vec tu: izdeluje ga
+# samostojen cikel Magento-cikel.ps1 (naloga "PIM magento", v intranetu cikel magento-csv) vsakih
+# 5 minut iz objave, ki jo je ta cikel pravkar osvezil. Validacija in objava zgoraj tecejo za vsa
+# podjetja, ker VID zaloga in VID cenik v ta katalog vstopata prek objavljenega sloja podjetja 3.
 
 Zapisi "Katalog cikel koncan; padlih korakov: $padli."
 exit $padli

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Enotni model opravil (migracija 237): katalog poslov, načrt korakov, zagon procesov, dostop do
+       ops.Job* in motor razporejanja. Isto knjižnico uporabljata gostitelj avtomatike (PIM.AutomationHost,
+       Windows storitev) in intranet (nadzorna konzola, ročne zahteve). Brez ASP.NET in brez Hosting
+       odvisnosti, da jo lahko vežejo tudi konzolni testi. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PIM.Automation</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <ProjectReference Include="..\PIM.Operations\PIM.Operations.csproj" />
+  </ItemGroup>
+</Project>

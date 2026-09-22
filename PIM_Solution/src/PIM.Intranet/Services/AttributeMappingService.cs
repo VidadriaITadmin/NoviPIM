@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
@@ -170,6 +171,116 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
+
+  // --- Dodajanje, urejanje in brisanje atributa (migracija 238) --------------------------
+  // Uporabnik 2026-09-21: »treba dodat da se dodaja piše briše«.
+
+  /// <param name="ProductValues">Vrstice canon.ProductAttribute (po slovenskem imenu, ker se vrednosti hranijo po imenu — 125).</param>
+  /// <param name="Requirements">Aktivne zahteve validacije za polje ProductAttribute.&lt;ime&gt;.</param>
+  public sealed record AttributeUsage(
+    string AttributeCode, string? SloveneName, string? Note, int SortOrder,
+    long ProductValues, long ProductsWithValue, long PimValues, long CategorySets, long SourceMaps,
+    long UnitPairs, long Requirements, long Translations)
+  {
+    public long ValueCount => ProductValues + PimValues;
+  }
+
+  /// <summary>Kje vse atribut živi — pred brisanjem in za zavihek Osnovno (opomba, ki je register ne vrača).</summary>
+  public async Task<AttributeUsage?> GetUsageAsync(string attributeCode, CancellationToken cancellationToken = default)
+  {
+    var rows = await database.QueryAsync(
+      "EXEC intranet.GetAttributeUsage @AttributeCode;",
+      reader => new AttributeUsage(
+        PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.Text(reader, "SloveneName"), PimDb.Text(reader, "Note"),
+        PimDb.Int32(reader, "SortOrder"), PimDb.Int64(reader, "ProductValues"), PimDb.Int64(reader, "ProductsWithValue"),
+        PimDb.Int64(reader, "PimValues"), PimDb.Int64(reader, "CategorySets"), PimDb.Int64(reader, "SourceMaps"),
+        PimDb.Int64(reader, "UnitPairs"), PimDb.Int64(reader, "Requirements"), PimDb.Int64(reader, "Translations")),
+      command => command.Parameters.AddWithValue("@AttributeCode", attributeCode), cancellationToken);
+    return rows.FirstOrDefault();
+  }
+
+  /// <summary>
+  /// Nov atribut: slovensko ime je obvezno (iz njega nastane koda, če je klicatelj ne poda), imena v
+  /// ostalih jezikih gredo v isti transakciji. Postopek zavrne obstoječo kodo in obstoječe slovensko ime.
+  /// Vrne kodo.
+  /// </summary>
+  public async Task<string> CreateDefinitionAsync(
+    string name, string? attributeCode, string? attributeGroup, string dataType, string? unit,
+    bool isTranslatable, string? note, IReadOnlyDictionary<string, string>? translations, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var others = (translations ?? new Dictionary<string, string>())
+      .Where(pair => !string.Equals(pair.Key, "sl", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pair.Value))
+      .Select(pair => new { lang = pair.Key, name = pair.Value.Trim() })
+      .ToList();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.CreateAttributeDefinition @Name, @AttributeCode, @AttributeGroup, @DataType, @Unit, @IsTranslatable, @Note, @TranslationsJson, @Actor, @CreatedCode OUTPUT;",
+      connection);
+    command.Parameters.AddWithValue("@Name", name.Trim());
+    command.Parameters.AddWithValue("@AttributeCode", Nullable(attributeCode));
+    command.Parameters.AddWithValue("@AttributeGroup", Nullable(attributeGroup));
+    command.Parameters.AddWithValue("@DataType", Nullable(dataType));
+    command.Parameters.AddWithValue("@Unit", Nullable(unit));
+    command.Parameters.AddWithValue("@IsTranslatable", isTranslatable);
+    command.Parameters.AddWithValue("@Note", Nullable(note));
+    command.Parameters.AddWithValue("@TranslationsJson", others.Count == 0 ? DBNull.Value : JsonSerializer.Serialize(others));
+    command.Parameters.AddWithValue("@Actor", actor);
+    var created = command.Parameters.Add("@CreatedCode", SqlDbType.NVarChar, 200);
+    created.Direction = ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return created.Value as string ?? throw new InvalidOperationException($"Atributa »{name}« ni bilo mogoče ustvariti.");
+  }
+
+  /// <summary>
+  /// Urejanje osnovnih lastnosti z izrecnim pomenom: prazna skupina, enota, opomba ali par enote se
+  /// POBRIŠEJO (za razliko od <see cref="SaveDefinitionAsync"/>, kjer prazno pomeni »pusti«).
+  /// </summary>
+  public async Task UpdateDefinitionAsync(
+    string attributeCode, string? attributeGroup, string dataType, string? unit, bool isTranslatable,
+    bool isUnitCandidate, string? unitOfAttributeCode, bool isActive, string? note, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.UpdateAttributeDefinition @AttributeCode, @AttributeGroup, @DataType, @Unit, @IsTranslatable, @IsUnitCandidate, @UnitOfAttributeCode, @IsActive, @Note, @Actor;",
+      connection);
+    command.Parameters.AddWithValue("@AttributeCode", attributeCode);
+    command.Parameters.AddWithValue("@AttributeGroup", Nullable(attributeGroup));
+    command.Parameters.AddWithValue("@DataType", dataType);
+    command.Parameters.AddWithValue("@Unit", Nullable(unit));
+    command.Parameters.AddWithValue("@IsTranslatable", isTranslatable);
+    command.Parameters.AddWithValue("@IsUnitCandidate", isUnitCandidate);
+    command.Parameters.AddWithValue("@UnitOfAttributeCode", Nullable(unitOfAttributeCode));
+    command.Parameters.AddWithValue("@IsActive", isActive);
+    command.Parameters.AddWithValue("@Note", Nullable(note));
+    command.Parameters.AddWithValue("@Actor", actor);
+    await command.ExecuteNonQueryAsync(cancellationToken);
+  }
+
+  /// <summary>
+  /// Trajni izbris. Brez <paramref name="force"/> postopek zavrne atribut z vrednostmi pri izdelkih;
+  /// s <paramref name="force"/> izbriše tudi te. Vrne število izbrisanih vrednosti pri izdelkih.
+  /// </summary>
+  public async Task<long> DeleteDefinitionAsync(string attributeCode, bool force, string actor, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "EXEC canon.DeleteAttributeDefinition @AttributeCode, @Actor, @Force, @DeletedValues OUTPUT;", connection) { CommandTimeout = 120 };
+    command.Parameters.AddWithValue("@AttributeCode", attributeCode);
+    command.Parameters.AddWithValue("@Actor", actor);
+    command.Parameters.AddWithValue("@Force", force);
+    var deleted = command.Parameters.Add("@DeletedValues", SqlDbType.BigInt);
+    deleted.Direction = ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return deleted.Value is long count ? count : 0;
   }
 
   /// <summary>

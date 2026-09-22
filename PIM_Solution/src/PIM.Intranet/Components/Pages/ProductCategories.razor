@@ -4,6 +4,7 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.CategoryMappingService Mapping
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.WebWithdrawalService Withdrawals
 @inject AuthenticationStateProvider Authentication
 
 @* Ročna uvrstitev enega izdelka. Ločena stran in ne zavihek kartice, ker je to edino mesto v
@@ -240,12 +241,19 @@
     Error = null;
     try
     {
+      var actor = await ActorAsync();
       var outcome = await Mapping.SetProductCategoriesAsync(
         OrganizationId.Value, ItemIdInput.Trim(), site.WebSiteCode, Chosen,
-        await ActorAsync(), string.IsNullOrWhiteSpace(Note) ? null : Note);
-      Message = outcome == "Unchanged"
+        actor, string.IsNullOrWhiteSpace(Note) ? null : Note);
+      // 251: artikel brez kategorije na označenem spletišču tja ne sme — ob vklopljenem samodejnem umiku
+      // PIM kljukico takoj odstrani (po sveži validaciji) in to pove tu.
+      var withdrawn = outcome == "Unchanged"
+        ? []
+        : await Withdrawals.AfterChangeByItemsAsync(OrganizationId.Value, [ItemIdInput.Trim()], "KATEGORIJE", actor, revalidate: true);
+      Message = (outcome == "Unchanged"
         ? "Uvrstitev je bila že takšna; nič se ni spremenilo."
-        : "Uvrstitev je shranjena. Stara vrednost je v zgodovini sprememb, ponovna preslikava je ne bo povozila.";
+        : "Uvrstitev je shranjena. Stara vrednost je v zgodovini sprememb, ponovna preslikava je ne bo povozila.")
+        + string.Concat(PIM.Intranet.Services.WebWithdrawalText.PerProduct(withdrawn).Select(line => " " + line + "."));
       CancelEdit();
       await LoadProductAsync();
     }

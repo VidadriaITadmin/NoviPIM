@@ -1161,3 +1161,713 @@ dokument (`.../Manuals/10580-2.pdf`).
 
 **Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva. Kot 219 je bila na lokalni bazi
 pognana neposredno prek `sqlcmd`; za produkcijo jo je treba pognati prek `PIM.Migrator`.
+
+## QUOTED_IDENTIFIER OFF na map.ApplyValueTransforms lomi UPDATE proti filtriranemu indeksu (migracija 230, 2026-09-18)
+
+Od 17. 9. 2026 13:34 (5 minut po zadnjem uspešnem teku) je `SAOP_PRICES` na `/sistem` padal za vsa
+štiri podjetja identično, z `UPDATE failed because the following SET options have incorrect
+settings: 'QUOTED_IDENTIFIER'. ...` (SQL Server napaka 1934).
+
+Vzrok, potrjen na `DAVID\MSSQL19` prek `sys.sql_modules.uses_quoted_identifier`:
+`map.ApplyValueTransforms` je imela to nastavitev izklopljeno, spremenjena natanko 2026-09-17
+13:34:38. Veriga: migracija 218 je istega dne na `map.ExtractedValue` dodala filtriran indeks
+(`IX_ExtractedValue_Identity ... WHERE TargetFieldCode IN (...)`) — od takrat vsak
+UPDATE/INSERT/DELETE na tej tabeli zahteva `QUOTED_IDENTIFIER ON` za celo sejo. Migracija 220 je
+`map.ApplyValueTransforms` spremenila mimo običajnega vzorca (`OBJECT_DEFINITION` → vrinjena veja →
+`sp_executesql`) **brez** predhodnega `SET QUOTED_IDENTIFIER ON` — in ker je bila (glej opombo pri
+220) pognana neposredno prek `sqlcmd` (privzeto `QUOTED_IDENTIFIER OFF`, razen z `-I`), je proceduro
+trajno zapekla z izklopljeno nastavitvijo. `map.ApplyValueTransforms` znotraj sebe UPDATE-a prav
+`map.ExtractedValue`, zato je od takrat padel vsak klic z vsaj enim aktivnim korakom v
+`map.FieldTransform` — pri `SAOP_PRICES` gre skozenj skoraj vsako polje (npr. `NUMBER`), zato je
+prvi opazen; po istem mehanizmu tvegata tudi `SAOP_PRODUCTS` in `GENERIC_XML` (obe kličeta isto
+proceduro, prva prek `PIM.KatalogWorker`, druga prek `PIM.XmlFileWorker`).
+
+Ista poizvedba je razkrila še tri starejše procedure v isti pomoti, spremenjene že 2026-09-02 (pred
+218/220, neodvisno od te napake): `ops.BeginRun`, `ops.AbandonOrphanRuns`, `ops.RecordRunCounts`.
+Doslej niso padle, ker tabele, ki jih pišejo (`ops.PipelineRun`, `ops.IntegrationHealth`), (še)
+nimajo filtriranega indeksa — a so pod istim tveganjem ob naslednjem, zato jih popravi ista
+migracija.
+
+Popravek: za vse štiri procedure `SET QUOTED_IDENTIFIER ON` pred `ALTER PROCEDURE` (isti
+`OBJECT_DEFINITION`→`ALTER`→`sp_executesql` vzorec kot 220, tokrat s pravilno SET opcijo pred
+klicem) — brez vsebinske spremembe kode, popravi se izključno metapodatek.
+
+Preverjeno na `DAVID\MSSQL19` (`PIM.Migrator`, brez `--verify`): migracija uporabljena,
+`sys.sql_modules.uses_quoted_identifier` za vse štiri objekte po popravku `1`.
+
+**Objekti:** `map.ApplyValueTransforms`, `ops.BeginRun`, `ops.AbandonOrphanRuns`,
+`ops.RecordRunCounts` (samo metapodatek `uses_quoted_identifier`, telo nespremenjeno).
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva in gre skozi `PIM.Migrator` (ne
+neposredno prek `sqlcmd`) — s tem se ista napaka ne ponovi.
+
+## Premik kategorije mora posodobiti tudi njeno kodo (migracija 229, 2026-09-18)
+
+Uporabnik je na strani "Kategorije" povlekel vejo "Pritrdila" izpod "Cameleon sistem" pod "Notranja
+svetila" (glej posnetek zaslona v seji) in opozoril, da se koda v desnem panelu ni spremenila.
+228 je to naredila namerno ("Kategorija je stabilna entiteta: pri premiku se njena koda ne
+spremeni.") — narobe: koda je fizično sestavljena kot `starševaKoda___slug` (078/178), zato je po
+premiku pod drugega starša vizualno še vedno kazala na STAREGA starša
+(`cameleon_sistem___pritrdila` bi moral postati `notranja_svetila___pritrdila`), čeprav sta
+`CategoryPath` in `ParentCategoryCode` že kazala na novo mesto. Enak vzorec zamenjave predpone
+(za celo poddrevo, ne le za koren) je 223 že uvedla za preimenovanje SL naziva; ta migracija ga
+uporabi tudi za premik.
+
+`canon.MoveCategories` zdaj za vsako premaknjeno korensko vejo izračuna njen "lastni" del kode
+(brez stare predpone starša) in iz njega sestavi novo kodo za ciljnega starša — enaka zamenjava
+predpone kot za `CategoryPath`, uporabljena na CELO poddrevo (koren + vsi potomci). Ker
+`FK_CategoryAttributeSet_Category` kaže na `canon.Category(CategoryTreeCode, CategoryCode)`, je
+okrog `UPDATE canon.Category` + `UPDATE canon.CategoryAttributeSet` isti `NOCHECK`/`WITH CHECK CHECK`
+ovinek kot v 223. Kodo za celo poddrevo dobijo tudi `canon.CategoryTranslation(History)`,
+`map.CategoryPathMap` (+ vpis v `CategoryPathMapHistory`), `val.FieldRequirement` — enak nabor kot
+223 — in dodatno `pim.TitleRule.CategoryCode`, ki ga je 223 pri preimenovanju spregledala (naslov,
+izračunan po pravilu, vezanem na kategorijo, bi drugače po premiku "odpadel" s te kategorije, čeprav
+`canon.GetCategoryChangeImpact` (228) `TitleRuleCount` že šteje kot del vpliva premika). Uvrstitve
+izdelkov (`canon.ProductCategory` / `pim.ProductCategory` / `pim.ProductCategoryOverride`) ostajajo
+nedotaknjene v tem koraku — te že premika 228 po `CategoryPath` BESEDILU; prilagoditi je bilo treba
+le vrstni red, ker poizvedba, ki po `UPDATE` prebere novo prevedeno pot iz
+`canon.CategoryPathTranslated`, mora vozlišče zdaj poiskati po NOVI kodi.
+
+Postopek poleg obstoječega povzetka (RootCount/CategoryCount/AssignmentCount) vrne še en nabor
+vrstic — (CategoryTreeCode, OldCategoryCode, NewCategoryCode) za vsako premaknjeno korensko vejo.
+`CategoryTreeService.MoveCategoriesAsync` ga prebere (drugi `NextResultAsync`) v nov
+`CategoryChangeResult.CodeChanges`; `CatalogCategories.razor` (`ConfirmMoveAsync`) ga uporabi, da po
+premiku spet izbere isto vozlišče v UI — enak razlog kot OUTPUT parameter pri 223.
+
+Preverjeno na `DAVID\MSSQL19` neposredno prek `canon.MoveCategories`, dvakrat in nato nazaj (stanje
+baze po testu enako kot pred njim):
+- `svetila_si`/`cameleon_sistem___pritrdila` → pod `notranja_svetila`: koda pravilno postane
+  `notranja_svetila___pritrdila`, `CategoryTranslation` (sl/en), `map.CategoryPathMap` (1 vrstica,
+  `NW_XML`) in vse uvrstitve (`canon.ProductCategory` 36, `pim.ProductCategory` 27, za oba jezika
+  svetila_si/svetila_si_en) sledijo na novo kodo/pot.
+- `videlektro`/`instalacije___kabli_in_vodniki___kabelski_koncniki_in_spojke` → pod `instalacije`:
+  koda postane `instalacije___kabelski_koncniki_in_spojke`; `canon.CategoryAttributeSet` (4 vrstice)
+  se pravilno preseli na novo kodo, `FK_CategoryAttributeSet_Category` po koncu ostane omogočen in
+  zaupanja vreden (`is_disabled=0`, `is_not_trusted=0`) — `NOCHECK`/`WITH CHECK CHECK` ovinek deluje.
+
+Opažena, a NAMERNO nedotaknjena stranska tema: `videlektro`/B2C ima za iste izdelke svoj, ločen
+"zrcaljen" zapis kategorije v `canon.ProductCategory` (`WebSite='B2C'`, besedilo z vnaprej dodanim
+"Razsvetljava > ", npr. `Razsvetljava > Cameleon sistem > Pritrdila` — glej 216/217/219), ker je
+`videlektro` SVOJE, ločeno drevo (`CategoryTreeCode='videlektro'`), ne isto kot `svetila_si`. Premik
+znotraj drevesa `svetila_si` ga zato ne dotakne in po premiku ostane s starim imenskim segmentom v
+besedilu, dokler ne izvozi/osveži nekdo ta zrcaljeni zapis posebej — to je obstoječa lastnost
+216/217/219 zrcaljenja, ne nova napaka te migracije, in ni bila del uporabnikovega poročila.
+
+**Objekti:** `canon.MoveCategories` (spremenjena — nov izračun kode za premaknjeno poddrevo, nov drugi
+nabor rezultatov), `canon.CategoryTranslation(History)`, `canon.CategoryAttributeSet`,
+`map.CategoryPathMap(History)`, `val.FieldRequirement`, `pim.TitleRule` (dodatne posodobitve kode ob
+premiku — brez sprememb sheme). `canon.GetCategoryChangeImpact` in `canon.DeleteCategories` se ne
+spremenita.
+
+**Koda v istem commitu:** `CategoryTreeService.cs` (`CategoryChangeResult.CodeChanges`, nov
+`CategoryCodeChange` zapis, `MoveCategoriesAsync` bere drugi nabor rezultatov),
+`CatalogCategories.razor` (`ConfirmMoveAsync` po premiku izbere vozlišče po novi kodi).
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva. Za produkcijo jo je treba pognati
+prek `PIM.Migrator`.
+
+## 229 je predpostavljala napačno kodno obliko za zrcaljeno vejo Razsvetljava (migraciji 230, 231; 2026-09-18)
+
+Uporabnik je po 229 v UI naletel na pravo SQL napako namesto lepega sporočila: *"Violation of UNIQUE
+KEY constraint 'UQ_Category_TreeCode' ... duplicate key value is (videlektro, razsvetljava___xxx)"*.
+Vzrok: migracija 092 je pod `videlektro`/`razsvetljava` zrcalila celo drevo `svetila_si`, a je
+OBDRŽALA identične kode (`cameleon_sistem`, `tracni_sistemi`, `tracni_sistemi___1_fazni_24v_nano_lvm`
+…), čeprav je `ParentCategoryCode` preusmerjen v videlektro hierarhijo — koda torej NE sledi vedno
+vzorcu `starševaKoda___slug`, ki ga je 229 predpostavljala povsod. Preverjeno na `DAVID\MSSQL19`:
+
+```sql
+SELECT CategoryTreeCode, CategoryCode, ParentCategoryCode FROM canon.Category
+WHERE ParentCategoryCode IS NOT NULL AND CategoryCode NOT LIKE ParentCategoryCode + '___%';
+```
+
+vrne 11 vrstic, vse pod `videlektro`/`razsvetljava`.
+
+**230** doda `@Roots.CodeIsWellFormed`: za vsako korensko vejo preveri, ali predpostavka drži za
+CELO poddrevo (koren glede na svojega dejanskega starša IN vsak potomec glede na kodo korena kot
+dobesedno predpono). Če ne drži, koda za to vejo (koren + vsi potomci) ostane NESPREMENJENA — vrne se
+na prvotno obnašanje 228 — medtem ko `ParentCategoryCode`/`LevelNo`/`CategoryPath` še vedno sledijo
+premiku. Za standardno kodirane veje (velika večina drevesa) ostane popravek iz 229 v celoti veljaven.
+
+**231** — pri lastnem preverjanju 230 (ne pri uporabniku) sem odkril drugo, resnejšo napako: premik
+"tracni_sistemi" (zrcaljena veja) je zaradi PRESEGA obsega (glej spodaj) potegnil s seboj še 5
+kategorij, ki so dejansko otroci DRUGE, pravilno kodirane kategorije `razsvetljava___tracni_sistemi`
+(isto ime "Tračni sistemi", različna koda — native videlektro veja in zrcaljena veja se po naključju
+imenujeta enako, torej imata IDENTIČNO prikazano pot). Ko UPDATE preslika `ParentCategoryCode` prek
+`parentMap` (LEFT JOIN na `@Affected`), za te "tuje" otroke ujemanja ni (njihov pravi starš ni del
+premika) in `parentMap.NewCode` je NULL — 230 je to NULL brez zaščite zapisala naravnost v
+`ParentCategoryCode`, 5 kategorij je obviselo brez starša. Podatke sem takoj popravil na
+`DAVID\MSSQL19` (rekonstrukcija `ParentCategoryCode`/`CategoryPath`/`LevelNo` iz nepoškodovanega
+`CategoryName` prek rekurzivnega CTE — prvi poskus popravka prek ročno vtipkanih literalov je zaradi
+sqlcmd privzetega kodnega nabora (brez `-f 65001`) pokvaril šumnike v besedilu; to je bila napaka
+moje popravne skripte, ne podatkov). **231** doda `ISNULL(parentMap.NewCode, node.ParentCategoryCode)`
+namesto golega `parentMap.NewCode`, da ostane `ParentCategoryCode` nespremenjen, kadar pravi starš
+potomca ni del premika.
+
+**Nepopravljen, širši, PREDHODNO OBSTOJEČ problem (ni del te migracije):** `@Roots`/`@Affected` v
+228/229/230/231 določajo obseg premika/brisanja/predogleda izključno po BESEDILU `CategoryPath`
+(`node.CategoryPath LIKE root.CategoryPath + ' > %'`), ne po dejanski verigi `ParentCategoryCode`.
+Kadarkoli dve kategoriji v istem drevesu delita identično prikazano pot (isto ime, isti neposredni
+prikazani starš, a različna koda — kot `razsvetljava___tracni_sistemi` proti zrcaljeni `tracni_sistemi`),
+bo premik ALI TRAJNO BRISANJE ene od njiju napačno zajelo tudi poddrevo druge. To ni nekaj, kar je
+vpeljala 229/230/231, in vpliva na `canon.MoveCategories`, `canon.DeleteCategories` ter
+`canon.GetCategoryChangeImpact` (isti vzorec v vseh treh). Pravi popravek bi obseg moral graditi z
+rekurzivnim sledenjem `ParentCategoryCode`, ne s poizvedbo po besedilu poti — večji, tvegan poseg v
+vse tri procedure, namenoma izven obsega teh dveh migracij. **Uporabnik je bil o tem obveščen in
+mora odločiti, ali in kdaj naj se to popravi.**
+
+Preverjeno na `DAVID\MSSQL19`: premik `videlektro`/`tracni_sistemi` (z zrcaljenimi otroki) in
+`svetlobni_viri_in_dodatki` v `instalacije` — koda pravilno ostane nespremenjena, brez SQL napake;
+premik `videlektro`/`instalacije___kabli_in_vodniki___kabelski_koncniki_in_spojke` (standardno
+kodirana veja s 4 vrsticami `canon.CategoryAttributeSet`) v `instalacije` — koda se pravilno preimenuje,
+FK ostane omogočen; po 231 se `ParentCategoryCode` petih "tujih" otrok pravilno ohrani (ni več NULL).
+Vsi testni premiki so bili ročno povrnjeni v izvirno stanje (preverjeno brez osirotelih vrstic v celi
+`canon.Category`).
+
+**Objekti:** `canon.MoveCategories` (spremenjena dvakrat — 230 doda `CodeIsWellFormed`, 231 popravi
+`ParentCategoryCode` ob nejasnem starševstvu). `canon.GetCategoryChangeImpact` in
+`canon.DeleteCategories` se ne spremenita (a delita isto, zgoraj opisano nepopravljeno tveganje).
+
+**Ročni korak po uvedbi:** ni potreben; obe migraciji sta ponovljivi. Za produkcijo ju je treba
+pognati prek `PIM.Migrator`.
+
+## Drobtinica poti v drevesu kategorij sledi izbranemu jeziku (migracija 235, 2026-09-21)
+
+Uporabnik je na `/nastavitve/kategorije` zamenjal jezik filtra na en in opozoril, da se ime v glavi
+desne plošče prevede ("Downlights"), pot pod njim ("Notranja svetila > Downlights") pa ostane
+slovenska — pričakoval je "Interior lighting > Downlights". Koda kategorije
+(`notranja_svetila___downlights`) mora po njegovih besedah ostati nespremenjena.
+
+Vzrok: `intranet.GetCategoryTree` je `CategoryPath` od nekdaj vračal neposredno iz
+`canon.Category.CategoryPath` — slovenske, "kanonične" poti, ki se nikoli ni prevajala. `DisplayName`
+v `CatalogCategories.razor` že bere `TranslationsJson` in prikaže ime v izbranem jeziku, a stran ni
+imela ločenega, prevedenega stolpca za pot.
+
+**235** doda stolpec `CategoryPathDisplay`: pot v `@LanguageCode`, prek `canon.CategoryPathTranslated`
+(rekurziven pogled iz 059, ki manjkajoč prevod posameznega prednika že nadomesti z njegovim
+slovenskim imenom — enako počne za pot spletne trgovine). Izračunan **enkrat v začasno tabelo**
+(`#PotPrikaz`, filtrirano na `@CategoryTreeCode`/`@LanguageCode`), ne prek `OUTER APPLY` na vsako
+vrstico — korelirano `APPLY` nad tem pogledom je bilo v 218 izmerjeno na 6 s na drevo, enak vzorec kot
+`#Uvrstitev`/`#Spodaj` v isti proceduri. Zunanji `ISNULL(pot.CategoryPath, v.CategoryPath)` lovi rob
+primer, ko za jezik v celi bazi še ni zapisanega niti enega prevoda (tedaj ga niti `CROSS JOIN` znotraj
+pogleda ne zajame).
+
+Obstoječi `CategoryPath` (slovenska pot) ostane **nespremenjen** in ga stran še naprej uporablja za
+notranjo logiko (zlaganje vej `Collapsed`, iskanje `@Iskanje`, `VejaFilter`/`ZPredniki`) — sprememba
+teh primerjav na prevedeno pot ni bila del prijavljene napake in bi pri delno prevedenem drevesu
+tvegala neujemanje. `CategoryTreeService.TreeRow` dobi novo polje `CategoryPathDisplay`;
+`CatalogCategories.razor` ga uporabi na treh mestih, kjer je pot doslej prikazovala uporabniku
+(glava izbrane kategorije, drobtinica v urejevalniku atributov, drobtinica v urejevalniku imen) — ne
+pa tudi v izbirnikih za ustvarjanje/premik kategorije (`CategoryOptionRow`), ki namenoma ostanejo
+slovenski (izbira starša po imenu/poti, neodvisno od jezikovnega filtra drevesa).
+
+Preverjeno na `DAVID\MSSQL19`, veja `notranja_svetila___downlights`: `@LanguageCode = N'en'` vrne
+`CategoryPath = 'Notranja svetila > Downlights'`, `CategoryPathDisplay = 'Interior lighting >
+Downlights'`; `@LanguageCode = N'sl'` vrne enak niz v obeh stolpcih; `CategoryCode` se v nobenem
+primeru ne spremeni.
+
+**Objekti:** `intranet.GetCategoryTree` (nov stolpec `CategoryPathDisplay`, brez spremembe
+obstoječih).
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva. Za TEST/produkcijo prek
+`PIM.Migrator`.
+
+## Odstranitev varovalke "artikel ni pripravljen za ERP" (migracija 236, 2026-09-21)
+
+Uporabnik je na kartici izdelka poskusil hkrati popraviti dve manjkajoči obvezni SAOP polji
+(Knjižna skupina, Skupina popusta) na artiklu s 5 odprtimi blokirajočimi napakami — oba poskusa
+je sprožilec `out.TR_OutboxMessage_ErpQualityGate` (194, popravljen v 195) zavrnil z napako 51497
+"Artikel ni pripravljen za ERP.". Popravek iz 195 iz preverbe izvzame samo polje, ki ga trenutno
+vpisano sporočilo samo popravlja — pri **več** hkratnih blokirajočih napakah na istem artiklu
+(kot v tem primeru) ostane vsak posamezen popravek zavrnjen, ker sosednje, še nerešene napake
+ostanejo v preverbi. Uporabnik se je namesto še ene zakrpe iste vzorčne napake odločil, da
+varovalke na tej poti ne bo več: vsako polje — ERP ali ne — se vedno da urediti in uvrstiti v
+vrsto za SAOP; sinhronizacija ostane preprosto "čaka odobritev" na kartici, SAOP-ova lastna
+validacija ob dejanskem pošiljanju pa je edina preostala zavora.
+
+**236** odstrani `out.TR_OutboxMessage_ErpQualityGate` v celoti — to je bila edina "neobhodna ERP
+varovalka" v odhodni poti, pokrivala je vstop v vrsto IN vsak kasnejši prehod stanja (odobritev
+iz `out.ApproveOutboundBatch`, prevzem iz `out.ClaimItemDocument`/`out.ClaimItemDocumentByKey`,
+retry) — z odstranitvijo izginejo vsi trije zavrnitveni prehodi hkrati. `val.IsProductChannelReady`
+(194) in `val.IsProductChannelReadyForField` (195) gresta stran skupaj s sprožilcem, ker je bil
+ta njun edini klicatelj (preverjeno po `sql/migrations` in `PIM.Intranet`).
+
+Kaj **ostane** nespremenjeno: `val.ProductHold`/`val.SetProductHold` (ročni zadržek) ostaneta —
+še naprej izključujeta artikel iz spletnega izvoza (`out.GetExportRows`), le za ERP vrsto ne
+vplivata več, ker je edina pot, po kateri je ERP kanal zanju sploh vedel, izginila s
+sprožilcem. `val.ProductChannelReadiness`/`intranet.GetQualityProducts` (nadzorna plošča
+kakovosti, "blokirajoče napake" na kartici izdelka) ostaneta nespremenjena — napake se še naprej
+štejejo in prikazujejo kot informacija, le vrste več ne zapirajo.
+
+Preverjeno na `DAVID\MSSQL19`: pred migracijo je artikel `F5-TRANSFORM-PROBE` (podjetje 2, 13
+odprtih blokirajočih napak) na poskus vpisa `Product.AccountingGroup` in `Product.DiscountGroup`
+hkrati padel z 51497 na obeh vrsticah; po migraciji (test znotraj `BEGIN TRAN … ROLLBACK`, brez
+trajne spremembe) sta obe vrstici vrnjeni kot `Queued`. F8 (`PIM.F8.BulkOutboundTests`, izolirana
+organizacija 9822 — množično naročilo, delna zavrnitev, prekrivka, odobritev/preklic skupine) po
+migraciji še vedno PASS.
+
+**Objekti:** `out.TR_OutboxMessage_ErpQualityGate` (odstranjen), `val.IsProductChannelReady`
+(odstranjena), `val.IsProductChannelReadyForField` (odstranjena). `val.ProductHold`,
+`val.SetProductHold`, `val.ProductChannelReadiness`, `intranet.GetQualityProducts` nespremenjeni.
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva (`DROP … IF OBJECT_ID …`). Za
+TEST/produkcijo prek `PIM.Migrator`. Na tej razvojni bazi (`DAVID\MSSQL19`) je že uveljavljena.
+
+## Pripravljenost zahteva svežo validacijo (migracija 236_ReadinessRequiresFreshValidation, 2026-09-21)
+
+`val.ProductChannelReadiness` je kazal `IsErpReady`/`IsWebReady` = 1 tudi pri validaciji, starejši
+od dveh ur (`IsValidationStale` = 1) — ista vrstica je hkrati trdila »zastarelo« in »pripravljeno«.
+Migracija doda pogoj `LastValidatedUtc >= DATEADD(hour, -2, SYSUTCDATETIME())` v oba stolpca
+pripravljenosti; števci napak in zadržkov so nespremenjeni. Ista meja kot prej v odstranjeni
+`val.IsProductChannelReady` (194). Kartica izdelka in `/kakovost/artikli` kažeta »Potrebna
+preverba« in gumb »Preveri zdaj« (`QualityWriteService.ValidateAsync`); ERP ocena je informativna
+(glej 236_OdstranitevErpPripravljenostneVarovalke zgoraj).
+
+Opomba: dve migraciji nosita številko 236 (ta in `236_OdstranitevErpPripravljenostneVarovalke`), ker
+sta nastali vzporedno. `PIM.Migrator` ju vodi po celem imenu datoteke in sta obe v
+`dbo.SchemaMigration`; nobene od njiju ne preimenuj.
+
+**Objekti:** `val.ProductChannelReadiness` (pogled, `CREATE OR ALTER`).
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva. Na razvojni bazi `DAVID\MSSQL19` je
+uveljavljena (2026-09-21 14:33); preverba `IsValidationStale = 1 AND (IsErpReady = 1 OR IsWebReady = 1)`
+vrne 0 vrstic.
+
+## Enotni model opravil in gostitelj avtomatike (migracija 237, 2026-09-21)
+
+Uporabnik: »Problem ni število strani, ampak to, da so pomešani poslovni tokovi, urniki, worker
+procesi in nadzor.« Cikel »katalog« (221) je v enem teku izvajal zajem artiklov, zajem naročil,
+validacijo in objavo štirih podjetij ter izvoz; izvoz je z `--osvezi-validacijo` validiral; urniki so
+bili na dveh ravneh (`ops.WorkerCycle`, `ops.ScheduleProfile`); cikel je po padlem vhodu izvoz
+izvedel vseeno; ura je bila vezana na proces intraneta. V razvojni bazi sta bila `WorkerCycleRunId`
+188 in 192 tri ure in pol `Running` brez utripa, najem je potekel ob 11:26 UTC.
+
+**237** uvede eno raven: `ops.JobDefinition` (posel = ena odgovornost, urnik, časovna meja, SLA,
+poslovni tok), `ops.JobDependency` (vrata `IsGate` in sprožilec `TriggersDependent`), `ops.JobRun`
+(vedno konča kot Succeeded/Warning/Failed/TimedOut/Cancelled/Abandoned ali je Blocked),
+`ops.JobStepRun`, `ops.DataCheckpoint`, `ops.Artifact`. `ops.SchedulerLease` dobi `Priority`:
+gostitelj (10) vzame uro intranetu (0). Prevzem (`ops.ClaimJobRun`) je edina vrata in zapiše
+blokado z razlogom; `ops.CompleteJobRun` zapiše kontrolno točko, sproži odvisne in zapre alarme;
+`ops.AbandonStaleJobRuns` zapre zagone brez utripa 10 min; `ops.EvaluateJobAlerts` odpira
+`JobOverdue`, `JobFailed`, `JobBlocked`, `AutomationHostDown`. Ročni zagon in ustavitev iz intraneta
+sta zahtevi (`ops.RequestJobRun`, `ops.RequestJobCancel`), ki ju prevzame gostitelj. Zasejanih je
+15 poslov (`SAOP_OUTBOUND_DISPATCH` izklopljen) in 6 odvisnosti; naročila so brez odvisnosti.
+Migracija zapre viseče zagone starih ciklov brez utripa (30 min) prek `ops.AbandonWorkerCycleRuns`.
+Stari cikli ostanejo (prehodno obdobje, glej `docs/AVTOMATIZACIJA.md` §7). Celotna zasnova:
+`docs/AVTOMATIZACIJA.md`.
+
+Preverjeno na `DAVID\MSSQL19`: migracija uporabljena dvakrat (drugič brez sprememb), zagona 188 in
+192 sta `Abandoned`, `PIM.F11.AutomationTests` (blokada, ponovitev, sprožilec, alarm, zapuščen zagon,
+ustavitev, ročna zahteva) PASS.
+
+**Objekti:** tabele `ops.JobDefinition`, `ops.JobDependency`, `ops.JobRun`, `ops.JobStepRun`,
+`ops.DataCheckpoint`, `ops.Artifact` (nove); stolpec `ops.SchedulerLease.Priority` (nov);
+procedure `ops.AcquireSchedulerLease` (nov parameter `@Priority`), `ops.EnsureJobDefinition`,
+`ops.EnsureJobDependency`, `ops.SetJobNextDue`, `intranet.SaveJobSchedule`, `ops.RequestJobRun`,
+`ops.RequestJobCancel`, `ops.ClaimJobRun`, `ops.HeartbeatJobRun`, `ops.RecordJobStepRun`,
+`ops.SetDataCheckpoint`, `ops.RegisterArtifact`, `ops.CompleteJobRun`, `ops.AbandonStaleJobRuns`,
+`ops.EvaluateJobAlerts`, `intranet.GetJobDefinitions`, `intranet.GetJobRuns`,
+`intranet.GetJobStepRuns`, `intranet.GetAutomationHost` (nove); omejitev
+`CK_UserAlertSubscription_Kind` (razširjena s štirimi vrstami) in naročnine skrbnikov nanje.
+
+**Ročni korak po uvedbi:** migracija je ponovljiva in samozadostna za bazo. Za delovanje avtomatike
+je treba na strežniku namestiti storitev `PIM.AutomationHost` (`deploy\Install-AutomationHost.ps1`)
+in zunanji nadzor (`scripts\Namesti-nadzor-avtomatike.ps1`); dokler storitev ne teče, intranet
+poganja stare cikle kot rezervo in kartice na `/sistem` kažejo »GOSTITELJ NE TEČE«. Za
+TEST/produkcijo prek `PIM.Migrator`.
+
+## Nova kategorija z imeni v vseh jezikih (migracija 237_NovaKategorijaZImeniVVsehJezikih, 2026-09-21)
+
+Uporabnik (»napake kategorij v PIM«): »ko izbereš angleško drevo se pot pokaže v slovenščini« in
+»dodajanje angleške podkategorije ni možno ker jo doda v slovensko drevo«. »Angleško drevo« na
+`/nastavitve/kategorije` je isto drevo (`svetila_si`, `videlektro`) v jeziku `en` (filter »Jezik v
+ospredju«); drevo je eno, `canon.Category` nosi slovensko (kanonično) ime, kodo in pot,
+`canon.CategoryTranslation` pa imena v ostalih jezikih. Obrazec za novo kategorijo je ponujal samo
+»Ime (slovensko)«, zato je angleško ime pristalo kot slovensko ime (in v kodi/poti), angleškega
+prevoda pa ni bilo. Izbirnika starša in cilja premika sta tudi po 235 kazala slovenske poti.
+
+`canon.SaveCategory` dobi neobvezen parameter `@TranslationsJson` (`[{"lang":"en","name":"…"}, …]`):
+kategorija nastane s slovenskim imenom (iz njega koda in pot, pravilo 178/223), v isti transakciji pa
+se prek `canon.SaveCategoryTranslations` (223) zapišejo imena v ostalih jezikih; neznan jezik
+(113003) razveljavi tudi kategorijo (`XACT_ABORT`). Obstoječi klici brez parametra delujejo
+nespremenjeno. Intranet: obrazec »+ Dodaj kategorijo« ima polje za vsak jezik (slovensko obvezno,
+jezik v ospredju poudarjen); `CategoryTreeService.GetCategoryOptionsAsync(tree, jezik)` vrne
+`DisplayName`/`DisplayPath` prek `canon.CategoryPathTranslated` (059) — izbirnik starša, cilj premika
+in napis »Nova lokacija« govorijo jezik v ospredju, slovenska pot ostane za notranjo logiko.
+
+Preverjeno na `DAVID\MSSQL19` (BEGIN TRAN … ROLLBACK): `SaveCategory` z en+de ustvari `sl`, `en`, `de`
+prevode in pravilno pot; podkategorija pod njo dobi kodo `…___podkategorija_237`; jezik `xx` pade s
+113003 in kategorija ne nastane.
+
+**Objekti:** `canon.SaveCategory` (nov neobvezen parameter, brez spremembe obstoječih).
+
+**Ročni korak po uvedbi:** ni potreben; migracija je ponovljiva. Za TEST/produkcijo prek
+`PIM.Migrator`.
+
+## Register atributov: dodaj, uredi, izbriši (migracija 238_AtributiDodajUrediIzbrisi, 2026-09-21)
+
+Uporabnik (»nemore se dodajat atributov«): »treba dodat da se dodaja piše briše«. Stran
+`/nastavitve/atributi` je znala samo prevesti ime in povezati enoto; nov atribut je nastajal
+stransko (`canon.EnsureAttributeDefinition`, 177), osnovnih lastnosti ni bilo mogoče urejati
+(`canon.SaveAttributeDefinition` iz 125 s COALESCE prazne vrednosti ne pobriše), brisanja ni bilo.
+
+Novi postopki (revizija v `b2b.AuditLog` kot pri 177/178):
+- `canon.CreateAttributeDefinition` — slovensko ime (obvezno; koda iz imena prek
+  `canon.AttributeCodeFromName`, če je klicatelj ne poda), skupina, tip, enota, prevedljivost, opomba
+  in imena v ostalih jezikih v eni transakciji; zavrne obstoječo kodo (52385) in obstoječe slovensko
+  ime (52386 — vrednosti pri izdelkih se hranijo po imenu, glej 125).
+- `canon.UpdateAttributeDefinition` — izrecen pomen: NULL **pobriše** skupino/enoto/opombo/par
+  enote; ista pravila za verigo enot kot 125; lahko deaktivira/aktivira.
+- `intranet.GetAttributeUsage` — vrednosti pri izdelkih (`canon.ProductAttribute` in
+  `pim.ProductAttribute` po slovenskem imenu), nabori kategorij, aktivne preslikave virov, pari enot,
+  aktivne zahteve validacije (`val.FieldRequirement`, `ProductAttribute.<ime>`), prevodi, opomba.
+- `canon.DeleteAttributeDefinition @AttributeCode, @Actor, @Force` — brez `@Force` zavrne atribut z
+  vrednostmi pri izdelkih (52402); z `@Force` jih izbriše. Odstrani prevode in vrstice
+  `canon.CategoryAttributeSet`, deaktivira `map.AttributeMap` (vrstica ostane zaradi zgodovine) in
+  zahteve validacije, počisti `UnitOfAttributeCode`, zapiše revizijo.
+
+Intranet: panel »+ Nov atribut«, zavihek »Osnovno« z urejanjem lastnosti in »Izbriši atribut …« s
+pregledom uporabe, potrditvijo IZBRIŠI in ločeno kljukico za brisanje vrednosti.
+
+Preverjeno na `DAVID\MSSQL19` (BEGIN TRAN … ROLLBACK): ustvarjanje z en prevodom, urejanje z
+brisanjem skupine/enote, pregled uporabe, brisanje; dvojnik `Garancija` pade s 52385; brisanje
+`GARANCIJA` (51.901 izdelkov) brez `@Force` pade s 52402.
+
+**Objekti:** `canon.CreateAttributeDefinition`, `canon.UpdateAttributeDefinition`,
+`intranet.GetAttributeUsage`, `canon.DeleteAttributeDefinition` (vsi novi).
+
+**Ročni korak po uvedbi:** ni potreben.
+
+## ERP opisi ločeni od spletnih (migracija 239_LocitevErpInSpletnihOpisov, 2026-09-21)
+
+Uporabnik (»Opisi ločiti ERP / Splet«): »Trenutno se ERP opisi pojavijo na kartici pod Splet – opisi.
+Moramo imeti ERP in pa potem Splet opisi tako v bazi kot v PIM aplikaciji.« SAOP pošilja opise po
+jezikih in vrstah (DescriptionType T/O/K/KD/KK), `map.ProcessProductTextInbox` (080) jih je pisal v
+`canon.ProductText` kot `DESCRIPTION`, `DESCRIPTION_O`, `DESCRIPTION_K` … — v isto vrsto, ki jo
+spletni izvoz in kartica štejeta za spletni opis, in jih z MERGE ob **vsakem zajemu prepisal**:
+lastnega spletnega opisa v PIM-u ni bilo mogoče obdržati.
+
+1. Preslikava SAOP (`map.FieldMapping` konektorjev s `CanCreateProducts = 1`) je preusmerjena s
+   `ProductTextByLanguage.DESCRIPTION` na `ProductTextByLanguage.DESCRIPTION_ERP`; 080 je
+   nespremenjen (vrsto bere iz ciljne kode in pripne pripono: `DESCRIPTION_ERP`, `_ERP_O`, `_ERP_K` …).
+   Omejitev `CK_CanonProductText_Type` (143) družino `DESCRIPTION%` že dovoljuje.
+2. `DESCRIPTION_ERP*` je napolnjen iz **zadnje** izluščene vrednosti SAOP v `map.ExtractedValue`
+   (po istem pravilu kot 080: `Record.ItemID`, `Record.LanguageId` prek `canon.Language`,
+   `Record.TextTypeSuffix`) pod virom sprememb `MIGRATION_239` (`pim.SetChangeContext`).
+3. Spletni opisi (`DESCRIPTION*`) **ostanejo** — tudi kjer so danes enaki ERP opisu (na razvojni bazi
+   22.500 od 22.501 slovenskih): so trenutno besedilo spletne trgovine, ki ga bereta izvoz in
+   validacija. Od zdaj jih SAOP ne prepisuje več; kartica pokaže »· enak ERP opisu«, dokler urednik
+   ali AI ne napiše spletnega.
+
+Intranet: `ProductFieldLabels.IsErpTextType` (TITLE_ERP*, TITLE_SHORT, SEARCH_NAME,
+DESCRIPTION_ERP*) loči kanala: ERP kanal dobi skupino »Opisi iz ERP (SAOP)« (samo prikaz) in »ERP
+kratki naziv«, zavihek Splet kaže samo spletna besedila (spletni naziv in spletni opis vedno, tudi
+brez vrstice). Na zavihku Splet je nov gumb »Predlagaj naziv in opis (AI)« (`AiTextService`, Claude
+prek uradnega SDK; ključ `Ai:ApiKey` v `appsettings.Local.json` ali `ANTHROPIC_API_KEY`, neobvezno
+`Ai:Model` in `Ai:Effort`): predlog gre v osnutek kartice in se shrani z istim gumbom kot ročna
+sprememba.
+
+Preverjeno na `DAVID\MSSQL19`: po migraciji 58.772 vrstic `DESCRIPTION_ERP` (5 jezikov), 531
+`_ERP_K`, 235 `_ERP_O`, 18 `_ERP_KD`, 14 `_ERP_KK`; vse štiri SAOP preslikave ciljajo
+`DESCRIPTION_ERP`. Polnjenje je na razvojni bazi trajalo ~20 min (sprožilec zgodovine
+`TR_ProductText_FieldHistory` in vzporedni tek drugih opravil) — na produkciji predvidi enak čas.
+
+**Objekti:** `map.FieldMapping` (podatki: 4 vrstice preusmerjene), `canon.ProductText` (podatki:
+nove vrstice `DESCRIPTION_ERP*`), `pim.ProductFieldHistory` (zapisi polnjenja pod `MIGRATION_239`).
+Brez sprememb postopkov.
+
+**Ročni korak po uvedbi:** ni potreben. Če na ciljni bazi surovih vrednosti SAOP ni več, ERP opise
+napolni naslednji tek SAOP (preslikava je že preusmerjena). Za AI predlog nastavi
+`"Ai": { "ApiKey": "sk-ant-…" }` v `appsettings.Local.json` ob objavljenem intranetu.
+
+## Kandidati iz XML po EAN, pregled in uvoz (migracija 240_KandidatiIzXmlPoEanPregledInUvoz, 2026-09-21)
+
+Uporabnik (»novi artikli«): »da bo nadzor nad novimi artikli iz xmlja ter pregled in uvoz«.
+Ugotovljeno na razvojni bazi: (1) `map.ProcessRawInbox` v bazi ni več vseboval blokov 3b/5b iz 219
+(migracija je zabeležena kot uveljavljena, telo pa je bilo starejše) — kandidati niso nastajali;
+(2) NW_XML in BT_XML preslikata samo `Product.EAN`, 5b pa je zahteval `ItemID`, zato tudi s 219 ne bi
+nastal noben kandidat (zajem BT 2026-09-21, podjetje 4: 3.166 zapisov »Izdelek za konfigurirani
+identifikator ne obstaja«, 0 kandidatov); (3) odobritev je ustvarila samo golo vrstico
+`canon.Product`, podatki iz XML so prišli šele z naslednjim zajemom.
+
+- `map.SupplierProductCandidate.ItemIdFromEan bit` — kandidat brez dobaviteljeve šifre je ključan po
+  EAN (`ItemID = EAN`); ob odobritvi nastane `canon.Product` z `ItemID = EAN`,
+  `ErpExistence = NOT_YET_IN_ERP`.
+- `map.ProcessRawInbox` — celotno telo iz 219, ključ kandidata `COALESCE(ItemID, EAN)`; kandidat se
+  ob ujemanju zapre po šifri ali po EAN (3b).
+- `intranet.GetSupplierProductCandidates` — dodatno `RunId`, `EntityType`, `ItemIdFromEan`,
+  `SupplierTitle` (naziv iz izluščenih vrednosti istega zajema, kadar ga vir preslika).
+- `intranet.GetSupplierProductCandidateValues` — vse izluščene vrednosti zapisov istega zajema z isto
+  šifro/EAN (atributi, slike, dokumenti, kategorija) za pregled.
+- `map.ImportSupplierProductCandidates @CandidatesJson, @Actor` — odobri izbrane in takoj obogati:
+  strani zadevnih zajemov nazaj na `Pending`, nato `map.ProcessRawInbox`, `map.ProcessAttributePairInbox`,
+  `map.ProcessDocumentInbox`, `map.ResolveProductCategories` pod `pim.SetChangeContext('XML_IMPORT')`
+  — ista pot kot redni zajem. Zajemi se izberejo po šifri/EAN prek vseh zajemov istega vira pri
+  istem podjetju (NW pošlje entitete v ločenih tekih); pregled (`GetSupplierProductCandidateValues`)
+  enako vzame najnovejši zapis na entiteto. Ponovna obdelava ni nov pojav: `OccurrenceCount` in
+  `LastSeenUtc` preostalih čakajočih kandidatov se po obdelavi vrneta na stanje pred uvozom.
+
+Intranet: `/zajem/novi-artikli` dobi zavihek v vhodih in števec »Novi artikli iz XML« na `/zajem`,
+gumbe »Podatki iz XML« (pregled), »Uvozi«, »Samo odobri«, »Zavrni …« ter paketni uvoz izbranih.
+
+Preverjeno na `DAVID\MSSQL19`: ponovna preslikava zajema NW_XML podjetja 4
+(`681A09A3-B44D-405E-9CCF-28DB11B44529`, 2.619 zapisov) po migraciji ustvari 2.619 kandidatov
+`PENDING` z `ItemIdFromEan = 1` v 3 s. Uvoz enega kandidata iz intraneta (EAN 5903139989091) je
+ustvaril `canon.Product` 224049 (`ItemID` = EAN, `NOT_YET_IN_ERP`) s 3 slikami, 1 dokumentom, 34
+atributi in 4 uvrstitvami — skozi preslikavo sta šla 2 zajema (5 strani) v ~15 s.
+
+**Objekti:** `map.SupplierProductCandidate` (nov stolpec), `map.ProcessRawInbox` (prepis),
+`intranet.GetSupplierProductCandidates` (prepis), `intranet.GetSupplierProductCandidateValues` (nova),
+`map.ImportSupplierProductCandidates` (nova).
+
+**Ročni korak po uvedbi:** kandidati za obstoječe zajeme nastanejo šele ob naslednjem zajemu
+dobaviteljevega XML-ja (ali ob ročni ponovni preslikavi zajema: `PIM.XmlFileWorker --znova-preslikaj
+<RunId>`). Za produkcijo ni drugega ročnega koraka.
+
+## Novi artikli iz XML v čakalno vrsto SAOP in prevzem šifre (migracija 241_NoviArtikliIzXmlVCakalnoVrstoSaop, 2026-09-21)
+
+Uporabnik: »rabimo neko stran kjer bodo zaznani novi artikli ki so samo v XMLju in jih urednik
+lahko porine v PIM in nato tudi v SAOP cakalno vrsto.« Prvi korak (XML → kandidat → PIM) je dala
+migracija 240; ta dodaja drugi korak (PIM → čakalna vrsta SAOP → šifra SAOP) in zapre vrzel, ki je
+ostala od 169: `canon.Product.ErpExistence` se ni nikjer postavil na `CONFIRMED_IN_ERP`, šifra, ki
+jo SAOP dodeli ob ADD (`SuggestFirstFreeCode`), pa je ostala samo v `out.SaopItemAssignment` —
+naslednji zajem SAOP bi z njo ustvaril drug artikel, EAN-ski bi ostal sirota in bi ob vsakem
+pošiljanju spet šel kot ADD.
+
+- `CK_OutboundBatch_Source` — dovoljen vir `XML` (poleg SINGLE/BULK/EXCEL/CARD), da so skupine s
+  strani kandidatov v `/outbound` in `/saop` razpoznavne.
+- `intranet.GetSupplierProductCandidates` — telo iz 240, dodatno za odobrene kandidate:
+  `ProductItemId` (trenutna šifra ustvarjenega artikla), `ErpExistence`, `SaopState`
+  (`NOT_QUEUED` / `QUEUED` / `SENT` / `FAILED` / `CONFIRMED`), `SaopLiveMessages`,
+  `SaopPendingApproval`, `SaopLastStatus`, `SaopLastBatchId`, `SaopLastUpdatedUtc`, `SaopLastError`,
+  `SaopAssignedItemId`; nov parameter `@SaopState` (filter) in v povzetku `ImportedWaitingCount`,
+  `QueuedCount`, `SentCount`, `FailedCount`, `ConfirmedCount`. Sporočila se iščejo po trenutni šifri
+  artikla IN po ključu kandidata (EAN), ker po prevzemu šifre stara sporočila ostanejo pod EAN.
+  Iskanje zadene tudi `product.ItemID` (šifro SAOP).
+- `out.CompleteItemDocument` — telo iz 196, dodatno ob uspehu: artikel z `NOT_YET_IN_ERP` postane
+  `CONFIRMED_IN_ERP`; če je SAOP dodelil drugo šifro, `canon.Product.ItemID` to šifro prevzame (EAN
+  ostane; sporočila v vrsti ostanejo pod staro šifro kot zgodovina; `ops.OutboundEvent` Info
+  »Artikel je prevzel sifro iz SAOP«). Če šifro v PIM že ima drug artikel, se nič ne preimenuje,
+  artikel ostane `NOT_YET_IN_ERP` in nastane `ops.OutboundEvent` Warning »SAOP je dodelil sifro, ki
+  jo v PIM ze ima drug artikel« — ročna uskladitev (napačna povezava je slabša od nobene, načelo iz
+  046). Ob neuspehu se ne spremeni nič.
+
+Koda (brez nove zapisovalne poti v bazi): `PIM.Outbound.SaopNewItemQueue` (kaj gre v vrsto za nov
+artikel: vpisano ima prednost, prazno pomeni »vzemi kanonično«, ključ nikoli; katera polja so na
+artikel in katera skupna), `SupplierCandidateSaopService` (pogodba + stanje artikla →
+`SaopItemPlanner`, uvrstitev prek `out.EnqueueSaopItemChanges` z virom `XML`, odobritev prek
+`out.ApproveItemDocument` po artiklu, »Pošlji zdaj« prek `TrySendArticleAsync`). Test
+`PIM.F8.SaopItemPlannerTests` (razdelek 9).
+
+Intranet `/zajem/novi-artikli`: filter »Pot v SAOP«, števci (uvoženi čakajo na SAOP / v vrsti /
+zavrnil / potrjeni) za cel obseg podjetja, v vrstici stanje SAOP (skupina, napaka, šifra SAOP),
+gumbi »V vrsto SAOP …« (priprava pod vrstico: šifranti ERP, naziv, EAN, mere; manjkajoča obvezna
+polja označena; predogled XML; »Uvrsti v čakalno vrsto« ali »Uvrsti in odobri«; nato »Pošlji
+zdaj«), »Odobri v vrsti«, »Pošlji zdaj« ter paketna priprava izbranih (skupni šifranti enkrat, naziv
+na artikel; stran si skupne vrednosti zapomni po podjetju za sejo).
+
+Preverjeno na `DAVID\MSSQL19` (v transakciji z ROLLBACK, artikel 224049 / EAN 5903139989091,
+podjetje 4): uspešen zaključek z dodeljeno šifro `TEST.241.0001` → `ItemID = TEST.241.0001`,
+`CONFIRMED_IN_ERP`, dogodek Info, `out.SaopItemAssignment` Response, kandidat `CONFIRMED` s
+`SaopAssignedItemId`; trk šifre (šifra obstoječega artikla) → brez preimenovanja, `NOT_YET_IN_ERP`,
+dogodek Warning; uspeh brez šifre → samo `CONFIRMED_IN_ERP`; neuspeh → nespremenjeno, sporočilo
+`Dead`, kandidat `FAILED` z `SaopLastError`. Pot v SAOP s strani (uvrstitev, odobritev) je bila
+preverjena prek storitve proti razvojni bazi; stran sama v brskalniku ni bila preverjena (ni bilo
+prijave).
+
+**Objekti:** `out.OutboundBatch` (CK_OutboundBatch_Source), `intranet.GetSupplierProductCandidates`
+(prepis), `out.CompleteItemDocument` (prepis).
+
+**Ročni korak po uvedbi:** ni potreben. Pogoj za uvrstitev ostaja omogočen `dbo.IntegrationProfile`
+za `SAOP_PRODUCT` (ni migracija, glej ODHODNA_POT_SAOP.md §4); pošiljanje ostaja `PIM.OutboxDispatcher
+--send` s poverilnicami ali gumb »Pošlji zdaj« (razdelek `Saop` v `appsettings.Local.json`).
+
+## Objava za splet po izvoznih pravilih, sestava kataloga, zadnji uspeh cikla (migracija 242_ObjavaZaSpletPoIzvoznihPravilih, 2026-09-21)
+
+Uporabnik: »uporabnik mora v aplikaciji videti dejansko izdelan CSV, iskati artikle in razumeti,
+zakaj artikel je ali ni objavljen« in »uskladi prikaz /kakovost/artikli z dejanskimi izvoznimi
+pravili«. Do te migracije je pogled `val.ProductChannelReadiness` splet računal iz
+`canon.Product.WebPublish` (oznaka iz SAOP), izvoz `out.GetExportRows` pa vrstico v `katalog.csv`
+določa po kljukicah spletišč (`pim.ProductWebShop.IsPublished`), kategoriji na spletišču, ročnem
+zadržku, izključitvi iz kataloga, veljavnosti profilov, ki blokirajo splet, in pravilu 220 (artikel
+brez vsake kljukice je v datoteki s praznim stolpcem »Spletne strani«). Stran je zato kazala »Ni za
+objavo« pri artiklih v datoteki in »Pripravljen« pri artiklih, ki jih izvoz izpusti.
+
+- `val.ProductChannelReadiness` — novi stolpci `IsPromoted`, `IsExcludedFromCatalog`, `SiteFlagCount`,
+  `SiteCategoryCount`, `AllowedSiteCount`, `WebExportState` (`INACTIVE | NOT_PROMOTED | EXCLUDED | HOLD |
+  NO_SITE | PUBLISHED | NO_CATEGORY | BLOCKED_ERRORS`), `IsInCatalogCsv`; `IsWebReady` zahteva kljukico
+  spletišča namesto `WebPublish` (ta ostane informativen). `IsErpReady` nespremenjen (236).
+- `intranet.GetQualityProducts` — nove stolpce vrne; `WEB_BLOCKED`/`READY` po kljukicah; nova stanja
+  filtra `IN_CSV`, `NOT_IN_CSV`, `NO_SITE`, `PUBLISHED`; seštevki `InCsvCount`, `NoSiteCount`,
+  `PublishedCount`.
+- `intranet.GetProductWebExportState @ProductId` (nova) — vrstica pogleda in razlog po spletiščih
+  (kljukica, kategorija, neveljavni blokirajoči profili) za kartico artikla (razdelek »Objava za
+  splet (katalog.csv)« z gumbom »Preveri zdaj«).
+- `intranet.GetWebExportSummary @OrganizationId` (nova) — sestava kataloga za `/splet`.
+- `intranet.GetWorkerCycles` — dodan `LastSucceededUtc` (zadnji uspešen zagon, ne samo zadnji poskus).
+- Podatki: `ops.WorkerCycle.magento-csv` 300 → 900 s in `ops.JobDefinition.WEB_CATALOG_EXPORT`
+  300 → 3600 s, samo kadar je vrednost še privzeta (skrbnikova nastavitev se ne prepiše).
+
+Preverjeno na `DAVID\MSSQL19` (podjetje 2): aktivnih 98.288, objavljenih v PIM 89.851,
+`IsInCatalogCsv` = 89.491 = točno število vrstic dejanskega `katalog.csv` (2.176 objavljenih s
+spletno stranjo + 87.315 brez spletnega mesta), brez kategorije 167, blokirajoče napake 193, strank
+3.988 = vrstice `stranke.csv`. `GetWebExportSummary` 2,3 s; `GetQualityProducts` s filtrom pod
+obremenitvijo 13,8 s (pred migracijo ~2 s pri mirni bazi; ponovno izmeriti ob mirni bazi).
+
+**Objekti:** `val.ProductChannelReadiness` (prepis), `intranet.GetQualityProducts` (prepis),
+`intranet.GetProductWebExportState` (nova), `intranet.GetWebExportSummary` (nova),
+`intranet.GetWorkerCycles` (prepis), `ops.WorkerCycle` in `ops.JobDefinition` (podatki).
+
+**Ročni korak po uvedbi:** ni potreben za bazo. Za izdelavo datotek mora imeti račun, pod katerim
+teče worker, pravico pisanja v `EXPORT_ROOT`: `scripts\Nastavi-pravice-izvozne-mape.ps1` kot skrbnik
+(glej `docs/WORKERS.md`).
+
+## Ponovna preslikava celega vira brez ponovnega nalaganja (migracija 244_PonovnaPreslikavaVira, 2026-09-22)
+
+Uporabnik: polja na kartici artikla se morajo spreminjati »kadarkoli«, brez oznake »čaka SAOP«, uvoz pa
+ne sme nikjer obtičati — napake naj se pokažejo v pojavnem oknu po sklopih (manjkajoča kategorija,
+manjkajoč atribut), z gumbom za ustvarjanje, nato naj gre »ista datoteka še enkrat skozi, brez
+ponovnega nalaganja«.
+
+Zakaj nova procedura in ne ponoven klic `map.ImportSupplierProductCandidates` (240): ta najprej
+odobri kandidate (`map.ApproveSupplierProductCandidate` zahteva `Status = 'PENDING'`), zajeme za
+ponovno obdelavo pa izbere samo za pravkar odobrene. Že uvoženi artikli — prav tisti, ki jim manjka
+kategorija ali atribut — bi bili preskočeni in njihove surove strani ne bi šle znova skozi preslikavo.
+
+- `map.ReprocessSupplierSource @OrganizationId, @SourceCode, @Actor` — vse zajeme vira pri podjetju
+  (strani z izluščenimi vrednostmi) vrne na `Pending` in jih pošlje skozi isto jedro kot redni zajem:
+  `map.ProcessRawInbox`, `map.ProcessAttributePairInbox`, `map.ProcessDocumentInbox`,
+  `map.ResolveProductCategories` pod `pim.SetChangeContext('XML_IMPORT')`. Napaka enega zajema se
+  zapiše in ne ustavi ostalih. `OccurrenceCount`/`LastSeenUtc` čakajočih kandidatov se vrneta na
+  stanje pred obdelavo (enako pravilo kot v 240). Vrne `Runs`, `Pages`, `Errors`. Podjetje brez
+  zajema vira vrne 0 zajemov. Začasni tabeli imata edinstveni imeni (`#PonovnaTek`, `#PonovnaPrej`),
+  ker SQL Server v gnezdeni proceduri ime začasne tabele veže na klicateljevo z istim imenom.
+
+Preslikave kategorij (`map.CategoryPathMap`) in atributov (`map.SaveAttributeMap`) so ključane po viru,
+ne po podjetju, zato intranet ob ponovni preslikavi pošlje vir skozi pri **vseh** podjetjih, ki ga imajo.
+
+Intranet (brez sprememb v bazi):
+- `ProductChannelPanel.razor` — polja SAOP niso več onemogočena, ko za polje čaka odhodno sporočilo;
+  oznaki »čaka SAOP« in »sprememba čaka odobritev« sta odstranjeni. Ponovljeno enako vrednost še
+  vedno zavrne `UX_OutboxMessage_ActiveDedup` (021), drugačna vrednost nadomesti čakajočo
+  (`Superseded`, 046) — podvajanja v vrsti ni.
+- `/zajem/novi-artikli` — po uvozu se odpre okno »Vrzeli po sklopih« (`ImportGapsDialog`):
+  nepreslikane kategorije vira (ustvari novo pod izbrano nadrejeno in preslikaj, ali poveži z
+  obstoječo), nepreslikani atributi (»Ustvari …« prek `canon.EnsureAttributeDefinition` + preslikava,
+  ali poveži z obstoječim) in druge napake uvoza; gumb »Ponovno preslikaj vir« pokliče
+  `map.ReprocessSupplierSource`. Isto okno odpre gumb »Vrzeli in ponovna preslikava …« v orodni vrstici.
+
+Preverjeno na `DAVID\MSSQL19` (v transakciji z `ROLLBACK`, v bazi ni ostalo nič): edina nepreslikana
+pot NW_XML (»F5 svetila« → drevo `videlektro`) je po preslikavi in `map.ReprocessSupplierSource 4,
+'NW_XML'` izginila s seznama vrzeli; 2 zajema, 5 strani, brez napak, vse strani spet `Processed`,
+vsota `OccurrenceCount` nespremenjena (2.618), nobena obstoječa uvrstitev izgubljena. Artikel s to
+potjo je pri podjetju 2 — zato ponovna preslikava vseh podjetij. Ponovna preslikava NW_XML podjetja 2
+(21 strani) v transakciji je trajala več kot 12 minut (hladen predpomnilnik, hkrati `val.RunValidation`)
+in je med tem zadrževala worker `ApplyLandingRecord` — test je bil prekinjen in povrnjen. **Gumba ne
+poganjaj med nočno uskladitvijo ali urno validacijo**, ker drži zaklepe nad istimi tabelami.
+
+**Objekti:** `map.ReprocessSupplierSource` (nova).
+
+**Ročni korak po uvedbi:** ni potreben. Na razvojni bazi `DAVID\MSSQL19`, kjer je bila ta procedura
+najprej uveljavljena pod imenom `243_PonovnaPreslikavaVira.sql` (številko 243 je medtem zasedla
+`243_VerifyEchoBatch.sql`), odstrani staro vrstico dnevnika, preden poženeš migracije:
+
+```sql
+DELETE FROM dbo.SchemaMigration WHERE MigrationId = N'243_PonovnaPreslikavaVira.sql';
+```
+
+## Uvoz delovnega lista: ERP polja v PIM takoj, slike in dokumenti (migracija 245_UvozDelovnegaListaErpTakojSlikeDokumenti, 2026-09-22)
+
+Uporabnik ob datoteki Objemke.xlsx (31 artiklov Vidadria): »morajo se v PIM vstaviti vsi podatki. Sepravi
+ERP brez čakanja SAOPa in omejitev, potem kategorije, nazivi splet in pa ERP morajo biti ločeni in ravno tako
+opisi, potem atributi, slike, dokumenti, kljukica za izločanje«. Test istega uvoza na razvojni bazi pred
+popravkom je pokazal: spletni nazivi, spletni opisi, kategorija Videlektro in dva atributa so se zapisali,
+ERP besedila so ostala ločena (TITLE_ERP, DESCRIPTION_ERP nedotaknjena); **ni** pa se zapisalo: ERP polja
+(samo v vrsto za SAOP), slike in dokumenti (stolpca samo za branje), 5 atributov, ki jih šifrant ni poznal
+(tiho neprepoznani stolpci), kategorija za Videlektro (ANG) (opozorilo na vsaki vrstici), kljukica za
+rezervacijo (izvoz je ni bral, zato je bila vedno prazna).
+
+Migracija doda dve proceduri po vzorcu `pim.SaveProductTextsBulk` (218): paket izdelkov v enem klicu,
+zgodovina z virom `EXCEL` (sprožilci, kjer jih ni pa ročne vrstice v `pim.ProductFieldHistory`), ena
+množična validacija. Slaba vrednost ne podre paketa — vrne se z razlogom.
+
+- `pim.SaveProductErpFieldsBulk` — ERP polja iz registra `out.SaopXmlField` zapiše v katalog takoj:
+  `canon.Product`, `canon.ProductCommercial`, `canon.ProductText` (TITLE_ERP, TITLE_ERP2, SEARCH_NAME),
+  `canon.ProductAttribute` (Garancija), `canon.ProductPlanning.ExcludeQuantityReservation`. Aplikacija isto
+  spremembo prej uvrsti v odhodno vrsto (`out.EnqueueSaopItemChanges`), kjer za pot v SAOP čaka odobritev.
+- `pim.SaveProductMediaBulk` — slike (`canon.ProductMedia`, prva PRIMARY, ostale GALLERY, obstoječa AMBIENT
+  ostane) in dokumenti (`canon.ProductDocument`, nov dobi vlogo »Dokument«). Celica je cel seznam izdelka;
+  kar izdelek ima, v celici pa ni, aplikacija pošlje v `remove` (razvrstitev slika/dokument je
+  `MediaKindPolicy`, ista kot izvoz).
+
+Koda v istem koraku (brez sprememb baze): nov atribut pod skupino »Atributi …« se ustvari v šifrantu
+(`canon.CreateAttributeDefinition`); jezikovna različica strani brez svoje celice (Videlektro (ANG)) dobi
+isto kategorijo kot primarna stran, kadar kategorije nima ali je bila do zdaj usklajena; kljukica za
+rezervacijo se bere in izvozi; logična polja so v listu D/N (kot v dokumentih SAOP POST/PATCH), uvoz sprejme
+tudi 1/0 in da/ne, v vrsto gredo kot 1/0 (graditelj jih po registru pretvori: IsActive D/N, WebPublish d/N,
+ItemExcludeQtyReservation true/false); števila z vejico se sprejmejo, besedilo namesto števila se javi in
+preskoči; opozorila kažejo številko vrstice iz Excela. Na izkaznici artikla je kljukica »Izloči iz
+rezervacije zaloge« prvič vidna in urejiva (ključ `Planning.ExcludeQtyReservation`), logična polja kažejo
+Da/Ne tudi, kadar čakajoča vrednost pride kot 1/0, D/N ali true.
+
+Tveganje, ki ga uporabnik sprejema: zajem iz SAOP prepiše kanonično vrednost, ko se artikel v SAOP spremeni;
+dokler SAOP spremembe iz vrste ne prejme, lahko PIM za trenutek spet kaže vrednost iz SAOP.
+`out.VerifyEchoBatch` (243) poslano sporočilo potrdi takoj, ker je kanonična vrednost že nova.
+
+**Objekti:** `pim.SaveProductErpFieldsBulk` (nova), `pim.SaveProductMediaBulk` (nova); piše v
+`canon.Product`, `canon.ProductCommercial`, `canon.ProductText`, `canon.ProductAttribute`,
+`canon.ProductPlanning`, `canon.ProductMedia`, `canon.ProductDocument`, `pim.ProductChangeBatch`,
+`pim.ProductFieldHistory`.
+
+**Ročni korak po uvedbi:** ni potreben za bazo. Proceduri kliče samo nova različica intraneta
+(`ProductWorkbookService`), zato ju uvedi skupaj z aplikacijo. Na razvojni bazi `DAVID\MSSQL19` je bila
+migracija med razvojem uveljavljena s `sqlcmd` in še ni v `dbo.SchemaMigration`; migrator jo bo ob naslednjem
+zagonu pognal znova (je idempotentna, `CREATE OR ALTER`).
+
+## En motor avtomatike, pas SAOP in zaloga ter cene na 10 min (migracija 246_EnMotorAvtomatike, 2026-09-22)
+
+Ekipa SAOP je javila, da PIM kliče GetPrices in GetItem brez premora in obremenjuje njihov procesor.
+Izmerjeno istega dne: workerje so poganjali trije razporejevalniki hkrati (Windows naloge, razporejevalnik
+v IIS, ki se je vklopil ob vsakem zagonu intraneta, in nenameščen `PIM.AutomationHost`). Cikel zaloge
+»na 5 min« je trajal 6–11 min in se takoj začel znova, dobavni roki so se iz IIS brali vsakih 30 min.
+
+Koda v istem commitu: gostitelj posle, ki kličejo SAOP (`JobCatalog.UsesSaop`), poganja po enega
+naenkrat z 2 min tišine vmes. Naslednji termin šteje od **konca** teka, po zaporednih napakah z odlogom
+(razmik × 2^(n-1), največ 4 h). Workerji tečejo v Windows Job Objectu (brez sirot). Vsako podjetje je svoj
+korak. Urni zajem artiklov bere samo 8 točk artiklov. Razporejevalnik v IIS je privzeto izklopljen
+(vklop samo z `Scheduler:Enabled=true`). Magento cene in zaloga gredo v `<EXPORT_ROOT>\<podjetje>\`.
+Nov posel `SUPPLIER_STOCK_IMPORT` (zaloga NW in Braytron) nastane ob zagonu gostitelja.
+
+Migracija uskladi obstoječe vrstice (samo tiste, ki jih ni spreminjal človek, `UpdatedBy` je postopek ali migracija):
+
+- `STOCK_IMPORT` (zdaj samo zaloga iz SAOP) in `PRICE_IMPORT`: razmik 600 s, meja 900 s, SLA 1800 s.
+- `WEB_STOCK_EXPORT`: razmik 1800 s (sproži ga uspešna zaloga), meja 1800 s, SLA 3600 s.
+- `SAOP_DELIVERY_IMPORT` in `SYSTEM_SELF_TEST`: izklopljena. `NIGHTLY_RECONCILIATION`: ob 00:30.
+- `NextDueUtc = NULL` za posle, ki ne tečejo (gostitelj jih razmakne znova).
+- Podjetje DEMO (1, predpona `DEMO`) izključeno v `ops.OrganizationAutomationPolicy`.
+- Stari cikli `ops.WorkerCycle` izklopljeni. `ops.ScheduleProfile` `SAOP_DELIVERY`: 1 dan, zastarelost 36 h.
+
+**Objekti:** `ops.JobDefinition`, `ops.OrganizationAutomationPolicy`, `ops.WorkerCycle`, `ops.ScheduleProfile` (samo podatki).
+
+**Ročni korak po uvedbi:** da. Workerje mora poganjati samo `PIM.AutomationHost` (storitev ali konzola).
+Windows naloge »PIM zaloga«, »PIM katalog«, »PIM nadzor« in »PIM nocni tok« izklopi, ko gostitelj teče
+(dokler drži najem, se same umaknejo). Na PRD migracija še ni uveljavljena.
+
+## Alarmi zamujanja po novem ritmu avtomatike (migracija 247_AlarmiPoNovemRitmu, 2026-09-22)
+
+Pregled sprememb 246 je našel dva vira lažnih kritičnih alarmov:
+
+- `ops.RaiseOverdueAlerts` (PIM.Watchdog) javi `PipelineOverdue`, ko postopek molči več kot 2 × razmik iz
+  `ops.ScheduleProfile`. Tam je bil še razmik 300 s, gostitelj pa zalogo in cene iz SAOP poganja na
+  ~10–13 min. Razmiki so poravnani navzgor: `SAOP_STOCK`, `SAOP_PRICES` na 900 s (zastarelost 1800 s),
+  `MAGENTO_STOCK_PRICES`, `STOCK_FILE`, `SOURCE_FETCH` na 1800 s (zastarelost 3600 s).
+- `ops.EvaluateJobAlerts` je `JobOverdue` meril od zadnjega začetka. Zdaj meri od termina (`NextDueUtc`):
+  posel zamuja, ko je termin minil za več kot (`WarnAfterMultiplier` − 1) × razmik in posel ne teče.
+  Odlog po napakah in čakanje v pasu SAOP nista zaostanek, padec javlja `JobFailed`.
+
+V isti izdaji kode: delni padec posla (npr. eno od treh podjetij) konča kot `Warning`, ne `Failed`, zato
+ne sproži odloga za zdrava podjetja in še sproži odvisne posle. Ročna ustavitev premakne termin na konec
++ razmik.
+
+**Objekti:** `ops.EvaluateJobAlerts` (spremenjena), `ops.ScheduleProfile` (podatki).
+
+**Ročni korak po uvedbi:** ni potreben.

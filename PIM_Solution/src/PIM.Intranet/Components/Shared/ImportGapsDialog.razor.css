@@ -1,0 +1,62 @@
+.gaps-backdrop {
+  align-items: center;
+  background: rgb(15 23 42 / .48);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 100;
+}
+.gaps-dialog {
+  background: var(--pim-surface);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius);
+  box-shadow: 0 24px 70px rgb(15 23 42 / .25);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  width: min(62rem, 100%);
+}
+.dialog-header { align-items: flex-start; border-bottom: 1px solid var(--pim-border); display: flex; justify-content: space-between; padding: 1rem 1.15rem .85rem; }
+.dialog-header h2 { color: var(--pim-text-strong); font-size: 1.15rem; margin: .15rem 0 0; }
+.dialog-kicker { color: var(--pim-primary); font-size: .66rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.dialog-scope { color: var(--pim-text-muted); font-size: .78rem; margin: .25rem 0 0; }
+.dialog-close { background: transparent; border: 0; color: var(--pim-text-muted); cursor: pointer; font-size: 1.35rem; line-height: 1; padding: .15rem .3rem; }
+.dialog-body { display: grid; gap: 1rem; overflow: auto; padding: 1rem 1.15rem; }
+.dialog-body > .message-state { margin: 0; }
+.dialog-footer { align-items: center; background: var(--pim-surface-subtle); border-top: 1px solid var(--pim-border); display: flex; gap: .55rem; justify-content: flex-end; padding: .8rem 1.15rem; }
+.footer-note { color: var(--pim-text-muted); font-size: .76rem; margin: 0 auto 0 0; }
+
+.gaps-clean { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); border-radius: var(--pim-radius-sm); color: var(--pim-good-text); margin: 0; padding: .7rem .85rem; }
+.gap-group h3 { align-items: center; color: var(--pim-text-strong); display: flex; font-size: .95rem; gap: .45rem; margin: 0 0 .25rem; }
+.gap-count { background: var(--pim-warn-bg, #fff7e6); border-radius: 999px; color: var(--pim-warn-text, #8a5300); font-size: .72rem; padding: .05rem .5rem; }
+.gap-count.is-bad { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.gap-help { color: var(--pim-text-soft); font-size: .78rem; margin: 0 0 .55rem; }
+.gap-list, .error-list { display: grid; gap: .4rem; list-style: none; margin: 0; padding: 0; }
+.gap-row { border: 1px solid var(--pim-border-soft, var(--pim-border)); border-radius: var(--pim-radius-sm); padding: .55rem .7rem; }
+.gap-main { align-items: center; display: grid; gap: .75rem; grid-template-columns: minmax(0, 1fr) auto auto; }
+.gap-main strong { color: var(--pim-text-strong); font-size: .86rem; overflow-wrap: anywhere; }
+.gap-main .muted { font-size: .74rem; margin-top: .15rem; }
+.gap-products { color: var(--pim-text-soft); font-size: .78rem; white-space: nowrap; }
+.gap-actions { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: flex-end; }
+.gap-editor { border-top: 1px dashed var(--pim-border); display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin-top: .6rem; padding-top: .6rem; }
+.editor-block { display: flex; flex-direction: column; gap: .45rem; }
+.editor-block > button { align-self: flex-start; }
+.editor-title { color: var(--pim-text-muted); font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.error-list li { background: var(--pim-bad-bg); border: 1px solid var(--pim-bad-border); border-radius: var(--pim-radius-sm); color: var(--pim-bad-text); font-size: .8rem; padding: .45rem .6rem; }
+.reprocess-log p { font-size: .8rem; margin: 0 0 .25rem; }
+
+.button-primary { background: var(--pim-primary); border: 0; border-radius: .35rem; color: #fff; cursor: pointer; font-weight: 600; padding: .45rem .9rem; }
+.button-primary:disabled { cursor: default; opacity: .5; }
+.primary-action { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 600; }
+.filter-check { align-items: center; color: var(--pim-text-soft); display: inline-flex; font-size: .8rem; gap: .4rem; }
+.filter-check input { accent-color: var(--pim-primary); }
+
+@media (max-width: 620px) {
+  .gaps-backdrop { align-items: end; padding: 0; }
+  .gaps-dialog { border-radius: var(--pim-radius) var(--pim-radius) 0 0; max-height: 94vh; }
+  .gap-main { grid-template-columns: 1fr; }
+  .gap-actions { justify-content: flex-start; }
+  .footer-note { display: none; }
+}

@@ -178,6 +178,17 @@ Assert(qualityProducts.Contains("IsErpReady", StringComparison.Ordinal)
   && qualityProducts.Contains("IsWebReady", StringComparison.Ordinal)
   && qualityProducts.Contains("Ročni zadržek", StringComparison.Ordinal),
   "Operativni pogled mora prikazati kanalsko pripravljenost in ročni zadržek.");
+// 242: splet se prikazuje po istih pravilih, po katerih nastane katalog.csv (kljukice spletisc, kategorija,
+// zadrzek, izkljucitev, veljavni profili, pravilo 220 za artikle brez spletnega mesta) — ne po WebPublish iz SAOP.
+Assert(qualityProducts.Contains("WebExportStates.Label", StringComparison.Ordinal)
+  && qualityProducts.Contains("IsInCatalogCsv", StringComparison.Ordinal)
+  && qualityProducts.Contains("stanje=NO_SITE", StringComparison.Ordinal)
+  && qualityProducts.Contains("stanje=IN_CSV", StringComparison.Ordinal)
+  && !qualityProducts.Contains("!row.WebPublish", StringComparison.Ordinal),
+  "Operativni pogled mora kazati stanje po izvoznih pravilih katalog.csv in ali je artikel v datoteki, ne oznake WebPublish iz SAOP.");
+var readinessMigration = Read(Path.Combine(root, "sql", "migrations", "242_ObjavaZaSpletPoIzvoznihPravilih.sql"));
+foreach (var contract in new[] { "WebExportState", "IsInCatalogCsv", "NoSiteStillExported220", "pim.ProductWebShop", "pim.CatalogPolicy", "val.ProductHold", "intranet.GetProductWebExportState", "intranet.GetWebExportSummary" })
+  Assert(readinessMigration.Contains(contract, StringComparison.Ordinal), "Manjka pogodba pripravljenosti po izvoznih pravilih (242): " + contract);
 foreach (var contract in new[] { "ProductChannelReadiness", "ProductHold", "TR_OutboxMessage_ErpQualityGate", "ERP_L1" })
   Assert(qualityGateMigration.Contains(contract, StringComparison.Ordinal), "Manjka pogodba profesionalne kakovosti: " + contract);
 

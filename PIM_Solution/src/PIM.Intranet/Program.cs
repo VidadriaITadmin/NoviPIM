@@ -1,3 +1,4 @@
+using PIM.Automation;
 using PIM.Intranet.Components;
 using PIM.Intranet.Services;
 using PIM.Operations;
@@ -87,17 +88,29 @@ builder.Services.AddScoped<PimDb>();
 builder.Services.AddScoped<CatalogReadService>();
 builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
+builder.Services.AddScoped<CustomerListService>();
+builder.Services.AddScoped<CustomerWorkbookService>();
 builder.Services.AddScoped<ProductLinkReadService>();
 builder.Services.AddScoped<RulesWriteService>();
 builder.Services.AddScoped<TitleRuleService>();
 builder.Services.AddScoped<PriceSheetService>();
 builder.Services.AddScoped<WebExportBuildService>();
+builder.Services.AddScoped<MagentoArtifactService>();
 builder.Services.AddScoped<CatalogControlService>();
 builder.Services.AddScoped<SaopEndpointSnapshotService>();
 builder.Services.AddScoped<ProductEditService>();
 builder.Services.AddScoped<ProductExportService>();
 builder.Services.AddScoped<QualityIssueExportService>();
 builder.Services.AddScoped<ProductWorkbookService>();
+builder.Services.AddScoped<ClearanceService>();
+// AI predlog spletnega naziva in opisa na kartici izdelka (kljuc Ai:ApiKey v appsettings.Local.json).
+builder.Services.AddScoped<AiTextService>();
+// Kandidati za nove artikle iz dobaviteljevih XML (219/240). Do 2026-09-21 servisa nista bila
+// registrirana, zato je stran /zajem/novi-artikli padla ze ob odprtju.
+builder.Services.AddScoped<SupplierCandidateReadService>();
+builder.Services.AddScoped<SupplierCandidateWriteService>();
+// 241: potisk uvozenega kandidata v cakalno vrsto SAOP (isti gradnik dokumenta in ista pot kot /saop/artikli).
+builder.Services.AddScoped<SupplierCandidateSaopService>();
 // Izvoz delovnega lista v ozadju (/izdelki, gumb "Izvozi Excel"): singleton, ker opravilo zivi
 // dlje od kroga, ki ga je sprozilo — uporabnik lahko stran zapre in se vrne, izvoz tece dalje.
 builder.Services.AddSingleton<ExportResultStore>();
@@ -111,6 +124,8 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<PipelineReadService>();
 builder.Services.AddScoped<QualityReadService>();
 builder.Services.AddScoped<QualityWriteService>();
+// 251: samodejni umik kljukic spletisc, predogled, pregled in nastavitev (stran /splet/umaknjeni, kartica).
+builder.Services.AddScoped<WebWithdrawalService>();
 builder.Services.AddScoped<StockReadService>();
 builder.Services.AddScoped<GovernanceReadService>();
 builder.Services.AddScoped<IntranetFeatureReadService>();
@@ -135,6 +150,10 @@ builder.Services.AddSingleton<WorkerCycleRunner>();
 builder.Services.AddSingleton<SelfAddress>();
 builder.Services.AddSingleton<WorkerSchedulerService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<WorkerSchedulerService>());
+// Enotni model opravil (237): intranet je nadzorna konzola gostitelja avtomatike (PIM.AutomationHost) —
+// bere ops.JobDefinition/JobRun in oddaja zahteve (zagon, ustavitev, urnik), ki jih prevzame gostitelj.
+builder.Services.AddSingleton(provider =>
+  new AutomationStore(ConnectionStringResolver.Resolve(provider.GetRequiredService<IConfiguration>()) ?? ""));
 
 // Naša ura je izbrana enkrat ob zagonu, ne podedovana od strežnika. Na IIS, nastavljenem na
 // UTC, bi ToLocalTime() kazal dve uri prej — in to bi se pokazalo šele po objavi.
@@ -298,6 +317,20 @@ app.MapGet("/izvoz/zaloge.xlsx", async (HttpContext context, StockReadService st
     $"PIM_zaloga_{organizationId?.ToString() ?? "vsa"}_{DateTime.UtcNow:yyyyMMdd_HHmm}.xlsx");
 }).RequireAuthorization();
 
+// Delovni list strank (250): isti filtri kot na /stranke (podjetje, vloga, iskanje, tip, …), zato je
+// datoteka natanko to, kar uporabnik vidi. Uvoz nazaj je na /stranke/uvoz. Podjetje ni obvezno —
+// prazno pomeni vsa, vsaka vrstica nosi svoje podjetje.
+app.MapGet("/izvoz/stranke.xlsx", async (HttpContext context, CustomerListService customers, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+{
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
+  var query = context.Request.Query;
+  var filter = CustomerListQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
+  var rows = CustomerListService.Apply(await customers.GetAsync(filter.OrganizationId, cancellationToken), filter).ToList();
+  return Results.File(CustomerWorkbookService.Build(rows),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    CustomerWorkbookService.FileName(DateTime.UtcNow));
+}).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial));
+
 app.MapGet("/izvoz/izdelki.csv", async (
   HttpContext context, ProductWorkbenchService workbench, HeavyWorkGate gate,
   CancellationToken cancellationToken) =>
@@ -402,7 +435,7 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     const string workbookContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     var tempPath = results.CreateTempFile();
     await using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
-      await workbook.BuildToAsync(stream, filter, selected, includeGroups: null, progress: null, cancellationToken);
+      await workbook.BuildToAsync(stream, filter, selected, includeFieldKeys: null, progress: null, cancellationToken);
     var token = results.Put(tempPath, ProductWorkbookService.FileName(DateTime.UtcNow), workbookContentType);
     return results.TryGet(token, out var path, out var fileName, out var contentType)
       ? Results.File(path, contentType, fileName)
@@ -417,10 +450,45 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
 // Prevzem zvezka, ki ga je zgradil ExportJobService v ozadju (/izdelki, gumb "Izvozi Excel").
 // Token zivi v ExportResultStore, datoteka na disku v zacasni mapi procesa — glej ExportJobService
 // za razlog, da gradnja sploh tece loceno od tega klica. Odgovor pretaka datoteko z diska.
-app.MapGet("/izvoz/prenos/{token:guid}", (Guid token, ExportResultStore results) =>
-  results.TryGet(token, out var path, out var fileName, out var contentType)
-    ? Results.File(path, contentType, fileName)
-    : Results.NotFound("Izvoz ni (vec) na voljo; morda je potekel ali ga je ze prevzel kdo drug."));
+app.MapGet("/izvoz/prenos/{token:guid}", (Guid token, ExportResultStore results, ExportJobService exports) =>
+{
+  if (!results.TryGet(token, out var path, out var fileName, out var contentType))
+    return Results.NotFound("Izvoz ni (vec) na voljo; morda je potekel ali ga je ze prevzel kdo drug.");
+  exports.MarkDownloaded(token);
+  return Results.File(path, contentType, fileName);
+});
+
+// Prenos, ki ga odpre klik na »Izvozi Excel« (/izdelki): brskalnik ga pokaze takoj, datoteka pride,
+// ko je zvezek gotov — glej ExportDownloadEndpoint, zakaj ne sele ob koncu gradnje.
+app.MapGet("/izvoz/zvezek/{jobId:guid}", ExportDownloadEndpoint.StreamWorkbookAsync);
+
+// Okno izvozov v kotu vsake strani (MainLayout #pim-export-tray, wwwroot/js/pim-export.js) bere
+// stanje tu, ne prek vezja strani: izvoz pripada uporabniku, zato ga vidi na /izdelki/uvoz in na
+// kateri koli drugi strani, tudi po osvezitvi — glej ExportJobService, zakaj.
+app.MapGet("/izvoz/opravila", (HttpContext context, ExportJobService exports) =>
+{
+  var now = DateTime.UtcNow;
+  context.Response.Headers.CacheControl = "no-store";
+  return Results.Json(exports.ForOwner(context.User.Identity?.Name ?? "").Select(job => new
+  {
+    id = job.JobId,
+    status = job.Status.ToString(),
+    phase = job.Phase.ToString(),
+    done = job.RowCount,
+    total = job.TotalRows,
+    queuePosition = job.QueuePosition,
+    remainingSeconds = job.RemainingSeconds(now),
+    elapsedSeconds = (int)((job.FinishedUtc ?? now) - job.StartedUtc).TotalSeconds,
+    fileName = job.FileName,
+    error = job.Error,
+    downloadUrl = job.DownloadToken is { } token ? $"izvoz/prenos/{token}" : null,
+    downloaded = job.Downloaded,
+    browserWaiting = job.BrowserWaiting,
+  }));
+});
+
+app.MapPost("/izvoz/opravila/{jobId:guid}/skrij", (Guid jobId, HttpContext context, ExportJobService exports) =>
+  exports.Dismiss(jobId, context.User.Identity?.Name ?? "") ? Results.NoContent() : Results.NotFound());
 
 // Izvoz odprtih napak validacije: isti filtri kot na /kakovost/napake, enaka oblika zvezka kot
 // na /izdelki. Vrstica je obarvana po resnosti (rdeca = napaka, bleda oranzna = opozorilo) —
@@ -534,7 +602,7 @@ app.MapGet("/izvoz/validacijski-profili.xlsx", async (
 // ista procedura, ki jo uporabi tudi PIM.B2bWorker, zato razhajanja med tem, kar uporabnik
 // vidi, in tem, kar odide na splet, ne more biti.
 app.MapGet("/izvoz/splet-na-zahtevo", async (
-  HttpContext context, WebExportBuildService export, AdminConsoleService console, CancellationToken cancellationToken) =>
+  HttpContext context, WebExportBuildService export, GovernanceReadService governance, AdminConsoleService console, CancellationToken cancellationToken) =>
 {
   var query = context.Request.Query;
   if (!int.TryParse(query["podjetje"], out var organizationId) || organizationId <= 0
@@ -545,6 +613,9 @@ app.MapGet("/izvoz/splet-na-zahtevo", async (
   string? Optional(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString();
   var profileCode = Optional("koda");
   if (profileCode is null) return Results.BadRequest("Manjka koda izvoznega profila.");
+  var profile = (await governance.GetExportProfilesAsync(cancellationToken))
+    .SingleOrDefault(value => value.ExportProfileId == profileId && value.ProfileCode == profileCode && value.IsActive && value.CanBuildOnDemand);
+  if (profile is null) return Results.BadRequest("Profil in njegova koda se ne ujemata ali profil ni aktiven.");
   // "ime" pride iz /splet za stalni par katalog.csv/stranke.csv; brez njega (npr. splet/izvoz
   // z izbranim poljubnim profilom) ostane privzeto, casovno zigosano ime.
   var fileName = Optional("ime") is { } requestedFileName
@@ -575,6 +646,21 @@ app.MapGet("/izvoz/splet-na-zahtevo", async (
   }
 
   return Results.Empty;
+}).RequireAuthorization();
+
+app.MapGet("/izvoz/magento-datoteka/{profile}", async (string profile, MagentoArtifactService artifacts, CancellationToken ct) =>
+{
+  if (profile is not ("MAGENTO_PRODUCTS" or "MAGENTO_CUSTOMERS")) return Results.NotFound();
+  try
+  {
+    var opened = await artifacts.OpenAsync(profile, ct);
+    return Results.Stream(opened.Stream, "text/csv; charset=utf-8", opened.Artifact.FileName,
+      lastModified: new DateTimeOffset(opened.Artifact.PublishedUtc));
+  }
+  catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+  {
+    return Results.Problem("Dokončana datoteka trenutno ni dosegljiva. Preveri stanje na strani Izhod na splet.", statusCode: 409);
+  }
 }).RequireAuthorization();
 
 app.MapRazorComponents<App>()

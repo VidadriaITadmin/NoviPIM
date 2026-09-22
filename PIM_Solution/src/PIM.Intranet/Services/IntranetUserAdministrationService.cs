@@ -183,15 +183,29 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
       throw new InvalidOperationException("Uporabnika ni bilo mogoče najti.");
   }
 
+  /// <summary>Dolzina, od katere naprej PIM ne svetuje vec. Samo priporocilo, ne pogoj.</summary>
+  public const int RecommendedPasswordLength = 10;
+
   /// <summary>
-  /// Najmanjsa zahteva za geslo. Namenoma kratka in razumljiva: dolzina je edina lastnost, ki
-  /// zanesljivo dela razliko, zapleteno pravilo pa ljudi prisili v zapisovanje na listek.
+  /// Edina zavrnitev: prazno geslo. Ni pravilo o kakovosti, ampak o prijavi — prijava prazno geslo
+  /// zavrne (<see cref="LocalUserAuthenticationService"/>), zato bi racun s praznim geslom ostal
+  /// zaklenjen. Dolzina in vrsta znakov nista pogoj; o njiju samo svetuje <see cref="PasswordAdvice"/>.
   /// </summary>
   static void ValidatePassword(string password)
   {
-    if (string.IsNullOrWhiteSpace(password) || password.Trim().Length < 10)
-      throw new InvalidOperationException("Geslo mora imeti vsaj 10 znakov.");
+    if (string.IsNullOrWhiteSpace(password))
+      throw new InvalidOperationException("Geslo ne sme biti prazno.");
   }
+
+  /// <summary>
+  /// Priporocilo, ce bi bilo geslo lahko boljse; null, ce pripomb ni. Nikoli ne zavrne gesla —
+  /// odlocitev je uporabnikova. Svetuje samo o dolzini, ker je dolzina edina lastnost, ki
+  /// zanesljivo dela razliko; pravila o vrsti znakov ljudi le prisilijo v zapisovanje na listek.
+  /// </summary>
+  public static string? PasswordAdvice(string? password) =>
+    string.IsNullOrWhiteSpace(password) || password.Length >= RecommendedPasswordLength
+      ? null
+      : $"Priporočilo: geslo je krajše od {RecommendedPasswordLength} znakov. Daljše geslo (npr. nekaj besed skupaj) je varnejše, ni pa obvezno.";
 
   /// <summary>
   /// Zapise ali pobrise naslov za opozorila. Prazen naslov je dovoljen in pomeni, da uporabnik

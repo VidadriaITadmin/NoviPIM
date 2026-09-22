@@ -422,11 +422,47 @@ PowerShell in `sqlcmd` nista več potrebna.
 
 | Cikel | Razpored | Kaj naredi |
 |---|---|---|
-| `zaloga` | vsakih 5 min | NW FTP in BT XML zaloga (prevzem + branje za vsa podjetja), zaloga iz SAOP, cene iz SAOP (GetPrices), izvoz cen in zaloge za splet, osvežen katalog.csv/stranke.csv (podjetje 2), na koncu datumi dobave iz SAOP po svojem razporedu (30 min) |
-| `katalog` | vsako uro | SAOP katalog (delta, kot `PIM-SaopKatalog` s strežnika), naročila iz SAOP (VNK/VND), validacija in objava vseh podjetij, poln izvoz kataloga in strank (podjetje 2) |
+| `magento-csv` | vsakih 15 min (242; prej 5) | `PIM.B2bWorker --export-magento --osvezi-validacijo --starost-validacije 90 --organization-id 2`: katalog.csv in stranke.csv za Magento iz objave (podjetje 2). Validacija in objava tečeta le, če je validacija podjetja starejša od 90 min (urni `katalog` ju sicer že opravi). Bere samo PIM, ne kliče SAOP ali Magenta. Izvoz traja minute (89.491 vrstic × 180 stolpcev); `ops.ClaimWorkerCycle` isti cikel nikoli ne požene dvakrat hkrati, razmik 15 min pa prepreči, da bi tekel neprekinjeno. |
+| `zaloga` | vsakih 5 min | NW FTP in BT XML zaloga (prevzem + branje za vsa podjetja), zaloga iz SAOP, cene iz SAOP (GetPrices), izvoz cen in zaloge za splet (hitri profil, `izvoz\magento\<podjetje>`), na koncu datumi dobave iz SAOP po svojem razporedu (30 min) |
+| `katalog` | vsako uro | SAOP katalog (delta, kot `PIM-SaopKatalog` s strežnika), naročila iz SAOP (VNK/VND), validacija in objava vseh podjetij |
 | `nadzor` | vsakih 5 min | `PIM.Watchdog`, `PIM.AlertDispatcher` |
-| `nocni-tok` | vsak dan ob 02:30 | `Nocno-vse.ps1 -ZalogaIzSaop`: (razvoj: gradnja workerjev), SAOP katalog (poln 1. v mesecu), prevzem, dobaviteljev XML (prevzeta datoteka, sicer fixtures), preslikava zaostanka, zaloge dobaviteljev, SAOP zaloga in datumi dobave, validacija in objava, izvoz, dnevni mail »Zaloga pod MID« (`STOCK_REPLENISHMENT_DIGEST`, doslej ga ni poganjal nihče) |
+| `nocni-tok` | vsak dan ob 02:30 | `Nocno-vse.ps1 -ZalogaIzSaop`: (razvoj: gradnja workerjev), SAOP katalog (poln 1. v mesecu), prevzem, dobaviteljev XML (prevzeta datoteka, sicer fixtures), preslikava zaostanka, zaloge dobaviteljev, SAOP zaloga in datumi dobave, validacija in objava, dnevni mail »Zaloga pod MID« (`STOCK_REPLENISHMENT_DIGEST`, doslej ga ni poganjal nihče) |
 | `samotest` | vsak dan ob 04:30 | `PIM.SelfTest.Nightly` — objavljen ob workerjih ali `dotnet run` iz izvorne kode |
+
+**CSV za Magento je samostojen cikel (2026-09-21).** Uporabnik: »katalog.csv je PIM → Magento;
+izdelava CSV je neodvisna od branja/pisanja SAOP.« Do takrat je poln izvoz tekel na koncu ciklov
+`zaloga`, `katalog` in `nocni-tok`: vsak padec vhoda (SAOP nedosegljiv) je bil videti kot padec
+izvoza in obratno, v 48 urah pred 2026-09-21 pa je 76 zagonov padlo na pravicah do izhodne mape
+(`.magento-export.lock` v `EXPORT_ROOT`) — in ker je `out.ExportRun` nastal šele za ključavnico,
+zgodovina na `/splet` ni pokazala niti enega poskusa. Zdaj: (1) cikel `magento-csv` (Windows
+naloga »PIM magento«, `scripts\Magento-cikel.ps1`) izdela par sam, vsakih 15 minut (242; prej 5); (2) `out.ExportRun`
+nastane pred mapo in ključavnico, zato je padec na pravicah viden z vzrokom; (3) `/splet` kaže
+dejansko izdelano datoteko (čas, generacija iz `magento-export.complete`, velikost, iskanje po
+vsebini, prenos bajtov) in ne predogleda iz baze; (4) validacija se v tem ciklu ponovi le, če je
+starejša od 90 min (`WorkerCycles.MagentoValidationMaxAgeMinutes`), ker validacija celega podjetja
+traja minute in jo urni `katalog` že opravi. Neuspešen zagon pusti prejšnji veljavni par.
+
+**Izhodna mapa in pravice (2026-09-21 zvečer, migracija 242).** Edini korak, ki ga sistem ne more
+narediti sam, so pravice na `EXPORT_ROOT`: mapo `C:\inetpub\wwwroot\PIM_exports_csv` je ustvaril
+skrbnik, račun Windows nalog in bazena IIS pa je imel samo branje. Po namestitvi (ali po spremembi
+poti z `Nastavi-izvozno-pot.ps1`) zato enkrat kot skrbnik:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\Nastavi-pravice-izvozne-mape.ps1 -BazenIis <ime bazena IIS>
+# brez skrbniških pravic samo preveri (izhod 0 = v redu):
+powershell -ExecutionPolicy Bypass -File scripts\Nastavi-pravice-izvozne-mape.ps1 -SamoPreveri
+```
+
+Worker ob nezapisljivi mapi pade z napako, ki pove mapo, račun in ta ukaz (ne samo »Access to the
+path … is denied«); `/splet` pokaže izhodno mapo, vir poti, ali intranet vanjo lahko piše in
+zadnji uspeh ločeno od zadnjega poskusa. Neuspel hash objavljene datoteke (npr. protivirusni
+program) zaključka ne spremeni v padec: `out.ExportRun` ostane `Succeeded` z velikostjo brez hasha.
+
+Namestitveni vrstni red, po katerem ostane samo povezava in domena za ročni vnos: (1) objava
+(`deploy\Publish-All.ps1`), (2) `appsettings.Local.json` ob objavi (`ConnectionStrings:Pim`,
+`ActiveDirectory:Domain`), (3) migracije (`PIM.Migrator`), (4) `scripts\Nastavi-izvozno-pot.ps1` in
+`scripts\Nastavi-pravice-izvozne-mape.ps1` kot skrbnik, (5) `scripts\Namesti-opravila.ps1` ali
+`deploy\Install-AutomationHost.ps1` (kdo drži uro), (6) prvi tek »CSV za Magento« preveri na `/splet`.
 
 Razpored (razmik ali dnevna ura) in vklop sta vrstica v `ops.WorkerCycle` in se urejata na
 `/sistem/workerji`; sprememba velja od naslednjega tika. Razpored posameznih postopkov
@@ -487,3 +523,13 @@ Nastavitve (`appsettings.Local.json` ob intranetu ali okolje): `Scheduler:Enable
 poganjati ciklov), `Scheduler:TickSeconds` (30), `Scheduler:LeaseSeconds` (90),
 `Scheduler:KeepAliveMinutes` (5, 0 = brez). Dokaz: `PIM.F10.IntranetLogicTests`
 (`WorkerSchedulerChecks`: katalog ciklov, načrt korakov, naslednji termin, presoja zaostanka).
+
+## Enotni model opravil in gostitelj avtomatike (2026-09-21, migracija 237)
+
+Razporejevalnik v aplikaciji (221) je nadomeščen: posle iz `ops.JobDefinition` poganja
+`PIM.AutomationHost` (Windows storitev, na razvoju konzola), intranet je nadzorna konzola
+(`/sistem` s štirimi poslovnimi karticami, `/sistem/opravila`, `/sistem/zagoni`; `/sistem/workerji`
+je tehnični pogled »Izvajalniki«). Vsak worker ima svoj posel z urnikom, časovno mejo in
+odvisnostmi; naročila so ločena od kataloga, izvoz ne validira, objava teče samo po uspešni
+validaciji, izvoz samo iz uspešne objave. Stari cikli tečejo samo, dokler gostitelj ne drži najema.
+Celoten opis, tabela poslov, namestitev in prehodno obdobje: `docs/AVTOMATIZACIJA.md`.

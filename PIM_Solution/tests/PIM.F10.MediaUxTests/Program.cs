@@ -45,7 +45,11 @@ Assert(sql.Contains(".mp4", StringComparison.Ordinal) && sql.Contains(".pdf", St
 Assert(!page.Contains("class=\"kpi-grid\"", StringComparison.Ordinal),
   "Stiri velike stevilcne kartice nad seznamom morajo izginiti — uporabnik jih je zavrnil.");
 Assert(page.Contains("media-meta", StringComparison.Ordinal), "Stevilke morajo dobiti drobno mesto v glavi strani.");
-Assert(page.Contains("izdelki?pogled=BREZ_SLIKE", StringComparison.Ordinal), "Stevilo izdelkov brez slike mora ostati delovna povezava.");
+// 2026-09-22: »pogled=BREZ_SLIKE« seznam izdelkov ne pozna in ga je tiho odprl brez filtra.
+Assert(page.Contains("izdelki?slika=NO&aktivnost=ACTIVE", StringComparison.Ordinal), "Stevilo izdelkov brez slike mora ostati delovna povezava.");
+var productsPage = Read(Path.Combine(pages, "Products.razor"));
+Assert(productsPage.Contains("Name = \"slika\"", StringComparison.Ordinal) && productsPage.Contains("Name = \"aktivnost\"", StringComparison.Ordinal),
+  "Seznam izdelkov mora brati filtra, na katera kaze povezava z medijev.");
 
 // ─── 3. Slike IN dokumenti: en predal, dve tabeli ──────────────────────────
 Assert(catalog.Contains("canon.ProductDocument", StringComparison.Ordinal) && catalog.Contains("UNION ALL", StringComparison.Ordinal),
@@ -151,6 +155,35 @@ Assert(mediaPage.Contains("id=\"media-organization\"", StringComparison.Ordinal)
   "Mediji morajo imeti izbirnik podjetja.");
 Assert(!mediaPage.Contains("Mediji izdelkov v izbrani organizaciji", StringComparison.Ordinal),
   "Napis ne sme govoriti o izbiri, ki je ni bilo mogoce narediti.");
+
+
+/* ─── Vsa aktivna podjetja, cas vnosa, stabilno listanje (2026-09-22) ─────────
+   Stran je privzeto odprla DEMO; 82 slik Vidadrie, uvozenih isti dan, se ni dalo najti. */
+Assert(mediaPage.Contains("<option value=\"\">Vsa podjetja</option>", StringComparison.Ordinal),
+  "Izbirnik podjetja mora ponuditi vsa podjetja.");
+Assert(!mediaPage.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal),
+  "Obseg ne sme priti iz GetCurrentOrganizationAsync — ta vedno vrne prvo podjetje po sifri (DEMO).");
+Assert(catalog.Contains("organization.IsActive = 1", StringComparison.Ordinal) && catalog.Contains("@OrganizationId IS NULL OR", StringComparison.Ordinal),
+  "Obseg medijev so aktivna podjetja iz dbo.OrganizationConfig, izbira enega je neobvezna.");
+Assert(catalog.Contains("media.CreatedUtc", StringComparison.Ordinal) && catalog.Contains("document.CreatedUtc", StringComparison.Ordinal),
+  "Slike in dokumenti morajo nositi cas vnosa (migracija 249).");
+Assert(catalog.Contains("\"CreatedUtc DESC, ", StringComparison.Ordinal), "Privzeti vrstni red je najnovejsi najprej.");
+var orderStart = catalog.IndexOf("static string MediaOrderBy", StringComparison.Ordinal);
+var orderEnd = catalog.IndexOf("};", orderStart, StringComparison.Ordinal);
+var orderLines = catalog[orderStart..orderEnd].Split('\n').Where(line => line.Contains("=> \"", StringComparison.Ordinal)).ToArray();
+// Enolicen kljuc zapisa je (Source, SourceId): oba morata biti v vsakem vrstnem redu, SourceId na koncu.
+Assert(orderLines.Length >= 6 && orderLines.All(line => line.Contains("Source", StringComparison.Ordinal)
+    && line.TrimEnd().TrimEnd(',').EndsWith("SourceId\"", StringComparison.Ordinal)),
+  "Vsak vrstni red se mora koncati z enolicnim kljucem, sicer listanje podvoji ali izpusti zapise.");
+Assert(!catalog[orderStart..orderEnd].Contains("_ => \"CreatedUtc DESC, ItemID, OrganizationId, Kind", StringComparison.Ordinal),
+  "Privzeti vrstni red ne sme vsebovati izracunane vrste — baza bi jo morala izracunati za vse zapise.");
+Assert(mediaPage.Contains("LoadVersion", StringComparison.Ordinal),
+  "Star, pocasnejsi odgovor ne sme prepisati rezultatov novega filtra.");
+foreach (var id in new[] { "media-host", "media-added", "media-activity" })
+  Assert(mediaPage.Contains($"id=\"{id}\"", StringComparison.Ordinal), "Manjka filter " + id + ".");
+var migration249 = Read(Path.Combine(root, "sql", "migrations", "249_MedijiCasVnosa.sql"));
+Assert(migration249.Contains("history.OldValue IS NULL", StringComparison.Ordinal) && migration249.Contains("BeforeChangeId", StringComparison.Ordinal),
+  "Polnitev casa slik mora slediti prepisom naslovov (220) nazaj do pravega vnosa.");
 
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;

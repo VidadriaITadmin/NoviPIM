@@ -63,7 +63,7 @@
 
 @code {
   IReadOnlyList<PIM.Intranet.Services.ScheduleRow> Rows = [];
-  readonly Dictionary<string, int> Urejeni = [];
+  readonly PIM.Intranet.Services.MinuteEditState Urejeni = new();
   bool Loading = true;
   bool Busy;
   string? Error;
@@ -92,16 +92,11 @@
   }
 
   // Razmik je v bazi v sekundah, uporabnik pa razmišlja v minutah; pretvorba je tu in nikjer drugje.
-  int Minute(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
-    Urejeni.TryGetValue(kljuc, out var vrednost) ? vrednost : Math.Max(1, row.IntervalSeconds / 60);
+  int Minute(PIM.Intranet.Services.ScheduleRow row, string kljuc) => Urejeni.Value(kljuc, Math.Max(1, row.IntervalSeconds / 60));
 
-  bool Spremenjen(PIM.Intranet.Services.ScheduleRow row, string kljuc) =>
-    Urejeni.TryGetValue(kljuc, out var vrednost) && vrednost != Math.Max(1, row.IntervalSeconds / 60);
+  bool Spremenjen(PIM.Intranet.Services.ScheduleRow row, string kljuc) => Urejeni.Changed(kljuc, Math.Max(1, row.IntervalSeconds / 60));
 
-  void NastaviMinute(string kljuc, string? vnos)
-  {
-    if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) Urejeni[kljuc] = minute;
-  }
+  void NastaviMinute(string kljuc, string? vnos) => Urejeni.Set(kljuc, vnos);
 
   async Task Preklopi(PIM.Intranet.Services.ScheduleRow row) =>
     await ShraniAsync(row, !row.IsEnabled, row.IntervalSeconds,

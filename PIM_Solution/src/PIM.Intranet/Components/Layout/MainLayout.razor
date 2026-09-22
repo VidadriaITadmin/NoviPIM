@@ -98,6 +98,13 @@
   </main>
 </div>
 
+@* Okno izvozov v ozadju: napredek, ocena preostanka in prenos uporabnikovega izvoza na VSAKI
+   strani, ne samo na /izdelki, ki ga je sprožila. Uporabnik 2026-09-22 je kliknil »Izvozi«,
+   takoj za tem »Uvozi«, in ni vec vedel, kaj se dogaja. Postavitev je staticni SSR, zato okno
+   izrise wwwroot/js/pim-export.js iz GET /izvoz/opravila; data-permanent ga ohrani cez
+   izboljsano navigacijo Blazorja, da ne utripa ob vsakem kliku. *@
+<div id="pim-export-tray" class="export-tray" data-permanent aria-live="polite"></div>
+
 @code {
   string DisplayName = "Uporabnik";
   string Initials = "U";
@@ -121,6 +128,8 @@
     "StaleHeartbeat" or "StalledWatermark" or "PipelinePaused" or "PipelineDisabled" or "PipelineOverdue" => "teki-obdelave",
     "CycleOverdue" => "sistem?pogled=postopki",
     "ExportRejected" => "sistem/izvozi",
+    // 251: artikli, ki jim je PIM odstranil kljukico spletisca, z razlogom in pregledom.
+    "WebShopWithdrawn" => "splet/umaknjeni",
     _ => "sistem/integracije",
   };
 

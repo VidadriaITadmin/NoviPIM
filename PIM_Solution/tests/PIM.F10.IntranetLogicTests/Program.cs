@@ -1,4 +1,11 @@
+using PIM.Automation;
 using PIM.Intranet.Services;
+
+Assert(PIM.StockReplenishmentWorker.ReplenishmentQuantity.Read(12.5m) == 13
+  && PIM.StockReplenishmentWorker.ReplenishmentQuantity.Read(-12.5m) == -13
+  && PIM.StockReplenishmentWorker.ReplenishmentQuantity.Read(7) == 7
+  && PIM.StockReplenishmentWorker.ReplenishmentQuantity.Read(DBNull.Value) is null,
+  "Digest sprejme SQL decimal/int/null in ohrani SQL zaokroževanje.");
 
 var nw = MediaUrlPolicy.Normalize("//pim.nowodvorski.com/media/files/203.jpg");
 Assert(nw.Href == "https://pim.nowodvorski.com/media/files/203.jpg", "NW naslov mora dobiti https:.");
@@ -71,6 +78,8 @@ foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v
 
 WorkerConsoleChecks.Run();
 WorkerSchedulerChecks.Run();
+JobCatalogChecks.Run();
+TextOwnershipChecks.Run();
 Console.WriteLine("F10 intranet logic PASS.");
 
 /* ─── Kontrast palete po WCAG (P3-23, pregled 2026-09-08) ─────────────────────

@@ -28,9 +28,9 @@
   intraneta in je spodaj med dnevniki. Zgodovina zagonov ciklov je v bazi (ops.WorkerCycleRun).
 *@
 
-<PageTitle>Workerji</PageTitle>
-<PimPage Title="Workerji"
-         Subtitle="@($"Razporejevalnik, ročni zagon, izpis v živo in dnevnik vsakega workerja. Časi so v naši uri ({PimTime.ZoneLabel}).")"
+<PageTitle>Izvajalniki</PageTitle>
+<PimPage Title="Izvajalniki"
+         Subtitle="@($"Tehnični pogled: kateri proces je bil zagnan, kaj je izpisal in kje so dnevniki. Kaj se izvaja in kdaj, je na Opravilih. Časi so v naši uri ({PimTime.ZoneLabel}).")"
          Crumbs="Crumbs">
   <Actions>
     <button type="button" class="filter-button" disabled="@Loading" @onclick="() => NaloziAsync(true)">Osveži</button>
@@ -55,10 +55,10 @@
     <PimChip Text="@StanjeRazporejevalnika().Text" Tone="@StanjeRazporejevalnika().Tone" Prefix="Razporejevalnik: " />
   </div>
   <p class="panel-note">
-    Ura je v aplikaciji: intranet, ki drži najem v bazi, vsakih nekaj sekund pogleda, kateri cikel je
-    na vrsti, in ga požene sam — pod IIS, v Visual Studiu ali z dotnet run, brez Windows nalog.
-    Isti cikel nikoli ne teče dvakrat hkrati, tudi če intranet teče na več mestih. Cikel, ki od
-    zadnjega začetka miruje več kot dvakrat svoj razmik, je označen ZASTAL in ima odprt alarm v zvoncu.
+    Od migracije 237 posle poganja <strong>gostitelj avtomatike</strong> (PIM.AutomationHost, Windows storitev ali konzola) po
+    modelu <a href="sistem/opravila">Opravila</a>; ta ura v intranetu drži najem samo, dokler gostitelj ne teče, in takrat
+    poganja spodnje stare cikle kot rezervo. Dokler gostitelj utripa, so stari cikli nadomeščeni in njihov ritem ni merilo.
+    Po dveh tednih vzporednega spremljanja jih izklopi tu; odstranjeni bodo v naslednjem koraku.
   </p>
 
   <dl class="scheduler-facts">
@@ -115,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
           var ritem = Ritem(cikel);
           var tece = Konzola.ActiveForCycle(cikel.CycleKey);
           var kljuc = cikel.CycleKey;
-          <tr class="@(ritem.State == CycleRhythm.Overdue ? "row-alarm" : null)">
+          <tr class="@(ritem.State == CycleRhythm.Overdue && !GostiteljZiv ? "row-alarm" : null)">
             <td class="job-cell">
               <strong>@cikel.Label</strong>
               <div class="job-note">@(opis?.Description ?? "")</div>
@@ -151,6 +151,12 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
               {
                 <div><PimChip Text="@($"Teče {Trajanje(DateTime.UtcNow - (cikel.RunningSinceUtc ?? DateTime.UtcNow))}")" Tone="warn" /></div>
                 <div class="job-note">od @PimTime.FormatTime(cikel.RunningSinceUtc) na @cikel.RunningHost@(cikel.RunningStep is { } tekociKorak ? $" · {tekociKorak}" : "")</div>
+                @if (cikel.OverlapPrevented(DateTime.UtcNow))
+                {
+                  @* 242: termin je mimo, tek še traja — ops.ClaimWorkerCycle isti cikel zavrne, dokler teče; to ni zamuda, je pa znak prekratkega razmika. *@
+                  <div class="job-note">prekrivanje preprečeno: termin @PimTime.FormatTime(cikel.NextDueUtc) je mimo, nov zagon šele po koncu tega</div>
+                }
+                <div class="job-note">zadnji uspeh: @PimTime.FormatWithAge(cikel.LastSucceededUtc, "nikoli")</div>
               }
               else if (cikel.LastStartedUtc is null)
               {
@@ -165,6 +171,8 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
                   @if (cikel.LastStepsFailed is > 0) { <span class="error-count"> · padlih skupin: @cikel.LastStepsFailed</span> }
                 </div>
                 @if (cikel.LastError is { Length: > 0 } napaka) { <div class="drift-flag" title="@napaka">@Skrajsaj(napaka)</div> }
+                @* 242: zadnji poskus in zadnji uspeh sta dva podatka — cikel, ki pada, je nazadnje uspel morda pred dnevi. *@
+                @if (cikel.LastStatus != "Succeeded") { <div class="job-note">zadnji uspeh: @PimTime.FormatWithAge(cikel.LastSucceededUtc, "nikoli")</div> }
               }
             </td>
             <td class="nowrap">
@@ -177,8 +185,15 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
               else { <span class="muted">ob naslednjem tiku</span> }
             </td>
             <td>
-              <PimChip Text="@RitemOznaka(ritem)" Tone="@RitemTon(ritem)" Prefix="Ritem: " />
-              @if (cikel.OpenOverdueAlerts > 0) { <div class="job-note error-count">odprt alarm</div> }
+              @if (GostiteljZiv && cikel.RunningRunId is null)
+              {
+                <PimChip Text="Nadomeščen z opravili" Prefix="Ritem: " />
+              }
+              else
+              {
+                <PimChip Text="@RitemOznaka(ritem)" Tone="@RitemTon(ritem)" Prefix="Ritem: " />
+                @if (cikel.OpenOverdueAlerts > 0) { <div class="job-note error-count">odprt alarm</div> }
+              }
             </td>
             <td>
               <div class="table-actions">
@@ -605,6 +620,9 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
 
   SchedulerStatus Stanje => Razporejevalnik.Status;
 
+  /// Gostitelj avtomatike (237) drži živ najem: stari cikli so nadomeščeni in njihov ritem ni alarm.
+  bool GostiteljZiv => Stanje.Lease is { } najem && najem.IsLive(DateTime.UtcNow) && najem.IsAutomationHost;
+
   WorkerRun? Izbrani => IzbraniId is { } id ? Konzola.Find(id) : null;
 
   IReadOnlyList<(int Id, string Name)> Podjetja => Avtomatika
@@ -952,7 +970,8 @@ powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1 -Odstrani<
   {
     var stanje = Stanje;
     if (!stanje.Enabled) return ("Izklopljen z nastavitvijo", "bad");
-    if (stanje.IsOwner) return ("Teče v tej aplikaciji", "good");
+    if (stanje.IsOwner) return ("Teče v tej aplikaciji (rezerva: stari cikli)", "warn");
+    if (stanje.Lease is { } gostitelj && gostitelj.IsLive(DateTime.UtcNow) && gostitelj.IsAutomationHost) return ($"Uro drži gostitelj avtomatike: {gostitelj.Owner}", "good");
     if (stanje.Lease is { } najem && najem.IsLive(DateTime.UtcNow)) return ($"Teče drugje: {najem.Owner}", "warn");
     if (stanje.LastTickUtc is null) return ("Zaganja se", "warn");
     return stanje.Lease is { } potekel

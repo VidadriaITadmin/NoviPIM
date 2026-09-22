@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject PIM.Intranet.Services.CustomerCardService Cards
+@inject PIM.Intranet.Services.CustomerListService CustomerList
 @inject AuthenticationStateProvider Authentication
 
 @* Kartica stranke po popravkih 2026-08-28. Prej je bila ena stran z dvema tabelama in enim
@@ -17,7 +18,7 @@
   @if (Card is not null)
   {
     var general = Card.General;
-    <PimPage Title="@general.Name" Subtitle="@($"Šifra {general.CustomerKey} · {KindLabel(general.CustomerKind)}")" Crumbs="Crumbs" />
+    <PimPage Title="@general.Name" Subtitle="@($"{OrganizationName} · šifra {general.CustomerKey} · {RoleSummary}")" Crumbs="Crumbs" />
 
     <nav class="page-tabs" role="tablist" aria-label="Sklopi kartice stranke">
       @foreach (var tab in Tabs)
@@ -165,7 +166,7 @@
           </label>
           <label class="form-field">Vrsta stranke
             <select class="filter-select" @bind="Draft.Kind">
-              <option value="">Ni določena</option>
+              <option value="">Ni določena — velja izračun</option>
               @foreach (var kind in Kinds) { <option value="@kind.Code">@kind.Label</option> }
             </select>
           </label>
@@ -182,14 +183,32 @@
           Magento skupina: <span class="code-value">@(general.MagentoGroupKey ?? "ni preslikave za ta tip")</span>.
           Skupina strank je nosilna vez — nanjo so vezane cene in popusti, ne na posamezno stranko.
         </p>
+        @* Vloga je izracunana znotraj podjetja stranke (migracija 250); rocna vrsta zgoraj jo prepise. *@
+        @if (Role is not null)
+        {
+          <p class="card-note">
+            Vloga v podjetju @Role.OrganizationName: <strong>@Role.RoleLabel</strong> (@Role.RoleSourceLabel).
+            @if (Role.SuppliedProductCount > 0)
+            {
+              <text> Dobavitelj za </text><a href="@ProductsHref("dobavitelj")">@Role.SuppliedProductCount.ToString("N0") izdelkov</a><text>.</text>
+            }
+            @if (Role.ManufacturedProductCount > 0)
+            {
+              <text> Proizvajalec za </text><a href="@ProductsHref("proizvajalec")">@Role.ManufacturedProductCount.ToString("N0") izdelkov</a><text>.</text>
+            }
+            @(Role.InCustomerExport ? " Gre v stranke.csv (aktivna, z B2B profilom)." : " Ne gre v stranke.csv.")
+          </p>
+        }
         <div class="panel-actions"><button class="primary-button" type="submit" disabled="@Busy">Shrani nastavitve</button></div>
       </EditForm>
 
       <section class="ui-card data-card section-gap">
-        <div class="subsection-head"><h2>Skupine popustov</h2><span>kataložni popust po skupini artiklov</span></div>
+        @* Isti popusti kot v stranke.csv (migracija 253): rocni popust stranke, rocni popust tipa,
+           sicer SAOP rabatni cenik; poslovna enota ga podeduje od placnika, tranzit ga nima. *@
+        <div class="subsection-head"><h2>Skupine popustov</h2><span>kataložni popust po skupini artiklov — natanko to gre v stranke.csv</span></div>
         <PimState Empty="@(Card.GroupDiscounts.Count == 0)"
-                  EmptyText="Za skupino te stranke ni zapisanih skupinskih popustov. Prazno pomeni tranzit — poslovna enota jih podeduje od plačnika.">
-          <PimTable Caption="Skupine popustov, ki veljajo za skupino te stranke" Columns="GroupColumns">
+                  EmptyText="Stranka danes nima veljavnih skupinskih popustov. Tranzit jih nima; poslovna enota jih podeduje od plačnika.">
+          <PimTable Caption="Skupine popustov, ki danes veljajo za stranko" Columns="GroupColumns">
             <Rows>
               @foreach (var row in Card.GroupDiscounts)
               {
@@ -359,7 +378,9 @@
 
   CustomerCard? Card;
   IReadOnlyList<PIM.Intranet.Services.CustomerTypeRow> Types = [];
-  IReadOnlyList<PIM.Intranet.Services.CustomerRow> AllCustomers = [];
+  IReadOnlyList<PIM.Intranet.Services.CustomerListRow> AllCustomers = [];
+  PIM.Intranet.Services.CustomerListRow? Role;
+  string OrganizationName = "";
   ProfileDraft Draft = new();
   PIM.Intranet.Services.CustomerGeneralDraft GeneralDraft = new();
   int? OrganizationId;
@@ -384,7 +405,7 @@
   decimal TierPercent;
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Stranke", "stranke"), new("Kartica")];
-  static readonly IReadOnlyList<PimColumn> GroupColumns = [new("Skupina artiklov"), new("Popust", true), new("Najmanj kos", true), new("Velja"), new("Skupina strank")];
+  static readonly IReadOnlyList<PimColumn> GroupColumns = [new("Skupina artiklov"), new("Popust", true), new("Najmanj kos", true), new("Velja"), new("Vir")];
   static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja", true), new("Prag", true), new("Popust", true), new("Stanje")];
   static readonly IReadOnlyList<PimColumn> SpecialColumns = [new("Izdelek"), new("Koda popusta"), new("Velja"), new("Stanje")];
   static readonly IReadOnlyList<PimColumn> BranchColumns = [new("Vrsta"), new("Enota"), new("Opomba"), new("Dodal"), new("Dodano")];
@@ -410,12 +431,19 @@
   ];
 
   // Enota je lahko katerakoli druga stranka istega podjetja; sebe za svojo enoto ni mogoce izbrati.
-  IReadOnlyList<PIM.Intranet.Services.CustomerRow> BranchCandidates =>
+  IReadOnlyList<PIM.Intranet.Services.CustomerListRow> BranchCandidates =>
     AllCustomers.Where(row => row.CustomerId != CustomerId)
       .OrderBy(row => row.Name, StringComparer.CurrentCulture).Take(500).ToArray();
 
   public static string KindLabel(string? value) =>
     Kinds.FirstOrDefault(kind => string.Equals(kind.Code, value, StringComparison.Ordinal))?.Label ?? "vrsta ni določena";
+
+  // Podnaslov pove vlogo, kot jo vidi seznam: rocna vrsta, ce obstaja, sicer izracun (250).
+  string RoleSummary => Role is null ? KindLabel(Card?.General.CustomerKind) : $"{Role.RoleLabel} ({Role.RoleSourceLabel})";
+
+  // Izdelki, kjer je ta stranka dobavitelj ali proizvajalec — v njenem podjetju, s sifro tega podjetja.
+  string ProductsHref(string filter) =>
+    $"izdelki?podjetje={OrganizationId}&{filter}={Uri.EscapeDataString(Card?.General.CustomerKey ?? "")}";
 
   protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -424,11 +452,15 @@
     Loading = true; Error = null;
     try
     {
-      var organization = await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      // Podjetje pride iz stranke, ne iz »aktivne organizacije«: seznam kaze vsa podjetja (250),
+      // prej pa je kartica vzela prvo (DEMO) in stranke drugega podjetja ni nasla.
+      var organization = await Data.GetCustomerOrganizationAsync(CustomerId);
+      if (organization is null) { Card = null; return; }
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
       Types = await Data.GetCustomerTypesAsync();
-      AllCustomers = await Data.GetCustomersAsync(organization.OrganizationId);
+      AllCustomers = await CustomerList.GetAsync(organization.OrganizationId);
+      Role = AllCustomers.FirstOrDefault(row => row.CustomerId == CustomerId);
       Card = await Cards.GetAsync(organization.OrganizationId, CustomerId);
       if (Card is null) return;
       Draft = new()

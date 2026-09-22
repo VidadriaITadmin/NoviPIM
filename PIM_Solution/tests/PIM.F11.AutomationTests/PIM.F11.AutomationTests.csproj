@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Enotni model opravil (237) nad živo razvojno bazo: prevzem, vrata, sprožilec, zapuščen zagon,
+       ustavitev, alarmi. Brez PIM_CONNECTION_STRING se preskoči (run_tests.ps1 to pokaže kot PRESK). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <ProjectReference Include="..\..\src\PIM.Automation\PIM.Automation.csproj" />
+  </ItemGroup>
+</Project>

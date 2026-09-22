@@ -1,248 +1,205 @@
 @page "/splet"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject GovernanceReadService Governance
-@inject CatalogReadService Catalog
-@inject IntranetDataService Data
-@inject WebExportBuildService Exports
+@inject MagentoArtifactService Artifacts
 @inject AdminConsoleService AdminConsole
+@inject QualityReadService Quality
 
-<PageTitle>Izhod na splet</PageTitle>
-<PimPage Title="Izhod na splet" Subtitle="Datoteke, ki gredo na spletna mesta: kaj je v njih in kako jih dobiš." />
-
-<div class="filter-bar section-gap">
-  <label class="field-control"><span>Spletno mesto</span><select class="filter-select" value="@SelectedSite" @onchange="SiteChanged"><option value="">Vsa spletna mesta</option>@foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }</select></label>
-  <div class="page-actions"><a href="splet/izvoz">Pripravi izvoz</a> <a href="splet/katalog">Nadzor kataloga in odprodaje</a></div>
+<PageTitle>CSV za Magento</PageTitle>
+<PimPage Title="CSV za Magento" Subtitle="Dejanski izhod PIM-a za IQLighting: katalog.csv in stranke.csv, ki ju bere Magento." />
+<div class="page-actions section-gap">
+  <button class="filter-button" disabled="@(Loading || PreviewLoading)" @onclick="LoadAsync">Osveži stanje</button>
+  <a href="sistem/workerji">Urnik in zagon: CSV za Magento</a>
+  <a href="splet/katalog">Nadzor objave artiklov</a>
+  <a href="splet/umaknjeni">Umaknjeni s spleta</a>
+  <a href="kakovost/artikli?podjetje=2">Validacija artiklov</a>
+  <a href="splet/izvoz">Predogled trenutnih podatkov PIM</a>
 </div>
-
-<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje spletnih izhodov …">
-
-  @* G6 in G7: uporabnik 2026-08-28 — »bi oni dejansko CSV videli, ki ga bomo dali za splet in
-     da si ga lahko potegnejo dol«, in »imeli bomo vec CSVjev za splet, artikli in pa stranke,
-     tako da bi mogli oba omogociti za pogled«.
-
-     Do migracije 142 je bila tu datoteka z diska iz mape WebExport:Directory. Zdaj datoteka
-     nastane na zahtevo iz istih tabel in iste procedure (out.GetExportRows), kot jo zapise
-     PIM.B2bWorker — predogled in datoteka, ki odide, torej ne moreta pokazati razlicne
-     vsebine, mape pa ni treba nastavljati in deliti. *@
-  <h2 class="section-title">Datoteke za splet</h2>
-  <section class="ui-card data-card">
-    @if (BuildableProfiles.Count == 0)
+<p class="card-note">Izdelava CSV bere podatke v PIM-u in ima svoj cikel. Čas izdelave potrjuje nastanek datoteke; ne potrjuje, da jo je Magento že prebral. Popravki na karticah se prenesejo ob naslednji uspešni izdelavi.</p>
+<PimState Loading="Loading" Error="@Error" Empty="false">
+  @* 242: mapa in pravice so bile vzrok, da datoteki dneve nista nastajali; stran to pove pred prvim padcem. *@
+  <section class="ui-card data-card section-gap">
+    <h2>Izhodna mapa</h2>
+    @if (Folder is null)
     {
-      <PimMissing Object="out.ExportProfile"
-                  What="izvozni profil za splet, iz katerega je mogoce sestaviti CSV"
-                  Needs="aktiven profil s stolpci in znanim virom vrednosti (ValueSourceCode)" />
+      <p class="message-state error-message">Izhodne mape ni mogoče določiti. Preveri register EXPORT_ROOT na strani Mape in povezavo z bazo.</p>
     }
     else
     {
-      <PimTable Caption="Datoteke, ki gredo na spletno mesto" Columns="FileColumns">
-        <Rows>
-          @foreach (var profile in BuildableProfiles)
-          {
-            <tr class="@(SelectedProfileId == profile.ExportProfileId ? "is-open" : null)">
-              <td><PimChip Text="@profile.ContentKind" Tone="@(profile.ContentKind == "Izdelki" ? "info" : null)" /></td>
-              <td><span class="code-value">@FileNameFor(profile)</span></td>
-              <td class="numeric">@(SelectedProfileId == profile.ExportProfileId && Preview is not null ? Preview.TotalCount.ToString("N0") : "—")</td>
-              <td class="numeric">@profile.ColumnCount.ToString("N0")</td>
-              <td>@LastRunSummary(profile)</td>
-              <td>
-                <button type="button" class="small-action" disabled="@PreviewLoading" @onclick="() => TogglePreviewAsync(profile)">
-                  @(SelectedProfileId == profile.ExportProfileId ? "Skrij" : "Poglej")
-                </button>
-                <a class="small-action" href="@DownloadHref(profile)">Prenesi</a>
-              </td>
-            </tr>
-            @if (SelectedProfileId == profile.ExportProfileId && Preview is not null)
-            {
-              <tr class="preview-row">
-                <td colspan="6">
-                  <div class="csv-preview" role="region" tabindex="0" aria-label="@($"Predogled datoteke {FileNameFor(profile)}")">
-                    <table class="data-table csv-table">
-                      <caption>Prvih @Preview.Rows.Count vrstic datoteke @FileNameFor(profile)</caption>
-                      <thead><tr>@foreach (var column in Preview.Columns) { <th scope="col">@column</th> }</tr></thead>
-                      <tbody>
-                        @foreach (var row in Preview.Rows)
-                        {
-                          <tr>@foreach (var value in row) { <td>@value</td> }</tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-                  @if (Preview.TotalCount > Preview.Rows.Count)
-                  {
-                    <p class="card-note">Predogled je odrezan pri @PreviewRows vrsticah; v datoteki jih bo @Preview.TotalCount.ToString("N0"). Celo datoteko dobiš s prenosom.</p>
-                  }
-                </td>
-              </tr>
-            }
-          }
-        </Rows>
-      </PimTable>
-      @if (PreviewError is not null)
-      {
-        <div class="note-panel">@PreviewError</div>
-      }
+      <p><strong>@Folder.Root</strong> <span class="tree-path">vir: @Folder.Source</span></p>
       <p class="card-note">
-        Urejanje datoteke tukaj ni mogoče in tudi ne bi imelo učinka: CSV nastane iz kataloga
-        ob vsakem prenosu. Popravek zato sodi na kartico izdelka ali stranke, od koder pride
-        v naslednjo datoteko.
+        Mapa @(Folder.Exists ? "obstaja" : "NE obstaja") ·
+        zapis iz tega procesa intraneta (račun @Folder.Account): @(Folder.WritableByThisProcess ? "mogoč" : "NI mogoč") ·
+        dokončan par datotek: @(Folder.HasCompletePair ? "da" : "ne").
+        Worker, ki datoteki izdela, lahko teče pod drugim računom (Windows naloga, storitev); zanj velja napaka zadnjega poskusa spodaj.
       </p>
+      @if (!Folder.Exists || !Folder.WritableByThisProcess)
+      {
+        <p class="message-state error-message">Pravice do izhodne mape uredi kot skrbnik: <code>powershell -ExecutionPolicy Bypass -File scripts\Nastavi-pravice-izvozne-mape.ps1</code> (doda pravico spreminjanja računu nalog in bazenu IIS, nato preveri z -SamoPreveri). Do takrat vsak poskus izdelave pade, prejšnji veljavni par pa ostane.</p>
+      }
     }
   </section>
-
-  <h2 class="section-title">Zgodovina dostav</h2>
-  <section class="ui-card data-card">
-    @if (RecentRuns.Count == 0)
-    {
-      <div class="note-panel">Za katalog.csv in stranke.csv v zadnjih 30 dneh še ni bilo zabeleženega izvoza.</div>
-    }
-    else
-    {
-      <PimTable Caption="Zadnji izvozi katalog.csv in stranke.csv" Columns="RunColumns">
-        <Rows>
-          @foreach (var run in RecentRuns)
+  <section class="ui-card data-card section-gap">
+    <table class="data-table"><caption>Dokončane datoteke za Magento</caption>
+      <thead><tr><th>Datoteka</th><th>Dejanska datoteka</th><th>Zadnji poskus in zadnji uspeh izdelave</th><th>Dejanje</th></tr></thead>
+      <tbody>@foreach (var code in Codes)
+      {
+        var artifact = Status.GetValueOrDefault(code);
+        var attempt = Runs.FirstOrDefault(run => run.ProfileCode == code && (run.Status != "Succeeded" || run.Sha256 is not null || run.ByteCountValue is not null));
+        var success = Runs.FirstOrDefault(run => run.ProfileCode == code && run.Status == "Succeeded" && (run.Sha256 is not null || run.ByteCountValue is not null));
+        <tr>
+          <td><strong>@MagentoArtifactService.FileName(code)</strong></td>
+          <td>@if (artifact is not null)
           {
-            <tr>
-              <td>@FileNameForCode(run.ProfileCode)</td>
-              <td>@run.StartedUtc.ToPimLocal().ToString("g")</td>
-              <td><span class="status-chip @(run.Status == "Succeeded" ? "good" : run.Status == "Running" ? "warn" : "bad")">@run.Status</span></td>
-              <td class="numeric">@(run.RowCountValue?.ToString("N0") ?? "—")</td>
-              <td>@TriggerLabel(run.TriggeredBy)</td>
-              <td>@(run.ErrorRedacted ?? "—")</td>
-            </tr>
+            <div>@artifact.PublishedUtc.ToPimLocal().ToString("g") · @PimFormat.Ago(artifact.PublishedUtc)</div>
+            <div class="tree-path">@((artifact.Bytes / 1024d / 1024d).ToString("N1")) MB · generacija @artifact.Generation</div>
+            @if (DateTime.UtcNow - artifact.PublishedUtc > TimeSpan.FromMinutes(StaleAfterMinutes)) { <PimChip Text="@($"Starejša od {StaleAfterMinutes} minut — preveri urnik")" Tone="warn" /> }
           }
-        </Rows>
-      </PimTable>
+          else { <span class="message-state error-message">@FileErrors.GetValueOrDefault(code)</span> }</td>
+          <td>@if (attempt is not null)
+          {
+            <PimChip Text="@StatusLabel(attempt.Status)" Tone="@(attempt.Status == "Succeeded" ? "good" : attempt.Status == "Running" ? "warn" : "bad")" Prefix="Zadnji poskus: " />
+            <div>@attempt.StartedUtc.ToPimLocal().ToString("g") · @Sprozilec(attempt.TriggeredBy) @attempt.Actor</div>
+            @if (attempt.ErrorRedacted is not null) { <div class="error-message">@attempt.ErrorRedacted</div> }
+            @if (attempt.Status != "Succeeded")
+            {
+              <div class="tree-path">Zadnji uspeh: @(success is null ? "nikoli" : $"{success.StartedUtc.ToPimLocal():g} · {PimFormat.Ago(success.StartedUtc)} · {success.RowCountValue?.ToString("N0")} vrstic")</div>
+            }
+          } else { <span>Ni zabeleženega poskusa.</span> }</td>
+          <td>
+            <button class="small-action" disabled="@(artifact is null || PreviewLoading)" @onclick="() => SelectAsync(code)">Preglej vsebino</button>
+            @if (artifact is not null) { <a class="small-action" href="@($"izvoz/magento-datoteka/{code}")">Prenesi izdelano datoteko</a> }
+          </td>
+        </tr>
+      }</tbody>
+    </table>
+  </section>
+  @* 242: sestava kataloga po istih pravilih, po katerih nastane katalog.csv — koliko vrstic bo v datoteki in zakaj ostalih ni. *@
+  <section class="ui-card data-card section-gap">
+    <h2>Sestava kataloga (podjetje @WorkerCycles.CatalogOrganization) po izvoznih pravilih</h2>
+    @if (SummaryLoading) { <p class="card-note">Računam sestavo kataloga …</p> }
+    else if (SummaryError is not null) { <p class="message-state error-message">@SummaryError</p> }
+    else if (Summary is { } s)
+    {
+      <div class="kpi-grid">
+        <PimStat Label="Aktivni artikli" Value="@s.ActiveCount.ToString("N0")" />
+        <PimStat Label="Objavljeni v PIM" Value="@s.PromotedCount.ToString("N0")" Note="po uspešni validaciji" />
+        <PimStat Label="Vrstic v katalog.csv" Value="@s.InCsvCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=IN_CSV" />
+        <PimStat Label="Objavljeni na spletu" Value="@s.PublishedCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=PUBLISHED" Note="s spletno stranjo" />
+        <PimStat Label="Brez spletnega mesta" Value="@s.NoSiteCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=NO_SITE" Note="v CSV samo kot odjava, če so bili prej na spletu" />
+        <PimStat Label="Strank v stranke.csv" Value="@s.CustomerCount.ToString("N0")" />
+      </div>
+      <table class="data-table"><caption>Zakaj artikel ni v katalog.csv</caption>
+        <thead><tr><th>Razlog</th><th>Artiklov</th><th>Pojasnilo</th></tr></thead>
+        <tbody>
+          <tr><td>@WebExportStates.Label(WebExportStates.NotPromoted)</td><td>@s.NotPromotedCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.NotPromoted)</td></tr>
+          <tr><td>@WebExportStates.Label(WebExportStates.NoCategory)</td><td>@s.NoCategoryCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.NoCategory)</td></tr>
+          <tr><td>@WebExportStates.Label(WebExportStates.BlockedErrors)</td><td>@s.BlockedErrorsCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.BlockedErrors)</td></tr>
+          <tr><td>@WebExportStates.Label(WebExportStates.Hold)</td><td>@s.HoldCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.Hold)</td></tr>
+          <tr><td>@WebExportStates.Label(WebExportStates.Excluded)</td><td>@s.ExcludedCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.Excluded)</td></tr>
+        </tbody>
+      </table>
+      <p class="card-note">Validacija: @s.StaleCount.ToString("N0") artiklov z zastarelo validacijo (starejša od 2 ur); najstarejša validacija @(s.OldestValidationUtc?.ToPimLocal().ToString("g") ?? "nikoli"). Števila veljajo za trenutno stanje baze; datoteka zgoraj je nastala ob svojem času in se lahko razlikuje do naslednje izdelave.</p>
     }
+  </section>
+  @if (Selected is not null)
+  {
+    <section class="ui-card data-card section-gap">
+      <h2>@MagentoArtifactService.FileName(Selected): pregled vsebine</h2>
+      <div class="filter-bar">
+        <label class="field-control"><span>Šifra, EAN, naziv ali druga vrednost v CSV</span><input class="search-input" @bind="SearchDraft" /></label>
+        <button class="filter-button" disabled="@PreviewLoading" @onclick="SearchAsync">Poišči v datoteki</button>
+        <label><input type="checkbox" @bind="AllColumns" /> Vsi stolpci</label>
+      </div>
+      <PimState Loading="PreviewLoading" Error="@PreviewError" Empty="@(Preview?.Page.Rows.Count == 0)" EmptyText="V izdelani datoteki ni zadetkov.">
+        @if (Preview is not null)
+        {
+          <p class="card-note">Generacija @Preview.Artifact.Generation · @Preview.Artifact.PublishedUtc.ToPimLocal().ToString("g") · @Preview.FileRows.ToString("N0") vrstic v datoteki · @Preview.Page.TotalCount.ToString("N0") zadetkov · @Preview.Page.Columns.Count stolpcev.</p>
+          <p class="card-note">Prazne oznake spletnih mest lahko pomenijo umik artikla iz spletnih mest. Prisotnost vrstice v CSV sama ne pomeni dovoljenja za objavo.</p>
+          <div class="csv-preview" role="region" tabindex="0" aria-label="Vsebina izdelanega CSV">
+            <table class="data-table csv-table"><thead><tr>@foreach (var index in VisibleColumns) { <th>@Preview.Page.Columns[index]</th> }</tr></thead>
+              <tbody>@foreach (var row in Preview.Page.Rows) { <tr>@foreach (var index in VisibleColumns) { <td>@row[index]</td> }</tr> }</tbody>
+            </table>
+          </div>
+          <PimPager Skip="Preview.Page.Skip" Take="50" Total="Preview.Page.TotalCount" SkipChanged="PageAsync" />
+        }
+      </PimState>
+    </section>
+  }
+  <section class="ui-card data-card section-gap">
+    <h2>Zgodovina izdelave in ročnih prenosov</h2>
+    <p class="card-note">Ročni prenos iz trenutne baze ne osveži datoteke za Magento. Uspešno izdelavo datoteke potrjuje zabeležen SHA-256 (oziroma velikost, kadar kontrolne vsote ni bilo mogoče prebrati).</p>
+    <table class="data-table"><thead><tr><th>Datoteka</th><th>Čas</th><th>Izid</th><th>Vrstic</th><th>Vrsta</th><th>Sprožil</th><th>Napaka</th></tr></thead>
+      <tbody>@foreach (var run in Runs.Take(30))
+      { <tr><td>@MagentoArtifactService.FileName(run.ProfileCode)</td><td>@run.StartedUtc.ToPimLocal().ToString("g")</td><td>@StatusLabel(run.Status)</td><td>@(run.RowCountValue?.ToString("N0") ?? "—")</td><td>@(run.Sha256 is not null || run.ByteCountValue is not null ? "Izdelana datoteka" : run.Status == "Succeeded" ? "Prenos iz baze" : "Poskus")</td><td>@Sprozilec(run.TriggeredBy) @run.Actor</td><td>@(run.ErrorRedacted ?? "—")</td></tr> }</tbody>
+    </table>
   </section>
 </PimState>
 
 @code {
-  static readonly IReadOnlyList<PimColumn> FileColumns =
-    [new("Vsebina"), new("Datoteka"), new("Vrstic", true), new("Stolpcev", true), new("Zadnji izvoz"), new("Dejanje")];
-  static readonly IReadOnlyList<PimColumn> RunColumns =
-    [new("Datoteka"), new("Kdaj"), new("Status"), new("Vrstic", true), new("Sprožil"), new("Napaka")];
-
-  // Zakaj izdelek ne pride do datoteke (blokirajoce zahteve, stolpci brez vira) ni vec tu —
-  // uporabnik 2026-09-10: ta stran naj kaze samo, kaj JE v datoteki; razlog, zakaj kaksnega
-  // izdelka ni, sodi na /kakovost (nivo Splet).
-
-  /// <summary>Koliko vrstic pokaze predogled; cela datoteka jih ima lahko 100.000.</summary>
-  const int PreviewRows = 1000;
-
-  /// <summary>
-  /// Uporabnik 2026-09-10: »zakaj imava toliko csvjev, ce pa imava samo dva — katalog.csv in
-  /// stranke.csv«. Register out.ExportProfile ima vec profilov na kanal MAGENTO (produkti,
-  /// stranke, hitra osvezitev cen/zaloge) in poleg tega se B2B/legacy profile — vsi so tehnicno
-  /// "na zahtevo gradljivi", zato jih je stran prej nastela vseh pet. Ta stran zdaj namenoma
-  /// kaze samo ta dva — dejanski par, ki ga PIM.B2bWorker izvozi na splet (MagentoProductSchema /
-  /// MagentoCustomerSchema) — z imenoma, kot ju vidi uporabnik, ne kodo profila.
-  /// </summary>
-  static readonly (string ProfileCode, string FileName)[] CatalogFiles =
-  [
-    ("MAGENTO_PRODUCTS", "katalog.csv"),
-    ("MAGENTO_CUSTOMERS", "stranke.csv"),
-  ];
-
-  int? SelectedProfileId;
-  bool PreviewLoading;
-  string? PreviewError;
-  WebExportPage? Preview;
-  IReadOnlyList<WebSiteRow> Sites = [];
-  IReadOnlyList<ExportProfileRow> Profiles = [];
-  IReadOnlyList<ExportRunRow> RecentRuns = [];
-  int? OrganizationId;
-  string SelectedSite = "";
-  bool Loading = true;
-  string? Error;
-
-  /// <summary>Samo katalog in stranke, in samo ce sta v registru se aktivna — drugim gumba ne ponudimo.</summary>
-  IReadOnlyList<ExportProfileRow> BuildableProfiles => CatalogFiles
-    .Select(entry => Profiles.FirstOrDefault(profile => profile.ProfileCode == entry.ProfileCode))
-    .Where(profile => profile is not null && profile.IsActive)
-    .Select(profile => profile!)
-    .ToArray();
-
-  static string FileNameFor(ExportProfileRow profile) =>
-    CatalogFiles.FirstOrDefault(entry => entry.ProfileCode == profile.ProfileCode).FileName ?? profile.ProfileCode;
-  static string FileNameForCode(string profileCode) =>
-    CatalogFiles.FirstOrDefault(entry => entry.ProfileCode == profileCode).FileName ?? profileCode;
-
-  protected override async Task OnInitializedAsync()
+  static readonly string[] Codes = ["MAGENTO_PRODUCTS", "MAGENTO_CUSTOMERS"];
+  /// <summary>Cikel magento-csv teče vsakih 15 min (242) in izvoz traja minute; starost nad 30 min pomeni, da cikel ne teče ali pada.</summary>
+  const int StaleAfterMinutes = 30;
+  readonly Dictionary<string, MagentoArtifact> Status = [];
+  readonly Dictionary<string, string> FileErrors = [];
+  IReadOnlyList<ExportRunRow> Runs = [];
+  MagentoOutputFolder? Folder;
+  WebExportSummary? Summary;
+  bool Loading = true, PreviewLoading, AllColumns, SummaryLoading;
+  string? Error, Selected, PreviewError, SummaryError;
+  string SearchDraft = "", AppliedSearch = "";
+  MagentoArtifactPage? Preview;
+  IEnumerable<int> VisibleColumns => Preview is null ? [] : Enumerable.Range(0, Preview.Page.Columns.Count)
+    .Where(index => AllColumns || index < 8 || Preview.Page.Columns[index].Contains("splet", StringComparison.OrdinalIgnoreCase)
+      || Preview.Page.Columns[index].Contains("zaloga", StringComparison.OrdinalIgnoreCase)
+      || Preview.Page.Columns[index].Contains("cena", StringComparison.OrdinalIgnoreCase));
+  static string StatusLabel(string status) => status switch { "Succeeded" => "Uspešno", "Failed" => "Napaka", "Running" => "V teku", "Abandoned" => "Zapuščen", _ => status };
+  static string Sprozilec(string triggeredBy) => triggeredBy switch { "Scheduler" => "razporejevalnik", "Task" => "naloga", _ => "ročno" };
+  protected override Task OnInitializedAsync() => LoadAsync();
+  async Task LoadAsync()
   {
+    Loading = true; Error = null; Status.Clear(); FileErrors.Clear(); Preview = null; Selected = null;
     try
     {
-      var org = (await Data.GetOrganizationsAsync()).SingleOrDefault(value => value.OrganizationId == 2);
-      if (org is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      OrganizationId = org.OrganizationId;
-      Sites = await Catalog.GetWebSitesAsync();
-      Profiles = await Governance.GetExportProfilesAsync();
-      // Vsi zadnji zagoni obeh profilov, cez vsa podjetja (procedura filtra po podjetju ne
-      // pozna) — tu se prikaze samo tisti del, ki sodi k aktivnemu podjetju.
-      var allRuns = await AdminConsole.GetExportRunsAsync(days: 30, profileCode: null, take: 200);
-      RecentRuns = allRuns
-        .Where(run => run.OrganizationId == OrganizationId
-          && CatalogFiles.Any(entry => entry.ProfileCode == run.ProfileCode))
-        .OrderByDescending(run => run.StartedUtc)
-        .ToArray();
+      try { Folder = await Artifacts.FolderAsync(); }
+      catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or Microsoft.Data.SqlClient.SqlException) { Folder = null; }
+      var runs = new List<ExportRunRow>();
+      foreach (var code in Codes)
+      {
+        runs.AddRange(await AdminConsole.GetExportRunsAsync(30, code, 200));
+        try { Status[code] = await Artifacts.StatusAsync(code); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { FileErrors[code] = ex is InvalidOperationException ? ex.Message : "Datoteka ni dosegljiva. Preveri izhodno mapo in pravice procesa."; }
+      }
+      Runs = runs.Where(run => run.OrganizationId == WorkerCycles.CatalogOrganization).OrderByDescending(run => run.StartedUtc).ToArray();
     }
-    catch { Error = "Spletnih izhodov trenutno ni mogoče naložiti."; }
+    catch { Error = "Stanja izvoza ni mogoče prebrati. Preveri povezavo z bazo in dnevnik aplikacije."; }
     finally { Loading = false; }
+    // Sestava kataloga je izračun nad vsemi aktivnimi artikli (nekaj sekund); ne sme zadrževati stanja datotek.
+    _ = LoadSummaryAsync();
   }
-
-  /// <summary>Uporabnik 2026-09-10: »dodaj, kdaj je bilo zadnjič izvoženo«.</summary>
-  string LastRunSummary(ExportProfileRow profile)
+  async Task LoadSummaryAsync()
   {
-    var last = RecentRuns.FirstOrDefault(run => run.ProfileCode == profile.ProfileCode);
-    if (last is null) return "še nikoli";
-    var when = PimFormat.Ago(last.EndedUtc ?? last.StartedUtc);
-    return last.Status switch
-    {
-      "Succeeded" => $"{when} ({TriggerLabel(last.TriggeredBy)})",
-      "Running" => $"teče že {when}",
-      _ => $"{when} — napaka",
-    };
+    SummaryLoading = true; SummaryError = null;
+    await InvokeAsync(StateHasChanged);
+    try { Summary = await Quality.GetWebExportSummaryAsync(WorkerCycles.CatalogOrganization); }
+    catch { SummaryError = "Sestave kataloga ni mogoče izračunati. Preveri povezavo z bazo (migracija 242)."; }
+    finally { SummaryLoading = false; await InvokeAsync(StateHasChanged); }
   }
-
-  static string TriggerLabel(string triggeredBy) => triggeredBy switch
+  async Task SelectAsync(string code) { Selected = code; SearchDraft = AppliedSearch = ""; await PageAsync(0); }
+  async Task SearchAsync() { AppliedSearch = SearchDraft.Trim(); await PageAsync(0); }
+  async Task PageAsync(int skip)
   {
-    "Scheduler" or "Task" => "urnik",
-    _ => "ročno",
-  };
-
-  void SiteChanged(ChangeEventArgs args) => SelectedSite = args.Value?.ToString() ?? "";
-
-  async Task TogglePreviewAsync(ExportProfileRow profile)
-  {
-    if (SelectedProfileId == profile.ExportProfileId) { SelectedProfileId = null; Preview = null; PreviewError = null; return; }
-    if (OrganizationId is null) return;
-
-    SelectedProfileId = profile.ExportProfileId;
-    Preview = null; PreviewError = null; PreviewLoading = true;
+    if (Selected is null || PreviewLoading) return;
+    PreviewLoading = true; PreviewError = null;
+    var previous = Preview?.Artifact.Generation;
+    Preview = null;
     try
     {
-      Preview = await Exports.PreviewAsync(OrganizationId.Value, profile.ExportProfileId,
-        SiteFilterFor(profile), profile.OnlyPublishedDefault, search: null, skip: 0, take: PreviewRows);
+      Preview = await Artifacts.PreviewAsync(Selected, AppliedSearch, skip);
+      if (skip > 0 && previous is not null && previous != Preview.Artifact.Generation)
+        Preview = await Artifacts.PreviewAsync(Selected, AppliedSearch, 0);
     }
-    catch
-    {
-      SelectedProfileId = null;
-      PreviewError = $"Predogleda datoteke {FileNameFor(profile)} trenutno ni mogoče pripraviti.";
-    }
+    catch { PreviewError = "Vsebine ni mogoče prebrati ali CSV ni veljaven. Osveži stanje in preveri zadnji izvoz."; }
     finally { PreviewLoading = false; }
   }
-
-  /// <summary>Spletno mesto je filter izdelkov; pri strankah nima pomena in bi izvoz izpraznil.</summary>
-  string? SiteFilterFor(ExportProfileRow profile) =>
-    profile.ContentKind == "Izdelki" && SelectedSite.Length > 0 ? SelectedSite : null;
-
-  string DownloadHref(ExportProfileRow profile) => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
-  {
-    $"podjetje={OrganizationId}", $"profil={profile.ExportProfileId}",
-    $"koda={Uri.EscapeDataString(profile.ProfileCode)}",
-    $"ime={Uri.EscapeDataString(FileNameFor(profile))}",
-    $"objavljeni={profile.OnlyPublishedDefault.ToString().ToLowerInvariant()}",
-    $"spletisce={Uri.EscapeDataString(SiteFilterFor(profile) ?? string.Empty)}"
-  });
-
 }

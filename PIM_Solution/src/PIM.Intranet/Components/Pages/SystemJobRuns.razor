@@ -1,0 +1,252 @@
+@page "/sistem/zagoni"
+@attribute [Authorize(Roles = "ADMIN")]
+@rendermode InteractiveServer
+@inject PIM.Automation.AutomationStore Opravila
+@inject PIM.Intranet.Services.WorkerConsoleService Konzola
+@inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject AuthenticationStateProvider Authentication
+
+@*
+  Zagoni (migracija 237): zgodovina ops.JobRun s koraki, napakami in tehničnim izpisom.
+
+  Vsak zagon ima končno stanje. Running brez utripa deset minut bralec vidi kot Zapuščeno, še preden
+  ga gostitelj zapre (EffectiveStatus iz intranet.GetJobRuns) — »Running« ne sme več pomeniti »ne vem«.
+  Blokiran zagon pove, kateri predhodnik ga je blokiral in kolikokrat je bil posel na vrsti (Occurrences).
+*@
+
+<PageTitle>Zagoni</PageTitle>
+<PimPage Title="Zagoni"
+         Subtitle="@($"Zgodovina zagonov poslov, koraki, napake in tehnični izpis. Časi so v naši uri ({PimTime.ZoneLabel}).")"
+         Crumbs="Crumbs">
+  <Actions>
+    <button type="button" class="filter-button" disabled="@Loading" @onclick="NaloziAsync">Osveži</button>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="zagoni" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
+
+@if (Message is not null) { <p class="message-state success-message" role="status" aria-live="polite">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<section class="ui-card toolbar" role="search" aria-labelledby="zagoni-filter-naslov">
+  <h2 id="zagoni-filter-naslov" class="visually-hidden">Filtriranje zagonov</h2>
+  <label class="visually-hidden" for="zagoni-posel">Posel</label>
+  <select id="zagoni-posel" class="filter-select" @bind="Posel" @bind:after="NaloziAsync">
+    <option value="">Vsi posli</option>
+    @foreach (var p in Posli) { <option value="@p.JobKey">@p.Label</option> }
+  </select>
+  <label class="visually-hidden" for="zagoni-stanje">Stanje</label>
+  <select id="zagoni-stanje" class="filter-select" @bind="Stanje" @bind:after="NaloziAsync">
+    <option value="">Vsa stanja</option>
+    @foreach (var s in new[] { "Running", "Succeeded", "Warning", "Failed", "TimedOut", "Cancelled", "Abandoned", "Blocked" })
+    { <option value="@s">@SystemJobs.StatusOznaka(s)</option> }
+  </select>
+  <label class="visually-hidden" for="zagoni-obdobje">Obdobje</label>
+  <select id="zagoni-obdobje" class="filter-select" @bind="Dni" @bind:after="NaloziAsync">
+    <option value="1">Zadnji dan</option>
+    <option value="7">Zadnjih 7 dni</option>
+    <option value="30">Zadnjih 30 dni</option>
+    <option value="90">Zadnjih 90 dni</option>
+  </select>
+  <span class="result-count" role="status" aria-live="polite">@(Loading ? "Berem …" : $"{Zagoni.Count} zagonov (do {Take})")</span>
+</section>
+
+<section class="ui-card data-card section-gap" aria-label="Zagoni poslov">
+  <PimState Loading="Loading" Empty="@(Zagoni.Count == 0)" EmptyText="V izbranem obdobju ni zagona." LoadingText="Berem zagone …">
+    <PimTable Caption="Zagoni poslov, najnovejši najprej" Columns="Stolpci">
+      <Rows>
+        @foreach (var tek in PageZagoni)
+        {
+          <tr class="@(JobRunStatus.IsFailure(tek.EffectiveStatus) ? "row-alarm" : tek.JobRunId == Odprt ? "row-selected" : null)">
+            <td class="nowrap">@PimTime.FormatExact(tek.StartedUtc)<div class="job-note">#@tek.JobRunId</div></td>
+            <td><strong>@(tek.Label ?? tek.JobKey)</strong><div class="job-note">@(tek.Flow is { } f ? JobFlows.Label(f) : "")</div></td>
+            <td>@SystemJobs.Sprozilec(tek.TriggeredBy)<div class="job-note">@tek.StartedBy · @tek.HostName</div></td>
+            <td>
+              <PimChip Text="@SystemJobs.StatusOznaka(tek.EffectiveStatus)" Tone="@SystemJobs.StatusTon(tek.EffectiveStatus)" />
+              @if (tek.Status == "Running" && tek.EffectiveStatus == "Abandoned") { <div class="drift-flag">brez utripa od @PimTime.FormatTime(tek.HeartbeatUtc)</div> }
+              @if (tek.Status == "Running" && tek.CurrentStep is { } tekociKorak) { <div class="job-note">@tekociKorak</div> }
+              @if (tek.Status == "Blocked") { <div class="job-note">predhodnik: @(Posli.FirstOrDefault(p => p.JobKey == tek.BlockedByJobKey)?.Label ?? tek.BlockedByJobKey)@(tek.Occurrences > 1 ? $" · {tek.Occurrences}×" : "")</div> }
+              @if (tek.Summary is { Length: > 0 } povzetek && tek.EffectiveStatus != "Succeeded") { <div class="drift-flag" title="@povzetek">@Skrajsaj(povzetek)</div> }
+            </td>
+            <td class="numeric">@PimTime.Duration((long)tek.Duration.TotalMilliseconds)@if (tek.TimeoutSeconds is { } meja) { <div class="job-note">meja @(meja / 60) min</div> }</td>
+            <td class="numeric">
+              @tek.StepsTotal<span class="muted"> / </span>
+              @if (tek.StepsFailed > 0) { <span class="error-count">@tek.StepsFailed</span> } else { <span class="muted">0</span> }
+              @if (tek.StepsBlocked > 0) { <span class="muted"> / </span><span class="error-count">@tek.StepsBlocked blok.</span> }
+              @if (tek.ErrorLines > 0) { <div class="job-note error-count">@tek.ErrorLines vrstic z napako</div> }
+            </td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="small-action" @onclick="() => OdpriKorakeAsync(tek.JobRunId)">Koraki</button>
+                @if (Konzola.RelativeLogPath(tek.LogPath) is { } pot)
+                {
+                  <button type="button" class="small-action" @onclick="() => OdpriDnevnik(pot)">Izpis</button>
+                }
+                @if (tek.Status == "Running" && tek.EffectiveStatus == "Running")
+                {
+                  <button type="button" class="small-action warn-action" disabled="@(Busy || tek.CancelRequestedUtc is not null)" @onclick="() => UstaviAsync(tek)">Ustavi</button>
+                }
+              </div>
+            </td>
+          </tr>
+          @if (tek.JobRunId == Odprt)
+          {
+            <tr class="row-selected">
+              <td colspan="7">
+                @if (Koraki.Count == 0) { <span class="muted">Zagon nima zapisanih korakov.</span> }
+                else
+                {
+                  <table class="data-table steps-table">
+                    <caption class="visually-hidden">Koraki zagona</caption>
+                    <thead><tr><th scope="col">#</th><th scope="col">Korak</th><th scope="col">Podjetje</th><th scope="col">Začetek</th><th scope="col">Trajanje</th><th scope="col">Stanje</th><th scope="col">Ukaz / opomba</th></tr></thead>
+                    <tbody>
+                      @foreach (var korak in Koraki)
+                      {
+                        <tr class="@(korak.Status is "Failed" or "TimedOut" ? "row-alarm" : null)">
+                          <td class="numeric">@korak.StepOrder</td>
+                          <td>@korak.StepName</td>
+                          <td>@(korak.OrganizationId?.ToString() ?? "—")</td>
+                          <td class="nowrap">@PimTime.FormatTime(korak.StartedUtc)</td>
+                          <td class="numeric">@(korak.EndedUtc is { } konec ? PimTime.Duration((long)(konec - korak.StartedUtc).TotalMilliseconds) : "—")</td>
+                          <td><PimChip Text="@StatusKoraka(korak.Status)" Tone="@SystemJobs.StatusTon(korak.Status)" /></td>
+                          <td><span class="code-value">@korak.Command</span>@if (korak.Note is { Length: > 0 } opomba) { <div class="job-note">@opomba</div> }</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </Rows>
+    </PimTable>
+    @if (Zagoni.Count > PageSize)
+    {
+      <PimPager Skip="PageSkip" Take="PageSize" Total="Zagoni.Count" SkipChanged="OnSkipChanged" Label="Strani zagonov" />
+    }
+  </PimState>
+</section>
+
+@if (OdprtDnevnik is not null)
+{
+  <section class="ui-card data-card section-gap" aria-labelledby="izpis-naslov">
+    <div class="console-toolbar">
+      <h2 id="izpis-naslov">Izpis: @OdprtDnevnik</h2>
+      <label><input type="checkbox" @bind="SamoTezave" /> Samo napake, opozorila in koraki</label>
+      <button type="button" class="small-action" @onclick="() => OdpriDnevnik(OdprtDnevnik)">Osveži</button>
+      <button type="button" class="small-action" @onclick="() => { OdprtDnevnik = null; Vrstice = []; }">Zapri</button>
+    </div>
+    <p class="run-meta">Prikazan je konec datoteke (do 512 KB): @Vrstice.Count vrstic.</p>
+    <div class="console" role="log" tabindex="0" aria-label="Tehnični izpis zagona">
+      <div>
+        @foreach (var vrstica in Prikazane)
+        {
+          <div class="line @Ton(vrstica.Tone)">@vrstica.Text</div>
+        }
+      </div>
+    </div>
+  </section>
+}
+
+@code {
+  [SupplyParameterFromQuery(Name = "posel")] public string? QueryJob { get; set; }
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Sistem", "sistem"), new("Zagoni")];
+  static readonly IReadOnlyList<PimColumn> Stolpci =
+    [new("Začetek"), new("Posel"), new("Sprožil"), new("Stanje"), new("Trajanje", true), new("Korakov / padlih", true), new("")];
+  const int Take = 200;
+  const int PageSize = 40;
+
+  IReadOnlyList<JobRunRow> Zagoni = [];
+  IReadOnlyList<JobDefinitionRow> Posli = [];
+  IReadOnlyList<JobStepRunRow> Koraki = [];
+  IReadOnlyList<WorkerLogLine> Vrstice = [];
+  string Posel = "";
+  string Stanje = "";
+  int Dni = 7;
+  long? Odprt;
+  string? OdprtDnevnik;
+  bool SamoTezave;
+  bool Loading = true;
+  bool Busy;
+  string? Message;
+  string? Error;
+  bool initialised;
+  int PageSkip;
+
+  // Vseh do 200 zagonov je ze v pomnilniku (Opravila.GetRunsAsync); ta stran je samo izsek te
+  // mnozice, brez nove poizvedbe na klik "Naslednja" — enako kot na /sistem/napake.
+  IEnumerable<JobRunRow> PageZagoni => Zagoni.Skip(PageSkip).Take(PageSize);
+
+  void OnSkipChanged(int skip) => PageSkip = skip;
+
+  IEnumerable<WorkerLogLine> Prikazane => SamoTezave
+    ? Vrstice.Where(v => v.Tone is LogLineTone.Error or LogLineTone.Warning or LogLineTone.Header)
+    : Vrstice;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (initialised) return;
+    initialised = true;
+    Posel = QueryJob ?? "";
+    try { Posli = (await Opravila.GetDefinitionsAsync()).Jobs; } catch { Posli = []; }
+    await NaloziAsync();
+  }
+
+  async Task NaloziAsync()
+  {
+    Loading = true;
+    Error = null;
+    PageSkip = 0;
+    try
+    {
+      Zagoni = await Opravila.GetRunsAsync(Take, string.IsNullOrWhiteSpace(Posel) ? null : Posel, string.IsNullOrWhiteSpace(Stanje) ? null : Stanje, Dni);
+    }
+    catch (Exception exception) { Zagoni = []; Error = "Zagonov ni mogoče prebrati: " + exception.Message; }
+    finally { Loading = false; }
+  }
+
+  async Task OdpriKorakeAsync(long jobRunId)
+  {
+    if (Odprt == jobRunId) { Odprt = null; Koraki = []; return; }
+    try { Koraki = await Opravila.GetStepsAsync(jobRunId); Odprt = jobRunId; }
+    catch { Error = "Korakov zagona ni mogoče prebrati."; }
+  }
+
+  void OdpriDnevnik(string pot)
+  {
+    var vrstice = Konzola.ReadLog(pot);
+    if (vrstice is null) { Error = "Dnevnika ni mogoče prebrati (mapa dnevnikov gostitelja ni ista kot intranetova?)."; return; }
+    OdprtDnevnik = pot;
+    Vrstice = vrstice.Select(v => new WorkerLogLine(v, WorkerLogs.Classify(v))).ToList();
+  }
+
+  async Task UstaviAsync(JobRunRow tek)
+  {
+    Busy = true; Message = null; Error = null;
+    try
+    {
+      var akter = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      await Opravila.RequestCancelAsync(tek.JobRunId, akter);
+      Message = $"{tek.Label}: ustavitev zahtevana; gostitelj jo izvede ob naslednjem utripu.";
+      try { await Nadzor.LogActivityAsync(akter, "JOB_CANCEL_REQUEST", "Opravilo", $"Zahteva za ustavitev zagona #{tek.JobRunId} ({tek.Label}).", entityKey: tek.JobKey); }
+      catch { Error = "Dejanje je izvedeno, sled v dnevniku sprememb pa ni zapisana."; }
+      await NaloziAsync();
+    }
+    catch (Exception exception) { Error = "Ustavitve ni bilo mogoče zahtevati: " + exception.Message; }
+    finally { Busy = false; }
+  }
+
+  static string StatusKoraka(string status) => status switch
+  {
+    "Succeeded" => "Uspešno", "Failed" => "Napaka", "Skipped" => "Preskočeno", "Cancelled" => "Ustavljeno", "TimedOut" => "Presežena meja", "Blocked" => "Blokirano", _ => status,
+  };
+
+  static string Ton(LogLineTone ton) => ton switch
+  {
+    LogLineTone.Error => "line-error", LogLineTone.Warning => "line-warn", LogLineTone.Header => "line-header", LogLineTone.Success => "line-ok", _ => "",
+  };
+
+  static string Skrajsaj(string b) => b.Length <= 160 ? b : b[..157] + "…";
+}

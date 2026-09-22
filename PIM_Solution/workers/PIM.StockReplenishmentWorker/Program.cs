@@ -173,12 +173,12 @@ static async Task<IReadOnlyList<ReplenishmentRow>> ReadBelowMidAsync(SqlConnecti
       Supplier: reader.IsDBNull(reader.GetOrdinal("Supplier")) ? null : reader.GetString(reader.GetOrdinal("Supplier")),
       SupplierName: reader.IsDBNull(reader.GetOrdinal("SupplierName")) ? null : reader.GetString(reader.GetOrdinal("SupplierName")),
       Department: reader.IsDBNull(reader.GetOrdinal("Department")) ? null : reader.GetString(reader.GetOrdinal("Department")),
-      CurrentStock: reader.GetInt32(reader.GetOrdinal("CurrentStock")),
-      MaximumStock: reader.IsDBNull(reader.GetOrdinal("MaximumStock")) ? null : reader.GetInt32(reader.GetOrdinal("MaximumStock")),
-      MidStock: reader.IsDBNull(reader.GetOrdinal("MidStock")) ? null : reader.GetInt32(reader.GetOrdinal("MidStock")),
-      MinimumStock: reader.IsDBNull(reader.GetOrdinal("MinimumStock")) ? null : reader.GetInt32(reader.GetOrdinal("MinimumStock")),
-      AvailableStock: reader.GetInt32(reader.GetOrdinal("AvailableStock")),
-      IncomingPurchaseQty: reader.IsDBNull(reader.GetOrdinal("IncomingPurchaseQty")) ? null : reader.GetInt32(reader.GetOrdinal("IncomingPurchaseQty"))));
+      CurrentStock: ReplenishmentQuantity.Read(reader["CurrentStock"]) ?? 0,
+      MaximumStock: ReplenishmentQuantity.Read(reader["MaximumStock"]),
+      MidStock: ReplenishmentQuantity.Read(reader["MidStock"]),
+      MinimumStock: ReplenishmentQuantity.Read(reader["MinimumStock"]),
+      AvailableStock: ReplenishmentQuantity.Read(reader["AvailableStock"]) ?? 0,
+      IncomingPurchaseQty: ReplenishmentQuantity.Read(reader["IncomingPurchaseQty"])));
   }
   return rows;
 }

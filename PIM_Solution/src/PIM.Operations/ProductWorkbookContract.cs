@@ -9,7 +9,12 @@ public enum ProductWorkbookTarget
   /// <summary>Podatek je last PIM; uvoz ga zapiše takoj.</summary>
   Pim,
 
-  /// <summary>Podatek piše SAOP; uvoz ga uvrsti v odhodno vrsto in čaka odobritev.</summary>
+  /// <summary>
+  /// Podatek je last SAOP (register <c>out.SaopXmlField</c>). Uvoz ga zapiše v PIM takoj IN ga
+  /// uvrsti v odhodno vrsto za SAOP, kjer čaka odobritev. Do 245 je šel samo v vrsto in se je v
+  /// PIM pokazal šele, ko ga je zajem prinesel nazaj iz SAOP; uporabnik 2026-09-22: »ERP brez
+  /// čakanja SAOPa«.
+  /// </summary>
   Saop,
 }
 
@@ -17,6 +22,8 @@ public enum ProductWorkbookTarget
 /// uporabnik, ki si naredi svojo datoteko, sme pisati kodo namesto slovenskega naslova.</param>
 /// <param name="Aliases">Dodatni sprejeti naslovi (pri poljih SAOP ime elementa).</param>
 /// <param name="IsMultiValue">Ali celica nosi seznam, ločen z »|«.</param>
+/// <param name="ValueFormat">Oblika vrednosti iz registra SAOP (<c>text</c>, <c>decimal4</c>,
+/// <c>decimal8</c>, <c>bool</c>); null pri stolpcih, ki niso ERP.</param>
 public sealed record ProductWorkbookColumn(
   string Group,
   string Header,
@@ -25,11 +32,15 @@ public sealed record ProductWorkbookColumn(
   WorkbookCellKind Kind = WorkbookCellKind.Text,
   double Width = 0,
   IReadOnlyList<string>? Aliases = null,
-  bool IsMultiValue = false)
+  bool IsMultiValue = false,
+  string? ValueFormat = null)
 {
   /// <summary>Vsi naslovi, po katerih uvoz prepozna ta stolpec.</summary>
   public IEnumerable<string> AcceptedHeaders =>
     new[] { Header, FieldKey }.Concat(Aliases ?? []).Where(name => !string.IsNullOrWhiteSpace(name));
+
+  /// <summary>Logično polje (da/ne): primerja se po pomenu, ne po zapisu (»da« je isto kot »1«).</summary>
+  public bool IsBool => string.Equals(ValueFormat, "bool", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <param name="FieldKey">Kanonična koda, npr. <c>Product.UoM</c>.</param>
@@ -72,8 +83,8 @@ public sealed record ProductWorkbookHeaderMatch(int Index, string Header, Produc
 ///
 /// Vsak stolpec ve, kdo je njegov lastnik (<see cref="ProductWorkbookTarget"/>). Ločnica ni
 /// mnenje te kode: polja SAOP prihajajo iz registra <c>out.SaopXmlField</c> in tam je zapisano,
-/// katero polje sme PIM pisati. Uvoz zato ne piše ERP podatka mimo odhodne vrste — uvrsti ga
-/// vanjo, kjer čaka odobritev.
+/// katero polje sme PIM pisati. ERP podatek uvoz zapiše v PIM takoj in ga hkrati uvrsti v
+/// odhodno vrsto, kjer za pot v SAOP čaka odobritev (245).
 ///
 /// Dve pravili, ki veljata povsod na listu:
 ///   1. <b>Prazna celica pomeni »tega polja se ne dotakni«</b>, ne »izprazni ga«. List ima
@@ -90,7 +101,7 @@ public static class ProductWorkbookContract
   public const string No = "ne";
 
   public const string GroupKey = "Ključ";
-  public const string GroupErp = "ERP — gre v vrsto za SAOP";
+  public const string GroupErp = "ERP — v PIM takoj, v SAOP prek vrste";
   public const string GroupWeb = "Splet — zapiše se takoj";
   /// <summary>Atributi, ki jih kategorija izdelka predpisuje (nabor iz <c>canon.CategoryAttributeSet</c>).</summary>
   public const string GroupAttributesInSet = "Atributi kategorije — nabor";
@@ -109,6 +120,23 @@ public static class ProductWorkbookContract
   public const string CategoryFieldPrefix = "ProductCategory.";
   public const string TextFieldPrefix = "ProductText.";
   public const string AttributeFieldPrefix = "ProductAttribute.";
+  public const string ImagesField = "ProductMedia.Url";
+  public const string DocumentsField = "ProductMedia.Documents";
+
+  /// <summary>
+  /// Ali je skupina nad naslovom ena od skupin atributov (»Atributi kategorije — nabor«, »Atributi
+  /// izven nabora …«). Stolpec pod tako skupino je atribut, tudi kadar ga šifrant ne pozna — tak
+  /// stolpec je prej tiho padel med neprepoznane in vrednosti so se izgubile (Objemke.xlsx:
+  /// Družina, Premer objema, Cev …); zdaj uvoz atribut ustvari.
+  /// </summary>
+  public static bool IsAttributeGroup(string? group) =>
+    WorkbookHeader.Normalize(group).StartsWith("atribut", StringComparison.Ordinal);
+
+  /// <summary>Stolpec za atribut, ki ga pogodba ni poznala vnaprej (nov ali brez vrednosti in nabora).</summary>
+  /// <param name="attributeName">Slovensko ime atributa — ključ vrednosti v <c>canon.ProductAttribute</c>.</param>
+  public static ProductWorkbookColumn AttributeColumn(string group, string header, string attributeName) =>
+    new(IsAttributeGroup(group) ? group : GroupAttributesOutside, header, AttributeFieldPrefix + attributeName,
+      ProductWorkbookTarget.Pim, Width: Math.Clamp(header.Length + 3, 14, 32));
 
   /// <summary>Naslov stolpca kategorij za dano spletno stran.</summary>
   public static string CategoryHeader(WorkbookWebSite site) => $"Kategorije — {site.Name}";
@@ -150,7 +178,7 @@ public static class ProductWorkbookContract
       columns.Add(new(GroupErp, field.Label, field.FieldKey, ProductWorkbookTarget.Saop,
         field.ValueFormat is "decimal4" or "decimal8" ? WorkbookCellKind.Number : WorkbookCellKind.Text,
         Width: Math.Clamp(field.Label.Length + 3, 14, 32),
-        Aliases: [field.ElementName]));
+        Aliases: [field.ElementName], ValueFormat: field.ValueFormat));
 
     // --- Splet: last PIM, zapiše se takoj ----------------------------------------------
     // Zastavice »Za splet« tu ni: register out.SaopXmlField jo pozna kot element WebPublish,
@@ -169,13 +197,16 @@ public static class ProductWorkbookContract
           $"{TextFieldPrefix}{textType}.{language}", ProductWorkbookTarget.Pim,
           Width: textType.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase) ? 48 : 34));
 
-    columns.Add(new(GroupWeb, "Slike", "ProductMedia.Url", ProductWorkbookTarget.ReadOnly, Width: 44,
+    // Slike in dokumenti sta bila do 245 samo za branje: uvoz ju je prezrl, čeprav ju uporabnik
+    // v Excelu dopolnjuje (Objemke.xlsx). Celica je cel seznam izdelka, v vrstnem redu — prva
+    // slika je glavna; naslov, ki ga v celici ni več, izdelek izgubi. Prazna celica: ne dotikaj se.
+    columns.Add(new(GroupWeb, "Slike", ImagesField, ProductWorkbookTarget.Pim, Width: 44,
       IsMultiValue: true));
 
     // Vse, kar canon.ProductMedia in canon.ProductDocument nosita in ni slika (dokumenti, videi,
     // arhivi …) — ista razvrstitev kot na strani Mediji (MediaKindPolicy.Classify), da izvoz in
     // stran nikoli ne kažeta različnih stvari za isti izdelek.
-    columns.Add(new(GroupWeb, "Dokumenti", "ProductMedia.Documents", ProductWorkbookTarget.ReadOnly, Width: 44,
+    columns.Add(new(GroupWeb, "Dokumenti", DocumentsField, ProductWorkbookTarget.Pim, Width: 44,
       IsMultiValue: true));
 
     // --- Atributi ----------------------------------------------------------------------
@@ -277,10 +308,27 @@ public static class ProductWorkbookContract
   /// </summary>
   public static bool? ParseYesNo(string? cell) => WorkbookHeader.Normalize(cell) switch
   {
-    "da" or "ja" or "1" or "true" or "yes" or "x" or "ok" => true,
-    "ne" or "0" or "false" or "no" => false,
+    // D/N je zapis iz SAOP (POST/PATCH) in od 2026-09-22 tudi zapis v delovnem listu.
+    "d" or "da" or "ja" or "y" or "1" or "true" or "yes" or "x" or "ok" => true,
+    "n" or "ne" or "0" or "false" or "no" => false,
     _ => null,
   };
 
+  /// <summary>Logična vrednost v delovnem listu: D ali N, kot jo SAOP pozna v dokumentih POST/PATCH
+  /// (uporabnik 2026-09-22: »v izvozu pa uvozu artiklov tudi D pa N, da bo enako kot na SAOP«).</summary>
+  public static string SheetYesNo(bool value) => value ? "D" : "N";
+
   public static string YesNo(bool value) => value ? Yes : No;
+
+  /// <summary>
+  /// Logična celica v obliki, ki jo hrani katalog in razume SaopDocumentBuilder: »1« ali »0«.
+  /// Prej je v vrsto za SAOP šlo besedilo iz celice (»da«, »x«) — »x« je graditelj dokumenta
+  /// zavrnil, »da« pa se ni nikoli ujel s kanonično »1« pri potrditvi odmeva (243).
+  /// </summary>
+  public static string? BoolValue(string? cell) => ParseYesNo(cell) switch
+  {
+    true => "1",
+    false => "0",
+    null => null,
+  };
 }

@@ -1,0 +1,4 @@
+/* Uvoz delovnega lista strank. Kartice, tabela in sporocila so v app.css. */
+.hint { color: var(--pim-text-muted); font-size: .82rem; margin: .6rem 0; }
+.change-list { list-style: none; margin: 0; padding: 0; }
+.change-list li { font-size: .82rem; line-height: 1.45; }

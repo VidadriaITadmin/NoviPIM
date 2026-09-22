@@ -7,8 +7,13 @@
 @inject IntranetFeatureReadService Features
 @inject CatalogReadService Catalog
 @inject ProductEditService Edits
+@inject ClearanceService Clearance
 @inject SaopWriteService SaopWrite
 @inject SaopEndpointSnapshotService SaopSnapshot
+@inject AiTextService Ai
+@inject QualityReadService Quality
+@inject QualityWriteService QualityWrite
+@inject WebWithdrawalService Withdrawals
 @inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
 
@@ -95,7 +100,10 @@
         </p>
         <div class="header-chips" aria-label="Stanje izdelka">
           <span class="flag-chip @(Detail.Header.IsActive ? "on" : "off")">@(Detail.Header.IsActive ? "Aktiven" : "Neaktiven")</span>
-          <span class="flag-chip @(Detail.Header.WebPublish ? "on" : "off")">@(Detail.Header.WebPublish ? "Za splet" : "Ni za splet")</span>
+          @* Dva locena podatka, ne eden namesto drugega: ERP samo naroci "pripravi za splet"
+             (Product.WebPublish), kljukice na Spletiscih pa povedo, ali je artikel dejansko tam. *@
+          <span class="flag-chip @(Detail.Header.WebPublish ? "on" : "off")" title="Iz SAOP-a: ERP oznaci artikel kot namenjenega za splet.">@(Detail.Header.WebPublish ? "ERP: za splet" : "ERP: ni za splet")</span>
+          <span class="flag-chip @(PublishedOnAnySite() ? "on" : "off")" title="Kljukica na zavihku Splet > Spletisca: dejansko odloca o objavi in validaciji.">@(PublishedOnAnySite() ? "Objavljeno na spletu" : "Ni objavljeno na spletu")</span>
           <PimChip Text="@(Detail.Header.IsPromoted ? "Objavljen v PIM" : "Ni objavljen v PIM")" Tone="@(Detail.Header.IsPromoted ? "good" : "warn")" />
         </div>
         @if (heroUrl.Href is not null) { <a class="media-link" href="@heroUrl.Href" target="_blank" rel="noopener noreferrer">Odpri glavni medij</a> }
@@ -153,7 +161,7 @@
             </button>
             <button type="button" class="ui-card channel-card" @onclick='() => SelectSection("web")'>
               <span class="channel-name">Splet</span>
-              <PimChip Text="@StatusLabel(WebStatus)" Tone="@Tone(WebStatus)" />
+              <PimChip Text="@WebStatusLabel" Tone="@WebStatusTone" />
               <small>@(string.IsNullOrWhiteSpace(SelectedSite) ? "vsa spletna mesta" : SelectedSite)</small>
             </button>
           </section>
@@ -165,7 +173,8 @@
                 <div><dt>Artikel</dt><dd><span>@Detail.Header.ItemId</span><span class="owner-label">@OwnerFor("Product.ItemID")</span></dd></div>
                 <div><dt>EAN</dt><dd><span>@Value(Detail.Header.Ean)</span><span class="owner-label">@OwnerFor("Product.EAN")</span></dd></div>
                 <div><dt>Aktiven</dt><dd><span>@YesNo(Detail.Header.IsActive)</span><span class="owner-label">@OwnerFor("Product.IsActive")</span></dd></div>
-                <div><dt>Za splet</dt><dd><span>@YesNo(Detail.Header.WebPublish)</span><span class="owner-label">@OwnerFor("Product.WebPublish")</span></dd></div>
+                <div><dt>ERP: za splet</dt><dd><span>@YesNo(Detail.Header.WebPublish)</span><span class="owner-label">@OwnerFor("Product.WebPublish")</span></dd></div>
+                <div><dt>Objavljeno na spletu</dt><dd><span>@YesNo(PublishedOnAnySite())</span></dd></div>
               </dl>
               <button type="button" class="detail-link" @onclick='() => SelectSection("core")'>Prikaži vse podrobnosti <span aria-hidden="true">›</span></button>
             </section>
@@ -211,6 +220,7 @@
                                WarningCount="@ErpIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@ErpFields" Issues="@ErpIssues"
                                Drafts="Drafts" FieldChanged="OnFieldChanged" EnterToSave="SaveChangesAsync" DefaultGroup="ERP — Slovenija"
+                               Waivers="FieldWaivers" CanWaive="CanWaive" WaiverChanged="OnWaiverChangedAsync"
                                ReadOnly="@(!CanEdit)" />
         </section>
 
@@ -237,8 +247,63 @@
 
         <section id="panel-web" role="tabpanel" aria-labelledby="tab-web" tabindex="0" class="section-panel section-stack" hidden="@(Section != "web")">
           <header class="section-heading"><h2>Splet</h2><p>Objava, nazivi in opisi po jezikih, kategorije in atributi.</p></header>
+
+          @* 242: zakaj artikel je ali ni v katalog.csv — po istih pravilih kot izvoz (kljukice spletišč,
+             kategorija na spletišču, zadržek, izključitev, veljavni profili, pravilo 220), ne po oznaki iz SAOP. *@
+          <section id="panel-objava-splet" class="ui-card data-card tab-panel" aria-labelledby="web-export-title">
+            <div class="subsection-head">
+              <h2 id="web-export-title">Objava za splet (katalog.csv)</h2>
+              <AuthorizeView Policy="@PimPolicies.BusinessWrite">
+                <button type="button" class="ghost-button" disabled="@WebCheckBusy" @onclick="RecheckWebAsync">@(WebCheckBusy ? "Preverjam …" : "Preveri zdaj")</button>
+              </AuthorizeView>
+            </div>
+            @if (WebExport is null)
+            {
+              <p class="muted">Stanja objave za splet ni mogoče prebrati (pogled val.ProductChannelReadiness, migracija 242).</p>
+            }
+            else
+            {
+              var web = WebExport.Row;
+              <p>
+                <PimChip Text="@WebExportStates.Label(web.WebExportState)" Tone="@WebExportStates.Tone(web.WebExportState)" />
+                @if (web.IsValidationStale) { <PimChip Text="Potrebna preverba" Tone="warn" /> }
+                else if (web.WebExportState == WebExportStates.Published && !web.IsWebReady) { <PimChip Text="Napake od zadnje objave" Tone="warn" /> }
+                <span class="muted">@WebExportStates.Explain(web.WebExportState)</span>
+              </p>
+              <dl class="key-data-list">
+                <div><dt>V katalog.csv</dt><dd>@(web.IsWithdrawalRow ? "da — odjavna vrstica (prazne Spletne strani, Magento ga umakne)" : web.IsInCatalogCsv ? "da" : "ne")</dd></div>
+                <div><dt>Blokirajoče napake za splet</dt><dd>@web.WebBlockingCount.ToString("N0")</dd></div>
+                <div><dt>Opozorila</dt><dd>@web.WarningCount.ToString("N0")</dd></div>
+                <div><dt>Ročni zadržek</dt><dd>@(web.HasGlobalHold ? "vsi kanali" : web.HasWebHold ? "splet" : "ne")</dd></div>
+                <div><dt>Izključen iz kataloga</dt><dd>@(web.IsExcludedFromCatalog ? "da" : "ne")</dd></div>
+                <div><dt>Objavljen v PIM</dt><dd>@(web.IsPromoted ? "da" : "ne — objava teče po uspešni validaciji")</dd></div>
+                <div><dt>ERP: za splet</dt><dd>@(web.WebPublish ? "da" : "ne") <span class="muted">(informativno)</span></dd></div>
+                <div><dt>Validirano</dt><dd>@(web.LastValidatedUtc?.ToPimLocal().ToString("g") ?? "nikoli") · @PimFormat.Ago(web.LastValidatedUtc)</dd></div>
+              </dl>
+              <table class="data-table">
+                <caption>Spletišča po izvoznih pravilih</caption>
+                <thead><tr><th>Spletišče</th><th>Kljukica</th><th>Kategorija</th><th>Blokirajoči neveljavni profili</th><th>V stolpcu »Spletne strani«</th></tr></thead>
+                <tbody>
+                  @foreach (var site in WebExport.Sites)
+                  {
+                    <tr>
+                      <td>@site.WebSiteName <span class="muted">(@site.TreeLabel)</span></td>
+                      <td>@(site.IsChecked ? "da" : "ne")</td>
+                      <td>@(site.HasCategory ? "da" : "ne")</td>
+                      <td>@(site.InvalidBlockingProfiles ?? "—")</td>
+                      <td>@(site.IsAllowed && web.WebExportState == WebExportStates.Published ? "da" : "ne")</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (WebCheckMessage is not null) { <p class="message-state" role="status">@WebCheckMessage</p> }
+              @if (WebCheckError is not null) { <p class="message-state error-message" role="alert">@WebCheckError</p> }
+              <p class="muted">»Preveri zdaj« požene validacijo tega artikla v PIM-u in osveži stanje; ne pošilja v SAOP in ne izdela CSV. V katalog.csv pride sprememba ob naslednji objavi in izdelavi datoteke (stran Izhod na splet).</p>
+            }
+          </section>
+
           <ProductChannelPanel PanelId="panel-splet" TabId="tab-web" Title="Splet"
-                               StatusText="@StatusLabel(WebStatus)" StatusTone="@Tone(WebStatus)"
+                               StatusText="@WebStatusLabel" StatusTone="@WebStatusTone"
                                BlockingCount="@webBlockingCount"
                                WarningCount="@WebIssues.Count(row => row.Severity == "WARNING")"
                                LastValidatedUtc="@Detail.Header.LastValidatedUtc" Fields="@WebFields" Issues="@WebIssues"
@@ -250,8 +315,25 @@
                 <option value="">Vsa spletna mesta</option>
                 @foreach (var site in WebSites) { <option value="@site">@site</option> }
               </select>
+              @if (CanEdit)
+              {
+                @* AI predlog (uporabnik 2026-09-21): iz ERP podatkov nastane osnutek spletnega naziva in
+                   opisa; v bazo gre sele z gumbom Shrani spremembe, kot vsaka rocna sprememba. *@
+                <span class="ai-tools">
+                  <label for="ai-language">AI predlog v jeziku</label>
+                  <select id="ai-language" class="filter-select" @bind="AiLanguage" disabled="@AiBusy">
+                    @foreach (var language in WebLanguages) { <option value="@language">@language</option> }
+                  </select>
+                  <button type="button" class="ghost-button" disabled="@(AiBusy || !Ai.IsConfigured)"
+                          title="@(Ai.IsConfigured ? "Iz ERP nazivov, opisov in atributov predlaga spletni naziv in opis. Nič se ne shrani, dokler ne klikneš Shrani spremembe." : Ai.ConfigurationHint)"
+                          @onclick="SuggestWithAiAsync">@(AiBusy ? "AI piše …" : "Predlagaj naziv in opis (AI)")</button>
+                  @if (!Ai.IsConfigured) { <span class="muted ai-hint">AI ni nastavljen</span> }
+                </span>
+              }
             </Toolbar>
           </ProductChannelPanel>
+          @if (AiMessage is not null) { <p class="message-state" role="status">@AiMessage</p> }
+          @if (AiError is not null) { <p class="message-state error-message" role="alert">@AiError</p> }
 
           @* D2 iz pregleda 2026-09-08 in odločitev uporabnika: kam gre izdelek, ne pove več
              »Objava na spletu« iz SAOP (`Product.WebPublish`), ampak ta potrditvena polja.
@@ -261,6 +343,23 @@
               <h2>Spletišča</h2>
               <span class="muted">Označeno spletišče pomeni, da izdelek tja gre — in da ga spletni profil tega spletišča validira.</span>
             </div>
+
+            @* 251: kljukico je PIM odstranil sam, ker artikel na spletišče ne sme več (npr. uvoz je pobrisal
+               sliko). Razlog je zapisan ob umiku: odkljukan artikel spletni profil ne validira več, zato
+               napak za splet spodaj ni več videti. *@
+            @if (OpenWithdrawals.Count > 0)
+            {
+              <div class="message-state warn-message web-withdrawn" role="status">
+                <strong>Samodejno umaknjen s spleta.</strong>
+                <ul>
+                  @foreach (var withdrawal in OpenWithdrawals)
+                  {
+                    <li>@withdrawal.ShopLabel — @(withdrawal.WithdrawnUtc?.ToPimLocal().ToString("g") ?? "") (@WebWithdrawalText.Source(withdrawal.TriggerSource)): @withdrawal.ReasonText.</li>
+                  }
+                </ul>
+                <span>Ko artikel dopolniš, spletišče ponovno označi in shrani. <a href="splet/umaknjeni">Vsi umaknjeni artikli</a></span>
+              </div>
+            }
 
             @if (WebShops.Count == 0)
             {
@@ -302,6 +401,99 @@
               else
               {
                 <p class="muted">Spremembo spletišč smeta vpisati vlogi ADMIN in CATALOG_EDITOR.</p>
+              }
+            }
+          </section>
+
+          @* 232: pregled odprodaje iz uvoza dobaviteljevega odprodajnega seznama; sam uvoz gre
+             prek /izdelki/uvoz-odprodaje, tu je samo pregled in rocna zakljucitev. *@
+          <section id="panel-odprodaja" class="ui-card data-card tab-panel">
+            <div class="subsection-head">
+              <h2>Odprodaja</h2>
+              <span class="muted">Iz uvoza odprodajnega seznama (<a href="izdelki/uvoz-odprodaje">uvoz tukaj</a>).</span>
+            </div>
+
+            @if (ClearanceItems.Count == 0)
+            {
+              <p class="muted">Izdelek trenutno ni na nobenem odprodajnem seznamu.</p>
+            }
+            else
+            {
+              <div class="table-scroll" role="region" tabindex="0" aria-label="Odprodaja">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Vir</th><th scope="col">Količina</th><th scope="col">Redna cena</th>
+                      <th scope="col">Popust %</th><th scope="col">Odprodajna cena</th><th scope="col">Stanje</th><th scope="col"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @foreach (var item in ClearanceItems)
+                    {
+                      <tr>
+                        <td>@item.Vir</td>
+                        <td>@item.Kolicina</td>
+                        <td>@item.RednaCena</td>
+                        <td>@item.PopustOdstotek</td>
+                        <td>@item.OdprodajnaCena</td>
+                        <td>@(item.IsActive ? "aktivna" : $"zaključena · {PimFormat.Ago(item.EndedUtc ?? item.ImportiranoUtc)}")</td>
+                        <td>
+                          @if (CanEdit && item.IsActive)
+                          {
+                            <button type="button" class="secondary-button" disabled="@ClearanceBusy" @onclick="() => EndClearanceItemAsync(item.ClearanceItemId)">Zaključi</button>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              @if (ClearanceMessage is not null) { <span class="save-ok" role="status">@ClearanceMessage</span> }
+              @if (ClearanceError is not null) { <span class="save-error" role="alert">@ClearanceError</span> }
+            }
+          </section>
+
+          @* 233: splosne oznake artikla (danes samo "Razstavni eksponat"); nova oznaka je
+             vrstica v pim.ProductFlagDefinition, ne nova migracija ali koda tu. *@
+          <section id="panel-oznake" class="ui-card data-card tab-panel">
+            <div class="subsection-head">
+              <h2>Oznake</h2>
+            </div>
+
+            @if (Flags.Count == 0)
+            {
+              <PimMissing Object="pim.ProductFlagDefinition" What="seznam oznak" Needs="vsaj eno aktivno oznako v registru" />
+            }
+            else
+            {
+              <ul class="shop-list">
+                @foreach (var flag in Flags)
+                {
+                  var flagCode = flag.FlagCode;
+                  <li>
+                    <label>
+                      <input type="checkbox" disabled="@(!CanEdit || FlagBusy)"
+                             checked="@FlagDraft(flagCode)"
+                             @onchange="args => OnFlagChanged(flagCode, args)" />
+                      <span class="shop-name">@flag.DisplayName</span>
+                    </label>
+                    @if (flag.ChangedBy is not null)
+                    {
+                      <span class="shop-trace">@flag.ChangedBy · @PimFormat.Ago(flag.ChangedUtc)</span>
+                    }
+                  </li>
+                }
+              </ul>
+
+              @if (CanEdit)
+              {
+                <div class="shop-actions">
+                  <button type="button" class="primary-button" disabled="@(!FlagDirty || FlagBusy)" @onclick="SaveFlagsAsync">
+                    Shrani oznake
+                  </button>
+                  @if (FlagMessage is not null) { <span class="save-ok" role="status">@FlagMessage</span> }
+                  @if (FlagError is not null) { <span class="save-error" role="alert">@FlagError</span> }
+                </div>
               }
             }
           </section>
@@ -385,7 +577,7 @@
         <section id="panel-media" role="tabpanel" aria-labelledby="tab-media" tabindex="0" class="section-panel section-stack" hidden="@(Section != "media")">
           <header class="section-heading"><h2>Mediji</h2><p>Vse slike in dokumenti izdelka, ne samo glavna slika.</p></header>
           <section class="ui-card tab-panel">
-            <div class="subsection-head"><h2>Gradiva</h2><a href="mediji?izdelek=@Detail.Header.ItemId">Vsi mediji tega izdelka</a></div>
+            <div class="subsection-head"><h2>Gradiva</h2><a href="mediji?izdelek=@(Uri.EscapeDataString(Detail.Header.ItemId))&podjetje=@OrganizationId">Vsi mediji tega izdelka</a></div>
             <ProductMediaGallery ProductName="@Detail.Header.Name" Media="@Detail.Media" Documents="@Detail.Documents" />
           </section>
         </section>
@@ -419,12 +611,6 @@
             </PimState>
           </section>
 
-          <section id="panel-history" class="ui-card data-card tab-panel">
-            <div class="subsection-head"><h2>Zgodovina sprememb</h2></div>
-            <PimState Empty="@(Detail.History.Count == 0)" EmptyText="Za ta izdelek še ni zabeleženih sprememb sledljivih polj.">
-              <PimTable Caption="Revizijska sled sprememb izdelka" Columns="HistoryColumns"><Rows>@foreach (var row in Detail.History) { <tr><td>@row.FieldKey</td><td>@Value(row.OldValue)</td><td>@Value(row.NewValue)</td><td>@row.Owner</td><td>@row.ChangeSource</td><td>@row.ChangedBy</td><td>@row.ChangedAtUtc.ToPimLocal().ToString("g")</td><td>@Value(row.Note)</td></tr> }</Rows></PimTable>
-            </PimState>
-          </section>
 
           <section id="panel-origin" class="ui-card data-card tab-panel">
             <div class="subsection-head"><h2>Izvor podatkov</h2></div>
@@ -435,6 +621,52 @@
           </section>
         </section>
       </div>
+
+      @* Aktivnosti so en sam stalni modul. Podatke dobi iz Detail.History, ki ga vrne
+         intranet.GetProductCard; zato ne vsebuje demonstracijskih dogodkov in ne kliče baze posebej. *@
+      <aside class="activity-column" aria-label="Aktivnosti artikla">
+        <section class="ui-card activity-card" aria-labelledby="activity-title">
+          <div class="activity-head">
+            <div>
+              <h2 id="activity-title">Aktivnosti</h2>
+              <p>Dejanske spremembe tega artikla</p>
+            </div>
+            <span class="activity-count" aria-label="@Detail.History.Count.ToString("N0") zabeleženih aktivnosti">@Detail.History.Count.ToString("N0")</span>
+          </div>
+
+          @if (Detail.History.Count == 0)
+          {
+            <p class="activity-empty">Za ta artikel še ni zabeleženih sprememb.</p>
+          }
+          else
+          {
+            <ol class="activity-timeline">
+              @foreach (var activity in VisibleActivities)
+              {
+                <li class="activity-event">
+                  <span class="activity-marker" aria-hidden="true"></span>
+                  <time datetime="@activity.ChangedAtUtc.ToString("O")">@activity.ChangedAtUtc.ToPimLocal().ToString("d. MMM yyyy, HH:mm")</time>
+                  <h3>@ActivityTitle(activity)</h3>
+                  <p class="activity-change">@ActivitySummary(activity)</p>
+                  <p class="activity-meta">
+                    @if (!string.IsNullOrWhiteSpace(activity.ChangedBy)) { <span>@activity.ChangedBy</span> }
+                    @if (!string.IsNullOrWhiteSpace(activity.Owner)) { <span>@activity.Owner</span> }
+                    @if (!string.IsNullOrWhiteSpace(activity.ChangeSource)) { <span>@activity.ChangeSource</span> }
+                  </p>
+                  @if (!string.IsNullOrWhiteSpace(activity.Note)) { <p class="activity-note">@activity.Note</p> }
+                </li>
+              }
+            </ol>
+
+            @if (Detail.History.Count > InitialActivityCount)
+            {
+              <button type="button" class="activity-toggle" @onclick="ToggleActivities">
+                @(ActivitiesExpanded ? "Prikaži manj" : $"Prikaži vse ({Detail.History.Count:N0})")
+              </button>
+            }
+          }
+        </section>
+      </aside>
     </div>
   }
 </PimState>
@@ -450,6 +682,7 @@
   PimReadResult<BusinessCheckRow>? StockChecks;
   bool Loading = true;
   bool HeroImageFailed;
+  bool ActivitiesExpanded;
   string? Error;
   string Section = "overview";
   string SelectedSite = "";
@@ -467,7 +700,36 @@
   string? ShopMessage;
   string? ShopError;
   bool ShopDirty => ShopDrafts.Count > 0;
+  /// <summary>Samodejni umiki s spleta (251), ki jih uporabnik še ni popravil: spletišče, kdaj in zakaj.</summary>
+  IReadOnlyList<WebShopWithdrawalRow> OpenWithdrawals = [];
   IReadOnlyList<WritableFieldRow> WritableSaopFields = [];
+
+  /// <summary>Objava za splet po izvoznih pravilih katalog.csv (242): stanje, razlog po spletiščih, preverba.</summary>
+  ProductWebExportState? WebExport;
+
+  /// <summary>Potrdljiva polja (249) in ali sme prijavljeni uporabnik potrjevati (samo skrbnik).</summary>
+  IReadOnlyList<ProductFieldWaiverRow> FieldWaivers = [];
+  bool CanWaive;
+  bool WebCheckBusy;
+  string? WebCheckMessage;
+  string? WebCheckError;
+
+  /// <summary>Odprodaja (232): pregled uvoženih vrstic za ta izdelek.</summary>
+  IReadOnlyList<ClearanceItemRow> ClearanceItems = [];
+  bool ClearanceBusy;
+  string? ClearanceMessage;
+  string? ClearanceError;
+
+  /// <summary>Splošne oznake (233), npr. "Razstavni eksponat".</summary>
+  IReadOnlyList<ProductFlagRow> Flags = [];
+
+  /// <summary>Kljukica »izloči iz rezervacije zaloge« (canon.ProductPlanning); glej ErpFields.</summary>
+  bool ReservationExcluded;
+  readonly Dictionary<string, bool> FlagDrafts = new(StringComparer.OrdinalIgnoreCase);
+  bool FlagBusy;
+  string? FlagMessage;
+  string? FlagError;
+  bool FlagDirty => FlagDrafts.Count > 0;
 
   /// <summary>Nepotrjene spremembe: kljuc polja → nova vrednost. Zivijo, dokler jih uporabnik
   /// ne shrani ali preklice; menjava sklopa jih ne izgubi, ker je kartica en obrazec.</summary>
@@ -492,8 +754,13 @@
   static readonly IReadOnlyList<PimColumn> StockColumns = [new("Skladišče"), new("Vir"), new("Količina", true), new("Prihaja", true), new("Razpoložljivo"), new("Svežina"), new("Min/max")];
   static readonly IReadOnlyList<PimColumn> IssueColumns = [new("Nivo"), new("Profil"), new("Resnost"), new("Zahteva"), new("Sporočilo"), new("Zaznano")];
   static readonly IReadOnlyList<PimColumn> OutboundColumns = [new("ID"), new("Polje"), new("Operacija"), new("Status"), new("Poskusov", true), new("Poslano"), new("Potrjeno"), new("Vzrok/odmik")];
-  static readonly IReadOnlyList<PimColumn> HistoryColumns = [new("Polje"), new("Stara vrednost"), new("Nova vrednost"), new("Lastnik"), new("Vir"), new("Spremenil"), new("Čas"), new("Razlog")];
+
   static readonly IReadOnlyList<PimColumn> OriginColumns = [new("Vir"), new("Tek"), new("Entiteta"), new("Stran", true), new("Zapis", true), new("Polj", true), new("Stanje"), new("Prejeto")];
+
+  const int InitialActivityCount = 8;
+  IEnumerable<ProductCardHistory> VisibleActivities => (Detail?.History ?? [])
+    .OrderByDescending(row => row.ChangedAtUtc)
+    .Take(ActivitiesExpanded ? 40 : InitialActivityCount);
 
   IReadOnlyList<string> WebSites => Sites.Where(site => site.IsActive).OrderBy(site => site.SortOrder).Select(site => site.WebSiteCode).ToArray();
 
@@ -502,6 +769,17 @@
   IReadOnlyList<ProductCardIssue> WebIssues => IssuesFor(PimValidationLayer.Splet).Where(row => MatchesSite(row.ProfileCode)).ToList();
   string ErpStatus => StatusFor([PimValidationLayer.ErpSlo, PimValidationLayer.ErpEuThird], Detail?.Header.ErpStatus ?? "PENDING");
   string WebStatus => StatusFor([PimValidationLayer.Splet], Detail?.Header.WebStatus ?? "PENDING", SelectedSite);
+
+  /* D2/182: "za splet" pomeni kljukico na spletišču (pim.ProductWebShop.IsPublished), ne staro
+     Product.WebPublish (SAOP polje, opuščeno za ta namen 2026-09-08) — glej panel-spletisca. */
+  bool PublishedOnAnySite(string? site = null) => WebShops.Any(shop =>
+    shop.IsPublished && (string.IsNullOrWhiteSpace(site) || string.Equals(shop.WebShopCode, site, StringComparison.OrdinalIgnoreCase)));
+
+  /* Ce noben spletni profil sploh ni v obsegu (ni kljukice), val.RunValidation zanj nikoli ne
+     ustvari stanja in StatusFor pade nazaj na "PENDING" — kar brez tega loci izgleda enako kot
+     "ravnokar spremenjeno, caka izracun". Locimo ju, da kartica ne kaze navidezno svezega izida. */
+  string WebStatusLabel => WebStatus == "PENDING" && !PublishedOnAnySite(SelectedSite) ? "Ni objavljeno na spletu" : StatusLabel(WebStatus);
+  string? WebStatusTone => WebStatus == "PENDING" && !PublishedOnAnySite(SelectedSite) ? null : Tone(WebStatus);
 
   /* Polja kanala nastanejo iz treh virov, da na kartici ni vec praznega mesta:
        1. kar je v bralnem modelu (vrednosti izdelka),
@@ -531,6 +809,10 @@
     var writable = Writable(fieldKey);
     var stored = Detail?.Fields.FirstOrDefault(row => row.FieldKey == fieldKey);
     var resolved = PendingValue(fieldKey) ?? value ?? stored?.Value;
+    // Logično polje se na kartici vedno izpiše Da / Ne (uporabnik 2026-09-22), tudi kadar vrednost
+    // pride kot 1/0 ali D/N — iz čakajočega sporočila (uvoz iz Excela pošlje 1/0) ali iz bralnega modela.
+    if (FormatOf(writable) == "bool" && PIM.Operations.ProductWorkbookContract.ParseYesNo(resolved) is { } flag)
+      resolved = YesNo(flag);
     return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "—" : "PIM"), null, null,
       Pending(fieldKey), inReadModel,
       writable is null ? ProductFieldEdit.None : ProductFieldEdit.Saop, FormatOf(writable),
@@ -539,17 +821,21 @@
   }
 
   /// <summary>Besedilo izdelka. ERP nazive pise SAOP, zato so ta med pisljivimi polji SAOP.</summary>
-  ProductChannelField TextField(string label, string textType, string language, string? value, string group)
+  /// <param name="readOnly">
+  /// Samo prikaz (239): ERP opisi pridejo iz SAOP ob vsakem zajemu in niso v registru pisljivih polj,
+  /// zato jih tu ni mogoce urejati — sprememba bi zivela do naslednjega zajema.
+  /// </param>
+  ProductChannelField TextField(string label, string textType, string language, string? value, string group, bool readOnly = false)
   {
     var fieldKey = $"ProductText.{textType}.{language}";
     var writable = Writable(fieldKey);
     var stored = Detail?.Texts.FirstOrDefault(row => row.TextType == textType && row.Language == language);
     var resolved = PendingValue(fieldKey) ?? value ?? stored?.Value;
     var multiline = textType.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase);
-    return new(label, fieldKey, resolved, stored?.Owner ?? (writable is null ? "PIM" : "SAOP"), null, null,
-      Pending(fieldKey), true,
-      writable is null ? ProductFieldEdit.Text : ProductFieldEdit.Saop,
-      writable is null && multiline ? "multiline" : FormatOf(writable),
+    var edit = readOnly ? ProductFieldEdit.None : writable is null ? ProductFieldEdit.Text : ProductFieldEdit.Saop;
+    var format = readOnly ? (multiline ? "multiline" : "text") : writable is null && multiline ? "multiline" : FormatOf(writable);
+    return new(label, fieldKey, resolved, stored?.Owner ?? (readOnly || writable is not null ? "SAOP" : "PIM"), null, null,
+      Pending(fieldKey), true, edit, format,
       RequiredField(fieldKey), string.IsNullOrWhiteSpace(resolved),
       Language: language, TextType: textType, Hint: group);
   }
@@ -614,19 +900,8 @@
     : string.IsNullOrWhiteSpace(name) ? code
     : $"{name} ({code})";
 
-  static string TextLabel(string textType) => textType switch
-  {
-    "WEB_TITLE" => "Spletni naziv",
-    "TITLE_ERP" => "ERP naziv",
-    "TITLE_ERP2" => "ERP naziv 2",
-    "SEARCH_NAME" => "Ime za iskanje",
-    "DESCRIPTION" => "Spletni opis",
-    "DESCRIPTION_K" => "Kratek opis",
-    "DESCRIPTION_KD" => "Kratek opis (dodatni)",
-    "DESCRIPTION_KK" => "Ključne lastnosti",
-    "DESCRIPTION_O" => "Opomba",
-    _ => textType,
-  };
+  /// <summary>Eno mesto za imena vrst besedil (kartica, kakovost, AI) — ProductFieldLabels.</summary>
+  static string TextLabel(string textType) => ProductFieldLabels.TextTypeLabel(textType);
 
   static string FieldLabel(string fieldKey) => fieldKey switch
   {
@@ -688,13 +963,17 @@
         Channel("Dobavitelj", "Product.Supplier", PartnerValue(Detail.Header.Supplier, Detail.Header.SupplierName), slovenia),
         Channel("Proizvajalec", "Product.Manufacturer", PartnerValue(Detail.Header.Manufacturer, Detail.Header.ManufacturerName), slovenia),
         Channel("Davčna stopnja", "Product.VatRate", null, slovenia, inReadModel: false),
-        Channel("Izloči iz rezervacije zaloge", "ProductPlanning", null, slovenia, inReadModel: false),
+        // Ključ iz registra SAOP (ItemExcludeQtyReservation). Prej »ProductPlanning« brez vrednosti:
+        // polje ni bilo v registru, zato ga ni bilo mogoče urediti, in kazalo je »ni v bralnem modelu«.
+        Channel("Izloči iz rezervacije zaloge", "Planning.ExcludeQtyReservation", YesNo(ReservationExcluded), slovenia),
         Channel("Garancija", "ProductAttribute.Garancija",
           Detail.Attributes.FirstOrDefault(row => string.Equals(
             row.AttributeCode, "Garancija", StringComparison.OrdinalIgnoreCase))?.Value, slovenia),
 
         TextField("ERP naziv 2 (sl)", "TITLE_ERP2", "sl", null, extra),
         TextField("Ime za iskanje", "SEARCH_NAME", "sl", null, extra),
+        // 239: kratki naziv iz SAOP je ERP polje; do zdaj je brez oznake pristal med spletnimi besedili.
+        TextField("ERP kratki naziv (sl)", "TITLE_SHORT", "sl", null, extra),
 
         // Za izvoz so obvezna se logisticna polja — v PIM_test svoja kartica, tu svoja skupina.
         Channel("Neto teža", "ProductCommercial.NetWeight", Number(commercial?.NetWeight), export),
@@ -722,10 +1001,28 @@
         rows.Add(TextField($"ERP naziv 2 ({language})", "TITLE_ERP2", language, null, names));
       }
 
+      // 239: opisi iz SAOP po jezikih in vrstah (DESCRIPTION_ERP, _K, _O ...). Samo prikaz — pise
+      // jih zajem SAOP. Uporabnik 2026-09-21: »ERP opisi se pojavijo na kartici pod Splet – opisi«;
+      // zdaj imajo svoje mesto na ERP kanalu, spletni opis na zavihku Splet pa je last PIM-a.
+      const string erpDescriptions = "Opisi iz ERP (SAOP)";
+      var erpDescriptionTypes = Detail.Texts.Select(row => row.TextType)
+        .Where(type => type.StartsWith("DESCRIPTION_ERP", StringComparison.OrdinalIgnoreCase))
+        .Append("DESCRIPTION_ERP")
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(type => string.Equals(type, "DESCRIPTION_ERP", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+        .ThenBy(type => type, StringComparer.Ordinal);
+      foreach (var type in erpDescriptionTypes)
+      {
+        var languages = PimLanguages.Order(Detail.Texts.Where(row => string.Equals(row.TextType, type, StringComparison.OrdinalIgnoreCase)).Select(row => row.Language).Append("sl"));
+        foreach (var language in languages)
+          rows.Add(TextField($"{TextLabel(type)} ({language})", type, language, null, erpDescriptions, readOnly: true));
+      }
+
       // Kanonicne kode ProductCommercial.* zdaj zivijo tu, zato se tu tudi dopolnita
       // seznam shranjenih polj in seznam manjkajocih zahtev.
       rows.AddRange(StoredFields(rows, "Product.", "Druga polja iz vira"));
       rows.AddRange(StoredFields(rows, "ProductCommercial.", "Druga polja iz vira"));
+      rows.AddRange(StoredFields(rows, "ProductText.", "Druga besedila iz ERP").Where(stored => ProductFieldLabels.IsErpTextType(TextTypeOf(stored.FieldKey))));
       rows.AddRange(MissingRequired(rows, "Product.", "Manjka za ERP"));
       rows.AddRange(MissingRequired(rows, "ProductCommercial.", "Manjka za ERP"));
       return rows;
@@ -751,6 +1048,9 @@
         Channel("ABC klasifikacija", "Product.Department", Detail.Header.Department, classification),
         Channel("Rabatna / skupina artikla", "Product.ItemGroup", Detail.Header.ItemGroup, classification),
         Channel("Aktivnost", "Product.IsActive", YesNo(Detail.Header.IsActive), classification),
+        // D2/182: SAOP polje, ne pove vec "kam gre izdelek" (to dolocajo kljukice na zavihku
+        // Splet > Spletisca) — zato tu, med ostalimi SAOP/ERP polji, ne na zavihku Splet.
+        Channel("Objava na spletu (SAOP)", "Product.WebPublish", YesNo(Detail.Header.WebPublish), classification),
         Channel("Nabavni podatki", "ProductCommercial.Purchase", null, purchase, inReadModel: false),
         Channel("Knjigovodske šifre", "ProductStockAccounting", Detail.Header.AccountingGroup, accounting),
       };
@@ -765,20 +1065,24 @@
     get
     {
       if (Detail is null) return [];
-      const string publication = "Objava";
       const string titles = "Nazivi in opisi";
       const string categories = "Kategorije";
       const string attributes = "Atributi";
-      var rows = new List<ProductChannelField>
-      {
-        Channel("Objava na spletu", "Product.WebPublish", YesNo(Detail.Header.WebPublish), publication),
-      };
+      var rows = new List<ProductChannelField>();
 
       // Nazivi in opisi po jezikih: prikazani so vsi jeziki spletnih kanalov, tudi tam, kjer
       // besedila se ni — sicer manjkajocega prevoda ni mogoce vpisati.
       foreach (var textType in WebTextTypes)
         foreach (var language in WebLanguages)
-          rows.Add(TextField($"{TextLabel(textType)} ({language})", textType, language, null, titles));
+        {
+          var textField = TextField($"{TextLabel(textType)} ({language})", textType, language, null, titles);
+          // 239: do locitve je SAOP ob vsakem zajemu prepisal spletni opis z ERP opisom; kjer je
+          // spletni opis se vedno dobesedna kopija, je to oznaceno, da urednik ve, da spletnega
+          // besedila se ni (AI predlog ali rocni vnos ju locita).
+          if (string.Equals(textType, "DESCRIPTION", StringComparison.OrdinalIgnoreCase) && SameAsErpDescription(language, textField.Value))
+            textField = textField with { Label = textField.Label + " · enak ERP opisu" };
+          rows.Add(textField);
+        }
 
       rows.AddRange(Detail.Categories
         .Where(row => string.IsNullOrWhiteSpace(SelectedSite) || string.Equals(row.WebSite, SelectedSite, StringComparison.OrdinalIgnoreCase))
@@ -820,8 +1124,10 @@
           .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
       }
 
-      rows.AddRange(StoredFields(rows, "ProductText.", "Druga besedila iz vira"));
-      rows.AddRange(MissingRequired(rows, "ProductText.", "Manjka za splet"));
+      // 239: kar je last ERP-ja (nazivi ERP, kratki naziv, ime za iskanje, ERP opisi), ima svoje
+      // mesto na ERP kanalu in tu ne sme vec pristati med »drugimi besedili«.
+      rows.AddRange(StoredFields(rows, "ProductText.", "Druga besedila iz vira").Where(stored => !ProductFieldLabels.IsErpTextType(TextTypeOf(stored.FieldKey))));
+      rows.AddRange(MissingRequired(rows, "ProductText.", "Manjka za splet").Where(missing => !ProductFieldLabels.IsErpTextType(TextTypeOf(missing.FieldKey))));
       rows.AddRange(MissingRequired(rows, "ProductAttribute.", "Manjka za splet"));
       return rows;
     }
@@ -853,22 +1159,90 @@
   IReadOnlyList<string> RegisteredLanguages =>
     Languages.Where(row => row.IsActive).Select(row => row.LanguageCode).ToArray();
 
-  /// <summary>Vrste spletnih besedil, ki jih izdelek ze ima ali jih zahteva validacija; brez ERP nazivov.</summary>
+  /// <summary>
+  /// Vrste spletnih besedil, ki jih izdelek ze ima ali jih zahteva validacija; brez vsega, kar je
+  /// last ERP-ja (239: ProductFieldLabels.IsErpTextType — nazivi ERP, kratki naziv, ime za iskanje,
+  /// ERP opisi). Spletni naziv in spletni opis sta ponujena vedno, tudi brez vrstice.
+  /// </summary>
   IReadOnlyList<string> WebTextTypes
   {
     get
     {
-      if (Detail is null) return ["WEB_TITLE"];
+      if (Detail is null) return ProductFieldLabels.CoreWebTextTypes;
       return Detail.Texts.Select(row => row.TextType)
         .Concat(Detail.Issues.Select(issue => issue.FieldCode)
           .Where(code => code.StartsWith("ProductText.", StringComparison.OrdinalIgnoreCase))
-          .Select(code => code.Split('.').Skip(1).FirstOrDefault() ?? ""))
-        .Where(type => type.Length > 0 && !type.StartsWith("TITLE_ERP", StringComparison.OrdinalIgnoreCase))
-        .Append("WEB_TITLE")
+          .Select(code => TextTypeOf(code) ?? ""))
+        .Where(type => type.Length > 0 && !ProductFieldLabels.IsErpTextType(type))
+        .Concat(ProductFieldLabels.CoreWebTextTypes)
         .Distinct(StringComparer.OrdinalIgnoreCase)
-        .OrderBy(type => type == "WEB_TITLE" ? 0 : 1).ThenBy(type => type, StringComparer.Ordinal)
+        .OrderBy(type => type.Equals("WEB_TITLE", StringComparison.OrdinalIgnoreCase) ? 0 : type.Equals("DESCRIPTION", StringComparison.OrdinalIgnoreCase) ? 1 : 2)
+        .ThenBy(type => type, StringComparer.Ordinal)
         .ToList();
     }
+  }
+
+  /// <summary>Vrsta besedila iz kljuca polja ProductText.&lt;vrsta&gt;.&lt;jezik&gt;; null za druge kljuce.</summary>
+  static string? TextTypeOf(string fieldKey)
+  {
+    var parts = fieldKey.Split('.');
+    return parts.Length >= 3 && string.Equals(parts[0], "ProductText", StringComparison.OrdinalIgnoreCase) ? parts[1] : null;
+  }
+
+  /// <summary>Spletni opis je se vedno dobesedna kopija ERP opisa v istem jeziku (239).</summary>
+  bool SameAsErpDescription(string language, string? value) =>
+    !string.IsNullOrWhiteSpace(value) && Detail is not null && Detail.Texts.Any(row =>
+      string.Equals(row.TextType, "DESCRIPTION_ERP", StringComparison.OrdinalIgnoreCase)
+      && string.Equals(row.Language, language, StringComparison.OrdinalIgnoreCase)
+      && string.Equals(row.Value.Trim(), value.Trim(), StringComparison.Ordinal));
+
+  // ─── AI predlog spletnih besedil (uporabnik 2026-09-21) ────────────────────────────────────
+  string AiLanguage = "sl";
+  bool AiBusy;
+  string? AiMessage, AiError;
+
+  /// <summary>
+  /// AI dobi samo to, kar je v PIM-u (ERP besedila, atributi, kategorije, partnerja, obstojeca
+  /// spletna besedila v drugih jezikih); predlog gre v osnutek, ne v bazo. Shrani ga isti gumb kot
+  /// rocno spremembo, zato velja tudi ista sled sprememb in isto pravilo o pravicah.
+  /// </summary>
+  async Task SuggestWithAiAsync()
+  {
+    if (Detail is null || !CanEdit || AiBusy) return;
+    AiBusy = true; AiMessage = null; AiError = null;
+    try
+    {
+      var request = new AiWebTextRequest(
+        Detail.Header.ItemId, Detail.Header.Ean,
+        Detail.Header.ManufacturerName ?? Detail.Header.Manufacturer,
+        Detail.Header.SupplierName ?? Detail.Header.Supplier,
+        Detail.Texts.Where(row => ProductFieldLabels.IsErpTextType(row.TextType) && !string.IsNullOrWhiteSpace(row.Value))
+          .Select(row => new AiText(row.TextType, row.Language, row.Value)).ToList(),
+        Detail.Categories.Select(row => new AiCategory(row.WebSite, row.CategoryPath)).ToList(),
+        Detail.Attributes.Where(row => !string.IsNullOrWhiteSpace(row.Value)).Select(row => new AiAttribute(row.AttributeCode, row.Value)).ToList(),
+        Detail.Texts.Where(row => !ProductFieldLabels.IsErpTextType(row.TextType) && !string.IsNullOrWhiteSpace(row.Value)
+            && !string.Equals(row.Language, AiLanguage, StringComparison.OrdinalIgnoreCase)
+            && !SameAsErpDescription(row.Language, row.Value))
+          .Select(row => new AiText(row.TextType, row.Language, row.Value)).ToList(),
+        AiLanguage);
+      var suggestion = await Ai.SuggestWebTextsAsync(request);
+      ApplyAiDraft("WEB_TITLE", suggestion.Title);
+      ApplyAiDraft("DESCRIPTION", suggestion.Description);
+      AiMessage = $"AI ({suggestion.Model}) je predlagal spletni naziv in opis v jeziku {AiLanguage}. Besedili sta v osnutku na zavihku Splet — preveri ju in klikni »Shrani spremembe«.";
+    }
+    catch (Exception exception) { AiError = exception.Message; }
+    finally { AiBusy = false; }
+  }
+
+  void ApplyAiDraft(string textType, string value)
+  {
+    var field = WebFields.FirstOrDefault(row =>
+        string.Equals(row.TextType, textType, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(row.Language, AiLanguage, StringComparison.OrdinalIgnoreCase)
+        && row.Edit == ProductFieldEdit.Text)
+      ?? TextField($"{TextLabel(textType)} ({AiLanguage})", textType, AiLanguage, null, "Nazivi in opisi");
+    if (field.Edit != ProductFieldEdit.Text) return;
+    OnFieldChanged((field, value));
   }
 
   IEnumerable<(PimValidationLayer Layer, ProductCardIssue Issue, bool Shared)> LayerIssues => Detail is null ? [] :
@@ -879,12 +1253,19 @@
 
   async Task LoadAsync()
   {
-    Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false;
+    Loading = true; Error = null; Detail = null; Origins = []; HeroImageFailed = false; ActivitiesExpanded = false;
     Snapshot = null; SnapshotError = null;
-    CanEdit = PimPolicies.Allows((await Authentication.GetAuthenticationStateAsync()).User, PimPolicies.CatalogWrite);
+    var principal = (await Authentication.GetAuthenticationStateAsync()).User;
+    CanEdit = PimPolicies.Allows(principal, PimPolicies.CatalogWrite);
+    CanWaive = PimPolicies.Allows(principal, PimPolicies.FieldWaiver);
     ShopDrafts.Clear();
     ShopMessage = null;
     ShopError = null;
+    FlagDrafts.Clear();
+    FlagMessage = null;
+    FlagError = null;
+    ClearanceMessage = null;
+    ClearanceError = null;
     try
     {
       // Kartica je dosegljiva iz seznama vseh podjetij, zato obseg dolocì izdelek sam;
@@ -908,10 +1289,25 @@
       var attributeSetTask = Workbench.GetProductAttributeSetAsync(ProductId);
       // Spletisca (182): oznaka na izdelku pove, kam gre in kdo ga validira.
       var shopTask = Edits.GetWebShopsAsync(ProductId);
-      await Task.WhenAll(cardTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask);
+      // Odprodaja (232) in oznake (233): neodvisna panela ob spletiscih.
+      var clearanceTask = Clearance.GetForProductAsync(ProductId);
+      var flagsTask = Edits.GetProductFlagsAsync(ProductId);
+      // Kljukica »izloči iz rezervacije« (245): ni v bralnem modelu kartice, zato posebej.
+      var reservationTask = Edits.GetReservationExclusionAsync(ProductId);
+      // Objava za splet po izvoznih pravilih (242): isti pogled kot /kakovost/artikli in /splet.
+      var webExportTask = LoadWebExportAsync();
+      // Potrditve skrbnika (249): katera polja sme potrditi in katera so za ta artikel ze potrjena.
+      var waiverTask = LoadFieldWaiversAsync();
+      // Samodejni umiki s spleta (251): pasica nad spletišči pove, kdaj in zakaj je kljukica izginila.
+      var withdrawalsTask = LoadWithdrawalsAsync();
+      await Task.WhenAll(cardTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask, clearanceTask, flagsTask, reservationTask, webExportTask, waiverTask, withdrawalsTask);
+      OpenWithdrawals = await withdrawalsTask;
       Detail = await cardTask; PriceChecks = await priceTask; StockChecks = await stockTask;
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
       AttributeSet = await attributeSetTask; WebShops = await shopTask;
+      ClearanceItems = await clearanceTask; Flags = await flagsTask; WebExport = await webExportTask;
+      ReservationExcluded = await reservationTask;
+      FieldWaivers = await waiverTask;
       var fragment = new Uri(Navigation.Uri).Fragment.TrimStart('#');
       if (Sections.Contains(fragment)) Section = fragment;
       if (Section == "saop-endpoint") _ = LoadSnapshotAsync();
@@ -919,6 +1315,70 @@
     }
     catch { Error = "Kartice izdelka trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+  }
+
+  /// <summary>Stanje za katalog.csv ne sme podreti kartice: brez migracije 242 je razdelek prazen, kartica pa dela.</summary>
+  async Task<ProductWebExportState?> LoadWebExportAsync()
+  {
+    try { return await Quality.GetProductWebExportStateAsync(ProductId); }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { return null; }
+  }
+
+  /// <summary>Umiki s spleta (251) po istem pravilu: brez migracije 251 je seznam prazen, kartica pa dela.</summary>
+  async Task<IReadOnlyList<WebShopWithdrawalRow>> LoadWithdrawalsAsync()
+  {
+    try { return await Withdrawals.GetForProductAsync(ProductId); }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { return []; }
+  }
+
+  /// <summary>Potrditve skrbnika (249) po istem pravilu: brez migracije 249 je seznam prazen, kartica pa dela.</summary>
+  async Task<IReadOnlyList<ProductFieldWaiverRow>> LoadFieldWaiversAsync()
+  {
+    try { return await Quality.GetProductFieldWaiversAsync(ProductId); }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { return []; }
+  }
+
+  /// <summary>
+  /// Skrbnik potrdi (ali prekliče), da artikel nima EAN / proizvajalca / dobavitelja (249). Baza artikel
+  /// takoj ponovno validira, zato se kartica naloži znova — napaka za potrjeno polje izgine, potrditev
+  /// pa je vidna v razdelku »Potrditve skrbnika«, dokler je kdo ne prekliče.
+  /// </summary>
+  async Task OnWaiverChangedAsync((string FieldCode, bool Active) change)
+  {
+    SaveMessage = null; SaveError = null;
+    try
+    {
+      await QualityWrite.SetFieldWaiverAsync(ProductId, change.FieldCode, null, change.Active, await ActorAsync());
+      await LoadAsync();
+      SaveMessage = change.Active
+        ? "Potrditev skrbnika je zapisana; artikel je ponovno validiran."
+        : "Potrditev je preklicana; artikel je ponovno validiran.";
+    }
+    catch (UnauthorizedAccessException) { SaveError = "Potrjevanje je dovoljeno samo skrbniku."; }
+    catch { SaveError = "Potrditve ni bilo mogoče zapisati. Preveri povezavo in dnevnik aplikacije."; }
+  }
+
+  /// <summary>
+  /// »Preveri zdaj« (242): validacija tega artikla v PIM-u (val.RunValidationForProduct) in osvežitev stanja
+  /// za katalog.csv. Ne pošilja v SAOP in ne izdela CSV; v datoteko pride sprememba ob naslednji objavi in izdelavi.
+  /// </summary>
+  async Task RecheckWebAsync()
+  {
+    WebCheckBusy = true; WebCheckMessage = null; WebCheckError = null;
+    try
+    {
+      await QualityWrite.ValidateAsync(ProductId);
+      // 251: preverba, ki pokaže, da artikel na označeno spletišče ne sme več, ga (ob vklopljenem
+      // samodejnem umiku) takoj odkljuka — kartico zato naložimo znova, da se vidi nova kljukica in pasica.
+      var withdrawn = await Withdrawals.AfterChangeAsync([ProductId], "PREVERI", await ActorAsync(), revalidate: false);
+      if (withdrawn.Count > 0) await LoadAsync();
+      WebExport = await Quality.GetProductWebExportStateAsync(ProductId);
+      var state = WebExport?.Row.WebExportState ?? "";
+      WebCheckMessage = $"Preverba je končana: {WebExportStates.Label(state)}. {WebExportStates.Explain(state)}"
+        + (withdrawn.Count > 0 ? " " + string.Join(" ", WebWithdrawalText.PerProduct(withdrawn)) + "." : "");
+    }
+    catch { WebCheckError = "Preverbe ni bilo mogoče dokončati. Preveri pravice, povezavo in dnevnik aplikacije."; }
+    finally { WebCheckBusy = false; }
   }
 
   /* Urejanje ima dve poti in ena ne sme prevzeti druge:
@@ -934,7 +1394,9 @@
     SaveError = null;
     var current = change.Value?.Trim();
     var original = change.Field.Value?.Trim();
-    if (string.Equals(current ?? "", original ?? "", StringComparison.Ordinal))
+    // Pri logičnem polju je izbira »da«, prikaz pa »Da« — ista vrednost, ne sprememba.
+    var comparison = change.Field.Format == "bool" ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    if (string.Equals(current ?? "", original ?? "", comparison))
     {
       Drafts.Remove(change.Field.FieldKey);
       DraftFields.Remove(change.Field.FieldKey);
@@ -1001,13 +1463,31 @@
       var saop = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Saop).ToList();
       if (saop.Count > 0)
       {
+        // Logično polje gre v vrsto kot 1/0, tako kot iz uvoza Excela: kanonična vrednost je 1/0 in
+        // potrditev odmeva (243) se z »da« ne bi nikoli ujela.
         var result = await SaopWrite.EnqueueAsync(OrganizationId,
-          saop.Select(field => (Detail.Header.ItemId, field.FieldKey, Drafts[field.FieldKey])), actor, "CARD", note);
+          saop.Select(field => (Detail.Header.ItemId, field.FieldKey,
+            field.Format == "bool" ? PIM.Operations.ProductWorkbookContract.BoolValue(Drafts[field.FieldKey]) ?? Drafts[field.FieldKey] : Drafts[field.FieldKey])),
+          actor, "CARD", note);
         outcome.Add(result.Rejected == 0
           ? $"{result.Queued:N0} polj uvrščenih v vrsto za SAOP (skupina {result.OutboundBatchId})"
           : $"{result.Queued:N0} polj v vrsti za SAOP, {result.Rejected:N0} zavrnjenih (skupina {result.OutboundBatchId})");
+        if (result.Rejected > 0)
+        {
+          // Razlog zavrnitve pride iz baze skupaj s Queued/Rejected stevci (SaopWriteService.EnqueueAsync),
+          // a se doslej ni prikazal — uporabnik je videl le golo stevilo, brez pojasnila.
+          var reasons = result.Rows.Where(row => row.Status == "Rejected")
+            .Select(row => $"{FieldLabel(row.FieldKey ?? "?")}: {row.Reason}");
+          outcome.Add("Zavrnjeno — " + string.Join("; ", reasons));
+        }
         foreach (var field in saop) saved.Add(field.FieldKey);
       }
+
+      // 251: besedilo ali lastnost, ki manjka, lahko artikel naredi neveljaven za splet — takrat ga PIM
+      // (ce je samodejni umik vklopljen) odkljuka s spletisc in to pove tu, ne sele v zvoncu.
+      if (texts.Count > 0 || attributes.Count > 0)
+        outcome.AddRange(WebWithdrawalText.PerProduct(
+          await Withdrawals.AfterChangeAsync([ProductId], "KARTICA", actor, revalidate: false)));
 
       Drafts.Clear();
       DraftFields.Clear();
@@ -1070,14 +1550,20 @@
     ShopError = null;
     try
     {
-      var published = await Edits.SaveWebShopsAsync(OrganizationId, ProductId,
+      var saved = await Edits.SaveWebShopsAsync(OrganizationId, ProductId,
         ShopDrafts.Select(draft => (draft.Key, draft.Value)), await ActorAsync(),
         $"Kartica izdelka {Detail.Header.ItemId}");
       ShopDrafts.Clear();
-      ShopMessage = published == 0
-        ? "Izdelek ni na nobenem spletišču; spletni profili ga ne validirajo."
-        : $"Shranjeno. Izdelek gre na {published} spletišč(a); validacija je osvežena.";
+      // LoadAsync pobrise sporocila spletisc, zato jih postavimo sele po osvezitvi.
       await LoadAsync();
+      ShopMessage = saved.PublishedCount == 0
+        ? "Izdelek ni na nobenem spletišču; spletni profili ga ne validirajo."
+        : $"Shranjeno. Izdelek gre na {saved.PublishedCount} spletišč(a); validacija je osvežena.";
+      // 251: nova kljukica na spletišču, kamor artikel ne sme, ne obvelja — povemo zakaj in kaj storiti.
+      if (saved.Rejected.Count > 0)
+        ShopError = "Kljukica ni shranjena — "
+          + string.Join(" · ", saved.Rejected.Select(rejection => $"{rejection.ShopLabel}: {rejection.ReasonText}"))
+          + ". Artikel najprej dopolni, nato spletišče ponovno označi.";
     }
     catch (UnauthorizedAccessException)
     {
@@ -1090,6 +1576,73 @@
     finally
     {
       ShopBusy = false;
+    }
+  }
+
+  bool FlagDraft(string code) =>
+    FlagDrafts.TryGetValue(code, out var draft)
+      ? draft
+      : Flags.FirstOrDefault(flag => string.Equals(flag.FlagCode, code, StringComparison.OrdinalIgnoreCase))?.IsSet ?? false;
+
+  void OnFlagChanged(string code, ChangeEventArgs args)
+  {
+    if (!CanEdit) return;
+    FlagMessage = null;
+    FlagError = null;
+    var value = args.Value is bool flag && flag;
+    var original = Flags.FirstOrDefault(row => string.Equals(row.FlagCode, code, StringComparison.OrdinalIgnoreCase))?.IsSet ?? false;
+    if (value == original) FlagDrafts.Remove(code);
+    else FlagDrafts[code] = value;
+  }
+
+  async Task SaveFlagsAsync()
+  {
+    if (!CanEdit || FlagDrafts.Count == 0 || Detail is null || FlagBusy) return;
+    FlagBusy = true;
+    FlagMessage = null;
+    FlagError = null;
+    try
+    {
+      await Edits.SaveProductFlagsAsync(OrganizationId, ProductId,
+        FlagDrafts.Select(draft => (draft.Key, draft.Value)), await ActorAsync(),
+        $"Kartica izdelka {Detail.Header.ItemId}");
+      FlagDrafts.Clear();
+      FlagMessage = "Oznake shranjene.";
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException)
+    {
+      FlagError = "Tvoja vloga ne dovoljuje urejanja oznak.";
+    }
+    catch
+    {
+      FlagError = "Oznak ni bilo mogoče shraniti. Stanje ni bilo spremenjeno.";
+    }
+    finally
+    {
+      FlagBusy = false;
+    }
+  }
+
+  async Task EndClearanceItemAsync(long clearanceItemId)
+  {
+    if (!CanEdit || ClearanceBusy) return;
+    ClearanceBusy = true;
+    ClearanceMessage = null;
+    ClearanceError = null;
+    try
+    {
+      await Clearance.EndAsync(clearanceItemId, await ActorAsync());
+      ClearanceMessage = "Odprodaja zaključena.";
+      await LoadAsync();
+    }
+    catch
+    {
+      ClearanceError = "Zaključitev ni uspela.";
+    }
+    finally
+    {
+      ClearanceBusy = false;
     }
   }
 
@@ -1187,6 +1740,24 @@
     finally { SnapshotLoading = false; StateHasChanged(); }
   }
   void HeroFailed() => HeroImageFailed = true;
+  void ToggleActivities() => ActivitiesExpanded = !ActivitiesExpanded;
+  static string ActivityTitle(ProductCardHistory activity) =>
+    string.IsNullOrWhiteSpace(activity.FieldKey) ? "Podatek posodobljen" : $"Posodobljeno: {FieldLabel(activity.FieldKey)}";
+  static string ActivitySummary(ProductCardHistory activity)
+  {
+    var oldValue = ActivityValue(activity.OldValue);
+    var newValue = ActivityValue(activity.NewValue);
+    return oldValue is null && newValue is null ? "Podatek je bil posodobljen."
+      : oldValue is null ? $"Nastavljena vrednost: {newValue}"
+      : newValue is null ? $"Odstranjena vrednost: {oldValue}"
+      : $"{oldValue} → {newValue}";
+  }
+  static string? ActivityValue(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim() switch
+  {
+    "1" or "true" or "True" => "Da",
+    "0" or "false" or "False" => "Ne",
+    var text => text,
+  };
   ProductChannelField Field(string label, string key, string? value, bool inModel = true)
   {
     var field = Detail?.Fields.FirstOrDefault(row => row.FieldKey == key);
@@ -1220,6 +1791,8 @@
   static string Normalize(string value) => new(value.Where(char.IsLetterOrDigit).ToArray());
   static string StockRule(ProductCardStock row) => row.MinimumStock is null && row.MaximumStock is null ? "—" : $"{Number(row.MinimumStock)} / {Number(row.MaximumStock)}";
   static string Moment(DateTime? value) => value?.ToPimLocal().ToString("g") ?? "—";
+  /// <summary>Logična vrednost na kartici: Da / Ne (uporabnik 2026-09-22: v Excelu in SAOP je D/N,
+  /// v intranetu »prevest v Da in Ne«, ker je uporabniško bolje).</summary>
   static string YesNo(bool value) => value ? "Da" : "Ne";
   static string Flag(bool value) => value ? "true" : "false";
   static string Value(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
@@ -1228,5 +1801,5 @@
   static string ShortId(Guid value) => value.ToString("N")[..8];
   static string? OwnerTone(string owner) => owner switch { "PIM" => "good", "SAOP" => "warn", _ => null };
   static string? Tone(string value) => value switch { "VALID" or "Verified" or "Succeeded" or "Processed" => "good", "PENDING" or "Pending" or "PendingApproval" or "Retry" or "Sending" or "Sent" => "warn", "INVALID" or "Error" or "Dead" or "Drift" or "Failed" or "Quarantined" or "Cancelled" => "bad", _ => null };
-  static string StatusLabel(string value) => value switch { "VALID" => "Veljavno", "INVALID" => "Neveljavno", "PENDING" => "Čaka izračun", "PendingApproval" => "Čaka odobritev", "Pending" => "V vrsti", "Sent" => "Poslano, nepotrjeno", "Verified" => "Potrjeno", "Drift" => "Odklon", "Dead" => "Mrtvo", "Retry" => "Ponovni poskus", _ => value };
+  static string StatusLabel(string value) => value switch { "VALID" => "Veljavno", "INVALID" => "Neveljavno", "PENDING" => "Čaka izračun", "NOT_ON_WEB" => "Ni objavljeno na spletu", "PendingApproval" => "Čaka odobritev", "Pending" => "V vrsti", "Sent" => "Poslano, nepotrjeno", "Verified" => "Potrjeno", "Drift" => "Odklon", "Dead" => "Mrtvo", "Retry" => "Ponovni poskus", _ => value };
 }

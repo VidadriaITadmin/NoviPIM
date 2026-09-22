@@ -60,19 +60,22 @@ public static class RulesTabs
 }
 
 /// <summary>
-/// Štirje operativni zavihki za nadzor: pregled pove, kaj je treba narediti, postopki urejajo
-/// razpored, workerji vsebujejo diagnostiko, alarmi pa vključujejo tudi izključitev podjetja iz
-/// avtomatike. Redkejši pregledi (zaloga, samotest, izvozi in sled) ostanejo dosegljivi iz povezav
-/// na pregledu, vendar ne obremenjujejo glavne navigacije.
+/// Zavihki nadzora (prenova 2026-09-21, migracija 237): pregled odgovori »ali poslovanje deluje in kaj
+/// moram narediti«, opravila so urniki, vklop in ročni zagon poslov, zagoni so zgodovina s koraki in
+/// napakami. Alarmi vključujejo tudi izključitev podjetja iz avtomatike. »Izvajalniki« (prej Workerji)
+/// je napredni tehnični pogled — kateri .exe je bil zagnan in kaj je izpisal; navadnemu skrbniku je
+/// pomembno, ali je spletni katalog svež, ne kateri proces je tekel. Tehnični razporedi postopkov
+/// (ops.ScheduleProfile) so dosegljivi iz Opravil, ne več kot zavihek.
 /// </summary>
 public static class NadzorTabs
 {
   public static readonly IReadOnlyList<PimTab> Tabs =
   [
-    new("pregled", "Pregled", "sistem", "Stanje in naslednji korak", PermissionKey: "tab.system.overview"),
-    new("postopki", "Postopki", "sistem?pogled=postopki", "Urniki, stanje in vklop", PermissionKey: "tab.system.schedules"),
-    new("workerji", "Workerji in dnevniki", "sistem/workerji", "Zagon, izpis in diagnostika", PermissionKey: "tab.system.workers"),
+    new("pregled", "Pregled", "sistem", "Ali poslovanje deluje in kaj narediti", PermissionKey: "tab.system.overview"),
+    new("opravila", "Opravila", "sistem/opravila", "Urniki, vklop in ročni zagon poslov", PermissionKey: "tab.system.jobs"),
+    new("zagoni", "Zagoni", "sistem/zagoni", "Zgodovina, koraki, napake in izpis", PermissionKey: "tab.system.runs"),
     new("alarmi", "Alarmi in podjetja", "sistem/integracije", "Napake, obvestila in izključitve", PermissionKey: "tab.system.alerts"),
+    new("workerji", "Izvajalniki", "sistem/workerji", "Tehnični pogled: procesi, izpis in dnevniki", PermissionKey: "tab.system.workers"),
   ];
 }
 

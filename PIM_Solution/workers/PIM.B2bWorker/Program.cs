@@ -4,8 +4,9 @@ using PIM.Operations;
 
 if (args.Length == 0)
 {
-  Console.WriteLine("PIM.B2bWorker: --export-magento --organization-id <int> [--output-dir <dir>] [--osvezi-validacijo] [--po-urniku]");
-  Console.WriteLine("               --export-profile <koda> --organization-id <int> [--output-dir <dir>] [--file-name <ime.csv>] [--osvezi-validacijo] [--po-urniku]");
+  Console.WriteLine("PIM.B2bWorker: --export-magento --organization-id <int> [--output-dir <dir>] [--osvezi-validacijo [--starost-validacije <min>]] [--po-urniku]");
+  Console.WriteLine("               --export-profile <koda> --organization-id <int> [--output-dir <dir>] [--file-name <ime.csv>] [--osvezi-validacijo [--starost-validacije <min>]] [--po-urniku]");
+  Console.WriteLine("  --starost-validacije <min>: validacija in objava tečeta samo, če je validacija podjetja starejša od <min> minut.");
   return 0;
 }
 
@@ -17,6 +18,11 @@ var organizationId = RequiredInt(args, "--organization-id");
 var outputDirOverride = Optional(args, "--output-dir");
 var bySchedule = args.Contains("--po-urniku", StringComparer.Ordinal);
 var refreshValidation = args.Contains("--osvezi-validacijo", StringComparer.Ordinal);
+// Meja starosti: cikel CSV (vsakih 5 minut) validacije ne ponavlja, ce jo je urni cikel kataloga ze
+// opravil — validacija celega podjetja traja minute (glej MagentoExportCommand.RefreshValidationAsync).
+var validationMaxAgeMinutes = OptionalInt(args, "--starost-validacije");
+if (validationMaxAgeMinutes is not null && !refreshValidation)
+  throw new ArgumentException("--starost-validacije velja samo skupaj z --osvezi-validacijo.");
 var connectionString = LocalSettings.ConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))
   throw new InvalidOperationException(LocalSettings.MissingConnectionMessage());
@@ -61,9 +67,11 @@ try
 {
   if (refreshValidation)
   {
-    await MagentoExportCommand.RefreshValidationAsync(organizationId, connectionString);
+    var refreshed = await MagentoExportCommand.RefreshValidationAsync(organizationId, connectionString, validationMaxAgeMinutes);
     await run.HeartbeatAsync();
-    Console.WriteLine($"Validacija in objava za podjetje {organizationId} osveženi.");
+    Console.WriteLine(refreshed
+      ? $"Validacija in objava za podjetje {organizationId} osveženi."
+      : $"Validacija podjetja {organizationId} je mlajša od {validationMaxAgeMinutes} min; osvežitev preskočena, izvoz vzame obstoječo objavo.");
   }
 
   if (exportProfile)
@@ -76,7 +84,8 @@ try
   }
   else
   {
-    await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString);
+    // 251: to je datoteka, ki jo bere Magento — pred izvozom samodejni umik, po njem zapis objave.
+    await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString, publishToMagento: true);
     Console.WriteLine($"Magento CSV izvoz končan: {outputDirectory}");
   }
   await run.CompleteAsync(true);
@@ -107,3 +116,10 @@ static string? Optional(string[] args, string name)
 
 static int RequiredInt(string[] args, string name)
   => int.TryParse(Required(args, name), out var value) && value > 0 ? value : throw new ArgumentException($"{name} mora biti pozitiven integer.");
+
+static int? OptionalInt(string[] args, string name)
+{
+  var raw = Optional(args, name);
+  if (raw is null) return null;
+  return int.TryParse(raw, out var value) && value >= 0 ? value : throw new ArgumentException($"{name} mora biti nenegativen integer (minute).");
+}

@@ -75,6 +75,7 @@ public static class PimAccessCatalog
     View("view.web.overview", "Datoteke in dostave", "Predogled datotek ter zgodovina dostav.", "splet", Web),
     View("view.web.build", "Pripravi izvoz", "Ročna priprava spletnega izvoza.", "splet/izvoz", Web),
     View("view.web.catalog", "Nadzor kataloga", "Objava, odprodaja in blokade.", "splet/katalog", Web),
+    View("view.web.withdrawals", "Umaknjeni s spleta", "Artikli, ki jim je PIM odstranil kljukico spletišča, in razlog.", "splet/umaknjeni", Web),
     View("view.web.profiles", "Izvozni profili", "Stolpci posameznega izvoznega profila.", "izvozi/profili", Web),
     View("view.web.events", "Odhodna obvestila", "Napake in dogodki spletnega izvoza.", "izvozi/obvestila", Web),
     View("view.web.bulk", "Množični izhod", "Množična priprava odhodnih podatkov.", "izvozi/mnozicno", Web),
@@ -104,9 +105,11 @@ public static class PimAccessCatalog
     View("view.rules.titles", "Spletni nazivi", "Sestava spletnih nazivov.", "pravila/nazivi", Rules, true),
 
     Page(System, "Nadzor sistema", "Postopki, alarmi in tehnično zdravje.", "sistem", "Administracija"),
-    View("tab.system.overview", "Pregled", "Stanje in naslednji korak.", "sistem", System, true),
-    View("tab.system.schedules", "Postopki", "Urniki, stanje in vklop.", "sistem?pogled=postopki", System, true),
-    View("tab.system.workers", "Workerji in dnevniki", "Zagon, izpis in diagnostika.", "sistem/workerji", System, true),
+    View("tab.system.overview", "Pregled", "Poslovne kartice, stanje in naslednji korak.", "sistem", System, true),
+    View("tab.system.jobs", "Opravila", "Urniki, vklop in ročni zagon poslov.", "sistem/opravila", System, true),
+    View("tab.system.runs", "Zagoni", "Zgodovina zagonov, koraki, napake in izpis.", "sistem/zagoni", System, true),
+    View("tab.system.schedules", "Postopki (tehnično)", "Razporedi postopkov ops.ScheduleProfile.", "sistem?pogled=postopki", System, true),
+    View("tab.system.workers", "Izvajalniki", "Tehnični pogled: procesi, izpis in dnevniki.", "sistem/workerji", System, true),
     View("tab.system.alerts", "Alarmi in podjetja", "Napake, obvestila in izključitve.", "sistem/integracije", System, true),
     View("view.system.activity", "Sled sprememb", "Kdo je kaj spremenil in kdaj.", "sistem/sled", System),
     View("view.system.exports", "Zagoni izvozov", "Izidi in napake izvozov.", "sistem/izvozi", System),
@@ -146,6 +149,8 @@ public static class PimAccessCatalog
 
     if (path == "sistem") return query.Contains("pogled=postopki", StringComparison.Ordinal) ? "tab.system.schedules" : "tab.system.overview";
     if (path == "sistem/workerji") return "tab.system.workers";
+    if (path == "sistem/opravila") return "tab.system.jobs";
+    if (path == "sistem/zagoni") return "tab.system.runs";
     if (path is "sistem/integracije" or "system/integracije") return "tab.system.alerts";
     if (path == "sistem/sled") return "view.system.activity";
     if (path == "sistem/izvozi") return "view.system.exports";
@@ -189,6 +194,7 @@ public static class PimAccessCatalog
     if (path is "splet" or "izvozi") return "view.web.overview";
     if (path == "splet/izvoz") return "view.web.build";
     if (path == "splet/katalog") return "view.web.catalog";
+    if (path == "splet/umaknjeni") return "view.web.withdrawals";
     if (path.StartsWith("izvozi/profili/", StringComparison.Ordinal)) return "view.web.profiles";
     if (path == "izvozi/obvestila") return "view.web.events";
     if (path == "izvozi/mnozicno") return "view.web.bulk";

@@ -148,6 +148,59 @@ var brezSifre = SaopItemPlanner.Plan(shape, contract, "   ", existsInSaop: false
 Assert(brezSifre.Error is not null, "Brez sifre artikla mora nacrt povedati napako, ne vreci izjeme.");
 Assert(!brezSifre.CanSend, "Brez sifre se ne posilja.");
 
+// --- 9. Kaj gre v vrsto za nov artikel iz PIM (241: kandidat iz dobaviteljevega XML) ------------
+// Za spremembo gre v vrsto samo vpisano (test 4). Za nov artikel pa SAOP nima cesa prepisati in
+// dokument ob prevzemu sploh nastane samo iz sporocil v vrsti - zato gre v vrsto vse, kar PIM ve
+// in sme pisati: vpisano ima prednost, prazno vpisano pomeni "vzemi kanonicno", kljuc nikoli.
+string[] writable = ["ProductText.TITLE_ERP.sl", "Product.EAN", "Product.UoM", "Product.IsActive", "ProductCommercial.NetWeight"];
+var queued = SaopNewItemQueue.Changes(writable,
+  canonical: new Dictionary<string, string?>
+  {
+    ["Product.EAN"] = "5903139989091",
+    ["Product.IsActive"] = "1",
+    ["Product.ItemID"] = "5903139989091",
+    ["ProductText.TITLE_ERP.sl"] = "  ",
+  },
+  inputs: new Dictionary<string, string?>
+  {
+    ["ProductText.TITLE_ERP.sl"] = " Svetilka HARMONY ",
+    ["Product.UoM"] = "kos",
+    ["Product.EAN"] = "",
+    ["Product.ItemGroup"] = "ni pisljivo",
+  });
+
+Assert(queued.Any(change => change.FieldKey == "ProductText.TITLE_ERP.sl" && change.Value == "Svetilka HARMONY" && change.Source == SaopQueuedChangeSource.Input),
+  "Vpisan naziv gre v vrsto obrezan in ima prednost pred (praznim) kanonicnim.");
+Assert(queued.Any(change => change.FieldKey == "Product.EAN" && change.Value == "5903139989091" && change.Source == SaopQueuedChangeSource.Canonical),
+  "Prazen vpis pomeni 'vzemi kanonicno' - EAN iz XML gre v vrsto.");
+Assert(queued.Any(change => change.FieldKey == "Product.UoM" && change.Value == "kos"), "Vpisana enota gre v vrsto.");
+Assert(queued.Any(change => change.FieldKey == "Product.IsActive" && change.Value == "1"), "Kanonicna aktivnost gre v vrsto, ceprav je urednik ni vpisal.");
+Assert(!queued.Any(change => change.FieldKey == "Product.ItemID"), "Kljuc dokumenta nikoli ne gre v vrsto kot sprememba.");
+Assert(!queued.Any(change => change.FieldKey == "Product.ItemGroup"), "Polje, ki ni pisljivo, ne gre v vrsto, tudi ce je vpisano.");
+Assert(!queued.Any(change => change.FieldKey == "ProductCommercial.NetWeight"), "Polje brez vpisa in brez kanonicne vrednosti ne gre v vrsto.");
+Assert(queued.Count == 4, "V vrsto gredo natanko stiri polja: " + string.Join(", ", queued.Select(change => change.FieldKey)));
+
+// Nacrt iz istega izbora: nov artikel je popoln sele, ko so obvezna polja pokrita - vpis, kanonicno ali privzetek.
+var izXml = SaopItemPlanner.Plan(shape, contract, "5903139989091", existsInSaop: false,
+  canonical: new Dictionary<string, string?> { ["Product.EAN"] = "5903139989091", ["Product.IsActive"] = "1" },
+  defaults: defaults,
+  changes: SaopNewItemQueue.AsPlannerChanges(queued), stampUtc: stamp);
+Assert(izXml.Intent == SaopIntent.Add && izXml.CanSend, "Artikel iz XML z vpisanim nazivom in kanonicnim EAN/aktivnostjo je pripravljen za POST: " + string.Join(", ", izXml.MissingMandatory));
+Assert(izXml.Xml.Contains("<ItemEANCode>5903139989091</ItemEANCode>", StringComparison.Ordinal), "EAN iz XML mora biti v dokumentu.");
+
+var brezNaziva = SaopItemPlanner.Plan(shape, contract, "5903139989091", existsInSaop: false,
+  canonical: new Dictionary<string, string?> { ["Product.EAN"] = "5903139989091", ["Product.IsActive"] = "1" },
+  defaults: defaults,
+  changes: SaopNewItemQueue.AsPlannerChanges(SaopNewItemQueue.Changes(writable,
+    new Dictionary<string, string?> { ["Product.EAN"] = "5903139989091", ["Product.IsActive"] = "1" },
+    new Dictionary<string, string?>())), stampUtc: stamp);
+Assert(!brezNaziva.CanSend && brezNaziva.MissingMandatory.Contains("Item/ItemTitle1"), "Brez naziva artikel iz XML ne sme v vrsto - SAOP bi ga zavrnil.");
+
+Assert(SaopNewItemQueue.IsPerItemField("ProductText.TITLE_ERP.sl") && SaopNewItemQueue.IsPerItemField("Product.EAN") && SaopNewItemQueue.IsPerItemField("ProductCommercial.NetWeight"),
+  "Nazivi, EAN in teze so na artikel.");
+Assert(!SaopNewItemQueue.IsPerItemField("Product.UoM") && !SaopNewItemQueue.IsPerItemField("Product.Supplier") && !SaopNewItemQueue.IsPerItemField("ProductCommercial.CountryOfOrigin"),
+  "Sifranti ERP (enota, dobavitelj, poreklo) so skupni za paketni vnos.");
+
 Console.WriteLine("F8 SAOP item planner PASS.");
 
 static void Assert(bool condition, string message)

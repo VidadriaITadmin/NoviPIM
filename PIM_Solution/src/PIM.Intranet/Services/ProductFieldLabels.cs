@@ -56,14 +56,38 @@ public static class ProductFieldLabels
     "WEB_TITLE" => "Spletni naziv",
     "TITLE_ERP" => "ERP naziv",
     "TITLE_ERP2" => "ERP naziv 2",
+    "TITLE_SHORT" => "ERP kratki naziv",
     "SEARCH_NAME" => "Ime za iskanje",
     "DESCRIPTION" => "Spletni opis",
-    "DESCRIPTION_K" => "Kratek opis",
-    "DESCRIPTION_KD" => "Kratek opis (dodatni)",
-    "DESCRIPTION_KK" => "Ključne lastnosti",
-    "DESCRIPTION_O" => "Opomba",
+    "DESCRIPTION_K" => "Kratek spletni opis",
+    "DESCRIPTION_KD" => "Kratek spletni opis (dodatni)",
+    "DESCRIPTION_KK" => "Ključne lastnosti (splet)",
+    "DESCRIPTION_O" => "Spletna opomba",
+    // 239: opisi iz SAOP, loceni od spletnih.
+    "DESCRIPTION_ERP" => "ERP opis",
+    "DESCRIPTION_ERP_K" => "ERP kratek opis",
+    "DESCRIPTION_ERP_KD" => "ERP kratek opis (dodatni)",
+    "DESCRIPTION_ERP_KK" => "ERP ključne lastnosti",
+    "DESCRIPTION_ERP_O" => "ERP opomba",
     _ => textType,
   };
+
+  /// <summary>
+  /// Ali je vrsta besedila last ERP-ja (SAOP jo piše in ob vsakem zajemu prepiše) ali spleta (piše
+  /// jo PIM: urednik, delovni zvezek, AI). Uporabnik 2026-09-21: »ERP opisi se pojavijo na kartici
+  /// pod Splet – opisi« — do 239 sta si vrsti delili ime DESCRIPTION, zato kartica ni mogla ločiti.
+  /// Pravilo: ERP nazivi (TITLE_ERP*, TITLE_SHORT, SEARCH_NAME) in ERP opisi (DESCRIPTION_ERP*);
+  /// vse ostalo (WEB_TITLE, DESCRIPTION*) je spletno.
+  /// </summary>
+  public static bool IsErpTextType(string? textType) =>
+    !string.IsNullOrWhiteSpace(textType)
+    && (textType.StartsWith("TITLE_ERP", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(textType, "TITLE_SHORT", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(textType, "SEARCH_NAME", StringComparison.OrdinalIgnoreCase)
+      || textType.StartsWith("DESCRIPTION_ERP", StringComparison.OrdinalIgnoreCase));
+
+  /// <summary>Spletna vrsta besedila, ki jo kartica ponudi tudi brez obstoječe vrstice (naziv in opis).</summary>
+  public static readonly IReadOnlyList<string> CoreWebTextTypes = ["WEB_TITLE", "DESCRIPTION"];
 
   /// <summary>Preostala polja brez lastnega mesta na kartici; enako ProductCard.razor.FieldLabel.</summary>
   static string Generic(string fieldKey) => fieldKey switch

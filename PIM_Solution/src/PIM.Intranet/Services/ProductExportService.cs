@@ -363,6 +363,7 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
     "INVALID" => "blokiran",
     "PENDING" => "čaka validacijo",
     "NOT_CONFIGURED" => "ni profila",
+    "NOT_ON_WEB" => "ni na spletu",
     _ => status,
   };
 

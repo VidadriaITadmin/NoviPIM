@@ -1,0 +1,19 @@
+dbo.IntegrationProfile — popravek naslova SAOP API (vrata 82 -> 81)
+
+UPDATE dbo.IntegrationProfile
+SET EndpointTemplate = 'https://192.168.178.12:81/iCenterAPI/', UpdatedUtc = SYSUTCDATETIME(), UpdatedBy = 'jaka.steblaj (popravek vrat 82->81, 22.9.2026)'
+WHERE TargetKind = 'SAOP_PRODUCT' AND EndpointTemplate = 'https://192.168.178.12:82/iCenterAPI/';
+
+4 vrstice (podjetja 1-4). Pravi vzrok za "caka SAOP", ki je ostal skrit skozi ves današnji dan:
+dbo.IntegrationProfile je za vsa podjetja kazal na https://192.168.178.12:82/iCenterAPI/ - testni/
+mock naslov (David, 2.9.2026, "rocni vklop za preizkus /saop/artikli"), ne na pravi SAOP
+(vrata 81). Vsak zapis iz SONJA-povezane aplikacije je zato šel na napacen streznik, ki je
+vracal <ResultCode>Ok</ResultCode> brez napak, a podatka dejansko ni shranil - medtem ko je
+branje (GetItemsGeneralData) šlo pravilno na vrata 81 (iz appsettings.Local.json), zato se je
+zdelo, da SAOP "tiho zavraca" pisanje. Isti zapis prek produkcije (ki verjetno že ima pravilno
+konfiguracijo ali drugačen profil) je uspel takoj.
+
+Po tem popravku je treba ponovno preveriti, ali je bil dodaten popravek kode
+(SaopDocumentRunner.Assemble, dopolnitev gnezdenega ovoja - commit db650fd) sploh potreben, ali
+je bila edina prava težava napačna vrata. Noben od današnjih testov proti "SAOP-u" ni šel
+proti pravemu SAOP-u, dokler ni bil ta popravek uveljavljen.

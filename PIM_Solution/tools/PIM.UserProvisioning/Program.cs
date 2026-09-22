@@ -25,6 +25,10 @@ if (string.IsNullOrWhiteSpace(password) || password != confirmation)
   return 2;
 }
 
+// Dolzina je samo priporocilo, enako kot na /sistem/uporabniki; racun se ustvari vseeno.
+if (IntranetUserAdministrationService.PasswordAdvice(password) is { } advice)
+  Console.WriteLine(advice);
+
 var passwordHash = PasswordHasher.Hash(password);
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();

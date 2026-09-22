@@ -6,6 +6,7 @@
 @inject SaopWriteService Write
 @inject SaopItemWriteService ItemWrite
 @inject PIM.Intranet.Services.SaopOrganizationContext OrgContext
+@inject PIM.Intranet.Services.ProductWorkbookService Workbook
 @inject AuthenticationStateProvider Authentication
 <PageTitle>Izvozi</PageTitle>
 <div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev poskusi takoj poslati v SAOP; brez nastavljenih poverilnic samo uvrsti v čakalno vrsto za worker.</p></div></div>
@@ -16,13 +17,16 @@
   <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči šifro artikla …" @bind="Search" @bind:event="oninput" />
   <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option>@status</option> }</select>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+  <button type="button" class="small-action" disabled="@(Loading || SelectableFilteredCount == 0)" @onclick="SelectAllFiltered">Izberi vse filtrirane (@SelectableFilteredCount)</button>
   <button type="button" class="small-action" disabled="@Loading" @onclick="RefreshAsync">Osveži</button>
+  <button type="button" class="small-action warn-action" disabled="@(Loading || ActionBusy)" @onclick="VerifyEchoesAsync" title="Potrdi sporočila v stanju Sent proti trenutni vrednosti v PIM (migracija 243) — dosedanji tok tega ni nikoli sam preveril.">Preveri potrditve SAOP</button>
 </section>
 @if (Selected.Count > 0) {
   <section class="ui-card toolbar bulk-actions" role="toolbar" aria-label="Skupinska dejanja za izbrane artikle">
     <span class="result-count" role="status" aria-live="polite">Izbranih artiklov: @Selected.Count</span>
     <button type="button" class="small-action good-action" disabled="@ActionBusy" @onclick="ApproveSelected">Odobri izbrane artikle</button>
     <button type="button" class="small-action" disabled="@ActionBusy" @onclick="CancelSelected">Prekliči izbrane artikle</button>
+    <button type="button" class="small-action" disabled="@ActionBusy" @onclick="ClearSelection">Počisti izbor</button>
   </section>
 }
 <section class="ui-card data-card" aria-label="Artikli v odhodni vrsti">
@@ -153,6 +157,28 @@ else {
     finally { Loading = false; }
   }
   async Task RefreshAsync(){Error=null;try{await Reload();}catch{Error="Osvežitev ni uspela.";}}
+  // Migracija 243: dosedanji tok iz SAOP nazaj ni nikoli klical out.VerifyEcho, zato je vsako
+  // odobreno in poslano sporocilo trajno obticalo na "Sent" — ne glede na to, ali je vrednost
+  // pravilna. Ta gumb je rocni preklop, dokler ni preverjeno na zivo in povezano v redni cikel.
+  async Task VerifyEchoesAsync()
+  {
+    if (OrganizationId is null) return;
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var outcome = await Workbook.VerifyPendingEchoesAsync(OrganizationId.Value);
+      Message = (outcome.Checked, outcome.Waiting) switch
+      {
+        (0, 0) => "Ni sporočil v stanju Sent za preveriti.",
+        (0, > 0) => $"{outcome.Waiting} sporočil še čaka na naslednjo vhodno sinhronizacijo (SAOP_PRODUCTS) — poskusi znova čez nekaj časa.",
+        (> 0, 0) => $"Preverjenih {outcome.Checked} sporočil.",
+        _ => $"Preverjenih {outcome.Checked} sporočil, {outcome.Waiting} še čaka na vhodno sinhronizacijo.",
+      };
+      await Reload();
+    }
+    catch (Exception exception) { Error = "Preverba ni uspela: " + exception.Message; }
+    finally { ActionBusy = false; }
+  }
   async Task<string> Actor(){var state=await Authentication.GetAuthenticationStateAsync();return state.User.Identity?.Name??"neznan";}
   async Task Act(Func<string,Task> action,string success){ActionBusy=true;Error=null;Message=null;try{await action(await Actor());Message=success;await Reload();}catch{Error="Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena.";}finally{ActionBusy=false;}}
 
@@ -214,6 +240,12 @@ else {
   /* --- izbor artiklov in skupinsko dejanje -------------------------------- */
   HashSet<(string EntityType,string EntityKey)> Selected = [];
   bool AllOnPageSelected => PageArticles.Any(a=>a.CanApprove||a.CanCancel) && PageArticles.Where(a=>a.CanApprove||a.CanCancel).All(a=>Selected.Contains((a.EntityType,a.EntityKey)));
+  // Stran kaze samo PageSize artiklov naenkrat; "izberi vse na strani" zato ne zajame vsega, kar
+  // ustreza trenutnim filtrom. David (2026-09-22): pametni filtri + moznost oznaciti vec/vse, da
+  // gre skupaj v SAOP — brez tega gumba je bilo treba oznacevati stran za stranjo.
+  int SelectableFilteredCount => FilteredArticles.Count(a=>a.CanApprove||a.CanCancel);
+  void SelectAllFiltered(){ foreach(var a in FilteredArticles.Where(a=>a.CanApprove||a.CanCancel)) Selected.Add((a.EntityType,a.EntityKey)); }
+  void ClearSelection() => Selected.Clear();
   void ToggleRow((string EntityType,string EntityKey) key, bool value){ if(value) Selected.Add(key); else Selected.Remove(key); }
   void ToggleAllOnPage(bool value){ foreach(var a in PageArticles.Where(a=>a.CanApprove||a.CanCancel)){ if(value) Selected.Add((a.EntityType,a.EntityKey)); else Selected.Remove((a.EntityType,a.EntityKey)); } }
   async Task ActBulk(Func<string,(string EntityType,string EntityKey),Task> action, string doneWord)

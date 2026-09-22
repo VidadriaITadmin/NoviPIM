@@ -6,7 +6,7 @@
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Atributi</PageTitle>
-<PimPage Title="Atributi" Subtitle="Register atributov s stalnimi kodami. Izberi vrstico za podrobnosti in urejanje." Crumbs="Crumbs" />
+<PimPage Title="Atributi" Subtitle="Register atributov s stalnimi kodami. Nov atribut dodaš zgoraj, izbrana vrstica se ureja in briše v desnem panelu." Crumbs="Crumbs" />
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 
@@ -16,7 +16,61 @@
   { <button type="button" class="status-filter @(QuickClass("MISSING:" + language.LanguageCode))" @onclick='() => QuickFilter = "MISSING:" + language.LanguageCode'>Manjka @language.LanguageCode.ToUpperInvariant() <strong>@MissingCount(language.LanguageCode)</strong></button> }
   <button type="button" class="status-filter @(QuickClass("NO_SOURCE"))" @onclick='() => QuickFilter = "NO_SOURCE"'>Brez vira <strong>@Rows.Count(row => row.SourceCount == 0)</strong></button>
   <button type="button" class="status-filter @(QuickClass("UNUSED"))" @onclick='() => QuickFilter = "UNUSED"'>Neuporabljeni <strong>@Rows.Count(row => row.ProductCount == 0)</strong></button>
+  <button type="button" class="status-filter @(QuickClass("INACTIVE"))" @onclick='() => QuickFilter = "INACTIVE"'>Neaktivni <strong>@Rows.Count(row => !row.IsActive)</strong></button>
 </nav>
+
+@* 238. Uporabnik 2026-09-21: »treba dodat da se dodaja piše briše«. Do zdaj je nov atribut nastajal
+   samo stransko (iz naborov, 177); tu ga urednik ustvari sam: slovensko ime je obvezno (iz njega
+   nastane koda, ce je ne vpise), ostalo je neobvezno in se da urediti pozneje. *@
+<details class="ui-card section-gap new-attribute">
+  <summary class="card-caption">+ Nov atribut</summary>
+  <div class="create-grid">
+    <label class="editor-field" for="new-attribute-name">
+      <span class="editor-label">Slovensko ime <em>obvezno</em></span>
+      <input id="new-attribute-name" class="form-input" @bind="NewName" @bind:after="ResolveNewNameAsync" placeholder="npr. Barva ohišja" />
+    </label>
+    <label class="editor-field" for="new-attribute-code">
+      <span class="editor-label">Koda <em>@(string.IsNullOrWhiteSpace(ProposedCode) ? "prazno = iz imena" : $"prazno = {ProposedCode}")</em></span>
+      <input id="new-attribute-code" class="form-input code-input" @bind="NewCode" placeholder="@(ProposedCode ?? "IZ_IMENA")" />
+    </label>
+    <label class="editor-field" for="new-attribute-group">
+      <span class="editor-label">Skupina</span>
+      <input id="new-attribute-group" class="form-input" list="attribute-groups" @bind="NewGroup" placeholder="npr. Tehnični podatki" />
+    </label>
+    <label class="editor-field" for="new-attribute-type">
+      <span class="editor-label">Tip podatka</span>
+      <select id="new-attribute-type" class="filter-select" @bind="NewDataType">
+        @foreach (var type in DataTypeOptions) { <option value="@type.Key">@type.Label</option> }
+      </select>
+    </label>
+    <label class="editor-field" for="new-attribute-unit">
+      <span class="editor-label">Enota</span>
+      <input id="new-attribute-unit" class="form-input" @bind="NewUnit" placeholder="npr. W, mm, lm" />
+    </label>
+    <label class="filter-check create-check"><input type="checkbox" @bind="NewTranslatable" /> Vrednost se prevaja po jezikih</label>
+    <label class="editor-field create-wide" for="new-attribute-note">
+      <span class="editor-label">Opomba</span>
+      <input id="new-attribute-note" class="form-input" @bind="NewNote" placeholder="Zakaj obstaja, od kod pride …" />
+    </label>
+    @foreach (var language in Languages.Where(language => language.LanguageCode != "sl"))
+    {
+      var lang = language.LanguageCode;
+      <label class="editor-field" for="@("new-attribute-name-" + lang)">
+        <span class="editor-label">Ime · @lang · @language.Name</span>
+        <input id="@("new-attribute-name-" + lang)" class="form-input" value="@NewTranslationFor(lang)" @onchange="args => NewTranslations[lang] = args.Value?.ToString() ?? string.Empty" />
+      </label>
+    }
+  </div>
+  <datalist id="attribute-groups">@foreach (var group in Groups) { <option value="@group"></option> }</datalist>
+  @if (NewNameConflict is not null)
+  {
+    <p class="message-state error-message" role="alert">Atribut s slovenskim imenom »@NewName« že obstaja (koda @NewNameConflict). Izberi ga v seznamu in uredi, namesto da bi nastal dvojnik.</p>
+  }
+  <div class="create-actions">
+    <button type="button" class="button-primary" disabled="@(Busy || string.IsNullOrWhiteSpace(NewName) || NewNameConflict is not null)" @onclick="CreateAsync">Ustvari atribut</button>
+    <span class="bulk-note">Koda po ustvarjanju ostane nespremenljiva — po njej se atribut veže na vire, nabore in izvoz.</span>
+  </div>
+</details>
 
 <section class="ui-card toolbar section-gap" role="search">
   <input class="form-input" type="search" placeholder="Išči po imenu ali kodi" aria-label="Išči po imenu ali kodi" @bind="Search" @bind:event="oninput" />
@@ -42,9 +96,9 @@
       <ul class="attribute-list">
         @foreach (var row in FilteredRows)
         {
-          <li class="attribute-row @(Selected?.AttributeCode == row.AttributeCode ? "is-selected" : null)">
+          <li class="attribute-row @(Selected?.AttributeCode == row.AttributeCode ? "is-selected" : null) @(row.IsActive ? null : "is-inactive")">
             <input type="checkbox" checked="@Picked.Contains(row.AttributeCode)" @onchange="args => TogglePicked(row.AttributeCode, args)" aria-label="@($"Izberi {Slovene(row)}")" />
-            <button type="button" class="attribute-main" @onclick="() => Select(row)"><strong>@Slovene(row)</strong><span class="code-value">@row.AttributeCode</span></button>
+            <button type="button" class="attribute-main" @onclick="() => SelectAsync(row)"><strong>@Slovene(row) @if (!row.IsActive) { <small class="muted">· neaktiven</small> }</strong><span class="code-value">@row.AttributeCode</span></button>
             <span>@row.DataType@if (row.Unit is not null) { <small> · @row.Unit</small> }</span>
             <span class="language-state">@foreach (var language in Languages) { var has = row.Translations.ContainsKey(language.LanguageCode); <span class="lang @(has ? "is-set" : "is-missing")" title="@(has ? row.Translations[language.LanguageCode] : "ime manjka")">@language.LanguageCode</span> }</span>
             <span class="numeric">@row.ProductCount.ToString("N0")</span>
@@ -55,15 +109,66 @@
   </section>
 
   <aside class="ui-card detail-panel" aria-label="Podrobnosti atributa">
-    @if (Selected is null) { <div class="detail-empty"><strong>Izberi atribut</strong><span>Podrobnosti se odprejo tukaj, brez razširjanja tabele.</span></div> }
+    @if (Selected is null) { <div class="detail-empty"><strong>Izberi atribut</strong><span>Podrobnosti, urejanje in brisanje se odprejo tukaj.</span></div> }
     else
     {
       <header class="detail-head"><div><h2>@Slovene(Selected)</h2><span class="code-value">@Selected.AttributeCode</span></div>@if (!Selected.IsActive) { <PimChip Text="neaktiven" Tone="neutral" /> }</header>
       <nav class="detail-tabs" aria-label="Podrobnosti atributa">@foreach (var tab in DetailTabs) { <button type="button" class="@(DetailTab == tab.Key ? "is-active" : null)" @onclick="() => DetailTab = tab.Key">@tab.Label</button> }</nav>
       @if (DetailTab == "BASIC")
       {
-        <div class="detail-body"><dl class="detail-facts"><dt>Skupina</dt><dd>@(Selected.AttributeGroup ?? "—")</dd><dt>Tip</dt><dd>@Selected.DataType</dd><dt>Enota</dt><dd>@(Selected.Unit ?? "—")</dd><dt>Prevedljiv</dt><dd>@(Selected.IsTranslatable ? "da" : "ne")</dd></dl>
-        @if (Selected.IsUnitCandidate) { <label class="editor-field"><span class="editor-label">Enota atributa</span><select class="filter-select" @bind="ChosenPair"><option value="">— ni določeno —</option>@foreach (var candidate in Rows.Where(item => !item.IsUnitCandidate)) { <option value="@candidate.AttributeCode">@Slovene(candidate)</option> }</select></label><button type="button" class="button-primary" disabled="@Busy" @onclick="SavePairAsync">Shrani povezavo</button> }</div>
+        @* 238: osnovne lastnosti se urejajo tu; prazno polje pomeni »pobriši«. *@
+        <div class="detail-body">
+          <label class="editor-field"><span class="editor-label">Skupina</span><input class="form-input" list="attribute-groups" @bind="EditGroup" /></label>
+          <label class="editor-field"><span class="editor-label">Tip podatka</span>
+            <select class="filter-select" @bind="EditDataType">@foreach (var type in DataTypeOptions) { <option value="@type.Key">@type.Label</option> }</select>
+          </label>
+          <label class="editor-field"><span class="editor-label">Enota</span><input class="form-input" @bind="EditUnit" placeholder="npr. W, mm, lm" /></label>
+          <label class="filter-check"><input type="checkbox" @bind="EditTranslatable" /> Vrednost se prevaja po jezikih</label>
+          <label class="filter-check"><input type="checkbox" @bind="EditUnitCandidate" /> Je enota drugega atributa</label>
+          @if (EditUnitCandidate)
+          {
+            <label class="editor-field"><span class="editor-label">Enota atributa</span>
+              <select class="filter-select" @bind="ChosenPair"><option value="">— ni določeno —</option>@foreach (var candidate in Rows.Where(item => !item.IsUnitCandidate && item.AttributeCode != Selected.AttributeCode)) { <option value="@candidate.AttributeCode">@Slovene(candidate)</option> }</select>
+            </label>
+          }
+          <label class="filter-check"><input type="checkbox" @bind="EditActive" /> Aktiven (neaktiven atribut ni v izbirnikih in ne gre v izvoz)</label>
+          <label class="editor-field"><span class="editor-label">Opomba</span><textarea class="form-input" rows="3" @bind="EditNote"></textarea></label>
+          <div class="detail-actions">
+            <button type="button" class="button-primary" disabled="@Busy" @onclick="SaveDefinitionAsync">Shrani lastnosti</button>
+          </div>
+          <dl class="detail-facts">
+            <dt>Izdelkov</dt><dd>@Selected.ProductCount.ToString("N0")</dd>
+            <dt>Virov</dt><dd>@Selected.SourceCount</dd>
+            @if (Usage is not null) { <dt>Nabori</dt><dd>@Usage.CategorySets</dd><dt>Zahteve</dt><dd>@Usage.Requirements</dd> }
+          </dl>
+
+          <details class="danger-zone" open="@DeleteOpen">
+            <summary>Izbriši atribut …</summary>
+            @if (Usage is null)
+            {
+              <p class="muted">Najprej preverim, kje vse atribut živi.</p>
+              <button type="button" disabled="@Busy" @onclick="LoadUsageAsync">Preveri uporabo</button>
+            }
+            else
+            {
+              <ul class="usage-list">
+                <li><strong>@Usage.ValueCount.ToString("N0")</strong> vrednosti pri <strong>@Usage.ProductsWithValue.ToString("N0")</strong> izdelkih</li>
+                <li><strong>@Usage.CategorySets</strong> vrstic v naborih kategorij (odstranijo se)</li>
+                <li><strong>@Usage.SourceMaps</strong> aktivnih preslikav virov (deaktivirajo se)</li>
+                <li><strong>@Usage.UnitPairs</strong> parov enot (razvežejo se) · <strong>@Usage.Requirements</strong> zahtev validacije (deaktivirajo se) · <strong>@Usage.Translations</strong> prevodov (izbrišejo se)</li>
+              </ul>
+              @if (Usage.ValueCount > 0)
+              {
+                <label class="filter-check danger-check"><input type="checkbox" @bind="ForceDelete" /> Izbriši tudi vrednosti pri @Usage.ProductsWithValue.ToString("N0") izdelkih (nepovratno)</label>
+                <p class="muted">Če vrednosti nočeš izgubiti, atribut raje deaktiviraj (kljukica »Aktiven« zgoraj).</p>
+              }
+              <label class="editor-field"><span class="editor-label">Za trajni izbris vpiši IZBRIŠI</span><input class="form-input" autocomplete="off" @bind="DeleteConfirmation" @bind:event="oninput" /></label>
+              <button type="button" class="danger-primary" disabled="@(Busy || !DeleteConfirmed || (Usage.ValueCount > 0 && !ForceDelete))" @onclick="DeleteAsync">
+                @(Busy ? "Brišem …" : "Trajno izbriši atribut")
+              </button>
+            }
+          </details>
+        </div>
       }
       else if (DetailTab == "TRANSLATIONS")
       {
@@ -88,18 +193,18 @@
   string? Error, Message;
   string Search = "", DataTypeFilter = "", GroupFilter = "", QuickFilter = "ALL", DetailTab = "BASIC", ChosenPair = "";
   static readonly IReadOnlyList<(string Key, string Label)> DetailTabs = [("BASIC", "Osnovno"), ("TRANSLATIONS", "Prevodi"), ("VALUES", "Vrednosti"), ("SOURCES", "Viri"), ("CATEGORIES", "Kategorije")];
+  static readonly IReadOnlyList<(string Key, string Label)> DataTypeOptions = [("TEXT", "TEXT · besedilo"), ("NUMBER", "NUMBER · število"), ("BOOL", "BOOL · da/ne"), ("ENUM", "ENUM · izbira iz seznama")];
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi")];
   IEnumerable<string> DataTypes => Rows.Select(row => row.DataType).Where(value => value.Length > 0).Distinct().Order();
   IEnumerable<string> Groups => Rows.Select(row => row.AttributeGroup).OfType<string>().Where(value => value.Length > 0).Distinct().Order();
   int MissingCount(string language) => Rows.Count(row => !row.Translations.ContainsKey(language));
-  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.DefinitionRow> FilteredRows => Rows.Where(row => (string.IsNullOrWhiteSpace(Search) || Slovene(row).Contains(Search, StringComparison.OrdinalIgnoreCase) || row.AttributeCode.Contains(Search, StringComparison.OrdinalIgnoreCase)) && (DataTypeFilter.Length == 0 || row.DataType == DataTypeFilter) && (GroupFilter.Length == 0 || row.AttributeGroup == GroupFilter) && (QuickFilter == "ALL" || QuickFilter == "NO_SOURCE" && row.SourceCount == 0 || QuickFilter == "UNUSED" && row.ProductCount == 0 || QuickFilter.StartsWith("MISSING:") && !row.Translations.ContainsKey(QuickFilter[8..]))).ToList();
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.DefinitionRow> FilteredRows => Rows.Where(row => (string.IsNullOrWhiteSpace(Search) || Slovene(row).Contains(Search, StringComparison.OrdinalIgnoreCase) || row.AttributeCode.Contains(Search, StringComparison.OrdinalIgnoreCase)) && (DataTypeFilter.Length == 0 || row.DataType == DataTypeFilter) && (GroupFilter.Length == 0 || row.AttributeGroup == GroupFilter) && (QuickFilter == "ALL" || QuickFilter == "NO_SOURCE" && row.SourceCount == 0 || QuickFilter == "UNUSED" && row.ProductCount == 0 || QuickFilter == "INACTIVE" && !row.IsActive || QuickFilter.StartsWith("MISSING:") && !row.Translations.ContainsKey(QuickFilter[8..]))).ToList();
   string ResultSummary => Loading ? "Nalaganje …" : $"{FilteredRows.Count:N0} od {Rows.Count:N0} atributov";
   bool CurrentAllPicked => FilteredRows.Count > 0 && FilteredRows.All(row => Picked.Contains(row.AttributeCode));
   string QuickClass(string value) => QuickFilter == value ? "is-active" : "";
   static string Slovene(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) => row.Translations.TryGetValue("sl", out var name) && !string.IsNullOrWhiteSpace(name) ? name : row.AttributeName ?? row.AttributeCode;
   protected override async Task OnInitializedAsync() { try { Languages = PIM.Intranet.Services.PimLanguages.OrderBy(await Tree.GetLanguagesAsync(), row => row.LanguageCode).ToArray(); } catch (Exception exception) { Error = exception.Message; } await LoadAsync(); }
   async Task LoadAsync() { Loading = true; Error = null; try { var code = Selected?.AttributeCode; Rows = await Attributes.GetDefinitionsAsync(null, OnlyUnits, false, OnlyWithoutPair); Selected = code is null ? null : Rows.FirstOrDefault(row => row.AttributeCode == code); } catch (Exception exception) { Error = exception.Message; Rows = []; } finally { Loading = false; } }
-  void Select(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row) { Selected = row; DetailTab = "BASIC"; ChosenPair = row.UnitOfAttributeCode ?? ""; Draft.Clear(); foreach (var language in Languages) Draft[language.LanguageCode] = row.Translations.TryGetValue(language.LanguageCode, out var name) ? name : ""; }
   string GetDraft(string code) => Draft.TryGetValue(code, out var value) ? value : "";
   void SetDraft(string code, string? value) => Draft[code] = value ?? "";
   void TogglePicked(string code, ChangeEventArgs args) { if (args.Value is true) Picked.Add(code); else Picked.Remove(code); }
@@ -107,6 +212,105 @@
   void SelectCurrent() { foreach (var row in FilteredRows) Picked.Add(row.AttributeCode); }
   void ClearPicked() => Picked.Clear();
   async Task SaveTranslationsAsync() { if (Selected is null) return; Busy = true; Error = Message = null; try { var payload = Draft.Where(pair => !string.IsNullOrWhiteSpace(pair.Value)).ToDictionary(pair => pair.Key, pair => pair.Value.Trim(), StringComparer.OrdinalIgnoreCase); var changed = payload.Count == 0 ? 0 : await Attributes.SaveTranslationsAsync(Selected.AttributeCode, payload, await ActorAsync()); Message = $"Shranjenih prevodov: {changed}."; await LoadAsync(); } catch (Exception exception) { Error = exception.Message; } finally { Busy = false; } }
-  async Task SavePairAsync() { if (Selected is null) return; Busy = true; Error = Message = null; try { await Attributes.SaveDefinitionAsync(Selected.AttributeCode, null, null, null, null, string.IsNullOrWhiteSpace(ChosenPair) ? null : ChosenPair, await ActorAsync(), null); Message = "Povezava enote je shranjena."; await LoadAsync(); } catch (Exception exception) { Error = exception.Message; } finally { Busy = false; } }
   async Task<string> ActorAsync() { var state = await Authentication.GetAuthenticationStateAsync(); return state.User.Identity?.Name ?? "neznan"; }
+
+  // ─── 238: nov atribut ─────────────────────────────────────────────────────────────────────
+  string NewName = "", NewCode = "", NewGroup = "", NewDataType = "TEXT", NewUnit = "", NewNote = "";
+  bool NewTranslatable;
+  string? ProposedCode, NewNameConflict;
+  readonly Dictionary<string, string> NewTranslations = new(StringComparer.OrdinalIgnoreCase);
+  string NewTranslationFor(string code) => NewTranslations.TryGetValue(code, out var value) ? value : "";
+
+  /// <summary>Predlagana koda in morebitni dvojnik po slovenskem imenu — isto pravilo kot v bazi (canon.ResolveAttributeNames).</summary>
+  async Task ResolveNewNameAsync()
+  {
+    ProposedCode = null; NewNameConflict = null;
+    if (string.IsNullOrWhiteSpace(NewName)) return;
+    try
+    {
+      var resolved = (await Tree.ResolveAttributeNamesAsync([NewName.Trim()])).FirstOrDefault();
+      if (resolved is null) return;
+      ProposedCode = resolved.ProposedCode;
+      NewNameConflict = resolved.AttributeCode;
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task CreateAsync()
+  {
+    if (string.IsNullOrWhiteSpace(NewName)) return;
+    Busy = true; Error = Message = null;
+    try
+    {
+      var code = await Attributes.CreateDefinitionAsync(NewName, NewCode, NewGroup, NewDataType, NewUnit, NewTranslatable, NewNote, NewTranslations, await ActorAsync());
+      Message = $"Atribut »{NewName.Trim()}« je ustvarjen s kodo {code}. Dodaj ga v nabor kategorije ali ga poveži z virom, da dobi vrednosti.";
+      NewName = NewCode = NewGroup = NewUnit = NewNote = ""; NewDataType = "TEXT"; NewTranslatable = false; ProposedCode = NewNameConflict = null; NewTranslations.Clear();
+      await LoadAsync();
+      var created = Rows.FirstOrDefault(row => row.AttributeCode == code);
+      if (created is not null) await SelectAsync(created);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  // ─── 238: urejanje in brisanje ────────────────────────────────────────────────────────────
+  string EditGroup = "", EditDataType = "TEXT", EditUnit = "", EditNote = "";
+  bool EditTranslatable, EditUnitCandidate, EditActive = true;
+  PIM.Intranet.Services.AttributeMappingService.AttributeUsage? Usage;
+  bool DeleteOpen, ForceDelete;
+  string DeleteConfirmation = "";
+  bool DeleteConfirmed => string.Equals(DeleteConfirmation.Trim(), "IZBRIŠI", StringComparison.OrdinalIgnoreCase);
+
+  async Task SelectAsync(PIM.Intranet.Services.AttributeMappingService.DefinitionRow row)
+  {
+    Selected = row; DetailTab = "BASIC"; ChosenPair = row.UnitOfAttributeCode ?? "";
+    EditGroup = row.AttributeGroup ?? ""; EditDataType = row.DataType; EditUnit = row.Unit ?? ""; EditNote = "";
+    EditTranslatable = row.IsTranslatable; EditUnitCandidate = row.IsUnitCandidate; EditActive = row.IsActive;
+    Usage = null; DeleteOpen = false; ForceDelete = false; DeleteConfirmation = "";
+    Draft.Clear(); foreach (var language in Languages) Draft[language.LanguageCode] = row.Translations.TryGetValue(language.LanguageCode, out var name) ? name : "";
+    // Opomba ni v registru (intranet.GetAttributeDefinitions); pride iz pregleda uporabe.
+    try { Usage = await Attributes.GetUsageAsync(row.AttributeCode); EditNote = Usage?.Note ?? ""; } catch { Usage = null; }
+  }
+
+  async Task LoadUsageAsync()
+  {
+    if (Selected is null) return;
+    Busy = true; Error = null;
+    try { Usage = await Attributes.GetUsageAsync(Selected.AttributeCode); DeleteOpen = true; }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task SaveDefinitionAsync()
+  {
+    if (Selected is null) return;
+    Busy = true; Error = Message = null;
+    try
+    {
+      await Attributes.UpdateDefinitionAsync(Selected.AttributeCode, EditGroup, EditDataType, EditUnit, EditTranslatable, EditUnitCandidate,
+        EditUnitCandidate ? ChosenPair : null, EditActive, EditNote, await ActorAsync());
+      Message = $"Lastnosti atributa {Selected.AttributeCode} so shranjene.";
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task DeleteAsync()
+  {
+    if (Selected is null || !DeleteConfirmed || Usage is null) return;
+    Busy = true; Error = Message = null;
+    var code = Selected.AttributeCode; var name = Slovene(Selected);
+    try
+    {
+      var deletedValues = await Attributes.DeleteDefinitionAsync(code, ForceDelete, await ActorAsync());
+      Message = deletedValues > 0
+        ? $"Atribut »{name}« ({code}) je trajno izbrisan skupaj z {deletedValues:N0} vrednostmi pri izdelkih."
+        : $"Atribut »{name}« ({code}) je trajno izbrisan.";
+      Selected = null; Usage = null; Picked.Remove(code);
+      await LoadAsync();
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
 }

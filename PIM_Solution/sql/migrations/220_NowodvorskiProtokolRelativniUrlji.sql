@@ -57,6 +57,9 @@ END;
 
 DECLARE @transforms nvarchar(max) = OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'));
 IF @transforms IS NULL THROW 52201, N'220: map.ApplyValueTransforms ne obstaja.', 1;
+/* ziva definicija ima lahko samo LF, medtem ko ima literal @old spodaj v datoteki CRLF (znan
+   autocrlf zaplet, glej 214) - normaliziraj obe strani na LF pred primerjavo. */
+SET @transforms = REPLACE(@transforms, NCHAR(13), N'');
 
 IF @transforms NOT LIKE N'%/* HttpsPrefix220 */%'
 BEGIN
@@ -66,6 +69,7 @@ BEGIN
               THEN NULLIF(LTRIM(RTRIM(SUBSTRING(LTRIM(value.Value), LEN(step.Argument) + 1, 400))), N'''')
             ELSE value.Value
           END';
+  SET @old = REPLACE(@old, NCHAR(13), N'');
   DECLARE @new nvarchar(max) = @old + N'
         /* HttpsPrefix220 */
         WHEN N''HTTPSPREFIX'' THEN

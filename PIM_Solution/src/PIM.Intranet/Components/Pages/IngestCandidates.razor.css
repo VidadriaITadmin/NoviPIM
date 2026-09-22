@@ -1,0 +1,64 @@
+/* 240: pregled in uvoz kandidatov za nove artikle iz dobaviteljevih XML. */
+.kpi-grid { margin-top: 1rem; }
+.bulk-bar { align-items: center; display: flex; flex-wrap: wrap; gap: .55rem; padding: .65rem .8rem; position: sticky; top: .5rem; z-index: 3; }
+.bulk-bar .bulk-note { color: var(--pim-text-muted); font-size: .78rem; margin-left: auto; }
+.button-primary { background: var(--pim-primary); border: 0; border-radius: .35rem; color: #fff; font-weight: 600; padding: .45rem .9rem; }
+.button-primary:disabled { opacity: .5; }
+.tag { background: var(--pim-warn-bg); border-radius: 999px; color: var(--pim-warn-text); font-size: .64rem; font-weight: 700; letter-spacing: .04em; margin-left: .35rem; padding: .1rem .45rem; text-transform: uppercase; vertical-align: middle; }
+.supplier-title { color: var(--pim-text); font-size: .85rem; margin-top: .15rem; }
+.candidate-actions { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.candidate-actions .primary-action { border-color: var(--pim-primary); color: var(--pim-primary); font-weight: 600; }
+.candidate-actions .decision-reason { font-size: .78rem; max-width: 22rem; }
+tr.is-picked td { background: var(--pim-surface-hover); }
+tr.candidate-details > td { background: var(--pim-surface-soft, var(--pim-surface)); padding: .75rem 1rem 1rem; }
+.details-grid { display: grid; gap: .9rem 1.4rem; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+.details-group h3 { border-bottom: 1px solid var(--pim-border); font-size: .8rem; letter-spacing: .04em; margin: 0 0 .4rem; padding-bottom: .25rem; text-transform: uppercase; }
+.details-group h3 small { color: var(--pim-text-muted); font-weight: 400; margin-left: .3rem; }
+.details-group dl { display: grid; gap: .15rem .75rem; grid-template-columns: minmax(9rem, 14rem) 1fr; margin: 0; }
+.details-group dt { color: var(--pim-text-muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.details-group dd { font-size: .85rem; margin: 0; overflow-wrap: anywhere; }
+.details-media { display: flex; flex-wrap: wrap; gap: .4rem; }
+.details-media img { background: #fff; border: 1px solid var(--pim-border); border-radius: .3rem; height: 4.5rem; object-fit: contain; width: 4.5rem; }
+.muted { color: var(--pim-text-muted); }
+
+/* 241: pot v SAOP — stanje v vrstici in priprava (en artikel pod vrstico, izbrani nad tabelo). */
+.saop-state { margin-top: .35rem; }
+.saop-state .muted { font-size: .76rem; margin-top: .15rem; }
+tr.candidate-saop > td { background: #f8faff; border-left: 4px solid var(--pim-accent); padding: .9rem 1rem 1rem; }
+.saop-panel { border-left: 4px solid var(--pim-accent); }
+.saop-panel-head { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: .75rem; }
+.saop-panel-head h3 { font-size: 1rem; margin: .1rem 0 .3rem; }
+.saop-panel-head p { color: var(--pim-text-muted); font-size: .8rem; line-height: 1.45; margin: 0; max-width: 60rem; }
+.saop-panel-kicker { color: var(--pim-primary); font-size: .68rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.saop-required { color: var(--pim-bad-text); margin-left: .1rem; }
+.saop-panel-channel { border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; font-size: .78rem; gap: .35rem 1rem; margin-bottom: .75rem; padding: .5rem .75rem; }
+.saop-panel-channel.good { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); color: var(--pim-good-text); }
+.saop-panel-channel.bad { background: var(--pim-bad-bg); border: 1px solid var(--pim-bad-border); color: var(--pim-bad-text); }
+.saop-panel-section { margin-top: .75rem; }
+.saop-panel-section h4 { color: var(--pim-text-muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; margin: 0 0 .45rem; text-transform: uppercase; }
+.saop-fields { display: grid; gap: .55rem .9rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+.saop-field { display: flex; flex-direction: column; gap: .2rem; }
+.saop-field-label { color: var(--pim-text-strong); font-size: .78rem; font-weight: 600; }
+.saop-field-label small { color: var(--pim-text-muted); font-weight: 400; margin-left: .3rem; }
+.saop-field.is-missing .table-input { border-color: var(--pim-bad-border); }
+.saop-field small.muted, .saop-targets small.muted { font-size: .7rem; }
+.saop-missing { color: var(--pim-bad-text); font-size: .7rem; font-weight: 600; }
+.saop-targets { border-collapse: collapse; width: 100%; }
+.saop-targets th, .saop-targets td { border-bottom: 1px solid var(--pim-border-soft); font-size: .8rem; padding: .4rem .5rem; text-align: left; vertical-align: top; }
+.saop-targets th small { color: var(--pim-text-muted); display: block; font-size: .66rem; font-weight: 400; }
+.saop-targets td.is-missing .table-input { border-color: var(--pim-bad-border); }
+.saop-targets tr.is-blocked > td:first-child { border-left: 3px solid var(--pim-bad-border); }
+.saop-targets tr.is-ready > td:first-child { border-left: 3px solid var(--pim-good-border); }
+.saop-targets .saop-doc { min-width: 12rem; }
+.saop-targets .saop-doc .status-chip { display: inline-block; margin: 0 .25rem .25rem 0; }
+.saop-xml { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); margin-top: .75rem; padding: .5rem .75rem; }
+.saop-xml summary { cursor: pointer; font-size: .78rem; font-weight: 650; }
+.saop-xml pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: .72rem; margin: .5rem 0 0; max-height: 20rem; overflow: auto; white-space: pre-wrap; }
+.saop-panel-submit { align-items: center; background: var(--pim-surface); border: 1px solid #dbe4ff; border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-top: .9rem; padding: .8rem 1rem; }
+.saop-panel-submit p { color: var(--pim-text-muted); font-size: .75rem; line-height: 1.45; margin: .3rem 0 0; max-width: 46rem; }
+.saop-panel-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
+.saop-panel-outcome { border-radius: var(--pim-radius-sm); font-size: .8rem; margin-top: .75rem; padding: .7rem .9rem; }
+.saop-panel-outcome.good { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); color: var(--pim-good-text); }
+.saop-panel-outcome.bad { background: var(--pim-bad-bg); border: 1px solid var(--pim-bad-border); color: var(--pim-bad-text); }
+.saop-panel-outcome > div { margin-top: .3rem; }
+.saop-panel-links { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; }

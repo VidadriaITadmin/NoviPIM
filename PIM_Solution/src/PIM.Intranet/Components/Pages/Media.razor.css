@@ -11,10 +11,14 @@
 .media-meta-item strong { color: var(--pim-text-strong); font-size: .875rem; }
 .media-meta-item.warn { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
 .media-meta-item.warn strong { color: var(--pim-warn-text); }
-a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: var(--pim-shadow); }
+a.media-meta-item:hover, button.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: var(--pim-shadow); }
+button.media-meta-item { cursor: pointer; font: inherit; font-size: .75rem; }
+.media-meta-item.fresh { background: var(--pim-info-bg); border-color: var(--pim-info-border); color: var(--pim-info-text); }
+.media-meta-item.fresh strong { color: var(--pim-info-text); }
 
-/* ─── Orodna vrstica ──────────────────────────────────────────────────────── */
-.media-toolbar { flex-wrap: wrap; margin-bottom: .75rem; }
+/* ─── Orodna vrstica: iskanje, obseg in razvrstitev zgoraj, ozji filtri spodaj ── */
+.media-toolbar { align-items: stretch; flex-direction: column; gap: .6rem; margin-bottom: .75rem; }
+.media-toolbar-row { align-items: center; display: flex; flex-wrap: wrap; gap: .6rem; }
 .media-search { flex: 1 1 22rem; min-width: 14rem; position: relative; }
 .media-search .search-input { min-width: 0; padding-left: 2.1rem; width: 100%; }
 .media-search-icon {
@@ -70,6 +74,16 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
 .media-role { color: var(--pim-text-muted); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-file { color: var(--pim-text-muted); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-open { color: var(--pim-accent-link); font-size: .72rem; margin-top: .15rem; }
+.media-item-line { align-items: center; display: flex; gap: .35rem; min-width: 0; }
+.media-product { color: var(--pim-text-soft); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-added { color: var(--pim-text-muted); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inactive-badge {
+  background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); border-radius: 999px;
+  color: var(--pim-neutral-text); font-size: .6rem; font-weight: 600; letter-spacing: .04em;
+  padding: .05rem .4rem; text-transform: uppercase; white-space: nowrap;
+}
+.row-product { color: var(--pim-text-muted); display: block; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nowrap { white-space: nowrap; }
 .media-note { color: var(--pim-warn-text); font-size: .72rem; }
 
 /* Predogled: fiksno razmerje in omejena slika — brez tega slika zraste čez stran. */
@@ -126,7 +140,7 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
 }
 .media-lightbox-panel header { align-items: center; border-bottom: 1px solid var(--pim-border); display: flex; gap: 1rem; justify-content: space-between; padding: .8rem 1rem; }
 .media-lightbox-panel header strong { display: block; color: var(--pim-text-strong); }
-.media-lightbox-panel header span { color: var(--pim-text-muted); font-size: .75rem; }
+.media-lightbox-panel header span { color: var(--pim-text-muted); display: block; font-size: .75rem; }
 .media-lightbox-body { align-items: center; background: var(--pim-surface-subtle); display: flex; justify-content: center; min-height: 12rem; overflow: auto; padding: 1rem; }
 .media-lightbox-body:has(.media-lightbox-pdf) { padding: .5rem; }
 .media-lightbox-body img { max-height: 62vh; max-width: 100%; object-fit: contain; }
@@ -136,7 +150,7 @@ a.media-meta-item:hover { border-color: var(--pim-border-strong); box-shadow: va
 .media-lightbox-panel footer .media-address { color: var(--pim-text-muted); font-size: .72rem; overflow-wrap: anywhere; }
 
 @media (max-width: 900px) {
-  .media-toolbar { align-items: stretch; flex-direction: column; }
+  .media-toolbar-row { align-items: stretch; flex-direction: column; }
   .media-kinds .result-count { margin-left: 0; width: 100%; }
   .media-grid { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); padding: .85rem; }
 }

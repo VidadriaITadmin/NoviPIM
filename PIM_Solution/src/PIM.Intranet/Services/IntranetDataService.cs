@@ -148,6 +148,27 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
       : null;
   }
 
+  /// <summary>
+  /// Podjetje, ki mu stranka pripada. Isti razlog kot pri izdelku: seznam strank kaže vsa podjetja
+  /// (250), kartica pa je prej vzela prvo aktivno podjetje (DEMO) in stranke IQLighting ni našla.
+  /// </summary>
+  public async Task<OrganizationContext?> GetCustomerOrganizationAsync(long customerId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT TOP (1) customer.OrganizationId, Name = COALESCE(organizationValue.Name, CONVERT(nvarchar(200), customer.OrganizationId))
+      FROM b2b.Customer AS customer
+      LEFT JOIN dbo.OrganizationConfig AS organizationValue ON organizationValue.OrganizationId = customer.OrganizationId
+      WHERE customer.CustomerId = @CustomerId;
+      """, connection);
+    command.Parameters.AddWithValue("@CustomerId", customerId);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    return await reader.ReadAsync(cancellationToken)
+      ? new(reader.GetInt32(reader.GetOrdinal("OrganizationId")), reader.GetString(reader.GetOrdinal("Name")))
+      : null;
+  }
+
   public async Task<int> GetOpenAlertCountAsync(int organizationId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);

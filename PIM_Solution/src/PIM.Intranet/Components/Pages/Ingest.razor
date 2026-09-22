@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.PipelineReadService Pipeline
 @inject PIM.Intranet.Services.IntranetDataService Data
+@inject PIM.Intranet.Services.SupplierCandidateReadService Candidates
 
 <PageTitle>Vhodni podatki</PageTitle>
 <PimPage Title="Vhodni podatki" Subtitle="Vsi registrirani vhodi vseh podjetij na enem mestu: kaj beremo, od kod, kdaj nazadnje in s kakšnim izidom. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
@@ -18,6 +19,10 @@
       <PimStat Label="Nerazvrščene vrednosti" Value="@Summary.UnmappedValues.ToString("N0")" Note="čakajo na slovar" Href="zajem/neujemanja" />
       <PimStat Label="Zavrnjena zaloga" Value="@Summary.StockUnmatchedCount.ToString("N0")" Href="zajem/tezave?vrsta=STOCK" />
       <PimStat Label="Tehnične težave" Value="@Summary.OpenTechnicalProblems.ToString("N0")" Note="mrtva pisma in napake v 7 dneh" Href="zajem/tezave" />
+      @* 240: novi artikli iz dobaviteljevih XML cakajo na odlocitev; do zdaj stran brez vstopne tocke. *@
+      <PimStat Label="Novi artikli iz XML" Value="@(PendingCandidates?.ToString("N0") ?? "—")" Note="čakajo na pregled in uvoz" Href="zajem/novi-artikli" />
+      @* 241: uvozeni artikli, ki v SAOP se niso in ne cakajo v vrsti - drugi korak poti. *@
+      <PimStat Label="Uvoženi, čakajo na SAOP" Value="@(CandidatesWaitingForSaop?.ToString("N0") ?? "—")" Note="v PIM so, v SAOP še ne" Href="zajem/novi-artikli?saop=NOT_QUEUED" />
     </section>
   }
 
@@ -111,6 +116,8 @@
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<string> Sources = [];
   InboundOverviewSummary? Summary;
+  long? PendingCandidates;
+  long? CandidatesWaitingForSaop;
   bool Loading = true;
   string? Error;
 
@@ -163,6 +170,15 @@
       Flows = await flowsTask;
       Summary = await summaryTask;
       Sources = (await optionsTask).Sources;
+      // Stevec kandidatov je locen klic in ne sme podreti pregleda, ce procedura (240) se ni uveljavljena.
+      try
+      {
+        // Brez filtra stanja: isti klic da cakajoce (PENDING) in uvozene, ki se cakajo na SAOP (241).
+        var totals = (await Candidates.GetCandidatesAsync(scope, null, null, null, 0, 1)).Totals;
+        PendingCandidates = totals.PendingCount;
+        CandidatesWaitingForSaop = totals.ImportedWaitingCount;
+      }
+      catch { PendingCandidates = null; CandidatesWaitingForSaop = null; }
 
       // Po zozitvi podjetja izbrani vir morda ne obstaja vec; tiho ga sprostimo,
       // da tabela ne ostane prazna brez pojasnila.

@@ -70,7 +70,7 @@ if ($intranet) {
   Start-Sleep -Seconds 2
 }
 
-& dotnet build $sln --nologo | Out-Null
+& dotnet build $sln --nologo -m:1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
   Zapisi Red "BUILD NEUSPESEN. Pozeni 'dotnet build PIM_Solution\PIM.sln' za podrobnosti."
   exit 1

@@ -1,0 +1,19 @@
+out.VerifyEchoBatch — nova procedura (migracija 243), uveljavljena na SONJA
+
+Glej sql/migrations/243_VerifyEchoBatch.sql za celotno besedilo. Na kratko: iz preiskave
+"čaka SAOP" (NW.6530) se je izkazalo, da obstoječ mehanizem potrditve iz SAOP nazaj
+(out.VerifyEcho, ExpectedEchoHash, EchoVerifier.Decide) ni bil nikoli poklican iz nobenega
+delujočega dela kode — vsako odobreno in poslano sporočilo je zato trajno obtičalo na "Sent".
+
+out.VerifyEchoBatch je nova, ločena procedura: vzame seznam (entityKey, field, value, qualifier),
+izračuna isti kanonični hash kot out.EnqueueMessage (ista FOR JSON PATH oblika) in za vsako
+polje pokliče obstoječi out.VerifyEcho. Ne spreminja map.ProcessRawInbox (19-krat predelana,
+prevec tvegano za ročni poseg pod pritiskom).
+
+Klicatelj: nova metoda ProductWorkbookService.VerifyPendingEchoesAsync (PIM.Intranet, commit
+po tem zapisu) — ponovno uporabi obstoječo, preverjeno pot branja trenutne kanonične vrednosti
+(intranet.GetProductWorkbook / Stored(), ista logika kot primerjava pri uvozu delovnega lista).
+Sprožena ročno z gumbom "Preveri potrditve SAOP" na /outbound, dokler ni potrjeno na živo in
+povezano v reden cikel.
+
+Uveljavljeno na SONJA prek Invoke-PendingMigrations.ps1 (ne ročno prek SSMS).

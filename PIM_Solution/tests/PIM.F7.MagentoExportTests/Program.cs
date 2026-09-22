@@ -105,6 +105,8 @@ await Throws<InvalidOperationException>(
 await Throws<ArgumentOutOfRangeException>(
   () => MagentoExportCommand.ExecuteAsync(0, Path.GetTempPath(), "Server=x", CancellationToken.None),
   "OrganizationId 0 mora pasti.");
+// 251: worker si iz zapisanih vrstic zapomni sifro in "Spletne strani" (objava / odjava) — brez baze.
+WebWithdrawalTests.RunWithoutDatabase();
 
 // ---------------------------------------------------------------------------
 // 5. Ukaz dejansko izveden proti razvojni bazi.
@@ -144,14 +146,16 @@ await CatalogLifecycleTests.RunAsync(connection);
 var registryProductColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode);
 var registryCustomerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode);
 
-Equal(176, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS mora imeti 176 aktivnih stolpcev.");
+Equal(180, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS ima po migraciji 234 še štiri stolpce odprodaje in eksponata.");
 Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
-Equal(true, registryProductColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
+Equal(true, registryProductColumns.Take(176).Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo izdelkov.");
 Equal(true, registryCustomerColumns.Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.CustomerHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo strank.");
-Equal(true, registryProductColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 176)),
+Equal(true, registryProductColumns.Take(176).Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 176)),
   "SortOrder izdelkov mora biti zvezen 1..176.");
+Equal(true, registryProductColumns.Skip(176).Select(column => column.OutputColumnName)
+  .SequenceEqual(new[] { "Odprodaja", "Odprodaja - popust %", "Odprodaja - količina", "Razstavni eksponat" }), "Štiri dodatne glave iz migracije 234.");
 Equal(true, registryCustomerColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 19)),
   "SortOrder strank mora biti zvezen 1..19.");
 
@@ -524,7 +528,7 @@ try
   var customerLines = (await File.ReadAllTextAsync(customersCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-  Equal(176, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora imeti 176 stolpcev.");
+  Equal(registryProductColumns.Count, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora ustrezati aktivnemu registru.");
   Equal(19, SplitCsvLine(customerLines[0]).Count, "Glava strank mora imeti 19 stolpcev.");
   Equal(true, productLines.Length > 1, "Izvoz mora vrniti vsaj eno vrstico izdelka — če je SQL padel, jih ni.");
 
@@ -532,7 +536,7 @@ try
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
     ?? throw new InvalidOperationException($"Izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-  Equal(176, row.Count, "Vrstica izdelka mora imeti 176 stolpcev.");
+  Equal(registryProductColumns.Count, row.Count, "Vrstica izdelka mora ustrezati aktivnemu registru.");
   Equal("111.11", row[22], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
   Equal("222.22", row[21],
     "Cena B2B mora priti iz cenika, ki ga doloca out.ExportPriceList — sifre F7_CENIK v programu ni.");
@@ -595,8 +599,11 @@ try
       .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
       ?? throw new InvalidOperationException($"Drugi izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-    Equal("", withoutRegistry[21],
-      "Brez aktivne vrstice registra mora stolpec 'Cena B2B' ostati prazen, cetudi cena v bazi obstaja.");
+    // Od 216 ima register za Product.PriceB2B tudi pravi cenik (VID B2B, out.ExportPriceList 96); po izklopu
+    // vrstice F7 stolpec ne sme vec nositi cene iz F7_CENIK — kar ostane, pove preostali aktivni register
+    // (prazno, kadar ga ni, ali pravi cenik). Prej je test zahteval prazen stolpec in je bil od 216 zastarel.
+    Equal(false, withoutRegistry[21] == "222.22",
+      "Brez aktivne vrstice registra stolpec 'Cena B2B' ne sme vec nositi cene iz F7_CENIK, cetudi cena v bazi obstaja.");
     Equal("111.11", withoutRegistry[22],
       "Izklop vrstice za B2B ne sme vplivati na stolpec 'Cena B2C'.");
   }
@@ -657,16 +664,14 @@ try
 
   Equal(true, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
     "Aktiven, za svetila_si oznacen in veljaven izdelek mora biti v katalogu.");
-  try
-  {
-    await ExecuteForIdAsync("UPDATE pim.ProductWebShop SET IsPublished = 0 WHERE ProductId = @Id AND WebShopCode = N'svetila_si';", canonProductId);
-    Equal(false, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
-      "Izdelek brez kljukice za svetila_si ne sme v katalog, cetudi ima kategorijo in je veljaven.");
-  }
-  finally
-  {
-    await ExecuteForIdAsync("UPDATE pim.ProductWebShop SET IsPublished = 1 WHERE ProductId = @Id AND WebShopCode = N'svetila_si';", canonProductId);
-  }
+  // 251 (uporabnik 2026-09-22): pravilo 220 (vsak aktiven artikel brez kljukice gre v datoteko s praznimi
+  // "Spletne strani") je zamenjano. V katalog.csv gre objavljen artikel (aktiven, kljukica, veljaven) in
+  // odjavna vrstica za artikel, ki je bil objavljen in ni vec; artikel, ki ni bil nikoli na spletu, ne gre.
+  // Samodejni umik ob pobrisani sliki, zavrnjena kljukica in odjavno okno — vse v eni razveljavljeni
+  // transakciji na tem artiklu (WebWithdrawalTests).
+  await WebWithdrawalTests.RunAsync(connection, organizationId, canonProductId, itemId);
+  Equal(true, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
+    "Po razveljavljeni transakciji 251 mora biti artikel spet objavljen v katalogu.");
 
   // Stranke (202): steje samo aktivnost iz SAOP. Oznaka Splet in tip nista pogoj — uporabnik
   // 2026-09-15: "ta splet kljukica se tice samo artiklov".
@@ -723,6 +728,101 @@ try
   Equal(0, Directory.GetFiles(exportDirectory, "*.tmp").Length, "Ne sme ostati .tmp datoteka.");
   Equal(0, Directory.GetFiles(exportDirectory, "*.prej").Length, "Ne sme ostati .prej datoteka.");
   Equal(true, File.Exists(markerPath), "Po povratku mora oznaka spet veljati za vrnjeni par.");
+
+  using (MagentoExportLock.Acquire(exportDirectory))
+  {
+    await Throws<InvalidOperationException>(
+      () => MagentoExportCommand.ExecuteAsync(organizationId, exportDirectory, connectionString),
+      "Sočasni izvoz je zavrnjen pred zamenjavo datotek.");
+  }
+  await AssertLastPairFailedAsync();
+
+  // Oba CSV sta že zamenjana, šele objava markerja pade. Vrniti se mora cel prejšnji par.
+  var previousMarker = await File.ReadAllTextAsync(markerPath);
+  File.Delete(markerPath);
+  Directory.CreateDirectory(markerPath);
+  try
+  {
+    try
+    {
+      await MagentoExportCommand.ExecuteAsync(organizationId, exportDirectory, connectionString);
+      throw new Exception("Objava markerja v mapo bi morala pasti.");
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    Equal(productBefore, await File.ReadAllTextAsync(productsCsv, Encoding.UTF8), "Marker failure vrne prejšnji katalog.");
+    Equal(customerBefore, await File.ReadAllTextAsync(customersCsv, Encoding.UTF8), "Marker failure vrne prejšnje stranke.");
+    await AssertLastPairFailedAsync();
+  }
+  finally { Directory.Delete(markerPath); await File.WriteAllTextAsync(markerPath, previousMarker); }
+
+  async Task AssertLastPairFailedAsync()
+  {
+    await using var log = new SqlCommand("SELECT TOP(2) Status, ErrorRedacted FROM out.ExportRun WHERE OrganizationId=@Org AND ProfileCode IN ('MAGENTO_PRODUCTS','MAGENTO_CUSTOMERS') ORDER BY ExportRunId DESC;", connection);
+    log.Parameters.AddWithValue("@Org", organizationId);
+    await using var reader = await log.ExecuteReaderAsync();
+    var count = 0;
+    while (await reader.ReadAsync())
+    {
+      Equal("Failed", reader.GetString(0), "Neuspešna objava je Failed, nikoli Succeeded ali Running.");
+      Equal(false, reader.IsDBNull(1), "Zgodovina vsebuje dejanski vzrok napake.");
+      count++;
+    }
+    Equal(2, count, "Oba profila dobita neuspešen zaključek.");
+  }
+
+  // 242: hash objavljene datoteke ne uspe (nekdo jo drži izključujoče, npr. protivirusni program).
+  // Datoteka JE objavljena, zato mora zaključek ostati Succeeded — brez hasha, z velikostjo — in ne
+  // sme ostati v Running niti biti prikazan kot padec.
+  {
+    var hashRunKey = await ExportRunLog.BeginAsync(connection, "MAGENTO_PRODUCTS", organizationId, CancellationToken.None);
+    Equal(true, hashRunKey is not null, "Zagon za preizkus hasha mora biti zabeležen.");
+    await using (var exclusive = new FileStream(productsCsv, FileMode.Open, FileAccess.Read, FileShare.None))
+    {
+      Equal<string?>(null, await ExportRunLog.TryHashAsync(productsCsv, CancellationToken.None),
+        "Izključujoče zaklenjena datoteka: hash vrne null, ne izjeme.");
+      await ExportRunLog.CompleteAsync(connection, hashRunKey, succeeded: true, rowCount: 1, columnCount: 1,
+        filePath: productsCsv, ct: CancellationToken.None);
+    }
+    await using var hashCheck = new SqlCommand("SELECT Status, Sha256, ByteCountValue FROM out.ExportRun WHERE RunKey = @Key;", connection);
+    hashCheck.Parameters.AddWithValue("@Key", hashRunKey!.Value);
+    await using (var hashReader = await hashCheck.ExecuteReaderAsync())
+    {
+      Equal(true, await hashReader.ReadAsync(), "Zapis zagona za preizkus hasha mora obstajati.");
+      Equal("Succeeded", hashReader.GetString(0), "Neuspel hash ne sme spremeniti izida: datoteka je objavljena.");
+      Equal(true, hashReader.IsDBNull(1), "Kadar hasha ni bilo mogoče prebrati, ostane prazen — ne izmišljen.");
+      Equal(false, hashReader.IsDBNull(2), "Velikost datoteke ostane zapisana tudi brez hasha.");
+    }
+  }
+
+  // 242: nezapisljiva izhodna mapa mora povedati mapo, račun in kaj storiti — ne samo "Access ... is denied".
+  {
+    var deniedDirectory = Path.Combine(exportDirectory, "brez-pravic");
+    Directory.CreateDirectory(deniedDirectory);
+    var deniedInfo = new DirectoryInfo(deniedDirectory);
+    var security = deniedInfo.GetAccessControl();
+    var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+    var deny = new System.Security.AccessControl.FileSystemAccessRule(me,
+      System.Security.AccessControl.FileSystemRights.CreateFiles | System.Security.AccessControl.FileSystemRights.WriteData,
+      System.Security.AccessControl.AccessControlType.Deny);
+    security.AddAccessRule(deny);
+    deniedInfo.SetAccessControl(security);
+    try
+    {
+      UnauthorizedAccessException? denied = null;
+      try { await MagentoExportCommand.ExecuteAsync(organizationId, deniedDirectory, connectionString, CancellationToken.None); }
+      catch (UnauthorizedAccessException exception) { denied = exception; }
+      Equal(true, denied is not null, "Izvoz v mapo brez pravice pisanja mora pasti z UnauthorizedAccessException.");
+      Contains(denied!.Message, deniedDirectory, "Napaka mora imenovati izhodno mapo.");
+      Contains(denied.Message, Environment.UserName, "Napaka mora imenovati račun, ki mu manjka pravica.");
+      Contains(denied.Message, "Nastavi-pravice-izvozne-mape.ps1", "Napaka mora povedati, kako pravico urediti.");
+      await AssertLastPairFailedAsync();
+    }
+    finally
+    {
+      security.RemoveAccessRule(deny);
+      deniedInfo.SetAccessControl(security);
+    }
+  }
 
   Console.WriteLine($"F7 Magento izvoz proti bazi: {productLines.Length - 1} izdelkov, {customerLines.Length - 1} strank, glavna slika za {itemId} PASS.");
 }
