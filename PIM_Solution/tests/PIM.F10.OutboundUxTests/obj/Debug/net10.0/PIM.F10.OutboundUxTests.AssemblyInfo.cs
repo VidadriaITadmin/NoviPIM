@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PIM.F10.OutboundUxTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ac5c834cb3c108ec5dae725b8598c9782d38e12b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+244ef9e141e6d92eb52f982296d2975cf2ed14b8")]
 [assembly: System.Reflection.AssemblyProductAttribute("PIM.F10.OutboundUxTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PIM.F10.OutboundUxTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -76,7 +76,6 @@ C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\scopedcss\Components\Pages\ValidationErrors.razor.rz.scp.css
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\scopedcss\bundle\PIM.Intranet.styles.css
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\scopedcss\projectbundle\PIM.Intranet.bundle.scp.css
-C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\wz6hg0kvge-{0}-vtmbuwbncv-vtmbuwbncv.gz
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\staticwebassets.build.json
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\staticwebassets.build.json.cache
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\staticwebassets.development.json
@@ -126,7 +125,6 @@ C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\scopedcss\Components\Pages\Error.razor.rz.scp.css
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\5s06n77ndm-{0}-9hsif5t8mt-9hsif5t8mt.gz
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\63tca8ad26-{0}-dwu72t6gfx-dwu72t6gfx.gz
-C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\bgutgugxay-{0}-bpk8xqwxhs-bpk8xqwxhs.gz
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\haqd6xgg9v-{0}-8inm30yfxf-8inm30yfxf.gz
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\85cfce40-d391-4495-b00b-f654bce5e108\scratchpad\intranet-bin\appsettings.Development.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\85cfce40-d391-4495-b00b-f654bce5e108\scratchpad\intranet-bin\appsettings.json
@@ -650,7 +648,6 @@ C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\e700
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\e700e4b8-786e-4d9d-b55d-8c45ff735e73\scratchpad\PIM.F10.ProductDetailUxTests\PIM.Intranet.runtimeconfig.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\e700e4b8-786e-4d9d-b55d-8c45ff735e73\scratchpad\PIM.F10.ProductDetailUxTests\PIM.Intranet.dll
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\e700e4b8-786e-4d9d-b55d-8c45ff735e73\scratchpad\PIM.F10.ProductDetailUxTests\PIM.Intranet.pdb
-C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\t48ciep8a3-{0}-3x9ahjgmq4-3x9ahjgmq4.gz
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\74a8df37-9b35-49c1-afb4-2e3ad62adfad\scratchpad\exportjob-http\out\appsettings.Development.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\74a8df37-9b35-49c1-afb4-2e3ad62adfad\scratchpad\exportjob-http\out\appsettings.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\74a8df37-9b35-49c1-afb4-2e3ad62adfad\scratchpad\exportjob-http\out\appsettings.Production.json
@@ -1087,8 +1084,6 @@ C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\ef4d
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\ef4d8a9d-df7d-4607-823b-73201a5743ed\scratchpad\intranet\PIM.Intranet.runtimeconfig.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\ef4d8a9d-df7d-4607-823b-73201a5743ed\scratchpad\intranet\PIM.Intranet.dll
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\ef4d8a9d-df7d-4607-823b-73201a5743ed\scratchpad\intranet\PIM.Intranet.pdb
-C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\z1lkab814a-{0}-8xh6kms99m-8xh6kms99m.gz
-C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\tszpm05h86-{0}-aho451fpkc-aho451fpkc.gz
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\d52ae152-62bf-49cd-bc96-e420ac1c27b6\scratchpad\valrepro\out\appsettings.Development.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\d52ae152-62bf-49cd-bc96-e420ac1c27b6\scratchpad\valrepro\out\appsettings.json
 C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\d52ae152-62bf-49cd-bc96-e420ac1c27b6\scratchpad\valrepro\out\appsettings.Production.json
@@ -1201,3 +1196,8 @@ C:\Users\david\AppData\Local\Temp\claude\C--Users-david-Desktop-PIM-NoviPIM\d52a
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\9hfkjsh7io-{0}-jvx9259zna-jvx9259zna.gz
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\6prmq3nn92-{0}-jvx9259zna-jvx9259zna.gz
 C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\z1lkab814a-{0}-kaxku7ctbm-kaxku7ctbm.gz
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\bgutgugxay-{0}-6gzpyzhau4-6gzpyzhau4.gz
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\wz6hg0kvge-{0}-y73oeknipy-y73oeknipy.gz
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\t48ciep8a3-{0}-qlbhzy7fk6-qlbhzy7fk6.gz
+C:\Users\david\Desktop\PIM\NoviPIM\PIM_Solution\src\PIM.Intranet\obj\Debug\net10.0\compressed\tszpm05h86-{0}-1k94uheg7s-1k94uheg7s.gz
