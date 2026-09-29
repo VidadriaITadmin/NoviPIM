@@ -158,7 +158,8 @@
       <section id="price-bulk-panel" class="ui-card panel price-bulk-panel" role="group" aria-labelledby="price-bulk-title">
         <h2 id="price-bulk-title">Paketna sprememba cen — @SelectionLabel</h2>
         <p class="hint">
-          Spremeni se samo <strong>neto cena</strong> v enem ceniku; DDV in aktivnost ostaneta. Cena se zaokroži na cent.
+          Vpisuješ in spreminjaš <strong>neto ceno — brez DDV</strong>, kot jo vodi SAOP, v enem ceniku; stopnja DDV in aktivnost ostaneta.
+          Cena se zaokroži na cent. V predogledu vidiš tudi ceno z DDV.
           Izdelki brez cene v tem ceniku in neaktivne cene se preskočijo. Vse gre <strong>v vrsto za SAOP</strong> in čaka odobritev
           na zavihku »V SAOP« — nič ne odide samo. V PIM se nova cena pokaže, ko jo zajem cen prinese nazaj iz SAOP.
         </p>
@@ -174,11 +175,11 @@
             <label for="bulk-mode">Sprememba</label>
             <select id="bulk-mode" class="filter-select" @bind="BulkMode" @bind:after="ResetBulkPreview">
               <option value="percent">Za odstotek (+ ali −)</option>
-              <option value="value">Na novo neto vrednost</option>
+              <option value="value">Na novo neto vrednost (brez DDV)</option>
             </select>
           </div>
           <div class="filter-field">
-            <label for="bulk-value">@(BulkMode == "percent" ? "Odstotek (npr. 5 ali −3,5)" : "Nova neto cena (EUR)")</label>
+            <label for="bulk-value">@(BulkMode == "percent" ? "Odstotek (npr. 5 ali −3,5)" : "Nova neto cena brez DDV (EUR)")</label>
             <input id="bulk-value" class="form-input numeric-input" inputmode="decimal" @bind="BulkValue" @bind:event="oninput" @bind:after="ResetBulkPreview"
                    aria-invalid="@(BulkErrorField == "value" ? "true" : null)" aria-describedby="bulk-error" />
           </div>
@@ -228,6 +229,7 @@
                       <td><span class="code-value">@line.ItemId</span></td>
                       <td class="numeric">@(line.OldNet?.ToString("N2") ?? "—")</td>
                       <td class="numeric"><strong>@line.NewNet.ToString("N2")</strong></td>
+                      <td class="numeric">@((line.NewVat ?? line.OldVat) is { } vat ? Math.Round(line.NewNet * (1 + vat / 100), 2, MidpointRounding.AwayFromZero).ToString("N2") : "—")</td>
                       <td class="numeric @(line.ChangePercent is { } p && Math.Abs(p) > 25 ? "warn-text" : null)">@(line.ChangePercent is { } percent ? percent.ToString("+0.0;-0.0;0") + " %" : "—")</td>
                       <td>@(line.ValidFrom is { } from ? from.ToString("d. M. yyyy") : "ostane")</td>
                     </tr>
@@ -630,8 +632,8 @@ else
 
   static readonly IReadOnlyList<PimColumn> PreviewColumns =
   [
-    new("Podjetje"), new("Cenik"), new("Artikel"), new("Neto prej", Numeric: true), new("Neto potem", Numeric: true),
-    new("Sprememba", Numeric: true), new("Velja od"),
+    new("Podjetje"), new("Cenik"), new("Artikel"), new("Neto prej (brez DDV)", Numeric: true), new("Neto potem (brez DDV)", Numeric: true),
+    new("Z DDV potem", Numeric: true), new("Sprememba", Numeric: true), new("Velja od"),
   ];
 
   static readonly IReadOnlyList<PimColumn> DetailColumns =

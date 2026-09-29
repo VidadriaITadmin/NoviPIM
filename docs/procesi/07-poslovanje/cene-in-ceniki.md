@@ -102,6 +102,7 @@ flowchart LR
 - SAOP za cene nima PATCH: nova cena `AddPrices`, sprememba `ModifyPricesV2`, nov cenik `AddPriceLists`. Cena za cenik, ki ga SAOP še ne pozna, počaka.
 - Nov cenik se doda na zavihku »Ceniki«, ne z uvozom.
 - Paketna sprememba (#31, privzeto za noč, odločitev #38): spremeni samo neto v enem ceniku, DDV in aktivnost ostaneta, zaokroži na cent (AwayFromZero), osnova za odstotek je cena iz SAOP (ne tista v vrsti). Novih cen ne dodaja; neaktivne cene preskoči. Izbira se nikoli ne pomeša med podjetji — serija nastane za vsako podjetje posebej.
+- DDV (odgovor lastnika na #38): uporabnik mora vedeti, ali je DDV vključen. Paketna sprememba zato povsod piše »neto — brez DDV« in v predogledu pokaže tudi »Z DDV potem«. Kako spletna trgovina ve, ali je cena z DDV (NW artikli z DDV, ostali brez), je ločena naloga.
 - Cene v SAOP ni mogoče izbrisati; povratek uvoza jo izklopi (Aktivna = N). Povrne se samo cena, ki jo je zajem že prinesel; sicer je pravi povratek preklic čakajoče serije.
 - Na splet: B2B cena IQ artiklov je VID-ova cena B2B po isti šifri; artikel brez nje je brez B2B cene.
 

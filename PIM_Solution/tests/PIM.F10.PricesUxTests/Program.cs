@@ -71,6 +71,8 @@ foreach (var contract in new[]
   "source: \"BULK\"",                                   // gre po poti uvoza v vrsto za SAOP
   "History.RecordAsync(ImportKinds.Prices",              // zgodovina za povratek na /uvozi
   "Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)", // samo urednik (SaopWrite); komerciala ne
+  "Nova neto cena brez DDV (EUR)",                       // #38: uporabnik mora vedeti, ali je DDV vključen
+  "new(\"Z DDV potem\", Numeric: true)",                  // predogled pokaže tudi ceno z DDV
 })
   Assert(markup.Contains(contract, StringComparison.Ordinal), "Paketna sprememba cen (#31) nima: " + contract);
 Assert(!markup.Contains("canon.ProductPrice SET", StringComparison.OrdinalIgnoreCase), "Paketna sprememba ne sme pisati v canon.ProductPrice.");
