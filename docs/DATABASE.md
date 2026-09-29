@@ -2402,3 +2402,14 @@ Preizkus uvoza Azzardo (2026-09-29): artikel v odprodaji je imel v novih stolpci
 - Razvojna baza: 119 artiklov v odprodaji, v starih stolpcih 0 neusklajenih, ostalih 2.775 vrstic nespremenjenih; izvoz 40 s kot prej.
 
 **Objekti:** `out.GetExportRows`. **Ročni korak:** ne. **Povratek:** iz definicije odstraniti blok OdprodajaStariStolpci304.
+
+## »Popust na artikel« brez odprodaje (migracija 305_PopustNaArtikluBrezOdprodaje, 2026-09-29)
+
+304 je popust odprodaje zapisala v `Product.ClearancePercent`, ki ga bereta dva stolpca: »Popust odprodaje %« in »Popust na artikel« (COL030). Uporabnik: »Popust na artikel« ne sme mešati odprodaje (nevarnost dvojnega popusta v Magentu). »Popust na artikel« ne izhaja iz cenikov SAOP — PIM iz cenikov zajema samo neto ceno in DDV; vir je od 204 oddelčni popust X/O iz Nadzora kataloga (045: prazen stolpec »Popust«, 217: preimenovan).
+
+- **`out.GetExportRows`** (oznaka PopustNaArtikluBrezOdprodaje305 v bloku 304): novo polje `Clearance.CatalogDiscountPercent` = `Product.ClearancePercent`; blok 304 pri artiklih v odprodaji prepiše to polje (in `Clearance.Quantity`), `Product.ClearancePercent` ostane nedotaknjen.
+- **`out.ExportColumn`:** »Popust odprodaje %« (MAGENTO_PRODUCTS COL217 in CATALOG_CLEARANCE, MAGENTO_STOCK_PRICES CATALOG_CLEARANCE) → `Clearance.CatalogDiscountPercent`. »Popust na artikel« (COL030) ostane `Product.ClearancePercent`.
+- Razvojna baza: 119 artiklov v odprodaji — »Popust na artikel« 0, »Popust odprodaje %« in »Količina odprodaje« enaka novima stolpcema; hitri izvoz cen enako; ostale vrstice nespremenjene. F7 catalog lifecycle (X/O) PASS.
+- Besedilo v proceduri je brez šumnikov: `Invoke-PendingMigrations.ps1` dinamičnega SQL ne bere kot UTF-8 (komentar bloka 304 ima zato pokvarjene znake, na delovanje ne vpliva).
+
+**Objekti:** `out.GetExportRows`, podatki `out.ExportColumn`. **Ročni korak:** ne. **Povratek:** stolpce »Popust odprodaje %« vrniti na `Product.ClearancePercent` in iz bloka 304 odstraniti vrstice 305.
