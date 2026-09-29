@@ -5,4 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- #15: pravila za kandidate podvojenih atributov se preverijo brez baze. -->
+    <Compile Include="..\..\src\PIM.Intranet\Services\AttributeDuplicatePolicy.cs" Link="AttributeDuplicatePolicy.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\PimText.cs" Link="PimText.cs" />
+  </ItemGroup>
 </Project>
