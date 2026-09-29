@@ -31,7 +31,7 @@ public static class MagentoCsvContract
     "Valuta",
     "DDV",
     "Pakirna količina",
-    // 302: prej »Omejitev pri naročanju« (brez vira); DA/NE = na spletu samo po celih paketih (»Pakirna količina«).
+    // 302: prej »Omejitev pri naročanju« (brez vira); 1/0 (303) = na spletu samo po celih paketih (»Pakirna količina«).
     "Pakirno naročanje",
     "Skupina popusta",
     "S popust %",

@@ -300,7 +300,29 @@
                 <div><dt>V katalog.csv</dt><dd>@(web.IsWithdrawalRow ? "da — odjavna vrstica (prazne Spletne strani, Magento ga umakne)" : web.IsInCatalogCsv ? "da" : "ne")</dd></div>
                 <div><dt>Blokirajoče napake za splet</dt><dd>@web.WebBlockingCount.ToString("N0")</dd></div>
                 <div><dt>Opozorila</dt><dd>@web.WarningCount.ToString("N0")</dd></div>
-                <div><dt>Ročni zadržek</dt><dd>@(web.HasGlobalHold ? "vsi kanali" : web.HasWebHold ? "splet" : "ne")</dd></div>
+                <div>
+                  <dt>Zadržek</dt>
+                  <dd>
+                    @if (PackageOrder is { Holds.Count: > 0 } holdState)
+                    {
+                      <span class="hold-list">
+                      @foreach (var hold in holdState.Holds)
+                      {
+                        <span class="hold-line">
+                          <strong>@HoldChannel(hold.ChannelCode)</strong> ·
+                          @(hold.IsRule ? $"samodejni ({HoldRuleName(hold.CreatedBy)})" : $"ročni ({hold.CreatedBy})") ·
+                          @PimFormat.Ago(hold.CreatedUtc)
+                          <span class="muted">— @hold.Reason</span>
+                        </span>
+                      }
+                      </span>
+                    }
+                    else
+                    {
+                      @(web.HasGlobalHold ? "vsi kanali" : web.HasWebHold ? "splet" : "ne")
+                    }
+                  </dd>
+                </div>
                 <div><dt>Izključen iz kataloga</dt><dd>@(web.IsExcludedFromCatalog ? "da" : "ne")</dd></div>
                 <div><dt>Objavljen v PIM</dt><dd>@(web.IsPromoted ? "da" : "ne — objava teče po uspešni validaciji")</dd></div>
                 <div><dt>ERP: za splet</dt><dd>@(web.WebPublish ? "da" : "ne") <span class="muted">(informativno)</span></dd></div>
@@ -538,7 +560,7 @@
                   </button>
                 </div>
               </div>
-              <p class="hint">Ročni vnos se zapiše pod vir »@ManualClearanceVir«. Vpisana količina je trenutna zaloga — prodaja se od takrat šteje znova. Razstavni eksponat označiš na zavihku Oznake.</p>
+              <p class="hint">Ročni vnos se zapiše pod vir »@ManualClearanceVir«. Vpisana količina je trenutna zaloga — prodaja se od takrat šteje znova. Razstavni eksponat označiš na zavihku Splet, razdelek Oznake.</p>
             }
             @if (ClearanceMessage is not null) { <span class="save-ok" role="status">@ClearanceMessage</span> }
             @if (ClearanceError is not null) { <span class="save-error" role="alert">@ClearanceError</span> }
@@ -546,7 +568,7 @@
 
           @* 233: splosne oznake artikla (danes samo "Razstavni eksponat"); nova oznaka je
              vrstica v pim.ProductFlagDefinition, ne nova migracija ali koda tu. *@
-          <section id="panel-oznake" class="ui-card data-card tab-panel">
+          <section id="panel-oznake" class="ui-card data-card tab-panel web-shops">
             <div class="subsection-head">
               <h2>Oznake</h2>
             </div>
@@ -574,16 +596,10 @@
                     }
                     @if (flagCode == ProductEditService.PackageOrderFlag)
                     {
-                      @* 302: v katalog.csv stolpec »Pakirno naročanje« (DA/NE); paket je »Pakirna količina« = Pakiranje 2. *@
-                      var pak2 = Detail?.Commercial?.Pak2;
-                      @if (FlagDraft(flagCode) && (pak2 is null || pak2 <= 1))
-                      {
-                        <span class="save-error" role="alert">Pakiranje 2 je @(pak2 is { } value ? value.ToString("0.##") : "prazno") — artikel je zadržan s spleta, dokler Pakiranje 2 ni večje od 1 (vpiše se na zavihku ERP, gre v SAOP prek vrste).</span>
-                      }
-                      else
-                      {
-                        <span class="shop-trace">Na spletu se naroča samo po celih paketih (paket = @(pak2 is { } value ? value.ToString("0.##") : "—"), Pakiranje 2).</span>
-                      }
+                      @* 302/306: v katalog.csv stolpec »Pakirno naročanje« (1/0, 303); paket je »Pakirna količina« =
+                         OBJAVLJENO Pakiranje 2 (pim.ProductCommercial). Kartica drugje kaže zajem, zato tu obe. *@
+                      var package = PackageOrderNote(FlagDraft(flagCode));
+                      <span class="@(package.Warning ? "save-error" : "shop-trace")" role="@(package.Warning ? "alert" : null)">@package.Text</span>
                     }
                   </li>
                 }
@@ -843,6 +859,8 @@
 
   /// <summary>Splošne oznake (233), npr. "Razstavni eksponat".</summary>
   IReadOnlyList<ProductFlagRow> Flags = [];
+  // 302/306: objavljeno Pakiranje 2 in aktivni zadržki (kdo in zakaj) — isto, kar vidi izvoz katalog.csv.
+  ProductEditService.PackageOrderState? PackageOrder;
 
   /// <summary>Kljukica »izloči iz rezervacije zaloge« (canon.ProductPlanning); glej ErpFields.</summary>
   bool ReservationExcluded;
@@ -1519,6 +1537,7 @@
       // Odprodaja (232) in oznake (233): neodvisna panela ob spletiscih.
       var clearanceTask = Clearance.GetForProductAsync(ProductId);
       var flagsTask = Edits.GetProductFlagsAsync(ProductId);
+      var packageOrderTask = LoadPackageOrderAsync();
       // Kljukica »izloči iz rezervacije« (245): ni v bralnem modelu kartice, zato posebej.
       var reservationTask = Edits.GetReservationExclusionAsync(ProductId);
       // Davčna stopnja (2026-09-28): ni v bralnem modelu kartice, zato posebej — kot rezervacija zgoraj.
@@ -1529,12 +1548,13 @@
       var waiverTask = LoadFieldWaiversAsync();
       // Samodejni umiki s spleta (251): pasica nad spletišči pove, kdaj in zakaj je kljukica izginila.
       var withdrawalsTask = LoadWithdrawalsAsync();
-      await Task.WhenAll(cardTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask, clearanceTask, flagsTask, reservationTask, vatRateTask, webExportTask, waiverTask, withdrawalsTask);
+      await Task.WhenAll(cardTask, priceTask, stockTask, sitesTask, languagesTask, writableTask, attributeSetTask, shopTask, clearanceTask, flagsTask, reservationTask, vatRateTask, webExportTask, waiverTask, withdrawalsTask, packageOrderTask);
       OpenWithdrawals = await withdrawalsTask;
       Detail = await cardTask; PriceChecks = await priceTask; StockChecks = await stockTask;
       Sites = await sitesTask; Languages = await languagesTask; WritableSaopFields = await writableTask;
       AttributeSet = await attributeSetTask; WebShops = await shopTask;
       ClearanceItems = await clearanceTask; Flags = await flagsTask; WebExport = await webExportTask;
+      PackageOrder = await packageOrderTask;
       // Obrazec za ročni vnos pokaže obstoječo ročno vrstico (preostanek in popust), da popravek ne začne od 1.
       if (ClearanceItems.FirstOrDefault(item => item.IsActive && item.Vir == ManualClearanceVir) is { } manual)
       {
@@ -1859,14 +1879,16 @@
         $"Kartica izdelka {Detail.Header.ItemId}");
       var packageOrder = FlagDrafts.TryGetValue(ProductEditService.PackageOrderFlag, out var packageSet) ? packageSet : (bool?)null;
       FlagDrafts.Clear();
+      // LoadAsync počisti sporočila kartice, zato se sporočilo o shranjenih oznakah postavi šele po njem;
+      // po njem je tudi PackageOrder (objavljeno Pakiranje 2, zadržek pravila 302) že svež.
+      await LoadAsync();
       FlagMessage = packageOrder switch
       {
-        true when Detail.Commercial?.Pak2 is null or <= 1 => "Oznake shranjene. Pakirno naročanje brez Pakiranja 2: artikel je zadržan s spleta, dokler Pakiranje 2 ni večje od 1.",
-        true => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = DA.",
-        false => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = NE.",
+        true when PackageOrderNote(true) is { Warning: true } note => $"Oznake shranjene. {note.Text}",
+        true => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = 1 (naročanje samo po celih paketih).",
+        false => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = 0 (naročanje po kosih).",
         _ => "Oznake shranjene.",
       };
-      await LoadAsync();
     }
     catch (UnauthorizedAccessException)
     {
@@ -2051,8 +2073,60 @@
   }
   void HeroFailed() => HeroImageFailed = true;
   void ToggleActivities() => ActivitiesExpanded = !ActivitiesExpanded;
-  static string ActivityTitle(ProductCardHistory activity) =>
-    string.IsNullOrWhiteSpace(activity.FieldKey) ? "Podatek posodobljen" : $"Posodobljeno: {FieldLabel(activity.FieldKey)}";
+
+  async Task<ProductEditService.PackageOrderState?> LoadPackageOrderAsync()
+  {
+    try { return await Edits.GetPackageOrderStateAsync(ProductId); }
+    catch { return null; } // kartica se odpre tudi brez tega; opomba ob oznaki potem kaže samo zajem
+  }
+
+  static string HoldChannel(string channel) => channel switch
+  {
+    "WEB" => "splet",
+    "ALL" => "vsi kanali",
+    "ERP" => "ERP",
+    _ => channel,
+  };
+
+  static string HoldRuleName(string createdBy) =>
+    string.Equals(createdBy, "pravilo 302", StringComparison.OrdinalIgnoreCase) ? "pravilo Pakirno naročanje" : createdBy;
+
+  static string Quantity(decimal? value) => value is { } number ? number.ToString("0.##") : "prazno";
+
+  /// <summary>
+  /// Opomba ob oznaki Pakirno naročanje. Pravilo 302 in katalog.csv gledata OBJAVLJENO Pakiranje 2
+  /// (<see cref="PackageOrder"/>), kartica drugje zajem/uvoz (<c>Detail.Commercial</c>); ko se razlikujeta,
+  /// opomba pove oboje, da uporabnik ve, zakaj je artikel zadržan, čeprav je Pakiranje 2 vpisano.
+  /// </summary>
+  (string Text, bool Warning) PackageOrderNote(bool isSet)
+  {
+    var captured = Detail?.Commercial?.Pak2;
+    var published = PackageOrder?.PublishedPak2;
+    if (!isSet)
+      return ($"Ni vklopljeno: na spletu se artikel naroča po kosih (katalog.csv »Pakirno naročanje« = 0). Če vklopiš, je paket objavljeno Pakiranje 2 ({Quantity(published ?? captured)}).", false);
+    if (PackageOrder is null)
+      return captured is > 1
+        ? ($"Na spletu se naroča samo po celih paketih (paket = {Quantity(captured)}, Pakiranje 2).", false)
+        : ($"Pakiranje 2 je {Quantity(captured)} — artikel je zadržan s spleta, dokler Pakiranje 2 ni večje od 1 (vpiše se na zavihku ERP, gre v SAOP prek vrste).", true);
+    if (published is > 1)
+      return captured is > 1 && captured != published
+        ? ($"Na spletu se naroča samo po celih paketih (paket = {Quantity(published)}, objavljeno Pakiranje 2; vpisano {Quantity(captured)} gre na splet ob naslednji objavi v PIM).", false)
+        : ($"Na spletu se naroča samo po celih paketih (paket = {Quantity(published)}, Pakiranje 2).", false);
+    if (captured is not > 1)
+      return ($"Pakiranje 2 je {Quantity(captured)} — artikel je zadržan s spleta, dokler Pakiranje 2 ni večje od 1 (vpiše se na zavihku ERP, gre v SAOP prek vrste) ali ne odstraniš oznake.", true);
+    return PackageOrder.IsPromoted
+      ? ($"Pakiranje 2 je vpisano ({Quantity(captured)}), na splet pa gre še objavljena vrednost ({Quantity(published)}). Artikel je zadržan s spleta do naslednje objave v PIM (po uspešni validaciji); zadržek se nato sprosti sam ob izvozu katalog.csv.", true)
+      : ($"Pakiranje 2 je vpisano ({Quantity(captured)}), artikel pa še ni objavljen v PIM (objava teče po uspešni validaciji). Do takrat je zadržan s spleta; zadržek se nato sprosti sam ob izvozu katalog.csv.", true);
+  }
+  string ActivityTitle(ProductCardHistory activity) =>
+    string.IsNullOrWhiteSpace(activity.FieldKey) ? "Podatek posodobljen" : $"Posodobljeno: {ActivityFieldLabel(activity.FieldKey)}";
+
+  /// <summary>Oznake (233/302) imajo ime v registru (pim.ProductFlagDefinition), ne v <see cref="FieldLabel"/>.</summary>
+  string ActivityFieldLabel(string fieldKey) =>
+    fieldKey.StartsWith("ProductFlag.", StringComparison.OrdinalIgnoreCase)
+    && Flags.FirstOrDefault(flag => string.Equals($"ProductFlag.{flag.FlagCode}", fieldKey, StringComparison.OrdinalIgnoreCase)) is { } flag
+      ? $"oznaka {flag.DisplayName}"
+      : FieldLabel(fieldKey);
   static string ActivitySummary(ProductCardHistory activity)
   {
     var oldValue = ActivityValue(activity.OldValue);

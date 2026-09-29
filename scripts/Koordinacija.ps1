@@ -386,12 +386,14 @@ function Invoke-Vrata($n) {
 
 function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
   $rez = @()
-  # Testni podatki (PIM_Solution/fixtures) niso v gitu; delovna kopija jih dobi iz glavne kopije.
-  $fix = Join-Path $Koren 'PIM_Solution/fixtures'
-  $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
-  if (-not (Test-Path $fix) -and (Test-Path $fixGlavna) -and ($fix -ne $fixGlavna)) {
-    Copy-Item $fixGlavna $fix -Recurse
-    Write-Host '  · testni podatki (fixtures) prekopirani iz glavne kopije'
+  # Testni podatki, ki niso v gitu (fixtures, ceniki v pdf_datoteke — .gitignore), delovna kopija dobi iz glavne.
+  foreach ($podmapa in 'PIM_Solution/fixtures', 'PIM_Solution/pdf_datoteke') {
+    $fix = Join-Path $Koren $podmapa
+    $fixGlavna = Join-Path $Glavna $podmapa
+    if (-not (Test-Path $fix) -and (Test-Path $fixGlavna) -and ($fix -ne $fixGlavna)) {
+      Copy-Item $fixGlavna $fix -Recurse
+      Write-Host "  · $podmapa prekopirano iz glavne kopije (ni v gitu)"
+    }
   }
 
   $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log
@@ -620,6 +622,8 @@ switch ($Ukaz) {
     $Koren = $potNaloge
     try {
       Set-Utrip "združujem #$Id v $GlavnaVeja" 'zdruzuje'
+      # Testni podatki, ki jih je prepisala starejša Kopija, niso delo naloge: vrni jih na stanje iz gita.
+      & git -C $potNaloge checkout -- PIM_Solution/fixtures 2>$null
       if (@(& git -C $potNaloge status --porcelain --untracked-files=no 2>$null).Count) { throw "Naloga #$Id ima nepotrjene spremembe v $potNaloge — najprej commit." }
       # 1) Veja naloge dobi vse, kar je medtem prišlo v integracijsko vejo, in se ponovno zgradi.
       $pred = & git -C $potNaloge rev-parse HEAD
@@ -658,8 +662,11 @@ switch ($Ukaz) {
       $mapaKopij = Join-Path $Glavna '.claude\worktrees'
       if ($potNaloge -ne $Glavna -and $potNaloge.StartsWith($mapaKopij, [StringComparison]::OrdinalIgnoreCase) -and
           -not @(& git -C $potNaloge status --porcelain 2>$null).Count) {
-        & git -C $Glavna worktree remove $potNaloge 2>$null
-        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." }
+        # Pospravljanje ni del združitve: kopija je lahko v rabi (odprta mapa, tekoč proces) — takrat ostane.
+        $ErrorActionPreference = 'Continue'
+        & git -C $Glavna worktree remove $potNaloge 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." } else { Write-Host "Delovna kopija $potNaloge ostane (v rabi)." }
+        $ErrorActionPreference = 'Stop'
       }
       Write-Host "Naloga #$Id združena v $GlavnaVeja ($commit)." -ForegroundColor Green
     } finally { Remove-Item $zaklepZ -Force -ErrorAction SilentlyContinue }
@@ -686,8 +693,11 @@ switch ($Ukaz) {
     else { & git -C $Glavna worktree add -b $veja $pot $GlavnaVeja 2>&1 | Write-Host }
     $ErrorActionPreference = 'Stop'
     if (-not (Test-Path (Join-Path $pot '.git'))) { throw "Kopije $pot ni bilo mogoče ustvariti." }
-    $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
-    if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Join-Path $pot 'PIM_Solution/fixtures') -Recurse -Force }
+    foreach ($podmapa in 'PIM_Solution/fixtures', 'PIM_Solution/pdf_datoteke') {
+      $fixGlavna = Join-Path $Glavna $podmapa
+      # Samo, če je v kopiji ni: fixtures so (od 4f73b7b) v gitu; prepis bi kopijo »umazal« (konci vrstic) in Zdruzi bi jo zavrnil.
+      if ((Test-Path $fixGlavna) -and -not (Test-Path (Join-Path $pot $podmapa))) { Copy-Item $fixGlavna (Split-Path (Join-Path $pot $podmapa) -Parent) -Recurse }
+    }
     $potKopije = $pot  # Use-Zaklep ima svoj $pot (datoteka zaklepa)
     if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $potKopije (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
     Write-Output $pot
