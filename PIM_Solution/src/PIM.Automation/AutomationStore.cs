@@ -187,6 +187,34 @@ public sealed class AutomationStore(string connectionString)
     return await command.ExecuteScalarAsync(cancellationToken) is int count ? count : 0;
   }
 
+  /// <summary>
+  /// Trajanje uspešnih tekov (Succeeded, Warning) vsakega posla v zadnjih <paramref name="days"/> dneh, z eno
+  /// poizvedbo za vse posle (IX_JobRun_Job). Osnova ocene začetka in trajanja na strani Nadzor (JobQueue.Forecast).
+  /// </summary>
+  public async Task<IReadOnlyDictionary<string, JobDurationStats>> GetDurationStatsAsync(int days = JobQueue.EstimateDays, CancellationToken cancellationToken = default)
+  {
+    await using var connection = await OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT JobKey,
+             Runs = COUNT(*),
+             AverageSeconds = AVG(CONVERT(bigint, DATEDIFF(second, StartedUtc, EndedUtc))),
+             MaxSeconds = MAX(CONVERT(bigint, DATEDIFF(second, StartedUtc, EndedUtc)))
+      FROM ops.JobRun
+      WHERE EndedUtc IS NOT NULL AND Status IN (N'Succeeded', N'Warning')
+        AND StartedUtc > DATEADD(day, -@Days, SYSUTCDATETIME())
+      GROUP BY JobKey;
+      """, connection);
+    command.Parameters.Add("@Days", SqlDbType.Int).Value = days;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var stats = new Dictionary<string, JobDurationStats>(StringComparer.Ordinal);
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var key = reader.GetString(0);
+      stats[key] = new(key, reader.GetInt32(1), (int)Math.Min(int.MaxValue, reader.GetInt64(2)), (int)Math.Min(int.MaxValue, reader.GetInt64(3)));
+    }
+    return stats;
+  }
+
   public async Task SaveScheduleAsync(string jobKey, bool isEnabled, int? intervalSeconds, TimeOnly? dailyAtLocal, int? timeoutSeconds, string actor, CancellationToken cancellationToken = default)
   {
     await using var connection = await OpenAsync(cancellationToken);

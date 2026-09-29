@@ -642,9 +642,11 @@ app.MapGet("/izvoz/validacijski-profili.xlsx", async (
 
   var profiles = await governance.GetValidationProfilesAsync(organization.OrganizationId, cancellationToken);
   var rows = new List<(ValidationProfileRow Profile, FieldRequirementRow Requirement)>();
+  var requirementsByProfile = await governance.GetFieldRequirementsAsync(organization.OrganizationId, cancellationToken);
   foreach (var profile in profiles)
-    foreach (var requirement in await governance.GetFieldRequirementsAsync(profile.ValidationProfileId, organization.OrganizationId, cancellationToken))
-      if (requirement.IsActive) rows.Add((profile, requirement));
+    if (requirementsByProfile.TryGetValue(profile.ValidationProfileId, out var requirements))
+      foreach (var requirement in requirements)
+        if (requirement.IsActive) rows.Add((profile, requirement));
 
   static string Severity(string? severity) => string.Equals(severity, "WARNING", StringComparison.OrdinalIgnoreCase) ? "Opozorilo" : "Napaka";
   static string Impact(ValidationProfileRow profile) => (profile.BlocksErp, profile.BlocksWeb) switch
