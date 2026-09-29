@@ -632,6 +632,17 @@ switch ($Ukaz) {
       $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
       if ($izhodMerge -ne 0) {
         $konf = @(& git -C $potNaloge diff --name-only --diff-filter=U 2>$null)
+        # Graf procesov je ustvarjen iz docs/procesi/*.md: konflikt v njem se reši s ponovnim Graf, ne ročno.
+        if ($konf.Count -eq 1 -and $konf[0] -eq 'docs/procesi/PIM-procesi.html') {
+          $ErrorActionPreference = 'Continue'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $potNaloge 'scripts\Procesi.ps1') -Ukaz Graf 2>&1 | Out-Null
+          & git -C $potNaloge add -- docs/procesi/PIM-procesi.html 2>&1 | Out-Null
+          & git -C $potNaloge commit --no-edit 2>&1 | Write-Host
+          $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
+          if ($izhodMerge -eq 0) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "združevanje: konflikt v grafu procesov rešen s ponovnim Procesi.ps1 -Ukaz Graf"; Write-Naloga $n }; $konf = @() }
+        }
+      }
+      if ($izhodMerge -ne 0) {
         & git -C $potNaloge merge --abort 2>$null
         Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: konflikt z $GlavnaVeja v $($konf -join ', ') — razvijalec mora vejo posodobiti ročno"; Write-Naloga $n }
         throw "Konflikt z $GlavnaVeja ($($konf -join ', '))."
