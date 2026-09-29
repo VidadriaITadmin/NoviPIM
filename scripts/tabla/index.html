@@ -467,7 +467,8 @@ function izrisiNaloge() {
 }
 
 function izrisiEkipo() {
-  const ag = S.agenti.filter(a => a.zdravje !== 'koncal');
+  const ag = S.agenti.filter(a => a.zdravje !== 'koncal' && !(a.starostMin > 60 && a.stanje !== 'čaka'));
+  const stare = S.agenti.filter(a => a.zdravje !== 'koncal' && a.starostMin > 60 && a.stanje !== 'čaka');
   $('#ekipaSt').textContent = ag.length ? `${ag.length} ${nal(ag.length, 'član', 'člana', 'člani', 'članov')}` : '';
   $('#ekipa').innerHTML = ag.length ? ag.map(a => {
     const [vloga, glagol, c, ikona] = VLOGE[a.vloga] || [a.vloga || 'Agent', 'dela', 'var(--mut)', 'dela'];
@@ -478,6 +479,7 @@ function izrisiEkipo() {
       <div class="kaj">${esc(poDomace(a.korak))}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${zdr}<span class="dim" style="font-size:12.5px">${minut(a.trajanjeMin)}${n ? ' · ' + esc(n.naslov.slice(0, 40)) : ''}</span></div></div>`;
   }).join('') : prazno('Ekipa trenutno ne dela', 'Ko v Claude napišeš »delaj naloge«, se tu prikažejo člani ekipe.');
+  if (stare.length) $('#ekipa').insertAdjacentHTML('beforeend', `<div class="ag" style="grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="mut">Stare prijave (več kot 1 h brez glasu, verjetno pozabljena odjava): ${stare.map(a => esc(a.seja) + (a.id ? ' #' + a.id : '')).join(', ')}</span><span style="flex:1"></span>${stare.map(a => `<button class="gumb majhen" data-odjavi="${esc(a.seja)}">Pospravi ${esc(a.seja)}</button>`).join('')}</div>`);
 
   const zas = S.mesta.filter(m => !m.prosto).length;
   $('#mestaSt').textContent = `${zas} od ${S.mesta.length} zasedenih`;
@@ -632,6 +634,8 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-zapri]')) return t.closest('.okno').classList.remove('odprt');
   const pos = t.closest('[data-poslji]');
   if (pos) { const ta = pos.closest('.vpr').querySelector('textarea'); if (!ta.value.trim()) { ta.focus(); return obvesti('Najprej napiši odgovor.', true); } const id = pos.dataset.poslji; return ukaz('Odlocitev', { id, odgovor: ta.value.trim() }, pos).then(ok => { if (ok) { delete osnutki[id]; shraniOsnutke(); zadnjiTebe = ''; nalozi(); } }); }
+  const oj = t.closest('[data-odjavi]');
+  if (oj) return ukaz('Odjava', { seja: oj.dataset.odjavi }, oj);
   const pz = t.closest('[data-preizkus],[data-ustavi]');
   if (pz) {
     const ustavi = pz.hasAttribute('data-ustavi'), id = pz.dataset.preizkus || pz.dataset.ustavi;

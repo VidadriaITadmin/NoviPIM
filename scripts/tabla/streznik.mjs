@@ -223,6 +223,7 @@ const UKAZI = {
   Odlocitev: (b) => ['-Id', String(b.id), '-Odgovor', b.odgovor],
   Sporocilo: (b) => ['-Id', String(b.id), '-Besedilo', b.besedilo],
   Zdruzi: (b) => ['-Id', String(b.id)],
+  Odjava: (b) => ['-Besedilo', 'pospravil lastnik na plošči (se ni oglasil)'],
   Nastavi: (b) => {
     if (!['prednost', 'stanje'].includes(b.polje)) throw new Error('Polje ni dovoljeno.');
     return ['-Id', String(b.id), '-Polje', b.polje, '-Vrednost', b.vrednost];
@@ -230,7 +231,10 @@ const UKAZI = {
 };
 function izvediUkaz(ukaz, telo) {
   if (!UKAZI[ukaz]) return Promise.reject(new Error('Neznan ukaz.'));
-  const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', KOORD, '-Ukaz', ukaz, '-Seja', 'Lastnik (plošča)', ...UKAZI[ukaz](telo)];
+  // Odjava pospravi TUJO sejo (pozabljena prijava), zato seja pride iz zahteve.
+  const seja = ukaz === 'Odjava' ? String(telo.seja || '') : 'Lastnik (plošča)';
+  if (!seja) return Promise.resolve({ ok: false, izhod: 'Manjka seja.' });
+  const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', KOORD, '-Ukaz', ukaz, '-Seja', seja, ...UKAZI[ukaz](telo)];
   return new Promise((res) => execFile('powershell.exe', args, { cwd: GLAVNA, encoding: 'utf8', timeout: ukaz === 'Zdruzi' ? 30 * 60000 : 60000, maxBuffer: 8 << 20 },
     (e, out, err) => res({ ok: !e, izhod: (out || '') + (err ? '\n' + err : ''), koda: e?.code ?? 0 })));
 }
@@ -249,6 +253,8 @@ async function zazeniPreizkus(id) {
   const port = 5200 + id, mapaK = join(nal.pot, 'PIM_Solution', 'tools', 'PIM.Klikalnik');
   const p = { id, port, url: `http://localhost:${port}/`, stanje: 'gradim', sporocilo: 'Sestavljam aplikacijo iz kopije naloge (1–3 min) …', od: new Date().toISOString() };
   preizkusi.set(id, p);
+  // Po ponovnem zagonu plošče lahko aplikacija s prejšnjega zagona še teče na istih vratih.
+  try { if ((await fetch(p.url + 'brez-dostopa')).ok) { p.stanje = 'tece'; p.sporocilo = 'Aplikacija že teče (od prej).'; return p; } } catch { }
   const env = { ...process.env, KLIKALNIK_PORT: String(port), KLIKALNIK_STREZNIK: streznik,
     PIM_CONNECTION_STRING: `Server=${streznik};Database=${baza};Integrated Security=True;Encrypt=True;TrustServerCertificate=True` };
   execFile('dotnet', ['build', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false'], { cwd: mapaK, env, maxBuffer: 16 << 20, timeout: 15 * 60000 }, async (e, out) => {
