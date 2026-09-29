@@ -394,7 +394,7 @@ function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
     Write-Host '  · testni podatki (fixtures) prekopirani iz glavne kopije'
   }
 
-  $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q') 20 $log
+  $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log
 
   foreach ($t in @($n.testi)) {
     if ($t -match 'ProductWorkbook' -and -not $Kljub) { $rez += @{ ok = $true; opis = "test ${t}: preskočen (DB del zamrzne SQL; -Kljub za zagon)" }; continue }
@@ -431,7 +431,7 @@ function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
   $env:KLIKALNIK_STREZNIK = [string]$Nastavitve.razvojniStreznik
   $env:KLIKALNIK_IZHOD = $izhodK
   try {
-    $b = Invoke-Korak 'klikalnik-build' 'dotnet' @('build', '-c', 'Release', '-nologo', '-v', 'q') 15 $log $mapaK
+    $b = Invoke-Korak 'klikalnik-build' 'dotnet' @('build', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 15 $log $mapaK
     if (-not $b.ok) { return $b }
     Set-KorakMesta 'klikalnik-zagon'
     $gostitelj = Start-Process dotnet -ArgumentList @('bin\Release\net10.0\PIM.Klikalnik.dll') -WorkingDirectory $mapaK -PassThru -WindowStyle Hidden `
@@ -635,7 +635,7 @@ switch ($Ukaz) {
       if ((& git -C $potNaloge rev-parse HEAD) -ne $pred) {
         $log = Join-Path $MapaPreverjanj ("{0:D4}-{1}-zdruzi" -f [int]$Id, (Get-Date).ToString('yyyyMMdd-HHmmss'))
         [void](Enter-MestoVrat)
-        try { $b = Invoke-Korak 'build po posodobitvi' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q') 20 $log $potNaloge }
+        try { $b = Invoke-Korak 'build po posodobitvi' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log $potNaloge }
         finally { Exit-MestoVrat }
         if (-not $b.ok) {
           Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: po posodobitvi z $GlavnaVeja build ne gre skozi ($($b.izhod))"; Write-Naloga $n }
