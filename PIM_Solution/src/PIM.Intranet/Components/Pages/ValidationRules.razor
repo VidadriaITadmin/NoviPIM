@@ -293,10 +293,13 @@
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       if (KnownFields.Count == 0) KnownFields = await Governance.GetCanonicalFieldCodesAsync();
       Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      // Ena poizvedba za vse profile (naloga #24), ne ena na profil.
+      var requirementsByProfile = await Governance.GetFieldRequirementsAsync(organization.OrganizationId);
       var results = new List<RequirementWithProfile>();
       foreach (var profile in Profiles)
-        foreach (var requirement in await Governance.GetFieldRequirementsAsync(profile.ValidationProfileId, organization.OrganizationId))
-          results.Add(new(profile, requirement));
+        if (requirementsByProfile.TryGetValue(profile.ValidationProfileId, out var requirements))
+          foreach (var requirement in requirements)
+            results.Add(new(profile, requirement));
       AllRows = results;
       FieldOptions = KnownFields.Concat(AllRows.Select(row => row.Requirement.FieldCode))
         .Distinct(StringComparer.OrdinalIgnoreCase)
