@@ -104,7 +104,7 @@
         <button type="button" class="small-action" @onclick="ClosePreview">Zapri</button>
       </div>
       <div class="filter-bar">
-        <label class="field-control"><span>Šifra, EAN, naziv ali druga vrednost</span><input class="search-input" @bind="SearchDraft" @onkeydown="OnSearchKeyAsync" /></label>
+        <label class="field-control"><span>Šifra, EAN, naziv ali druga vrednost</span><input class="search-input" @bind="SearchDraft" @bind:event="oninput" @onkeydown="OnSearchKeyAsync" /></label>
         <button type="button" class="filter-button" disabled="@PreviewLoading" @onclick="SearchAsync">Poišči v datoteki</button>
         <label class="checkbox-control"><input type="checkbox" @bind="AllColumns" aria-label="Pokaži vse stolpce" /> Vsi stolpci</label>
       </div>
