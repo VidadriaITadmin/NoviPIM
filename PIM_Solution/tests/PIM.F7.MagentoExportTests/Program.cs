@@ -464,17 +464,62 @@ try
     seededCanonicalPriceIds.Add(Convert.ToInt64(await seedCanonical.ExecuteScalarAsync()));
   }
 
-  // Poti ne obstajajo v canon.Category, zato ne prinesejo nabora atributov (147). Tretja je na
-  // B2C (drevo videlektro), za katerega izdelek nima kljukice — ne sme priti v izvoz.
+  // Od 291 gre v katalog samo pot, ki obstaja v drevesu v jeziku spletisca (canon.WebSiteCategoryPath);
+  // izmisljena pot je ostanek in ne sme v izvoz. Zato: (a) prava kategorija svetila_si z istim
+  // vozliscem v slovenski in angleski poti, ki je izdelek se nima in ki ne izloca posajenih atributov;
+  // (b) prava pot na B2C (drevo videlektro), za katerega izdelek nima kljukice — ne sme priti v izvoz;
+  // (c) izmisljena pot na svetila_si — ne sme priti v izvoz (291).
+  string? validSlPath = null, validEnPath = null, validB2cPath = null;
+  const string InventedSlPath = "F7 Svetila/Izmisljena pot";
+  await using (var pickCategory = new SqlCommand("""
+    SELECT TOP (1) sl.CategoryPath, en.CategoryPath
+    FROM canon.WebSiteCategoryPath AS sl
+    INNER JOIN canon.WebSiteCategoryPath AS en
+      ON en.WebSiteCode = N'svetila_si_en' AND en.CategoryCode = sl.CategoryCode
+    WHERE sl.WebSiteCode = N'svetila_si'
+      AND NOT EXISTS (SELECT 1 FROM pim.ProductCategory AS own WHERE own.PimProductId = @PimProductId
+                        AND ((own.WebSite = N'svetila_si' AND own.CategoryPath = sl.CategoryPath)
+                          OR (own.WebSite = N'svetila_si_en' AND own.CategoryPath = en.CategoryPath)))
+      AND NOT EXISTS
+      (
+        SELECT 1 FROM canon.CategoryAttributeEffective(sl.CategoryTreeCode, sl.CategoryCode) AS effective
+        LEFT JOIN canon.AttributeTranslation AS translation
+          ON translation.AttributeCode = effective.AttributeCode AND translation.LanguageCode = N'sl'
+        WHERE effective.Level = N'EXCLUDED'
+          AND COALESCE(translation.Name, effective.AttributeCode) IN (@GrloName, N'Prevladujoč material')
+      )
+    ORDER BY sl.CategoryCode;
+    SELECT TOP (1) b2c.CategoryPath FROM canon.WebSiteCategoryPath AS b2c
+    WHERE b2c.WebSiteCode = N'B2C'
+      AND NOT EXISTS (SELECT 1 FROM pim.ProductCategory AS own WHERE own.PimProductId = @PimProductId
+                        AND own.WebSite = N'B2C' AND own.CategoryPath = b2c.CategoryPath)
+    ORDER BY b2c.CategoryCode;
+    """, connection))
+  {
+    pickCategory.Parameters.AddWithValue("@PimProductId", pimProductId);
+    pickCategory.Parameters.AddWithValue("@GrloName", MagentoCsvContract.ProductHeaders[47].Trim());
+    await using var categoryPick = await pickCategory.ExecuteReaderAsync();
+    if (await categoryPick.ReadAsync()) { validSlPath = categoryPick.GetString(0); validEnPath = categoryPick.GetString(1); }
+    await categoryPick.NextResultAsync();
+    if (await categoryPick.ReadAsync()) validB2cPath = categoryPick.GetString(0);
+  }
+  if (validSlPath is null || validEnPath is null || validB2cPath is null)
+    throw new InvalidOperationException("V canon.WebSiteCategoryPath ni proste veljavne poti za svetila_si/svetila_si_en/B2C, ki ne bi izlocala posajenih atributov.");
+
   await using (var seedCategory = new SqlCommand("""
     INSERT pim.ProductCategory (PimProductId, WebSite, CategoryPath)
     OUTPUT INSERTED.PimProductCategoryId
-    VALUES (@PimProductId, N'svetila_si', N'F7 Svetila/Stropne'),
-           (@PimProductId, N'svetila_si_en', N'F7 Lights/Ceiling'),
-           (@PimProductId, N'B2C', N'F7 Vid/Brez kljukice');
+    VALUES (@PimProductId, N'svetila_si', @SlPath),
+           (@PimProductId, N'svetila_si_en', @EnPath),
+           (@PimProductId, N'B2C', @B2cPath),
+           (@PimProductId, N'svetila_si', @InventedPath);
     """, connection))
   {
     seedCategory.Parameters.AddWithValue("@PimProductId", pimProductId);
+    seedCategory.Parameters.AddWithValue("@SlPath", validSlPath);
+    seedCategory.Parameters.AddWithValue("@EnPath", validEnPath);
+    seedCategory.Parameters.AddWithValue("@B2cPath", validB2cPath);
+    seedCategory.Parameters.AddWithValue("@InventedPath", InventedSlPath);
     await using var categoryReader = await seedCategory.ExecuteReaderAsync();
     while (await categoryReader.ReadAsync()) seededCategoryIds.Add(categoryReader.GetInt64(0));
   }
@@ -612,9 +657,11 @@ try
   // kljukice za videlektro, zato je ta stran zanj zaprta, cetudi ima tam kategorijo (201).
   if (seededCategoryIds.Count > 0)
   {
-    Contains(row[18], "F7 Svetila/Stropne", "Stolpec 'Kategorije svetila SLO' mora vsebovati pot iz svetila_si.");
-    Contains(row[17], "F7 Lights/Ceiling", "Stolpec 'Kategorije svetila ANG' mora vsebovati pot iz svetila_si_en.");
-    Equal(false, row[20].Contains("F7 Vid/Brez kljukice", StringComparison.Ordinal),
+    Contains(row[18], validSlPath!, "Stolpec 'Kategorije svetila SLO' mora vsebovati pot iz svetila_si.");
+    Contains(row[17], validEnPath!, "Stolpec 'Kategorije svetila ANG' mora vsebovati pot iz svetila_si_en.");
+    Equal(false, row[18].Contains(InventedSlPath, StringComparison.Ordinal),
+      "Pot, ki je ni v drevesu spletisca, ne sme v izvoz (291).");
+    Equal(false, row[20].Contains(validB2cPath!, StringComparison.Ordinal),
       "Kategorija na spletiscu brez kljukice ne sme v izvoz.");
     Equal(false, row[2].Split('|').Contains("B2C"), "Stolpec 'Spletne strani' ne sme nasteti strani brez kljukice.");
   }
