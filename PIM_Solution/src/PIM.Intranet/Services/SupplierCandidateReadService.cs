@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using PIM.Operations;
 
 namespace PIM.Intranet.Services;
 
@@ -134,6 +135,19 @@ public static class SupplierXmlChangeKinds
 
   public static readonly IReadOnlyList<int> DayOptions = [1, 7, 30, 90];
 
+  /// <summary>
+  /// »35 sprememb pri 1 artiklu« — s sklanjatvijo (preverjalec #7 je videl »pri 1 artiklih«).
+  /// Po »pri« je mestnik: 1 artiklu, 2/3/5 artiklih; število sprememb je v imenovalniku/rodilniku.
+  /// </summary>
+  public static string Summary(long changes, long products)
+  {
+    var sl = System.Globalization.CultureInfo.GetCultureInfo("sl-SI");
+    static string Form(long value, string one, string two, string few, string many) =>
+      (Math.Abs(value) % 100) switch { 1 => one, 2 => two, 3 or 4 => few, _ => many };
+    return $"{changes.ToString("N0", sl)} {Form(changes, "sprememba", "spremembi", "spremembe", "sprememb")} pri "
+      + $"{products.ToString("N0", sl)} {Form(products, "artiklu", "artiklih", "artiklih", "artiklih")}";
+  }
+
   public static string KindOf(string fieldKey) => fieldKey switch
   {
     "ProductAttribute.Value" => Attribute,
@@ -172,16 +186,31 @@ public static class SupplierXmlChangeKinds
       case Media:
         {
           var dot = column.LastIndexOf('.');
-          if (dot < 0) return "Slika";
-          var role = column[..dot];
-          var place = column[(dot + 1)..];
-          return string.Equals(role, "IMAGE", StringComparison.OrdinalIgnoreCase) ? $"Slika {place}" : $"{role} {place}";
+          return dot < 0 ? MediaLabel(column, null) : MediaLabel(column[..dot], column[(dot + 1)..]);
         }
       case Attribute:
         return column.Length == 0 ? "Atribut" : column;
       default:
         return ProductFieldLabels.For(fieldKey);
     }
+  }
+
+  /// <summary>
+  /// Vloga slike iz zajema (PRIMARY, GALLERY, IMAGE …) po domače — preverjalec #7 je videl surovo
+  /// »GALLERY 2«. Neznana vloga ostane vidna v oklepaju, da se ne izgubi, kaj je dobavitelj poslal.
+  /// </summary>
+  public static string MediaLabel(string? role, string? place)
+  {
+    var number = string.IsNullOrWhiteSpace(place) ? "" : " " + place.Trim();
+    return (role ?? "").Trim().ToUpperInvariant() switch
+    {
+      "" or "IMAGE" or "SLIKA" => "Slika" + number,
+      "PRIMARY" or "MAIN" => place is null or "1" ? "Glavna slika" : "Glavna slika" + number,
+      "GALLERY" => "Dodatna slika" + number,
+      "AMBIENT" => "Ambientna slika" + number,
+      "THUMB" or "THUMBNAIL" => "Sličica" + number,
+      var other => $"Slika{number} ({other.ToLowerInvariant()})",
+    };
   }
 }
 
@@ -292,12 +321,7 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
   public async Task<SupplierXmlChangePage> GetXmlChangesAsync(SupplierXmlChangeFilter filter, CancellationToken cancellationToken = default)
   {
     ArgumentNullException.ThrowIfNull(filter);
-    var orderBy = filter.Sort switch
-    {
-      "starejse" => "h.ChangeId ASC",
-      "sifra" => "h.ItemID ASC, h.ChangeId DESC",
-      _ => "h.ChangeId DESC",
-    };
+    var orderBy = XmlChangesOrderBy(filter.Sort);
     var sql = SupplierXmlBatchesSql + $"""
 
       SELECT h.FieldKey, COUNT_BIG(*) AS Changes
@@ -334,11 +358,7 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
-    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
-    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(filter.SourceCode);
-    command.Parameters.Add("@FieldKey", SqlDbType.NVarChar, 256).Value = (object?)SupplierXmlChangeKinds.FieldKeyOf(filter.Kind) ?? DBNull.Value;
-    command.Parameters.Add("@Search", SqlDbType.NVarChar, 210).Value = LikePattern(filter.Search);
-    command.Parameters.Add("@FromUtc", SqlDbType.DateTime2).Value = filter.Days is int days && days > 0 ? DateTime.UtcNow.AddDays(-days) : DBNull.Value;
+    AddXmlChangeParameters(command, filter);
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = Math.Max(0, filter.Skip);
     command.Parameters.Add("@Take", SqlDbType.Int).Value = Math.Clamp(filter.Take, 1, 500);
 
@@ -363,11 +383,7 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
     await reader.NextResultAsync(cancellationToken);
     var rows = new List<SupplierXmlChangeRow>();
     while (await reader.ReadAsync(cancellationToken))
-      rows.Add(new(
-        PimDb.Int64(reader, "ChangeId"), PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"),
-        PimDb.TextOrEmpty(reader, "SourceCode"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
-        PimDb.TextOrEmpty(reader, "FieldKey"), PimDb.Text(reader, "CanonColumn"), PimDb.Text(reader, "OldValue"),
-        PimDb.Text(reader, "NewValue"), PimDb.DateTimeValue(reader, "ChangedAtUtc")));
+      rows.Add(ReadXmlChangeRow(reader));
 
     await reader.NextResultAsync(cancellationToken);
     var received = new List<(string, DateTime)>();
@@ -376,6 +392,107 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
 
     return new(rows, total, products, last, kinds, received);
   }
+
+  /// <summary>
+  /// Izvoz v Excel (#7, odločitev lastnika pri #27: »pregled s filtri in izvozom v Excel«): iste vrstice
+  /// in isti vrstni red kot na zaslonu, a vse strani, ne le trenutna. Vrstice se berejo iz baze sproti
+  /// in se pišejo naravnost v dani tok (datoteko), zato cela zgodovina (več sto tisoč vrstic) ne gre v pomnilnik.
+  /// Vrne število zapisanih vrstic.
+  /// </summary>
+  public async Task<long> WriteXmlChangesWorkbookAsync(
+    SupplierXmlChangeFilter filter, Stream destination, CancellationToken cancellationToken = default)
+  {
+    ArgumentNullException.ThrowIfNull(filter);
+    ArgumentNullException.ThrowIfNull(destination);
+    static WorkbookColumn Text(string header, double width) => new(header, WorkbookCellKind.Text, width);
+    IReadOnlyList<WorkbookColumn> columns =
+    [
+      Text("Šifra", 20), Text("Podjetje", 16), Text("Vir", 10), Text("Vrsta", 10), Text("Kaj", 30),
+      Text("Sprememba", 13), Text("Prej", 50), Text("Potem", 50),
+      new("Kdaj", WorkbookCellKind.DateTime, 17),
+    ];
+    long written = 0;
+    var notes = new List<string>();
+
+    async IAsyncEnumerable<IReadOnlyList<object?>> Rows([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token = default)
+    {
+      await foreach (var row in ReadXmlChangesAsync(filter, token))
+      {
+        written++;
+        yield return
+        [
+          row.ItemId, row.OrganizationName, row.SourceCode, SupplierXmlChangeKinds.KindLabel(row.Kind), row.FieldLabel,
+          row.Change, row.OldValue, row.NewValue, row.ChangedAtUtc.ToPimLocal(),
+        ];
+      }
+      notes.Add($"Izvoženo {DateTime.UtcNow.ToPimLocal():dd.MM.yyyy HH:mm}; sprememb {written:N0}. Filtri: {DescribeFilter(filter)}.");
+      notes.Add("Samo spremembe, ki jih je naredil zajem dobaviteljevega XML (NW_XML, BT_XML). Spremembe iz SAOP in ročni popravki so na kartici artikla pod Zgodovina.");
+      notes.Add($"Zgodovina hrani prvih {SupplierXmlChangeRow.StoredLength} znakov vrednosti; daljše besedilo je odrezano (celo je na kartici artikla).");
+    }
+
+    await WorkbookWriter.WriteAsync(destination, "Spremembe iz XML", columns, Rows(cancellationToken), notes, cancellationToken);
+    return written;
+  }
+
+  /// <summary>Filtri z besedami za opombo v izvozu (kdo datoteko odpre čez teden, ve, kaj gleda).</summary>
+  public static string DescribeFilter(SupplierXmlChangeFilter filter)
+  {
+    var parts = new List<string>();
+    if (filter.OrganizationId is int organization) parts.Add($"podjetje {organization}");
+    if (filter.SourceCode is { } source) parts.Add($"vir {source}");
+    if (filter.Kind is { } kind) parts.Add(SupplierXmlChangeKinds.Kinds.FirstOrDefault(item => item.Code == kind).Label?.ToLowerInvariant() ?? kind);
+    if (filter.Search is { } search) parts.Add($"šifra vsebuje »{search}«");
+    if (filter.Days is int days) parts.Add(days == 1 ? "zadnji dan" : $"zadnjih {days} dni");
+    return parts.Count == 0 ? "brez (vse spremembe iz XML)" : string.Join(", ", parts);
+  }
+
+  /// <summary>Vse vrstice filtra v vrstnem redu zaslona, brez listanja — za izvoz; bere sproti (brez zbiranja v pomnilniku).</summary>
+  async IAsyncEnumerable<SupplierXmlChangeRow> ReadXmlChangesAsync(
+    SupplierXmlChangeFilter filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+  {
+    var sql = SupplierXmlBatchesSql + $"""
+
+      SELECT TOP (@Max) h.ChangeId, h.OrganizationId, COALESCE(organizacija.Name, CONCAT(N'Podjetje ', h.OrganizationId)) AS OrganizationName,
+        paket.SourceCode, h.ProductId, h.ItemID, h.FieldKey, h.CanonColumn, h.OldValue, h.NewValue, h.ChangedAtUtc
+      FROM pim.ProductFieldHistory h
+      INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
+      LEFT JOIN dbo.OrganizationConfig organizacija ON organizacija.OrganizationId = h.OrganizationId
+      WHERE {SupplierXmlFilterSql} AND (@FieldKey IS NULL OR h.FieldKey = @FieldKey)
+      ORDER BY {XmlChangesOrderBy(filter.Sort)}
+      OPTION (RECOMPILE);
+      """;
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(sql, connection) { CommandTimeout = 600 };
+    AddXmlChangeParameters(command, filter);
+    command.Parameters.Add("@Max", SqlDbType.Int).Value = WorkbookWriter.MaxRows;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      yield return ReadXmlChangeRow(reader);
+  }
+
+  static string XmlChangesOrderBy(string sort) => sort switch
+  {
+    "starejse" => "h.ChangeId ASC",
+    "sifra" => "h.ItemID ASC, h.ChangeId DESC",
+    _ => "h.ChangeId DESC",
+  };
+
+  static void AddXmlChangeParameters(SqlCommand command, SupplierXmlChangeFilter filter)
+  {
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(filter.SourceCode);
+    command.Parameters.Add("@FieldKey", SqlDbType.NVarChar, 256).Value = (object?)SupplierXmlChangeKinds.FieldKeyOf(filter.Kind) ?? DBNull.Value;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 210).Value = LikePattern(filter.Search);
+    command.Parameters.Add("@FromUtc", SqlDbType.DateTime2).Value = filter.Days is int days && days > 0 ? DateTime.UtcNow.AddDays(-days) : DBNull.Value;
+  }
+
+  /// <summary>Ena vrstica iz SELECT-a sprememb (isti stolpci na zaslonu in v izvozu).</summary>
+  static SupplierXmlChangeRow ReadXmlChangeRow(SqlDataReader reader) => new(
+    PimDb.Int64(reader, "ChangeId"), PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"),
+    PimDb.TextOrEmpty(reader, "SourceCode"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
+    PimDb.TextOrEmpty(reader, "FieldKey"), PimDb.Text(reader, "CanonColumn"), PimDb.Text(reader, "OldValue"),
+    PimDb.Text(reader, "NewValue"), PimDb.DateTimeValue(reader, "ChangedAtUtc"));
 
   /// <summary>Iskanje po delu šifre: »%x%« z ubežnimi znaki, da »_« v šifri ne pomeni poljubnega znaka.</summary>
   internal static object LikePattern(string? search)

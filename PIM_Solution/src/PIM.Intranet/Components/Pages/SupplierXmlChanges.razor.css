@@ -16,3 +16,6 @@
 .xml-media img { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); height: 2.75rem; object-fit: contain; width: 2.75rem; }
 .xml-tag { background: var(--pim-warn-bg); border-radius: 999px; color: var(--pim-warn-text); font-size: .64rem; font-weight: 700; letter-spacing: .04em; margin-left: .35rem; padding: .1rem .45rem; text-transform: uppercase; vertical-align: middle; }
 .muted { color: var(--pim-text-muted); }
+.xml-export { display: inline-flex; flex-wrap: wrap; gap: .4rem; }
+.xml-export-note { font-size: .82rem; margin: .5rem 0 0; }
+.xml-export-note.is-error { color: var(--pim-bad-text); font-weight: 600; }

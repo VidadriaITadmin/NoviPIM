@@ -1,6 +1,10 @@
 @using System.Globalization
 @inject SupplierCandidateReadService Candidates
 @inject NavigationManager Navigation
+@inject ExportResultStore ExportFiles
+@inject HeavyWorkGate Gate
+@inject IJSRuntime Js
+@implements IDisposable
 
 @* #7a (lastnik 2026-09-29): »ni jasno, ali novosti iz XML delujejo; stran ne pokaže, kaj se je
    spremenilo in pri katerem artiklu«. Zajem XML (SUPPLIER_CATALOG_IMPORT, na 6 ur) obstoječe artikle
@@ -82,7 +86,29 @@
     <button type="button" class="secondary-button" @onclick="ClearFilters">Počisti filtre</button>
   }
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+
+  @* Odločitev lastnika (#27): pregled s filtri IN izvozom v Excel. Izvoz vzame iste filtre in vrstni red
+     kot seznam, a vse strani; gradi se v ozadju te strani z možnostjo preklica. *@
+  <span class="xml-export">
+    @if (Exporting)
+    {
+      <button type="button" class="secondary-button" disabled aria-busy="true">Pripravljam Excel …</button>
+      <button type="button" class="ghost-button" @onclick="CancelExport">Prekliči izvoz</button>
+    }
+    else
+    {
+      <button type="button" class="secondary-button" disabled="@(Page is null || Page.Total == 0)" @onclick="ExportAsync"
+              title="Vse spremembe, ki ustrezajo filtrom (vse strani), v Excel — isti stolpci in vrstni red kot na zaslonu.">
+        Izvozi Excel (@((Page?.Total ?? 0).ToString("N0", Sl)))
+      </button>
+    }
+  </span>
 </section>
+
+@if (ExportMessage is not null)
+{
+  <p class="xml-export-note @(ExportFailed ? "is-error" : null)" role="@(ExportFailed ? "alert" : "status")">@ExportMessage</p>
+}
 
 <section class="ui-card data-card section-gap" aria-label="Spremembe iz XML dobaviteljev">
   <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)" EmptyText="@EmptyText" LoadingText="Berem zgodovino sprememb iz XML …">
@@ -216,8 +242,61 @@
   long AllKinds => Page?.KindCounts.Values.Sum() ?? 0;
 
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo"
-    : Page is null ? "" : $"{Page.Total.ToString("N0", Sl)} sprememb pri {Page.ProductCount.ToString("N0", Sl)} artiklih"
+    : Page is null ? "" : SupplierXmlChangeKinds.Summary(Page.Total, Page.ProductCount)
       + (Page.LastChangedUtc is { } last ? $" · zadnja {last.ToPimLocal().ToString("g", Sl)}" : "");
+
+  /* --- izvoz v Excel ------------------------------------------------------ */
+
+  bool Exporting, ExportFailed;
+  string? ExportMessage;
+  CancellationTokenSource? exportCancel;
+  const string XlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  async Task ExportAsync()
+  {
+    if (Exporting || Page is null || Page.Total == 0) return;
+    Exporting = true;
+    ExportFailed = false;
+    ExportMessage = $"Pripravljam Excel ({SupplierXmlChangeKinds.Summary(Page.Total, Page.ProductCount)}) … Pri celotni zgodovini to traja do minute; stran lahko medtem uporabljaš.";
+    exportCancel = new CancellationTokenSource();
+    var token = exportCancel.Token;
+    var filter = Filter;
+    var path = ExportFiles.CreateTempFile();
+    try
+    {
+      long rows;
+      using (await Gate.Exports.EnterAsync(token))
+      await using (var file = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        rows = await Candidates.WriteXmlChangesWorkbookAsync(filter, file, token);
+      var fileName = $"PIM_spremembe_iz_XML_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx";
+      var download = ExportFiles.Put(path, fileName, XlsxType);
+      await Js.InvokeVoidAsync("pimDownloadFile", $"izvoz/prenos/{download}");
+      ExportMessage = $"Izvoženih {rows.ToString("N0", Sl)} vrstic v {fileName}. Če se prenos ni začel sam, ga najdeš v prenosih brskalnika.";
+    }
+    catch (OperationCanceledException)
+    {
+      ExportMessage = "Izvoz preklican; datoteka ni bila narejena.";
+    }
+    catch (Exception exception)
+    {
+      ExportFailed = true;
+      ExportMessage = $"Izvoz ni uspel: {exception.Message} Poskusi znova ali zoži filtre (obdobje, vir).";
+    }
+    finally
+    {
+      Exporting = false;
+      exportCancel?.Dispose();
+      exportCancel = null;
+      if (File.Exists(path)) { try { File.Delete(path); } catch (IOException) { } }
+    }
+  }
+
+  void CancelExport() => exportCancel?.Cancel();
+
+  public void Dispose()
+  {
+    exportCancel?.Cancel();
+  }
 
   string Caption => "Spremembe iz XML dobaviteljev po šifri"
     + (Filter.Kind is { } kind ? " — " + SupplierXmlChangeKinds.Kinds.First(item => item.Code == kind).Label : "")

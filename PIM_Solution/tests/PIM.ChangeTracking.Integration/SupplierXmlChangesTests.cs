@@ -88,6 +88,34 @@ public sealed class SupplierXmlChangesTests
     Assert.Contains("slovar.IsActive = 1", sql);
   }
 
+  [Fact]
+  public void Changes_view_exports_the_filtered_list_to_excel()
+  {
+    // Odločitev lastnika pri #27: pregled s filtri IN izvozom v Excel (preverjalec #7 ga je pogrešal).
+    Assert.Contains("Izvozi Excel", Changes);
+    Assert.Contains("Candidates.WriteXmlChangesWorkbookAsync(filter, file, token)", Changes);
+    Assert.Contains("Gate.Exports.EnterAsync(token)", Changes);
+    Assert.Contains("Prekliči izvoz", Changes);
+    Assert.Contains("pimDownloadFile", Changes);
+    // Izvoz bere iste filtre in isti vrstni red kot seznam, le brez listanja (vse strani).
+    Assert.Contains("AddXmlChangeParameters(command, filter);", ReadService);
+    Assert.Contains("ORDER BY {XmlChangesOrderBy(filter.Sort)}", ReadService);
+    Assert.Contains("WorkbookWriter.WriteAsync(destination,", ReadService);
+  }
+
+  [Fact]
+  public void Changes_view_speaks_plain_slovenian()
+  {
+    // »35 sprememb pri 1 artiklu«, ne »pri 1 artiklih«; vloga slike ni surova koda »GALLERY 2«.
+    Assert.Contains("SupplierXmlChangeKinds.Summary(Page.Total, Page.ProductCount)", Changes);
+    Assert.DoesNotContain("artiklih\"", Changes);
+    Assert.Contains("\"artiklu\", \"artiklih\", \"artiklih\", \"artiklih\"", ReadService);
+    Assert.Contains("\"GALLERY\" => \"Dodatna slika\"", ReadService);
+    Assert.Contains("\"PRIMARY\" or \"MAIN\" => ", ReadService);
+    // Ob kliku na šifro kandidati ne utripnejo: pogled se določi samo na tej strani.
+    Assert.Contains("if (!IsThisPage) return;", Page);
+  }
+
   [RequiresPimConnectionFact]
   public async Task Changes_query_counts_the_same_rows_as_a_direct_select()
   {

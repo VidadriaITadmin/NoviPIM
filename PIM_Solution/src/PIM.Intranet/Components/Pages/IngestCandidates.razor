@@ -326,7 +326,21 @@ else
   [SupplyParameterFromQuery(Name = "podjetje")] public string? OrganizationQuery { get; set; }
   [SupplyParameterFromQuery(Name = "pogled")] public string? ViewQuery { get; set; }
 
-  bool ShowChanges => string.Equals(ViewQuery, "spremembe", StringComparison.OrdinalIgnoreCase);
+  /// <summary>
+  /// Pogled se določi samo, ko je naslov res ta stran. Ob kliku na šifro (izdelki/123) Blazor pred
+  /// menjavo strani še enkrat poda parametre iz poizvedbe novemu naslovu — brez »pogled« je za trenutek
+  /// utripnil pogled kandidatov in sprožil njihovo nalaganje (preverjalec #7).
+  /// </summary>
+  bool ShowChanges;
+  bool IsThisPage
+  {
+    get
+    {
+      var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+      return path.Equals("izdelki/novi-artikli", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("zajem/novi-artikli", StringComparison.OrdinalIgnoreCase);
+    }
+  }
   string CurrentUri = "";
   bool CandidatesLoaded;
 
@@ -345,6 +359,7 @@ else
     // Naslov pred prvim await: ob predupodabljanju se pogled sprememb izriše že med branjem podjetij
     // in s praznim naslovom je padel (UriFormatException, stran 500 ob odprtju/osvežitvi povezave).
     CurrentUri = Navigation.Uri;
+    ShowChanges = string.Equals(ViewQuery, "spremembe", StringComparison.OrdinalIgnoreCase);
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
 
@@ -362,6 +377,8 @@ else
 
   protected override async Task OnParametersSetAsync()
   {
+    if (!IsThisPage) return;
+    ShowChanges = string.Equals(ViewQuery, "spremembe", StringComparison.OrdinalIgnoreCase);
     CurrentUri = Navigation.Uri;
     // Kandidati se naložijo šele, ko je njihov pogled odprt — pogled sprememb jih ne potrebuje.
     if (!ShowChanges && !CandidatesLoaded)
