@@ -2391,3 +2391,12 @@ Uporabnik: atribut ima svojo mersko enoto; uvozi prepoznajo, v kateri enoti je v
 - katalog.csv: glave ostanejo enake (stalni stolpci iz 216); pretvorba 216d dobi atribut enote že v ciljni enoti (količnik 1).
 
 **Objekti:** `canon.AttributeDefinition` (Unit, UnitOfAttributeCode), `canon.UnitConversion`, `canon.AttributeUnitValue`, `canon.NormalizeAttributeUnits`, `canon.AlignAttributeUnits`, spremembe `val.Promote`, `pim.SaveProductAttributes`, `pim.SaveProductAttributesBulk`; podatki `pim.ProductAttribute`. **Ročni korak:** ne. **Povratek:** `OldValue` v dnevniku; `val.Promote` vrniti na blok MERGE iz `canon.ProductAttribute`.
+
+## Pakirno naročanje (migraciji 302_PakirnoNarocanje in 303_PakirnoNarocanjeEnaNic, 2026-09-29, naloga #5)
+
+Artikel se na spletu naroča samo po celih paketih; količino paketa Magento vzame iz stolpca »Pakirna količina« (Pakiranje 2 = SAOP `ItemQuantityOfPackaging2`). Oznaka je samo PIM, po podjetju, privzeto ne; v SAOP ne gre.
+
+- **302:** oznaka `PAKIRNO_NAROCANJE` v `pim.ProductFlagDefinition` (kartica, Oznake; zapis `pim.SaveProductFlags` z zgodovino); `out.ExportColumn` COL034 profila MAGENTO_PRODUCTS = »Pakirno naročanje« (prej prazen »Omejitev pri naročanju«); vrednost v `out.GetExportRows`; `val.SyncPackageOrderHolds` (artikel z oznako brez Pakiranja 2 > 1 dobi zadržek WEB »pravilo 302«, sprosti se sam); `pim.SetProductFlagsBulk` (uvoz delovnega lista). Izvoz katalog.csv pred sestavo pokliče `val.SyncPackageOrderHolds` enkrat na podjetje.
+- **303:** odločitev lastnika 29. 9. 16:59 (naloga #13): v katalog.csv je vrednost **1/0**, ne DA/NE. Popravek žive definicije `out.GetExportRows` (REPLACE natanko enega izraza v bloku 302, marker `PakirnoNarocanje303`). Kartica in Excel ostaneta Da/Ne oziroma D/N. »Razstavni eksponat« in »Odprodaja« ostaneta DA/NE.
+
+**Objekti:** `pim.ProductFlagDefinition` (podatek), `out.ExportColumn` (podatek), `out.GetExportRows`, `val.SyncPackageOrderHolds`, `pim.SetProductFlagsBulk`. **Ročni korak:** ne. **Vrstni red:** 303 zahteva 302. **Povratek 303:** v `out.GetExportRows` vrni `N'1'`/`N'0'` na `N'DA'`/`N'NE'`. Na DEV 303 uveljavljena posamično s `sqlcmd -f 65001` in vpisom v `dbo.SchemaMigration` (hash kot `Invoke-PendingMigrations.ps1`). **PRD:** 302 in 303 skupaj, šele po lastnikovi potrditvi.

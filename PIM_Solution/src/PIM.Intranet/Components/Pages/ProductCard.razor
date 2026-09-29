@@ -574,7 +574,7 @@
                     }
                     @if (flagCode == ProductEditService.PackageOrderFlag)
                     {
-                      @* 302: v katalog.csv stolpec »Pakirno naročanje« (DA/NE); paket je »Pakirna količina« = Pakiranje 2. *@
+                      @* 302: v katalog.csv stolpec »Pakirno naročanje« (1/0, migracija 303); paket je »Pakirna količina« = Pakiranje 2. *@
                       var pak2 = Detail?.Commercial?.Pak2;
                       @if (FlagDraft(flagCode) && (pak2 is null || pak2 <= 1))
                       {
@@ -1859,14 +1859,16 @@
         $"Kartica izdelka {Detail.Header.ItemId}");
       var packageOrder = FlagDrafts.TryGetValue(ProductEditService.PackageOrderFlag, out var packageSet) ? packageSet : (bool?)null;
       FlagDrafts.Clear();
-      FlagMessage = packageOrder switch
+      var message = packageOrder switch
       {
         true when Detail.Commercial?.Pak2 is null or <= 1 => "Oznake shranjene. Pakirno naročanje brez Pakiranja 2: artikel je zadržan s spleta, dokler Pakiranje 2 ni večje od 1.",
-        true => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = DA.",
-        false => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = NE.",
+        true => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = 1 (naročanje samo po celih paketih).",
+        false => "Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = 0.",
         _ => "Oznake shranjene.",
       };
+      // LoadAsync počisti sporočila kartice, zato se sporočilo o shranjenih oznakah postavi šele po njem.
       await LoadAsync();
+      FlagMessage = message;
     }
     catch (UnauthorizedAccessException)
     {

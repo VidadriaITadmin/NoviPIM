@@ -116,7 +116,7 @@ flowchart LR
 - Par se zamenja skupaj — nikoli nov katalog ob stari datoteki strank. Neuspešen tek pusti prejšnji veljavni par.
 - Varovalka (277) zadrži samo sumljive artikle; zadržan artikel ostane na spletu s prejšnjimi podatki, nov artikel ne pride na splet.
 - Posel ne validira; bere samo objavljeno stanje. Cene in zaloga se berejo sproti (ne čakajo objave).
-- **Pakirno naročanje (302):** stolpec 28 »Pakirno naročanje« (prej prazen »Omejitev pri naročanju«) = DA/NE iz oznake artikla `PAKIRNO_NAROCANJE`; brez oznake NE. DA pomeni, da Magento prodaja samo po celih paketih po »Pakirni količini« (Pakiranje 2). Artikel z DA brez Pakiranja 2 (> 1) v datoteko ne gre (zadržek »pravilo 302«), dokler Pakiranje 2 ni vpisano.
+- **Pakirno naročanje (302):** stolpec 28 »Pakirno naročanje« (prej prazen »Omejitev pri naročanju«) = 1/0 iz oznake artikla `PAKIRNO_NAROCANJE` (303; prej DA/NE); brez oznake 0. 1 pomeni, da Magento prodaja samo po celih paketih po »Pakirni količini« (Pakiranje 2). Artikel z 1 brez Pakiranja 2 (> 1) v datoteko ne gre (zadržek »pravilo 302«), dokler Pakiranje 2 ni vpisano.
 - »Popust na artikel« pri oznakah X in O gre ven samo ob sveži (do 30 min) pozitivni lastni zalogi, sicer 0.
 - Stran `/splet` vidijo vloge z dovoljenjem `page.web`; potrditi na `/varovalke` smejo ADMIN, CATALOG_EDITOR in COMMERCIAL.
 

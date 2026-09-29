@@ -69,6 +69,69 @@ internal static class PackageOrderHoldTests
         {
             await transaction.RollbackAsync();
         }
+
+        await ExportValueIsOneZeroAsync(connection);
+    }
+
+    /// <summary>
+    /// 303 (odločitev lastnika 29. 9., naloga #13): v katalog.csv je »Pakirno naročanje« 1 ali 0, ne DA/NE.
+    /// Vzame prvi artikel iz izvoza podjetja 2, mu v transakciji vklopi oznako in prebere svojo vrstico.
+    /// </summary>
+    static async Task ExportValueIsOneZeroAsync(SqlConnection connection)
+    {
+        const string Column = "Pakirno naročanje";
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            var first = await ExportAsync(connection, transaction, search: null, take: 1);
+            if (first.Count == 0)
+            {
+                Console.WriteLine("F7 Pakirno naročanje 1/0: podjetje 2 nima vrstic za izvoz — preskočeno.");
+                return;
+            }
+            var item = first[0].Values.First();
+            Assert(first[0].TryGetValue(Column, out var before) && (before == "0" || before == "1"),
+                $"Stolpec »{Column}« mora biti 0 ali 1, je »{before}«.");
+
+            await using (var set = new SqlCommand("""
+                DECLARE @ProductId bigint=(SELECT ProductId FROM canon.Product WHERE OrganizationId=2 AND ItemID=@Item);
+                DELETE pim.ProductFlag WHERE ProductId=@ProductId AND FlagCode=N'PAKIRNO_NAROCANJE';
+                INSERT pim.ProductFlag(ProductId,FlagCode,IsSet,ChangedBy) VALUES(@ProductId,N'PAKIRNO_NAROCANJE',1,N'F7');
+                """, connection, transaction))
+            {
+                set.Parameters.AddWithValue("@Item", item);
+                await set.ExecuteNonQueryAsync();
+            }
+            var row = (await ExportAsync(connection, transaction, item, take: 0))
+                .FirstOrDefault(candidate => string.Equals(candidate.Values.First(), item, StringComparison.OrdinalIgnoreCase));
+            Assert(row is not null, $"Artikel {item} mora biti v izvozu tudi po vklopu oznake.");
+            Assert(row![Column] == "1", $"Z oznako mora biti »{Column}« = 1, je »{row[Column]}«.");
+            Console.WriteLine("F7 Pakirno naročanje: katalog.csv ima 1/0 (303) PASS.");
+        }
+        finally
+        {
+            await transaction.RollbackAsync();
+        }
+    }
+
+    static async Task<List<Dictionary<string, string>>> ExportAsync(SqlConnection connection, SqlTransaction transaction, string? search, int take)
+    {
+        await using var command = new SqlCommand("""
+            DECLARE @ProfileId int=(SELECT ExportProfileId FROM out.ExportProfile WHERE ProfileCode=N'MAGENTO_PRODUCTS'),@Count int;
+            EXEC out.GetExportRows @OrganizationId=2,@ExportProfileId=@ProfileId,@Search=@Search,@Take=@Take,@OnlyPublished=0,@TotalCount=@Count OUTPUT;
+            """, connection, transaction) { CommandTimeout = 300 };
+        command.Parameters.AddWithValue("@Search", (object?)search ?? DBNull.Value);
+        command.Parameters.AddWithValue("@Take", take);
+        await using var reader = await command.ExecuteReaderAsync();
+        var rows = new List<Dictionary<string, string>>();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (var i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? "" : Convert.ToString(reader.GetValue(i)) ?? "";
+            rows.Add(row);
+        }
+        return rows;
     }
 
     static async Task<bool> ActiveRuleHoldAsync(SqlConnection connection, SqlTransaction transaction, long productId)
