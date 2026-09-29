@@ -17,7 +17,7 @@ migracije: [153, 154, 232, 233, 234, 275, 276, 288, 289, 296, 297]
 
 ## 1. Namen
 
-Artikle dati v odprodajo s količino in popustom ter jih označiti kot razstavni eksponat — ročno ali z uvozom dobaviteljevega seznama iz Excela. Rezultat so stolpci »Odprodaja«, »Odprodaja - popust %«, »Odprodaja - količina« in »Razstavni eksponat« v katalog.csv ob naslednjem izvozu; cena se ne spremeni, popust uporabi spletna trgovina. Naročila kupcev iz SAOP količino sproti zmanjšujejo (288).
+Artikle dati v odprodajo s količino in popustom ter jih označiti kot razstavni eksponat — ročno ali z uvozom dobaviteljevega seznama iz Excela. Rezultat so stolpci »Odprodaja«, »Odprodaja - popust %«, »Odprodaja - količina« in »Razstavni eksponat« v katalog.csv ob naslednjem izvozu; cena se ne spremeni, popust uporabi spletna trgovina. Naročila kupcev iz SAOP količino sproti zmanjšujejo (288). Isti popust in količino dobita tudi stara stolpca »Popust odprodaje %« in »Količina odprodaje« (304, 305), da Magento vidi odprodajo ne glede na to, katerega bere. »Popust na artikel« odprodaje ne nosi (305): ostane oddelčni popust X/O iz Nadzora kataloga, sicer 0 — sicer bi artikel lahko dobil popust dvakrat.
 
 ## 2. Kdo sodeluje
 
@@ -42,7 +42,7 @@ Artikle dati v odprodajo s količino in popustom ter jih označiti kot razstavni
 | **Vhod** | Excel s stolpci Šifra, Količina, Popust, Cena (samo pregled), Razstavni eksponat | Dobavitelj / Excel |
 | **Izhod** | Vrstice odprodaje po viru in oznaka razstavni eksponat | PIM |
 | **Vhod** | Naročila kupcev (VNK) za artikle v odprodaji | SAOP (sales.OrderLine) |
-| **Izhod** | Odprodaja DA/NE, popust %, preostala količina, razstavni eksponat DA/NE | katalog.csv (ob naslednjem izvozu) |
+| **Izhod** | Odprodaja DA/NE, popust %, preostala količina, razstavni eksponat DA/NE; popust in količina tudi v starih stolpcih »Popust odprodaje %«, »Količina odprodaje« (304, 305); »Popust na artikel« ne | katalog.csv (ob naslednjem izvozu) |
 
 ## 5. Diagram
 
