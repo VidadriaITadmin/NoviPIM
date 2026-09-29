@@ -69,8 +69,127 @@ public sealed record SupplierCandidateValueRow(string EntityType, string TargetF
 }
 
 /// <summary>
+/// Kam bi preslikava uvrstila kandidata (#7b): dobaviteljeva pot iz zadnjega zajema in naša
+/// kategorija po drevesu. Isto pravilo kot <c>map.ResolveProductCategories</c> (ključ poti,
+/// <c>map.CategoryPathMap</c>), zato stran pove natanko to, kar bo naredil zajem, ko bo artikel
+/// ustvarjen v SAOP in ga naslednji XML obogati.
+/// </summary>
+/// <param name="SupplierPath">»Interior lighting / Ceiling lamps / Plafonds«; null, kadar dobavitelj kategorije ne pošlje.</param>
+/// <param name="Trees">Po drevesu: naša pot ali null (preslikave ni).</param>
+public sealed record SupplierCategoryPrediction(string? SupplierPath, string? SourcePathKey, IReadOnlyList<SupplierCategoryTarget> Trees)
+{
+  public IEnumerable<SupplierCategoryTarget> Mapped => Trees.Where(tree => tree.CategoryPath is not null);
+  public IEnumerable<SupplierCategoryTarget> Unmapped => Trees.Where(tree => tree.CategoryPath is null);
+
+  /// <summary>Dobavitelj pošlje kategorijo, preslikave pa ni v nobenem drevesu — artikel ostane brez uvrstitve.</summary>
+  public bool IsError => SupplierPath is not null && !Mapped.Any();
+}
+
+public sealed record SupplierCategoryTarget(string CategoryTreeCode, string? CategoryPath);
+
+/// <summary>Filter pregleda »Spremembe iz XML« (#7a); vse je v naslovu strani.</summary>
+/// <param name="Kind">ATTRIBUTE, TEXT, MEDIA ali null (vse).</param>
+/// <param name="Days">Zadnjih N dni; null = vsa zgodovina.</param>
+/// <param name="Sort">novejse (privzeto), starejse, sifra.</param>
+public sealed record SupplierXmlChangeFilter(
+  int? OrganizationId = null, string? SourceCode = null, string? Kind = null, string? Search = null,
+  int? Days = null, string Sort = "novejse", int Skip = 0, int Take = 50);
+
+/// <summary>Ena sprememba polja, ki jo je naredil zajem dobaviteljevega XML (pim.ProductFieldHistory).</summary>
+public sealed record SupplierXmlChangeRow(
+  long ChangeId, int OrganizationId, string OrganizationName, string SourceCode, long ProductId, string ItemId,
+  string FieldKey, string? CanonColumn, string? OldValue, string? NewValue, DateTime ChangedAtUtc)
+{
+  /// <summary>Zgodovina hrani največ 400 znakov (sprožilci 034); daljša vrednost je odrezana.</summary>
+  public const int StoredLength = 400;
+
+  public string Kind => SupplierXmlChangeKinds.KindOf(FieldKey);
+  public bool IsMedia => Kind == SupplierXmlChangeKinds.Media;
+  public bool OldTruncated => (OldValue?.Length ?? 0) >= StoredLength;
+  public bool NewTruncated => (NewValue?.Length ?? 0) >= StoredLength;
+
+  /// <summary>Kaj se je spremenilo, v besedah urednika: ime atributa, vrsta besedila z jezikom, slika z mestom.</summary>
+  public string FieldLabel => SupplierXmlChangeKinds.FieldLabel(FieldKey, CanonColumn);
+
+  /// <summary>Dodano, odstranjeno ali spremenjeno — iz prazne stare oz. nove vrednosti.</summary>
+  public string Change => OldValue is null ? "dodano" : NewValue is null ? "odstranjeno" : "spremenjeno";
+}
+
+/// <param name="KindCounts">Število sprememb po vrsti pri istih ostalih filtrih (za čipe nad seznamom).</param>
+/// <param name="LastReceived">Zadnji prevzem datoteke po viru (raw.Inbox) — ali XML sploh prihaja.</param>
+public sealed record SupplierXmlChangePage(
+  IReadOnlyList<SupplierXmlChangeRow> Rows, long Total, long ProductCount, DateTime? LastChangedUtc,
+  IReadOnlyDictionary<string, long> KindCounts, IReadOnlyList<(string SourceCode, DateTime ReceivedUtc)> LastReceived);
+
+/// <summary>Skupna pravila pregleda sprememb iz XML: vrste polj in njihova imena.</summary>
+public static class SupplierXmlChangeKinds
+{
+  public const string Attribute = "ATTRIBUTE", Text = "TEXT", Media = "MEDIA", Other = "OTHER";
+
+  public static readonly IReadOnlyList<(string Code, string Label)> Kinds =
+    [(Attribute, "Atributi"), (Text, "Nazivi in opisi"), (Media, "Slike")];
+
+  public static readonly IReadOnlyList<(string Code, string Label)> Sorts =
+    [("novejse", "Najnovejše najprej"), ("starejse", "Najstarejše najprej"), ("sifra", "Po šifri")];
+
+  public static readonly IReadOnlyList<int> DayOptions = [1, 7, 30, 90];
+
+  public static string KindOf(string fieldKey) => fieldKey switch
+  {
+    "ProductAttribute.Value" => Attribute,
+    "ProductText.Value" => Text,
+    "ProductMedia.Url" => Media,
+    _ => Other,
+  };
+
+  public static string? FieldKeyOf(string? kind) => kind switch
+  {
+    Attribute => "ProductAttribute.Value",
+    Text => "ProductText.Value",
+    Media => "ProductMedia.Url",
+    _ => null,
+  };
+
+  public static string KindLabel(string kind) => kind switch
+  {
+    Attribute => "Atribut", Text => "Besedilo", Media => "Slika", _ => "Polje",
+  };
+
+  /// <summary>
+  /// Sprožilci 034 v <c>CanonColumn</c> hranijo, KATERO polje: kodo/ime atributa, »VRSTA.jezik« pri
+  /// besedilu, »VLOGA.mesto« pri sliki. Tu to postane ime, ki ga urednik pozna.
+  /// </summary>
+  public static string FieldLabel(string fieldKey, string? canonColumn)
+  {
+    var column = canonColumn ?? "";
+    switch (KindOf(fieldKey))
+    {
+      case Text:
+        {
+          var dot = column.LastIndexOf('.');
+          return dot < 0 ? ProductFieldLabels.TextTypeLabel(column) : $"{ProductFieldLabels.TextTypeLabel(column[..dot])} ({column[(dot + 1)..]})";
+        }
+      case Media:
+        {
+          var dot = column.LastIndexOf('.');
+          if (dot < 0) return "Slika";
+          var role = column[..dot];
+          var place = column[(dot + 1)..];
+          return string.Equals(role, "IMAGE", StringComparison.OrdinalIgnoreCase) ? $"Slika {place}" : $"{role} {place}";
+        }
+      case Attribute:
+        return column.Length == 0 ? "Atribut" : column;
+      default:
+        return ProductFieldLabels.For(fieldKey);
+    }
+  }
+}
+
+/// <summary>
 /// Bralni model kandidatov za nove artikle od dobaviteljev (219, 240, 241). SQL ostane v migraciji;
-/// tu je samo klic procedure in preslikava stolpcev po imenu.
+/// tu je samo klic procedure in preslikava stolpcev po imenu. Izjemi (#7, brez migracije, ker je
+/// <c>docs/DATABASE.md</c> med delom zaklenjen): pregled sprememb iz XML in predlagana kategorija
+/// kandidata sta parametrizirana SELECT-a nad obstoječimi tabelami.
 /// </summary>
 public sealed class SupplierCandidateReadService(IConfiguration configuration)
 {
@@ -142,4 +261,258 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
   }
 
   static object Optional(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+  /* --- #7a: spremembe iz XML dobaviteljev po šifri ----------------------- */
+
+  /// <summary>
+  /// Paketi zgodovine, ki jih je naredil zajem dobaviteljevega XML. Ne po <c>ChangeSource='XML_FEED'</c>:
+  /// isto oznako nosi tudi preslikava SAOP (<c>PIM.XmlMapping:SAOP_*</c>), ki bi se sicer pokazala kot
+  /// »novost dobavitelja«. Dobavitelj = vir z vrsto <c>FILE_XML</c> v <c>map.SourceConnector</c>.
+  /// Podjetje je v vrstici zgodovine, ne v paketu (paket XML ga nima).
+  /// </summary>
+  internal const string SupplierXmlBatchesSql = """
+    DECLARE @Paket TABLE (ChangeBatchId bigint NOT NULL PRIMARY KEY, SourceCode nvarchar(100) NOT NULL);
+    INSERT @Paket (ChangeBatchId, SourceCode)
+    SELECT paket.ChangeBatchId, vir.SourceCode
+    FROM pim.ProductChangeBatch paket
+    INNER JOIN (SELECT DISTINCT SourceCode FROM map.SourceConnector WHERE ConnectorType = N'FILE_XML') vir
+      ON paket.ChangedBy = N'PIM.XmlMapping:' + vir.SourceCode
+    WHERE paket.ChangeSource = N'XML_FEED' AND (@SourceCode IS NULL OR vir.SourceCode = @SourceCode);
+    """;
+
+  const string SupplierXmlFilterSql = """
+      (@OrganizationId IS NULL OR h.OrganizationId = @OrganizationId)
+      AND (@FromUtc IS NULL OR h.ChangedAtUtc >= @FromUtc)
+      AND (@Search IS NULL OR h.ItemID LIKE @Search ESCAPE N'\')
+    """;
+
+  public async Task<SupplierXmlChangePage> GetXmlChangesAsync(SupplierXmlChangeFilter filter, CancellationToken cancellationToken = default)
+  {
+    ArgumentNullException.ThrowIfNull(filter);
+    var orderBy = filter.Sort switch
+    {
+      "starejse" => "h.ChangeId ASC",
+      "sifra" => "h.ItemID ASC, h.ChangeId DESC",
+      _ => "h.ChangeId DESC",
+    };
+    var sql = SupplierXmlBatchesSql + $"""
+
+      SELECT h.FieldKey, COUNT_BIG(*) AS Changes
+      FROM pim.ProductFieldHistory h
+      INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
+      WHERE {SupplierXmlFilterSql}
+      GROUP BY h.FieldKey
+      OPTION (RECOMPILE);
+
+      SELECT COUNT_BIG(*) AS Total, COUNT_BIG(DISTINCT h.ProductId) AS Products, MAX(h.ChangedAtUtc) AS LastChangedUtc
+      FROM pim.ProductFieldHistory h
+      INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
+      WHERE {SupplierXmlFilterSql} AND (@FieldKey IS NULL OR h.FieldKey = @FieldKey)
+      OPTION (RECOMPILE);
+
+      SELECT h.ChangeId, h.OrganizationId, COALESCE(organizacija.Name, CONCAT(N'Podjetje ', h.OrganizationId)) AS OrganizationName,
+        paket.SourceCode, h.ProductId, h.ItemID, h.FieldKey, h.CanonColumn, h.OldValue, h.NewValue, h.ChangedAtUtc
+      FROM pim.ProductFieldHistory h
+      INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
+      LEFT JOIN dbo.OrganizationConfig organizacija ON organizacija.OrganizationId = h.OrganizationId
+      WHERE {SupplierXmlFilterSql} AND (@FieldKey IS NULL OR h.FieldKey = @FieldKey)
+      ORDER BY {orderBy}
+      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY
+      OPTION (RECOMPILE);
+
+      SELECT inbox.SourceCode, MAX(inbox.ReceivedUtc) AS ReceivedUtc
+      FROM raw.Inbox inbox
+      WHERE inbox.SourceCode IN (SELECT DISTINCT SourceCode FROM map.SourceConnector WHERE ConnectorType = N'FILE_XML')
+        AND (@OrganizationId IS NULL OR inbox.OrganizationId = @OrganizationId)
+      GROUP BY inbox.SourceCode
+      ORDER BY inbox.SourceCode;
+      """;
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)filter.OrganizationId ?? DBNull.Value;
+    command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = Optional(filter.SourceCode);
+    command.Parameters.Add("@FieldKey", SqlDbType.NVarChar, 256).Value = (object?)SupplierXmlChangeKinds.FieldKeyOf(filter.Kind) ?? DBNull.Value;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 210).Value = LikePattern(filter.Search);
+    command.Parameters.Add("@FromUtc", SqlDbType.DateTime2).Value = filter.Days is int days && days > 0 ? DateTime.UtcNow.AddDays(-days) : DBNull.Value;
+    command.Parameters.Add("@Skip", SqlDbType.Int).Value = Math.Max(0, filter.Skip);
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = Math.Clamp(filter.Take, 1, 500);
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var kinds = new Dictionary<string, long>(StringComparer.Ordinal);
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var kind = SupplierXmlChangeKinds.KindOf(PimDb.TextOrEmpty(reader, "FieldKey"));
+      kinds[kind] = kinds.GetValueOrDefault(kind) + PimDb.Int64(reader, "Changes");
+    }
+
+    await reader.NextResultAsync(cancellationToken);
+    long total = 0, products = 0;
+    DateTime? last = null;
+    if (await reader.ReadAsync(cancellationToken))
+    {
+      total = PimDb.Int64(reader, "Total");
+      products = PimDb.Int64(reader, "Products");
+      last = PimDb.NullableDateTime(reader, "LastChangedUtc");
+    }
+
+    await reader.NextResultAsync(cancellationToken);
+    var rows = new List<SupplierXmlChangeRow>();
+    while (await reader.ReadAsync(cancellationToken))
+      rows.Add(new(
+        PimDb.Int64(reader, "ChangeId"), PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"),
+        PimDb.TextOrEmpty(reader, "SourceCode"), PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"),
+        PimDb.TextOrEmpty(reader, "FieldKey"), PimDb.Text(reader, "CanonColumn"), PimDb.Text(reader, "OldValue"),
+        PimDb.Text(reader, "NewValue"), PimDb.DateTimeValue(reader, "ChangedAtUtc")));
+
+    await reader.NextResultAsync(cancellationToken);
+    var received = new List<(string, DateTime)>();
+    while (await reader.ReadAsync(cancellationToken))
+      received.Add((PimDb.TextOrEmpty(reader, "SourceCode"), PimDb.DateTimeValue(reader, "ReceivedUtc")));
+
+    return new(rows, total, products, last, kinds, received);
+  }
+
+  /// <summary>Iskanje po delu šifre: »%x%« z ubežnimi znaki, da »_« v šifri ne pomeni poljubnega znaka.</summary>
+  internal static object LikePattern(string? search)
+  {
+    if (string.IsNullOrWhiteSpace(search)) return DBNull.Value;
+    var text = search.Trim();
+    if (text.Length > 200) text = text[..200];
+    return "%" + text.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_").Replace("[", @"\[") + "%";
+  }
+
+  /* --- #7b: kam bo uvrščen kandidat -------------------------------------- */
+
+  /// <summary>
+  /// Za kandidate na strani (ena poizvedba, ne ena na vrstico) prebere dobaviteljevo pot iz zadnjega
+  /// zajema (zapis <c>Classification</c> z isto šifro ali EAN) in jo prevede po <c>map.CategoryPathMap</c>
+  /// v vsakem dejavnem drevesu — enako kot <c>map.ResolveProductCategories</c>, ki to naredi, ko artikel
+  /// obstaja. Kandidati, za katere dobavitelj kategorije ne pošlje, v slovarju nimajo vnosa poti.
+  /// </summary>
+  public async Task<IReadOnlyDictionary<long, SupplierCategoryPrediction>> GetCategoryPredictionsAsync(
+    IEnumerable<long> candidateIds, CancellationToken cancellationToken = default)
+  {
+    var ids = candidateIds.Distinct().ToArray();
+    if (ids.Length == 0) return new Dictionary<long, SupplierCategoryPrediction>();
+
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(CategoryPredictionSql, connection) { CommandTimeout = 60 };
+    command.Parameters.Add("@Ids", SqlDbType.NVarChar, -1).Value = System.Text.Json.JsonSerializer.Serialize(ids);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+    var paths = new Dictionary<long, (string? Path, string? Key)>();
+    var trees = new Dictionary<long, List<SupplierCategoryTarget>>();
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var id = PimDb.Int64(reader, "SupplierProductCandidateId");
+      var levels = new[] { PimDb.Text(reader, "Level1"), PimDb.Text(reader, "Level2"), PimDb.Text(reader, "Level3") }
+        .Where(level => !string.IsNullOrWhiteSpace(level)).ToArray();
+      paths[id] = (levels.Length == 0 ? null : string.Join(" / ", levels), PimDb.Text(reader, "SourcePathKey"));
+      var tree = PimDb.Text(reader, "CategoryTreeCode");
+      if (tree is null) continue;
+      if (!trees.TryGetValue(id, out var list)) trees[id] = list = [];
+      list.Add(new(tree, PimDb.Text(reader, "CategoryPath")));
+    }
+
+    var result = new Dictionary<long, SupplierCategoryPrediction>();
+    foreach (var id in ids)
+    {
+      var (path, key) = paths.GetValueOrDefault(id);
+      result[id] = new(path, key, path is null ? [] : trees.GetValueOrDefault(id) ?? []);
+    }
+    return result;
+  }
+
+  /// <summary>
+  /// Ključ poti je natanko formula iz <c>map.ResolveProductCategories</c> (ravni, »___«, presledki v »_«,
+  /// male črke). Zapisi zajema se izberejo prek indeksa <c>IX_ExtractedValue_Identity</c> (vrsta polja,
+  /// zapis) — najprej zapisi tega vira in podjetja, ki sploh nosijo kategorijo, nato ujemanje ključa.
+  /// </summary>
+  internal const string CategoryPredictionSql = """
+    SET NOCOUNT ON;
+    DECLARE @Kandidat TABLE (SupplierProductCandidateId bigint NOT NULL PRIMARY KEY, OrganizationId int NOT NULL, SourceCode nvarchar(100) NOT NULL);
+    DECLARE @Kljuc TABLE (SupplierProductCandidateId bigint NOT NULL, OrganizationId int NOT NULL, SourceCode nvarchar(100) NOT NULL, KeyValue nvarchar(100) NOT NULL);
+    DECLARE @Zapis TABLE (InboxId bigint NOT NULL PRIMARY KEY, OrganizationId int NOT NULL, SourceCode nvarchar(100) NOT NULL);
+
+    INSERT @Kandidat (SupplierProductCandidateId, OrganizationId, SourceCode)
+    SELECT kandidat.SupplierProductCandidateId, kandidat.OrganizationId, kandidat.SourceCode
+    FROM map.SupplierProductCandidate kandidat
+    WHERE kandidat.SupplierProductCandidateId IN (SELECT CONVERT(bigint, [value]) FROM OPENJSON(@Ids));
+
+    INSERT @Kljuc (SupplierProductCandidateId, OrganizationId, SourceCode, KeyValue)
+    SELECT DISTINCT kandidat.SupplierProductCandidateId, kandidat.OrganizationId, kandidat.SourceCode, kljuc.KeyValue
+    FROM map.SupplierProductCandidate kandidat
+    CROSS APPLY (VALUES (kandidat.ItemID), (kandidat.EAN)) kljuc(KeyValue)
+    WHERE kandidat.SupplierProductCandidateId IN (SELECT SupplierProductCandidateId FROM @Kandidat)
+      AND NULLIF(LTRIM(RTRIM(kljuc.KeyValue)), N'') IS NOT NULL;
+
+    INSERT @Zapis (InboxId, OrganizationId, SourceCode)
+    SELECT inbox.InboxId, inbox.OrganizationId, inbox.SourceCode
+    FROM raw.Inbox inbox
+    WHERE EXISTS (SELECT 1 FROM @Kandidat kandidat WHERE kandidat.OrganizationId = inbox.OrganizationId AND kandidat.SourceCode = inbox.SourceCode)
+      AND EXISTS (SELECT 1 FROM map.ExtractedValue vrednost
+                  WHERE vrednost.TargetFieldCode = N'ProductCategory.SourceLevel1' AND vrednost.InboxId = inbox.InboxId);
+
+    WITH Zadetek AS
+    (
+      SELECT kljuc.SupplierProductCandidateId, vrednost.InboxId, vrednost.RecordOrdinal,
+        ROW_NUMBER() OVER (PARTITION BY kljuc.SupplierProductCandidateId ORDER BY vrednost.InboxId DESC, vrednost.RecordOrdinal DESC) AS Mesto
+      FROM @Zapis zapis
+      INNER JOIN map.ExtractedValue vrednost WITH (FORCESEEK (IX_ExtractedValue_Identity (TargetFieldCode, InboxId)))
+        ON vrednost.TargetFieldCode IN (N'Product.ItemID', N'Product.EAN') AND vrednost.InboxId = zapis.InboxId
+      INNER JOIN @Kljuc kljuc
+        ON kljuc.OrganizationId = zapis.OrganizationId AND kljuc.SourceCode = zapis.SourceCode
+       AND kljuc.KeyValue = CONVERT(nvarchar(100), vrednost.Value)
+    ),
+    Pot AS
+    (
+      SELECT zadetek.SupplierProductCandidateId, kandidat.SourceCode,
+        LTRIM(RTRIM(MAX(CASE WHEN vrednost.TargetFieldCode = N'ProductCategory.SourceLevel1' THEN CONVERT(nvarchar(400), vrednost.Value) END))) AS Level1,
+        NULLIF(LTRIM(RTRIM(MAX(CASE WHEN vrednost.TargetFieldCode = N'ProductCategory.SourceLevel2' THEN CONVERT(nvarchar(400), vrednost.Value) END))), N'') AS Level2,
+        NULLIF(LTRIM(RTRIM(MAX(CASE WHEN vrednost.TargetFieldCode = N'ProductCategory.SourceLevel3' THEN CONVERT(nvarchar(400), vrednost.Value) END))), N'') AS Level3
+      FROM Zadetek zadetek
+      INNER JOIN @Kandidat kandidat ON kandidat.SupplierProductCandidateId = zadetek.SupplierProductCandidateId
+      INNER JOIN map.ExtractedValue vrednost
+        ON vrednost.TargetFieldCode IN (N'ProductCategory.SourceLevel1', N'ProductCategory.SourceLevel2', N'ProductCategory.SourceLevel3')
+       AND vrednost.InboxId = zadetek.InboxId AND vrednost.RecordOrdinal = zadetek.RecordOrdinal
+      WHERE zadetek.Mesto = 1
+      GROUP BY zadetek.SupplierProductCandidateId, kandidat.SourceCode
+    ),
+    Kljuc AS
+    (
+      SELECT pot.*, LOWER(CONCAT(
+          REPLACE(pot.Level1, N' ', N'_'),
+          CASE WHEN pot.Level2 IS NULL THEN N'' ELSE N'___' + REPLACE(pot.Level2, N' ', N'_') END,
+          CASE WHEN pot.Level3 IS NULL THEN N'' ELSE N'___' + REPLACE(pot.Level3, N' ', N'_') END)) AS SourcePathKey
+      FROM Pot pot
+      WHERE NULLIF(pot.Level1, N'') IS NOT NULL
+    ),
+    Drevo AS
+    (
+      SELECT DISTINCT spletisce.CategoryTreeCode
+      FROM canon.WebSite spletisce
+      WHERE spletisce.IsActive = 1
+        AND EXISTS (SELECT 1 FROM canon.Category kategorija WHERE kategorija.CategoryTreeCode = spletisce.CategoryTreeCode AND kategorija.IsActive = 1)
+    )
+    SELECT kljuc.SupplierProductCandidateId, kljuc.Level1, kljuc.Level2, kljuc.Level3, kljuc.SourcePathKey,
+      drevo.CategoryTreeCode, cilj.CategoryPath
+    FROM Kljuc kljuc
+    CROSS JOIN Drevo drevo
+    OUTER APPLY
+    (
+      SELECT TOP (1) prevod.CategoryPath
+      FROM map.CategoryPathMap slovar
+      INNER JOIN canon.WebSite spletisce ON spletisce.CategoryTreeCode = slovar.CategoryTreeCode AND spletisce.IsActive = 1
+      INNER JOIN canon.CategoryPathTranslated prevod
+        ON prevod.CategoryTreeCode = slovar.CategoryTreeCode AND prevod.CategoryCode = slovar.CategoryCode
+       AND prevod.LanguageCode = spletisce.LanguageCode
+      WHERE slovar.SourceCode = kljuc.SourceCode AND slovar.CategoryTreeCode = drevo.CategoryTreeCode
+        AND slovar.SourcePathKey = kljuc.SourcePathKey AND slovar.IsActive = 1
+      ORDER BY CASE WHEN spletisce.LanguageCode = N'sl' THEN 0 ELSE 1 END, spletisce.WebSiteCode
+    ) cilj
+    ORDER BY kljuc.SupplierProductCandidateId, drevo.CategoryTreeCode;
+    """;
 }

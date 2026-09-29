@@ -3,17 +3,17 @@ id: dobaviteljski-katalogi-xml
 naslov: Dobaviteljski katalogi XML in zaloga dobaviteljev
 podrocje: 02-vhodi
 stanje: delno
-bere: [dobavitelj.xml, pim.izdelek, pim.pravila, pim.nastavitve]
+bere: [dobavitelj.xml, pim.izdelek, pim.pravila, pim.nastavitve, pim.zgodovina-uvozov]
 pise: [pim.surovi-zajem, pim.atributi, pim.besedila, pim.mediji, pim.kategorije-izdelka, pim.kandidati, pim.zaloge, pim.urniki]
-strani: [/zajem, /zajem/viri/{SourceCode}, /sistem]
+strani: [/zajem, /zajem/viri/{SourceCode}, /sistem, /izdelki/novi-artikli]
 posli: [SUPPLIER_CATALOG_IMPORT, SUPPLIER_STOCK_IMPORT, NIGHTLY_RECONCILIATION]
-koda: [PIM_Solution/workers/PIM.SourceFetchWorker/*.cs, PIM_Solution/workers/PIM.XmlFileWorker/*.cs, PIM_Solution/workers/PIM.StockFileWorker/*.cs, PIM_Solution/src/PIM.XmlMapping/*.cs, PIM_Solution/src/PIM.StockMapping/*.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs, PIM_Solution/src/PIM.Automation/WorkerSchedulerPolicy.cs]
+koda: [PIM_Solution/workers/PIM.SourceFetchWorker/*.cs, PIM_Solution/workers/PIM.XmlFileWorker/*.cs, PIM_Solution/workers/PIM.StockFileWorker/*.cs, PIM_Solution/src/PIM.XmlMapping/*.cs, PIM_Solution/src/PIM.StockMapping/*.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs, PIM_Solution/src/PIM.Automation/WorkerSchedulerPolicy.cs, PIM_Solution/src/PIM.Intranet/Components/Pages/SupplierXmlChanges.razor, PIM_Solution/src/PIM.Intranet/Services/SupplierCandidateReadService.cs]
 migracije: [240, 256, 257, 262, 270, 273]
 ---
 
 # Dobaviteljski katalogi XML in zaloga dobaviteljev
 
-> **Področje:** Vhodi · **Lastnik:** urednik kataloga (vsebina), skrbnik (prevzem) · **Stanje:** ⚠️ delno · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Vhodi · **Lastnik:** urednik kataloga (vsebina), skrbnik (prevzem) · **Stanje:** ⚠️ delno · **Preverjeno:** 2026-09-29, iz kode in razvojne baze (#7)
 
 ## 1. Namen
 
@@ -87,6 +87,7 @@ flowchart LR
 | 4 | Avtomatika | — | — | Zapis brez ujemanja postane **kandidat** (ne artikel). Če je artikel medtem nastal po drugi poti (SAOP), se kandidat samodejno zapre. | Na `/izdelki/novi-artikli` je nov kandidat »Čaka na ERP«. |
 | 5 | Avtomatika | — | — | Zaloga dobavitelja se zapiše vsakemu podjetju, a na strani Zaloga šteje samo pri artiklu, ki ga podjetje ima (262). | `/zaloge` pri artiklu kaže vir `NW_STOCK` ali `BT_STOCK`. |
 | 6 | Urednik | `/zajem` | Pregledaš vrstice »Dobaviteljev XML« in »Zaloga dobavitelja« (stanje, zadnji uspeh, čaka, zavrnjeno). | — | Stanje »V redu«; »Čaka« 0. |
+| 6b | Urednik | `/izdelki/novi-artikli?pogled=spremembe` (zavihek »Spremembe iz XML«) | Vpišeš šifro artikla ali izbereš podjetje, vir, vrsto (atributi, besedila, slike) in obdobje. | Prebere se zgodovina polj (`pim.ProductFieldHistory`), ki jo je zapisal zajem **dobaviteljevega** XML (paketi `PIM.XmlMapping:NW_XML` / `BT_XML`); spremembe preslikave SAOP in ročni popravki niso zraven. Listanje po 50, štetje v bazi. | Vrstice »šifra · kaj · prej → potem · kdaj · vir«; zgoraj »Zadnji prevzem datoteke« po viru (rumeno, če je starejši od dneva). Klik na šifro odpre kartico artikla. |
 | 7 | Urednik | `/izdelki/novi-artikli` → »Vrzeli in ponovna preslikava …« | Če XML prinaša kategorije ali atribute brez preslikave, jih zapreš in klikneš »Ponovno preslikaj vir«. | Glej [Preslikava virov in ponovna obdelava](preslikava-virov-in-ponovna-obdelava.md). | Artikli dobijo manjkajoče vrednosti. |
 
 ## 7. Pravila in varovalke
@@ -96,6 +97,7 @@ flowchart LR
 - Zaloga dobavitelja se ne pokaže pri artiklu, ki ga podjetje nima (262).
 - Svežina: `NW_XML` sme biti star 7 dni, `BT_XML` 36 h; zaloga `NW_STOCK` 4 h, `BT_STOCK` 6 h (merjeno po **novih** podatkih — Braytron je 2026-09-22 pet dni vračal isto datoteko). Prekoračitev odpre alarm »SourceStale«.
 - Naslov z dostopnim žetonom stoji samo v `appsettings.Local.json` na strežniku, ne v bazi.
+- Vsaka sprememba, ki jo zajem XML naredi pri obstoječem artiklu, gre v zgodovino polj (sprožilci 034, `ChangeSource = XML_FEED`, `ChangedBy = PIM.XmlMapping:<vir>`); pregled po šifri je zavihek »Spremembe iz XML« (#7). Povratka teh sprememb še ni (odločitev lastnika, naloga #27) — naslednji zajem bi vrnjeno vrednost spet prepisal.
 
 ## 8. Ko gre kaj narobe
 
@@ -105,6 +107,8 @@ flowchart LR
 | Vir »Zamuja«, alarm »SourceStale«. | Dobavitelj ne odgovarja ali vrača isto datoteko. | Skrbnik preveri prevzem na `/sistem`; po potrebi kontaktira dobavitelja. |
 | Artikel nima atributov ali kategorije iz XML. | Manjka preslikava kategorije ali atributa vira. | Zapri vrzeli in ponovno preslikaj vir. |
 | Datoteka v karanteni. | Pokvarjen ali nepričakovan XML. | `/zajem/tezave?vrsta=INBOX`; skrbnik pogleda predogled vhoda. |
+| Zavihek »Spremembe iz XML« je prazen ali zadnja sprememba je stara. | XML ne prihaja (glej »Zadnji prevzem datoteke«) ali dobavitelj ni ničesar spremenil. | Pri rumenem prevzemu preveri posel `SUPPLIER_CATALOG_IMPORT` na `/sistem`. |
+| Pri opisu piše »skrajšano«. | Zgodovina hrani prvih 400 znakov. | Celotno besedilo je na kartici artikla. |
 | »Zavrnjena zaloga« na `/zajem` raste. | Šifre v datoteki zaloge se ne ujemajo z artikli. | `/zajem/tezave?vrsta=STOCK`. |
 
 ## 9. Tehnično ozadje
@@ -112,7 +116,7 @@ flowchart LR
 <details>
 <summary>Za skrbnika in razvoj</summary>
 
-- **Strani:** `/zajem` (`Ingest.razor`), `/zajem/viri/{SourceCode}` (`IngestSourceDetail.razor`).
+- **Strani:** `/zajem` (`Ingest.razor`), `/zajem/viri/{SourceCode}` (`IngestSourceDetail.razor`), zavihek »Spremembe iz XML« (`SupplierXmlChanges.razor` v `IngestCandidates.razor`, `SupplierCandidateReadService.GetXmlChangesAsync` — parametriziran SELECT nad `pim.ProductChangeBatch` + `pim.ProductFieldHistory`, brez migracije).
 - **Storitve / delavci:** `PIM.SourceFetchWorker` (`SourceFetcher`, `FetchLocation`; register `map.SourceFetchLocation`), `PIM.XmlFileWorker` (branje XML in delovnih zvezkov, okolje `PIM_XML_SOURCE_CODE`, `PIM_XML_ORGANIZATION_ID`; stikala `--map-run`, `--znova-preslikaj`), `PIM.StockFileWorker` (`NwFtpTransport`, `BtXmlTransport`), knjižnici `PIM.XmlMapping` (`XPathMappingExtractor`, `SqlMappingPipeline`) in `PIM.StockMapping` (`StockMappingExtractor`, `StockLandingWriter`); posli v `PIM.Automation/JobCatalog.cs` (`PlanSupplierCatalog`) in `WorkerSchedulerPolicy.cs` (`XmlSteps`, `StockFilesSteps`).
 - **Tabele in pogledi:** `raw.Inbox`, `map.ExtractedValue`, `map.SourceConnector` (`CanCreateProducts = 0` za ne-SAOP), `map.SupplierProductCandidate`, `stock.Position`, `map.StockIdentityRule`.
 - **Migracije:** 240 (kandidati po EAN), 256 (viri in svežina), 257 (ERP-first), 262 (zaloga dobavitelja samo obstoječim), 270 (NW_XML prek HTTP), 273.
@@ -123,6 +127,8 @@ flowchart LR
 ## 10. Odprta vprašanja in razlike
 
 - ⚠️ Nočna uskladitev pri XML koraku, če mapa prevzema nima datotek, uporabi **testne datoteke** (`nw`, `bt` v mapi fixtures), redni posel `SUPPLIER_CATALOG_IMPORT` pa ne. Nočni tek lahko torej na strežniku z mapo fixtures zajame testni XML.
+- ⚠️ Oznaka `XML_FEED` v zgodovini pokriva tudi preslikavo SAOP (`PIM.XmlMapping:SAOP_*`); dobavitelja loči samo `ChangedBy`. Paket XML nima podjetja (`pim.ProductChangeBatch.OrganizationId` je NULL), podjetje je v vrstici zgodovine.
+- ⚠️ Stara in nova vrednost v zgodovini sta odrezani na 400 znakov (sprožilci 034).
 - ⚠️ `Fetch:BT_XML` na PRD po zapisih prejšnjih sej verjetno manjka; iz kode ni mogoče preveriti.
 - ⚠️ Znana napaka iz prejšnjih sej: MERGE medijev iz NW XML in časovna omejitev za podjetje 4 — v kodi nisem našel potrditve, da sta odpravljeni.
 - ⚠️ XML se bere za vsa vključena podjetja, čeprav ima katalog za splet samo podjetje 2; pri velikem podjetju preslikava traja 10 min in več.

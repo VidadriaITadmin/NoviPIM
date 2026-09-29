@@ -9,6 +9,7 @@
 @inject SupplierCandidateSaopService Saop
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 @inject ILogger<IngestCandidates> Log
 
 <PageTitle>Novi artikli dobaviteljev</PageTitle>
@@ -16,6 +17,30 @@
          Subtitle="Dobaviteljev XML ustvari le kandidata, ne artikla v PIM-u. Urednik pregleda podatke, dopolni obvezna polja ERP in kandidata pošlje v SAOP kot nov artikel (POST). Šele povratni uvoz iz SAOP ustvari kartico v PIM-u; XML jo nato obogati."
          Crumbs="Crumbs" />
 <PimTabs Active="novi" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
+
+@* #7: dva pogleda istega vira — novi artikli (kandidati, ki jih v PIM še ni) in spremembe, ki jih je
+   XML naredil pri obstoječih artiklih. Pogled je v naslovu (?pogled=spremembe), zato povezava drži. *@
+<nav class="view-switch" aria-label="Pogled novosti iz XML">
+  <a href="@CandidatesHref" aria-current="@(ShowChanges ? null : "page")">
+    <strong>Novi v katalogu dobavitelja</strong>
+    <small>Artikla v PIM še ni: pregled, kategorija, pot v SAOP</small>
+  </a>
+  <a href="izdelki/novi-artikli?pogled=spremembe" aria-current="@(ShowChanges ? "page" : null)">
+    <strong>Spremembe iz XML</strong>
+    <small>Kaj je XML spremenil pri obstoječih artiklih, po šifri</small>
+  </a>
+</nav>
+
+@if (ShowChanges)
+{
+  <SupplierXmlChanges CurrentUri="@CurrentUri" Organizations="Organizations" />
+}
+else
+{
+@if (!CanSaop)
+{
+  <p class="message-state readonly-note" role="status">Samo za branje — pošiljanje in odobritev za SAOP smeta urednik kataloga in skrbnik. Kandidate in njihove podatke lahko pregleduješ.</p>
+}
 
 <section class="ui-card toolbar" role="search" aria-labelledby="candidate-filter-title">
   <h2 id="candidate-filter-title" class="visually-hidden">Filtriranje kandidatov za nove artikle</h2>
@@ -92,7 +117,7 @@
     <strong>@Picked.Count izbranih</strong>
     <button type="button" @onclick="PickVisible" disabled="@Busy">Izberi vidne</button>
     <button type="button" @onclick="ClearPicked" disabled="@Busy">Počisti izbor</button>
-@if (PickedForSaop > 0)
+@if (PickedForSaop > 0 && CanSaop)
     {
       <button type="button" class="button-primary" disabled="@Busy" @onclick="OpenBulkSaopAsync">V čakalno vrsto SAOP izbrane (@PickedForSaop) …</button>
     }
@@ -116,7 +141,7 @@
           var id = row.SupplierProductCandidateId;
           <tr class="@(Picked.Contains(id) ? "is-picked" : null)">
             <td>
-              @if (row.CanQueueForSaop)
+              @if (row.CanQueueForSaop && CanSaop)
               {
                 <input type="checkbox" checked="@Picked.Contains(id)" @onchange="args => TogglePicked(id, args)" aria-label="@($"Izberi {row.CurrentItemId}")" />
               }
@@ -127,7 +152,9 @@
               @if (row.ItemIdFromEan && row.CurrentItemId == row.ItemId) { <span class="tag" title="Dobavitelj šifre ne pošilja; artikel je ključan po EAN in dobi pravo šifro, ko gre v SAOP.">šifra = EAN</span> }
               <div class="tree-path">@(row.Ean ?? "brez EAN")</div>
               @if (row.SupplierTitle is not null) { <div class="supplier-title">@row.SupplierTitle</div> }
+              @if (row.CreatedProductId is null) { <div class="new-in-catalog"><PimChip Text="nov v katalogu dobavitelja" Tone="info" Prefix="Artikel: " /></div> }
             </td>
+            <td class="category-cell">@CategoryCell(row)</td>
             <td><span class="code-value">@row.SourceCode</span><div class="tree-path">@row.EntityType</div></td>
             <td>@row.FirstSeenUtc.ToPimLocal().ToString("g")</td>
             <td>@row.LastSeenUtc.ToPimLocal().ToString("g")</td>
@@ -153,28 +180,28 @@
                 @if (RejectingId == id)
                 {
                   <input class="form-input" placeholder="Razlog zavrnitve …" @bind="RejectReason" />
-                  <button class="small-action warn-action" disabled="@Busy" @onclick="() => RejectAsync(row)">Potrdi zavrnitev</button>
+                  <button class="small-action warn-action" disabled="@(Busy || !CanCatalog)" @onclick="() => RejectAsync(row)">Potrdi zavrnitev</button>
                   <button class="small-action" @onclick="() => RejectingId = null">Prekliči</button>
                 }
                 else
                 {
-                  <button class="small-action primary-action" disabled="@Busy" title="Dopolni ERP podatke in pošlji kandidata v SAOP. PIM kartica nastane šele po povratnem SAOP uvozu." @onclick="() => OpenSingleSaopAsync(row)">V SAOP …</button>
-                  <button class="small-action" disabled="@Busy" @onclick="() => BeginReject(row)">Zavrni …</button>
+                  <button class="small-action primary-action" disabled="@(Busy || !CanSaop)" title="@(CanSaop ? "Dopolni ERP podatke in uvrsti kandidata v čakalno vrsto za SAOP. Nič se ne pošlje samo; PIM kartica nastane šele po povratnem SAOP uvozu." : ReadOnlySaop)" @onclick="() => OpenSingleSaopAsync(row)">V SAOP …</button>
+                  <button class="small-action" disabled="@(Busy || !CanCatalog)" title="@(CanCatalog ? null : "Samo za branje — zavrne lahko urednik kataloga ali skrbnik.")" @onclick="() => BeginReject(row)">Zavrni …</button>
                 }
               }
               else
               {
                 @if (row.CanQueueForSaop)
                 {
-                  <button class="small-action primary-action" disabled="@Busy" title="Dopolni obvezne podatke ERP in uvrsti artikel v čakalno vrsto SAOP kot nov artikel (POST)." @onclick="() => OpenSingleSaopAsync(row)">@(Panel is { IsBulk: false } && Panel.AnchorId == id ? "Skrij pripravo" : "V vrsto SAOP …")</button>
+                  <button class="small-action primary-action" disabled="@(Busy || !CanSaop)" title="@(CanSaop ? "Dopolni obvezne podatke ERP in uvrsti artikel v čakalno vrsto SAOP kot nov artikel (POST)." : ReadOnlySaop)" @onclick="() => OpenSingleSaopAsync(row)">@(Panel is { IsBulk: false } && Panel.AnchorId == id ? "Skrij pripravo" : "V vrsto SAOP …")</button>
                 }
                 @if (row.SaopState == "QUEUED" && row.SaopPendingApproval > 0)
                 {
-                  <button class="small-action" disabled="@Busy" title="Odobri vsa čakajoča sporočila tega artikla; nato ga pošlje worker ali gumb »Pošlji zdaj«." @onclick="() => ApproveQueuedAsync(row)">Odobri v vrsti (@row.SaopPendingApproval)</button>
+                  <button class="small-action" disabled="@(Busy || !CanSaop)" title="@(CanSaop ? "Odobri vsa čakajoča sporočila tega artikla; nato ga pošlje worker ali gumb »Pošlji zdaj«." : ReadOnlySaop)" @onclick="() => ApproveQueuedAsync(row)">Odobri v vrsti (@row.SaopPendingApproval)</button>
                 }
                 @if (row.SaopState == "QUEUED" && row.SaopPendingApproval == 0)
                 {
-                  <button class="small-action" disabled="@Busy" title="Takoj poskusi poslati ta artikel v SAOP (potrebne so poverilnice SAOP na strežniku)." @onclick="() => SendNowAsync(row)">Pošlji zdaj</button>
+                  <button class="small-action" disabled="@(Busy || !CanSaop)" title="@(CanSaop ? "Takoj poskusi poslati ta artikel v SAOP (potrebne so poverilnice SAOP na strežniku)." : ReadOnlySaop)" @onclick="() => SendNowAsync(row)">Pošlji zdaj</button>
                 }
                 <span class="muted">@(row.DecidedBy ?? "—") · @(row.DecidedUtc?.ToPimLocal().ToString("g") ?? "—")</span>
                 @if (row.DecisionReason is not null) { <div class="muted decision-reason">@row.DecisionReason</div> }
@@ -184,13 +211,13 @@
           @if (Panel is { IsBulk: false } && Panel.AnchorId == id)
           {
             <tr class="candidate-saop">
-              <td colspan="9">@SaopPanelFragment</td>
+              <td colspan="10">@SaopPanelFragment</td>
             </tr>
           }
           @if (DetailsId == id)
           {
             <tr class="candidate-details">
-              <td colspan="9">
+              <td colspan="10">
                 @if (DetailsLoading) { <p class="muted">Berem, kaj je dobavitelj poslal …</p> }
                 else if (DetailsError is not null) { <p class="message-state error-message" role="alert">@DetailsError</p> }
                 else if (Details.Count == 0) { <p class="muted">Za ta zapis ni izluščenih vrednosti (preslikava vira jih ne zajame ali pa je zajem že pobrisan).</p> }
@@ -234,6 +261,7 @@
     @if (Page is not null) { <PimPager Skip="Skip" Take="Take" Total="Page.Totals.TotalCount" SkipChanged="OnSkipChangedAsync" Label="Strani kandidatov za nove artikle" /> }
   </PimState>
 </section>
+}
 
 @code {
   IReadOnlyList<OrganizationContext> Organizations = [];
@@ -285,7 +313,7 @@
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izdelki", "izdelki"), new("Novi artikli")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
-    new(""), new("Podjetje"), new("Artikel"), new("Vir"), new("Prvič viden"), new("Nazadnje viden"),
+    new(""), new("Podjetje"), new("Artikel"), new("Uvrstitev v kategorijo"), new("Vir"), new("Prvič viden"), new("Nazadnje viden"),
     new("Ponovitev", Numeric: true), new("Stanje"), new("Dejanje"),
   ];
 
@@ -296,16 +324,48 @@
 
   [SupplyParameterFromQuery(Name = "saop")] public string? SaopQuery { get; set; }
   [SupplyParameterFromQuery(Name = "podjetje")] public string? OrganizationQuery { get; set; }
+  [SupplyParameterFromQuery(Name = "pogled")] public string? ViewQuery { get; set; }
+
+  bool ShowChanges => string.Equals(ViewQuery, "spremembe", StringComparison.OrdinalIgnoreCase);
+  string CurrentUri = "";
+  bool CandidatesLoaded;
+
+  /// <summary>Pravice za izris (servis jih preveri sam): SAOP = uvrstitev, odobritev, pošiljanje; katalog = zavrnitev.</summary>
+  bool CanSaop, CanCatalog;
+  const string ReadOnlySaop = "Samo za branje — v SAOP pošilja in odobri urednik kataloga ali skrbnik.";
+
+  /// <summary>#7b: kam bi preslikava uvrstila kandidate na strani; ena poizvedba za vso stran.</summary>
+  IReadOnlyDictionary<long, SupplierCategoryPrediction> Predictions = new Dictionary<long, SupplierCategoryPrediction>();
+  string? PredictionError;
+
+  string CandidatesHref => "izdelki/novi-artikli" + (Organization == "" ? "" : "?podjetje=" + Uri.EscapeDataString(Organization));
 
   protected override async Task OnInitializedAsync()
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
 
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      CanSaop = PimPolicies.Allows(user, PimPolicies.SaopWrite);
+      CanCatalog = PimPolicies.Allows(user, PimPolicies.CatalogWrite);
+    }
+    catch { CanSaop = CanCatalog = false; }
+
     if (!string.IsNullOrWhiteSpace(SaopQuery)) { SaopFilter = SaopQuery.Trim().ToUpperInvariant(); Status = "PENDING"; }
     if (!string.IsNullOrWhiteSpace(OrganizationQuery)) Organization = OrganizationQuery.Trim();
+  }
 
-    await LoadAsync();
+  protected override async Task OnParametersSetAsync()
+  {
+    CurrentUri = Navigation.Uri;
+    // Kandidati se naložijo šele, ko je njihov pogled odprt — pogled sprememb jih ne potrebuje.
+    if (!ShowChanges && !CandidatesLoaded)
+    {
+      CandidatesLoaded = true;
+      await LoadAsync();
+    }
   }
 
   async Task LoadAsync()
@@ -326,7 +386,72 @@
     }
     catch (Exception ex) { Error = ex.Message; }
     finally { Loading = false; }
+
+    await LoadPredictionsAsync();
   }
+
+  /// <summary>Predlagana kategorija ni pogoj za seznam: če poizvedba pade, seznam ostane in pove, zakaj stolpca ni.</summary>
+  async Task LoadPredictionsAsync()
+  {
+    PredictionError = null;
+    try
+    {
+      Predictions = Page is { Rows.Count: > 0 }
+        ? await Candidates.GetCategoryPredictionsAsync(Page.Rows.Select(row => row.SupplierProductCandidateId))
+        : new Dictionary<long, SupplierCategoryPrediction>();
+    }
+    catch (Exception ex)
+    {
+      Log.LogWarning(ex, "Novi artikli iz XML: predlagane kategorije ni bilo mogoče prebrati.");
+      Predictions = new Dictionary<long, SupplierCategoryPrediction>();
+      PredictionError = ex.Message;
+    }
+  }
+
+  void OpenGapsFor(string sourceCode) =>
+    Gaps = new(ScopesFor([sourceCode]), $"Vrzeli preslikave vira {sourceCode} in ponovna preslikava", []);
+
+  RenderFragment CategoryCell(SupplierProductCandidateRow row) => __builder =>
+  {
+    if (PredictionError is not null)
+    {
+      <span class="muted" title="@PredictionError">uvrstitve ni bilo mogoče prebrati</span>
+      return;
+    }
+    if (!Predictions.TryGetValue(row.SupplierProductCandidateId, out var prediction)) return;
+    var created = row.CreatedProductId is not null;
+    if (prediction.SupplierPath is null)
+    {
+      <div class="category-note warn">@(created ? "Dobavitelj kategorije ne pošlje." : "Dobavitelj kategorije ne pošlje — po ustvaritvi uvrsti artikel ročno na kartici.")</div>
+      return;
+    }
+    if (prediction.IsError)
+    {
+      <div class="category-note bad" role="note">
+        <strong>Kategorija dobavitelja nima preslikave</strong>
+        <span class="category-source">@prediction.SupplierPath</span>
+        <span>Artikel bo brez uvrstitve, dokler poti ne preslikaš.</span>
+        <span class="category-links">
+          <button type="button" class="small-action" disabled="@Busy" @onclick="() => OpenGapsFor(row.SourceCode)">Preslikaj …</button>
+          <a href="kakovost/kategorije">Preslikave kategorij</a>
+        </span>
+      </div>
+      return;
+    }
+    <div class="category-note good">
+      <span class="category-kicker">@(created ? "Uvrstitev po preslikavi" : "Bo uvrščen v")</span>
+      @foreach (var target in prediction.Mapped)
+      {
+        <strong class="category-target">@target.CategoryPath</strong>
+        <span class="category-tree">drevo @target.CategoryTreeCode</span>
+      }
+      <span class="category-source" title="Kategorija, kot jo pošlje dobavitelj">dobavitelj: @prediction.SupplierPath</span>
+      @foreach (var missing in prediction.Unmapped)
+      {
+        <span class="category-tree">v drevesu @missing.CategoryTreeCode ni preslikave</span>
+      }
+    </div>
+  };
 
   async Task ApplyAsync() { Skip = 0; DetailsId = null; if (Panel is { IsBulk: false }) Panel = null; await LoadAsync(); }
   async Task OnStatusChangedAsync() { if (Status != "APPROVED" && Status != "") SaopFilter = ""; await ApplyAsync(); }
@@ -564,7 +689,7 @@
     Busy = true; ActionError = null;
     try
     {
-      var approved = await Data.ApproveItemAsync(row.OrganizationId, "Product", row.CurrentItemId, await ActorAsync());
+      var approved = await Saop.ApproveAsync(row.OrganizationId, row.CurrentItemId, await ActorAsync());
       Message = $"Artikel {row.CurrentItemId}: odobrenih sporočil {approved}. Pošlje jih worker ali gumb »Pošlji zdaj«.";
       await LoadAsync();
     }
