@@ -170,7 +170,7 @@ async function seje() {
       for (const e of await fsp.readdir(mapa, { withFileTypes: true })) {
         const p = join(mapa, e.name);
         if (e.isDirectory()) { await pregledaj(p, e.name.startsWith('wf_') ? e.name : tok); continue; }
-        if (!e.name.endsWith('.jsonl')) continue;
+        if (!e.name.endsWith('.jsonl') || !e.name.startsWith('agent-')) continue;
         const s = statSync(p);
         if (s.mtimeMs < zdaj() - 15 * 60000) continue;
         const meta = await beriJson(p.replace(/\.jsonl$/, '.meta.json')) || {};
