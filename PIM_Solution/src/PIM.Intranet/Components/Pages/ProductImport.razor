@@ -14,7 +14,7 @@
 <PageTitle>Uvoz delovnega lista</PageTitle>
 
 <PimPage Title="Uvoz delovnega lista izdelkov"
-         Subtitle="Ista datoteka, ki jo izvozi gumb »Delovni list« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
+         Subtitle="Ista datoteka, ki jo izvozi gumb »Izvozi Excel« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
 <PimTabs Active="uvoz" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
@@ -560,7 +560,7 @@
             organization.Select(row => row.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             "DELOVNI_LIST", actor, revalidate: true));
       }
-      Message = $"Uvoz končan: {Outcome.PimChanges} vrednosti zapisanih v PIM, {Outcome.SaopQueued} ERP sprememb uvrščenih v vrsto za SAOP.";
+      Message = $"Uvoz končan: v PIM {PimFormat.Count(Outcome.PimChanges, "zapisana vrednost", "zapisani vrednosti", "zapisane vrednosti", "zapisanih vrednosti")}, v vrsto za SAOP {PimFormat.Count(Outcome.SaopQueued, "ERP sprememba", "ERP spremembi", "ERP spremembe", "ERP sprememb")}.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
       Preview = null;
     }

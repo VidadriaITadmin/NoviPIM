@@ -2,9 +2,11 @@ using Microsoft.Data.SqlClient;
 using PIM.B2bWorker;
 
 /// <summary>
-/// 302 (naloga #5): »Pakirno naročanje« brez Pakiranja 2 drži artikel s spleta. Pakiranje 2 lahko vpiše ali
-/// pobriše zajem iz SAOP mimo kartice in uvoza Excela, zato izvoz katalog.csv pred sestavo datoteke uskladi
-/// zadržke (MagentoExportCommand.SyncPackageOrderHoldsAsync). Test teče v transakciji in se na koncu povrne.
+/// 302/306 (naloga #5): »Pakirno naročanje« brez objavljenega Pakiranja 2 drži artikel s spleta. Zajem iz SAOP
+/// piše Pakiranje 2 v canon.ProductCommercial, na splet (katalog.csv) pa gre šele objavljena vrednost
+/// (pim.ProductCommercial po val.Promote); objava teče mimo kartice in uvoza Excela, zato izvoz katalog.csv
+/// pred sestavo datoteke uskladi zadržke (MagentoExportCommand.SyncPackageOrderHoldsAsync).
+/// Test teče v transakciji in se na koncu povrne.
 /// </summary>
 internal static class PackageOrderHoldTests
 {
@@ -33,19 +35,37 @@ internal static class PackageOrderHoldTests
             Assert(first.Held >= 1, "Izvoz mora zadržati artikel s Pakirnim naročanjem brez Pakiranja 2.");
             Assert(await ActiveRuleHoldAsync(connection, transaction, productId), "Zadržek »pravilo 302« za WEB mora obstajati.");
 
-            // Zajem iz SAOP vpiše Pakiranje 2 = 6: naslednji izvoz zadržek sprosti.
-            await using (var capture = new SqlCommand("""
+            Assert((await RuleHoldReasonAsync(connection, transaction, productId))?.Contains("vpiši Pakiranje 2", StringComparison.Ordinal) == true,
+                "Brez Pakiranja 2 tudi v zajemu mora razlog zadržka veleti »vpiši Pakiranje 2«.");
+
+            // Zajem iz SAOP vpiše Pakiranje 2 = 6 v canon.ProductCommercial. Pravilo in katalog.csv pa gledata
+            // OBJAVLJENO vrednost (pim.ProductCommercial, polni jo val.Promote po uspešni validaciji): artikel
+            // ostane zadržan, razlog (306) pa pove, da Pakiranje 2 samo čaka objavo.
+            await using (var capture = new SqlCommand(
+                "INSERT canon.ProductCommercial(ProductId,Pak2) VALUES(@ProductId,6);", connection, transaction))
+            {
+                capture.Parameters.AddWithValue("@ProductId", productId);
+                await capture.ExecuteNonQueryAsync();
+            }
+            await MagentoExportCommand.SyncPackageOrderHoldsAsync(connection, 2, CancellationToken.None, transaction);
+            Assert(await ActiveRuleHoldAsync(connection, transaction, productId), "Pred objavo v PIM mora zadržek ostati (katalog.csv bi nosil prazno Pakirno količino).");
+            var waiting = await RuleHoldReasonAsync(connection, transaction, productId);
+            Assert(waiting?.Contains("je vpisano (6)", StringComparison.Ordinal) == true && waiting.Contains("objavljena vrednost (prazno)", StringComparison.Ordinal),
+                $"Razlog mora povedati, da je Pakiranje 2 vpisano in čaka objavo, je »{waiting}«.");
+
+            // Objava v PIM (kar naredi val.Promote) prenese Pakiranje 2 = 6: naslednji izvoz zadržek sprosti.
+            await using (var promote = new SqlCommand("""
                 UPDATE commercial SET Pak2 = 6
                 FROM pim.ProductCommercial commercial JOIN pim.Product promoted ON promoted.PimProductId = commercial.PimProductId
                 WHERE promoted.OrganizationId = 2 AND promoted.ItemID = @Item;
                 """, connection, transaction))
             {
-                capture.Parameters.AddWithValue("@Item", item);
-                await capture.ExecuteNonQueryAsync();
+                promote.Parameters.AddWithValue("@Item", item);
+                await promote.ExecuteNonQueryAsync();
             }
             var second = await MagentoExportCommand.SyncPackageOrderHoldsAsync(connection, 2, CancellationToken.None, transaction);
-            Assert(second.Released >= 1, "Ko ima artikel Pakiranje 2, mora izvoz zadržek sprostiti.");
-            Assert(!await ActiveRuleHoldAsync(connection, transaction, productId), "Po vpisu Pakiranja 2 zadržek »pravilo 302« ni več aktiven.");
+            Assert(second.Released >= 1, "Ko je Pakiranje 2 objavljeno, mora izvoz zadržek sprostiti.");
+            Assert(!await ActiveRuleHoldAsync(connection, transaction, productId), "Po objavi Pakiranja 2 zadržek »pravilo 302« ni več aktiven.");
 
             // Ročnega zadržka pravilo ne sprosti.
             await using (var manual = new SqlCommand(
@@ -63,7 +83,7 @@ internal static class PackageOrderHoldTests
                 Assert(Convert.ToInt32(await check.ExecuteScalarAsync()) == 1, "Ročni zadržek mora ostati.");
             }
 
-            Console.WriteLine("F7 Pakirno naročanje: izvoz zadrži artikel brez Pakiranja 2 in ga sprosti po zajemu PASS.");
+            Console.WriteLine("F7 Pakirno naročanje: izvoz zadrži artikel brez objavljenega Pakiranja 2, razlog loči manjka/čaka objavo, sprosti po objavi PASS.");
         }
         finally
         {
@@ -141,6 +161,15 @@ internal static class PackageOrderHoldTests
             connection, transaction);
         command.Parameters.AddWithValue("@ProductId", productId);
         return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
+    }
+
+    static async Task<string?> RuleHoldReasonAsync(SqlConnection connection, SqlTransaction transaction, long productId)
+    {
+        await using var command = new SqlCommand(
+            "SELECT TOP 1 Reason FROM val.ProductHold WHERE ProductId=@ProductId AND IsActive=1 AND CreatedBy=N'pravilo 302';",
+            connection, transaction);
+        command.Parameters.AddWithValue("@ProductId", productId);
+        return await command.ExecuteScalarAsync() as string;
     }
 
     static void Assert(bool condition, string message)

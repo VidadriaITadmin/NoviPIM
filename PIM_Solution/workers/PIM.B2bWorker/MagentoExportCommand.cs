@@ -734,7 +734,7 @@ public static class MagentoExportCommand
             var heldCount = held.Value is int h ? h : 0;
             var releasedCount = released.Value is int r ? r : 0;
             if (heldCount > 0 || releasedCount > 0)
-                Console.WriteLine($"Pakirno naročanje (podjetje {organizationId}): {heldCount} artiklov zadržanih s spleta (brez Pakiranja 2), {releasedCount} sproščenih.");
+                Console.WriteLine($"Pakirno naročanje (podjetje {organizationId}): {heldCount} artiklov zadržanih s spleta (brez objavljenega Pakiranja 2), {releasedCount} sproščenih.");
             return (heldCount, releasedCount);
         }
         catch (SqlException exception) when (exception.Number == 2812)
