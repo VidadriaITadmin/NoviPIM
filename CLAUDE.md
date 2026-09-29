@@ -27,9 +27,22 @@ Na PIM hkrati dela več sej. Vse delo teče prek **table nalog** `scripts/Koordi
 5. **Vrata pred »končano«:** `-Ukaz Preveri -Id N` (build Release, testi naloge, procesi, klikalnik na
    spremenjenih straneh), nato preverjalec pogleda strani v brskalniku in šele potem `-Ukaz Koncaj`.
    Brez uspešnih vrat naloga ni končana. Klikalnik ne klika Shrani — shranjevanje preveri preverjalec.
-6. **Odločitve lastnika:** poslovno vprašanje zapiši z `-Ukaz Odlocitev` in ne ugibaj. Pregledna stran
-   za lastnika je `.git/pim-koordinacija/PREGLED.html` (`-Ukaz Stanje -Odpri`).
-7. **Čakanje:** vsaka zanka ali čakanje v Bashu ima časovno mejo (največ 15 min) in ob izteku javi, zakaj.
+   Vrata tečejo največ `vrataHkrati` (3) naenkrat, ostali čakajo v vrsti — to ni napaka.
+6. **Odločitve lastnika:** poslovno vprašanje zapiši z `-Ukaz Odlocitev` in ne ugibaj. Lastnik odgovarja
+   na **nadzorni plošči** (`scripts/Tabla.cmd` → http://localhost:5099/), kjer vidi tudi agente, vrata,
+   časovnico in združevanje.
+7. **Čakanje:** vsaka zanka ali čakanje v Bashu ima časovno mejo (največ 15 min; vrata in združevanje do
+   60 min, ker čakajo v vrsti) in ob izteku javi, zakaj.
+8. **Utrip:** vsak agent se javlja (`-Ukaz Utrip -Seja -Vloga -Id -Besedilo`) in na koncu odjavi
+   (`-Ukaz Odjava`). Brez utripa ga plošča pokaže kot »zastal«.
+9. **Združevanje:** `-Ukaz Zdruzi -Id N` (po `Koncaj`): veja naloge dobi vse iz integracijske veje,
+   se ponovno zgradi in šele nato združi v glavno kopijo; naenkrat ena. Integracijska veja in razvojni SQL
+   strežnik sta v `<git-common-dir>/pim-koordinacija/nastavitve.json` (odvisno od računalnika).
+10. **Dispečer** (seja, v kateri lastnik reče »delaj naloge«): prebere tablo (`-Ukaz Json`), vzame
+    `pripravljena` naloge brez odprte odločitve (ali naštete številke), jih po potrebi dopolni (opis,
+    kriteriji) in zažene tok `pim-naloge` z `args: {ids, seja, zdruzi: true}`. Med tekom lastniku sproti
+    poroča; na koncu povzetek po §7 in kaj čaka njega. Objave na produkcijski strežnik in pošiljanja v SAOP
+    ekipa ne dela nikoli.
 
 ---
 

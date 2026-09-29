@@ -8,7 +8,9 @@ preden rečemo, da je stran »končana«.
        dotnet build -c Release
        dotnet bin/Release/net10.0/PIM.Klikalnik.dll
 
-   Posluša na `http://localhost:5000/`. Program se ustavi, če povezava ne kaže na razvojni strežnik.
+   Posluša na `http://localhost:5000/` (drugače: `KLIKALNIK_PORT=5071`, da teče več hkrati). Program se
+   ustavi, če povezava ne kaže na razvojni strežnik (`KLIKALNIK_STREZNIK`, privzeto `DAVID\MSSQL19`).
+   Poročilo gre v `porocilo/` ali v mapo `KLIKALNIK_IZHOD` (tako ga vrata naloge shranijo k preverjanju).
 
 2. V drugem oknu zaženi pregled (vse strani ali samo tiste, ki vsebujejo niz):
 

@@ -20,7 +20,8 @@ const izbrana = pot => !SAMO.length || SAMO.some(x => pot.replace(/^\//, '').sta
 // Vzporedno: KLIKALNIK_DEL="0/3" pregleda vsako tretjo stran; `node klikalnik.mjs --zdruzi` združi dele.
 const [DEL, DELOV] = (process.env.KLIKALNIK_DEL ?? '0/1').split('/').map(Number);
 const PRIPONA = DELOV > 1 ? '-' + DEL : '';
-const IZHOD = join(tu, 'porocilo');
+// KLIKALNIK_IZHOD: vrata naloge pišejo poročilo in posnetke v mapo preverjanja (vidi jih nadzorna plošča).
+const IZHOD = process.env.KLIKALNIK_IZHOD || join(tu, 'porocilo');
 mkdirSync(join(IZHOD, 'posnetki'), { recursive: true });
 
 const EDGE = [

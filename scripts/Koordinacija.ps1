@@ -17,18 +17,27 @@
   -Ukaz Preveri     -Id: vrata — build Release, testi naloge, procesi (Vpliv/Preveri), klikalnik
                     na straneh naloge. Rezultat se zapiše v nalogo. Izhod 0 = vse OK.
   -Ukaz Koncaj      -Id: naloga gre v pregled (samo, če so zadnja vrata OK).
-  -Ukaz Zdruzi      -Id: (samo v glavni kopiji) združi vejo naloge v main, če je main čist.
+  -Ukaz Zdruzi      -Id: vejo naloge najprej posodobi z integracijsko vejo in jo zgradi v delovni kopiji
+                    naloge, nato jo združi v integracijsko vejo glavne kopije (nastavitve.json: glavnaVeja).
   -Ukaz Nastavi     -Id -Polje -Vrednost: spremeni polje naloge (stanje, prednost, obmocje ...).
+  -Ukaz Utrip       -Seja -Vloga -Id -Besedilo: agent javi, da je živ in kaj dela (nadzorna plošča).
+  -Ukaz Odjava      -Seja: agent je končal (izgine s plošče agentov).
+  -Ukaz Json        Stanje table kot JSON (za tokove in orodja).
+
+  Vrata (build, testi, klikalnik) tečejo največ vrataHkrati naenkrat (privzeto 3); ostali čakajo v vrsti.
+  Vsako mesto ima svoja vrata testnega intraneta (5071, 5072, ...), zato več preverjanj teče vzporedno.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\Koordinacija.ps1 -Ukaz Stanje -Odpri
   powershell -ExecutionPolicy Bypass -File scripts\Koordinacija.ps1 -Ukaz Prevzemi -Id 3 -Seja "Popravki strani"
 #>
 param(
-  [ValidateSet('Stanje', 'Nova', 'Prevzemi', 'Sprosti', 'Sporocilo', 'Odlocitev', 'Migracija', 'Preveri', 'Koncaj', 'Zdruzi', 'Nastavi')]
+  [ValidateSet('Stanje', 'Nova', 'Prevzemi', 'Sprosti', 'Sporocilo', 'Odlocitev', 'Migracija', 'Preveri', 'Koncaj', 'Zdruzi', 'Nastavi', 'Utrip', 'Odjava', 'Json')]
   [string]$Ukaz = 'Stanje',
   [int]$Id,
   [string]$Seja = $env:USERNAME,
+  [string]$Vloga,
+  [ValidateSet('', 'predlog', 'pripravljena')][string]$Zacetno = '',
   [string]$Naslov,
   [ValidateSet('V', 'S', 'N')][string]$Prednost = 'S',
   [string]$Vrsta = 'napaka',
@@ -70,14 +79,25 @@ $DatotekaMigracij = Join-Path $Mapa 'migracije.txt'
 $DatotekaDnevnika = Join-Path $Mapa 'dnevnik.log'
 $DatotekaNastavitev = Join-Path $Mapa 'nastavitve.json'
 if (-not (Test-Path $DatotekaNastavitev)) {
-  [IO.File]::WriteAllText($DatotekaNastavitev, (@{ razvojniStreznik = 'DAVID\MSSQL19'; razvojnaBaza = 'PIM' } | ConvertTo-Json), $Utf8)
+  # Razvojni strežnik je odvisen od računalnika (DAVID\MSSQL19, DESKTOP-TONVQHJ\MSSQLSERVER3 ...): prva
+  # namestitev vzame lokalno SQL storitev; nastavitve.json je v .git, torej za vsak računalnik posebej.
+  $sql = Get-Service -Name 'MSSQL$*' -ErrorAction SilentlyContinue | Where-Object Status -eq 'Running' | Select-Object -First 1
+  $privzet = if ($sql) { "$env:COMPUTERNAME\$($sql.Name.Substring(6))" } else { 'DAVID\MSSQL19' }
+  [IO.File]::WriteAllText($DatotekaNastavitev, (@{ razvojniStreznik = $privzet; razvojnaBaza = 'PIM' } | ConvertTo-Json), $Utf8)
 }
 $Nastavitve = [IO.File]::ReadAllText($DatotekaNastavitev, $Utf8) | ConvertFrom-Json
+$MapaAgentov = Join-Path $Mapa 'agenti'
+if (-not (Test-Path $MapaAgentov)) { New-Item -ItemType Directory -Path $MapaAgentov | Out-Null }
+# Glavna kopija = mapa, v kateri je skupni .git; integracijska veja je veja, na kateri je glavna kopija
+# (ali nastavitve.json: glavnaVeja). Vanjo se združujejo naloge; iz nje nastajajo delovne kopije agentov.
+$Glavna = (Resolve-Path (Split-Path $Skupna -Parent)).Path
+$GlavnaVeja = if ($Nastavitve.glavnaVeja) { [string]$Nastavitve.glavnaVeja } else { (& git -C $Glavna rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1) }
+$VrataHkrati = if ($Nastavitve.vrataHkrati) { [int]$Nastavitve.vrataHkrati } else { 3 }
 
 $Stanja = @('predlog', 'pripravljena', 'v-delu', 'preverjanje', 'pregled', 'koncana', 'blokirana', 'opuscena')
 $Aktivna = @('v-delu', 'preverjanje')
 $Polja = @('id', 'naslov', 'stanje', 'prednost', 'vrsta', 'vir', 'obmocje', 'strani', 'testi', 'odvisno',
-  'odlocitev', 'seja', 'veja', 'pot', 'preverjeno', 'ustvarjeno', 'posodobljeno')
+  'odlocitev', 'seja', 'veja', 'pot', 'preverjeno', 'zdruzeno', 'ustvarjeno', 'posodobljeno')
 $Seznami = @('obmocje', 'strani', 'testi', 'odvisno')
 
 function Get-Cas { return (Get-Date).ToString('yyyy-MM-dd HH:mm') }
@@ -260,8 +280,66 @@ table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--li
 }
 
 # ---------------------------------------------------------------- vrata preverjanja
+# Mesto za vrata: največ $VrataHkrati hkratnih buildov/testov/klikalnikov (sicer 10 agentov zamrzne
+# računalnik in SQL). Mesto K ima svoja vrata testnega intraneta 5070+K. Kdor ne dobi mesta, čaka v vrsti.
+function Enter-MestoVrat([int]$minut = 45) {
+  $rok = (Get-Date).AddMinutes($minut); $javljeno = $false
+  while ((Get-Date) -lt $rok) {
+    for ($k = 1; $k -le $VrataHkrati; $k++) {
+      $pot = Join-Path $Mapa ".vrata-$k"
+      if ((Test-Path $pot) -and (Get-Item $pot).LastWriteTime -lt (Get-Date).AddMinutes(-90)) { Remove-Item $pot -Force -ErrorAction SilentlyContinue }
+      try {
+        $tok = [IO.File]::Open($pot, 'CreateNew', 'Write', 'None')
+        $b = $Utf8.GetBytes((@{ mesto = $k; seja = $Seja; id = [int]$Id; korak = 'začetek'; od = (Get-Date).ToString('s'); pot = $Koren } | ConvertTo-Json -Compress))
+        $tok.Write($b, 0, $b.Length); $tok.Close()
+        $script:MestoVrat = $k; $script:PotMesta = $pot
+        return $k
+      } catch { }
+    }
+    if (-not $javljeno) {
+      Write-Host "  · vsa mesta za vrata ($VrataHkrati) so zasedena — čakam v vrsti ..." -ForegroundColor Yellow
+      Set-Utrip "čaka v vrsti za vrata (zasedena vsa $VrataHkrati mesta)" 'čaka'
+      $javljeno = $true
+    }
+    Start-Sleep -Seconds 10
+  }
+  throw "Ni prostega mesta za vrata v $minut min."
+}
+
+function Set-KorakMesta([string]$korak) {
+  if (-not $script:PotMesta -or -not (Test-Path $script:PotMesta)) { return }
+  $d = [IO.File]::ReadAllText($script:PotMesta, $Utf8) | ConvertFrom-Json
+  $d.korak = $korak
+  [IO.File]::WriteAllText($script:PotMesta, ($d | ConvertTo-Json -Compress), $Utf8)
+}
+
+function Exit-MestoVrat {
+  if ($script:PotMesta) { Remove-Item $script:PotMesta -Force -ErrorAction SilentlyContinue; $script:PotMesta = $null }
+}
+
+function Get-ImeDatotekeSeje([string]$s) { return (($s -replace '[^\p{L}\p{N}]+', '-').Trim('-').ToLowerInvariant()) + '.json' }
+
+# Utrip agenta: kdo je živ, katera naloga, katera vloga, kaj dela zdaj. Plošča ga pokaže kot »zastal«,
+# če se dolgo ne oglasi. Sprememba koraka gre tudi v dnevnik (časovnica), ponovljen utrip ne.
+function Set-Utrip([string]$besedilo, [string]$stanjeAgenta = 'dela') {
+  $pot = Join-Path $MapaAgentov (Get-ImeDatotekeSeje $Seja)
+  $prej = if (Test-Path $pot) { try { [IO.File]::ReadAllText($pot, $Utf8) | ConvertFrom-Json } catch { $null } } else { $null }
+  $zacetek = if ($prej -and $prej.zacetek) { $prej.zacetek } else { (Get-Date).ToString('s') }
+  $vloga = if ($Vloga) { $Vloga } elseif ($prej) { $prej.vloga } else { '' }
+  $id = if ($Id) { [int]$Id } elseif ($prej) { $prej.id } else { 0 }
+  $d = [ordered]@{ seja = $Seja; vloga = $vloga; id = $id; korak = $besedilo; stanje = $stanjeAgenta
+    zacetek = $zacetek; utrip = (Get-Date).ToString('s'); pot = $Koren
+    veja = (Invoke-Git rev-parse --abbrev-ref HEAD | Select-Object -First 1); pid = $PID }
+  [IO.File]::WriteAllText($pot, ($d | ConvertTo-Json -Compress), $Utf8)
+  if (-not $prej -or $prej.korak -ne $besedilo) {
+    [IO.File]::AppendAllText($DatotekaDnevnika, "$(Get-Cas)`t$Seja`t#$id`t[$vloga] $besedilo`r`n", $Utf8)
+  }
+}
+
+
 function Invoke-Korak([string]$ime, [string]$exe, [string[]]$argumenti, [int]$minut, [string]$log, [string]$mapa = $Koren) {
   Write-Host "  · $ime ..." -NoNewline
+  Set-KorakMesta $ime
   $izhod = "$log.$($ime -replace '\W', '_').txt"
   $p = Start-Process -FilePath $exe -ArgumentList $argumenti -WorkingDirectory $mapa -NoNewWindow -PassThru `
     -RedirectStandardOutput $izhod -RedirectStandardError "$izhod.err"
@@ -279,8 +357,8 @@ function Invoke-Korak([string]$ime, [string]$exe, [string[]]$argumenti, [int]$mi
 }
 
 function Get-StraniIzSprememb {
-  # Strani (@page) iz spremenjenih .razor datotek proti main.
-  $spremenjene = @(Invoke-Git diff --name-only main) + @(Invoke-Git ls-files --others --exclude-standard)
+  # Strani (@page) iz spremenjenih .razor datotek proti integracijski veji.
+  $spremenjene = @(Invoke-Git diff --name-only "$GlavnaVeja...HEAD") + @(Invoke-Git diff --name-only) + @(Invoke-Git ls-files --others --exclude-standard)
   $strani = @()
   foreach ($f in ($spremenjene | Where-Object { $_ -like '*.razor' } | Select-Object -Unique)) {
     $pot = Join-Path $Koren $f
@@ -300,10 +378,17 @@ function Invoke-Vrata($n) {
   # Nikoli proti produkciji: testi in klikalnik dobijo izrecno razvojno povezavo.
   $env:PIM_CONNECTION_STRING = "Server=$($Nastavitve.razvojniStreznik);Database=$($Nastavitve.razvojnaBaza);Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
   Write-Host "Vrata za nalogo #$($n.id) v $Koren (baza $($Nastavitve.razvojniStreznik))"
+  $mesto = Enter-MestoVrat
+  Write-Host "  · mesto za vrata $mesto/$VrataHkrati (testni intranet na vratih $(5070 + $mesto))"
+  Set-Utrip "vrata: mesto $mesto" 'vrata'
+  try { return Invoke-VrataNaMestu $n $log $mesto } finally { Exit-MestoVrat }
+}
+
+function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
+  $rez = @()
   # Testni podatki (PIM_Solution/fixtures) niso v gitu; delovna kopija jih dobi iz glavne kopije.
-  $glavna = Split-Path $Skupna -Parent
   $fix = Join-Path $Koren 'PIM_Solution/fixtures'
-  $fixGlavna = Join-Path $glavna 'PIM_Solution/fixtures'
+  $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
   if (-not (Test-Path $fix) -and (Test-Path $fixGlavna) -and ($fix -ne $fixGlavna)) {
     Copy-Item $fixGlavna $fix -Recurse
     Write-Host '  · testni podatki (fixtures) prekopirani iz glavne kopije'
@@ -316,7 +401,7 @@ function Invoke-Vrata($n) {
     $rez += Invoke-Korak "test $t" 'powershell' @('-ExecutionPolicy', 'Bypass', '-File', 'scripts\run_tests.ps1', '-Filter', $t) 25 $log
   }
 
-  $vpliv = Invoke-Korak 'procesi-vpliv' 'powershell' @('-ExecutionPolicy', 'Bypass', '-File', 'scripts\Procesi.ps1', '-Ukaz', 'Vpliv', '-Od', 'main') 5 $log
+  $vpliv = Invoke-Korak 'procesi-vpliv' 'powershell' @('-ExecutionPolicy', 'Bypass', '-File', 'scripts\Procesi.ps1', '-Ukaz', 'Vpliv', '-Od', $GlavnaVeja) 5 $log
   if ($vpliv.koda -eq 2) { $vpliv.opis = 'procesi-vpliv: sprememba PODRE podatek, ki ga nekdo bere' } elseif ($vpliv.koda -ne 0) { $vpliv.ok = $true; $vpliv.opis = 'procesi-vpliv: opozorila' }
   $rez += $vpliv
   $prev = Invoke-Korak 'procesi-preveri' 'powershell' @('-ExecutionPolicy', 'Bypass', '-File', 'scripts\Procesi.ps1', '-Ukaz', 'Preveri') 5 $log
@@ -325,46 +410,50 @@ function Invoke-Vrata($n) {
 
   $strani = @($n.strani) + @(Get-StraniIzSprememb) | Where-Object { $_ } | Select-Object -Unique
   if ($strani.Count -and -not $BrezKlikalnika -and ($rez | Where-Object { $_.opis -like 'build*' }).ok) {
-    $rez += Invoke-Klikalnik $strani $log
+    $rez += Invoke-Klikalnik $strani $log (5070 + $mesto)
   } elseif ($strani.Count) { $rez += @{ ok = $true; opis = 'klikalnik: preskočen' } }
 
   $ok = -not ($rez | Where-Object { -not $_.ok })
   $povzetek = ($rez | ForEach-Object { $_.opis }) -join '; '
+  # Strojno berljiv izid za nadzorno ploščo (koraki, dnevniki, posnetki).
+  $izid = [ordered]@{ id = [int]$n.id; seja = $Seja; ok = $ok; cas = (Get-Date).ToString('s'); pot = $Koren; mesto = $mesto
+    koraki = @($rez | ForEach-Object { [ordered]@{ ok = [bool]$_.ok; opis = $_.opis; izhod = $_.izhod } }) }
+  [IO.File]::WriteAllText("$log.json", ($izid | ConvertTo-Json -Depth 5), $Utf8)
   return @{ ok = $ok; povzetek = $povzetek; log = $log }
 }
 
-function Invoke-Klikalnik([string[]]$strani, [string]$log) {
-  # Klikalnik uporablja vrata 5000 — naenkrat samo en, zato ima svoj zaklep.
-  $zaklep = Join-Path $Mapa '.klikalnik'
-  if ((Test-Path $zaklep) -and (Get-Item $zaklep).LastWriteTime -gt (Get-Date).AddMinutes(-40)) {
-    return @{ ok = $false; opis = "klikalnik: zaseden (druga seja, $([IO.File]::ReadAllText($zaklep)))" }
-  }
-  [IO.File]::WriteAllText($zaklep, "$Seja #$($n.id) $(Get-Cas)")
+function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
+  # Vsako mesto za vrata ima svoja vrata testnega intraneta, zato klikalnikov teče več hkrati.
   $mapaK = Join-Path $Koren 'PIM_Solution\tools\PIM.Klikalnik'
+  $izhodK = "$log-klikalnik"
   $gostitelj = $null
+  $env:KLIKALNIK_PORT = "$vrata"
+  $env:KLIKALNIK_STREZNIK = [string]$Nastavitve.razvojniStreznik
+  $env:KLIKALNIK_IZHOD = $izhodK
   try {
     $b = Invoke-Korak 'klikalnik-build' 'dotnet' @('build', '-c', 'Release', '-nologo', '-v', 'q') 15 $log $mapaK
     if (-not $b.ok) { return $b }
+    Set-KorakMesta 'klikalnik-zagon'
     $gostitelj = Start-Process dotnet -ArgumentList @('bin\Release\net10.0\PIM.Klikalnik.dll') -WorkingDirectory $mapaK -PassThru -WindowStyle Hidden `
       -RedirectStandardOutput "$log.gostitelj.txt" -RedirectStandardError "$log.gostitelj.err"
     $rok = (Get-Date).AddMinutes(4); $gor = $false
     while (-not $gor -and (Get-Date) -lt $rok) {
-      try { $r = Invoke-WebRequest 'http://localhost:5000/brez-dostopa' -UseBasicParsing -TimeoutSec 20; $gor = ($r.StatusCode -eq 200) } catch { Start-Sleep 3 }
+      try { $r = Invoke-WebRequest "http://localhost:$vrata/brez-dostopa" -UseBasicParsing -TimeoutSec 20; $gor = ($r.StatusCode -eq 200) } catch { Start-Sleep 3 }
     }
-    if (-not $gor) { return @{ ok = $false; opis = 'klikalnik: testni intranet se ni zagnal v 4 min' } }
-    $k = Invoke-Korak 'klikalnik' 'node' @('klikalnik.mjs', 'http://localhost:5000/', ($strani -join ',')) 30 $log $mapaK
-    $json = Join-Path $mapaK 'porocilo\klikalnik.json'
+    if (-not $gor) { return @{ ok = $false; opis = "klikalnik: testni intranet se ni zagnal v 4 min (vrata $vrata)" } }
+    $k = Invoke-Korak 'klikalnik' 'node' @('klikalnik.mjs', "http://localhost:$vrata/", ($strani -join ',')) 30 $log $mapaK
+    $json = Join-Path $izhodK 'klikalnik.json'
     if (Test-Path $json) {
       $najdbe = @(([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json) | ForEach-Object { $_.najdbe })
       $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
       $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' })
-      Copy-Item (Join-Path $mapaK 'porocilo\klikalnik.md') "$log.klikalnik.md" -Force
-      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($strani.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)" }
+      Copy-Item (Join-Path $izhodK 'klikalnik.md') "$log.klikalnik.md" -Force
+      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($strani.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"; izhod = "$log.klikalnik.md" }
     }
     return @{ ok = $false; opis = "klikalnik: ni poročila ($($k.opis))" }
   } finally {
     if ($gostitelj -and -not $gostitelj.HasExited) { & taskkill /PID $gostitelj.Id /T /F 2>$null | Out-Null }
-    Remove-Item $zaklep -Force -ErrorAction SilentlyContinue
+    Remove-Item Env:KLIKALNIK_PORT, Env:KLIKALNIK_IZHOD, Env:KLIKALNIK_STREZNIK -ErrorAction SilentlyContinue
   }
 }
 
@@ -377,7 +466,7 @@ function Get-NaslednjaMigracija {
       foreach ($f in Get-ChildItem $m -Filter *.sql) { if ($f.Name -match '^(\d{3,4})_') { $max = [Math]::Max($max, [int]$Matches[1]) } }
     }
   }
-  foreach ($v in (Invoke-Git ls-tree --name-only -r main -- PIM_Solution/sql/migrations)) {
+  foreach ($v in (Invoke-Git ls-tree --name-only -r $GlavnaVeja -- PIM_Solution/sql/migrations)) {
     if ((Split-Path $v -Leaf) -match '^(\d{3,4})_') { $max = [Math]::Max($max, [int]$Matches[1]) }
   }
   if (Test-Path $DatotekaMigracij) {
@@ -413,7 +502,7 @@ switch ($Ukaz) {
       $novId = [int]$zadnji + 1
       $n = [ordered]@{}
       foreach ($p in $Polja) { $n[$p] = '' }
-      $n.id = $novId; $n.naslov = $Naslov; $n.stanje = 'predlog'; $n.prednost = $Prednost; $n.vrsta = $Vrsta; $n.vir = $Vir
+      $n.id = $novId; $n.naslov = $Naslov; $n.stanje = $(if ($Zacetno) { $Zacetno } else { 'predlog' }); $n.prednost = $Prednost; $n.vrsta = $Vrsta; $n.vir = $Vir
       $n.obmocje = @($Obmocje | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }); $n.strani = @($Strani | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }); $n.testi = @($Testi | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }); $n.odvisno = $Odvisno; $n.ustvarjeno = Get-Cas
       $n.telo = "`r`n## Opis`r`n$Opis`r`n`r`n## Kriteriji sprejema`r`n- `r`n`r`n## Dnevnik`r`n"
       $n.datoteka = Join-Path $MapaNalog ('{0:D4}.md' -f $novId)
@@ -439,7 +528,7 @@ switch ($Ukaz) {
       $n.veja = (Invoke-Git rev-parse --abbrev-ref HEAD | Select-Object -First 1)
       Add-Dnevnik $n "prevzeta v $($n.pot) (veja $($n.veja))"
       Write-Naloga $n
-      if ($n.veja -eq 'main') { Write-Host 'OPOZORILO: delaš v glavni kopiji (main). Priporočeno: lastna delovna kopija (worktree).' -ForegroundColor Yellow }
+      if ($Koren -eq $Glavna) { Write-Host 'OPOZORILO: delaš v glavni kopiji. Priporočeno: lastna delovna kopija (worktree).' -ForegroundColor Yellow }
       Write-Host "Prevzeta #$Id. Območje: $($n.obmocje -join ', ')"
     }
   }
@@ -504,13 +593,83 @@ switch ($Ukaz) {
   }
   'Zdruzi' {
     $n = Get-Naloga $Id
-    if ((Invoke-Git rev-parse --abbrev-ref HEAD) -ne 'main') { throw 'Združuje se samo v glavni kopiji na veji main.' }
-    if (@(Invoke-Git status --porcelain).Count -and -not $Kljub) { throw 'Glavna kopija ima nepotrjene spremembe; najprej jih potrdi ali umakni.' }
-    if (-not $n.veja -or $n.veja -eq 'main') { throw "Naloga #$Id nima lastne veje." }
-    if ($n.preverjeno -notlike 'OK*') { throw "Naloga #$Id nima uspešnih vrat." }
-    Invoke-Git merge --no-ff $n.veja -m "Združi nalogo #${Id}: $($n.naslov)" | Write-Host
-    if ($GitIzhod -ne 0) { throw "Združevanje ni uspelo (konflikt?). Razreši ročno: git merge $($n.veja)." }
-    Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'koncana'; Add-Dnevnik $n "združena v main"; Write-Naloga $n }
+    if (-not $n.veja -or $n.veja -eq $GlavnaVeja) { throw "Naloga #$Id nima lastne veje (veja '$($n.veja)')." }
+    if ($n.preverjeno -notlike 'OK*' -and -not $Kljub) { throw "Naloga #$Id nima uspešnih vrat." }
+    if ($n.stanje -ne 'pregled' -and -not $Kljub) { throw "Naloga #$Id ni sprejeta (stanje $($n.stanje)); združi se po Koncaj." }
+    $potNaloge = if ($n.pot -and (Test-Path $n.pot)) { (Resolve-Path $n.pot).Path } else { $null }
+    if (-not $potNaloge) { throw "Delovna kopija naloge #$Id ne obstaja več ($($n.pot))." }
+    if ((& git -C $Glavna rev-parse --abbrev-ref HEAD 2>$null) -ne $GlavnaVeja) { throw "Glavna kopija ni na integracijski veji $GlavnaVeja." }
+
+    # Naenkrat se združuje samo ena naloga (vrsta združevanja).
+    $zaklepZ = Join-Path $Mapa '.zdruzevanje'
+    $rok = (Get-Date).AddMinutes(30); $tok = $null
+    while (-not $tok) {
+      try { $tok = [IO.File]::Open($zaklepZ, 'CreateNew', 'Write', 'None'); $tok.Close() }
+      catch {
+        if ((Get-Item $zaklepZ -ErrorAction SilentlyContinue).LastWriteTime -lt (Get-Date).AddMinutes(-60)) { Remove-Item $zaklepZ -Force; continue }
+        if ((Get-Date) -gt $rok) { throw 'Vrsta združevanja je zasedena več kot 30 min.' }
+        Set-Utrip "čaka v vrsti za združevanje #$Id" 'čaka'; Start-Sleep -Seconds 10
+      }
+    }
+    $Koren = $potNaloge
+    try {
+      Set-Utrip "združujem #$Id v $GlavnaVeja" 'zdruzuje'
+      if (@(& git -C $potNaloge status --porcelain --untracked-files=no 2>$null).Count) { throw "Naloga #$Id ima nepotrjene spremembe v $potNaloge — najprej commit." }
+      # 1) Veja naloge dobi vse, kar je medtem prišlo v integracijsko vejo, in se ponovno zgradi.
+      $pred = & git -C $potNaloge rev-parse HEAD
+      $ErrorActionPreference = 'Continue'
+      & git -C $potNaloge merge --no-edit $GlavnaVeja 2>&1 | Write-Host
+      $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
+      if ($izhodMerge -ne 0) {
+        $konf = @(& git -C $potNaloge diff --name-only --diff-filter=U 2>$null)
+        & git -C $potNaloge merge --abort 2>$null
+        Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: konflikt z $GlavnaVeja v $($konf -join ', ') — razvijalec mora vejo posodobiti ročno"; Write-Naloga $n }
+        throw "Konflikt z $GlavnaVeja ($($konf -join ', '))."
+      }
+      if ((& git -C $potNaloge rev-parse HEAD) -ne $pred) {
+        $log = Join-Path $MapaPreverjanj ("{0:D4}-{1}-zdruzi" -f [int]$Id, (Get-Date).ToString('yyyyMMdd-HHmmss'))
+        [void](Enter-MestoVrat)
+        try { $b = Invoke-Korak 'build po posodobitvi' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q') 20 $log $potNaloge }
+        finally { Exit-MestoVrat }
+        if (-not $b.ok) {
+          Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: po posodobitvi z $GlavnaVeja build ne gre skozi ($($b.izhod))"; Write-Naloga $n }
+          throw 'Build po posodobitvi ni uspel.'
+        }
+      }
+      # 2) Združitev v glavno kopijo (git zavrne, če so iste datoteke tam nepotrjeno spremenjene).
+      $ErrorActionPreference = 'Continue'
+      & git -C $Glavna merge --no-ff $n.veja -m "Združi nalogo #${Id}: $($n.naslov)" 2>&1 | Write-Host
+      $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
+      if ($izhodMerge -ne 0) {
+        & git -C $Glavna merge --abort 2>$null
+        Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "združevanje v glavno kopijo ni uspelo (nepotrjene spremembe v istih datotekah?) — poskusi znova"; Write-Naloga $n }
+        throw 'Združevanje v glavno kopijo ni uspelo.'
+      }
+      $commit = (& git -C $Glavna rev-parse --short HEAD)
+      Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'koncana'; $n.zdruzeno = "$commit $(Get-Cas)"; Add-Dnevnik $n "združena v $GlavnaVeja ($commit)"; Write-Naloga $n }
+      Set-Utrip "#$Id združena v $GlavnaVeja ($commit)" 'končal'
+      Write-Host "Naloga #$Id združena v $GlavnaVeja ($commit)." -ForegroundColor Green
+    } finally { Remove-Item $zaklepZ -Force -ErrorAction SilentlyContinue }
+  }
+  'Utrip' {
+    if (-not $Besedilo) { throw 'Manjka -Besedilo (kaj agent dela zdaj).' }
+    Set-Utrip $Besedilo 'dela'
+    return
+  }
+  'Odjava' {
+    $pot = Join-Path $MapaAgentov (Get-ImeDatotekeSeje $Seja)
+    if (Test-Path $pot) {
+      $d = [IO.File]::ReadAllText($pot, $Utf8) | ConvertFrom-Json
+      [IO.File]::AppendAllText($DatotekaDnevnika, "$(Get-Cas)`t$Seja`t#$($d.id)`t[$($d.vloga)] odjava$(if ($Besedilo) { ': ' + $Besedilo })`r`n", $Utf8)
+      Remove-Item $pot -Force
+    }
+    return
+  }
+  'Json' {
+    $izid = [ordered]@{ glavna = $Glavna; glavnaVeja = $GlavnaVeja; vrataHkrati = $VrataHkrati
+      naloge = @(Get-Naloge | ForEach-Object { $o = [ordered]@{}; foreach ($k in $_.Keys) { if ($k -ne 'telo') { $o[$k] = $_[$k] } }; $o }) }
+    [Console]::Out.Write(($izid | ConvertTo-Json -Depth 5))
+    return
   }
 }
-if ($Ukaz -ne 'Stanje') { [void](Write-Pregled) }
+if ($Ukaz -notin 'Stanje', 'Utrip', 'Odjava', 'Json') { [void](Write-Pregled) }

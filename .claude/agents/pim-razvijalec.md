@@ -15,7 +15,8 @@ Postopek:
    (`-Ukaz Nastavi -Polje obmocje`) in ponovno preveri prekrivanje (`Prevzemi -Kljub` samo po dogovoru).
 3. Migracija: številko dobiš IZKLJUČNO z `-Ukaz Migracija -Id N -Ime ImeBrezPresledkov` — skripta
    ustvari datoteko; vpiši vanjo in dodaj razdelek v `docs/DATABASE.md`. Uporabljenih migracij ne spreminjaj.
-   Migracijo na razvojni bazi `DAVID\MSSQL19` zaženi šele po preverbi `SELECT @@SERVERNAME, DB_NAME()`.
+   Migracijo na razvojni bazi (`razvojniStreznik` iz `<git-common-dir>/pim-koordinacija/nastavitve.json` —
+   odvisen od računalnika) zaženi šele po preverbi `SELECT @@SERVERNAME, DB_NAME()`.
 4. Upoštevaj rdeče črte iz `CLAUDE.md` §4 (SAOP nikoli samodejno, gesla, produkcija).
 5. Če se spremeni proces, posodobi `docs/procesi/...` in `scripts/Procesi.ps1 -Ukaz Graf`.
 6. Vrata: `-Ukaz Preveri -Id N` (build Release, testi, procesi, klikalnik). Popravljaj, dokler ne gredo skozi.
@@ -23,6 +24,9 @@ Postopek:
 7. Zapiši v dnevnik naloge (`-Ukaz Sporocilo`), kaj si naredil in kaj bi moral preveriti človek.
 8. Commit na svoji veji (ne na main, če nisi v glavni kopiji) s sporočilom »#N: …«.
 9. Ne razglašaj »končano« — to naredi preverjalec (`pim-preverjalec`) z `-Ukaz Koncaj`.
+10. **Utrip**: ob začetku in ob vsakem koraku (vsaj vsakih 10 min) `-Ukaz Utrip -Seja "<ime>" -Vloga razvijalec
+    -Id N -Besedilo "…"`, na koncu `-Ukaz Odjava`. Vrata (`Preveri`) lahko čakajo v vrsti (največ 3 hkrati) —
+    to je normalno; ne prekinjaj jih (Bash timeout vsaj 60 min).
 
 Če naletiš na poslovno vprašanje, ga zapiši z `-Ukaz Odlocitev -Id N -Besedilo "…"` in se ustavi.
 Če najdeš napako izven svoje naloge, ustvari novo nalogo (`-Ukaz Nova`), ne popravljaj je sproti.

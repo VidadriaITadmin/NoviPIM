@@ -10,8 +10,10 @@ using Microsoft.Extensions.Options;
 
 // Klikalnik: intranet na razvojni bazi z vgrajenim uporabnikom "klikalnik" (vloga ADMIN), brez prijave.
 // Varovalka: zažene se samo, če PIM_CONNECTION_STRING kaže na razvojni strežnik (privzeto DAVID\MSSQL19).
-// Vrata: WebApplicationFactory v .NET 10 prezre UseKestrel(port) in posluša na privzetih :5000.
-var port = 5000;
+// Vrata: privzeto 5000; KLIKALNIK_PORT omogoči več hkratnih testnih intranetov (vzporedni agenti).
+var port = int.TryParse(Environment.GetEnvironmentVariable("KLIKALNIK_PORT"), out var p) ? p : 5000;
+Environment.SetEnvironmentVariable("ASPNETCORE_URLS", $"http://localhost:{port}");
+Environment.SetEnvironmentVariable("ASPNETCORE_HTTP_PORTS", null);
 var dovoljenStreznik = Environment.GetEnvironmentVariable("KLIKALNIK_STREZNIK") ?? @"DAVID\MSSQL19";
 var povezava = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING")
   ?? $"Server={dovoljenStreznik};Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True";
@@ -29,6 +31,7 @@ using var factory = new WebApplicationFactory<PIM.Intranet.Services.ProductEditS
   .WithWebHostBuilder(b =>
   {
     b.UseEnvironment("Development");
+    b.UseSetting(WebHostDefaults.ServerUrlsKey, $"http://localhost:{port}");
     b.ConfigureTestServices(s =>
     {
       s.AddAuthentication().AddScheme<AuthenticationSchemeOptions, KlikalnikAuth>(KlikalnikAuth.Shema, _ => { });
@@ -41,7 +44,7 @@ using var factory = new WebApplicationFactory<PIM.Intranet.Services.ProductEditS
       });
     });
   });
-factory.UseKestrel();
+factory.UseKestrel(port);
 factory.StartServer();
 Console.WriteLine($"Klikalnik intranet teče: http://localhost:{port}/  (baza {dovoljenStreznik}). Ctrl+C za konec.");
 var konec = new TaskCompletionSource();
