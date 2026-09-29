@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 @inject SaopWriteService Write
+@inject ProductEditService Edits
 @inject SaopOrganizationContext OrgContext
 @inject AuthenticationStateProvider Authentication
 
@@ -19,7 +20,35 @@
   <select class="filter-select" @bind="Period"><option value="0">Vse obdobje</option><option value="7">Zadnjih 7 dni</option><option value="30">Zadnjih 30 dni</option><option value="90">Zadnjih 90 dni</option></select>
   <input class="search-input" type="search" placeholder="Ključ, polje ali cilj …" @bind="Search" @bind:event="oninput" />
   <span class="result-count">@Filtered.Count.ToString("N0") operacij</span>
+  <button type="button" class="small-action" disabled="@(Loading || SelectableFiltered.Count == 0)" @onclick="SelectAllFiltered">Izberi vse filtrirane (@SelectableFiltered.Count)</button>
 </section>
+
+@* Uporabnik 2026-09-23: artikli so bili v SAOP poslani kot neaktivni; »omogočiti, da se obstoječe
+   podatke, ki smo jih poslali, ponovno označi, spremeni polje in vrednost in ponovno pošlje«.
+   Popravek je nova sprememba za izbrane artikle: v PIM velja takoj, v SAOP gre šele po odobritvi
+   na Čakalni vrsti — nič se ne pošlje samo. *@
+@if (Selected.Count > 0)
+{
+  <section class="ui-card toolbar bulk-actions" role="toolbar" aria-label="Popravek izbranih poslanih sprememb">
+    <span class="result-count" role="status" aria-live="polite">Izbranih sporočil: @Selected.Count (artiklov: @SelectedItems.Count)</span>
+    <label class="visually-hidden" for="fix-field">Polje</label>
+    <select id="fix-field" class="filter-select" value="@FixField" @onchange="OnFixFieldChanged">
+      <option value="">— izberi polje —</option>
+      @foreach (var field in WritableFields) { <option value="@field.FieldKey">@SaopFieldLabels.For(field.ElementName) (@field.FieldKey)</option> }
+    </select>
+    <label class="visually-hidden" for="fix-value">Nova vrednost</label>
+    @if (FixFieldIsBool)
+    {
+      <select id="fix-value" class="filter-select" @bind="FixValue"><option value="">— vrednost —</option><option value="D">Da</option><option value="N">Ne</option></select>
+    }
+    else
+    {
+      <input id="fix-value" class="search-input" placeholder="Nova vrednost" @bind="FixValue" @bind:event="oninput" />
+    }
+    <button type="button" class="small-action good-action" disabled="@(ActionBusy || FixField.Length == 0 || (FixFieldIsBool && FixValue.Length == 0))" @onclick="QueueFixAsync">Pripravi popravek (čaka odobritev)</button>
+    <button type="button" class="small-action" disabled="@ActionBusy" @onclick="ClearSelection">Počisti izbor</button>
+  </section>
+}
 
 @* PimMissing tu ne bi bil pravilen: procedura za spodnje ze obstaja v bazi (intranet.GetOutboundMessage,
    migracija 021), samo na to stran se ni vezana — ne gre za manjkajoc objekt v bazi. *@
@@ -41,8 +70,9 @@
         @foreach (var row in PageRows)
         {
           <tr>
+            <td>@if (Selectable(row)) { <input type="checkbox" aria-label="Izberi @row.EntityKey @row.FieldSummary" checked="@Selected.Contains(row.OutboxMessageId)" @onchange="args => Toggle(row, args.Value is true)" /> }</td>
             <td>@row.CreatedUtc.ToPimLocal().ToString("g")</td><td>@row.EntityType<div class="tree-path">@row.EntityKey</div></td><td>@row.Operation</td>
-            <td>@row.FieldSummary</td><td>@(row.ApprovedBy ?? "—")</td><td>@(row.SentUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@Response(row)</td>
+            <td>@row.FieldSummary</td><td>@ValueText(row)</td><td>@(row.ApprovedBy ?? "—")</td><td>@(row.SentUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@Response(row)</td>
             <td>@(row.Status is "Verified" or "Succeeded" ? "Da" : "—")</td><td><PimChip Text="@Label(row.Status)" Tone="@Tone(row.Status)" /></td>
             <td><div class="table-actions">
               @if (row.Status is "Error" or "Dead")
@@ -92,7 +122,7 @@
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("SAOP", "saop"), new("Zgodovina")];
   int? OrganizationId;
   IReadOnlyList<OrganizationContext> Organizations = [];
-  static readonly IReadOnlyList<PimColumn> Columns = [new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat"), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Izbor"), new("Čas"), new("Entiteta / ključ"), new("Operacija"), new("Polja"), new("Vrednost"), new("Odobril"), new("Poslano"), new("Odgovor ERP"), new("Potrjeno"), new("Rezultat"), new("Dejanje")];
   IReadOnlyList<OutboundRow> Rows = [];
   bool Loading = true;
   bool ActionBusy;
@@ -106,7 +136,8 @@
     (Entity.Length == 0 || row.EntityType == Entity) && (string.IsNullOrEmpty(Status) || row.Status == Status)
     && (Approver.Length == 0 || row.ApprovedBy == Approver)
     && (Period == "0" || row.CreatedUtc >= DateTime.UtcNow.AddDays(-int.Parse(Period)))
-    && (Search.Length == 0 || row.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.FieldSummary.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.TargetKind.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+    && (Search.Length == 0 || row.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.FieldSummary.Contains(Search, StringComparison.OrdinalIgnoreCase) || row.TargetKind.Contains(Search, StringComparison.OrdinalIgnoreCase)
+      || (row.Value?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)))
     .OrderByDescending(row => row.CreatedUtc).ToArray();
 
   /* --- strani (10 na stran) ------------------------------------------------ */
@@ -134,6 +165,7 @@
       if (OrganizationId is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       OrgContext.OrganizationId = OrganizationId;
       await ReloadAsync();
+      await LoadWritableFieldsAsync();
     }
     catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -150,8 +182,9 @@
     OrganizationId = organizationId;
     OrgContext.OrganizationId = organizationId;
     Page = 0;
+    Selected.Clear();
     Loading = true; Error = null; Message = null;
-    try { await ReloadAsync(); }
+    try { await ReloadAsync(); await LoadWritableFieldsAsync(); }
     catch { Error = "Zgodovine trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
   }
@@ -169,6 +202,74 @@
     catch { Error = "Sporočila ni bilo mogoče varno poslati znova. Stanje ni bilo spremenjeno."; }
     finally { ActionBusy = false; }
   }
+  /* --- popravek poslanih sprememb (2026-09-23) ------------------------------ */
+  HashSet<long> Selected = [];
+  IReadOnlyList<WritableFieldRow> WritableFields = [];
+  string FixField = "", FixValue = "";
+  bool FixFieldIsBool => WritableFields.FirstOrDefault(writable => writable.FieldKey == FixField)?.ValueFormat == "bool";
+  static bool Selectable(OutboundRow row) => row.TargetKind == "SAOP_PRODUCT" && row.EntityType == "Product";
+  IReadOnlyList<OutboundRow> SelectableFiltered => Filtered.Where(Selectable).ToArray();
+  IReadOnlyList<string> SelectedItems => Rows.Where(row => Selected.Contains(row.OutboxMessageId))
+    .Select(row => row.EntityKey).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+  void SelectAllFiltered() { foreach (var row in SelectableFiltered) Selected.Add(row.OutboxMessageId); PrefillField(); }
+  void ClearSelection() { Selected.Clear(); FixField = ""; FixValue = ""; }
+  void Toggle(OutboundRow row, bool on) { if (on) Selected.Add(row.OutboxMessageId); else Selected.Remove(row.OutboxMessageId); PrefillField(); }
+  // Kadar so izbrana sporočila istega polja, se polje ponudi samo — najpogostejši popravek je isto
+  // polje z drugo vrednostjo (npr. Aktiven: Ne → Da).
+  void PrefillField()
+  {
+    if (FixField.Length > 0) return;
+    var fields = Rows.Where(row => Selected.Contains(row.OutboxMessageId)).Select(row => row.FieldSummary).Distinct().ToArray();
+    if (fields.Length == 1 && WritableFields.Any(field => field.FieldKey == fields[0])) FixField = fields[0];
+  }
+  void OnFixFieldChanged(ChangeEventArgs args) { FixField = args.Value?.ToString() ?? ""; FixValue = ""; }
+  async Task LoadWritableFieldsAsync()
+  {
+    try { WritableFields = OrganizationId is null ? [] : await Write.GetWritableFieldsAsync(OrganizationId.Value); }
+    catch { WritableFields = []; }
+  }
+  string ValueText(OutboundRow row)
+  {
+    if (row.Value is null) return "—";
+    var format = WritableFields.FirstOrDefault(field => field.FieldKey == row.FieldSummary)?.ValueFormat;
+    return format == "bool" && PIM.Operations.ProductWorkbookContract.ParseYesNo(row.Value) is { } flag ? (flag ? "Da" : "Ne") : row.Value;
+  }
+
+  /// <summary>
+  /// Za vsak izbran artikel ena nova sprememba (izbrano polje, nova vrednost): v vrsto za SAOP
+  /// (čaka odobritev — nič se ne pošlje samo) in takoj v PIM, tako kot s kartice. Starejša
+  /// neposlana sprememba istega polja postane »Nadomeščeno« (out.EnqueueMessage, 046).
+  /// </summary>
+  async Task QueueFixAsync()
+  {
+    if (OrganizationId is not { } organizationId || FixField.Length == 0) return;
+    ActionBusy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var items = SelectedItems;
+      var value = FixFieldIsBool ? PIM.Operations.ProductWorkbookContract.BoolValue(FixValue) ?? FixValue : FixValue.Trim();
+      var outcome = await Write.EnqueueAsync(organizationId, items.Select(item => (item, FixField, (string?)value)),
+        actor, "BULK", $"Popravek poslanih sprememb: {FixField} = {value}");
+      var accepted = outcome.Rows.Where(row => row.Status != "Rejected" && row.ItemId is not null)
+        .Select(row => row.ItemId!).ToArray();
+      var ids = await Write.ResolveProductIdsAsync(organizationId, accepted);
+      var written = ids.Count == 0 ? null : await Edits.SaveErpFieldsBulkAsync(organizationId,
+        ids.Values.Select(productId => new ProductErpBulkEdit(productId, FixField, value)), actor,
+        $"Popravek poslanih sprememb (skupina {outcome.OutboundBatchId})");
+      var rejected = outcome.Rows.Where(row => row.Status == "Rejected").Select(row => $"{row.ItemId}: {row.Reason}").ToArray();
+      var skipped = written?.Skipped.Select(skip => $"izdelek {skip.ProductId}: {skip.Reason}").ToArray() ?? [];
+      Message = $"Pripravljen popravek za {accepted.Length:N0} artiklov (skupina {outcome.OutboundBatchId}) — v PIM velja takoj, "
+        + "v SAOP gre šele, ko ga odobriš na Čakalni vrsti."
+        + (rejected.Length > 0 ? " Zavrnjeno: " + string.Join("; ", rejected) + "." : "")
+        + (skipped.Length > 0 ? " Ni zapisano v PIM: " + string.Join("; ", skipped) + "." : "");
+      ClearSelection();
+      await ReloadAsync();
+    }
+    catch (Exception exception) { Error = "Popravka ni bilo mogoče pripraviti: " + exception.Message; }
+    finally { ActionBusy = false; }
+  }
+
   static string Response(OutboundRow row) => row.ResponseStatusCode is null && row.ResponseCorrelationId is null ? "—" : $"{row.ResponseStatusCode} {row.ResponseCorrelationId}".Trim();
   // Ista poenostavljena poimenovanja kot na Čakalni vrsti: navzven samo Poslano/Napaka/Preklicano,
   // ne cel notranji seznam stanj — razlog za napako je v gumbu "Poglej napako".

@@ -1,0 +1,175 @@
+@page "/analitika/dobavitelji"
+@attribute [Authorize(Roles = "ADMIN,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject AnalyticsService Analytics
+@inject IntranetDataService Data
+@inject NavigationManager Navigation
+@using System.Globalization
+
+<PageTitle>Analitika · dobavitelji</PageTitle>
+
+@* 284: promet, zaloga, predlog naročila in dejanski dobavni časi po dobavitelju (ana.SupplierMetric). *@
+<PimPage Title="Analitika dobaviteljev" OrganizationScope="true"
+         Subtitle="Koliko prodamo po dobavitelju, koliko zaloge imamo, kaj je treba naročiti in kako hitro dobavitelj dejansko dostavi.">
+  <Actions>
+    <a class="secondary-button @(Total == 0 ? "disabled" : null)" href="@ExportHref" download data-enhance-nav="false">Izvozi Excel (@Total.ToString("N0", Sl))</a>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="suppliers" Tabs="AnalyticsTabs.Tabs" Label="Analitika" />
+
+<section class="ui-card ana-toolbar" role="search" aria-label="Iskanje dobaviteljev">
+  <div class="ana-bar">
+    <label class="visually-hidden" for="ana-sup-search">Išči po šifri ali imenu dobavitelja</label>
+    <input id="ana-sup-search" type="search" class="search-input" placeholder="Šifra ali ime dobavitelja … (Enter)" @bind="SearchText" @bind:after="Apply" />
+    <label class="visually-hidden" for="ana-sup-sort">Razvrsti</label>
+    <select id="ana-sup-sort" class="filter-select" style="min-width:12rem" @bind="SortText" @bind:after="Apply">
+      @foreach (var (sortCode, sortLabel) in Sorts) { <option value="@sortCode">@sortLabel</option> }
+    </select>
+    <button type="button" class="ghost-button" @onclick="ToggleDirection" aria-label="Smer razvrščanja: @(Descending ? "padajoče" : "naraščajoče")">@(Descending ? "Padajoče" : "Naraščajoče")</button>
+    <label class="check-field"><input type="checkbox" @bind="ShowAll" @bind:after="Apply" /> Tudi dobavitelji brez prometa in zaloge</label>
+    @if (!string.IsNullOrEmpty(QSearch) || ShowAll)
+    {
+      <button type="button" class="link-button" @onclick="Clear">Počisti filtre</button>
+    }
+    <span class="result-count" role="status" aria-live="polite">@Total.ToString("N0", Sl) dobaviteljev</span>
+  </div>
+</section>
+
+<section class="ui-card data-card" aria-label="Dobavitelji">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Rows is not null && Rows.Count == 0)" LoadingText="Nalaganje dobaviteljev …"
+            EmptyText="@(string.IsNullOrEmpty(QSearch) ? "Analitika dobaviteljev še ni preračunana ali pa noben dobavitelj nima prometa ali zaloge." : "Noben dobavitelj ne ustreza iskanju.")">
+    @if (Rows is { Count: > 0 })
+    {
+      <div class="table-scroll">
+        <table class="data-table ana-table">
+          <caption class="visually-hidden">Dobavitelji, stran @(Skip / Take + 1)</caption>
+          <thead>
+            <tr>
+              <th scope="col">Dobavitelj</th>
+              <th scope="col" class="numeric">Promet 365 dni</th>
+              <th scope="col" class="numeric">Glede na lani</th>
+              <th scope="col" class="numeric">Vrednost zaloge</th>
+              <th scope="col" class="numeric">Za naročilo</th>
+              <th scope="col" class="numeric">Zaležano</th>
+              <th scope="col" class="numeric">Dobavni čas</th>
+              <th scope="col" class="numeric">Odprta naročila</th>
+              <th scope="col">Zadnje naročilo</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var s in Rows)
+            {
+              var id = Uri.EscapeDataString(s.SupplierId);
+              <tr>
+                <td>
+                  @if (s.SupplierId.Length > 0) { <a class="row-link" href="analitika?dobavitelj=@id">@(s.SupplierName ?? s.SupplierId)</a><span class="sub">@s.SupplierId · @s.Items.ToString("N0", Sl) artiklov, @s.ItemsInStock.ToString("N0", Sl) na zalogi</span> }
+                  else { <span>Brez dobavitelja</span><span class="sub">@s.Items.ToString("N0", Sl) artiklov brez šifre dobavitelja</span> }
+                </td>
+                <td class="numeric">@Money(s.Sales365Net)@if (s.Sales365Margin is { } m) { <span class="sub">razlika v ceni @Money(m)</span> }</td>
+                <td class="numeric"><span class="@Tone(s.YoyPct)">@Pct(s.YoyPct)</span></td>
+                <td class="numeric">@Money(s.StockValue)</td>
+                <td class="numeric">
+                  @if (s.ItemsToOrder > 0 && s.SupplierId.Length > 0)
+                  {
+                    <a href="analitika/artikli?dobavitelj=@id&signal=NAROCI&razvrsti=predlog">@s.ItemsToOrder.ToString("N0", Sl) art.</a><span class="sub">@Money(s.SuggestedOrderValue)</span>
+                  }
+                  else { <span class="muted">—</span> }
+                  @if (s.StockoutItems > 0) { <span class="sub ana-down">@s.StockoutItems.ToString("N0", Sl) brez zaloge</span> }
+                </td>
+                <td class="numeric">
+                  @if (s.DeadItems > 0 && s.SupplierId.Length > 0)
+                  {
+                    <a href="analitika/artikli?dobavitelj=@id&signal=ZALEZANO&razvrsti=vrednost">@Money(s.DeadStockValue)</a><span class="sub">@s.DeadItems.ToString("N0", Sl) art.</span>
+                  }
+                  else { <span class="muted">—</span> }
+                </td>
+                <td class="numeric">
+                  @(s.LeadTimeAvgDays is { } lt ? $"{lt.ToString("N0", Sl)} dni" : "—")
+                  @if (s.LeadTimeSamples > 0) { <span class="sub">@s.LeadTimeSamples.ToString("N0", Sl) prevzemov</span> }
+                </td>
+                <td class="numeric">
+                  @(s.OpenPurchaseLines > 0 ? s.OpenPurchaseLines.ToString("N0", Sl) : "—")
+                  @if (s.OverduePurchaseLines > 0) { <span class="sub ana-down">@s.OverduePurchaseLines.ToString("N0", Sl) zamuja</span> }
+                </td>
+                <td>@(s.LastPurchaseOrderDate?.ToString("d. M. yyyy", Sl) ?? "—")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <PimPager Skip="Skip" Take="Take" Total="Total" Label="Strani dobaviteljev" SkipChanged="GoToSkip" />
+    }
+  </PimState>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "isci")] public string? QSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? QSort { get; set; }
+  [SupplyParameterFromQuery(Name = "smer")] public string? QDirection { get; set; }
+  [SupplyParameterFromQuery(Name = "vsi")] public string? QAll { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public int? QPage { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly (string Code, string Label)[] Sorts =
+  [
+    ("promet", "Promet 365 dni"), ("trend", "Rast glede na lani"), ("zaloga", "Vrednost zaloge"), ("predlog", "Vrednost predloga"),
+    ("zalezano", "Zaležana zaloga"), ("dobava", "Dobavni čas"), ("zamude", "Zamujena naročila"), ("marza", "Razlika v ceni"),
+    ("naziv", "Ime"), ("sifra", "Šifra"),
+  ];
+  const int Take = 50;
+
+  IReadOnlyList<AnalyticsSupplierRow>? Rows;
+  long Total;
+  int Skip;
+  bool Loading = true, Descending = true, ShowAll;
+  string? Error;
+  string SearchText = "", SortText = "promet";
+
+  protected override async Task OnParametersSetAsync()
+  {
+    SearchText = QSearch ?? "";
+    SortText = Sorts.Any(s => s.Code == QSort) ? QSort! : "promet";
+    Descending = QDirection != "nar";
+    ShowAll = QAll == "1";
+    Skip = QPage is > 1 ? (QPage.Value - 1) * Take : 0;
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      (Rows, Total) = await Analytics.GetSuppliersAsync(organization.OrganizationId, QSearch, SortText, Descending, Skip, Take, !ShowAll);
+    }
+    catch (Exception exception)
+    {
+      Error = $"Dobaviteljev ni bilo mogoče naložiti: {exception.Message}";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string Query(int page = 1)
+  {
+    var parts = new List<string>();
+    if (!string.IsNullOrWhiteSpace(SearchText)) parts.Add("isci=" + Uri.EscapeDataString(SearchText.Trim()));
+    if (SortText != "promet") parts.Add("razvrsti=" + SortText);
+    if (!Descending) parts.Add("smer=nar");
+    if (ShowAll) parts.Add("vsi=1");
+    if (page > 1) parts.Add("stran=" + page);
+    return string.Join("&", parts);
+  }
+
+  string ExportHref => "izvoz/analitika-dobavitelji.xlsx?" + Query();
+  void Go(int page = 1) => Navigation.NavigateTo("analitika/dobavitelji" + (Query(page) is { Length: > 0 } q ? "?" + q : ""));
+  void Apply() => Go();
+  void ToggleDirection() { Descending = !Descending; Go(); }
+  void Clear() { SearchText = ""; ShowAll = false; Go(); }
+  void GoToSkip(int skip) => Go(skip / Take + 1);
+
+  static string Money(decimal? value) => value is { } v ? v.ToString("N0", Sl) + " €" : "—";
+  static string Pct(decimal? value) => value is { } v ? (v > 0 ? "+" : "") + v.ToString("N0", Sl) + " %" : "—";
+  static string? Tone(decimal? value) => value switch { > 0 => "ana-up", < 0 => "ana-down", _ => null };
+}

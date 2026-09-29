@@ -1,0 +1,5 @@
+.undo-banner { background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); }
+.undo-skipped { margin: .5rem 0; }
+.undo-skipped summary { cursor: pointer; font-weight: 600; }
+.undo-skipped ul { margin: .5rem 0 0; padding-left: 1.25rem; }
+.undo-skipped li { font-size: .875rem; margin: .15rem 0; }

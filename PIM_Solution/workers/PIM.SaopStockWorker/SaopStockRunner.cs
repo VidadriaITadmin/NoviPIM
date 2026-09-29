@@ -105,9 +105,13 @@ public sealed class SaopStockRunner(string connectionString, HttpClient http, Ur
     // Posnetek je trenutek klica: zaloga velja za takrat, ne za trenutek zapisa v bazo.
     var snapshotUtc = DateTime.UtcNow;
     var sourceCode = await ReadStockSourceCodeAsync(connection, organizationId, cancellationToken);
-    var (runId, applied, quarantined, _) = await new StockLandingWriter(connectionString).PersistAsync(
+    var writer = new StockLandingWriter(connectionString);
+    var (runId, applied, quarantined, _) = await writer.PersistAsync(
       organizationId, sourceCode, "SAOP", endpointForSnapshot, snapshotUtc, hash, records,
       "yyyy-MM-dd", cancellationToken: cancellationToken);
+    // 283: prazen ali okrnjen odgovor SAOP ne pobere zaloge — velja prejšnji posnetek, potrditev na /varovalke.
+    if (writer.HeldReason is { } heldReason)
+      Console.WriteLine($"Zaloga SAOP za podjetje {organizationId} ni zapisana: {heldReason}.");
     await MarkSuccessAsync(connection, profile.ProfileId, cancellationToken);
     return new(profile.ProfileCode, profile.ProviderKind, warehouses.Count, records.Count, applied, quarantined, runId);
   }

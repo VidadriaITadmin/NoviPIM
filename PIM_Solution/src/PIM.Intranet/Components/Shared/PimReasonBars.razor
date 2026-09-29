@@ -1,0 +1,47 @@
+@* Števila po razlogu kot vodoravne vrstice (277): na prvi pogled se vidi, kateri vzrok prevladuje
+   (npr. »brez kategorije spletišča: 198«). Klik na vrstico izbere razlog kot filter seznama pod njo;
+   ponoven klik ga odstrani. Števila so vedno iz baze. *@
+@using System.Globalization
+
+@if (Items.Count == 0)
+{
+  <p class="reason-bars-empty">@EmptyText</p>
+}
+else
+{
+  <div class="reason-bars" role="group" aria-label="@Label">
+    @foreach (var item in Items)
+    {
+      var width = Max == 0 ? 0d : Math.Max(2d, item.Count * 100d / Max);
+      <button type="button" class="reason-bar @(item.Key == Selected ? "selected" : null)" aria-pressed="@(item.Key == Selected ? "true" : "false")"
+              disabled="@(!Selectable)" title="@(Selectable ? (item.Key == Selected ? "Prikaži vse" : "Prikaži samo te") : null)"
+              @onclick="() => SelectAsync(item.Key)">
+        <span class="reason-bar-label">@item.Label</span>
+        <span class="reason-bar-track" aria-hidden="true"><i class="tone-@(item.Tone ?? "neutral")" style="width:@(width.ToString("0.#", CultureInfo.InvariantCulture))%"></i></span>
+        <span class="reason-bar-count">@item.Count.ToString("N0")</span>
+      </button>
+    }
+  </div>
+}
+
+@code {
+  /// <param name="Key">Vrednost filtra (npr. koda razloga).</param>
+  /// <param name="Tone">good, warn, bad ali null za nevtralno.</param>
+  public sealed record Item(string Key, string Label, int Count, string? Tone = null);
+
+  [Parameter, EditorRequired] public required IReadOnlyList<Item> Items { get; set; }
+  [Parameter] public string Label { get; set; } = "Razlogi";
+  [Parameter] public string EmptyText { get; set; } = "Ni zapisov.";
+  [Parameter] public string? Selected { get; set; }
+  [Parameter] public EventCallback<string?> SelectedChanged { get; set; }
+  [Parameter] public bool Selectable { get; set; } = true;
+
+  int Max => Items.Count == 0 ? 0 : Items.Max(item => item.Count);
+
+  async Task SelectAsync(string key)
+  {
+    if (!Selectable) return;
+    Selected = Selected == key ? null : key;
+    await SelectedChanged.InvokeAsync(Selected);
+  }
+}

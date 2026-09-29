@@ -122,6 +122,45 @@ public static class WorkbookTable
     return groups;
   }
 
+  /// <summary>Imena listov v vrstnem redu zvezka.</summary>
+  public static IReadOnlyList<string> SheetNames(Stream stream)
+  {
+    ArgumentNullException.ThrowIfNull(stream);
+    using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+    return ReadSheetIndex(archive).Select(sheet => sheet.Name ?? "").ToList();
+  }
+
+  /// <summary>
+  /// Prvi list in za njim vsi listi z ISTIMI naslovi stolpcev, združeni v eno tabelo (274: cenik je
+  /// razdeljen na liste »razsvetljava«, »elektro_material«, »ViD_Tech« z istimi stolpci). List z
+  /// drugačnimi naslovi se ne prebere; njegovo ime vrne <paramref name="skipped"/>.
+  /// </summary>
+  public static WorkbookSheet ReadMatchingSheets(Stream stream, IReadOnlyCollection<string>? headerHints, out IReadOnlyList<string> skipped)
+  {
+    ArgumentNullException.ThrowIfNull(stream);
+    var names = SheetNames(stream);
+    stream.Position = 0;
+    var first = Read(stream, sheetName: null, headerHints);
+    var skippedNames = new List<string>();
+    if (names.Count <= 1) { skipped = skippedNames; return first; }
+
+    var headerKey = string.Join("\u0001", first.Headers.Select(WorkbookHeader.Normalize));
+    var rows = first.Rows.ToList();
+    var numbers = Enumerable.Range(0, first.Rows.Count).Select(first.RowNumber).ToList();
+    foreach (var name in names.Skip(1))
+    {
+      stream.Position = 0;
+      WorkbookSheet other;
+      try { other = Read(stream, name, headerHints); }
+      catch (WorkbookReadException) { skippedNames.Add(name); continue; }
+      if (string.Join("\u0001", other.Headers.Select(WorkbookHeader.Normalize)) != headerKey) { skippedNames.Add(name); continue; }
+      rows.AddRange(other.Rows);
+      numbers.AddRange(Enumerable.Range(0, other.Rows.Count).Select(other.RowNumber));
+    }
+    skipped = skippedNames;
+    return first with { Rows = rows, RowNumbers = numbers };
+  }
+
   public static WorkbookSheet Read(string path, string? sheetName = null, IReadOnlyCollection<string>? headerHints = null)
   {
     // Zvezek je lahko odprt v Excelu; brez tega načina bi uvoz padel zaradi datoteke, ki jo

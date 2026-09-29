@@ -1,0 +1,4 @@
+.deactivation-confirm { background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); }
+.deactivation-confirm h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
+.deactivation-confirm .table-scroll { max-height: 22rem; overflow: auto; margin: .5rem 0; }
+.deactivation-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }

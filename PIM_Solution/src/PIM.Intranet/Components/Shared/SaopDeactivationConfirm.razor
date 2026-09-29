@@ -1,0 +1,65 @@
+@* 281: potrditev sumljivih sprememb za SAOP na mestu odobritve. Uporabnik 2026-09-24: »če je artikel aktiven, takoj
+   uvoziš v SAOP; če je neaktiven, ti javi toliko artiklov je neaktivnih — fino bi bilo še, da se vidi seznam«; »dej mi
+   še ostale varovalke notri«. Seznam po razlogu (neaktivni, cene, ključna polja, množično, staro), odločitev tu. *@
+
+@if (Items.Count > 0)
+{
+  <section class="ui-card deactivation-confirm section-gap" role="alertdialog" aria-labelledby="held-title">
+    <h2 id="held-title">@Heading</h2>
+    <p>Preveri, ali je prav. Ostale spremembe so že šle v SAOP; te gredo, ko potrdiš.</p>
+    @foreach (var group in Items.GroupBy(item => (item.RuleCode, item.RuleTitle, item.RuleOrder)).OrderBy(group => group.Key.RuleOrder))
+    {
+      var rows = group.ToList();
+      var messages = rows.Select(row => row.OutboxMessageId).Distinct().Count();
+      <h3>@group.Key.RuleTitle (@messages.ToString("N0"))</h3>
+      <div class="table-scroll">
+        <table class="data-table">
+          <caption class="visually-hidden">@group.Key.RuleTitle</caption>
+          <thead><tr><th>Šifra</th><th>Naziv</th><th>Sprememba</th><th>Od kod</th><th>Pripravil</th></tr></thead>
+          <tbody>
+            @foreach (var item in rows.Take(MaxRows))
+            {
+              <tr>
+                <td>@item.ItemId</td>
+                <td>@item.Title</td>
+                <td>@item.FieldLabel: @Show(item.OldValue) → <strong>@Show(item.NewValue)</strong>@(item.ChangeText is { Length: > 0 } change ? $" ({change})" : "")</td>
+                <td>@item.Source</td>
+                <td>@item.CreatedBy, @item.CreatedUtc.ToPimLocal().ToString("g")</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (rows.Count > MaxRows) { <p class="hint">… in še @((rows.Count - MaxRows).ToString("N0")).</p> }
+    }
+    <div class="deactivation-actions">
+      <button type="button" class="primary-button" disabled="@Busy" @onclick="OnSendAll">@SendAllText</button>
+      <button type="button" class="secondary-button" disabled="@Busy" @onclick="OnCancel">@CancelText</button>
+    </div>
+  </section>
+}
+
+@code {
+  const int MaxRows = 200;
+
+  [Parameter] public IReadOnlyList<SaopHeldRow> Items { get; set; } = [];
+  [Parameter] public bool Busy { get; set; }
+  [Parameter] public string SendAllText { get; set; } = "Da, prav je — pošlji v SAOP";
+  [Parameter] public string CancelText { get; set; } = "Ne zdaj";
+  [Parameter] public EventCallback OnSendAll { get; set; }
+  [Parameter] public EventCallback OnCancel { get; set; }
+
+  int Messages => Items.Select(item => item.OutboxMessageId).Distinct().Count();
+
+  /// <summary>Samo neaktivni: »V SAOP 3 artikli bodo neaktivni«; sicer »V SAOP čaka potrditev: N sprememb«.</summary>
+  string Heading => Items.All(item => item.IsDeactivation)
+    ? $"V SAOP {SafeguardText.ItemsInactive(Items.Select(item => item.ItemId).Distinct().Count())}"
+    : $"V SAOP čaka potrditev: {Messages:N0} sprememb"
+      + (Items.Any(item => item.IsDeactivation) ? $", od tega {SafeguardText.ItemsInactive(Items.Where(item => item.IsDeactivation).Select(item => item.ItemId).Distinct().Count())}" : "");
+
+  static string Show(string? value) =>
+    value is null ? "—"
+    : decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var number)
+      ? number.ToString("0.####", System.Globalization.CultureInfo.GetCultureInfo("sl-SI"))
+      : value.Length > 60 ? value[..60] + "…" : value;
+}

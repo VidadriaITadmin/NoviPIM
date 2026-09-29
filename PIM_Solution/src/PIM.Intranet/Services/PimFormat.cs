@@ -17,6 +17,16 @@ public static class PimFormat
     return $"pred {(int)(age.TotalDays / 365):N0} let";
   }
 
+  /// <summary>
+  /// Število s slovensko sklanjatvijo: <c>Count(2, "napaka", "napaki", "napake", "napak")</c> → »2 napaki«.
+  /// Oblike so ednina, dvojina, množina (3, 4) in rodilnik množine (0, 5 …); šteje zadnja dva mesta (101 = ednina).
+  /// </summary>
+  public static string Count(long value, string one, string two, string few, string many)
+  {
+    var form = (Math.Abs(value) % 100) switch { 1 => one, 2 => two, 3 or 4 => few, _ => many };
+    return $"{value:N0} {form}";
+  }
+
   static DateTime AsUtc(DateTime value) => value.Kind switch
   {
     DateTimeKind.Utc => value,

@@ -56,7 +56,8 @@ ko gostitelj neha utripati, in takrat poganja samo stare cikle kot rezervo preho
 | Posel | Tok | Urnik | Meja | Kaj naredi | Odvisnost |
 |---|---|---|---|---|---|
 | `SAOP_PRODUCT_IMPORT` | Vhodni viri (rezultat) | 1 h | 60 min | `PIM.KatalogWorker` delta (poln 1. v mesecu) | — |
-| `SAOP_ORDER_IMPORT` | Naročila (rezultat) | 1 h | 30 min | `PIM.SaopOrdersWorker` VNK/VND | — (nobena, nihče ni odvisen) |
+| `SAOP_ORDER_IMPORT` | Naročila (rezultat) | 1 h | 30 min | `PIM.SaopOrdersWorker` VNK/VND (tudi po številkah od največje znane, 284) | — (nobena, nihče ni odvisen) |
+| `SAOP_ANALYTICS_IMPORT` | Naročila | dnevno 4:00 | 4 h | `PIM.SaopAnalyticsWorker`: računi, Barkawi CO/PO/SKU (samo GET, pas SAOP), nato `ana.RefreshAnalytics`; brez SAOP samo preračun | — (nobena) |
 | `STOCK_IMPORT` | Cene in zaloga | 5 min | 15 min | prevzem + branje NW/BT zaloge za vsa podjetja, `PIM.SaopStockWorker` količine | — |
 | `PRICE_IMPORT` | Cene in zaloga | 5 min | 15 min | `PIM.KatalogWorker --endpoints GetPrices` | — |
 | `SAOP_DELIVERY_IMPORT` | Cene in zaloga | 30 min | 30 min | `PIM.SaopStockWorker --dostave` | — |

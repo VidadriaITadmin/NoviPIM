@@ -23,7 +23,8 @@ public sealed record ProductAttributeEdit(string AttributeCode, string? Value, s
 
 /// <summary>Ena sprememba besedila v mnozicnem zapisu (218); izdelek je del vrstice, ker gre vec izdelkov v en klic.</summary>
 public sealed record ProductTextBulkEdit(long ProductId, string Language, string TextType, string? Value);
-public sealed record ProductAttributeBulkEdit(long ProductId, string AttributeCode, string? Value);
+/// <param name="LanguageCode">Jezik vrstice (277); null pri atributu brez jezika — zapiše se v vse vrstice atributa.</param>
+public sealed record ProductAttributeBulkEdit(long ProductId, string AttributeCode, string? Value, string? LanguageCode = null);
 
 /// <param name="Skipped">Izdelki, ki jih procedura ni zapisala (npr. niso v tem podjetju), z razlogom.</param>
 public sealed record ProductBulkEditOutcome(long ChangedCount, long ProductCount, IReadOnlyList<ProductBulkSkip> Skipped);
@@ -184,6 +185,21 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
     return await command.ExecuteScalarAsync(cancellationToken) is bool excluded && excluded;
   }
 
+  /// <summary>
+  /// Šifra davčne stopnje SAOP (canon.Product.VatRateId). Bralni model kartice (intranet.GetProductCard)
+  /// je nima, zato je kartica do 2026-09-28 kazala »Davčna stopnja — ni v bralnem modelu«, čeprav je bila
+  /// vrednost v bazi in je polje v registru pisljivih polj (Product.VatRateId, VATRateID). Isti vzorec kot zgoraj.
+  /// </summary>
+  public async Task<string?> GetVatRateIdAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(
+      "SELECT VatRateId FROM canon.Product WHERE ProductId = @ProductId;", connection);
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    return await command.ExecuteScalarAsync(cancellationToken) is { } value and not DBNull ? Convert.ToString(value) : null;
+  }
+
   /* ─── Oznake izdelka (233) ──────────────────────────────────────────────────────────── */
 
   /// <summary>Vse aktivne oznake iz registra, tudi neoznačene (isti razlog kot pri spletiščih:
@@ -224,8 +240,84 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
       flags.Select(flag => new { flagCode = flag.FlagCode, isSet = flag.IsSet ? "1" : "0" }));
     command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
     command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
+    int setCount;
+    await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+      setCount = await reader.ReadAsync(cancellationToken) ? (int)PimDb.Int64(reader, "SetCount") : 0;
+    // 302: Pakirno naročanje brez Pakiranja 2 drži artikel s spleta; zadržek sledi oznaki takoj.
+    await SyncPackageOrderHoldsAsync(connection, organizationId, productId, cancellationToken);
+    return setCount;
+  }
+
+  /// <summary>Oznaka, ki na spletu omeji naročanje na cele pakete (302); količina je Pakiranje 2.</summary>
+  public const string PackageOrderFlag = "PAKIRNO_NAROCANJE";
+
+  /// <param name="UnknownItems">Šifre, ki jih v podjetju ni (vejica med njimi); null = vse znane.</param>
+  /// <param name="Held">Artikli, ki so zaradi Pakirnega naročanja brez Pakiranja 2 dobili zadržek za splet.</param>
+  public sealed record ProductFlagBulkResult(int ChangedCount, string? UnknownItems, int Held, int Released);
+
+  /// <summary>
+  /// Ena oznaka za več artiklov enega podjetja (pim.SetProductFlagsBulk, 302), z zgodovino v
+  /// pim.ProductFieldHistory. Kliče jo uvoz delovnega lista in množično dejanje na /izdelki.
+  /// </summary>
+  public async Task<ProductFlagBulkResult> SaveProductFlagsBulkAsync(
+    int organizationId, string flagCode, IReadOnlyList<(string ItemId, bool IsSet)> items,
+    string actor, string changeSource, string? note = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    if (items.Count == 0) return new(0, null, 0, 0);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("pim.SetProductFlagsBulk", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 300,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@FlagCode", SqlDbType.NVarChar, 50).Value = flagCode;
+    command.Parameters.Add("@ItemsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(
+      items.Select(item => new { i = item.ItemId, s = item.IsSet ? 1 : 0 }));
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@ChangeSource", SqlDbType.NVarChar, 32).Value = changeSource;
+    command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = (object?)note ?? DBNull.Value;
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    return await reader.ReadAsync(cancellationToken) ? (int)PimDb.Int64(reader, "SetCount") : 0;
+    return await reader.ReadAsync(cancellationToken)
+      ? new(PimDb.Int32(reader, "ChangedCount"), PimDb.Text(reader, "UnknownItems"), PimDb.Int32(reader, "Held"), PimDb.Int32(reader, "Released"))
+      : new(0, null, 0, 0);
+  }
+
+  /// <summary>Uskladi zadržke za splet pri Pakirnem naročanju brez Pakiranja 2 (val.SyncPackageOrderHolds, 302).</summary>
+  static async Task<(int Held, int Released)> SyncPackageOrderHoldsAsync(
+    SqlConnection connection, int? organizationId, long? productId, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand("val.SyncPackageOrderHolds", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = (object?)productId ?? DBNull.Value;
+    var held = command.Parameters.Add("@Held", SqlDbType.Int);
+    held.Direction = ParameterDirection.Output;
+    var released = command.Parameters.Add("@Released", SqlDbType.Int);
+    released.Direction = ParameterDirection.Output;
+    await command.ExecuteNonQueryAsync(cancellationToken);
+    return (held.Value is int h ? h : 0, released.Value is int r ? r : 0);
+  }
+
+  /// <summary>Ali ima artikel Pakiranje 2 večje od 1 — brez tega Pakirno naročanje drži artikel s spleta.</summary>
+  public async Task<decimal?> GetPackageQuantityAsync(long productId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT commercial.Pak2
+      FROM canon.Product AS product
+      LEFT JOIN pim.Product AS promoted ON promoted.OrganizationId = product.OrganizationId AND promoted.ItemID = product.ItemID
+      LEFT JOIN pim.ProductCommercial AS commercial ON commercial.PimProductId = promoted.PimProductId
+      WHERE product.ProductId = @ProductId;
+      """, connection);
+    command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
+    return await command.ExecuteScalarAsync(cancellationToken) is decimal value ? value : null;
   }
 
   /* ─── Mnozicni zapis (218) — uvoz delovnega lista ──────────────────────────────────── */
@@ -262,6 +354,7 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
       {
         productId = edit.ProductId,
         attributeCode = edit.AttributeCode,
+        languageCode = edit.LanguageCode,
         value = edit.Value ?? string.Empty,
       })), actor, note, cancellationToken);
   }

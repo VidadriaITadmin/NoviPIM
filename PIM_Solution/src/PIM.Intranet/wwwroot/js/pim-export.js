@@ -32,6 +32,8 @@ window.pimExports = (function () {
   // Kaj je ta dokument ze pokazal. Izboljsana navigacija Blazorja dokumenta ne zamenja, zato to
   // prezivi klike med stranmi; ob polni osvezitvi pomaga streznik (downloaded).
   const shown = new Set();
+  // Izvozi, za katere je uporabnik ze kliknil »Preklici« — gumb ostane zaklenjen do konca.
+  const canceling = new Set();
 
   function tray() { return document.getElementById(TRAY_ID); }
 
@@ -89,8 +91,13 @@ window.pimExports = (function () {
       const signature = JSON.stringify(job);
       const previous = existing.get(job.id);
       if (previous && previous.dataset.signature === signature) return previous;
+      // Tekoca kartica, na kateri je miska ali fokus, pocaka: sicer bi nov element med pritiskom
+      // in spustom gumba »Preklici« pozrl klik. Sprememba stanja (npr. konec) jo izrise takoj.
+      if (previous && previous.dataset.status === job.status && isActive(job)
+        && previous.matches(':hover, :focus-within')) return previous;
       const node = card(job);
       node.dataset.key = job.id;
+      node.dataset.status = job.status;
       node.dataset.signature = signature;
       return node;
     }));
@@ -183,9 +190,24 @@ window.pimExports = (function () {
       link.setAttribute('data-enhance-nav', 'false');
       actions.appendChild(link);
       node.appendChild(actions);
+    } else if (job.status === 'Canceled') {
+      title.textContent = 'Izvoz je preklican';
+      node.appendChild(el('p', 'export-card-detail', 'Datoteka ni bila narejena.'));
     } else {
       title.textContent = 'Izvoz ni uspel';
       node.appendChild(el('p', 'export-card-detail', job.error || 'Neznana napaka.'));
+    }
+
+    // Preklic: klik na »Izvozi« po pomoti sicer zasede vrata izvozov in bazo za vec minut.
+    if (isActive(job)) {
+      const actions = el('div', 'export-card-actions');
+      const pending = canceling.has(job.id);
+      const cancel = el('button', 'export-card-cancel', pending ? 'Preklicujem …' : 'Prekliči izvoz');
+      cancel.type = 'button';
+      cancel.disabled = pending;
+      cancel.addEventListener('click', function () { cancelJob(job.id, cancel); });
+      actions.appendChild(cancel);
+      node.appendChild(actions);
     }
 
     if (!isActive(job)) {
@@ -204,6 +226,20 @@ window.pimExports = (function () {
     try {
       await fetch('izvoz/opravila/' + encodeURIComponent(id) + '/skrij', { method: 'POST', credentials: 'same-origin' });
     } catch (error) { /* naslednje branje ga pokaze znova, ce zapiranje ni uspelo */ }
+  }
+
+  async function cancelJob(id, button) {
+    canceling.add(id);
+    button.disabled = true;
+    button.textContent = 'Preklicujem …';
+    try {
+      const response = await fetch('izvoz/opravila/' + encodeURIComponent(id) + '/preklici', { method: 'POST', credentials: 'same-origin' });
+      if (!response.ok) canceling.delete(id);
+    } catch (error) {
+      canceling.delete(id); /* naslednje branje pokaze, ali izvoz se tece */
+    }
+    button.blur();
+    refresh();
   }
 
   document.addEventListener('visibilitychange', function () {

@@ -20,18 +20,19 @@ public sealed record PimLifecycleArea(string Code, string Label, string Descript
 /// </summary>
 public static class PimLifecycle
 {
-  public static PimLifecycleArea Oversight { get; } = new("NADZOR", "Nadzor", "Skupni operativni pregled vseh podatkovnih tokov.", ["nadzorna-plosca"]);
-  public static PimLifecycleArea Inputs { get; } = new("VHODI", "Vhodni podatki", "Zajem, preslikave in neujemanja iz SAOP, XML-jev in datotek.", ["zajem", "pravila/preslikave", "pravila/slovar"]);
+  // 2026-09-24: področje »Vhodni podatki« je odpadlo, meni »Zajem podatkov« tudi; Teki so pod Nadzorom sistema,
+  // novi artikli dobaviteljev so pod Izdelki, preslikave in slovar pod Pravila (Upravljanje).
+  public static PimLifecycleArea Oversight { get; } = new("NADZOR", "Nadzor", "Skupni operativni pregled vseh podatkovnih tokov.", ["nadzorna-plosca", "varovalke", "uvozi", "zajem"]);
   public static PimLifecycleArea Catalog { get; } = new("PIM", "PIM katalog", "Kanonični in PIM-lastni podatki kataloga.", ["izdelki", "mediji", "nastavitve/atributi", "nastavitve/kategorije", "nastavitve/nabori-atributov", "nastavitve/povezave-izdelkov", "nastavitve/jeziki", "nastavitve/skladisca", "nastavitve/kanali"]);
   public static PimLifecycleArea Quality { get; } = new("KAKOVOST", "Kakovost", "Validacija, vrzeli, prevodi, kategorije in karantena.", ["kakovost"]);
   public static PimLifecycleArea Outputs { get; } = new("IZHODI", "Izhodi ERP in splet", "Nadzorovani zapisi v SAOP ter profili in datoteke za splet.", ["saop", "splet", "izvozi", "outbound"]);
-  public static PimLifecycleArea Business { get; } = new("POSLOVANJE", "Poslovanje", "Stranke, popusti, cene, ceniki in zaloga.", ["stranke", "zaloge", "cene", "preverbe", "pravila-popustov"]);
+  public static PimLifecycleArea Business { get; } = new("POSLOVANJE", "Poslovanje", "Stranke, popusti, cene, ceniki in zaloga.", ["stranke", "zaloge", "cene", "preverbe", "pravila-popustov", "analitika"]);
   public static PimLifecycleArea Governance { get; } = new("UPRAVLJANJE", "Upravljanje", "Pravila, lastništvo in izvor podatkov ter nastavitve kataloga.", ["nastavitve", "pravila"]);
   public static PimLifecycleArea Administration { get; } = new("ADMIN", "Administracija", "Uporabniki, vloge, integracije, alarmi in tehnično zdravje.", ["sistem", "administracija"]);
 
   public static IReadOnlyList<PimLifecycleArea> Areas { get; } =
   [
-    Oversight, Inputs, Catalog, Quality, Outputs, Business, Governance, Administration,
+    Oversight, Catalog, Quality, Outputs, Business, Governance, Administration,
   ];
 
   public static PimLifecycleArea ResolveLifecycleArea(string? baseRelativePath)
@@ -54,7 +55,7 @@ public static class PimLifecycle
 /// spremeni skupaj s stranmi, ki jih opisuje. Bralni model v bazi ostaja nedotaknjen.
 ///
 /// Skupine sledijo trajnemu podatkovnemu toku iz <c>docs/PRODUKTNI_MODEL_PIM.md</c>:
-/// vhodni podatki, PIM katalog, kakovost, izhodi ERP/splet, poslovanje in upravljanje.
+/// nadzor (tudi zajem), PIM katalog, kakovost, izhodi ERP/splet, poslovanje in upravljanje.
 /// Vsaka postavka je ena destinacija; podstrani so dosegljive z razdelilne strani, nikoli
 /// iz menija — tako je vsaka stran v meniju natanko enkrat.
 /// </summary>
@@ -65,14 +66,16 @@ public static class PimNavigation
     new(null,
     [
       new("Nadzorna plošča", "nadzorna-plosca", "icon-dashboard", "Operativno stanje vseh podatkovnih tokov.", PermissionKey: PimAccessCatalog.Dashboard),
-    ]),
-    new(PimLifecycle.Inputs.Label,
-    [
-      new("Zajem podatkov", "zajem", "icon-import", "Viri, teki, čakalne vrste in neujemanja.", IsHub: true, PermissionKey: PimAccessCatalog.Ingest),
+      // 277: sumljiva sprememba (cena ×100, umik s spleta) ne gre ven, dokler je nekdo ne potrdi — tu.
+      new("Varovalke", "varovalke", "icon-shield", "Kaj čaka potrditev pred objavo in zakaj.", PermissionKey: PimAccessCatalog.Safeguards),
+      // 280: uvoz, ki je naredil narobe, se povrne v celoti — tu.
+      new("Zgodovina uvozov", "uvozi", "icon-import", "Kaj so uvozi spremenili in povratek.", PermissionKey: PimAccessCatalog.ImportHistory),
     ]),
     new(PimLifecycle.Catalog.Label,
     [
-      new("Izdelki", "izdelki", "icon-products", "Iskanje, kakovost in stanje izdelkov.", PermissionKey: PimAccessCatalog.Products),
+      new("Izdelki", "izdelki", "icon-products", "Iskanje, novi artikli dobaviteljev, odprodaja in uvoz.", IsHub: true, PermissionKey: PimAccessCatalog.Products),
+      // Stran 275 je bila dosegljiva samo prek naslova ali kartice izdelka (uporabnik 2026-09-24).
+      new("Odprodaja", "izdelki/odprodaja", "icon-price", "Artikli v odprodaji, popust, razstavni eksponat in uvoz seznama.", [PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial], PermissionKey: "view.products.clearance"),
       new("Mediji", "mediji", "icon-media", PermissionKey: PimAccessCatalog.Media),
     ]),
     new(PimLifecycle.Quality.Label,
@@ -94,6 +97,8 @@ public static class PimNavigation
       new("Zaloga", "zaloge", "icon-stock", PermissionKey: PimAccessCatalog.Stocks),
       new("Cene in ceniki", "cene", "icon-price", PermissionKey: PimAccessCatalog.Prices),
       new("Preverbe cen in zaloge", "preverbe", "icon-quality", "Opozorila o cenah, maržah in zalogi — ne blokirajo izvoza.", PermissionKey: PimAccessCatalog.Checks),
+      // 284: vloge morajo ustrezati [Authorize(Roles=...)] na straneh analitike (F10.AuthTests).
+      new("Analitika", "analitika", "icon-dashboard", "Koliko se proda, trend, kaj naročiti in katera zaloga stoji.", [PimRoles.Admin, PimRoles.Commercial], IsHub: true, PermissionKey: PimAccessCatalog.Analytics),
     ]),
     new(PimLifecycle.Governance.Label,
     [

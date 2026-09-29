@@ -10,6 +10,9 @@ namespace PIM.SaopOrdersWorker;
 /// <summary>Naravni ključ naročila/naročilnice: leto, knjiga, številka.</summary>
 public sealed record OrderKey(int Year, string Book, int Number);
 
+/// <summary>Izid klica po številki: XML dokumenta ali null (ni dokumenta) in koda odgovora SAOP.</summary>
+public sealed record DocumentProbe(string? Xml, int Status);
+
 /// <summary>Ena stran odkritvenega (Status) klica: surov XML in ključi, razčlenjeni iz nje.</summary>
 public sealed record StatusPage(string PayloadXml, IReadOnlyList<OrderKey> Keys);
 
@@ -139,7 +142,56 @@ public sealed class SaopOrdersApiClient : IDisposable
   private static string? ChildValue(XElement record, string localName) =>
     record.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value;
 
+  /// <summary>
+  /// Naročilo kupca po ključu ali null, kadar ga pod to številko ni (luknja v številčenju, izbrisan osnutek).
+  /// Za zajem po številkah (David 2026-09-25): GetOrderStatus za VNK ne vrne ničesar, GetOrder/leto/knjiga/številka pa dela.
+  /// </summary>
+  public Task<DocumentProbe> TryGetSalesOrderAsync(int organizationId, OrderKey key, CancellationToken cancellationToken = default) =>
+    TryGetDocumentAsync(organizationId, $"api/Order/GetOrder/{key.Year}/{Uri.EscapeDataString(key.Book)}/{key.Number}", "OrderNumber", cancellationToken);
+
+  /// <summary>Naročilo dobavitelju po ključu ali null, kadar ga ni; glej <see cref="TryGetSalesOrderAsync"/>.</summary>
+  public Task<DocumentProbe> TryGetPurchaseOrderAsync(int organizationId, OrderKey key, CancellationToken cancellationToken = default) =>
+    TryGetDocumentAsync(organizationId, $"api/PurchaseOrders/GetPurchaseOrder/{key.Year}/{Uri.EscapeDataString(key.Book)}/{key.Number}", "PurchaseOrderNumber", cancellationToken);
+
+  /// <summary>
+  /// Dokument obstaja, ko SAOP vrne 200 in v odgovoru je številka dokumenta. 400/404/204 in 500 pomenijo »ni dokumenta«
+  /// (SAOP za neobstoječo številko ne vrača enotno); 401/403 in omrežne napake so prava napaka in ustavijo zajem.
+  /// </summary>
+  private async Task<DocumentProbe> TryGetDocumentAsync(int organizationId, string relativeUrl, string numberElement, CancellationToken cancellationToken)
+  {
+    var (status, body) = await SendRawAsync(organizationId, relativeUrl, cancellationToken);
+    if (settings.DelayBetweenCallsMilliseconds > 0) await Task.Delay(settings.DelayBetweenCallsMilliseconds, cancellationToken);
+    if (status == 200)
+    {
+      try
+      {
+        var number = XDocument.Parse(body).Root?.DescendantsAndSelf()
+          .SelectMany(e => e.Elements()).FirstOrDefault(e => e.Name.LocalName == numberElement)?.Value;
+        return new DocumentProbe(string.IsNullOrWhiteSpace(number) || number == "0" ? null : body, status);
+      }
+      catch (System.Xml.XmlException)
+      {
+        return new DocumentProbe(null, status);
+      }
+    }
+    if (status is 204 or 400 or 404 or 500) return new DocumentProbe(null, status);
+    var snippet = string.IsNullOrWhiteSpace(body) ? "<prazno telo>" : body[..Math.Min(300, body.Length)];
+    throw new InvalidOperationException(
+      $"SAOP klic ni uspel. Podjetje={organizationId} Url={new Uri(http.BaseAddress!, relativeUrl)} Status={status} Uporabnik={settings.Username}. Odlomek odgovora:{Environment.NewLine}{snippet}");
+  }
+
   private async Task<string> SendAsync(int organizationId, string relativeUrl, CancellationToken cancellationToken)
+  {
+    var (status, body) = await SendRawAsync(organizationId, relativeUrl, cancellationToken);
+    if (status is >= 200 and < 300) return body;
+    var snippet = string.IsNullOrWhiteSpace(body) ? "<prazno telo>" : body[..Math.Min(300, body.Length)];
+    throw new InvalidOperationException(
+      $"SAOP klic ni uspel. Podjetje={organizationId} Url={new Uri(http.BaseAddress!, relativeUrl)} "
+      + $"Status={status} Uporabnik={settings.Username}. Odlomek odgovora:{Environment.NewLine}{snippet}");
+  }
+
+  /// <summary>Klic s ponovitvami ob prehodnih napakah; vrne kodo in telo, ne meče za neuspešno kodo.</summary>
+  private async Task<(int Status, string Body)> SendRawAsync(int organizationId, string relativeUrl, CancellationToken cancellationToken)
   {
     var maxExtra = Math.Max(0, settings.RetryMaxExtraAttempts);
     var delayMilliseconds = Math.Max(50, settings.RetryBaseDelayMilliseconds);
@@ -152,19 +204,13 @@ public sealed class SaopOrdersApiClient : IDisposable
       using var response = await http.SendAsync(request, cancellationToken);
       var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
-      if (response.IsSuccessStatusCode) return body;
-
-      if (attempt < maxExtra && IsTransient(response.StatusCode))
+      if (!response.IsSuccessStatusCode && attempt < maxExtra && IsTransient(response.StatusCode))
       {
         await Task.Delay(delayMilliseconds, cancellationToken);
         delayMilliseconds *= 2;
         continue;
       }
-
-      var snippet = string.IsNullOrWhiteSpace(body) ? "<prazno telo>" : body[..Math.Min(300, body.Length)];
-      throw new InvalidOperationException(
-        $"SAOP klic ni uspel. Podjetje={organizationId} Url={new Uri(http.BaseAddress!, relativeUrl)} "
-        + $"Status={(int)response.StatusCode} {response.ReasonPhrase} Uporabnik={settings.Username}. Odlomek odgovora:{Environment.NewLine}{snippet}");
+      return ((int)response.StatusCode, body);
     }
   }
 

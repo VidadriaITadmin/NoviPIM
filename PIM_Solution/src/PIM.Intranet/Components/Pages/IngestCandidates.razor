@@ -1,3 +1,5 @@
+@page "/izdelki/novi-artikli"
+@* Stara pot ostane, da zaznamki in povezave iz obvestil ne padejo. *@
 @page "/zajem/novi-artikli"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -13,7 +15,7 @@
 <PimPage Title="Novi artikli dobaviteljev"
          Subtitle="Dobaviteljev XML ustvari le kandidata, ne artikla v PIM-u. Urednik pregleda podatke, dopolni obvezna polja ERP in kandidata pošlje v SAOP kot nov artikel (POST). Šele povratni uvoz iz SAOP ustvari kartico v PIM-u; XML jo nato obogati."
          Crumbs="Crumbs" />
-<IngestTabs Active="candidates" />
+<PimTabs Active="novi" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 <section class="ui-card toolbar" role="search" aria-labelledby="candidate-filter-title">
   <h2 id="candidate-filter-title" class="visually-hidden">Filtriranje kandidatov za nove artikle</h2>
@@ -280,7 +282,7 @@
   /// <summary>Skupne vrednosti sifrantov ERP (enota, skupina, oddelek, dobavitelj …), ki si jih stran zapomni po podjetju za naslednjo pripravo v isti seji.</summary>
   readonly Dictionary<int, Dictionary<string, string?>> RememberedCommon = new();
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Novi artikli")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izdelki", "izdelki"), new("Novi artikli")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new(""), new("Podjetje"), new("Artikel"), new("Vir"), new("Prvič viden"), new("Nazadnje viden"),
@@ -332,7 +334,7 @@
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; DetailsId = null; await LoadAsync(); }
   string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo" : $"{Page?.Totals.TotalCount ?? 0:N0} kandidatov";
-  string FilterHref(string saopState) => "zajem/novi-artikli?saop=" + saopState + (Organization == "" ? "" : "&podjetje=" + Organization);
+  string FilterHref(string saopState) => "izdelki/novi-artikli?saop=" + saopState + (Organization == "" ? "" : "&podjetje=" + Organization);
 
   void TogglePicked(long id, ChangeEventArgs args) { if (args.Value is true) Picked.Add(id); else Picked.Remove(id); }
   void PickVisible() { foreach (var row in Page?.Rows ?? []) if (row.CanQueueForSaop) Picked.Add(row.SupplierProductCandidateId); }

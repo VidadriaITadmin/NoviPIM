@@ -1,0 +1,13 @@
+/* Izoliran slog strani /splet/izvoz. */
+.page-help { color: var(--pim-text-soft); font-size: .82rem; margin: -.5rem 0 1rem; }
+.page-help summary { color: var(--pim-accent); cursor: pointer; font-weight: 600; width: max-content; }
+.page-help p { line-height: 1.55; margin: .5rem 0 0; max-width: 60rem; }
+.field-control { color: var(--pim-text-soft); display: flex; flex-direction: column; font-size: .72rem; font-weight: 600; gap: .25rem; }
+.toolbar { align-items: flex-end; }
+.active-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin: -.5rem 0 1rem; }
+.filter-chip { align-items: center; background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); border-radius: 999px; color: var(--pim-text-strong); display: inline-flex; font-size: .78rem; gap: .4rem; padding: .25rem .65rem; text-decoration: none; }
+.chip-remove { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove::before, .chip-remove::after { background: currentColor; content: ""; height: 1.5px; left: 0; position: absolute; top: 50%; width: 100%; }
+.chip-remove::before { transform: rotate(45deg); }
+.chip-remove::after { transform: rotate(-45deg); }
+.filter-chip:focus-visible, .page-help summary:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }

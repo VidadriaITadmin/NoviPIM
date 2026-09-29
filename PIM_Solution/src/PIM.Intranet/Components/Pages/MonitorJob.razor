@@ -276,7 +276,10 @@ else
                 @Starost(vir.BasisUtc)
                 <div class="monitor-note">po @(vir.MeasureNewData ? "zadnjih novih podatkih" : "zadnjem uspešnem stiku")</div>
               </td>
-              <td class="nowrap">@MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(vir.MaxAgeSeconds))</td>
+              <td class="nowrap">
+                @MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(vir.MaxAgeSeconds))
+                @if (vir.IsMaxAgeOverridden) { <div class="monitor-note">nastavljeno na strani</div> }
+              </td>
               <td>@PimTime.FormatWithAge(vir.LastContactUtc, "nikoli")</td>
               <td>@PimTime.FormatWithAge(vir.LastNewDataUtc, "nikoli")</td>
               <td class="monitor-reason">
@@ -556,7 +559,14 @@ else
         Sprememba velja od naslednjega tika gostitelja.
       </p>
       <div class="monitor-form">
-        @if (job.IntervalSeconds is not null)
+        <label class="monitor-field">
+          <span>Teče</span>
+          <select class="filter-select" value="@(JeDnevno(job) ? "dnevno" : "razmik")" @onchange="@(e => UrejenoDnevno = e.Value?.ToString() == "dnevno")">
+            <option value="razmik">na razmik</option>
+            <option value="dnevno">enkrat na dan</option>
+          </select>
+        </label>
+        @if (!JeDnevno(job))
         {
           <label class="monitor-field">
             <span>Razmik (min)</span>
@@ -586,6 +596,46 @@ else
         </div>
       </div>
     </div>
+
+    @* Meja svežine virov (276): kdaj je vir rdeč in se odpre opozorilo. *@
+    @if (MejeVirov(posel.Sources) is { Count: > 0 } mejeVirov)
+    {
+      <div class="monitor-sub" role="group" aria-labelledby="meje-naslov">
+        <h3 id="meje-naslov">Meja svežine virov</h3>
+        <p>
+          Kako stari smejo biti podatki vira, preden je posel rdeč in pride opozorilo. Ni isto kot razmik: razmik pove,
+          kako pogosto posel teče, meja pa, koliko tekov brez novih podatkov še prenesemo (priporočeno vsaj 2× razmik).
+          Velja za vsa podjetja, od naslednjega tika gostitelja.
+        </p>
+        @foreach (var vir in mejeVirov)
+        {
+          var kljuc = MejaKljuc(vir);
+          <div class="monitor-form">
+            <label class="monitor-field">
+              <span>@vir.Label (ure)</span>
+              <input type="number" min="0.1" max="720" step="0.5" class="filter-select monitor-number"
+                     value="@MejaUreBesedilo(vir)" @onchange="@(e => NastaviMejoVira(vir, e.Value?.ToString()))" />
+            </label>
+            <div class="table-actions">
+              <button type="button" class="small-action primary-small" disabled="@(Busy || !UrejeneMejeVirov.ContainsKey(kljuc))"
+                      @onclick="() => ShraniMejoViraAsync(job, vir, MejaMinuteVira(vir))">Shrani</button>
+              @if (vir.IsMaxAgeOverridden)
+              {
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => ShraniMejoViraAsync(job, vir, null)">Nazaj na kodo</button>
+              }
+              @if (UrejeneMejeVirov.ContainsKey(kljuc))
+              {
+                <button type="button" class="small-action" disabled="@Busy" @onclick="() => { UrejeneMejeVirov.Remove(kljuc); }">Prekliči</button>
+              }
+            </div>
+            <p class="monitor-note">
+              @(vir.IsMaxAgeOverridden ? "Nastavljeno na strani." : "Iz kode.")
+              @if (vir.DefaultMaxAgeSeconds is { } izKode) { <span> Privzeto v kodi: @MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(izKode)).</span> }
+            </p>
+          </div>
+        }
+      </div>
+    }
 
     @* Postopki (ops.ScheduleProfile), ki jih koraki odprejo *@
     <div class="monitor-sub" role="group" aria-labelledby="postopki-naslov">
@@ -749,7 +799,10 @@ else
   long? CelIzpisTek;
   int? UrejeniRazmik;
   string? UrejenaUra;
+  bool? UrejenoDnevno;
   int? UrejenaMeja;
+  /// <summary>Vnesene meje svežine po viru (»postopek|vir« → minute), dokler niso shranjene.</summary>
+  readonly Dictionary<string, int> UrejeneMejeVirov = new(StringComparer.Ordinal);
   readonly CancellationTokenSource ustavi = new();
 
   string Naslov => Podrobnosti?.Job.Job.Label ?? JobCatalog.Find(JobKey)?.Label ?? JobKey;
@@ -765,7 +818,8 @@ else
 
   string OsvezenoOb => OsvezenoUtc is null ? "" : $"Osveženo ob {PimTime.FormatTime(OsvezenoUtc)}";
 
-  bool UrejaUrnik => UrejeniRazmik is not null || UrejenaUra is not null || UrejenaMeja is not null;
+  bool UrejaUrnik => UrejeniRazmik is not null || UrejenaUra is not null || UrejenaMeja is not null || UrejenoDnevno is not null
+    || UrejeneMejeVirov.Count > 0;
 
   protected override async Task OnInitializedAsync()
   {
@@ -972,13 +1026,19 @@ else
   IReadOnlyList<WorkerLogLine>? PreberiCelIzpis(JobRunRow tek) => Nadzor.ReadRunLog(tek.LogPath, null);
 
   // ── Urnik ─────────────────────────────────────────────────────────────────
-  int RazmikMinute(JobDefinitionRow job) => UrejeniRazmik ?? Math.Max(1, (job.IntervalSeconds ?? 60) / 60);
+  // Dnevni posel, preklopljen na razmik, začne pri 60 min, ne pri 1 min.
+  int RazmikMinute(JobDefinitionRow job) => UrejeniRazmik ?? (job.IntervalSeconds is { } s ? Math.Max(1, s / 60) : 60);
   string DnevnaUra(JobDefinitionRow job) => UrejenaUra ?? (job.DailyAtLocal ?? new TimeOnly(2, 30)).ToString("HH:mm", Inv);
   int MejaMinute(JobDefinitionRow job) => UrejenaMeja ?? Math.Max(1, job.TimeoutSeconds / 60);
 
+  // Preklop razmik ↔ dnevna ura: posel ima v bazi eno ali drugo (CK_JobDefinition_Schedule), zato izbira na strani
+  // odloči, katero od obeh polj se shrani. Brez izbire je bilo mogoče urejati samo tisto, kar je posel že imel.
+  bool JeDnevno(JobDefinitionRow job) => UrejenoDnevno ?? job.IntervalSeconds is null;
+
   bool UrnikSpremenjen(JobDefinitionRow job) =>
-    (job.IntervalSeconds is { } razmik && UrejeniRazmik is { } novRazmik && novRazmik != Math.Max(1, razmik / 60))
-    || (job.IntervalSeconds is null && UrejenaUra is { } novaUra && novaUra != (job.DailyAtLocal ?? new TimeOnly(2, 30)).ToString("HH:mm", Inv))
+    JeDnevno(job) != (job.IntervalSeconds is null)
+    || (!JeDnevno(job) && UrejeniRazmik is { } novRazmik && novRazmik != Math.Max(1, (job.IntervalSeconds ?? 60) / 60))
+    || (JeDnevno(job) && UrejenaUra is { } novaUra && novaUra != (job.DailyAtLocal ?? new TimeOnly(2, 30)).ToString("HH:mm", Inv))
     || (UrejenaMeja is { } novaMeja && novaMeja != Math.Max(1, job.TimeoutSeconds / 60));
 
   void NastaviRazmik(string? vnos) { if (int.TryParse(vnos, out var minute) && minute is >= 1 and <= 1440) UrejeniRazmik = minute; }
@@ -990,12 +1050,48 @@ else
     UrejeniRazmik = null;
     UrejenaUra = null;
     UrejenaMeja = null;
+    UrejenoDnevno = null;
+    UrejeneMejeVirov.Clear();
+  }
+
+  // ── Meja svežine virov (276) ─────────────────────────────────────────────
+  // Vir je v Sources enkrat na podjetje; meja velja za vir, zato ena vrstica na vir. Baza pred 276
+  // (DefaultMaxAgeSeconds null) urejanja ne pozna — tedaj se razdelek ne pokaže.
+  static IReadOnlyList<SourceStateRow> MejeVirov(IReadOnlyList<SourceStateRow> viri) =>
+    viri.Where(vir => vir.DefaultMaxAgeSeconds is not null)
+      .GroupBy(MejaKljuc).Select(skupina => skupina.First()).ToList();
+
+  static string MejaKljuc(SourceStateRow vir) => $"{vir.Pipeline}|{vir.SourceCode}";
+
+  int MejaMinuteVira(SourceStateRow vir) =>
+    UrejeneMejeVirov.TryGetValue(MejaKljuc(vir), out var minute) ? minute : Math.Max(1, vir.MaxAgeSeconds / 60);
+
+  string MejaUreBesedilo(SourceStateRow vir) => Math.Round(MejaMinuteVira(vir) / 60d, 2).ToString("0.##", Inv);
+
+  // Ure z decimalko (vejica ali pika): 0,5 = 30 min, 36 = 1 dan 12 h. Neveljaven vnos se prezre.
+  void NastaviMejoVira(SourceStateRow vir, string? vnos)
+  {
+    if (!double.TryParse(vnos?.Replace(',', '.'), global::System.Globalization.NumberStyles.Float, Inv, out var ure)) return;
+    var minute = (int)Math.Round(ure * 60);
+    if (minute is < 1 or > 43200) return;
+    var kljuc = MejaKljuc(vir);
+    if (minute == Math.Max(1, vir.MaxAgeSeconds / 60)) UrejeneMejeVirov.Remove(kljuc);
+    else UrejeneMejeVirov[kljuc] = minute;
+  }
+
+  Task ShraniMejoViraAsync(JobDefinitionRow job, SourceStateRow vir, int? minute)
+  {
+    var opis = minute is { } m ? MonitorPolicy.AgeLabel(TimeSpan.FromMinutes(m))
+      : $"iz kode ({MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(vir.DefaultMaxAgeSeconds ?? vir.MaxAgeSeconds))})";
+    return IzvediAsync(() => Nadzor.SaveSourceMaxAgeAsync(job.JobKey, vir.Pipeline, vir.SourceCode, minute, Uporabnik),
+      $"{vir.Label}: meja svežine je {opis}. Opozorilo jo upošteva od naslednjega tika gostitelja.",
+      "Meje svežine ni bilo mogoče shraniti", ponastaviUrnik: true);
   }
 
   Task ShraniUrnikAsync(JobDefinitionRow job)
   {
-    int? razmik = job.IntervalSeconds is not null ? RazmikMinute(job) : null;
-    TimeOnly? ura = job.IntervalSeconds is null ? TimeOnly.ParseExact(DnevnaUra(job), "HH:mm", Inv) : null;
+    int? razmik = JeDnevno(job) ? null : RazmikMinute(job);
+    TimeOnly? ura = JeDnevno(job) ? TimeOnly.ParseExact(DnevnaUra(job), "HH:mm", Inv) : null;
     var meja = MejaMinute(job);
     var opis = $"{JobCatalog.FormatSchedule(razmik * 60, ura)}, meja {meja} min";
     return IzvediAsync(() => Nadzor.SaveJobScheduleAsync(job.JobKey, razmik, ura, meja, Uporabnik),

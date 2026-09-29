@@ -1,0 +1,5 @@
+.missing-panel { max-width: 64rem; }
+.missing-title { font-size: .95rem; margin: .25rem 0 .6rem; }
+.missing-title:not(:first-child) { margin-top: 1.25rem; }
+.missing-row { align-items: center; display: flex; gap: .55rem; padding: .3rem 0; }
+.missing-row input[type="checkbox"] { flex: 0 0 auto; height: 1rem; width: 1rem; }

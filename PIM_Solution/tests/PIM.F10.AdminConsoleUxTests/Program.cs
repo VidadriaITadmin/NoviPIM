@@ -27,7 +27,7 @@ var services = Path.Combine(root, "src", "PIM.Intranet", "Services");
 foreach (var (file, route) in new[]
 {
   ("AdminActivity.razor", "/sistem/sled"),
-  ("AdminSelfTest.razor", "/sistem/samotest"),
+  // 2026-09-24: stran samotesta je odstranjena (uporabnik: neuporabna), glej razdelek 2.
 })
 {
   var markup = Read(Path.Combine(pages, file));
@@ -52,7 +52,7 @@ foreach (var odstranjena in new[]
   "System.razor", "System.razor.css", "SystemJobs.razor", "SystemJobs.razor.css",
   "SystemJobRuns.razor", "SystemJobRuns.razor.css", "SystemIntegrations.razor", "SystemIntegrations.razor.css",
   "SystemErrors.razor", "SystemErrors.razor.css", "AdminPerformance.razor", "AdminPerformance.razor.css",
-  "AdminExports.razor", "AdminExports.razor.css",
+  "AdminExports.razor", "AdminExports.razor.css", "AdminSelfTest.razor", "AdminSelfTest.razor.css",
 })
   Assert(!File.Exists(Path.Combine(pages, odstranjena)), "Stara stran nadzora se ne sme vrniti: " + odstranjena);
 Assert(!Directory.Exists(Path.Combine(root, "tests", "PIM.F10.SystemIntegrationsUxTests")),
@@ -286,8 +286,8 @@ Assert(pimTab.Contains("class SistemskeZadeveTabs", StringComparison.Ordinal),
   "Uporabniki/vloge/mape morajo imeti svoj locen seznam zavihkov, locen od nadzora.");
 
 var activity = Read(Path.Combine(pages, "AdminActivity.razor"));
-var selfTestPage = Read(Path.Combine(pages, "AdminSelfTest.razor"));
-foreach (var (page, active) in new[] { (activity, "sled"), (selfTestPage, "samotest") })
+var runsPage = Read(Path.Combine(pages, "IngestRuns.razor"));
+foreach (var (page, active) in new[] { (activity, "sled"), (runsPage, "teki") })
 {
   Assert(page.Contains("<PimTabs", StringComparison.Ordinal) && page.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
     "Vsaka stran nadzora mora prikazati skupni zavihek NadzorTabs.");
@@ -301,18 +301,17 @@ foreach (var page in new[] { users, roles, paths })
   Assert(page.Contains("<PimTabs", StringComparison.Ordinal) && page.Contains("SistemskeZadeveTabs.Tabs", StringComparison.Ordinal),
     "Uporabniki, vloge in mesta shranjevanja morajo prikazati skupni zavihek SistemskeZadeveTabs.");
 
-// Koraki zadnjega samotesta (prej cela tabela na pregledu, "oblacki") so se preselili na svojo stran.
-Assert(selfTestPage.Contains("SelfTestSteps", StringComparison.Ordinal),
-  "Koraki zadnjega zagona morajo biti na strani /sistem/samotest.");
+Assert(runsPage.Contains("@page \"/sistem/teki\"", StringComparison.Ordinal) && runsPage.Contains("@page \"/zajem/teki\"", StringComparison.Ordinal),
+  "Teki so pod Nadzorom sistema (sistem/teki); stara pot zajem/teki ostane za obstoječe povezave.");
 
-// Blok 7: Nadzor ima natanko tri zavihke — Nadzor, Samotest in Sled sprememb. Opravila, Zagoni,
+// Blok 7: Nadzor ima natanko tri zavihke — Nadzor, Teki in Sled sprememb (2026-09-24: Samotest odstranjen). Opravila, Zagoni,
 // Alarmi in Izvozi so del strani posla, ne zavihki.
 var nadzorTabsStart = pimTab.IndexOf("class NadzorTabs", StringComparison.Ordinal);
 var nadzorTabs = pimTab[nadzorTabsStart..pimTab.IndexOf("];", nadzorTabsStart, StringComparison.Ordinal)];
-foreach (var zavihek in new[] { "new(\"nadzor\", \"Nadzor\", \"sistem\"", "new(\"samotest\", \"Samotest\", \"sistem/samotest\"", "new(\"sled\", \"Sled sprememb\", \"sistem/sled\"" })
+foreach (var zavihek in new[] { "new(\"nadzor\", \"Nadzor\", \"sistem\"", "new(\"teki\", \"Teki\", \"sistem/teki\"", "new(\"sled\", \"Sled sprememb\", \"sistem/sled\"" })
   Assert(nadzorTabs.Contains(zavihek, StringComparison.Ordinal), "Zavihkom nadzora manjka: " + zavihek);
 Assert(nadzorTabs.Split("new(", StringSplitOptions.None).Length - 1 == 3, "Nadzor ima natanko tri zavihke.");
-foreach (var odstranjen in new[] { "\"opravila\"", "\"zagoni\"", "\"alarmi\"", "\"izvozi\"", "\"pregled\"", "\"sistem/opravila\"", "\"sistem/zagoni\"", "\"sistem/integracije\"" })
+foreach (var odstranjen in new[] { "\"samotest\"", "\"opravila\"", "\"zagoni\"", "\"alarmi\"", "\"izvozi\"", "\"pregled\"", "\"sistem/opravila\"", "\"sistem/zagoni\"", "\"sistem/integracije\"" })
   Assert(!nadzorTabs.Contains(odstranjen, StringComparison.Ordinal), "Odstranjen zavihek nadzora se ne sme vrniti: " + odstranjen);
 
 var accessCatalog = Read(Path.Combine(services, "PimAccessCatalog.cs"));

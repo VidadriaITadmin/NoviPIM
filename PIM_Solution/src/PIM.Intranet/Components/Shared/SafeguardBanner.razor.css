@@ -1,0 +1,13 @@
+.safeguard-banner { align-items: center; border-left: 4px solid; display: flex; gap: 1rem; justify-content: space-between; padding: 1rem 1.25rem; }
+.safeguard-banner h2 { font-size: 1.05rem; margin: 0 0 .25rem; }
+.safeguard-banner p { margin: .15rem 0; }
+.safeguard-waiting { background: var(--pim-bad-bg); border-color: var(--pim-bad-text); }
+.safeguard-waiting h2 { color: var(--pim-bad-strong); }
+.safeguard-confirmed { background: var(--pim-good-bg); border-color: var(--pim-good-bar); }
+.safeguard-banner-headline { font-weight: 600; }
+.safeguard-banner-meta { color: var(--pim-text-muted); font-size: .8125rem; }
+.safeguard-line { align-items: center; color: var(--pim-text-soft); display: flex; flex-wrap: wrap; font-size: .875rem; gap: .4rem; margin: 0; }
+
+@media (max-width: 720px) {
+  .safeguard-banner { align-items: stretch; flex-direction: column; }
+}

@@ -1,0 +1,17 @@
+@* Aktivni filtri kot čipi z × in »Počisti filtre« (prenova 2026-09-26). Isti vzorec kot na
+   Izdelkih; tu kot gradnik področja Zajem, da ga sedem seznamov ne prepiše sedemkrat. *@
+@if (Chips.Count > 0)
+{
+  <div class="ingest-chips" role="group" aria-label="Aktivni filtri">
+    @foreach (var chip in Chips)
+    {
+      <a class="ingest-chip" href="@chip.RemoveHref" aria-label="@($"Odstrani filter {chip.Label}")">@chip.Label<span class="ingest-chip-x" aria-hidden="true"></span></a>
+    }
+    <a class="ingest-chip ingest-chip-clear" href="@ClearHref">Počisti filtre</a>
+  </div>
+}
+
+@code {
+  [Parameter, EditorRequired] public required IReadOnlyList<IngestChip> Chips { get; set; }
+  [Parameter, EditorRequired] public required string ClearHref { get; set; }
+}

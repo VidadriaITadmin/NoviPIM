@@ -1,0 +1,4 @@
+/* Izoliran slog strani /izvozi/profili/{id}. */
+.card-title { color: var(--pim-text-strong); font-size: .95rem; margin: 0; padding: .85rem .85rem .25rem; }
+.preview-table { font-size: .75rem; white-space: nowrap; }
+.preview-table td { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }

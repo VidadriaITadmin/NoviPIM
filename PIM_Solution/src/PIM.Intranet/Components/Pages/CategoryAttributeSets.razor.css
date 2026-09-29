@@ -100,3 +100,37 @@ tr.editor-row > td { background: var(--pim-surface-subtle); padding: .8rem 1rem 
 }
 
 .unknown-panel p { font-size: .85rem; margin: 0; }
+
+/* --- 2026-09-29: izbira vrstic nabora, mnozicna dejanja, potrditev, razveljavitev ------------ */
+
+.set-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem .8rem; }
+.set-toolbar .pim-selection { flex: 1 1 auto; margin-bottom: 0; }
+
+.attribute-set .check-cell { width: 2rem; }
+.attribute-set .check-cell input { accent-color: var(--pim-primary); }
+.attribute-set tr.is-selected td { background: var(--pim-info-bg); }
+.attribute-set td.zero-value { color: var(--pim-warn-text); font-weight: 600; }
+
+.danger-action { border-color: var(--pim-bad-border); color: var(--pim-bad-text); }
+
+.danger-button {
+  background: var(--pim-bad-text); border: 1px solid var(--pim-bad-text); border-radius: var(--pim-radius-sm); color: #fff;
+  cursor: pointer; font: inherit; font-size: .875rem; font-weight: 600; min-height: var(--pim-control-height); padding: .45rem .85rem;
+}
+.danger-button:hover:not(:disabled) { background: var(--pim-bad-strong); border-color: var(--pim-bad-strong); }
+.danger-button:disabled { cursor: default; opacity: .5; }
+.danger-button:focus-visible, .danger-action:focus-visible { outline: 2px solid var(--pim-bad-strong); outline-offset: 2px; }
+
+.confirm-panel {
+  background: var(--pim-bad-bg); border: 1px solid var(--pim-bad-border); border-radius: var(--pim-radius-sm);
+  display: flex; flex-direction: column; gap: .4rem; padding: .7rem .9rem;
+}
+.confirm-panel p { margin: 0; }
+.confirm-panel ul { font-size: .85rem; margin: 0; padding-left: 1.2rem; }
+
+.undo-panel {
+  align-items: center; background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); border-radius: var(--pim-radius-sm);
+  display: flex; flex-wrap: wrap; font-size: .85rem; gap: .6rem; justify-content: space-between; padding: .45rem .8rem;
+}
+/* Izlocen atribut ni v naboru (na kartici, v validaciji in izvozu ga ni); vrstica je samo razlaga, zakaj. */
+.attribute-set tr.is-excluded td:nth-child(2) { color: var(--pim-text-muted); text-decoration: line-through; }

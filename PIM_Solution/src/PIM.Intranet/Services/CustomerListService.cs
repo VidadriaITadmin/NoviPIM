@@ -32,6 +32,24 @@ public sealed record CustomerListRow(
   decimal? Tier3Threshold, decimal? Tier3Percent,
   string? GroupDiscounts, string? SpecialDiscounts, string? ExportGroupDiscounts)
 {
+  /* 279: polja iz intranet.GetCustomerListExtra (baza kupcev ViD). */
+
+  /// <summary>Referent iz SAOP (SalesClerkID) in njegovo ime iz pim.SalesClerk.</summary>
+  public string? SalesClerkCode { get; init; }
+  public string? SalesClerkName { get; init; }
+  /// <summary>Skrbnik, kot ga vodi prodaja (ročno, ni nujno SAOP referent).</summary>
+  public string? AccountManager { get; init; }
+  public string? DeliveryNoteEmail { get; init; }
+  public string? NoticeEmail { get; init; }
+  public string? NoticePerson { get; init; }
+  /// <summary>Dodatni popust stranke po skupini (P2) »SKUPINA=%« ločen z » | «; obračuna se za osnovnim.</summary>
+  public string? ExtraGroupDiscounts { get; init; }
+  /// <summary>Zaznamki stranke, najnovejši prvi, vsak v svoji vrstici »d. M. yyyy: besedilo«.</summary>
+  public string? Notes { get; init; }
+
+  public string? SalesClerkLabel => SalesClerkCode is null ? null : SalesClerkName is null ? SalesClerkCode : $"{SalesClerkCode} {SalesClerkName}";
+  public int ExtraGroupDiscountCount => CountItems(ExtraGroupDiscounts);
+
   public string RoleLabel => CustomerRoles.Label(IsBuyer, IsSupplier, IsManufacturer);
   public string RoleSourceLabel => CustomerRoles.SourceLabel(RoleSource);
   public bool HasOwnTiers => Tier1Threshold is not null || Tier2Threshold is not null || Tier3Threshold is not null;
@@ -91,7 +109,7 @@ public static class CustomerRoles
 /// <param name="Activity">ACTIVE ali INACTIVE.</param>
 /// <param name="Source">Vir vloge: MANUAL, PRODUCTS, SAOP, TYPE, DEFAULT.</param>
 /// <param name="Export">YES ali NO — ali gre v stranke.csv.</param>
-/// <param name="Discount">PACKAGING, VALUE, B2BPLUS, OWN_TIERS, GROUP, SPECIAL, EXPORT_GROUPS ali NONE.</param>
+/// <param name="Discount">PACKAGING, VALUE, B2BPLUS, OWN_TIERS, GROUP, SPECIAL, EXTRA, EXPORT_GROUPS ali NONE.</param>
 /// <param name="Magento">YES ali NO — ali ima Magento skupino.</param>
 public sealed record CustomerListQuery(
   int? OrganizationId = null, string? Role = null, string? Search = null, string? Type = null,
@@ -169,6 +187,36 @@ public sealed class CustomerListService(IConfiguration configuration)
         PimDb.NullableDecimal(reader, "Tier3Threshold"), PimDb.NullableDecimal(reader, "Tier3Percent"),
         PimDb.Text(reader, "GroupDiscounts"), PimDb.Text(reader, "SpecialDiscounts"), PimDb.Text(reader, "ExportGroupDiscounts")));
     }
+    await reader.CloseAsync();
+
+    // 279: referent, skrbnik, e-pošta za dobavnice in obveščanje, dodatni popust, zaznamki — ločeno
+    // branje, da se intranet.GetCustomerList ne prepisuje. Vrne samo stranke, ki kaj od tega imajo.
+    var extra = new Dictionary<long, CustomerListRow>();
+    await using (var extraCommand = new SqlCommand("intranet.GetCustomerListExtra", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 120,
+    })
+    {
+      extraCommand.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
+      var byId = rows.Select((row, index) => (row.CustomerId, index)).ToDictionary(pair => pair.CustomerId, pair => pair.index);
+      await using var extraReader = await extraCommand.ExecuteReaderAsync(cancellationToken);
+      while (await extraReader.ReadAsync(cancellationToken))
+      {
+        if (!byId.TryGetValue(PimDb.Int64(extraReader, "CustomerId"), out var index)) continue;
+        rows[index] = rows[index] with
+        {
+          SalesClerkCode = PimDb.Text(extraReader, "SalesClerkCode"),
+          SalesClerkName = PimDb.Text(extraReader, "SalesClerkName"),
+          AccountManager = PimDb.Text(extraReader, "AccountManager"),
+          DeliveryNoteEmail = PimDb.Text(extraReader, "DeliveryNoteEmail"),
+          NoticeEmail = PimDb.Text(extraReader, "NoticeEmail"),
+          NoticePerson = PimDb.Text(extraReader, "NoticePerson"),
+          ExtraGroupDiscounts = PimDb.Text(extraReader, "ExtraGroupDiscounts"),
+          Notes = PimDb.Text(extraReader, "Notes"),
+        };
+      }
+    }
 
     return rows;
   }
@@ -216,9 +264,10 @@ public sealed class CustomerListService(IConfiguration configuration)
     "OWN_TIERS" => row.HasOwnTiers,
     "GROUP" => row.GroupDiscountCount > 0,
     "SPECIAL" => row.SpecialDiscountCount > 0,
+    "EXTRA" => row.ExtraGroupDiscountCount > 0,
     "EXPORT_GROUPS" => row.ExportGroupDiscounts is not null,
     "NONE" => !row.PackagingDiscountEnabled && !row.ValueDiscountEnabled && !row.B2bPlusEnabled && !row.HasOwnTiers
-      && row.GroupDiscountCount == 0 && row.SpecialDiscountCount == 0,
+      && row.GroupDiscountCount == 0 && row.SpecialDiscountCount == 0 && row.ExtraGroupDiscountCount == 0,
     _ => true,
   };
 }

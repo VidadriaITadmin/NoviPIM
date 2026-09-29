@@ -53,7 +53,10 @@
       </label>
       <label class="form-field">Jezik
         <select class="filter-select" @bind="NewLanguage">
-          @foreach (var language in Languages) { <option value="@language">@language</option> }
+          @foreach (var language in Languages)
+          {
+            <option value="@language">@(language == UnifyLanguage ? "ENOTNO – enak zapis v vseh jezikih" : language)</option>
+          }
         </select>
       </label>
       <label class="form-field">Ciljna vrednost
@@ -70,6 +73,10 @@
       @foreach (var domain in Domains) { <option value="@domain.Domain"></option> }
     </datalist>
     <p class="card-note">Za isti jezik, domeno in izvorno vrednost obstaja samo ena vrstica. Če že obstaja, jo poišči spodaj in uredi.</p>
+    <p class="card-note"><strong>ENOTNO</strong> poenoti zapis iste vrednosti (npr. domena »Napetost«: »220-230« → »~220-230«).
+      Takoj velja za katalog.csv in za vsak nov zajem; vrednost, ki je že v PIM, se zamenja ob naslednjem zajemu.
+      Domena je slovensko ime lastnosti.
+      Napetost, frekvenca, presledki in decimalna vejica se poenotijo že samodejno, v slovar vpiši samo izjeme.</p>
   </div>
 </details>
 
@@ -153,7 +160,9 @@
 @code {
   IReadOnlyList<ValueLookupRow> Rows = [];
   IReadOnlyList<ValueDomainRow> Domains = [];
-  static readonly IReadOnlyList<string> Languages = ["SL", "DE", "HR", "EN", "IT"];
+  /* 291: ENOTNO ni jezik, ampak poenotenje zapisa, ki ga uporabi pim.NormalizeAttributeValue (zajem, PIM, katalog.csv). */
+  const string UnifyLanguage = "ENOTNO";
+  static readonly IReadOnlyList<string> Languages = ["SL", "DE", "HR", "EN", "IT", UnifyLanguage];
   string Domain = "";
   string Search = "";
   string State = "";

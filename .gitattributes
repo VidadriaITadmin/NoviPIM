@@ -1,0 +1,2 @@
+# Skripte tokov: brez CR (orodje Workflow zavrne kontrolne znake).
+.claude/workflows/*.js text eol=lf

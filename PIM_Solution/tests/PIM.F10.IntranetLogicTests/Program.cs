@@ -70,11 +70,22 @@ Expect(!navRoutes.Contains("izvozi"), "»Izvozni profili in datoteke« je podvaj
 Expect(!navRoutes.Contains("partnerji"), "Partnerji odpadejo: stranke se locijo po vrsti (kupec, dobavitelj, proizvajalec).");
 Expect(navRoutes.Distinct().Count() == navRoutes.Count, "Vsaka destinacija sme biti v meniju natanko enkrat.");
 
-foreach (var retired in new[] { "Zajem in preslikave", "Validacija in vrzeli", "SAOP — pisanje nazaj", "Splet — kaj gre ven", "Izvozni profili in datoteke", "Partnerji" })
+foreach (var retired in new[] { "Zajem podatkov", "Zajem in preslikave", "Validacija in vrzeli", "SAOP — pisanje nazaj", "Splet — kaj gre ven", "Izvozni profili in datoteke", "Partnerji" })
   Expect(!navLabels.Contains(retired), $"Ime »{retired}« je uporabnik zavrnil in se ne sme vrniti.");
 
-foreach (var expected in new[] { "Zajem podatkov", "Kakovost podatkov", "Izhod v SAOP", "Izhod na splet" })
+foreach (var expected in new[] { "Kakovost podatkov", "Izhod v SAOP", "Izhod na splet" })
   Expect(navLabels.Contains(expected), $"V meniju manjka postavka »{expected}«.");
+
+// 2026-09-24: področje »Vhodni podatki« je odpadlo. Zajem je nadzor, novi artikli so pod Izdelki.
+Expect(PimNavigation.Sections.All(section => section.Title != "Vhodni podatki"), "Skupine »Vhodni podatki« v meniju ni več.");
+Expect(PimAccessCatalog.Resolve("sistem/teki") == "tab.ingest.runs" && PimAccessCatalog.Resolve("sistem/teki/00000000-0000-0000-0000-000000000001") == "tab.ingest.runs",
+  "Teki so pod Nadzorom sistema z istim ključem pravic.");
+Expect(PimAccessCatalog.Resolve("sistem/samotest") is null || PimAccessCatalog.Resolve("sistem/samotest") != "view.system.self-test", "Samotest je odstranjen.");
+Expect(PimLifecycle.ResolveLifecycleArea("izdelki/novi-artikli") == PimLifecycle.Catalog, "Novi artikli so v PIM katalogu (Izdelki).");
+Expect(PimLifecycle.ResolveLifecycleArea("pravila/preslikave") == PimLifecycle.Governance, "Preslikave so pravila (Upravljanje).");
+Expect(PimAccessCatalog.Resolve("izdelki/novi-artikli") == "view.ingest.candidates" && PimAccessCatalog.Resolve("zajem/novi-artikli") == "view.ingest.candidates",
+  "Nova in stara pot novih artiklov imata isti dodeljeni ključ pravic.");
+Expect(PimAccessCatalog.ChildrenOf(PimAccessCatalog.Products).Any(child => child.Key == "view.ingest.candidates"), "Novi artikli so pogled Izdelkov.");
 
 WorkerConsoleChecks.Run();
 JobCatalogChecks.Run();

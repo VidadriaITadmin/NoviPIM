@@ -1,0 +1,107 @@
+@* Mesečni trend (284): stolpci = to obdobje, črta = isti mesec lani. Brez knjižnice, čisti SVG,
+   da ga strežnik izriše takoj; bralniki zaslona dobijo isto kot tabelo pod grafom. *@
+@using System.Globalization
+
+<figure class="trend">
+  <figcaption class="trend-caption">
+    <span class="trend-title">@Caption</span>
+    <span class="trend-legend" aria-hidden="true">
+      <span class="legend-bar"></span>@CurrentLabel
+      @if (HasCompare) { <span class="legend-line"></span>@CompareLabel }
+    </span>
+  </figcaption>
+
+  @if (Points.Count == 0 || Max <= 0)
+  {
+    <p class="trend-empty">@EmptyText</p>
+  }
+  else
+  {
+    <svg class="trend-svg" viewBox="0 0 @Width @Height" role="img" aria-label="@AriaSummary">
+      @for (var g = 0; g <= 3; g++)
+      {
+        var gy = Top + PlotHeight - PlotHeight * g / 3.0;
+        <line class="trend-grid" x1="@Left" x2="@(Width - 4)" y1="@F(gy)" y2="@F(gy)" />
+        @Axis(Left - 6, gy + 3, "end", Short(Max * g / 3m))
+      }
+      @for (var i = 0; i < Points.Count; i++)
+      {
+        var point = Points[i];
+        var x = Left + Slot * i;
+        var h = PlotHeight * (double)(Math.Max(0, point.Value) / Max);
+        <rect class="trend-bar @(i == Points.Count - 1 ? "current" : null)" x="@F(x + Slot * .18)" y="@F(Top + PlotHeight - h)" width="@F(Slot * .64)" height="@F(Math.Max(h, 0))" rx="2">
+          <title>@point.Label: @Format(point.Value)@(point.Compare is { } c ? $" (lani {Format(c)})" : "")</title>
+        </rect>
+        @if (i % LabelEvery == 0 || i == Points.Count - 1)
+        {
+          @Axis(x + Slot / 2, Height - 4, "middle", point.Label)
+        }
+      }
+      @if (HasCompare)
+      {
+        <polyline class="trend-line" points="@ComparePoints" />
+      }
+    </svg>
+
+    <table class="visually-hidden">
+      <caption>@Caption</caption>
+      <thead><tr><th scope="col">Mesec</th><th scope="col">@CurrentLabel</th>@if (HasCompare) { <th scope="col">@CompareLabel</th> }</tr></thead>
+      <tbody>
+        @foreach (var point in Points)
+        {
+          <tr><th scope="row">@point.Label</th><td>@Format(point.Value)</td>@if (HasCompare) { <td>@(point.Compare is { } c ? Format(c) : "—")</td> }</tr>
+        }
+      </tbody>
+    </table>
+  }
+</figure>
+
+@code {
+  public sealed record Point(string Label, decimal Value, decimal? Compare = null);
+
+  [Parameter, EditorRequired] public required IReadOnlyList<Point> Points { get; set; }
+  [Parameter, EditorRequired] public required string Caption { get; set; }
+  [Parameter] public string CurrentLabel { get; set; } = "Letos";
+  [Parameter] public string CompareLabel { get; set; } = "Lani";
+  [Parameter] public string Unit { get; set; } = "";
+  [Parameter] public int Decimals { get; set; }
+  [Parameter] public string EmptyText { get; set; } = "Ni podatkov za graf.";
+
+  const int Width = 720, Height = 220, Left = 52, Top = 10, Bottom = 22;
+  double PlotHeight => Height - Top - Bottom;
+  double Slot => (Width - Left - 4) / (double)Math.Max(1, Points.Count);
+  int LabelEvery => Points.Count > 18 ? 3 : Points.Count > 12 ? 2 : 1;
+  bool HasCompare => Points.Any(p => p.Compare is not null);
+  decimal Max => Points.Count == 0 ? 0 : Nice(Points.Max(p => Math.Max(p.Value, p.Compare ?? 0)));
+
+  string ComparePoints => string.Join(" ", Points.Select((p, i) => p.Compare is { } c
+    ? $"{F(Left + Slot * i + Slot / 2)},{F(Top + PlotHeight - PlotHeight * (double)(Math.Max(0, c) / Max))}" : null).Where(s => s is not null));
+
+  string AriaSummary
+  {
+    get
+    {
+      var total = Points.Sum(p => p.Value);
+      var best = Points.MaxBy(p => p.Value);
+      return $"{Caption}. Skupaj {Format(total)}; najmočnejši mesec {best?.Label} ({Format(best?.Value ?? 0)}).";
+    }
+  }
+
+  static decimal Nice(decimal value)
+  {
+    if (value <= 0) return 0;
+    var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)value)));
+    foreach (var step in new[] { 1m, 1.5m, 2m, 2.5m, 3m, 4m, 5m, 6m, 8m, 10m })
+      if (value <= step * magnitude) return step * magnitude;
+    return 10 * magnitude;
+  }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+  // <text> je v Razorju rezervirana oznaka, zato SVG besedilo osi nastane kot kodirana oznaka.
+  static MarkupString Axis(double x, double y, string anchor, string content) =>
+    new($"<text class=\"trend-axis\" x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+  string Format(decimal value) => value.ToString("N" + Decimals, Sl) + (Unit.Length > 0 ? " " + Unit : "");
+  static string Short(decimal value) => value >= 1_000_000 ? (value / 1_000_000m).ToString("0.#", Sl) + " mio"
+    : value >= 10_000 ? (value / 1000m).ToString("0", Sl) + " tis." : value.ToString("N0", Sl);
+}

@@ -270,19 +270,13 @@
         </div>
       </section>
 
-      <section class="ui-card data-card section-gap">
-        <div class="subsection-head"><h2>Posebni popusti za stranko</h2><span>odstopanje od popusta na polno pakiranje pri posameznem izdelku</span></div>
-        <PimState Empty="@(Card.SpecialDiscounts.Count == 0)" EmptyText="Stranka nima posebnih popustov na izdelek.">
-          <PimTable Caption="Posebni popusti stranke po izdelku" Columns="SpecialColumns">
-            <Rows>
-              @foreach (var row in Card.SpecialDiscounts)
-              {
-                <tr><td><span class="code-value">@(row.ItemId ?? "—")</span></td><td>@row.DiscountCode</td><td>@Day(row.ValidFrom) – @Day(row.ValidTo)</td><td><PimChip Text="@(row.IsActive ? "Velja" : "Ne velja")" Tone="@(row.IsActive ? "good" : null)" /></td></tr>
-              }
-            </Rows>
-          </PimTable>
-        </PimState>
-      </section>
+      @* 274: posebni S stranke in njenega tipa — pravila (artikel, rabatna skupina, S koda, vsi) in
+         seznam izdelkov, pri katerih stranka dobi drug S kot privzeti. *@
+      @if (OrganizationId is int organizationForPackaging)
+      {
+        <CustomerPackagingPanel OrganizationId="organizationForPackaging" CustomerId="CustomerId" CustomerKey="@general.CustomerKey"
+                                Version="@($"{general.CustomerTypeCode}|{general.PackagingDiscountEnabled}")" />
+      }
     </section>
 
     <section id="panel-branches" role="tabpanel" aria-labelledby="tab-branches" hidden="@(Section != "branches")">
@@ -441,7 +435,6 @@
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Stranke", "stranke"), new("Kartica")];
   static readonly IReadOnlyList<PimColumn> GroupColumns = [new("Skupina artiklov"), new("Popust", true), new("Najmanj kos", true), new("Velja"), new("Vir")];
   static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja", true), new("Prag", true), new("Popust", true), new("Stanje")];
-  static readonly IReadOnlyList<PimColumn> SpecialColumns = [new("Izdelek"), new("Koda popusta"), new("Velja"), new("Stanje")];
   static readonly IReadOnlyList<PimColumn> BranchColumns = [new("Vrsta"), new("Enota"), new("Opomba"), new("Dodal"), new("Dodano")];
   static readonly IReadOnlyList<PimColumn> HistoryColumns = [new("Entiteta"), new("Dejanje"), new("Stara vrednost"), new("Nova vrednost"), new("Spremenil"), new("Čas")];
 

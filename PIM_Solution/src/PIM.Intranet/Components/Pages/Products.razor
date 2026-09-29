@@ -11,10 +11,12 @@
 @inject ProductWorkbookService Workbook
 @inject IJSRuntime Js
 @inject AuthenticationStateProvider Authentication
+@inject PackagingDiscountService Packaging
 
 <PageTitle>Izdelki</PageTitle>
 
 <PimPage Title="Izdelki" Subtitle="Delovni seznam kataloga vseh podjetij: kaj je pripravljeno za ERP, kaj za splet in kaj manjka. Privzeto so vsa podjetja; filter zoži na eno." />
+<PimTabs Active="seznam" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 <section class="ui-card toolbar" role="search" aria-labelledby="products-filter-title">
   <h2 id="products-filter-title" class="visually-hidden">Filtriranje izdelkov</h2>
@@ -60,6 +62,7 @@
         Izvozi Excel @ExportScopeLabel
       </button>
       <a class="ghost-button" href="izdelki/uvoz" title="Urejena datoteka se vrne v PIM: spletni podatki takoj, ERP polja v vrsto za SAOP.">Uvozi Excel</a>
+      <a class="ghost-button" href="izdelki/odprodaja" title="Artikli v odprodaji: ročni vnos, uvoz seznama iz Excela, razstavni eksponat.">Odprodaja</a>
     </div>
   </div>
 
@@ -181,6 +184,38 @@
           <option value="FULL">100 %</option>
         </select>
       </div>
+
+      @* 274: S-popust na polno pakiranje. Privzeta S koda izdelka, rabatna skupina (SAOP) in
+         posebni S po tipu stranke ali po stranki — isto, kar gre v katalog.csv. *@
+      <div class="filter-field">
+        <label for="product-scode">S-popust (privzeti)</label>
+        <select id="product-scode" class="filter-select" @bind="PackagingDraft">
+          <option value="">Vsi</option>
+          <option value="ANY">Ima S kodo</option>
+          <option value="NONE">Brez S kode</option>
+          @foreach (var sCode in PackagingCodes) { <option value="@sCode.Code">@sCode.Code (@sCode.Percent.ToString("0.##") %)</option> }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-discount-group">Rabatna skupina</label>
+        <PimPicker Id="product-discount-group" Options="DiscountGroupOptions" @bind-Value="DiscountGroupDraftOrNull"
+                   Placeholder="Vse rabatne skupine" EmptyText="Ni rabatnih skupin." />
+      </div>
+
+      <div class="filter-field">
+        <label for="product-special-type">Posebni S za tip stranke</label>
+        <select id="product-special-type" class="filter-select" @bind="SpecialTypeDraft">
+          <option value="">Vsi</option>
+          <option value="ANY">Ima katerikoli posebni S</option>
+          @foreach (var type in CustomerTypes) { <option value="@("TYPE:" + type.CustomerTypeCode)">@type.Name</option> }
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="product-special-customer">Posebni S za stranko (šifra)</label>
+        <input id="product-special-customer" class="filter-select" placeholder="npr. 00001234" @bind="SpecialCustomerDraft" />
+      </div>
     </div>
 
     <div class="filter-actions">
@@ -287,7 +322,69 @@
    je izginilo skupaj s to stranjo, izvoz pa je tekel naprej brez sledi. Glej ExportJobService. *@
 @* Razvrstitev ni filter — ne zozi nabora, samo obrne vrstni red — zato stoji nad tabelo,
    kjer ucinkuje, in ne v panelu filtrov. Deluje takoj ob izbiri, brez gumba Uporabi. *@
+@* 274: S-popust za izbrane izdelke ali za cel pogled. Privzeti S velja za vse stranke s kljukico
+   »Popust polno pakiranje«; posebni S za tip stranke ali stranko ga zanjo zamenja (katalog.csv). *@
+@if (CanEditDiscounts && BulkOpen)
+{
+  <section class="ui-card bulk-discount" aria-labelledby="bulk-discount-title">
+    <div class="bulk-discount-head">
+      <h2 id="bulk-discount-title">S-popust na polno pakiranje</h2>
+      <button type="button" class="small-action" @onclick="() => BulkOpen = false">Zapri</button>
+    </div>
+    <div class="filter-grid">
+      <div class="filter-field">
+        <label for="bulk-kind">Kaj nastavim</label>
+        <select id="bulk-kind" class="filter-select" @bind="BulkKind">
+          <option value="DEFAULT">Privzeti S izdelka (za vse stranke)</option>
+          <option value="TYPE">Posebni S za tip stranke</option>
+          <option value="CUSTOMER">Posebni S za stranko</option>
+        </select>
+      </div>
+      @if (BulkKind == "TYPE")
+      {
+        <div class="filter-field">
+          <label for="bulk-type">Tip stranke</label>
+          <select id="bulk-type" class="filter-select" @bind="BulkType">
+            @foreach (var type in CustomerTypes) { <option value="@type.CustomerTypeCode">@type.Name</option> }
+          </select>
+        </div>
+      }
+      else if (BulkKind == "CUSTOMER")
+      {
+        <div class="filter-field">
+          <label for="bulk-customer">Šifra stranke</label>
+          <input id="bulk-customer" class="filter-select" placeholder="npr. 00001234" @bind="BulkCustomer" />
+        </div>
+      }
+      <div class="filter-field">
+        <label for="bulk-code">S koda</label>
+        <select id="bulk-code" class="filter-select" @bind="BulkCode">
+          <option value="">@(BulkKind == "DEFAULT" ? "Brez S (odstrani)" : "Odstrani posebni S")</option>
+          @foreach (var sCode in PackagingCodes) { <option value="@sCode.Code">@sCode.Code (@sCode.Percent.ToString("0.##") %)</option> }
+        </select>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="primary-button" disabled="@(BulkBusy || Selected.Count == 0)" @onclick="() => ApplyBulkAsync(false)">
+        Uporabi za izbrane (@Selected.Count.ToString("N0"))
+      </button>
+      <button type="button" class="ghost-button" disabled="@(BulkBusy || Page is null || Page.TotalCount == 0)" @onclick="() => ApplyBulkAsync(true)">
+        Uporabi za cel pogled (@((Page?.TotalCount ?? 0).ToString("N0")))
+      </button>
+      @if (BulkBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+    </div>
+    <p class="muted">Pravilo za celo rabatno skupino, S kodo ali vse artikle naenkrat nastaviš na strani <a href="pravila-popustov?podrocje=spopusti">Komercialna pravila → S-popusti</a>; tu se S zapiše vsakemu izdelku posebej.</p>
+    @if (BulkMessage is not null) { <p class="message-state success-message" role="status">@BulkMessage</p> }
+    @foreach (var problem in BulkProblems.Take(20)) { <p class="message-state warn-message">@problem</p> }
+    @if (BulkProblems.Count > 20) { <p class="hint">… in še @(BulkProblems.Count - 20) opozoril.</p> }
+  </section>
+}
+
 <div class="table-toolbar">
+  @if (CanEditDiscounts)
+  {
+    <button type="button" class="ghost-button" @onclick="() => BulkOpen = !BulkOpen">S-popust …</button>
+  }
   <label for="product-sort">Razvrstitev</label>
   <select id="product-sort" class="filter-select" @bind="SortDraft" @bind:after="ApplySortAsync">
     <option value="ITEM">Šifra naraščajoče</option>
@@ -381,6 +478,9 @@
   [SupplyParameterFromQuery(Name = "popolnost")] public string? QueryCompleteness { get; set; }
   [SupplyParameterFromQuery(Name = "slika")] public string? QueryImage { get; set; }
   [SupplyParameterFromQuery(Name = "kategorija")] public string? QueryCategory { get; set; }
+  [SupplyParameterFromQuery(Name = "spopust")] public string? QueryPackaging { get; set; }
+  [SupplyParameterFromQuery(Name = "rabatna")] public string? QueryDiscountGroup { get; set; }
+  [SupplyParameterFromQuery(Name = "posebni")] public string? QuerySpecial { get; set; }
   [SupplyParameterFromQuery(Name = "sort")] public string? QuerySort { get; set; }
   [SupplyParameterFromQuery(Name = "smer")] public string? QueryDirection { get; set; }
   [SupplyParameterFromQuery(Name = "stran")] public int? QueryPage { get; set; }
@@ -414,6 +514,21 @@
   string CompletenessDraft = "";
   string ImageDraft = "";
   string CategoryDraft = "";
+  string PackagingDraft = "";
+  string DiscountGroupDraft = "";
+  string SpecialTypeDraft = "";
+  string SpecialCustomerDraft = "";
+  IReadOnlyList<PackagingCode> PackagingCodes = [];
+  IReadOnlyList<CustomerTypeRow> CustomerTypes = [];
+  bool CanEditDiscounts;
+  bool BulkOpen;
+  bool BulkBusy;
+  string BulkKind = "DEFAULT";
+  string BulkType = "";
+  string BulkCustomer = "";
+  string BulkCode = "";
+  string? BulkMessage;
+  List<string> BulkProblems = [];
   IReadOnlyList<CategoryTreeService.CategoryPickRow> CategoryOptions = [];
   string SortDraft = "ITEM";
 
@@ -424,6 +539,14 @@
   string? GroupDraftOrNull { get => string.IsNullOrEmpty(GroupDraft) ? null : GroupDraft; set => GroupDraft = value ?? ""; }
   string? DepartmentDraftOrNull { get => string.IsNullOrEmpty(DepartmentDraft) ? null : DepartmentDraft; set => DepartmentDraft = value ?? ""; }
   string? CategoryDraftOrNull { get => string.IsNullOrEmpty(CategoryDraft) ? null : CategoryDraft; set => CategoryDraft = value ?? ""; }
+  string? DiscountGroupDraftOrNull { get => string.IsNullOrEmpty(DiscountGroupDraft) ? null : DiscountGroupDraft; set => DiscountGroupDraft = value ?? ""; }
+
+  List<PimPickerOption> DiscountGroupOptions =>
+    Facets.Where(row => row.FacetKind == "DISCOUNT_GROUP")
+      .Select(facet => new PimPickerOption(facet.FacetValue, facet.FacetLabel, Badge: facet.ProductCount.ToString("N0"))).ToList();
+
+  /// <summary>Filter »posebni S« je en parameter: stranka (vpisana šifra) ima prednost pred izbranim tipom.</summary>
+  string SpecialDraftValue => SpecialCustomerDraft.Trim().Length > 0 ? "CUSTOMER:" + SpecialCustomerDraft.Trim() : SpecialTypeDraft;
 
   // Seznami za PimPicker: isce se po imenu, sifra pa je vseeno del iskanega besedila (Key), da
   // najde tudi tisti, ki pozna samo sifro proizvajalca/dobavitelja, ne njegovega imena.
@@ -530,6 +653,15 @@
     }
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
+    try
+    {
+      PackagingCodes = await Packaging.GetCatalogAsync();
+      CustomerTypes = await Data.GetCustomerTypesAsync();
+      BulkType = CustomerTypes.FirstOrDefault()?.CustomerTypeCode ?? "";
+    }
+    catch { PackagingCodes = []; CustomerTypes = []; }
+    var user = (await Authentication.GetAuthenticationStateAsync()).User;
+    CanEditDiscounts = user.IsInRole("ADMIN") || user.IsInRole("CATALOG_EDITOR") || user.IsInRole("COMMERCIAL");
   }
 
   protected override async Task OnParametersSetAsync()
@@ -548,6 +680,10 @@
     CompletenessDraft = QueryCompleteness ?? "";
     ImageDraft = QueryImage ?? "";
     CategoryDraft = QueryCategory ?? "";
+    PackagingDraft = QueryPackaging ?? "";
+    DiscountGroupDraft = QueryDiscountGroup ?? "";
+    SpecialTypeDraft = QuerySpecial is { } special && !special.StartsWith("CUSTOMER:", StringComparison.OrdinalIgnoreCase) ? special : "";
+    SpecialCustomerDraft = QuerySpecial is { } customer && customer.StartsWith("CUSTOMER:", StringComparison.OrdinalIgnoreCase) ? customer["CUSTOMER:".Length..] : "";
     SortDraft = string.IsNullOrWhiteSpace(QuerySort) ? "ITEM"
       : string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase) ? QuerySort + ":desc" : QuerySort;
 
@@ -580,7 +716,8 @@
         QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
         QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
         "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
-        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory)));
+        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
+        QueryPackaging, QueryDiscountGroup, QuerySpecial));
     }
     catch
     {
@@ -643,6 +780,9 @@
       if (!string.IsNullOrWhiteSpace(QueryCompleteness)) chips.Add(new($"Popolnost: {CompletenessLabel(QueryCompleteness)}", Href(completeness: "")));
       if (!string.IsNullOrWhiteSpace(QueryImage)) chips.Add(new($"Slika: {ImageLabel(QueryImage)}", Href(image: "")));
       if (!string.IsNullOrWhiteSpace(QueryCategory)) chips.Add(new($"Kategorija: {CategoryLabel(QueryCategory)}", Href(category: "")));
+      if (!string.IsNullOrWhiteSpace(QueryPackaging)) chips.Add(new($"S-popust: {PackagingLabel(QueryPackaging)}", Href(packaging: "")));
+      if (!string.IsNullOrWhiteSpace(QueryDiscountGroup)) chips.Add(new($"Rabatna skupina: {QueryDiscountGroup}", Href(discountGroup: "")));
+      if (!string.IsNullOrWhiteSpace(QuerySpecial)) chips.Add(new($"Posebni S: {SpecialLabel(QuerySpecial)}", Href(special: "")));
       return chips;
     }
   }
@@ -652,7 +792,8 @@
   string Href(string? view = null, string? search = null, string? organization = null, string? manufacturer = null,
     string? supplier = null, string? group = null, string? department = null, string? erp = null, string? web = null,
     string? activity = null, string? webPublish = null, string? completeness = null, string? image = null,
-    string? category = null, string? sort = null, string? direction = null, int? page = null)
+    string? category = null, string? sort = null, string? direction = null, int? page = null,
+    string? packaging = null, string? discountGroup = null, string? special = null)
   {
     var parameters = new List<string>();
     Add("pogled", Resolve(view, ActiveView == "ALL" ? null : ActiveView));
@@ -669,11 +810,15 @@
     Add("popolnost", Resolve(completeness, QueryCompleteness));
     Add("slika", Resolve(image, QueryImage));
     Add("kategorija", Resolve(category, QueryCategory));
+    Add("spopust", Resolve(packaging, QueryPackaging));
+    Add("rabatna", Resolve(discountGroup, QueryDiscountGroup));
+    Add("posebni", Resolve(special, QuerySpecial));
     Add("sort", Resolve(sort, QuerySort));
     Add("smer", Resolve(direction, QueryDirection));
     var resolvedPage = page ?? (view is null && search is null && organization is null && manufacturer is null
       && supplier is null && group is null && department is null && erp is null && web is null && activity is null
-      && webPublish is null && completeness is null && image is null && sort is null && direction is null ? QueryPage : null);
+      && webPublish is null && completeness is null && image is null && sort is null && direction is null
+      && packaging is null && discountGroup is null && special is null ? QueryPage : null);
     if (resolvedPage is > 1) parameters.Add("stran=" + resolvedPage);
 
     return parameters.Count == 0 ? "izdelki" : "izdelki?" + string.Join('&', parameters);
@@ -781,7 +926,8 @@
     QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
     QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
     "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
-    CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory));
+    CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
+    QueryPackaging, QueryDiscountGroup, QuerySpecial);
 
   async Task StartExportAsync()
   {
@@ -834,7 +980,8 @@
       activity: ActivityDraft, webPublish: WebPublishDraft, completeness: CompletenessDraft,
       image: ImageDraft,
       category: CategoryDraft,
-      sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1));
+      sort: sort[0] == "ITEM" ? "" : sort[0], direction: sort.Length > 1 ? "desc" : "", page: 1,
+      packaging: PackagingDraft, discountGroup: DiscountGroupDraft, special: SpecialDraftValue));
     return Task.CompletedTask;
   }
 
@@ -901,6 +1048,99 @@
     int.TryParse(value, out var id)
       ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"neznano ({value})"
       : value ?? "";
+
+  string PackagingLabel(string value) => value.ToUpperInvariant() switch
+  {
+    "ANY" => "ima S kodo",
+    "NONE" => "brez S kode",
+    var code => PackagingCodes.FirstOrDefault(item => item.Code == code) is { } found ? $"{found.Code} ({found.Percent:0.##} %)" : code,
+  };
+
+  string SpecialLabel(string value)
+  {
+    if (string.Equals(value, "ANY", StringComparison.OrdinalIgnoreCase)) return "katerikoli";
+    if (value.StartsWith("TYPE:", StringComparison.OrdinalIgnoreCase))
+    {
+      var code = value[5..];
+      return "tip " + (CustomerTypes.FirstOrDefault(type => string.Equals(type.CustomerTypeCode, code, StringComparison.OrdinalIgnoreCase))?.Name ?? code);
+    }
+    return value.StartsWith("CUSTOMER:", StringComparison.OrdinalIgnoreCase) ? "stranka " + value[9..] : value;
+  }
+
+  /// <summary>
+  /// S-popust za izbrane ali za cel pogled. Privzeti S gre skozi en množični zapis na podjetje
+  /// (pim.SaveProductPackagingDiscountsBulk, z zgodovino); posebni S za tip ali stranko je pravilo
+  /// na izdelku (b2b.SavePackagingDiscountRule), prazna koda ga umakne.
+  /// </summary>
+  async Task ApplyBulkAsync(bool wholeView)
+  {
+    BulkBusy = true; BulkMessage = null; BulkProblems = [];
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      List<(int OrganizationId, string ItemId)> targets;
+      if (wholeView)
+      {
+        targets = [];
+        var filter = BuildExportFilter();
+        for (var skip = 0; ; skip += 20_000)
+        {
+          var page = await Workbench.GetProductListAsync(filter with { Skip = skip, Take = 20_000 });
+          targets.AddRange(page.Rows.Select(row => (row.OrganizationId, row.ItemId)));
+          if (page.Rows.Count == 0 || targets.Count >= page.TotalCount) break;
+        }
+      }
+      else targets = Selected.Values.Select(item => (item.OrganizationId, item.ItemId)).ToList();
+
+      var code = BulkCode.Length == 0 ? null : BulkCode;
+      var customerKey = BulkKind == "CUSTOMER" ? BulkCustomer.Trim() : null;
+      if (BulkKind == "CUSTOMER" && string.IsNullOrEmpty(customerKey)) { BulkProblems.Add("Vpiši šifro stranke."); return; }
+      var changed = 0;
+      foreach (var organization in targets.GroupBy(target => target.OrganizationId))
+      {
+        if (BulkKind == "DEFAULT")
+        {
+          var outcome = await Packaging.SaveDefaultsBulkAsync(organization.Key,
+            organization.Select(target => (target.ItemId, code)).ToList(), actor, "Seznam izdelkov", "INTRANET");
+          changed += outcome.Changed;
+          BulkProblems.AddRange(outcome.Skipped.Select(skip => $"{skip.ItemId}: {skip.Reason}"));
+          continue;
+        }
+
+        var existing = code is not null
+          ? new Dictionary<string, PackagingRule>(StringComparer.OrdinalIgnoreCase)
+          : (await Packaging.GetRulesAsync(organization.Key))
+            .Where(rule => rule.ScopeKind == PackagingDiscountService.ScopeItem && rule.TargetKind == BulkKind && rule.ItemId is not null
+              && string.Equals(rule.TargetCode, BulkKind == "TYPE" ? BulkType : customerKey, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(rule => rule.ItemId!, StringComparer.OrdinalIgnoreCase);
+        await using var connection = await Packaging.OpenAsync();
+        var done = 0;
+        var total = organization.Count();
+        foreach (var target in organization)
+        {
+          try
+          {
+            if (code is not null)
+            {
+              await Packaging.SaveRuleAsync(organization.Key, new(BulkKind, BulkKind == "TYPE" ? BulkType : null, null, customerKey,
+                PackagingDiscountService.ScopeItem, target.ItemId, null, null, code), actor, connection: connection);
+              changed++;
+            }
+            else if (existing.TryGetValue(target.ItemId, out var rule))
+            {
+              await Packaging.RemoveRuleAsync(organization.Key, rule.RuleId, actor, connection: connection);
+              changed++;
+            }
+          }
+          catch (Microsoft.Data.SqlClient.SqlException failure) { BulkProblems.Add($"{target.ItemId}: {failure.Message}"); }
+          if (++done % 250 == 0) { BulkMessage = $"Zapisujem … {done:N0} od {total:N0}"; StateHasChanged(); }
+        }
+      }
+      BulkMessage = $"S-popust zapisan: {changed:N0} sprememb na {targets.Count:N0} izdelkih. V katalog.csv gre ob naslednjem izvozu.";
+    }
+    catch (Exception failure) { BulkProblems.Add("Zapis ni uspel: " + failure.Message); }
+    finally { BulkBusy = false; }
+  }
 
   static string ActivityLabel(string? value) => value switch
   {

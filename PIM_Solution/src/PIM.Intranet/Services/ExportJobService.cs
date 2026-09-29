@@ -3,7 +3,7 @@ using PIM.Operations;
 
 namespace PIM.Intranet.Services;
 
-public enum ExportRunStatus { Queued, Running, Completed, Failed }
+public enum ExportRunStatus { Queued, Running, Completed, Failed, Canceled }
 
 /// <param name="RowCount">Do zdaj obdelanih vrstic v trenutni fazi (napredek) oziroma vseh vrstic ob koncu.</param>
 /// <param name="DownloadToken">Ključ v <see cref="ExportResultStore"/>; na voljo šele ko je
@@ -88,6 +88,9 @@ public sealed class ExportJobService(
   /// <summary>Konec gradnje po opravilih — nanj čaka odprt prenos v brskalniku (<see cref="WaitForBrowserAsync"/>).</summary>
   readonly ConcurrentDictionary<Guid, TaskCompletionSource<ExportJobState>> finished = new();
 
+  /// <summary>Uporabnikov preklic po opravilih (<see cref="Cancel"/>); živi le, dokler opravilo teče.</summary>
+  readonly ConcurrentDictionary<Guid, CancellationTokenSource> cancellations = new();
+
   /// <summary>Sproži se ob vsakem premiku opravila (Queued → Running → napredek → Completed/Failed).
   /// Poslušalci filtrirajo po JobId, ker je en servis skupen vsem uporabnikom vezja.</summary>
   public event Action<ExportJobState>? Changed;
@@ -110,6 +113,22 @@ public sealed class ExportJobService(
     if (!jobs.TryGetValue(jobId, out var state) || state.IsActive || !IsOwner(state, owner))
       return false;
     return jobs.TryUpdate(jobId, state with { Dismissed = true }, state);
+  }
+
+  /// <summary>
+  /// Prekliče tekoč ali čakajoč izvoz. Uporabnik 2026-09-23: klik na »Izvozi« po pomoti je
+  /// sprožil gradnjo celega kataloga (180.000 vrstic), ki je ni bilo mogoče ustaviti — zasedla je
+  /// ena od dveh vrat za izvoze in bazo za več minut. Preklic ustavi branje in pisanje, zbriše
+  /// začasno datoteko, odprt prenos v brskalniku pa se prekine (ExportDownloadEndpoint).
+  /// </summary>
+  public bool Cancel(Guid jobId, string owner)
+  {
+    if (!jobs.TryGetValue(jobId, out var state) || !state.IsActive || !IsOwner(state, owner)
+      || !cancellations.TryGetValue(jobId, out var cancellation))
+      return false;
+    try { cancellation.Cancel(); }
+    catch (ObjectDisposedException) { return false; }
+    return true;
   }
 
   /// <summary>Brskalnik je datoteko prevzel; okno izvozov jo pokaže kot preneseno.</summary>
@@ -162,6 +181,7 @@ public sealed class ExportJobService(
     var state = new ExportJobState(jobId, ExportRunStatus.Queued, FileName: fileName,
       QueuePosition: gate.Exports.Waiting, Owner: owner, StartedUtc: DateTime.UtcNow);
     finished[jobId] = new TaskCompletionSource<ExportJobState>(TaskCreationOptions.RunContinuationsAsynchronously);
+    cancellations[jobId] = new CancellationTokenSource();
     jobs[jobId] = state;
     _ = RunAsync(state, filter, selection, includeFieldKeys);
   }
@@ -173,11 +193,13 @@ public sealed class ExportJobService(
     // Task.Yield: klicatelj (klik na strani) dobi nadzor nazaj takoj, gradnja tece na bazenu niti.
     await Task.Yield();
     using var timeout = new CancellationTokenSource(MaxDuration);
+    var userCancel = cancellations.TryGetValue(state.JobId, out var cancellation) ? cancellation.Token : CancellationToken.None;
+    using var stop = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, userCancel);
     string? tempPath = null;
     try
     {
       Publish(state = state with { QueuePosition = gate.Exports.Waiting });
-      using var lease = await gate.Exports.EnterAsync(timeout.Token);
+      using var lease = await gate.Exports.EnterAsync(stop.Token);
       Publish(state = state with { Status = ExportRunStatus.Running, RowCount = 0 });
 
       using var scope = scopeFactory.CreateScope();
@@ -196,8 +218,10 @@ public sealed class ExportJobService(
           TotalRows = step.Total,
           WritingStartedUtc = step.Phase == ProductWorkbookPhase.Writing ? state.WritingStartedUtc ?? DateTime.UtcNow : null,
         }));
-        rowCount = await workbook.BuildToAsync(stream, filter, selection, includeFieldKeys, progress, timeout.Token);
+        rowCount = await workbook.BuildToAsync(stream, filter, selection, includeFieldKeys, progress, stop.Token);
       }
+      // Preklic tik pred koncem: zvezek je sicer gotov, a uporabnik ga ne želi več.
+      userCancel.ThrowIfCancellationRequested();
       var token = results.Put(tempPath, state.FileName ?? "izvoz.xlsx", WorkbookContentType);
       tempPath = null;
       Publish(state = state with
@@ -205,6 +229,11 @@ public sealed class ExportJobService(
         Status = ExportRunStatus.Completed, RowCount = rowCount, TotalRows = rowCount,
         DownloadToken = token, FinishedUtc = DateTime.UtcNow,
       });
+    }
+    catch (OperationCanceledException) when (userCancel.IsCancellationRequested)
+    {
+      logger.LogInformation("Izvoz {JobId} je uporabnik preklical.", state.JobId);
+      Publish(state = state with { Status = ExportRunStatus.Canceled, FinishedUtc = DateTime.UtcNow });
     }
     catch (OperationCanceledException) when (timeout.IsCancellationRequested)
     {
@@ -222,6 +251,7 @@ public sealed class ExportJobService(
     }
     finally
     {
+      if (cancellations.TryRemove(state.JobId, out var used)) used.Dispose();
       if (tempPath is not null)
       {
         try { File.Delete(tempPath); }

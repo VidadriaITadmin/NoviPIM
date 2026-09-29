@@ -144,8 +144,14 @@ foreach (var kind in new[] { "new(\"CUSTOMER\", \"Kupec\")", "new(\"BOTH\", \"Ku
   Assert(card.Contains(kind, StringComparison.Ordinal), "Kartici manjka vrsta stranke: " + kind + ".");
 
 // 11. H4: komercialni zavihek pokrije vse, kar je nastel uporabnik.
-foreach (var heading in new[] { "B2B spletne nastavitve", "Skupine popustov", "Vrednostni rabat", "Posebni popusti za stranko", "Popust na polno pakiranje" })
+foreach (var heading in new[] { "B2B spletne nastavitve", "Skupine popustov", "Vrednostni rabat", "Popust na polno pakiranje" })
   Assert(card.Contains(heading, StringComparison.Ordinal), "Komercialnemu zavihku manjka: " + heading + ".");
+// 274: posebni S stranke (in njenega tipa) je svoj sestavni del s pravili in seznamom izdelkov.
+var packagingPanel = File.ReadAllText(Path.Combine(pages, "CustomerPackagingPanel.razor"));
+Assert(card.Contains("<CustomerPackagingPanel", StringComparison.Ordinal)
+  && packagingPanel.Contains("S-popust na polno pakiranje", StringComparison.Ordinal)
+  && packagingPanel.Contains("Izdelki s posebnim S za to stranko", StringComparison.Ordinal),
+  "Komercialnemu zavihku manjka panel posebnega S (pravila in izdelki stranke).");
 Assert(card.Contains("Tip stranke", StringComparison.Ordinal) && card.Contains("Vrsta stranke", StringComparison.Ordinal),
   "Tip in vrsta stranke morata biti med komercialnimi nastavitvami.");
 
@@ -394,6 +400,47 @@ static async Task WorkbookRoundTripAsync(string connectionString)
     Assert(!(restoredProduct!["Product.SpecialCustomerDiscounts"] ?? "").Contains(customer.CustomerKey + "\\", StringComparison.Ordinal),
       "Po povratnem uvozu katalog.csv ne sme vec nositi testnega posebnega S.");
     Console.WriteLine($"Krog delovnega lista strank: {customer.OrganizationName} {customer.CustomerKey}, izdelek {item} ({itemGroup}) — PASS.");
+
+    // 7. 279: dodatni popust (P2) se obračuna za osnovnim, prodajna polja in opomba ostanejo v PIM.
+    var baseText = (beforeRow!["Customer.GroupDiscounts"] ?? "").Split(" | ", StringSplitOptions.RemoveEmptyEntries)
+      .FirstOrDefault(entry => entry.StartsWith(itemGroup + "=", StringComparison.OrdinalIgnoreCase));
+    var basePercent = baseText is null ? 0m : decimal.Parse(baseText[(baseText.IndexOf('=') + 1)..].TrimEnd('%'), System.Globalization.CultureInfo.InvariantCulture);
+    var expected = Math.Round(100m - (100m - basePercent) * 93m / 100m, 4);
+    var note = "Test F10 279: dobavnice brez cen.";
+    var sales = Sheet(customer,
+      ("Dodatni popust po skupinah (P2)", itemGroup + "=7"), ("Skrbnik", "Test Skrbnik"),
+      ("E-pošta za dobavnice", "dobavnice.f10@primer.si"), ("E-pošta za obveščanje", "obvestila.f10@primer.si"),
+      ("Oseba za obveščanje", "g. Test"), ("Dodaj opombo", note));
+    var salesPreview = await workbook.PreviewAsync(new MemoryStream(sales), null);
+    Assert(salesPreview.Problems.Count == 0 && salesPreview.ChangeCount == 6,
+      $"Prodajni stolpci morajo prinesti 6 sprememb, prinesli so {salesPreview.ChangeCount}: {string.Join("; ", salesPreview.Problems)}");
+    var salesOutcome = await workbook.ApplyAsync(salesPreview, Actor);
+    Assert(salesOutcome.Problems.Count == 0 && salesOutcome.ValuesWritten == 3,
+      $"Uvoz mora zapisati prodajna polja, dodatni popust in opombo (3), zapisal je {salesOutcome.ValuesWritten}: {string.Join("; ", salesOutcome.Problems)}");
+    var withSales = (await list.GetAsync(Organization)).Single(row => row.CustomerId == customer.CustomerId);
+    Assert(withSales.ExtraGroupDiscounts == itemGroup + "=7" && withSales.AccountManager == "Test Skrbnik"
+      && withSales.DeliveryNoteEmail == "dobavnice.f10@primer.si" && withSales.NoticeEmail == "obvestila.f10@primer.si"
+      && withSales.NoticePerson == "g. Test" && (withSales.Notes ?? "").Contains(note, StringComparison.Ordinal),
+      "Seznam mora nositi vsa prodajna polja, dodatni popust in opombo.");
+    var salesRow = await ExportRowAsync(connection, Organization, "MAGENTO_CUSTOMERS", customer.CustomerKey, true, "Customer.Key");
+    var expectedText = itemGroup + "=" + expected.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    Assert((salesRow!["Customer.GroupDiscounts"] ?? "").Split(" | ").Contains(expectedText, StringComparer.OrdinalIgnoreCase),
+      $"stranke.csv mora imeti {expectedText} (osnovni {basePercent} % + dodatni 7 %), ima {salesRow["Customer.GroupDiscounts"]}.");
+    Assert(salesRow["Customer.GroupDiscounts"] == withSales.ExportGroupDiscounts, "Seznam in stranke.csv morata imeti isti niz tudi z dodatnim popustom.");
+    Assert(salesRow["Customer.Email"] == beforeRow["Customer.Email"], "Prodajne e-pošte ne smejo v stranke.csv.");
+    var again = await workbook.PreviewAsync(new MemoryStream(sales), null);
+    Assert(again.ChangeCount == 0, "Ponovni uvoz iste datoteke ne sme podvojiti opombe ali česa spremeniti.");
+
+    var salesRevert = Sheet(customer, ("Dodatni popust po skupinah (P2)", "-"), ("Skrbnik", "-"), ("E-pošta za dobavnice", "-"),
+      ("E-pošta za obveščanje", "-"), ("Oseba za obveščanje", "-"));
+    var salesRevertOutcome = await workbook.ApplyAsync(await workbook.PreviewAsync(new MemoryStream(salesRevert), null), Actor);
+    Assert(salesRevertOutcome.Problems.Count == 0, "Povratni uvoz prodajnih polj ne sme javiti napake.");
+    await ExecuteAsync(connection, $"DELETE FROM pim.CustomerNote WHERE CustomerId = @key AND CreatedBy = N'{Actor}';", customer.CustomerId);
+    var salesRestored = (await list.GetAsync(Organization)).Single(row => row.CustomerId == customer.CustomerId);
+    Assert(salesRestored == customer, "Povratni uvoz prodajnih polj mora stranko vrniti v prvotno stanje.");
+    var salesRestoredRow = await ExportRowAsync(connection, Organization, "MAGENTO_CUSTOMERS", customer.CustomerKey, true, "Customer.Key");
+    Assert(salesRestoredRow!["Customer.GroupDiscounts"] == beforeRow["Customer.GroupDiscounts"], "Po umiku dodatnega popusta mora stranke.csv imeti prvotne skupine.");
+    Console.WriteLine($"279 dodatni popust: {expectedText} v stranke.csv, prodajna polja in opomba — PASS.");
   }
   finally
   {
@@ -421,6 +468,9 @@ static async Task WorkbookRoundTripAsync(string connectionString)
     await ExecuteAsync(connection, $"DELETE FROM b2b.CustomerPackagingDiscountOverride WHERE CustomerId = @key AND OverrideId > {specialMax};", customer.CustomerId);
     if (tierRowsBefore == 0) await ExecuteAsync(connection, "DELETE FROM pim.CustomerValueDiscountTier WHERE CustomerId = @key;", customer.CustomerId);
     if (contactBefore == 0) await ExecuteAsync(connection, "DELETE FROM pim.CustomerContact WHERE CustomerId = @key;", customer.CustomerId);
+    await ExecuteAsync(connection, $"DELETE FROM b2b.CustomerExtraGroupDiscount WHERE CustomerId = @key AND CreatedBy = N'{Actor}';", customer.CustomerId);
+    await ExecuteAsync(connection, $"DELETE FROM pim.CustomerExtra WHERE CustomerId = @key AND UpdatedBy = N'{Actor}';", customer.CustomerId);
+    await ExecuteAsync(connection, $"DELETE FROM pim.CustomerNote WHERE CustomerId = @key AND CreatedBy = N'{Actor}';", customer.CustomerId);
     await ExecuteAsync(connection, $"DELETE FROM b2b.AuditLog WHERE ChangedBy = N'{Actor}' AND @key = @key;", customer.CustomerId);
   }
 }

@@ -1,0 +1,45 @@
+/* Uvrstitev izdelka (kartica in /izdelki/{šifra}/kategorije). */
+
+.category-editor { display: flex; flex-direction: column; gap: .75rem; }
+
+.editor-head { border-bottom: 1px solid var(--pim-border); display: flex; flex-wrap: wrap; gap: .35rem 1rem; padding-bottom: .5rem; }
+.editor-head h3 { color: var(--pim-text-strong); font-size: .8rem; font-weight: 700; letter-spacing: .06em; margin: 0; text-transform: uppercase; }
+.muted { color: var(--pim-text-muted); font-size: .78rem; }
+
+.editor-message { border-radius: var(--pim-radius-sm); font-size: .84rem; margin: 0; padding: .5rem .75rem; }
+.editor-message.ok { background: var(--pim-good-bg); color: var(--pim-good-text); }
+.editor-message.bad { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+
+.site-list { display: flex; flex-direction: column; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+
+.site-row {
+  align-items: flex-start;
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding: .75rem .9rem;
+}
+.site-row.editing { border-color: var(--pim-accent); }
+
+.site-main { display: flex; flex: 1 1 20rem; flex-direction: column; gap: .4rem; min-width: 0; }
+.site-name { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }
+.site-name strong { color: var(--pim-text-strong); font-size: .9rem; }
+.site-paths { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+.path-chip {
+  background: var(--pim-surface-subtle);
+  border: 1px solid var(--pim-border);
+  border-radius: var(--pim-radius-sm);
+  color: var(--pim-text);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+  padding: .2rem .5rem;
+}
+
+.site-edit { display: flex; flex: 1 1 100%; flex-direction: column; gap: .6rem; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.chosen-list { display: flex; flex-direction: column; gap: .35rem; list-style: none; margin: 0; padding: 0; }
+.chosen-list li { align-items: center; display: flex; gap: .5rem; justify-content: space-between; }

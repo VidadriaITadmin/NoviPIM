@@ -61,19 +61,26 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
   {
     // Baza sama pove, koliko vrstic ima pogled (TotalCount); tu se bere stran za stranjo, dokler
     // ni vsega — isti vzorec kot StockReadService.BuildStockWorkbookAsync.
+    // Izbor (tudi izrecno prazen) se prebere neposredno, ne s sitom cez cel pogled.
     var rows = new List<ProductListRow>();
     long totalCount = 0;
-    var skip = 0;
-    while (rows.Count < MaxRows)
-    {
-      var page = await workbench.GetProductListAsync(filter with { Skip = skip, Take = PageSize }, cancellationToken);
-      totalCount = page.TotalCount;
-      rows.AddRange(page.Rows);
-      if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
-      skip += PageSize;
-    }
     if (onlySelectionKeys is not null)
-      rows = rows.Where(row => onlySelectionKeys.Contains($"{row.OrganizationId}|{row.ItemId}", StringComparer.OrdinalIgnoreCase)).ToList();
+    {
+      if (onlySelectionKeys.Count > 0)
+        rows = await workbench.GetSelectedRowsAsync(filter, onlySelectionKeys, cancellationToken);
+    }
+    else
+    {
+      var skip = 0;
+      while (rows.Count < MaxRows)
+      {
+        var page = await workbench.GetProductListAsync(filter with { Skip = skip, Take = PageSize }, cancellationToken);
+        totalCount = page.TotalCount;
+        rows.AddRange(page.Rows);
+        if (page.Rows.Count == 0 || rows.Count >= page.TotalCount) break;
+        skip += PageSize;
+      }
+    }
 
     var notes = new List<string>();
     if (onlySelectionKeys is { Count: > 0 })
@@ -120,7 +127,8 @@ public sealed class ProductExportService(IConfiguration configuration, ProductWo
       new(GroupIdentity, "Podjetje", null, Width: 16, FromRow: row => row.OrganizationName),
       new(GroupIdentity, "Šifra artikla", "Product.ItemID", Width: 18),
       new(GroupIdentity, "EAN", "Product.EAN", Width: 16),
-      new(GroupIdentity, "Naziv", null, Width: 46, FromRow: row => row.Name),
+      // »Naziv« (spletni naziv, sicer naziv ERP) je uporabnik 2026-09-29 odstranil: mešal je dva podatka.
+      // Naziv ERP in spletni naziv sta spodaj vsak v svojem stolpcu.
 
       new(GroupErp, "Enota mere", "Product.UoM"),
       new(GroupErp, "Skupina artikla", "Product.ItemGroup"),

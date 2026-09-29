@@ -1,0 +1,246 @@
+@page "/analitika"
+@attribute [Authorize(Roles = "ADMIN,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject AnalyticsService Analytics
+@inject IntranetDataService Data
+@inject NavigationManager Navigation
+@using System.Globalization
+
+<PageTitle>Analitika</PageTitle>
+
+@* 284 (uporabnik 2026-09-24): »koliko se kaj proda, mesečni trend po dobaviteljih in artiklih, koliko česa naročiti,
+   katera zaloga je zaležana«. Vse številke so iz ana.* (preračun ana.RefreshAnalytics); stran ne računa nič sama. *@
+<PimPage Title="Analitika" OrganizationScope="true"
+         Subtitle="Koliko se proda, kako se giblje po mesecih, kaj je treba naročiti in katera zaloga stoji. Številke preračuna PIM vsako noč iz SAOP.">
+  <Actions>
+    <a class="primary-button" href="analitika/artikli?signal=NAROCI&razvrsti=predlog">Predlog naročil</a>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="overview" Tabs="AnalyticsTabs.Tabs" Label="Analitika" />
+
+<div class="ana-bar">
+  <label class="visually-hidden" for="ana-supplier">Dobavitelj</label>
+  <select id="ana-supplier" class="filter-select" @bind="SupplierFilter" @bind:after="SupplierChanged">
+    <option value="">Vsi dobavitelji</option>
+    @foreach (var supplier in Suppliers.Where(s => s.SupplierId.Length > 0))
+    {
+      <option value="@supplier.SupplierId">@(supplier.SupplierName ?? supplier.SupplierId) (@supplier.SupplierId)</option>
+    }
+  </select>
+  @if (!string.IsNullOrEmpty(QuerySupplier))
+  {
+    <button type="button" class="link-button" @onclick="ClearSupplier">Počisti filter</button>
+  }
+  @if (Overview?.Kpi.CalculatedUtc is { } calculated)
+  {
+    <span class="ana-fresh" role="status">Preračunano @calculated.ToPimLocal().ToString("d. M. yyyy 'ob' HH:mm", Sl) · vir prodaje: @AnalyticsService.DemandSourceLabel(Overview.Kpi.DemandSource)</span>
+  }
+</div>
+
+<PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && !Overview.HasData)"
+          LoadingText="Nalaganje analitike …"
+          EmptyText="Analitika za to podjetje še ni preračunana. Preračun teče vsako noč (posel »Analitika iz SAOP«); takoj ga lahko sproži skrbnik na zavihku Nastavitve izračuna.">
+  @if (Overview is { HasData: true } o)
+  {
+    @if (o.Kpi.DemandSource == "BREZ")
+    {
+      <p class="info-message" role="status">
+        Podatkov o prodaji še ni, zato prometa, trendov in zaležane zaloge ni mogoče izračunati. Vidiš zalogo in predloge po SAOP minimumu.
+        Prodajo prinese worker <strong>PIM.SaopAnalyticsWorker</strong> ob prvem zagonu v omrežju podjetja (računi in naročila iz SAOP).
+      </p>
+    }
+
+    <section class="ana-kpis" aria-label="Kazalniki">
+      <PimStat Label="Promet zadnjih 12 mesecev" Value="@Money(o.Kpi.Sales12Net)" Note="@Change(o.Kpi.Sales12Net, o.Kpi.SalesPrev12Net, "glede na lani")" />
+      <PimStat Label="Razlika v ceni (12 mesecev)" Value="@Money(o.Kpi.Sales12Margin)" Note="@MarginShare(o.Kpi)" />
+      <PimStat Label="Vrednost zaloge" Value="@Money(o.Kpi.StockValue)"
+               Note="@($"{o.Kpi.ItemsInStock:N0} artiklov na zalogi" + (o.Kpi.StockWithoutCost > 0 ? $", {o.Kpi.StockWithoutCost:N0} brez nabavne cene" : ""))" />
+      <PimStat Label="Za naročilo" Value="@o.Kpi.ToOrderItems.ToString("N0", Sl)" Note="@($"predlog {Money(o.Kpi.ToOrderValue)}")"
+               Href="@ItemsHref(AnalyticsSignals.Order, "predlog")" />
+      <PimStat Label="Ni zaloge, prodaja se" Value="@o.Kpi.StockoutItems.ToString("N0", Sl)" Note="artiklov"
+               Href="@ItemsHref(AnalyticsSignals.Stockout, "prodaja")" />
+      <PimStat Label="Zaležana zaloga" Value="@Money(o.Kpi.DeadStockValue)" Note="@($"{o.Kpi.DeadItems:N0} artiklov za odprodajo")"
+               Href="@ItemsHref(AnalyticsSignals.Dead, "vrednost")" />
+      <PimStat Label="Preveč zaloge" Value="@Money(o.Kpi.OverstockValue)" Note="@($"presežek pri {o.Kpi.OverstockItems:N0} artiklih")"
+               Href="@ItemsHref(AnalyticsSignals.Overstock, "presezek")" />
+    </section>
+
+    <section class="ui-card ana-chart" aria-label="Mesečni trend">
+      <div class="ana-chart-switch" role="group" aria-label="Kaj prikaže graf">
+        <button type="button" aria-pressed="@((!ShowQuantity).ToString().ToLowerInvariant())" @onclick="() => ShowQuantity = false">Promet €</button>
+        <button type="button" aria-pressed="@ShowQuantity.ToString().ToLowerInvariant()" @onclick="() => ShowQuantity = true">Količina</button>
+      </div>
+      <PimTrendChart Points="ChartPoints" Unit="@(ShowQuantity ? "kos" : "€")"
+                     Caption="@((ShowQuantity ? "Prodana količina" : "Promet") + " po mesecih" + (o.SupplierName is { } name ? $" — {name}" : ""))"
+                     CurrentLabel="Zadnjih 12 mesecev" CompareLabel="Leto prej"
+                     EmptyText="V zadnjih 12 mesecih ni zabeležene prodaje." />
+    </section>
+
+    <div class="ana-columns">
+      @if (o.TopSuppliers.Count > 0)
+      {
+        <section class="ui-card" aria-labelledby="ana-top-suppliers">
+          <h2 id="ana-top-suppliers">Dobavitelji z največ prometa</h2>
+          <table class="data-table ana-table">
+            <caption class="visually-hidden">Deset dobaviteljev z največ prometa v 365 dneh</caption>
+            <thead><tr><th scope="col">Dobavitelj</th><th scope="col" class="numeric">Promet 365 dni</th><th scope="col" class="numeric">Glede na lani</th><th scope="col" class="numeric">Za naročilo</th></tr></thead>
+            <tbody>
+              @foreach (var s in o.TopSuppliers)
+              {
+                <tr>
+                  <td><a class="row-link" href="analitika?dobavitelj=@Uri.EscapeDataString(s.SupplierId)">@(s.SupplierName ?? s.SupplierId)</a></td>
+                  <td class="numeric">@Money(s.Sales365Net)</td>
+                  <td class="numeric"><span class="@Tone(s.YoyPct)">@Pct(s.YoyPct)</span></td>
+                  <td class="numeric">
+                    @if (s.ItemsToOrder > 0) { <a href="analitika/artikli?dobavitelj=@Uri.EscapeDataString(s.SupplierId)&signal=NAROCI&razvrsti=predlog">@s.ItemsToOrder.ToString("N0", Sl)</a> }
+                    else { <span class="muted">0</span> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <a class="link-button" href="analitika/dobavitelji">Vsi dobavitelji</a>
+        </section>
+      }
+
+      <section class="ui-card" aria-labelledby="ana-top-items">
+        <h2 id="ana-top-items">Najbolj prodajani artikli</h2>
+        @if (o.TopItems.Count == 0)
+        {
+          <p class="muted">V zadnjih 365 dneh ni prodaje.</p>
+        }
+        else
+        {
+          <table class="data-table ana-table">
+            <caption class="visually-hidden">Deset najbolj prodajanih artiklov v 365 dneh</caption>
+            <thead><tr><th scope="col">Artikel</th><th scope="col" class="numeric">Prodano</th><th scope="col" class="numeric">Promet</th><th scope="col">Stanje</th></tr></thead>
+            <tbody>
+              @foreach (var item in o.TopItems)
+              {
+                var signal = AnalyticsSignals.Find(item.Signal);
+                <tr>
+                  <td><a class="row-link" href="analitika/artikli/@item.ProductId">@(item.ItemName ?? item.ItemId)</a><span class="sub">@item.ItemId</span></td>
+                  <td class="numeric">@item.Sales365Qty.ToString("N0", Sl)</td>
+                  <td class="numeric">@Money(item.Sales365Net)</td>
+                  <td><PimChip Text="@signal.Label" Tone="@signal.Tone" Prefix="Stanje: " /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+
+      @if (o.TopCustomers.Count > 0)
+      {
+        <section class="ui-card" aria-labelledby="ana-top-customers">
+          <h2 id="ana-top-customers">Kupci z največ prometa</h2>
+          <table class="data-table ana-table">
+            <caption class="visually-hidden">Deset kupcev z največ prometa v 365 dneh (iz računov)</caption>
+            <thead><tr><th scope="col">Kupec</th><th scope="col" class="numeric">Promet 365 dni</th><th scope="col" class="numeric">Računov</th></tr></thead>
+            <tbody>
+              @foreach (var c in o.TopCustomers)
+              {
+                <tr>
+                  <td>@if (c.CustomerId is { } customerId) { <a class="row-link" href="stranke?isci=@Uri.EscapeDataString(customerId)">@(c.CustomerName ?? customerId)</a> } else { <span>—</span> }</td>
+                  <td class="numeric">@Money(c.Net)</td>
+                  <td class="numeric">@c.Invoices.ToString("N0", Sl)</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </section>
+      }
+    </div>
+
+    <section class="ui-card ana-chart" aria-labelledby="ana-streams">
+      <h2 id="ana-streams" class="ana-section-title">Od kod so podatki</h2>
+      <table class="data-table ana-table">
+        <caption class="visually-hidden">Zadnji zajem posameznega vira analitike</caption>
+        <thead><tr><th scope="col">Vir</th><th scope="col">Zadnji uspeh</th><th scope="col" class="numeric">Vrstic</th><th scope="col">Stanje</th></tr></thead>
+        <tbody>
+          @foreach (var stream in StreamRows(o.Streams))
+          {
+            <tr>
+              <td>@AnalyticsService.StreamLabel(stream.Stream)</td>
+              <td>@(stream.LastSuccessUtc?.ToPimLocal().ToString("d. M. yyyy HH:mm", Sl) ?? "še nikoli")</td>
+              <td class="numeric">@(stream.LastRowCount?.ToString("N0", Sl) ?? "—")</td>
+              <td>
+                @if (stream.LastError is { } error && (stream.LastSuccessUtc is null || stream.LastAttemptUtc > stream.LastSuccessUtc))
+                {
+                  <PimChip Text="Napaka" Tone="bad" /><span class="sub" title="@error">@Shorten(error)</span>
+                }
+                else if (stream.LastSuccessUtc is null) { <PimChip Text="Čaka prvi zajem" /> }
+                else { <PimChip Text="V redu" Tone="good" /> }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+</PimState>
+
+@code {
+  [SupplyParameterFromQuery(Name = "dobavitelj")] public string? QuerySupplier { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly string[] AllStreams = ["RACUNI", "NAROCILA_KUPCEV", "NAROCILA_DOBAVITELJEM", "NABAVNI_PODATKI", "IZRACUN"];
+
+  AnalyticsOverview? Overview;
+  IReadOnlyList<AnalyticsSupplierRow> Suppliers = [];
+  bool Loading = true;
+  string? Error;
+  string SupplierFilter = "";
+  bool ShowQuantity;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    SupplierFilter = QuerySupplier ?? "";
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      Overview = await Analytics.GetOverviewAsync(organization.OrganizationId, QuerySupplier);
+      if (Suppliers.Count == 0)
+        Suppliers = (await Analytics.GetSuppliersAsync(organization.OrganizationId, null, "naziv", false, 0, 2000, true)).Rows;
+      ShowQuantity = Overview.Months.All(m => m.Net is null);
+    }
+    catch (Exception exception)
+    {
+      Error = $"Analitike ni bilo mogoče naložiti: {exception.Message}";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  IReadOnlyList<PimTrendChart.Point> ChartPoints =>
+    Overview is null ? [] : Overview.Months.Skip(Math.Max(0, Overview.Months.Count - 12)).Select(m => new PimTrendChart.Point(
+      m.MonthStart.ToString("MMM yy", Sl).Replace(".", ""),
+      ShowQuantity ? m.Qty : m.Net ?? 0,
+      ShowQuantity ? m.PrevYearQty : m.PrevYearNet)).ToList();
+
+  void SupplierChanged() => Navigation.NavigateTo(string.IsNullOrEmpty(SupplierFilter) ? "analitika" : $"analitika?dobavitelj={Uri.EscapeDataString(SupplierFilter)}");
+  void ClearSupplier() => Navigation.NavigateTo("analitika");
+
+  string ItemsHref(string signal, string sort) =>
+    $"analitika/artikli?signal={signal}&razvrsti={sort}" + (string.IsNullOrEmpty(QuerySupplier) ? "" : $"&dobavitelj={Uri.EscapeDataString(QuerySupplier)}");
+
+  static IEnumerable<AnalyticsStream> StreamRows(IReadOnlyList<AnalyticsStream> streams) =>
+    AllStreams.Select(code => streams.FirstOrDefault(s => s.Stream == code) ?? new AnalyticsStream(code, null, null, null, null));
+
+  static string Money(decimal? value) => value is { } v ? v.ToString("N0", Sl) + " €" : "—";
+  static string Pct(decimal? value) => value is { } v ? (v > 0 ? "+" : "") + v.ToString("N1", Sl) + " %" : "—";
+  static string? Tone(decimal? value) => value switch { > 0 => "ana-up", < 0 => "ana-down", _ => null };
+  static string Shorten(string text) => text.Length > 90 ? text[..90] + " …" : text;
+
+  static string? Change(decimal? current, decimal? previous, string suffix) =>
+    current is { } c && previous is > 0 ? Pct((c - previous.Value) / previous.Value * 100) + " " + suffix : null;
+
+  static string? MarginShare(AnalyticsKpi kpi) =>
+    kpi.Sales12Margin is { } margin && kpi.Sales12Net is > 0 ? $"{(margin / kpi.Sales12Net.Value * 100).ToString("N1", Sl)} % prometa" : "za artikle z nabavno ceno";
+}

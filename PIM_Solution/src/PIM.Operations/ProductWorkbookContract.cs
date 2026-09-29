@@ -71,7 +71,12 @@ public sealed record ProductWorkbookSpec(
   IReadOnlyList<WorkbookWebSite> WebSites,
   IReadOnlyList<string> TextTypes,
   IReadOnlyList<string> Languages,
-  IReadOnlyList<WorkbookAttribute> Attributes);
+  IReadOnlyList<WorkbookAttribute> Attributes,
+  IReadOnlyList<WorkbookFlag>? Flags = null);
+
+/// <param name="Code">Koda oznake v <c>pim.ProductFlagDefinition</c>, npr. PAKIRNO_NAROCANJE.</param>
+/// <param name="Name">Prikazno ime oznake; naslov stolpca.</param>
+public sealed record WorkbookFlag(string Code, string Name);
 
 /// <param name="Column">Stolpec pogodbe; null pomeni naslov, ki mu ne ustreza noben stolpec.</param>
 public sealed record ProductWorkbookHeaderMatch(int Index, string Header, ProductWorkbookColumn? Column);
@@ -106,6 +111,10 @@ public static class ProductWorkbookContract
 
   public const string GroupKey = "Ključ";
   public const string GroupErp = "ERP — v PIM takoj, v SAOP prek vrste";
+  /// <summary>Teže, dimenzije, pakiranje, poreklo, tarifa: polja SAOP (ProductCommercial.*), ki gredo
+  /// po isti poti kot ERP, a jih uporabnik išče skupaj s S-popustom (David 2026-09-24).</summary>
+  public const string GroupCommercial = "Komerciala — v PIM takoj, v SAOP prek vrste";
+  public const string CommercialFieldPrefix = "ProductCommercial.";
   public const string GroupWeb = "Splet — zapiše se takoj";
   /// <summary>Atributi, ki jih kategorija izdelka predpisuje (nabor iz <c>canon.CategoryAttributeSet</c>).</summary>
   public const string GroupAttributesInSet = "Atributi kategorije — nabor";
@@ -126,6 +135,34 @@ public static class ProductWorkbookContract
   public const string AttributeFieldPrefix = "ProductAttribute.";
   public const string ImagesField = "ProductMedia.Url";
   public const string DocumentsField = "ProductMedia.Documents";
+
+  /// <summary>S-popust na polno pakiranje (274): last PIM, gre v katalog.csv, v SAOP ne.</summary>
+  public const string GroupPackaging = "S-popust na polno pakiranje — PIM, v katalog.csv";
+  /// <summary>Privzeta S koda izdelka (S1–S4); »-« pomeni »brez S«.</summary>
+  public const string PackagingCodeField = "Discount.PackagingCode";
+  /// <summary>Posebni S na tem izdelku po tipu stranke: »TIP\S3 | TIP\S2«; »-« odstrani vse.</summary>
+  public const string TypeSpecialsField = "Discount.TypeSpecials";
+  /// <summary>Posebni S na tem izdelku po stranki: »ŠIFRA_STRANKE\S2 | …«; »-« odstrani vse.</summary>
+  public const string CustomerSpecialsField = "Discount.CustomerSpecials";
+  /// <summary>Znak v celici, ki izprazni polje S (prazna celica pomeni »ne dotikaj se«).</summary>
+  public const string ClearToken = "-";
+
+  /// <summary>Oznake artikla (233/302): last PIM, D/N, gredo v katalog.csv, v SAOP ne.</summary>
+  public const string GroupFlags = "Oznake — PIM, v katalog.csv";
+  public const string FlagFieldPrefix = "ProductFlag.";
+
+  /// <summary>Ali je polje oznaka artikla (bere in piše jih pim.ProductFlag, ne canon.FieldValue).</summary>
+  public static bool IsFlagField(string fieldKey) => fieldKey.StartsWith(FlagFieldPrefix, StringComparison.Ordinal);
+
+  /// <summary>Koda oznake iz kode stolpca: »ProductFlag.PAKIRNO_NAROCANJE« → »PAKIRNO_NAROCANJE«.</summary>
+  public static string FlagCode(string fieldKey) => fieldKey[FlagFieldPrefix.Length..];
+
+  static bool IsCommercial(SaopWritableField field) =>
+    field.FieldKey.StartsWith(CommercialFieldPrefix, StringComparison.Ordinal);
+
+  /// <summary>Ali je polje eno od polj S-popusta (bere in piše jih PackagingDiscountService, ne canon.FieldValue).</summary>
+  public static bool IsPackagingField(string fieldKey) =>
+    fieldKey is PackagingCodeField or TypeSpecialsField or CustomerSpecialsField;
 
   /// <summary>
   /// Ali je skupina nad naslovom ena od skupin atributov (»Atributi kategorije — nabor«, »Atributi
@@ -172,7 +209,9 @@ public static class ProductWorkbookContract
       new(GroupKey, "Podjetje", OrganizationField, ProductWorkbookTarget.ReadOnly, Width: 18),
       new(GroupKey, "Šifra artikla", ItemIdField, ProductWorkbookTarget.ReadOnly, Width: 20,
         Aliases: ["ItemID", "Sifra artikla", "Šifra", "Artikel"]),
-      new(GroupKey, "Naziv", "Row.Name", ProductWorkbookTarget.ReadOnly, Width: 44),
+      // »Naziv« (spletni naziv, sicer naziv ERP, sicer šifra) je bil tu do 2026-09-29. Uporabnik ga je
+      // odstranil: mešal je dva podatka in se je iz Excela prepisal v »Spletni naziv (sl)«. Naziv ERP
+      // in spletni naziv sta svoja stolpca. Uvoz ga ne pozna več: v stari datoteki je neznan stolpec in se ne uvozi.
     };
 
     // --- ERP: stolpci pridejo iz registra, ne iz tega seznama ---------------------------
@@ -182,24 +221,45 @@ public static class ProductWorkbookContract
     // po 081 vedno enak oddelku, ItemDepartment). Zapisljiv je samo prvi stolpec; ostali so samo
     // za branje. Prej sta bila oba zapisljiva in pri uvozu je drugi tiho povozil prvega:
     // »Oddelek (ABC)« B -> A se ni zaznal, ker je »Dodatna lastnost 1« v isti vrstici še nosila B.
+    // Vrstni red skupin je vrstni red, v katerem uporabnik list izpolnjuje: ERP, komerciala
+    // (teže, pakiranje, nato S-popust), splet (kategorije, strani, besedila, slike), atributi.
     var saopKeys = new HashSet<string>(StringComparer.Ordinal);
-    foreach (var field in spec.SaopFields)
-      columns.Add(new(GroupErp, field.Label, field.FieldKey,
+    var saopFields = spec.SaopFields.Where(field => !IsCommercial(field))
+      .Concat(spec.SaopFields.Where(IsCommercial));
+    foreach (var field in saopFields)
+      columns.Add(new(IsCommercial(field) ? GroupCommercial : GroupErp, field.Label, field.FieldKey,
         saopKeys.Add(field.FieldKey) ? ProductWorkbookTarget.Saop : ProductWorkbookTarget.ReadOnly,
         field.ValueFormat is "decimal4" or "decimal8" ? WorkbookCellKind.Number : WorkbookCellKind.Text,
         Width: Math.Clamp(field.Label.Length + 3, 14, 32),
-        Aliases: [field.ElementName], ValueFormat: field.ValueFormat));
+        Aliases: [field.ElementName, $"{field.Label} [{field.FieldKey}]"], ValueFormat: field.ValueFormat));
+
+    // --- S-popust na polno pakiranje (274): last PIM, gre v katalog.csv ------------------------
+    // »Skupina popusta« je naslov istega podatka v ceniku in v katalog.csv, zato uvoz sprejme tudi
+    // cenik (Šifra | Skupina popusta | VPAK). Rabatna skupina ERP ima svoj naslov (»Rabatna skupina 1«).
+    columns.Add(new(GroupPackaging, "S koda", PackagingCodeField, ProductWorkbookTarget.Pim, Width: 10,
+      Aliases: ["Skupina popusta", "S-koda", "S popust", "Product.PackagingDiscountCode"]));
+    columns.Add(new(GroupPackaging, "Posebni S — tipi strank", TypeSpecialsField, ProductWorkbookTarget.Pim, Width: 30,
+      Aliases: ["Posebni S - tipi strank", "Posebni S tipi strank"], IsMultiValue: true));
+    columns.Add(new(GroupPackaging, "Posebni S — stranke", CustomerSpecialsField, ProductWorkbookTarget.Pim, Width: 30,
+      Aliases: ["Posebni S - stranke", "Posebni S stranke", "Posebni popust za stranko"], IsMultiValue: true));
+
+    // --- Oznake artikla (233/302): last PIM, D/N ------------------------------------------
+    // »Pakirno naročanje« (katalog.csv: na spletu samo po celih paketih po Pakiranju 2),
+    // »Razstavni eksponat«. Nova oznaka v registru dobi stolpec sama.
+    foreach (var flag in spec.Flags ?? [])
+      columns.Add(new(GroupFlags, flag.Name, FlagFieldPrefix + flag.Code, ProductWorkbookTarget.Pim,
+        Width: Math.Clamp(flag.Name.Length + 3, 12, 24), Aliases: [flag.Code], ValueFormat: "bool"));
 
     // --- Splet: last PIM, zapiše se takoj ----------------------------------------------
     // Zastavice »Za splet« tu ni: register out.SaopXmlField jo pozna kot element WebPublish,
     // torej potuje v SAOP in mora skozi odhodno vrsto kot vsako drugo ERP polje. Dva stolpca
     // za isto polje bi bila pri uvozu dvoumna in bi eno vrednost pisala dvakrat, vsakič drugam.
-    columns.Add(new(GroupWeb, "Spletne strani", WebSitesField, ProductWorkbookTarget.Pim, Width: 30,
-      Aliases: ["Spletna stran", "Strani"], IsMultiValue: true));
-
     foreach (var site in spec.WebSites)
       columns.Add(new(GroupWeb, CategoryHeader(site), CategoryFieldKey(site.Code), ProductWorkbookTarget.Pim,
         Width: 44, Aliases: [$"Kategorije {site.Code}"], IsMultiValue: true));
+
+    columns.Add(new(GroupWeb, "Spletne strani", WebSitesField, ProductWorkbookTarget.Pim, Width: 30,
+      Aliases: ["Spletna stran", "Strani"], IsMultiValue: true));
 
     foreach (var textType in spec.TextTypes)
       foreach (var language in spec.Languages)
@@ -227,7 +287,9 @@ public static class ProductWorkbookContract
     // ta je tisti, ki ga je treba vpisati.
     var inSet = spec.Attributes.Where(attribute => attribute.InSet).ToList();
     var outside = spec.Attributes.Where(attribute => !attribute.InSet).ToList();
-    foreach (var attribute in inSet.Concat(outside))
+    // Atribut, ki ga že piše polje SAOP (Garancija ← Warranty), nima svojega stolpca: dva stolpca
+    // za isto polje sta pri uvozu zavrnila vrstico, kadar je uporabnik popravil samo enega.
+    foreach (var attribute in inSet.Concat(outside).Where(attribute => !saopKeys.Contains(AttributeFieldPrefix + attribute.Code)))
       columns.Add(new(attribute.InSet ? GroupAttributesInSet : GroupAttributesOutside,
         attribute.Name, AttributeFieldPrefix + attribute.Code,
         ProductWorkbookTarget.Pim, Width: Math.Clamp(attribute.Name.Length + 3, 14, 32),

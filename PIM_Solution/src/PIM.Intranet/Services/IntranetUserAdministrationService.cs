@@ -183,29 +183,30 @@ public sealed class IntranetUserAdministrationService(IConfiguration configurati
       throw new InvalidOperationException("Uporabnika ni bilo mogoče najti.");
   }
 
-  /// <summary>Dolzina, od katere naprej PIM ne svetuje vec. Samo priporocilo, ne pogoj.</summary>
-  public const int RecommendedPasswordLength = 10;
+  /// <summary>Najkrajse dovoljeno lokalno geslo. Edino pravilo o geslu — vrsta znakov ni pogoj.</summary>
+  public const int MinimumPasswordLength = 6;
 
   /// <summary>
-  /// Edina zavrnitev: prazno geslo. Ni pravilo o kakovosti, ampak o prijavi — prijava prazno geslo
-  /// zavrne (<see cref="LocalUserAuthenticationService"/>), zato bi racun s praznim geslom ostal
-  /// zaklenjen. Dolzina in vrsta znakov nista pogoj; o njiju samo svetuje <see cref="PasswordAdvice"/>.
+  /// Zavrne prazno geslo (prijava ga ne sprejme, <see cref="LocalUserAuthenticationService"/>) in
+  /// geslo, krajse od <see cref="MinimumPasswordLength"/>. Pravil o vrsti znakov ni; ta ljudi le
+  /// prisilijo v zapisovanje na listek.
   /// </summary>
   static void ValidatePassword(string password)
   {
     if (string.IsNullOrWhiteSpace(password))
       throw new InvalidOperationException("Geslo ne sme biti prazno.");
+    if (password.Length < MinimumPasswordLength)
+      throw new InvalidOperationException($"Geslo mora imeti vsaj {MinimumPasswordLength} znakov.");
   }
 
   /// <summary>
-  /// Priporocilo, ce bi bilo geslo lahko boljse; null, ce pripomb ni. Nikoli ne zavrne gesla —
-  /// odlocitev je uporabnikova. Svetuje samo o dolzini, ker je dolzina edina lastnost, ki
-  /// zanesljivo dela razliko; pravila o vrsti znakov ljudi le prisilijo v zapisovanje na listek.
+  /// Opozorilo med tipkanjem, ce je geslo prekratko; null, ce je v redu ali polje se prazno.
+  /// Isto pravilo kot <see cref="ValidatePassword"/>, da obrazec pove vnaprej, kar bi shranjevanje zavrnilo.
   /// </summary>
   public static string? PasswordAdvice(string? password) =>
-    string.IsNullOrWhiteSpace(password) || password.Length >= RecommendedPasswordLength
+    string.IsNullOrWhiteSpace(password) || password.Length >= MinimumPasswordLength
       ? null
-      : $"Priporočilo: geslo je krajše od {RecommendedPasswordLength} znakov. Daljše geslo (npr. nekaj besed skupaj) je varnejše, ni pa obvezno.";
+      : $"Geslo mora imeti vsaj {MinimumPasswordLength} znakov.";
 
   /// <summary>
   /// Zapise ali pobrise naslov za opozorila. Prazen naslov je dovoljen in pomeni, da uporabnik

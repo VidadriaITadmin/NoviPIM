@@ -562,8 +562,8 @@ static async Task<int> UstvariAdminaAsync(string connectionString, string uporab
   var prikazno = (Console.ReadLine() ?? "").Trim();
   if (prikazno.Length == 0) prikazno = ime;
 
-  // Dolzina je samo priporocilo. Zavrne se le prazno geslo, ker ga prijava ne sprejme in bi
-  // racun ostal zaklenjen.
+  // Edino pravilo: vsaj 6 znakov, enako kot na /sistem/uporabniki. Prazno geslo prijava tako
+  // ali tako ne sprejme.
   var geslo = PreberiGeslo("Geslo: ");
   if (string.IsNullOrWhiteSpace(geslo))
   {
@@ -571,8 +571,11 @@ static async Task<int> UstvariAdminaAsync(string connectionString, string uporab
     return 2;
   }
 
-  if (geslo.Length < 10)
-    Console.WriteLine("Priporocilo: geslo je krajse od 10 znakov. Daljse geslo je varnejse, ni pa obvezno.");
+  if (geslo.Length < 6)
+  {
+    Console.Error.WriteLine("Geslo mora imeti vsaj 6 znakov.");
+    return 2;
+  }
 
   if (geslo != PreberiGeslo("Ponovi geslo: "))
   {

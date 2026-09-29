@@ -354,8 +354,7 @@ dotnet run --project src\PIM.Migrator -- --ustvari-admina david
 1. Vpraša **`Prikazno ime za david:`** → vpiši ime in priimek, Enter.
 2. Vpraša **`Geslo:`** → vtipkaj geslo, Enter.
    *Med tipkanjem se ne bo videlo nič — niti zvezdic. Tako je prav.*
-   Dolžina ni omejena, geslo le ne sme biti prazno. Pri geslu, krajšem od 10 znakov, izpiše samo
-   priporočilo; račun se vseeno ustvari.
+   Geslo mora imeti vsaj 6 znakov; drugih pravil (velike črke, številke …) ni.
 3. Vpraša **`Ponovi geslo:`** → isto geslo, Enter.
 
 **Mora pisati:**

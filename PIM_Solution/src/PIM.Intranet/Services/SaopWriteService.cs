@@ -127,6 +127,28 @@ public sealed class SaopWriteService(IConfiguration configuration, PimWriteGuard
     return new(batch.Value is DBNull ? 0 : Convert.ToInt64(batch.Value), rows);
   }
 
+  /// <summary>Šifra artikla → ProductId v tem podjetju. Za zapis v PIM po poti, ki izhaja iz vrste (šifra).</summary>
+  public async Task<IReadOnlyDictionary<string, long>> ResolveProductIdsAsync(
+    int organizationId, IEnumerable<string> itemIds, CancellationToken cancellationToken = default)
+  {
+    var keys = itemIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    var result = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+    if (keys.Count == 0) return result;
+    await using var connection = await OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("""
+      SELECT product.ItemID, product.ProductId
+      FROM canon.Product AS product
+      WHERE product.OrganizationId = @OrganizationId
+        AND product.ItemID IN (SELECT value FROM OPENJSON(@ItemIdsJson));
+      """, connection);
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@ItemIdsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(keys);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      result[reader.GetString(0)] = reader.GetInt64(1);
+    return result;
+  }
+
   public async Task<int> ApproveBatchAsync(long batchId, string actor, CancellationToken cancellationToken = default) =>
     await GuardedScalarIntAsync("EXEC out.ApproveOutboundBatch @Batch, @Actor;", batchId, actor, cancellationToken);
 

@@ -37,6 +37,8 @@ using PIM.XmlMapping;
 
 var organizationFilter = ParseOrganizationFilter(args);
 var full = args.Contains("--full", StringComparer.OrdinalIgnoreCase);
+// 2026-09-25 (David): enkratni zajem zgodovine po številkah — vsa leta od podanega do letos, vsaka številka od 1 naprej.
+var historyFrom = ParseHistoryFrom(args);
 if (args.Contains("--help", StringComparer.OrdinalIgnoreCase) || args.Contains("-h", StringComparer.OrdinalIgnoreCase))
 {
   PrintUsage();
@@ -115,7 +117,7 @@ foreach (var organization in organizations)
   if (!string.IsNullOrWhiteSpace(organization.SalesOrderBook))
   {
     if (!await RunOrderKindAsync("SAOP_ORDERS_VNK", "Naročila kupcev (VNK)", async (connection, runId) =>
-      await RunSalesOrdersAsync(client, connection, settings, organization, sourceConnectorId.Value, runId, full)))
+      await RunSalesOrdersAsync(client, connection, settings, organization, sourceConnectorId.Value, runId, full, historyFrom)))
       failedAny = true;
   }
   else
@@ -126,7 +128,7 @@ foreach (var organization in organizations)
   if (!string.IsNullOrWhiteSpace(organization.PurchaseOrderBook))
   {
     if (!await RunOrderKindAsync("SAOP_ORDERS_VND", "Naročila dobaviteljem (VND)", async (connection, runId) =>
-      await RunPurchaseOrdersAsync(client, connection, settings, organization, sourceConnectorId.Value, runId, full)))
+      await RunPurchaseOrdersAsync(client, connection, settings, organization, sourceConnectorId.Value, runId, full, historyFrom)))
       failedAny = true;
   }
   else
@@ -242,7 +244,7 @@ return failedAny ? 1 : 0;
 /// </summary>
 static async Task<OrderFetch> RunSalesOrdersAsync(
   SaopOrdersApiClient client, SqlConnection connection, OrdersSettings settings, SaopOrganization organization,
-  int sourceConnectorId, Guid runId, bool full)
+  int sourceConnectorId, Guid runId, bool full, int? historyFrom)
 {
   const string entityType = "GetOrder";
   var fetchStartedUtc = DateTime.UtcNow;
@@ -275,16 +277,21 @@ static async Task<OrderFetch> RunSalesOrdersAsync(
     landed++;
   }
 
+  // GetOrderStatus za VNK ne vrne ničesar (vsi teki »0 sprememb«), GetOrder po ključu pa dela (David 2026-09-25):
+  // zato še zajem po številkah od največje znane naprej in enkrat na dan osvežitev odprtih naročil.
+  var sweep = await OrderSweep.SweepAsync(client, connection, settings, organization, runId, OrderSweep.Sales, organization.SalesOrderBook!, historyFrom);
+  var refreshed = await OrderSweep.RefreshOpenAsync(client, connection, settings, organization, sourceConnectorId, runId, OrderSweep.Sales, organization.SalesOrderBook!);
+
   // Vodni žig se odloči šele PO preslikavi (RunOrderKindAsync): pred njo so sveže zapisane strani vedno
   // Pending, zato se žig ni premaknil nikoli, ko je tek kaj prinesel, in vsak tek je znova prenesel vse
   // (Vidadria 2026-09-22: 634 naročil vsako uro).
-  return new OrderFetch(keys.Count, landed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
+  return new OrderFetch(keys.Count + sweep + refreshed, landed + sweep + refreshed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
 }
 
 /// <summary>VND: enak vzorec kot RunSalesOrdersAsync, glej tam.</summary>
 static async Task<OrderFetch> RunPurchaseOrdersAsync(
   SaopOrdersApiClient client, SqlConnection connection, OrdersSettings settings, SaopOrganization organization,
-  int sourceConnectorId, Guid runId, bool full)
+  int sourceConnectorId, Guid runId, bool full, int? historyFrom)
 {
   const string entityType = "GetPurchaseOrder";
   var fetchStartedUtc = DateTime.UtcNow;
@@ -317,10 +324,22 @@ static async Task<OrderFetch> RunPurchaseOrdersAsync(
     landed++;
   }
 
+  var sweep = await OrderSweep.SweepAsync(client, connection, settings, organization, runId, OrderSweep.Purchase, organization.PurchaseOrderBook!, historyFrom);
+  var refreshed = await OrderSweep.RefreshOpenAsync(client, connection, settings, organization, sourceConnectorId, runId, OrderSweep.Purchase, organization.PurchaseOrderBook!);
+
   // Vodni žig se odloči šele PO preslikavi (RunOrderKindAsync): pred njo so sveže zapisane strani vedno
   // Pending, zato se žig ni premaknil nikoli, ko je tek kaj prinesel, in vsak tek je znova prenesel vse
   // (Vidadria 2026-09-22: 634 naročil vsako uro).
-  return new OrderFetch(keys.Count, landed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
+  return new OrderFetch(keys.Count + sweep + refreshed, landed + sweep + refreshed, 0, false, modifiedFrom.Value, fetchStartedUtc, failed, entityType, sourceConnectorId);
+}
+
+static int? ParseHistoryFrom(string[] args)
+{
+  var index = Array.FindIndex(args, a => string.Equals(a, "--zgodovina-od", StringComparison.OrdinalIgnoreCase));
+  if (index < 0) return null;
+  if (index + 1 >= args.Length || !int.TryParse(args[index + 1], out var year) || year < 2000 || year > DateTime.Today.Year)
+    throw new ArgumentException($"--zgodovina-od potrebuje leto med 2000 in {DateTime.Today.Year}, npr. --zgodovina-od 2023.");
+  return year;
 }
 
 static async Task<int?> ReadSourceConnectorIdAsync(SqlConnection connection, int organizationId, string sourceCode)
@@ -403,6 +422,12 @@ static void PrintUsage()
     Argumenti:
       --organizations 2,3   zajemi samo našteta podjetja (privzeto vsa aktivna z nastavljeno knjigo)
       --full                prezri vodni žig; zajemi zadnjih InitialBackfillMonths mesecev znova
+      --zgodovina-od 2023   enkratni zajem zgodovine po številkah: vsa leta od 2023 do letos, vsaka številka
+                            od 1 naprej (že znane se preskočijo; konec leta = OrderSweepHistoryGap zaporednih lukenj)
+
+    Zajem po številkah (2026-09-25): vsak tek za tekoče leto prebere GetOrder/GetPurchaseOrder od največje
+    številke v bazi naprej (konec = OrderSweepTailGap zaporednih neobstoječih); enkrat na OrderOpenRefreshHours
+    ur znova prebere odprta naročila zadnjih OrderOpenRefreshDays dni (odpremljene in prevzete količine).
       --help                ta izpis
 
     Knjige (SalesOrderBook/PurchaseOrderBook) se nastavijo na organizacijo v appsettings.Local.json

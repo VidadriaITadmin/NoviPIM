@@ -12,7 +12,10 @@ namespace PIM.B2bWorker;
 /// Ena zapisana izvozna datoteka: kar gre v fazo DATOTEKA (blok 6 prenove nadzora) — ime, vrstice,
 /// stolpci in velikost. Velikost je null, kadar je datoteke po zamenjavi ni bilo mogoče prebrati.
 /// </summary>
-public sealed record ExportFileResult(string ProfileCode, string FilePath, int Rows, int Columns, long? Bytes);
+/// <param name="Note">
+/// 277: kaj je o datoteki povedala varovalka (npr. »zadržanih artiklov: 3 … čakajo potrditev«); null = nič posebnega.
+/// </param>
+public sealed record ExportFileResult(string ProfileCode, string FilePath, int Rows, int Columns, long? Bytes, string? Note = null);
 
 public static class MagentoExportCommand
 {
@@ -66,6 +69,8 @@ public static class MagentoExportCommand
         // manjkajoce stranke.csv - torej ni polovicnega izvoza.
         // Obliko preberemo pred podatki: manjkajoč ali izklopljen profil je napaka
         // konfiguracije in mora pasti, preden se karkoli zapiše v izhodno mapo.
+        // 286: stolpci atributov sledijo naborom atributov po kategorijah (uporabnik 2026-09-25: »to ne sme biti fiksno«).
+        await SyncAttributeColumnsAsync(connection, MagentoProductSchema.ProfileCode, ct);
         var productProfile = await ExportProfileRegistry.LoadProfileAsync(connection, MagentoProductSchema.ProfileCode, ct);
         var customerProfile = await ExportProfileRegistry.LoadProfileAsync(connection, MagentoCustomerSchema.ProfileCode, ct);
 
@@ -104,25 +109,82 @@ public static class MagentoExportCommand
         var productCount = 0;
         var customerCount = 0;
         // 251: sifra in »Spletne strani« vsake zapisane vrstice — po uspesni zamenjavi gre v out.WebPublication.
+        // 277: in varovane vrednosti (cene), ki jih varovalka primerja z zadnjo objavo.
         var publication = new List<PublishedRow>();
+        // 277: kje v zacasni datoteki je vsaka vrstica (odmik, dolzina v bajtih) — zadrzane se izpustijo.
+        var records = new List<(string? ItemId, long Offset, int Length)>();
+        var itemIndex = ConfiguredItemIndex(productProfile.Columns);
+        var filteredTempPath = $"{productPath}.{runId}.izbor.tmp";
+        CatalogSafeguardDecision? safeguard = null;
+        IReadOnlyList<string> heldItems = [];
+        // 285: katalog iz več podjetij — začasne datoteke po podjetju in kaj je vsako prispevalo.
+        var sourceTempPaths = new List<string>();
+        MergedCatalog? mergedParts = null;
 
         try
         {
             directoryLock = AcquireOutputDirectory(outputDir);
-            await RefreshCatalogReviewAsync(connection, organizationId, ct);
-            if (publishToMagento) await WithdrawIneligibleWebShopsAsync(connection, organizationId, ct);
-            // Od migracije 146 gre v datoteko samo, kar na splet sodi: objavljen izdelek s spletno
-            // stranjo, veljaven za to stran (pravilo je v out.GetExportRows in registru profila).
-            // Do takrat je izvoz jemal ves katalog podjetja (43.504 vrstic namesto 1.957 pri
-            // podjetju 2) — uporabnik 2026-09-02: "v izvozu morajo biti cisti podatki".
-            // 251: poleg objavljenih gre v datoteko se odjavna vrstica (prazne »Spletne strani«) za
-            // artikel, ki je bil objavljen in ni vec; artikel, ki ni bil nikoli na spletu, ne gre.
-            productCount = await RegistryCsvWriter.WriteAsync(productTempPath, productProfile.Columns,
-                CapturePublication(
-                    ReadExportRowsAsync(connection, productProfile.ExportProfileId, organizationId, productProfile.Columns, onlyPublished: true, ct),
-                    productProfile.Columns, publication, ct), ct);
+            RemoveStaleTempFiles(outputDir);
+            // 285: katalog iz več podjetij (out.CatalogSource). Brez registra ali z enim podjetjem je izvoz enak kot pred 285.
+            var sources = await CatalogMerge.LoadSourcesAsync(connection, organizationId, ct);
+            var mergedCatalog = sources.Count > 1 || sources[0].OrganizationId != organizationId;
+            foreach (var source in sources)
+            {
+                await RefreshCatalogReviewAsync(connection, source.OrganizationId, ct);
+                if (publishToMagento) await WithdrawIneligibleWebShopsAsync(connection, source.OrganizationId, ct);
+            }
+            string publishFrom;
+            if (mergedCatalog)
+            {
+                mergedParts = await WriteMergedCatalogAsync(connection, sources, productProfile, productPath, runId, productTempPath,
+                    publishToMagento, productRunKey, sourceTempPaths, ct);
+                productCount = mergedParts.Rows;
+                publishFrom = productTempPath;
+            }
+            else
+            {
+                // Od migracije 146 gre v datoteko samo, kar na splet sodi: objavljen izdelek s spletno
+                // stranjo, veljaven za to stran (pravilo je v out.GetExportRows in registru profila).
+                // Do takrat je izvoz jemal ves katalog podjetja (43.504 vrstic namesto 1.957 pri
+                // podjetju 2) — uporabnik 2026-09-02: "v izvozu morajo biti cisti podatki".
+                // 251: poleg objavljenih gre v datoteko se odjavna vrstica (prazne »Spletne strani«) za
+                // artikel, ki je bil objavljen in ni vec; artikel, ki ni bil nikoli na spletu, ne gre.
+                // 277: locilo stolpcev iz registra (katalog.csv ';'), cene z decimalno vejico (ExportValueFormat).
+                productCount = await RegistryCsvWriter.WriteAsync(productTempPath, productProfile.Columns,
+                    CapturePublication(
+                        ReadExportRowsAsync(connection, productProfile.ExportProfileId, organizationId, productProfile.Columns, onlyPublished: true, ct),
+                        productProfile.Columns, publication, ct), ct,
+                    productProfile.FieldDelimiter,
+                    (row, offset, length) => records.Add((itemIndex >= 0 ? row[itemIndex] : null, offset, length)));
+
+                // 277: varovalka pred zamenjavo. Artikel s sumljivo spremembo (cena ×100, 0, prazna, množičen umik s
+                // spleta …) ne gre v objavljeno datoteko in čaka potrditev na /varovalke; ostali gredo ven kot vedno.
+                // Magento se artikla, ki ga v datoteki ni, ne dotakne: na spletu ostane s prejšnjimi podatki.
+                if (publishToMagento)
+                {
+                    safeguard = await CatalogSafeguard.EvaluateAsync(connection, organizationId, CatalogSafeguard.RowsJson(publication), productCount, productRunKey, ct);
+                    heldItems = safeguard.HeldItems;
+                    Console.WriteLine($"Varovalka katalog.csv: {safeguard.Describe()}.");
+                }
+                publishFrom = productTempPath;
+                if (heldItems.Count > 0)
+                {
+                    var held = heldItems.ToHashSet(StringComparer.Ordinal);
+                    var skip = Enumerable.Range(0, records.Count).Where(index => records[index].ItemId is { } item && held.Contains(item)).ToHashSet();
+                    productCount = await RegistryCsvWriter.CopyWithoutAsync(productTempPath, filteredTempPath,
+                        records.Select(record => (record.Offset, record.Length)).ToList(), skip, ct);
+                    publishFrom = filteredTempPath;
+                }
+            }
+
+            // 285: stranke iz vseh podjetij kataloga. Anja Zorenc 2026-09-25: »Stranke so dvojne, imajo tudi dvojne
+            // šifre … Vodimo jo posebej. Združevali jih bomo pomoje samo v analizah.« Vsaka stranka gre ven s svojo
+            // šifro, cenikom in popusti svojega podjetja; šifre podjetij se ne prekrivajo (IQ 8 mest, ViD 7).
             customerCount = await RegistryCsvWriter.WriteAsync(customerTempPath, customerProfile.Columns,
-                ReadExportRowsAsync(connection, customerProfile.ExportProfileId, organizationId, customerProfile.Columns, onlyPublished: true, ct), ct);
+                mergedCatalog
+                    ? CustomersFromAllAsync(connection, customerProfile, sources, ct)
+                    : ReadExportRowsAsync(connection, customerProfile.ExportProfileId, organizationId, customerProfile.Columns, onlyPublished: true, ct), ct,
+                customerProfile.FieldDelimiter);
 
             // Vse premikanje datotek je znotraj ENEGA try: tudi odmik prejsnjega para.
             // Ce bi bil odmik zunaj, bi neuspesen odmik datoteke strank (na primer ker je
@@ -140,7 +202,7 @@ public static class MagentoExportCommand
                 if (File.Exists(productPath)) { File.Move(productPath, productBackupPath, overwrite: true); productBackedUp = true; }
                 if (File.Exists(customerPath)) { File.Move(customerPath, customerBackupPath, overwrite: true); customerBackedUp = true; }
 
-                File.Move(productTempPath, productPath, overwrite: true);
+                File.Move(publishFrom, productPath, overwrite: true);
                 productReplaced = true;
                 File.Move(customerTempPath, customerPath, overwrite: true);
                 customerReplaced = true;
@@ -170,7 +232,24 @@ public static class MagentoExportCommand
 
             // 251: sele ko je par objavljen, zapisemo, kaj je slo ven. Ce ta zapis pade, datoteki ostaneta
             // (sta veljavni), zagon pa se konca z napako: naslednji izvoz poslje iste odjave znova.
-            if (publishToMagento) await RecordWebPublicationAsync(connection, organizationId, publication, ct);
+            // 277: zapise se samo, kar je v objavljeni datoteki; zadrzani artikli ostanejo, kot so bili.
+            if (publishToMagento && mergedParts is not null)
+            {
+                // 285: vsako podjetje zapiše svoje vrstice (svoja spletišča) — od tega so odvisne njegove odjavne vrstice.
+                foreach (var part in mergedParts.Parts)
+                {
+                    var publishedJson = CatalogSafeguard.RowsJson(part.Publication.Where(row => part.Contributed.Contains(row.ItemId)));
+                    await RecordWebPublicationAsync(connection, part.OrganizationId, publishedJson, ct);
+                    await CatalogSafeguard.RecordPublicationAsync(connection, part.OrganizationId, publishedJson, part.Safeguard?.CheckId, part.Held, ct);
+                }
+            }
+            else if (publishToMagento)
+            {
+                var held = heldItems.ToHashSet(StringComparer.Ordinal);
+                var publishedJson = CatalogSafeguard.RowsJson(publication.Where(row => !held.Contains(row.ItemId)));
+                await RecordWebPublicationAsync(connection, organizationId, publishedJson, ct);
+                await CatalogSafeguard.RecordPublicationAsync(connection, organizationId, publishedJson, safeguard?.CheckId, heldItems, ct);
+            }
         }
         catch (Exception exception)
         {
@@ -180,6 +259,8 @@ public static class MagentoExportCommand
         finally
         {
             DeleteIfExists(productTempPath);
+            DeleteIfExists(filteredTempPath);
+            foreach (var sourceTempPath in sourceTempPaths) DeleteIfExists(sourceTempPath);
             DeleteIfExists(customerTempPath);
             DeleteIfExists(markerTempPath);
 
@@ -205,12 +286,154 @@ public static class MagentoExportCommand
             directoryLock?.Dispose();
         }
 
+        // 277: faza DATOTEKA pove, koliko artiklov je zadrzanih (niso v datoteki, cakajo potrditev).
+        var note = mergedParts is not null
+            ? mergedParts.Note
+            : safeguard is { Status: not "CLEAN" } ? safeguard.Describe() : null;
         return
         [
-            new(MagentoProductSchema.ProfileCode, productPath, productCount, productProfile.Columns.Count, FileSize(productPath)),
+            new(MagentoProductSchema.ProfileCode, productPath, productCount, productProfile.Columns.Count, FileSize(productPath), note),
             new(MagentoCustomerSchema.ProfileCode, customerPath, customerCount, customerProfile.Columns.Count, FileSize(customerPath)),
         ];
     }
+
+    /// <summary>
+    /// 285: stranke vseh podjetij kataloga zaporedoma. Šifra stranke je ključ v Magentu; če bi se kdaj ponovila v
+    /// dveh podjetjih, gre ven samo prva (po prednosti), ostale so naštete v izpisu — dve vrstici z isto šifro bi
+    /// Magento zmešal v eno stranko z napačnim cenikom.
+    /// </summary>
+    static async IAsyncEnumerable<IReadOnlyList<string?>> CustomersFromAllAsync(
+        SqlConnection connection, ExportProfileDefinition profile, IReadOnlyList<CatalogMerge.Source> sources,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        var keyIndex = profile.Columns.Where(column => column.IsActive).OrderBy(column => column.SortOrder).ToList()
+            .FindIndex(column => string.Equals(column.CanonicalFieldCode, "Customer.Key", StringComparison.Ordinal));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = new List<string>();
+        foreach (var source in sources)
+        {
+            var count = 0;
+            await foreach (var row in ReadExportRowsAsync(connection, profile.ExportProfileId, source.OrganizationId, profile.Columns, onlyPublished: true, ct))
+            {
+                if (keyIndex >= 0 && row[keyIndex] is { Length: > 0 } key && !seen.Add(key))
+                {
+                    duplicates.Add($"{key} (podjetje {source.OrganizationId})");
+                    continue;
+                }
+                count++;
+                yield return row;
+            }
+            Console.WriteLine($"Stranke: podjetje {source.OrganizationId} prispeva {count} strank.");
+        }
+        if (duplicates.Count > 0)
+            Console.Error.WriteLine($"Opozorilo: {duplicates.Count} šifer strank se ponovi v več podjetjih, izvožena je prva: {string.Join(", ", duplicates.Take(20))}.");
+    }
+
+    /// <summary>285: kaj je v združeni katalog.csv prispevalo posamezno podjetje.</summary>
+    internal sealed record MergedPart(
+        int OrganizationId, List<PublishedRow> Publication, IReadOnlySet<string> Contributed,
+        CatalogSafeguardDecision? Safeguard, IReadOnlyList<string> Held, int SourceRows);
+
+    /// <summary>285: združena datoteka — vrstice v njej in prispevki po podjetjih.</summary>
+    internal sealed record MergedCatalog(int Rows, IReadOnlyList<MergedPart> Parts, string? Note);
+
+    /// <summary>
+    /// 285: katalog.csv iz več podjetij. Vsako podjetje zapiše svoje vrstice po obstoječih pravilih v svojo začasno
+    /// datoteko in gre skozi svojo varovalko (277, primerjava z SVOJO zadnjo objavo); nato <see cref="CatalogMerge"/>
+    /// sestavi eno vrstico na šifro. Rezultat je v <paramref name="targetTempPath"/>.
+    /// </summary>
+    static async Task<MergedCatalog> WriteMergedCatalogAsync(
+        SqlConnection connection, IReadOnlyList<CatalogMerge.Source> sources, ExportProfileDefinition profile,
+        string productPath, string runId, string targetTempPath, bool publishToMagento, Guid? productRunKey,
+        List<string> sourceTempPaths, CancellationToken ct)
+    {
+        var ordered = profile.Columns.Where(column => column.IsActive).OrderBy(column => column.SortOrder)
+            .ThenBy(column => column.ColumnCode, StringComparer.Ordinal).ToList();
+        var itemIndex = ordered.FindIndex(column => string.Equals(column.CanonicalFieldCode, "Product.ItemID", StringComparison.Ordinal));
+        var sitesIndex = ordered.FindIndex(column => string.Equals(column.CanonicalFieldCode, "Product.WebSites", StringComparison.Ordinal));
+        if (itemIndex < 0 || sitesIndex < 0)
+            throw new InvalidOperationException("Katalog iz več podjetij potrebuje v profilu stolpca šifre in »Spletne strani«. Prejšnja datoteka ostane veljavna.");
+        var sites = await CatalogMerge.LoadSitesAsync(connection, ct);
+        var categoryIndex = sites.ToDictionary(
+            site => site.Label,
+            site => (IReadOnlyList<int>)site.CategoryFieldCodes
+                .Select(code => ordered.FindIndex(column => string.Equals(column.CanonicalFieldCode, code, StringComparison.Ordinal)))
+                .Where(index => index >= 0).ToList(),
+            StringComparer.OrdinalIgnoreCase);
+        var siteColumns = categoryIndex.Values.SelectMany(indexes => indexes).Distinct().ToArray();
+
+        var rows = new List<IReadOnlyList<CatalogMerge.SourceRow>>();
+        var publications = new List<List<PublishedRow>>();
+        var decisions = new List<CatalogSafeguardDecision?>();
+        var held = new List<IReadOnlySet<string>>();
+        foreach (var source in sources)
+        {
+            var tempPath = $"{productPath}.{runId}.podjetje{source.OrganizationId}.tmp";
+            sourceTempPaths.Add(tempPath);
+            var sourceRows = new List<CatalogMerge.SourceRow>();
+            var publication = new List<PublishedRow>();
+            // Podjetje z omejenimi spletišči (ViD: samo videlektro): vrstica brez dovoljenega spletišča ne gre ven,
+            // razen kot odjavna vrstica za artikel, ki ga je podjetje nedavno objavilo (kot 251).
+            var recent = source.WebSiteLabels is null ? null : await CatalogMerge.LoadRecentPublicationAsync(connection, source.OrganizationId, source.WebSiteLabels, ct);
+            var dropped = 0;
+            await RegistryCsvWriter.WriteAsync(tempPath, profile.Columns,
+                CapturePublication(
+                    ReadExportRowsAsync(connection, profile.ExportProfileId, source.OrganizationId, profile.Columns, onlyPublished: true, ct),
+                    profile.Columns, publication, ct), ct,
+                profile.FieldDelimiter,
+                (row, offset, length) =>
+                {
+                    var values = new Dictionary<int, string?>(siteColumns.Length);
+                    foreach (var index in siteColumns) values[index] = row[index];
+                    // Vrstica brez šifre se ne združuje; dobi svoj ključ in gre skozi, kot je.
+                    var itemId = row[itemIndex] is { Length: > 0 } id ? id : $"\0{source.OrganizationId}:{sourceRows.Count}";
+                    var allowed = source.Allowed(row[sitesIndex]);
+                    // Tudi odjavna vrstica podjetja (prazne »Spletne strani«) gre ven samo za artikel, ki ga je podjetje
+                    // objavilo na dovoljenem spletišču — sicer bi ViD umikal artikle, ki jih je objavljal samo na svetilih.
+                    if (allowed is null && recent is not null && !recent.Contains(itemId))
+                    {
+                        dropped++;
+                        return;
+                    }
+                    sourceRows.Add(new(itemId, offset, length, allowed, values, row[sitesIndex]));
+                });
+            // Objava in varovalka podjetja vidita samo, kar podjetje res prispeva: dovoljena spletišča.
+            var kept = sourceRows.ToDictionary(row => row.ItemId, row => row.WebSites, StringComparer.Ordinal);
+            publication = publication.Where(row => kept.ContainsKey(row.ItemId))
+                .Select(row => row with { WebSites = kept[row.ItemId] }).ToList();
+            var count = sourceRows.Count;
+            CatalogSafeguardDecision? decision = null;
+            if (publishToMagento)
+            {
+                decision = await CatalogSafeguard.EvaluateAsync(connection, source.OrganizationId, CatalogSafeguard.RowsJson(publication), count, productRunKey, ct);
+                Console.WriteLine($"Varovalka katalog.csv (podjetje {source.OrganizationId}): {decision.Describe()}.");
+            }
+            rows.Add(sourceRows);
+            publications.Add(publication);
+            decisions.Add(decision);
+            held.Add((decision?.HeldItems ?? []).ToHashSet(StringComparer.Ordinal));
+            Console.WriteLine($"Katalog: podjetje {source.OrganizationId} prispeva {count} vrstic"
+                + (dropped > 0 ? $" ({dropped} brez dovoljenega spletišča {string.Join('|', source.WebSiteLabels!)} izpuščenih)." : "."));
+        }
+
+        var plan = CatalogMerge.Plan(rows, held, sites, sitesIndex, categoryIndex);
+        var written = await CatalogMerge.WriteAsync(targetTempPath, sourceTempPaths, rows, plan, ordered, profile.FieldDelimiter, null, ct);
+        var contributed = CatalogMerge.Contributed(rows, held, plan);
+        var parts = sources.Select((source, index) => new MergedPart(source.OrganizationId, publications[index], contributed[index],
+            decisions[index], decisions[index]?.HeldItems ?? [], rows[index].Count)).ToList();
+        var fromFirst = plan.Count(row => row.SourceIndex == 0);
+        Console.WriteLine($"Katalog iz {sources.Count} podjetij: {written} vrstic (podjetje {sources[0].OrganizationId}: {fromFirst}, ostala: {written - fromFirst}), "
+            + $"{plan.Count(row => row.Patches.Count > 0)} vrstic z združenimi spletišči.");
+        var notes = parts.Where(part => part.Safeguard is { Status: not "CLEAN" })
+            .Select(part => $"podjetje {part.OrganizationId}: {part.Safeguard!.Describe()}").ToList();
+        var summary = $"iz {sources.Count} podjetij ({string.Join(" + ", parts.Select(part => $"{part.OrganizationId}: {part.SourceRows}"))} vrstic → {written})";
+        return new MergedCatalog(written, parts, notes.Count == 0 ? summary : summary + "; " + string.Join("; ", notes));
+    }
+
+    /// <summary>Stolpec s šifro artikla v urejenem registru (po SortOrder); -1, če ga profil nima.</summary>
+    static int ConfiguredItemIndex(IReadOnlyList<ExportColumnDefinition> columns) =>
+        columns.Where(column => column.IsActive).OrderBy(column => column.SortOrder).ThenBy(column => column.ColumnCode, StringComparer.Ordinal)
+            .ToList().FindIndex(column => string.Equals(column.CanonicalFieldCode, "Product.ItemID", StringComparison.Ordinal));
 
     /// <summary>
     /// En sam profil iz registra v eno datoteko — za hitro osvezitev cen in zaloge
@@ -236,6 +459,7 @@ public static class MagentoExportCommand
         var profile = await ExportProfileRegistry.LoadProfileAsync(connection, profileCode, ct);
         var targetPath = Path.Combine(outputDir, fileName ?? $"magento-{profileCode.ToLowerInvariant().Replace('_', '-')}.csv");
         var tempPath = $"{targetPath}.{Guid.NewGuid():N}.tmp";
+        var filteredPath = $"{tempPath}.izbor";
 
         // Sled izvoza (migracija 172) nastane PRED izhodno mapo in kljucavnico, enako kot pri paru
         // katalog/stranke. Do 2026-09-21 je bil zapis sele za kljucavnico: 76 zagonov v 48 urah je
@@ -250,12 +474,45 @@ public static class MagentoExportCommand
 
             // Samo objavljeni izdelki s spletno stranjo; ali je zahtevana tudi veljavnost za splet,
             // pove profil (RequireWebValid) — hitri profil je namenoma ne zahteva.
+            // 282: profil z varovanimi stolpci (cene, zaloga) gre skozi varovalko — sumljivi artikli ne gredo v
+            // datoteko in na spletu ostanejo s prejšnjo ceno in zalogo; ostali gredo ven kot vedno.
+            var itemIndex = ConfiguredItemIndex(profile.Columns);
+            var guarded = itemIndex >= 0 && profile.Columns.Any(column => column.IsActive && column.GuardKind is not null);
+            var publication = new List<PublishedRow>();
+            var records = new List<(string? ItemId, long Offset, int Length)>();
+            var rows = ReadExportRowsAsync(connection, profile.ExportProfileId, organizationId, profile.Columns, onlyPublished: true, ct);
+            Action<IReadOnlyList<string?>, long, int>? recordWritten = guarded ? (row, offset, length) => records.Add((row[itemIndex], offset, length)) : null;
             var count = await RegistryCsvWriter.WriteAsync(tempPath, profile.Columns,
-                ReadExportRowsAsync(connection, profile.ExportProfileId, organizationId, profile.Columns, onlyPublished: true, ct), ct);
+                guarded ? CapturePublication(rows, profile.Columns, publication, ct) : rows, ct,
+                profile.FieldDelimiter, recordWritten);
+            CatalogSafeguardDecision? safeguard = null;
+            IReadOnlyList<string> heldItems = [];
+            if (guarded)
+            {
+                safeguard = await CatalogSafeguard.EvaluateStockPriceAsync(connection, profileCode, organizationId,
+                    CatalogSafeguard.RowsJson(publication), count, ct);
+                heldItems = safeguard.HeldItems;
+                Console.WriteLine($"Varovalka {profileCode}: {safeguard.Describe()}.");
+                if (heldItems.Count > 0)
+                {
+                    var heldSet = heldItems.ToHashSet(StringComparer.Ordinal);
+                    var skip = Enumerable.Range(0, records.Count).Where(index => records[index].ItemId is { } item && heldSet.Contains(item)).ToHashSet();
+                    count = await RegistryCsvWriter.CopyWithoutAsync(tempPath, filteredPath,
+                        records.Select(record => (record.Offset, record.Length)).ToList(), skip, ct);
+                    File.Move(filteredPath, tempPath, overwrite: true);
+                }
+            }
             File.Move(tempPath, targetPath, overwrite: true);
+            if (guarded && safeguard is { CheckId: not null })
+            {
+                var heldSet = heldItems.ToHashSet(StringComparer.Ordinal);
+                await CatalogSafeguard.RecordExportPublicationAsync(connection, profileCode, organizationId,
+                    CatalogSafeguard.RowsJson(publication.Where(row => !heldSet.Contains(row.ItemId))), safeguard.CheckId, heldItems, ct);
+            }
             await ExportRunLog.CompleteAsync(connection, runKey, succeeded: true,
                 rowCount: count, columnCount: profile.Columns.Count, filePath: targetPath, ct: CancellationToken.None);
-            return new ExportFileResult(profileCode, targetPath, count, profile.Columns.Count, FileSize(targetPath));
+            return new ExportFileResult(profileCode, targetPath, count, profile.Columns.Count, FileSize(targetPath),
+                safeguard is { Status: not "CLEAN" } ? safeguard.Describe() : null);
         }
         catch (Exception exception)
         {
@@ -266,6 +523,7 @@ public static class MagentoExportCommand
         finally
         {
             DeleteIfExists(tempPath);
+            DeleteIfExists(filteredPath);
             directoryLock?.Dispose();
         }
     }
@@ -326,12 +584,17 @@ public static class MagentoExportCommand
         return value is int minutes ? minutes : null;
     }
 
-    /// <summary>Ena vrstica zapisanega katalog.csv za out.WebPublication: sifra in »Spletne strani« (prazno = odjava).</summary>
-    internal sealed record PublishedRow(string ItemId, string? WebSites);
+    /// <summary>
+    /// Ena vrstica zapisanega katalog.csv za out.WebPublication: sifra in »Spletne strani« (prazno = odjava).
+    /// 277: <paramref name="Guarded"/> so vrednosti stolpcev, ki jih preverja varovalka (cene), v strojni
+    /// obliki s piko — po kanonični kodi stolpca, npr. Product.PriceB2B.
+    /// </summary>
+    internal sealed record PublishedRow(string ItemId, string? WebSites, IReadOnlyDictionary<string, string?>? Guarded = null);
 
     /// <summary>
-    /// Vrstice gredo skozi nespremenjene; ob tem si zapomnimo sifro in »Spletne strani« (po kanonicni kodi
-    /// stolpca, ne po naslovu v glavi). Brez stolpca sifre profil ne more nositi objave — takrat nic ne zbiramo.
+    /// Vrstice gredo skozi nespremenjene; ob tem si zapomnimo sifro, »Spletne strani« in varovane vrednosti
+    /// (po kanonicni kodi stolpca, ne po naslovu v glavi). Brez stolpca sifre profil ne more nositi objave —
+    /// takrat nic ne zbiramo. Vrednosti so zajete PRED zapisom, torej s piko, kot jih vrne baza.
     /// </summary>
     internal static async IAsyncEnumerable<IReadOnlyList<string?>> CapturePublication(
         IAsyncEnumerable<IReadOnlyList<string?>> rows,
@@ -342,10 +605,22 @@ public static class MagentoExportCommand
         var ordered = columns.OrderBy(column => column.SortOrder).ToList();
         var itemIndex = ordered.FindIndex(column => string.Equals(column.CanonicalFieldCode, "Product.ItemID", StringComparison.Ordinal));
         var sitesIndex = ordered.FindIndex(column => string.Equals(column.CanonicalFieldCode, "Product.WebSites", StringComparison.Ordinal));
+        var guarded = ordered
+            .Select((column, index) => (column, index))
+            .Where(pair => !string.IsNullOrEmpty(pair.column.GuardKind))
+            .ToArray();
         await foreach (var row in rows.WithCancellation(ct))
         {
             if (itemIndex >= 0 && row[itemIndex] is { Length: > 0 } itemId)
-                into.Add(new(itemId, sitesIndex >= 0 ? row[sitesIndex] : null));
+            {
+                Dictionary<string, string?>? values = null;
+                if (guarded.Length > 0)
+                {
+                    values = new Dictionary<string, string?>(StringComparer.Ordinal);
+                    foreach (var (column, index) in guarded) values[column.CanonicalFieldCode] = row[index];
+                }
+                into.Add(new(itemId, sitesIndex >= 0 ? row[sitesIndex] : null, values));
+            }
             yield return row;
         }
     }
@@ -381,8 +656,11 @@ public static class MagentoExportCommand
         }
     }
 
-    /// <summary>251: kaj je slo v objavljeni katalog.csv — od tega je odvisno, kdo dobi odjavno vrstico in kdaj izpade.</summary>
-    internal static async Task RecordWebPublicationAsync(SqlConnection connection, int organizationId, IReadOnlyList<PublishedRow> rows, CancellationToken ct)
+    /// <summary>
+    /// 251: kaj je slo v objavljeni katalog.csv — od tega je odvisno, kdo dobi odjavno vrstico in kdaj izpade.
+    /// Vrstice so iste kot za varovalko (<see cref="CatalogSafeguard.RowsJson"/>); procedura bere samo i in s.
+    /// </summary>
+    internal static async Task RecordWebPublicationAsync(SqlConnection connection, int organizationId, string rowsJson, CancellationToken ct)
     {
         await using var command = new SqlCommand("out.RecordWebPublication", connection)
         {
@@ -390,11 +668,43 @@ public static class MagentoExportCommand
             CommandTimeout = 300,
         };
         command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
-        command.Parameters.Add("@RowsJson", SqlDbType.NVarChar, -1).Value =
-            System.Text.Json.JsonSerializer.Serialize(rows.Select(row => new { i = row.ItemId, s = row.WebSites ?? string.Empty }));
+        command.Parameters.Add("@RowsJson", SqlDbType.NVarChar, -1).Value = rowsJson;
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))
             Console.WriteLine($"Objava na splet zapisana: {reader.GetInt32(0)} objavljenih, {reader.GetInt32(1)} odjavnih vrstic ({reader.GetInt32(2)} novih odjav).");
+    }
+
+    /// <summary>
+    /// 286: stolpec za vsak atribut iz naborov atributov po kategorijah (<c>out.SyncAttributeExportColumns</c>) —
+    /// nov atribut v naboru dobi stolpec na koncu datoteke, preimenovan se preimenuje, umaknjen izklopi. Napaka
+    /// tu izvoza ne ustavi: datoteka nastane s stolpci, kot so bili; baza pred 286 procedure nima.
+    /// </summary>
+    private static async Task SyncAttributeColumnsAsync(SqlConnection connection, string profileCode, CancellationToken ct)
+    {
+        try
+        {
+            await using var command = new SqlCommand("out.SyncAttributeExportColumns", connection)
+            {
+                CommandType = CommandType.StoredProcedure,
+                CommandTimeout = 120,
+            };
+            command.Parameters.Add("@ProfileCode", SqlDbType.NVarChar, 200).Value = profileCode;
+            command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = "PIM.B2bWorker";
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            var changes = new List<string>();
+            while (await reader.ReadAsync(ct))
+                changes.Add($"{reader.GetString(1).ToLowerInvariant()}: {(reader.IsDBNull(3) ? reader.IsDBNull(2) ? reader.GetString(0) : reader.GetString(2) : reader.GetString(3))}");
+            if (changes.Count > 0)
+                Console.WriteLine($"Stolpci atributov usklajeni z nabori ({changes.Count}): {string.Join("; ", changes)}.");
+        }
+        catch (SqlException exception) when (exception.Number == 2812)
+        {
+            // Baza pred 286: stolpci ostanejo, kot so v registru.
+        }
+        catch (SqlException exception) when (!ct.IsCancellationRequested)
+        {
+            Console.Error.WriteLine($"Opozorilo: stolpci atributov niso usklajeni z nabori (izvoz se nadaljuje s trenutnimi stolpci): {exception.Message}");
+        }
     }
 
     private static async Task RefreshCatalogReviewAsync(SqlConnection connection, int organizationId, CancellationToken ct)
@@ -453,6 +763,27 @@ public static class MagentoExportCommand
         try { if (File.Exists(path)) File.Delete(path); }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// Zacasne datoteke zagonov, ki so bili prekinjeni na silo (Job Object, ubit proces) in niso prisli do
+    /// pospravljanja v finally — uporabnik 2026-09-28 je v mapi nasel katalog.csv.….podjetje2.tmp izpred treh dni.
+    /// Klice se pod kljucavnico mape, torej noben drug izvoz ne pise; ura starosti je samo dodatna varnost.
+    /// Varnostne kopije (.prej) ostanejo: ob neuspeli obnovi so lahko edina kopija prejsnje datoteke.
+    /// </summary>
+    internal static int RemoveStaleTempFiles(string outputDir, TimeSpan? olderThan = null)
+    {
+        var limit = DateTime.UtcNow - (olderThan ?? TimeSpan.FromHours(1));
+        var removed = 0;
+        foreach (var pattern in new[] { "katalog.csv.*.tmp", "stranke.csv.*.tmp", "magento-export.complete.*.tmp" })
+            foreach (var path in Directory.EnumerateFiles(outputDir, pattern, SearchOption.TopDirectoryOnly))
+            {
+                if (File.GetLastWriteTimeUtc(path) >= limit) continue;
+                DeleteIfExists(path);
+                if (!File.Exists(path)) removed++;
+            }
+        if (removed > 0) Console.WriteLine($"Pospravljenih {removed} zacasnih datotek prekinjenih izvozov.");
+        return removed;
     }
 
     /// <summary>

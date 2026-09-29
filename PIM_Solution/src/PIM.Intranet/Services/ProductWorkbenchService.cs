@@ -78,7 +78,8 @@ public sealed record ProductListFilter(
   string? ErpStatus = null, string? WebStatus = null, string? Sort = null,
   bool SortDescending = false, string Language = "sl", string? Department = null,
   string? Activity = null, string? WebPublish = null, string? CompletenessBand = null,
-  string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null)
+  string? HasImage = null, string? CategoryTreeCode = null, string? CategoryCode = null,
+  string? PackagingDiscount = null, string? DiscountGroup = null, string? SpecialFor = null)
 {
   /// <summary>
   /// Proizvajalec in dobavitelj sta SAOP šifri partnerja znotraj podjetja: ista šifra je v drugem
@@ -358,6 +359,10 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     command.Parameters.Add("@HasImage", SqlDbType.NVarChar, 20).Value = Optional(filter.HasImage);
     command.Parameters.Add("@CategoryTreeCode", SqlDbType.NVarChar, 100).Value = Optional(filter.CategoryTreeCode);
     command.Parameters.Add("@CategoryCode", SqlDbType.NVarChar, 200).Value = Optional(filter.CategoryCode);
+    // 274: S-popusti - privzeta S koda (S1-S4, NONE, ANY), rabatna skupina in posebni S za tip/stranko.
+    command.Parameters.Add("@PackagingDiscount", SqlDbType.NVarChar, 20).Value = Optional(filter.PackagingDiscount);
+    command.Parameters.Add("@DiscountGroup", SqlDbType.NVarChar, 100).Value = Optional(filter.DiscountGroup);
+    command.Parameters.Add("@SpecialFor", SqlDbType.NVarChar, 120).Value = Optional(filter.SpecialFor);
 
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
     var rows = await ReadAsync(reader, row => new ProductListRow(
@@ -379,6 +384,38 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
       total = Convert.ToInt64(reader.GetValue(0));
 
     return new(rows, total);
+  }
+
+  /// <summary>
+  /// Vrstice izbranih izdelkov (ključ »PodjetjeId|Šifra«) pod istimi filtri pogleda — brez branja
+  /// celega pogleda. Prej je izvoz dveh odkljukanih izdelkov prebral vseh 179.000 vrstic in jih
+  /// šele nato zožil (uporabnik 2026-09-25). Iskanje v bazi je LIKE po šifri/EAN, zato se tu
+  /// obdrži samo natančno ujemanje; strani se berejo, dokler se vrstica ne najde.
+  /// </summary>
+  public async Task<List<ProductListRow>> GetSelectedRowsAsync(
+    ProductListFilter filter, IReadOnlyCollection<string> selectionKeys, CancellationToken cancellationToken = default)
+  {
+    const int pageSize = 500;
+    var scoped = filter.WithPartnerScope();
+    var rows = new List<ProductListRow>();
+    foreach (var key in selectionKeys.Distinct(StringComparer.OrdinalIgnoreCase))
+    {
+      var separator = key.IndexOf('|');
+      if (separator <= 0 || !int.TryParse(key[..separator], out var organizationId)) continue;
+      var itemId = key[(separator + 1)..];
+      if (itemId.Length == 0 || scoped.OrganizationId is { } only && only != organizationId) continue;
+
+      for (var skip = 0; ; skip += pageSize)
+      {
+        var page = await GetProductListAsync(
+          scoped with { OrganizationId = organizationId, Search = itemId, Sort = null, SortDescending = false, Skip = skip, Take = pageSize },
+          cancellationToken);
+        var match = page.Rows.FirstOrDefault(row => string.Equals(row.ItemId, itemId, StringComparison.OrdinalIgnoreCase));
+        if (match is not null) { rows.Add(match); break; }
+        if (page.Rows.Count < pageSize || skip + pageSize >= page.TotalCount) break;
+      }
+    }
+    return rows;
   }
 
   /// <summary>Vrednosti filtrov so dejanske vrednosti kataloga, ne trdo kodiran seznam.</summary>

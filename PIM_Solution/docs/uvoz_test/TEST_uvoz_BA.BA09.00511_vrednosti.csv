@@ -1,0 +1,228 @@
+﻿Skupina | Stolpec | Prej | Test
+ERP — v PIM takoj, v SAOP prek vrste | Naziv 1 | LED sijalka svečka E14 5W | TEST LED svečka E14 5W
+ERP — v PIM takoj, v SAOP prek vrste | Naziv 2 | 4000K 450lm CRI>80 180° | TEST 4000K 450lm
+ERP — v PIM takoj, v SAOP prek vrste | Merska enota | kom | pkt
+ERP — v PIM takoj, v SAOP prek vrste | DDV (stopnja) | 02 | 02
+ERP — v PIM takoj, v SAOP prek vrste | Skupina artikla | BA | BA2
+ERP — v PIM takoj, v SAOP prek vrste | Knjižna skupina | BA | BA2
+ERP — v PIM takoj, v SAOP prek vrste | Objava na spletu | D | D
+ERP — v PIM takoj, v SAOP prek vrste | Oddelek (ABC) | A | B
+ERP — v PIM takoj, v SAOP prek vrste | EAN | 5949097704628 | 5949097704635
+ERP — v PIM takoj, v SAOP prek vrste | Iskalni naziv | dnevno bela; mlečna; C37; Energijski razred: F; Ekvivalent: 35W; U: 220V-240V; Vidna dimenzija: Fi35x105mm; Življenjska doba: 15000ur; IP20 | TEST iskalni naziv
+ERP — v PIM takoj, v SAOP prek vrste | Rabatna skupina 1 | BA | BA2
+ERP — v PIM takoj, v SAOP prek vrste | Garancija | 2 leti | 3 leta
+ERP — v PIM takoj, v SAOP prek vrste | Aktiven | D | D
+ERP — v PIM takoj, v SAOP prek vrste | Dobavitelj | 0000428 | 0001053
+ERP — v PIM takoj, v SAOP prek vrste | Proizvajalec | 0000062 | 0000081
+ERP — v PIM takoj, v SAOP prek vrste | Kljukica za rezervacijo | N | D
+Komerciala — v PIM takoj, v SAOP prek vrste | Carinska tarifa | 85395200 | 85395100
+Komerciala — v PIM takoj, v SAOP prek vrste | Neto teža na enoto | 0.02 | 0,04
+Komerciala — v PIM takoj, v SAOP prek vrste | Bruto teža | 0.03 | 0,06
+Komerciala — v PIM takoj, v SAOP prek vrste | Širina | 40 | 45
+Komerciala — v PIM takoj, v SAOP prek vrste | Višina | 110 | 115
+Komerciala — v PIM takoj, v SAOP prek vrste | Enota dimenzij | mm | cm
+Komerciala — v PIM takoj, v SAOP prek vrste | Država porekla | CN | DE
+Komerciala — v PIM takoj, v SAOP prek vrste | Količina v pakiranju | 1 | 2
+Komerciala — v PIM takoj, v SAOP prek vrste | Količina v pakiranju 2 | 10 | 20
+S-popust na polno pakiranje — PIM, v katalog.csv | S koda | S2 | S3
+S-popust na polno pakiranje — PIM, v katalog.csv | Posebni S — tipi strank |  | TRGOVEC\S4
+S-popust na polno pakiranje — PIM, v katalog.csv | Posebni S — stranke |  | 0000014\S2
+Splet — zapiše se takoj | Kategorije — Svetila.si |  | Svetlobni viri in dodatki > E14
+Splet — zapiše se takoj | Kategorije — Svetila.si (ANG) |  | Svetlobni viri in dodatki > E14
+Splet — zapiše se takoj | Kategorije — Videlektro | Razsvetljava > Sijalke > LED sijalke E14 | Razsvetljava > Sijalke > LED sijalke E27
+Splet — zapiše se takoj | Kategorije — Videlektro (ANG) | Lighting > Bulbs > LED Bulbs E14 | Lighting > Bulbs > LED Bulbs E27
+Splet — zapiše se takoj | Spletne strani | Videlektro | Videlektro | Svetila.si
+Splet — zapiše se takoj | Spletni naziv (sl) | LED sijalka svečka E14 5W dnevno bela 450lm mlečna | TEST spletni naziv sl
+Splet — zapiše se takoj | Spletni naziv (en) | LED bulb candle E14 5W daily white 450lm CRI>80 180° | TEST spletni naziv en
+Splet — zapiše se takoj | Spletni naziv (de) | LED Glühbirne Kerze E14 5W neutralweiss 450lm CRI>80 180° | TEST spletni naziv de
+Splet — zapiše se takoj | Spletni naziv (hr) | LED žarulja svijeća E14 5W dnevno bijela 450lm CRI>80 180° | TEST spletni naziv hr
+Splet — zapiše se takoj | Spletni naziv (it) |  | TEST spletni naziv it
+Splet — zapiše se takoj | Spletni opis (sl) | dnevno bela; mlečna; C37; Energijski razred: F; Ekvivalent: 35W; U: 220V-240V; Vidna dimenzija: Fi35x105mm; Življenjska doba: 15000ur; IP20 | TEST spletni opis sl
+Splet — zapiše se takoj | Spletni opis (en) | daily white; milky; C37; Efficiency class: F; Equivalent: 35W; U: 220V-240V; Visual dimension: Fi35x105mm; Lifetime: 15000h; IP20 | TEST spletni opis en
+Splet — zapiše se takoj | Spletni opis (de) | neutralweiss; milch; C37; Effizienzklasse: F; Äquivalent: 35W; U: 220V-240V; Sichtbare Dimension: Fi35x105mm; Lebenszeit: 15000h; IP20 | TEST spletni opis de
+Splet — zapiše se takoj | Spletni opis (hr) | dnevno bijela; mliječna; C37; 
+Energetski razred: F; Ekvivalent: 35W; U: 220V-240V; Vidljiva dimenzija: Fi35x105mm; Rok trajanja: 15000ur; IP20 | TEST spletni opis hr
+Splet — zapiše se takoj | Spletni opis (it) |  | TEST spletni opis it
+Splet — zapiše se takoj | Slike | https://cdn.braytron.center/images/BA09-00511-1.webp | https://cdn.braytron.center/images/BA09-00511-2.webp | https://cdn.braytron.center/images/BA09-00511-3.webp | https://cdn.braytron.center/images/BA09-00511-4.webp | https://cdn.braytron.center/images/BA09-00511-1.webp | https://cdn.braytron.center/images/BA09-00511-2.webp | https://cdn.braytron.center/images/BA09-00511-3.webp | https://cdn.braytron.center/images/BA09-00511-4.webp | https://cdn.braytron.center/images/BA09-00511-5.webp
+Splet — zapiše se takoj | Dokumenti | https://cdn.braytron.center/cefiles/12-CE-CERTIFICATE-(EMC).pdf | https://bapp.ro/product-datasheet/c7511a08508a4080a925c82de3b1c89e/BA09-00511_EN.pdf | https://cdn.braytron.center/cefiles/12-CE-CERTIFICATE-(LVD).pdf | https://cdn.braytron.center/cefiles/12-EC-DECLARATION.pdf | https://cdn.braytron.center/cefiles/12-EMC-TEST-55015.pdf | https://cdn.braytron.center/cefiles/12-LVD-TEST-EN-62560.pdf | https://cdn.braytron.center/cefiles/12-CE-CERTIFICATE-(EMC).pdf | https://bapp.ro/product-datasheet/c7511a08508a4080a925c82de3b1c89e/BA09-00511_EN.pdf | https://cdn.braytron.center/cefiles/12-CE-CERTIFICATE-(LVD).pdf | https://cdn.braytron.center/cefiles/12-EC-DECLARATION.pdf | https://cdn.braytron.center/cefiles/12-EMC-TEST-55015.pdf | https://cdn.braytron.center/cefiles/12-LVD-TEST-EN-62560.pdf | https://example.com/TEST-tehnicni-list.pdf
+Atributi izven nabora — ne gredo na splet | Barva vrat |  | TEST Barva vrat
+Atributi izven nabora — ne gredo na splet | Baterija |  | TEST Baterija
+Atributi izven nabora — ne gredo na splet | Delovna temperatura | -20⁰C ~ +40⁰C | TEST Delovna temperatura
+Atributi izven nabora — ne gredo na splet | Delovni čas |  | TEST Delovni čas
+Atributi izven nabora — ne gredo na splet | Dimenzija varovalke |  | TEST Dimenzija varovalke
+Atributi izven nabora — ne gredo na splet | Dolžina |  | TEST Dolžina
+Atributi izven nabora — ne gredo na splet | Dolžina kabla |  | TEST Dolžina kabla
+Atributi izven nabora — ne gredo na splet | Dolžina varovalke |  | TEST Dolžina varovalke
+Atributi izven nabora — ne gredo na splet | Ekvivalent | 35 w | TEST Ekvivalent
+Atributi izven nabora — ne gredo na splet | Električni razred | II | TEST Električni razred
+Atributi izven nabora — ne gredo na splet | Energijski razred | F | TEST Energijski razred
+Atributi izven nabora — ne gredo na splet | Frekvenca | 50/60 | TEST Frekvenca
+Atributi izven nabora — ne gredo na splet | Grlo | E14 | TEST Grlo
+Atributi izven nabora — ne gredo na splet | Indeks barvnega videza (CRI) | ≥80 | TEST Indeks barvnega videza (CRI)
+Atributi izven nabora — ne gredo na splet | IP stopnja zaščite | IP20 | TEST IP stopnja zaščite
+Atributi izven nabora — ne gredo na splet | Končni navoj |  | TEST Končni navoj
+Atributi izven nabora — ne gredo na splet | Kot detekcije |  | TEST Kot detekcije
+Atributi izven nabora — ne gredo na splet | Kot svetlobnega snopa | 180⁰ | TEST Kot svetlobnega snopa
+Atributi izven nabora — ne gredo na splet | Material pokrova |  | TEST Material pokrova
+Atributi izven nabora — ne gredo na splet | Montažna višina |  | TEST Montažna višina
+Atributi izven nabora — ne gredo na splet | Način montaže |  | TEST Način montaže
+Atributi izven nabora — ne gredo na splet | Način polnjenja |  | TEST Način polnjenja
+Atributi izven nabora — ne gredo na splet | Napajanje |  | TEST Napajanje
+Atributi izven nabora — ne gredo na splet | Napetost | 220-240 | TEST Napetost
+Atributi izven nabora — ne gredo na splet | Nazivna jakost toka |  | TEST Nazivna jakost toka
+Atributi izven nabora — ne gredo na splet | Nazivna moč | 5 | 6
+Atributi izven nabora — ne gredo na splet | Nazivna napetost |  | TEST Nazivna napetost
+Atributi izven nabora — ne gredo na splet | Oblika |  | TEST Oblika
+Atributi izven nabora — ne gredo na splet | Oblika svetilke | Neusmerjena | Non-Directional | TEST Oblika svetilke
+Atributi izven nabora — ne gredo na splet | Otroška zaščita |  | TEST Otroška zaščita
+Atributi izven nabora — ne gredo na splet | Pokrov |  | TEST Pokrov
+Atributi izven nabora — ne gredo na splet | Predpripravljeni vhodi |  | TEST Predpripravljeni vhodi
+Atributi izven nabora — ne gredo na splet | Premer | 37 mm | TEST Premer
+Atributi izven nabora — ne gredo na splet | Presek kabla |  | TEST Presek kabla
+Atributi izven nabora — ne gredo na splet | Presek kabla max |  | TEST Presek kabla max
+Atributi izven nabora — ne gredo na splet | Presek kabla min |  | TEST Presek kabla min
+Atributi izven nabora — ne gredo na splet | Prevladujoč material | PBT-PC | PBT-PC | TEST Prevladujoč material
+Atributi izven nabora — ne gredo na splet | Prevladujoča barva | Bela | White | TEST Prevladujoča barva
+Atributi izven nabora — ne gredo na splet | Priključne sponke |  | TEST Priključne sponke
+Atributi izven nabora — ne gredo na splet | Priklop |  | TEST Priklop
+Atributi izven nabora — ne gredo na splet | Pritrditev |  | TEST Pritrditev
+Atributi izven nabora — ne gredo na splet | Prosojnost |  | TEST Prosojnost
+Atributi izven nabora — ne gredo na splet | RAL |  | TEST RAL
+Atributi izven nabora — ne gredo na splet | Razdalja detekcije |  | TEST Razdalja detekcije
+Atributi izven nabora — ne gredo na splet | Senzor gibanja |  | TEST Senzor gibanja
+Atributi izven nabora — ne gredo na splet | Slog |  | TEST Slog
+Atributi izven nabora — ne gredo na splet | Sponka PE/N |  | TEST Sponka PE/N
+Atributi izven nabora — ne gredo na splet | Svetlobni tok | 470 | 471
+Atributi izven nabora — ne gredo na splet | Širina [ProductAttribute.Širina] |  | TEST Širina [ProductAttribute.Širina]
+Atributi izven nabora — ne gredo na splet | Širina modula |  | TEST Širina modula
+Atributi izven nabora — ne gredo na splet | Širina varovalke |  | TEST Širina varovalke
+Atributi izven nabora — ne gredo na splet | Število modulov |  | TEST Število modulov
+Atributi izven nabora — ne gredo na splet | Število polov |  | TEST Število polov
+Atributi izven nabora — ne gredo na splet | Število vrst |  | TEST Število vrst
+Atributi izven nabora — ne gredo na splet | Tehnologija |  | TEST Tehnologija
+Atributi izven nabora — ne gredo na splet | Temperatura barve | 4000K | TEST Temperatura barve
+Atributi izven nabora — ne gredo na splet | Temperaturna obstojnost |  | TEST Temperaturna obstojnost
+Atributi izven nabora — ne gredo na splet | Tip napajalnika |  | TEST Tip napajalnika
+Atributi izven nabora — ne gredo na splet | Uporaba |  | TEST Uporaba
+Atributi izven nabora — ne gredo na splet | Upravljanje |  | TEST Upravljanje
+Atributi izven nabora — ne gredo na splet | Velikost |  | TEST Velikost
+Atributi izven nabora — ne gredo na splet | Velikost doze |  | TEST Velikost doze
+Atributi izven nabora — ne gredo na splet | Velikost uvodnice |  | TEST Velikost uvodnice
+Atributi izven nabora — ne gredo na splet | Višina [ProductAttribute.Višina] | 100 | 101
+Atributi izven nabora — ne gredo na splet | Vključuje napajalnik |  | TEST Vključuje napajalnik
+Atributi izven nabora — ne gredo na splet | Vrsta doze |  | TEST Vrsta doze
+Atributi izven nabora — ne gredo na splet | Vrsta kabla |  | TEST Vrsta kabla
+Atributi izven nabora — ne gredo na splet | Vrsta svetlobnega vira | LED | LED | TEST Vrsta svetlobnega vira
+Atributi izven nabora — ne gredo na splet | Za LED profil |  | TEST Za LED profil
+Atributi izven nabora — ne gredo na splet | Zatemnljivo | Ne | Not-Dimmable | TEST Zatemnljivo
+Atributi izven nabora — ne gredo na splet | Združljivo z |  | TEST Združljivo z
+Atributi izven nabora — ne gredo na splet | Življenjska doba | 15000 h | TEST Življenjska doba
+Atributi izven nabora — ne gredo na splet | Bruto teža (2) | 2.9 | 3.9
+Atributi izven nabora — ne gredo na splet | BUG |  | TEST BUG
+Atributi izven nabora — ne gredo na splet | CategoryRequired |  | TEST CategoryRequired
+Atributi izven nabora — ne gredo na splet | Čas polnjenja |  | TEST Čas polnjenja
+Atributi izven nabora — ne gredo na splet | Časovna zakasnitev |  | TEST Časovna zakasnitev
+Atributi izven nabora — ne gredo na splet | Dimenzije odprtine |  | TEST Dimenzije odprtine
+Atributi izven nabora — ne gredo na splet | Dolžina horizontalne roke |  | TEST Dolžina horizontalne roke
+Atributi izven nabora — ne gredo na splet | Dolžina paketa I | 40 | 45 mm
+Atributi izven nabora — ne gredo na splet | Dolžina paketa II |  | TEST Dolžina paketa II
+Atributi izven nabora — ne gredo na splet | Dolžina paketa III |  | TEST Dolžina paketa III
+Atributi izven nabora — ne gredo na splet | Dolžina podnožja |  | TEST Dolžina podnožja
+Atributi izven nabora — ne gredo na splet | Dolžina senčnika |  | TEST Dolžina senčnika
+Atributi izven nabora — ne gredo na splet | Dolžina spuščenega stropa |  | TEST Dolžina spuščenega stropa
+Atributi izven nabora — ne gredo na splet | Dolžina vertikalne roke |  | TEST Dolžina vertikalne roke
+Atributi izven nabora — ne gredo na splet | Dopolnilna barva I |  | TEST Dopolnilna barva I
+Atributi izven nabora — ne gredo na splet | Dopolnilna barva II |  | TEST Dopolnilna barva II
+Atributi izven nabora — ne gredo na splet | Dopolnilni material I |  | TEST Dopolnilni material I
+Atributi izven nabora — ne gredo na splet | Dopolnilni material II |  | TEST Dopolnilni material II
+Atributi izven nabora — ne gredo na splet | Dopolnilni material III |  | TEST Dopolnilni material III
+Atributi izven nabora — ne gredo na splet | Dopolnilni simbol tkanine iz vzorčne škatle I |  | TEST Dopolnilni simbol tkanine iz vzorčne škatle I
+Atributi izven nabora — ne gredo na splet | Enota bruto teže (2) | kgs | cm
+Atributi izven nabora — ne gredo na splet | Enota dimenzij odprtine |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine horizontalne roke |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine paketa I | cm | mm
+Atributi izven nabora — ne gredo na splet | Enota dolžine paketa II |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine paketa III |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine podnožja |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine senčnika |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine spuščenega stropa |  | cm
+Atributi izven nabora — ne gredo na splet | Enota dolžine vertikalne roke |  | cm
+Atributi izven nabora — ne gredo na splet | Enota frekvence |  | cm
+Atributi izven nabora — ne gredo na splet | Enota kota svetlobnega snopa |  | cm
+Atributi izven nabora — ne gredo na splet | Enota napetosti |  | cm
+Atributi izven nabora — ne gredo na splet | Enota neto teže (2) | kgs | cm
+Atributi izven nabora — ne gredo na splet | Enota razdalje od stene |  | cm
+Atributi izven nabora — ne gredo na splet | Enota razpona nastavitve višine |  | cm
+Atributi izven nabora — ne gredo na splet | Enota svetlobnega toka |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine paketa I | cm | mm
+Atributi izven nabora — ne gredo na splet | Enota širine paketa II |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine paketa III |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine podnožja |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine senčnika reflektorja |  | cm
+Atributi izven nabora — ne gredo na splet | Enota širine stropne kapice |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine | mm | cm
+Atributi izven nabora — ne gredo na splet | Enota višine daljše roke |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine krajše roke |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine paketa I | cm | mm
+Atributi izven nabora — ne gredo na splet | Enota višine paketa II |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine paketa III |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine senčnika reflektorja |  | cm
+Atributi izven nabora — ne gredo na splet | Enota višine stropne kapice |  | cm
+Atributi izven nabora — ne gredo na splet | Enota volumna paketa |  | cm
+Atributi izven nabora — ne gredo na splet | EPREL |  | TEST EPREL
+Atributi izven nabora — ne gredo na splet | Faktor moči | >0,5 | TEST Faktor moči
+Atributi izven nabora — ne gredo na splet | Hitrost detekcije |  | TEST Hitrost detekcije
+Atributi izven nabora — ne gredo na splet | Hrup |  | TEST Hrup
+Atributi izven nabora — ne gredo na splet | ID METAKOCKE | 18550 | 18551
+Atributi izven nabora — ne gredo na splet | IK stopnja |  | TEST IK stopnja
+Atributi izven nabora — ne gredo na splet | Ikone |  | TEST Ikone
+Atributi izven nabora — ne gredo na splet | Izvrtina (cutout) |  | TEST Izvrtina (cutout)
+Atributi izven nabora — ne gredo na splet | Kapaciteta baterije |  | TEST Kapaciteta baterije
+Atributi izven nabora — ne gredo na splet | Kolekcija |  | TEST Kolekcija
+Atributi izven nabora — ne gredo na splet | Komentarji |  | TEST Komentarji
+Atributi izven nabora — ne gredo na splet | Kosov na karton | 100 | 101
+Atributi izven nabora — ne gredo na splet | LEDLINE |  | TEST LEDLINE
+Atributi izven nabora — ne gredo na splet | Luks |  | TEST Luks
+Atributi izven nabora — ne gredo na splet | Max moč sijalke |  | TEST Max moč sijalke
+Atributi izven nabora — ne gredo na splet | Model | BA09-00511 | TEST Model
+Atributi izven nabora — ne gredo na splet | Nastavitev višine |  | TEST Nastavitev višine
+Atributi izven nabora — ne gredo na splet | Neto teža (2) | 1.6 | 2.6
+Atributi izven nabora — ne gredo na splet | Oblika odprtine |  | TEST Oblika odprtine
+Atributi izven nabora — ne gredo na splet | PCN |  | TEST PCN
+Atributi izven nabora — ne gredo na splet | Podnožje / socket | E14 | TEST Podnožje / socket
+Atributi izven nabora — ne gredo na splet | Razdalja od stene |  | TEST Razdalja od stene
+Atributi izven nabora — ne gredo na splet | Razdelitev na segmente |  | TEST Razdelitev na segmente
+Atributi izven nabora — ne gredo na splet | Razpon nastavitve višine |  | TEST Razpon nastavitve višine
+Atributi izven nabora — ne gredo na splet | Režim nujne osvetlitve |  | TEST Režim nujne osvetlitve
+Atributi izven nabora — ne gredo na splet | SEKUNDARNAMERSKAENOTA |  | TEST SEKUNDARNAMERSKAENOTA
+Atributi izven nabora — ne gredo na splet | Simbol atributa |  | TEST Simbol atributa
+Atributi izven nabora — ne gredo na splet | Simbol tkanine iz vzorčne škatle |  | TEST Simbol tkanine iz vzorčne škatle
+Atributi izven nabora — ne gredo na splet | Solarna moč |  | TEST Solarna moč
+Atributi izven nabora — ne gredo na splet | Solarni panel |  | TEST Solarni panel
+Atributi izven nabora — ne gredo na splet | SPECIFIKACIJA BARVE |  | TEST SPECIFIKACIJA BARVE
+Atributi izven nabora — ne gredo na splet | SPREMEMBA |  | TEST SPREMEMBA
+Atributi izven nabora — ne gredo na splet | STEVILOKOSOVVPAKETU |  | TEST STEVILOKOSOVVPAKETU
+Atributi izven nabora — ne gredo na splet | Svetilka vključuje svetlobni vir |  | TEST Svetilka vključuje svetlobni vir
+Atributi izven nabora — ne gredo na splet | Širina paketa I | 21 | 22
+Atributi izven nabora — ne gredo na splet | Širina paketa II |  | TEST Širina paketa II
+Atributi izven nabora — ne gredo na splet | Širina paketa III |  | TEST Širina paketa III
+Atributi izven nabora — ne gredo na splet | Širina podnožja |  | TEST Širina podnožja
+Atributi izven nabora — ne gredo na splet | Širina senčnika reflektorja |  | TEST Širina senčnika reflektorja
+Atributi izven nabora — ne gredo na splet | Širina stropne kapice |  | TEST Širina stropne kapice
+Atributi izven nabora — ne gredo na splet | Število ciklov polnjenja |  | TEST Število ciklov polnjenja
+Atributi izven nabora — ne gredo na splet | Število paketov |  | TEST Število paketov
+Atributi izven nabora — ne gredo na splet | Število svetlobnih segmentov |  | TEST Število svetlobnih segmentov
+Atributi izven nabora — ne gredo na splet | Število svetlobnih virov |  | TEST Število svetlobnih virov
+Atributi izven nabora — ne gredo na splet | Video |  | TEST Video
+Atributi izven nabora — ne gredo na splet | Višina daljše roke |  | TEST Višina daljše roke
+Atributi izven nabora — ne gredo na splet | Višina krajše roke |  | TEST Višina krajše roke
+Atributi izven nabora — ne gredo na splet | Višina paketa I | 22.5 | 23.5
+Atributi izven nabora — ne gredo na splet | Višina paketa II |  | TEST Višina paketa II
+Atributi izven nabora — ne gredo na splet | Višina paketa III |  | TEST Višina paketa III
+Atributi izven nabora — ne gredo na splet | Višina senčnika reflektorja |  | TEST Višina senčnika reflektorja
+Atributi izven nabora — ne gredo na splet | Višina stropne kapice |  | TEST Višina stropne kapice
+Atributi izven nabora — ne gredo na splet | Volumen paketa |  | TEST Volumen paketa
+Atributi izven nabora — ne gredo na splet | Vrtenje motorja |  | TEST Vrtenje motorja
+Atributi izven nabora — ne gredo na splet | Zračni pretok |  | TEST Zračni pretok

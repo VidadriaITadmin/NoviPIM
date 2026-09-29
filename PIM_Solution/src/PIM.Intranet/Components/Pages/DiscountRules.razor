@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
+@inject PackagingDiscountService Packaging
 
 <PageTitle>Komercialna pravila</PageTitle>
 <PimPage OrganizationScope="true" Title="Komercialna pravila"
@@ -48,6 +49,9 @@
   </button>
   <button type="button" class="@(Section == "overrides" ? "active" : null)" aria-pressed="@(Section == "overrides")" @onclick='() => Section = "overrides"'>
     <strong>Posebne izjeme</strong><span>@Overrides.Count.ToString("N0") vnosov</span>
+  </button>
+  <button type="button" class="@(Section == "spopusti" ? "active" : null)" aria-pressed="@(Section == "spopusti")" @onclick='() => Section = "spopusti"'>
+    <strong>S-popusti</strong><span>@PackagingRules.Count.ToString("N0") pravil</span>
   </button>
 </nav>
 
@@ -153,6 +157,119 @@
       }
     </section>
   }
+  else if (Section == "spopusti")
+  {
+    @* 274: S-popust na polno pakiranje (Magento_Pravila §4.4, §4.5, §4.8). Šifrant S kod, pravila po
+       tipu stranke ali stranki za en artikel, rabatno skupino, vse artikle z dano S kodo ali vse
+       artikle. Stranka ima prednost pred tipom; znotraj zmaga najbolj specifično pravilo. *@
+    <section class="commercial-workspace">
+      <section class="ui-card data-card">
+        <PimTable Caption="Šifrant S kod — odstotek popusta pri količini ≥ PAK2" Columns="CodeColumns">
+          <Rows>
+            @foreach (var entry in PackagingCodes)
+            {
+              <tr class="@(entry.Code == EditCode ? "selected-row" : null)">
+                <td><strong>@entry.Code</strong></td>
+                <td class="numeric">@entry.Percent.ToString("0.##") %</td>
+                <td><button type="button" class="small-action" @onclick="() => { EditCode = entry.Code; EditPercent = entry.Percent; }">Uredi</button></td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      </section>
+      <section class="ui-card panel">
+        <h2>S koda</h2>
+        <p class="commercial-note">Spremeni odstotek obstoječe kode ali vpiši novo (npr. S5). Sprememba velja za vse izdelke s to kodo ob naslednjem izvozu katalog.csv.</p>
+        <div class="tier-form">
+          <label class="form-field">Koda<input class="form-input" @bind="EditCode" /></label>
+          <label class="form-field">Popust %<input type="number" min="0" max="100" step="0.01" class="form-input" @bind="EditPercent" /></label>
+          <button type="button" class="primary-button" disabled="@(Busy || EditCode.Trim().Length == 0 || EditPercent <= 0 || EditPercent > 100)" @onclick="SavePercentAsync">Shrani kodo</button>
+        </div>
+      </section>
+    </section>
+
+    <section class="ui-card panel section-gap" aria-labelledby="packaging-rule-title">
+      <div class="section-heading">
+        <div>
+          <h2 id="packaging-rule-title">Dodaj pravilo posebnega S</h2>
+          <p>Npr. »vsi inštalaterji dobijo na rabatni skupini BRAYTRON S3« ali »tip Trgovec: vsi artikli z S2 dobijo S3«. Obstoječe pravilo za isti cilj in obseg se posodobi.</p>
+        </div>
+      </div>
+      <div class="form-grid override-form">
+        <label class="form-field">Komu
+          <select class="filter-select" @bind="RuleTarget">
+            <option value="TYPE">Tipu stranke</option>
+            <option value="CUSTOMER">Stranki</option>
+          </select>
+        </label>
+        @if (RuleTarget == PackagingDiscountService.TargetType)
+        {
+          <label class="form-field">Tip stranke
+            <select class="filter-select" @bind="RuleType">
+              @foreach (var type in Types) { <option value="@type.CustomerTypeCode">@type.Name</option> }
+            </select>
+          </label>
+        }
+        else
+        {
+          <label class="form-field">Šifra stranke<input class="form-input" placeholder="npr. 00001234" @bind="RuleCustomer" /></label>
+        }
+        <label class="form-field">Za artikle
+          <select class="filter-select" @bind="RuleScope">
+            <option value="ITEM_GROUP">Rabatna skupina</option>
+            <option value="S_CODE">Vsi z privzeto S kodo</option>
+            <option value="ALL">Vsi artikli</option>
+            <option value="ITEM">En artikel</option>
+          </select>
+        </label>
+        @if (RuleScope == PackagingDiscountService.ScopeItem)
+        {
+          <label class="form-field">Šifra artikla<input class="form-input" @bind="RuleItem" /></label>
+        }
+        else if (RuleScope == PackagingDiscountService.ScopeGroup)
+        {
+          <label class="form-field">Rabatna skupina<input class="form-input" placeholder="npr. BRAYTRON" @bind="RuleGroup" /></label>
+        }
+        else if (RuleScope == PackagingDiscountService.ScopeCode)
+        {
+          <label class="form-field">Privzeta S koda
+            <select class="filter-select" @bind="RuleFrom">
+              @foreach (var entry in PackagingCodes) { <option value="@entry.Code">@entry.Code</option> }
+            </select>
+          </label>
+        }
+        <label class="form-field">Nova S koda
+          <select class="filter-select" @bind="RuleCode">
+            @foreach (var entry in PackagingCodes) { <option value="@entry.Code">@entry.Code (@entry.Percent.ToString("0.##") %)</option> }
+          </select>
+        </label>
+        <label class="form-field">Velja od<input type="date" class="form-input" @bind="RuleValidFrom" /></label>
+        <label class="form-field">Velja do<input type="date" class="form-input" @bind="RuleValidTo" /></label>
+        <div class="form-action"><button type="button" class="primary-button" disabled="@(Busy || !CanSaveRule)" @onclick="SaveRuleAsync">Shrani pravilo</button></div>
+      </div>
+    </section>
+
+    <section class="ui-card data-card section-gap">
+      <PimTable Caption="Pravila posebnega S — v katalog.csv: stranka v »Posebni popust za stranko«, tip v »Posebni S za skupino strank«" Columns="RuleColumns">
+        <Rows>
+          @foreach (var rule in PackagingRules)
+          {
+            <tr>
+              <td>@rule.TargetLabel@if (rule.MagentoGroupKey is not null) { <div class="tree-path">@rule.MagentoGroupKey</div> }</td>
+              <td>@rule.ScopeLabel</td>
+              <td><strong>@rule.DiscountCode</strong> (@(rule.Percent?.ToString("0.##") ?? "?") %)</td>
+              <td class="numeric">@rule.ProductCount.ToString("N0")</td>
+              <td class="numeric">@rule.CustomerCount.ToString("N0")</td>
+              <td>@(rule.ValidFrom?.ToString("d") ?? "takoj") – @(rule.ValidTo?.ToString("d") ?? "brez konca")</td>
+              <td><button type="button" class="small-action" disabled="@Busy" @onclick="() => RemoveRuleAsync(rule)">Umakni</button></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (PackagingRules.Count == 0) { <div class="empty-state">Pravil posebnega S še ni — vse stranke s kljukico dobijo privzeti S izdelka.</div> }
+      <p class="commercial-note">Pravila za posamezen artikel urejaš tudi na kartici izdelka, na seznamu izdelkov (»S-popust …«) in v delovnem listu izdelkov; pravila stranke na kartici stranke in v delovnem listu strank (list »S po tipih strank« za tipe).</p>
+    </section>
+  }
   else
   {
     <section class="ui-card panel" aria-labelledby="override-title">
@@ -227,7 +344,15 @@
   IReadOnlyList<CustomerTypeRow> Types = [];
   IReadOnlyList<ValueTierRow> Tiers = [];
   IReadOnlyList<GroupOverrideRow> Overrides = [];
+  [SupplyParameterFromQuery(Name = "podrocje")] public string? QuerySection { get; set; }
   string Section = "types";
+  IReadOnlyList<PackagingCode> PackagingCodes = [];
+  IReadOnlyList<PackagingRule> PackagingRules = [];
+  string EditCode = "";
+  decimal EditPercent;
+  string RuleTarget = PackagingDiscountService.TargetType, RuleType = "", RuleCustomer = "", RuleScope = PackagingDiscountService.ScopeGroup;
+  string RuleItem = "", RuleGroup = "", RuleFrom = "", RuleCode = "";
+  DateTime? RuleValidFrom, RuleValidTo;
   string? Message;
   string? SaveError;
   string? Error;
@@ -243,6 +368,9 @@
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Komercialna pravila")];
   static readonly IReadOnlyList<PimColumn> TypeColumns = [new("Tip stranke"), new("Skupina Magento"), new("Stanje"), new("Dejanje")];
   static readonly IReadOnlyList<PimColumn> TierColumns = [new("Stopnja"), new("Prag brez DDV", Numeric: true), new("Popust", Numeric: true), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> CodeColumns = [new("Koda"), new("Popust", Numeric: true), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> RuleColumns =
+  [new("Komu"), new("Za artikle"), new("S koda"), new("Izdelkov danes", Numeric: true), new("Strank", Numeric: true), new("Velja"), new("Dejanje")];
   static readonly IReadOnlyList<PimColumn> OverrideColumns =
   [new("Cilj"), new("Stranka ali tip"), new("Skupina artiklov"), new("Popust", Numeric: true), new("Od"), new("Do"), new("Stanje")];
 
@@ -253,6 +381,7 @@
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       OrganizationId = organization.OrganizationId;
+      if (QuerySection is { Length: > 0 } requested) Section = requested;
       await ReloadAllAsync();
       TypeCode = Types.FirstOrDefault()?.CustomerTypeCode ?? "";
       OverrideType = TypeCode;
@@ -276,7 +405,48 @@
     Types = await typesTask;
     Tiers = await tiersTask;
     Overrides = await overridesTask;
+    PackagingCodes = await Packaging.GetCatalogAsync();
+    PackagingRules = await Packaging.GetRulesAsync(OrganizationId.Value);
+    RuleType = RuleType.Length > 0 ? RuleType : Types.FirstOrDefault()?.CustomerTypeCode ?? "";
+    RuleCode = RuleCode.Length > 0 ? RuleCode : PackagingCodes.FirstOrDefault()?.Code ?? "";
+    RuleFrom = RuleFrom.Length > 0 ? RuleFrom : PackagingCodes.FirstOrDefault()?.Code ?? "";
   }
+
+  bool CanSaveRule => RuleCode.Length > 0
+    && (RuleTarget == PackagingDiscountService.TargetType ? RuleType.Length > 0 : RuleCustomer.Trim().Length > 0)
+    && (RuleValidFrom is null || RuleValidTo is null || RuleValidTo >= RuleValidFrom)
+    && RuleScope switch
+    {
+      PackagingDiscountService.ScopeItem => RuleItem.Trim().Length > 0,
+      PackagingDiscountService.ScopeGroup => RuleGroup.Trim().Length > 0,
+      PackagingDiscountService.ScopeCode => RuleFrom.Length > 0,
+      _ => true,
+    };
+
+  async Task SavePercentAsync() => await RunSaveAsync(async () =>
+  {
+    await Packaging.SavePercentAsync(OrganizationId!.Value, EditCode, EditPercent, await ActorAsync());
+    PackagingCodes = await Packaging.GetCatalogAsync();
+  }, $"S koda {EditCode.Trim().ToUpperInvariant()} je shranjena.");
+
+  async Task SaveRuleAsync() => await RunSaveAsync(async () =>
+  {
+    await Packaging.SaveRuleAsync(OrganizationId!.Value, new(RuleTarget,
+      RuleTarget == PackagingDiscountService.TargetType ? RuleType : null, null,
+      RuleTarget == PackagingDiscountService.TargetCustomer ? RuleCustomer.Trim() : null,
+      RuleScope,
+      RuleScope == PackagingDiscountService.ScopeItem ? RuleItem.Trim() : null,
+      RuleScope == PackagingDiscountService.ScopeGroup ? RuleGroup.Trim() : null,
+      RuleScope == PackagingDiscountService.ScopeCode ? RuleFrom : null,
+      RuleCode, RuleValidFrom, RuleValidTo), await ActorAsync());
+    PackagingRules = await Packaging.GetRulesAsync(OrganizationId.Value);
+  }, "Pravilo posebnega S je shranjeno.");
+
+  async Task RemoveRuleAsync(PackagingRule rule) => await RunSaveAsync(async () =>
+  {
+    await Packaging.RemoveRuleAsync(OrganizationId!.Value, rule.RuleId, await ActorAsync());
+    PackagingRules = await Packaging.GetRulesAsync(OrganizationId.Value);
+  }, "Pravilo je umaknjeno.");
 
   void OnTypeChanged() =>
     GroupKey = Types.FirstOrDefault(type => type.CustomerTypeCode == TypeCode)?.MagentoGroupKey ?? "";
@@ -330,6 +500,8 @@
     if (OrganizationId is null) return;
     Busy = true; Message = SaveError = null;
     try { await action(); Message = message; }
+    catch (Microsoft.Data.SqlClient.SqlException failure) when (failure.Number is >= 52700 and < 52800)
+    { SaveError = failure.Message; }
     catch { SaveError = "Spremembe ni bilo mogoče shraniti. Preveri vnesene vrednosti in poskusi znova."; }
     finally { Busy = false; }
   }

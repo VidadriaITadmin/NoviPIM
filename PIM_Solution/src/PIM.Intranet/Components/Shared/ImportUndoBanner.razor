@@ -1,0 +1,33 @@
+@* 280: stran uvoza v načinu povratka (?povrni=N). Predogled spodaj je običajen predogled uvoza, le da vrne
+   vrednosti pred uvozom; tu je povedano, čigav uvoz se vrača in česa povratek ne more vrniti (spor, prazno v SAOP). *@
+
+@if (Run is { } run)
+{
+  <section class="ui-card panel section-gap undo-banner" aria-labelledby="undo-banner-title">
+    <h2 id="undo-banner-title">Povratek uvoza #@run.ImportRunId</h2>
+    <p>
+      @ImportKinds.Label(run.Kind) · @run.Title · @run.AppliedUtc.ToPimLocal().ToString("g") · @run.Actor.
+      Spodaj je predogled, ki vrne vrednosti <strong>pred tem uvozom</strong> — samo tam, kjer je še vedno vrednost uvoza.
+      Preglej ga in potrdi; zapiše se kot vsak uvoz (zgodovina, validacija)@(SaopNote is { Length: > 0 } ? $", {SaopNote}" : "").
+    </p>
+    @if (Skipped.Count > 0)
+    {
+      <details class="undo-skipped" open="@(Skipped.Count <= 10)">
+        <summary>Ne povrnem (@Skipped.Count.ToString("N0"))</summary>
+        <ul>
+          @foreach (var line in Skipped.Take(100)) { <li>@line</li> }
+        </ul>
+        @if (Skipped.Count > 100) { <p class="hint">… in še @((Skipped.Count - 100).ToString("N0")).</p> }
+      </details>
+    }
+    <p><a href="@($"uvozi/{run.ImportRunId}")">Nazaj na uvoz #@run.ImportRunId</a></p>
+  </section>
+}
+
+@code {
+  [Parameter] public ImportRunRow? Run { get; set; }
+  [Parameter] public IReadOnlyList<string> Skipped { get; set; } = [];
+
+  /// <summary>Dodatek k stavku o zapisu, npr. »ERP polja gredo v vrsto za SAOP in čakajo odobritev«.</summary>
+  [Parameter] public string? SaopNote { get; set; }
+}

@@ -1,0 +1,176 @@
+@page "/uvozi/{Id:long}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ImportHistoryService History
+@inject AuthenticationStateProvider Authentication
+
+@* 280: en uvoz — kaj je spremenil (prej → potem, PIM ali SAOP) in povratek. Povratek odpre isto stran uvoza s
+   predogledom prejšnjih vrednosti (?povrni=N); del, ki v SAOP še ni šel, se prekliče tu (nič ni treba vračati). *@
+
+<PageTitle>Uvoz #@Id</PageTitle>
+<PimPage Title="@TitleText" Subtitle="@SubtitleText" Crumbs="Crumbs" />
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<PimState Loading="Loading" Error="@LoadError" Empty="@(Detail is null)" EmptyText="Uvoza ni v zgodovini (morda je starejši od 180 dni).">
+  @if (Detail is { } detail)
+  {
+    var run = detail.Run;
+    <section class="ui-card data-card section-gap" aria-labelledby="run-summary-title">
+      <div class="subsection-head">
+        <h2 id="run-summary-title">@run.Title</h2>
+        @if (run.IsUndone) { <PimChip Text="@($"povrnjen z uvozom #{run.UndoneByImportRunId}")" Tone="warn" /> }
+        else if (run.IsUndo) { <PimChip Text="@($"povratek uvoza #{run.UndoOfImportRunId}")" /> }
+        else { <PimChip Text="uveljavljen" Tone="good" /> }
+      </div>
+      <div class="kpi-grid">
+        <PimStat Label="Vrstic" Value="@run.RowCount.ToString("N0")" Note="@ImportKinds.Label(run.Kind)" />
+        <PimStat Label="Spremenjenih celic" Value="@run.ChangeCount.ToString("N0")" Note="@($"v PIM: {PimCells:N0}, v SAOP: {SaopCells:N0}")" />
+        <PimStat Label="V vrsto za SAOP" Value="@(run.SaopCount > 0 ? run.SaopCount.ToString("N0") : "—")"
+                 Note="@(Queue is { } queue ? $"čaka {queue.Waiting:N0} · poslanih {queue.Sent:N0} · preklicanih {queue.Cancelled:N0}" : "brez SAOP")" />
+      </div>
+      <p class="muted">
+        @run.AppliedUtc.ToPimLocal().ToString("g") · @run.Actor@(run.Organizations is { Length: > 0 } organizations ? $" · {organizations}" : "")
+        @if (run.Note is { Length: > 0 } note) { <text> · opomba: @note</text> }
+        @if (run.OutboundBatchIds is { Length: > 0 } batches) { <text> · skupine v vrsti za SAOP: @batches</text> }
+      </p>
+      @if (run.IsUndone && run.UndoneByImportRunId is { } undoneBy)
+      {
+        <p>Povrnil @run.UndoneBy @run.UndoneUtc?.ToPimLocal().ToString("g") — <a href="@($"uvozi/{undoneBy}")">povratek #@undoneBy</a>.</p>
+      }
+      @if (run.IsUndo && run.UndoOfImportRunId is { } undoOf)
+      {
+        <p>To je povratek <a href="@($"uvozi/{undoOf}")">uvoza #@undoOf</a>.</p>
+      }
+    </section>
+
+    @if (!run.IsUndone)
+    {
+      <section class="ui-card panel section-gap run-undo" aria-labelledby="run-undo-title">
+        <h2 id="run-undo-title">Povrni ta uvoz</h2>
+        <p>
+          Povratek vrne vrednosti <strong>pred tem uvozom</strong> — samo tam, kjer je še vedno vrednost uvoza. Kar je po uvozu
+          spremenil kdo drug, ostane (pokaže se kot spor). Najprej se odpre predogled na strani uvoza; nič se ne zapiše, dokler ga ne potrdiš.
+          @if (run.Kind != ImportKinds.Customers) { <text>Kar gre v SAOP, gre v vrsto za SAOP in čaka odobritev — nič ne odide samo.</text> }
+        </p>
+        @if (Queue is { Waiting: > 0 } waiting)
+        {
+          <p class="message-state warn-message">
+            @waiting.Waiting.ToString("N0") sporočil tega uvoza še čaka v vrsti za SAOP (niso poslana). Zanje je pravi povratek
+            <strong>preklic</strong> — v SAOP ne gre nič in ničesar ni treba vračati.
+          </p>
+          <AuthorizeView Policy="@PimPolicies.SaopWrite">
+            <Authorized>
+              @if (CancelArmed)
+              {
+                <span class="run-arm" role="group" aria-label="Preklic čakajočih">
+                  Res prekličem @waiting.Waiting.ToString("N0") čakajočih sporočil?
+                  <button type="button" class="primary-button" disabled="@Busy" @onclick="CancelWaitingAsync">Da, prekliči</button>
+                  <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CancelArmed = false">Ne</button>
+                </span>
+              }
+              else
+              {
+                <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CancelArmed = true">Prekliči, kar še čaka v SAOP (@waiting.Waiting.ToString("N0"))</button>
+              }
+            </Authorized>
+          </AuthorizeView>
+        }
+        <p><a class="primary-button" href="@($"{ImportKinds.ImportPage(run.Kind)}?povrni={run.ImportRunId}")">Pripravi povratek (predogled)</a></p>
+      </section>
+    }
+
+    <section class="ui-card data-card section-gap" aria-labelledby="run-changes-title">
+      <div class="subsection-head">
+        <h2 id="run-changes-title">Spremembe (@detail.Changes.Count.ToString("N0"))</h2>
+        <label class="form-field run-search">Išči
+          <input class="form-input" @bind="Search" @bind:event="oninput" placeholder="šifra, polje, vrednost" />
+        </label>
+      </div>
+      <PimTable Caption="@($"Spremenjene celice{(Visible.Count > MaxRows ? $", prikazanih {MaxRows} od {Visible.Count:N0}" : "")}")" Columns="Columns">
+        <Rows>
+          @foreach (var change in Visible.Take(MaxRows))
+          {
+            <tr>
+              <td>@change.RowKey@if (change.RowLabel is { Length: > 0 } label) { <br /><span class="muted">@label</span> }
+                @if (change.OrganizationName is { Length: > 0 } organization) { <br /><span class="muted">@organization</span> }</td>
+              <td>@(change.FieldLabel ?? change.FieldKey)</td>
+              <td>@ImportHistoryService.Display(change, change.OldValue)</td>
+              <td><strong>@ImportHistoryService.Display(change, change.NewValue)</strong></td>
+              <td>@(change.Target == "SAOP" ? "PIM + vrsta za SAOP" : "PIM")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </section>
+
+    @if (run.Problems is { Length: > 0 } problems)
+    {
+      <section class="ui-card data-card section-gap">
+        <details>
+          <summary>Opozorila uvoza</summary>
+          @foreach (var line in problems.Split('\n', StringSplitOptions.RemoveEmptyEntries).Take(200)) { <p class="message-state warn-message">@line</p> }
+        </details>
+      </section>
+    }
+  }
+</PimState>
+
+@code {
+  [Parameter] public long Id { get; set; }
+
+  const int MaxRows = 500;
+  static readonly IReadOnlyList<PimColumn> Columns = [new("Vrstica"), new("Polje"), new("Prej"), new("Potem"), new("Kam")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zgodovina uvozov", "uvozi"), new("Uvoz")];
+
+  ImportRunDetail? Detail;
+  ImportQueueState? Queue;
+  bool Loading = true, Busy, CancelArmed;
+  string? LoadError, Error, Message, Search;
+
+  int PimCells => Detail?.Changes.Count(change => change.Target != "SAOP") ?? 0;
+  int SaopCells => Detail?.Changes.Count(change => change.Target == "SAOP") ?? 0;
+
+  IReadOnlyList<ImportChange> Visible => Detail is null ? []
+    : string.IsNullOrWhiteSpace(Search) ? Detail.Changes
+    : Detail.Changes.Where(change => new[] { change.RowKey, change.RowLabel, change.FieldLabel, change.FieldKey, change.OldValue, change.NewValue }
+        .Any(text => text?.Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase) == true)).ToList();
+
+  string TitleText => Detail is null ? $"Uvoz #{Id}" : $"Uvoz #{Id}: {ImportKinds.Label(Detail.Run.Kind).ToLowerInvariant()}";
+  string SubtitleText => Detail is null ? "" : $"{Detail.Run.AppliedUtc.ToPimLocal():g} · {Detail.Run.Actor}";
+
+  protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+  async Task LoadAsync()
+  {
+    Loading = Detail is null; LoadError = null;
+    try
+    {
+      Detail = await History.GetRunAsync(Id);
+      var batches = ImportHistoryService.BatchIds(Detail?.Run.OutboundBatchIds);
+      Queue = batches.Count == 0 ? null : await History.GetQueueStateAsync(batches);
+    }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      LoadError = "Uvoza ni mogoče prebrati (migracija 280: intranet.GetImportRun).";
+    }
+    finally { Loading = false; }
+  }
+
+  async Task CancelWaitingAsync()
+  {
+    if (Detail is null) return;
+    Busy = true; Error = null; Message = null; CancelArmed = false;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      var cancelled = await History.CancelWaitingAsync(ImportHistoryService.BatchIds(Detail.Run.OutboundBatchIds), actor);
+      Message = $"Preklicanih sporočil: {cancelled:N0}. V SAOP ne gre nič od tega.";
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga preklica v vrsti za SAOP ne dovoljuje."; }
+    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = "Preklic ni uspel: " + exception.Message; }
+    finally { Busy = false; }
+  }
+}

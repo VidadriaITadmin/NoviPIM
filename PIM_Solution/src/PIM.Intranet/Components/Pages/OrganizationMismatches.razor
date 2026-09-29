@@ -1,0 +1,256 @@
+@page "/splet/neskladja"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject OrganizationMismatchService Mismatches
+@inject NavigationManager Navigation
+@using System.Globalization
+
+<PageTitle>Neskladja med podjetji</PageTitle>
+
+@* 290: uporabnik 2026-09-28 — »fino bi bilo, če bi te neskladja imela kje v PIM-u, da imajo pregled in nadzor nad ERP-jem«.
+   Dogovor s komercialo: svetila vodi IQ, ViD kartica je za videlektro, artikel na obeh spletiščih ima ERP v obeh
+   podjetjih. Stran samo bere (intranet.GetOrganizationMismatches); popravek je na kartici artikla ali v ERP.
+   Filtri živijo v naslovu, listanje in razvrščanje sta v bazi, izvoz je natanko ta pogled ali izbrane vrstice. *@
+<PimPage Title="Neskladja med podjetji" Crumbs="Crumbs"
+         Subtitle="@Subtitle">
+  <Actions>
+    <a class="secondary-button @(Page?.Total is null or 0 ? "disabled" : null)" href="@ExportHref" download data-enhance-nav="false">Izvozi Excel (@((Page?.Total ?? 0).ToString("N0", Sl)))</a>
+  </Actions>
+</PimPage>
+
+<p class="card-note section-gap">
+  Kljukica spletišča na kartici odloča, kam gre artikel. Ista šifra v več podjetjih gre v katalog.csv enkrat:
+  vsebina iz @(Page?.PrimaryName ?? "glavnega podjetja"), spletišča iz vseh kartic@(OtherRuleText).
+  Zakaj artikel s kljukico kljub temu ne gre na splet (kategorija, validacija), kaže
+  <a href="splet/umaknjeni?pogled=kljukice">Umaknjeni s spleta → kljukice brez objave</a>.
+</p>
+
+<nav class="pim-pills" aria-label="Vrsta neskladja">
+  <a class="pim-pill" href="@Href(Filter with { Kind = null, Skip = 0 })" aria-current="@((Filter.Kind is null).ToString().ToLowerInvariant())">
+    Vsa neskladja <span class="count">@AllCount.ToString("N0", Sl)</span>
+  </a>
+  @foreach (var kind in Kinds)
+  {
+    <a class="pim-pill" href="@Href(Filter with { Kind = kind.Code, Skip = 0 })"
+       aria-current="@((Filter.Kind == kind.Code).ToString().ToLowerInvariant())" title="@kind.Effect">
+      <span class="dot @(kind.Tone ?? "neutral")" aria-hidden="true"></span>@kind.Label
+      <span class="count">@Count(kind.Code).ToString("N0", Sl)</span>
+    </a>
+  }
+</nav>
+
+<section class="ui-card" role="search" aria-label="Iskanje in filtri neskladij">
+  <div class="pim-filterbar">
+    <label class="visually-hidden" for="mismatch-search">Išči po šifri ali nazivu</label>
+    <input id="mismatch-search" type="search" class="search-input" placeholder="Šifra ali naziv … (Enter)" @bind="SearchText" @bind:after="ApplySearch" />
+
+    <label class="visually-hidden" for="mismatch-prefix">Dobavitelj po predponi šifre</label>
+    <select id="mismatch-prefix" class="filter-select" @bind="PrefixText" @bind:after="ApplyFilters">
+      <option value="">Vse predpone</option>
+      @foreach (var (prefix, items) in Page?.Prefixes ?? [])
+      {
+        if (prefix.Length > 0) { <option value="@prefix">@prefix (@items.ToString("N0", Sl))</option> }
+      }
+    </select>
+
+    <label class="visually-hidden" for="mismatch-sort">Razvrsti</label>
+    <select id="mismatch-sort" class="filter-select" style="min-width:10rem" @bind="SortText" @bind:after="ApplyFilters">
+      @foreach (var (sortCode, sortLabel) in Sorts) { <option value="@sortCode">@sortLabel</option> }
+    </select>
+    <button type="button" class="ghost-button" @onclick="ToggleDirection" aria-label="Smer razvrščanja: @(Filter.Descending ? "padajoče" : "naraščajoče")">
+      @(Filter.Descending ? "Padajoče" : "Naraščajoče")
+    </button>
+
+    @if (HasFilters)
+    {
+      <button type="button" class="link-button" @onclick="ClearFilters">Počisti filtre</button>
+    }
+    <span class="result-count" role="status" aria-live="polite">@((Page?.Total ?? 0).ToString("N0", Sl)) @Plural(Page?.Total ?? 0)</span>
+  </div>
+</section>
+
+@if (AllMatching && Page is not null)
+{
+  <div class="pim-selection" role="status" aria-live="polite">
+    <strong>Izbranih vseh @Page.Total.ToString("N0", Sl), ki ustrezajo filtru</strong>
+    <a class="secondary-button" href="@ExportHref" download data-enhance-nav="false">Izvozi izbrane v Excel</a>
+    <button type="button" class="link-button" @onclick="ClearSelection">Počisti izbiro</button>
+  </div>
+}
+else if (Selected.Count > 0)
+{
+  <div class="pim-selection" role="status" aria-live="polite">
+    <strong>Izbranih @Selected.Count.ToString("N0", Sl)</strong>
+    <a class="secondary-button" href="@SelectedExportHref" download data-enhance-nav="false">Izvozi izbrane v Excel</a>
+    @if (AllOnPageSelected && Page is not null && Page.Total > Page.Rows.Count)
+    {
+      <button type="button" class="link-button" @onclick="() => AllMatching = true">Izberi vseh @Page.Total.ToString("N0", Sl), ki ustrezajo filtru</button>
+    }
+    <button type="button" class="link-button" @onclick="ClearSelection">Počisti izbiro</button>
+  </div>
+}
+
+<section class="ui-card data-card" aria-label="Neskladja">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)" LoadingText="Primerjam kartice podjetij …"
+            EmptyText="@EmptyText">
+    @if (Page is not null && Page.Rows.Count > 0)
+    {
+      @if (Filter.Kind is { } active)
+      {
+        var activeKind = OrganizationMismatchKinds.Find(Kinds, active);
+        <p class="card-note" style="padding:.6rem 1rem 0">@activeKind.Effect @activeKind.Action</p>
+      }
+      <div class="table-scroll">
+        <table class="data-table pim-list-table">
+          <caption class="visually-hidden">@Caption</caption>
+          <thead>
+            <tr>
+              <th scope="col"><input type="checkbox" aria-label="Označi vse na tej strani" checked="@AllOnPageSelected" @onchange="TogglePage" /></th>
+              <th scope="col">Artikel</th>
+              <th scope="col">Neskladje</th>
+              <th scope="col">@Page.PrimaryName</th>
+              <th scope="col">@Page.OthersName</th>
+              <th scope="col">V katalogu po kljukicah</th>
+              <th scope="col">Kaj narediti</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Page.Rows)
+            {
+              var kind = OrganizationMismatchKinds.Find(Kinds, row.Kind);
+              var key = Key(row);
+              var isSelected = Selected.Contains(key);
+              <tr class="@(isSelected ? "selected" : null)">
+                <td><input type="checkbox" aria-label="Označi @row.ItemId" checked="@isSelected" @onchange="() => Toggle(row)" /></td>
+                <td>
+                  @if ((row.PrimaryPimProductId ?? row.OtherPimProductId) is { } cardId)
+                  {
+                    <a class="row-link" href="izdelki/@cardId#web">@(row.Name ?? row.ItemId)</a>
+                  }
+                  else { <strong>@(row.Name ?? row.ItemId)</strong> }
+                  <span class="sub">@row.ItemId</span>
+                </td>
+                <td><PimChip Text="@kind.Label" Tone="@kind.Tone" Prefix="Neskladje: " /></td>
+                <td>@CardCell(row.PrimaryCard, row.PrimaryActive, row.PrimaryPimProductId, row.PrimaryFlags)</td>
+                <td>@CardCell(row.OtherCard, row.OtherActive, row.OtherPimProductId, row.OtherFlags)</td>
+                <td>
+                  @(row.CatalogSites ?? "nikamor")
+                  @if (row.LostSites is { Length: > 0 } lost) { <span class="sub mismatch-lost">ne gre na @lost</span> }
+                </td>
+                <td class="mismatch-action">@kind.Action</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <PimPager Skip="Filter.Skip" Take="Filter.Take" Total="Page.Total" Label="Strani neskladij" SkipChanged="GoToSkip" />
+    }
+  </PimState>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "isci")] public string? QSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? QKind { get; set; }
+  [SupplyParameterFromQuery(Name = "predpona")] public string? QPrefix { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? QSort { get; set; }
+  [SupplyParameterFromQuery(Name = "smer")] public string? QDirection { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public string? QPage { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod na splet", "splet"), new("Neskladja med podjetji")];
+  static readonly (string Code, string Label)[] Sorts = [("sifra", "Šifra"), ("naziv", "Naziv"), ("vrsta", "Vrsta neskladja"), ("predpona", "Predpona")];
+
+  OrganizationMismatchFilter Filter = new();
+  OrganizationMismatchPage? Page;
+  readonly HashSet<string> Selected = new(StringComparer.Ordinal);
+  bool AllMatching;
+  bool Loading = true;
+  string? Error;
+  string SearchText = "", PrefixText = "", SortText = "sifra";
+
+  IReadOnlyList<OrganizationMismatchKinds.Kind> Kinds => Page?.Kinds ?? OrganizationMismatchKinds.All("glavno podjetje", "drugo podjetje");
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Filter = OrganizationMismatchQuery.FromQuery(name => name switch
+    {
+      "isci" => QSearch, "vrsta" => QKind, "predpona" => QPrefix, "razvrsti" => QSort, "smer" => QDirection, "stran" => QPage, _ => null,
+    });
+    SearchText = Filter.Search ?? "";
+    PrefixText = Filter.Prefix ?? "";
+    SortText = Filter.Sort ?? "sifra";
+    AllMatching = false; // nov filter = nova množica; »vse po filtru« ne sme veljati za drug nabor
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      Page = await Mismatches.GetAsync(Filter);
+    }
+    catch (Exception exception)
+    {
+      Error = $"Neskladij ni bilo mogoče naložiti: {exception.Message} Poskusi znova čez minuto; če se ponovi, preveri, ali je migracija 290 uveljavljena.";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string Subtitle => Page is { Sources.Count: > 1 }
+    ? $"Ista šifra v podjetjih {string.Join(" in ", Page.Sources.Select(source => source.Name))}: manjkajoča kartica ali različne kljukice spletišč. Popravek naredi na kartici artikla ali v ERP."
+    : "Ista šifra v več podjetjih kataloga: manjkajoča kartica ali različne kljukice spletišč. Popravek naredi na kartici artikla ali v ERP.";
+
+  string OtherRuleText => Page?.Sources.Where(source => !source.IsPrimary && source.AllowedSites is not null)
+      .Select(source => $"; {source.Name} prispeva samo {source.AllowedSites}").FirstOrDefault() ?? "";
+
+  int Count(string kind) => Page?.KindCounts.TryGetValue(kind, out var n) == true ? n : 0;
+  int AllCount => Page?.KindCounts.Values.Sum() ?? 0;
+  bool HasFilters => Filter.Search is not null || Filter.Kind is not null || Filter.Prefix is not null;
+
+  string EmptyText => HasFilters
+    ? "Za izbrane filtre ni neskladij. Počisti filtre ali izberi drugo vrsto."
+    : "Ni neskladij: vsaka šifra s kljukico ima v vseh podjetjih kataloga usklajeno kartico in kljukice.";
+
+  string Caption => $"Neskladja med podjetji{(Filter.Kind is { } k ? " — " + OrganizationMismatchKinds.Find(Kinds, k).Label : "")}, stran {Filter.Skip / Filter.Take + 1}";
+
+  static string Plural(long n) => (n % 100) switch { 1 => "neskladje", 2 => "neskladji", 3 or 4 => "neskladja", _ => "neskladij" };
+
+  static string Href(OrganizationMismatchFilter filter) =>
+    "splet/neskladja" + (OrganizationMismatchQuery.ToQueryString(filter, filter.Skip / Math.Max(1, filter.Take) + 1) is { Length: > 0 } q ? "?" + q : "");
+
+  string ExportHref => "izvoz/neskladja-med-podjetji.xlsx" + (OrganizationMismatchQuery.ToQueryString(Filter with { Skip = 0 }) is { Length: > 0 } q ? "?" + q : "");
+  string SelectedExportHref => "izvoz/neskladja-med-podjetji.xlsx?izbrani=" +
+    Uri.EscapeDataString(string.Join(",", Selected.Select(key => key[..key.IndexOf('|')]).Distinct().Take(2000)));
+
+  void Go(OrganizationMismatchFilter filter) => Navigation.NavigateTo(Href(filter));
+  void ApplySearch() => Go(Filter with { Search = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(), Skip = 0 });
+  void ApplyFilters() => Go(Filter with { Prefix = string.IsNullOrEmpty(PrefixText) ? null : PrefixText, Sort = SortText, Skip = 0 });
+  void ToggleDirection() => Go(Filter with { Descending = !Filter.Descending, Skip = 0 });
+  void ClearFilters() => Go(new OrganizationMismatchFilter());
+  void GoToSkip(int skip) => Go(Filter with { Skip = skip });
+
+  static string Key(OrganizationMismatchRow row) => $"{row.ItemId}|{row.OtherOrganizationId}";
+  bool AllOnPageSelected => Page is { Rows.Count: > 0 } && Page.Rows.All(row => Selected.Contains(Key(row)));
+  void Toggle(OrganizationMismatchRow row) { AllMatching = false; if (!Selected.Remove(Key(row))) Selected.Add(Key(row)); }
+  void ClearSelection() { Selected.Clear(); AllMatching = false; }
+  void TogglePage()
+  {
+    if (Page is null) return;
+    AllMatching = false;
+    if (AllOnPageSelected) foreach (var row in Page.Rows) Selected.Remove(Key(row));
+    else foreach (var row in Page.Rows) Selected.Add(Key(row));
+  }
+
+  static RenderFragment CardCell(bool exists, bool active, long? pimProductId, string? flags) => __builder =>
+  {
+    if (!exists)
+    {
+      <PimChip Text="ni kartice" Tone="bad" Prefix="Kartica: " />
+      return;
+    }
+    if (!active) { <PimChip Text="neaktivna" Tone="warn" Prefix="Kartica: " /> }
+    if (pimProductId is { } id) { <a href="izdelki/@id#web">@(flags ?? "brez kljukic")</a> }
+    else { <span>@(flags ?? "brez kljukic")</span><span class="sub">ni prevzeta v PIM</span> }
+  };
+}

@@ -1,145 +1,506 @@
+@page "/izdelki/odprodaja"
 @page "/izdelki/uvoz-odprodaje"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Data.SqlClient
 @using PIM.Intranet.Services
 @inject ClearanceService Clearance
+@inject ProductEditService Edits
 @inject IntranetDataService Data
 @inject HeavyWorkGate Gate
 @inject AuthenticationStateProvider Authentication
 
-<PageTitle>Uvoz odprodaje</PageTitle>
+<PageTitle>Odprodaja</PageTitle>
 
-<PimPage Title="Uvoz odprodajnega seznama"
-         Subtitle="Dobaviteljev Excel (npr. odprodaja/razprodaja zaloge) po šifri artikla. Prepozna stolpce Šifra, Količina, Cena in Popust — ostale prezre." />
+@* 275: ena stran za odprodajo — pregled, urejanje, ročni vnos in uvoz seznama iz Excela. Podatki
+   gredo v katalog.csv prek out.GetExportRows (234): »Odprodaja«, »Odprodaja - popust %«,
+   »Odprodaja - količina«, »Razstavni eksponat«. Stara pot /izdelki/uvoz-odprodaje ostane. *@
+<PimPage Title="Odprodaja"
+         Subtitle="Artikli v odprodaji, popust in razstavni eksponat. Ob naslednjem izvozu jih prebere katalog.csv." />
+<PimTabs Active="odprodaja" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 
+<details class="ui-card compact-details">
+  <summary>Kako deluje</summary>
+  <div class="compact-details-body">
+    <ol class="clearance-steps">
+      <li>Artikel dodaš v odprodajo <strong>ročno</strong> (spodaj) ali <strong>z uvozom seznama iz Excela</strong>.
+          Vpišeš količino, popust v % in po potrebi razstavni eksponat.</li>
+      <li>Artikel mora imeti na kartici obkljukano spletno stran (Svetila, Videlektro). Brez nje ga katalog ne izvozi.
+          Takšni artikli so v tabeli označeni z »ni na spletu«.</li>
+      <li>Ob naslednjem izvozu kataloga dobi katalog.csv za artikel: <em>Odprodaja</em> = DA,
+          <em>Odprodaja - popust %</em>, <em>Odprodaja - količina</em> in <em>Razstavni eksponat</em> = DA/NE.
+          Cena se ne spreminja, popust uporabi spletna trgovina.</li>
+      <li><strong>Naročila kupcev iz SAOP količino sproti zmanjšujejo</strong> — vsa naročila (splet, trgovina, B2B),
+          od trenutka, ko je količina vpisana. Stornirano naročilo ne šteje. PIM naročila prebere vsaki 2 uri,
+          katalog.csv dobi preostanek ob naslednjem izvozu.</li>
+      <li><strong>Zaloga v glavnem skladišču:</strong> ob vpisu PIM primerja količino z zalogo. Enaka = vsa zaloga je za odprodajo
+          (SAOP jo ob prodaji sam zmanjša); večja = del redne zaloge (velja vpisana količina minus naročila); manjša = napaka v
+          seznamu (»zaloge premalo«) — na spletu je takrat največ toliko kosov, kolikor jih je na zalogi.</li>
+      <li>Ko preostanek pade na 0, gre v katalog Odprodaja = NE in količina 0; vrstica ostane tukaj kot »razprodano«.
+          Če popraviš količino v stolpcu <em>Ostane</em>, je to nova zaloga in štetje prodaje začne znova.</li>
+      <li>Ko artikel zaključiš, gre v katalog Odprodaja = NE in oznaka razstavni eksponat se odstrani.</li>
+    </ol>
+  </div>
+</details>
+
+<section class="kpi-grid" aria-label="Povzetek odprodaje">
+  <PimStat Label="V odprodaji" Value="@ActiveProducts.ToString()" Note="artiklov z aktivno vrstico" />
+  <PimStat Label="Gre v katalog.csv" Value="@InCatalog.ToString()" Note="na spletu, ostane > 0" />
+  <PimStat Label="Razprodano" Value="@SoldOut.ToString()" Note="naročila so porabila količino" />
+  <PimStat Label="Zaloge premalo" Value="@StockShort.ToString()" Note="zaloga manjša od vpisane količine" />
+  <PimStat Label="Razstavni eksponati" Value="@Showcase.ToString()" />
+  <PimStat Label="Ni na spletu" Value="@NotOnWeb.ToString()" Note="brez obkljukane spletne strani" />
+</section>
+
 <section class="ui-card panel">
-  <h2>1. Vir in podjetje</h2>
+  <h2>Dodaj artikel v odprodajo</h2>
   <div class="form-grid">
     <label class="form-field" for="clearance-organization">
       Podjetje
-      <select id="clearance-organization" class="filter-select" @bind="OrganizationText">
+      <select id="clearance-organization" class="filter-select" value="@OrganizationText" @onchange="OnOrganizationChangedAsync">
         @foreach (var organization in Organizations)
         {
           <option value="@organization.OrganizationId">@organization.Name</option>
         }
       </select>
     </label>
-    <label class="form-field" for="clearance-vir">
-      Vir (ime dobavitelja/seznama)
-      <input id="clearance-vir" class="form-input" @bind="Vir" placeholder="npr. Azzardo 2026-09" />
+    <label class="form-field" for="clearance-new-item">
+      Šifra artikla
+      <input id="clearance-new-item" class="form-input" @bind="NewItemId" placeholder="npr. AZ.0059" />
     </label>
+    <label class="form-field" for="clearance-new-qty">
+      Količina
+      <input id="clearance-new-qty" class="form-input" type="number" min="0" step="1" @bind="NewKolicina" />
+    </label>
+    <label class="form-field" for="clearance-new-discount">
+      Popust %
+      <input id="clearance-new-discount" class="form-input" type="number" min="0" max="100" step="1" @bind="NewPopust" />
+    </label>
+    <label class="form-field" for="clearance-new-vir">
+      Vir
+      <input id="clearance-new-vir" class="form-input" @bind="NewVir" placeholder="Ročno" />
+    </label>
+    <label class="check-field">
+      <input type="checkbox" @bind="NewRazstavni" /> Razstavni eksponat
+    </label>
+    <div>
+      <button type="button" class="primary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(NewItemId))" @onclick="AddAsync">Dodaj v odprodajo</button>
+    </div>
   </div>
-  <p class="hint">
-    Vir je ključ: ponovni uvoz pod istim virom posodobi obstoječe vrstice in <strong>samodejno
-    konča</strong> tiste, ki jih v novi datoteki ni več. Za nov, ločen seznam uporabi drugo ime vira.
-  </p>
-  <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+  <p class="hint">Če je artikel pod istim virom že v odprodaji, se vrstica posodobi. Vir pove, od kod je vrstica (npr. »Ročno«, »Azzardo 2026-09«).</p>
 </section>
 
-@if (Preview is not null)
-{
-  <section class="ui-card panel section-gap">
-    <h2>2. Kaj bo uvoz naredil</h2>
-    <p role="status">
-      Vrstic: <strong>@Preview.Rows.Count</strong> —
-      ujemajočih šifer: <strong>@Preview.MatchedCount</strong>,
-      neujemajočih: <strong>@Preview.UnmatchedCount</strong>.
-    </p>
-    @foreach (var problem in Preview.Problems) { <p class="message-state warn-message">@problem</p> }
+<section class="ui-card panel section-gap">
+  <div class="toolbar clearance-toolbar">
+    <h2>Artikli v odprodaji</h2>
+    <input class="form-input" type="search" placeholder="Išči po šifri, nazivu ali viru" aria-label="Išči po odprodaji" @bind="Search" @bind:event="oninput" />
+    <label class="check-field"><input id="clearance-only-problems" type="checkbox" @bind="OnlyProblems" /> Samo zaloga premalo ali neznana</label>
+    <label class="check-field"><input id="clearance-include-ended" type="checkbox" checked="@IncludeEnded" @onchange="OnIncludeEndedChangedAsync" /> Pokaži tudi zaključene</label>
+    <span class="muted">@Visible.Count vrstic</span>
+  </div>
 
-    @if (Preview.UnmatchedCount > 0)
-    {
-      <p class="message-state warn-message">
-        Neujemajoče šifre (podjetje @Preview.OrganizationId nima artikla s to šifro), uvoz jih preskoči:
-        @string.Join(", ", Preview.Rows.Where(row => row.ProductId is null).Take(30).Select(row => row.Sifra))
-        @(Preview.UnmatchedCount > 30 ? $" … in še {Preview.UnmatchedCount - 30}." : "")
-      </p>
-    }
-
-    @if (Preview.Rows.Count > 0)
-    {
-      <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza odprodaje">
-        <table class="data-table">
-          <caption>Predogled prvih 20 vrstic</caption>
-          <thead>
-            <tr>
-              <th scope="col">Vrstica</th><th scope="col">Šifra</th><th scope="col">Ujema</th>
-              <th scope="col">Količina</th><th scope="col">Redna cena</th><th scope="col">Popust %</th><th scope="col">Odprodajna cena</th>
+  @if (Loading)
+  {
+    <p class="muted" role="status">Nalaganje odprodaje …</p>
+  }
+  else if (Rows.Count == 0)
+  {
+    <p class="muted">V odprodaji ni nobenega artikla. Dodaj ga zgoraj ali uvozi seznam iz Excela spodaj.</p>
+  }
+  else
+  {
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Artikli v odprodaji">
+      <table class="data-table clearance-table">
+        <thead>
+          <tr>
+            <th scope="col">Šifra</th><th scope="col">Naziv</th><th scope="col">Vir</th>
+            <th scope="col" class="numeric">Vpisano</th><th scope="col" class="numeric">Prodano</th>
+            <th scope="col" class="numeric">Ostane</th><th scope="col" class="numeric">Zaloga</th><th scope="col" class="numeric">Popust %</th>
+            <th scope="col">Razstavni</th><th scope="col">Spletne strani</th><th scope="col">V katalog.csv</th><th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @foreach (var row in Visible)
+          {
+            var key = RowKey(row);
+            var draft = DraftOf(row);
+            <tr class="@(row.IsActive || row.ClearanceItemId is null ? null : "clearance-ended")">
+              <td><a href="izdelki/@row.ProductId">@row.ItemId</a></td>
+              <td>@row.Naziv</td>
+              <td>@(row.Vir ?? "—")</td>
+              @if (row.ClearanceItemId is null)
+              {
+                <td class="numeric">—</td>
+                <td class="numeric">—</td>
+                <td class="numeric">—</td>
+                <td class="numeric">—</td>
+                <td class="numeric">—</td>
+                <td><PimChip Text="DA" Tone="warn" Prefix="Razstavni eksponat: " /></td>
+              }
+              else
+              {
+                <td class="numeric">@Num(row.ZacetnaKolicina)</td>
+                <td class="numeric">
+                  @if (row.Prodano > 0) { <span title="@row.Narocila">@Num(row.Prodano)</span><span class="visually-hidden"> (naročila: @row.Narocila)</span> }
+                  else { <span class="muted">0</span> }
+                </td>
+                <td class="numeric"><input class="form-input clearance-number" type="number" min="0" step="1" aria-label="Ostane @row.ItemId"
+                                           value="@Num(draft.Kolicina)" @onchange="args => OnDraft(row, kolicina: Parse(args.Value))" /></td>
+                <td class="numeric">
+                  @if (row.Stock is { } stock)
+                  {
+                    <span title="@StockTitle(stock)">@(Num(stock.Zaloga) ?? "—")</span>
+                    <PimChip Text="@ClearanceStock.Label(stock.Nacin)" Tone="@ClearanceStock.Tone(stock.Nacin)" Prefix="Zaloga: " />
+                  }
+                </td>
+                <td class="numeric"><input class="form-input clearance-number" type="number" min="0" max="100" step="1" aria-label="Popust @row.ItemId"
+                                           value="@Num(draft.Popust)" @onchange="args => OnDraft(row, popust: Parse(args.Value))" /></td>
+                <td><input type="checkbox" aria-label="Razstavni eksponat @row.ItemId" checked="@draft.Razstavni"
+                           @onchange="args => OnDraft(row, razstavni: args.Value is bool value && value)" /></td>
+              }
+              <td>
+                @if (string.IsNullOrEmpty(row.SpletneStrani)) { <PimChip Text="ni na spletu" Tone="bad" Prefix="Spletne strani: " /> }
+                else { @row.SpletneStrani }
+              </td>
+              <td>
+                @if (row.ClearanceItemId is null) { <span class="muted">samo oznaka</span> }
+                else if (!row.IsActive) { <PimChip Text="zaključena" Prefix="Stanje: " /> }
+                else if (row.VKatalogu) { <PimChip Text="DA" Tone="good" Prefix="V katalog.csv: " /> }
+                else if (string.IsNullOrEmpty(row.SpletneStrani)) { <PimChip Text="NE — ni na spletu" Tone="bad" Prefix="V katalog.csv: " /> }
+                else if (row.Kolicina is not > 0 && row.Prodano > 0) { <PimChip Text="NE — razprodano" Tone="warn" Prefix="V katalog.csv: " /> }
+                else if (row.Kolicina is not > 0) { <PimChip Text="NE — količina 0" Tone="warn" Prefix="V katalog.csv: " /> }
+                else { <PimChip Text="NE — velja novejši vir" Tone="warn" Prefix="V katalog.csv: " /> }
+              </td>
+              <td>
+                <div class="table-actions">
+                  @if (row.ClearanceItemId is null)
+                  {
+                    <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => RemoveShowcaseAsync(row)">Odstrani oznako</button>
+                  }
+                  else if (row.IsActive)
+                  {
+                    <button type="button" class="primary-button" disabled="@(Busy || !Drafts.ContainsKey(key))" @onclick="() => SaveRowAsync(row)">Shrani</button>
+                    <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => EndAsync(row)">Zaključi</button>
+                  }
+                  else
+                  {
+                    <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => SaveRowAsync(row)" title="Znova v odprodajo z zgornjo količino in popustom">Obnovi</button>
+                  }
+                </div>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            @foreach (var row in Preview.Rows.Take(20))
-            {
-              <tr>
-                <td>@row.RowNumber</td>
-                <td>@row.Sifra</td>
-                <td>@(row.ProductId is null ? "ne" : "da")</td>
-                <td>@row.Kolicina</td>
-                <td>@row.RednaCena</td>
-                <td>@row.PopustOdstotek</td>
-                <td>@row.OdprodajnaCena</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-      @if (Preview.Rows.Count > 20)
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+<details class="ui-card compact-details section-gap" open="@(Preview is not null || Outcome is not null)">
+  <summary>Uvoz odprodajnega seznama iz Excela</summary>
+  <div class="compact-details-body">
+    <p class="hint">
+      Prepozna stolpce <strong>Šifra</strong>, <strong>Količina</strong>, <strong>Popust</strong> (številka, npr. 50),
+      <strong>Cena</strong> (samo za pregled) in <strong>Razstavni eksponat</strong> (1/da/x = DA, prazno = NE). Ostale stolpce prezre.
+      Podjetje je tisto, ki je izbrano zgoraj.
+    </p>
+    @* Izbira podjetja je v kartici »Dodaj artikel v odprodajo«; brez te vrstice je uvoz tiho šel v privzeto podjetje. *@
+    <p role="status"><strong>Uvoz gre v podjetje: @OrganizationName</strong> (spremeniš ga zgoraj, pri »Dodaj artikel v odprodajo«).</p>
+    <div class="form-grid">
+      <label class="form-field" for="clearance-vir">
+        Vir (ime dobavitelja/seznama)
+        <input id="clearance-vir" class="form-input" @bind="Vir" placeholder="npr. Azzardo 2026-09" />
+      </label>
+    </div>
+    <p class="hint">
+      Vir je ključ: ponovni uvoz pod istim virom posodobi obstoječe vrstice in <strong>samodejno
+      zaključi</strong> tiste, ki jih v novi datoteki ni več. Za nov, ločen seznam uporabi drugo ime vira.
+    </p>
+    <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
+
+    @if (Preview is not null)
+    {
+      <h3 class="section-gap">Kaj bo uvoz naredil</h3>
+      <p role="status">
+        Vrstic: <strong>@Preview.Rows.Count</strong> —
+        ujemajočih šifer: <strong>@Preview.MatchedCount</strong>,
+        neujemajočih: <strong>@Preview.UnmatchedCount</strong>.
+        Razstavni eksponat: <strong>@(Preview.HasShowcaseColumn ? $"{Preview.Rows.Count(row => row.Razstavni == true)} artiklov" : "stolpca ni, oznake ostanejo, kot so")</strong>.
+        Zaloga v glavnem skladišču: vsa za odprodajo <strong>@PreviewModeCount(ClearanceStock.Cela)</strong>,
+        del redne zaloge <strong>@PreviewModeCount(ClearanceStock.Del)</strong>,
+        zaloge premalo <strong>@PreviewModeCount(ClearanceStock.Premalo)</strong>,
+        ni znana <strong>@PreviewModeCount(ClearanceStock.Neznana)</strong>.
+      </p>
+      @foreach (var problem in Preview.Problems) { <p class="message-state warn-message">@problem</p> }
+
+      @if (Preview.UnmatchedCount > 0)
       {
-        <p class="hint">… in še @(Preview.Rows.Count - 20) vrstic.</p>
+        <p class="message-state warn-message">
+          Neujemajoče šifre (podjetje nima artikla s to šifro), uvoz jih preskoči:
+          @string.Join(", ", Preview.Rows.Where(row => row.ProductId is null).Take(30).Select(row => row.Sifra))
+          @(Preview.UnmatchedCount > 30 ? $" … in še {Preview.UnmatchedCount - 30}." : "")
+        </p>
       }
 
-      <button type="button" class="primary-button" disabled="@(Busy || Preview.MatchedCount == 0)" @onclick="ApplyAsync">
-        Uvozi @Preview.MatchedCount ujemajočih vrstic
-      </button>
+      @if (Preview.Rows.Count > 0)
+      {
+        <div class="table-scroll" role="region" tabindex="0" aria-label="Predogled uvoza odprodaje">
+          <table class="data-table">
+            <caption>Predogled 20 vrstic (najprej tiste z zalogo premalo ali neznano)</caption>
+            <thead>
+              <tr>
+                <th scope="col">Vrstica</th><th scope="col">Šifra</th><th scope="col">Ujema</th>
+                <th scope="col" class="numeric">Količina</th><th scope="col" class="numeric">Zaloga</th><th scope="col">Zaloga proti količini</th>
+                <th scope="col" class="numeric">Popust %</th><th scope="col">Razstavni</th>
+                <th scope="col" class="numeric">Redna cena</th><th scope="col" class="numeric">Odprodajna cena</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (var row in PreviewRows.Take(20))
+              {
+                <tr>
+                  <td>@row.RowNumber</td>
+                  <td>@row.Sifra</td>
+                  <td>@(row.ProductId is null ? "ne" : "da")</td>
+                  <td class="numeric">@row.Kolicina</td>
+                  <td class="numeric">@(row.ProductId is null ? "—" : Num(row.Zaloga) ?? "—")</td>
+                  <td>@if (row.ProductId is not null) { <PimChip Text="@ClearanceStock.Label(row.Nacin)" Tone="@ClearanceStock.Tone(row.Nacin)" Prefix="Zaloga: " /> }</td>
+                  <td class="numeric">@row.PopustOdstotek</td>
+                  <td>@(row.Razstavni switch { true => "DA", false => "NE", null => "—" })</td>
+                  <td class="numeric">@row.RednaCena</td>
+                  <td class="numeric">@row.OdprodajnaCena</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (Preview.Rows.Count > 20)
+        {
+          <p class="hint">… in še @(Preview.Rows.Count - 20) vrstic.</p>
+        }
+        @* Popust izven 0–100 baza zavrne (276); gumb se zato sploh ne ponudi, napaka pa bi bila na vrhu strani. *@
+        <button type="button" class="primary-button" disabled="@(Busy || Preview.MatchedCount == 0 || HasOutOfRangeDiscount)" @onclick="ApplyAsync">
+          Uvozi @Preview.MatchedCount ujemajočih vrstic
+        </button>
+        @if (HasOutOfRangeDiscount)
+        {
+          <p class="hint">Uvoz ni mogoč, dokler je v datoteki popust manjši od 0 ali večji od 100 (glej opozorilo zgoraj).</p>
+        }
+      }
     }
-  </section>
-}
 
-@if (Outcome is not null)
-{
-  <section class="ui-card data-card section-gap" aria-label="Izid uvoza">
-    <h2>3. Izid</h2>
-    <p role="status">
-      Prejetih vrstic: <strong>@Outcome.RequestedCount</strong>.
-      Zapisanih (ujemajočih): <strong>@Outcome.MatchedCount</strong>.
-      Preskočenih: <strong>@Outcome.UnmatchedCount</strong>.
-    </p>
-    @if (Outcome.NeujemajoceSifre.Count > 0)
+    @if (ImportError is not null) { <p class="message-state error-message section-gap" role="alert">@ImportError</p> }
+
+    @if (Outcome is not null)
     {
-      <p class="hint">Neujemajoče šifre: @string.Join(", ", Outcome.NeujemajoceSifre.Take(30))@(Outcome.NeujemajoceSifre.Count > 30 ? " …" : "")</p>
+      <p role="status" class="section-gap">
+        Prejetih vrstic: <strong>@Outcome.RequestedCount</strong>.
+        Zapisanih (ujemajočih): <strong>@Outcome.MatchedCount</strong>.
+        Preskočenih: <strong>@Outcome.UnmatchedCount</strong>.
+      </p>
+      @if (Outcome.NeujemajoceSifre.Count > 0)
+      {
+        <p class="hint">Neujemajoče šifre: @string.Join(", ", Outcome.NeujemajoceSifre.Take(30))@(Outcome.NeujemajoceSifre.Count > 30 ? " …" : "")</p>
+      }
     }
-  </section>
-}
+  </div>
+</details>
 
 @code {
   const long MaxUploadBytes = 16 * 1024 * 1024;
 
+  /// <summary>Neshranjena sprememba vrstice v tabeli.</summary>
+  sealed record Draft(decimal? Kolicina, decimal? Popust, bool Razstavni);
+
   IReadOnlyList<OrganizationContext> Organizations = [];
+  IReadOnlyList<ClearanceOverviewRow> Rows = [];
+  readonly Dictionary<string, Draft> Drafts = new(StringComparer.Ordinal);
   ClearanceImportPreview? Preview;
   ClearanceImportOutcome? Outcome;
   string OrganizationText = "2";
   string Vir = "";
+  string Search = "";
+  bool IncludeEnded;
   string? FileName;
   bool Busy;
+  bool Loading = true;
   string? Error;
   string? Message;
 
+  string NewItemId = "";
+  decimal? NewKolicina = 1;
+  decimal? NewPopust;
+  string NewVir = "Ročno";
+  bool NewRazstavni;
+
   int OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : 2;
+  string? ImportError;
+  bool HasOutOfRangeDiscount => Preview?.Rows.Any(row => row.ProductId is not null && row.PopustOdstotek is < 0 or > 100) == true;
+  string OrganizationName => Organizations.FirstOrDefault(organization => organization.OrganizationId == OrganizationId)?.Name ?? OrganizationText;
+
+  IEnumerable<ClearanceOverviewRow> ActiveRows => Rows.Where(row => row.ClearanceItemId is not null && row.IsActive);
+  int ActiveProducts => ActiveRows.Select(row => row.ProductId).Distinct().Count();
+  int InCatalog => Rows.Count(row => row.VKatalogu);
+  int Showcase => Rows.Where(row => row.Razstavni).Select(row => row.ProductId).Distinct().Count();
+  int StockShort => ActiveRows.Count(row => row.Stock?.Nacin == ClearanceStock.Premalo);
+  bool OnlyProblems;
+  int PreviewModeCount(string nacin) => Preview?.Rows.Count(row => row.ProductId is not null && row.Nacin == nacin) ?? 0;
+  IEnumerable<ClearanceImportRow> PreviewRows => (Preview?.Rows ?? []).OrderBy(row =>
+    row.ProductId is null ? 2 : row.Nacin is ClearanceStock.Premalo or ClearanceStock.Neznana ? 0 : 1).ThenBy(row => row.RowNumber);
+  static string StockTitle(ClearanceStock stock) =>
+    $"Ob vpisu: {Num(stock.ZalogaObVpisu) ?? "ni podatka"}{(stock.ZalogaObVpisuUtc is { } at ? $" (zaloga z {at.ToLocalTime():d. M. yyyy HH:mm})" : "")}."
+    + (stock.ZalogaSveza ? " Zaloga je sveža in omeji količino na spletu." : " Zaloga ni sveža; velja vpisano minus naročila.");
+  int SoldOut => ActiveRows.Count(row => row.Kolicina is not > 0 && row.Prodano > 0);
+  int NotOnWeb => ActiveRows.Where(row => string.IsNullOrEmpty(row.SpletneStrani)).Select(row => row.ProductId).Distinct().Count();
+
+  IReadOnlyList<ClearanceOverviewRow> Visible => Rows
+    .Where(row => string.IsNullOrWhiteSpace(Search) || Matches(row, Search.Trim()))
+    .Where(row => !OnlyProblems || row.Stock?.Nacin is ClearanceStock.Premalo or ClearanceStock.Neznana)
+    .ToList();
+
+  static bool Matches(ClearanceOverviewRow row, string text) =>
+    row.ItemId.Contains(text, StringComparison.OrdinalIgnoreCase)
+    || (row.Naziv?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false)
+    || (row.Vir?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false);
+
+  static string RowKey(ClearanceOverviewRow row) => row.ClearanceItemId?.ToString() ?? $"p{row.ProductId}";
+
+  Draft DraftOf(ClearanceOverviewRow row) =>
+    Drafts.TryGetValue(RowKey(row), out var draft) ? draft : new(row.Kolicina, row.PopustOdstotek, row.Razstavni);
 
   protected override async Task OnInitializedAsync()
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    try
+    {
+      Rows = await Clearance.GetOverviewAsync(OrganizationId, IncludeEnded);
+      Drafts.Clear();
+    }
+    catch (Exception failure) { Error = "Odprodaje ni bilo mogoče naložiti: " + failure.Message; }
+    finally { Loading = false; }
+  }
+
+  async Task OnOrganizationChangedAsync(ChangeEventArgs args)
+  {
+    OrganizationText = args.Value?.ToString() ?? "2";
+    Preview = null; Outcome = null;
+    await LoadAsync();
+  }
+
+  async Task OnIncludeEndedChangedAsync(ChangeEventArgs args)
+  {
+    IncludeEnded = args.Value is bool value && value;
+    await LoadAsync();
+  }
+
+  /// <summary>Vrednost za &lt;input type="number"&gt;: vedno s piko, brez odvečnih decimalk.</summary>
+  static string? Num(decimal? value) => value?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+  static decimal? Parse(object? value) =>
+    decimal.TryParse(value?.ToString()?.Replace(',', '.'), System.Globalization.NumberStyles.Number,
+      System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+
+  void OnDraft(ClearanceOverviewRow row, decimal? kolicina = null, decimal? popust = null, bool? razstavni = null)
+  {
+    Message = null; Error = null;
+    var current = DraftOf(row);
+    var next = current with
+    {
+      Kolicina = kolicina ?? current.Kolicina,
+      Popust = popust ?? current.Popust,
+      Razstavni = razstavni ?? current.Razstavni,
+    };
+    if (next.Kolicina == row.Kolicina && next.Popust == row.PopustOdstotek && next.Razstavni == row.Razstavni)
+      Drafts.Remove(RowKey(row));
+    else
+      Drafts[RowKey(row)] = next;
   }
 
   async Task<string> ActorAsync()
   {
     var state = await Authentication.GetAuthenticationStateAsync();
     return state.User.Identity?.Name ?? "neznan";
+  }
+
+  /// <summary>Sporočilo napake iz baze (THROW v pim.SaveClearanceItem) je že v slovenščini.</summary>
+  static string Reason(Exception failure) => failure is SqlException sql ? sql.Message : failure.Message;
+
+  async Task AddAsync()
+  {
+    Error = null; Message = null;
+    if (NewKolicina is not { } kolicina || kolicina < 0) { Error = "Vpiši količino (0 ali več)."; return; }
+    if (NewPopust is not { } popust || popust < 0 || popust > 100) { Error = "Vpiši popust med 0 in 100 %."; return; }
+    Busy = true;
+    try
+    {
+      var itemId = NewItemId.Trim();
+      var vir = string.IsNullOrWhiteSpace(NewVir) ? "Ročno" : NewVir.Trim();
+      await Clearance.SaveItemAsync(OrganizationId, itemId, vir, kolicina, popust, NewRazstavni, await ActorAsync());
+      Message = $"{itemId} je v odprodaji: količina {kolicina:0.##}, popust {popust:0.##} %{(NewRazstavni ? ", razstavni eksponat" : "")}."
+        + (kolicina > 0 ? "" : " Količina je 0, zato v katalogu ne bo v odprodaji.");
+      NewItemId = ""; NewKolicina = 1; NewPopust = null; NewRazstavni = false;
+      await LoadAsync();
+    }
+    catch (Exception failure) { Error = "Artikla ni bilo mogoče dodati: " + Reason(failure); }
+    finally { Busy = false; }
+  }
+
+  async Task SaveRowAsync(ClearanceOverviewRow row)
+  {
+    if (row.Vir is null) return;
+    Error = null; Message = null;
+    var draft = DraftOf(row);
+    if (draft.Kolicina is not { } kolicina || kolicina < 0) { Error = $"{row.ItemId}: vpiši količino (0 ali več)."; return; }
+    if (draft.Popust is not { } popust || popust < 0 || popust > 100) { Error = $"{row.ItemId}: popust mora biti med 0 in 100 %."; return; }
+    Busy = true;
+    try
+    {
+      await Clearance.SaveItemAsync(OrganizationId, row.ItemId, row.Vir, kolicina, popust,
+        draft.Razstavni == row.Razstavni ? null : draft.Razstavni, await ActorAsync());
+      Message = row.IsActive ? $"{row.ItemId} shranjen." : $"{row.ItemId} je znova v odprodaji.";
+      await LoadAsync();
+    }
+    catch (Exception failure) { Error = $"{row.ItemId} ni shranjen: " + Reason(failure); }
+    finally { Busy = false; }
+  }
+
+  async Task EndAsync(ClearanceOverviewRow row)
+  {
+    if (row.ClearanceItemId is not { } id) return;
+    Error = null; Message = null; Busy = true;
+    try
+    {
+      await Clearance.EndAsync(id, await ActorAsync());
+      Message = $"Odprodaja za {row.ItemId} ({row.Vir}) je zaključena.";
+      await LoadAsync();
+    }
+    catch (Exception failure) { Error = "Zaključitev ni uspela: " + Reason(failure); }
+    finally { Busy = false; }
+  }
+
+  async Task RemoveShowcaseAsync(ClearanceOverviewRow row)
+  {
+    Error = null; Message = null; Busy = true;
+    try
+    {
+      await Edits.SaveProductFlagsAsync(OrganizationId, row.ProductId, [("RAZSTAVNI_EKSPONAT", false)], await ActorAsync(), "Odprodaja: odstranjena oznaka");
+      Message = $"{row.ItemId} ni več razstavni eksponat.";
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga ne dovoljuje urejanja oznak."; }
+    catch (Exception failure) { Error = "Oznake ni bilo mogoče odstraniti: " + Reason(failure); }
+    finally { Busy = false; }
   }
 
   async Task<IDisposable> EnterImportLaneAsync()
@@ -152,7 +513,7 @@
 
   async Task OnFileAsync(InputFileChangeEventArgs args)
   {
-    Error = null; Message = null; Preview = null; Outcome = null;
+    Error = null; ImportError = null; Message = null; Preview = null; Outcome = null;
     if (string.IsNullOrWhiteSpace(Vir)) { Error = "Vnesi vir (ime dobavitelja/seznama) pred izbiro datoteke."; return; }
     try
     {
@@ -174,7 +535,7 @@
   async Task ApplyAsync()
   {
     if (Preview is null) return;
-    Busy = true; Error = null; Message = null;
+    Busy = true; Error = null; ImportError = null; Message = null;
     try
     {
       var actor = await ActorAsync();
@@ -182,8 +543,10 @@
         Outcome = await Clearance.ApplyAsync(Preview, actor);
       Message = $"Uvoz končan: {Outcome.MatchedCount} vrstic zapisanih.";
       Preview = null;
+      await LoadAsync();
     }
-    catch (Exception failure) { Error = "Uvoz ni uspel: " + failure.Message; }
+    // Tudi pod gumbom: uporabnik je ob kliku na dnu strani, sporočilo na vrhu ni vidno.
+    catch (Exception failure) { Error = ImportError = "Uvoz ni uspel: " + Reason(failure); }
     finally { Busy = false; }
   }
 }

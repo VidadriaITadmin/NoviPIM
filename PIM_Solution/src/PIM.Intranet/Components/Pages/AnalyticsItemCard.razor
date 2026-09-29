@@ -1,0 +1,189 @@
+@page "/analitika/artikli/{ProductId:long}"
+@attribute [Authorize(Roles = "ADMIN,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject AnalyticsService Analytics
+@inject IntranetDataService Data
+@using System.Globalization
+
+<PageTitle>Analitika · @(Detail?.Item.ItemId ?? "artikel")</PageTitle>
+
+@* 284: zakaj PIM predlaga to količino — vsaka številka formule je na zaslonu, da komerciala predlogu lahko verjame
+   ali ga zavrne. Nič se ne pošilja v SAOP. *@
+<PimPage Title="@(Detail?.Item.ItemName ?? Detail?.Item.ItemId ?? "Artikel")" OrganizationScope="true" Crumbs="Crumbs"
+         Subtitle="@(Detail is { } d ? $"{d.Item.ItemId} · {d.Item.SupplierName ?? d.Item.SupplierId}" : null)">
+  <Actions>
+    <a class="secondary-button" href="izdelki/@ProductId">Kartica izdelka</a>
+    @if (Detail is { } dd) { <a class="secondary" href="zaloge?isci=@Uri.EscapeDataString(dd.Item.ItemId)">Zaloga po virih</a> }
+  </Actions>
+</PimPage>
+
+<PimState Loading="Loading" Error="@Error" Empty="@(!Loading && Error is null && Detail is null)" LoadingText="Nalaganje artikla …"
+          EmptyText="Za ta artikel v izbranem podjetju ni analitike. Artikel je morda v drugem podjetju ali še ni bil preračunan.">
+  @if (Detail is { } d)
+  {
+    var item = d.Item;
+    var signal = AnalyticsSignals.Find(item.Signal);
+    <div class="ana-bar">
+      <PimChip Text="@signal.Label" Tone="@signal.Tone" Prefix="Stanje: " />
+      @if (item.AbcClass is { } abc) { <PimChip Text="@($"Razred {abc}{item.XyzClass}")" Prefix="" /> }
+      <span class="ana-fresh">Preračunano @d.CalculatedUtc.ToPimLocal().ToString("d. M. yyyy 'ob' HH:mm", Sl) · vir prodaje: @AnalyticsService.DemandSourceLabel(d.DemandSource)</span>
+    </div>
+
+    <section class="ana-kpis" aria-label="Kazalniki artikla">
+      <PimStat Label="Zaloga" Value="@Qty(item.Stock)" Note="@($"razpoložljivo {Qty(item.Available)}" + (item.StockValue is { } sv ? $", {Money(sv)}" : ""))" />
+      <PimStat Label="Naročeno pri dobaviteljih" Value="@Qty(item.OnOrder)" Note="@(item.NextDeliveryDate is { } nd ? $"prvi prihod {nd.ToString("d. M. yyyy", Sl)}" : "datuma prihoda ni")" />
+      <PimStat Label="Prodano 365 dni" Value="@Qty(item.Sales365Qty)" Note="@($"30 dni: {Qty(item.Sales30Qty)}, 90 dni: {Qty(item.Sales90Qty)}")" />
+      <PimStat Label="Promet 365 dni" Value="@Money(item.Sales365Net)" Note="@(item.Sales365Margin is { } m ? $"razlika v ceni {Money(m)}" : $"{d.Customers365:N0} kupcev")" />
+      <PimStat Label="Pokritost" Value="@(item.CoverDays is { } c ? $"{c:N0} dni" : "—")" Note="koliko dni zadošča razpoložljiva zaloga" />
+      <PimStat Label="Predlog naročila" Value="@(item.SuggestedQty > 0 ? Qty(item.SuggestedQty) : "ni")" Note="@(item.SuggestedQty > 0 ? Money(item.SuggestedValue) : "zaloga zadošča")" />
+    </section>
+
+    <div class="ana-columns">
+      <section class="ui-card" aria-labelledby="ana-why">
+        <h2 id="ana-why">Kako je izračunan predlog</h2>
+        <p class="ana-explain">@Explanation(d)</p>
+        <dl class="ana-facts">
+          <dt>Povprečna dnevna prodaja</dt><dd>@item.DailyDemand.ToString("N2", Sl) kos (zadnjih @d.DemandWindowDays dni)</dd>
+          <dt>Dobavni čas</dt><dd>@item.LeadTimeDays dni — @d.LeadTimeSourceLabel@(d.LeadTimeSamples > 0 ? $", {d.LeadTimeSamples} prevzemov" : "")</dd>
+          <dt>Varnostna zaloga</dt><dd>@Qty(Math.Round(item.SafetyStock, 1)) kos</dd>
+          <dt>Točka naročila</dt><dd>@Qty(Math.Round(item.ReorderPoint, 1)) kos</dd>
+          <dt>Ciljna zaloga</dt><dd>@Qty(Math.Round(item.OrderUpToLevel, 1)) kos (dobavni čas + @d.ReviewPeriodDays dni do naslednjega naročila)</dd>
+          <dt>SAOP MIN / MAX</dt><dd>@(item.PolicyMin is null && item.PolicyMax is null ? "ni nastavljeno" : $"{Qty(item.PolicyMin ?? 0)} / {Qty(item.PolicyMax ?? 0)}")</dd>
+          <dt>Večkratnik naročila</dt><dd>@Qty(item.OrderMultiple)</dd>
+          <dt>Nabavna cena</dt><dd>@(item.UnitCost is { } cost ? cost.ToString("N4", Sl) + " €" : "ni znana") @CostSourceLabel(d.CostSource)</dd>
+          <dt>Zadnja prodaja / prevzem</dt><dd>@(item.LastSaleDate?.ToString("d. M. yyyy", Sl) ?? "—") / @(d.LastReceiptDate?.ToString("d. M. yyyy", Sl) ?? "—")</dd>
+        </dl>
+      </section>
+
+      <section class="ui-card" aria-label="Prodaja po mesecih">
+        <PimTrendChart Points="ChartPoints" Unit="kos" Caption="Prodana količina po mesecih" CurrentLabel="Zadnjih 12 mesecev" CompareLabel="Leto prej"
+                       EmptyText="V zadnjih 12 mesecih artikel ni bil prodan." />
+      </section>
+    </div>
+
+    <div class="ana-columns">
+      <section class="ui-card" aria-labelledby="ana-purchases">
+        <h2 id="ana-purchases">Naročila dobaviteljem in prevzemi</h2>
+        @if (d.Purchases.Count == 0)
+        {
+          <p class="muted">Za ta artikel ni naročil dobaviteljem ali prevzemov v podatkih iz SAOP.</p>
+        }
+        else
+        {
+          <div class="table-scroll">
+            <table class="data-table ana-table">
+              <caption class="visually-hidden">Zadnja naročila dobaviteljem in prevzemi artikla</caption>
+              <thead><tr><th scope="col">Dokument</th><th scope="col">Naročeno</th><th scope="col" class="numeric">Količina</th><th scope="col">Pričakovano / prevzeto</th><th scope="col" class="numeric">Dni</th><th scope="col">Status</th></tr></thead>
+              <tbody>
+                @foreach (var p in d.Purchases)
+                {
+                  <tr>
+                    <td>@p.Document<span class="sub">@p.Source</span></td>
+                    <td>@(p.OrderDate?.ToString("d. M. yyyy", Sl) ?? "—")</td>
+                    <td class="numeric">@(p.Qty is { } q ? Qty(q) : "—")@if (p.ReceivedQty is { } rq) { <span class="sub">prevzeto @Qty(rq)</span> }</td>
+                    <td>@(p.ReceivedDate?.ToString("d. M. yyyy", Sl) ?? p.ExpectedDate?.ToString("d. M. yyyy", Sl) ?? "—")
+                      @if (p.ReceivedDate is null && p.ExpectedDate is { } e && e < DateTime.Today) { <span class="sub ana-down">zamuja</span> }
+                    </td>
+                    <td class="numeric">@(p.LeadTimeDays?.ToString() ?? "—")</td>
+                    <td>@(p.Status ?? "—")</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section class="ui-card" aria-labelledby="ana-customers">
+        <h2 id="ana-customers">Kdo kupuje (365 dni)</h2>
+        @if (d.Customers.Count == 0)
+        {
+          <p class="muted">Ni računov za ta artikel v zadnjih 365 dneh.</p>
+        }
+        else
+        {
+          <table class="data-table ana-table">
+            <caption class="visually-hidden">Kupci artikla v zadnjih 365 dneh</caption>
+            <thead><tr><th scope="col">Kupec</th><th scope="col" class="numeric">Količina</th><th scope="col" class="numeric">Promet</th><th scope="col">Zadnjič</th></tr></thead>
+            <tbody>
+              @foreach (var customer in d.Customers)
+              {
+                <tr>
+                  <td>@if (customer.CustomerId is { } id) { <a class="row-link" href="stranke?isci=@Uri.EscapeDataString(id)">@(customer.CustomerName ?? id)</a> } else { <span>—</span> }</td>
+                  <td class="numeric">@Qty(customer.Qty)</td>
+                  <td class="numeric">@Money(customer.Net)</td>
+                  <td>@(customer.LastDate?.ToString("d. M. yyyy", Sl) ?? "—")</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    </div>
+  }
+</PimState>
+
+@code {
+  [Parameter] public long ProductId { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  AnalyticsItemDetail? Detail;
+  bool Loading = true;
+  string? Error;
+
+  IReadOnlyList<PimCrumb> Crumbs => [new("Analitika", "analitika"), new("Artikli", "analitika/artikli"), new(Detail?.Item.ItemId ?? "Artikel")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      Detail = await Analytics.GetItemDetailAsync(organization.OrganizationId, ProductId);
+    }
+    catch (Exception exception)
+    {
+      Error = $"Analitike artikla ni bilo mogoče naložiti: {exception.Message}";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  IReadOnlyList<PimTrendChart.Point> ChartPoints => Detail is null ? [] :
+    Detail.Months.Skip(Math.Max(0, Detail.Months.Count - 12))
+      .Select(m => new PimTrendChart.Point(m.MonthStart.ToString("MMM yy", Sl).Replace(".", ""), m.Qty, m.PrevYearQty)).ToList();
+
+  static string Explanation(AnalyticsItemDetail d)
+  {
+    var i = d.Item;
+    var position = i.Available + i.OnOrder;
+    if (d.DemandSource == "BREZ")
+      return i.SuggestedQty > 0
+        ? $"Podatkov o prodaji še ni, zato velja samo SAOP minimum: razpoložljivo in naročeno je {Qty(position)}, minimum {Qty(i.PolicyMin ?? 0)}. Predlog {Qty(i.SuggestedQty)} kos dvigne zalogo do SAOP maksimuma."
+        : "Podatkov o prodaji še ni, zato predloga po prodaji ni. Ko worker prebere račune iz SAOP, se predlog izračuna sam.";
+    if (i.DailyDemand <= 0 && i.SuggestedQty <= 0)
+      return $"Artikel se v zadnjih {d.DemandWindowDays} dneh ni prodajal, zato ga ni treba naročati.";
+    var text = $"Razpoložljivo {Qty(i.Available)} in naročeno {Qty(i.OnOrder)} skupaj da {Qty(position)} kos. "
+      + $"V {i.LeadTimeDays} dneh, kolikor traja dobava, se proda približno {Qty(Math.Round(i.DailyDemand * i.LeadTimeDays, 1))} kos, "
+      + $"za nihanje prodaje pa PIM drži še {Qty(Math.Round(i.SafetyStock, 1))} kos varnostne zaloge. ";
+    return i.SuggestedQty > 0
+      ? text + $"Ker je {Qty(position)} pod točko naročila {Qty(Math.Round(i.ReorderPoint, 1))}, predlaga {Qty(i.SuggestedQty)} kos, da zaloga zadošča do naslednjega naročila čez {d.ReviewPeriodDays} dni."
+        + (i.SuggestionReason is { } reason ? $" Razlog: {reason}." : "")
+      : text + $"To je nad točko naročila {Qty(Math.Round(i.ReorderPoint, 1))}, zato naročilo zdaj ni potrebno.";
+  }
+
+  static string CostSourceLabel(string? source) => source switch
+  {
+    "POVPRECNA" => "(povprečna nabavna cena iz SAOP)",
+    "CENIK" => "(nabavni cenik)",
+    "ZADNJA" => "(zadnja nabavna cena)",
+    _ => "",
+  };
+
+  static string Qty(decimal value) => value.ToString(value == decimal.Truncate(value) ? "N0" : "N1", Sl);
+  static string Money(decimal? value) => value is { } v ? v.ToString("N0", Sl) + " €" : "—";
+}

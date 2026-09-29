@@ -116,6 +116,8 @@
       </div>
       <p class="hint">Odobritev skupino samo uvrsti v vrsto. Pošlje jo šele odhodni worker.</p>
     }
+    @* 281: artikli, ki bi bili v SAOP neaktivni — seznam in potrditev tu, ostalo gre ob odobritvi. *@
+    <SaopSafeguardBanner Version="SafeguardVersion" />
 
     @if (Outcome.Rejected > 0)
     {
@@ -156,6 +158,8 @@
   string SelectedFieldKey = "";
   string NewValue = "";
   bool Busy;
+  /// <summary>281: pasica deaktivacij se osveži po odobritvi skupine.</summary>
+  int SafeguardVersion;
   string? Error;
   string? Message;
 
@@ -248,7 +252,7 @@
     Busy = true;
     try { Message = $"Odobrenih sporočil: {await Write.ApproveBatchAsync(Outcome.OutboundBatchId, await ActorAsync())}."; }
     catch { Error = "Skupine trenutno ni mogoče odobriti."; }
-    finally { Busy = false; }
+    finally { Busy = false; SafeguardVersion++; }
   }
 
   async Task CancelAsync()

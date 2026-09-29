@@ -1,0 +1,11 @@
+/* Prenova 2026-09-26: filtri, hitri izbori in tabela v eni kartici. */
+.search-box { align-items: center; display: flex; flex: 1 1 18rem; max-width: 22rem; position: relative; }
+.search-box .search-input { min-width: 0; padding-left: 2rem; width: 100%; }
+.search-glyph { border: 2px solid var(--pim-text-muted); border-radius: 50%; height: .75rem; left: .7rem; pointer-events: none; position: absolute; top: 50%; transform: translateY(-60%); width: .75rem; }
+.search-glyph::after { background: var(--pim-text-muted); content: ""; height: 2px; left: .55rem; position: absolute; top: .62rem; transform: rotate(45deg); width: .4rem; }
+.list-head { border-bottom: 1px solid var(--pim-border); padding: 0 .85rem; }
+.value-cell { color: var(--pim-text-strong); font-weight: 500; max-width: 22rem; overflow-wrap: anywhere; }
+.reason { color: var(--pim-text-muted); font-size: .72rem; margin-top: .2rem; max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.numeric { font-variant-numeric: tabular-nums; }
+#unmapped-field { max-width: 18rem; }
+@media (max-width: 720px) { .search-box { max-width: none; } }

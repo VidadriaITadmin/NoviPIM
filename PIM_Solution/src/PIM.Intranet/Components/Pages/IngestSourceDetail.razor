@@ -90,7 +90,7 @@
             @foreach (var run in Runs)
             {
               <tr>
-                <td><a href="zajem/teki/@run.RunId">@run.StartedUtc.ToPimLocal().ToString("g")</a></td>
+                <td><a href="sistem/teki/@run.RunId">@run.StartedUtc.ToPimLocal().ToString("g")</a></td>
                 <td>@run.Pipeline</td>
                 <td><PimChip Text="@Status(run.Status)" Tone="@Tone(run.Status)" /></td>
                 <td class="numeric">@run.RowsRead.ToString("N0")</td>
@@ -117,7 +117,7 @@
 
   [Parameter, SupplyParameterFromQuery(Name = "podjetje")] public int? RequestedOrganizationId { get; set; }
 
-  IReadOnlyList<PimCrumb> Crumbs => [new("Vhodni podatki", "zajem"), new(SourceCode)];
+  IReadOnlyList<PimCrumb> Crumbs => [new("Zajem podatkov", "zajem"), new(SourceCode)];
   static readonly IReadOnlyList<PimColumn> EntityColumns =
   [
     new("Entiteta"), new("Preslikava"), new("Polj", Numeric: true), new("Obveznih", Numeric: true),

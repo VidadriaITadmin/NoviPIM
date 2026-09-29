@@ -51,8 +51,10 @@
 
 /* --- dejanja ob naslovu ------------------------------------------------------------- */
 
-.card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
-.save-state { font-size: .78rem; white-space: nowrap; }
+/* 2026-09-28: sporočilo po shranjevanju zna biti dolgo (kaj velja takoj, kaj čaka SAOP, kategorije) —
+   z nowrap je stisnilo naslov artikla v ozek stolpec. Zdaj se prelomi v širini največ ~32 rem. */
+.card-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; max-width: 40rem; }
+.save-state { font-size: .78rem; line-height: 1.4; max-width: 32rem; text-align: right; }
 .save-ok { color: var(--pim-good-text); font-weight: 600; }
 .save-error { color: var(--pim-bad-text); font-weight: 600; }
 .save-dirty { color: var(--pim-warn-text); font-weight: 600; }
@@ -134,6 +136,28 @@
 .nav-badge { border-radius: 999px; font-size: .7rem; font-weight: 700; min-width: 1.35rem; padding: .12rem .4rem; text-align: center; }
 .nav-badge.bad { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
 .nav-badge.warn { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+/* Število vsebine (slike, zaloga) ni opozorilo: brez barvnega ozadja, samo tiho število. */
+.nav-badge.count { background: transparent; color: var(--pim-text-muted); font-weight: 600; }
+
+/* »Dodaj atribut« in kategorije na zavihku Splet (2026-09-28). Oznake nastanejo v tej datoteki,
+   zato slog tu in ne v ProductChannelPanel.razor.css. */
+.add-attribute .group-title,
+.section-content .field-group > .group-title {
+  border-bottom: 1px solid var(--pim-border);
+  color: var(--pim-text-strong);
+  font-size: .8rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  margin: 1.75rem 0 .75rem;
+  padding-bottom: .5rem;
+  text-transform: uppercase;
+}
+.section-content .field-group.add-attribute,
+.section-content .field-group.add-attribute + .field-group { margin-top: 2rem; }
+.add-attribute-row { align-items: flex-end; display: grid; gap: .4rem .75rem; grid-template-columns: minmax(0, 28rem) auto; }
+.add-attribute-row label { color: var(--pim-text-strong); font-size: .84rem; font-weight: 600; grid-column: 1 / -1; }
+.add-attribute .muted { font-size: .78rem; margin: .5rem 0 0; }
+@media (max-width: 700px) { .add-attribute-row { grid-template-columns: 1fr; } }
 
 .section-content { min-width: 0; }
 .section-panel[hidden] { display: none; }

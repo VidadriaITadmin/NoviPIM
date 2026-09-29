@@ -1,0 +1,225 @@
+@page "/varovalke"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SafeguardService Safeguards
+@inject AuthenticationStateProvider Authentication
+
+@* 277: skupno mesto vseh varovalk. Izvoz primerja, kar gre ven, z zadnjo objavo; sumljiv artikel zadrži
+   (ga ni v datoteki), dokler ga kdo ne pregleda in potrdi — vsi ostali gredo ven. Katalog.csv je prvo
+   področje — SAOP, zaloga in viri se dodajo kot nova področja v ops.SafeguardRule, stran jih pokaže brez spremembe. *@
+
+<PageTitle>Varovalke</PageTitle>
+<PimPage Title="Varovalke"
+         Subtitle="Preden gre kaj iz PIM-a, se primerja z zadnjo objavo. Artikel s sumljivo spremembo počaka na potrditev, vsi ostali gredo ven — procesi tečejo naprej." />
+
+<p class="card-note">
+  Kako deluje: izvoz se izdela in objavi kot vedno. Če varovalka pri artiklu najde kaj sumljivega (npr. cena ×100, cena 0, prazna cena,
+  veliko artiklov gre s spleta), je ta artikel <strong>zadržan</strong>: v datoteki ga ni, zato na spletu ostane s prejšnjimi podatki
+  (nov artikel tja še ne pride). Ko zadržane artikle pregledaš in potrdiš — posamično ali vse — gredo ven z naslednjim izvozom (izvoz se
+  sproži ob potrditvi). Če napako popraviš (npr. ceno v SAOP), je naslednji izvoz ne najde več in artikel gre ven sam. Potrjena sprememba
+  14 dni ne sprašuje znova.
+</p>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<PimState Loading="Loading" Error="@LoadError" Empty="false">
+  <section class="ui-card data-card section-gap" aria-labelledby="safeguards-waiting-title">
+    <h2 id="safeguards-waiting-title">Čaka potrditev</h2>
+    @if (Waiting.Count == 0)
+    {
+      <p class="message-state success-message">Noben artikel ne čaka potrditve — vse je šlo ven.</p>
+    }
+    else
+    {
+      <div class="safeguard-waiting-list">
+        @foreach (var check in Waiting)
+        {
+          <article class="safeguard-waiting-card">
+            <div>
+              <h3>@SafeguardText.Area(check.AreaCode) · @check.OrganizationName: @(check.AreaCode == SafeguardText.SaopArea ? $"v SAOP {SafeguardText.ItemsInactive(check.HeldCount)}" : $"{SafeguardText.ItemsWaiting(check.HeldCount)} potrditev")</h3>
+              <p><strong>@check.Headline</strong></p>
+              <p class="muted">@(check.AreaCode == SafeguardText.SaopArea ? "Deaktivacije se ne pošljejo, ostale spremembe gredo" : "Datoteka je objavljena brez njih") · zadržano od @check.CreatedUtc.ToPimLocal().ToString("g") (@PimFormat.Ago(check.CreatedUtc)) · zadnje preverjanje @PimFormat.Ago(check.LastEvaluatedUtc)@(check.EvaluationCount > 1 ? $" · isti izid {check.EvaluationCount}× zapored" : "")</p>
+            </div>
+            <a class="primary-button" href="@($"varovalke/{check.SafeguardCheckId}")">Preglej in potrdi</a>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="ui-card data-card section-gap" aria-labelledby="safeguards-history-title">
+    <div class="subsection-head">
+      <h2 id="safeguards-history-title">Zadnja preverjanja</h2>
+      <label><input type="checkbox" @bind="OnlyWithFindings" @bind:after="LoadAsync" /> Samo z ugotovitvami</label>
+    </div>
+    <PimState Loading="false" Error="@null" Empty="@(History.Count == 0)" EmptyText="@(OnlyWithFindings ? "Ni preverjanj z ugotovitvami." : "Varovalka še ni tekla — prvo preverjanje nastane ob naslednjem izvozu.")">
+      <PimTable Caption="Preverjanja, najnovejša najprej (največ 60)" Columns="HistoryColumns">
+        <Rows>
+          @foreach (var check in History)
+          {
+            <tr>
+              <td>@check.CreatedUtc.ToPimLocal().ToString("g")</td>
+              <td>@SafeguardText.Area(check.AreaCode)<br /><span class="muted">@check.OrganizationName</span></td>
+              <td><PimChip Text="@SafeguardText.Status(check.Status)" Tone="@SafeguardText.Tone(check.Status)" /></td>
+              <td>@(check.Headline ?? "—")</td>
+              <td class="numeric">@(check.PublishedRows?.ToString("N0") ?? "—")</td>
+              <td class="numeric">@(check.HeldCount > 0 ? check.HeldCount.ToString("N0") : "—")</td>
+              <td>@Decision(check)</td>
+              <td><a href="@($"varovalke/{check.SafeguardCheckId}")">Odpri</a></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+  </section>
+
+  <section class="ui-card data-card section-gap" aria-labelledby="safeguards-rules-title">
+    <h2 id="safeguards-rules-title">Pravila</h2>
+    <p class="card-note">
+      »Zadrži artikel« pomeni, da artikla s to ugotovitvijo ni v datoteki, dokler ga kdo ne potrdi; ostali artikli gredo ven.
+      Pri pošiljanju v SAOP pomeni, da se sprememba (npr. deaktivacija artikla) ne pošlje, dokler je kdo ne potrdi; ostale spremembe gredo.
+      »Samo opozorilo« artikel objavi in ugotovitev pokaže. Pravila o celoti (npr. število artiklov na spletu) artikla ne morejo zadržati.
+      »Najmanj artiklov« pove, od koliko prizadetih artiklov naprej pravilo zadrži (npr. umik s spleta: posamezni umiki so opozorilo,
+      množični počakajo potrditev). Spremembe veljajo od naslednjega izvoza.
+    </p>
+    @foreach (var area in Rules.GroupBy(rule => rule.AreaCode))
+    {
+      <div class="rules-table">
+      <PimTable Caption="@SafeguardText.Area(area.Key)" Columns="RuleColumns">
+        <Rows>
+          @foreach (var rule in area)
+          {
+            var draft = Drafts[rule.RuleCode];
+            <tr>
+              <td><strong>@rule.Title</strong><br /><span class="muted">@rule.Explanation</span></td>
+              <td>
+                @if (CanEditRules && rule.CanHold && !rule.IsInformational)
+                {
+                  <label><input type="checkbox" @bind="draft.RequiresConfirmation" /> zadrži artikel</label>
+                }
+                else
+                {
+                  <span>@(rule.IsInformational ? "informacija" : rule.RequiresConfirmation ? "zadrži artikel" : "samo opozorilo")</span>
+                }
+              </td>
+              <td>
+                @if (rule.ThresholdLabel is null) { <span class="muted">—</span> }
+                else if (CanEditRules)
+                {
+                  <label class="rule-number"><input class="form-input" type="number" min="0" step="1" @bind="draft.ThresholdValue" aria-label="@rule.ThresholdLabel" /> <span class="muted">@rule.ThresholdLabel</span></label>
+                }
+                else { <span>@rule.ThresholdValue?.ToString("0.##") <span class="muted">@rule.ThresholdLabel</span></span> }
+              </td>
+              <td class="numeric">
+                @if (CanEditRules && rule.CanHold && !rule.IsInformational)
+                {
+                  <input class="form-input rule-min" type="number" min="1" step="1" @bind="draft.MinCount" aria-label="Najmanj artiklov, da pravilo zadrži" />
+                }
+                else { <span>@rule.MinCount</span> }
+              </td>
+              <td>
+                @if (CanEditRules) { <label><input type="checkbox" @bind="draft.IsEnabled" /> vklopljeno</label> }
+                else { <PimChip Text="@(rule.IsEnabled ? "vklopljeno" : "izklopljeno")" Tone="@(rule.IsEnabled ? "good" : null)" /> }
+              </td>
+              <td>
+                @if (CanEditRules)
+                {
+                  <button type="button" class="ghost-button" disabled="@(Busy || !draft.IsDirty(rule))" @onclick="() => SaveRuleAsync(rule)">Shrani</button>
+                }
+                <br /><span class="muted">@rule.UpdatedBy · @PimFormat.Ago(rule.UpdatedUtc)</span>
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      </div>
+    }
+  </section>
+</PimState>
+
+@code {
+  static readonly IReadOnlyList<PimColumn> HistoryColumns =
+    [new("Čas"), new("Področje"), new("Izid"), new("Povzetek"), new("Na spletu", Numeric: true), new("Zadržanih", Numeric: true), new("Objava ali potrditev"), new("")];
+  static readonly IReadOnlyList<PimColumn> RuleColumns =
+    [new("Pravilo"), new("Kaj naredi"), new("Prag"), new("Najmanj artiklov", Numeric: true), new("Stanje"), new("")];
+
+  sealed class RuleDraft(SafeguardRule rule)
+  {
+    public bool IsEnabled { get; set; } = rule.IsEnabled;
+    public bool RequiresConfirmation { get; set; } = rule.RequiresConfirmation;
+    public decimal? ThresholdValue { get; set; } = rule.ThresholdValue;
+    public int MinCount { get; set; } = rule.MinCount;
+
+    public bool IsDirty(SafeguardRule current) =>
+      IsEnabled != current.IsEnabled || RequiresConfirmation != current.RequiresConfirmation
+      || ThresholdValue != current.ThresholdValue || MinCount != current.MinCount;
+  }
+
+  IReadOnlyList<SafeguardCheckRow> Waiting = [];
+  IReadOnlyList<SafeguardCheckRow> History = [];
+  IReadOnlyList<SafeguardRule> Rules = [];
+  readonly Dictionary<string, RuleDraft> Drafts = new(StringComparer.Ordinal);
+  bool Loading = true, Busy, OnlyWithFindings = true, CanEditRules;
+  string? LoadError, Error, Message;
+
+  protected override async Task OnInitializedAsync()
+  {
+    var user = (await Authentication.GetAuthenticationStateAsync()).User;
+    CanEditRules = PimPolicies.Allows(user, PimPolicies.SafeguardSettings);
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = History.Count == 0 && Rules.Count == 0;
+    LoadError = null;
+    try
+    {
+      // 281: seznam deaktivacij za SAOP se osveži ob odprtju strani (nova sporočila v vrsti, preklici).
+      await Safeguards.EvaluateSaopAsync();
+      var all = await Safeguards.GetChecksAsync(onlyWithFindings: OnlyWithFindings, take: 60);
+      Waiting = all.Where(check => check.IsWaiting).ToList();
+      History = all;
+      Rules = await Safeguards.GetRulesAsync();
+      Drafts.Clear();
+      foreach (var rule in Rules) Drafts[rule.RuleCode] = new(rule);
+    }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      LoadError = "Varovalk ni mogoče prebrati (migracija 277: ops.SafeguardCheck, intranet.GetSafeguardChecks).";
+    }
+    finally { Loading = false; }
+  }
+
+  async Task SaveRuleAsync(SafeguardRule rule)
+  {
+    var draft = Drafts[rule.RuleCode];
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      Rules = await Safeguards.SaveRuleAsync(
+        new(rule.RuleCode, draft.IsEnabled, draft.RequiresConfirmation, draft.ThresholdValue, Math.Max(1, draft.MinCount)), await ActorAsync());
+      Drafts.Clear();
+      foreach (var saved in Rules) Drafts[saved.RuleCode] = new(saved);
+      Message = $"Pravilo »{rule.Title}« je shranjeno. Velja od naslednjega izvoza.";
+    }
+    catch (UnauthorizedAccessException) { Error = "Pravila varovalk lahko spreminja samo skrbnik."; }
+    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = "Pravila ni bilo mogoče shraniti: " + exception.Message; }
+    finally { Busy = false; }
+  }
+
+  static string Decision(SafeguardCheckRow check) => check.Status switch
+  {
+    SafeguardText.Confirmed => $"objavljeno {check.PublishedUtc?.ToPimLocal():g}; zadržane potrdil {check.DecidedBy} {check.DecidedUtc?.ToPimLocal():g}",
+    SafeguardText.Waiting => check.PublishedUtc is { } sent ? $"objavljeno {sent.ToPimLocal():g}, brez zadržanih" : "zadržani čakajo",
+    SafeguardText.Superseded => "nadomeščeno z novejšim",
+    _ => check.PublishedUtc is { } published ? $"objavljeno {published.ToPimLocal():g}" : "ni objavljeno",
+  };
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}

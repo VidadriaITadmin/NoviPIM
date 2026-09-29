@@ -1,3 +1,4 @@
+@page "/sistem/teki/{RunId:guid}"
 @page "/zajem/teki/{RunId:guid}"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -138,7 +139,7 @@
   bool Loading = true;
   string? Error;
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Teki", "zajem/teki"), new("Podrobnosti")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nadzor sistema", "sistem"), new("Teki", "sistem/teki"), new("Podrobnosti")];
   static readonly IReadOnlyList<PimColumn> StepColumns = [new("Korak"), new("Poskus", Numeric: true), new("Vhod", Numeric: true), new("Združeno", Numeric: true), new("Trajanje ms", Numeric: true), new("Stanje"), new("Zapisano")];
   static readonly IReadOnlyList<PimColumn> ErrorColumns = [new("Čas"), new("Resnost"), new("Koda"), new("Sporočilo")];
   static readonly IReadOnlyList<PimColumn> StockColumns = [new("Razlog"), new("Artikel"), new("EAN"), new("Podrobnost"), new("Čas")];

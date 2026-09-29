@@ -4,181 +4,355 @@
 @inject WebWithdrawalService Withdrawals
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 
 @* 251: artikli, ki jim je PIM sam odstranil kljukico svetila/videlektro, ker na spletišče ne smejo več
    (neaktiven, brez kategorije spletišča, neveljaven — npr. uvoz je pobrisal sliko). Razlog je zapisan
    ob umiku, ker ga po odkljukanju spletna validacija ne kaže več. Opozorilo v zvoncu (WebShopWithdrawn)
-   vodi sem in se zapre, ko so vsi umiki pregledani ali popravljeni. *@
+   vodi sem in se zapre, ko so vsi umiki pregledani ali popravljeni.
+   277: uporabnik 2026-09-24 — »koliko artiklov je bilo umaknjenih s spleta, zakaj in kateri«, »če imajo
+   kljukice, pa ne gredo na splet, da vemo zakaj ne«, »hitre obnove«. Zato trije zavihki: vsi umiki (ne samo
+   samodejni) po razlogu z vrnitvijo kljukic, kljukice brez objave po razlogu in samodejni umik (251). *@
 
 <PageTitle>Umaknjeni s spleta</PageTitle>
 <PimPage Title="Umaknjeni s spleta"
-         Subtitle="Artikli, ki jim je PIM sam odstranil kljukico svetila ali videlektro, ker niso več veljavni za splet — z razlogom, kdaj in kaj je umik sprožilo." />
+         Subtitle="Kateri artikli so šli s spleta in zakaj, katere kljukice ne delujejo in zakaj — in kljukice nazaj v enem koraku." />
 <div class="page-actions section-gap">
   <a href="splet">CSV za Magento</a>
+  <a href="varovalke">Varovalke</a>
+  <a href="splet/neskladja">Neskladja med podjetji</a>
   <a href="kakovost/artikli?podjetje=@OrganizationId&stanje=BLOCKED_ERRORS">Artikli z blokirajočimi napakami</a>
 </div>
 <p class="card-note">
-  Artikel gre na spletišče, dokler je aktiven, ima kategorijo na tem spletišču in je veljaven za splet. Ko to ni več res,
-  PIM kljukico odstrani in katalog.csv artikel še @(Policy?.WithdrawalRowDays ?? 14) dni pošilja s praznimi »Spletne strani«,
-  da ga Magento umakne. Ko artikel dopolniš, spletišče na kartici ponovno označi — kljukica obvelja samo, če je artikel veljaven.
+  Artikel gre na spletišče, dokler je aktiven, ima kategorijo na tem spletišču in je veljaven za splet — kljukica sama ni dovolj.
+  Ko artikel ne gre več, ga katalog.csv še @(Policy?.WithdrawalRowDays ?? 14) dni pošilja s praznimi »Spletne strani«, da ga Magento umakne.
 </p>
 
-<section class="ui-card toolbar section-gap" aria-label="Filter">
+<section class="ui-card toolbar section-gap" aria-label="Podjetje">
   <label for="withdrawal-organization">Podjetje</label>
-  <select id="withdrawal-organization" class="filter-select" @bind="OrganizationText" @bind:after="LoadAsync">
+  <select id="withdrawal-organization" class="filter-select" @bind="OrganizationText" @bind:after="ReloadAllAsync">
     @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
   </select>
-  <label for="withdrawal-search">Šifra ali naziv</label>
-  <input id="withdrawal-search" class="form-input" @bind="Search" @bind:event="oninput" @onkeydown="OnSearchKeyAsync" />
-  <label><input type="checkbox" @bind="OnlyOpen" @bind:after="LoadAsync" /> Samo nepregledani</label>
-  <button type="button" class="filter-button" disabled="@Busy" @onclick="LoadAsync">Prikaži</button>
 </section>
+
+<nav class="view-switch section-gap" aria-label="Pogled">
+  <button type="button" class="view-tab @(View == ViewWithdrawn ? "active" : null)" aria-pressed="@(View == ViewWithdrawn ? "true" : "false")" @onclick="() => ShowAsync(ViewWithdrawn)">
+    Umaknjeni s spleta @if (WithdrawnTotal is { } withdrawnTotal) { <span class="view-count">@withdrawnTotal.ToString("N0")</span> }
+  </button>
+  <button type="button" class="view-tab @(View == ViewBlocked ? "active" : null)" aria-pressed="@(View == ViewBlocked ? "true" : "false")" @onclick="() => ShowAsync(ViewBlocked)">
+    S kljukico, a ne gredo na splet @if (BlockedTotal is { } blockedTotal) { <span class="view-count">@blockedTotal.ToString("N0")</span> }
+  </button>
+  <button type="button" class="view-tab @(View == ViewAuto ? "active" : null)" aria-pressed="@(View == ViewAuto ? "true" : "false")" @onclick="() => ShowAsync(ViewAuto)">
+    Samodejni umik @if (Policy is { OpenWithdrawalCount: > 0 } open) { <span class="view-count">@open.OpenWithdrawalCount.ToString("N0")</span> }
+  </button>
+</nav>
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
-
-@if (Policy is { } policy)
+@if (RestoreRejected.Count > 0)
 {
-  <section class="ui-card data-card section-gap" aria-labelledby="withdrawal-policy-title">
-    <h2 id="withdrawal-policy-title">Samodejni umik</h2>
-    <div class="kpi-grid">
-      <PimStat Label="Samodejni umik" Value="@(policy.AutoWithdrawEnabled ? "vklopljen" : "izklopljen")"
-               Note="@(policy.UpdatedBy is null ? null : $"{policy.UpdatedBy} · {PimFormat.Ago(policy.UpdatedUtc)}")" />
-      <PimStat Label="Nepregledani umiki" Value="@policy.OpenWithdrawalCount.ToString("N0")" />
-      <PimStat Label="Objavljeni v zadnjem izvozu" Value="@policy.PublishedCount.ToString("N0")" Note="vrstice s Spletne strani" />
-      <PimStat Label="Odjavne vrstice v katalog.csv" Value="@policy.WithdrawalRowCount.ToString("N0")" Note="@($"prazne Spletne strani, {policy.WithdrawalRowDays} dni")" />
-    </div>
-    @if (!policy.AutoWithdrawEnabled)
-    {
-      <p class="message-state warn-message">
-        Samodejni umik je za to podjetje izklopljen: PIM kljukic ne odstranjuje sam. Neveljaven artikel s kljukico v katalog.csv
-        vseeno ne gre (če je bil prej na spletu, gre kot odjavna vrstica). Spodaj je predogled, kaj bi umik zdaj naredil.
-      </p>
-    }
-    <AuthorizeView Policy="@PimPolicies.WebPublicationSettings">
-      <div class="form-grid">
-        <label class="form-field"><span><input type="checkbox" @bind="DraftEnabled" /> Samodejno odkljukaj artikle, ki niso več veljavni za splet</span></label>
-        <label class="form-field" for="withdrawal-days">Odjavna vrstica v katalog.csv (dni)
-          <input id="withdrawal-days" class="form-input" type="number" min="1" max="365" @bind="DraftDays" />
-        </label>
-      </div>
-      <button type="button" class="primary-button" disabled="@(Busy || !PolicyDirty)" @onclick="SavePolicyAsync">Shrani nastavitev</button>
-    </AuthorizeView>
-  </section>
+  <div class="message-state warn-message" role="status">
+    <strong>Teh kljukic ni bilo mogoče vrniti — artikel na spletišče (še) ne sme:</strong>
+    <ul>@foreach (var line in RestoreRejected.Take(50)) { <li>@line</li> }</ul>
+  </div>
 }
 
-@if (Policy is { AutoWithdrawEnabled: false } || Preview is not null)
+@if (View == ViewWithdrawn)
 {
-  <section class="ui-card data-card section-gap" aria-labelledby="withdrawal-preview-title">
-    <h2 id="withdrawal-preview-title">Predogled: kaj bi umik odkljukal zdaj</h2>
-    @if (Preview is null)
-    {
-      <button type="button" class="ghost-button" disabled="@Busy" @onclick="LoadPreviewAsync">Pripravi predogled</button>
-    }
-    else
-    {
-      <p role="status">
-        <strong>@Preview.Count.ToString("N0")</strong> kljukic na <strong>@PreviewProducts.ToString("N0")</strong> artiklih
-        ni več dovoljenih (stanje zadnje validacije; pred umikom se ti artikli še enkrat validirajo).
-      </p>
+  <section class="ui-card data-card section-gap" aria-labelledby="withdrawn-title">
+    <h2 id="withdrawn-title">Umaknjeni s spleta</h2>
+    <p class="card-note">
+      Artikli, ki so bili na spletu in jih je katalog.csv umaknil (samodejno, ročno, zaradi kategorije, napake ali neaktivnosti).
+      Razlog je stanje zdaj. Odkljukanim lahko kljukico vrneš — obvelja samo, če artikel na spletišče sme; na splet gre ob naslednjem izvozu.
+    </p>
+    <div class="filter-bar">
+      <label class="field-control"><span>Obdobje</span>
+        <select class="filter-select" @bind="DaysText" @bind:after="LoadWithdrawnAsync">
+          <option value="7">zadnjih 7 dni</option>
+          <option value="30">zadnjih 30 dni</option>
+          <option value="90">zadnjih 90 dni</option>
+          <option value="365">zadnje leto</option>
+        </select>
+      </label>
+      <label class="field-control"><span>Šifra ali naziv</span><input class="search-input" @bind="WithdrawnSearch" @bind:event="oninput" @onkeydown="OnWithdrawnKeyAsync" /></label>
+      <button type="button" class="filter-button" disabled="@Busy" @onclick="LoadWithdrawnAsync">Prikaži</button>
+    </div>
+    <PimState Loading="WithdrawnLoading" Error="@WithdrawnError" Empty="@(Withdrawn is { Rows.Count: 0 } && WithdrawnReason is null)" EmptyText="V izbranem obdobju ni bil s spleta umaknjen noben artikel.">
+      @if (Withdrawn is not null)
+      {
+        <PimReasonBars Label="Umaknjeni po razlogu" EmptyText="Ni umikov."
+                       Items="@(Withdrawn.Counts.Select(count => new PimReasonBars.Item(count.ReasonCode, SafeguardText.ReasonShort(count.ReasonCode), count.ProductCount, SafeguardText.ReasonTone(count.ReasonCode))).ToList())"
+                       Selected="@WithdrawnReason" SelectedChanged="OnWithdrawnReasonAsync" />
+        <AuthorizeView Policy="@PimPolicies.CatalogWrite">
+          <div class="restore-bar">
+            <button type="button" class="ghost-button" disabled="@(Busy || !Withdrawn.Rows.Any(row => row.CanRestore))" @onclick="SelectRestorable">Izberi vse, ki jim lahko vrnem kljukico</button>
+            @if (Selected.Count > 0)
+            {
+              @if (!ConfirmRestore)
+              {
+                <button type="button" class="primary-button" disabled="@Busy" @onclick="() => ConfirmRestore = true">Vrni kljukice izbranim (@Selected.Count.ToString("N0")) …</button>
+              }
+              else
+              {
+                <span class="message-state warn-message restore-confirm">
+                  Vrnem @Selected.Count.ToString("N0") kljukic na @SelectedProducts.ToString("N0") artiklih? Kljukica obvelja samo, če artikel na spletišče sme; na splet gre ob naslednjem izvozu katalog.csv.
+                  <button type="button" class="primary-button" disabled="@Busy" @onclick="RestoreAsync">Da, vrni</button>
+                  <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ConfirmRestore = false">Prekliči</button>
+                </span>
+              }
+            }
+          </div>
+        </AuthorizeView>
+        <PimTable Caption="@($"Umaknjeni s spleta{(WithdrawnReason is null ? "" : $" — {SafeguardText.ReasonShort(WithdrawnReason)}")} (največ 500)")" Columns="WithdrawnColumns">
+          <Rows>
+            @foreach (var row in Withdrawn.Rows)
+            {
+              var key = Key(row.ProductId, row.WebShopCode);
+              <tr>
+                <td>
+                  @if (row.CanRestore && row.ProductId is not null && row.WebShopCode is not null)
+                  {
+                    <input type="checkbox" aria-label="@($"Izberi {row.ItemId} ({row.SiteLabel})")" checked="@Selected.Contains(key)" @onchange="args => Toggle(key, args)" />
+                  }
+                </td>
+                <td>@if (row.ProductId is { } productId) { <a href="@($"izdelki/{productId}#web")">@row.ItemId</a> } else { @row.ItemId }<br /><span class="muted">@row.ProductName</span></td>
+                <td>@row.SiteLabel</td>
+                <td>@(row.WithdrawnUtc?.ToPimLocal().ToString("g"))<br /><span class="muted">@PimFormat.Ago(row.WithdrawnUtc)</span></td>
+                <td><PimChip Text="@SafeguardText.ReasonShort(row.ReasonCode)" Tone="@SafeguardText.ReasonTone(row.ReasonCode)" /><br /><span class="muted">@row.ReasonText</span></td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </PimState>
+  </section>
+}
+else if (View == ViewBlocked)
+{
+  <section class="ui-card data-card section-gap" aria-labelledby="blocked-title">
+    <h2 id="blocked-title">S kljukico, a ne gredo na splet</h2>
+    <p class="card-note">
+      Artikli s kljukico svetila ali videlektro, ki jih katalog.csv ne pošlje na to spletišče — in zakaj ne. Najpogosteje manjka kategorija
+      spletišča (kljukica sama ni dovolj) ali kaj, kar je za splet obvezno (slika, naziv …). Popravi na kartici artikla; na splet gre ob naslednjem izvozu.
+    </p>
+    <div class="filter-bar">
+      <label class="field-control"><span>Spletišče</span>
+        <select class="filter-select" @bind="BlockedShop" @bind:after="OnBlockedShopAsync">
+          <option value="">vsa</option>
+          @foreach (var shop in BlockedShops) { <option value="@shop.Code">@shop.Label</option> }
+        </select>
+      </label>
+      <label class="field-control"><span>Šifra ali naziv</span><input class="search-input" @bind="BlockedSearch" @bind:event="oninput" @onkeydown="OnBlockedKeyAsync" /></label>
+      <button type="button" class="filter-button" disabled="@Busy" @onclick="LoadBlockedAsync">Prikaži</button>
+    </div>
+    <PimState Loading="BlockedLoading" Error="@BlockedError" Empty="@(Blocked is { Counts.Count: 0 })" EmptyText="Vse kljukice delujejo: vsak artikel s kljukico gre na splet.">
+      @if (Blocked is not null)
+      {
+        <PimReasonBars Label="Kljukice brez objave po spletišču in razlogu"
+                       Items="@(Blocked.Counts.Where(count => BlockedShop is "" || count.WebShopCode == BlockedShop).Select(count => new PimReasonBars.Item($"{count.WebShopCode}|{count.ReasonCode}", $"{count.SiteLabel}: {SafeguardText.ReasonShort(count.ReasonCode)}", count.ProductCount, SafeguardText.ReasonTone(count.ReasonCode))).ToList())"
+                       Selected="@BlockedKey" SelectedChanged="OnBlockedReasonAsync" />
+        <PimTable Caption="@($"Kljukice brez objave{(BlockedKeyReason is null ? "" : $" — {SafeguardText.ReasonShort(BlockedKeyReason)}")} (največ 500)")" Columns="BlockedColumns">
+          <Rows>
+            @foreach (var row in Blocked.Rows)
+            {
+              <tr>
+                <td><a href="@($"izdelki/{row.ProductId}#web")">@row.ItemId</a><br /><span class="muted">@row.ProductName</span></td>
+                <td>@row.SiteLabel</td>
+                <td><PimChip Text="@SafeguardText.ReasonShort(row.ReasonCode)" Tone="@SafeguardText.ReasonTone(row.ReasonCode)" /><br /><span class="muted">@row.ReasonText</span></td>
+                <td>@(row.ChangedUtc?.ToPimLocal().ToString("g"))<br /><span class="muted">@row.ChangedBy</span></td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </PimState>
+  </section>
+}
+else
+{
+  <section class="ui-card toolbar section-gap" aria-label="Filter samodejnih umikov">
+    <label for="withdrawal-search">Šifra ali naziv</label>
+    <input id="withdrawal-search" class="form-input" @bind="Search" @bind:event="oninput" @onkeydown="OnSearchKeyAsync" />
+    <label><input type="checkbox" @bind="OnlyOpen" @bind:after="LoadAsync" /> Samo nepregledani</label>
+    <button type="button" class="filter-button" disabled="@Busy" @onclick="LoadAsync">Prikaži</button>
+  </section>
+
+  @if (Policy is { } policy)
+  {
+    <section class="ui-card data-card section-gap" aria-labelledby="withdrawal-policy-title">
+      <h2 id="withdrawal-policy-title">Samodejni umik</h2>
+      <div class="kpi-grid">
+        <PimStat Label="Samodejni umik" Value="@(policy.AutoWithdrawEnabled ? "vklopljen" : "izklopljen")"
+                 Note="@(policy.UpdatedBy is null ? null : $"{policy.UpdatedBy} · {PimFormat.Ago(policy.UpdatedUtc)}")" />
+        <PimStat Label="Nepregledani umiki" Value="@policy.OpenWithdrawalCount.ToString("N0")" />
+        <PimStat Label="Objavljeni v zadnjem izvozu" Value="@policy.PublishedCount.ToString("N0")" Note="vrstice s Spletne strani" />
+        <PimStat Label="Odjavne vrstice v katalog.csv" Value="@policy.WithdrawalRowCount.ToString("N0")" Note="@($"prazne Spletne strani, {policy.WithdrawalRowDays} dni")" />
+      </div>
+      @if (!policy.AutoWithdrawEnabled)
+      {
+        <p class="message-state warn-message">
+          Samodejni umik je za to podjetje izklopljen: PIM kljukic ne odstranjuje sam. Neveljaven artikel s kljukico v katalog.csv
+          vseeno ne gre (če je bil prej na spletu, gre kot odjavna vrstica). Spodaj je predogled, kaj bi umik zdaj naredil.
+        </p>
+      }
       <AuthorizeView Policy="@PimPolicies.WebPublicationSettings">
-        @if (Preview.Count > 0)
-        {
-          @if (!ConfirmWithdraw)
-          {
-            <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ConfirmWithdraw = true">Umakni zdaj …</button>
-          }
-          else
-          {
-            <p class="message-state warn-message">
-              Odkljukam @Preview.Count.ToString("N0") kljukic na @PreviewProducts.ToString("N0") artiklih? Artikli gredo iz Magenta ob naslednjem izvozu katalog.csv.
-              <button type="button" class="primary-button" disabled="@Busy" @onclick="WithdrawNowAsync">Da, umakni</button>
-              <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ConfirmWithdraw = false">Prekliči</button>
-            </p>
-          }
-        }
+        <div class="form-grid">
+          <label class="form-field"><span><input type="checkbox" @bind="DraftEnabled" /> Samodejno odkljukaj artikle, ki niso več veljavni za splet</span></label>
+          <label class="form-field" for="withdrawal-days">Odjavna vrstica v katalog.csv (dni)
+            <input id="withdrawal-days" class="form-input" type="number" min="1" max="365" @bind="DraftDays" />
+          </label>
+        </div>
+        <button type="button" class="primary-button" disabled="@(Busy || !PolicyDirty)" @onclick="SavePolicyAsync">Shrani nastavitev</button>
       </AuthorizeView>
-      <PimTable Caption="Predogled (največ 300 vrstic)" Columns="PreviewColumns">
+    </section>
+  }
+
+  @if (Policy is { AutoWithdrawEnabled: false } || Preview is not null)
+  {
+    <section class="ui-card data-card section-gap" aria-labelledby="withdrawal-preview-title">
+      <h2 id="withdrawal-preview-title">Predogled: kaj bi umik odkljukal zdaj</h2>
+      @if (Preview is null)
+      {
+        <button type="button" class="ghost-button" disabled="@Busy" @onclick="LoadPreviewAsync">Pripravi predogled</button>
+      }
+      else
+      {
+        <p role="status">
+          <strong>@Preview.Count.ToString("N0")</strong> kljukic na <strong>@PreviewProducts.ToString("N0")</strong> artiklih
+          ni več dovoljenih (stanje zadnje validacije; pred umikom se ti artikli še enkrat validirajo).
+        </p>
+        <AuthorizeView Policy="@PimPolicies.WebPublicationSettings">
+          @if (Preview.Count > 0)
+          {
+            @if (!ConfirmWithdraw)
+            {
+              <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ConfirmWithdraw = true">Umakni zdaj …</button>
+            }
+            else
+            {
+              <p class="message-state warn-message">
+                Odkljukam @Preview.Count.ToString("N0") kljukic na @PreviewProducts.ToString("N0") artiklih? Artikli gredo iz Magenta ob naslednjem izvozu katalog.csv.
+                <button type="button" class="primary-button" disabled="@Busy" @onclick="WithdrawNowAsync">Da, umakni</button>
+                <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ConfirmWithdraw = false">Prekliči</button>
+              </p>
+            }
+          }
+        </AuthorizeView>
+        <PimTable Caption="Predogled (največ 300 vrstic)" Columns="PreviewColumns">
+          <Rows>
+            @foreach (var row in Preview.Take(300))
+            {
+              <tr>
+                <td><a href="@($"izdelki/{row.ProductId}#web")">@row.ItemId</a></td>
+                <td>@row.ProductName</td>
+                <td>@row.ShopLabel</td>
+                <td>@row.ReasonText</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+      }
+    </section>
+  }
+
+  <section class="ui-card data-card section-gap" aria-labelledby="withdrawal-list-title">
+    <div class="subsection-head">
+      <h2 id="withdrawal-list-title">Samodejni umiki</h2>
+      <AuthorizeView Policy="@PimPolicies.CatalogWrite">
+        <button type="button" class="ghost-button" disabled="@(Busy || !Rows.Any(IsOpen))" @onclick="ReviewAllAsync">Označi vse kot pregledane</button>
+      </AuthorizeView>
+    </div>
+    <PimState Loading="Loading" Error="@LoadError" Empty="@(Rows.Count == 0)"
+              EmptyText="@(OnlyOpen ? "Ni nepregledanih umikov." : "Ni umikov.")">
+      <PimTable Caption="Samodejno odkljukana spletišča, najnovejša najprej (največ 500)" Columns="Columns">
         <Rows>
-          @foreach (var row in Preview.Take(300))
+          @foreach (var row in Rows)
           {
             <tr>
-              <td><a href="@($"izdelki/{row.ProductId}#web")">@row.ItemId</a></td>
-              <td>@row.ProductName</td>
+              <td><a href="@($"izdelki/{row.ProductId}#web")">@row.ItemId</a><br /><span class="muted">@row.ProductName</span></td>
               <td>@row.ShopLabel</td>
               <td>@row.ReasonText</td>
+              <td>@(row.WithdrawnUtc?.ToPimLocal().ToString("g"))<br /><span class="muted">@WebWithdrawalText.Source(row.TriggerSource)@(row.TriggeredBy is null ? "" : $" · {row.TriggeredBy}")</span></td>
+              <td>
+                @if (row.RestoredUtc is not null) { <PimChip Text="Ponovno označen" Tone="good" /><br /><span class="muted">@row.RestoredBy</span> }
+                else if (row.ReviewedUtc is not null) { <PimChip Text="Pregledano" /><br /><span class="muted">@row.ReviewedBy</span> }
+                else { <PimChip Text="Čaka na pregled" Tone="warn" /> }
+              </td>
+              <td>
+                @if (IsOpen(row))
+                {
+                  <AuthorizeView Policy="@PimPolicies.CatalogWrite">
+                    <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ReviewAsync(row)">Pregledano</button>
+                  </AuthorizeView>
+                }
+              </td>
             </tr>
           }
         </Rows>
       </PimTable>
-    }
+    </PimState>
   </section>
 }
 
-<section class="ui-card data-card section-gap" aria-labelledby="withdrawal-list-title">
-  <div class="subsection-head">
-    <h2 id="withdrawal-list-title">Umiki</h2>
-    <AuthorizeView Policy="@PimPolicies.CatalogWrite">
-      <button type="button" class="ghost-button" disabled="@(Busy || !Rows.Any(IsOpen))" @onclick="ReviewAllAsync">Označi vse kot pregledane</button>
-    </AuthorizeView>
-  </div>
-  <PimState Loading="Loading" Error="@LoadError" Empty="@(Rows.Count == 0)"
-            EmptyText="@(OnlyOpen ? "Ni nepregledanih umikov." : "Ni umikov.")">
-    <PimTable Caption="Samodejno odkljukana spletišča, najnovejša najprej (največ 500)" Columns="Columns">
-      <Rows>
-        @foreach (var row in Rows)
-        {
-          <tr>
-            <td><a href="@($"izdelki/{row.ProductId}#web")">@row.ItemId</a><br /><span class="muted">@row.ProductName</span></td>
-            <td>@row.ShopLabel</td>
-            <td>@row.ReasonText</td>
-            <td>@(row.WithdrawnUtc?.ToPimLocal().ToString("g"))<br /><span class="muted">@WebWithdrawalText.Source(row.TriggerSource)@(row.TriggeredBy is null ? "" : $" · {row.TriggeredBy}")</span></td>
-            <td>
-              @if (row.RestoredUtc is not null) { <PimChip Text="Ponovno označen" Tone="good" /><br /><span class="muted">@row.RestoredBy</span> }
-              else if (row.ReviewedUtc is not null) { <PimChip Text="Pregledano" /><br /><span class="muted">@row.ReviewedBy</span> }
-              else { <PimChip Text="Čaka na pregled" Tone="warn" /> }
-            </td>
-            <td>
-              @if (IsOpen(row))
-              {
-                <AuthorizeView Policy="@PimPolicies.CatalogWrite">
-                  <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ReviewAsync(row)">Pregledano</button>
-                </AuthorizeView>
-              }
-            </td>
-          </tr>
-        }
-      </Rows>
-    </PimTable>
-  </PimState>
-</section>
-
 @code {
+  const string ViewWithdrawn = "umaknjeni";
+  const string ViewBlocked = "kljukice";
+  const string ViewAuto = "samodejni";
+
   static readonly IReadOnlyList<PimColumn> Columns =
     [new("Artikel"), new("Spletišče"), new("Razlog"), new("Umaknjen"), new("Stanje"), new("")];
   static readonly IReadOnlyList<PimColumn> PreviewColumns =
     [new("Artikel"), new("Naziv"), new("Spletišče"), new("Razlog")];
+  static readonly IReadOnlyList<PimColumn> WithdrawnColumns =
+    [new(""), new("Artikel"), new("Spletišče"), new("Umaknjen"), new("Razlog (zdaj)")];
+  static readonly IReadOnlyList<PimColumn> BlockedColumns =
+    [new("Artikel"), new("Spletišče"), new("Zakaj ne gre na splet"), new("Kljukica od")];
+
+  [SupplyParameterFromQuery(Name = "pogled")] public string? Pogled { get; set; }
 
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<WebShopWithdrawalRow> Rows = [];
   IReadOnlyList<WebShopWithdrawalRow>? Preview;
   WebPublicationPolicy? Policy;
+  WebReasonPage<WebWithdrawnItem>? Withdrawn;
+  WebReasonPage<WebBlockedItem>? Blocked;
+  readonly HashSet<string> Selected = new(StringComparer.Ordinal);
+  IReadOnlyList<string> RestoreRejected = [];
+  string View = ViewWithdrawn;
   string OrganizationText = "2";
   string Search = "";
+  string DaysText = "30";
+  string WithdrawnSearch = "";
+  string? WithdrawnReason;
+  string BlockedShop = "";
+  string BlockedSearch = "";
+  /// <summary>Izbrana vrstica s števili: »spletišče|razlog«; null = vsi razlogi (spletišče iz spustnega seznama).</summary>
+  string? BlockedKey;
+  string? BlockedKeyShop => BlockedKey?.Split('|')[0];
+  string? BlockedKeyReason => BlockedKey?.Split('|') is [_, var reason] ? reason : null;
   bool OnlyOpen = true;
-  bool Loading = true;
+  bool Loading = true, WithdrawnLoading, BlockedLoading;
   bool Busy;
-  bool ConfirmWithdraw;
+  bool ConfirmWithdraw, ConfirmRestore;
   bool DraftEnabled;
   int DraftDays = 14;
-  string? LoadError;
+  int? WithdrawnTotal, BlockedTotal;
+  string? LoadError, WithdrawnError, BlockedError;
   string? Error;
   string? Message;
 
   int OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : 2;
   int PreviewProducts => Preview?.Select(row => row.ProductId).Distinct().Count() ?? 0;
+  int SelectedProducts => Selected.Select(key => key.Split('|')[0]).Distinct(StringComparer.Ordinal).Count();
   bool PolicyDirty => Policy is not null && (DraftEnabled != Policy.AutoWithdrawEnabled || DraftDays != Policy.WithdrawalRowDays);
   static bool IsOpen(WebShopWithdrawalRow row) => row.ReviewedUtc is null && row.RestoredUtc is null;
+  static string Key(long? productId, string? webShopCode) => $"{productId}|{webShopCode}";
+
+  IReadOnlyList<(string Code, string Label)> BlockedShops =>
+    Blocked?.Counts.Where(count => count.WebShopCode is not null)
+      .GroupBy(count => count.WebShopCode!)
+      .Select(shop => (shop.Key, shop.First().SiteLabel ?? shop.Key))
+      .ToList() ?? [];
 
   protected override async Task OnInitializedAsync()
   {
@@ -186,7 +360,24 @@
     catch { Organizations = []; }
     if (Organizations.Count > 0 && Organizations.All(organization => organization.OrganizationId != 2))
       OrganizationText = Organizations[0].OrganizationId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    View = Pogled is ViewBlocked or ViewAuto ? Pogled : ViewWithdrawn;
+    await ReloadAllAsync();
+  }
+
+  async Task ReloadAllAsync()
+  {
+    Selected.Clear(); ConfirmRestore = false;
+    // Politika in samodejni umiki (251) so hitri; števca obeh zavihkov 277 se preračunata v ozadju.
     await LoadAsync();
+    await Task.WhenAll(LoadWithdrawnAsync(), LoadBlockedAsync());
+  }
+
+  async Task ShowAsync(string view)
+  {
+    View = view;
+    Message = null; Error = null; RestoreRejected = [];
+    Navigation.NavigateTo($"splet/umaknjeni?pogled={view}", forceLoad: false, replace: true);
+    await Task.CompletedTask;
   }
 
   async Task LoadAsync()
@@ -210,10 +401,74 @@
     finally { Loading = false; }
   }
 
-  async Task OnSearchKeyAsync(KeyboardEventArgs args)
+  async Task LoadWithdrawnAsync()
   {
-    if (args.Key == "Enter") await LoadAsync();
+    WithdrawnLoading = Withdrawn is null; WithdrawnError = null;
+    try
+    {
+      var days = int.TryParse(DaysText, out var parsed) ? parsed : 30;
+      Withdrawn = await Withdrawals.GetWithdrawnItemsAsync(OrganizationId, days, WithdrawnReason, WithdrawnSearch);
+      WithdrawnTotal = Withdrawn.Counts.Sum(count => count.ProductCount);
+      Selected.RemoveWhere(key => !Withdrawn.Rows.Any(row => row.CanRestore && Key(row.ProductId, row.WebShopCode) == key));
+    }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      WithdrawnError = "Umikov s spleta ni mogoče prebrati (migracija 277: intranet.GetWebWithdrawnItems).";
+    }
+    finally { WithdrawnLoading = false; await InvokeAsync(StateHasChanged); }
   }
+
+  async Task LoadBlockedAsync()
+  {
+    BlockedLoading = Blocked is null; BlockedError = null;
+    try
+    {
+      Blocked = await Withdrawals.GetBlockedAsync(OrganizationId, BlockedKeyShop ?? BlockedShop, BlockedKeyReason, BlockedSearch);
+      BlockedTotal = Blocked.Counts.Sum(count => count.ProductCount);
+    }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      BlockedError = "Kljukic brez objave ni mogoče prebrati (migracija 277: intranet.GetWebShopBlocked).";
+    }
+    finally { BlockedLoading = false; await InvokeAsync(StateHasChanged); }
+  }
+
+  async Task OnWithdrawnReasonAsync(string? reason) { WithdrawnReason = reason; await LoadWithdrawnAsync(); }
+  async Task OnBlockedReasonAsync(string? key) { BlockedKey = key; await LoadBlockedAsync(); }
+  async Task OnBlockedShopAsync() { BlockedKey = null; await LoadBlockedAsync(); }
+  async Task OnWithdrawnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadWithdrawnAsync(); }
+  async Task OnBlockedKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadBlockedAsync(); }
+  async Task OnSearchKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(); }
+
+  void Toggle(string key, ChangeEventArgs args)
+  {
+    if (args.Value is true) Selected.Add(key); else Selected.Remove(key);
+    ConfirmRestore = false;
+  }
+
+  void SelectRestorable()
+  {
+    if (Withdrawn is null) return;
+    foreach (var row in Withdrawn.Rows.Where(row => row.CanRestore)) Selected.Add(Key(row.ProductId, row.WebShopCode));
+    ConfirmRestore = false;
+  }
+
+  async Task RestoreAsync() => await RunAsync(async () =>
+  {
+    if (Withdrawn is null || Selected.Count == 0) return;
+    var items = Withdrawn.Rows
+      .Where(row => row.CanRestore && row.ProductId is not null && row.WebShopCode is not null && Selected.Contains(Key(row.ProductId, row.WebShopCode)))
+      .Select(row => (row.ProductId!.Value, row.ItemId, row.WebShopCode!))
+      .Distinct()
+      .ToList();
+    var outcome = await Withdrawals.RestoreAsync(OrganizationId, items, await ActorAsync());
+    Selected.Clear(); ConfirmRestore = false;
+    RestoreRejected = outcome.Rejected;
+    await Task.WhenAll(LoadWithdrawnAsync(), LoadBlockedAsync());
+    Message = outcome.Restored > 0
+      ? $"Vrnjenih kljukic: {outcome.Restored:N0}. Artikli gredo na splet ob naslednjem izvozu katalog.csv."
+      : "Nobena kljukica ni bila vrnjena.";
+  });
 
   async Task LoadPreviewAsync() => await RunAsync(async () =>
   {
@@ -254,7 +509,7 @@
 
   async Task RunAsync(Func<Task> work)
   {
-    Busy = true; Error = null; Message = null;
+    Busy = true; Error = null; Message = null; RestoreRejected = [];
     try { await work(); }
     catch (UnauthorizedAccessException) { Error = "Tvoja vloga tega ne dovoljuje."; }
     catch (Exception exception) { Error = "Ni uspelo: " + exception.Message; }

@@ -1,0 +1,37 @@
+@namespace PIM.Intranet.Components.Pages.ProductCardParts
+
+@* Prenova 2026-09-26: na vrhu zavihka pove, čigav je podatek in kam gre sprememba — preden
+   uporabnik karkoli spremeni. SAOP: sprememba velja v PIM takoj, v SAOP pa šele po odobritvi
+   (SaopWriteService.EnqueueAsync). PIM: besedila, atributi in spletišča so last PIM in veljajo
+   takoj; v katalog.csv pridejo ob naslednjem izvozu. Besedilo sledi dejanskemu obnašanju kartice
+   (SaveChangesAsync), zato ga ob spremembi poti shranjevanja popravi tudi tu. *@
+
+@if (Owner == "SAOP")
+{
+  <div class="source-note saop" role="note">
+    <span class="source-mark" aria-hidden="true"></span>
+    <p>
+      <strong>Ti podatki so v SAOP.</strong>
+      Polje z oznako SAOP lahko spremeniš tukaj: v PIM velja takoj, v SAOP pa gre šele, ko spremembo
+      odobriš. Naslednji zajem iz SAOP polja s čakajočo spremembo ne povozi.
+      <a href="saop/artikli">Odpri odobritev za SAOP</a>
+    </p>
+  </div>
+}
+else
+{
+  <div class="source-note pim" role="note">
+    <span class="source-mark" aria-hidden="true"></span>
+    <p>
+      <strong>Ti podatki so last PIM.</strong>
+      Besedila, atributi, spletišča, odprodaja in oznake veljajo takoj po shranjevanju. V spletno trgovino
+      (katalog.csv) pridejo ob naslednji objavi in izvozu. Samo polje z oznako SAOP gre v odobritev za SAOP.
+      <a href="splet/izvoz">Pripravi spletni izvoz</a>
+    </p>
+  </div>
+}
+
+@code {
+  /// <summary>Lastnik podatkov na zavihku: <c>SAOP</c> ali <c>PIM</c>.</summary>
+  [Parameter, EditorRequired] public required string Owner { get; set; }
+}

@@ -74,7 +74,7 @@
     else
     {
       <div class="create-flow" aria-labelledby="dodaj-lokalnega">
-        <div class="flow-step"><span>1</span><div><strong id="dodaj-lokalnega">Dodaj lokalnega uporabnika</strong><small>Za osebe brez domenskega računa. Priporočamo geslo z vsaj @IntranetUserAdministrationService.RecommendedPasswordLength znaki, ni pa obvezno.</small></div></div>
+        <div class="flow-step"><span>1</span><div><strong id="dodaj-lokalnega">Dodaj lokalnega uporabnika</strong><small>Za osebe brez domenskega računa. Geslo mora imeti vsaj @IntranetUserAdministrationService.MinimumPasswordLength znakov.</small></div></div>
         <div class="local-create-grid">
           <label class="form-field" for="novoIme">Uporabniško ime
             <input id="novoIme" class="form-input" @bind="NovoUporabnisko" placeholder="npr. mnovak" />

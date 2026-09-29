@@ -1,0 +1,42 @@
+@* 277: stanje varovalke katalog.csv na vrhu /splet. Uporabnik mora brez iskanja videti, ali je zadnja
+   datoteka šla na splet in ali kakšen artikel čaka potrditev — koliko, zakaj in kje ga potrdi. Datoteka gre
+   ven vedno; zadržani artikli v njej niso. Čakajoče je poudarjeno, čisto stanje je ena vrstica. Preverjanje
+   prebere stran (SafeguardService.GetCurrentAsync), ker ga potrebuje tudi sama. *@
+
+@if (Check is { } check)
+{
+  @if (check.IsWaiting || check.Status == SafeguardText.Confirmed)
+  {
+    <section class="ui-card safeguard-banner @(check.IsWaiting ? "safeguard-waiting" : "safeguard-confirmed") section-gap" aria-labelledby="safeguard-banner-title" role="status">
+      <div class="safeguard-banner-body">
+        <h2 id="safeguard-banner-title">@(check.IsWaiting
+          ? $"katalog.csv: {SafeguardText.ItemsWaiting(check.HeldCount)} potrditev"
+          : "Zadržani artikli potrjeni — na splet gredo z naslednjim izvozom")</h2>
+        <p>@SafeguardText.StatusExplain(check)</p>
+        @if (check.IsWaiting && check.Headline is { Length: > 0 })
+        {
+          <p class="safeguard-banner-headline">Zakaj: @check.Headline</p>
+        }
+        <p class="safeguard-banner-meta">Preverjeno @check.LastEvaluatedUtc.ToPimLocal().ToString("g") (@PimFormat.Ago(check.LastEvaluatedUtc))@(check.EvaluationCount > 1 ? $" · isti izid {check.EvaluationCount}× zapored" : "")</p>
+      </div>
+      <a class="primary-button" href="@($"varovalke/{check.SafeguardCheckId}")">@(check.IsWaiting ? "Preglej in potrdi" : "Odpri preverjanje")</a>
+    </section>
+  }
+  else
+  {
+    <p class="safeguard-line section-gap" role="status">
+      <PimChip Text="@SafeguardText.Status(check.Status)" Tone="@SafeguardText.Tone(check.Status)" Prefix="Varovalka: " />
+      <span>Varovalka: zadnji izvoz @check.LastEvaluatedUtc.ToPimLocal().ToString("g")@(check.PublishedUtc is null ? "" : " je objavljen")</span>
+      @if (check.PublishedRows is > 0) { <span>· na spletu @check.PublishedRows.Value.ToString("N0") artiklov</span> }
+      @if (check.Summary.LostItems is > 0) { <span>· s spleta @check.Summary.LostItems.Value.ToString("N0")</span> }
+      @if (check.Summary.NewItems is > 0) { <span>· novih na spletu @check.Summary.NewItems.Value.ToString("N0")</span> }
+      @if (check.Summary.CheckedNotPublished is > 0) { <span>· s kljukico, a ne gredo na splet: @check.Summary.CheckedNotPublished.Value.ToString("N0")</span> }
+      <a href="@($"varovalke/{check.SafeguardCheckId}")">Podrobnosti</a>
+    </p>
+  }
+}
+
+@code {
+  /// <summary>Čakajoče ali zadnje preverjanje; null = varovalka še ni tekla (ali ni nameščena) — pasice ni.</summary>
+  [Parameter] public SafeguardCheckRow? Check { get; set; }
+}

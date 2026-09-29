@@ -1,0 +1,196 @@
+@namespace PIM.Intranet.Components.Pages.ProductCardParts
+@inject PackagingDiscountService Packaging
+@inject IntranetDataService Data
+@inject AuthenticationStateProvider Authentication
+
+@* 274: S-popust na polno pakiranje na kartici izdelka (Magento_Pravila §4.4, §4.5). Privzeti S velja
+   za vse stranke s kljukico »Popust polno pakiranje« pri količini ≥ PAK2; posebni S za tip stranke
+   ali stranko ga zanjo zamenja. V katalog.csv: »Skupina popusta«, »S popust %«, »Posebni popust za
+   stranko«, »Posebni S za skupino strank«. *@
+<section id="panel-packaging" class="ui-card data-card tab-panel" aria-labelledby="packaging-title">
+  <div class="subsection-head">
+    <h2 id="packaging-title">S-popust na polno pakiranje</h2>
+    <a href="pravila-popustov?podrocje=spopusti">Pravila S po skupinah</a>
+  </div>
+
+  @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+  @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+  @if (State is null)
+  {
+    <p class="muted">Nalaganje S-popusta …</p>
+  }
+  else if (!State.IsPromoted)
+  {
+    <p class="muted">Izdelek še ni objavljen (promoviran v PIM), zato S koda še ne more biti dodeljena.</p>
+  }
+  else
+  {
+    <div class="form-grid packaging-grid">
+      <label class="form-field">Privzeta S koda
+        <select class="filter-select" @bind="DefaultCode" disabled="@(!CanEdit || Busy)">
+          <option value="">Brez S</option>
+          @foreach (var entry in State.Catalog) { <option value="@entry.Code">@entry.Code (@entry.Percent.ToString("0.##") %)</option> }
+        </select>
+      </label>
+      <div class="form-field">PAK2 (polno pakiranje)
+        <strong>@(State.Pak2 is { } pak2 && pak2 > 0 ? pak2.ToString("0.##") + " kos" : "ni podatka")</strong>
+      </div>
+      <div class="form-field">Rabatna skupina
+        <strong>@(State.DiscountGroup ?? "—")</strong>
+      </div>
+      @if (CanEdit)
+      {
+        <div class="form-action">
+          <button type="button" class="primary-button" disabled="@(Busy || DefaultCode == (State.DiscountCode ?? ""))" @onclick="SaveDefaultAsync">Shrani S kodo</button>
+        </div>
+      }
+    </div>
+    @if (State.DiscountCode is not null && State.Pak2 is null or <= 0)
+    {
+      <p class="message-state warn-message">Izdelek nima PAK2 (Količina v pakiranju 2 iz SAOP), zato S-popust v trgovini nima učinka.</p>
+    }
+
+    <h3 class="packaging-subtitle">Posebni S, ki danes veljajo za ta izdelek</h3>
+    <PimState Empty="@(State.Specials.Count == 0)" EmptyText="Za ta izdelek ni posebnega S — vsi kupci s kljukico dobijo privzeti S.">
+      <PimTable Caption="Posebni S po tipu stranke in po stranki" Columns="SpecialColumns">
+        <Rows>
+          @foreach (var row in State.Specials)
+          {
+            <tr>
+              <td>@(row.TargetKind == PackagingDiscountService.TargetType ? "Tip stranke" : "Stranka")</td>
+              <td><strong>@row.TargetName</strong> <span class="code-value">@row.TargetCode</span></td>
+              <td>@row.DiscountCode (@(row.Percent?.ToString("0.##") ?? "?") %)</td>
+              <td>@(row.ScopeKind == PackagingDiscountService.ScopeItem ? "ta izdelek" : row.ScopeLabel)</td>
+              <td>@Day(row.ValidFrom) – @Day(row.ValidTo)</td>
+              <td>
+                @if (CanEdit && row.ScopeKind == PackagingDiscountService.ScopeItem)
+                {
+                  <button type="button" class="small-action" disabled="@Busy" @onclick="() => RemoveAsync(row)">Umakni</button>
+                }
+                else if (row.ScopeKind != PackagingDiscountService.ScopeItem)
+                {
+                  <a href="pravila-popustov?podrocje=spopusti">pravilo</a>
+                }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+
+    @if (CanEdit)
+    {
+      <div class="form-grid packaging-grid section-gap">
+        <label class="form-field">Komu
+          <select class="filter-select" @bind="NewKind">
+            <option value="TYPE">Tipu stranke</option>
+            <option value="CUSTOMER">Stranki</option>
+          </select>
+        </label>
+        @if (NewKind == PackagingDiscountService.TargetType)
+        {
+          <label class="form-field">Tip stranke
+            <select class="filter-select" @bind="NewType">
+              @foreach (var type in Types) { <option value="@type.CustomerTypeCode">@type.Name</option> }
+            </select>
+          </label>
+        }
+        else
+        {
+          <label class="form-field">Šifra stranke
+            <input class="form-input" placeholder="npr. 00001234" @bind="NewCustomer" />
+          </label>
+        }
+        <label class="form-field">S koda
+          <select class="filter-select" @bind="NewCode">
+            @foreach (var entry in State.Catalog) { <option value="@entry.Code">@entry.Code (@entry.Percent.ToString("0.##") %)</option> }
+          </select>
+        </label>
+        <div class="form-action">
+          <button type="button" class="primary-button" disabled="@(Busy || NewCode.Length == 0 || (NewKind == PackagingDiscountService.TargetCustomer && NewCustomer.Trim().Length == 0))"
+                  @onclick="AddAsync">Dodaj posebni S</button>
+        </div>
+      </div>
+    }
+  }
+</section>
+
+@code {
+  [Parameter, EditorRequired] public long ProductId { get; set; }
+  [Parameter, EditorRequired] public string ItemId { get; set; } = "";
+  [Parameter] public bool CanEdit { get; set; }
+
+  ProductPackagingState? State;
+  IReadOnlyList<CustomerTypeRow> Types = [];
+  string DefaultCode = "";
+  string NewKind = PackagingDiscountService.TargetType;
+  string NewType = "";
+  string NewCustomer = "";
+  string NewCode = "";
+  bool Busy;
+  string? Error;
+  string? Message;
+  long LoadedFor;
+
+  static readonly IReadOnlyList<PimColumn> SpecialColumns =
+    [new("Komu"), new("Tip ali stranka"), new("S koda"), new("Iz pravila"), new("Velja"), new("Dejanje")];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (LoadedFor == ProductId) return;
+    LoadedFor = ProductId;
+    try
+    {
+      Types = await Data.GetCustomerTypesAsync();
+      NewType = Types.FirstOrDefault()?.CustomerTypeCode ?? "";
+      await ReloadAsync();
+    }
+    catch { Error = "S-popusta tega izdelka trenutno ni mogoče naložiti."; }
+  }
+
+  async Task ReloadAsync()
+  {
+    State = await Packaging.GetProductAsync(ProductId);
+    DefaultCode = State?.DiscountCode ?? "";
+    NewCode = string.IsNullOrEmpty(NewCode) ? State?.Catalog.FirstOrDefault()?.Code ?? "" : NewCode;
+  }
+
+  async Task SaveDefaultAsync() => await RunAsync(async actor =>
+  {
+    await Packaging.SaveProductDefaultAsync(State!.OrganizationId, ProductId, DefaultCode.Length == 0 ? null : DefaultCode, actor);
+    return DefaultCode.Length == 0 ? "S koda je odstranjena." : $"Privzeta S koda je {DefaultCode}.";
+  });
+
+  async Task AddAsync() => await RunAsync(async actor =>
+  {
+    await Packaging.SaveRuleAsync(State!.OrganizationId, new(NewKind,
+      NewKind == PackagingDiscountService.TargetType ? NewType : null, null,
+      NewKind == PackagingDiscountService.TargetCustomer ? NewCustomer.Trim() : null,
+      PackagingDiscountService.ScopeItem, ItemId, null, null, NewCode), actor);
+    NewCustomer = "";
+    return "Posebni S je dodan.";
+  });
+
+  async Task RemoveAsync(ProductSpecial row) => await RunAsync(async actor =>
+  {
+    await Packaging.RemoveRuleAsync(State!.OrganizationId, row.RuleId, actor);
+    return $"Posebni S za {row.TargetName} je umaknjen.";
+  });
+
+  async Task RunAsync(Func<string, Task<string>> action)
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      Message = await action(actor);
+      await ReloadAsync();
+    }
+    catch (Microsoft.Data.SqlClient.SqlException failure) { Error = failure.Message; }
+    catch (Exception) { Error = "Sprememba ni shranjena. Poskusi znova."; }
+    finally { Busy = false; }
+  }
+
+  static string Day(DateTime? value) => value?.ToString("d. M. yyyy") ?? "—";
+}

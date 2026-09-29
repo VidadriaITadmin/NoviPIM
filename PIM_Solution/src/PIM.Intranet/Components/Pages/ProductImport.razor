@@ -7,15 +7,20 @@
 @inject IntranetDataService Data
 @inject HeavyWorkGate Gate
 @inject WebWithdrawalService Withdrawals
+@inject ImportHistoryService History
+@inject CategoryTreeService Categories
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Uvoz delovnega lista</PageTitle>
 
 <PimPage Title="Uvoz delovnega lista izdelkov"
          Subtitle="Ista datoteka, ki jo izvozi gumb »Delovni list« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
+<PimTabs Active="uvoz" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<ImportUndoBanner Run="UndoOf" Skipped="UndoSkipped" SaopNote="ERP polja gredo v vrsto za SAOP in čakajo odobritev" />
 
 <section class="ui-card panel">
   <h2>1. Izberi datoteko</h2>
@@ -33,8 +38,8 @@
   </div>
   <p class="hint">
     Naslovov stolpcev ne spreminjaj — po njih uvoz prepozna, kaj je kaj. <strong>Prazna celica
-    pomeni, da se polja ne dotaknemo</strong>, ne da ga izpraznimo. Več vrednosti v eni celici
-    loči z znakom <code>|</code>.
+    pomeni, da se polja ne dotaknemo</strong>; polje izprazniš z znakom <code>-</code> (ne velja za
+    ERP polja). Več vrednosti v eni celici loči z znakom <code>|</code>, ravni kategorije z <code>&gt;</code>.
   </p>
   <InputFile OnChange="OnFileAsync" accept=".xlsx" class="form-input" aria-label="Izberi datoteko xlsx" />
 </section>
@@ -49,6 +54,13 @@
       ERP polja (v PIM takoj in v vrsto za SAOP): <strong>@Preview.SaopChangeCount</strong>.
     </p>
 
+    @if (HasMissing(Preview))
+    {
+      <p class="message-state warn-message">
+        Datoteka omenja kategorije ali atribute, ki jih PIM še nima.
+        <button type="button" class="small-action" @onclick="() => MissingOpen = true">Manjkajoče (@MissingCount(Preview))</button>
+      </p>
+    }
     @if (Preview.ReadOnlyColumns.Count > 0)
     {
       <p class="hint">Stolpci samo za branje (prezrti): @string.Join(", ", Preview.ReadOnlyColumns)</p>
@@ -56,7 +68,7 @@
     @if (Preview.NewAttributes is { Count: > 0 } newAttributes)
     {
       <p class="message-state warn-message">
-        Novi atributi — šifrant jih še ne pozna, uvoz jih ustvari: @string.Join(", ", newAttributes)
+        Novi atributi — šifrant jih še ne pozna, uvoz jih ustvari (potrjeno v oknu »Manjkajoče«): @string.Join(", ", newAttributes)
       </p>
     }
     @if (Preview.UnknownColumns.Count > 0)
@@ -117,6 +129,10 @@
 {
   <section class="ui-card data-card section-gap" aria-label="Izid uvoza">
     <h2>3. Izid</h2>
+    @if (HistoryId is { } historyId)
+    {
+      <p class="hint">Uvoz je zapisan v zgodovino kot <a href="@($"uvozi/{historyId}")">uvoz #@historyId</a> — tam ga lahko povrneš.</p>
+    }
     <p role="status">
       Spremenjenih izdelkov: <strong>@Outcome.RowsTouched</strong>.
       Zapisano v PIM: <strong>@Outcome.PimChanges</strong>
@@ -166,6 +182,110 @@
   </section>
 }
 
+@* Manjkajoče kategorije in novi atributi (David 2026-09-24): »naj bo pop-up okno, kjer je seznam
+   kategorij, ki manjkajo, in potem samo potrdi in se same kreirajo, enako za atribute«. Kategorija
+   se ustvari v drevesu strani (vse manjkajoče ravni poti), atribut v šifrantu ob zapisu. Česar
+   uporabnik ne potrdi, uvoz ne ustvari: kategorija ostane pri prejšnji, atribut se ne zapiše. *@
+@if (MissingOpen && Preview is not null)
+{
+  <div class="xml-lightbox" role="dialog" aria-modal="true" aria-label="Manjkajoče kategorije in atributi" @onclick="() => MissingOpen = false">
+    <div class="xml-lightbox-panel missing-panel" @onclick:stopPropagation="true">
+      <header>
+        <div>
+          <strong>Manjkajoče kategorije in novi atributi</strong>
+          <span>Označi, kar naj PIM ustvari. Kar ni označeno, uvoz izpusti in pove, zakaj.</span>
+        </div>
+        <button type="button" class="small-action" @onclick="() => MissingOpen = false">Zapri</button>
+      </header>
+      <div class="xml-lightbox-body">
+        @if (Preview.MissingCategories is { Count: > 0 } missing)
+        {
+          <h3 class="missing-title">Kategorije, ki jih drevo strani nima (@missing.Count)</h3>
+          <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th scope="col">Ustvari</th><th scope="col">Stran</th><th scope="col">Pot</th><th scope="col">Artikli</th><th scope="col">Najbližja obstoječa</th></tr></thead>
+            <tbody>
+              @foreach (var item in missing)
+              {
+                var key = CategoryKey(item);
+                <tr>
+                  <td>
+                    <input type="checkbox" aria-label="Ustvari @item.Path" disabled="@(!item.CanCreate)"
+                           checked="@(item.CanCreate && !SkippedCategories.Contains(key))"
+                           @onchange="args => Toggle(SkippedCategories, key, (bool)(args.Value ?? false))" />
+                  </td>
+                  <td>@item.SiteName</td>
+                  <td>
+                    <strong>@item.Path</strong>
+                    @if (!item.CanCreate)
+                    {
+                      <div class="hint">Jezikovna različica: ustvari pot na slovenski strani in dodaj prevod na <a href="kategorije">Kategorije</a>, ali pusti celico prazno — prevzame kategorijo slovenske strani.</div>
+                    }
+                  </td>
+                  <td>@item.Items.Count <span class="hint">@string.Join(", ", item.Items.Take(3))@(item.Items.Count > 3 ? " …" : "")</span></td>
+                  <td>
+                    @if (item.Suggestion is { } suggestion)
+                    {
+                      <span>@suggestion</span>
+                      <button type="button" class="link-button" @onclick="() => UseSuggestion(item, suggestion)">Uporabi predlog</button>
+                    }
+                    else { <span class="hint">—</span> }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          </div>
+        }
+        @if (Preview.NewAttributes is { Count: > 0 } attributes)
+        {
+          <h3 class="missing-title">Novi atributi (@attributes.Count)</h3>
+          <p class="hint">Stolpec pod skupino atributov, ki ga šifrant ne pozna. Preveri, ali ni tipkarska napaka v imenu obstoječega atributa. V nabor kategorije ga dodaš kasneje na <a href="nastavitve/nabori-atributov">Nabori atributov</a>.</p>
+          @foreach (var name in attributes)
+          {
+            <div class="missing-row">
+              <label class="missing-row">
+                <input type="checkbox" checked="@(!RejectedAttributes.Contains(name))"
+                       @onchange="args => Toggle(RejectedAttributes, name, (bool)(args.Value ?? false))" />
+                <span>Ustvari »@name«</span>
+              </label>
+              @if (Preview.AttributeSuggestions?.GetValueOrDefault(name) is { } similar)
+              {
+                <span class="hint">ali je mišljen obstoječi »@similar«?</span>
+                <button type="button" class="link-button" disabled="@Busy" @onclick="() => MapColumnAsync(name, similar)">Zapiši v »@similar«</button>
+              }
+            </div>
+          }
+        }
+        @if (Preview.UnknownColumns.Count > 0)
+        {
+          <h3 class="missing-title">Stolpci, ki jih uvoz ne pozna (@Preview.UnknownColumns.Count)</h3>
+          <p class="hint">Brez odločitve se ti stolpci ne uvozijo. Stolpec lahko zapišeš v podoben obstoječi atribut ali ga ustvariš kot nov atribut. Pomožne stolpce (formule, opombe) pusti neoznačene.</p>
+          @foreach (var column in Preview.UnknownColumns)
+          {
+            <div class="missing-row">
+              <label class="missing-row">
+                <input type="checkbox" checked="@NewColumnAttributes.Contains(column)"
+                       @onchange="args => ToggleNew(column, (bool)(args.Value ?? false))" />
+                <span>Ustvari atribut »@column«</span>
+              </label>
+              @if (Preview.AttributeSuggestions?.GetValueOrDefault(column) is { } similar)
+              {
+                <span class="hint">podoben obstoječi: »@similar«</span>
+                <button type="button" class="link-button" disabled="@Busy" @onclick="() => MapColumnAsync(column, similar)">Zapiši v »@similar«</button>
+              }
+            </div>
+          }
+        }
+      </div>
+      <footer>
+        <button type="button" class="primary-button" disabled="@Busy" @onclick="CreateMissingAsync">Ustvari izbrano in osveži predogled</button>
+        <button type="button" class="small-action" disabled="@Busy" @onclick="SkipMissing">Nadaljuj brez</button>
+      </footer>
+    </div>
+  </div>
+}
+
 @code {
   // Zvezek se prebere v pomnilnik; meja je varovalka pred datoteko, ki bi pojedla strežnik.
   const long MaxUploadBytes = 16 * 1024 * 1024;
@@ -176,7 +296,25 @@
   /// <summary>Kljukice spletišč, ki jih je PIM po tem uvozu umaknil (251).</summary>
   List<WebShopWithdrawalRow> Withdrawn = [];
   string OrganizationText = "";
+  /// <summary>Naložena datoteka: po ustvarjanju kategorij se predogled prebere znova.</summary>
+  byte[]? FileBytes;
+  bool MissingOpen;
+  /// <summary>Kategorije (stran|pot), ki jih uporabnik ni označil za ustvarjanje.</summary>
+  HashSet<string> SkippedCategories = new(StringComparer.OrdinalIgnoreCase);
+  /// <summary>Novi atributi, ki jih uporabnik ni potrdil — ne ustvarijo se in se ne zapišejo.</summary>
+  HashSet<string> RejectedAttributes = new(StringComparer.OrdinalIgnoreCase);
+  /// <summary>Odločitve za stolpce: naslov → atribut (obstoječi ali nov). Gredo v vsak ponovni predogled.</summary>
+  Dictionary<string, string> ColumnAttributes = new(StringComparer.OrdinalIgnoreCase);
+  /// <summary>Neprepoznani stolpci, ki jih je uporabnik označil za nov atribut (ob »Ustvari izbrano«).</summary>
+  HashSet<string> NewColumnAttributes = new(StringComparer.OrdinalIgnoreCase);
   string Note = "";
+  string? FileName;
+
+  /// <summary>280: povratek uvoza (?povrni=N) — predogled s prejšnjimi vrednostmi.</summary>
+  [SupplyParameterFromQuery(Name = "povrni")] public long? UndoRunId { get; set; }
+  ImportRunRow? UndoOf;
+  IReadOnlyList<string> UndoSkipped = [];
+  long? HistoryId;
   bool Busy;
   string? Error;
   string? Message;
@@ -187,6 +325,28 @@
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+    if (UndoRunId is { } undoRunId) await PrepareUndoAsync(undoRunId);
+  }
+
+  /// <summary>280: predogled povratka — iste celice kot uvoz, s prejšnjimi vrednostmi, brez sporov.</summary>
+  async Task PrepareUndoAsync(long importRunId)
+  {
+    try
+    {
+      if (await History.GetRunAsync(importRunId) is not { } detail || detail.Run.Kind != ImportKinds.Products)
+      { Error = $"Uvoza izdelkov #{importRunId} ni v zgodovini."; return; }
+      if (detail.Run.IsUndone) { Error = $"Uvoz #{importRunId} je že povrnjen (povratek #{detail.Run.UndoneByImportRunId})."; return; }
+      using (await EnterImportLaneAsync())
+      {
+        var plan = await Workbook.PlanUndoAsync(detail.Changes);
+        UndoOf = detail.Run;
+        UndoSkipped = plan.Skipped;
+        Preview = plan.Preview.Rows.Count > 0 ? plan.Preview : null;
+      }
+      Note = $"Povratek uvoza #{importRunId}";
+      Message = Preview is null ? "Ničesar ni za povrniti — vse je že tako kot pred uvozom ali pa je bilo medtem spremenjeno (glej spodaj)." : null;
+    }
+    catch (Exception failure) { Error = "Povratka ni bilo mogoče pripraviti: " + failure.Message; }
   }
 
   static string Describe(IReadOnlyDictionary<string, string> values) =>
@@ -194,7 +354,7 @@
       + (values.Count > 6 ? $" … (+{values.Count - 6})" : "");
 
   static string Short(string fieldKey) => fieldKey.Split('.').Last();
-  static string Trim(string value) => value.Length <= 40 ? value : value[..40] + "…";
+  static string Trim(string value) => value.Length == 0 ? "(izprazni)" : value.Length <= 40 ? value : value[..40] + "…";
 
   async Task<string> ActorAsync()
   {
@@ -215,24 +375,147 @@
 
   async Task OnFileAsync(InputFileChangeEventArgs args)
   {
-    Error = null; Message = null; Preview = null; Outcome = null;
+    Error = null; Message = null; Preview = null; Outcome = null; UndoOf = null; UndoSkipped = []; HistoryId = null;
     try
     {
       var file = args.File;
       if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 16 MB. Razdeli jo na več datotek."; return; }
+      FileName = file.Name;
 
       // Zvezek gre najprej v pomnilnik: bralnik potrebuje iskanje po toku, česar tok brskalnika ne zna.
       using var buffer = new MemoryStream();
       await using (var upload = file.OpenReadStream(MaxUploadBytes)) await upload.CopyToAsync(buffer);
       buffer.Position = 0;
-      // Predogled bere trenutno stanje vseh izdelkov datoteke; gre skozi ista vrata kot zapis,
-      // da deset hkratnih uvozov ne prebere kataloga desetkrat naenkrat (HeavyWorkGate).
-      using (await EnterImportLaneAsync())
-        Preview = await Workbook.PreviewAsync(buffer, OrganizationId);
+      FileBytes = buffer.ToArray();
+      SkippedCategories.Clear(); RejectedAttributes.Clear(); ColumnAttributes.Clear(); NewColumnAttributes.Clear();
+      await ReadPreviewAsync();
+      MissingOpen = HasMissing(Preview);
       Message = null;
     }
     catch (PIM.Operations.WorkbookReadException exception) { Error = exception.Message; }
     catch (Exception failure) { Error = "Datoteke ni bilo mogoče prebrati kot delovni zvezek Excel: " + failure.Message; }
+  }
+
+  async Task ReadPreviewAsync()
+  {
+    if (FileBytes is null) return;
+    using var buffer = new MemoryStream(FileBytes);
+    // Predogled bere trenutno stanje vseh izdelkov datoteke; gre skozi ista vrata kot zapis,
+    // da deset hkratnih uvozov ne prebere kataloga desetkrat naenkrat (HeavyWorkGate).
+    using (await EnterImportLaneAsync())
+      Preview = await Workbook.PreviewAsync(buffer, OrganizationId, default, ColumnAttributes);
+  }
+
+  void ToggleNew(string column, bool selected)
+  {
+    if (selected) NewColumnAttributes.Add(column); else NewColumnAttributes.Remove(column);
+  }
+
+  /// <summary>Stolpec gre v obstoječi atribut (predlog): predogled se prebere znova z isto odločitvijo.</summary>
+  async Task MapColumnAsync(string column, string attribute)
+  {
+    Busy = true;
+    try
+    {
+      ColumnAttributes[column] = attribute;
+      RejectedAttributes.Remove(column);
+      NewColumnAttributes.Remove(column);
+      await RereadKeepingChoicesAsync();
+      Message = $"Stolpec »{column}« se zapiše v obstoječi atribut »{attribute}«.";
+      if (!HasMissing(Preview)) MissingOpen = false;
+    }
+    catch (Exception failure) { Error = "Predogleda ni bilo mogoče osvežiti: " + failure.Message; }
+    finally { Busy = false; }
+  }
+
+  /// <summary>Ponovni predogled, ki ohrani zamenjave kategorij s predlogom (te so samo v predogledu).</summary>
+  async Task RereadKeepingChoicesAsync()
+  {
+    if (Preview is null) return;
+    var earlierRows = Preview.Rows.ToDictionary(row => (row.OrganizationId, row.ItemId));
+    await ReadPreviewAsync();
+    if (Preview is null) return;
+    Preview = Preview with
+    {
+      Rows = Preview.Rows.Select(row => earlierRows.TryGetValue((row.OrganizationId, row.ItemId), out var earlier)
+        ? row with
+        {
+          PimValues = row.PimValues.ToDictionary(pair => pair.Key,
+            pair => pair.Key.StartsWith(PIM.Operations.ProductWorkbookContract.CategoryFieldPrefix, StringComparison.Ordinal)
+              && earlier.PimValues.TryGetValue(pair.Key, out var kept) ? kept : pair.Value, StringComparer.Ordinal),
+        }
+        : row).ToList(),
+    };
+    Preview = ProductWorkbookService.WithoutNewAttributes(Preview, RejectedAttributes);
+  }
+
+  static bool HasMissing(ProductWorkbookPreview? preview) => preview is not null && MissingCount(preview) > 0;
+  static int MissingCount(ProductWorkbookPreview preview) =>
+    (preview.MissingCategories?.Count ?? 0) + (preview.NewAttributes?.Count ?? 0) + preview.UnknownColumns.Count;
+  static string CategoryKey(ProductWorkbookMissingCategory item) => item.SiteCode + "|" + item.Path;
+
+  static void Toggle(HashSet<string> skipped, string key, bool selected)
+  {
+    if (selected) skipped.Remove(key); else skipped.Add(key);
+  }
+
+  /// <summary>Tipkarska napaka v poti: namesto nove kategorije vzemi obstoječo — v vseh vrsticah te strani.</summary>
+  void UseSuggestion(ProductWorkbookMissingCategory item, string suggestion)
+  {
+    if (Preview is null) return;
+    var fieldKey = PIM.Operations.ProductWorkbookContract.CategoryFieldKey(item.SiteCode);
+    Preview = Preview with
+    {
+      Rows = Preview.Rows.Select(row => !row.PimValues.TryGetValue(fieldKey, out var cell) ? row : row with
+      {
+        PimValues = new Dictionary<string, string>(row.PimValues, StringComparer.Ordinal)
+        {
+          [fieldKey] = PIM.Operations.ProductWorkbookContract.JoinList(PIM.Operations.ProductWorkbookContract.SplitList(cell)
+            .Select(path => string.Equals(path, item.Path, StringComparison.OrdinalIgnoreCase) ? suggestion : path)) ?? cell,
+        },
+      }).ToList(),
+      MissingCategories = Preview.MissingCategories?.Where(other => other != item).ToList(),
+    };
+    Message = $"»{item.Path}« je zamenjana z obstoječo »{suggestion}« ({item.Items.Count} artiklov).";
+    if (!HasMissing(Preview)) MissingOpen = false;
+  }
+
+  void SkipMissing()
+  {
+    if (Preview is not null)
+      Preview = ProductWorkbookService.WithoutNewAttributes(Preview, RejectedAttributes);
+    MissingOpen = false;
+  }
+
+  async Task CreateMissingAsync()
+  {
+    if (Preview is null) return;
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var chosen = (Preview.MissingCategories ?? [])
+        .Where(item => item.CanCreate && !SkippedCategories.Contains(CategoryKey(item))).ToList();
+      var levels = 0;
+      var failed = new List<string>();
+      foreach (var item in chosen)
+      {
+        try { levels += await Categories.EnsureCategoryPathAsync(item.CategoryTreeCode, item.Path, actor); }
+        catch (Exception failure) { failed.Add($"{item.SiteName}: {item.Path} — {failure.Message}"); }
+      }
+      // Označeni neprepoznani stolpci postanejo novi atributi (ustvarijo se ob zapisu, kot ostali novi).
+      foreach (var column in NewColumnAttributes) ColumnAttributes[column] = column;
+      var newColumns = NewColumnAttributes.Count;
+      NewColumnAttributes.Clear();
+      await RereadKeepingChoicesAsync();
+      Message = $"Ustvarjenih kategorij: {chosen.Count - failed.Count} ({levels} novih ravni v drevesu)"
+        + (newColumns > 0 ? $", stolpcev za nove atribute: {newColumns}" : "") + ". Predogled je osvežen."
+        + (RejectedAttributes.Count > 0 ? $" Izpuščeni atributi: {string.Join(", ", RejectedAttributes)}." : "");
+      if (failed.Count > 0) Error = "Ni ustvarjeno: " + string.Join("; ", failed);
+      MissingOpen = false;
+    }
+    catch (Exception failure) { Error = "Ustvarjanje ni uspelo: " + failure.Message; }
+    finally { Busy = false; }
   }
 
   async Task ApplyAsync()
@@ -247,8 +530,14 @@
       var progress = new Progress<string>(text => { Message = text; _ = InvokeAsync(StateHasChanged); });
       using (await EnterImportLaneAsync())
       {
+        Preview = ProductWorkbookService.WithoutNewAttributes(Preview, RejectedAttributes);
         Outcome = await Workbook.ApplyAsync(Preview, actor,
           string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), progress);
+        // 280: zgodovina uvoza (prej → potem po celicah) — iz nje se uvoz lahko povrne.
+        HistoryId = await History.RecordAsync(ImportKinds.Products,
+          UndoOf is { } undone ? $"Povratek uvoza #{undone.ImportRunId}" : FileName ?? "Delovni list izdelkov",
+          string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), actor, Outcome.RowsTouched, Outcome.SaopQueued + Outcome.SaopDuplicates,
+          Outcome.OutboundBatchIds, Outcome.Problems, UndoOf?.ImportRunId, ImportHistoryService.FromProducts(Preview));
         // 251: artikli datoteke, ki po uvozu na označeno spletišče ne smejo več (npr. pobrisana slika) —
         // kategorije uvoz zapiše brez validacije, zato kandidate najprej ponovno validiramo.
         ((IProgress<string>)progress).Report("Preverjam, ali kak artikel po uvozu ni več veljaven za splet …");

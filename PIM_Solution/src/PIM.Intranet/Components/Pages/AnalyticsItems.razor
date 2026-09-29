@@ -1,0 +1,290 @@
+@page "/analitika/artikli"
+@attribute [Authorize(Roles = "ADMIN,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject AnalyticsService Analytics
+@inject IntranetDataService Data
+@inject NavigationManager Navigation
+@using System.Globalization
+
+<PageTitle>Analitika · artikli</PageTitle>
+
+@* 284: delovni seznam »kaj naročiti, kaj stoji«. Filtri živijo v naslovu (povezavo se da deliti, nazaj deluje),
+   listanje in razvrščanje sta v bazi (ana.GetItemMetrics), izvoz je natanko ta pogled ali izbrane vrstice. *@
+<PimPage Title="Analitika artiklov" OrganizationScope="true"
+         Subtitle="Predlog naročila, zaloga, ki stoji, in prodajni trend po artiklu. Predlog je izračun PIM; v SAOP se nič ne pošlje samo.">
+  <Actions>
+    <a class="secondary-button @(Page?.Total is null or 0 ? "disabled" : null)" href="@ExportHref" download data-enhance-nav="false">Izvozi Excel (@((Page?.Total ?? 0).ToString("N0", Sl)))</a>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="items" Tabs="AnalyticsTabs.Tabs" Label="Analitika" />
+
+<nav class="ana-signals" aria-label="Stanje artiklov">
+  <a class="ana-signal" href="@Href(Filter with { Signal = null, Skip = 0 })" aria-current="@((Filter.Signal is null).ToString().ToLowerInvariant())">
+    Vsi s prometom ali zalogo <span class="count">@ActiveTotal.ToString("N0", Sl)</span>
+  </a>
+  @foreach (var signal in AnalyticsSignals.All)
+  {
+    <a class="ana-signal" href="@Href(Filter with { Signal = signal.Code, Skip = 0, Sort = DefaultSort(signal.Code) })"
+       aria-current="@((Filter.Signal == signal.Code).ToString().ToLowerInvariant())" title="@signal.Hint">
+      <span class="dot @(signal.Tone ?? "neutral")" aria-hidden="true"></span>@signal.Label
+      <span class="count">@Count(signal.Code).ToString("N0", Sl)</span>
+    </a>
+  }
+</nav>
+
+<section class="ui-card ana-toolbar" role="search" aria-label="Iskanje in filtri artiklov">
+  <div class="ana-bar">
+    <label class="visually-hidden" for="ana-search">Išči po šifri, nazivu, EAN ali dobavitelju</label>
+    <input id="ana-search" type="search" class="search-input" placeholder="Šifra, naziv, EAN ali dobavitelj … (Enter)" @bind="SearchText" @bind:after="ApplySearch" />
+
+    <label class="visually-hidden" for="ana-item-supplier">Dobavitelj</label>
+    <select id="ana-item-supplier" class="filter-select" @bind="SupplierText" @bind:after="ApplyFilters">
+      <option value="">Vsi dobavitelji</option>
+      @foreach (var supplier in Suppliers.Where(s => s.SupplierId.Length > 0)) { <option value="@supplier.SupplierId">@(supplier.SupplierName ?? supplier.SupplierId)</option> }
+    </select>
+
+    <label class="visually-hidden" for="ana-abc">Razred ABC</label>
+    <select id="ana-abc" class="filter-select" style="min-width:9rem" @bind="AbcText" @bind:after="ApplyFilters">
+      <option value="">Vsi razredi</option>
+      <option value="A">A — 80 % prometa</option>
+      <option value="B">B — naslednjih 15 %</option>
+      <option value="C">C — ostalo</option>
+    </select>
+
+    <label class="visually-hidden" for="ana-sort">Razvrsti</label>
+    <select id="ana-sort" class="filter-select" style="min-width:11rem" @bind="SortText" @bind:after="ApplyFilters">
+      @foreach (var (sortCode, sortLabel) in Sorts) { <option value="@sortCode">@sortLabel</option> }
+    </select>
+    <button type="button" class="ghost-button" @onclick="ToggleDirection" aria-label="Smer razvrščanja: @(Filter.Descending ? "padajoče" : "naraščajoče")">
+      @(Filter.Descending ? "Padajoče" : "Naraščajoče")
+    </button>
+
+    @if (HasFilters)
+    {
+      <button type="button" class="link-button" @onclick="ClearFilters">Počisti filtre</button>
+    }
+    <span class="result-count" role="status" aria-live="polite">@((Page?.Total ?? 0).ToString("N0", Sl)) artiklov</span>
+  </div>
+</section>
+
+@if (AllMatching && Page is not null)
+{
+  <div class="ana-selection" role="status" aria-live="polite">
+    <strong>Izbranih vseh @Page.Total.ToString("N0", Sl), ki ustrezajo filtru</strong>
+    <a class="secondary-button" href="@ExportHref" download data-enhance-nav="false">Izvozi izbrane v Excel</a>
+    <button type="button" class="link-button" @onclick="ClearSelection">Počisti izbiro</button>
+  </div>
+}
+else if (Selected.Count > 0)
+{
+  <div class="ana-selection" role="status" aria-live="polite">
+    <strong>Izbranih @Selected.Count.ToString("N0", Sl)</strong>
+    <span>Predlog skupaj @Money(SelectedSuggestion) · zaloga skupaj @Money(SelectedStockValue)</span>
+    <a class="secondary-button" href="@SelectedExportHref" download data-enhance-nav="false">Izvozi izbrane v Excel</a>
+    @if (AllOnPageSelected && Page is not null && Page.Total > Page.Rows.Count)
+    {
+      <button type="button" class="link-button" @onclick="() => AllMatching = true">Izberi vseh @Page.Total.ToString("N0", Sl), ki ustrezajo filtru</button>
+    }
+    <button type="button" class="link-button" @onclick="ClearSelection">Počisti izbiro</button>
+  </div>
+}
+
+<section class="ui-card data-card" aria-label="Artikli">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)" LoadingText="Nalaganje artiklov …"
+            EmptyText="@EmptyText">
+    @if (Page is not null && Page.Rows.Count > 0)
+    {
+      @if (Filter.Signal is { } active) { <p class="card-note" style="padding:.6rem 1rem 0">@AnalyticsSignals.Find(active).Hint</p> }
+      <div class="table-scroll">
+        <table class="data-table ana-table">
+          <caption class="visually-hidden">@Caption</caption>
+          <thead>
+            <tr>
+              <th scope="col"><input type="checkbox" aria-label="Označi vse na tej strani" checked="@AllOnPageSelected" @onchange="TogglePage" /></th>
+              <th scope="col">Artikel</th>
+              <th scope="col">Dobavitelj</th>
+              <th scope="col">Stanje</th>
+              <th scope="col" class="numeric">Zaloga</th>
+              <th scope="col" class="numeric">Naročeno</th>
+              <th scope="col" class="numeric">Prodano 90 / 365 dni</th>
+              <th scope="col" class="numeric">Trend</th>
+              <th scope="col" class="numeric">Pokritost</th>
+              <th scope="col" class="numeric">Predlog</th>
+              <th scope="col" class="numeric">@(Filter.Signal is AnalyticsSignals.Dead or AnalyticsSignals.Overstock ? "Presežek" : "Vrednost zaloge")</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Page.Rows)
+            {
+              var signal = AnalyticsSignals.Find(row.Signal);
+              var isSelected = Selected.ContainsKey(row.ProductId);
+              <tr class="@(isSelected ? "selected" : null)">
+                <td><input type="checkbox" aria-label="Označi @row.ItemId" checked="@isSelected" @onchange="() => Toggle(row)" /></td>
+                <td>
+                  <a class="row-link" href="analitika/artikli/@row.ProductId">@(row.ItemName ?? row.ItemId)</a>
+                  <span class="sub">@row.ItemId@(row.AbcClass is { } abc ? $" · {abc}{row.XyzClass}" : "")</span>
+                </td>
+                <td>
+                  @if (row.SupplierId.Length > 0)
+                  {
+                    <a href="@Href(Filter with { SupplierId = row.SupplierId, Skip = 0 })">@(row.SupplierName ?? row.SupplierId)</a>
+                  }
+                  else { <span class="muted">brez dobavitelja</span> }
+                </td>
+                <td><PimChip Text="@signal.Label" Tone="@signal.Tone" Prefix="Stanje: " /></td>
+                <td class="numeric">
+                  @Qty(row.Stock)
+                  @if (row.Available != row.Stock) { <span class="sub">razp. @Qty(row.Available)</span> }
+                </td>
+                <td class="numeric">
+                  @(row.OnOrder > 0 ? Qty(row.OnOrder) : "—")
+                  @if (row.NextDeliveryDate is { } next) { <span class="sub">@next.ToString("d. M.", Sl)</span> }
+                </td>
+                <td class="numeric">@Qty(row.Sales90Qty) / @Qty(row.Sales365Qty)
+                  @if (row.LastSaleDate is { } last) { <span class="sub">zadnja @last.ToString("d. M. yy", Sl)</span> }
+                </td>
+                <td class="numeric"><span class="@Tone(row.TrendPct)">@Pct(row.TrendPct)</span></td>
+                <td class="numeric">@(row.CoverDays is { } cover ? (cover >= 9999 ? "> 9999 dni" : $"{cover:N0} dni") : "—")</td>
+                <td class="numeric">
+                  @if (row.SuggestedQty > 0)
+                  {
+                    <strong>@Qty(row.SuggestedQty)</strong><span class="sub">@Money(row.SuggestedValue)</span>
+                  }
+                  else { <span class="muted">—</span> }
+                </td>
+                <td class="numeric">
+                  @if (Filter.Signal is AnalyticsSignals.Dead or AnalyticsSignals.Overstock)
+                  {
+                    @Money(row.ExcessValue)<span class="sub">@Qty(row.ExcessQty) kos</span>
+                  }
+                  else { @Money(row.StockValue) }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <PimPager Skip="Filter.Skip" Take="Filter.Take" Total="Page.Total" Label="Strani artiklov" SkipChanged="GoToSkip" />
+    }
+  </PimState>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "isci")] public string? QSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "dobavitelj")] public string? QSupplier { get; set; }
+  [SupplyParameterFromQuery(Name = "signal")] public string? QSignal { get; set; }
+  [SupplyParameterFromQuery(Name = "abc")] public string? QAbc { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? QSort { get; set; }
+  [SupplyParameterFromQuery(Name = "smer")] public string? QDirection { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public string? QPage { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly (string Code, string Label)[] Sorts =
+  [
+    ("prodaja", "Prodano 365 dni"), ("promet", "Promet 365 dni"), ("predlog", "Vrednost predloga"), ("vrednost", "Vrednost zaloge"),
+    ("presezek", "Vrednost presežka"), ("zaloga", "Zaloga"), ("pokritost", "Pokritost v dneh"), ("trend", "Trend 3 mesecev"),
+    ("zadnja", "Zadnja prodaja"), ("dobava", "Dobavni čas"), ("sifra", "Šifra"), ("naziv", "Naziv"), ("dobavitelj", "Dobavitelj"),
+  ];
+
+  AnalyticsItemFilter Filter = new();
+  AnalyticsItemPage? Page;
+  IReadOnlyList<AnalyticsSupplierRow> Suppliers = [];
+  readonly Dictionary<long, AnalyticsItemRow> Selected = [];
+  bool AllMatching;
+  int OrganizationId;
+  bool Loading = true;
+  string? Error;
+  string SearchText = "", SupplierText = "", AbcText = "", SortText = "prodaja";
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Filter = AnalyticsQuery.FromQuery(name => name switch
+    {
+      "isci" => QSearch, "dobavitelj" => QSupplier, "signal" => QSignal, "abc" => QAbc, "razvrsti" => QSort, "smer" => QDirection,
+      "stran" => QPage, _ => null,
+    });
+    if (string.IsNullOrEmpty(Filter.Sort)) Filter = Filter with { Sort = DefaultSort(Filter.Signal) };
+    SearchText = Filter.Search ?? "";
+    SupplierText = Filter.SupplierId ?? "";
+    AbcText = Filter.Abc ?? "";
+    SortText = Filter.Sort ?? "prodaja";
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      if (organization.OrganizationId != OrganizationId) { Selected.Clear(); Suppliers = []; }
+      AllMatching = false; // nov filter = nova množica; izbira »vse po filtru« ne sme veljati za drug nabor
+      OrganizationId = organization.OrganizationId;
+      Page = await Analytics.GetItemsAsync(OrganizationId, Filter);
+      if (Suppliers.Count == 0)
+        Suppliers = (await Analytics.GetSuppliersAsync(OrganizationId, null, "naziv", false, 0, 2000, true)).Rows;
+    }
+    catch (Exception exception)
+    {
+      Error = $"Artiklov ni bilo mogoče naložiti: {exception.Message}";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  static string DefaultSort(string? signal) => signal switch
+  {
+    AnalyticsSignals.Order => "predlog",
+    AnalyticsSignals.Dead => "vrednost",
+    AnalyticsSignals.Overstock => "presezek",
+    _ => "prodaja",
+  };
+
+  int Count(string signal) => Page?.SignalCounts.TryGetValue(signal, out var n) == true ? n : 0;
+  int ActiveTotal => Page?.SignalCounts.Where(p => p.Key != AnalyticsSignals.Inactive).Sum(p => p.Value) ?? 0;
+  bool HasFilters => Filter.Search is not null || Filter.SupplierId is not null || Filter.Abc is not null || Filter.Signal is not null;
+
+  string EmptyText => HasFilters
+    ? "Za izbrane filtre ni artiklov. Počisti filtre ali izberi drug signal."
+    : "Analitika za to podjetje še ni preračunana ali pa ni artiklov z zalogo ali prodajo.";
+
+  string Caption => $"Artikli{(Filter.Signal is { } s ? " — " + AnalyticsSignals.Find(s).Label : "")}, stran {Filter.Skip / Filter.Take + 1}";
+
+  static string Href(AnalyticsItemFilter filter) =>
+    "analitika/artikli" + (AnalyticsQuery.ToQueryString(filter, filter.Skip / Math.Max(1, filter.Take) + 1) is { Length: > 0 } q ? "?" + q : "");
+
+  string ExportHref => "izvoz/analitika-artikli.xlsx?" + AnalyticsQuery.ToQueryString(Filter with { Skip = 0 });
+  string SelectedExportHref => "izvoz/analitika-artikli.xlsx?izbrani=" + string.Join(",", Selected.Keys.Take(2000));
+
+  void Go(AnalyticsItemFilter filter) => Navigation.NavigateTo(Href(filter));
+  void ApplySearch() => Go(Filter with { Search = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(), Skip = 0 });
+  void ApplyFilters() => Go(Filter with
+  {
+    SupplierId = string.IsNullOrEmpty(SupplierText) ? null : SupplierText,
+    Abc = string.IsNullOrEmpty(AbcText) ? null : AbcText,
+    Sort = SortText,
+    Skip = 0,
+  });
+  void ToggleDirection() => Go(Filter with { Descending = !Filter.Descending, Skip = 0 });
+  void ClearFilters() => Go(new AnalyticsItemFilter());
+  void GoToSkip(int skip) => Go(Filter with { Skip = skip });
+
+  bool AllOnPageSelected => Page is { Rows.Count: > 0 } && Page.Rows.All(r => Selected.ContainsKey(r.ProductId));
+  void Toggle(AnalyticsItemRow row) { AllMatching = false; if (!Selected.Remove(row.ProductId)) Selected[row.ProductId] = row; }
+  void ClearSelection() { Selected.Clear(); AllMatching = false; }
+  void TogglePage()
+  {
+    if (Page is null) return;
+    AllMatching = false;
+    if (AllOnPageSelected) foreach (var row in Page.Rows) Selected.Remove(row.ProductId);
+    else foreach (var row in Page.Rows) Selected[row.ProductId] = row;
+  }
+  decimal SelectedSuggestion => Selected.Values.Sum(r => r.SuggestedValue ?? 0);
+  decimal SelectedStockValue => Selected.Values.Sum(r => r.StockValue ?? 0);
+
+  static string Qty(decimal value) => value.ToString(value == decimal.Truncate(value) ? "N0" : "N1", Sl);
+  static string Money(decimal? value) => value is { } v ? v.ToString("N0", Sl) + " €" : "—";
+  static string Pct(decimal? value) => value is { } v ? (v > 0 ? "+" : "") + v.ToString("N0", Sl) + " %" : "—";
+  static string? Tone(decimal? value) => value switch { > 0 => "ana-up", < 0 => "ana-down", _ => null };
+}

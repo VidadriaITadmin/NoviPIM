@@ -31,11 +31,15 @@ public enum MonitorAction { None, RunNow, EnableJob, EnablePipeline, OpenLog, Op
 /// <summary>Vrstica intranet.GetJobSourceState (256): svežina enega vira posla za eno podjetje.</summary>
 /// <param name="State">Fresh, Stale, Failed ali Unknown (vir še ni zapisal nobene faze).</param>
 /// <param name="BasisUtc">Čas, po katerem se meri starost: zadnji novi podatki ali zadnji uspešen stik (MeasureNewData).</param>
+/// <param name="MaxAgeSeconds">Veljavna meja: nastavljena na strani posla (276) ali iz kode.</param>
+/// <param name="DefaultMaxAgeSeconds">Meja iz kode (JobCatalog.Sources); null pri bazi pred 276.</param>
+/// <param name="IsMaxAgeOverridden">Mejo je nastavil skrbnik na strani posla in ne velja meja iz kode.</param>
 public sealed record SourceStateRow(
   string JobKey, string Pipeline, string SourceCode, string Label,
   int? OrganizationId, string? OrganizationName, int MaxAgeSeconds, bool MeasureNewData,
   DateTime? LastContactUtc, DateTime? LastNewDataUtc, DateTime? LastFailureUtc, DateTime? BasisUtc,
-  string? LastMessage, string? LastStatus, string? LastPhaseCode, long? LastItemsOut, long? LastItemsRejected, string State);
+  string? LastMessage, string? LastStatus, string? LastPhaseCode, long? LastItemsOut, long? LastItemsRejected, string State,
+  int? DefaultMaxAgeSeconds = null, bool IsMaxAgeOverridden = false);
 
 /// <summary>Vrstica intranet.GetMonitorPipelines: postopek (ops.ScheduleProfile) za eno podjetje z zdravjem (ops.IntegrationHealth).</summary>
 /// <param name="OrganizationInAutomation">ops.OrganizationAutomationPolicy (privzeto vključeno).</param>
@@ -96,6 +100,8 @@ public static class MonitorPolicy
   static readonly HashSet<string> DataAlertKinds = new(StringComparer.Ordinal)
   {
     "ReservationExcluded", "ExportRejected", "WebShopWithdrawn", "StockSnapshotStale", "StockSnapshotEmpty",
+    // 277: varovalka je zadržala objavo — potrdi ali popravi urednik na /varovalke.
+    "SafeguardPending",
   };
 
   const string SourceFailed = "Failed";

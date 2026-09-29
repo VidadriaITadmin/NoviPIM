@@ -1,0 +1,35 @@
+@* Hitri izbori s števci (prenova 2026-09-26 po zgledu PIM-demo-Akeneo-stil). En gradnik za vse
+   sezname, da je vzorec povsod enak: najpogostejša vprašanja z enim klikom, število zraven, izbor
+   živi v URL-ju. Število pride iz ene zbirne poizvedbe strani, nikoli iz štetja po vrstici. *@
+<div class="pim-segment-bar">
+  <nav class="pim-segment-row" aria-label="@Label">
+    @foreach (var segment in Segments)
+    {
+      <a class="pim-segment @(segment.Active ? "on" : null)" href="@segment.Href"
+         aria-current="@(segment.Active ? "true" : null)" title="@segment.Hint">
+        @segment.Label
+        @if (segment.Count is { } count)
+        {
+          <span class="pim-segment-count @(count > 0 ? segment.Tone : null)">@count.ToString("N0")</span>
+        }
+        else if (Loading)
+        {
+          <span class="pim-segment-count pim-segment-loading" aria-hidden="true"></span>
+        }
+      </a>
+    }
+  </nav>
+  @if (!string.IsNullOrWhiteSpace(Summary))
+  {
+    <span class="pim-segment-summary" role="status" aria-live="polite">@Summary</span>
+  }
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required IReadOnlyList<PimSegment> Segments { get; set; }
+  [Parameter] public string Label { get; set; } = "Hitri izbori";
+  /// <summary>Števci se še berejo: namesto števila tiha oznaka.</summary>
+  [Parameter] public bool Loading { get; set; }
+  /// <summary>Število zadetkov trenutnega pogleda, npr. »340 izdelkov«.</summary>
+  [Parameter] public string? Summary { get; set; }
+}

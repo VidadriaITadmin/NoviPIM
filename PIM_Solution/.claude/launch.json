@@ -6,6 +6,24 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "C:\\Users\\David\\Documents\\GitHub\\PIM\\PIM_Solution\\src\\PIM.Intranet"],
       "port": 5091
+    },
+    {
+      "name": "pim-intranet-sonja-test",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set \"PIM_CONNECTION_STRING=Server=SONJA;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && set \"PIM_SCHEDULER_ENABLED=false\" && dotnet run --project C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet --no-launch-profile --urls http://localhost:5098 --Scheduler:Enabled=false"
+      ],
+      "port": 5098
+    },
+    {
+      "name": "pim-intranet-sonja-locenibuild",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d C:/Users/David/Documents/GitHub/PIM/PIM_Solution/src/PIM.Intranet && set \"ASPNETCORE_ENVIRONMENT=Development\" && set \"PIM_CONNECTION_STRING=Server=SONJA;Database=PIM;Integrated Security=True;Encrypt=True;TrustServerCertificate=True\" && set \"PIM_SCHEDULER_ENABLED=false\" && C:/Users/david/AppData/Local/Temp/claude/pimtest-out/PIM.Intranet.exe --urls http://localhost:5099 --Scheduler:Enabled=false"
+      ],
+      "port": 5099
     }
   ]
 }

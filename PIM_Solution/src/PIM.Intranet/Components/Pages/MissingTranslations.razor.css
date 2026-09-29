@@ -1,0 +1,33 @@
+/* Manjkajoči prevodi (prenova 2026-09-26). Skupne oblike so v app.css. */
+
+.page-help { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); margin: 0 0 .9rem; }
+.page-help > summary { color: var(--pim-text-soft); cursor: pointer; font-size: .8rem; font-weight: 600; padding: .55rem .9rem; }
+.page-help > summary:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.page-help-body { border-top: 1px solid var(--pim-border); color: var(--pim-text-muted); font-size: .8rem; line-height: 1.55; padding: .6rem .9rem .8rem; }
+.page-help-body p { margin: 0 0 .45rem; max-width: 80ch; }
+.page-help-body p:last-child { margin-bottom: 0; }
+
+.translations-toolbar .search-input { flex: 1 1 18rem; max-width: 32rem; }
+.search-input:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+.active-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; margin: 0 0 .75rem; }
+.filter-chip {
+  align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: 999px;
+  color: var(--pim-text-strong); display: inline-flex; font-size: .76rem; gap: .35rem; padding: .22rem .6rem; text-decoration: none;
+}
+.filter-chip:hover { background: var(--pim-surface-hover); text-decoration: none; }
+.filter-chip:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.filter-chip.clear-all { border-style: dashed; color: var(--pim-text-muted); }
+.chip-remove { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove::before, .chip-remove::after { background: currentColor; content: ""; height: 1px; left: 0; position: absolute; top: 50%; width: 100%; }
+.chip-remove::before { transform: rotate(45deg); }
+.chip-remove::after { transform: rotate(-45deg); }
+
+.data-card { padding: 0; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--pim-surface-hover); }
+.nowrap { white-space: nowrap; }
+.row-actions { text-align: right; white-space: nowrap; }
+.row-actions a { font-weight: 600; }
+.row-actions a:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.arrow { border-right: 2px solid currentColor; border-top: 2px solid currentColor; display: inline-block; height: .4rem; margin-left: .2rem; transform: rotate(45deg); width: .4rem; }

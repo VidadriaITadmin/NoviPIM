@@ -19,7 +19,7 @@ static class JobCatalogChecks
   {
     // ─── Katalog ─────────────────────────────────────────────────────────────
     var keys = JobCatalog.All.Select(job => job.Key).ToList();
-    Check(keys.Distinct().Count() == keys.Count && keys.Count == 16, $"Šestnajst enoličnih poslov, dobil {keys.Count}.");
+    Check(keys.Distinct().Count() == keys.Count && keys.Count == 18, $"Osemnajst enoličnih poslov (284: analitika), dobil {keys.Count}.");
     Check(JobCatalog.All.All(job => (job.IntervalSeconds is not null) != (job.DailyAtLocal is not null)), "Posel ima bodisi razmik bodisi dnevno uro.");
     Check(JobCatalog.All.All(job => job.TimeoutSeconds >= 30), "Vsak posel ima časovno mejo.");
     Check(JobCatalog.All.All(job => job.Reach == WorkerJobReach.Internal || !string.IsNullOrWhiteSpace(job.ReachNote)), "Posel, ki seže navzven, pove, kam.");
@@ -48,7 +48,7 @@ static class JobCatalogChecks
 
     // ─── Vsak worker ima posel ───────────────────────────────────────────────
     foreach (var worker in new[] { "PIM.KatalogWorker", "PIM.SaopOrdersWorker", "PIM.SourceFetchWorker", "PIM.StockFileWorker", "PIM.SaopStockWorker",
-      "PIM.XmlFileWorker", "PIM.B2bWorker", "PIM.Watchdog", "PIM.AlertDispatcher", "PIM.StockReplenishmentWorker", "PIM.OutboxDispatcher", "PIM.SelfTest.Nightly" })
+      "PIM.XmlFileWorker", "PIM.B2bWorker", "PIM.Watchdog", "PIM.AlertDispatcher", "PIM.StockReplenishmentWorker", "PIM.OutboxDispatcher", "PIM.SelfTest.Nightly", "PIM.SaopAnalyticsWorker" })
       Check(JobCatalog.All.Any(job => job.Workers.Contains(worker)), $"Worker {worker} nima posla.");
 
     // ─── Načrti ──────────────────────────────────────────────────────────────
@@ -100,6 +100,12 @@ static class JobCatalogChecks
     Check(ordersPlan.Count == 4 && ordersPlan.All(g => g.Steps[0].Process!.Arguments.Any(a => a.EndsWith("PIM.SaopOrdersWorker", StringComparison.Ordinal))
       && g.Steps[0].Environment!["PIM_SAOP_MODE"] == "Live"), "Naročila: SaopOrdersWorker, en korak na podjetje, v živo.");
 
+    // 284: analitika kliče SAOP samo za branje, zato je v pasu SAOP; en korak na podjetje, v živo, nikoli poln zajem.
+    var analyticsPlan = Expand(JobCatalog.Plan(JobCatalog.SaopAnalyticsImport, env));
+    Check(JobCatalog.UsesSaop(JobCatalog.SaopAnalyticsImport) && analyticsPlan.Count == 4
+      && analyticsPlan.All(g => g.Steps.Single().Process!.Arguments.Any(a => a.EndsWith("PIM.SaopAnalyticsWorker", StringComparison.Ordinal))
+        && !g.Steps.Single().Process!.Arguments.Contains("--full") && g.Steps[0].Environment!["PIM_SAOP_MODE"] == "Live"),
+      "Analitika: SaopAnalyticsWorker v pasu SAOP, en korak na podjetje, v živo, brez --full.");
     var prices = Expand(JobCatalog.Plan(JobCatalog.PriceImport, env));
     Check(prices.Count == 4 && prices.All(g => !g.RequiresAllPrevious && g.Steps.Single().Process!.Arguments.Contains("GetPrices"))
       && prices.Select(g => g.Steps[0].OrganizationId).SequenceEqual([1, 2, 3, 4]), "Cene: en korak na podjetje, padec enega ne blokira drugih.");
@@ -107,7 +113,7 @@ static class JobCatalogChecks
     // Pas SAOP: kateri posli kličejo SAOP in zato nikoli ne tečejo hkrati.
     Check(new[] { JobCatalog.SaopProductImport, JobCatalog.SaopOrderImport, JobCatalog.StockImport, JobCatalog.PriceImport, JobCatalog.SaopDeliveryImport,
         JobCatalog.NightlyReconciliation, JobCatalog.SaopOutboundDispatch }.All(JobCatalog.UsesSaop)
-      && !new[] { JobCatalog.SupplierStockImport, JobCatalog.WebStockExport, JobCatalog.WebCatalogExport, JobCatalog.ProductValidation, JobCatalog.AlertEvaluation }.Any(JobCatalog.UsesSaop),
+      && !new[] { JobCatalog.SupplierStockImport, JobCatalog.SupplierCatalogImport, JobCatalog.WebStockExport, JobCatalog.WebCatalogExport, JobCatalog.ProductValidation, JobCatalog.AlertEvaluation }.Any(JobCatalog.UsesSaop),
       "Pas SAOP zajema vse posle, ki kličejo SAOP, in nobenega drugega.");
     Check(JobCatalog.Find(JobCatalog.StockImport)!.IntervalSeconds == 600 && JobCatalog.Find(JobCatalog.PriceImport)!.IntervalSeconds == 600,
       "Zaloga in cene iz SAOP: vsakih 10 minut (od konca teka).");
@@ -219,6 +225,40 @@ static class JobCatalogChecks
     })).Single(g => g.Name == "Dobaviteljev XML (Braytron)").Steps;
     Check(landedXml.Count == 4 && landedXml.All(s => s.Environment?["PIM_XML_ROOT"] == @"D:\prevzem\BT_XML"),
       "Prevzeti dobaviteljev XML ima prednost pred fixtures.");
+
+    // 2026-09-23: katalog dobaviteljev ima svoj posel (prej samo nočna uskladitev v pasu SAOP, na strežniku nikoli ni tekel).
+    var catalogJob = JobCatalog.Find(JobCatalog.SupplierCatalogImport)!;
+    Check(!JobCatalog.UsesSaop(catalogJob.Key) && catalogJob.EnabledByDefault && catalogJob.IntervalSeconds == 21600 && catalogJob.Flow == JobFlows.Inputs,
+      "Katalog dobaviteljev: vklopljen, vsakih 6 h (razmik Nowodvorskega), zunaj pasu SAOP.");
+    Check(catalogJob.Dependencies.Single() is { DependsOnJobKey: JobCatalog.SaopProductImport, IsGate: false, TriggersDependent: false },
+      "Katalog dobaviteljev ne teče med zajemom artiklov iz SAOP, a ga ta ne blokira in ne sproži.");
+    var catalogPlan = Expand(JobCatalog.Plan(JobCatalog.SupplierCatalogImport, env with
+    {
+      DirectoryExists = directory => xmlFiles.ContainsKey(directory),
+      ListFiles = directory => xmlFiles.TryGetValue(directory, out var list) ? list : [],
+    }));
+    Check(catalogPlan.Select(g => g.Name).SequenceEqual(["Katalog NW_XML", "Katalog BT_XML"]) && catalogPlan.All(g => !g.RequiresAllPrevious),
+      "Katalog dobaviteljev: dva neodvisna vira: " + string.Join(" | ", catalogPlan.Select(g => g.Name)));
+    Check(catalogPlan[0].Steps[0].Process!.Arguments.SkipWhile(a => a != "--source").Skip(1).First() == "NW_XML"
+        && catalogPlan[1].Steps[0].Process!.Arguments.SkipWhile(a => a != "--source").Skip(1).First() == "BT_XML",
+      "Vsak vir najprej prevzame svojo datoteko.");
+    Check(catalogPlan[0].Steps.Count == 2 && catalogPlan[0].Steps[1].Kind == CycleStepKind.Note,
+      "Brez prevzetega NW XML katalog NE bere fixtures (testni XML ni katalog dobavitelja): " + catalogPlan[0].Steps[1].Command);
+    Check(catalogPlan[1].Steps.Count == 5 && catalogPlan[1].Steps.Skip(1).All(s => s.Environment?["PIM_XML_ROOT"] == @"D:\prevzem\BT_XML")
+        && catalogPlan[1].Steps.Skip(1).Select(s => s.Environment?["PIM_XML_ORGANIZATION_ID"]).SequenceEqual(["1", "2", "3", "4"]),
+      "Prevzeti BT XML se prebere za vsako podjetje.");
+    Check(!catalogPlan.SelectMany(g => g.Steps).Any(s => s.Environment?.ContainsKey("PIM_SAOP_MODE") == true), "Katalog dobaviteljev ne kliče SAOP.");
+
+    // Ročna zahteva ima v pasu SAOP prednost pred rednimi posli (nočna je zadnja v vrstnem redu).
+    var request = JobCatalog.SaopRequestFirst([(JobCatalog.StockImport, false, false), (JobCatalog.SupplierCatalogImport, true, false),
+      (JobCatalog.NightlyReconciliation, true, false)]);
+    Check(request == JobCatalog.NightlyReconciliation, "Zahteva za posel zunaj pasu SAOP pasu ne rezervira; nočna ga: " + request);
+    Check(JobCatalog.YieldsSaopLane(JobCatalog.StockImport, false, request) && !JobCatalog.YieldsSaopLane(JobCatalog.NightlyReconciliation, true, request)
+        && !JobCatalog.YieldsSaopLane(JobCatalog.SupplierCatalogImport, false, request) && !JobCatalog.YieldsSaopLane(JobCatalog.StockImport, true, request),
+      "Redni SAOP posel prepusti pas zahtevi; zahtevan posel in posli zunaj pasu ne čakajo.");
+    Check(JobCatalog.SaopRequestFirst([(JobCatalog.NightlyReconciliation, true, true), (JobCatalog.StockImport, false, false)]) is null
+        && JobCatalog.SaopRequestFirst([(JobCatalog.StockImport, false, false)]) is null,
+      "Zahteva, ki že teče, ali brez zahteve: nihče ne čaka.");
 
     var serverPaths = paths with { SolutionRoot = "", PublishedWorkersRoot = @"D:\site\Workerji", PublishedWorker = worker => $@"D:\site\Workerji\{worker}\{worker}.exe" };
     var serverNightly = Expand(JobCatalog.Plan(JobCatalog.NightlyReconciliation, env with { Paths = serverPaths, FixturesRoot = null }));
@@ -338,8 +378,8 @@ static class JobCatalogChecks
       (JobCatalog.SaopOrderImport, "SAOP_ORDERS_VND", "SAOP_ORDERS_VND"),
       (JobCatalog.WebCatalogExport, "MAGENTO_PRODUCTS", "MAGENTO_PRODUCTS"),
       (JobCatalog.WebStockExport, "MAGENTO_STOCK_PRICES", "MAGENTO_STOCK_PRICES"),
-      (JobCatalog.NightlyReconciliation, "GENERIC_XML", "NW_XML"),
-      (JobCatalog.NightlyReconciliation, "GENERIC_XML", "BT_XML"),
+      (JobCatalog.SupplierCatalogImport, "GENERIC_XML", "NW_XML"),
+      (JobCatalog.SupplierCatalogImport, "GENERIC_XML", "BT_XML"),
       (JobCatalog.StockReplenishmentDigest, "STOCK_REPLENISHMENT_DIGEST", "STOCK_REPLENISHMENT_DIGEST"),
     ];
     foreach (var (job, pipeline, source) in bloka6)
@@ -349,6 +389,8 @@ static class JobCatalogChecks
       "Blok 6: naročila, izvozi, XML in dnevni mail se merijo po stiku (ura brez spremembe ni napaka).");
     Check(vsi.Single(x => x.source.SourceCode == "MAGENTO_PRODUCTS").source.PerOrganization == false,
       "katalog.csv nastane samo za podjetje kataloga; vir po podjetjih bi bil za druga podjetja za vedno prestar.");
+    Check(vsi.Where(x => x.source.SourceCode is "NW_XML" or "BT_XML").All(x => x.job.Key == JobCatalog.SupplierCatalogImport),
+      "Svežino dobaviteljevega XML meri samo katalog dobaviteljev (sicer dvojni alarm z nočno).");
     Check(vsi.Single(x => x.source.SourceCode == "NW_XML").source.MaxAgeSeconds == 604800
       && vsi.Single(x => x.source.SourceCode == "BT_XML").source.MaxAgeSeconds == 129600,
       "Meji dobaviteljevega XML po načrtu: Nowodvorski 7 dni, Braytron 36 h.");

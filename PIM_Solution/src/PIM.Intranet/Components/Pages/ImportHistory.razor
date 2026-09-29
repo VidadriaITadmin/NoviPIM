@@ -1,0 +1,86 @@
+@page "/uvozi"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ImportHistoryService History
+
+@* 280: vsi uveljavljeni uvozi izdelkov, cen in strank. Uporabnik 2026-09-24: »mišljeno je, da ko se spremenijo
+   artikli, da se povrne — pri uvozih artiklov, cen, strank in SAOP«. Uvoz je tu ena vrstica (ne desetine serij
+   zgodovine); odpre se v podrobnosti, kjer se ga povrne. *@
+
+<PageTitle>Zgodovina uvozov</PageTitle>
+<PimPage Title="Zgodovina uvozov"
+         Subtitle="Vsak uvoz izdelkov, cen in strank: kdaj, kdo, kaj je spremenil (prej → potem). Uvoz, ki je naredil narobe, se povrne v celoti — prejšnje vrednosti gredo skozi isti predogled in isti zapis kot vsak uvoz." />
+
+<div class="history-filters section-gap" role="group" aria-label="Vrsta uvoza">
+  @foreach (var (kind, label) in Kinds)
+  {
+    <button type="button" class="@(Kind == kind ? "primary-button" : "secondary-button")" aria-pressed="@(Kind == kind)"
+            @onclick="() => SelectAsync(kind)">@label</button>
+  }
+</div>
+
+<PimState Loading="Loading" Error="@LoadError" Empty="@(Runs.Count == 0)"
+          EmptyText="Uvozov še ni v zgodovini — zapisujejo se od migracije 280 naprej (uvoz izdelkov, cen in strank).">
+  <section class="ui-card data-card section-gap">
+    <PimTable Caption="Uvozi, najnovejši najprej (največ 200)" Columns="Columns">
+      <Rows>
+        @foreach (var run in Runs)
+        {
+          <tr>
+            <td class="numeric"><a href="@($"uvozi/{run.ImportRunId}")">#@run.ImportRunId</a></td>
+            <td>@run.AppliedUtc.ToPimLocal().ToString("g")<br /><span class="muted">@PimFormat.Ago(run.AppliedUtc)</span></td>
+            <td>@ImportKinds.Label(run.Kind)@if (run.Organizations is { Length: > 0 } organizations) { <br /><span class="muted">@organizations</span> }</td>
+            <td>@run.Title@if (run.Note is { Length: > 0 } note) { <br /><span class="muted">@note</span> }</td>
+            <td>@run.Actor</td>
+            <td class="numeric">@run.RowCount.ToString("N0")</td>
+            <td class="numeric">@run.ChangeCount.ToString("N0")</td>
+            <td class="numeric">@(run.SaopCount > 0 ? run.SaopCount.ToString("N0") : "—")</td>
+            <td>
+              @if (run.IsUndone) { <PimChip Text="@($"povrnjen (#{run.UndoneByImportRunId})")" Tone="warn" /> }
+              else if (run.IsUndo) { <PimChip Text="@($"povratek #{run.UndoOfImportRunId}")" /> }
+              else { <span class="muted">uveljavljen</span> }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+  </section>
+</PimState>
+
+@code {
+  static readonly IReadOnlyList<PimColumn> Columns =
+    [new("Uvoz", Numeric: true), new("Čas"), new("Vrsta"), new("Datoteka / opis"), new("Kdo"), new("Vrstic", Numeric: true),
+     new("Sprememb", Numeric: true), new("V SAOP", Numeric: true), new("Stanje")];
+  static readonly IReadOnlyList<(string? Kind, string Label)> Kinds =
+    [(null, "Vsi"), (ImportKinds.Products, "Izdelki"), (ImportKinds.Prices, "Cene"), (ImportKinds.Customers, "Stranke")];
+
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? KindQuery { get; set; }
+
+  IReadOnlyList<ImportRunRow> Runs = [];
+  string? Kind;
+  bool Loading = true;
+  string? LoadError;
+
+  protected override async Task OnInitializedAsync()
+  {
+    Kind = Kinds.Any(item => item.Kind == KindQuery) ? KindQuery : null;
+    await LoadAsync();
+  }
+
+  async Task SelectAsync(string? kind)
+  {
+    Kind = kind;
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = Runs.Count == 0; LoadError = null;
+    try { Runs = await History.GetRunsAsync(Kind, 200); }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      LoadError = "Zgodovine uvozov ni mogoče prebrati (migracija 280: intranet.GetImportRuns).";
+    }
+    finally { Loading = false; }
+  }
+}

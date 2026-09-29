@@ -123,6 +123,9 @@
             <select class="filter-select" @bind="EditDataType">@foreach (var type in DataTypeOptions) { <option value="@type.Key">@type.Label</option> }</select>
           </label>
           <label class="editor-field"><span class="editor-label">Enota</span><input class="form-input" @bind="EditUnit" placeholder="npr. W, mm, lm" /></label>
+          @* 301: enota atributa je enota vrednosti v PIM in v katalog.csv. *@
+          <p class="muted" style="margin:0">V tej enoti so vrednosti v PIM in v katalog.csv. Uvoz iz Excela in zajem dobaviteljev pretvorita
+            »5 m« ali 5 + atribut enote v to enoto (mm/cm/m, g/kg, cm3/dm3/l/m3); česar ne moreta pretvoriti, ostane zapisano, kot je, z opozorilom.</p>
           <label class="filter-check"><input type="checkbox" @bind="EditTranslatable" /> Vrednost se prevaja po jezikih</label>
           <label class="filter-check"><input type="checkbox" @bind="EditUnitCandidate" /> Je enota drugega atributa</label>
           @if (EditUnitCandidate)

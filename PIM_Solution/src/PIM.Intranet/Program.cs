@@ -90,6 +90,7 @@ builder.Services.AddScoped<ProductWorkbenchService>();
 builder.Services.AddScoped<CustomerCardService>();
 builder.Services.AddScoped<CustomerListService>();
 builder.Services.AddScoped<CustomerWorkbookService>();
+builder.Services.AddScoped<PackagingDiscountService>();
 // Cene in ceniki v SAOP (265): branje, vrsta, delovni list; posiljanje tece v ozadju (en tek na podjetje).
 builder.Services.AddScoped<PriceService>();
 builder.Services.AddScoped<PriceWorkbookService>();
@@ -130,7 +131,13 @@ builder.Services.AddScoped<QualityReadService>();
 builder.Services.AddScoped<QualityWriteService>();
 // 251: samodejni umik kljukic spletisc, predogled, pregled in nastavitev (stran /splet/umaknjeni, kartica).
 builder.Services.AddScoped<WebWithdrawalService>();
+// 290: neskladja med podjetji kataloga (stran /splet/neskladja, izvoz v Excel).
+builder.Services.AddScoped<OrganizationMismatchService>();
+builder.Services.AddScoped<SafeguardService>();
+builder.Services.AddScoped<ImportHistoryService>();
 builder.Services.AddScoped<StockReadService>();
+// 284: analitika prodaje, zalog in nabave (shema ana; polni PIM.SaopAnalyticsWorker).
+builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<GovernanceReadService>();
 builder.Services.AddScoped<IntranetFeatureReadService>();
 builder.Services.AddSingleton<ActiveDirectoryService>();
@@ -324,13 +331,15 @@ app.MapGet("/izvoz/zaloge.xlsx", async (HttpContext context, StockReadService st
 // Delovni list strank (250): isti filtri kot na /stranke (podjetje, vloga, iskanje, tip, …), zato je
 // datoteka natanko to, kar uporabnik vidi. Uvoz nazaj je na /stranke/uvoz. Podjetje ni obvezno —
 // prazno pomeni vsa, vsaka vrstica nosi svoje podjetje.
-app.MapGet("/izvoz/stranke.xlsx", async (HttpContext context, CustomerListService customers, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+app.MapGet("/izvoz/stranke.xlsx", async (HttpContext context, CustomerListService customers, CustomerWorkbookService customerWorkbook,
+  HeavyWorkGate gate, CancellationToken cancellationToken) =>
 {
   using var lease = await gate.Exports.EnterAsync(cancellationToken);
   var query = context.Request.Query;
   var filter = CustomerListQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
   var rows = CustomerListService.Apply(await customers.GetAsync(filter.OrganizationId, cancellationToken), filter).ToList();
-  return Results.File(CustomerWorkbookService.Build(rows),
+  // 274: drugi list »S po tipih strank« — pravila posebnega S po tipu stranke, vračljiva z uvozom.
+  return Results.File(await customerWorkbook.BuildAsync(rows, filter.OrganizationId, cancellationToken),
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     CustomerWorkbookService.FileName(DateTime.UtcNow));
 }).RequireAuthorization(policy => policy.RequireRole(PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial));
@@ -364,7 +373,8 @@ app.MapGet("/izvoz/izdelki.csv", async (
     organizationId, 0, maximumRows, Value("isci"), Value("pogled"),
     Value("proizvajalec"), Value("dobavitelj"), Value("skupina"), Value("erp"), Value("splet"),
     Value("sort"), string.Equals(Value("smer"), "desc", StringComparison.OrdinalIgnoreCase),
-    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika")),
+    "sl", Value("oddelek"), Value("aktivnost"), Value("objava"), Value("popolnost"), Value("slika"),
+    PackagingDiscount: Value("spopust"), DiscountGroup: Value("rabatna"), SpecialFor: Value("posebni")),
     cancellationToken);
   var rows = page.Rows;
   var total = page.TotalCount;
@@ -442,7 +452,9 @@ app.MapGet("/izvoz/izdelki.xlsx", async (
     // Kategorija pride kot »drevo:koda«, ker sta kodi v dveh drevesih lahko enaki. Poleg vrstic
     // doloca tudi stolpce atributov: delovni list dobi nabor te kategorije.
     Value("kategorija")?.Split(':', 2) is { Length: 2 } category ? category[0] : null,
-    Value("kategorija")?.Split(':', 2) is { Length: 2 } code ? code[1] : Value("kategorija"));
+    Value("kategorija")?.Split(':', 2) is { Length: 2 } code ? code[1] : Value("kategorija"),
+    // 274: filtri S-popustov, isti kot na strani /izdelki.
+    Value("spopust"), Value("rabatna"), Value("posebni"));
 
   if (workbookTemplate)
   {
@@ -507,6 +519,10 @@ app.MapGet("/izvoz/opravila", (HttpContext context, ExportJobService exports) =>
 app.MapPost("/izvoz/opravila/{jobId:guid}/skrij", (Guid jobId, HttpContext context, ExportJobService exports) =>
   exports.Dismiss(jobId, context.User.Identity?.Name ?? "") ? Results.NoContent() : Results.NotFound());
 
+// Gumb »Prekliči« v oknu izvozov: ustavi tekoc ali cakajoc izvoz (npr. klik na »Izvozi« po pomoti).
+app.MapPost("/izvoz/opravila/{jobId:guid}/preklici", (Guid jobId, HttpContext context, ExportJobService exports) =>
+  exports.Cancel(jobId, context.User.Identity?.Name ?? "") ? Results.NoContent() : Results.NotFound());
+
 // Izvoz odprtih napak validacije: isti filtri kot na /kakovost/napake, enaka oblika zvezka kot
 // na /izdelki. Vrstica je obarvana po resnosti (rdeca = napaka, bleda oranzna = opozorilo) —
 // uporabnikova zahteva 2026-09-10.
@@ -562,6 +578,56 @@ app.MapGet("/izvoz/karantena.xlsx", async (
   var bytes = WorkbookWriter.Write("Karantena", columns, cells);
   return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "karantena-" + DateTime.UtcNow.ToPimLocal().ToString("yyyyMMdd-HHmm", System.Globalization.CultureInfo.InvariantCulture) + ".xlsx");
+}).RequireAuthorization();
+
+// 290: neskladja med podjetji — isti filtri kot na strani (OrganizationMismatchQuery) ali izbrane šifre (izbrani=a,b).
+// Pravico strani preveri tudi tu: povezava na datoteko obide stran.
+app.MapGet("/izvoz/neskladja-med-podjetji.xlsx", async (HttpContext context, OrganizationMismatchService mismatches,
+  RoleAccessService access, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+{
+  if (!await access.CanAccessAsync(context.User, "view.web.mismatches", cancellationToken)) return Results.Forbid();
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
+  var query = context.Request.Query;
+  var filter = OrganizationMismatchQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
+  var items = query["izbrani"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Distinct(StringComparer.Ordinal).Take(WorkbookTable.MaxRows).ToArray();
+  var workbook = await mismatches.BuildWorkbookAsync(items.Length > 0 ? new OrganizationMismatchFilter() : filter,
+    items.Length > 0 ? items : null, cancellationToken);
+  return Results.File(workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    $"PIM_neskladja_med_podjetji_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx");
+}).RequireAuthorization();
+
+// 284: izvoz analitike artiklov/dobaviteljev — isti filtri kot na strani (AnalyticsQuery), podjetje iz izbire
+// na strani. Prodajne številke so občutljive, zato poleg prijave preveri še pravico zavihka (ne samo RequireAuthorization).
+app.MapGet("/izvoz/analitika-artikli.xlsx", async (HttpContext context, AnalyticsService analytics, IntranetDataService data,
+  RoleAccessService access, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+{
+  if (!await access.CanAccessAsync(context.User, "tab.analytics.items", cancellationToken)) return Results.Forbid();
+  var organization = await data.GetCurrentOrganizationAsync(cancellationToken);
+  if (organization is null) return Results.BadRequest("Aktivna organizacija ni na voljo.");
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
+  var query = context.Request.Query;
+  var filter = AnalyticsQuery.FromQuery(name => string.IsNullOrWhiteSpace(query[name]) ? null : query[name].ToString());
+  var ids = query["izbrani"].ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Select(value => long.TryParse(value, out var id) ? id : 0).Where(id => id > 0).Distinct().ToArray();
+  var workbook = await analytics.BuildItemsWorkbookAsync(organization.OrganizationId, ids.Length > 0 ? new AnalyticsItemFilter() : filter,
+    ids.Length > 0 ? ids : null, cancellationToken);
+  return Results.File(workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    $"PIM_analitika_artikli_{organization.OrganizationId}_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx");
+}).RequireAuthorization();
+
+app.MapGet("/izvoz/analitika-dobavitelji.xlsx", async (HttpContext context, AnalyticsService analytics, IntranetDataService data,
+  RoleAccessService access, HeavyWorkGate gate, CancellationToken cancellationToken) =>
+{
+  if (!await access.CanAccessAsync(context.User, "tab.analytics.suppliers", cancellationToken)) return Results.Forbid();
+  var organization = await data.GetCurrentOrganizationAsync(cancellationToken);
+  if (organization is null) return Results.BadRequest("Aktivna organizacija ni na voljo.");
+  using var lease = await gate.Exports.EnterAsync(cancellationToken);
+  var query = context.Request.Query;
+  var workbook = await analytics.BuildSuppliersWorkbookAsync(organization.OrganizationId,
+    query["isci"].ToString(), query["razvrsti"].ToString(), query["smer"] != "nar", query["vsi"] != "1", cancellationToken);
+  return Results.File(workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    $"PIM_analitika_dobavitelji_{organization.OrganizationId}_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx");
 }).RequireAuthorization();
 
 // Izvoz validacijskih profilov (/pravila/validacija): en list na poslovni nivo (ERP_SLO,
@@ -678,6 +744,29 @@ app.MapGet("/izvoz/magento-datoteka/{profile}", async (string profile, MagentoAr
   {
     return Results.Problem("Dokončana datoteka trenutno ni dosegljiva. Preveri stanje na strani Izhod na splet.", statusCode: 409);
   }
+}).RequireAuthorization();
+
+// Ista izdelana datoteka kot zvezek za Excel: CSV je za Magento (decimalna pika, UTF-8 brez BOM),
+// slovenski Excel pa iz njega pokvari šumnike in decimalke.
+app.MapGet("/izvoz/magento-datoteka/{profile}/excel", async (string profile, MagentoArtifactService artifacts, CancellationToken ct) =>
+{
+  if (profile is not ("MAGENTO_PRODUCTS" or "MAGENTO_CUSTOMERS")) return Results.NotFound();
+  try
+  {
+    var (bytes, fileName) = await artifacts.ExcelAsync(profile, ct);
+    return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+  }
+  catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+  {
+    return Results.Problem("Dokončana datoteka trenutno ni dosegljiva. Preveri stanje na strani Izhod na splet.", statusCode: 409);
+  }
+}).RequireAuthorization();
+
+// 277: ugotovitve varovalke kot zvezek za Excel — prvo preverjanje po uvedbi ima lahko sto in več vrstic.
+app.MapGet("/varovalke/{id:long}/excel", async (long id, SafeguardService safeguards, CancellationToken ct) =>
+{
+  if (await safeguards.ExcelAsync(id, ct) is not { } workbook) return Results.NotFound();
+  return Results.File(workbook.Bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", workbook.FileName);
 }).RequireAuthorization();
 
 app.MapRazorComponents<App>()

@@ -1,0 +1,11 @@
+@* Dolga razlaga strani ne sodi v podnaslov (prenova 2026-09-26): glava ima eno vrstico, podrobnosti
+   so tu, zložene, za tistega, ki jih potrebuje. *@
+<details class="page-help">
+  <summary>@Summary</summary>
+  <div class="page-help-body">@ChildContent</div>
+</details>
+
+@code {
+  [Parameter] public string Summary { get; set; } = "Kako deluje";
+  [Parameter, EditorRequired] public required RenderFragment ChildContent { get; set; }
+}

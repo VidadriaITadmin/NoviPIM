@@ -1871,3 +1871,523 @@ ne sproži odloga za zdrava podjetja in še sproži odvisne posle. Ročna ustavi
 **Objekti:** `ops.EvaluateJobAlerts` (spremenjena), `ops.ScheduleProfile` (podatki).
 
 **Ročni korak po uvedbi:** ni potreben.
+
+## Nowodvorski katalog prek povezave (migracija 270_NowodvorskiXmlPrekoPovezave, 2026-09-23)
+
+`NW_XML` v `map.SourceFetchLocation` ni več `MAPA` (ročno odlaganje), ampak `HTTP` kot Braytron:
+`CredentialKey = Fetch:NW_XML`, `FileNamePattern = products_en_US.xml` (s končnico `.xml`, sicer bi prevzemnik
+shranil `NW_XML.dat`, ki ga `PIM.XmlFileWorker` ne bere), `MinIntervalMinutes = 360`, `Location = NULL`.
+Nočna uskladitev (00:30) datoteko prenese v `<LANDING_ROOT>\NW_XML` in jo nato prebere. Preizkušeno na
+razvoju: prenos 18,4 MB, ista oblika kot `fixtures\nw\products_en_US.xml`.
+
+**Objekti:** `map.SourceFetchLocation` (samo podatki).
+
+**Ročni korak po uvedbi:** da. V `appsettings.Local.json` ob intranetu na strežniku pod `"Fetch"` dodaj
+`"NW_XML": "https://pim.nowodvorski.com/xmlfeed/download/1/<žeton>"`. Brez tega prevzem javi napako
+»Naslov ni nastavljen«.
+
+## Šumniki v glavah izvoza (migracija 271_PopraviSumnikeVGlavahIzvoza, 2026-09-23)
+
+Na strežniku je `katalog.csv` imel glavi »Pakirna koliÄŤina« (217) in »Odprodaja - koliÄŤina« (234). Migraciji
+sta tekli skozi `sqlcmd` brez `-f 65001`, zato je bil UTF-8 prebran kot Windows-1250. `Invoke-PendingMigrations.ps1`
+ima `-f 65001` danes vgrajen; 271 popravi, kar je že v bazi (zaporedja `Ä`/`Ĺ` + drugi znak → č, Č, š, Š, ž, Ž, ć, Ć, đ),
+in pade, če ostane pokvarjen znak. Na bazi brez napake ne spremeni ničesar. Preizkušeno na razvoju v povrnjeni transakciji.
+
+**Objekti:** `out.ExportColumn.OutputColumnName` (samo podatki).
+
+**Ročni korak po uvedbi:** ne. Naslednji izvoz `katalog.csv` že nosi pravilne glave.
+
+## Sprememba polja SAOP velja v PIM takoj, v SAOP gre po odobritvi (migracija 273_NeposlanaSpremembaPimPredZajemomSaop, 2026-09-23)
+
+Pravilo (uporabnik 2026-09-23): sprememba polja SAOP (kartica, uvoz delovnega lista, popravek iz zgodovine) velja
+v PIM takoj in povsod. V SAOP ne gre nič samo: sprememba čaka odobritev na Čakalni vrsti, poslana je zadnja
+vrednost (starejša neposlana sprememba istega polja postane `Superseded`, `out.EnqueueMessage` od 046).
+
+- `map.ProcessRawInbox`: telo iz 240 + korak 8b. Zajem iz SAOP ne povozi polja, za katero ima artikel v
+  `out.OutboxMessage` (`SAOP_PRODUCT`) neposlano sporočilo (`PendingApproval`, `Pending`, `Retry`, `Sending`, `Error`).
+  `Sent` ni zaščiten, da potrditev odmeva (243) loči potrditev od odklona.
+- `intranet.GetOutboundMessages`: 20. stolpec `Value` (poslana vrednost). Zgodovina (`/saop/zgodovina`) iz izbranih
+  sporočil pripravi popravek (polje + vrednost, čaka odobritev).
+
+Preizkušeno na razvoju v povrnjeni transakciji: ponovna obdelava zajema 4768 — artikel s čakajočo spremembo obdrži
+vrednost iz PIM, artikel brez nje dobi vrednost iz SAOP; popravek in nadomestitev delujeta.
+
+**Objekti:** `map.ProcessRawInbox`, `intranet.GetOutboundMessages` (samo procedure).
+
+**Ročni korak po uvedbi:** ne. Potrebna je objava intranetu (kartica zdaj piše v PIM takoj, zgodovina ima popravek).
+
+## Katalog dobaviteljev (XML) kot svoj posel in prednost ročnih zahtev v pasu SAOP (brez migracije, 2026-09-23)
+
+Dobaviteljev XML (NW_XML, BT_XML) je bil samo korak nočne uskladitve. Ta kliče SAOP, zato čaka v pasu SAOP,
+v vrstnem redu je zadnja in na strežniku ni tekla nikoli: obstoječi artikli se niso bogatili, novi niso
+postali kandidati na /zajem/novi-artikli.
+
+Koda (`PIM.Automation`): nov posel `SUPPLIER_CATALOG_IMPORT` »Katalog dobaviteljev (XML)«, tok INPUTS, vsakih
+6 h, meja 90 min. Za vsak vir posebej: `PIM.SourceFetchWorker --source <vir>`, nato `PIM.XmlFileWorker` za
+vsako podjetje. Padel prevzem (npr. manjka `Fetch:NW_XML`) preskoči branje istega vira. Brez rezervnih
+fixtures. SAOP ne kliče. Med zajemom artiklov iz SAOP čaka (odvisnost brez vrat in brez sprožilca).
+Viri svežine NW_XML/BT_XML se premaknejo z `NIGHTLY_RECONCILIATION` na nov posel; nočni XML korak ostane kontrola.
+
+Pas SAOP: ročna zahteva (»Poženi zdaj«) za SAOP posel ima prednost. Redni SAOP posli ji prepustijo pas, dokler ne začne.
+
+Objekti v bazi: `ops.JobDefinition` (nova vrstica), `ops.JobDependency` (SUPPLIER_CATALOG_IMPORT → SAOP_PRODUCT_IMPORT),
+`ops.JobSource` (NW_XML/BT_XML pod novim poslom; pri nočni se izklopita). Vse zapiše gostitelj ob zagonu
+(`ops.EnsureJobDefinition`, `ops.EnsureJobSource`, `ops.RetireJobSources`).
+
+Ročni korak: **da** — na strežniku objaviti novo avtomatiko (PIM.AutomationHost) in v `appsettings.Local.json`
+ob intranetu imeti `Fetch:NW_XML` (glej 270) in `Fetch:BT_XML`, sicer posel pade na prevzemu z jasnim razlogom.
+
+## S-popusti: pravila po tipu stranke, stranki, rabatni skupini in S kodi (migracija 274_SPopustiPravilaPoTipuStrankiInSkupini, 2026-09-23)
+
+S-popust na polno pakiranje (Magento_Pravila_Cene_Popusti_Postnine §4.4, §4.5, §4.8) ima tri sloje:
+
+1. **privzeti S izdelka** (`pim.ProductPackagingDiscount`, od 020): velja za vse stranke s kljukico
+   »Popust polno pakiranje« pri količini ≥ PAK2. V katalog.csv gre v »Skupina popusta« in »S popust %«.
+2. **posebni S po tipu stranke**: npr. vsi inštalaterji dobijo na rabatni skupini BRAYTRON S3. V katalog.csv gre v nov
+   stolpec »Posebni S za skupino strank« (COL037B) kot `MAGENTO_SKUPINA\S3 | …`.
+3. **posebni S po stranki**. V katalog.csv gre v »Posebni popust za stranko« (COL037) kot `ŠIFRA_STRANKE\S2 | …`.
+
+Pravilo velja za en artikel (ITEM), rabatno skupino (ITEM_GROUP = `canon.Product.DiscountGroup`), vse artikle
+z dano privzeto S kodo (S_CODE) ali vse artikle (ALL). Zmaga najbolj specifično pravilo (artikel, S koda,
+skupina, vsi). Stranka ima prednost pred svojim tipom: tako to prikaže kartica stranke, Magento pa to
+pravilo uveljavi pri branju obeh stolpcev.
+
+- `b2b.PackagingDiscountRule` (nova tabela): vsa posebna S pravila, en veljaven zapis na cilj in obseg (filtriran unikaten indeks).
+- `b2b.CustomerPackagingDiscountOverride` (216) → preimenovana v `…_pred274`. Vrstice so prenesene v novo tabelo
+  (CUSTOMER/ITEM). Ime zdaj nosi **pogled** z istimi stolpci (bralci 129/250 delujejo naprej).
+- `b2b.PackagingDiscountSpecials(@OrganizationId, @OnDate)` (nova funkcija): učinkoviti posebni S na cilj in izdelek.
+- `b2b.SavePackagingDiscountRule`, `b2b.RemovePackagingDiscountRule` (novi, revizija `b2b.AuditLog`).
+  `b2b.SaveCustomerPackagingDiscountOverride` in `b2b.RemoveCustomerPackagingDiscountOverride` (216) pišeta prek njiju.
+- `pim.SaveProductPackagingDiscountsBulk` (nova): privzeti S več izdelkom (delovni list, cenik, seznam izdelkov),
+  zgodovina v `pim.ProductFieldHistory`. `pim.SavePackagingDiscountPercent` (nova): šifrant S kod.
+- `intranet.GetProductPackagingDiscount` (spremenjena, + nabor posebnih S), `intranet.GetProductPackagingDiscountSheet`,
+  `intranet.GetPackagingDiscountRules`, `intranet.GetCustomerPackagingDiscounts` (nove).
+- `intranet.GetProductList` (+ `@PackagingDiscount`, `@DiscountGroup`, `@SpecialFor`), `intranet.GetProductListFilters`
+  (+ faseta DISCOUNT_GROUP), indeks `IX_CanonProduct_OrgDiscountGroup`.
+- `out.GetExportRows` (oznaka `/* SpecialS274 */`), `out.ExportColumn` (COL037B na koncu profila MAGENTO_PRODUCTS, za dodatki 234 — prvih 176 stolpcev predloge Magenta ostane na mestu).
+- `intranet.GetCustomerList`: `SpecialDiscounts` v zapisu `ARTIKEL\S2 | SKUPINA:koda\S3 | S:S2\S3 | *\S3`.
+
+Začasne tabele v procedurah imajo `COLLATE DATABASE_DEFAULT`, ker je kolacija tempdb lahko druga kot kolacija baze
+(na DAVID\MSSQL19: Slovenian_CI_AS proti SQL_Latin1_General_CP1_CI_AS, Msg 4191).
+
+Intranet: filtri in »S-popust …« (za izbrane izdelke ali cel pogled) na /izdelki, kartica izdelka (Komerciala), kartica stranke,
+Pravila → Komercialna pravila → S-popusti. Delovni list izdelkov ima stolpce »S koda« (sprejme tudi »Skupina popusta« iz cenika),
+»Posebni S — tipi strank« in »Posebni S — stranke«. Uvoz prebere vse liste z istimi stolpci. VPAK iz cenika samo primerja
+s PAK2 in ga ne zapiše, ker je to podatek SAOP. Delovni list strank ima drugi list »S po tipih strank«.
+
+**Ročni korak po uvedbi:** ne. Magento mora brati nov stolpec »Posebni S za skupino strank«.
+
+## Odprodaja: pregled, ročni vnos in razstavni eksponat (migracija 275_OdprodajaPregledInRocniVnos, 2026-09-23)
+
+Odprodaja je zdaj ena stran v intranetu: **Izdelki → Odprodaja** (`/izdelki/odprodaja`; stara pot
+`/izdelki/uvoz-odprodaje` vodi na isto stran). Na njej so številke, tabela vseh artiklov v odprodaji (urejanje
+količine, popusta in oznake razstavni eksponat, zaključitev, obnova), ročni vnos enega artikla in uvoz seznama iz Excela.
+Na kartici izdelka (zavihek Odprodaja) je ročni vnos pod virom »Ročno«.
+
+Izvoz se ne spreminja: katalog.csv že od 234 bere `pim.ClearanceItem` (najnovejša aktivna vrstica artikla,
+Odprodaja = DA pri količini > 0) in `pim.ProductFlag` RAZSTAVNI_EKSPONAT.
+
+- `pim.SetShowcaseFlags` (nova): oznaka RAZSTAVNI_EKSPONAT za več artiklov naenkrat, z zgodovino.
+- `pim.SaveClearanceItem` (nova): en artikel v odprodajo ali popravek vrstice istega vira; `@Razstavni` NULL ne spreminja oznake.
+- `pim.SaveClearanceItems` (spremenjena): JSON vrstica ima `razstavni` (uvoz bere stolpec »Razstavni eksponat«;
+  1/da/x = DA, prazno = NE, brez stolpca oznake ne spreminja). Samodejno zaključene vrstice počistijo oznako.
+- `pim.EndClearanceItem` (spremenjena): ob zaključitvi počisti oznako, kadar artikel nima druge aktivne odprodaje.
+- `intranet.GetClearanceOverview` (nova): tabela strani, vključno s spletnimi stranmi in »gre v katalog.csv«.
+- `sec.RolePermission`: nova pravica `view.products.clearance` za ADMIN, CATALOG_EDITOR, COMMERCIAL.
+
+Namerno ločeno od `Product.ClearancePercent` na `/splet/katalog` (204/207, oddelčni popust X/O), ki ostane, kot je.
+
+**Objekti:** procedure zgoraj + vrstice v `sec.RolePermission`. Tabel ne spreminja.
+
+**Ročni korak po uvedbi:** ne (migracija + objava intranetu).
+
+## Meja svežine vira na strani posla (migracija 276_MejaSvezineVirovNaStrani, 2026-09-24)
+
+Meja svežine vira (kako stari smejo biti podatki, preden je posel na Nadzoru rdeč in se odpre alarm
+`SourceStale`) je bila samo v kodi (`JobCatalog.Sources`); gostitelj jo ob vsakem zagonu prepiše z
+`ops.EnsureJobSource`. Zdaj jo skrbnik nastavi na **Nadzor → posel → 5. Nastavitve → Meja svežine virov**
+(v urah, velja za vir v vseh podjetjih). »Nazaj na kodo« preglas odstrani.
+
+- `ops.JobSource.MaxAgeSecondsOverride` (nov stolpec, NULL = velja koda; 60 s–30 dni). `MaxAgeSeconds` ostane
+  meja iz kode, ki jo `ops.EnsureJobSource` še naprej usklajuje — preglasa ne pozna, zato ga ne prepiše.
+- `ops.JobSourceState()` (spremenjena): `MaxAgeSeconds` je veljavna meja (preglas ali koda), nova stolpca
+  `DefaultMaxAgeSeconds` in `IsMaxAgeOverridden`. Stanje Stale in alarm `SourceStale` (`ops.EvaluateJobAlerts`
+  bere to funkcijo) sledita meji s strani brez spremembe procedure alarmov.
+- `intranet.GetJobSourceState` (spremenjena): vrne še `DefaultMaxAgeSeconds`, `IsMaxAgeOverridden`.
+- `intranet.SetJobSourceMaxAge` (nova): zapis preglasa; NULL ali vrednost enaka kodi preglas odstrani.
+  Sled zapiše intranet (`JOB_SOURCE_MAX_AGE`).
+
+Ni isto kot razmik posla (`ops.JobDefinition.IntervalSeconds`, kako pogosto teče) ali časovna meja
+(`TimeoutSeconds`, kako dolgo sme en tek trajati).
+
+**Objekti:** `ops.JobSource` (stolpec + CHECK), `ops.JobSourceState`, `intranet.GetJobSourceState`, `intranet.SetJobSourceMaxAge`.
+
+**Ročni korak po uvedbi:** ne (migracija + objava intranetu; intranet brez 276 pokaže mejo iz kode brez urejanja).
+
+## Slike, ki jih dobavitelj ne pošilja več, na konec galerije + vse slike iz XML (migracija 278_StareSlikeNaKonecGalerije, 2026-09-24)
+
+Stran Media za NW_XML je šla v karanteno pri vseh podjetjih: dvojnik na `UQ_CanonProductMedia_ProductRoleSort`.
+Nowodvorski je pri nekaterih artiklih (org 2: 44) umaknil glavno sliko. MERGE v `map.ProcessRawInbox` (korak 13)
+slike ujema po (ProductId, Url), zato sta nova in stara glavna slika obe ostali na PRIMARY/1. Ker je cela
+stran ena transakcija, se ni posodobila nobena NW slika.
+
+Objekti: `map.ProcessRawInbox` (korak 13, oznaka `/* 278 */`, zamenjava besedila kot 261, ponovljivo).
+- Pred MERGE: pri artiklih, ki jim stran prinaša vsaj eno sliko, se slike, ki jih na strani ni, umaknejo
+  na SortOrder 100000+. PRIMARY postane GALLERY, AMBIENT ostane AMBIENT.
+- Po MERGE: umaknjene slike dobijo zaporedje takoj za slikami vira, v prejšnjem vrstnem redu.
+  Nič se ne briše (uporabnik: stare na konec galerije; kasneje arhiv slik na naš strežnik).
+
+Koda v istem commitu (`PIM.XmlMapping`): ekstraktor je za vsako preslikavo vzel samo prvi zadetek in
+`map.FieldMapping.IsMultiValue` ni poznal (izgubljeno po koncu avgusta; zadnja stran z ValueOrdinal > 1 je 2706).
+Iz NW XML je zato prišla samo prva slika na artikel. Zdaj večvrednostna preslikava (slike, vrste slik,
+dokumenti NW/BT) vrne vse zadetke z `map.ExtractedValue.ValueOrdinal` 1..n. Preslikave SAOP niso večvrednostne.
+
+Ročni korak: ne za migracijo. Strani v karanteni se ne ponovijo same; ob naslednji novi NW datoteki
+(posel Katalog dobaviteljev, 6 h) gredo slike skozi popravljeno pot. Za objavo potreba nova izdaja workerjev
+(PIM.XmlFileWorker, PIM.KatalogWorker zaradi skupne knjižnice PIM.XmlMapping).
+
+## Varovalke: katalog.csv pred objavo + cene z decimalno vejico, ločilo podpičje (migracija 277_VarovalkeKatalogCsv, 2026-09-24)
+
+Uporabnik 2026-09-23/24: »katalog ni dal vejice cenam in smo imeli napačne cene na svetilih«, »kljukice za splet niso
+delovale«, varovalke »ne blokirajo procesov, ampak samo opozorijo in mora uporabnik ponovno potrditi«; »dej cenam vejico in
+pa ločilo naj bo ; ne pa vejica« (cena `29,78`, brez narekovajev); »če ima en artikel prazno polje, se ostali pojavijo v
+CSV, ta pa ne sme biti v CSV in mora čakati odobritev«.
+
+Worker (`PIM.B2bWorker`, `CatalogSafeguard`) po zapisu katalog.csv in pred zamenjavo datotek pokliče
+`ops.EvaluateCatalogSafeguards`. Ta vrne izid in seznam **zadržanih artiklov**; worker prepiše datoteko brez njihovih vrstic
+(`RegistryCsvWriter.CopyWithoutAsync`, bajt za bajtom) in objavi ostalo. Zadržan artikel na spletu ostane s prejšnjimi podatki
+(Magento artiklov, ki jih ni v datoteki, ne spreminja; nov artikel tja ne pride), obdrži izhodišče cen in stanje v
+`out.WebPublication`. Posel se vedno konča uspešno; faza DATOTEKA v sporočilu pove, koliko artiklov je zadržanih in zakaj.
+Uporabnik potrdi na `/varovalke/{id}` posamezne ugotovitve ali vse; potrditev (`ops.SafeguardApproval`, prstni odtis: pravilo,
+artikel, polje, spletišče, prej, zdaj) velja 14 dni, ob potrditvi se odda zahteva za zagon `WEB_CATALOG_EXPORT`. Če napako
+popravi (npr. ceno v SAOP), je naslednji izvoz ne najde več in artikel gre ven sam. Napaka varovalke dostave ne ustavi
+(datoteka gre ven brez preverjanja, opozorilo v zvoncu).
+
+- `out.ExportColumn.DecimalSeparator` (nov stolpec, ',' = število z decimalno vejico) in `GuardKind` ('PRICE' = preverja
+  varovalka cen). Nastavljeno za Cena B2B/Cena B2C (MAGENTO_PRODUCTS, MAGENTO_STOCK_PRICES). Ostala števila ostanejo s piko.
+  `out.GetExportRows` ostane s piko (po njej računa varovalka); vejico postavi zapis datoteke (`PIM.B2b.ExportValueFormat`)
+  in ročni prenos na /splet.
+- `out.ExportProfile.FieldDelimiter` (nov stolpec, ',' ali ';'): MAGENTO_PRODUCTS (katalog.csv) in MAGENTO_CUSTOMERS
+  (stranke.csv) = ';', ostali profili (cene in zaloga) ostanejo ','. Vrednost se da v narekovaje samo, če vsebuje ločilo, `"` ali prelom vrstice.
+- `ops.SafeguardRule` (nova): pravila po področjih (zdaj `KATALOG_CSV`), besedila, prag, najmanj artiklov, ali zadrži artikel
+  (`RequiresConfirmation`; samo pravila o artiklu, `CanHold = 1`), vklop — nastavljivo na /varovalke (samo ADMIN). Pravila:
+  KAT_CENA_OBLIKA (ni število), KAT_CENA_VEJICA (×10/×100/×1000 ±2 %), KAT_CENA_NIC (0 ali negativna), KAT_CENA_PRAZNA,
+  KAT_CENA_SKOK (prag 25 %) — vse zadržijo artikel; KAT_SPLET_UMIK (gre s spleta; zadrži od 10 artiklov naprej),
+  KAT_VRSTICE (padec artiklov na spletu, prag 10 % — opozorilo o celoti), KAT_KLJUKICA_NE_GRE (nova kljukica, artikel ne
+  gre — opozorilo), KAT_SPLET_NOVI (informacija). Nova področja (SAOP, zaloga, viri) so nove vrstice + svoja procedura.
+- `ops.SafeguardCheck`, `ops.SafeguardFinding` (novi): preverjanje (CLEAN/WARNED/WAITING = so zadržani/CONFIRMED/SUPERSEDED),
+  število zadržanih (`HeldCount`), artiklov na spletu (`PublishedRows`, `PreviousPublishedRows`), ugotovitve po artiklu (prej,
+  zdaj, sprememba, razlog, prstni odtis, `RequiresConfirmation` = zadržan). Zadržan ostane zadržan tudi, ko pade pod prag.
+  Čakajoče preverjanje z enakimi nepotrjenimi ugotovitvami se osveži, ne podvoji. Čiščenje: nadomeščena po 2 dneh,
+  podrobnosti objavljenih po 30, vse po 120 dneh.
+- `ops.SafeguardApproval` (nova): potrjene ugotovitve (kdo, kdaj, opomba) — velja 14 dni, izbriše se po 120 dneh.
+- `out.CatalogPublishedValue` (nova): cene zadnjega objavljenega katalog.csv (izhodišče primerjave), piše
+  `out.RecordCatalogPublication` po uspešni zamenjavi — brez zadržanih artiklov (`@HeldItemsJson`).
+- `pim.WebShopReason(@OrganizationId)` (nova funkcija): za vsako kljukico, ali artikel gre na spletišče in zakaj ne (UNCHECKED,
+  INACTIVE, EXCLUDED, HOLD, NO_CATEGORY, BLOCKED_ERRORS + polja, NOT_VALIDATED, NOT_PROMOTED) — po pravilih #Site v out.GetExportRows.
+- Procedure: `ops.EvaluateCatalogSafeguards`, `out.RecordCatalogPublication`, `ops.ApproveSafeguardFindings` (izbrane ali vse),
+  `ops.SaveSafeguardRule`, `intranet.GetSafeguardRules`, `intranet.GetSafeguardChecks`, `intranet.GetSafeguardCheck`,
+  `intranet.GetWebShopBlocked` (kljukice, ki ne gredo na splet), `intranet.GetWebWithdrawnItems` (umaknjeni s spleta z razlogom).
+- Opozorilo `SafeguardPending` (zvonec → /varovalke): CHECK naročnin, naročnina skrbnikov, `intranet.GetUserAlertSubscriptions`
+  (dopolnjena živa definicija), `intranet.GetMonitorAlerts` (podatkovna vrsta, ni na Nadzoru; enako `MonitorPolicy.IsDataAlert`).
+- `sec.RolePermission`: `page.safeguards` za ADMIN, CATALOG_EDITOR, VIEWER, COMMERCIAL. Potrdi lahko ADMIN, CATALOG_EDITOR, COMMERCIAL.
+
+Intranet: `/varovalke` (čaka potrditev, zgodovina, pravila), `/varovalke/{id}` (zadržani artikli z izbiro in potrditvijo
+izbranih ali vseh, razlogi umikov v vrsticah s števili, Excel), pasica na `/splet`, `/splet/umaknjeni` z zavihki Umaknjeni s
+spleta (vsi umiki z razlogom + vrnitev kljukic v enem koraku), S kljukico, a ne gredo na splet, Samodejni umik (251).
+Predogled in Excel na /splet prepoznata ločilo iz glave datoteke.
+
+**Objekti:** zgoraj. Migracija preveri, da je datoteka prebrana kot UTF-8 (`THROW 52700` sicer).
+
+**Ročni korak po uvedbi: DA — uvoznik Magento.** katalog.csv ima od te migracije ločilo `;` in cene z decimalno vejico brez
+narekovajev (`A-1;13,02;1.5`). Uvoz katalog.csv in stranke.csv na Magento (svetila) mora biti nastavljen na ločilo `;` **preden** se objavi nov
+`PIM.B2bWorker`, sicer Magento prebere vso vrstico kot en stolpec. Enako za stranke.csv (tudi ločilo `;`). Prvi izvoz po uvedbi še nima
+objavljenih cen za primerjavo: artikli s prazno ceno ali ceno 0 so enkrat zadržani (/varovalke), po potrditvi ne več.
+Objava: migracija + intranet + `PIM.B2bWorker`.
+
+## Baza kupcev ViD: referent, dodatni popust P2, prodajni kontakti in opombe (migracija 279_BazaKupcevDodatniPopustInKontakti, 2026-09-24)
+
+Pregled Excela »Baza kupcev_ViD_2026.xlsx« (listi B2B, Tujina, Dodatna pravila za artikle, Opombe strank 2.2026)
+proti PIM: popusti R1–R7, VD1 … TT so kopija SAOP rabatnega cenika (1.818 enakih, 10 različnih) in ostanejo v
+SAOP. Manjkalo je: drugi popust »NW-P2« (7 %, ki ga prodaja vpiše v P2 naročila), referent, e-pošta za dobavnice
+in obveščanje, skrbnik in opombe v delovnem listu.
+
+- `b2b.Customer.SalesClerkCode` (nov stolpec) iz SAOP `<SalesClerkID>`: preslikava `Customers → Customer.SalesClerkCode`
+  za vse SAOP konektorje, `map.ProcessCustomerInbox` popravljen na živi definiciji (5 zamenjav besedila, kot 253).
+  Obstoječe stranke dobijo vrednost iz zadnje že zajete strani `raw.Inbox` (Vidadria 2.744, IQLighting 3.723, Ediito 477).
+- `pim.SalesClerk` (nova): imena referentov po podjetju. SAOP imen v zajetih entitetah ne pošilja; Vidadria je
+  napolnjena iz Excela (8 referentov).
+- `pim.CustomerExtra` + `b2b.SaveCustomerExtra` (nova): skrbnik (ročno), e-pošta za dobavnice, e-pošta in oseba za
+  obveščanje. Ločeno od `pim.CustomerContact`, ker kontakt gre v stranke.csv, ta polja pa ne. Sled `CustomerExtra`.
+- `b2b.CustomerExtraGroupDiscount` + `b2b.SaveCustomerExtraGroupDiscount` / `b2b.RemoveCustomerExtraGroupDiscount`
+  (nova): dodatni popust stranke po skupini artiklov; ena aktivna vrstica na stranko in skupino. Sled `CustomerExtraGroupDiscount`.
+- `b2b.CustomerGroupDiscounts` (spremenjena): dodatni popust se obračuna **za** osnovnim (kot P2 za P1 v SAOP):
+  `100 − (100 − osnovni) × (100 − dodatni) / 100` (NW 39 % + 7 % = 43,27 %); brez osnovnega velja sam (vir `EXTRA`,
+  velja tudi za tranzit — ročna odločitev kot pri 253). Nova stolpca `BasePercent`, `ExtraPercent`. Isti rezultat
+  berejo stranke.csv (`out.GetExportRows`), stran Stranke in kartica.
+- `intranet.GetCustomerCard` nabor 2 (popravljen): vir »dodatni popust stranke« oz. »… + dodatni 7 %«.
+- `intranet.GetCustomerListExtra` (nova): referent, skrbnik, e-pošte, dodatni popusti in opombe za stran Stranke in
+  delovni list (`intranet.GetCustomerList` ostane nespremenjena).
+
+Delovni list strank (`/izvoz/stranke.xlsx`, `/stranke/uvoz`) ima nove stolpce: »Dodatni popust po skupinah (P2)«,
+»Referent (SAOP)« (samo branje), »Skrbnik«, »E-pošta za dobavnice«, »E-pošta za obveščanje«, »Oseba za obveščanje«,
+»Dodaj opombo« (doda zaznamek, enak obstoječemu se ne podvoji) in »Opombe« (samo branje).
+
+**Ni narejeno:** privzeti popusti po tipu iz vrstic TRGOVINE/INŠTALATERJI (ročni popust tipa bi prevladal nad SAOP
+ceniki strank), list »Dodatna pravila za artikle« (prosto besedilo).
+
+**Objekti:** `b2b.Customer` (stolpec), `map.FieldMapping` (vrstice), `map.ProcessCustomerInbox`, `pim.SalesClerk`,
+`pim.CustomerExtra`, `b2b.SaveCustomerExtra`, `b2b.CustomerExtraGroupDiscount`, `b2b.SaveCustomerExtraGroupDiscount`,
+`b2b.RemoveCustomerExtraGroupDiscount`, `b2b.CustomerGroupDiscounts`, `intranet.GetCustomerCard`, `intranet.GetCustomerListExtra`.
+
+**Ročni korak po uvedbi:** ne (migracija + objava intranetu; migracija teče ~40 s zaradi branja XML strani strank).
+Skripto poganjaj z `sqlcmd -I` (Invoke-PendingMigrations.ps1 to dela), brez tega pade na QUOTED_IDENTIFIER.
+
+## Zgodovina uvozov in povratek (migracija 280_ZgodovinaInPovratekUvozov, 2026-09-24)
+
+Uporabnik 2026-09-24: »hitra sprememba samo za eno polje ni uporabna; mišljeno je, da ko se spremenijo artikli, da se
+povrne — pri uvozih artiklov, cen, strank in SAOP«. Do zdaj uvoz ni imel identitete (uvoz izdelkov je nastal kot
+desetine serij v `pim.ProductChangeBatch`, uvoz cen prejšnjih vrednosti ni shranil nikjer), zato ga ni bilo mogoče ne
+pokazati kot celote ne povrniti.
+
+- `ops.ImportRun` (nova): en zapis na uveljavljen uvoz (IZDELKI, CENE, STRANKE): datoteka, kdo, kdaj, vrstic, sprememb,
+  koliko v SAOP, skupine v odhodni vrsti, opozorila, pri strankah `Snapshot` (vrstice seznama strank pred uvozom, JSON),
+  povezava povratka (`UndoOfImportRunId`, `UndoneByImportRunId`, `UndoneUtc`, `UndoneBy`).
+- `ops.ImportRunChange` (nova): vsaka spremenjena celica — vrstica (šifra artikla, ključ stranke, »cenik|šifra«), polje,
+  naslov stolpca, prej → potem, PIM ali SAOP, vrsta vrednosti (TEXT/BOOL/NUMBER). »Prej« zajame predogled uvoza tik
+  pred zapisom (izdelki: `ProductWorkbookRowChange.OldValues`; cene: `PriceImportRow.Old*`; stranke: predogled).
+- `ops.RecordImportRun`, `intranet.GetImportRuns`, `intranet.GetImportRun`. Čiščenje: starejši od 180 dni.
+- `sec.RolePermission`: `page.imports.history` za ADMIN, CATALOG_EDITOR, VIEWER, COMMERCIAL.
+
+Intranet: `/uvozi` (seznam uvozov), `/uvozi/{id}` (spremembe prej → potem, stanje v vrsti za SAOP, »Prekliči, kar še
+čaka v SAOP« in »Pripravi povratek«). Povratek ni nova pot zapisa: odpre stran uvoza (`izdelki/uvoz`, `cene/uvoz`,
+`stranke/uvoz`) s `?povrni=N` in običajnim predogledom prejšnjih vrednosti; zapiše se kot vsak uvoz in se sam zabeleži
+kot uvoz z `UndoOfImportRunId`. Pravila:
+- Povrne se samo celica, ki ima še vrednost uvoza; kar je po uvozu spremenil kdo drug, je spor in ostane (našteto).
+- ERP polja izdelkov gredo v PIM takoj in v vrsto za SAOP s stanjem PendingApproval (nikoli samodejno); starejše
+  čakajoče sporočilo uvoza za isto polje postane Superseded. Prazne vrednosti v SAOP ni mogoče poslati (graditelj
+  dokumenta prazno izpusti) — tako polje se ne povrne in se pove.
+- Cene: povrne se samo cena, ki jo je zajem že prinesel iz SAOP; kjer je v PIM še stara cena, je pravi povratek
+  preklic čakajoče serije (`out.CancelOutboundBatch`, gumb na `/uvozi/{id}`). Nova cena se v SAOP ne da izbrisati,
+  povratek jo izklopi (Aktivna = N).
+- Stranke: povratek sestavi delovni list strank samo s celicami, ki jih je uvoz spremenil (prej prazno → »-«).
+  Zaznamkov, pravil »S po tipih strank« in ustvarjenega B2B profila ne vzame nazaj (pove).
+
+**Objekti:** `ops.ImportRun`, `ops.ImportRunChange`, `ops.RecordImportRun`, `intranet.GetImportRuns`, `intranet.GetImportRun`,
+`sec.RolePermission` (vrstice).
+
+**Ročni korak po uvedbi:** ne (migracija + objava intranetu). Zgodovina se piše od uvedbe naprej; starejših uvozov ni.
+
+## Varovalke pošiljanja v SAOP (migracija 281_VarovalkeSaop, 2026-09-24)
+
+Uporabnik 2026-09-24: »če je že en neaktiven, moraš opozoriti in potrebna je potrditev; uporabnik mora vedeti, katerim
+se je spremenila vrednost«; »nisem mislil, da moraš na druge strani skakati — če je artikel aktiven, takoj v SAOP; če je
+neaktiven, ti javi toliko artiklov je neaktivnih in se vidi seznam«; »dej mi še ostale varovalke notri«.
+
+Ob odobritvi (skupina, artikel, sporočilo) gre v SAOP vse, kar ni sumljivo; sumljiva sporočila ostanejo PendingApproval.
+Stran odobritve (`/outbound`, `/izvozi/mnozicno`, `/saop/artikli`, zavihek »V SAOP« na `/cene`) jih takoj pokaže s seznamom
+(šifra, naziv, prej → potem, od kod, kdo) in gumbom »Da, prav je — pošlji v SAOP«. Isti seznam je na `/varovalke`.
+
+- Pravila (`ops.SafeguardRule`, področje `SAOP`): SAOP_NEAKTIVEN (že en artikel), SAOP_CENA_VEJICA (×10/×100/×1000 ±2 %
+  glede na trenutno ceno), SAOP_CENA_NIC, SAOP_CENA_SKOK (prag 25 %), SAOP_CENA_IZKLOP, SAOP_KLJUCNO (EAN, enota, skupina
+  obstoječega artikla), SAOP_MNOZICNO (isto polje v skupini pri ≥ 100 artiklih, brez novih artiklov), SAOP_STARO (v vrsti > 7 dni).
+- `ops.IsSaopDeactivation`, `ops.SaopHeldMessage` (sporočilo × pravilo, nepotrjeno; potrditev velja za sporočilo),
+  `ops.SaopHeldForApproval` (+ ostala polja iste cene — cena gre v SAOP kot celota).
+- `out.ApproveMessage`, `out.ApproveItemDocument`, `out.ApproveOutboundBatch` (spremenjene): zadržana preskočijo; posamična
+  odobritev zadržanega vrne 52901; skupina in artikel vrneta tudi `Zadrzanih`.
+- `intranet.GetSaopHeldMessages`, `ops.ConfirmSaopHeldMessages` (seznam in potrditev na mestu, hkrati odobri za pošiljanje),
+  `ops.EvaluateSaopSafeguards` (preverjanje področja SAOP + zvonec), `ops.OnSafeguardApproved` (potrditev na `/varovalke/{id}`).
+- 277: `ops.SafeguardFinding.SourceRef`, klic `ops.OnSafeguardApproved` iz `ops.ApproveSafeguardFindings`.
+- `out.EnqueueMessage` (popravek žive definicije): deaktivacija je vedno PendingApproval.
+
+PIM vrednost (npr. `canon.Product.IsActive`) uvoz zapiše takoj kot doslej (245) — varovalka zadrži samo pošiljanje v SAOP.
+
+**Objekti:** zgoraj. **Ročni korak po uvedbi:** ne (277 pred 281; objava intranetu).
+
+## Varovalka datoteke cen in zaloge za splet (migracija 282_VarovalkaCenInZaloge, 2026-09-24)
+
+Datoteka cen in zaloge (MAGENTO_STOCK_PRICES) gre na Magento vsakih nekaj minut in nosi cene — varovalka katalog.csv je
+ni pokrivala. Worker (`MagentoExportCommand.ExportProfileFileAsync`) pred zamenjavo pokliče
+`ops.EvaluateStockPriceSafeguards`; sumljive artikle izpusti (na spletu ostanejo s prejšnjo ceno in zalogo), ostale objavi
+in zapiše izhodišče (`out.RecordExportPublication`). Prvi zagon samo zapiše izhodišče.
+
+- `out.ExportColumn.GuardKind` dovoli še `STOCK`; nastavljeno za MAGENTO_STOCK_PRICES (Cena B2B/B2C = PRICE,
+  VID razpoložljiva količina = STOCK).
+- `out.ExportPublishedValue` (nova): vrednosti zadnje objavljene datoteke po profilu.
+- Pravila (področje `ZALOGA_CSV`): ZAL_CENA_VEJICA, ZAL_CENA_NIC, ZAL_CENA_PRAZNA, ZAL_CENA_SKOK (25 %) — vse glede na zadnjo
+  objavo; ZAL_ZALOGA_NIC (zaloga z >0 na 0 pri ≥ 20 artiklih hkrati); ZAL_VRSTICE (padec artiklov > 20 %, opozorilo).
+- 277: potrditev področja `ZALOGA_CSV` zahteva zagon `WEB_STOCK_EXPORT`.
+
+**Objekti:** zgoraj. **Ročni korak po uvedbi:** ne. Opomba: ta datoteka ima ločilo `,`, zato so cene z vejico v narekovajih.
+
+## Varovalka zaloge virov (migracija 283_VarovalkaZalogeVirov, 2026-09-24)
+
+Nov posnetek zaloge vira (NW_STOCK, BT_STOCK, zajem zaloge iz SAOP) v celoti nadomesti prejšnjega — okrnjena ali prazna
+datoteka bi pobrala zalogo vsem artiklom vira. `StockLandingWriter.PersistAsync` pred zapisom pokliče
+`ops.EvaluateStockFeedSafeguards`; ob prevelikem padcu posnetka ne zapiše (velja prejšnji), faza ZAPIS je preskočena z
+razlogom, v zvoncu je opozorilo. Po potrditvi na `/varovalke/{id}` naslednji zajem iste datoteke (isto število vrstic in
+vrstic z zalogo) posnetek zapiše.
+
+- Pravila (področje `ZALOGA_VIR`): ZALV_VRSTICE (manj artiklov za > 30 %), ZALV_NIC (artiklov z zalogo > 0 manj za > 50 %,
+  vsaj 20 v veljavnem).
+- XML katalog dobaviteljev nima varovalke: ne briše artiklov, praznih vrednosti ne zapiše in ne nosi cen.
+
+**Objekti:** `ops.EvaluateStockFeedSafeguards`, pravila. **Ročni korak po uvedbi:** ne (objava `PIM.StockFileWorker`,
+`PIM.SaopStockWorker`).
+
+## Analitika prodaje, zalog in nabave (migracija 284_AnalitikaProdajeZalogInNabave, 2026-09-24/25)
+
+Uporabnik: »naredi analitiko v PIM-u … koliko se kaj proda, mesečni trend po dobaviteljih in artiklih, koliko česa naročiti, katera zaloga je zaležana« in »naredi worker, ki prebere vse te podatke, da se samo priklopim v omrežje«. Nova shema `ana`; nič ne piše v SAOP in se ne dotika `canon`/`pim`/`out`.
+
+- **Vhodne tabele** (polni `PIM.SaopAnalyticsWorker`, samo GET): `ana.SalesInvoiceLine` (Invoice/GetInvoices; račun se zamenja v celoti), `ana.CustomerOrderLine` (Barkawi/GetCO), `ana.PurchaseOrderLine` (Barkawi/GetPO, izračunan `LeadTimeDays`), `ana.ItemPurchaseInfo` (Barkawi/GetSKU), `ana.SourcePage` (surovi odgovori 30 dni za `--razcleni-znova`), `ana.StreamState` (vodni žig in svežina toka).
+- **Zaloga v času:** `ana.StockDaily` — dnevni posnetek lastne zaloge iz vira BASE (`out.ExportStockSource`), zaloga NW/BT se ne šteje; hrani ~26 mesecev (`ana.CaptureStockDaily`).
+- **Preračun:** `ana.RefreshAnalytics @OrganizationId` prepiše `ana.ItemMonthly`, `ana.ItemMetric`, `ana.SupplierMetric` (ena transakcija na tabelo, brez zanke po artiklih; podjetje 2 ≈ 15 s). Vir prodaje po prednosti: računi → `sales.OrderLine.ShippedQTY` → Barkawi CO. Formula in pravila so v glavi postopka.
+- **Nastavitve:** `ana.Setting` po podjetju (z, razmik naročil, privzeti dobavni čas, obdobje, meje zaležanosti/presežka, cenik nabavne cene), sprememba prek `ana.SaveSettings` piše `ana.SettingHistory` (prej/potem, kdo).
+- **Branje za intranet:** `ana.GetOverview`, `ana.GetItemMetrics` (strežniško listanje, iskanje brez šumnikov, števci po signalih, izbrani po `@ProductIdsJson`), `ana.GetSupplierMetrics`, `ana.GetItemDetail`, `ana.GetSettings`.
+- **Razpored** `SAOP_ANALYTICS` (2, 3, 4 vklopljeno, DEMO izklopljeno); **pravice** `page.analytics` in zavihki `tab.analytics.*` za ADMIN in COMMERCIAL.
+
+**Objekti:** shema `ana` (11 tabel, 14 postopkov), vrstice v `ops.ScheduleProfile` in `sec.RolePermission`. **Ročni korak po uvedbi:** ne; objaviti `PIM.SaopAnalyticsWorker` (Publish-Workers.ps1 ga najde sam) in intranet. Prvi zagon v omrežju: `PIM.SaopAnalyticsWorker --preizkus` (vzorci in polja, v bazo ne piše), nato `PIM.SaopOrdersWorker --zgodovina-od 2023` (enkratni zajem zgodovine naročil po številkah).
+
+**Brez migracije, ista sprememba:** `PIM.SaopOrdersWorker` bere naročila VNK/VND tudi po številkah (`OrderSweep`): `GetOrderStatus` za VNK ni vrnil ničesar, `GetOrder/{leto}/{knjiga}/{številka}` pa dela. Redni tek od največje številke v `sales.OrderHeader`/`purch.PurchaseOrderHeader` naprej (konec po `OrderSweepTailGap` zaporednih manjkajočih, največ `OrderSweepTailMaxCalls` klicev), odprta naročila znova enkrat na `OrderOpenRefreshHours` ur (zaznamek `GetOrder:ODPRTA` v `map.Watermark`).
+
+## Katalog iz več podjetij (migracija 285_KatalogIzVecPodjetij, 2026-09-25)
+
+Uporabnik: IQ in ViD artikli v katalog.csv brez podvajanj, »svetila samo IQ, videlektro oba«; stranke obeh podjetij (Anja Zorenc: stranke so dvojne, z dvojnimi šiframi, vodijo se posebej). Do zdaj je bil katalog samo podjetje 2.
+
+- **`out.CatalogSource`** (CatalogOrganizationId, SourceOrganizationId, Priority, WebSiteLabels, IsActive): vpisana 2 (prednost 10, vsa spletišča) in 3 (prednost 20, `videlektro`). Brez vrstic ali z enim podjetjem izvoz dela natanko kot pred 285.
+- `PIM.B2bWorker` (`CatalogMerge`): vsako podjetje zapiše svoje vrstice z `out.GetExportRows` (procedura nespremenjena) v svojo začasno datoteko, gre skozi svojo varovalko 277; nato ena vrstica na šifro — vsebina iz podjetja z najvišjo prednostjo, ki artikel objavlja, »Spletne strani« = unija dovoljenih spletišč, kategorija spletišča iz podjetja, ki ga prispeva. Vrstica ViD brez videlektro ne gre ven (razen odjavne, če je ViD artikel na videlektro objavil v zadnjih WithdrawalRowDays dneh). Zapis objave (251) in izhodišče varovalke po podjetju.
+- `stranke.csv`: stranke vseh podjetij iz registra zaporedoma; ponovljena šifra (se ne zgodi, IQ 8 mest, ViD 7) gre ven samo prva, v izpisu je opozorilo.
+- **Čiščenje:** `out.WebPublication` vrstice podjetij, ki niso podjetje kataloga in niso bile nikoli izvožene (`LastExportedUtc IS NULL` — začetno stanje 251), so odstranjene; kopija v `out.WebPublication_pred285`. Brez tega bi ViD pošiljal odjavne vrstice za artikle, ki jih Magento od njega ni nikoli dobil.
+- Razvojna baza (DAVID\MSSQL19), `--brez-objave`: IQ 2.536 vrstic → združeno 2.595 (59 artiklov samo ViD na videlektro, 68 IQ odjav postane videlektro iz ViD, 2.468 IQ vrstic bitno enakih); stranke 3.988 + 393 = 4.381, vse šifre enolične.
+
+**Objekti:** tabela `out.CatalogSource`, tabela `out.WebPublication_pred285`, brisanje v `out.WebPublication`. **Ročni korak po uvedbi:** objaviti `PIM.B2bWorker`. Izklop ViD: `UPDATE out.CatalogSource SET IsActive = 0 WHERE SourceOrganizationId = 3`. Predogled na `/splet` in »Prenesi za Excel« še kažeta samo podjetje 2.
+
+## Stolpci atributov iz naborov (migracija 286_StolpciAtributovIzNaborov, 2026-09-25)
+
+Uporabnik: atributi, dodani v nabor kategorije, morajo iti v katalog.csv — »to ne sme biti fiksno«.
+
+- **`out.SyncAttributeExportColumns @ProfileCode, @Actor`**: za vsak aktiven atribut iz aktivnih naborov (Level <> EXCLUDED) doda stolpec na konec profila (prevedljiv »Ime ANG« + »Ime SLO«, sicer »Ime [enota]«); samodejni stolpec `ATTR_…` preimenuje, izklopi ali znova vklopi, ročnih ne spreminja. Kliče ga `PIM.B2bWorker` pred vsakim izvozom katalog.csv.
+- **`out.ExportColumnChange`**: zgodovina samodejnih sprememb stolpcev.
+- **`out.GetExportRows`**: vrednost atributa brez jezika gre v stolpec »… SLO«, če artikel za isti atribut nima vrednosti v sl.
+
+**Objekti:** procedura `out.SyncAttributeExportColumns`, tabela `out.ExportColumnChange`, sprememba `out.GetExportRows`. **Ročni korak:** ne (objaviti `PIM.B2bWorker`). Magento: glava se lahko razširi s stolpci na koncu.
+
+## Hitrejši izvoz atributov SLO (migracija 287_HitrejsiIzvozAtributovSlo, 2026-09-28)
+
+Pravilo 286 (vrednost brez jezika → SLO) je bilo zapisano kot `NOT EXISTS` nad istim `#Attribute` (kopica brez indeksa, pogoj v OR) in je sam porabil ~310 s na podjetje. 287 ga zapiše z okensko funkcijo (`MAX(CASE WHEN LanguageCode = N'sl' …) OVER (PARTITION BY RowKey, AttributeCode)`), pomen je enak.
+
+- Meritev na razvojni bazi (DAVID\MSSQL19, cel katalog, `@Take = 0`): podjetje 2 **387 s → 24 s**, podjetje 3 **266 s → 20 s**; izhod procedure pred in po je za obe podjetji bajt za bajt enak.
+- Preverjanje nabora atributov po artiklu (`#AttributeFilter`, 147) stane 0,5–0,8 s in ostane. Brez njega in z vsemi atributi kot stolpci izvoz ni hitrejši (sestava datoteke 14 → 22 s), v datoteko pa bi šli tudi atributi zunaj nabora.
+- Migracija poišče stavek 286 po besedilu in pade, če ni v pričakovani obliki; ponoven zagon ne naredi ničesar (oznaka `/* 287 */`).
+
+**Objekti:** sprememba `out.GetExportRows` (en stavek). **Ročni korak:** ne. Na razvojni bazi uveljavljena ročno (sqlcmd), brez vpisa v `dbo.SchemaMigration` — kot 285/286.
+
+## Neskladja med podjetji (migracija 290_NeskladjaMedPodjetji, 2026-09-28)
+
+Uporabnik: pregled in nadzor nad ERP obeh podjetij — ista šifra v IQ in ViD (viri kataloga `out.CatalogSource`) z manjkajočo kartico ali različnimi kljukicami spletišč. Stran `/splet/neskladja`.
+
+- **`intranet.GetOrganizationMismatches`** (samo bere): vrste `MANJKA_GLAVNA` (ViD ima kljukico spletišča, ki ga ne sme prispevati — svetila — IQ artikla nima ali je neaktiven), `MANJKA_DRUGA` (IQ ima kljukico spletišča, ki ga sme prispevati tudi ViD, ViD artikla nima), `RAZLICNE_KLJUKICE` (obe kartici aktivni, kljukice različne). Vrne tudi »V katalogu po kljukicah« (unija po pravilu 285, brez kategorije in validacije) in »ne gre na«. Iskanje brez šumnikov, predpona šifre, razvrščanje in listanje v bazi; števci po vrstah, predpone, viri.
+- **Pravica `view.web.mismatches`** za ADMIN, CATALOG_EDITOR, COMMERCIAL, VIEWER (kot `view.web.withdrawals`).
+- Razvojna baza: 360 neskladij (322 manjka v IQ — 154 NW + 168 BA, 30 manjka v ViD, 8 različnih kljukic); klic 1,5 s na mirni bazi.
+
+**Objekti:** procedura `intranet.GetOrganizationMismatches`, vrstice v `sec.RolePermission`. **Ročni korak:** ne (objaviti intranet).
+
+## Odprodaja: naročila kupcev zmanjšajo količino (migraciji 288_OdprodajaOdstejNarocila in 289_OdprodajaNarociloOdVidenjaPim, 2026-09-28)
+
+Uporabnik: na strani Odprodaja se nastavi samo, kaj je v odprodaji in koliko; katalog.csv pošlje odprodajo, popust in količino; naročila kupcev količino sproti zmanjšujejo. Odločitve: štejejo **vsa** naročila kupcev iz SAOP (VNK, `sales.OrderLine` iz `PIM.SaopOrdersWorker`, splet + trgovina + B2B), odšteje se **ob naročilu**, pri 0 gre v katalog Odprodaja = NE in količina 0 (Magento pri 0 odprodaje ne pokaže), vrstica ostane.
+
+- Nič se ne odšteva v tabeli; preostanek se izračuna: **`pim.ClearanceItemRemaining(@OrganizationId)`** vrne vrstice odprodaje podjetja s `Kolicina` = vpisano − prodano (nikoli pod 0), `ZacetnaKolicina`, `Prodano`, `Narocila` (npr. `2026/VNK/3495 (1.00)`). Stornirano/preklicano naročilo ne šteje; zaprta vrstica šteje samo odpremljeno količino.
+- **`pim.ClearanceItem.StetjeOdUtc`** + sprožilec **`pim.TR_ClearanceItem_StetjeOd`**: štetje prodaje začne ob vnosu vrstice, ob spremembi količine (nova količina = nova zaloga) in ob obnovi zaključene vrstice. Ponovni uvoz iste datoteke (enaka količina) štetja ne ponastavi.
+- **`sales.OrderHeader.PrvicVidenoUtc`** (289): kdaj je PIM naročilo prvič zapisal. Naročilo šteje, če je njegov dan ≥ dan začetka štetja **in** ga je PIM videl po začetku štetja. SAOP pri naročilu pove samo dan, zato je brez tega popravek količine isti dan odštel že znano naročilo še enkrat (najdeno pri preizkusu 288).
+- **`out.GetExportRows`**: blok OdprodajaExport234 bere `pim.ClearanceItemRemaining` namesto `pim.ClearanceItem` (oznaka `/* 288 */`); imena stolpcev in pravilo DA pri količini > 0 ostanejo.
+- **`intranet.GetClearanceOverview`**: nova stolpca ZacetnaKolicina, Prodano, Narocila; `VKatalogu` zdaj zahteva še obkljukano spletno stran in aktiven artikel (prej je kazal DA tudi za artikle, ki niso na spletu).
+- Preizkus na razvojni bazi (DAVID\MSSQL19) s testnimi naročili `2099/TEST288` (pobrisana): 14 − 4 = 10; stornirano in starejše naročilo ne štejeta; zaprta vrstica 2 naročeno / 1 odpremljeno šteje 1; izvoz za artikel na spletu 3 → 1 (DA) → 0 (NE, popust 0); popravek na 1 isti dan ne odšteje že znanega naročila; ponoven uvoz Azzardo datoteke ohrani odšteto.
+
+**Objekti:** stolpca `pim.ClearanceItem.StetjeOdUtc`, `sales.OrderHeader.PrvicVidenoUtc`; sprožilec `pim.TR_ClearanceItem_StetjeOd`; funkcija `pim.ClearanceItemRemaining`; spremembi `out.GetExportRows`, `intranet.GetClearanceOverview`. **Ročni korak:** ne. Pogoj za delovanje: `PIM.SaopOrdersWorker` (SAOP_ORDERS_VNK) mora teči — na razvojni bazi `sales.OrderLine` je še prazna. Na razvojni bazi uveljavljeni z `Invoke-PendingMigrations.ps1` (v `dbo.SchemaMigration`).
+
+## Odprodaja na kartici izdelka: preostanek (migracija 296_OdprodajaNaKarticiPreostanek, 2026-09-28)
+
+Kartica izdelka (Splet → Odprodaja) je kazala vpisano količino, katalog.csv pa preostanek po naročilih (288). **`intranet.GetClearanceItemsForProduct`** zdaj bere `pim.ClearanceItemRemaining` za podjetje izdelka in vrne še ZacetnaKolicina, Prodano, Narocila; `Kolicina` je preostanek. Kartica kaže Vpisano / Prodano (naročila) / Ostane in stanje (aktivna, razprodano, količina 0, zaključena); obrazec za ročni vnos pokaže obstoječo ročno vrstico.
+
+Hkrati (koda, brez baze): `ClearanceService` uvoz, ročni vnos in zaključitev ob zastoju z zajemom iz SAOP (Msg 1205) ponovi do trikrat — prvi uvoz Azzardo na DEV je bil žrtev zastoja z `map.ProcessPlanningInbox`.
+
+Številke 291–295 je rezervirala druga seja. **Objekti:** sprememba `intranet.GetClearanceItemsForProduct`. **Ročni korak:** ne. Na razvojni bazi uveljavljena s sqlcmd brez vpisa v `dbo.SchemaMigration` (runner bi uveljavil tudi nedokončano 290 druge seje).
+
+## Katalog: vsi atributi, poenotene vrednosti, veljavne kategorije (migracije 291_KatalogVsiAtributiPoenotenjeKategorije, 292_HitrejsiIzvozKatalogaPoStevilkahStolpcev, 293_IzvozKatalogaStolpciPoStevilkahPopravek, 2026-09-28)
+
+Uporabnik: v katalogu morajo biti vsi atributi, kljukice »Spletne strani« morajo kazati isto kot PIM, Napetost naj bo za izmenično vedno enaka (splet je v filtru kazal »~220-230« in »220-230« kot dve vrednosti), prav tako frekvenca; kategorije morajo štimati; izvoz mora biti hiter in zanesljiv.
+
+Meritve na razvojni bazi pred 291: 81.257 vrednosti atributov je imelo stolpec, v katalog.csv pa so ostale prazne — nabor atributov po kategoriji (147) je v izvoz spustil **samo** atribute iz nabora. Napetost je imela 12 zapisov (~220-230, 220-230, 220/230, ~220-230V, 24, DC5 …), frekvenca 3, CRI in faktor moči presledke in decimalno vejico. Na spletišču videlektro je bilo ~390 poti na podjetje, ki jih ni v drevesu (okrnjene »1-fazni Profile«, stari prevodi); EN prevod »1-fazni 48V LVM« je bil »1-circuit 48V   UT- LVM«. Kljukice: kartica in izvoz sta se ujemala 100 % — pravilo ostane.
+
+- **`pim.NormalizeAttributeValue(@AttributeCode, @Value)`** (skalarna, kliče se enkrat na različno vrednost): presledki, znak spredaj (»≥ 80« → »≥80«), decimalna vejica v čistem številu/razponu → pika, **Napetost** vedno `~220-230` (izmenična) oz. `DC 24` (enosmerna), brez V; brez oznake od 100 V naprej izmenična, pod 100 V enosmerna; **Frekvenca** `50/60`; nato slovar **`map.ValueLookup` z jezikom `ENOTNO`** (domena = slovensko ime lastnosti ali `*`; stran `/pravila/slovar` ponuja »ENOTNO«). Nov indeks `IX_ValueLookup_LanguageKey`.
+- Obstoječe vrednosti poenotene v `canon.ProductAttribute` (sprožilec zapiše `pim.ProductFieldHistory`, vir POENOTENJE) in `pim.ProductAttribute`; dnevnik obeh **`pim.AttributeValueNormalizationLog`** (prej/potem) — 7.142 vrstic na DEV.
+- **`map.ApplyValueTransforms`** (oznaka `Poenotenje291`): vrednosti atributov vsakega zajema gredo skozi isto pravilo; izvirnik ostane v `map.ExtractedValue.RawValue` (094 ga ob ponovni obdelavi vrne).
+- **`out.GetExportRows`**: nabor po kategoriji je le izločevalen — izpade samo atribut z ravnijo EXCLUDED (če ga druga kategorija izdelka ne vključi), izračun nabora se preskoči, ko EXCLUDED ni (`VsiAtributi291`); vrednosti atributov skozi preslikavo `#NormalMap291`; v stolpce kategorij gre samo pot iz **`canon.WebSiteCategoryPath`** (nov pogled: pot v jeziku spletišča iz imen prednikov + shranjena slovenska pot vozlišča) (`VeljavnaPot291`).
+- Kategorije: EN prevod »1-fazni 48V LVM« → »1-circuit 48V LVM« v obeh drevesih (`canon.SaveCategoryTranslations`, zgodovina) in EN poti izdelkov pod njim; odvečne neveljavne poti (izdelek ima na istem spletišču veljavno, ročna uvrstitev ostane) odstranjene iz canon in pim — kopija v **`canon.ProductCategory_pred291`** / **`pim.ProductCategory_pred291`** (DEV: 1.797 / 1.725 vrstic; razveljavitev = INSERT nazaj). **`map.ResolveProductCategories`** in **`val.Promote`** (oznaka `Pospravi291`) po zapisu odstranita isto vrsto ostankov, ker sta do zdaj poti samo dodajala.
+- **292/293** (hitrost): razdelek D izbira stolpec po številki kanonične kode (`#FieldNo291`, `#ValueNo293`) namesto primerjave niza v Slovenian_CI_AS za vsako vrednost; pretvorba enot (216d) išče enoto v `#UnitValue292`; velika začetnica (216c) samo pri vrednostih z malo začetnico in brez rezanja pri 4.000 znakih. 292 je sestavljanje postavil v izpeljan stik, ki ga je SQL Server ponavljal za vsako vrstico (izvoz ustavljen po 10 min); 293 to popravi — **292 brez 293 ne uvajati**.
+- Rezultat na DEV (podjetje 2 / 3): izpolnjenih celic 120.889 → 154.652 / 119.931 → 156.021, vsi atributi s stolpcem v izvozu (0 manjkajočih), Napetost 8 zapisov (~220-230, ~220-240, ~250, ~230, ~450, DC 48, DC 24, DC 5), Frekvenca 50/60 in 50, neveljavnih poti 787/813 → 1/2 (predogled VID 219 »Track systems« proti »Track Systems«), kljukice kartica = izvoz 2176/2176 in 2448/2448, čas izvoza 36 s → 30–39 s (org 2), 30 s → 32 s (org 3); izpis po 293 celica za celico enak izpisu po 291.
+
+**Objekti:** funkcija `pim.NormalizeAttributeValue`, pogled `canon.WebSiteCategoryPath`, tabele `pim.AttributeValueNormalizationLog`, `canon.ProductCategory_pred291`, `pim.ProductCategory_pred291`, indeks `IX_ValueLookup_LanguageKey`, spremembe `out.GetExportRows`, `map.ApplyValueTransforms`, `map.ResolveProductCategories`, `val.Promote`; podatki `canon/pim.ProductAttribute`, `canon/pim.ProductCategory`, `canon.CategoryTranslation`, 1 vrstica `map.ValueLookup`. **Ročni korak:** ne (objaviti intranet zaradi izbire ENOTNO na `/pravila/slovar`). Na DEV uveljavljene z `Invoke-PendingMigrations.ps1` posamično (vpis v `dbo.SchemaMigration`).
+
+## Odprodaja in zaloga v glavnem skladišču (migracija 297_OdprodajaZalogaGlavnegaSkladisca, 2026-09-28)
+
+Uporabnik: količino odprodaje vpišemo; ob vpisu se preveri zaloga artikla v glavnem skladišču (IQ: Brnčičeva). Enaka zaloga = vsa zaloga je za odprodajo (SAOP ob prodaji sam zmanjša zalogo, naročila samo za vsak slučaj); večja = redna prodaja in nekaj kosov za odprodajo (velja vpisano minus naročila); manjša = napaka z obvestilom. Med skladišči se nič ne prestavlja.
+
+- **`pim.ClearanceItem.ZalogaObVpisu`, `ZalogaObVpisuUtc`**: zaloga (`out.CatalogStock.OwnAvailable`) in čas posnetka ob vnosu, spremembi količine ali obnovi. Sprožilec `pim.TR_ClearanceItem_StetjeOd` je zdaj `AFTER INSERT, UPDATE`.
+- **`pim.ClearanceItemRemaining`**: novi stolpci Zaloga, ZalogaSveza, ZalogaObVpisu, ZalogaObVpisuUtc, **Nacin** (CELA / DEL / PREMALO / NEZNANA). `Kolicina` (katalog.csv) = vpisano − naročeno, pri sveži zalogi (pravilo 207: `out.CatalogOwnStockFresh` + posnetek < 30 min) največ zaloga; pri PREMALO največ zadnja znana zaloga, tudi stara.
+- **`intranet.GetClearanceOverview`, `intranet.GetClearanceItemsForProduct`**: novi stolpci. Stran Odprodaja: stolpec Zaloga z načinom, števec »Zaloge premalo«, filter »Samo zaloga premalo ali neznana«; predogled uvoza našteje artikle z zalogo premalo ali neznano in jih pokaže prve. Kartica izdelka: stolpec Zaloga z načinom.
+- Razvojna baza, Azzardo 177: CELA 168, PREMALO 8 (npr. AZ.0858 6 v datoteki / 3 na zalogi → na splet 3), NEZNANA 1. Simulacija sveže zaloge (transakcija, razveljavljena): prodan AZ.0059 v SAOP (zaloga 0) → na splet 0. Ročni vnos 5 pri zalogi 14 → DEL. Nov uvoz 177 vrstic 1,3 s, ponoven 0,25 s, predogled 0,23 s.
+- **Odprto:** artikel v IQ in ViD — katalog.csv vzame vrstico (tudi odprodajo) iz IQ, če ga IQ objavlja; odprodaja, vpisana v ViD, tam ne velja. Obvestilo v zvoncu za PREMALO še ni (zahteva register vrst obvestil).
+
+**Objekti:** stolpca `pim.ClearanceItem.ZalogaObVpisu`/`ZalogaObVpisuUtc`, sprožilec `pim.TR_ClearanceItem_StetjeOd`, funkcija `pim.ClearanceItemRemaining`, proceduri `intranet.GetClearanceOverview`, `intranet.GetClearanceItemsForProduct`. **Ročni korak:** ne. Na razvojni bazi uveljavljena s sqlcmd brez vpisa v `dbo.SchemaMigration` (kot 296).
+
+## Atributi z jezikom namesto končnice ANG/SLO (migraciji 294_AtributiJezikNamestoKoncniceAngSlo in 295_NeprevedenaVrednostNePovoziPrevoda, 2026-09-28)
+
+Uporabnik: »Prevladujoča barva ANG« in »… SLO« ne smeta biti atributa v PIM, ampak samo stolpca v katalog.csv (osnova + prevod). 124 je končnico enkrat prenesla v `LanguageCode`, zajem pa ni bil prilagojen: 160 ciljev `map.FieldMapping` »ProductAttribute.<ime> ANG/SLO« (NW_XML, BT_XML) je `map.ProcessRawInbox` pisal kot ločena imena, zato je vsak uvoz obnovil ~80.000 starih vrstic (17 lastnosti), prave vrstice z jezikom pa so ostale pri stanju 27. 8. (razen ročnih popravkov v intranetu). Izvoz je stolpec »… ANG« polnil iz obeh.
+
+- **294 — `map.ProcessRawInbox`** (oznaka `Jezik294`): cilj »<ime> SLO/ANG«, kjer je <ime> v registru (`canon.AttributeTranslation` sl), se zapiše kot <ime> z `LanguageCode` sl/en; MERGE primerja tudi jezik. Preslikave ostanejo — končnica v cilju pomeni jezik.
+- **294 — podatki:** vrednost stare vrstice gre v vrstico <ime>+jezik (nova ali posodobljena), razen kjer je bila prava vrstica ročno popravljena v intranetu (`pim.ProductFieldHistory`, vir INTRANET — ostane); stara vrstica gre. DEV: canon 80.765 odstranjenih, 280 novih, 179 posodobljenih; pim 72.913 / 224 / 177. Vse v `pim.AttributeValueNormalizationLog` (odstranjena vrstica: staro ime, `NewValue` NULL), canon tudi v `pim.ProductFieldHistory`. Imena brez atributa v registru (testni »F5 … SLO«) ostanejo.
+- **295 — `map.ProcessRawInbox`** (oznaka `Prevod295`): vrstica sl se ne posodobi, če je nova vrednost enaka angleški istega atributa v istem zapisu in ima izdelek že drugačno slovensko (neprevedena vrednost ne povozi prevoda; prevede se na `/kakovost/prevodi`). 26 vrstic (13 canon, 13 pim), ki jih je 294 tako povozila (»Nikelj« → »Nickle«), je vrnjenih iz dnevnika.
+- Izvoz: stolpci »… SLO/ANG« izpolnjeni enako kot pred 294 (npr. Prevladujoča barva 2.360 / 2.360, org 2), noben atribut s stolpcem ne manjka; 39 celic org 2 drugačnih zaradi svežih vrednosti uvoza (npr. NW.10328 »Prozorna« → »Črna«).
+
+**Objekti:** sprememba `map.ProcessRawInbox`; podatki `canon/pim.ProductAttribute`. **Ročni korak:** ne. Prvi pravi preizkus zajema: naslednji uvoz XML (SUPPLIER_CATALOG_IMPORT) — po njem v canon ne sme biti atributov »… ANG/SLO« brez jezika.
+
+## Nabor atributov za svetila (migracija 299_NaborAtributovSvetila, 2026-09-28)
+
+Uporabnik je poslal seznam 39 atributov, ki veljajo za vse kategorije svetila.si in razsvetljave na videlektro (s pripombami: barva svetlobe z imenom, ne v kelvinih; pametno upravljanje brez on/off; drsnik za IP, moč, svetlobni tok, dimenzije).
+
+- **Novi atributi** (`canon.CreateAttributeDefinition`, ENUM, prevodi en/de/hr/it): `BARVA_SVETLOBE`, `PAMETNO_UPRAVLJANJE`, `POVEZLJIVOST`, `VRSTA_SENZORJA`.
+- **Obstoječi atributi** za ostala imena, ker izdelki vrednosti hranijo po slovenskem imenu: Prostor → Uporaba, Stil → Slog, Barva → Prevladujoča barva, Material → Prevladujoč material, Svetlobni vir → Vrsta svetlobnega vira, Zatemnitev → Zatemnljivo, IP zaščita → IP stopnja zaščite, Moč → Nazivna moč, Senzor → Senzor gibanja, Temperatura svetlobe → Temperatura barve, Material/Barva komplementarna → Dopolnilni material I / Dopolnilna barva I, Domet → Razdalja detekcije, Kot zaznavanja → Kot detekcije, Čas delovanja → Časovna zakasnitev, Svetlobna občutljivost → Luks, Kot svetenja → Kot svetlobnega snopa, Število sijalk → Število svetlobnih virov, Vključuje sijalko → Svetilka vključuje svetlobni vir, Vhodna napetost → Napetost, Frekvence → Frekvenca, CRI → Indeks barvnega videza (CRI), Vidna dimenzija → Dolžina, Širina, Višina, Premer, Vgradna dimenzija → Izvrtina (cutout); ostali po enakem imenu. Ime s seznama in želja za filter sta v `Note` vrstice nabora (»Svetila 2026-09-28: …«).
+- **Nabor:** vsi atributi kot RECOMMENDED (opozorilo, ne blokira spleta) na korenske kategorije `svetila_si` (vseh 6) in `videlektro` (`razsvetljava` + trije korenski `razsvetljava___tracni_sistemi___*`), prek `canon.SaveCategoryAttributeSet` (zahteve `val.FieldRequirement`, `b2b.AuditLog`). Obstoječe vrstice na isti kategoriji niso spremenjene. `SortOrder` po seznamu uporabnika.
+- DEV (DAVID\MSSQL19): 4 atributi, 349 vrstic nabora, 349 aktivnih zahtev, 353 vnosov revizije; `notranja_svetila` in `razsvetljava___luci` imata zdaj 47 učinkovitih atributov.
+- **Povratek:** `canon.SaveCategoryAttributeSet @Level = NULL` za vrstice z `UpdatedBy = 'migracija 298'` (oznaka akterja je ostala iz prvotne številke).
+
+**Objekti:** podatki `canon.AttributeDefinition`, `canon.AttributeTranslation`, `canon.CategoryAttributeSet`, `val.FieldRequirement`, `b2b.AuditLog`. **Ročni korak:** ne; učinek na validacijo ob naslednjem `PRODUCT_VALIDATION`, na katalog.csv ob naslednjem `WEB_CATALOG_EXPORT`. Na DEV uveljavljena z `Invoke-PendingMigrations.ps1` posamično (vpis v `dbo.SchemaMigration`).
+
+## Kartica artikla: dolžina in prostornina v SAOP (migraciji 298_KarticaDolzinaInProstorninaVSaop in 300_KarticaDolzinaInProstorninaLastPim, 2026-09-28)
+
+Uporabnik: »dej vse v oblačke in da se da vse urejat, nič zaklepat — program mora sam zaznati, ali gre za SAOP polje«; sodelavec: »lahko širino in višino, dolžino pa ne morem«. Zajem je `PropertiesData/ItemLength` (`ProductCommercial.PackageLength`) in `ItemVolumePerUnit` (`ProductCommercial.Volume`) bral od 057, pisati pa ju PIM ni smel: v registru `out.SaopXmlField` ju ni bilo, v `out.OwnershipPolicy` (068) sta bili »SAOP« (beremo, ne pišemo). Specifikacija SAOP (`SAOP_API_swagger_v2.json`, PropertiesData) obe polji sprejme.
+
+- **298:** dve vrstici v `out.SaopXmlField` (SAOP_PRODUCT, PropertiesData, decimal8, ni obvezno ob dodajanju).
+- **300:** `out.OwnershipPolicy` Owner = PIM za obe polji v vseh podjetjih s pravili SAOP_PRODUCT (1–4). Pomen »PIM« (068): pisljivo IN zajem ga še naprej bere nazaj.
+- Posledica: kartica, uvoz/izvoz delovnega lista in `/saop/zgodovina` obravnavajo polji kot ostala SAOP polja — PIM takoj (`pim.SaveProductErpFieldsBulk` ju je že poznal), v SAOP po odobritvi. Nič se ne pošlje samo od sebe.
+- DEV (DAVID\MSSQL19): po 300 ni nobenega omogočenega polja v registru SAOP_PRODUCT (razen ključa ItemID), ki ne bi bilo last PIM v vseh štirih podjetjih.
+- **Povratek:** `UPDATE out.SaopXmlField SET IsEnabled = 0` za obe vrstici in Owner = 'SAOP' v `out.OwnershipPolicy` (UpdatedBy = 'migracija 300').
+
+**Objekti:** podatki `out.SaopXmlField`, `out.OwnershipPolicy`. **Ročni korak:** ne. **Tveganje:** prvo pošiljanje dolžine/prostornine v živi SAOP — pred množično odobritvijo odobri eno sporočilo in preveri potrditev na `/saop/zgodovina`. Na DEV uveljavljeni s `PIM.Migrator --migrations <mapa s samo to datoteko>` (vpis v `dbo.SchemaMigration`).
+
+Intranet v istem koraku (brez migracije): kartica bere davčno stopnjo iz `Product.VatRateId` (prej napačen ključ `Product.VatRate`), ERP opisi/nazivi v drugih jezikih so urejljivi (vir PIM, označeni »samo PIM« — SAOP jih ne sprejme), kategorije in dodajanje atributa na zavihku Splet (`ProductCategoryEditor`), `CategoryMappingService` preverja vlogo `CatalogWrite`.
+
+## Enota na atributu (migracija 301_EnotaNaAtributu, 2026-09-29)
+
+Uporabnik: atribut ima svojo mersko enoto; uvozi prepoznajo, v kateri enoti je vpisano, in pretvorijo; atributi enot ostanejo za lažje preslikave XML, PIM in katalog.csv pa gledata samo glavni atribut in njegovo enoto v `[]`. Besedilne vrednosti (»do 30m«) so dovoljene, uvoz opozori.
+
+- **`canon.AttributeDefinition.Unit`** dobijo glavni atributi iz `out.CatalogUnitRule` (38; ista enota kot v glavi katalog.csv), atributi enot pa `UnitOfAttributeCode` (34 parov).
+- **`canon.UnitConversion`** (inline, mm/cm/m, g/kg, cm3/dm3/l/m3, sopomenke mt/kgs/gr …) in **`canon.AttributeUnitValue`** (ena vrednost: ista enota -> samo število, kot je zapisano; druga enota iste vrste -> pretvorba; »1.500 m« se zaradi dvoumnosti ne pretvori; besedilo ostane).
+- **`canon.NormalizeAttributeUnits`** dela nad `#AttributeSource` klicatelja: glavni atribut v enoti atributa (enota iz vrednosti ali iz atributa enote istega izdelka), atribut enote poravnan. **`val.Promote`** ga pokliče pred MERGE v `pim.ProductAttribute` (oznaka Enota301) — izvorni sloj `canon` ostane, kot ga pošlje vir.
+- **`canon.AlignAttributeUnits`** v `pim.SaveProductAttributes` in `pim.SaveProductAttributesBulk`: vrednost s kartice ali iz Excela je v enoti atributa, atribut enote izdelka se nastavi na to enoto (sicer bi stara »m« iz XML novo vrednost pretvorila še enkrat).
+- **Enkratna uskladitev PIM:** 9.325 vrednosti (razvojna baza; npr. »10000h« -> 10000, paket I iz mm v cm, »Dolžina 50 + mt« -> 50000 mm), samo vrstice, enake izvornemu sloju; dnevnik `pim.AttributeValueNormalizationLog` (ChangedBy »migracija 301«).
+- Prva različica je bila pogled nad vsemi vrednostmi (>10 min za eno podjetje) — nadomeščen s postopkom; `val.Promote` org 2 37 s, org 3 31 s (normalizacija ~5 s na podjetje).
+- katalog.csv: glave ostanejo enake (stalni stolpci iz 216); pretvorba 216d dobi atribut enote že v ciljni enoti (količnik 1).
+
+**Objekti:** `canon.AttributeDefinition` (Unit, UnitOfAttributeCode), `canon.UnitConversion`, `canon.AttributeUnitValue`, `canon.NormalizeAttributeUnits`, `canon.AlignAttributeUnits`, spremembe `val.Promote`, `pim.SaveProductAttributes`, `pim.SaveProductAttributesBulk`; podatki `pim.ProductAttribute`. **Ročni korak:** ne. **Povratek:** `OldValue` v dnevniku; `val.Promote` vrniti na blok MERGE iz `canon.ProductAttribute`.

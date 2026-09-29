@@ -6,6 +6,7 @@
 @inject CustomerWorkbookService Workbook
 @inject IntranetDataService Data
 @inject HeavyWorkGate Gate
+@inject ImportHistoryService History
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Uvoz strank</PageTitle>
@@ -15,6 +16,8 @@
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<ImportUndoBanner Run="UndoOf" Skipped="UndoSkipped" />
 
 <section class="ui-card panel">
   <h2>1. Izberi datoteko</h2>
@@ -94,10 +97,30 @@
         </table>
       </div>
       @if (Preview.Rows.Count > 50) { <p class="hint">… in še @(Preview.Rows.Count - 50) strank.</p> }
+    }
 
+    @* 274: list »S po tipih strank« — pravila posebnega S za tip stranke. *@
+    @if (Preview.TypeRules is { Count: > 0 } typeRules)
+    {
+      <div class="table-scroll section-gap" role="region" tabindex="0" aria-label="Pravila S po tipih strank">
+        <table class="data-table">
+          <caption>Pravila posebnega S po tipih strank (list »@CustomerWorkbookService.TypeRulesSheetName«)</caption>
+          <thead><tr><th scope="col">Vrstica</th><th scope="col">Podjetje</th><th scope="col">Sprememba</th></tr></thead>
+          <tbody>
+            @foreach (var rule in typeRules.Take(100))
+            {
+              <tr><td>@rule.RowNumber</td><td>@rule.OrganizationName</td><td>@rule.Description</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (Preview.Rows.Count > 0 || Preview.TypeRules is { Count: > 0 })
+    {
       <div class="panel-actions">
         <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyAsync">
-          Uvozi @Preview.ChangeCount.ToString("N0") sprememb pri @Preview.Rows.Count.ToString("N0") strankah
+          Uvozi @Preview.ChangeCount.ToString("N0") sprememb pri @Preview.Rows.Count.ToString("N0") strankah@(Preview.TypeRules is { Count: > 0 } rules ? $" in {rules.Count:N0} pravilih S po tipih" : "")
         </button>
       </div>
     }
@@ -108,6 +131,10 @@
 {
   <section class="ui-card panel section-gap" aria-label="Izid uvoza">
     <h2>3. Izid</h2>
+    @if (HistoryId is { } historyId)
+    {
+      <p class="hint">Uvoz je zapisan v zgodovino kot <a href="@($"uvozi/{historyId}")">uvoz #@historyId</a> — tam ga lahko povrneš.</p>
+    }
     <p role="status">
       Spremenjenih strank: <strong>@Outcome.CustomersTouched.ToString("N0")</strong>
       (@string.Join(", ", Outcome.Organizations)), zapisanih sprememb: <strong>@Outcome.ValuesWritten.ToString("N0")</strong>.
@@ -134,7 +161,14 @@
   CustomerWorkbookPreview? Preview;
   CustomerWorkbookOutcome? Outcome;
   string OrganizationText = "";
+  string? FileName;
   bool Busy;
+
+  /// <summary>280: povratek uvoza (?povrni=N) — predogled s prejšnjimi vrednostmi strank.</summary>
+  [SupplyParameterFromQuery(Name = "povrni")] public long? UndoRunId { get; set; }
+  ImportRunRow? UndoOf;
+  IReadOnlyList<string> UndoSkipped = [];
+  long? HistoryId;
   string? Error;
   string? Message;
 
@@ -144,6 +178,26 @@
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+    if (UndoRunId is { } undoRunId) await PrepareUndoAsync(undoRunId);
+  }
+
+  async Task PrepareUndoAsync(long importRunId)
+  {
+    try
+    {
+      if (await History.GetRunAsync(importRunId) is not { } detail || detail.Run.Kind != ImportKinds.Customers)
+      { Error = $"Uvoza strank #{importRunId} ni v zgodovini."; return; }
+      if (detail.Run.IsUndone) { Error = $"Uvoz #{importRunId} je že povrnjen (povratek #{detail.Run.UndoneByImportRunId})."; return; }
+      using (await EnterImportLaneAsync())
+      {
+        var plan = await ImportHistoryService.PlanCustomerUndoAsync(Workbook, detail);
+        UndoOf = detail.Run;
+        UndoSkipped = plan.Skipped;
+        Preview = plan.Preview.Rows.Count > 0 ? plan.Preview with { Problems = [], Warnings = [] } : null;
+      }
+      Message = Preview is null ? "Ničesar ni za povrniti — vse je že tako kot pred uvozom ali pa je bilo medtem spremenjeno (glej spodaj)." : null;
+    }
+    catch (Exception failure) { Error = "Povratka ni bilo mogoče pripraviti: " + failure.Message; }
   }
 
   // Kam sprememba te stranke odide: stranke.csv za aktivne z B2B profilom, katalog.csv za posebni S.
@@ -174,11 +228,12 @@
 
   async Task OnFileAsync(InputFileChangeEventArgs args)
   {
-    Error = null; Message = null; Preview = null; Outcome = null;
+    Error = null; Message = null; Preview = null; Outcome = null; UndoOf = null; UndoSkipped = []; HistoryId = null;
     try
     {
       var file = args.File;
       if (file.Size > MaxUploadBytes) { Error = "Datoteka je večja od 16 MB. Razdeli jo na več datotek."; return; }
+      FileName = file.Name;
 
       // Zvezek gre najprej v pomnilnik: bralnik potrebuje iskanje po toku, česar tok brskalnika ne zna.
       using var buffer = new MemoryStream();
@@ -202,6 +257,11 @@
       var progress = new Progress<string>(text => { Message = text; _ = InvokeAsync(StateHasChanged); });
       using (await EnterImportLaneAsync())
         Outcome = await Workbook.ApplyAsync(Preview, actor, progress);
+      // 280: zgodovina uvoza (prej → potem po strankah) in stanje strank pred uvozom — iz tega se uvoz lahko povrne.
+      HistoryId = await History.RecordAsync(ImportKinds.Customers,
+        UndoOf is { } undone ? $"Povratek uvoza #{undone.ImportRunId}" : FileName ?? "Delovni list strank", null, actor,
+        Outcome.CustomersTouched, 0, null, Outcome.Problems, UndoOf?.ImportRunId, ImportHistoryService.FromCustomers(Preview),
+        ImportHistoryService.CustomerSnapshot(Preview));
       Message = $"Uvoz končan: {Outcome.ValuesWritten:N0} sprememb zapisanih pri {Outcome.CustomersTouched:N0} strankah.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
       Preview = null;

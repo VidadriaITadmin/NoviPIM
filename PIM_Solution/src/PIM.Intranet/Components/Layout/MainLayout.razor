@@ -126,6 +126,8 @@
     "ExportRejected" => "splet",
     // 251: artikli, ki jim je PIM odstranil kljukico spletisca, z razlogom in pregledom.
     "WebShopWithdrawn" => "splet/umaknjeni",
+    // 277: izvoz je zadrzal sumljivo datoteko (cena ×100, umik s spleta …); pregled in potrditev.
+    "SafeguardPending" => "varovalke",
     _ when alert.Pipeline is { } pipeline && pipeline.StartsWith("OPRAVILO:", StringComparison.Ordinal) && pipeline.Length > "OPRAVILO:".Length
       => "sistem/posel/" + Uri.EscapeDataString(pipeline["OPRAVILO:".Length..]),
     _ when alert.Pipeline == "GOSTITELJ" => "sistem",

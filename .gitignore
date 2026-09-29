@@ -31,3 +31,11 @@ izvoz/
 # lokalni dotnet publish izhod (testni self-contained publish)
 publish/
 appsettings.Local.json
+
+# lokalne objave in kopije Visual Studia (ne sodijo v repozitorij)
+publish_*/
+**/.vs.*/
+.worktrees/
+.claude/worktrees/
+PIM_Solution/tools/PIM.Klikalnik/porocilo/
+PIM_Solution/pdf_datoteke/

@@ -1,0 +1,15 @@
+/* Izoliran slog strani /izvozi/obvestila. Vzorci .selection-bar in .confirm-bar so enaki kot na
+   Čakalni vrsti za SAOP; dokler niso v app.css, jih stran nosi sama. */
+.clear-link { font-size: .8rem; font-weight: 600; }
+.selection-bar { align-items: center; background: var(--pim-primary-soft); border: 1px solid var(--pim-accent-ring); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 1rem; padding: .6rem .9rem; }
+.selection-count { color: var(--pim-text-strong); font-size: .85rem; font-weight: 650; margin-right: .5rem; }
+.confirm-bar { align-items: center; background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; justify-content: space-between; margin: 0 0 1rem; padding: .8rem 1rem; }
+.confirm-bar p { color: var(--pim-text-strong); font-size: .86rem; line-height: 1.5; margin: 0; max-width: 52rem; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.link-button { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover:not(:disabled) { text-decoration: underline; }
+.select-col { width: 2.2rem; }
+.events-table td { font-size: .84rem; }
+.events-table tr.row-attention td { background: var(--pim-bad-bg); }
+.small-action:focus-visible, .link-button:focus-visible, .clear-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+@media (max-width: 900px) { .data-table { min-width: 900px; } }

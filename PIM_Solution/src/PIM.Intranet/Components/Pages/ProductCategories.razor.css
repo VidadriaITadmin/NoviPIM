@@ -1,0 +1,39 @@
+/* Uvrstitev izdelka (prenova 2026-09-26). */
+
+.page-help { margin-bottom: 1rem; }
+.help-list { color: var(--pim-text-soft); display: grid; font-size: .85rem; gap: .4rem; line-height: 1.45; margin: 0; padding-left: 1.2rem; }
+
+.pick-row { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .75rem; }
+.pick-field { flex: 0 1 22rem; }
+.product-line { align-items: baseline; display: flex; flex-wrap: wrap; gap: .5rem; margin: .9rem 0 0; }
+.product-line span { color: var(--pim-text-soft); font-size: .9rem; }
+.product-line .muted { color: var(--pim-text-muted); font-size: .8rem; }
+
+.data-card { padding: 0; }
+.card-title { font-size: 1rem; margin: 0; padding: 1rem 1.1rem .5rem; }
+.row-note { color: var(--pim-text-muted); font-size: .75rem; margin-top: .2rem; }
+.editing-row td { background: var(--pim-surface-subtle); }
+
+.edit-panel { display: grid; gap: .75rem; min-width: 20rem; }
+.chosen-list { display: grid; gap: .3rem; list-style: none; margin: 0; padding: 0; }
+.chosen-list li {
+  align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-xs);
+  display: flex; gap: .5rem; justify-content: space-between; padding: .3rem .5rem;
+}
+.edit-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }
+.confirm-text { color: var(--pim-text-strong); font-size: .82rem; font-weight: 600; }
+
+.link-button { background: none; border: 0; color: var(--pim-accent-link); cursor: pointer; font: inherit; font-size: .8rem; font-weight: 600; padding: .15rem .3rem; }
+.link-button:hover { text-decoration: underline; }
+.link-button:disabled { cursor: default; opacity: .5; }
+.danger-button {
+  background: var(--pim-bad-text); border: 1px solid var(--pim-bad-text); border-radius: var(--pim-radius-xs); color: var(--pim-surface);
+  cursor: pointer; font: inherit; font-size: .8rem; font-weight: 600; padding: .35rem .7rem;
+}
+.danger-button:hover:not(:disabled) { background: var(--pim-bad-strong); border-color: var(--pim-bad-strong); }
+.danger-button:disabled { cursor: default; opacity: .5; }
+.link-button:focus-visible, .danger-button:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .edit-panel { min-width: 0; }
+}

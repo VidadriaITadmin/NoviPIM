@@ -5,8 +5,8 @@
 @inject PIM.Intranet.Services.IntranetDataService Data
 @inject PIM.Intranet.Services.SupplierCandidateReadService Candidates
 
-<PageTitle>Vhodni podatki</PageTitle>
-<PimPage Title="Vhodni podatki" Subtitle="Vsi registrirani vhodi vseh podjetij na enem mestu: kaj beremo, od kod, kdaj nazadnje in s kakšnim izidom. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
+<PageTitle>Zajem podatkov</PageTitle>
+<PimPage Title="Zajem podatkov" Subtitle="Vsi registrirani vhodi vseh podjetij na enem mestu: kaj beremo, od kod, kdaj nazadnje in s kakšnim izidom. Zadnji poskus je ločen od zadnjega uspeha, da neuspeh ne ostane skrit za starim zelenim stanjem." />
 <IngestTabs Active="overview" />
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Visible.Count == 0)" EmptyText="Za izbrane filtre ni registriranih vhodnih tokov." LoadingText="Sestavljanje pregleda vseh vhodov …">
@@ -20,9 +20,9 @@
       <PimStat Label="Zavrnjena zaloga" Value="@Summary.StockUnmatchedCount.ToString("N0")" Href="zajem/tezave?vrsta=STOCK" />
       <PimStat Label="Tehnične težave" Value="@Summary.OpenTechnicalProblems.ToString("N0")" Note="mrtva pisma in napake v 7 dneh" Href="zajem/tezave" />
       @* 240: novi artikli iz dobaviteljevih XML cakajo na odlocitev; do zdaj stran brez vstopne tocke. *@
-      <PimStat Label="Novi artikli iz XML" Value="@(PendingCandidates?.ToString("N0") ?? "—")" Note="čakajo na pregled in uvoz" Href="zajem/novi-artikli" />
+      <PimStat Label="Novi artikli iz XML" Value="@(PendingCandidates?.ToString("N0") ?? "—")" Note="čakajo na pregled in uvoz" Href="izdelki/novi-artikli" />
       @* 241: uvozeni artikli, ki v SAOP se niso in ne cakajo v vrsti - drugi korak poti. *@
-      <PimStat Label="Uvoženi, čakajo na SAOP" Value="@(CandidatesWaitingForSaop?.ToString("N0") ?? "—")" Note="v PIM so, v SAOP še ne" Href="zajem/novi-artikli?saop=NOT_QUEUED" />
+      <PimStat Label="Uvoženi, čakajo na SAOP" Value="@(CandidatesWaitingForSaop?.ToString("N0") ?? "—")" Note="v PIM so, v SAOP še ne" Href="izdelki/novi-artikli?saop=NOT_QUEUED" />
     </section>
   }
 
@@ -95,7 +95,7 @@
             <td>
               @if (flow.LastRunId is not null)
               {
-                <a href="zajem/teki/@flow.LastRunId">@Moment(flow.LastAttemptUtc)</a>
+                <a href="sistem/teki/@flow.LastRunId">@Moment(flow.LastAttemptUtc)</a>
               }
               else { <span class="muted">Nikoli</span> }
             </td>

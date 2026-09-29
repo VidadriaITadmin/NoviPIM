@@ -26,6 +26,27 @@ var configuration = new ConfigurationBuilder()
 var workbench = new ProductWorkbenchService(configuration);
 var export = new ProductExportService(configuration, workbench);
 
+// 0. Izbrani izdelki se preberejo neposredno, ne s sitom cez cel pogled (uporabnik 2026-09-25:
+//    »izvoz mi vse izvaža, čeprav sem izbral dva«). Kratka šifra (npr. »0«) se v iskanju LIKE ujema
+//    s skoraj vsem, zato mora priti nazaj natanko izbrana vrstica.
+var sample = (await workbench.GetProductListAsync(new ProductListFilter(null, 0, 50))).Rows;
+var picked = sample.OrderBy(row => row.ItemId.Length).Take(2).ToList();
+var keys = picked.Select(row => $"{row.OrganizationId}|{row.ItemId}").ToList();
+var clock = System.Diagnostics.Stopwatch.StartNew();
+var selectedRows = await workbench.GetSelectedRowsAsync(new ProductListFilter(null), keys);
+clock.Stop();
+Assert(selectedRows.Count == picked.Count
+    && selectedRows.All(row => keys.Contains($"{row.OrganizationId}|{row.ItemId}", StringComparer.OrdinalIgnoreCase)),
+  $"Izbor {string.Join(", ", keys)} je vrnil {selectedRows.Count} vrstic namesto {picked.Count}.");
+var selectedSheet = await export.BuildAsync(new ProductListFilter(null), ProductExportTemplate.Saop, keys);
+using (var selectedStream = new MemoryStream(selectedSheet))
+{
+  var selectedTable = WorkbookTable.Read(selectedStream);
+  Assert(picked.All(row => selectedTable.Rows.Any(cells => cells.Contains(row.ItemId))) && selectedTable.Rows.Count < 10,
+    $"Izvoz izbranih ima {selectedTable.Rows.Count} vrstic, pričakovani sta samo izbrani.");
+}
+Console.WriteLine($"F7 izbor {string.Join(", ", keys)}: {selectedRows.Count} vrstic v {clock.Elapsed.TotalSeconds:N1} s.");
+
 byte[] bytes;
 try
 {

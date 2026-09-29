@@ -1,0 +1,32 @@
+/* Izoliran slog strani /saop (pregled pošiljanja). Pot spremembe je ena vrstica s števili, ki
+   vodijo na filtriran seznam — po zgledu demo pgSaopOverview (.flow). */
+.saop-flow { align-items: stretch; display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem; }
+.saop-flow-step { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); box-shadow: var(--pim-shadow); color: var(--pim-text-soft); display: flex; flex-direction: column; font-size: .78rem; gap: .15rem; justify-content: center; min-width: 9rem; padding: .6rem .85rem; text-decoration: none; }
+.saop-flow-step strong { color: var(--pim-text-strong); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.saop-flow-step.start { background: var(--pim-surface-subtle); box-shadow: none; color: var(--pim-text-muted); min-width: 0; }
+a.saop-flow-step:hover { border-color: var(--pim-accent); box-shadow: var(--pim-shadow-hover); }
+.saop-flow-step.attention { border-color: var(--pim-warn-border); border-left: 4px solid var(--pim-warn-bar); }
+.saop-flow-step.done strong { color: var(--pim-good-text); }
+.saop-flow-step.failed { margin-left: auto; }
+.saop-flow-step.failed.attention { border-color: var(--pim-bad-border); border-left: 4px solid var(--pim-bad-text); }
+.saop-flow-step.failed.attention strong { color: var(--pim-bad-text); }
+/* Puščica je CSS, ne znak. */
+.saop-flow-arrow { align-self: center; border-bottom: .35rem solid transparent; border-left: .45rem solid var(--pim-border-strong); border-top: .35rem solid transparent; height: 0; width: 0; }
+
+.card-head { align-items: baseline; display: flex; flex-wrap: wrap; gap: .5rem 1rem; justify-content: space-between; padding: .85rem .85rem 0; }
+.card-head h2 { color: var(--pim-text-strong); font-size: .95rem; margin: 0; }
+.card-head a { font-size: .8rem; font-weight: 600; }
+.error-advice { color: var(--pim-bad-strong); font-size: .76rem; line-height: 1.4; margin-top: .3rem; max-width: 22rem; }
+
+.confirm-bar { align-items: center; background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; justify-content: space-between; margin: 0 0 1rem; padding: .8rem 1rem; }
+.confirm-bar p { color: var(--pim-text-strong); font-size: .86rem; line-height: 1.5; margin: 0; max-width: 52rem; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.saop-flow-step:focus-visible,
+.small-action:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .saop-flow-arrow { display: none; }
+  .saop-flow-step { flex: 1 1 40%; }
+  .saop-flow-step.failed { margin-left: 0; }
+}

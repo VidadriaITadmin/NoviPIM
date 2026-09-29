@@ -37,7 +37,7 @@ static class MonitorPolicyChecks
     Check(MonitorPolicy.AgeLabel(TimeSpan.FromMinutes(-3)) == "0 s", "Ura strežnika pred bazo ne sme dati negativne starosti.");
 
     // ─── Pripadnost alarmov in podatkovni alarmi ────────────────────────────
-    foreach (var kind in new[] { "ReservationExcluded", "ExportRejected", "WebShopWithdrawn", "StockSnapshotStale", "StockSnapshotEmpty" })
+    foreach (var kind in new[] { "ReservationExcluded", "ExportRejected", "WebShopWithdrawn", "StockSnapshotStale", "StockSnapshotEmpty", "SafeguardPending" })
       Check(MonitorPolicy.IsDataAlert(kind), $"{kind} je podatkovni alarm (rešuje ga urednik) in ne sodi na Nadzor.");
     foreach (var kind in new[] { "PipelineOverdue", "JobFailed", "SourceStale", "AutomationHostDown", "OutboundDead" })
       Check(!MonitorPolicy.IsDataAlert(kind), $"{kind} je alarm delovanja in mora biti na Nadzoru.");

@@ -144,6 +144,14 @@
 .table-toolbar { align-items: center; display: flex; gap: .5rem; justify-content: flex-end; margin: 0 0 .5rem; }
 .table-toolbar label { color: var(--pim-text-muted); font-size: .78rem; }
 .table-toolbar .filter-select { max-width: 14rem; }
+.table-toolbar > .ghost-button { margin-right: auto; }
+
+/* 274: okno S-popusta za izbrane izdelke ali cel pogled. */
+.bulk-discount { margin-bottom: 1rem; padding: .9rem 1.1rem; }
+.bulk-discount-head { align-items: center; display: flex; justify-content: space-between; margin-bottom: .6rem; }
+.bulk-discount-head h2 { font-size: 1rem; margin: 0; }
+.bulk-discount .filter-actions { flex-wrap: wrap; }
+.bulk-discount .muted { font-size: .8rem; margin: .6rem 0 0; }
 
 /* Kartica se nalaga vec kot trenutek; do takrat mora seznam povedati, da se odpira. */
 .opening-card { position: relative; }

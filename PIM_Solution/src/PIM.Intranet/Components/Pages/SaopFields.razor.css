@@ -1,0 +1,4 @@
+/* Izoliran slog strani /saop/polja. */
+.clear-link { font-size: .8rem; font-weight: 600; }
+.group-row th { background: var(--pim-surface-subtle); color: var(--pim-text-strong); font-size: .78rem; letter-spacing: .02em; text-transform: none; }
+.clear-link:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }

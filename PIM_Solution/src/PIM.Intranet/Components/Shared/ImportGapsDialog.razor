@@ -366,7 +366,8 @@
       {
         var result = await CandidatesWrite.ReprocessSourceAsync(scope.OrganizationId, scope.SourceCode, actor);
         if (result.Runs > 0)
-          ReprocessNotes.Add($"{scope.SourceCode} ({scope.OrganizationName}): {result.Runs:N0} zajemov, {result.Pages:N0} strani je šlo znova skozi preslikavo.");
+          // 279: obdela se samo zadnji zajem vira (Runs je 0 ali 1).
+          ReprocessNotes.Add($"{scope.SourceCode} ({scope.OrganizationName}): zadnji zajem, {result.Pages:N0} strani je šlo znova skozi preslikavo.");
         if (!string.IsNullOrWhiteSpace(result.Errors)) { failed = true; ReprocessNotes.Add($"{scope.SourceCode} ({scope.OrganizationName}) napake: {result.Errors}"); }
       }
       if (ReprocessNotes.Count == 0) ReprocessNotes.Add("Za izbrane vire v bazi ni zajemov — ni bilo česa preslikati.");

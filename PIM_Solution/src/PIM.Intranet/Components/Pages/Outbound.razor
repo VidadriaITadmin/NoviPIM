@@ -29,6 +29,7 @@
     <button type="button" class="small-action" disabled="@ActionBusy" @onclick="ClearSelection">Počisti izbor</button>
   </section>
 }
+<SaopSafeguardBanner Version="SafeguardVersion" OrganizationId="OrganizationId" />
 <section class="ui-card data-card" aria-label="Artikli v odhodni vrsti">
 @if (Loading) { <div class="loading-state" role="status">Nalaganje izvozov …</div> }
 else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
@@ -97,6 +98,8 @@ else {
 }
 
 @code{
+  /// <summary>281: pasica deaktivacij se osveži po vsaki odobritvi.</summary>
+  int SafeguardVersion;
   int? OrganizationId;IReadOnlyList<PIM.Intranet.Services.OutboundRow>? Rows;bool Loading=true,ActionBusy;string? Message,Error;string Search="",StatusFilter="";int Page;const int PageSize=10;
   // Brez izbirnika je stran vedno kazala samo podjetje z najnizjo sifro (GetCurrentOrganizationAsync
   // vedno vrne to) — artikli za katero koli drugo podjetje so bili tu nevidni, ceprav so bili v
@@ -143,7 +146,8 @@ else {
   int CurrentPage => Math.Min(Page, PageCount - 1);
   void Previous()=>Page=Math.Max(0,CurrentPage-1);void Next()=>Page=Math.Min(PageCount-1,CurrentPage+1);
   protected override async Task OnInitializedAsync(){try{Organizations=await Data.GetOrganizationsAsync();var org=await Data.GetCurrentOrganizationAsync();OrganizationId=OrgContext.OrganizationId??org?.OrganizationId??Organizations.FirstOrDefault()?.OrganizationId;if(OrganizationId is null){Error="Aktivna organizacija ni na voljo.";return;}OrgContext.OrganizationId=OrganizationId;await Reload();}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
-  async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value);}
+  // 301: samo nezaključena sporočila — zaključena stran itak ne prikaže (Terminal), vseh pa je lahko 50.000+.
+  async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value,onlyActive:true);}
   async Task OnOrganizationChangedAsync(ChangeEventArgs args)
   {
     if (!int.TryParse(args.Value?.ToString(), out var organizationId) || organizationId == OrganizationId) return;
@@ -197,8 +201,11 @@ else {
       Message = "Artikel je odobren. " + SendMessage(await Write.TrySendArticleAsync(OrganizationId!.Value, entityKey));
       await Reload();
     }
+    // 281: artikel bi bil v SAOP neaktiven — potrditev na /varovalke (pasica zgoraj).
+    catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number == 52901)
+    { Message = "Sprememba tega artikla čaka potrditev — preveri jo na seznamu spodaj."; }
     catch { Error = "Dejanja trenutno ni mogoče izvesti. Sprememba stanja ni potrjena."; }
-    finally { ActionBusy = false; }
+    finally { ActionBusy = false; SafeguardVersion++; }
   }
   Task Cancel(string entityType, string entityKey)=>Act(actor=>Data.CancelItemAsync(OrganizationId!.Value,entityType,entityKey,actor),"Artikel je preklican.");
   // Rocni "poslji zdaj" za artikel, ki je ze odobren (Pending/Retry) in samo caka na worker —
@@ -286,8 +293,11 @@ else {
         var send = await Write.TrySendArticleAsync(OrganizationId!.Value, article.EntityKey);
         sendNotes.Add($"{article.EntityKey}: {SendMessage(send)}");
       }
+      catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number == 52901)
+      { failed.Add($"{article.EntityKey} (čaka potrditev — seznam spodaj)"); }
       catch { failed.Add($"{article.EntityType} {article.EntityKey}"); }
     }
+    SafeguardVersion++;
     Selected.Clear();
     await Reload();
     var approved = failed.Count == 0 ? $"Odobreno: {ok} artiklov." : $"Odobreno: {ok} artiklov, ni uspelo za: {string.Join(", ", failed)}.";

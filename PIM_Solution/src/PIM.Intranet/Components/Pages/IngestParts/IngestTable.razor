@@ -1,0 +1,40 @@
+@* Tabela področja Zajem z razvrščanjem po stolpcih (prenova 2026-09-26). PimTable glave ne zna
+   narediti klikljive; ta ohrani isto ogrodje (napis, drsnik, scope) in doda povezavo na stolpec.
+   Razvrščanje je povezava, ne gumb: živi v URL-ju in dela z Nazaj. *@
+<div class="table-scroll" role="region" tabindex="0" aria-label="@Caption">
+  <table class="data-table @TableClass">
+    <caption>@Caption</caption>
+    <thead>
+      <tr>
+        @foreach (var column in Columns)
+        {
+          var active = column.SortKey is not null && string.Equals(column.SortKey, Sort, StringComparison.Ordinal);
+          <th scope="col" class="@(column.Numeric ? "numeric" : null)" aria-sort="@(active ? (Descending ? "descending" : "ascending") : null)">
+            @if (column.SortKey is null || SortHref is null)
+            {
+              @column.Label
+            }
+            else
+            {
+              <a class="sort-link @(active ? "on" : null)" href="@SortHref(column.SortKey)" title="Razvrsti po stolpcu »@column.Label«">
+                @column.Label<span class="sort-icon @(active ? (Descending ? "desc" : "asc") : null)" aria-hidden="true"></span>
+              </a>
+            }
+          </th>
+        }
+      </tr>
+    </thead>
+    <tbody>@Rows</tbody>
+  </table>
+</div>
+
+@code {
+  [Parameter, EditorRequired] public required string Caption { get; set; }
+  [Parameter, EditorRequired] public required IReadOnlyList<IngestColumn> Columns { get; set; }
+  [Parameter, EditorRequired] public required RenderFragment Rows { get; set; }
+  [Parameter] public string? Sort { get; set; }
+  [Parameter] public bool Descending { get; set; }
+  /// <summary>Povezava za klik na stolpec (ključ → base-relativni naslov); null = brez razvrščanja.</summary>
+  [Parameter] public Func<string, string>? SortHref { get; set; }
+  [Parameter] public string? TableClass { get; set; }
+}

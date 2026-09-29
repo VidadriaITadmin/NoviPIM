@@ -37,18 +37,37 @@ public sealed class CustomerWorkbookRowChange(int rowNumber, CustomerListRow cur
   /// <summary>Novi ročni kontakti (vsi štirje), kadar se je spremenil katerikoli.</summary>
   public ContactTarget? Contact { get; set; }
 
+  /// <summary>279: skrbnik, e-pošta za dobavnice in obveščanje (vsi štirje), kadar se je spremenil katerikoli.</summary>
+  public ExtraTarget? Extra { get; set; }
+
+  /// <summary>279: skupina artiklov → nov dodatni popust (P2); null pomeni »umakni«.</summary>
+  public Dictionary<string, decimal?> ExtraGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+  /// <summary>279: nov zaznamek, ki se doda k obstoječim.</summary>
+  public string? Note { get; set; }
+
   public sealed record ProfileTarget(
     string? Kind, string? TypeCode, bool Packaging, bool Value, bool Plus, DateTime? PlusFrom, DateTime? PlusTo);
 
   public sealed record ContactTarget(string? Email, string? Phone, string? Mobile, string? Persons);
+
+  public sealed record ExtraTarget(string? AccountManager, string? DeliveryNoteEmail, string? NoticeEmail, string? NoticePerson);
 }
+
+/// <summary>
+/// Vrstica lista »S po tipih strank« (274): pravilo posebnega S za tip stranke. <paramref name="RemoveRuleId"/>
+/// je nastavljen, kadar vrstica pravilo ukinja (stolpec »Ukini« = D).
+/// </summary>
+public sealed record CustomerTypeRuleChange(
+  int RowNumber, int OrganizationId, string OrganizationName, PackagingRuleInput Input, long? RemoveRuleId, string Description);
 
 public sealed record CustomerWorkbookPreview(
   IReadOnlyList<CustomerWorkbookRowChange> Rows, int RowsRead, int UnchangedRows,
   IReadOnlyList<string> Problems, IReadOnlyList<string> Warnings,
-  IReadOnlyList<string> UnknownColumns, IReadOnlyList<string> ReadOnlyColumns)
+  IReadOnlyList<string> UnknownColumns, IReadOnlyList<string> ReadOnlyColumns,
+  IReadOnlyList<CustomerTypeRuleChange>? TypeRules = null)
 {
-  public int ChangeCount => Rows.Sum(row => row.Changes.Count);
+  public int ChangeCount => Rows.Sum(row => row.Changes.Count) + (TypeRules?.Count ?? 0);
 }
 
 /// <param name="CustomerExportRows">Spremenjene stranke, ki gredo v stranke.csv (aktivne z B2B profilom).</param>
@@ -71,8 +90,14 @@ public sealed record CustomerWorkbookOutcome(
 /// »izprazni« — brez tega se popusta ali tipa z uvozom ne bi dalo odstraniti. Seznam v celici je
 /// ločen z »|« in je CEL seznam: skupina ali izdelek, ki ga v celici ni več, se umakne.
 /// </summary>
-public sealed class CustomerWorkbookService(IConfiguration configuration, CustomerListService customers)
+public sealed class CustomerWorkbookService(IConfiguration configuration, CustomerListService customers,
+  PackagingDiscountService? packagingService = null)
 {
+  /// <summary>Pravila S (274); v testih brez DI se ustvari iz iste konfiguracije.</summary>
+  readonly PackagingDiscountService packaging = packagingService ?? new PackagingDiscountService(configuration);
+
+  /// <summary>Drugi list zvezka: pravila posebnega S po tipu stranke (274).</summary>
+  public const string TypeRulesSheetName = "S po tipih strank";
   public const string ClearToken = "-";
   public const string SheetName = "Stranke";
 
@@ -83,6 +108,7 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
   const string GroupTiers = "Vrednostni rabat stranke — v stranke.csv";
   const string GroupDiscounts = "Popusti po skupinah in izdelkih";
   const string GroupContacts = "Kontakti — v stranke.csv";
+  const string GroupInternal = "Prodaja — samo v PIM";
   const string GroupState = "Stanje — samo za branje";
 
   public const string OrganizationKey = "ORG";
@@ -101,6 +127,12 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
   const string PhoneKey = "PHONE";
   const string MobileKey = "MOBILE";
   const string PersonsKey = "PERSONS";
+  const string ExtraGroupsKey = "EXTRA_GROUPS";
+  const string ManagerKey = "MANAGER";
+  const string DeliveryEmailKey = "DELIVERY_EMAIL";
+  const string NoticeEmailKey = "NOTICE_EMAIL";
+  const string NoticePersonKey = "NOTICE_PERSON";
+  const string AddNoteKey = "ADD_NOTE";
   static string ThresholdKey(int tier) => "T" + tier + "_THRESHOLD";
   static string PercentKey(int tier) => "T" + tier + "_PERCENT";
 
@@ -133,12 +165,21 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
     new(PercentKey(3), "Rabat 3 (%)", GroupTiers, true, WorkbookCellKind.Number),
 
     new(GroupsKey, "Skupinski popusti stranke", GroupDiscounts, true, Width: 30),
-    new(SpecialKey, "Posebni S po izdelku (katalog.csv)", GroupDiscounts, true, Width: 30),
+    new(SpecialKey, "Posebni S po izdelku (katalog.csv)", GroupDiscounts, true, Width: 36),
+    new(ExtraGroupsKey, "Dodatni popust po skupinah (P2)", GroupDiscounts, true, Width: 24),
 
     new(EmailKey, "E-pošta", GroupContacts, true, Width: 26),
     new(PhoneKey, "Telefon", GroupContacts, true, Width: 16),
     new(MobileKey, "Mobitel", GroupContacts, true, Width: 16),
     new(PersonsKey, "Osebe", GroupContacts, true, Width: 26),
+
+    new("CLERK", "Referent (SAOP)", GroupInternal, false, Width: 22),
+    new(ManagerKey, "Skrbnik", GroupInternal, true, Width: 20),
+    new(DeliveryEmailKey, "E-pošta za dobavnice", GroupInternal, true, Width: 26),
+    new(NoticeEmailKey, "E-pošta za obveščanje", GroupInternal, true, Width: 26),
+    new(NoticePersonKey, "Oseba za obveščanje", GroupInternal, true, Width: 20),
+    new(AddNoteKey, "Dodaj opombo", GroupInternal, true, Width: 30),
+    new("NOTES", "Opombe", GroupInternal, false, Width: 40),
 
     new("MAGENTO", "Magento skupina", GroupState, false, Width: 16),
     new("ACTIVE", "Aktivna", GroupState, false, Width: 9),
@@ -160,7 +201,9 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
     "Prag in rabat iste stopnje vpiši skupaj; prazna stopnja pomeni splošno lestvico.",
     "Skupinski popusti stranke: ročni popust SKUPINA=% ločeno z |, npr. NW=10 | AR=5. Celica je cel seznam — skupina, ki je ni več, se umakne. Ročni popust prevlada nad SAOP.",
     "Skupine popustov v stranke.csv (samo za branje): kar gre na splet v stolpca Skupine popustov in Popust NW — ročni popust stranke, ročni popust tipa, sicer SAOP rabatni cenik; poslovna enota (PE) ga podeduje od plačnika, tranzit ga nima. Samo danes veljavni popusti nad 0 %.",
-    "Posebni S: ARTIKEL\\S2 ločeno z |. Artikel mora biti objavljen izdelek istega podjetja. V katalog.csv gredo v stolpec Posebni popust za stranko kot ŠIFRA_STRANKE\\S2.",
+    "Dodatni popust po skupinah (P2): SKUPINA=% ločeno z |, npr. NW=7. Obračuna se ZA osnovnim popustom skupine (kot P2 za P1 v SAOP): NW 39 % in dodatni 7 % = 43,27 % v stranke.csv; brez osnovnega velja sam. Celica je cel seznam.",
+    "Prodaja — samo v PIM: Referent je iz SAOP (samo za branje). Skrbnik, e-pošta za dobavnice, e-pošta in oseba za obveščanje ne gredo v stranke.csv. »Dodaj opombo« doda nov zaznamek na kartico (obstoječi ostanejo in so vidni v stolpcu Opombe); v izvozu je vedno prazna.",
+    "Posebni S (katalog.csv, stolpec Posebni popust za stranko kot ŠIFRA_STRANKE\\S2): ločeno z |. ARTIKEL\\S2 = en artikel (objavljen izdelek istega podjetja); SKUPINA:BRAYTRON\\S3 = vsi artikli rabatne skupine; S:S2\\S3 = vsi artikli, ki imajo privzeto S2; *\\S3 = vsi artikli. Velja najbolj specifično: artikel, S koda, skupina, vsi. Posebni S stranke ima prednost pred pravilom njenega tipa (list »S po tipih strank«).",
     "V stranke.csv gre aktivna stranka z B2B profilom. Stolpci pod »samo za branje« se pri uvozu prezrejo. Ključ vrstice je Podjetje + Šifra stranke.",
   ];
 
@@ -171,11 +214,60 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
 
   /* --- Izvoz ------------------------------------------------------------------------------- */
 
-  public static byte[] Build(IReadOnlyList<CustomerListRow> rows)
+  public static byte[] Build(IReadOnlyList<CustomerListRow> rows, IReadOnlyList<(string Organization, PackagingRule Rule)>? typeRules = null)
   {
     var columns = Columns.Select(column => new WorkbookColumn(column.Header, column.Kind, column.Width, column.Group)).ToArray();
-    return WorkbookWriter.Write([new WorkbookWriteSheet(SheetName, columns, rows.Select(Cells), Notes)]);
+    var sheets = new List<WorkbookWriteSheet> { new(SheetName, columns, rows.Select(Cells), Notes) };
+    if (typeRules is not null)
+      sheets.Add(new(TypeRulesSheetName,
+        TypeRuleColumns.Select(column => new WorkbookColumn(column.Header, column.Kind, column.Width, column.Group)).ToArray(),
+        typeRules.Select(pair => (IReadOnlyList<object?>)
+        [
+          pair.Organization, pair.Rule.TargetCode, pair.Rule.TargetName,
+          PackagingDiscountService.ScopeText(pair.Rule.ScopeKind, pair.Rule.ItemId, pair.Rule.ItemGroupCode, pair.Rule.FromDiscountCode),
+          pair.Rule.DiscountCode, pair.Rule.ValidFrom, pair.Rule.ValidTo, pair.Rule.Note, "N",
+          pair.Rule.MagentoGroupKey, pair.Rule.ProductCount, pair.Rule.CustomerCount,
+        ]), TypeRuleNotes));
+    return WorkbookWriter.Write(sheets);
   }
+
+  /// <summary>Delovni list strank z listom pravil S po tipih za podjetja, ki so v vrsticah (ali izbrano podjetje).</summary>
+  public async Task<byte[]> BuildAsync(IReadOnlyList<CustomerListRow> rows, int? organizationId, CancellationToken cancellationToken = default)
+  {
+    var organizations = await OrganizationsAsync(cancellationToken);
+    var ids = organizationId is { } one ? [one] : rows.Select(row => row.OrganizationId).Distinct().ToList();
+    var typeRules = new List<(string, PackagingRule)>();
+    foreach (var id in ids)
+      foreach (var rule in (await packaging.GetRulesAsync(id, cancellationToken: cancellationToken)).Where(rule => rule.TargetKind == PackagingDiscountService.TargetType))
+        typeRules.Add((organizations.GetValueOrDefault(id, id.ToString(CultureInfo.InvariantCulture)), rule));
+    return Build(rows, typeRules);
+  }
+
+  const string TypeRuleGroupKey = "Pravilo";
+  const string TypeRuleGroupState = "Stanje — samo za branje";
+
+  static readonly IReadOnlyList<CustomerWorkbookColumn> TypeRuleColumns =
+  [
+    new(OrganizationKey, "Podjetje", TypeRuleGroupKey, true, Width: 14),
+    new("TR_TYPE", "Tip stranke", TypeRuleGroupKey, true, Width: 20),
+    new("TR_TYPE_NAME", "Ime tipa", TypeRuleGroupState, false, Width: 24),
+    new("TR_SCOPE", "Za artikle", TypeRuleGroupKey, true, Width: 26),
+    new("TR_CODE", "S koda", TypeRuleGroupKey, true, Width: 9),
+    new("TR_FROM", "Velja od", TypeRuleGroupKey, true, WorkbookCellKind.DateTime),
+    new("TR_TO", "Velja do", TypeRuleGroupKey, true, WorkbookCellKind.DateTime),
+    new("TR_NOTE", "Opomba", TypeRuleGroupKey, true, Width: 24),
+    new("TR_REMOVE", "Ukini", TypeRuleGroupKey, true, Width: 8),
+    new("TR_MAGENTO", "Magento skupina", TypeRuleGroupState, false, Width: 20),
+    new("TR_PRODUCTS", "Artiklov danes", TypeRuleGroupState, false, WorkbookCellKind.Number, 12),
+    new("TR_CUSTOMERS", "Strank tega tipa", TypeRuleGroupState, false, WorkbookCellKind.Number, 12),
+  ];
+
+  static readonly IReadOnlyList<string> TypeRuleNotes =
+  [
+    "Pravila posebnega S za TIP stranke: vse stranke tega tipa (npr. vsi inštalaterji) dobijo na izbranih artiklih namesto privzetega S izdelka to S kodo. V katalog.csv gredo v stolpec »Posebni S za skupino strank« kot MAGENTO_SKUPINA\\S3.",
+    "Za artikle: ARTIKEL (en artikel), SKUPINA:BRAYTRON (rabatna skupina), S:S2 (vsi artikli s privzetim S2), * (vsi artikli). Velja najbolj specifično pravilo; pravilo posamezne stranke (list Stranke) ima prednost pred pravilom tipa.",
+    "Nova vrstica doda pravilo, spremenjena S koda ali datum ga posodobi. Ukini = D pravilo umakne. Vrstic, ki jih v datoteki ni, uvoz ne spremeni.",
+  ];
 
   static IReadOnlyList<object?> Cells(CustomerListRow row) =>
   [
@@ -192,7 +284,9 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
     row.B2bPlusValidFrom, row.B2bPlusValidTo,
     row.Tier1Threshold, row.Tier1Percent, row.Tier2Threshold, row.Tier2Percent, row.Tier3Threshold, row.Tier3Percent,
     row.GroupDiscounts, row.SpecialDiscounts,
+    row.ExtraGroupDiscounts,
     row.Email, row.Phone, row.Mobile, row.Persons,
+    row.SalesClerkLabel, row.AccountManager, row.DeliveryNoteEmail, row.NoticeEmail, row.NoticePerson, null, row.Notes,
     row.MagentoGroupKey,
     ProductWorkbookContract.SheetYesNo(row.IsActive),
     ProductWorkbookContract.SheetYesNo(row.InCustomerExport),
@@ -205,6 +299,8 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
 
   public async Task<CustomerWorkbookPreview> PreviewAsync(Stream stream, int? fallbackOrganizationId, CancellationToken cancellationToken = default)
   {
+    var sheetNames = WorkbookTable.SheetNames(stream);
+    stream.Position = 0;
     var sheet = WorkbookTable.Read(stream, headerHints: ["Šifra stranke", "Podjetje"]);
 
     var byHeader = Columns.ToDictionary(column => WorkbookHeader.Normalize(column.Header));
@@ -275,12 +371,84 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
       ReadGroups(change, Cell(GroupsKey), itemGroups, where, problems, warnings);
       ReadSpecials(change, Cell(SpecialKey), packagingCodes, where, problems);
       ReadContacts(change, Cell);
+      ReadExtraGroups(change, Cell(ExtraGroupsKey), itemGroups, where, problems, warnings);
+      ReadExtra(change, Cell);
 
       if (change.Changes.Count == 0) unchanged++;
       else rows.Add(change);
     }
 
-    return new(rows, read, unchanged, problems, warnings, unknown, readOnly);
+    // 274: drugi list — pravila posebnega S po tipu stranke.
+    var typeRules = new List<CustomerTypeRuleChange>();
+    if (sheetNames.Any(name => WorkbookHeader.Same(name, TypeRulesSheetName)))
+    {
+      stream.Position = 0;
+      var ruleSheet = WorkbookTable.Read(stream, sheetNames.First(name => WorkbookHeader.Same(name, TypeRulesSheetName)),
+        headerHints: ["Tip stranke", "Za artikle"]);
+      await ReadTypeRulesAsync(ruleSheet, fallbackOrganizationId, organizations, types, packagingCodes, typeRules, problems, cancellationToken);
+    }
+
+    return new(rows, read, unchanged, problems, warnings, unknown, readOnly, typeRules);
+  }
+
+  async Task ReadTypeRulesAsync(WorkbookSheet sheet, int? fallbackOrganizationId, IReadOnlyDictionary<int, string> organizations,
+    IReadOnlyDictionary<string, string> types, IReadOnlySet<string> packagingCodes, List<CustomerTypeRuleChange> result,
+    List<string> problems, CancellationToken cancellationToken)
+  {
+    var index = TypeRuleColumns.ToDictionary(column => column.Key, column => sheet.Headers.ToList()
+      .FindIndex(header => WorkbookHeader.Same(header, column.Header)));
+    if (index["TR_TYPE"] < 0 || index["TR_SCOPE"] < 0 || index["TR_CODE"] < 0)
+    {
+      problems.Add($"List »{TypeRulesSheetName}« nima stolpcev Tip stranke, Za artikle in S koda — list je prezrt.");
+      return;
+    }
+    var existing = new Dictionary<int, IReadOnlyList<PackagingRule>>();
+    for (var row = 0; row < sheet.Rows.Count; row++)
+    {
+      var cells = sheet.Rows[row];
+      var rowNumber = sheet.RowNumber(row);
+      string Cell(string key) => index[key] is var at && at >= 0 && at < cells.Count ? (cells[at] ?? "").Trim() : "";
+      var where = $"List »{TypeRulesSheetName}«, vrstica {rowNumber}";
+      var typeText = Cell("TR_TYPE");
+      var scopeText = Cell("TR_SCOPE");
+      if (typeText.Length == 0 && scopeText.Length == 0) continue;
+
+      var organizationText = Cell(OrganizationKey);
+      int? organizationId = organizationText.Length == 0 ? fallbackOrganizationId : ResolveOrganization(organizations, organizationText);
+      if (organizationId is null) { problems.Add($"{where}: podjetje ni znano — vrstica je izpuščena."); continue; }
+      if (ParseType(types, typeText) is not { } typeCode) { problems.Add($"{where}: tipa stranke »{typeText}« ni v šifrantu."); continue; }
+      if (PackagingDiscountService.ParseScope(scopeText) is not { } scope) { problems.Add($"{where}: »Za artikle« je prazno — vpiši ARTIKEL, SKUPINA:koda, S:S2 ali *."); continue; }
+
+      if (!existing.TryGetValue(organizationId.Value, out var rules))
+        existing[organizationId.Value] = rules = (await packaging.GetRulesAsync(organizationId.Value, cancellationToken: cancellationToken))
+          .Where(rule => rule.TargetKind == PackagingDiscountService.TargetType).ToList();
+      var current = rules.FirstOrDefault(rule => string.Equals(rule.TargetCode, typeCode, StringComparison.OrdinalIgnoreCase)
+        && new PackagingScope(rule.ScopeKind, rule.ItemId, rule.ItemGroupCode, rule.FromDiscountCode).Key == scope.Key);
+      var organizationName = organizations.GetValueOrDefault(organizationId.Value, organizationId.Value.ToString(CultureInfo.InvariantCulture));
+      var label = $"{types[typeCode]} · {PackagingDiscountService.ScopeLabel(scope.ScopeKind, scope.ItemId, scope.ItemGroupCode, scope.FromDiscountCode)}";
+
+      if (ProductWorkbookContract.ParseYesNo(Cell("TR_REMOVE")) == true)
+      {
+        if (current is null) continue;
+        result.Add(new(rowNumber, organizationId.Value, organizationName,
+          new(PackagingDiscountService.TargetType, typeCode, null, null, scope.ScopeKind, scope.ItemId, scope.ItemGroupCode, scope.FromDiscountCode, current.DiscountCode),
+          current.RuleId, $"{label}: ukini ({current.DiscountCode})"));
+        continue;
+      }
+
+      var code = Cell("TR_CODE").ToUpperInvariant();
+      if (!packagingCodes.Contains(code)) { problems.Add($"{where}: S koda »{code}« ni v šifrantu ({string.Join(", ", packagingCodes.Order())})."); continue; }
+      DateTime? from = null, to = null;
+      if (!ReadDate(Cell("TR_FROM"), "Velja od", ref from, where, problems) || !ReadDate(Cell("TR_TO"), "Velja do", ref to, where, problems)) continue;
+      var note = Cell("TR_NOTE") is { Length: > 0 } text ? text : null;
+      if (current is not null && string.Equals(current.DiscountCode, code, StringComparison.OrdinalIgnoreCase)
+        && current.ValidFrom?.Date == from?.Date && current.ValidTo?.Date == to?.Date) continue;
+
+      result.Add(new(rowNumber, organizationId.Value, organizationName,
+        new(PackagingDiscountService.TargetType, typeCode, null, null, scope.ScopeKind, scope.ItemId, scope.ItemGroupCode, scope.FromDiscountCode,
+          code, from, to, note),
+        null, current is null ? $"{label}: nov {code}" : $"{label}: {current.DiscountCode} → {code}"));
+    }
   }
 
   static void ReadProfile(CustomerWorkbookRowChange change, Func<string, string> cell,
@@ -443,6 +611,11 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
       }
     }
 
+    // 274: levo je obseg — artikel, SKUPINA:koda, S:S2 ali *. Ključ je enoten zapis obsega.
+    wanted = wanted.ToDictionary(pair => PackagingDiscountService.ParseScope(pair.Key)?.Text ?? pair.Key, pair => pair.Value,
+      StringComparer.OrdinalIgnoreCase);
+    current = current.ToDictionary(pair => PackagingDiscountService.ParseScope(pair.Key)?.Text ?? pair.Key, pair => pair.Value,
+      StringComparer.OrdinalIgnoreCase);
     foreach (var (item, code) in wanted)
       if (!current.TryGetValue(item, out var old) || !string.Equals(old, code, StringComparison.OrdinalIgnoreCase)) change.Specials[item] = code;
     foreach (var item in current.Keys)
@@ -471,6 +644,69 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
     if (mobile != row.Mobile) change.Changes.Add(new("Mobitel", row.Mobile, mobile));
     if (persons != row.Persons) change.Changes.Add(new("Osebe", row.Persons, persons));
     if (change.Changes.Count > before) change.Contact = new(email, phone, mobile, persons);
+  }
+
+  /// <summary>279: dodatni popust (P2) — isti zapis in ista pravila celice kot skupinski popusti.</summary>
+  static void ReadExtraGroups(CustomerWorkbookRowChange change, string text, IReadOnlyDictionary<(int, string), string> itemGroups,
+    string where, List<string> problems, List<string> warnings)
+  {
+    if (text.Length == 0) return;
+    var current = ParseGroupList(change.Current.ExtraGroupDiscounts, out _);
+    var wanted = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+    if (text != ClearToken)
+    {
+      var typed = ParseGroupList(text, out var error);
+      if (error is not null) { problems.Add($"{where}: dodatni popust — {error}"); return; }
+      foreach (var (group, percent) in typed)
+      {
+        if (itemGroups.TryGetValue((change.Current.OrganizationId, group.ToUpperInvariant()), out var canonical))
+          wanted[canonical] = percent;
+        else
+        {
+          wanted[group] = percent;
+          warnings.Add($"{where}: skupina »{group}« ni skupina artiklov nobenega izdelka tega podjetja — dodatni popust se zapiše, a v Magentu ne bo zadel izdelka.");
+        }
+      }
+    }
+
+    foreach (var (group, percent) in wanted)
+      if (!current.TryGetValue(group, out var old) || old != percent) change.ExtraGroups[group] = percent;
+    foreach (var group in current.Keys)
+      if (!wanted.ContainsKey(group)) change.ExtraGroups[group] = null;
+
+    if (change.ExtraGroups.Count > 0)
+      change.Changes.Add(new("Dodatni popust (P2)", change.Current.ExtraGroupDiscounts, FormatGroups(wanted)));
+  }
+
+  static void ReadExtra(CustomerWorkbookRowChange change, Func<string, string> cell)
+  {
+    var row = change.Current;
+    string? Next(string key, string? old)
+    {
+      var text = cell(key);
+      return text.Length == 0 ? old : text == ClearToken ? null : text;
+    }
+
+    var manager = Next(ManagerKey, row.AccountManager);
+    var delivery = Next(DeliveryEmailKey, row.DeliveryNoteEmail);
+    var noticeEmail = Next(NoticeEmailKey, row.NoticeEmail);
+    var noticePerson = Next(NoticePersonKey, row.NoticePerson);
+    var before = change.Changes.Count;
+    if (manager != row.AccountManager) change.Changes.Add(new("Skrbnik", row.AccountManager, manager));
+    if (delivery != row.DeliveryNoteEmail) change.Changes.Add(new("E-pošta za dobavnice", row.DeliveryNoteEmail, delivery));
+    if (noticeEmail != row.NoticeEmail) change.Changes.Add(new("E-pošta za obveščanje", row.NoticeEmail, noticeEmail));
+    if (noticePerson != row.NoticePerson) change.Changes.Add(new("Oseba za obveščanje", row.NoticePerson, noticePerson));
+    if (change.Changes.Count > before) change.Extra = new(manager, delivery, noticeEmail, noticePerson);
+
+    // Opomba se doda, ne prepiše. Besedilo, ki ga zaznamki že nosijo, se ne podvoji (ponovni uvoz iste datoteke).
+    var note = cell(AddNoteKey);
+    if (note.Length > 0 && note != ClearToken && !Collapse(row.Notes ?? "").Contains(Collapse(note), StringComparison.Ordinal))
+    {
+      change.Note = note;
+      change.Changes.Add(new("Nova opomba", null, note));
+    }
+
+    static string Collapse(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
   }
 
   /* --- Uvoz: zapis ---------------------------------------------------------------------------- */
@@ -530,14 +766,10 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
         var active = await ActiveSpecialOverridesAsync(connection, row, cancellationToken);
         foreach (var (item, code) in change.Specials)
         {
-          var ok = await TryAsync($"posebni S za {item}", () => code is not null
-            ? ExecAsync(connection, "b2b.SaveCustomerPackagingDiscountOverride", command =>
-              {
-                AddCustomer(command, row);
-                command.Parameters.Add("@ItemID", SqlDbType.NVarChar, 50).Value = item;
-                command.Parameters.Add("@DiscountCode", SqlDbType.NVarChar, 10).Value = code;
-                command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
-              }, cancellationToken)
+          var scope = PackagingDiscountService.ParseScope(item);
+          var ok = scope is not null && await TryAsync($"posebni S za {item}", () => code is not null
+            ? packaging.SaveRuleAsync(row.OrganizationId, new(PackagingDiscountService.TargetCustomer, null, row.CustomerId, null,
+                scope.ScopeKind, scope.ItemId, scope.ItemGroupCode, scope.FromDiscountCode, code), actor, cancellationToken, connection)
             : RemoveSpecialsAsync(connection, row,
                 active.Where(entry => string.Equals(entry.ItemId, item, StringComparison.OrdinalIgnoreCase)).Select(entry => entry.Id).ToArray(),
                 actor, cancellationToken));
@@ -554,6 +786,41 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
           command.Parameters.Add("@Mobile", SqlDbType.NVarChar, 200).Value = (object?)contact.Mobile ?? DBNull.Value;
           command.Parameters.Add("@Persons", SqlDbType.NVarChar, 1000).Value = (object?)contact.Persons ?? DBNull.Value;
           command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+        }, cancellationToken));
+
+      if (change.Extra is { } extra)
+        await TryAsync("skrbnik in e-pošta za dobavnice/obveščanje", () => ExecAsync(connection, "b2b.SaveCustomerExtra", command =>
+        {
+          AddCustomer(command, row);
+          command.Parameters.Add("@AccountManager", SqlDbType.NVarChar, 200).Value = (object?)extra.AccountManager ?? DBNull.Value;
+          command.Parameters.Add("@DeliveryNoteEmail", SqlDbType.NVarChar, 400).Value = (object?)extra.DeliveryNoteEmail ?? DBNull.Value;
+          command.Parameters.Add("@NoticeEmail", SqlDbType.NVarChar, 400).Value = (object?)extra.NoticeEmail ?? DBNull.Value;
+          command.Parameters.Add("@NoticePerson", SqlDbType.NVarChar, 400).Value = (object?)extra.NoticePerson ?? DBNull.Value;
+          command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+        }, cancellationToken));
+
+      foreach (var (group, percent) in change.ExtraGroups)
+        await TryAsync($"dodatni popust {group}", () => percent is { } value
+          ? ExecAsync(connection, "b2b.SaveCustomerExtraGroupDiscount", command =>
+            {
+              AddCustomer(command, row);
+              command.Parameters.Add("@ItemGroupCode", SqlDbType.NVarChar, 100).Value = group;
+              AddDecimal(command, "@PercentValue", value, 9, 4);
+              command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+            }, cancellationToken)
+          : ExecAsync(connection, "b2b.RemoveCustomerExtraGroupDiscount", command =>
+            {
+              AddCustomer(command, row);
+              command.Parameters.Add("@ItemGroupCode", SqlDbType.NVarChar, 100).Value = group;
+              command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
+            }, cancellationToken));
+
+      if (change.Note is { } note)
+        await TryAsync("opomba", () => ExecAsync(connection, "intranet.AddCustomerNote", command =>
+        {
+          AddCustomer(command, row);
+          command.Parameters.Add("@Body", SqlDbType.NVarChar, 4000).Value = note;
+          command.Parameters.Add("@CreatedBy", SqlDbType.NVarChar, 200).Value = actor;
         }, cancellationToken));
 
       if (written > before)
@@ -577,6 +844,19 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
           return false;
         }
       }
+    }
+
+    // 274: pravila posebnega S po tipu stranke (drugi list).
+    foreach (var rule in preview.TypeRules ?? [])
+    {
+      try
+      {
+        if (rule.RemoveRuleId is { } removeId) await packaging.RemoveRuleAsync(rule.OrganizationId, removeId, actor, cancellationToken, connection);
+        else await packaging.SaveRuleAsync(rule.OrganizationId, rule.Input, actor, cancellationToken, connection);
+        written++;
+        organizations.Add(rule.OrganizationName);
+      }
+      catch (SqlException failure) { problems.Add($"List »{TypeRulesSheetName}«, vrstica {rule.RowNumber}: {rule.Description} ni zapisano — {failure.Message}"); }
     }
 
     return new(touched, written, exportRows, catalogProducts.Count, organizations.ToArray(), problems);
@@ -643,10 +923,10 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
     string actor, CancellationToken cancellationToken)
   {
     foreach (var id in ids)
-      await ExecAsync(connection, "b2b.RemoveCustomerPackagingDiscountOverride", command =>
+      await ExecAsync(connection, "b2b.RemovePackagingDiscountRule", command =>
       {
-        AddCustomer(command, row);
-        command.Parameters.Add("@OverrideId", SqlDbType.BigInt).Value = id;
+        command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = row.OrganizationId;
+        command.Parameters.Add("@RuleId", SqlDbType.BigInt).Value = id;
         command.Parameters.Add("@ChangedBy", SqlDbType.NVarChar, 200).Value = actor;
       }, cancellationToken);
   }
@@ -668,11 +948,14 @@ public sealed class CustomerWorkbookService(IConfiguration configuration, Custom
   static async Task<IReadOnlyList<(long Id, string ItemId)>> ActiveSpecialOverridesAsync(
     SqlConnection connection, CustomerListRow row, CancellationToken cancellationToken)
   {
+    // 274: vsa pravila stranke (artikel, rabatna skupina, S koda, vsi) v zapisu obsega iz celice.
     await using var command = new SqlCommand("""
-      SELECT special.OverrideId, product.ItemID
-      FROM b2b.CustomerPackagingDiscountOverride AS special
-      INNER JOIN pim.Product AS product ON product.PimProductId = special.PimProductId
-      WHERE special.CustomerId = @CustomerId AND special.IsActive = 1 AND product.OrganizationId = @OrganizationId;
+      SELECT rule274.RuleId, ScopeText = CASE rule274.ScopeKind WHEN N'ITEM' THEN product.ItemID
+        WHEN N'ITEM_GROUP' THEN N'SKUPINA:' + rule274.ItemGroupCode WHEN N'S_CODE' THEN N'S:' + rule274.FromDiscountCode ELSE N'*' END
+      FROM b2b.PackagingDiscountRule AS rule274
+      LEFT JOIN pim.Product AS product ON product.PimProductId = rule274.PimProductId
+      WHERE rule274.TargetKind = N'CUSTOMER' AND rule274.CustomerId = @CustomerId
+        AND rule274.OrganizationId = @OrganizationId AND rule274.IsActive = 1;
       """, connection);
     AddCustomer(command, row);
     var rows = new List<(long, string)>();

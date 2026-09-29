@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Bralni API za analize in AI (migracija 287, docs/API.md). Samostojna spletna aplikacija ob intranetu:
+       bere SAMO prek postopkov sheme api z uporabnikom v vlogi pim_api_reader, zato ne more pisati v katalog
+       ali SAOP. Namesti se kot svoje IIS spletno mesto (Navodila/08_API_za_AI.md). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PIM.Api</RootNamespace>
+    <AssemblyName>PIM.Api</AssemblyName>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Povezava do baze ne sme na strežnik iz razvojnega računalnika: tam velja tista, ki jo skrbnik
+         postavi ob PIM.Api.exe (appsettings.Local.json). -->
+    <Content Remove="appsettings.Local.json" />
+  </ItemGroup>
+
+</Project>

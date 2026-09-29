@@ -4,7 +4,8 @@ using PIM.B2b;
 namespace PIM.B2bWorker;
 
 /// <param name="ExportProfileId">Ključ profila; procedura out.GetExportRows ga potrebuje.</param>
-public sealed record ExportProfileDefinition(int ExportProfileId, string ProfileCode, IReadOnlyList<ExportColumnDefinition> Columns);
+/// <param name="FieldDelimiter">Ločilo stolpcev (<c>out.ExportProfile.FieldDelimiter</c>, 277): katalog.csv »;«, ostali »,«.</param>
+public sealed record ExportProfileDefinition(int ExportProfileId, string ProfileCode, IReadOnlyList<ExportColumnDefinition> Columns, char FieldDelimiter = ',');
 
 /// <summary>
 /// Bere izvozni profil iz registra <c>out.ExportProfile</c> / <c>out.ExportColumn</c>.
@@ -40,11 +41,16 @@ public static class ExportProfileRegistry
 
         var columns = new List<ExportColumnDefinition>();
         var exportProfileId = 0;
+        var delimiter = ',';
 
-        await using (var command = new SqlCommand("""
+        // 277: oblika števila (decimalna vejica), varovani stolpci in ločilo stolpcev. Na bazi pred 277 stolpcev
+        // še ni — worker, nameščen pred migracijo, piše kot doslej, namesto da bi izvoz padel.
+        var hasFormat = await HasFormatColumnsAsync(connection, cancellationToken);
+        await using (var command = new SqlCommand($"""
             SELECT profile.ExportProfileId,
                    exportColumn.ColumnCode, exportColumn.OutputColumnName, exportColumn.CanonicalFieldCode,
-                   exportColumn.SortOrder, exportColumn.IsRequired
+                   exportColumn.SortOrder, exportColumn.IsRequired,
+                   {(hasFormat ? "exportColumn.DecimalSeparator, exportColumn.GuardKind, profile.FieldDelimiter" : "CAST(NULL AS nchar(1)), CAST(NULL AS nvarchar(20)), CAST(N',' AS nchar(1))")}
             FROM out.ExportColumn exportColumn
             INNER JOIN out.ExportProfile profile ON profile.ExportProfileId = exportColumn.ExportProfileId
             WHERE profile.ProfileCode = @ProfileCode AND profile.IsActive = 1 AND exportColumn.IsActive = 1
@@ -56,13 +62,16 @@ public static class ExportProfileRegistry
             while (await reader.ReadAsync(cancellationToken))
             {
                 exportProfileId = reader.GetInt32(0);
+                if (!reader.IsDBNull(8) && reader.GetString(8) is { Length: 1 } profileDelimiter) delimiter = profileDelimiter[0];
                 columns.Add(new ExportColumnDefinition(
                     reader.GetString(1),
                     reader.GetString(2),
                     reader.GetString(3),
                     reader.GetInt32(4),
                     reader.GetBoolean(5),
-                    true));
+                    true,
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7)));
             }
         }
 
@@ -74,6 +83,15 @@ public static class ExportProfileRegistry
                 $"Izvozni profil {profileCode} v out.ExportProfile / out.ExportColumn nima nobenega aktivnega stolpca. "
                 + "Preveri, ali je profil aktiven in ali so bile migracije uporabljene.");
 
-        return new ExportProfileDefinition(exportProfileId, profileCode, columns);
+        return new ExportProfileDefinition(exportProfileId, profileCode, columns, delimiter);
+    }
+
+    static async Task<bool> HasFormatColumnsAsync(SqlConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(
+            "SELECT CASE WHEN COL_LENGTH(N'out.ExportColumn', N'DecimalSeparator') IS NOT NULL AND COL_LENGTH(N'out.ExportColumn', N'GuardKind') IS NOT NULL "
+            + "AND COL_LENGTH(N'out.ExportProfile', N'FieldDelimiter') IS NOT NULL THEN 1 ELSE 0 END;",
+            connection) { CommandTimeout = 30 };
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
     }
 }

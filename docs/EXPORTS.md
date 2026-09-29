@@ -204,6 +204,9 @@ od devetih.
 - glava so `OutputColumnName` vrednosti;
 - manjkajoča **ali prazna** vrednost obveznega stolpca → `ExportContractException`;
 - UTF-8 **brez BOM**, `NewLine = "\n"`, ubežanje `,` `"` CR LF po pravilu podvojenega narekovaja.
+- Ločilo stolpcev je nastavitev profila (`out.ExportProfile.FieldDelimiter`, 277): katalog.csv in stranke.csv `;`, ostali (cene in zaloga) `,`.
+  V narekovaje gre samo vrednost z ločilom, `"` ali prelomom. Cene (`out.ExportColumn.DecimalSeparator = ','`) so z decimalno
+  vejico (`13,02`), ostala števila s piko. Artikle, ki jih zadrži varovalka (`ops.EvaluateCatalogSafeguards`), worker izpusti.
 
 `StockCsvGenerator` piše prav tako UTF-8 brez BOM, vendar **ne** nastavi
 `NewLine`, zato na Windows uporabi CRLF — izhod se v tem pogledu razlikuje od

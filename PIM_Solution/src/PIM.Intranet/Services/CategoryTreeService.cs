@@ -494,6 +494,32 @@ public sealed class CategoryTreeService(PimDb database, IConfiguration configura
     return created;
   }
 
+  /// <summary>
+  /// Cela slovenska pot »A > B > C«: ravni, ki že obstajajo, ostanejo, manjkajoče se ustvarijo po vrsti
+  /// (uvoz delovnega lista — uporabnik v pojavnem oknu potrdi manjkajoče kategorije, David 2026-09-24).
+  /// Vrne število ustvarjenih ravni.
+  /// </summary>
+  public async Task<int> EnsureCategoryPathAsync(
+    string categoryTreeCode, string path, string actor, CancellationToken cancellationToken = default)
+  {
+    var parts = path.Split('>').Select(part => part.Trim()).Where(part => part.Length > 0).ToList();
+    if (parts.Count == 0) return 0;
+    var existing = (await GetCategoryOptionsAsync(categoryTreeCode, "sl", cancellationToken))
+      .GroupBy(row => row.CategoryPath, StringComparer.OrdinalIgnoreCase)
+      .ToDictionary(group => group.Key, group => group.First().CategoryCode, StringComparer.OrdinalIgnoreCase);
+    string? parent = null;
+    var created = 0;
+    for (var level = 0; level < parts.Count; level++)
+    {
+      var prefix = string.Join(" > ", parts.Take(level + 1));
+      if (existing.TryGetValue(prefix, out var code)) { parent = code; continue; }
+      parent = await CreateCategoryAsync(categoryTreeCode, parent, parts[level], actor, null, cancellationToken);
+      existing[prefix] = parent;
+      created++;
+    }
+    return created;
+  }
+
   // --- Premikanje in trajno brisanje kategorij (migracija 228) ---------------------------
 
   public sealed record CategoryRef(string CategoryTreeCode, string CategoryCode);

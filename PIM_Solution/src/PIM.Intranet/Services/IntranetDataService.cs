@@ -30,7 +30,7 @@ public sealed record GroupOverrideRow(long OverrideId, string TargetKind, string
 public sealed record OutboundRow(long OutboxMessageId, string TargetKind, string Operation, string EntityType, string EntityKey,
   string FieldSummary, string DedupKey, string Status, int AttemptCount, DateTime? NextAttemptUtc,
   int? ResponseStatusCode, string? ResponseCorrelationId, string? DriftDetail, DateTime CreatedUtc,
-  string? ApprovedBy, DateTime? ApprovedUtc, DateTime? SentUtc, string? LastError, string? SaopErrorKind);
+  string? ApprovedBy, DateTime? ApprovedUtc, DateTime? SentUtc, string? LastError, string? SaopErrorKind, string? Value = null);
 public sealed record SystemIntegrationRow(int OrganizationId, string OrganizationCode, string Provider, string Pipeline, bool IsEnabled,
   string? Status, DateTime? LastHeartbeatUtc, DateTime? LastSuccessfulRunUtc, DateTime? LastFailedRunUtc, DateTime? WatermarkUtc,
   DateTime? NextScheduledUtc, int OpenAlerts, int OutboxDeadCount, int OutboxDriftCount);
@@ -386,12 +386,16 @@ public sealed class IntranetDataService(IConfiguration configuration, PimWriteGu
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);await using var command=new SqlCommand(sql,connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);command.Parameters.AddWithValue("@ChangedBy",changedBy);configure(command);await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
-  public async Task<IReadOnlyList<OutboundRow>> GetOutboundAsync(int organizationId, CancellationToken cancellationToken=default)
+  /// <param name="onlyActive">301: samo sporočila, ki še niso zaključena (stran /outbound). Brez tega
+  /// je Vidadria vrnila 50.744 vrstic in Blazor povezava se je prekinila.</param>
+  public async Task<IReadOnlyList<OutboundRow>> GetOutboundAsync(int organizationId, CancellationToken cancellationToken=default, bool onlyActive=false)
   {
     await using var connection=new SqlConnection(ConnectionString);await connection.OpenAsync(cancellationToken);
-    await using var command=new SqlCommand("EXEC intranet.GetOutboundMessages @OrganizationId;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);
+    await using var command=new SqlCommand(onlyActive?"EXEC intranet.GetOutboundMessages @OrganizationId, @SamoAktivna=1;":"EXEC intranet.GetOutboundMessages @OrganizationId;",connection);command.Parameters.AddWithValue("@OrganizationId",organizationId);
     await using var reader=await command.ExecuteReaderAsync(cancellationToken);var rows=new List<OutboundRow>();
-    while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetInt32(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetDateTime(13),reader.IsDBNull(14)?null:reader.GetString(14),reader.IsDBNull(15)?null:reader.GetDateTime(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),reader.IsDBNull(17)?null:reader.GetString(17),reader.IsDBNull(18)?null:reader.GetString(18)));
+    while(await reader.ReadAsync(cancellationToken))rows.Add(new(reader.GetInt64(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetInt32(8),reader.IsDBNull(9)?null:reader.GetDateTime(9),reader.IsDBNull(10)?null:reader.GetInt32(10),reader.IsDBNull(11)?null:reader.GetString(11),reader.IsDBNull(12)?null:reader.GetString(12),reader.GetDateTime(13),reader.IsDBNull(14)?null:reader.GetString(14),reader.IsDBNull(15)?null:reader.GetDateTime(15),reader.IsDBNull(16)?null:reader.GetDateTime(16),reader.IsDBNull(17)?null:reader.GetString(17),reader.IsDBNull(18)?null:reader.GetString(18),
+      // 273: poslana vrednost; pred migracijo 273 stolpca ni in ostane prazna.
+      reader.FieldCount>19&&!reader.IsDBNull(19)?reader.GetString(19):null));
     return rows;
   }
 

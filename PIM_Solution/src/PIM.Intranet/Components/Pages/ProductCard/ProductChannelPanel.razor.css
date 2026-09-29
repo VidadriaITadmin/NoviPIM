@@ -69,10 +69,47 @@
 .field label { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem; }
 .field-label { color: var(--pim-text-strong); font-size: .84rem; font-weight: 600; }
 
-.tag { border-radius: 999px; font-size: .64rem; font-weight: 700; letter-spacing: .04em; padding: .1rem .45rem; text-transform: uppercase; }
+.tag { border-radius: 999px; font-size: .64rem; font-weight: 700; letter-spacing: .04em; padding: .1rem .45rem; text-transform: uppercase; white-space: nowrap; }
 .tag-required { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.tag-recommended { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
 .tag-pending { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
-.tag-saop { background: var(--pim-neutral-bg); color: var(--pim-neutral-text); }
+/* Pot spremembe (2026-09-28): vsaka značka ima svojo barvo IN svoje besedilo; barva sama ni sporočilo. */
+.tag-saop { background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); color: var(--pim-info-text); }
+.tag-pim { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); color: var(--pim-good-text); }
+.tag-local { background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); color: var(--pim-warn-text); }
+.tag-locked { background: var(--pim-neutral-bg); border: 1px solid var(--pim-neutral-border); color: var(--pim-neutral-text); }
+
+/* Povzetek zavihka: kaj manjka, kaj čaka SAOP, kaj ni shranjeno — z imeni polj. */
+.panel-summary { display: flex; flex-direction: column; gap: .35rem; margin: 1rem 0 .25rem; }
+.summary-line { align-items: baseline; border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; font-size: .84rem; gap: .35rem; margin: 0; padding: .5rem .75rem; }
+.summary-line strong { color: inherit; }
+.summary-line span:not(.summary-mark) { color: var(--pim-text); }
+.summary-mark { align-self: center; border-radius: 50%; flex: 0 0 auto; height: .5rem; margin-right: .25rem; width: .5rem; }
+.summary-line.good { background: var(--pim-good-bg); color: var(--pim-good-text); }
+.summary-line.good .summary-mark { background: var(--pim-good-text); }
+.summary-line.bad { background: var(--pim-bad-bg); color: var(--pim-bad-text); }
+.summary-line.bad .summary-mark { background: var(--pim-bad-text); }
+.summary-line.warn { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.summary-line.warn .summary-mark { background: var(--pim-warn-text); }
+.summary-line.info { background: var(--pim-info-bg); color: var(--pim-info-text); }
+.summary-line.info .summary-mark { background: var(--pim-info-text); }
+.summary-line.draft { background: var(--pim-surface-subtle); color: var(--pim-text-strong); }
+.summary-line.draft .summary-mark { background: var(--pim-accent); }
+.summary-line a { color: var(--pim-accent-link); font-weight: 600; }
+
+.route-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; margin: .75rem 0 0; }
+.route-legend > div { align-items: center; display: flex; gap: .4rem; }
+.route-legend dt { margin: 0; }
+.route-legend dd { color: var(--pim-text-muted); font-size: .74rem; margin: 0; }
+
+.panel-meta dd.warn { color: var(--pim-warn-text); }
+.panel-meta dd.info { color: var(--pim-info-text); }
+
+/* Spremenjeno, še neshranjeno: poudarjena leva obroba, da se vidi, kaj bo šlo ob »Shrani«. */
+.field.is-dirty .field-input { border-color: var(--pim-accent); box-shadow: inset 3px 0 0 var(--pim-accent); }
+.note-dirty { color: var(--pim-accent-link); font-weight: 600; }
+.note-pending { color: var(--pim-info-text); font-weight: 600; }
+.note-bad { color: var(--pim-bad-text); font-weight: 600; }
 
 .field-input {
   background: var(--pim-surface);
@@ -95,6 +132,8 @@ textarea.field-input { line-height: 1.5; min-height: 6rem; resize: vertical; }
 
 /* Prazna obvezna vrednost: obroba je opozorilo, znacka »obvezno« pa pomen. Barva sama ni sporocilo. */
 .field.needs-value .field-input { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); }
+/* Prazna priporočena vrednost (samo opozorilo): rumena, ker objave ne ustavi. */
+.field.should-have-value .field-input { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); }
 
 .field-value {
   align-items: center;

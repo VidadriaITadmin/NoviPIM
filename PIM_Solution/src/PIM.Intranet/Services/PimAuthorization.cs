@@ -38,14 +38,29 @@ public static class PimPolicies
   /// </summary>
   public const string WebPublicationSettings = "WebPublicationSettings";
 
+  /// <summary>
+  /// Potrditev varovalke (277): pregledane spremembe (cene, umiki s spleta) gredo v objavo. Katalog ureja
+  /// urednik, cene komercialist — potrdi lahko vsak od njiju in skrbnik; kdo je potrdil, ostane zapisano.
+  /// </summary>
+  public const string SafeguardConfirm = "SafeguardConfirm";
+
+  /// <summary>Pragovi in vklop pravil varovalk (277): odločajo, kaj sploh zadrži objavo — zato samo ADMIN.</summary>
+  public const string SafeguardSettings = "SafeguardSettings";
+
+  /// <summary>Parametri formule analitike (284): servisna raven, dobavni čas, meje zaležanosti — skrbnik in komerciala.</summary>
+  public const string AnalyticsSettings = "AnalyticsSettings";
+
   static readonly Dictionary<string, string[]> PolicyRoles = new(StringComparer.Ordinal)
   {
     [WebPublicationSettings] = [PimRoles.Admin],
+    [SafeguardConfirm] = [PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial],
+    [SafeguardSettings] = [PimRoles.Admin],
     [CatalogWrite] = [PimRoles.Admin, PimRoles.CatalogEditor],
     [SaopWrite] = [PimRoles.Admin, PimRoles.CatalogEditor],
     [BusinessWrite] = [PimRoles.Admin, PimRoles.CatalogEditor, PimRoles.Commercial],
     [AlertWrite] = [PimRoles.Admin, PimRoles.Commercial],
     [FieldWaiver] = [PimRoles.Admin],
+    [AnalyticsSettings] = [PimRoles.Admin, PimRoles.Commercial],
   };
 
   public static IReadOnlyCollection<string> Names => PolicyRoles.Keys;

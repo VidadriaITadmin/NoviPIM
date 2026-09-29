@@ -20,6 +20,8 @@ public sealed record PimPermissionDefinition(
 public static class PimAccessCatalog
 {
   public const string Dashboard = "page.dashboard";
+  public const string Safeguards = "page.safeguards";
+  public const string ImportHistory = "page.imports.history";
   public const string Ingest = "page.ingest";
   public const string Products = "page.products";
   public const string Media = "page.media";
@@ -30,6 +32,7 @@ public static class PimAccessCatalog
   public const string Stocks = "page.stocks";
   public const string Prices = "page.prices";
   public const string Checks = "page.checks";
+  public const string Analytics = "page.analytics";
   public const string CatalogSettings = "page.catalog-settings";
   public const string Rules = "page.rules";
   public const string System = "page.system";
@@ -38,12 +41,14 @@ public static class PimAccessCatalog
   public static readonly IReadOnlyList<PimPermissionDefinition> All =
   [
     Page(Dashboard, "Nadzorna plošča", "Operativni pregled celotnega podatkovnega toka.", "nadzorna-plosca", "Nadzor"),
+    // 277: kar izvozi zadržijo, ker je sumljivo (cena ×100, umik s spleta …), s potrditvijo in pravili.
+    Page(Safeguards, "Varovalke", "Kaj čaka potrditev pred objavo, zakaj, in pravila varovalk.", "varovalke", "Nadzor"),
+    // 280: vsak uveljavljen uvoz izdelkov, cen in strank — kaj je spremenil (prej → potem) in povratek.
+    Page(ImportHistory, "Zgodovina uvozov", "Uvozi izdelkov, cen in strank: kaj so spremenili in povratek.", "uvozi", "Nadzor"),
 
-    Page(Ingest, "Zajem podatkov", "Viri, teki in težave pri prevzemu podatkov.", "zajem", "Vhodni podatki"),
+    Page(Ingest, "Zajem podatkov", "Viri, teki in težave pri prevzemu podatkov.", "zajem", "Nadzor"),
     View("tab.ingest.overview", "Vhodi", "Viri, stanje in svežina.", "zajem", Ingest, true),
-    View("tab.ingest.runs", "Teki", "Izvedbe, koraki in dnevnik obdelave.", "zajem/teki", Ingest, true),
     View("tab.ingest.issues", "Težave", "Napake, karantena in čakalne vrste.", "zajem/tezave", Ingest, true),
-    View("view.ingest.candidates", "Novi artikli", "Kandidati dobaviteljev pred sprejemom.", "zajem/novi-artikli", Ingest),
     View("view.ingest.queue", "Čakalna vrsta", "Zapisi, ki še čakajo na obdelavo.", "zajem/cakalna-vrsta", Ingest),
     View("view.ingest.unmapped", "Neujemanja", "Neprepoznane vrednosti in preslikave.", "zajem/neujemanja", Ingest),
     View("view.ingest.attributes", "Atributi vira", "Odkriti atributi vhodnih virov.", "zajem/atributi", Ingest),
@@ -51,6 +56,9 @@ public static class PimAccessCatalog
     Page(Products, "Izdelki", "Delovni seznam in kartice izdelkov.", "izdelki", "PIM katalog"),
     View("view.products.list", "Seznam in kartica", "Iskanje, pregled ter podrobnosti izdelka.", "izdelki", Products),
     View("view.products.import", "Uvoz delovnega zvezka", "Množično urejanje iz Excela.", "izdelki/uvoz", Products),
+    // 2026-09-24: ključ ostane view.ingest.candidates (dodeljen v sec.RolePermission), stran pa je pod Izdelki.
+    View("view.ingest.candidates", "Novi artikli", "Kandidati dobaviteljev pred sprejemom v SAOP.", "izdelki/novi-artikli", Products),
+    View("view.products.clearance", "Odprodaja", "Artikli v odprodaji, popust, razstavni eksponat in uvoz seznama.", "izdelki/odprodaja", Products),
     View("view.products.categories", "Kategorije izdelka", "Uvrstitev izdelkov v kategorije.", "izdelki/kategorije", Products),
     Page(Media, "Mediji", "Slike in dokumenti izdelkov.", "mediji", "PIM katalog"),
 
@@ -76,6 +84,8 @@ public static class PimAccessCatalog
     View("view.web.build", "Pripravi izvoz", "Ročna priprava spletnega izvoza.", "splet/izvoz", Web),
     View("view.web.catalog", "Nadzor kataloga", "Objava, odprodaja in blokade.", "splet/katalog", Web),
     View("view.web.withdrawals", "Umaknjeni s spleta", "Artikli, ki jim je PIM odstranil kljukico spletišča, in razlog.", "splet/umaknjeni", Web),
+    // 290: ista šifra v IQ in ViD z manjkajočo kartico ali različnimi kljukicami — pregled nad ERP obeh podjetij.
+    View("view.web.mismatches", "Neskladja med podjetji", "Ista šifra v več podjetjih: manjkajoča kartica ali različne kljukice spletišč.", "splet/neskladja", Web),
     View("view.web.profiles", "Izvozni profili", "Stolpci posameznega izvoznega profila.", "izvozi/profili", Web),
     View("view.web.events", "Odhodna obvestila", "Napake in dogodki spletnega izvoza.", "izvozi/obvestila", Web),
     View("view.web.bulk", "Množični izhod", "Množična priprava odhodnih podatkov.", "izvozi/mnozicno", Web),
@@ -85,6 +95,12 @@ public static class PimAccessCatalog
     Page(Stocks, "Zaloga", "Količine, svežina in razpoložljivost.", "zaloge", "Poslovanje"),
     Page(Prices, "Cene in ceniki", "Cene, ceniki in tisk.", "cene", "Poslovanje"),
     Page(Checks, "Preverbe cen in zaloge", "Opozorila o cenah, maržah in zalogi.", "preverbe", "Poslovanje"),
+    // 284: prodaja, zaloga, dobavitelji in predlogi naročil. Prodajne številke so občutljive — privzeto samo ADMIN in COMMERCIAL.
+    Page(Analytics, "Analitika", "Prodaja, trendi, zaloga, dobavitelji in predlogi naročil.", "analitika", "Poslovanje"),
+    View("tab.analytics.overview", "Pregled", "Prodaja po mesecih, kazalniki in signali.", "analitika", Analytics, true),
+    View("tab.analytics.items", "Artikli", "Predlogi naročil, zaležana zaloga in trend po artiklu.", "analitika/artikli", Analytics, true),
+    View("tab.analytics.suppliers", "Dobavitelji", "Promet, zaloga, dobavni časi in zamude po dobavitelju.", "analitika/dobavitelji", Analytics, true),
+    View("tab.analytics.settings", "Nastavitve izračuna", "Servisna raven, dobavni čas in meje za zaležano zalogo.", "analitika/nastavitve", Analytics, true),
 
     Page(CatalogSettings, "Nastavitve kataloga", "Šifranti in strukture kataloga.", "nastavitve", "Upravljanje"),
     View("view.catalog.attributes", "Atributi", "Šifrant atributov in prevodi.", "nastavitve/atributi", CatalogSettings),
@@ -108,7 +124,7 @@ public static class PimAccessCatalog
     // ki ju pokriva ista pravica. Osirotele ključe iz sec.RolePermission briše migracija 259 (259_NadzorPoslov.sql).
     Page(System, "Nadzor sistema", "Ali podatki prihajajo, kje je napaka in kaj narediti.", "sistem", "Administracija"),
     View("tab.system.overview", "Nadzor", "Posli, njihovi koraki, faze, izpis in urnik.", "sistem", System, true),
-    View("view.system.self-test", "Samotest", "Rezultati nočnega samotesta.", "sistem/samotest", System, true),
+    View("tab.ingest.runs", "Teki", "Izvedbe vhodov, koraki in dnevnik obdelave.", "sistem/teki", System, true),
     View("view.system.activity", "Sled sprememb", "Kdo je kaj spremenil in kdaj.", "sistem/sled", System, true),
 
     Page(Administration, "Sistemske zadeve", "Uporabniki, vloge in mesta shranjevanja.", "administracija", "Administracija"),
@@ -136,6 +152,8 @@ public static class PimAccessCatalog
 
     if (path is "" or "prijava" or "brez-dostopa" or "error") return null;
     if (path == "nadzorna-plosca") return Dashboard;
+    if (path == "varovalke" || path.StartsWith("varovalke/", StringComparison.Ordinal)) return Safeguards;
+    if (path == "uvozi" || path.StartsWith("uvozi/", StringComparison.Ordinal)) return ImportHistory;
 
     if (path == "administracija") return "tab.admin.users";
     if (path == "administracija/vloge") return "tab.admin.roles";
@@ -143,18 +161,19 @@ public static class PimAccessCatalog
 
     if (path == "sistem" || path.StartsWith("sistem/posel/", StringComparison.Ordinal)) return "tab.system.overview";
     if (path == "sistem/sled") return "view.system.activity";
-    if (path == "sistem/samotest") return "view.system.self-test";
+    if (path.StartsWith("sistem/teki", StringComparison.Ordinal)) return "tab.ingest.runs";
 
     if (path == "zajem") return "tab.ingest.overview";
     if (path.StartsWith("zajem/teki", StringComparison.Ordinal)) return "tab.ingest.runs";
     if (path.StartsWith("zajem/tezave", StringComparison.Ordinal)) return "tab.ingest.issues";
-    if (path == "zajem/novi-artikli") return "view.ingest.candidates";
+    if (path == "zajem/novi-artikli" || path == "izdelki/novi-artikli") return "view.ingest.candidates";
     if (path == "zajem/cakalna-vrsta") return "view.ingest.queue";
     if (path == "zajem/neujemanja") return "view.ingest.unmapped";
     if (path == "zajem/atributi") return "view.ingest.attributes";
     if (path.StartsWith("zajem/viri/", StringComparison.Ordinal)) return "tab.ingest.overview";
 
     if (path == "izdelki/uvoz") return "view.products.import";
+    if (path == "izdelki/odprodaja" || path == "izdelki/uvoz-odprodaje") return "view.products.clearance";
     if (path == "izdelki/kategorije" || (path.StartsWith("izdelki/", StringComparison.Ordinal) && path.EndsWith("/kategorije", StringComparison.Ordinal))) return "view.products.categories";
     if (path == "izdelki" || path.StartsWith("izdelki/", StringComparison.Ordinal)) return "view.products.list";
     if (path == "mediji") return Media;
@@ -182,6 +201,7 @@ public static class PimAccessCatalog
     if (path == "splet/izvoz") return "view.web.build";
     if (path == "splet/katalog") return "view.web.catalog";
     if (path == "splet/umaknjeni") return "view.web.withdrawals";
+    if (path == "splet/neskladja") return "view.web.mismatches";
     if (path.StartsWith("izvozi/profili/", StringComparison.Ordinal)) return "view.web.profiles";
     if (path == "izvozi/obvestila") return "view.web.events";
     if (path == "izvozi/mnozicno") return "view.web.bulk";
@@ -190,6 +210,10 @@ public static class PimAccessCatalog
     if (path == "zaloge") return Stocks;
     if (path == "cene" || path == "cene/tisk" || path == "cene/uvoz") return Prices;
     if (path == "preverbe") return Checks;
+    if (path == "analitika") return "tab.analytics.overview";
+    if (path == "analitika/artikli" || path.StartsWith("analitika/artikli/", StringComparison.Ordinal)) return "tab.analytics.items";
+    if (path == "analitika/dobavitelji") return "tab.analytics.suppliers";
+    if (path == "analitika/nastavitve") return "tab.analytics.settings";
 
     if (path == "nastavitve") return CatalogSettings;
     if (path.StartsWith("nastavitve/atributi", StringComparison.Ordinal)) return "view.catalog.attributes";

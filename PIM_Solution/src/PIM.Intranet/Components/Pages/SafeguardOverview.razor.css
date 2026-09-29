@@ -1,0 +1,17 @@
+.safeguard-waiting-list { display: grid; gap: .75rem; }
+.safeguard-waiting-card {
+  align-items: center; background: var(--pim-bad-bg); border: 1px solid var(--pim-bad-border); border-left: 4px solid var(--pim-bad-text);
+  border-radius: var(--pim-radius-sm); display: flex; gap: 1rem; justify-content: space-between; padding: .85rem 1rem;
+}
+.safeguard-waiting-card h3 { font-size: 1rem; margin: 0 0 .25rem; }
+.safeguard-waiting-card p { margin: .15rem 0; }
+.muted { color: var(--pim-text-muted); font-size: .8125rem; }
+.rule-number { align-items: center; display: flex; gap: .4rem; }
+.rule-number input { width: 5.5rem; }
+.rule-min { width: 5rem; }
+.rules-table ::deep td { vertical-align: top; }
+.rules-table ::deep td:first-child { min-width: 22rem; }
+
+@media (max-width: 720px) {
+  .safeguard-waiting-card { align-items: stretch; flex-direction: column; }
+}

@@ -4,19 +4,24 @@
 @inject MagentoArtifactService Artifacts
 @inject AdminConsoleService AdminConsole
 @inject QualityReadService Quality
+@inject SafeguardService Safeguards
 
 <PageTitle>CSV za Magento</PageTitle>
 <PimPage Title="CSV za Magento" Subtitle="Dejanski izhod PIM-a za IQLighting: katalog.csv in stranke.csv, ki ju bere Magento." />
 <div class="page-actions section-gap">
   <button class="filter-button" disabled="@(Loading || PreviewLoading)" @onclick="LoadAsync">Osveži stanje</button>
   <a href="sistem/posel/WEB_CATALOG_EXPORT">Urnik in zagon: CSV za Magento</a>
+  <a href="varovalke">Varovalke</a>
   <a href="splet/katalog">Nadzor objave artiklov</a>
   <a href="splet/umaknjeni">Umaknjeni s spleta</a>
+  <a href="splet/neskladja">Neskladja med podjetji</a>
   <a href="kakovost/artikli?podjetje=2">Validacija artiklov</a>
   <a href="splet/izvoz">Predogled trenutnih podatkov PIM</a>
 </div>
 <p class="card-note">Izdelava CSV bere podatke v PIM-u in ima svoj cikel. Čas izdelave potrjuje nastanek datoteke; ne potrjuje, da jo je Magento že prebral. Popravki na karticah se prenesejo ob naslednji uspešni izdelavi.</p>
 <PimState Loading="Loading" Error="@Error" Empty="false">
+  @* 277: ali je zadnja izdelava šla na splet ali čaka potrditev varovalke (cena ×100, umik s spleta …). *@
+  <SafeguardBanner Check="Safeguard" />
   @* 242: mapa in pravice so bile vzrok, da datoteki dneve nista nastajali; stran to pove pred prvim padcem. *@
   <section class="ui-card data-card section-gap">
     <h2>Izhodna mapa</h2>
@@ -53,7 +58,8 @@
           {
             <div>@artifact.PublishedUtc.ToPimLocal().ToString("g") · @PimFormat.Ago(artifact.PublishedUtc)</div>
             <div class="tree-path">@((artifact.Bytes / 1024d / 1024d).ToString("N1")) MB · generacija @artifact.Generation</div>
-            @if (DateTime.UtcNow - artifact.PublishedUtc > TimeSpan.FromMinutes(StaleAfterMinutes)) { <PimChip Text="@($"Starejša od {StaleAfterMinutes} minut — preveri urnik")" Tone="warn" /> }
+            @if (Safeguard is { IsWaiting: true, HeldCount: > 0 } held && code == "MAGENTO_PRODUCTS") { <PimChip Text="@($"brez zadržanih artiklov: {held.HeldCount:N0}")" Tone="warn" /> }
+            else if (DateTime.UtcNow - artifact.PublishedUtc > TimeSpan.FromMinutes(StaleAfterMinutes)) { <PimChip Text="@($"Starejša od {StaleAfterMinutes} minut — preveri urnik")" Tone="warn" /> }
           }
           else { <span class="message-state error-message">@FileErrors.GetValueOrDefault(code)</span> }</td>
           <td>@if (attempt is not null)
@@ -68,7 +74,11 @@
           } else { <span>Ni zabeleženega poskusa.</span> }</td>
           <td>
             <button class="small-action" disabled="@(artifact is null || PreviewLoading)" @onclick="() => SelectAsync(code)">Preglej vsebino</button>
-            @if (artifact is not null) { <a class="small-action" href="@($"izvoz/magento-datoteka/{code}")">Prenesi izdelano datoteko</a> }
+            @if (artifact is not null)
+            {
+              <a class="small-action" href="@($"izvoz/magento-datoteka/{code}")">Prenesi izdelano datoteko</a>
+              <a class="small-action" href="@($"izvoz/magento-datoteka/{code}/excel")" title="Iste vrednosti kot CSV, s pravilnimi šumniki in decimalkami za Excel">Prenesi za Excel</a>
+            }
           </td>
         </tr>
       }</tbody>
@@ -154,6 +164,7 @@
       || Preview.Page.Columns[index].Contains("zaloga", StringComparison.OrdinalIgnoreCase)
       || Preview.Page.Columns[index].Contains("cena", StringComparison.OrdinalIgnoreCase));
   static string StatusLabel(string status) => status switch { "Succeeded" => "Uspešno", "Failed" => "Napaka", "Running" => "V teku", "Abandoned" => "Zapuščen", _ => status };
+  SafeguardCheckRow? Safeguard;
   static string Sprozilec(string triggeredBy) => triggeredBy switch { "Scheduler" => "razporejevalnik", "Task" => "naloga", _ => "ročno" };
   protected override Task OnInitializedAsync() => LoadAsync();
   async Task LoadAsync()
@@ -163,6 +174,9 @@
     {
       try { Folder = await Artifacts.FolderAsync(); }
       catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or Microsoft.Data.SqlClient.SqlException) { Folder = null; }
+      // 277: varovalka je dodatek — če je baza še nima, stran deluje kot prej.
+      try { Safeguard = await Safeguards.GetCurrentAsync(SafeguardText.CatalogArea, WorkerCycles.CatalogOrganization); }
+      catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.SqlClient.SqlException) { Safeguard = null; }
       var runs = new List<ExportRunRow>();
       foreach (var code in Codes)
       {

@@ -1,0 +1,1249 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Procesi PIM</title>
+<!-- PREDLOGA. PIM-procesi.html se ustvari iz te datoteke z ukazom: scripts\Procesi.ps1 -Ukaz Graf (vgradi podatke). Urejaj to datoteko, ne PIM-procesi.html. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f9fafc; --text: #1b2130; --muted: #5f6b7d; --line: #e1e6ed; --line-2: #eef1f5;
+  --accent: #4f46e5; --accent-soft: #eef2ff; --accent-text: #4338ca;
+  --ok: #2e7d32; --ok-soft: #e7f5e8; --warn: #b26a00; --warn-soft: #fff3de; --bad: #c0392b; --bad-soft: #fde8e6;
+  --data: #0f766e; --data-soft: #e3f4f1; --up: #4f46e5; --down: #d97706;
+  --canvas: #f7f8fb; --grid: #dfe4ec; --edge: #cbd5e1;
+  --shadow: 0 1px 2px rgba(20,30,50,.05), 0 4px 14px rgba(20,30,50,.05);
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151a; --panel: #1b1f26; --panel-2: #20252d; --text: #e6e9ee; --muted: #9aa5b5; --line: #2c323c; --line-2: #252a33;
+    --accent: #8b85ff; --accent-soft: #26244d; --accent-text: #b9b5ff;
+    --ok: #6cc070; --ok-soft: #1c2e1e; --warn: #f0b34a; --warn-soft: #33291a; --bad: #ff8a7a; --bad-soft: #3a1f1d;
+    --data: #5eead4; --data-soft: #16322f; --up: #8b85ff; --down: #f59e0b;
+    --canvas: #161a20; --grid: #2a303a; --edge: #3b4452;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151a; --panel: #1b1f26; --panel-2: #20252d; --text: #e6e9ee; --muted: #9aa5b5; --line: #2c323c; --line-2: #252a33;
+  --accent: #8b85ff; --accent-soft: #26244d; --accent-text: #b9b5ff;
+  --ok: #6cc070; --ok-soft: #1c2e1e; --warn: #f0b34a; --warn-soft: #33291a; --bad: #ff8a7a; --bad-soft: #3a1f1d;
+  --data: #5eead4; --data-soft: #16322f; --up: #8b85ff; --down: #f59e0b;
+    --canvas: #161a20; --grid: #2a303a; --edge: #3b4452;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.55 Inter, "Segoe UI", system-ui, sans-serif; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font: inherit; cursor: pointer; color: inherit; }
+kbd { font: 11px Consolas, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); background: var(--panel); }
+
+/* ogrodje */
+.app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.brand { padding: 18px 16px 12px; display: flex; gap: 10px; align-items: center; }
+.logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; }
+.brand h1 { font-size: 16px; margin: 0; line-height: 1.2; }
+.brand .sub { color: var(--muted); font-size: 12px; }
+.searchbtn { margin: 0 12px 10px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--muted); text-align: left; }
+.searchbtn span { flex: 1; }
+nav { overflow: auto; padding: 0 8px 16px; flex: 1; }
+.nav-sec { margin: 14px 8px 4px; font-weight: 600; font-size: 11px; color: var(--muted); }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 7px; color: var(--text); cursor: pointer; }
+.nav-item:hover { background: var(--line-2); text-decoration: none; }
+.nav-item.active { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.nav-item .cnt { margin-left: auto; font-size: 11px; color: var(--muted); }
+.nav-item .cnt.warn { color: var(--warn); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.deluje { background: var(--ok); } .dot.delno { background: var(--warn); } .dot.nedeluje { background: var(--bad); }
+.source { border-top: 1px solid var(--line); padding: 10px 12px; font-size: 12px; color: var(--muted); }
+.source .row { display: flex; gap: 6px; margin-top: 8px; }
+
+main { overflow: auto; min-width: 0; scroll-behavior: smooth; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 22px 28px 70px; }
+.wrap.siroko { max-width: none; }
+.wrap.siroko .head, .wrap.siroko .strip { max-width: 1240px; }
+.crumbs { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.crumbs a { color: var(--muted); }
+.head { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 14px; }
+.head .t { flex: 1; min-width: 260px; }
+h2.title { font-size: 26px; margin: 0 0 4px; letter-spacing: -.01em; }
+.lead { color: var(--muted); margin: 0; max-width: 860px; }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); margin-bottom: 16px; }
+.card h3 { margin: 0 0 10px; font-size: 14px; }
+.card h3 .muted { font-weight: 400; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); }
+.btn:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); color: #fff; }
+.btn.sm { padding: 4px 9px; font-size: 12.5px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.badge.deluje { background: var(--ok-soft); color: var(--ok); } .badge.delno { background: var(--warn-soft); color: var(--warn); } .badge.nedeluje { background: var(--bad-soft); color: var(--bad); }
+.badge.neutral { background: var(--line-2); color: var(--muted); font-weight: 500; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; margin: 3px 4px 3px 0; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-size: 12.5px; cursor: pointer; max-width: 100%; }
+.chip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.chip.data { background: var(--data-soft); border-color: transparent; color: var(--data); }
+.chip.page { font-family: Consolas, monospace; font-size: 12px; }
+.chip small { color: var(--muted); }
+.muted { color: var(--muted); }
+.bar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line-2); margin-top: 8px; }
+.bar i { display: block; }
+
+/* platno (interaktivni graf) */
+.strip { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-bottom: 14px; font-size: 13px; color: var(--muted); }
+.strip b { color: var(--text); font-size: 15px; margin-right: 2px; }
+.strip .bar { width: 160px; margin: 0; }
+.strip .s-ok b { color: var(--ok); } .strip .s-warn b { color: var(--warn); } .strip .s-bad b { color: var(--bad); }
+.strip a b { color: var(--warn); }
+.strip-leg { margin-left: auto; display: inline-flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; }
+.lg { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.lg.up { background: var(--up); } .lg.down { background: var(--down); } .lg.ext { background: var(--data); }
+
+.pl { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background-color: var(--canvas); background-image: radial-gradient(var(--grid) 1px, transparent 1.2px); background-size: 22px 22px; touch-action: none; cursor: grab; user-select: none; }
+.pl.drag { cursor: grabbing; }
+.pl-home { height: calc(100vh - 210px); min-height: 520px; }
+.pl-fokus { height: 560px; margin-bottom: 16px; }
+.pl-scena { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.pl-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.pl-plast { position: absolute; left: 0; top: 0; }
+
+.pl-g { position: absolute; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.05); }
+.pl-gh { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px 0; font-weight: 700; font-size: 13.5px; color: var(--text); cursor: pointer; border-radius: 16px 16px 0 0; }
+.pl-gh:hover, .pl-gh:focus-visible { color: var(--accent); outline: none; }
+.pl-gc { font-weight: 500; font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+
+.pl-n { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-radius: 11px; background: var(--panel); border: 1px solid var(--line); padding: 7px 10px 7px 15px; font-size: 12.5px; line-height: 1.3; color: var(--text); cursor: pointer; overflow: hidden; transition: opacity .18s, box-shadow .18s, border-color .18s, background-color .18s; }
+.pl-n::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--st, var(--line)); }
+.pl-n.st-deluje { --st: var(--ok); } .pl-n.st-delno { --st: var(--warn); } .pl-n.st-nedeluje { --st: var(--bad); }
+.pl-n:hover, .pl-n:focus-visible { border-color: var(--accent); box-shadow: 0 6px 20px rgba(15,23,42,.12); outline: none; }
+.pl-nm { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pl-n.has-q .pl-nm { padding-right: 24px; }
+.pl-home .pl-p { font-size: 13.5px; }
+.pl-home .pl-gh { font-size: 15px; }
+.pl-home .pl-t { font-size: 14px; }
+.pl-q { position: absolute; right: 7px; top: 7px; min-width: 20px; text-align: center; font-size: 10.5px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 99px; padding: 1px 6px; }
+.pl-meta { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-via { display: flex; flex-wrap: nowrap; gap: 4px; overflow: hidden; }
+.pl-d { font-size: 10.5px; font-weight: 500; background: var(--data-soft); color: var(--data); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
+.pl-x { background: var(--data-soft); border-color: transparent; padding-left: 12px; }
+.pl-x::before { display: none; }
+.pl-x b { color: var(--data); font-size: 13px; }
+.pl-x > span:not(.pl-via) { font-size: 11.5px; color: var(--muted); }
+.pl-x .pl-d { background: var(--panel); }
+.pl-t { background: none; border: 0; padding: 0 2px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: default; justify-content: flex-end; }
+.pl-t::before, .pl-empty::before { display: none; }
+.pl-empty { background: none; border: 1px dashed var(--line); color: var(--muted); cursor: default; align-items: center; }
+.pl-me { background: var(--accent); border-color: var(--accent); color: #fff; font-size: 14px; padding-left: 16px; box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 35%, transparent); }
+.pl-me::before { display: none; }
+.pl-me .pl-meta { color: rgba(255,255,255,.85); }
+.pl-mid { background: var(--panel); }
+.pl-data { background: var(--data); border-color: var(--data); color: #fff; }
+.pl-data::before { display: none; }
+.pl-data .pl-meta { color: rgba(255,255,255,.85); white-space: normal; }
+.pl-a { background: var(--panel); }
+.pl-a::before { background: var(--line); }
+.pl-cnt { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--muted); background: var(--line-2); border-radius: 99px; padding: 0 7px; vertical-align: 1px; }
+.pl-list { display: flex; flex-direction: column; font-size: 11.5px; color: var(--muted); gap: 1px; }
+.pl-list > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+.pl-list .dot { width: 6px; height: 6px; }
+.pl-more { border-style: dashed; background: var(--panel-2); }
+.pl-more::before { display: none; }
+
+.pl-n.dim { opacity: .2; }
+.pl-n.me:not(.pl-me) { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.pl-n.up { border-color: var(--up); box-shadow: 0 0 0 2px color-mix(in srgb, var(--up) 22%, transparent); }
+.pl-n.down { border-color: var(--down); box-shadow: 0 0 0 2px color-mix(in srgb, var(--down) 25%, transparent); }
+.pl-n.up.down { box-shadow: 0 0 0 2px color-mix(in srgb, var(--up) 22%, transparent), 0 0 0 5px color-mix(in srgb, var(--down) 22%, transparent); }
+
+.pl-e { fill: none; stroke: var(--edge); stroke-width: 1.7; transition: opacity .18s; }
+.pl-e.up { stroke: var(--up); } .pl-e.down { stroke: var(--down); }
+.pl-e.ext { stroke: var(--data); stroke-dasharray: 3 5; }
+.pl-e.anim { stroke-dasharray: 8 7; animation: tok 1.1s linear infinite; stroke-width: 2; }
+.pl-e.faint { opacity: .07; }
+.mk-up { fill: var(--up); } .mk-down { fill: var(--down); } .mk-ext { fill: var(--data); } .mk-plain { fill: var(--edge); }
+@keyframes tok { to { stroke-dashoffset: -30; } }
+@media (prefers-reduced-motion: reduce) { .pl-e.anim { animation: none; } .pl-n { transition: none; } }
+
+.pl-kontrole { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+.pl-kontrole button { width: 34px; height: 34px; border: 0; background: none; display: grid; place-items: center; color: var(--muted); }
+.pl-kontrole button + button { border-top: 1px solid var(--line-2); }
+.pl-kontrole button:hover, .pl-kontrole button:focus-visible { color: var(--accent); background: var(--accent-soft); outline: none; }
+.pl-kontrole svg, .pp-x svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pl-hint { position: absolute; left: 14px; bottom: 14px; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; pointer-events: none; transition: opacity .6s; }
+.pl-hint.skrij { opacity: 0; }
+
+.pl-panel[hidden] { display: none; }
+.pl-panel { position: absolute; right: 14px; top: 14px; width: 330px; max-width: calc(100% - 28px); max-height: calc(100% - 28px); overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 48px rgba(15,23,42,.18); padding: 16px 18px; cursor: default; animation: panelIn .18s ease-out; }
+@keyframes panelIn { from { opacity: 0; transform: translateX(12px); } }
+.pl-panel h3 { margin: 10px 0 6px; font-size: 17px; line-height: 1.3; }
+.pp-top { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+.pp-x { margin-left: auto; width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; display: grid; place-items: center; color: var(--muted); }
+.pp-x:hover { background: var(--line-2); color: var(--text); }
+.pp-namen { color: var(--muted); font-size: 13px; }
+.pp-sec { margin-top: 14px; }
+.pp-sec h4 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; }
+.pp-li { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 5px 6px; border-radius: 7px; font-size: 13px; }
+.pp-li:hover, .pp-li:focus-visible { background: var(--accent-soft); color: var(--accent-text); outline: none; }
+.pp-warn { color: var(--warn); font-weight: 600; font-size: 13px; }
+.pp-act { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+/* proces */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.side { position: sticky; top: 12px; }
+.side .card { padding: 14px; }
+.side h4 { margin: 12px 0 6px; font-size: 12px; color: var(--muted); }
+.side h4:first-child { margin-top: 0; }
+.namen { font-size: 15.5px; line-height: 1.6; background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { padding: 9px 14px; border: 0; background: none; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .n { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 99px; background: var(--line-2); font-size: 11px; color: var(--muted); }
+.tab .n.warn { background: var(--warn-soft); color: var(--warn); }
+.overview { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.overview .card { margin: 0; }
+.steps { position: relative; }
+.step { display: grid; grid-template-columns: 38px 1fr; gap: 14px; margin-bottom: 12px; }
+.step .num { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; display: grid; place-items: center; position: relative; z-index: 1; }
+.step:not(:last-child) .num::after { content: ""; position: absolute; top: 34px; left: 16px; width: 2px; height: calc(100% + 60px); background: var(--line); z-index: -1; }
+.step .body { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; box-shadow: var(--shadow); }
+.step .who { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.step .who .role { font-weight: 700; }
+.step .who .where { font-size: 12.5px; color: var(--muted); }
+.step .do { font-size: 14px; margin-bottom: 8px; }
+.step .res { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; }
+.step .res > div { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; }
+.step .res .lbl { font-size: 11px; color: var(--muted); font-weight: 600; display: block; margin-bottom: 2px; }
+.step.auto .num { background: var(--ok); }
+
+.md h2 { font-size: 16px; margin: 22px 0 8px; }
+.md h2:first-child { margin-top: 0; }
+.md h3 { font-size: 14.5px; }
+.md blockquote { margin: 0 0 12px; padding: 8px 12px; background: var(--accent-soft); border-radius: 8px; }
+.md blockquote p { margin: 0; }
+.md table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+.md th { background: var(--panel-2); font-weight: 600; }
+.md code { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12.5px; }
+.md pre { background: var(--panel-2); padding: 10px; border-radius: 8px; overflow: auto; }
+.md pre code { border: 0; padding: 0; }
+.md details { background: var(--panel-2); border-radius: 8px; padding: 8px 12px; }
+.md ul { padding-left: 20px; }
+.md li { margin: 4px 0; }
+.dia { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; overflow: auto; text-align: center; }
+.dia svg { max-width: 100%; height: auto; }
+.dia .zoom { position: absolute; top: 8px; right: 8px; }
+.dia svg .node rect, .dia svg .cluster rect { rx: 10px; ry: 10px; }
+.dia svg .edgeLabel, .dia svg .edgeLabel p { font-size: 12px; border-radius: 6px; }
+.dia svg .cluster-label { font-weight: 600; }
+
+/* seznami */
+.qlist { list-style: none; margin: 0; padding: 0; }
+.qlist li { padding: 9px 0; border-bottom: 1px solid var(--line-2); display: grid; grid-template-columns: 20px 1fr; gap: 6px; }
+.qlist li:last-child { border-bottom: 0; }
+.filter { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.filter input, .filter select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); font: inherit; }
+.filter input { min-width: 260px; flex: 1; max-width: 420px; }
+table.plain { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.plain th, table.plain td { padding: 8px 10px; border-bottom: 1px solid var(--line-2); text-align: left; vertical-align: top; }
+table.plain th { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+table.plain tr:hover td { background: var(--panel-2); }
+.impact-lvl { border-left: 3px solid var(--down); padding-left: 12px; margin-bottom: 12px; }
+.sole { color: var(--bad); font-weight: 600; font-size: 12px; }
+
+/* urejanje in okna */
+textarea.editor { width: 100%; min-height: 68vh; font: 13px/1.5 Consolas, "Cascadia Mono", monospace; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+.notice { padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 13px; }
+.notice.info { background: var(--accent-soft); } .notice.warn { background: var(--warn-soft); }
+.overlay { position: fixed; inset: 0; background: rgba(10,15,25,.5); display: flex; align-items: flex-start; justify-content: center; z-index: 60; padding: 8vh 16px 16px; }
+.modal { background: var(--panel); border-radius: 14px; max-width: 720px; width: 100%; max-height: 84vh; overflow: auto; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal h3 { margin-top: 0; }
+.impact li { margin: 5px 0; }
+.impact .podre { color: var(--bad); } .impact .pozor { color: var(--warn); } .impact .obogati { color: var(--ok); }
+.palette { max-width: 640px; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.palette input { border: 0; border-bottom: 1px solid var(--line); padding: 16px 18px; font: inherit; font-size: 16px; background: var(--panel); color: var(--text); outline: none; }
+.palette .res { overflow: auto; max-height: 60vh; }
+.palette .it { display: flex; gap: 10px; align-items: center; padding: 9px 18px; cursor: pointer; color: var(--text); }
+.palette .it small { color: var(--muted); margin-left: auto; }
+.palette .it.sel { background: var(--accent-soft); }
+.palette .grp { padding: 8px 18px 4px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.zoomer { position: fixed; inset: 0; background: var(--bg); z-index: 70; overflow: hidden; cursor: grab; }
+.zoomer .inner { transform-origin: 0 0; position: absolute; left: 0; top: 0; padding: 40px; }
+.zoomer .inner svg { max-width: none !important; }
+.zoomer .bar2 { position: fixed; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 71; }
+.menu-btn { display: none; }
+
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { position: static; }
+}
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  aside { position: fixed; inset: 0 25% 0 0; z-index: 50; transform: translateX(-100%); transition: transform .2s; }
+  aside.open { transform: none; }
+  .menu-btn { display: inline-flex; }
+  .overview, .step .res { grid-template-columns: 1fr; }
+  .strip-leg { margin-left: 0; }
+  .pl-panel { left: 14px; right: 14px; width: auto; top: auto; bottom: 14px; max-height: 60%; }
+  .wrap { padding: 16px; }
+}
+@media print {
+  aside, .tabs, .btn, .side { display: none !important; }
+  .app { display: block; height: auto; } main { overflow: visible; }
+  .layout { display: block; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside id="aside">
+    <div class="brand"><div class="logo">P</div><div><h1>Procesi PIM</h1><div class="sub" id="brandSub"></div></div></div>
+    <button class="searchbtn" id="btnSearch"><span>🔍 Išči …</span><kbd>Ctrl K</kbd></button>
+    <nav id="nav"></nav>
+    <div class="source">
+      <div id="srcInfo"></div>
+      <div class="row">
+        <button class="btn sm" id="btnConnect" title="Stran bere in shranjuje neposredno v mapo s procesi">📂 Poveži z mapo</button>
+        <button class="btn sm" id="btnTheme" title="Svetla / temna tema">◐</button>
+        <button class="btn sm" onclick="print()" title="Natisni ali shrani kot PDF">🖨</button>
+      </div>
+    </div>
+  </aside>
+  <main id="main"><div class="wrap"><button type="button" class="btn sm menu-btn" onclick="document.getElementById('aside').classList.toggle('open')" style="margin-bottom:12px">Meni</button><div id="view"></div></div></main>
+</div>
+
+<script>/*PODATKI*/</script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+/* ===== JEDRO: glave, povezave, vpliv (brez DOM) ===== */
+const Jedro = (() => {
+  const PODROCJA = {
+    '01-nadzor': 'Nadzor', '02-vhodi': 'Vhodi', '03-izdelki': 'Izdelki', '04-kakovost': 'Kakovost',
+    '05-izhod-saop': 'Izhod v SAOP', '06-izhod-splet': 'Izhod na splet', '07-poslovanje': 'Poslovanje',
+    '08-upravljanje': 'Upravljanje', '09-administracija': 'Administracija'
+  };
+  const OPIS = {
+    '01-nadzor': 'Stanje, varovalke, zgodovina uvozov', '02-vhodi': 'Kaj pride iz SAOP in od dobaviteljev',
+    '03-izdelki': 'Artikli, kategorije, mediji, odprodaja', '04-kakovost': 'Kaj manjka in kaj zadrži izhod',
+    '05-izhod-saop': 'Kaj gre nazaj v ERP', '06-izhod-splet': 'katalog.csv, stranke.csv, Magento',
+    '07-poslovanje': 'Stranke, popusti, cene, zaloga', '08-upravljanje': 'Atributi, kategorije, pravila',
+    '09-administracija': 'Uporabniki, urniki, namestitev'
+  };
+  // stolpci zemljevida toka (levo -> desno); podpora je spodaj
+  const TOK = [['02-vhodi'], ['03-izdelki', '04-kakovost'], ['07-poslovanje'], ['05-izhod-saop', '06-izhod-splet']];
+  const TOK_NASLOVI = ['Vhodi', 'Katalog in kakovost', 'Poslovanje', 'Izhodi'];
+  const PODPORNA = ['01-nadzor', '08-upravljanje', '09-administracija'];
+  const ZUNANJI = [
+    { pred: 'saop.', id: 'X_SAOP', naziv: 'SAOP ERP', opis: 'artikli, cene, zaloge, stranke' },
+    { pred: 'dobavitelj.', id: 'X_DOB', naziv: 'Dobavitelji', opis: 'katalogi XML' },
+    { pred: 'excel.', id: 'X_XLS', naziv: 'Excel', opis: 'uvozi uporabnikov' },
+    { pred: 'splet.', id: 'X_WEB', naziv: 'Splet / Magento', opis: 'katalog.csv, stranke.csv' },
+    { pred: 'obvestila', id: 'X_MAIL', naziv: 'E-pošta', opis: 'obvestila in alarmi' }
+  ];
+  const zunanji = o => ZUNANJI.find(z => o.startsWith(z.pred)) || null;
+  const podrocjeNaziv = p => PODROCJA[p] || p;
+  const razred = s => /^ne/.test(s || '') ? 'nedeluje' : /^delno/.test(s || '') ? 'delno' : 'deluje';
+  const SEZNAMI = ['bere', 'pise', 'strani', 'posli', 'koda', 'migracije'];
+
+  function razcleni(besedilo) {
+    const vr = besedilo.replace(/\r/g, '').split('\n');
+    const g = {};
+    let konec = 0;
+    if (vr[0] && vr[0].trim() === '---') {
+      for (let i = 1; i < vr.length; i++) {
+        if (vr[i].trim() === '---') { konec = i + 1; break; }
+        const m = vr[i].replace(/\s+#.*$/, '').match(/^\s*([A-Za-z_]+)\s*:\s*(.*)$/);
+        if (!m) continue;
+        const val = m[2].trim();
+        g[m[1]] = val.startsWith('[')
+          ? val.replace(/^\[|\]$/g, '').split(',').map(x => x.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+          : val.replace(/^["']|["']$/g, '');
+      }
+    }
+    SEZNAMI.forEach(k => { if (!Array.isArray(g[k])) g[k] = []; });
+    g.brezGlave = konec === 0;
+    g.telo = vr.slice(konec).join('\n');
+    return g;
+  }
+
+  // razdelki "## N. Naslov" -> { 1: {naslov, md}, ... , povezani: md }
+  function razdelki(telo) {
+    const r = { uvod: '' };
+    const deli = telo.split(/^## /m);
+    r.uvod = deli.shift();
+    for (const d of deli) {
+      const nl = d.indexOf('\n');
+      const naslov = (nl < 0 ? d : d.slice(0, nl)).trim();
+      const md = nl < 0 ? '' : d.slice(nl + 1).trim();
+      const m = naslov.match(/^(\d+)\.\s*(.*)$/);
+      if (m) r[m[1]] = { naslov: m[2], md };
+      else if (/^Povezani/i.test(naslov)) r.povezani = { naslov, md };
+      else r['x' + naslov] = { naslov, md };
+    }
+    return r;
+  }
+
+  function tabela(md) {
+    const vr = md.split('\n').filter(l => l.trim().startsWith('|'));
+    if (vr.length < 2) return [];
+    const celice = l => l.trim().replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map(c => c.trim());
+    return vr.slice(2).map(celice);
+  }
+
+  function alineje(md) {
+    return md.split('\n').filter(l => /^\s*[-*]\s+/.test(l)).map(l => l.replace(/^\s*[-*]\s+/, '').trim())
+      .filter(l => l && !/^(Ni\.?|Ni odprtih)/i.test(l.replace(/^⚠️\s*/, '')));
+  }
+
+  function zgradi(datoteke, slovarBesedilo) {
+    const procesi = {};
+    for (const d of datoteke) {
+      const deli = d.pot.split('/');
+      if (deli.length < 2 || !/^\d\d-/.test(deli[0]) || deli[deli.length - 1].startsWith('_')) continue;
+      const g = razcleni(d.vsebina);
+      g.id = g.id || deli[deli.length - 1].replace(/\.md$/, '');
+      g.naslov = g.naslov || g.id;
+      g.podrocje = deli[0];
+      g.pot = d.pot;
+      g.vsebina = d.vsebina;
+      g.razred = razred(g.stanje);
+      g.r = razdelki(g.telo);
+      const lm = g.telo.match(/\*\*Lastnik:\*\*\s*([^·\n]+)/); g.lastnik = lm ? lm[1].trim() : '';
+      const pm = g.telo.match(/\*\*Preverjeno:\*\*\s*([^·\n]+)/); g.preverjeno = pm ? pm[1].trim() : '';
+      g.namen = g.r[1] ? g.r[1].md : '';
+      g.odprto = g.r[10] ? alineje(g.r[10].md) : [];
+      procesi[g.id] = g;
+    }
+    const slovar = {};
+    (slovarBesedilo || '').split('\n').forEach(v => {
+      const m = v.match(/^\|\s*`([^`]+)`\s*\|\s*([^|]+)\|/); if (m) slovar[m[1]] = m[2].trim();
+    });
+    const pisci = {}, bralci = {};
+    for (const p of Object.values(procesi)) {
+      p.pise.forEach(o => (pisci[o] = pisci[o] || []).push(p.id));
+      p.bere.forEach(o => (bralci[o] = bralci[o] || []).push(p.id));
+    }
+    return { procesi, slovar, pisci, bralci };
+  }
+
+  function nasledniki(m, id) {
+    const n = {};
+    for (const o of m.procesi[id].pise) for (const b of (m.bralci[o] || [])) if (b !== id) (n[b] = n[b] || new Set()).add(o);
+    return n;
+  }
+  function predhodniki(m, id) {
+    const n = {};
+    for (const o of m.procesi[id].bere) for (const w of (m.pisci[o] || [])) if (w !== id) (n[w] = n[w] || new Set()).add(o);
+    return n;
+  }
+  function drugiNivo(m, id) {
+    const prvi = new Set(Object.keys(nasledniki(m, id)));
+    const drugi = new Set();
+    for (const b of prvi) for (const c of Object.keys(nasledniki(m, b))) if (c !== id && !prvi.has(c)) drugi.add(c);
+    return [...drugi];
+  }
+
+  function opozorila(m) {
+    const op = [];
+    for (const p of Object.values(m.procesi)) {
+      if (p.brezGlave) op.push(`Proces „${p.naslov}“ nima strojne glave.`);
+      for (const o of [...p.bere, ...p.pise]) if (Object.keys(m.slovar).length && !m.slovar[o]) op.push(`„${p.naslov}“: podatek ${o} ni v slovarju podatkov.`);
+    }
+    for (const o of Object.keys(m.bralci)) if (!m.pisci[o] && !zunanji(o)) op.push(`Podatek ${o} berejo procesi, piše ga pa noben proces.`);
+    for (const o of Object.keys(m.pisci)) if (!m.bralci[o] && !zunanji(o)) op.push(`Podatek ${o} se piše, bere ga pa noben proces.`);
+    return [...new Set(op)];
+  }
+
+  function vpliv(m, staraVsebina, novaVsebina, id) {
+    const s = staraVsebina ? razcleni(staraVsebina) : null;
+    const n = razcleni(novaVsebina);
+    const podre = [], pozor = [], obogati = [];
+    const drugi = arr => (arr || []).filter(x => x !== id);
+    const ime = x => (m.procesi[x] ? m.procesi[x].naslov : x);
+    const sPise = s ? s.pise : [], sBere = s ? s.bere : [];
+    for (const o of sPise.filter(o => !n.pise.includes(o))) {
+      const br = drugi(m.bralci[o]), pi = drugi(m.pisci[o]);
+      if (br.length && !pi.length && !zunanji(o)) podre.push(`Proces ne bo več pisal ${o}. Berejo ga ${br.map(ime).join(', ')} – drugega vira ni.`);
+      else if (br.length) pozor.push(`Proces ne bo več pisal ${o}; še ga piše ${pi.map(ime).join(', ') || 'zunanji sistem'}. Berejo ga ${br.map(ime).join(', ')}.`);
+    }
+    for (const o of n.pise.filter(o => !sPise.includes(o))) {
+      const br = drugi(m.bralci[o]), pi = drugi(m.pisci[o]);
+      if (br.length) pozor.push(`Proces bo na novo pisal ${o}. To spremeni vhod za ${br.map(ime).join(', ')}.`);
+      else obogati.push(`Proces bo na novo pisal ${o} (zaenkrat ga nihče ne bere).`);
+      if (pi.length && !zunanji(o)) pozor.push(`${o} bo imel več piscev: ${[...pi.map(ime), 'ta proces'].join(', ')} – kdo ima prednost?`);
+    }
+    for (const o of n.bere.filter(o => !sBere.includes(o))) {
+      if (!drugi(m.pisci[o]).length && !zunanji(o)) podre.push(`Proces bo bral ${o}, ki ga ne piše noben proces.`);
+      else obogati.push(`Proces bo na novo uporabljal ${o}.`);
+    }
+    for (const o of [...n.bere, ...n.pise]) if (Object.keys(m.slovar).length && !m.slovar[o]) pozor.push(`Podatek ${o} ni v slovarju podatkov (_PODATKI.md).`);
+    if (s && razred(s.stanje) !== razred(n.stanje)) pozor.push(`Stanje procesa: ${s.stanje || '—'} → ${n.stanje || '—'}.`);
+    const nasl = m.procesi[id] ? Object.keys(nasledniki(m, id)).map(ime) : [];
+    return { podre, pozor, obogati, nasl };
+  }
+
+  return { PODROCJA, OPIS, TOK, TOK_NASLOVI, PODPORNA, ZUNANJI, zunanji, podrocjeNaziv, razred, razcleni, razdelki, tabela, alineje, zgradi, nasledniki, predhodniki, drugiNivo, opozorila, vpliv };
+})();
+/* ===== KONEC JEDRA ===== */
+
+/* ===== vir podatkov: vgrajeni posnetek ali živa mapa ===== */
+const Vir = {
+  nacin: 'vgrajeno', mapa: null, datoteke: [], slovar: '', kopito: '', casi: {}, ustvarjeno: '',
+  naloziVgrajeno() {
+    const d = window.PROCESI_PODATKI;
+    if (!d) return false;
+    this.datoteke = d.datoteke || []; this.slovar = d.slovar || ''; this.kopito = d.kopito || ''; this.ustvarjeno = d.ustvarjeno || '';
+    return true;
+  },
+  async naloziMapo() {
+    const dat = [], casi = {};
+    for await (const [ime, h] of this.mapa.entries()) {
+      if (h.kind === 'file' && (ime === '_PODATKI.md' || ime === '_KOPITO.md')) {
+        const f = await h.getFile(); casi[ime] = f.lastModified;
+        if (ime === '_PODATKI.md') this.slovar = await f.text(); else this.kopito = await f.text();
+      }
+      if (h.kind !== 'directory' || !/^\d\d-/.test(ime)) continue;
+      for await (const [ime2, h2] of h.entries()) {
+        if (h2.kind !== 'file' || !ime2.endsWith('.md')) continue;
+        const f = await h2.getFile();
+        dat.push({ pot: `${ime}/${ime2}`, vsebina: await f.text() });
+        casi[`${ime}/${ime2}`] = f.lastModified;
+      }
+    }
+    dat.sort((a, b) => a.pot.localeCompare(b.pot));
+    this.datoteke = dat; this.casi = casi;
+  },
+  async spremenjeno() {
+    const star = JSON.stringify(this.casi), shr = [this.datoteke, this.slovar, this.kopito];
+    await this.naloziMapo();
+    if (JSON.stringify(this.casi) !== star) return true;
+    [this.datoteke, this.slovar, this.kopito] = shr;
+    return false;
+  },
+  async zapisi(pot, vsebina) {
+    const [mapa, ime] = pot.split('/');
+    const dir = await this.mapa.getDirectoryHandle(mapa, { create: true });
+    const w = await (await dir.getFileHandle(ime, { create: true })).createWritable();
+    await w.write(vsebina); await w.close();
+  }
+};
+const Rocaj = {
+  db() { return new Promise((ok, ne) => { const r = indexedDB.open('pim-procesi', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => ne(r.error); }); },
+  async shrani(h) { try { (await this.db()).transaction('h', 'readwrite').objectStore('h').put(h, 'mapa'); } catch { } },
+  async beri() { try { const db = await this.db(); return await new Promise(ok => { const r = db.transaction('h').objectStore('h').get('mapa'); r.onsuccess = () => ok(r.result); r.onerror = () => ok(null); }); } catch { return null; } }
+};
+
+let M = null, trenutno = '', urejanje = false;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mid = s => s.replace(/[^A-Za-z0-9]/g, '_');
+const oz = s => String(s).replace(/"/g, '#quot;');
+const md = s => (window.marked ? marked.parse(s || '') : `<pre>${esc(s)}</pre>`);
+const mdi = s => (window.marked ? marked.parseInline(s || '') : esc(s));
+const STANJE = { deluje: '✅ Deluje', delno: '⚠️ Delno', nedeluje: '❌ Ne deluje' };
+const vsi = () => Object.values(M.procesi);
+window.pojdi = pot => { location.hash = '#/' + pot; };
+
+/* ===== mermaid ===== */
+const temna = () => { const t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+const mermaidInit = () => window.mermaid && mermaid.initialize({
+  startOnLoad: false, securityLevel: 'loose', theme: 'base',
+  flowchart: { htmlLabels: true, curve: 'basis', padding: 14, nodeSpacing: 36, rankSpacing: 56 },
+  themeVariables: temna()
+    ? { fontFamily: 'Inter, Segoe UI, sans-serif', fontSize: '14px', primaryColor: '#26244d', primaryTextColor: '#e6e9ee', primaryBorderColor: '#4b4799', lineColor: '#6b7585', clusterBkg: '#1b1f26', clusterBorder: '#2c323c', edgeLabelBackground: '#1b1f26', tertiaryColor: '#20252d' }
+    : { fontFamily: 'Inter, Segoe UI, sans-serif', fontSize: '14px', primaryColor: '#eef2ff', primaryTextColor: '#1e293b', primaryBorderColor: '#c7d2fe', lineColor: '#94a3b8', clusterBkg: '#f8fafc', clusterBorder: '#e2e8f0', edgeLabelBackground: '#ffffff', tertiaryColor: '#f8fafc' }
+});
+const CLASSDEF = [
+  'classDef deluje fill:#eef7ee,stroke:#3a8a3a,color:#123812;', 'classDef delno fill:#fff4e0,stroke:#d08a00,color:#4a3000;',
+  'classDef nedeluje fill:#fde8e8,stroke:#c0392b,color:#5a1010;', 'classDef zunanji fill:#f3f0fa,stroke:#6b54b0,color:#2a1f4d;',
+  'classDef podatek fill:#ffffff,stroke:#6b54b0,color:#2a1f4d,stroke-dasharray:3 2;', 'classDef jaz fill:#2f6fd6,stroke:#1b4ea0,color:#ffffff,font-weight:bold;'
+].map(x => '  ' + x);
+let nGraf = 0;
+async function narisi(el, koda) {
+  if (!window.mermaid) { el.innerHTML = `<div class="notice warn">Za diagrame je potrebna internetna povezava (knjižnica Mermaid).</div>`; return; }
+  try {
+    const { svg, bindFunctions } = await mermaid.render('g' + (++nGraf), koda);
+    el.innerHTML = svg + '<button class="btn sm zoom" title="Povečaj">⤢ Povečaj</button>';
+    if (bindFunctions) bindFunctions(el);
+    el.querySelector('.zoom').onclick = () => povecaj(el.querySelector('svg'));
+  } catch (e) {
+    el.innerHTML = `<div class="notice warn">Diagrama ni mogoče izrisati: ${esc(e.message || e)}</div><pre style="text-align:left">${esc(koda)}</pre>`;
+  }
+}
+function povecaj(svg) {
+  const z = document.createElement('div'); z.className = 'zoomer';
+  z.innerHTML = `<div class="bar2"><button class="btn sm" data-z="1.25">＋</button><button class="btn sm" data-z="0.8">－</button><button class="btn sm primary" data-x>Zapri (Esc)</button></div><div class="inner"></div>`;
+  const inner = z.querySelector('.inner'); inner.appendChild(svg.cloneNode(true));
+  let s = 1, x = 0, y = 0, drag = null;
+  const upd = () => inner.style.transform = `translate(${x}px,${y}px) scale(${s})`;
+  const w = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal.width : svg.clientWidth;
+  s = Math.min(3, Math.max(0.5, (innerWidth - 80) / (w || 800))); upd();
+  z.onwheel = e => { e.preventDefault(); const f = e.deltaY < 0 ? 1.12 : 0.89; x = e.clientX - (e.clientX - x) * f; y = e.clientY - (e.clientY - y) * f; s *= f; upd(); };
+  z.onmousedown = e => { if (e.target.closest('button')) return; drag = [e.clientX - x, e.clientY - y]; z.style.cursor = 'grabbing'; };
+  z.onmousemove = e => { if (drag) { x = e.clientX - drag[0]; y = e.clientY - drag[1]; upd(); } };
+  z.onmouseup = () => { drag = null; z.style.cursor = 'grab'; };
+  const zapri = () => { z.remove(); removeEventListener('keydown', esc1); };
+  const esc1 = e => { if (e.key === 'Escape') zapri(); };
+  addEventListener('keydown', esc1);
+  z.querySelectorAll('[data-z]').forEach(b => b.onclick = () => { s *= +b.dataset.z; upd(); });
+  z.querySelector('[data-x]').onclick = zapri;
+  document.body.appendChild(z);
+}
+
+/* ===== PLATNO: interaktivni graf (kartice HTML + povezave SVG, premik in povečava) ===== */
+const IKONA = {
+  in: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>',
+  out: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg>',
+  fit: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>',
+  x: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>'
+};
+function Platno(host, o) {
+  const uid = ++Platno.n;
+  host.classList.add('pl');
+  host.innerHTML = `<div class="pl-scena"><svg class="pl-svg" xmlns="http://www.w3.org/2000/svg"><defs>${['up', 'down', 'ext', 'plain'].map(k =>
+    `<marker id="m${uid}-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" class="mk-${k}"/></marker>`).join('')}</defs><g class="pl-edges"></g></svg><div class="pl-plast"></div></div>
+    <div class="pl-kontrole"><button type="button" data-a="in" aria-label="Povečaj">${IKONA.in}</button><button type="button" data-a="out" aria-label="Pomanjšaj">${IKONA.out}</button><button type="button" data-a="fit" aria-label="Prikaži vse">${IKONA.fit}</button></div>
+    <div class="pl-hint">${o.kolesce ? 'Kolesce ali vlečenje: premik. Ctrl + kolesce: povečava.' : 'Vlečenje: premik. Ctrl + kolesce: povečava.'}</div>
+    <aside class="pl-panel" hidden></aside>`;
+  const scena = host.querySelector('.pl-scena'), svg = host.querySelector('svg'), gE = svg.querySelector('.pl-edges'),
+    plast = host.querySelector('.pl-plast'), panel = host.querySelector('.pl-panel');
+  const N = {};
+  let W = 0, H = 0, robovi = [];
+  for (const g of (o.skupine || [])) {
+    const d = document.createElement('div'); d.className = 'pl-g ' + (g.cls || '');
+    Object.assign(d.style, { left: g.x + 'px', top: g.y + 'px', width: g.w + 'px', height: g.h + 'px' });
+    d.innerHTML = `<div class="pl-gh"${g.klik ? ' tabindex="0" role="button"' : ''}>${g.naslov}</div>`;
+    if (g.klik) { const h = d.firstChild; h.onclick = e => { e.stopPropagation(); g.klik(); }; h.onkeydown = e => { if (e.key === 'Enter') g.klik(); }; }
+    plast.appendChild(d); W = Math.max(W, g.x + g.w); H = Math.max(H, g.y + g.h);
+  }
+  for (const n of o.vozlisca) {
+    const d = document.createElement('div'); d.className = 'pl-n ' + (n.cls || ''); d.dataset.id = n.id;
+    Object.assign(d.style, { left: n.x + 'px', top: n.y + 'px', width: n.w + 'px', height: n.h + 'px' });
+    d.innerHTML = n.html;
+    if (!n.pasiven) {
+      d.tabIndex = 0; d.setAttribute('role', 'button'); if (n.aria) d.setAttribute('aria-label', n.aria);
+      d.onclick = e => { e.stopPropagation(); o.onNode && o.onNode(n.id); };
+      d.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.onNode && o.onNode(n.id); } };
+      d.onmouseenter = () => o.onHover && o.onHover(n.id);
+      d.onmouseleave = () => o.onHover && o.onHover(null);
+    }
+    plast.appendChild(d); N[n.id] = { ...n, el: d };
+    W = Math.max(W, n.x + n.w); H = Math.max(H, n.y + n.h);
+  }
+  W += 30; H += 30;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  plast.style.width = W + 'px'; plast.style.height = H + 'px';
+
+  let s = 1, x = 0, y = 0;
+  const upd = () => { scena.style.transform = `translate(${x}px,${y}px) scale(${s})`; };
+  const fit = () => {
+    const r = host.getBoundingClientRect(); if (!r.width) return;
+    const desno = panel.hidden ? 0 : Math.min(340, r.width * 0.4);
+    if (o.sirina) { s = Math.max(o.min || 0.2, Math.min((r.width - 40) / W, o.maks || 1)); x = Math.max(20, (r.width - W * s) / 2); y = 18; upd(); return; }
+    s = Math.max(0.2, Math.min((r.width - desno - 48) / W, (r.height - 56) / H, o.maks || 1));
+    x = Math.max(24, (r.width - desno - W * s) / 2); y = Math.max(24, (r.height - H * s) / 2 - 8); upd();
+  };
+  const zoom = (f, cx, cy) => {
+    const r = host.getBoundingClientRect(); if (cx == null) { cx = r.width / 2; cy = r.height / 2; }
+    const ns = Math.min(2.5, Math.max(0.15, s * f)); x = cx - (cx - x) * ns / s; y = cy - (cy - y) * ns / s; s = ns; upd();
+  };
+  host.addEventListener('wheel', e => {
+    if (e.ctrlKey) { e.preventDefault(); const r = host.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.12 : 0.89, e.clientX - r.left, e.clientY - r.top); }
+    else if (o.kolesce) { e.preventDefault(); x -= e.shiftKey ? e.deltaY : e.deltaX; y -= e.shiftKey ? 0 : e.deltaY; upd(); }
+  }, { passive: false });
+  let vlek = null;
+  host.addEventListener('pointerdown', e => {
+    if (e.target.closest('.pl-n,.pl-gh,.pl-kontrole,.pl-panel')) return;
+    vlek = { sx: e.clientX, sy: e.clientY, x, y, premik: 0 }; host.setPointerCapture(e.pointerId); host.classList.add('drag');
+  });
+  host.addEventListener('pointermove', e => {
+    if (!vlek) return; x = vlek.x + e.clientX - vlek.sx; y = vlek.y + e.clientY - vlek.sy;
+    vlek.premik = Math.max(vlek.premik, Math.abs(e.clientX - vlek.sx) + Math.abs(e.clientY - vlek.sy)); upd();
+  });
+  host.addEventListener('pointerup', () => { if (vlek && vlek.premik < 4 && o.onBg) o.onBg(); vlek = null; host.classList.remove('drag'); });
+  host.querySelector('.pl-kontrole').onclick = e => { const b = e.target.closest('button'); if (!b) return; ({ in: () => zoom(1.2), out: () => zoom(0.83), fit })[b.dataset.a](); };
+
+  function pot(a, b) {
+    let x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+    if (Math.abs(a.x - b.x) < 30) { // isti stolpec: lok ob desnem robu
+      x1 = a.x + a.w; x2 = b.x + b.w; const c = 40 + Math.abs(y2 - y1) / 4;
+      return `M${x1},${y1} C${x1 + c},${y1} ${x2 + c},${y2} ${x2 + 2},${y2}`;
+    }
+    if (b.x < a.x) { x1 = a.x; x2 = b.x + b.w; const c = Math.max(60, (x1 - x2) / 2); return `M${x1},${y1} C${x1 - c},${y1} ${x2 + c},${y2} ${x2},${y2}`; }
+    const c = Math.max(50, (x2 - x1) / 2);
+    return `M${x1},${y1} C${x1 + c},${y1} ${x2 - c},${y2} ${x2},${y2}`;
+  }
+  const api = {
+    N, W, H,
+    fit,
+    setEdges(list) {
+      robovi = list.filter(e => N[e.a] && N[e.b]);
+      gE.innerHTML = robovi.map((e, i) => `<path data-i="${i}" class="pl-e ${e.cls || 'plain'}${e.anim ? ' anim' : ''}" d="${pot(N[e.a], N[e.b])}" marker-end="url(#m${uid}-${e.cls || 'plain'})"/>`).join('');
+    },
+    oznaci(st) {
+      for (const n of Object.values(N)) {
+        if (n.pasiven) continue;
+        const c = n.el.classList;
+        c.toggle('me', !!st && st.me.has(n.id));
+        c.toggle('up', !!st && st.up.has(n.id));
+        c.toggle('down', !!st && st.down.has(n.id));
+        c.toggle('dim', !!st && !st.me.has(n.id) && !st.up.has(n.id) && !st.down.has(n.id));
+      }
+    },
+    // poudari samo povezave enega vozlišča (ostale zbledijo)
+    poudari(id) {
+      const sos = new Set([id]);
+      gE.querySelectorAll('path').forEach(p => {
+        const e = robovi[+p.dataset.i], vez = !id || e.a === id || e.b === id;
+        p.classList.toggle('faint', !vez);
+        if (id && vez) { sos.add(e.a); sos.add(e.b); }
+      });
+      for (const n of Object.values(N)) if (!n.pasiven) n.el.classList.toggle('dim', !!id && !sos.has(n.id));
+    },
+    panel(html) { panel.hidden = !html; panel.innerHTML = html || ''; return panel; }
+  };
+  requestAnimationFrame(fit);
+  setTimeout(() => host.querySelector('.pl-hint')?.classList.add('skrij'), 6000);
+  return api;
+}
+Platno.n = 0;
+
+/* kartice na platnu */
+const kratko = t => t.split(/\s[—–]\s|\s\(/)[0];
+const ZUN = id => Jedro.ZUNANJI.find(z => z.id === id);
+const via = arr => `<span class="pl-via">${[...new Set(arr)].slice(0, 4).map(o => `<span class="pl-d">${esc(o.replace(/^(pim|saop|splet|excel|dobavitelj)\./, ''))}</span>`).join('')}${arr.length > 4 ? `<span class="pl-d">+${arr.length - 4}</span>` : ''}</span>`;
+const kartaP = (p, extra = '') => `${p.odprto.length ? `<span class="pl-q" title="${p.odprto.length} odprtih vprašanj">${p.odprto.length}</span>` : ''}<span class="pl-nm">${esc(kratko(p.naslov))}</span>${extra}`;
+
+/* ===== celoten sistem ===== */
+function postavitevSistema() {
+  const CW = 232, XW = 170, CG = 58, KW = 210, KH = 56, RAZ = 8, GH = 42, GP = 11;
+  const kolone = [ // Viri | tok | Cilji
+    { t: 'Viri', ext: ['X_SAOP', 'X_DOB', 'X_XLS'], sfx: '_i' },
+    ...Jedro.TOK.map((a, i) => ({ t: Jedro.TOK_NASLOVI[i], areas: a })),
+    { t: 'Cilji', ext: ['X_SAOP', 'X_WEB', 'X_MAIL'], sfx: '_o' }
+  ];
+  const voz = [], sk = [];
+  let dno = 0;
+  const skupina = (pd, x, y) => {
+    const pp = vsi().filter(p => p.podrocje === pd);
+    const y0 = y; y += GH;
+    for (const p of pp) {
+      voz.push({ id: p.id, x: x + GP, y, w: KW, h: KH, cls: 'pl-p st-' + p.razred + (p.odprto.length ? ' has-q' : ''), html: kartaP(p), aria: p.naslov });
+      y += KH + RAZ;
+    }
+    y += GP - RAZ;
+    const slabih = pp.filter(p => p.razred !== 'deluje').length;
+    sk.push({ x, y: y0, w: CW, h: y - y0, naslov: `<span>${esc(Jedro.podrocjeNaziv(pd))}</span><span class="pl-gc">${pp.length} procesov</span>`, klik: () => pojdi('podrocje/' + pd) });
+    return y;
+  };
+  kolone.forEach((k, i) => {
+    const x = i === 0 ? 0 : XW + CG + (i - 1) * (CW + CG), cw = k.ext ? XW : CW; let y = 0;
+    voz.push({ id: 'T' + i, x, y, w: cw, h: 22, pasiven: true, cls: 'pl-t', html: esc(k.t) });
+    y = 32;
+    if (k.ext) for (const zid of k.ext) {
+      const z = ZUN(zid);
+      voz.push({ id: zid + k.sfx, x, y, w: cw, h: 64, cls: 'pl-x', html: `<b>${esc(z.naziv)}</b><span>${esc(z.opis)}</span>`, aria: z.naziv });
+      y += 76;
+    }
+    else for (const pd of k.areas) y = skupina(pd, x, y) + 22;
+    dno = Math.max(dno, y);
+  });
+  const y0 = dno + 30;
+  voz.push({ id: 'Tp', x: XW + CG, y: y0, w: 3 * CW + 2 * CG, h: 22, pasiven: true, cls: 'pl-t', html: 'Podpora: sodeluje z vsemi področji' });
+  Jedro.PODPORNA.forEach((pd, i) => skupina(pd, XW + CG + i * (CW + CG), y0 + 32));
+  return { voz, sk };
+}
+
+function pogledDomov() {
+  const pp = vsi(), c = r => pp.filter(p => p.razred === r).length;
+  const odprto = pp.reduce((a, p) => a + p.odprto.length, 0);
+  $('#view').innerHTML = `<div class="head"><div class="t"><h2 class="title">Celoten sistem PIM</h2>
+    <p class="lead">Podatki tečejo od virov na levi do SAOP in spleta na desni. Klikni proces, da vidiš, od česa je odvisen in na kaj vpliva. Klikni ime področja, da vidiš samo to področje.</p></div></div>
+  <div class="strip">${statusBar(pp)}<span><b>${pp.length}</b> procesov</span><span class="s-ok"><b>${c('deluje')}</b> deluje</span><span class="s-warn"><b>${c('delno')}</b> delno</span><span class="s-bad"><b>${c('nedeluje')}</b> ne deluje</span><a href="#/odprto"><b>${odprto}</b> odprtih vprašanj</a>
+    <span class="strip-leg"><i class="lg up"></i>odvisen od <i class="lg down"></i>vpliva na <i class="lg ext"></i>zunanji sistem</span></div>
+  <div id="sys" class="pl-home"></div>`;
+  const { voz, sk } = postavitevSistema();
+  let izbran = null;
+  const stanje = id => {
+    const p = M.procesi[id];
+    const up = Object.keys(Jedro.predhodniki(M, id)), dn = Object.keys(Jedro.nasledniki(M, id));
+    const zIn = [...new Set(p.bere.map(Jedro.zunanji).filter(Boolean).map(z => z.id + '_i'))];
+    const zOut = [...new Set(p.pise.map(Jedro.zunanji).filter(Boolean).map(z => z.id + '_o'))];
+    const robovi = [...up.map(u => ({ a: u, b: id, cls: 'up', anim: true })), ...zIn.map(z => ({ a: z, b: id, cls: 'ext' })),
+      ...dn.map(d => ({ a: id, b: d, cls: 'down', anim: true })), ...zOut.map(z => ({ a: id, b: z, cls: 'ext' }))];
+    return { p, up, dn, robovi, st: { me: new Set([id]), up: new Set([...up, ...zIn]), down: new Set([...dn, ...zOut]) } };
+  };
+  const pokazi = id => {
+    if (!id) { pl.setEdges([]); pl.oznaci(null); return; }
+    const s = stanje(id); pl.setEdges(s.robovi); pl.oznaci(s.st);
+  };
+  const imena = arr => arr.slice(0, 8).map(x => `<button type="button" class="pp-li" data-sel="${x}"><i class="dot ${M.procesi[x].razred}"></i>${esc(kratko(M.procesi[x].naslov))}</button>`).join('') + (arr.length > 8 ? `<span class="muted" style="font-size:12px">in še ${arr.length - 8}</span>` : '');
+  const izberi = id => {
+    if (id && !M.procesi[id]) { const z = id.replace(/_[io]$/, ''); if (ZUN(z)) pojdi('sistem/' + z); return; }
+    izbran = id; pokazi(id);
+    if (!id) { pl.panel(''); return; }
+    const s = stanje(id), p = s.p;
+    const el = pl.panel(`<div class="pp-top"><span class="badge ${p.razred}">${STANJE[p.razred]}</span><span class="muted">${esc(Jedro.podrocjeNaziv(p.podrocje))}</span><button type="button" class="pp-x" aria-label="Zapri">${IKONA.x}</button></div>
+      <h3>${esc(p.naslov)}</h3><div class="pp-namen">${mdi(p.namen.split(/(?<=\.)\s/)[0])}</div>
+      <div class="pp-sec"><h4><i class="lg up"></i>Odvisen od (${s.up.length})</h4>${imena(s.up) || '<span class="muted">nobenega procesa</span>'}</div>
+      <div class="pp-sec"><h4><i class="lg down"></i>Vpliva na (${s.dn.length})</h4>${imena(s.dn) || '<span class="muted">na noben proces</span>'}</div>
+      ${p.odprto.length ? `<div class="pp-sec"><a href="#/proces/${id}/odprto" class="pp-warn">${p.odprto.length} odprtih vprašanj</a></div>` : ''}
+      <div class="pp-act"><a class="btn primary" href="#/proces/${id}">Odpri proces</a><a class="btn" href="#/vpliv/${id}">Vpliv spremembe</a></div>`);
+    el.querySelector('.pp-x').onclick = () => izberi(null);
+    el.querySelectorAll('[data-sel]').forEach(b => b.onclick = () => izberi(b.dataset.sel));
+  };
+  const pl = Platno($('#sys'), {
+    vozlisca: voz, skupine: sk, kolesce: true, sirina: true, min: 0.62, maks: 1,
+    onNode: izberi,
+    onBg: () => izberi(null),
+    onHover: id => { if (id && M.procesi[id]) pokazi(id); else pokazi(izbran); }
+  });
+}
+
+/* ===== fokus: sredina + kdo ji daje (levo) + komu daje (desno) ===== */
+function fokusGraf(host, { levo, sredina, desno, robovi, naslovi, odpri, omejitev = 12 }) {
+  const CW = [252, 268, 252], GX = 120, OH = 74, SH = 64, RAZ = 12;
+  let vse = false;
+  const risi = () => {
+    const kos = arr => (vse || arr.length <= omejitev) ? arr : [...arr.slice(0, omejitev), { id: '__vec', html: `<span class="pl-nm">+ še ${arr.length - omejitev}</span><span class="pl-meta">Prikaži vse</span>`, cls: 'pl-more' }];
+    const L = kos(levo), R = kos(desno);
+    const vis = (arr, h) => arr.length ? arr.reduce((a, it) => a + (it.h || h) + RAZ, 0) - RAZ : 40;
+    const hMax = Math.max(vis(L, OH), vis(sredina, SH), vis(R, OH));
+    const voz = [];
+    const stolpec = (arr, xi, h, prazno) => {
+      const x = xi === 0 ? 0 : xi === 1 ? CW[0] + GX : CW[0] + CW[1] + 2 * GX;
+      voz.push({ id: 'T' + xi, x, y: 0, w: CW[xi], h: 22, pasiven: true, cls: 'pl-t', html: naslovi[xi] });
+      let y = 34 + (hMax - vis(arr, h)) / 2;
+      if (!arr.length) voz.push({ id: 'E' + xi, x, y, w: CW[xi], h: 40, pasiven: true, cls: 'pl-empty', html: prazno });
+      for (const it of arr) { const hh = it.h || h; voz.push({ ...it, x, y, w: CW[xi], h: hh }); y += hh + RAZ; }
+    };
+    stolpec(L, 0, OH, 'Nič'); stolpec(sredina, 1, SH, ''); stolpec(R, 2, OH, 'Nič');
+    const pl = Platno(host, {
+      vozlisca: voz, maks: 1.05,
+      onNode: id => { if (id === '__vec') { vse = true; risi(); } else odpri(id); },
+      onHover: id => pl.poudari(id)
+    });
+    pl.setEdges(robovi);
+    const sc = Math.min(1.05, (host.clientWidth - 40) / pl.W);
+    host.style.height = Math.round(Math.min(720, Math.max(260, pl.H * sc + 70))) + 'px';
+  };
+  risi();
+}
+const zunKarta = (z, sfx, podatki) => ({ id: z.id + sfx, cls: 'pl-x', html: `<b>${esc(z.naziv)}</b>${via(podatki)}`, aria: z.naziv });
+const procKarta = (id, podatki, cls = '') => { const p = M.procesi[id]; return { id, cls: `pl-p st-${p.razred}${p.odprto.length ? ' has-q' : ''} ${cls}`, html: kartaP(p, `<span class="pl-meta">${esc(Jedro.podrocjeNaziv(p.podrocje))}</span>${podatki ? via(podatki) : ''}`), aria: p.naslov }; };
+const zunSkupine = (arr) => { const g = {}; for (const o of arr) { const z = Jedro.zunanji(o); if (z) (g[z.id] = g[z.id] || []).push(o); } return g; };
+const odpriVozlisce = id => { const a = id.match(/^A_(.+)_[lr]$/); if (a) return pojdi('podrocje/' + a[1]); if (M.procesi[id]) pojdi('proces/' + id); else { const z = id.replace(/_[io]$/, ''); if (ZUN(z)) pojdi('sistem/' + z); } };
+
+const grupa = (vnosi, sfx) => {
+  const po = {};
+  for (const [id, d] of Object.entries(vnosi)) { const pd = M.procesi[id].podrocje; (po[pd] = po[pd] || { ids: [], d: new Set() }); po[pd].ids.push(id); d.forEach(x => po[pd].d.add(x)); }
+  return Object.keys(Jedro.PODROCJA).filter(pd => po[pd]).map(pd => {
+    const g = po[pd], n = g.ids.length, vrstic = Math.min(3, n) + (n > 3 ? 1 : 0);
+    return { id: `A_${pd}${sfx}`, cls: 'pl-a', h: 60 + vrstic * 17, aria: Jedro.podrocjeNaziv(pd),
+      html: `<span class="pl-nm">${esc(Jedro.podrocjeNaziv(pd))}<span class="pl-cnt">${n}</span></span><span class="pl-list">${g.ids.slice(0, 3).map(i => `<span><i class="dot ${M.procesi[i].razred}"></i>${esc(kratko(M.procesi[i].naslov))}</span>`).join('')}${n > 3 ? `<span class="muted">in še ${n - 3}</span>` : ''}</span>${via([...g.d])}` };
+  });
+};
+const gid = (id, sfx) => `A_${M.procesi[id].podrocje}${sfx}`;
+
+function grafProcesa(host, id) {
+  const p = M.procesi[id], pred = Jedro.predhodniki(M, id), nasl = Jedro.nasledniki(M, id);
+  const zi = zunSkupine(p.bere), zo = zunSkupine(p.pise);
+  const VEC = 8, gL = Object.keys(pred).length > VEC, gR = Object.keys(nasl).length > VEC;
+  const levo = [...Object.entries(zi).map(([z, d]) => zunKarta(ZUN(z), '_i', d)), ...(gL ? grupa(pred, '_l') : Object.entries(pred).map(([w, d]) => procKarta(w, [...d])))];
+  const desno = [...(gR ? grupa(nasl, '_r') : Object.entries(nasl).map(([b, d]) => procKarta(b, [...d]))), ...Object.entries(zo).map(([z, d]) => zunKarta(ZUN(z), '_o', d))];
+  const sredina = [{ id, cls: 'pl-me', html: `<span class="pl-nm">${esc(kratko(p.naslov))}</span><span class="pl-meta">${STANJE[p.razred]}</span>` }];
+  const robovi = [...levo.map(l => ({ a: l.id, b: id, cls: l.id.endsWith('_i') ? 'ext' : 'up', anim: !l.id.endsWith('_i') })),
+    ...desno.map(r => ({ a: id, b: r.id, cls: r.id.endsWith('_o') ? 'ext' : 'down', anim: !r.id.endsWith('_o') }))];
+  const nL = Object.keys(pred).length, nR = Object.keys(nasl).length;
+  fokusGraf(host, { levo, sredina, desno, robovi, naslovi: [`Odvisen od: ${nL} procesov${gL ? ', po področjih' : ''}`, 'Proces', `Vpliva na: ${nR} procesov${gR ? ', po področjih' : ''}`], odpri: x => x === id ? null : odpriVozlisce(x) });
+}
+
+function grafPodrocja(host, pd) {
+  const pp = vsi().filter(p => p.podrocje === pd), ids = new Set(pp.map(p => p.id));
+  const L = {}, R = {}, robovi = [], zi = {}, zo = {};
+  for (const p of pp) {
+    for (const [w, d] of Object.entries(Jedro.predhodniki(M, p.id))) if (!ids.has(w)) { (L[w] = L[w] || new Set()); d.forEach(x => L[w].add(x)); robovi.push({ a: gid(w, '_l'), b: p.id, cls: 'up' }); }
+    for (const [b, d] of Object.entries(Jedro.nasledniki(M, p.id))) if (!ids.has(b)) { (R[b] = R[b] || new Set()); d.forEach(x => R[b].add(x)); robovi.push({ a: p.id, b: gid(b, '_r'), cls: 'down' }); }
+    for (const [z, d] of Object.entries(zunSkupine(p.bere))) { (zi[z] = zi[z] || new Set()); d.forEach(x => zi[z].add(x)); robovi.push({ a: z + '_i', b: p.id, cls: 'ext' }); }
+    for (const [z, d] of Object.entries(zunSkupine(p.pise))) { (zo[z] = zo[z] || new Set()); d.forEach(x => zo[z].add(x)); robovi.push({ a: p.id, b: z + '_o', cls: 'ext' }); }
+  }
+  const levo = [...Object.entries(zi).map(([z, d]) => zunKarta(ZUN(z), '_i', [...d])), ...grupa(L, '_l')];
+  const desno = [...grupa(R, '_r'), ...Object.entries(zo).map(([z, d]) => zunKarta(ZUN(z), '_o', [...d]))];
+  const uniq = new Set(); for (let i = robovi.length - 1; i >= 0; i--) { const k = robovi[i].a + '>' + robovi[i].b; if (uniq.has(k)) robovi.splice(i, 1); else uniq.add(k); }
+  const sredina = pp.map(p => ({ id: p.id, cls: `pl-p pl-mid st-${p.razred}${p.odprto.length ? ' has-q' : ''}`, html: kartaP(p, `<span class="pl-meta">${STANJE[p.razred]}</span>`), aria: p.naslov }));
+  fokusGraf(host, { levo, sredina, desno, robovi, naslovi: ['Dobi podatke od', esc(Jedro.podrocjeNaziv(pd)), 'Daje podatke'], odpri: odpriVozlisce, omejitev: 14 });
+}
+
+function grafPodatka(host, o) {
+  const pi = M.pisci[o] || [], br = M.bralci[o] || [];
+  fokusGraf(host, {
+    levo: pi.map(w => procKarta(w)), desno: br.map(b => procKarta(b)),
+    sredina: [{ id: 'D', cls: 'pl-data', html: `<span class="pl-nm">${esc(o)}</span><span class="pl-meta">${esc(M.slovar[o] || '')}</span>` }],
+    robovi: [...pi.map(w => ({ a: w, b: 'D', cls: 'up', anim: true })), ...br.map(b => ({ a: 'D', b, cls: 'down', anim: true }))],
+    naslovi: [`Piše (${pi.length})`, 'Podatek', `Bere (${br.length})`], odpri: odpriVozlisce, omejitev: 16
+  });
+}
+
+/* ===== gradniki ===== */
+const chipP = (id, extra = '') => { const p = M.procesi[id]; return p ? `<a class="chip" href="#/proces/${id}"><span class="dot ${p.razred}"></span>${esc(p.naslov)}${extra}</a>` : ''; };
+const vec = (arr, n = 6) => arr.length <= n ? arr.join('') : arr.slice(0, n).join('') + `<details style="display:inline"><summary class="chip" style="list-style:none">+ še ${arr.length - n}</summary>${arr.slice(n).join('')}</details>`;
+const chipD = o => `<a class="chip data" href="#/podatek/${encodeURIComponent(o)}">${esc(o)}</a>`;
+function statusBar(pp) {
+  const n = pp.length || 1, c = r => pp.filter(p => p.razred === r).length;
+  return `<div class="bar"><i style="width:${c('deluje') / n * 100}%;background:var(--ok)"></i><i style="width:${c('delno') / n * 100}%;background:var(--warn)"></i><i style="width:${c('nedeluje') / n * 100}%;background:var(--bad)"></i></div>`;
+}
+
+/* ===== pogledi ===== */
+function pogledPodrocja(pd) {
+  const pp = vsi().filter(p => p.podrocje === pd);
+  const odprto = pp.reduce((a, p) => a + p.odprto.length, 0);
+  const vhod = new Set(), izhod = new Set();
+  pp.forEach(p => { Object.keys(Jedro.predhodniki(M, p.id)).forEach(x => { if (M.procesi[x].podrocje !== pd) vhod.add(x); }); Object.keys(Jedro.nasledniki(M, p.id)).forEach(x => { if (M.procesi[x].podrocje !== pd) izhod.add(x); }); });
+  let h = `<div class="crumbs"><a href="#/">Glavni proces</a> › ${esc(Jedro.podrocjeNaziv(pd))}</div>
+  <div class="head"><div class="t"><h2 class="title">${esc(Jedro.podrocjeNaziv(pd))}</h2><p class="lead">${esc(Jedro.OPIS[pd] || '')}</p>
+    <p class="lead" style="margin-top:6px">Z miško pojdi na proces na sredini: ostanejo vidne samo njegove povezave. Klik na blok odpre področje ali proces.</p>
+    <div class="meta"><span class="badge neutral">${pp.length} procesov</span>${odprto ? `<span class="badge delno">⚠ ${odprto} odprtih vprašanj</span>` : ''}</div></div>
+    ${Vir.nacin === 'mapa' ? `<button class="btn" onclick="novProces('${pd}')">＋ Nov proces</button>` : ''}</div>
+  <div id="gArea" class="pl-fokus"></div>
+  <div class="grid">`;
+  for (const p of pp) {
+    const up = Object.keys(Jedro.predhodniki(M, p.id)).length, dn = Object.keys(Jedro.nasledniki(M, p.id)).length;
+    h += `<a class="card" href="#/proces/${p.id}" style="color:inherit;text-decoration:none;margin:0">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><h3 style="margin:0">${esc(p.naslov)}</h3><span class="badge ${p.razred}">${STANJE[p.razred]}</span></div>
+      <div class="muted" style="margin:8px 0;font-size:13px">${mdi(p.namen.split('\n')[0])}</div>
+      <div class="meta" style="margin:0"><span>⬅ ${up}</span><span>➡ ${dn}</span>${p.odprto.length ? `<span style="color:var(--warn)">⚠ ${p.odprto.length}</span>` : ''}${p.lastnik ? `<span>· ${esc(p.lastnik)}</span>` : ''}</div></a>`;
+  }
+  h += `</div><div class="grid" style="margin-top:16px">
+    <div class="card"><h3>Dobi podatke od <span class="muted">(druga področja)</span></h3>${[...vhod].map(x => chipP(x)).join('') || '<span class="muted">—</span>'}</div>
+    <div class="card"><h3>Daje podatke <span class="muted">(druga področja)</span></h3>${[...izhod].map(x => chipP(x)).join('') || '<span class="muted">—</span>'}</div></div>`;
+  $('#view').innerHTML = h;
+  grafPodrocja($('#gArea'), pd);
+}
+
+const ZAVIHKI = [['pregled', 'Pregled'], ['diagram', 'Diagram'], ['koraki', 'Koraki'], ['pravila', 'Pravila'], ['tezave', 'Ko gre narobe'], ['odprto', 'Odprto'], ['tehnika', 'Tehnika'], ['vse', 'Vse']];
+async function pogledProcesa(id, zav) {
+  const p = M.procesi[id];
+  if (!p) { $('#view').innerHTML = `<div class="notice warn">Procesa „${esc(id)}“ ni. <a href="#/">Nazaj</a></div>`; return; }
+  zav = zav || 'pregled';
+  const pred = Jedro.predhodniki(M, id), nasl = Jedro.nasledniki(M, id), r = p.r;
+  const koraki = r[6] ? Jedro.tabela(r[6].md) : [];
+  const n = { koraki: koraki.length, odprto: p.odprto.length, pravila: r[7] ? Jedro.alineje(r[7].md).length : 0, tezave: r[8] ? Jedro.tabela(r[8].md).length : 0 };
+  let h = `<div class="crumbs"><a href="#/">Glavni proces</a> › <a href="#/podrocje/${p.podrocje}">${esc(Jedro.podrocjeNaziv(p.podrocje))}</a> › ${esc(p.naslov)}</div>
+  <div class="head"><div class="t"><h2 class="title">${esc(p.naslov)}</h2>
+    <div class="meta"><span class="badge ${p.razred}">${STANJE[p.razred]}</span>${p.lastnik ? `<span>👤 ${esc(p.lastnik)}</span>` : ''}${p.preverjeno ? `<span>· Preverjeno ${esc(p.preverjeno)}</span>` : ''}</div></div>
+    <div style="display:flex;gap:8px"><a class="btn" href="#/vpliv/${id}">⚡ Vpliv spremembe</a><button class="btn" onclick="urediProces('${id}')">✎ Uredi</button></div></div>
+  <div class="layout"><div>
+    <div class="namen">${md(p.namen)}</div>
+    <div class="tabs">${ZAVIHKI.map(([k, t]) => `<button class="tab ${k === zav ? 'active' : ''}" onclick="pojdi('proces/${id}/${k}')">${t}${n[k] ? `<span class="n ${k === 'odprto' ? 'warn' : ''}">${n[k]}</span>` : ''}</button>`).join('')}</div>
+    <div id="tabBody"></div>
+  </div>
+  <div class="side"><div class="card">
+    <h4>Odvisen od (${Object.keys(pred).length})</h4>${vec(Object.keys(pred).map(w => chipP(w))) || '<span class="muted">—</span>'}
+    <h4>Vpliva na (${Object.keys(nasl).length})</h4>${vec(Object.keys(nasl).map(b => chipP(b))) || '<span class="muted">—</span>'}
+    <h4>Bere</h4>${p.bere.map(chipD).join('') || '<span class="muted">—</span>'}
+    <h4>Piše</h4>${p.pise.map(chipD).join('') || '<span class="muted">—</span>'}
+    ${p.strani.length ? `<h4>Strani v intranetu</h4>${p.strani.map(s => `<span class="chip page">${esc(s)}</span>`).join('')}` : ''}
+    ${p.posli.length ? `<h4>Samodejni posli</h4>${p.posli.map(s => `<span class="chip page">⚙ ${esc(s)}</span>`).join('')}` : ''}
+  </div></div></div>`;
+  $('#view').innerHTML = h;
+  const tb = $('#tabBody');
+  const sek = k => r[k] ? r[k].md : '';
+  if (zav === 'pregled') {
+    tb.innerHTML = `<div id="gSos" class="pl-fokus"></div><div class="overview">
+      <div class="card md"><h3>👥 Kdo sodeluje</h3>${md(sek(2))}</div>
+      <div class="card md"><h3>⏱ Kdaj se sproži</h3>${md(sek(3))}</div>
+      <div class="card md" style="grid-column:1/-1"><h3>⇄ Vhod in izhod</h3>${md(sek(4))}</div>
+      </div>`;
+    grafProcesa($('#gSos'), id);
+  } else if (zav === 'diagram') {
+    tb.innerHTML = `<div class="md" id="mdD"></div>`; await izrisiMd($('#mdD'), sek(5));
+  } else if (zav === 'koraki') {
+    tb.innerHTML = koraki.length ? `<div class="steps">${koraki.map(k => {
+      const [st, kdo, kje, kaj, zgodi, preveri] = k; const auto = /avtomat|sistem|pim\b/i.test(kdo || '');
+      return `<div class="step ${auto ? 'auto' : ''}"><div class="num">${esc(st)}</div><div class="body">
+        <div class="who"><span class="role">${mdi(kdo)}</span>${kje && kje !== '—' ? `<span class="where">📍 ${mdi(kje)}</span>` : ''}</div>
+        ${kaj && kaj !== '—' ? `<div class="do">${mdi(kaj)}</div>` : ''}
+        <div class="res"><div><span class="lbl">Kaj se zgodi</span>${mdi(zgodi || '—')}</div><div><span class="lbl">Kako preveriš</span>${mdi(preveri || '—')}</div></div>
+      </div></div>`;
+    }).join('')}</div>` : `<div class="card md">${md(sek(6))}</div>`;
+  } else if (zav === 'pravila') {
+    tb.innerHTML = `<div class="card md">${md(sek(7))}</div>`;
+  } else if (zav === 'tezave') {
+    const t = Jedro.tabela(sek(8));
+    tb.innerHTML = t.length ? `<div class="card"><table class="plain"><tr><th>Kaj vidiš</th><th>Verjeten vzrok</th><th>Kaj narediš</th></tr>${t.map(v => `<tr><td>${mdi(v[0])}</td><td>${mdi(v[1])}</td><td>${mdi(v[2])}</td></tr>`).join('')}</table></div>` : `<div class="card md">${md(sek(8))}</div>`;
+  } else if (zav === 'odprto') {
+    tb.innerHTML = `<div class="card"><p class="muted" style="margin-top:0">Kar v kodi ni dokončano, ni jasno ali se verjetno razlikuje od dejanskega dela.</p>${p.odprto.length ? `<ul class="qlist">${p.odprto.map(x => `<li><span>⚠️</span><span>${mdi(x.replace(/^⚠️\s*/, ''))}</span></li>`).join('')}</ul>` : '✅ Ni odprtih vprašanj.'}</div>`;
+  } else if (zav === 'tehnika') {
+    tb.innerHTML = `<div class="card md" id="mdT"></div><div class="card"><h3>Koda procesa</h3>${p.koda.map(k => `<div><code>${esc(k)}</code></div>`).join('') || '—'}${p.migracije.length ? `<h3 style="margin-top:12px">Migracije</h3>${p.migracije.map(x => `<span class="chip page">${esc(x)}</span>`).join('')}` : ''}</div>`;
+    await izrisiMd($('#mdT'), sek(9).replace(/<\/?details>|<summary>.*?<\/summary>/g, ''));
+  } else {
+    tb.innerHTML = `<div class="card md" id="mdAll"></div>`; await izrisiMd($('#mdAll'), p.telo.replace(/^#\s.*$/m, ''));
+  }
+}
+
+async function izrisiMd(el, besedilo) {
+  el.innerHTML = md(besedilo);
+  el.querySelectorAll('a[href$=".md"]').forEach(a => {
+    const ime = a.getAttribute('href').split('/').pop().replace(/\.md$/, '');
+    if (M.procesi[ime]) a.setAttribute('href', '#/proces/' + ime);
+  });
+  for (const b of [...el.querySelectorAll('pre > code.language-mermaid')]) {
+    const box = document.createElement('div'); box.className = 'dia'; box.style.marginBottom = '14px';
+    b.parentElement.replaceWith(box);
+    await narisi(box, b.textContent);
+  }
+}
+
+async function pogledVpliva(id) {
+  const p = M.procesi[id]; if (!p) return pogledDomov();
+  const nasl = Jedro.nasledniki(M, id), drugi = Jedro.drugiNivo(M, id);
+  let h = `<div class="crumbs"><a href="#/">Glavni proces</a> › <a href="#/proces/${id}">${esc(p.naslov)}</a> › Vpliv</div>
+  <div class="head"><div class="t"><h2 class="title">Če spremeniš: ${esc(p.naslov)}</h2>
+  <p class="lead">Kateri procesi so odvisni od podatkov, ki jih ta proces piše. Kjer je proces <span class="sole">edini vir</span> podatka, bi sprememba ali izpad podrl vse, ki ta podatek berejo.</p></div></div>
+  <div class="grid">`;
+  for (const o of p.pise) {
+    const br = (M.bralci[o] || []).filter(x => x !== id), pi = (M.pisci[o] || []).filter(x => x !== id), zun = Jedro.zunanji(o);
+    h += `<div class="card"><h3>${chipD(o)} ${!pi.length && !zun && br.length ? '<span class="sole">edini vir</span>' : ''}</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:6px">${esc(M.slovar[o] || '')}</div>
+      <div style="font-size:12px" class="muted">Berejo (${br.length}):</div>${br.map(x => chipP(x)).join('') || (zun ? `<span class="muted">zunanji sistem: ${esc(zun.naziv)}</span>` : '<span class="muted">nihče</span>')}
+      ${pi.length ? `<div style="font-size:12px;margin-top:6px" class="muted">Pišejo ga tudi:</div>${pi.map(x => chipP(x)).join('')}` : ''}</div>`;
+  }
+  h += `</div>
+  <div class="card"><h3>Neposredno vpliva na (${Object.keys(nasl).length})</h3><div class="impact-lvl">${Object.entries(nasl).map(([b, s]) => chipP(b, ` <small>prek ${[...s].join(', ')}</small>`)).join('') || '—'}</div>
+  <h3>Posredno, v drugem koraku (${drugi.length})</h3><div class="impact-lvl" style="border-color:var(--line)">${vec(drugi.map(x => chipP(x)), 10) || '—'}</div></div>
+  <div id="gV" class="pl-fokus"></div>`;
+  $('#view').innerHTML = h;
+  grafProcesa($('#gV'), id);
+}
+
+async function pogledPodatka(o) {
+  const pi = M.pisci[o] || [], br = M.bralci[o] || [];
+  $('#view').innerHTML = `<div class="crumbs"><a href="#/">Glavni proces</a> › <a href="#/podatki">Podatki</a> › ${esc(o)}</div>
+  <div class="head"><div class="t"><h2 class="title">${esc(o)}</h2><p class="lead">${esc(M.slovar[o] || 'Ni v slovarju podatkov.')}</p></div></div>
+  <div id="gD" class="pl-fokus"></div>`;
+  grafPodatka($('#gD'), o);
+}
+
+function pogledSistema(zid) {
+  const z = Jedro.ZUNANJI.find(x => x.id === zid); if (!z) return pogledDomov();
+  const obj = [...new Set([...Object.keys(M.pisci), ...Object.keys(M.bralci), ...Object.keys(M.slovar)])].filter(o => o.startsWith(z.pred)).sort();
+  $('#view').innerHTML = `<div class="crumbs"><a href="#/">Glavni proces</a> › ${esc(z.naziv)}</div>
+  <div class="head"><div class="t"><h2 class="title">${esc(z.naziv)}</h2><p class="lead">Zunanji sistem. Kateri procesi iz njega berejo in kateri vanj pišejo.</p></div></div>
+  <div class="card"><table class="plain"><tr><th>Podatek</th><th>PIM bere (proces)</th><th>PIM piše (proces)</th></tr>
+  ${obj.map(o => `<tr><td>${chipD(o)}<div class="muted" style="font-size:12px">${esc(M.slovar[o] || '')}</div></td><td>${(M.bralci[o] || []).map(x => chipP(x)).join('') || '—'}</td><td>${(M.pisci[o] || []).map(x => chipP(x)).join('') || '—'}</td></tr>`).join('')}</table></div>`;
+}
+
+function pogledPodatkov() {
+  const obj = [...new Set([...Object.keys(M.slovar), ...Object.keys(M.pisci), ...Object.keys(M.bralci)])].sort();
+  $('#view').innerHTML = `<div class="crumbs"><a href="#/">Glavni proces</a> › Podatki</div>
+  <div class="head"><div class="t"><h2 class="title">Podatki</h2><p class="lead">Prek teh podatkov so procesi povezani med seboj. Proces, ki podatek piše, vpliva na vse, ki ga berejo.</p></div></div>
+  <div class="card"><table class="plain"><tr><th>Podatek</th><th>Opis</th><th>Piše</th><th>Bere</th></tr>
+  ${obj.map(o => { const pi = (M.pisci[o] || []).length, br = (M.bralci[o] || []).length; return `<tr><td>${chipD(o)}</td><td>${esc(M.slovar[o] || '')}</td><td>${pi}${pi === 1 && br && !Jedro.zunanji(o) ? ' <span class="sole">edini vir</span>' : ''}</td><td>${br}</td></tr>`; }).join('')}</table></div>`;
+}
+
+function pogledOdprto() {
+  const vse = vsi().filter(p => p.odprto.length);
+  const skupaj = vse.reduce((a, p) => a + p.odprto.length, 0);
+  $('#view').innerHTML = `<div class="crumbs"><a href="#/">Glavni proces</a> › Kaj ni pod kontrolo</div>
+  <div class="head"><div class="t"><h2 class="title">Kaj ni pod kontrolo</h2>
+  <p class="lead">Vsa odprta vprašanja in razlike iz vseh procesov na enem mestu (${skupaj} v ${vse.length} procesih). To je seznam za urejanje PIM-a.</p></div></div>
+  <div class="filter"><input id="fq" type="search" placeholder="Filtriraj, npr. SAOP, vloga, katalog …"><select id="fa"><option value="">Vsa področja</option>${Object.keys(Jedro.PODROCJA).map(k => `<option value="${k}">${Jedro.PODROCJA[k]}</option>`).join('')}</select><span class="muted" id="fn"></span></div>
+  <div id="flist"></div>`;
+  const risi = () => {
+    const q = $('#fq').value.toLowerCase(), a = $('#fa').value; let n = 0;
+    $('#flist').innerHTML = vse.filter(p => !a || p.podrocje === a).map(p => {
+      const it = p.odprto.filter(x => !q || (x + ' ' + p.naslov).toLowerCase().includes(q)); n += it.length;
+      return it.length ? `<div class="card"><h3><a href="#/proces/${p.id}/odprto" style="color:inherit"><span class="dot ${p.razred}" style="display:inline-block;margin-right:6px"></span>${esc(p.naslov)}</a> <span class="muted">· ${esc(Jedro.podrocjeNaziv(p.podrocje))} · ${it.length}</span></h3><ul class="qlist">${it.map(x => `<li><span>⚠️</span><span>${mdi(x.replace(/^⚠️\s*/, ''))}</span></li>`).join('')}</ul></div>` : '';
+    }).join('') || '<div class="card muted">Ni zadetkov.</div>';
+    $('#fn').textContent = `${n} zadetkov`;
+  };
+  $('#fq').oninput = risi; $('#fa').onchange = risi; risi();
+}
+
+function pogledOpozoril() {
+  const op = Jedro.opozorila(M);
+  $('#view').innerHTML = `<div class="crumbs"><a href="#/">Glavni proces</a> › Skladnost</div>
+  <div class="head"><div class="t"><h2 class="title">Skladnost procesov</h2><p class="lead">Kar se med opisi procesov ne ujema. Primerjavo s kodo (strani intraneta, poti kode) naredi <code>scripts\\Procesi.ps1 -Ukaz Preveri</code>.</p></div></div>
+  <div class="card">${op.length ? `<ul class="qlist">${op.map(x => `<li><span>⚠️</span><span>${esc(x)}</span></li>`).join('')}</ul>` : '✅ Ni neskladij.'}</div>`;
+}
+
+/* ===== iskanje (Ctrl+K) ===== */
+function odpriIskanje() {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal palette"><input placeholder="Išči proces, stran intraneta, podatek, posel …" autofocus><div class="res"></div></div>`;
+  document.body.appendChild(ov);
+  const inp = ov.querySelector('input'), res = ov.querySelector('.res'); let sel = 0, items = [];
+  const zapri = () => ov.remove();
+  ov.onclick = e => { if (e.target === ov) zapri(); };
+  const risi = () => {
+    const q = inp.value.trim().toLowerCase();
+    const P = vsi().map(p => ({ t: p.naslov, s: Jedro.podrocjeNaziv(p.podrocje), pot: 'proces/' + p.id, d: p.razred, k: [p.naslov, p.id, ...p.strani, ...p.posli].join(' ').toLowerCase(), b: p.telo.toLowerCase() }));
+    const D = [...new Set([...Object.keys(M.slovar), ...Object.keys(M.pisci)])].map(o => ({ t: o, s: M.slovar[o] || 'podatek', pot: 'podatek/' + encodeURIComponent(o), k: (o + ' ' + (M.slovar[o] || '')).toLowerCase(), b: '' }));
+    const najdi = arr => arr.filter(x => !q || x.k.includes(q)).concat(q ? arr.filter(x => !x.k.includes(q) && x.b.includes(q)) : []);
+    const r1 = najdi(P).slice(0, 12), r2 = najdi(D).slice(0, 6);
+    items = [...r1, ...r2]; sel = Math.min(sel, Math.max(0, items.length - 1));
+    let i = 0;
+    res.innerHTML = (r1.length ? `<div class="grp">Procesi</div>` + r1.map(x => `<div class="it ${i === sel ? 'sel' : ''}" data-i="${i++}"><span class="dot ${x.d}"></span>${esc(x.t)}<small>${esc(x.s)}</small></div>`).join('') : '')
+      + (r2.length ? `<div class="grp">Podatki</div>` + r2.map(x => `<div class="it ${i === sel ? 'sel' : ''}" data-i="${i++}"><span style="color:var(--data)">◆</span>${esc(x.t)}<small>${esc(x.s)}</small></div>`).join('') : '')
+      || '<div class="it muted">Ni zadetkov.</div>';
+    res.querySelectorAll('[data-i]').forEach(e => e.onclick = () => { pojdi(items[+e.dataset.i].pot); zapri(); });
+  };
+  inp.oninput = () => { sel = 0; risi(); };
+  inp.onkeydown = e => {
+    if (e.key === 'Escape') zapri();
+    else if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, items.length - 1); risi(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); risi(); e.preventDefault(); }
+    else if (e.key === 'Enter' && items[sel]) { pojdi(items[sel].pot); zapri(); }
+  };
+  risi(); inp.focus();
+}
+addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (!document.querySelector('.palette')) odpriIskanje(); } });
+
+/* ===== urejanje ===== */
+window.urediProces = id => {
+  const p = M.procesi[id];
+  if (Vir.nacin !== 'mapa') { obvestilo('Za urejanje klikni »📂 Poveži z mapo« spodaj levo in izberi mapo docs\\procesi. Urejanje deluje v brskalnikih Edge in Chrome.'); return; }
+  odpriUrejevalnik(`Urejanje: ${p.naslov}`, p.pot, id, p.vsebina, p.vsebina);
+};
+window.novProces = pd => {
+  const naslov = prompt('Ime novega procesa:'); if (!naslov) return;
+  const id = naslov.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (M.procesi[id]) { obvestilo('Proces s tem imenom že obstaja.'); return; }
+  let v = Vir.kopito || `---\nid: ${id}\nnaslov: ${naslov}\npodrocje: ${pd}\nstanje: delno\nbere: []\npise: []\n---\n\n# ${naslov}\n`;
+  v = v.replace(/^id:.*$/m, `id: ${id}`).replace(/^naslov:.*$/m, `naslov: ${naslov}`).replace(/^podrocje:.*$/m, `podrocje: ${pd}`)
+    .replace(/^(bere|pise|strani|posli|koda|migracije):.*$/gm, '$1: []').replace(/^# \[Ime procesa\]/m, `# ${naslov}`).replace(/<!--[\s\S]*?-->\n*/, '');
+  odpriUrejevalnik(`Nov proces: ${naslov}`, `${pd}/${id}.md`, id, null, v);
+};
+function odpriUrejevalnik(naslov, pot, id, stara, vsebina) {
+  urejanje = true;
+  $('#view').innerHTML = `<div class="head"><div class="t"><h2 class="title">${esc(naslov)}</h2><div class="meta"><code>${esc(pot)}</code></div></div>
+    <div style="display:flex;gap:8px"><button class="btn primary" id="bSave">Preveri vpliv in shrani</button><button class="btn" id="bCancel">Prekliči</button></div></div>
+  <div class="notice info">Glava med <code>---</code> določa povezave: <b>bere</b> in <b>pise</b> uporabljata oznake iz <a href="#/podatki">seznama podatkov</a>. Pred shranjevanjem se pokaže, na kaj sprememba vpliva.</div>
+  <textarea class="editor" id="ed" spellcheck="false"></textarea>`;
+  $('#ed').value = vsebina;
+  $('#bCancel').onclick = () => { urejanje = false; prikazi(); };
+  $('#bSave').onclick = () => shraniZVplivom(pot, id, stara, $('#ed').value);
+}
+function shraniZVplivom(pot, id, stara, nova) {
+  const r = Jedro.vpliv(M, stara, nova, id);
+  const sez = (a, c, z) => a.map(x => `<li class="${c}">${z} ${esc(x)}</li>`).join('');
+  const nic = !r.podre.length && !r.pozor.length && !r.obogati.length;
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal"><h3>Vpliv spremembe</h3>
+    ${r.podre.length ? '<p><b style="color:var(--bad)">PODRE</b> – nekaj, kar drugi procesi potrebujejo, ne bo več delovalo.</p>' : ''}
+    <ul class="impact">${sez(r.podre, 'podre', '✖')}${sez(r.pozor, 'pozor', '!')}${sez(r.obogati, 'obogati', '+')}</ul>
+    ${nic ? '<p>✅ Povezave med procesi se ne spremenijo.</p>' : ''}
+    ${r.nasl.length ? `<p class="muted">Ta proces vpliva na: ${esc(r.nasl.join(', '))}. Preveri, ali njihovi opisi še držijo.</p>` : ''}
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ${r.podre.length ? '' : 'primary'}" id="mOk">${r.podre.length ? 'Vseeno shrani' : 'Shrani'}</button><button class="btn" id="mNo">Nazaj na urejanje</button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#mNo').onclick = () => ov.remove();
+  ov.querySelector('#mOk').onclick = async () => {
+    try {
+      await Vir.zapisi(pot, nova.replace(/\r?\n/g, '\r\n'));
+      ov.remove(); urejanje = false;
+      await Vir.naloziMapo(); M = Jedro.zgradi(Vir.datoteke, Vir.slovar); zgradiMeni(); osveziVir();
+      pojdi('proces/' + (Jedro.razcleni(nova).id || id)); prikazi();
+    } catch (e) { alert('Shranjevanje ni uspelo: ' + (e.message || e)); }
+  };
+}
+function obvestilo(t) {
+  const ov = document.createElement('div'); ov.className = 'overlay';
+  ov.innerHTML = `<div class="modal"><p style="margin-top:0">${esc(t)}</p><button class="btn primary">V redu</button></div>`;
+  ov.querySelector('button').onclick = () => ov.remove();
+  document.body.appendChild(ov);
+}
+
+/* ===== meni in usmerjanje ===== */
+function zgradiMeni() {
+  const pp = vsi(), odprto = pp.reduce((a, p) => a + p.odprto.length, 0), op = Jedro.opozorila(M).length;
+  let h = `<a class="nav-item" data-pot="" href="#/">🗺️ Glavni proces</a>
+    <a class="nav-item" data-pot="odprto" href="#/odprto">🚩 Kaj ni pod kontrolo<span class="cnt warn">${odprto}</span></a>
+    <a class="nav-item" data-pot="podatki" href="#/podatki">◆ Podatki</a>
+    <a class="nav-item" data-pot="opozorila" href="#/opozorila">🧩 Skladnost<span class="cnt ${op ? 'warn' : ''}">${op}</span></a>
+    <div class="nav-sec">Področja</div>`;
+  for (const pd of Object.keys(Jedro.PODROCJA)) {
+    const a = pp.filter(p => p.podrocje === pd); if (!a.length) continue;
+    const slab = a.filter(p => p.razred !== 'deluje').length;
+    h += `<a class="nav-item" data-pot="podrocje/${pd}" href="#/podrocje/${pd}">${esc(Jedro.podrocjeNaziv(pd))}<span class="cnt">${slab ? `<span style="color:var(--warn)">${slab}⚠</span> · ` : ''}${a.length}</span></a>`;
+  }
+  $('#nav').innerHTML = h; oznaciMeni();
+}
+function oznaciMeni() {
+  const pot = trenutno.startsWith('proces/') && M.procesi[trenutno.split('/')[1]] ? 'podrocje/' + M.procesi[trenutno.split('/')[1]].podrocje : trenutno;
+  document.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.pot === pot));
+}
+async function prikazi() {
+  if (!M) return;
+  trenutno = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  oznaciMeni(); $('#aside').classList.remove('open');
+  const [v, a, b] = trenutno.split('/');
+  $('#view').parentElement.classList.toggle('siroko', !v);
+  if (v === 'proces') await pogledProcesa(a, b);
+  else if (v === 'podrocje') pogledPodrocja(a);
+  else if (v === 'podatek') await pogledPodatka(decodeURIComponent(a));
+  else if (v === 'podatki') pogledPodatkov();
+  else if (v === 'sistem') pogledSistema(a);
+  else if (v === 'vpliv') await pogledVpliva(a);
+  else if (v === 'odprto') pogledOdprto();
+  else if (v === 'opozorila') pogledOpozoril();
+  else pogledDomov();
+  if (v !== 'proces' || !b) $('#main').scrollTop = 0;
+}
+function osveziVir() {
+  const s = $('#srcInfo');
+  if (Vir.nacin === 'mapa') s.innerHTML = `🟢 <b>V živo</b> iz mape „${esc(Vir.mapa.name)}“. Spremembe se prikažejo same.`;
+  else if (window.PROCESI_PODATKI) s.innerHTML = `Posnetek ${esc(Vir.ustvarjeno)}. Za sprotne spremembe in urejanje poveži mapo.`;
+  else s.innerHTML = `Ni vgrajenih podatkov. Klikni »Poveži z mapo« in izberi <b>docs\\procesi</b>.`;
+  $('#brandSub').textContent = `${Object.keys(M ? M.procesi : {}).length} procesov · ${Vir.nacin === 'mapa' ? 'v živo' : 'posnetek'}`;
+}
+async function poveziMapo(h) {
+  Vir.mapa = h; Vir.nacin = 'mapa';
+  await Vir.naloziMapo();
+  if (!Vir.datoteke.length) { obvestilo('V tej mapi ni procesov. Izberi mapo docs\\procesi (tisto z mapami 01-nadzor, 02-vhodi …).'); Vir.nacin = 'vgrajeno'; Vir.naloziVgrajeno(); }
+  else await Rocaj.shrani(h);
+  M = Jedro.zgradi(Vir.datoteke, Vir.slovar); zgradiMeni(); osveziVir(); prikazi();
+}
+$('#btnConnect').onclick = async () => {
+  if (!window.showDirectoryPicker) { obvestilo('Povezava z mapo deluje v brskalnikih Edge in Chrome. Tu je na voljo branje posnetka.'); return; }
+  try {
+    const s = await Rocaj.beri();
+    if (s && (await s.requestPermission({ mode: 'readwrite' })) === 'granted') return poveziMapo(s);
+    await poveziMapo(await showDirectoryPicker({ id: 'pim-procesi', mode: 'readwrite' }));
+  } catch (e) { if (e.name !== 'AbortError') obvestilo('Mape ni bilo mogoče odpreti: ' + (e.message || e)); }
+};
+$('#btnTheme').onclick = () => {
+  document.documentElement.setAttribute('data-theme', temna() ? 'light' : 'dark');
+  try { localStorage.setItem('pim-procesi-tema', document.documentElement.getAttribute('data-theme')); } catch { }
+  mermaidInit(); prikazi();
+};
+$('#btnSearch').onclick = odpriIskanje;
+addEventListener('hashchange', () => { if (!urejanje) prikazi(); });
+setInterval(async () => {
+  if (Vir.nacin !== 'mapa' || urejanje || document.hidden) return;
+  try { if (await Vir.spremenjeno()) { M = Jedro.zgradi(Vir.datoteke, Vir.slovar); zgradiMeni(); osveziVir(); prikazi(); } } catch { }
+}, 4000);
+
+(async () => {
+  try { const t = localStorage.getItem('pim-procesi-tema'); if (t) document.documentElement.setAttribute('data-theme', t); } catch { }
+  mermaidInit();
+  Vir.naloziVgrajeno();
+  M = Jedro.zgradi(Vir.datoteke, Vir.slovar);
+  zgradiMeni(); osveziVir(); prikazi();
+  // če je bila mapa že povezana in dovoljenje še velja, preklopi na živ način
+  try {
+    const h = await Promise.race([Rocaj.beri(), new Promise(ok => setTimeout(() => ok(null), 1500))]);
+    if (h && (await h.queryPermission({ mode: 'readwrite' })) === 'granted') await poveziMapo(h);
+  } catch { }
+})();
+</script>
+</body>
+</html>

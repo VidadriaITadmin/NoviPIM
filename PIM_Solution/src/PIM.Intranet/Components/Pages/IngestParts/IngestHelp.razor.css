@@ -1,0 +1,21 @@
+.page-help { color: var(--pim-text-soft); font-size: .82rem; margin: -.4rem 0 1rem; max-width: 62rem; }
+.page-help summary { color: var(--pim-accent-link); cursor: pointer; display: inline-flex; font-weight: 600; gap: .35rem; list-style: none; }
+.page-help summary::-webkit-details-marker { display: none; }
+.page-help summary::before {
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  content: "";
+  display: inline-block;
+  height: .4rem;
+  margin: .3rem .1rem 0 0;
+  transform: rotate(-45deg);
+  transition: transform .15s ease;
+  width: .4rem;
+}
+.page-help[open] summary::before { transform: rotate(45deg); margin-top: .15rem; }
+.page-help summary:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.page-help-body { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); line-height: 1.55; margin-top: .5rem; padding: .7rem .9rem; }
+.page-help-body ::deep p { margin: 0 0 .45rem; }
+.page-help-body ::deep p:last-child { margin-bottom: 0; }
+.page-help-body ::deep ul, .page-help-body ::deep ol { margin: .2rem 0 .45rem; padding-left: 1.2rem; }
+@media (prefers-reduced-motion: reduce) { .page-help summary::before { transition: none; } }

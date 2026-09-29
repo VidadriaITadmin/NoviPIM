@@ -1,0 +1,3 @@
+/* 290: posledica (kam artikel ne gre) je rdeča, kaj narediti je navodilo, ne podatek — ožje in tišje. */
+.mismatch-lost { color: var(--pim-bad-text); font-weight: 600; }
+.mismatch-action { color: var(--pim-text-soft); font-size: .8rem; line-height: 1.4; max-width: 26rem; }

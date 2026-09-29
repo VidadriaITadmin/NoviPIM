@@ -254,6 +254,77 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     return new(batches);
   }
 
+  /* --- povratek uvoza (280) ------------------------------------------------------------------ */
+
+  /// <summary>
+  /// Povratek uvoza cen: predogled, ki v vrsto za SAOP uvrsti prejšnje cene — samo tam, kjer je v PIM (zajem iz
+  /// SAOP) že cena uvoza. Kjer je v PIM še stara cena, uvoz v SAOP še ni prišel (čaka v vrsti ali zajem še ni
+  /// tekel): tam je pravi povratek preklic čakajoče serije, ne nova cena. Nova cena (pred uvozom je ni bilo) se v
+  /// SAOP ne da izbrisati, zato jo povratek izklopi (Aktivna = N). Drugačna cena od obeh je spor in ostane.
+  /// </summary>
+  public async Task<PriceImportPreview> PlanUndoAsync(IReadOnlyList<ImportChange> changes, CancellationToken cancellationToken = default)
+  {
+    var rows = new List<PriceImportRow>();
+    var skipped = new List<string>();
+    var warnings = new List<string>();
+    var already = 0;
+    var rowNumber = 0;
+    foreach (var organization in changes.GroupBy(change => (change.OrganizationId, change.OrganizationName)))
+    {
+      var keys = organization.GroupBy(change => change.RowKey, StringComparer.OrdinalIgnoreCase).ToList();
+      var itemIds = keys.Select(key => key.Key.Split('|', 2) is [_, var item] ? item : key.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+      var current = await prices.GetCurrentAsync(organization.Key.OrganizationId, itemIds, cancellationToken);
+      foreach (var key in keys)
+      {
+        if (key.Key.Split('|', 2) is not [var priceList, var itemId]) continue;
+        var where = $"{organization.Key.OrganizationName} {priceList} {itemId}";
+        string? Old(string field) => key.FirstOrDefault(change => change.FieldKey == field)?.OldValue;
+        string? New(string field) => key.FirstOrDefault(change => change.FieldKey == field)?.NewValue;
+        var oldNet = Decimal(Old("NET"));
+        var newNet = Decimal(New("NET"));
+        current.TryGetValue((organization.Key.OrganizationId, priceList, itemId), out var now);
+        if (now?.Net is not { } nowNet)
+        {
+          skipped.Add($"{where}: cene v PIM (še) ni — nova cena še ni prišla iz SAOP; če čaka v vrsti, prekliči serijo.");
+          continue;
+        }
+        var fieldsChanged = key.Select(change => change.FieldKey).ToHashSet(StringComparer.Ordinal);
+        bool Now(string field, string? value) => field switch
+        {
+          "NET" => value is null ? false : Decimal(value) == nowNet,
+          "VAT" => Decimal(value) == now.VatRate,
+          "FROM" => value == ImportHistoryService.Date(now.ValidFrom),
+          "ACTIVE" => value == ImportHistoryService.Bool(now.IsActive),
+          _ => false,
+        };
+        var atNew = fieldsChanged.All(field => Now(field, New(field)));
+        var atOld = oldNet is not null && fieldsChanged.All(field => Now(field, Old(field)));
+        if (atOld)
+        {
+          already++;
+          skipped.Add($"{where}: v PIM je še cena pred uvozom — uvoz v SAOP še ni prišel. Če serija čaka v vrsti, jo prekliči.");
+          continue;
+        }
+        if (!atNew)
+        {
+          skipped.Add($"{where}: cena je bila po uvozu spremenjena (zdaj {nowNet:N2}, uvoz {newNet:N2}) — ne povrnem, preveri ročno.");
+          continue;
+        }
+        var active = oldNet is null ? false : fieldsChanged.Contains("ACTIVE") ? ProductWorkbookContract.ParseYesNo(Old("ACTIVE")) : null;
+        if (oldNet is null) warnings.Add($"{where}: pred uvozom cene ni bilo — v SAOP je ni mogoče izbrisati, povratek jo izklopi (Aktivna = N).");
+        rows.Add(new(++rowNumber, organization.Key.OrganizationId, organization.Key.OrganizationName ?? "", priceList, itemId,
+          nowNet, oldNet ?? nowNet, now.VatRate, fieldsChanged.Contains("VAT") ? Decimal(Old("VAT")) : null,
+          now.ValidFrom is { Year: > 1900 } from ? from.Date : null,
+          fieldsChanged.Contains("FROM") && Old("FROM") is { } oldFrom ? DateTime.ParseExact(oldFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null,
+          now.IsActive, active));
+      }
+    }
+    return new(rows, changes.Select(change => change.RowKey).Distinct(StringComparer.OrdinalIgnoreCase).Count(), already, skipped, warnings, [], []);
+
+    static decimal? Decimal(string? value) =>
+      decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;
+  }
+
   static int? ResolveOrganization(IReadOnlyDictionary<int, string> organizations, string text)
   {
     if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && organizations.ContainsKey(id)) return id;

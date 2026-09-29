@@ -1,0 +1,54 @@
+@inject SafeguardService Safeguards
+@inject AuthenticationStateProvider Authentication
+
+@* 281: spremembe za SAOP, ki čakajo potrditev, pokazane na strani odobritve s seznamom in potrditvijo na mestu —
+   brez skakanja na druge strani (uporabnik 2026-09-24). Nesumljive spremembe so ob odobritvi že šle. *@
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (Items.Count > 0 && !Hidden)
+{
+  <SaopDeactivationConfirm Items="Items" Busy="Busy" OnSendAll="ConfirmAsync" OnCancel="() => Hidden = true" />
+}
+
+@code {
+  /// <summary>Stran ga poveča po odobritvi, da se seznam osveži.</summary>
+  [Parameter] public int Version { get; set; }
+
+  /// <summary>Samo spremembe tega podjetja (stran z izbranim podjetjem); null = vse.</summary>
+  [Parameter] public int? OrganizationId { get; set; }
+
+  IReadOnlyList<SaopHeldRow> Items = [];
+  int? loadedVersion;
+  bool Busy, Hidden;
+  string? Message, Error;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (loadedVersion == Version) return;
+    loadedVersion = Version;
+    Hidden = false;
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    try { Items = await Safeguards.GetSaopHeldAsync(organizationId: OrganizationId); }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { Items = []; }
+  }
+
+  async Task ConfirmAsync()
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      var confirmed = await Safeguards.ConfirmSaopHeldAsync(Items.Select(item => item.OutboxMessageId).ToList(), actor);
+      Message = $"Potrjeno: {confirmed:N0} sprememb gre v SAOP.";
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga pošiljanja v SAOP ne dovoljuje."; }
+    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = "Potrditev ni uspela: " + exception.Message; }
+    finally { Busy = false; }
+  }
+}

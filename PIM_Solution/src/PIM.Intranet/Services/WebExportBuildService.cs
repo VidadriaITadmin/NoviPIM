@@ -49,28 +49,54 @@ public sealed class WebExportBuildService(IConfiguration configuration)
   {
     ArgumentNullException.ThrowIfNull(output);
     await using var connection = await OpenAsync(cancellationToken);
+    // 277: stolpci z decimalno vejico (cene) in ločilo profila — enako kot v datoteki za Magento (PIM.B2b ExportValueFormat).
+    var (commaColumns, delimiter) = await FormatAsync(connection, exportProfileId, cancellationToken);
     await using var command = Command(connection, organizationId, exportProfileId, webSite,
       onlyPublished, search, skip: 0, take: 0);
     command.CommandTimeout = 600;
 
     await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken);
     await using var writer = new StreamWriter(output, new UTF8Encoding(false), 65_536, leaveOpen: true) { NewLine = "\n" };
-    await writer.WriteLineAsync(string.Join(',', Enumerable.Range(0, reader.FieldCount)
-      .Select(index => Escape(reader.GetName(index)))).AsMemory(), cancellationToken);
+    await writer.WriteLineAsync(string.Join(delimiter, Enumerable.Range(0, reader.FieldCount)
+      .Select(index => PIM.B2b.RegistryCsvWriter.Escape(reader.GetName(index), delimiter))).AsMemory(), cancellationToken);
+    var decimalComma = Enumerable.Range(0, reader.FieldCount).Select(index => commaColumns.Contains(reader.GetName(index))).ToArray();
 
     long rows = 0;
     while (await reader.ReadAsync(cancellationToken))
     {
       var cells = new string[reader.FieldCount];
       for (var index = 0; index < reader.FieldCount; index++)
-        cells[index] = Escape(reader.IsDBNull(index)
-          ? null
-          : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture));
-      await writer.WriteLineAsync(string.Join(',', cells).AsMemory(), cancellationToken);
+      {
+        var value = reader.IsDBNull(index) ? null : Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture);
+        cells[index] = PIM.B2b.RegistryCsvWriter.Escape(decimalComma[index] ? PIM.B2b.ExportValueFormat.WithDecimalComma(value) : value, delimiter);
+      }
+      await writer.WriteLineAsync(string.Join(delimiter, cells).AsMemory(), cancellationToken);
       rows++;
     }
     await writer.FlushAsync(cancellationToken);
     return rows;
+  }
+
+  /// <summary>Imena stolpcev profila z decimalno vejico in ločilo stolpcev (277); na bazi pred 277 brez vejic in z vejico.</summary>
+  static async Task<(HashSet<string> CommaColumns, char Delimiter)> FormatAsync(SqlConnection connection, int exportProfileId, CancellationToken cancellationToken)
+  {
+    await using var command = new SqlCommand("""
+      IF COL_LENGTH(N'out.ExportProfile', N'FieldDelimiter') IS NOT NULL
+      BEGIN
+        EXEC sys.sp_executesql
+          N'SELECT FieldDelimiter FROM out.ExportProfile WHERE ExportProfileId = @Id;
+            SELECT OutputColumnName FROM out.ExportColumn WHERE ExportProfileId = @Id AND IsActive = 1 AND DecimalSeparator = N'','';',
+          N'@Id int', @Id = @ExportProfileId;
+      END
+      """, connection) { CommandTimeout = 30 };
+    command.Parameters.Add("@ExportProfileId", SqlDbType.Int).Value = exportProfileId;
+    var columns = new HashSet<string>(StringComparer.Ordinal);
+    var delimiter = ',';
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (await reader.ReadAsync(cancellationToken) && !reader.IsDBNull(0) && reader.GetString(0) is [var first, ..]) delimiter = first;
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken)) columns.Add(reader.GetString(0));
+    return (columns, delimiter);
   }
 
   public static string FileName(string profileCode, DateTime utcNow)

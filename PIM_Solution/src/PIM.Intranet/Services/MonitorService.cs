@@ -237,6 +237,37 @@ public sealed class MonitorService(
     await TraceAsync(actor, "JOB_SCHEDULE", "Opravilo", $"Urnik posla {row.Label}: {after}.", jobKey, oldValue: before, newValue: after, ct: ct);
   }
 
+  /// <summary>
+  /// Meja svežine vira (276): kako stari smejo biti podatki, preden je vir rdeč in se odpre alarm SourceStale.
+  /// Null ali enaka meji iz kode vrne mejo iz kode. Velja za vir v vseh podjetjih; gostitelj je ne prepiše.
+  /// </summary>
+  public async Task SaveSourceMaxAgeAsync(
+    string jobKey, string pipeline, string sourceCode, int? maxAgeMinutes, string actor, CancellationToken ct = default)
+  {
+    await RequireAdminAsync();
+    if (maxAgeMinutes is < 1 or > 43200)
+      throw new ArgumentOutOfRangeException(nameof(maxAgeMinutes), maxAgeMinutes, "Meja svežine mora biti med 1 minuto in 30 dnevi.");
+    KnownJob(jobKey);
+    var source = (await GetSourceStatesAsync(jobKey, ct)).FirstOrDefault(row => row.Pipeline == pipeline && row.SourceCode == sourceCode)
+      ?? throw new InvalidOperationException($"Vir {sourceCode} posla {jobKey} ne obstaja.");
+
+    await using (var connection = await OpenAsync(ct))
+    await using (var command = new SqlCommand("intranet.SetJobSourceMaxAge", connection) { CommandType = CommandType.StoredProcedure })
+    {
+      command.Parameters.Add("@JobKey", SqlDbType.NVarChar, 60).Value = jobKey;
+      command.Parameters.Add("@Pipeline", SqlDbType.NVarChar, 100).Value = pipeline;
+      command.Parameters.Add("@SourceCode", SqlDbType.NVarChar, 100).Value = sourceCode;
+      command.Parameters.Add("@MaxAgeSeconds", SqlDbType.Int).Value = maxAgeMinutes is { } minutes ? minutes * 60 : DBNull.Value;
+      command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+      await command.ExecuteNonQueryAsync(ct);
+    }
+    var before = MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(source.MaxAgeSeconds));
+    var after = maxAgeMinutes is { } set ? MonitorPolicy.AgeLabel(TimeSpan.FromMinutes(set))
+      : source.DefaultMaxAgeSeconds is { } fromCode ? MonitorPolicy.AgeLabel(TimeSpan.FromSeconds(fromCode)) + " (iz kode)" : "iz kode";
+    await TraceAsync(actor, "JOB_SOURCE_MAX_AGE", "Opravilo", $"Meja svežine vira {source.Label}: {after}.", jobKey,
+      oldValue: before, newValue: after, ct: ct);
+  }
+
   /// <summary>Vklop postopka (ops.ScheduleProfile) za podjetje z obstoječim razmikom; po samodejnem izklopu ali ročnem.</summary>
   public async Task EnablePipelineAsync(string pipeline, int organizationId, string actor, CancellationToken ct = default)
   {
@@ -415,13 +446,17 @@ public sealed class MonitorService(
     command.Parameters.Add("@JobKey", SqlDbType.NVarChar, 60).Value = (object?)jobKey ?? DBNull.Value;
     await using var reader = await command.ExecuteReaderAsync(ct);
     var rows = new List<SourceStateRow>();
+    // Baza pred 276 nima meje s strani; stran tedaj pokaže mejo iz kode brez urejanja.
+    var hasOverride = HasColumn(reader, "IsMaxAgeOverridden");
     while (await reader.ReadAsync(ct))
       rows.Add(new(
         Text(reader, "JobKey"), Text(reader, "Pipeline"), Text(reader, "SourceCode"), Text(reader, "Label"),
         NullableInt(reader, "OrganizationId"), NullableText(reader, "OrganizationName"), Int(reader, "MaxAgeSeconds"), Bool(reader, "MeasureNewData"),
         NullableDate(reader, "LastContactUtc"), NullableDate(reader, "LastNewDataUtc"), NullableDate(reader, "LastFailureUtc"), NullableDate(reader, "BasisUtc"),
         NullableText(reader, "LastMessage"), NullableText(reader, "LastStatus"), NullableText(reader, "LastPhaseCode"),
-        NullableLong(reader, "LastItemsOut"), NullableLong(reader, "LastItemsRejected"), Text(reader, "State")));
+        NullableLong(reader, "LastItemsOut"), NullableLong(reader, "LastItemsRejected"), Text(reader, "State"),
+        hasOverride ? NullableInt(reader, "DefaultMaxAgeSeconds") : null,
+        hasOverride && Bool(reader, "IsMaxAgeOverridden")));
     return rows;
   }
 
@@ -517,6 +552,12 @@ public sealed class MonitorService(
     return await command.ExecuteScalarAsync(ct) as string;
   }
 
+  static bool HasColumn(SqlDataReader reader, string column)
+  {
+    for (var index = 0; index < reader.FieldCount; index++)
+      if (string.Equals(reader.GetName(index), column, StringComparison.OrdinalIgnoreCase)) return true;
+    return false;
+  }
   static string Text(SqlDataReader reader, string column) => reader.GetString(reader.GetOrdinal(column));
   static string? NullableText(SqlDataReader reader, string column)
   {

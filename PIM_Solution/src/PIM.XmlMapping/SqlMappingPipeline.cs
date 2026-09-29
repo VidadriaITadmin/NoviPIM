@@ -298,7 +298,7 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
   {
     const string sql = """
       SELECT fieldMapping.EntityType,fieldMapping.FieldMappingId,fieldMapping.MappingVersion,
-        fieldMapping.SourceElement,fieldMapping.TargetFieldCode,fieldMapping.IsRequired
+        fieldMapping.SourceElement,fieldMapping.TargetFieldCode,fieldMapping.IsRequired,fieldMapping.IsMultiValue
       FROM map.FieldMapping fieldMapping
       INNER JOIN map.SourceConnector connector
         ON connector.SourceConnectorId=fieldMapping.SourceConnectorId AND connector.IsActive=1
@@ -324,7 +324,8 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
         reader.GetInt32(2),
         reader.GetString(3),
         reader.GetString(4),
-        reader.GetBoolean(5)));
+        reader.GetBoolean(5),
+        reader.GetBoolean(6)));
     }
     return grouped;
   }
@@ -349,6 +350,7 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
         FieldMappingId int NOT NULL,
         MappingVersion int NOT NULL,
         RecordOrdinal int NOT NULL,
+        ValueOrdinal int NOT NULL,
         TargetFieldCode nvarchar(400) NOT NULL,
         Value nvarchar(max) NULL
       );
@@ -363,11 +365,12 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
       table.Columns.Add("FieldMappingId", typeof(int));
       table.Columns.Add("MappingVersion", typeof(int));
       table.Columns.Add("RecordOrdinal", typeof(int));
+      table.Columns.Add("ValueOrdinal", typeof(int));
       table.Columns.Add("TargetFieldCode", typeof(string));
       table.Columns.Add("Value", typeof(string));
       foreach (var value in values)
       {
-        table.Rows.Add(inboxId, value.FieldMappingId, value.MappingVersion, value.RecordOrdinal,
+        table.Rows.Add(inboxId, value.FieldMappingId, value.MappingVersion, value.RecordOrdinal, value.ValueOrdinal,
           value.TargetFieldCode, (object?)value.Value ?? DBNull.Value);
       }
       using var bulk = new SqlBulkCopy(connection, SqlBulkCopyOptions.Default, transaction)
@@ -381,14 +384,15 @@ public sealed class SqlMappingPipeline(string connectionString, XPathMappingExtr
     }
 
     await using (var insert = new SqlCommand("""
-      INSERT map.ExtractedValue(InboxId,FieldMappingId,MappingVersion,RecordOrdinal,TargetFieldCode,Value)
-      SELECT stage.InboxId,stage.FieldMappingId,stage.MappingVersion,stage.RecordOrdinal,stage.TargetFieldCode,stage.Value
+      INSERT map.ExtractedValue(InboxId,FieldMappingId,MappingVersion,RecordOrdinal,ValueOrdinal,TargetFieldCode,Value)
+      SELECT stage.InboxId,stage.FieldMappingId,stage.MappingVersion,stage.RecordOrdinal,stage.ValueOrdinal,stage.TargetFieldCode,stage.Value
       FROM #ExtractedValueStage stage
       WHERE NOT EXISTS
       (
         SELECT 1 FROM map.ExtractedValue existing
         WHERE existing.InboxId=stage.InboxId AND existing.FieldMappingId=stage.FieldMappingId
           AND existing.MappingVersion=stage.MappingVersion AND existing.RecordOrdinal=stage.RecordOrdinal
+          AND existing.ValueOrdinal=stage.ValueOrdinal
       );
       DROP TABLE #ExtractedValueStage;
       """, connection, transaction)

@@ -60,7 +60,7 @@
             <td>@row.FirstSeenUtc.ToPimLocal().ToString("g")</td>
             <td>@row.LastSeenUtc.ToPimLocal().ToString("g")</td>
             <td>
-              @if (row.RunId is not null) { <a href="zajem/teki/@row.RunId">Odpri tek</a> }
+              @if (row.RunId is not null) { <a href="sistem/teki/@row.RunId">Odpri tek</a> }
               else { <span class="muted">—</span> }
             </td>
           </tr>
@@ -90,7 +90,7 @@
   const int Take = 50;
   long Total;
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Težave")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zajem podatkov", "zajem"), new("Težave")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new("Resnost"), new("Težava"), new("Podjetje"), new("Vir"), new("Ponovitev", Numeric: true),

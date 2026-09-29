@@ -4,9 +4,10 @@ using PIM.Operations;
 
 if (args.Length == 0)
 {
-  Console.WriteLine("PIM.B2bWorker: --export-magento --organization-id <int> [--output-dir <dir>] [--osvezi-validacijo [--starost-validacije <min>]] [--po-urniku]");
+  Console.WriteLine("PIM.B2bWorker: --export-magento --organization-id <int> [--output-dir <dir>] [--osvezi-validacijo [--starost-validacije <min>]] [--po-urniku] [--brez-objave]");
   Console.WriteLine("               --export-profile <koda> --organization-id <int> [--output-dir <dir>] [--file-name <ime.csv>] [--osvezi-validacijo [--starost-validacije <min>]] [--po-urniku]");
   Console.WriteLine("  --starost-validacije <min>: validacija in objava tečeta samo, če je validacija podjetja starejša od <min> minut.");
+  Console.WriteLine("  --brez-objave: ročni preizkus — datoteki se zapišeta, out.WebPublication in kljukice ostanejo nedotaknjeni.");
   return 0;
 }
 
@@ -17,6 +18,9 @@ if (!args.Contains("--export-magento", StringComparer.Ordinal) && !exportProfile
 var organizationId = RequiredInt(args, "--organization-id");
 var outputDirOverride = Optional(args, "--output-dir");
 var bySchedule = args.Contains("--po-urniku", StringComparer.Ordinal);
+// Opravila po urniku pišejo z --output-dir v mapo, ki jo bere Magento, zato --output-dir sam ne pomeni
+// preizkusa. Ročni izvoz v začasno mapo mora to povedati izrecno, sicer začne odjavno okno (251).
+var withoutPublication = args.Contains("--brez-objave", StringComparer.Ordinal);
 var refreshValidation = args.Contains("--osvezi-validacijo", StringComparer.Ordinal);
 // Meja starosti: cikel CSV (vsakih 5 minut) validacije ne ponavlja, ce jo je urni cikel kataloga ze
 // opravil — validacija celega podjetja traja minute (glej MagentoExportCommand.RefreshValidationAsync).
@@ -103,7 +107,8 @@ try
   else
   {
     // 251: to je datoteka, ki jo bere Magento — pred izvozom samodejni umik, po njem zapis objave.
-    var files = await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString, publishToMagento: true);
+    // 277: pred zamenjavo varovalka; sumljivi artikli ne gredo v datoteko in čakajo potrditev, ostali gredo ven.
+    var files = await MagentoExportCommand.ExecuteAsync(organizationId, outputDirectory, connectionString, publishToMagento: !withoutPublication);
     Console.WriteLine($"Magento CSV izvoz končan: {outputDirectory}");
     datotekeZapisane = true;
     foreach (var file in files) await RecordFileAsync(file);
@@ -129,11 +134,13 @@ finally
 return 0;
 
 // Faza DATOTEKA: prazna datoteka (0 vrstic) je uspeh brez novih podatkov, ne »uspelo«.
+// 277: sporočilu se doda, kaj je povedala varovalka (npr. koliko artiklov je zadržanih in zakaj).
 Task RecordFileAsync(ExportFileResult file) =>
   phases.RecordAsync(PhaseCodes.File, PhaseOutcome.Succeeded, file.ProfileCode, organizationId, pipeline,
-    message: file.Rows > 0
-      ? $"{Path.GetFileName(file.FilePath)}, stolpcev {file.Columns}"
-      : $"{Path.GetFileName(file.FilePath)} je prazna (0 vrstic), stolpcev {file.Columns}",
+    message: (file.Rows > 0
+        ? $"{Path.GetFileName(file.FilePath)}, stolpcev {file.Columns}"
+        : $"{Path.GetFileName(file.FilePath)} je prazna (0 vrstic), stolpcev {file.Columns}")
+      + (file.Note is { } note ? $"; {note}" : ""),
     hasNewData: file.Rows > 0, itemsOut: file.Rows, byteCount: file.Bytes);
 
 static string Required(string[] args, string name)

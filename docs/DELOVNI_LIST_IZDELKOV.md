@@ -45,7 +45,7 @@ stolpec ne more zdrsniti samo na eni strani: kar izvoz izpiše, uvoz prebere.
 
 | Skupina | Kaj je v njej | Kam gre pri uvozu |
 |---|---|---|
-| Ključ | Podjetje, Šifra artikla, Naziv | nikamor; brez prvih dveh uvoz vrstice ne najde |
+| Ključ | Podjetje, Šifra artikla | nikamor; brez njiju uvoz vrstice ne najde. Stolpca »Naziv« od 2026-09-29 ni več (mešal je spletni naziv in naziv ERP); naziv ERP je »Naziv 1«, spletni naziv »Spletni naziv (sl)« |
 | ERP — gre v vrsto za SAOP | vsa polja z `IsWritable` iz registra `out.SaopXmlField` (tudi »Objava na spletu«) | `out.EnqueueSaopItemChanges` → skupina čaka odobritev |
 | Splet — zapiše se takoj | Spletne strani, Kategorije po straneh, spletni nazivi in opisi po jezikih | `pim.SetProductCategories`, `pim.SaveProductTexts` |
 | Atributi kategorije — nabor | kar kategorija predpisuje (`canon.CategoryAttributeSet`, z dedovanjem po drevesu) | `pim.SaveProductAttributes` |

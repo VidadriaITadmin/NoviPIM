@@ -31,6 +31,11 @@
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (ActionError is not null) { <p class="message-state error-message" role="alert">@ActionError</p> }
+@if (Tab == "saop")
+{
+  @* 281: sumljive cene (×10/×100, 0, velik skok, izklop) počakajo potrditev — seznam in potrditev tu. *@
+  <SaopSafeguardBanner Version="SafeguardVersion" />
+}
 
 @if (Tab == "cene")
 {
@@ -424,6 +429,9 @@ else
   [SupplyParameterFromQuery(Name = "cenik")] public string? QueryPriceList { get; set; }
   [SupplyParameterFromQuery(Name = "zavihek")] public string? QueryTab { get; set; }
 
+  /// <summary>281: seznam cen, ki čakajo potrditev, se osveži po odobritvi.</summary>
+  int SafeguardVersion;
+
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<PriceProductRow> Rows = [];
   IReadOnlyList<PriceLine> Detail = [];
@@ -781,7 +789,7 @@ else
       await LoadBatchesAsync();
     }
     catch (Exception exception) { ActionError = "Odobritev ni uspela: " + exception.Message; }
-    finally { Busy = false; }
+    finally { Busy = false; SafeguardVersion++; }
   }
 
   async Task SendAsync(int organizationId)

@@ -1,0 +1,270 @@
+@namespace PIM.Intranet.Components.Pages.ProductCardParts
+@inject PIM.Intranet.Services.CategoryMappingService Mapping
+@inject PIM.Intranet.Services.WebWithdrawalService Withdrawals
+@inject AuthenticationStateProvider Authentication
+
+@* Uvrstitev izdelka po spletnih straneh. En gradnik za kartico izdelka in stran /izdelki/{šifra}/kategorije:
+   uporabnik 2026-09-28 »zakaj se ne more ... na sami kartici artikla ... kategorije spreminjati« — prej je bila
+   kategorija na kartici samo besedilo, urejala pa se je na ločeni strani brez povezave nanjo.
+   Ročna uvrstitev je močnejša od vira (109): ponovna preslikava dobaviteljevega XML je ne povozi. *@
+
+<section class="category-editor" aria-labelledby="@($"{IdPrefix}-title")">
+  <div class="editor-head">
+    <h3 id="@($"{IdPrefix}-title")">Kategorije po spletnih straneh</h3>
+    <span class="muted">Ročna izbira ima prednost pred virom; stara vrednost ostane v zgodovini sprememb.</span>
+  </div>
+
+  @if (Message is not null) { <p class="editor-message ok" role="status">@Message</p> }
+  @if (Error is not null) { <p class="editor-message bad" role="alert">@Error</p> }
+
+  @if (Loading)
+  {
+    <p class="muted" role="status">Nalagam uvrstitev …</p>
+  }
+  else if (Sites.Count == 0)
+  {
+    <p class="muted">Ni aktivnih spletnih strani, zato izdelka ni kam uvrstiti.</p>
+  }
+  else
+  {
+    <ul class="site-list">
+      @foreach (var site in Sites)
+      {
+        var editing = Editing == site.WebSiteCode;
+        <li class="site-row @(editing ? "editing" : null)">
+          <div class="site-main">
+            <div class="site-name">
+              <strong>@site.WebSiteName</strong>
+              @if (site.IsManual)
+              {
+                <PimChip Text="ročno" Tone="warn" Prefix="Izvor: " />
+                <span class="muted">@site.SetBy · @(site.SetUtc?.ToPimLocal().ToString("g"))</span>
+              }
+              else if (!string.IsNullOrWhiteSpace(site.CategoryPaths))
+              {
+                <PimChip Text="iz vira" Prefix="Izvor: " />
+              }
+            </div>
+            <div class="site-paths">
+              @if (string.IsNullOrWhiteSpace(site.CategoryPaths))
+              {
+                <PimChip Text="brez kategorije — na to spletno stran ne gre" Tone="bad" />
+              }
+              else
+              {
+                @foreach (var path in Split(site.CategoryPaths))
+                {
+                  <span class="path-chip">@path</span>
+                }
+              }
+            </div>
+          </div>
+
+          @if (CanEdit && !editing)
+          {
+            <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => BeginEditAsync(site)">Spremeni</button>
+          }
+
+          @if (editing)
+          {
+            <div class="site-edit">
+              <label class="form-field" for="@($"{IdPrefix}-pick-{site.WebSiteCode}")">
+                Dodaj kategorijo
+                <PimPicker Id="@($"{IdPrefix}-pick-{site.WebSiteCode}")" Options="PathOptionsFor(site.WebSiteCode)" @bind-Value="PickedPathOrNull"
+                           Placeholder="Vpiši del imena ali poti kategorije …" EmptyText="V tem drevesu ni kategorij." />
+              </label>
+              <div class="edit-actions">
+                <button type="button" class="ghost-button" disabled="@(Busy || string.IsNullOrWhiteSpace(PickedPath))" @onclick="AddPicked">Dodaj na seznam</button>
+              </div>
+
+              @if (Chosen.Count == 0)
+              {
+                <p class="muted">Seznam je prazen. Shranjen prazen seznam pomeni <b>namenoma brez kategorije</b> — izdelek na to spletno stran ne gre.</p>
+              }
+              else
+              {
+                <ul class="chosen-list" aria-label="Izbrane kategorije">
+                  @foreach (var path in Chosen)
+                  {
+                    <li>
+                      <span class="path-chip" title="@SlPathOf(site.WebSiteCode, path)">@path</span>
+                      @if (SlPathOf(site.WebSiteCode, path) is { } slPath && slPath != path) { <span class="muted">@slPath</span> }
+                      <button type="button" class="ghost-button" disabled="@Busy" aria-label="@($"Odstrani {path}")" @onclick="() => Chosen.Remove(path)">Odstrani</button>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <label class="form-field" for="@($"{IdPrefix}-note-{site.WebSiteCode}")">
+                Opomba (neobvezno)
+                <input id="@($"{IdPrefix}-note-{site.WebSiteCode}")" class="form-input" @bind="Note" />
+              </label>
+
+              <div class="edit-actions">
+                <button type="button" class="primary-button" disabled="@Busy" @onclick="() => SaveAsync(site)">@(Busy ? "Shranjujem …" : "Shrani kategorije")</button>
+                <button type="button" class="ghost-button" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
+                @if (site.IsManual)
+                {
+                  <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => ClearAsync(site)"
+                          title="Odstrani ročno izbiro; kategorijo spet določi preslikava iz vira.">Vrni pod vir</button>
+                }
+              </div>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+    @if (!CanEdit)
+    {
+      <p class="muted">Kategorije smeta spreminjati vlogi ADMIN in CATALOG_EDITOR.</p>
+    }
+  }
+</section>
+
+@code {
+  [Parameter, EditorRequired] public int OrganizationId { get; set; }
+  [Parameter, EditorRequired] public string ItemId { get; set; } = "";
+  [Parameter] public bool CanEdit { get; set; }
+
+  /// <summary>Po shranjeni spremembi: kartica se naloži znova (nabor atributov in validacija sta odvisna od kategorije).</summary>
+  [Parameter] public EventCallback<string> Saved { get; set; }
+
+  /// <summary>Predpona za id-je, da se gradnik lahko pojavi na strani več kot enkrat.</summary>
+  [Parameter] public string IdPrefix { get; set; } = "kategorije";
+
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow> Sites = [];
+  readonly Dictionary<string, IReadOnlyList<PimPickerOption>> PathOptionCache = [];
+  readonly List<string> Chosen = [];
+  string? Editing;
+  string PickedPath = "";
+  string Note = "";
+  bool Loading = true;
+  bool Busy;
+  string? Error;
+  string? Message;
+  (int, string)? LoadedFor;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    // Kartica se po vsakem shranjevanju izriše znova; uvrstitev beremo samo, kadar se je izdelek zamenjal.
+    if (LoadedFor == (OrganizationId, ItemId)) return;
+    LoadedFor = (OrganizationId, ItemId);
+    Message = null;
+    await LoadAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    Error = null;
+    Editing = null;
+    try { Sites = string.IsNullOrWhiteSpace(ItemId) ? [] : await Mapping.GetProductCategoriesAsync(OrganizationId, ItemId.Trim()); }
+    catch (Exception exception) { Error = exception.Message; Sites = []; }
+    finally { Loading = false; }
+  }
+
+  static IEnumerable<string> Split(string paths) => paths.Split(" | ", StringSplitOptions.RemoveEmptyEntries);
+
+  async Task BeginEditAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    Message = null;
+    Error = null;
+    Editing = site.WebSiteCode;
+    PickedPath = "";
+    Note = "";
+    Chosen.Clear();
+    if (!string.IsNullOrWhiteSpace(site.CategoryPaths)) Chosen.AddRange(Split(site.CategoryPaths));
+    if (!PathOptionCache.ContainsKey(site.WebSiteCode))
+    {
+      try
+      {
+        // Ključ je pot v jeziku spletne strani (to shrani in preveri pim.SetProductCategories): pri »(ANG)«
+        // angleška. Ime in siva pot sta slovenska, da se išče po slovensko (uporabnik 2026-09-29).
+        var nodes = await Mapping.GetSitePathOptionsAsync(site.WebSiteCode);
+        PathOptionCache[site.WebSiteCode] = nodes
+          .Select(node => new PimPickerOption(node.SitePath, node.SlName, node.SlPath, node.LevelNo - 1)).ToList();
+      }
+      catch (Exception exception) { Error = exception.Message; PathOptionCache[site.WebSiteCode] = []; }
+    }
+  }
+
+  string? PickedPathOrNull { get => string.IsNullOrWhiteSpace(PickedPath) ? null : PickedPath; set => PickedPath = value ?? ""; }
+
+  IReadOnlyList<PimPickerOption> PathOptionsFor(string webSiteCode) =>
+    PathOptionCache.TryGetValue(webSiteCode, out var options) ? options : [];
+
+  /// <summary>Slovenska pot za pot v jeziku spletne strani (pri slovenski strani ista).</summary>
+  string? SlPathOf(string webSiteCode, string path) =>
+    PathOptionsFor(webSiteCode).FirstOrDefault(option => option.Key == path)?.Detail;
+
+  void AddPicked()
+  {
+    if (string.IsNullOrWhiteSpace(PickedPath)) return;
+    if (!Chosen.Contains(PickedPath)) Chosen.Add(PickedPath);
+    PickedPath = "";
+  }
+
+  void CancelEdit()
+  {
+    Editing = null;
+    Chosen.Clear();
+    PickedPath = "";
+    Note = "";
+  }
+
+  async Task SaveAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var outcome = await Mapping.SetProductCategoriesAsync(
+        OrganizationId, ItemId.Trim(), site.WebSiteCode, Chosen.ToList(), actor, string.IsNullOrWhiteSpace(Note) ? null : Note);
+      // 251: artikel brez kategorije na označenem spletišču tja ne sme — ob vklopljenem samodejnem umiku
+      // PIM kljukico takoj odstrani (po sveži validaciji) in to pove tu.
+      var withdrawn = outcome == "Unchanged"
+        ? []
+        : await Withdrawals.AfterChangeByItemsAsync(OrganizationId, [ItemId.Trim()], "KATEGORIJE", actor, revalidate: true);
+      var message = (outcome == "Unchanged"
+        ? $"{site.WebSiteName}: uvrstitev je bila že takšna; nič se ni spremenilo."
+        : $"{site.WebSiteName}: kategorije so shranjene, artikel je ponovno validiran. Ponovna preslikava iz vira jih ne bo povozila; v katalog.csv gredo ob naslednji izdelavi datoteke.")
+        + string.Concat(PIM.Intranet.Services.WebWithdrawalText.PerProduct(withdrawn).Select(line => " " + line + "."));
+      CancelEdit();
+      await LoadAsync();
+      Message = message;
+      if (outcome != "Unchanged") await Saved.InvokeAsync(message);
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga ne dovoljuje spreminjanja kategorij."; }
+    // Baza zavrne pot, ki v drevesu te spletne strani ne obstaja (106007). Prosto besedilo bi
+    // pomenilo izdelek v kategoriji, ki je v trgovini ni.
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task ClearAsync(PIM.Intranet.Services.CategoryMappingService.ProductCategoryRow site)
+  {
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await Mapping.ClearProductCategoryOverrideAsync(OrganizationId, ItemId.Trim(), site.WebSiteCode, await ActorAsync());
+      var message = $"{site.WebSiteName}: ročna uvrstitev je odstranjena. Kategorijo vrne naslednja preslikava iz vira — trenutne vrstice ne ugibamo.";
+      CancelEdit();
+      await LoadAsync();
+      Message = message;
+      await Saved.InvokeAsync(message);
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga ne dovoljuje spreminjanja kategorij."; }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}

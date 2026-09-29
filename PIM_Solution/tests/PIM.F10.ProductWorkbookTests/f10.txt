@@ -1,0 +1,81 @@
+=== Pogodba stolpcev (brez baze) ===
+  OK   kljuŸ je prvi in nosi çifro artikla
+  OK   drugo polje SAOP z istim kljuŸem je samo za branje
+  OK   razlika samo v vodilnih niŸlah se prepozna
+  OK   çifra ni çtevilo: ¯02® je çtevilsko polje le, kadar je decimal
+  OK   stolpec spletnih strani obstaja in je last PIM
+  OK   vsaka spletna stran ima svoj stolpec kategorij
+  OK   spletna besedila so po jezikih
+  OK   atribut iz nabora in atribut izven nabora sta v loŸenih skupinah
+  OK   ERP polja gredo v vrsto za SAOP, ne v katalog
+  OK   stanje je samo za branje
+  OK   noben naslov stolpca ni podvojen
+  OK   izvo§ene glave se vse prepoznajo nazaj
+  OK   prepoznan je isti stolpec, ne kar koli
+  OK   koda polja je sprejeta kot naslov
+  OK   ime elementa SAOP je sprejeto kot naslov
+  OK   koda besedila je sprejeta kot naslov
+  OK   neznan stolpec se ne prilepi na napaŸno polje
+  OK   seznam se loŸi z |
+  OK   prazna celica da prazen seznam
+  OK   seznam se sestavi nazaj
+  OK   prazen seznam da prazno celico
+  OK   da in ne se prebereta
+  OK   nerazumljiva vrednost ni tiho ne
+  OK   naslovna vrstica je vrstica z imeni stolpcev, ne s skupinami
+  OK   opomba pod tabelo ne postane vrstica z artiklom
+  OK   çtevilka vrstice je tista iz Excela (skupine + naslovi = prva podatkovna je 3)
+  OK   skupina stolpca se prebere iz vrstice nad naslovi (zdru§ena celica velja v desno)
+  OK   skupina atributov se prepozna
+  OK   slike in dokumenti se uvozijo (niso veŸ samo za branje)
+  OK   logiŸna vrednost gre naprej kot 1/0
+  OK   D in N (kot v SAOP POST/PATCH) se prebereta in izvoz ju piçe
+  OK   ERP polje nosi obliko iz registra (logiŸno polje se prepozna)
+
+=== Ocena preostanka izvoza v ozadju (brez baze) ===
+  OK   ocena preostanka sledi dosedanji hitrosti
+  OK   prve sekunde pisanja so brez ocene
+  OK   branje seznama je brez ocene
+  OK   koncan izvoz je brez ocene
+
+=== Krog izvoz  uvoz nad razvojno bazo ===
+  OK   izvoz ima vrstice
+  OK   izvoz ima stolpec spletnih strani
+  OK   izvoz ima stolpec objave na spletu
+  OK   izvoz ima stolpec kategorij vsaj ene strani
+  OK   register spletnih strani ni prazen
+  OK   seznam polj za pojavno okno ustreza dejanskemu izvozu (brez omejitve)
+  OK   izbira enega polja (ERP) da kljuc plus natanko to polje
+  OK   izvoz je viden lastniku takoj ob zagonu, preden zacne
+  OK   izvoz v ozadju se konca
+  OK   napredek pove branje seznama z imenovalcem
+  OK   napredek pove pisanje vrstic od vseh
+  OK   po koncu ni vec sporocila ¯tece® (napredek ne prehiti konca)
+  OK   koncano stanje nosi lastnika, cas in zeton
+  OK   izvoz vidi samo lastnik
+  OK   tuji uporabnik obvestila ne more zapreti
+  OK   odprt prenos tujega uporabnika ne dobi izvoza
+  OK   odprt prenos dobi koncan izvoz
+  OK   prevzem datoteke se zabelezi
+  OK   lastnik obvestilo zapre in ga ni vec
+  OK   tuji uporabnik izvoza ne more preklicati
+  OK   lastnik tekoŸ izvoz prekliŸe
+  OK   preklican izvoz se konca kot preklican, ne kot napaka
+  OK   preklican izvoz nima datoteke za prenos
+  OK   preklican izvoz se ustavi hitro
+  OK   koncanega izvoza ni mogoce preklicati
+  OK   odprt prenos preklicanega izvoza ne dobi datoteke
+  OK   obvestilo o preklicu se da zapreti
+  OK   preklic ne pusti zacasne datoteke
+  (kategorija ¯Zunanja svetila > Prenosna svetila®: 26 izdelkov, 32 atributov v naboru)
+  OK   filter po kategoriji zo§i seznam
+  OK   list po kategoriji ima vrstice
+  OK   vsak atribut iz nabora kategorije ima stolpec
+  (od 32 atributov nabora jih je 14 praznih pri vseh izvo§enih izdelkih)
+  OK   tudi list po kategoriji se vrne brez sprememb
+  OK   noben stolpec lista po kategoriji ne ostane neprepoznan
+  (razlika brez urejanja) Product.UoM: 3x, primer 'kos'
+  FAIL nespremenjena datoteka ne prinese nobene spremembe - vrstic s spremembo: 3; prva: CX-M029-WH: Product.UoM=kos
+  OK   noben stolpec izvoza ne ostane neprepoznan
+  FAIL ena spremenjena celica da eno spremembo - vrstic 4, PIM 1, SAOP 3
+  FAIL sprememba nosi kodo spletnega naziva

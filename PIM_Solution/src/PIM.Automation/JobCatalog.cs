@@ -47,8 +47,8 @@ public static class JobFlows
   {
     WebCatalog => "Validacija, objava v PIM ter katalog.csv in stranke.csv za splet.",
     Stock => "Zaloga in cene iz SAOP in dobaviteljev ter cene in zaloga za splet.",
-    Orders => "Naročila kupcev in dobaviteljem za MIN/MID/MAX ter dnevni mail o zalogi pod MID.",
-    Inputs => "Artikli iz SAOP in nočna uskladitev vseh vhodov.",
+    Orders => "Naročila kupcev in dobaviteljem za MIN/MID/MAX, analitika prodaje in zalog ter dnevni mail o zalogi pod MID.",
+    Inputs => "Artikli iz SAOP, katalogi dobaviteljev (XML) in nočna uskladitev vseh vhodov.",
     System => "Nadzornik, alarmi, samotest in odhodna pot v SAOP.",
     _ => "",
   };
@@ -94,8 +94,10 @@ public static class JobCatalog
 {
   public const string SaopProductImport = "SAOP_PRODUCT_IMPORT";
   public const string SaopOrderImport = "SAOP_ORDER_IMPORT";
+  public const string SaopAnalyticsImport = "SAOP_ANALYTICS_IMPORT";
   public const string StockImport = "STOCK_IMPORT";
   public const string SupplierStockImport = "SUPPLIER_STOCK_IMPORT";
+  public const string SupplierCatalogImport = "SUPPLIER_CATALOG_IMPORT";
   public const string PriceImport = "PRICE_IMPORT";
   public const string SaopDeliveryImport = "SAOP_DELIVERY_IMPORT";
   public const string ProductValidation = "PRODUCT_VALIDATION";
@@ -130,6 +132,19 @@ public static class JobCatalog
       new("GetItemsStockAccountingData", "Knjigovodski podatki zaloge", "SAOP_PRODUCTS", 7200, true, false),
       new("GetItemCustomerDataV2", "Podatki artiklov po kupcih", "SAOP_PRODUCTS", 7200, true, false),
     ] },
+    // 2026-09-23: dobaviteljev XML je bil samo korak nočne uskladitve (pas SAOP, do 6 h), zato na strežniku
+    // nikoli ni tekel — obstoječi artikli se niso bogatili, novi niso postali kandidati (/zajem/novi-artikli).
+    // Zdaj ima svoj posel kot zaloga dobaviteljev: SAOP ne kliče, zato ne čaka v pasu SAOP.
+    new(SupplierCatalogImport, "Katalog dobaviteljev (XML)",
+      "Prevzem in branje XML katalogov Nowodvorski in Braytron za vsa vključena podjetja: obstoječe artikle obogati, za šifre in EAN, ki jih v katalogu ni, ustvari kandidate (Novi artikli). Prevzemnik spoštuje razmik dobavitelja (Nowodvorski 6 h); nespremenjeno vsebino worker preskoči. SAOP ne kliče.",
+      JobFlows.Inputs, false, 11, WorkerJobReach.ExternalCall, "kliče dobavitelja", 21600, null, 5400, 43200, true,
+      [new(SaopProductImport, false, null, false, "Ne teče hkrati z zajemom artiklov iz SAOP: nova šifra mora obstajati, preden jo XML obogati.")],
+      ["SOURCE_FETCH", "GENERIC_XML"], ["PIM.SourceFetchWorker", "PIM.XmlFileWorker"], []) { Sources = [
+      // PIM.XmlFileWorker piše BRANJE/ZAPIS/PRESLIKAVA pod GENERIC_XML s kodo vira (PIM_XML_SOURCE_CODE); stik,
+      // ne novi podatki. Meji po odobrenem načrtu (2026-09-22): Nowodvorski 7 dni, Braytron 36 h.
+      new("NW_XML", "Nowodvorski XML (katalog)", "GENERIC_XML", 604800, true, false),
+      new("BT_XML", "Braytron XML (katalog)", "GENERIC_XML", 129600, true, false),
+    ] },
     new(SaopOrderImport, "Naročila iz SAOP",
       "Naročila kupcev (VNK) in naročila dobaviteljem (VND) za MIN/MID/MAX, vsako podjetje v svojem koraku. Popolnoma ločeno od spletnega kataloga.",
       JobFlows.Orders, true, 20, WorkerJobReach.ExternalCall, "kliče SAOP", 3600, null, 1800, 7200, true,
@@ -138,6 +153,18 @@ public static class JobCatalog
       // podatki: ura brez novega naročila je normalna. Podjetje brez knjige je preskok in ni stik.
       new("SAOP_ORDERS_VNK", "Naročila kupcev (VNK)", "SAOP_ORDERS_VNK", 7200, true, false),
       new("SAOP_ORDERS_VND", "Naročila dobaviteljem (VND)", "SAOP_ORDERS_VND", 7200, true, false),
+    ] },
+    // 284 (uporabnik 2026-09-24): analitika prodaje, zalog in nabave. Samo GET klici v SAOP (računi, Barkawi CO/PO/SKU),
+    // nato preračun v bazi (ana.RefreshAnalytics). Brez SAOP (izven omrežja) preračun vseeno teče iz baze.
+    new(SaopAnalyticsImport, "Analitika iz SAOP",
+      "Računi (prodaja), naročila kupcev, naročila dobaviteljem s prevzemi in nabavne cene iz SAOP (samo branje), nato preračun analitike: predlogi naročil, zaležana zaloga, trendi, dobavni časi. Vsako podjetje v svojem koraku.",
+      JobFlows.Orders, false, 21, WorkerJobReach.ExternalCall, "kliče SAOP (samo branje)", null, new TimeOnly(4, 0), 14400, 129600, true,
+      [], ["SAOP_ANALYTICS"], ["PIM.SaopAnalyticsWorker"], []) { Sources = [
+      new("ANA_RACUNI", "Računi (prodaja)", "SAOP_ANALYTICS", 129600, true, false),
+      new("ANA_NAROCILA_KUPCEV", "Naročila kupcev (analitika)", "SAOP_ANALYTICS", 129600, true, false),
+      new("ANA_NAROCILA_DOBAVITELJEM", "Naročila dobaviteljem in prevzemi", "SAOP_ANALYTICS", 129600, true, false),
+      new("ANA_NABAVNI_PODATKI", "Nabavni podatki artiklov", "SAOP_ANALYTICS", 129600, true, false),
+      new("ANA_IZRACUN", "Preračun analitike", "SAOP_ANALYTICS", 129600, true, false),
     ] },
     new(StockImport, "Zaloga iz SAOP",
       "Količine zaloge iz SAOP, vsako podjetje v svojem koraku; padec enega podjetja ne ustavi drugih. Uspeh sproži izvoz cen in zaloge za splet.",
@@ -175,7 +202,7 @@ public static class JobCatalog
       [new(ProductValidation, true, 7200, true, "Objava samo po uspešni validaciji, mlajši od dveh ur (236: pripravljenost zahteva svežo validacijo).")],
       [], [], []),
     new(WebCatalogExport, "Katalog in stranke za splet",
-      "katalog.csv in stranke.csv (podjetje 2) iz objavljenega stanja. Brez validacije: bere samo potrjeno stanje in teče samo po uspešni objavi.",
+      "katalog.csv in stranke.csv (katalog podjetja 2) iz objavljenega stanja. Od 285 iz podjetij v out.CatalogSource: IQ in ViD, en artikel ena vrstica (svetila s kartice IQ, videlektro z IQ ali ViD), stranke obeh podjetij. Brez validacije: bere samo potrjeno stanje in teče samo po uspešni objavi.",
       // 242: uspešna objava ga sproži takoj (TriggersDependent); razmik je rezerva. Izvoz podjetja 2
       // (89.491 vrstic × 180 stolpcev) traja minute — pri 300 s bi tekel neprekinjeno in obremenjeval bazo.
       JobFlows.WebCatalog, true, 42, WorkerJobReach.Internal, null, 3600, null, 1800, 7200, true,
@@ -186,10 +213,11 @@ public static class JobCatalog
       new(MagentoProducts, "katalog.csv za splet", MagentoProducts, 7200, false, false),
     ] },
     new(WebStockExport, "Cene in zaloga za splet",
-      "magento-stock-prices.csv za vsako podjetje iz trenutnega objavljenega stanja (profil MAGENTO_STOCK_PRICES).",
+      "magento-stock-prices.csv za vsako podjetje iz trenutnega objavljenega stanja (profil MAGENTO_STOCK_PRICES). Privzeto izklopljen: splet bere samo katalog.csv in stranke.csv (272).",
       // Sproži ga uspešna zaloga iz SAOP (vsakih ~10 min); cene pridejo v datoteko ob naslednjem izvozu.
       // Brez sprožilca iz cen, sicer bi izvoz treh podjetij (org 2 ~3 min) tekel skoraj neprekinjeno.
-      JobFlows.Stock, true, 43, WorkerJobReach.Internal, null, 1800, null, 1800, 3600, true,
+      // 272: uporabnik 2026-09-23 »rabim samo katalog.csv in stranke.csv« — mape 2/3/4 v EXPORT_ROOT niso več potrebne.
+      JobFlows.Stock, true, 43, WorkerJobReach.Internal, null, 1800, null, 1800, 3600, false,
       [new(StockImport, false, null, true, "Uspešen zajem zaloge sproži izvoz cen in zaloge; padec ga ne blokira (izvoz bere zadnje objavljeno stanje)."),
        new(PriceImport, false, null, false, "Izvoz ne teče med zajemom cen; cene pridejo v datoteko ob naslednjem izvozu.")],
       [MagentoStockPrices], ["PIM.B2bWorker"], [MagentoStockPrices]) { Sources = [
@@ -211,10 +239,7 @@ public static class JobCatalog
       [], ["SAOP_PRODUCTS", "SOURCE_FETCH", "GENERIC_XML", "STOCK_FILE", "SAOP_STOCK", "SAOP_DELIVERY"],
       ["PIM.KatalogWorker", "PIM.SourceFetchWorker", "PIM.XmlFileWorker", "PIM.StockFileWorker", "PIM.SaopStockWorker"], []) { Sources = [
       new("SAOP_DELIVERY", "Datumi dobave iz SAOP", "SAOP_DELIVERY", 129600, true, false),
-      // Blok 6: PIM.XmlFileWorker piše BRANJE/ZAPIS/PRESLIKAVA pod GENERIC_XML s kodo vira (PIM_XML_SOURCE_CODE).
-      // Meji po odobrenem načrtu (2026-09-22): Nowodvorski 7 dni, Braytron 36 h (dan in rezerva za nočni termin).
-      new("NW_XML", "Nowodvorski XML (katalog)", "GENERIC_XML", 604800, true, false),
-      new("BT_XML", "Braytron XML (katalog)", "GENERIC_XML", 129600, true, false),
+      // NW_XML in BT_XML meri posel Katalog dobaviteljev (XML); nočni XML korak je samo kontrola.
     ] },
     new(StockReplenishmentDigest, "Zaloga pod MID (dnevni mail)",
       "Dnevni mail o artiklih na ali pod MID pragom prejemnikom s kljukico »Zaloga pod MID«.",
@@ -253,9 +278,12 @@ public static class JobCatalog
       ["--organizations", WorkerCycles.Org(org), "--endpoints", ItemEndpoints, "--max-parallel", "1"], env.Paths, org, environment: WorkerCycles.SaopLive)),
     SaopOrderImport => PerOrganization(env, "Naročila iz SAOP", org => WorkerCycles.Worker($"Naročila iz SAOP (podjetje {org})", "PIM.SaopOrdersWorker",
       ["--organizations", WorkerCycles.Org(org)], env.Paths, org, environment: WorkerCycles.SaopLive)),
+    SaopAnalyticsImport => PerOrganization(env, "Analitika iz SAOP", org => WorkerCycles.Worker($"Analitika iz SAOP (podjetje {org})", "PIM.SaopAnalyticsWorker",
+      ["--organizations", WorkerCycles.Org(org)], env.Paths, org, environment: WorkerCycles.SaopLive)),
     StockImport => PerOrganization(env, "Zaloga iz SAOP", org => WorkerCycles.Worker($"Zaloga iz SAOP (podjetje {org})", "PIM.SaopStockWorker",
       ["--organizations", WorkerCycles.Org(org)], env.Paths, org, environment: WorkerCycles.SaopLive)),
     SupplierStockImport => PlanSupplierStock(env),
+    SupplierCatalogImport => PlanSupplierCatalog(env),
     PriceImport => PerOrganization(env, "Cene iz SAOP", org => WorkerCycles.Worker($"Cene iz SAOP (podjetje {org})", "PIM.KatalogWorker",
       ["--organizations", WorkerCycles.Org(org), "--endpoints", "GetPrices"], env.Paths, org, environment: WorkerCycles.SaopLive)),
     SaopDeliveryImport => PerOrganization(env, "Datumi dobave iz SAOP", org => WorkerCycles.Worker($"Datumi dobave iz SAOP (podjetje {org})", "PIM.SaopStockWorker",
@@ -289,7 +317,7 @@ public static class JobCatalog
 
   static readonly HashSet<string> SaopJobs = new(StringComparer.Ordinal)
   {
-    SaopProductImport, SaopOrderImport, StockImport, PriceImport, SaopDeliveryImport, NightlyReconciliation, SaopOutboundDispatch,
+    SaopProductImport, SaopOrderImport, SaopAnalyticsImport, StockImport, PriceImport, SaopDeliveryImport, NightlyReconciliation, SaopOutboundDispatch,
   };
 
   /// <summary>
@@ -299,6 +327,18 @@ public static class JobCatalog
   public static bool UsesSaop(string jobKey) => SaopJobs.Contains(jobKey);
 
   public const int SaopQuietSeconds = 120;
+
+  /// <summary>
+  /// Ročna zahteva ima v pasu SAOP prednost (2026-09-23): nočna uskladitev je v vrstnem redu zadnja in jo je
+  /// »Poženi zdaj« čakal, dokler je bil na vrsti katerikoli redni SAOP posel (zaloga vsakih 10 min) — lahko ure.
+  /// Vrne posel s čakajočo zahtevo, ki mu redni SAOP posli prepustijo pas; null, kadar take zahteve ni.
+  /// </summary>
+  public static string? SaopRequestFirst(IEnumerable<(string JobKey, bool IsRequested, bool IsRunning)> jobs) =>
+    jobs.FirstOrDefault(job => job.IsRequested && !job.IsRunning && UsesSaop(job.JobKey)).JobKey;
+
+  /// <summary>Ali redni (nezahtevan) SAOP posel <paramref name="jobKey"/> prepusti pas čakajoči zahtevi <paramref name="requested"/>.</summary>
+  public static bool YieldsSaopLane(string jobKey, bool isRequested, string? requested) =>
+    !isRequested && requested is not null && requested != jobKey && UsesSaop(jobKey);
 
   /// <summary>En korak (in ena skupina) na podjetje: padec enega podjetja ne ustavi naslednjih.</summary>
   static IReadOnlyList<CycleGroup> PerOrganization(CycleEnvironment env, string label, Func<int, CycleStep> step) =>
@@ -317,6 +357,23 @@ public static class JobCatalog
         new($"Branje {vir}", CycleStepKind.Expand, $"datoteke v {mapa}", Expand: () => WorkerCycles.StockFilesSteps(vir, mapa, env, [])),
       ]));
     }
+    return groups;
+  }
+
+  /// <summary>
+  /// Katalog dobaviteljev: prevzem in branje za vsak vir posebej; padec enega ne ustavi drugega. Padel prevzem
+  /// (npr. manjka Fetch:NW_XML) preskoči branje istega vira, da stara datoteka ne ustvari videza svežine.
+  /// Brez rezervnih fixtures: testni XML v bazi ni katalog dobavitelja.
+  /// </summary>
+  static IReadOnlyList<CycleGroup> PlanSupplierCatalog(CycleEnvironment env)
+  {
+    var groups = new List<CycleGroup>();
+    foreach (var (vir, ime) in new[] { ("NW_XML", "Nowodvorski"), ("BT_XML", "Braytron") })
+      groups.Add(new($"Katalog {vir}",
+      [
+        WorkerCycles.Worker($"Prevzem {vir}", "PIM.SourceFetchWorker", ["--source", vir, "--target", env.LandingRoot], env.Paths),
+        new($"XML {ime}", CycleStepKind.Expand, vir, Expand: () => WorkerCycles.XmlSteps(vir, null, env)),
+      ]));
     return groups;
   }
 

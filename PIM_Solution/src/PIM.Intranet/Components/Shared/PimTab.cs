@@ -60,17 +60,33 @@ public static class RulesTabs
 }
 
 /// <summary>
+/// Zavihki izdelkov (2026-09-24): področje »Vhodni podatki« je odpadlo; novi artikli dobaviteljev so
+/// delo urednika z artikli, zato so zavihek Izdelkov in ne tehnični pogled zajema.
+/// </summary>
+public static class ProductTabs
+{
+  public static readonly IReadOnlyList<PimTab> Tabs =
+  [
+    new("seznam", "Seznam", "izdelki", "Iskanje in stanje izdelkov", PermissionKey: "view.products.list"),
+    new("novi", "Novi artikli", "izdelki/novi-artikli", "Kandidati iz XML dobaviteljev", PermissionKey: "view.ingest.candidates"),
+    new("odprodaja", "Odprodaja", "izdelki/odprodaja", "Popust, razstavni eksponati", PermissionKey: "view.products.clearance"),
+    new("uvoz", "Uvoz iz Excela", "izdelki/uvoz", "Množično urejanje", PermissionKey: "view.products.import"),
+  ];
+}
+
+/// <summary>
 /// Zavihki nadzora (prenova 2026-09-22, blok 7): ena stran Nadzor z eno vrstico na posel; koraki,
 /// faze, izpis, urnik in postopki posla so na njegovi strani (sistem/posel/&lt;KEY&gt;), ne na ločenih
 /// zavihkih. Uporabnik je hotel vsak korak videti na enem mestu, zato so Opravila, Zagoni, Alarmi,
-/// Izvozi in Zmogljivost odstranjeni. Ostaneta samo samotest in sled sprememb, ki nista posel.
+/// Izvozi in Zmogljivost odstranjeni. 2026-09-24: samotest odstranjen (uporabnik: neuporaben), Teki so
+/// se preselili iz zajema podatkov sem, ker je meni »Zajem podatkov« odpadel.
 /// </summary>
 public static class NadzorTabs
 {
   public static readonly IReadOnlyList<PimTab> Tabs =
   [
     new("nadzor", "Nadzor", "sistem", "Ali podatki prihajajo in kje je napaka", PermissionKey: "tab.system.overview"),
-    new("samotest", "Samotest", "sistem/samotest", "Rezultati nočnega samotesta", PermissionKey: "view.system.self-test"),
+    new("teki", "Teki", "sistem/teki", "Izvedbe vhodov, koraki in napake", PermissionKey: "tab.ingest.runs"),
     new("sled", "Sled sprememb", "sistem/sled", "Kdo je kaj spremenil in kdaj", PermissionKey: "view.system.activity"),
   ];
 }
@@ -86,5 +102,17 @@ public static class SistemskeZadeveTabs
     new("uporabniki", "Uporabniki", "administracija", "Lokalni in domenski računi", PermissionKey: "tab.admin.users"),
     new("vloge", "Vloge", "administracija/vloge", "Dodeljene vloge in dostop", PermissionKey: "tab.admin.roles"),
     new("mape", "Mesta shranjevanja", "administracija/mape", "Kam gredo prevzete datoteke in izvozi", PermissionKey: "tab.admin.paths"),
+  ];
+}
+
+/// <summary>Zavihki analitike (284): pregled, artikli, dobavitelji in nastavitve izračuna.</summary>
+public static class AnalyticsTabs
+{
+  public static readonly IReadOnlyList<PimTab> Tabs =
+  [
+    new("overview", "Pregled", "analitika", "Prodaja po mesecih in signali", PermissionKey: "tab.analytics.overview"),
+    new("items", "Artikli", "analitika/artikli", "Kaj naročiti, kaj stoji", PermissionKey: "tab.analytics.items"),
+    new("suppliers", "Dobavitelji", "analitika/dobavitelji", "Promet, zaloga, dobavni časi", PermissionKey: "tab.analytics.suppliers"),
+    new("settings", "Nastavitve izračuna", "analitika/nastavitve", "Parametri formule", PermissionKey: "tab.analytics.settings"),
   ];
 }

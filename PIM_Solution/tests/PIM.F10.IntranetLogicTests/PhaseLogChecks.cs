@@ -135,6 +135,7 @@ static class PhaseLogChecks
       ("PIM.Watchdog", ["PhaseCodes.Compute"]),
       ("PIM.AlertDispatcher", ["PhaseCodes.Send", "PhaseOutcome.Skipped", "PhaseOutcome.Failed"]),
       ("PIM.StockReplenishmentWorker", ["PhaseCodes.Compute", "PhaseCodes.Send", "PhaseOutcome.Failed"]),
+      ("PIM.SaopAnalyticsWorker", ["PhaseCodes.Fetch", "PhaseCodes.Compute", "PhaseOutcome.Failed", "\"SAOP_ANALYTICS\""]),
     ];
     foreach (var (worker, mora) in workerji)
     {

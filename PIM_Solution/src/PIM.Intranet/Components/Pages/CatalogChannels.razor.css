@@ -1,0 +1,6 @@
+/* Spletni kanali (prenova 2026-09-26). */
+.page-help { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-soft); font-size: .82rem; margin: 0 0 1rem; padding: .55rem .9rem; }
+.page-help > summary { color: var(--pim-text-strong); cursor: pointer; font-weight: 600; }
+.page-help > summary:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.page-help p { line-height: 1.55; margin: .5rem 0 0; max-width: 60rem; }
+.is-inactive td { color: var(--pim-text-muted); }

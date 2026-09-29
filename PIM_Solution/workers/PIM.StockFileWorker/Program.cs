@@ -129,13 +129,15 @@ async Task<int> WriteOrganizationAsync(int organizationId)
     return exception.Number == 51100 ? 1 : 0;
   }
 
-  Guid runId; long applied, quarantined; bool alreadyApplied;
+  Guid runId; long applied, quarantined; bool alreadyApplied; string? heldReason = null;
   var zapis = await phases.BeginAsync(PhaseCodes.Land, options.SourceCode, organizationId, Pipeline, run.RunId);
   try
   {
-    (runId, applied, quarantined, alreadyApplied) = await new StockLandingWriter(connectionString).PersistAsync(
+    var writer = new StockLandingWriter(connectionString);
+    (runId, applied, quarantined, alreadyApplied) = await writer.PersistAsync(
       organizationId, options.SourceCode, "FILE", options.Endpoint, snapshotUtc,
       batch.PayloadHash, batch.Records, options.DateFormat);
+    heldReason = writer.HeldReason;
     await run.CompleteAsync(true);
   }
   catch (Exception exception)
@@ -147,6 +149,14 @@ async Task<int> WriteOrganizationAsync(int organizationId)
   }
 
   await run.DisposeAsync();
+
+  if (heldReason is not null)
+  {
+    // 283: okrnjena ali prazna datoteka — velja prejšnji posnetek, potrditev na /varovalke.
+    await zapis.SkippedAsync(heldReason, itemsIn: batch.Records.Count);
+    Console.WriteLine($"Posnetek zaloge ni zapisan: {heldReason}; vir={options.SourceCode}, podjetje={organizationId}.");
+    return 0;
+  }
 
   if (alreadyApplied)
   {

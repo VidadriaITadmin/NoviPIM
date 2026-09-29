@@ -533,3 +533,14 @@ je tehnični pogled »Izvajalniki«). Vsak worker ima svoj posel z urnikom, čas
 odvisnostmi; naročila so ločena od kataloga, izvoz ne validira, objava teče samo po uspešni
 validaciji, izvoz samo iz uspešne objave. Stari cikli tečejo samo, dokler gostitelj ne drži najema.
 Celoten opis, tabela poslov, namestitev in prehodno obdobje: `docs/AVTOMATIZACIJA.md`.
+
+## PIM.SaopAnalyticsWorker (284)
+
+Zajem za analitiko prodaje, zalog in nabave. Samo GET v SAOP: Invoice/GetInvoices (računi, prvi zajem po letih), Barkawi/GetCO, Barkawi/GetPO, Barkawi/GetSKU; zapis prek na.Upsert*, nato na.RefreshAnalytics. Razpored SAOP_ANALYTICS, posel SAOP_ANALYTICS_IMPORT (pas SAOP). Faze PRENOS (vir `ANA_<tok>`) in IZRACUN (`ANA_IZRACUN`).
+
+- brez `PIM_SAOP_MODE=Live` ali brez omrežja: klici se preskočijo (po prvem omrežnem neuspehu ostali tokovi takoj), preračun iz baze teče vseeno;
+- `--preizkus [--mapa pot]`: majhni klici vseh točk, vzorci XML in seznam polj; v bazo ne piše — prvi zagon v omrežju;
+- `--samo-izracun`, `--razcleni-znova [--dni 30]`, `--full`, `--tokovi RACUNI,NAROCILA_KUPCEV,NAROCILA_DOBAVITELJEM,NABAVNI_PODATKI`;
+- nastavitve v sekciji `Analitika` (TimeoutSeconds 900, PageSize 500, InitialBackfillMonths 24, BarkawiBackfillPeriod 24, BarkawiDeltaPeriod 3, DelayBetweenCallsMilliseconds 250).
+
+`PIM.SaopOrdersWorker` od 284 bere naročila tudi po številkah (`OrderSweep`) in ima `--zgodovina-od LLLL` za enkratni zajem zgodovine.

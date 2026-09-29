@@ -30,7 +30,7 @@
           <dt>Podjetje</dt><dd>@Detail.OrganizationName</dd>
           <dt>Prvič</dt><dd>@Detail.FirstSeenUtc.ToPimLocal().ToString("g")</dd>
           <dt>Nazadnje</dt><dd>@Detail.LastSeenUtc.ToPimLocal().ToString("g")</dd>
-          <dt>Tek</dt><dd>@if (Detail.RunId is not null) { <a href="zajem/teki/@Detail.RunId">@Detail.RunId</a> } else { <span>—</span> }</dd>
+          <dt>Tek</dt><dd>@if (Detail.RunId is not null) { <a href="sistem/teki/@Detail.RunId">@Detail.RunId</a> } else { <span>—</span> }</dd>
         </dl>
       </article>
     </section>
@@ -62,7 +62,7 @@
   bool Loading = true;
   string? Error;
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Težave", "zajem/tezave"), new("Podrobnosti")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Zajem podatkov", "zajem"), new("Težave", "zajem/tezave"), new("Podrobnosti")];
 
   protected override async Task OnParametersSetAsync()
   {

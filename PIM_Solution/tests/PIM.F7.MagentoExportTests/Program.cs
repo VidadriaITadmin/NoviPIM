@@ -107,6 +107,32 @@ await Throws<ArgumentOutOfRangeException>(
   "OrganizationId 0 mora pasti.");
 // 251: worker si iz zapisanih vrstic zapomni sifro in "Spletne strani" (objava / odjava) — brez baze.
 WebWithdrawalTests.RunWithoutDatabase();
+// 277: cene z decimalno vejico, zapis v narekovajih in zajem cen za varovalko — brez baze.
+await SafeguardTests.RunWithoutDatabaseAsync();
+// 285: katalog iz več podjetij — ena vrstica na šifro, unija spletišč, zadržanja po podjetju — brez baze.
+await CatalogMergeTests.RunWithoutDatabaseAsync();
+// 2026-09-28: ostanki prekinjenih izvozov (.tmp starejši od ure) se pospravijo, sveži .tmp in .prej ostanejo — brez baze.
+var staleDirectory = Path.Combine(Path.GetTempPath(), "f7-stale-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(staleDirectory);
+try
+{
+  string Touch(string name, TimeSpan age)
+  {
+    var path = Path.Combine(staleDirectory, name);
+    File.WriteAllText(path, "");
+    File.SetLastWriteTimeUtc(path, DateTime.UtcNow - age);
+    return path;
+  }
+  var oldPart = Touch("katalog.csv.ce7c4758.podjetje2.tmp", TimeSpan.FromDays(3));
+  var oldMarker = Touch("magento-export.complete.ab12cd34.tmp", TimeSpan.FromHours(2));
+  var freshPart = Touch("katalog.csv.e32bd85c.podjetje2.tmp", TimeSpan.FromMinutes(1));
+  var backup = Touch("katalog.csv.ce7c4758.prej", TimeSpan.FromDays(3));
+  var catalog = Touch("katalog.csv", TimeSpan.FromDays(3));
+  Equal(2, MagentoExportCommand.RemoveStaleTempFiles(staleDirectory), "Pospravljeni sta natanko dve stari zacasni datoteki.");
+  Equal(false, File.Exists(oldPart) || File.Exists(oldMarker), "Stari .tmp izginejo.");
+  Equal(true, File.Exists(freshPart) && File.Exists(backup) && File.Exists(catalog), "Svez .tmp (tekoci izvoz), .prej in katalog.csv ostanejo.");
+}
+finally { Directory.Delete(staleDirectory, true); }
 
 // ---------------------------------------------------------------------------
 // 5. Ukaz dejansko izveden proti razvojni bazi.
@@ -146,7 +172,15 @@ await CatalogLifecycleTests.RunAsync(connection);
 var registryProductColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoProductSchema.ProfileCode);
 var registryCustomerColumns = await ExportProfileRegistry.LoadColumnsAsync(connection, MagentoCustomerSchema.ProfileCode);
 
-Equal(180, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS ima po migraciji 234 še štiri stolpce odprodaje in eksponata.");
+// 286: stolpci atributov iz naborov (ColumnCode ATTR_…) nastajajo sami na koncu profila; njihovo število je
+// podatek (nabori), ne pogodba. Stalni del ostane 181, samodejni so za njim in nosijo kanonično kodo Attr.*.
+var automaticProductColumns = registryProductColumns.Where(column => column.ColumnCode.StartsWith("ATTR_", StringComparison.Ordinal)).ToList();
+var fixedProductColumns = registryProductColumns.Where(column => !column.ColumnCode.StartsWith("ATTR_", StringComparison.Ordinal)).ToList();
+Equal(true, automaticProductColumns.All(column => column.CanonicalFieldCode.StartsWith("Attr.", StringComparison.Ordinal)
+    && column.SortOrder > fixedProductColumns.Max(fixedColumn => fixedColumn.SortOrder)),
+  "Samodejni stolpci atributov (286) so za stalnimi in berejo Attr.*.");
+registryProductColumns = fixedProductColumns;
+Equal(181, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS ima po migraciji 234 še štiri stolpce odprodaje in eksponata, po 274 še »Posebni S za skupino strank« (brez samodejnih stolpcev 286).");
 Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
 Equal(true, registryProductColumns.Take(176).Select(column => column.OutputColumnName).SequenceEqual(MagentoCsvContract.ProductHeaders),
   "Glave v registru se morajo znak za znak ujemati s predlogo izdelkov.");
@@ -155,7 +189,8 @@ Equal(true, registryCustomerColumns.Select(column => column.OutputColumnName).Se
 Equal(true, registryProductColumns.Take(176).Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 176)),
   "SortOrder izdelkov mora biti zvezen 1..176.");
 Equal(true, registryProductColumns.Skip(176).Select(column => column.OutputColumnName)
-  .SequenceEqual(new[] { "Odprodaja", "Odprodaja - popust %", "Odprodaja - količina", "Razstavni eksponat" }), "Štiri dodatne glave iz migracije 234.");
+  .SequenceEqual(new[] { "Odprodaja", "Odprodaja - popust %", "Odprodaja - količina", "Razstavni eksponat", "Posebni S za skupino strank" }),
+  "Štiri dodatne glave iz migracije 234 in posebni S po skupini strank iz 274.");
 Equal(true, registryCustomerColumns.Select(column => column.SortOrder).SequenceEqual(Enumerable.Range(1, 19)),
   "SortOrder strank mora biti zvezen 1..19.");
 
@@ -167,10 +202,11 @@ Equal("Attr.Grlo", registryProductColumns[47].CanonicalFieldCode, "Stolpec 48 je
 // Stolpec 7 je do migracije 077 sluzil kot primer stolpca brez vira; zdaj ima vir
 // (Product.Supplier), ker sta dobavitelj in merska enota v katalogu od prvega zajema, le objava
 // ju ni nesla naprej. Namen trditve je isti — da se vidi, kateri stolpec ima vir in kateri ne —
-// zato primer prevzame stolpec 28 (Omejitev pri narocanju), kjer vira res ni. Stolpec 13 (Enota bruto
+// zato je primer prevzel stolpec 28 (Omejitev pri narocanju), ki ima od 302 vir. Stolpec 13 (Enota bruto
 // teze) je od 216 izklopljen: enota je v glavi "Bruto teza [kg]".
 Equal("Product.Supplier", registryProductColumns[6].CanonicalFieldCode, "Stolpec 7 je dobavitelj.");
-Equal("", registryProductColumns[27].CanonicalFieldCode, "Stolpec 28 (Omejitev pri narocanju) nima dolocenega vira.");
+// 302: stolpec 28 (prej »Omejitev pri narocanju« brez vira) je »Pakirno naročanje«.
+Equal("ProductFlag.PakirnoNarocanje", registryProductColumns[27].CanonicalFieldCode, "Stolpec 28 je Pakirno naročanje.");
 Equal("Customer.Key", registryCustomerColumns[0].CanonicalFieldCode, "Stolpec 1 strank je sifra.");
 Equal("Customer.MagentoGroup", registryCustomerColumns[5].CanonicalFieldCode, "Stolpec 6 strank je skupina.");
 Equal("Customer.NwDiscount", registryCustomerColumns[18].CanonicalFieldCode, "Stolpec 19 strank je popust NW.");
@@ -528,18 +564,23 @@ try
   var customerLines = (await File.ReadAllTextAsync(customersCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-  Equal(registryProductColumns.Count, SplitCsvLine(productLines[0]).Count, "Glava izdelkov mora ustrezati aktivnemu registru.");
-  Equal(19, SplitCsvLine(customerLines[0]).Count, "Glava strank mora imeti 19 stolpcev.");
+  Equal(registryProductColumns.Count, SplitCsvLine(productLines[0], ';').Count, "Glava izdelkov mora ustrezati aktivnemu registru.");
+  Equal(19, SplitCsvLine(customerLines[0], ';').Count, "Glava strank mora imeti 19 stolpcev.");
   Equal(true, productLines.Length > 1, "Izvoz mora vrniti vsaj eno vrstico izdelka — če je SQL padel, jih ni.");
 
-  var row = productLines.Skip(1).Select(SplitCsvLine)
+  // 277: katalog.csv in stranke.csv imata ločilo podpičje (cene z decimalno vejico brez narekovajev).
+  var row = productLines.Skip(1).Select(line => SplitCsvLine(line, ';'))
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
     ?? throw new InvalidOperationException($"Izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
   Equal(registryProductColumns.Count, row.Count, "Vrstica izdelka mora ustrezati aktivnemu registru.");
-  Equal("111.11", row[22], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena.");
-  Equal("222.22", row[21],
+  // 277: cene so v datoteki z decimalno vejico (uporabnik 2026-09-24: »cene morajo imeti vejico, ne piko«).
+  Equal("111,11", row[22], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena — z decimalno vejico.");
+  Equal("222,22", row[21],
     "Cena B2B mora priti iz cenika, ki ga doloca out.ExportPriceList — sifre F7_CENIK v programu ni.");
+  var productLine = productLines.First(line => line.StartsWith(itemId + ";", StringComparison.Ordinal));
+  Contains(productLine, ";111,11;", "Cena z vejico mora biti v datoteki brez narekovajev (ločilo je podpičje).");
+  Equal(false, productLine.Contains("\"111,11\"", StringComparison.Ordinal), "Cena ne sme biti v narekovajih (uporabnik 2026-09-24).");
   Equal("E27", row[47], "Atribut z kodo, enako glavi predloge, mora pristati v svojem stolpcu.");
 
   var slovenianColumn = MagentoCsvContract.ProductHeaders
@@ -595,21 +636,21 @@ try
     var withoutRegistry = (await File.ReadAllTextAsync(
         Path.Combine(registryExportDirectory, "katalog.csv"), Encoding.UTF8))
       .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-      .Skip(1).Select(SplitCsvLine)
+      .Skip(1).Select(line => SplitCsvLine(line, ';'))
       .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
       ?? throw new InvalidOperationException($"Drugi izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
     // Od 216 ima register za Product.PriceB2B tudi pravi cenik (VID B2B, out.ExportPriceList 96); po izklopu
     // vrstice F7 stolpec ne sme vec nositi cene iz F7_CENIK — kar ostane, pove preostali aktivni register
     // (prazno, kadar ga ni, ali pravi cenik). Prej je test zahteval prazen stolpec in je bil od 216 zastarel.
-    Equal(false, withoutRegistry[21] == "222.22",
+    Equal(false, withoutRegistry[21] == "222,22",
       "Brez aktivne vrstice registra stolpec 'Cena B2B' ne sme vec nositi cene iz F7_CENIK, cetudi cena v bazi obstaja.");
-    Equal("111.11", withoutRegistry[22],
+    Equal("111,11", withoutRegistry[22],
       "Izklop vrstice za B2B ne sme vplivati na stolpec 'Cena B2C'.");
   }
 
   // --- Stranka: izklopljen prag in veljavnostno okno rabatov --------------
-  var customerRow = customerLines.Skip(1).Select(SplitCsvLine)
+  var customerRow = customerLines.Skip(1).Select(line => SplitCsvLine(line, ';'))
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == customerKey)
     ?? throw new InvalidOperationException($"Izvoz strank ne vsebuje vrstice za {customerKey}.");
 
@@ -672,6 +713,8 @@ try
   await WebWithdrawalTests.RunAsync(connection, organizationId, canonProductId, itemId);
   Equal(true, (await ExportKeysAsync("MAGENTO_PRODUCTS", itemId)).Contains(itemId),
     "Po razveljavljeni transakciji 251 mora biti artikel spet objavljen v katalogu.");
+  // 277: varovalka katalog.csv nad bazo (cene, umik, potrditev, objava) — v razveljavljeni transakciji.
+  await SafeguardTests.RunAsync(connection, organizationId);
 
   // Stranke (202): steje samo aktivnost iz SAOP. Oznaka Splet in tip nista pogoj — uporabnik
   // 2026-09-15: "ta splet kljukica se tice samo artiklov".
@@ -932,8 +975,8 @@ static async Task Throws<TException>(Func<Task> action, string message) where TE
   throw new InvalidOperationException($"{message}: izjeme ni bilo.");
 }
 
-/// <summary>Razdeli CSV vrstico po RFC 4180 — polje v narekovajih sme vsebovati vejico in "".</summary>
-static List<string> SplitCsvLine(string line)
+/// <summary>Razdeli CSV vrstico po RFC 4180 — polje v narekovajih sme vsebovati ločilo in "".</summary>
+static List<string> SplitCsvLine(string line, char delimiter = ',')
 {
   var fields = new List<string>();
   var current = new StringBuilder();
@@ -950,7 +993,7 @@ static List<string> SplitCsvLine(string line)
     }
 
     if (character == '"') { inQuotes = true; continue; }
-    if (character == ',') { fields.Add(current.ToString()); current.Clear(); continue; }
+    if (character == delimiter) { fields.Add(current.ToString()); current.Clear(); continue; }
     current.Append(character);
   }
 

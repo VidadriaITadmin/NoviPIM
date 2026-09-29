@@ -61,7 +61,7 @@ else
     </section>
 
     <section class="dashboard-panel processes-panel" aria-labelledby="procesi-naslov">
-      <div class="panel-title"><h2 id="procesi-naslov">Zadnji procesi / Status integracij</h2><a href="zajem/teki">Poglej vse</a></div>
+      <div class="panel-title"><h2 id="procesi-naslov">Zadnji procesi / Status integracij</h2><a href="sistem/teki">Poglej vse</a></div>
       @if (Runs is null) { <p class="panel-state">Zadnji procesi niso na voljo.</p> }
       else if (Runs.Count == 0) { <p class="panel-state">Ni zabeleženih procesov.</p> }
       else
@@ -69,7 +69,7 @@ else
         <div class="process-head"><span>Proces / Integracija</span><span>Zadnji zagon</span><span>Status</span></div>
         @foreach (var run in Runs.OrderByDescending(row => row.StartedUtc).Take(5))
         {
-          <a class="process-row" href="zajem/teki"><span>@run.Pipeline</span><span>@run.StartedUtc.ToPimLocal().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
+          <a class="process-row" href="sistem/teki"><span>@run.Pipeline</span><span>@run.StartedUtc.ToPimLocal().ToString("dd. MM. yyyy HH:mm")</span><strong class="status @StatusClass(run.Status)"><span class="visually-hidden">Status: </span>@run.Status</strong></a>
         }
       }
     </section>

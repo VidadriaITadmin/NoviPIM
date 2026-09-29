@@ -144,17 +144,84 @@
                   {
                     <div class="editor-grid">
                       <div class="editor-block">
-                        <h3>Trenutni nabor (@EditorSet.Rows.Count)</h3>
+                        <h3>Trenutni nabor (@EditorSet.Rows.Count(setRow => setRow.Level != "EXCLUDED"))@(EditorSet.Rows.Any(setRow => setRow.Level == "EXCLUDED") ? $" · izločenih {EditorSet.Rows.Count(setRow => setRow.Level == "EXCLUDED")}" : "")</h3>
+
+                        @if (EditorSet.Rows.Count > 0)
+                        {
+                          @* 2026-09-29 uporabnik: "omogoci da vec na enkrat odstranim ... tiste atribute ki v tej
+                             kategoriji nimajo vrednosti". Izbira + mnozicna dejanja; podedovane vrstice se tu izlocijo
+                             ali odstranijo pri izvoru (kategoriji, kjer so dolocene), s potrditvijo in razveljavitvijo. *@
+                          <div class="set-toolbar">
+                            <button type="button" class="small-action" disabled="@(Busy || EmptyRows.Count == 0)" @onclick="SelectEmpty"
+                                    title="Označi atribute, ki jih noben izdelek te kategorije (in podkategorij) nima izpolnjenih">
+                              Označi brez vrednosti (@EmptyRows.Count)
+                            </button>
+                            @if (SelectedRows.Count > 0)
+                            {
+                              <div class="pim-selection" role="group" aria-label="Dejanja za izbrane atribute">
+                                <strong>Izbranih @SelectedRows.Count</strong>
+                                <label class="visually-hidden" for="bulk-level">Nova raven za izbrane</label>
+                                <select id="bulk-level" class="filter-select" @bind="BulkLevel" disabled="@Busy">
+                                  <option value="REQUIRED">obvezen</option>
+                                  <option value="RECOMMENDED">priporočen</option>
+                                  <option value="EXCLUDED">izločen</option>
+                                </select>
+                                <button type="button" class="ghost-button" disabled="@Busy" @onclick="() => SetLevelSelectedAsync(row)">Nastavi raven</button>
+                                <button type="button" class="ghost-button" disabled="@Busy" @onclick="AskRemoveHere">Odstrani iz te kategorije</button>
+                                <button type="button" class="ghost-button danger-action" disabled="@Busy" @onclick="() => AskRemoveAtSourceAsync(row)">Odstrani pri izvoru …</button>
+                                <button type="button" class="ghost-button" disabled="@Busy" @onclick="SelectedClear">Počisti izbiro</button>
+                              </div>
+                            }
+                          </div>
+                        }
+
+                        @if (Pending is not null)
+                        {
+                          <div class="confirm-panel" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+                            <p id="confirm-title"><strong>@Pending.Title</strong></p>
+                            <ul id="confirm-body">
+                              @foreach (var line in Pending.Lines) { <li>@line</li> }
+                            </ul>
+                            <div class="editor-actions">
+                              @foreach (var choice in Pending.Choices)
+                              {
+                                <button type="button" class="@(choice.Danger ? "danger-button" : "primary-button")" disabled="@(Busy || choice.Items.Count == 0)"
+                                        @onclick="() => ApplyAsync(row, choice)">@choice.Label</button>
+                              }
+                              <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => Pending = null">Prekliči</button>
+                            </div>
+                          </div>
+                        }
+
+                        @if (Undo is not null && Pending is null)
+                        {
+                          <div class="undo-panel" role="status">
+                            <span>@Undo.Label</span>
+                            <button type="button" class="small-action" disabled="@Busy" @onclick="() => UndoAsync(row)">Razveljavi</button>
+                          </div>
+                        }
+
                         <table class="attribute-set">
-                          <thead><tr><th>Atribut</th><th>Raven</th><th>Določen na</th><th class="numeric">Ima vrednost</th><th></th></tr></thead>
+                          <caption class="visually-hidden">Učinkovit nabor atributov kategorije @row.CategoryName</caption>
+                          <thead><tr>
+                            <th scope="col" class="check-cell">
+                              <input type="checkbox" aria-label="Označi vse atribute nabora" checked="@(EditorSet.Rows.Count > 0 && SelectedRows.Count == EditorSet.Rows.Count)"
+                                     disabled="@(EditorSet.Rows.Count == 0)" @onchange="args => SelectAll(args.Value is true)" />
+                            </th>
+                            <th scope="col">Atribut</th><th scope="col">Raven</th><th scope="col">Določen na</th><th scope="col" class="numeric">Ima vrednost</th><th scope="col"><span class="visually-hidden">Dejanje</span></th>
+                          </tr></thead>
                           <tbody>
                             @if (EditorSet.Rows.Count == 0)
                             {
-                              <tr><td colspan="5" class="muted">Nabor še ni določen. Dodaj atribute iz registra, jih prilepi ali kopiraj nabor druge kategorije.</td></tr>
+                              <tr><td colspan="6" class="muted">Nabor še ni določen. Dodaj atribute iz registra, jih prilepi ali kopiraj nabor druge kategorije.</td></tr>
                             }
                             @foreach (var setRow in EditorSet.Rows)
                             {
-                              <tr class="@(setRow.IsInherited ? "is-inherited" : null)">
+                              <tr class="@(setRow.IsInherited ? "is-inherited" : null) @(setRow.Level == "EXCLUDED" ? "is-excluded" : null) @(Selected.Contains(setRow.AttributeCode) ? "is-selected" : null)">
+                                <td class="check-cell">
+                                  <input type="checkbox" aria-label="@($"Označi {setRow.AttributeName}")" checked="@Selected.Contains(setRow.AttributeCode)"
+                                         @onchange="args => ToggleSelected(setRow.AttributeCode, args.Value)" />
+                                </td>
                                 <td>@setRow.AttributeName <span class="code-value">@setRow.AttributeCode</span></td>
                                 <td>
                                   <select class="filter-select" value="@setRow.Level" disabled="@Busy" aria-label="@($"Raven za {setRow.AttributeName}")"
@@ -165,11 +232,17 @@
                                   </select>
                                 </td>
                                 <td>@(setRow.IsInherited ? $"podedovan: {setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}" : "tu")</td>
-                                <td class="numeric" title="Izdelki v tej kategoriji in pod njo, ki atribut imajo / vsi">@setRow.ProductsWithValue.ToString("N0") / @setRow.ProductCount.ToString("N0")</td>
+                                <td class="numeric @(setRow.ProductsWithValue == 0 ? "zero-value" : null)" title="Izdelki v tej kategoriji in pod njo, ki atribut imajo / vsi">@setRow.ProductsWithValue.ToString("N0") / @setRow.ProductCount.ToString("N0")</td>
                                 <td>
                                   @if (!setRow.IsInherited)
                                   {
-                                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => SetLevelAsync(row, setRow.AttributeCode, null)">Odstrani</button>
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => RemoveOneAsync(row, setRow)">Odstrani</button>
+                                  }
+                                  else if (setRow.Level != "EXCLUDED")
+                                  {
+                                    @* Podedovane vrstice tu ni, zato je ni mogoce izbrisati; izlocitev jo skrije v tej kategoriji in pod njo. *@
+                                    <button type="button" class="small-action" disabled="@Busy" @onclick="() => RemoveOneAsync(row, setRow)"
+                                            title="@($"Atribut je določen na »{setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}«. Tu se izloči, tam ostane. Za odstranitev povsod ga označi in izberi »Odstrani pri izvoru«.")">Izloči tu</button>
                                   }
                                 </td>
                               </tr>
@@ -314,7 +387,7 @@
   <ul>
     <li><strong>Kartica izdelka</strong> (/izdelki/{id}): atributi iz nabora so v svoji skupini (tudi prazni, da jih je mogoče vpisati), ostali so označeni kot »izven nabora«.</li>
     <li><strong>Validacija</strong>: obvezen atribut je zahteva ERROR v spletnem profilu drevesa, priporočen je WARNING; upošteva jih naslednji tek validacije.</li>
-    <li><strong>Spletni izvoz</strong>: kadar kategorija izdelka nabor določa, gredo v datoteko samo atributi iz nabora; izdelek brez nabora obdrži vse.</li>
+    <li><strong>Spletni izvoz</strong> (katalog.csv, od 291): gredo vsi izpolnjeni atributi izdelka; izpusti se samo atribut z ravnjo <em>izločen</em>.</li>
     <li>Isti nabor ureja tudi gumb <strong>Atributi</strong> pri kategoriji na <a href="nastavitve/kategorije">/nastavitve/kategorije</a>; register atributov je na <a href="nastavitve/atributi">/nastavitve/atributi</a>.</li>
   </ul>
 </details>
@@ -448,6 +521,10 @@
     Message = null;
     Error = null;
     Editing = row.CategoryCode;
+    Selected.Clear();
+    Pending = null;
+    Undo = null;
+    ParentCodes = null;
     Picked.Clear();
     PickerSearch = "";
     PasteText = "";
@@ -465,6 +542,7 @@
     {
       if (AttributeOptions.Count == 0) AttributeOptions = await Tree.GetAttributeOptionsAsync();
       EditorSet = await Tree.GetAttributeSetAsync(row.CategoryTreeCode, row.CategoryCode);
+      Selected.IntersectWith(EditorSet.Rows.Select(setRow => setRow.AttributeCode));
     }
     catch (Exception exception) { Error = exception.Message; EditorSet = new([], []); }
     finally { EditorLoading = false; }
@@ -492,6 +570,7 @@
   /// <summary>Po vsaki spremembi se osvezijo urejevalnik, pregled in stevci dreves — isti podatki na treh mestih ne smejo razhajati.</summary>
   async Task AfterChangeAsync(CategoryTreeService.OverviewRow row)
   {
+    ParentCodes = null;
     await LoadEditorAsync(row);
     await LoadAsync();
     await ReloadTreesAsync();
@@ -656,6 +735,250 @@
       Message = copied == 0
         ? $"Iz »{source}« ni bilo česa prepisati: vse vrstice so v naboru kategorije »{row.CategoryName}« že bile."
         : $"Iz »{source}« je v nabor kategorije »{row.CategoryName}« prepisanih {copied} atributov.";
+      await AfterChangeAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  // --- Izbira vrstic nabora in mnozicna dejanja (2026-09-29) ------------------------------------
+
+  /// <summary>Ena sprememba nabora: atribut v kategoriji dobi raven (null = vrstica se odstrani).</summary>
+  sealed record SetChange(string CategoryCode, string AttributeCode, string? Level);
+
+  /// <param name="Undo">Spremembe, ki vrnejo stanje pred tem dejanjem.</param>
+  sealed record SetChoice(string Label, bool Danger, IReadOnlyList<SetChange> Items, IReadOnlyList<SetChange> Undo, string Done);
+
+  sealed record PendingAction(string Title, IReadOnlyList<string> Lines, IReadOnlyList<SetChoice> Choices);
+
+  sealed record UndoAction(string Label, IReadOnlyList<SetChange> Items);
+
+  readonly HashSet<string> Selected = new(StringComparer.OrdinalIgnoreCase);
+  string BulkLevel = "RECOMMENDED";
+  PendingAction? Pending;
+  UndoAction? Undo;
+
+  IReadOnlyList<CategoryTreeService.AttributeSetRow> SelectedRows =>
+    EditorSet.Rows.Where(setRow => Selected.Contains(setRow.AttributeCode)).ToList();
+
+  IReadOnlyList<CategoryTreeService.AttributeSetRow> EmptyRows =>
+    EditorSet.Rows.Where(setRow => setRow.ProductsWithValue == 0 && setRow.Level != "EXCLUDED").ToList();
+
+  void ToggleSelected(string attributeCode, object? value)
+  {
+    if (value is true) Selected.Add(attributeCode); else Selected.Remove(attributeCode);
+    Pending = null;
+  }
+
+  void SelectAll(bool on)
+  {
+    Selected.Clear();
+    if (on) Selected.UnionWith(EditorSet.Rows.Select(setRow => setRow.AttributeCode));
+    Pending = null;
+  }
+
+  void SelectEmpty()
+  {
+    Selected.Clear();
+    Selected.UnionWith(EmptyRows.Select(setRow => setRow.AttributeCode));
+    Pending = null;
+  }
+
+  void SelectedClear() { Selected.Clear(); Pending = null; }
+
+  static string SourceName(CategoryTreeService.AttributeSetRow setRow) => setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode;
+
+  /// <summary>Slovenska dvojina in mnozina: 1 atribut, 2 atributa, 3 atributi, 5 atributov.</summary>
+  static string Attributes(int count) => (count % 100) switch
+  {
+    1 => $"{count} atribut", 2 => $"{count} atributa", 3 or 4 => $"{count} atributi", _ => $"{count} atributov",
+  };
+
+  /// <summary>Atributi, ki jih ima (neizlocene) ze nadrejena kategorija; prebere se sele, ko je potrebno.</summary>
+  HashSet<string>? ParentCodes;
+
+  async Task<HashSet<string>> ParentCodesAsync(CategoryTreeService.OverviewRow row)
+  {
+    if (ParentCodes is not null) return ParentCodes;
+    var parent = string.IsNullOrWhiteSpace(row.ParentCategoryCode) ? null : await Tree.GetAttributeSetAsync(row.CategoryTreeCode, row.ParentCategoryCode);
+    ParentCodes = new(parent?.Rows.Where(setRow => setRow.Level != "EXCLUDED").Select(setRow => setRow.AttributeCode) ?? [], StringComparer.OrdinalIgnoreCase);
+    return ParentCodes;
+  }
+
+  /// <summary>
+  /// »Odstrani« v tej kategoriji, tako da atributa tu res ni vec:
+  /// - lastna vrstica se izbrise; ce ima atribut tudi nadrejena kategorija, bi se po izbrisu pojavil kot
+  ///   podedovan (izmerjeno 2026-09-29 na »Dolzina«), zato se namesto tega tu izloci;
+  /// - podedovana se tu izloci (pri izvoru ostane, ker jo tam morda rabijo sestrske kategorije);
+  /// - ze izlocena, ki je zgoraj ni vec, se samo pocisti; ostale izlocene nimajo kaj spremeniti.
+  /// </summary>
+  static (SetChange Change, SetChange Undo)? RemoveHere(CategoryTreeService.OverviewRow row, CategoryTreeService.AttributeSetRow setRow, HashSet<string> parentCodes)
+  {
+    var inParent = parentCodes.Contains(setRow.AttributeCode);
+    var undoLevel = setRow.IsInherited ? null : setRow.Level;
+    string? level;
+    if (setRow.Level == "EXCLUDED")
+    {
+      if (setRow.IsInherited || inParent) return null;
+      level = null;
+    }
+    else level = setRow.IsInherited || inParent ? "EXCLUDED" : null;
+    return (new(row.CategoryCode, setRow.AttributeCode, level), new(row.CategoryCode, setRow.AttributeCode, undoLevel));
+  }
+
+  async Task RemoveOneAsync(CategoryTreeService.OverviewRow row, CategoryTreeService.AttributeSetRow setRow)
+  {
+    try
+    {
+      if (RemoveHere(row, setRow, await ParentCodesAsync(row)) is not { } change)
+      {
+        Message = $"Atribut {setRow.AttributeName} je v kategoriji »{row.CategoryName}« že izločen. Da izgine s seznama, ga označi in izberi »Odstrani pri izvoru«.";
+        return;
+      }
+      var done = change.Change.Level == "EXCLUDED"
+        ? $"Atribut {setRow.AttributeName} je v kategoriji »{row.CategoryName}« izločen; pri nadrejeni kategoriji ostane."
+        : $"Atribut {setRow.AttributeName} je odstranjen iz nabora kategorije »{row.CategoryName}«.";
+      await ApplyAsync(row, new SetChoice("", false, [change.Change], [change.Undo], done));
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  async Task AskRemoveHere()
+  {
+    var editing = Overview?.Rows.FirstOrDefault(candidate => candidate.CategoryCode == Editing);
+    if (editing is null) return;
+    Error = null;
+    try
+    {
+      var parentCodes = await ParentCodesAsync(editing);
+      var rows = SelectedRows;
+      var changes = rows.Select(setRow => RemoveHere(editing, setRow, parentCodes)).OfType<(SetChange Change, SetChange Undo)>().ToList();
+      var deleted = changes.Count(change => change.Change.Level is null);
+      var excluded = changes.Count - deleted;
+      var unchanged = rows.Count - changes.Count;
+      var lines = new List<string>();
+      if (deleted > 0) lines.Add($"Vrstica te kategorije se izbriše — {Attributes(deleted)}.");
+      if (excluded > 0) lines.Add($"Tu se izloči, ker ga določa nadrejena kategorija (tam ostane za ostale podkategorije) — {Attributes(excluded)}.");
+      if (unchanged > 0) lines.Add($"Že izločeno, brez spremembe — {Attributes(unchanged)}. Da izgine s seznama, uporabi »Odstrani pri izvoru«.");
+      lines.Add("Velja tudi za podkategorije. Kartica in validacija (ob naslednjem teku) atributa ne ponujata več; iz katalog.csv ga izpusti samo raven »izločen«.");
+      Pending = new($"Odstraniti izbrane atribute iz nabora kategorije »{editing.CategoryName}«? ({Attributes(changes.Count)})", lines,
+        [new($"Odstrani ({changes.Count})", true, changes.Select(change => change.Change).ToList(), changes.Select(change => change.Undo).ToList(),
+          $"Odstranjeno iz nabora kategorije »{editing.CategoryName}«: {Attributes(changes.Count)}.")]);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+  }
+
+  /// <summary>
+  /// »Odstrani pri izvoru«: vrstica se izbrise v kategoriji, kjer je dolocena, torej tudi pri vseh njenih
+  /// podkategorijah. Pred potrditvijo se za vsak izvor prebere, koliko izdelkov pod njim atribut sploh ima,
+  /// da je mogoce varno odstraniti samo tiste, ki so prazni povsod.
+  /// </summary>
+  async Task AskRemoveAtSourceAsync(CategoryTreeService.OverviewRow row)
+  {
+    Busy = true;
+    Error = null;
+    Pending = null;
+    try
+    {
+      var rows = SelectedRows;
+      var sources = new Dictionary<string, CategoryTreeService.AttributeSetView>(StringComparer.OrdinalIgnoreCase);
+      foreach (var source in rows.Select(setRow => setRow.DefinedAtCategoryCode).Distinct(StringComparer.OrdinalIgnoreCase))
+        sources[source] = string.Equals(source, row.CategoryCode, StringComparison.OrdinalIgnoreCase)
+          ? EditorSet
+          : await Tree.GetAttributeSetAsync(row.CategoryTreeCode, source);
+
+      var lines = new List<string>();
+      var all = new List<SetChange>();
+      var allUndo = new List<SetChange>();
+      var empty = new List<SetChange>();
+      var emptyUndo = new List<SetChange>();
+      foreach (var group in rows.GroupBy(setRow => setRow.DefinedAtCategoryCode, StringComparer.OrdinalIgnoreCase))
+      {
+        var atSource = sources[group.Key].Rows.ToDictionary(setRow => setRow.AttributeCode, StringComparer.OrdinalIgnoreCase);
+        var withValue = new List<string>();
+        var productCount = atSource.Values.FirstOrDefault()?.ProductCount ?? 0;
+        foreach (var setRow in group)
+        {
+          var change = new SetChange(group.Key, setRow.AttributeCode, null);
+          var undo = new SetChange(group.Key, setRow.AttributeCode, setRow.Level);
+          all.Add(change);
+          allUndo.Add(undo);
+          var values = atSource.TryGetValue(setRow.AttributeCode, out var sourceRow) ? sourceRow.ProductsWithValue : 0;
+          if (values == 0) { empty.Add(change); emptyUndo.Add(undo); }
+          else withValue.Add($"{setRow.AttributeName} ({values:N0})");
+        }
+        var name = SourceName(group.First());
+        var here = string.Equals(group.Key, row.CategoryCode, StringComparison.OrdinalIgnoreCase);
+        lines.Add($"»{name}«{(here ? " (ta kategorija)" : " in vse njene podkategorije")}: {Attributes(group.Count())}, "
+          + $"{group.Count() - withValue.Count} brez vrednosti pri {productCount:N0} izdelkih"
+          + (withValue.Count > 0 ? $"; z vrednostmi (št. izdelkov): {string.Join(", ", withValue)}." : "."));
+        if (group.Any(setRow => setRow.Level == "EXCLUDED"))
+          lines.Add($"Pri »{name}« so med izbranimi tudi izločeni atributi: če jih ima kakšna nadrejena kategorija, se po odstranitvi izločitve spet pojavijo.");
+      }
+      lines.Add("Vrednosti pri izdelkih ostanejo; spremeni se, kateri atributi so na kartici in v validaciji. Izpolnjen atribut gre v katalog.csv še naprej, razen če je kje izločen.");
+
+      Pending = new($"Odstraniti izbrane atribute pri izvoru? ({Attributes(all.Count)})", lines,
+      [
+        new($"Odstrani samo prazne ({empty.Count})", false, empty, emptyUndo,
+          $"Odstranjeno pri izvoru (brez vrednosti pri vseh izdelkih): {Attributes(empty.Count)}."),
+        new($"Odstrani vse izbrane ({all.Count})", true, all, allUndo,
+          $"Odstranjeno pri izvoru: {Attributes(all.Count)}."),
+      ]);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  Task SetLevelSelectedAsync(CategoryTreeService.OverviewRow row)
+  {
+    // Podedovana vrstica z isto ravnjo bi tu dobila odvec lastno kopijo.
+    var rows = SelectedRows.Where(setRow => setRow.Level != BulkLevel).ToList();
+    if (rows.Count == 0) { Message = $"Vsi izbrani atributi so že {LevelLabel(BulkLevel)}."; return Task.CompletedTask; }
+    return ApplyAsync(row, new SetChoice("", false,
+      rows.Select(setRow => new SetChange(row.CategoryCode, setRow.AttributeCode, BulkLevel)).ToList(),
+      rows.Select(setRow => new SetChange(row.CategoryCode, setRow.AttributeCode, setRow.IsInherited ? null : setRow.Level)).ToList(),
+      $"V kategoriji »{row.CategoryName}« je zdaj {LevelLabel(BulkLevel)}: {Attributes(rows.Count)}."));
+  }
+
+  /// <summary>Zapis po kategorijah prek istega postopka kot drugje (147/170): revizija v b2b.AuditLog in zahteve validacije.</summary>
+  async Task WriteChangesAsync(CategoryTreeService.OverviewRow row, IReadOnlyList<SetChange> changes)
+  {
+    var actor = await ActorAsync();
+    foreach (var group in changes.GroupBy(change => change.CategoryCode, StringComparer.OrdinalIgnoreCase))
+      await Tree.SaveAttributeSetBulkAsync(row.CategoryTreeCode, group.Key,
+        group.Select(change => new CategoryTreeService.AttributeSetItem(change.AttributeCode, change.Level)).ToList(), actor);
+  }
+
+  async Task ApplyAsync(CategoryTreeService.OverviewRow row, SetChoice choice)
+  {
+    if (choice.Items.Count == 0) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await WriteChangesAsync(row, choice.Items);
+      Pending = null;
+      Selected.Clear();
+      Undo = new(choice.Done, choice.Undo);
+      Message = choice.Done + " Validacija jih upošteva ob naslednjem teku.";
+      await AfterChangeAsync(row);
+    }
+    catch (Exception exception) { Error = exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task UndoAsync(CategoryTreeService.OverviewRow row)
+  {
+    if (Undo is null) return;
+    Busy = true;
+    Message = null;
+    Error = null;
+    try
+    {
+      await WriteChangesAsync(row, Undo.Items);
+      Message = $"Razveljavljeno, prejšnja raven vrnjena: {Attributes(Undo.Items.Count)}.";
+      Undo = null;
       await AfterChangeAsync(row);
     }
     catch (Exception exception) { Error = exception.Message; }

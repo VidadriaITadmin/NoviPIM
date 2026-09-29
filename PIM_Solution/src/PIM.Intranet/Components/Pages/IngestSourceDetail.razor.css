@@ -1,0 +1,7 @@
+/* Prenova 2026-09-26 */
+.row-link { cursor: pointer; }
+.num-bad { color: var(--pim-bad-text) !important; font-weight: 600; }
+.num-warn { color: var(--pim-warn-text) !important; font-weight: 600; }
+.numeric { font-variant-numeric: tabular-nums; }
+.endpoint { font-family: Consolas, "Cascadia Mono", monospace; font-size: .75rem !important; overflow-wrap: anywhere; }
+dd ::deep .status-chip + .status-chip { margin-left: .3rem; }

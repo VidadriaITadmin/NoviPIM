@@ -243,6 +243,11 @@ Assert(PimPolicies.RolesFor(PimPolicies.AlertWrite).OrderBy(role => role).Sequen
   "Politika AlertWrite mora biti ADMIN in COMMERCIAL.");
 Assert(PimPolicies.RolesFor(PimPolicies.BusinessWrite).OrderBy(role => role).SequenceEqual(["ADMIN", "CATALOG_EDITOR", "COMMERCIAL"]),
   "Politika BusinessWrite mora biti ADMIN, CATALOG_EDITOR in COMMERCIAL.");
+// 277: potrditev varovalke (cene, umiki s spleta) — urednik, komercialist ali skrbnik; pragove pravil samo skrbnik.
+Assert(PimPolicies.RolesFor(PimPolicies.SafeguardConfirm).OrderBy(role => role).SequenceEqual(["ADMIN", "CATALOG_EDITOR", "COMMERCIAL"]),
+  "Politika SafeguardConfirm mora biti ADMIN, CATALOG_EDITOR in COMMERCIAL.");
+Assert(PimPolicies.RolesFor(PimPolicies.SafeguardSettings).SequenceEqual(["ADMIN"]),
+  "Pravila varovalk (SafeguardSettings) sme spreminjati samo ADMIN.");
 
 var viewer = Principal("qa_viewer", "VIEWER");
 var editor = Principal("qa_editor", "CATALOG_EDITOR");
@@ -444,6 +449,10 @@ foreach (var (path, expected) in new[]
   ("sistem/posel/WEB_CATALOG_EXPORT?tek=12", "tab.system.overview"),
   ("sistem/samotest", "view.system.self-test"),
   ("sistem/sled", "view.system.activity"),
+  // 277: varovalke — pregled, eno preverjanje in izvoz ugotovitev v Excel spadajo pod isto pravico.
+  ("varovalke", "page.safeguards"),
+  ("varovalke/42", "page.safeguards"),
+  ("varovalke/42/excel", "page.safeguards"),
 })
   Assert(PimAccessCatalog.Resolve(path) == expected, $"Pot {path} mora zahtevati {expected}, zahteva pa {PimAccessCatalog.Resolve(path)}.");
 foreach (var removedPath in new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi" })

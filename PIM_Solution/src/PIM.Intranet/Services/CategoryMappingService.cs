@@ -15,7 +15,7 @@ namespace PIM.Intranet.Services;
 /// postopek zavrne neobstoječo kategorijo, kategorijo brez prevedene poti in spremembo brez
 /// akterja. Napako pokažemo uporabniku takšno, kot jo je povedala baza.
 /// </summary>
-public sealed class CategoryMappingService(PimDb database, IConfiguration configuration)
+public sealed class CategoryMappingService(PimDb database, IConfiguration configuration, PimWriteGuard guard)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
@@ -104,6 +104,37 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
         command.Parameters.AddWithValue("@Iskanje", Nullable(search));
       }, cancellationToken);
 
+  /// <summary>Kategorija za izbiro na kartici: pot v jeziku spletne strani (to se shrani) in slovenska pot za iskanje.</summary>
+  public sealed record SitePathOption(string CategoryCode, int LevelNo, string SlName, string SlPath, string SitePath);
+
+  /// <summary>
+  /// Poti drevesa spletne strani v njenem jeziku (canon.WebSite.LanguageCode). Uporabnik 2026-09-29: pri
+  /// »Videlektro (ANG)« je izbirnik ponujal slovenske poti — isče se po slovensko, shrani pa pot v jeziku strani,
+  /// ker pim.SetProductCategories preverja pot v canon.CategoryPathTranslated za jezik te strani.
+  /// </summary>
+  public Task<IReadOnlyList<SitePathOption>> GetSitePathOptionsAsync(string webSiteCode, CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      """
+      SELECT node.CategoryCode, node.LevelNo, SlName = node.CategoryName,
+        SlPath = COALESCE(slPath.CategoryPath, sitePath.CategoryPath), SitePath = sitePath.CategoryPath
+      FROM canon.WebSite AS site
+      INNER JOIN canon.Category AS node ON node.CategoryTreeCode = site.CategoryTreeCode AND node.IsActive = 1
+      INNER JOIN canon.CategoryPathTranslated AS sitePath
+        ON sitePath.CategoryTreeCode = site.CategoryTreeCode AND sitePath.CategoryCode = node.CategoryCode
+       AND sitePath.LanguageCode = site.LanguageCode
+      LEFT JOIN canon.CategoryPathTranslated AS slPath
+        ON slPath.CategoryTreeCode = site.CategoryTreeCode AND slPath.CategoryCode = node.CategoryCode AND slPath.LanguageCode = N'sl'
+      WHERE site.WebSiteCode = @WebSite
+      ORDER BY COALESCE(slPath.CategoryPath, sitePath.CategoryPath);
+      """,
+      reader => new SitePathOption(
+        PimDb.TextOrEmpty(reader, "CategoryCode"),
+        PimDb.Int32(reader, "LevelNo"),
+        PimDb.TextOrEmpty(reader, "SlName"),
+        PimDb.TextOrEmpty(reader, "SlPath"),
+        PimDb.TextOrEmpty(reader, "SitePath")),
+      command => command.Parameters.AddWithValue("@WebSite", webSiteCode), cancellationToken);
+
   public Task<IReadOnlyList<string>> GetSourceCodesAsync(CancellationToken cancellationToken = default) =>
     database.QueryAsync(
       "SELECT DISTINCT SourceCode FROM map.SourceCategory ORDER BY SourceCode;",
@@ -166,10 +197,13 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
   /// Postavi celoten nabor kategorij izdelka na eni spletni strani. Prazen seznam pomeni
   /// »namenoma brez kategorije« in ni isto kot »še ni preslikano«.
   /// </summary>
-  public Task<string> SetProductCategoriesAsync(
+  public async Task<string> SetProductCategoriesAsync(
     int organizationId, string itemId, string webSite, IReadOnlyList<string> categoryPaths,
-    string actor, string? note, CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    string actor, string? note, CancellationToken cancellationToken = default)
+  {
+    // 2026-09-28: urejanje je zdaj tudi na kartici izdelka, ki jo odpre vsaka vloga — vloga se preveri tu.
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC pim.SetProductCategories @OrganizationId, @ItemID, @WebSite, @CategoryPathsJson, @Actor, @Note;",
       command =>
       {
@@ -181,11 +215,14 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
 
-  public Task<string> ClearProductCategoryOverrideAsync(
+  public async Task<string> ClearProductCategoryOverrideAsync(
     int organizationId, string itemId, string webSite, string actor,
-    CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC pim.ClearProductCategoryOverride @OrganizationId, @ItemID, @WebSite, @Actor;",
       command =>
       {
@@ -194,6 +231,7 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
         command.Parameters.AddWithValue("@WebSite", webSite);
         command.Parameters.AddWithValue("@Actor", actor);
       }, cancellationToken);
+  }
 
   async Task<string> ScalarTextAsync(string sql, Action<SqlCommand> bind, CancellationToken cancellationToken)
   {

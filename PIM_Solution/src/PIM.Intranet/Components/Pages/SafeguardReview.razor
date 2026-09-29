@@ -1,0 +1,443 @@
+@page "/varovalke/{Id:long}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SafeguardService Safeguards
+@inject AuthenticationStateProvider Authentication
+
+@* 277: eno preverjanje varovalke — kaj se je spremenilo glede na zadnjo objavo, zakaj je sumljivo in
+   potrditev. Uporabnik 2026-09-24: »koliko artiklov je bilo umaknjenih s spleta, zakaj in kateri — ključno
+   je, da je lepo ponazorjeno«. Zato so umiki najprej prešteti po razlogu (vrstice s števili), šele nato
+   našteti; klik na razlog pokaže samo te artikle.
+   »Če ima en artikel prazno polje, se ostali pojavijo v CSV, ta pa ne sme biti v CSV in mora čakati
+   odobritev«: sumljiv artikel je zadržan (ga ni v datoteki), potrdi se posamično ali vse naenkrat. *@
+
+<PageTitle>Varovalka · preverjanje @Id</PageTitle>
+<PimPage Title="@PageTitleText" Subtitle="@PageSubtitle" />
+<div class="page-actions section-gap">
+  <a href="varovalke">Vse varovalke</a>
+  @if (IsSaop)
+  {
+    <a href="outbound">Odhodna vrsta za SAOP</a>
+    <a href="izvozi/mnozicno">Množično urejanje</a>
+  }
+  else
+  {
+    <a href="splet">CSV za Magento</a>
+    <a href="splet/umaknjeni">Umaknjeni s spleta</a>
+  }
+  @if (Detail is not null && Detail.Findings.Count > 0) { <a href="@($"varovalke/{Id}/excel")">Prenesi ugotovitve v Excel</a> }
+</div>
+
+@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+
+<PimState Loading="Loading" Error="@LoadError" Empty="@(Detail is null)" EmptyText="Preverjanja ni (morda je starejše od 120 dni).">
+  @if (Detail is { } detail)
+  {
+    var check = detail.Check;
+    <section class="ui-card data-card section-gap review-status review-@check.Status.ToLowerInvariant()" aria-labelledby="review-status-title">
+      <div class="subsection-head">
+        <h2 id="review-status-title">@SafeguardText.Status(check.Status)</h2>
+        <PimChip Text="@SafeguardText.Status(check.Status)" Tone="@SafeguardText.Tone(check.Status)" />
+      </div>
+      <p>@SafeguardText.StatusExplain(check)</p>
+      @if (check.Status == SafeguardText.Superseded && check.LatestCheckId is { } latest && latest != check.SafeguardCheckId)
+      {
+        <p><a class="primary-button" href="@($"varovalke/{latest}")">Odpri najnovejše preverjanje</a></p>
+      }
+      @if (check.DecisionNote is { Length: > 0 }) { <p class="muted">Opomba ob potrditvi: @check.DecisionNote</p> }
+      @if (IsSaop)
+      {
+        <div class="kpi-grid">
+          <PimStat Label="Artiklov na seznamu" Value="@detail.Findings.Select(finding => finding.ItemId).Distinct().Count().ToString("N0")" Note="@(check.Headline ?? "")" />
+          <PimStat Label="Čaka potrditev" Value="@PendingItems.ToString("N0")" Note="se ne pošlje, dokler ne potrdiš" />
+          <PimStat Label="Potrjeni" Value="@ApprovedItems.ToString("N0")" Note="odobreni za pošiljanje v SAOP" />
+        </div>
+      }
+      else if (IsFeed)
+      {
+        <div class="kpi-grid">
+          <PimStat Label="Vrstic v novem posnetku" Value="@(check.RowCountValue?.ToString("N0") ?? "—")" Note="@check.SubjectLabel" />
+          <PimStat Label="Vrstic v veljavnem posnetku" Value="@(check.PreviousPublishedRows?.ToString("N0") ?? "—")" Note="ta še velja" />
+        </div>
+      }
+      else if (!IsCatalog)
+      {
+        <div class="kpi-grid">
+          <PimStat Label="Artiklov v datoteki" Value="@(check.RowCountValue?.ToString("N0") ?? "—")"
+                   Note="@(check.PreviousPublishedRows is { } previousRows ? $"zadnja objava: {previousRows:N0}" : "prva primerjava")" />
+          <PimStat Label="Zadržani artikli" Value="@PendingItems.ToString("N0")"
+                   Note="@(PendingItems > 0 ? "niso v datoteki — na spletu prejšnja cena in zaloga" : ApprovedItems > 0 ? $"potrjenih: {ApprovedItems:N0}" : "nobeden")" />
+        </div>
+      }
+      else
+      {
+      <div class="kpi-grid">
+        <PimStat Label="Na spletu po tej objavi" Value="@(check.PublishedRows?.ToString("N0") ?? "—")"
+                 Note="@(check.PreviousPublishedRows is { } previous ? $"artiklov; zadnja objava: {previous:N0}" : "artiklov; prva primerjava")" />
+        <PimStat Label="Zadržani artikli" Value="@PendingItems.ToString("N0")"
+                 Note="@(PendingItems > 0 ? "niso v datoteki — čakajo potrditev" : ApprovedItems > 0 ? $"potrjenih: {ApprovedItems:N0}" : "nobeden")" />
+        <PimStat Label="Gre s spleta" Value="@(check.Summary.LostItems?.ToString("N0") ?? "0")" Note="artiklov glede na zadnjo objavo" />
+        <PimStat Label="Novi na spletu" Value="@(check.Summary.NewItems?.ToString("N0") ?? "0")" />
+        <PimStat Label="S kljukico, a ne gredo na splet" Value="@(check.Summary.CheckedNotPublished?.ToString("N0") ?? "—")"
+                 Href="splet/umaknjeni?pogled=kljukice" Note="stanje ob preverjanju" />
+      </div>
+      }
+      <p class="muted">Preverjeno @check.CreatedUtc.ToPimLocal().ToString("g")@(check.EvaluationCount > 1 ? $", nazadnje {check.LastEvaluatedUtc.ToPimLocal():g} ({check.EvaluationCount}× isti izid)" : "") · @SafeguardText.Area(check.AreaCode) · @check.OrganizationName</p>
+    </section>
+
+    @if (check.IsWaiting && PendingItems > 0)
+    {
+      <section class="ui-card data-card section-gap review-confirm" aria-labelledby="review-confirm-title">
+        <h2 id="review-confirm-title">@(IsSaop ? "Čakajo potrditev" : IsFeed ? "Nov posnetek ni uporabljen" : "Zadržani artikli")@(IsFeed ? "" : $" ({PendingItems:N0})")</h2>
+        @if (IsFeed)
+        {
+          <p>
+            Velja zadnji dober posnetek zaloge tega vira. Preveri datoteko (prenos, dobavitelj, zajem iz SAOP). Če je padec res
+            (npr. dobavitelj je umaknil artikle), potrdi — naslednji zajem iste datoteke jo uporabi. Če ni, ne potrdi: ko pride
+            pravilna datoteka, se uporabi sama.
+          </p>
+        }
+        else if (IsSaop)
+        {
+          <p>
+            Te spremembe se v SAOP ne pošljejo, dokler ne potrdiš, da so prav (neaktivni artikli, sumljive cene, ključna polja,
+            množične ali stare spremembe). Če so prav, jih potrdi — takoj so odobrene za pošiljanje. Če katera ni, je ne potrdi:
+            sporočilo prekliči v odhodni vrsti ali vrednost popravi.
+          </p>
+        }
+        else
+        {
+        <p>
+          Teh artiklov <strong>ni v objavljeni datoteki</strong> — na spletu ostanejo s prejšnjimi podatki, nov artikel tja še ne pride.
+          Vsi ostali artikli so šli na splet. Če je sprememba pravilna, artikel <strong>potrdi</strong>: gre ven z naslednjim izvozom
+          (izvoz se sproži takoj), enaka sprememba pa 14 dni ne bo spraševala znova. Če ni pravilna, jo popravi (ceno v SAOP, kategorijo
+          na kartici artikla) — naslednji izvoz je ne najde več in artikel objavi sam.
+        </p>
+        <p class="muted">Artikel gre ven, ko so potrjene vse njegove zadržane ugotovitve (npr. obe ceni).</p>
+        }
+        @if (CanConfirm)
+        {
+          <label class="form-field review-note">Opomba (neobvezno)
+            <input class="form-input" maxlength="1000" @bind="Note" placeholder="npr. nov cenik velja od 1. 10." />
+          </label>
+          <div class="review-actions">
+            <button type="button" class="primary-button" disabled="@(Busy || Selected.Count == 0)" @onclick="ApproveSelectedAsync">
+              @(IsSaop ? "Potrdi izbrane in pošlji v SAOP" : "Potrdi izbrane")@(Selected.Count > 0 ? $" ({Selected.Count:N0})" : "")
+            </button>
+            @if (ConfirmAllArmed)
+            {
+              <span class="review-arm" role="group" aria-label="Potrditev vseh">
+                Res potrdiš vseh @PendingItems.ToString("N0") zadržanih artiklov?
+                <button type="button" class="primary-button" disabled="@Busy" @onclick="ApproveAllAsync">Da, potrdi vse</button>
+                <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => ConfirmAllArmed = false">Prekliči</button>
+              </span>
+            }
+            else
+            {
+              <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => ConfirmAllArmed = true">Potrdi vse zadržane (@PendingItems.ToString("N0"))</button>
+            }
+          </div>
+          @if (Selected.Count == 0) { <p class="muted">Izberi artikle v tabelah spodaj (kljukica v prvem stolpcu).</p> }
+        }
+        else
+        {
+          <p class="message-state warn-message">Potrdi lahko skrbnik, urednik kataloga ali komercialist.</p>
+        }
+      </section>
+    }
+
+    @if (detail.Findings.Count == 0)
+    {
+      <section class="ui-card data-card section-gap"><p class="message-state success-message">Brez ugotovitev: datoteka se od zadnje objave ni sumljivo spremenila.</p></section>
+    }
+
+    @foreach (var group in Groups)
+    {
+      var rule = group.Rule;
+      var visible = group.Rows.Where(row => group.Filter is null || row.ReasonCode == group.Filter).ToList();
+      var selectable = CanSelect && group.PendingIds.Count > 0;
+      <section class="ui-card data-card section-gap" aria-labelledby="@($"rule-{rule.RuleCode}")">
+        <div class="subsection-head">
+          <h2 id="@($"rule-{rule.RuleCode}")">@rule.Title</h2>
+          <span>
+            @if (group.PendingItems > 0) { <PimChip Text="@($"zadržani: {group.PendingItems:N0}")" Tone="bad" /> }
+            @if (group.ApprovedItems > 0) { <PimChip Text="@($"potrjeni: {group.ApprovedItems:N0}")" Tone="good" /> }
+            @if (group.PendingItems == 0 && group.ApprovedItems == 0) { <PimChip Text="@(rule.IsInformational ? $"informacija: {group.Items:N0}" : $"opozorilo: {group.Items:N0}")" Tone="@(rule.IsInformational ? null : "warn")" /> }
+          </span>
+        </div>
+        <p class="card-note">@rule.Explanation <strong>Kaj narediti:</strong> @rule.WhatToDo</p>
+
+        @if (group.IsWeb)
+        {
+          <PimReasonBars Label="@($"{rule.Title} po razlogu")" Items="group.Reasons" Selected="@group.Filter"
+                         SelectedChanged="value => group.Filter = value" />
+        }
+
+        @if (selectable)
+        {
+          var allSelected = group.PendingIds.All(Selected.Contains);
+          <p class="review-group-select">
+            <button type="button" class="small-action" disabled="@Busy" @onclick="() => ToggleGroup(group, !allSelected)">
+              @(allSelected ? "Odznači zadržane v tej skupini" : $"Izberi vse zadržane v tej skupini ({group.PendingIds.Count:N0})")
+            </button>
+          </p>
+        }
+
+        <PimTable Caption="@($"{rule.Title}: {SafeguardText.Rows(visible.Count)}{(visible.Count > MaxRows ? $", prikazanih {MaxRows}" : "")}")" Columns="@ColumnsFor(group, selectable)">
+          <Rows>
+            @foreach (var finding in visible.Take(MaxRows))
+            {
+              <tr class="@RowClass(finding)">
+                @if (selectable)
+                {
+                  <td class="review-select">
+                    @if (finding.IsPending)
+                    {
+                      var findingId = finding.SafeguardFindingId;
+                      <input type="checkbox" aria-label="@($"Izberi {finding.ItemId} {finding.FieldLabel ?? finding.SiteLabel}")"
+                             checked="@Selected.Contains(findingId)" disabled="@Busy"
+                             @onchange="args => Toggle(findingId, args.Value is true)" />
+                    }
+                  </td>
+                }
+                @if (group.IsRows)
+                {
+                  <td>@(finding.OldValue ?? "—")</td>
+                  <td>@(finding.NewValue ?? "—")</td>
+                  <td><strong>@finding.ChangeText</strong></td>
+                }
+                else
+                {
+                  <td>@if (finding.ProductId is { } productId) { <a href="@($"izdelki/{productId}{(group.IsWeb ? "#web" : "")}")">@finding.ItemId</a> } else { @finding.ItemId }
+                    <br /><span class="muted">@finding.ProductName</span></td>
+                  @if (group.IsWeb)
+                  {
+                    <td>@finding.SiteLabel</td>
+                    <td>@(finding.RuleCode == "KAT_KLJUKICA_NE_GRE" ? "kljukica od " + finding.ReasonUtc?.ToPimLocal().ToString("g")
+                          : finding.ChangeText is { Length: > 0 } change ? $"{SafeguardText.Sites(finding.OldValue)} → {change} (Magento ga ne umakne sam)"
+                          : $"{SafeguardText.Sites(finding.OldValue)} → {SafeguardText.Sites(finding.NewValue)}")</td>
+                    <td>@if (finding.ReasonCode is { } reason) { <PimChip Text="@SafeguardText.ReasonShort(reason)" Tone="@SafeguardText.ReasonTone(reason)" /><br /><span class="muted">@finding.ReasonText</span> }</td>
+                  }
+                  else
+                  {
+                    <td>@(finding.FieldLabel ?? finding.FieldCode)</td>
+                    <td>@(finding.OldValue is null ? "—" : SafeguardText.Value(finding.OldValue))</td>
+                    <td><strong>@SafeguardText.Value(finding.NewValue)</strong></td>
+                    @if (IsSaop)
+                    {
+                      <td>@if (finding.ChangeText is { Length: > 0 } change) { <strong>@change</strong><br /> }@finding.ReasonFields<br /><span class="muted">@finding.ReasonActor@(finding.ReasonUtc is { } queued ? $", {queued.ToPimLocal():g}" : "")</span></td>
+                    }
+                    else
+                    {
+                      <td><strong>@finding.ChangeText</strong></td>
+                    }
+                  }
+                }
+                <td>@SafeguardText.FindingState(finding, Detail?.Check.AreaCode)</td>
+              </tr>
+            }
+          </Rows>
+        </PimTable>
+        @if (visible.Count > MaxRows) { <p class="card-note">Prikazanih je prvih @MaxRows vrstic. Vse so v <a href="@($"varovalke/{Id}/excel")">Excelu</a>; »Potrdi vse zadržane« zajame tudi neprikazane.</p> }
+      </section>
+    }
+
+    @if (check.Summary.Blocked.Count > 0)
+    {
+      <section class="ui-card data-card section-gap" aria-labelledby="review-blocked-title">
+        <div class="subsection-head">
+          <h2 id="review-blocked-title">S kljukico, a ne gredo na splet (stanje ob preverjanju)</h2>
+          <a href="splet/umaknjeni?pogled=kljukice">Seznam artiklov in popravki</a>
+        </div>
+        <p class="card-note">Kljukica sama ni dovolj: artikel mora biti aktiven, imeti kategorijo na tem spletišču in biti veljaven za splet. To je stalno stanje, ne sprememba — artikla ne zadrži.</p>
+        <PimReasonBars Label="Kljukice brez objave po razlogu" Selectable="false"
+                       Items="@(check.Summary.Blocked.OrderByDescending(item => item.Count).Select(item => new PimReasonBars.Item($"{item.Site}|{item.Reason}", $"{item.Site}: {SafeguardText.ReasonShort(item.Reason)}", item.Count, SafeguardText.ReasonTone(item.Reason))).ToList())" />
+      </section>
+    }
+  }
+</PimState>
+
+@code {
+  [Parameter] public long Id { get; set; }
+
+  const int MaxRows = 300;
+  static readonly PimColumn SelectColumn = new("Izberi");
+  static readonly IReadOnlyList<PimColumn> PriceColumns =
+    [new("Artikel"), new("Polje"), new("Zadnja objava"), new("Zdaj"), new("Sprememba"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> SaopColumns =
+    [new("Artikel"), new("Polje"), new("Zdaj"), new("Po pošiljanju"), new("Od kod in kdo"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> WebColumns =
+    [new("Artikel"), new("Spletišče"), new("Spletne strani: zadnja objava → zdaj"), new("Razlog"), new("Stanje")];
+  static readonly IReadOnlyList<PimColumn> RowColumns =
+    [new("Vrstic ob zadnji objavi"), new("Vrstic zdaj"), new("Sprememba"), new("Stanje")];
+
+  sealed class Group(SafeguardRule rule, IReadOnlyList<SafeguardFindingRow> rows)
+  {
+    public SafeguardRule Rule { get; } = rule;
+    public IReadOnlyList<SafeguardFindingRow> Rows { get; } = rows;
+    public bool IsWeb { get; } = rule.RuleCode is "KAT_SPLET_UMIK" or "KAT_KLJUKICA_NE_GRE";
+    /// <summary>Ugotovitev o celoti (število vrstic), ne o artiklu.</summary>
+    public bool IsRows { get; } = rule.RuleCode == "KAT_VRSTICE" || rows.All(row => row.ItemId is null);
+    public int Items { get; } = rows.Select(row => row.ItemId ?? "*").Distinct(StringComparer.Ordinal).Count();
+    public int PendingItems { get; } = rows.Where(row => row.IsPending).Select(row => row.ItemId ?? "*").Distinct(StringComparer.Ordinal).Count();
+    /// <summary>Potrjene ugotovitve — tudi tiste, ki zaradi prejšnje potrditve artikla niso več zadržale.</summary>
+    public int ApprovedItems { get; } = rows.Where(row => row.IsApproved).Select(row => row.ItemId ?? "*").Distinct(StringComparer.Ordinal).Count();
+    public IReadOnlyList<long> PendingIds { get; } = rows.Where(row => row.IsPending).Select(row => row.SafeguardFindingId).ToList();
+    public string? Filter { get; set; }
+    public IReadOnlyList<PimReasonBars.Item> Reasons { get; } = rows
+      .Where(row => row.ReasonCode is not null)
+      .GroupBy(row => row.ReasonCode!)
+      .Select(reason => new PimReasonBars.Item(reason.Key, SafeguardText.ReasonShort(reason.Key),
+        reason.Select(row => row.ItemId).Distinct(StringComparer.Ordinal).Count(), SafeguardText.ReasonTone(reason.Key)))
+      .OrderByDescending(item => item.Count)
+      .ToList();
+  }
+
+  SafeguardCheckDetail? Detail;
+  IReadOnlyList<Group> Groups = [];
+  readonly HashSet<long> Selected = [];
+  bool Loading = true, Busy, CanConfirm, ConfirmAllArmed;
+  string? LoadError, Error, Message, Note;
+
+  /// <summary>Artikli, ne vrstice: umik z dveh spletišč ali dve ceni sta en zadržan artikel (uporabnik šteje artikle).</summary>
+  int PendingItems => Detail?.Findings.Where(finding => finding.IsPending)
+    .Select(finding => finding.ItemId ?? finding.RuleCode).Distinct(StringComparer.Ordinal).Count() ?? 0;
+
+  int ApprovedItems => Detail?.Findings.Where(finding => finding.RequiresConfirmation && finding.IsApproved)
+    .Select(finding => finding.ItemId ?? finding.RuleCode).Distinct(StringComparer.Ordinal).Count() ?? 0;
+
+  bool IsSaop => Detail?.Check.AreaCode == SafeguardText.SaopArea;
+  bool IsCatalog => Detail?.Check.AreaCode is null or SafeguardText.CatalogArea;
+  bool IsFeed => Detail?.Check.AreaCode == SafeguardText.FeedArea;
+
+  /// <summary>Izbira ima smisel samo, dokler preverjanje čaka in uporabnik sme potrjevati.</summary>
+  bool CanSelect => CanConfirm && Detail?.Check.IsWaiting == true;
+
+  string PageTitleText => Detail is null ? $"Varovalka · preverjanje {Id}" : $"{Detail.Check.SubjectLabel}: {SafeguardText.Status(Detail.Check.Status).ToLowerInvariant()}";
+  string PageSubtitle => Detail is null ? "" : $"{SafeguardText.Area(Detail.Check.AreaCode)} · preverjanje {Id} · {Detail.Check.CreatedUtc.ToPimLocal():g}";
+
+  protected override async Task OnInitializedAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    CanConfirm = PimPolicies.Allows(state.User, PimPolicies.SafeguardConfirm);
+  }
+
+  protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+  async Task LoadAsync()
+  {
+    Loading = Detail is null; LoadError = null;
+    try
+    {
+      var detail = await Safeguards.GetCheckAsync(Id);
+      Detail = detail;
+      if (detail is null) { Groups = []; Selected.Clear(); return; }
+      var rules = detail.Rules.ToDictionary(rule => rule.RuleCode, StringComparer.Ordinal);
+      Groups = detail.Findings
+        .GroupBy(finding => finding.RuleCode)
+        .Select(findings => new Group(
+          rules.TryGetValue(findings.Key, out var rule) ? rule
+            : new SafeguardRule(findings.Key, detail.Check.AreaCode, findings.Key, findings.Key, "", "", false, false, false, true, null, null, 1, 999, DateTime.UtcNow, ""),
+          findings.OrderByDescending(finding => finding.IsPending)
+            .ThenByDescending(finding => finding.RequiresConfirmation)
+            .ThenBy(finding => finding.ItemId, StringComparer.Ordinal).ToList()))
+        .OrderByDescending(group => group.PendingItems > 0)
+        .ThenBy(group => group.Rule.SortOrder)
+        .ToList();
+      // Izbira velja samo za ugotovitve, ki še čakajo (drug uporabnik jih je morda medtem potrdil).
+      var pending = detail.Findings.Where(finding => finding.IsPending).Select(finding => finding.SafeguardFindingId).ToHashSet();
+      Selected.IntersectWith(pending);
+    }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      LoadError = "Preverjanja ni mogoče prebrati (migracija 277: intranet.GetSafeguardCheck).";
+    }
+    finally { Loading = false; }
+  }
+
+  void Toggle(long findingId, bool selected)
+  {
+    if (selected) Selected.Add(findingId); else Selected.Remove(findingId);
+  }
+
+  void ToggleGroup(Group group, bool select)
+  {
+    if (select) Selected.UnionWith(group.PendingIds); else Selected.ExceptWith(group.PendingIds);
+  }
+
+  Task ApproveSelectedAsync() => Selected.Count == 0 ? Task.CompletedTask : ApproveAsync(Selected.ToList());
+
+  Task ApproveAllAsync()
+  {
+    ConfirmAllArmed = false;
+    return ApproveAsync(null);
+  }
+
+  async Task ApproveAsync(IReadOnlyCollection<long>? findingIds)
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var outcome = await Safeguards.ApproveAsync(Id, findingIds, await ActorAsync(), Note);
+      Message = ApproveMessage(outcome, IsSaop);
+      Selected.Clear();
+      Note = null;
+      await LoadAsync();
+    }
+    catch (UnauthorizedAccessException) { Error = "Tvoja vloga potrditve ne dovoljuje."; }
+    catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number is 52703 or 52704)
+    {
+      Error = exception.Number == 52703
+        ? "Tega preverjanja ni več."
+        : "To preverjanje ne čaka več potrditve — vse je potrdil že nekdo drug ali pa je nastal novejši izvoz. Stran je osvežena.";
+      await LoadAsync();
+    }
+    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = "Potrditev ni uspela: " + exception.Message; }
+    finally { Busy = false; }
+  }
+
+  static string ApproveMessage(SafeguardApproveOutcome outcome, bool saop)
+  {
+    var approved = outcome.ApprovedCount == 0
+      ? "Ni bilo česa potrditi (morda je že potrdil nekdo drug)."
+      : $"{Findings(outcome.ApprovedCount, "Potrjena", "Potrjeni", "Potrjene", "Potrjenih")}.";
+    var run = outcome.ApprovedCount == 0 ? ""
+      : saop ? " Potrjeni artikli so odobreni za pošiljanje v SAOP — pošlje jih odhodna vrsta."
+      : outcome.RunRequested ? " Izvoz je sprožen — potrjeni artikli gredo na splet v nekaj minutah."
+      : " Potrjeni artikli gredo na splet z naslednjim izvozom (izvoz ta hip teče ali ni vklopljen).";
+    var rest = outcome.RemainingCount switch
+    {
+      > 0 => $" Še čaka: {Findings(outcome.RemainingCount, "", "", "", "").Trim()}.",
+      0 => " Vsi zadržani artikli so potrjeni.",
+      _ => "",
+    };
+    return approved + run + rest;
+  }
+
+  /// <summary>Slovenska dvojina in množina: 1 ugotovitev, 2 ugotovitvi, 3 ugotovitve, 5 ugotovitev.</summary>
+  static string Findings(int count, string one, string two, string few, string many) => (count % 100) switch
+  {
+    1 => $"{one} {count} ugotovitev",
+    2 => $"{two} {count} ugotovitvi",
+    3 or 4 => $"{few} {count} ugotovitve",
+    _ => $"{many} {count} ugotovitev",
+  };
+
+  static IReadOnlyList<PimColumn> ColumnsFor(Group group, bool selectable)
+  {
+    var columns = group.IsWeb ? WebColumns : group.IsRows ? RowColumns : group.Rule.AreaCode == SafeguardText.SaopArea ? SaopColumns : PriceColumns;
+    return selectable ? [SelectColumn, .. columns] : columns;
+  }
+
+  static string? RowClass(SafeguardFindingRow finding) =>
+    finding.IsPending ? "review-row-held"
+    : finding.IsApproved ? "review-row-approved"
+    : null;
+
+  async Task<string> ActorAsync()
+  {
+    var state = await Authentication.GetAuthenticationStateAsync();
+    return state.User.Identity?.Name ?? "neznan";
+  }
+}

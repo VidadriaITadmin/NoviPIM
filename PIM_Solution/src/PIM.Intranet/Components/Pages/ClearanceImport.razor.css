@@ -1,0 +1,7 @@
+.clearance-steps { display: grid; gap: .45rem; margin: 0; padding-left: 1.2rem; }
+.clearance-toolbar { margin-bottom: .5rem; padding: 0; }
+.clearance-toolbar h2 { margin: 0 auto 0 0; }
+.clearance-toolbar input[type="search"] { max-width: 320px; }
+.clearance-number { max-width: 6rem; text-align: right; }
+.clearance-ended td { color: var(--pim-text-muted); }
+.clearance-table td { vertical-align: middle; }

@@ -1,0 +1,10 @@
+/* 274: S-popust na kartici izdelka. */
+.data-card { padding: 1rem 1.1rem; }
+.packaging-grid { grid-template-columns: repeat(4, minmax(150px, 1fr)); margin: .5rem 0 .75rem; }
+.packaging-grid .form-field strong { display: block; font-weight: 600; padding-top: .45rem; }
+.packaging-subtitle { font-size: .92rem; margin: 1rem 0 .5rem; }
+.section-gap { margin-top: .9rem; }
+
+@media (max-width: 760px) {
+  .packaging-grid { grid-template-columns: 1fr; }
+}

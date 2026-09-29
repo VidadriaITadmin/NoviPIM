@@ -1,0 +1,15 @@
+/* Izoliran slog strani /izvozi/mnozicno. */
+.bulk-grid { grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; }
+.bulk-items textarea { min-height: 6rem; }
+.field-hint { color: var(--pim-text-muted); font-size: .72rem; font-weight: 500; }
+.field-error { color: var(--pim-bad-strong); font-size: .74rem; font-weight: 600; }
+.hint { color: var(--pim-text-muted); font-size: .8rem; line-height: 1.5; margin: .75rem 0 0; }
+.preview-summary { margin-top: .75rem; }
+.confirm-bar { align-items: center; background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; justify-content: space-between; padding: .8rem 1rem; }
+.confirm-bar p { color: var(--pim-text-strong); font-size: .86rem; line-height: 1.5; margin: 0; max-width: 52rem; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.danger-button { background: var(--pim-bad-text); border: 1px solid var(--pim-bad-text); border-radius: var(--pim-radius-sm); color: var(--pim-surface); cursor: pointer; font: inherit; font-size: .8125rem; font-weight: 600; min-height: var(--pim-button-height); padding: .4rem .875rem; }
+.danger-button:disabled { cursor: default; opacity: .5; }
+.danger-action { color: var(--pim-bad-text); }
+.small-action:focus-visible, .danger-button:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+@media (max-width: 1000px) { .bulk-grid { grid-template-columns: 1fr; } }

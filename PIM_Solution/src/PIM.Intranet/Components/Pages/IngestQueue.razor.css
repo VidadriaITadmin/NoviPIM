@@ -1,0 +1,7 @@
+/* Prenova 2026-09-26: filtri in hitri izbori nad skupinami, posamezne strani pod njimi. */
+.list-head { border-bottom: 1px solid var(--pim-border); padding: 0 .85rem; }
+.row-link { cursor: pointer; }
+tr.is-active td { background: var(--pim-primary-soft); }
+.section-title .count { color: var(--pim-text-muted); font-size: .8rem; font-weight: 600; margin-left: .35rem; }
+.quiet-link { font-size: .75rem; font-weight: 500 !important; }
+.numeric { font-variant-numeric: tabular-nums; }

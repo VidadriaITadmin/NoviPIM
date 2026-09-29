@@ -1,0 +1,44 @@
+/* Izoliran slog strani /saop/zgodovina. Vzorci .page-help, .filter-chip, .selection-bar in
+   .confirm-bar so enaki kot na Čakalni vrsti; dokler niso v app.css, jih stran nosi sama. */
+.page-help { color: var(--pim-text-soft); font-size: .82rem; margin: -.5rem 0 1rem; }
+.page-help summary { color: var(--pim-accent); cursor: pointer; font-weight: 600; width: max-content; }
+.page-help p { line-height: 1.55; margin: .5rem 0 0; max-width: 60rem; }
+
+.active-filters { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin: -.5rem 0 1rem; }
+.filter-chip { align-items: center; background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); border-radius: 999px; color: var(--pim-text-strong); display: inline-flex; font-size: .78rem; gap: .4rem; padding: .25rem .65rem; text-decoration: none; }
+.filter-chip:hover { background: var(--pim-surface-hover); }
+.filter-chip.clear-all { background: var(--pim-surface); border-color: var(--pim-border-strong); border-style: dashed; color: var(--pim-text-soft); }
+.chip-remove { display: inline-block; height: .55rem; position: relative; width: .55rem; }
+.chip-remove::before, .chip-remove::after { background: currentColor; content: ""; height: 1.5px; left: 0; position: absolute; top: 50%; width: 100%; }
+.chip-remove::before { transform: rotate(45deg); }
+.chip-remove::after { transform: rotate(-45deg); }
+
+.selection-bar { align-items: center; background: var(--pim-primary-soft); border: 1px solid var(--pim-accent-ring); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 1rem; padding: .6rem .9rem; position: sticky; top: .5rem; z-index: 5; }
+.selection-count { color: var(--pim-text-strong); font-size: .85rem; font-weight: 650; margin-right: .5rem; }
+.selection-bar .fix-value { min-width: 12rem; }
+.field-hint { color: var(--pim-text-muted); font-size: .76rem; }
+.select-all-row { border-bottom: 1px solid var(--pim-border); padding: .5rem .85rem; }
+
+.confirm-bar { align-items: center; background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-sm); display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; justify-content: space-between; margin: 0 0 1rem; padding: .8rem 1rem; }
+.confirm-bar p { color: var(--pim-text-strong); font-size: .86rem; line-height: 1.5; margin: 0; max-width: 52rem; }
+.confirm-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.link-button { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover:not(:disabled) { text-decoration: underline; }
+.link-button:disabled { color: var(--pim-text-muted); cursor: default; }
+
+.select-col { width: 2.2rem; }
+.history-table tr.is-selected td { background: var(--pim-primary-soft); }
+.history-table td { font-size: .84rem; }
+.error-advice { color: var(--pim-bad-strong); font-size: .76rem; line-height: 1.4; margin-top: .3rem; max-width: 18rem; }
+
+.search-input:focus-visible,
+.filter-select:focus-visible,
+.small-action:focus-visible,
+.link-button:focus-visible,
+.filter-chip:focus-visible,
+.page-help summary:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .data-table { min-width: 960px; }
+  .selection-bar { position: static; }
+}

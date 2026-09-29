@@ -41,11 +41,41 @@ public sealed record WebPublicationPolicy(
   int OrganizationId, bool AutoWithdrawEnabled, int WithdrawalRowDays, DateTime? UpdatedUtc, string? UpdatedBy,
   long OpenWithdrawalCount, long PublishedCount, long WithdrawalRowCount, DateTime? LastExportedUtc);
 
+/// <summary>Koliko artiklov (kljukic) iz določenega razloga — za vrstice s števili nad seznamom (277).</summary>
+public sealed record WebReasonCount(string ReasonCode, string? SiteLabel, string? WebShopCode, int ProductCount);
+
+/// <summary>
+/// Artikel, ki je bil na spletu in ga je katalog.csv umaknil (odjavna vrstica, <c>out.WebPublication.WithdrawnUtc</c>),
+/// po spletišču, z razlogom, kakršen je zdaj (277, <c>intranet.GetWebWithdrawnItems</c>).
+/// </summary>
+/// <param name="CanRestore">Kljukica je odstranjena in artikel obstaja — vrniti jo je mogoče v enem koraku.</param>
+public sealed record WebWithdrawnItem(
+  string ItemId, long? ProductId, string ProductName, string SiteLabel, string? WebShopCode, string WebSites,
+  DateTime? WithdrawnUtc, string ReasonCode, string? InvalidProfiles, string? MissingFields, string? ChangedBy,
+  DateTime? ChangedUtc, bool CanRestore)
+{
+  public string ReasonText => SafeguardText.Reason(ReasonCode, SiteLabel, MissingFields, ChangedBy, ChangedUtc);
+}
+
+/// <summary>Kljukica, s katero artikel ta hip ne gre na spletišče, in zakaj ne (277, <c>intranet.GetWebShopBlocked</c>).</summary>
+public sealed record WebBlockedItem(
+  long ProductId, string ItemId, string ProductName, string WebShopCode, string SiteLabel, string ReasonCode,
+  string? InvalidProfiles, string? MissingFields, string? ChangedBy, DateTime? ChangedUtc)
+{
+  public string ReasonText => SafeguardText.Reason(ReasonCode, SiteLabel, MissingFields, null, null);
+}
+
+public sealed record WebReasonPage<T>(IReadOnlyList<WebReasonCount> Counts, IReadOnlyList<T> Rows);
+
+/// <param name="Restored">Koliko kljukic je spet veljavnih.</param>
+/// <param name="Rejected">Kljukice, ki jih artikel ni dobil nazaj, ker na spletišče ne sme — z razlogom.</param>
+public sealed record WebRestoreOutcome(int Restored, IReadOnlyList<string> Rejected);
+
 /// <summary>Besedila za umik — ista na kartici, v seznamu umikov in v sporočilu po shranjevanju.</summary>
 public static class WebWithdrawalText
 {
   /// <summary>Polja, ki jih splošni seznam imen (<see cref="ProductFieldLabels"/>) ne pozna v spletni obliki.</summary>
-  static string FieldLabel(string code) => code switch
+  public static string FieldLabel(string code) => code switch
   {
     "ProductMedia.Url" => "slika za splet",
     "ProductCategory.CategoryPath" => "kategorija",
@@ -108,10 +138,94 @@ public static class WebWithdrawalText
 /// PIM kljukico odstrani, razlog zapiše in skrbnikom odpre opozorilo v zvoncu. Umik teče samo pri podjetju,
 /// ki ga je skrbnik vklopil (<see cref="SetPolicyAsync"/>); dotlej je na voljo predogled.
 /// </summary>
-public sealed class WebWithdrawalService(IConfiguration configuration, PimWriteGuard guard)
+public sealed class WebWithdrawalService(IConfiguration configuration, PimWriteGuard guard, ProductEditService productEdit)
 {
   string ConnectionString => ConnectionStringResolver.Resolve(configuration)
     ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
+
+  /// <summary>
+  /// 277: artikli, ki jih je katalog.csv v zadnjih <paramref name="days"/> dneh umaknil s spleta, po razlogu —
+  /// ne samo samodejni umiki (251), ampak vsak: odkljukan, brez kategorije, neveljaven, neaktiven …
+  /// </summary>
+  public async Task<WebReasonPage<WebWithdrawnItem>> GetWithdrawnItemsAsync(
+    int organizationId, int days, string? reasonCode, string? search, int take = 500, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetWebWithdrawnItems", connection)
+      { CommandType = CommandType.StoredProcedure, CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@Days", SqlDbType.Int).Value = days;
+    command.Parameters.Add("@ReasonCode", SqlDbType.NVarChar, 40).Value = string.IsNullOrWhiteSpace(reasonCode) ? DBNull.Value : reasonCode;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim();
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var counts = new List<WebReasonCount>();
+    while (await reader.ReadAsync(cancellationToken))
+      counts.Add(new(PimDb.TextOrEmpty(reader, "ReasonCode"), null, null, PimDb.Int32(reader, "ProductCount")));
+    var rows = new List<WebWithdrawnItem>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        rows.Add(new(
+          PimDb.TextOrEmpty(reader, "ItemID"), PimDb.NullableInt64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ProductName"),
+          PimDb.TextOrEmpty(reader, "SiteLabel"), PimDb.Text(reader, "WebShopCode"), PimDb.TextOrEmpty(reader, "WebSites"),
+          PimDb.NullableDateTime(reader, "WithdrawnUtc"), PimDb.TextOrEmpty(reader, "ReasonCode"), PimDb.Text(reader, "InvalidProfiles"),
+          PimDb.Text(reader, "MissingFields"), PimDb.Text(reader, "ChangedBy"), PimDb.NullableDateTime(reader, "ChangedUtc"),
+          PimDb.Bool(reader, "CanRestore")));
+    return new(counts, rows);
+  }
+
+  /// <summary>277: kljukice, s katerimi artikel ta hip NE gre na spletišče — »zakaj kljukica ne deluje«.</summary>
+  public async Task<WebReasonPage<WebBlockedItem>> GetBlockedAsync(
+    int organizationId, string? webShopCode, string? reasonCode, string? search, int take = 500, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("intranet.GetWebShopBlocked", connection)
+      { CommandType = CommandType.StoredProcedure, CommandTimeout = 120 };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@WebShopCode", SqlDbType.NVarChar, 100).Value = string.IsNullOrWhiteSpace(webShopCode) ? DBNull.Value : webShopCode;
+    command.Parameters.Add("@ReasonCode", SqlDbType.NVarChar, 40).Value = string.IsNullOrWhiteSpace(reasonCode) ? DBNull.Value : reasonCode;
+    command.Parameters.Add("@Search", SqlDbType.NVarChar, 200).Value = string.IsNullOrWhiteSpace(search) ? DBNull.Value : search.Trim();
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var counts = new List<WebReasonCount>();
+    while (await reader.ReadAsync(cancellationToken))
+      counts.Add(new(PimDb.TextOrEmpty(reader, "ReasonCode"), PimDb.Text(reader, "SiteLabel"), PimDb.Text(reader, "WebShopCode"),
+        PimDb.Int32(reader, "ProductCount")));
+    var rows = new List<WebBlockedItem>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        rows.Add(new(
+          PimDb.Int64(reader, "ProductId"), PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "ProductName"),
+          PimDb.TextOrEmpty(reader, "WebShopCode"), PimDb.TextOrEmpty(reader, "SiteLabel"), PimDb.TextOrEmpty(reader, "ReasonCode"),
+          PimDb.Text(reader, "InvalidProfiles"), PimDb.Text(reader, "MissingFields"), PimDb.Text(reader, "ChangedBy"),
+          PimDb.NullableDateTime(reader, "ChangedUtc")));
+    return new(counts, rows);
+  }
+
+  /// <summary>
+  /// 277: hitra obnova — odkljukanim artiklom vrne kljukice spletišč v enem koraku. Gre po isti poti kot kartica
+  /// (<c>pim.SaveProductWebShops</c>): zgodovina sprememb, validacija, in kljukica obvelja samo, če artikel na
+  /// spletišče sme — sicer pove zakaj. Umaknjen artikel gre na splet ob naslednjem izvozu katalog.csv.
+  /// </summary>
+  public async Task<WebRestoreOutcome> RestoreAsync(
+    int organizationId, IReadOnlyCollection<(long ProductId, string ItemId, string WebShopCode)> items, string actor,
+    CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var restored = 0;
+    var rejected = new List<string>();
+    foreach (var product in items.GroupBy(item => (item.ProductId, item.ItemId)))
+    {
+      var shops = product.Select(item => item.WebShopCode).Distinct(StringComparer.Ordinal).ToList();
+      var outcome = await productEdit.SaveWebShopsAsync(organizationId, product.Key.ProductId,
+        shops.Select(shop => (shop, true)), actor, "Vrnjena kljukica (Umaknjeni s spleta)", cancellationToken);
+      restored += shops.Count(shop => outcome.Rejected.All(rejection => rejection.WebShopCode != shop));
+      rejected.AddRange(outcome.Rejected.Select(rejection => $"{product.Key.ItemId} ({rejection.ShopLabel}): {rejection.ReasonText}"));
+    }
+    return new(restored, rejected);
+  }
 
   /// <summary>
   /// Umik po spremembi, ki jo je naredil uporabnik (kartica, kategorije, uvoz, »Preveri zdaj«). Vrne umaknjene

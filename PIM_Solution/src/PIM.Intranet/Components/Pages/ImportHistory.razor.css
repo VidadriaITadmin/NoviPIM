@@ -1,0 +1,2 @@
+.history-filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+.muted { color: var(--pim-text-muted); font-size: .8125rem; }

@@ -5,6 +5,7 @@
 @inject PriceWorkbookService Workbook
 @inject IntranetDataService Data
 @inject HeavyWorkGate Gate
+@inject ImportHistoryService History
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Uvoz cen</PageTitle>
@@ -14,6 +15,8 @@
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+<ImportUndoBanner Run="UndoOf" Skipped="UndoSkipped" SaopNote="prejšnje cene gredo v vrsto za SAOP in čakajo odobritev" />
 
 <AuthorizeView Policy="@PimPolicies.SaopWrite">
   <NotAuthorized>
@@ -109,6 +112,10 @@
 {
   <section class="ui-card panel section-gap" aria-label="Izid uvoza">
     <h2>3. Izid</h2>
+    @if (HistoryId is { } historyId)
+    {
+      <p class="hint">Uvoz je zapisan v zgodovino kot <a href="@($"uvozi/{historyId}")">uvoz #@historyId</a> — tam ga lahko povrneš.</p>
+    }
     <p role="status">
       V vrsto za SAOP: <strong>@Outcome.Queued.ToString("N0")</strong> cen
       @if (Outcome.Duplicates > 0) { <text>· že čakalo v vrsti: @Outcome.Duplicates.ToString("N0") </text> }
@@ -142,10 +149,34 @@
 
   int? OrganizationId => int.TryParse(OrganizationText, out var parsed) ? parsed : null;
 
+  /// <summary>280: povratek uvoza (?povrni=N) — predogled s prejšnjimi cenami.</summary>
+  [SupplyParameterFromQuery(Name = "povrni")] public long? UndoRunId { get; set; }
+  ImportRunRow? UndoOf;
+  IReadOnlyList<string> UndoSkipped = [];
+  long? HistoryId;
+
   protected override async Task OnInitializedAsync()
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+    if (UndoRunId is { } undoRunId) await PrepareUndoAsync(undoRunId);
+  }
+
+  async Task PrepareUndoAsync(long importRunId)
+  {
+    try
+    {
+      if (await History.GetRunAsync(importRunId) is not { } detail || detail.Run.Kind != ImportKinds.Prices)
+      { Error = $"Uvoza cen #{importRunId} ni v zgodovini."; return; }
+      if (detail.Run.IsUndone) { Error = $"Uvoz #{importRunId} je že povrnjen (povratek #{detail.Run.UndoneByImportRunId})."; return; }
+      var plan = await Workbook.PlanUndoAsync(detail.Changes);
+      UndoOf = detail.Run;
+      UndoSkipped = plan.Problems;
+      Preview = plan.Rows.Count > 0 ? plan with { Problems = [] } : null;
+      FileName = $"povratek uvoza #{importRunId}";
+      Message = Preview is null ? "Ničesar ni za povrniti v SAOP — glej spodaj, zakaj (morda serija še čaka v vrsti: prekliči jo v zgodovini uvoza)." : null;
+    }
+    catch (Exception failure) { Error = "Povratka ni bilo mogoče pripraviti: " + failure.Message; }
   }
 
   static string Other(PriceImportRow row)
@@ -174,7 +205,7 @@
 
   async Task OnFileAsync(InputFileChangeEventArgs args)
   {
-    Error = null; Message = null; Preview = null; Outcome = null;
+    Error = null; Message = null; Preview = null; Outcome = null; UndoOf = null; UndoSkipped = []; HistoryId = null;
     try
     {
       var file = args.File;
@@ -200,6 +231,11 @@
       var actor = await ActorAsync();
       using (await EnterImportLaneAsync())
         Outcome = await Workbook.ApplyAsync(Preview, actor, FileName);
+      // 280: zgodovina uvoza (prejšnje in nove cene) — iz nje se uvoz lahko povrne.
+      HistoryId = await History.RecordAsync(ImportKinds.Prices,
+        UndoOf is { } undone ? $"Povratek uvoza #{undone.ImportRunId}" : FileName ?? "Uvoz cen", null, actor,
+        Preview.Rows.Count, Outcome.Queued, Outcome.Batches.Where(batch => batch.BatchId is not null).Select(batch => batch.BatchId!.Value),
+        Outcome.Rejected.Select(row => $"{row.PriceList} {row.ItemId}: {row.Reason}"), UndoOf?.ImportRunId, ImportHistoryService.FromPrices(Preview));
       Message = $"{Outcome.Queued:N0} cen čaka odobritev na zavihku »V SAOP«.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvrsti datoteke dvakrat.
       Preview = null;

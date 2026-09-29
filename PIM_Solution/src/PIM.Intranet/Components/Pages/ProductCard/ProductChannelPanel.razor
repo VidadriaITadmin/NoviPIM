@@ -12,10 +12,15 @@
       <h2>@Title</h2>
       <PimChip Text="@StatusText" Tone="@StatusTone" />
     </div>
+    @* Uporabnik 2026-09-28: števci so bili dvoumni. Zdaj ime pove posledico: napaka ustavi objavo,
+       opozorilo ne; »preverjeno« je čas zadnje validacije, ne shranjevanja. *@
     <dl class="panel-meta">
-      <div><dt>Blokirajoče napake</dt><dd class="@(BlockingCount > 0 ? "bad" : null)">@BlockingCount.ToString("N0")</dd></div>
-      <div><dt>Opozorila</dt><dd>@WarningCount.ToString("N0")</dd></div>
-      <div><dt>Validirano</dt><dd>@PimFormat.Ago(LastValidatedUtc)</dd></div>
+      @* Števca štejeta polja NA TEM ZAVIHKU (2026-09-28): prej sta štela težave profila, polje pa je
+         lahko stalo na drugem zavihku — glava je rekla »0 opozoril«, povzetek pod njo »2 prazni polji«. *@
+      <div><dt>Ustavi objavo</dt><dd class="@(MissingRequired.Count > 0 ? "bad" : null)" title="Prazna polja na tem zavihku, zaradi katerih objava ne gre skozi">@MissingRequired.Count.ToString("N0")</dd></div>
+      <div><dt>Priporočeno</dt><dd class="@(MissingRecommended.Count > 0 ? "warn" : null)" title="Prazna polja na tem zavihku, ki objave ne ustavijo">@MissingRecommended.Count.ToString("N0")</dd></div>
+      <div><dt>Čaka SAOP</dt><dd class="@(PendingSaop.Count > 0 ? "info" : null)" title="Spremembe, ki v PIM že veljajo in čakajo odobritev ali potrditev SAOP">@PendingSaop.Count.ToString("N0")</dd></div>
+      <div><dt>Preverjeno</dt><dd title="Čas zadnje validacije tega artikla">@PimFormat.Ago(LastValidatedUtc)</dd></div>
     </dl>
     <div class="panel-tools">
       @if (Toolbar is not null) { @Toolbar }
@@ -30,32 +35,91 @@
   </header>
 
   <div class="panel-body">
+    @* Uporabnik 2026-09-28: »obvestila so dvoumna, uporabniku ni s prve jasno, koliko je česa, kje in
+       kaj manjka«. Zato najprej en povzetek z imeni polj, potem legenda poti — oboje iz istih polj,
+       ki so spodaj, brez posebnega štetja. *@
+    <div class="panel-summary" role="status">
+      @if (MissingRequired.Count == 0 && MissingRecommended.Count == 0 && PendingSaop.Count == 0 && DraftCount == 0)
+      {
+        <p class="summary-line good"><span class="summary-mark" aria-hidden="true"></span>Vsa polja, ki jih zahteva validacija, so izpolnjena. Nič ne čaka na SAOP.</p>
+      }
+      @if (MissingRequired.Count > 0)
+      {
+        <p class="summary-line bad">
+          <span class="summary-mark" aria-hidden="true"></span>
+          <strong>@PimFormat.Count(MissingRequired.Count, "obvezno polje je prazno", "obvezni polji sta prazni", "obvezna polja so prazna", "obveznih polj je praznih")</strong>
+          <span>— ustavi objavo: @string.Join(", ", MissingRequired.Select(row => row.Label))</span>
+        </p>
+      }
+      @if (MissingRecommended.Count > 0)
+      {
+        <p class="summary-line warn">
+          <span class="summary-mark" aria-hidden="true"></span>
+          <strong>@PimFormat.Count(MissingRecommended.Count, "priporočeno polje je prazno", "priporočeni polji sta prazni", "priporočena polja so prazna", "priporočenih polj je praznih")</strong>
+          <span>— objave ne ustavi: @string.Join(", ", MissingRecommended.Select(row => row.Label))</span>
+        </p>
+      }
+      @if (PendingSaop.Count > 0)
+      {
+        <p class="summary-line info">
+          <span class="summary-mark" aria-hidden="true"></span>
+          <strong>@PimFormat.Count(PendingSaop.Count, "sprememba čaka SAOP", "spremembi čakata SAOP", "spremembe čakajo SAOP", "sprememb čaka SAOP")</strong>
+          <span>— v PIM že veljajo: @string.Join(", ", PendingSaop.Select(row => row.Label)). <a href="saop">Izhod v SAOP</a></span>
+        </p>
+      }
+      @if (DraftCount > 0)
+      {
+        <p class="summary-line draft">
+          <span class="summary-mark" aria-hidden="true"></span>
+          <strong>@PimFormat.Count(DraftCount, "neshranjena sprememba", "neshranjeni spremembi", "neshranjene spremembe", "neshranjenih sprememb")</strong>
+          <span>na tem zavihku — shrani z gumbom »Shrani spremembe« zgoraj.</span>
+        </p>
+      }
+    </div>
+
+    @if (!ReadOnly && Routes.Count > 0)
+    {
+      <dl class="route-legend" aria-label="Kam gre sprememba polja">
+        @foreach (var route in Routes)
+        {
+          <div><dt><span class="tag @RouteClass(route)">@RouteLabel(route)</span></dt><dd>@RouteExplain(route)</dd></div>
+        }
+      </dl>
+    }
+
     @foreach (var group in Fields.GroupBy(row => row.Hint ?? DefaultGroup))
     {
-      var missing = group.Count(row => row.Missing && row.Required);
+      var missing = group.Count(row => row.Missing && (row.Required || row.Recommended));
       <section class="field-group @(TwoColumnGroups?.Contains(group.Key, StringComparer.Ordinal) == true ? "two-columns" : null)">
         <h3 class="group-title">
           @group.Key
-          @if (missing > 0) { <span class="group-count">@missing brez vrednosti</span> }
+          @if (missing > 0) { <span class="group-count">@PimFormat.Count(missing, "prazno polje", "prazni polji", "prazna polja", "praznih polj")</span> }
         </h3>
         <div class="field-grid">
           @foreach (var row in group)
           {
             var controlId = ControlId(row);
-            <div class="field @(row.Format == "multiline" ? "wide" : null) @(row.Required && row.Missing ? "needs-value" : null)">
+            var recommendedOnly = row.Recommended && !row.Required;
+            var route = RouteOf(row);
+            var dirty = Drafts.ContainsKey(row.FieldKey);
+            @* 2026-09-29: @key po ključu polja in autocomplete="off" — brez njiju je vrednost ostala na mestu
+               v DOM, ko se je seznam polj spremenil (jeziki, spletno mesto), in brskalnik je ob vrnitvi na stran
+               obnovil vnose po vrstnem redu: angleški naziv se je prikazal pod »de«, slovenski pod »en«. *@
+            <div @key="row.FieldKey" class="field @(row.Format == "multiline" ? "wide" : null) @(row.Required && row.Missing ? "needs-value" : null) @(recommendedOnly && row.Missing ? "should-have-value" : null) @(dirty ? "is-dirty" : null) @(route == FieldRoute.Locked ? "is-locked" : null)">
               <label for="@controlId">
                 <span class="field-label">@row.Label</span>
-                @if (row.Required) { <span class="tag tag-required">obvezno</span> }
-                @if (row.Edit == ProductFieldEdit.Saop) { <span class="tag tag-saop">SAOP</span> }
+                @* Značka sledi resnosti v validacijskem profilu: napaka ustavi objavo (obvezno),
+                   opozorilo ne (priporočeno). Prej je bila vsaka težava »obvezno«. *@
+                @if (row.Required) { <span class="tag tag-required" title="Napaka v validaciji — ustavi objavo">obvezno</span> }
+                else if (recommendedOnly) { <span class="tag tag-recommended" title="Opozorilo v validaciji — objave ne ustavi">priporočeno</span> }
+                <span class="tag @RouteClass(route)" title="@RouteExplain(route)">@RouteLabel(route)</span>
               </label>
 
-              @if (row.Edit == ProductFieldEdit.None || ReadOnly)
+              @* Uporabnik 2026-09-28: »dej vse v oblačke«. Tudi zaklenjeno polje je okence (onemogočeno),
+                 da je kartica enotna; zakaj je zaklenjeno, pove opomba pod njim. *@
+              @if (row.Format == "bool")
               {
-                <output id="@controlId" class="field-value">@Display(row)</output>
-              }
-              else if (row.Format == "bool")
-              {
-                <select id="@controlId" class="field-input" disabled="@row.Pending"
+                <select id="@controlId" class="field-input" autocomplete="off" disabled="@(!Editable(row))" aria-describedby="@($"{controlId}-note")"
                         value="@Draft(row)" @onchange="args => Change(row, args)">
                   <option value="">— ni določeno —</option>
                   <option value="da">Da</option>
@@ -64,26 +128,36 @@
               }
               else if (row.Format == "multiline")
               {
-                <textarea id="@controlId" class="field-input" rows="4" disabled="@row.Pending"
+                <textarea id="@controlId" class="field-input" rows="4" autocomplete="off" disabled="@(!Editable(row))" aria-describedby="@($"{controlId}-note")"
                           value="@Draft(row)" @onchange="args => Change(row, args)"></textarea>
               }
               else
               {
-                <input id="@controlId" class="field-input" inputmode="@(row.Format == "decimal" ? "decimal" : null)" disabled="@row.Pending"
+                <input id="@controlId" class="field-input" autocomplete="off" inputmode="@(row.Format == "decimal" ? "decimal" : null)"
+                       disabled="@(!Editable(row))" aria-describedby="@($"{controlId}-note")"
                        value="@Draft(row)" @onchange="args => Change(row, args)"
                        @onkeyup="args => EnterSaves(args)" />
               }
 
-              <p class="field-note">
+              <p class="field-note" id="@($"{controlId}-note")">
                 @if (ShowFieldKeys) { <span class="code-value">@row.FieldKey</span> }
-                @if (row.Edit == ProductFieldEdit.None && !row.InReadModel) { <span>ni v bralnem modelu</span> }
-                @if (ReadOnly && row.Edit != ProductFieldEdit.None) { <span>tvoja vloga tega polja ne sme urejati</span> }
+                @if (dirty) { <span class="note-dirty">Spremenjeno, še ni shranjeno@(route == FieldRoute.Saop ? " — po shranjevanju velja v PIM, v SAOP gre po odobritvi" : "")</span> }
+                @* 2026-09-23: čakajoča sprememba polja ne zaklene več — nova vrednost nadomesti staro
+                   sporočilo (out.EnqueueMessage, Superseded); tu se samo pove, kje je. *@
+                else if (row.Pending) { <span class="note-pending">@PendingText(row.PendingStatus)</span> }
+                @if (row.Required && row.Missing && !dirty) { <span class="note-bad">Prazno — ustavi objavo</span> }
+                else if (recommendedOnly && row.Missing && !dirty) { <span>Prazno — priporočeno, objave ne ustavi</span> }
+                @if (route == FieldRoute.Locked && row.LockReason is not null) { <span>@row.LockReason</span> }
+                @if (route == FieldRoute.PimOnlyFromSaop) { <span>SAOP tega polja ne sprejme: velja v PIM, ob naslednjem zajemu artikla ga SAOP lahko prepiše.</span> }
+                @if (ReadOnly && route != FieldRoute.Locked) { <span>Tvoja vloga tega polja ne sme urejati.</span> }
               </p>
             </div>
           }
         </div>
       </section>
     }
+
+    @if (ChildContent is not null) { @ChildContent }
 
     <section class="field-group">
       <h3 class="group-title">Odprte težave kanala</h3>
@@ -205,8 +279,63 @@
     return field.Format == "bool" ? field.Value?.ToLowerInvariant() : field.Value;
   }
 
-  static string Display(ProductChannelField field) =>
-    !field.InReadModel ? "ni v bralnem modelu" : string.IsNullOrWhiteSpace(field.Value) ? "—" : field.Value;
+  /// <summary>Dodatna vsebina pod polji (npr. urejanje kategorij, dodajanje atributa), pred težavami kanala.</summary>
+  [Parameter] public RenderFragment? ChildContent { get; set; }
+
+  /// <summary>
+  /// Kam gre sprememba — kartica to izbere sama (uporabnik 2026-09-28: »program mora sam zaznati, ali gre
+  /// za SAOP polje«). Pot je lastnost polja, ne izbira uporabnika; tu se samo poimenuje.
+  /// </summary>
+  enum FieldRoute { Saop, Pim, PimOnlyFromSaop, Locked }
+
+  static FieldRoute RouteOf(ProductChannelField field) => field.Edit switch
+  {
+    ProductFieldEdit.Saop => FieldRoute.Saop,
+    ProductFieldEdit.None => FieldRoute.Locked,
+    _ => field.SaopOrigin ? FieldRoute.PimOnlyFromSaop : FieldRoute.Pim,
+  };
+
+  static string RouteLabel(FieldRoute route) => route switch
+  {
+    FieldRoute.Saop => "PIM + SAOP",
+    FieldRoute.Pim => "PIM",
+    FieldRoute.PimOnlyFromSaop => "samo PIM",
+    _ => "zaklenjeno",
+  };
+
+  static string RouteClass(FieldRoute route) => route switch
+  {
+    FieldRoute.Saop => "tag-saop",
+    FieldRoute.Pim => "tag-pim",
+    FieldRoute.PimOnlyFromSaop => "tag-local",
+    _ => "tag-locked",
+  };
+
+  static string RouteExplain(FieldRoute route) => route switch
+  {
+    FieldRoute.Saop => "velja v PIM takoj, v SAOP gre po odobritvi na strani Izhod v SAOP",
+    FieldRoute.Pim => "podatek PIM-a, velja takoj",
+    FieldRoute.PimOnlyFromSaop => "pride iz SAOP, SAOP pa ga od PIM ne sprejme — velja v PIM, zajem ga lahko prepiše",
+    _ => "ni mogoče urediti tu; opomba pod poljem pove zakaj",
+  };
+
+  bool Editable(ProductChannelField field) => !ReadOnly && field.Edit != ProductFieldEdit.None;
+
+  static string PendingText(string? status) => status switch
+  {
+    "PendingApproval" => "V PIM velja; čaka odobritev za SAOP",
+    "Pending" or "Retry" => "V PIM velja; odobreno, čaka pošiljanje v SAOP",
+    "Sending" or "Sent" => "V PIM velja; poslano v SAOP, čaka potrditev",
+    _ => "V PIM velja; na poti v SAOP",
+  };
+
+  IReadOnlyList<ProductChannelField> MissingRequired => Fields.Where(row => row.Required && row.Missing && !Drafts.ContainsKey(row.FieldKey)).ToList();
+  IReadOnlyList<ProductChannelField> MissingRecommended => Fields.Where(row => row.Recommended && !row.Required && row.Missing && !Drafts.ContainsKey(row.FieldKey)).ToList();
+  IReadOnlyList<ProductChannelField> PendingSaop => Fields.Where(row => row.Pending).ToList();
+  int DraftCount => Fields.Count(row => Drafts.ContainsKey(row.FieldKey));
+
+  /// <summary>Legenda samo s potmi, ki jih ta zavihek res ima — da ne razlaga česa, česar ni.</summary>
+  IReadOnlyList<FieldRoute> Routes => Fields.Select(RouteOf).Distinct().OrderBy(route => route).ToList();
 
   Task Change(ProductChannelField field, ChangeEventArgs args) =>
     FieldChanged.InvokeAsync((field, args.Value?.ToString()));
@@ -219,6 +348,6 @@
   static bool IsBlocking(ProductCardIssue row) => row.Severity == "ERROR" && (row.BlocksErp || row.BlocksWeb);
 
   static string IssueEffect(ProductCardIssue row) =>
-    IsBlocking(row) ? "blokira" : row.Severity == "ERROR" ? "manjka (ne blokira)" : "opozorilo";
+    IsBlocking(row) ? "ustavi objavo" : row.Severity == "ERROR" ? "manjka (objave ne ustavi)" : "opozorilo";
 }
 

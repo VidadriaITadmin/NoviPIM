@@ -1,0 +1,26 @@
+/* Opomba o lastniku podatkov na vrhu zavihka. SAOP = opozorilni ton (sprememba gre v odobritev),
+   PIM = informativni ton (velja takoj). Barva ni edini nosilec: prva beseda pove lastnika. */
+.source-note {
+  align-items: flex-start;
+  border: 1px solid;
+  border-radius: var(--pim-radius);
+  display: flex;
+  font-size: .82rem;
+  gap: .7rem;
+  line-height: 1.45;
+  padding: .7rem 1rem;
+}
+.source-note p { margin: 0; }
+.source-note strong { margin-right: .25rem; }
+.source-note a { color: inherit; font-weight: 700; margin-left: .25rem; text-decoration: underline; white-space: nowrap; }
+.source-note a:focus-visible { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+.source-note.saop { background: var(--pim-warn-bg); border-color: var(--pim-warn-border); color: var(--pim-warn-text); }
+.source-note.pim { background: var(--pim-info-bg); border-color: var(--pim-info-border); color: var(--pim-info-text); }
+
+/* Znak lastnika: pri SAOP ključavnica (lok + telo), pri PIM krog s črto — oboje v CSS. */
+.source-mark { flex: 0 0 auto; height: 1rem; margin-top: .15rem; position: relative; width: 1rem; }
+.saop .source-mark::before { border: 2px solid currentColor; border-bottom: 0; border-radius: .35rem .35rem 0 0; content: ""; height: .45rem; left: .2rem; position: absolute; top: 0; width: .6rem; box-sizing: border-box; }
+.saop .source-mark::after { background: currentColor; border-radius: 2px; bottom: 0; content: ""; height: .55rem; left: .05rem; position: absolute; width: .9rem; }
+.pim .source-mark::before { border: 2px solid currentColor; border-radius: 50%; box-sizing: border-box; content: ""; inset: 0; position: absolute; }
+.pim .source-mark::after { background: currentColor; content: ""; height: .4rem; left: calc(50% - 1px); position: absolute; top: .38rem; width: 2px; }

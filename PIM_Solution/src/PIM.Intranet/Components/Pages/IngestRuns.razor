@@ -1,3 +1,4 @@
+@page "/sistem/teki"
 @page "/zajem/teki"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -6,7 +7,7 @@
 
 <PageTitle>Teki vhodnih podatkov</PageTitle>
 <PimPage Title="Teki vhodnih podatkov" Subtitle="Skupna zgodovina kataloških, XML, delovnih in zalogovnih izvedb. Vrstica vodi v dejanske korake, strani ter napake teka." Crumbs="Crumbs" />
-<IngestTabs Active="runs" />
+<PimTabs Active="teki" Tabs="NadzorTabs.Tabs" Label="Pogledi nadzora" />
 
 <section class="ui-card toolbar" role="search" aria-labelledby="inbound-runs-filter-title">
   <h2 id="inbound-runs-filter-title" class="visually-hidden">Filtriranje tekov vhodnih podatkov</h2>
@@ -60,7 +61,7 @@
         @foreach (var row in Rows)
         {
           <tr>
-            <td><a href="zajem/teki/@row.RunId">@row.StartedUtc.ToPimLocal().ToString("g")</a></td>
+            <td><a href="sistem/teki/@row.RunId">@row.StartedUtc.ToPimLocal().ToString("g")</a></td>
             <td>@row.OrganizationName</td>
             <td><span class="code-value">@row.SourceCode</span></td>
             <td>@row.Pipeline</td>
@@ -94,7 +95,7 @@
   const int Take = 50;
   long Total;
 
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Vhodni podatki", "zajem"), new("Teki")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nadzor sistema", "sistem"), new("Teki")];
   static readonly IReadOnlyList<PimColumn> Columns =
   [
     new("Začetek"), new("Podjetje"), new("Vir"), new("Postopek"), new("Stanje"),

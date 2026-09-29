@@ -73,7 +73,7 @@ var expectedSections = new Dictionary<string, string>
   ["stock"] = "Zaloga",
   ["quality-history"] = "Kakovost in zgodovina",
 };
-Assert(Regex.Matches(card, "new\\(\"(overview|core|commercial|web|media|stock|quality-history)\", ").Count == 7,
+Assert(Regex.Matches(card, "(new|IssueSection)\\(\"(overview|core|commercial|web|media|stock|quality-history)\", ").Count == 7,
   "Kartica ima sedem sklopov; komerciala in splet sta locena.");
 
 // Aktivnosti so enoten, stalno viden modul ob kartici. Vir ostane ProductCardView.History,
@@ -93,9 +93,12 @@ Assert(css.Contains(".activity-timeline", StringComparison.Ordinal)
 foreach (var retired in new[] { "media-stock", "panel-sales", "tab-sales" })
   Assert(!card.Contains(retired, StringComparison.Ordinal), "Odpisani skupni sklop se ne sme vrniti: " + retired + ".");
 foreach (var section in expectedSections)
-  Assert(Regex.IsMatch(card, "new\\(\"" + section.Key + "\", \"" + Regex.Escape(section.Value)), "Manjka sklop " + section.Value + ".");
-Assert(card.Contains("Tone: \"bad\"", StringComparison.Ordinal) && card.Contains("Tone: \"warn\"", StringComparison.Ordinal),
-  "Stevci v navigaciji smejo poudariti samo blokade in opozorila.");
+  Assert(Regex.IsMatch(card, "(new|IssueSection)\\(\"" + section.Key + "\", \"" + Regex.Escape(section.Value)), "Manjka sklop " + section.Value + ".");
+// 2026-09-28: barvna značka samo za napake (bad) in opozorila (warn); število vsebine (slike, zaloga) je sivo
+// in ima opis z besedami — uporabnik je »1« pri Zalogi bral kot opozorilo.
+Assert(card.Contains("static CardSection IssueSection(", StringComparison.Ordinal)
+    && card.Contains("entry.Tone ?? \"count\"", StringComparison.Ordinal) && card.Contains("title=\"@entry.Title\"", StringComparison.Ordinal),
+  "Stevci v navigaciji smejo barvno poudariti samo blokade in opozorila, vsak pa mora z besedo povedati, kaj steje.");
 
 // Zavihki morajo biti oznaka, ne sestavljeni v RenderTreeBuilder: izoliran slog Blazorja doda
 // oznako obsega samo elementom iz datoteke .razor, zato so bili zavihki iz kode brez sloga in
@@ -117,9 +120,22 @@ Assert(!card.Contains("Caption=\"Kanonična vrednost, lastnik in čakajoča spre
   "Pregled ne sme biti velika tehnicna tabela.");
 Assert(card.Contains("napak blokira ERP", StringComparison.Ordinal) && card.Contains("Odpri kakovost", StringComparison.Ordinal),
   "Pregled mora jasno povedati blokado in naslednje dejanje.");
-foreach (var field in new[] { "Davčna stopnja", "Izloči iz rezervacije zaloge", "Knjigovodske šifre", "Kosov v paketu", "Nabavni podatki" })
-  Assert(card.Contains(field, StringComparison.Ordinal), "Manjkajoče polje mora ostati vidno: " + field + ".");
-Assert(channel.Contains("ni v bralnem modelu", StringComparison.Ordinal), "Kanalski gradnik mora pošteno označiti polja zunaj modela.");
+// 2026-09-28, uporabnik: »dej vse v oblačke in da se da vse urejat, nič zaklepat; program mora sam zaznati,
+// ali gre za SAOP polje«. Davčna stopnja je iskala napačen ključ (Product.VatRate namesto registrskega
+// Product.VatRateId); prazni okvirji brez podatka v bazi so odstranjeni.
+foreach (var field in new[] { "Davčna stopnja", "Izloči iz rezervacije zaloge" })
+  Assert(card.Contains(field, StringComparison.Ordinal), "Polje mora ostati vidno: " + field + ".");
+foreach (var retired in new[] { "\"ProductStockAccounting\"", "\"Product.PiecesInPackage\"", "\"ProductCommercial.Purchase\"", "readOnly: true" })
+  Assert(!card.Contains(retired, StringComparison.Ordinal), "Prazen ali zaklenjen okvir se ne sme vrniti: " + retired + ".");
+Assert(!channel.Contains("ni v bralnem modelu", StringComparison.Ordinal) && !channel.Contains("<output id=\"@controlId\"", StringComparison.Ordinal),
+  "Vsako polje je vnosno okence; zaklenjeno je onemogočeno okence z razlogom, ne golo besedilo.");
+Assert(channel.Contains("row.LockReason", StringComparison.Ordinal) && card.Contains("static string LockReasonFor(", StringComparison.Ordinal),
+  "Zaklenjeno polje mora povedati, zakaj je zaklenjeno in kje se ureja.");
+foreach (var route in new[] { "\"PIM + SAOP\"", "\"PIM\"", "\"samo PIM\"", "\"zaklenjeno\"" })
+  Assert(channel.Contains(route, StringComparison.Ordinal), "Ob polju mora pisati, kam gre sprememba: " + route + ".");
+Assert(channel.Contains("panel-summary", StringComparison.Ordinal) && channel.Contains("MissingRequired", StringComparison.Ordinal)
+    && channel.Contains("PendingSaop", StringComparison.Ordinal),
+  "Zavihek mora z imeni polj povedati, kaj manjka, kaj čaka SAOP in kaj ni shranjeno.");
 
 /* --- Razdelitev na kanale je prevzeta iz PIM_test -------------------------------------
    Uporabnik 2026-09-02: »razporedi podatke tako kot so pri starem PIM_test intranetu.
@@ -146,13 +162,13 @@ var webBlock = BlockOf(card, "WebFields");
 foreach (var key in new[]
 {
   "Product.ItemID", "Product.EAN", "Product.UoM", "Product.AccountingGroup", "Product.DiscountGroup",
-  "Product.Supplier", "Product.Manufacturer", "Product.VatRate", "Planning.ExcludeQtyReservation",
+  "Product.Supplier", "Product.Manufacturer", "Product.VatRateId", "Planning.ExcludeQtyReservation",
   "ProductAttribute.Garancija", "SEARCH_NAME", "TITLE_ERP", "TITLE_ERP2",
   "ProductCommercial.NetWeight", "ProductCommercial.GrossWeight",
   "ProductCommercial.CustomsTariff", "ProductCommercial.CountryOfOrigin",
-  "ProductCommercial.Pak1", "ProductCommercial.Pak2", "Product.PiecesInPackage",
+  "ProductCommercial.Pak1", "ProductCommercial.Pak2",
   "ProductCommercial.PackageLength", "ProductCommercial.PackageWidth", "ProductCommercial.PackageHeight",
-  "ProductCommercial.DimensionUnit", "ProductCommercial.Volume", "ProductCommercial.Dimensions",
+  "ProductCommercial.DimensionUnit", "ProductCommercial.Volume",
 })
 {
   Assert(erpBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu ERP: " + key);
@@ -162,15 +178,17 @@ foreach (var key in new[]
 // Komerciala nosi uvrstitev artikla, aktivnost in nabavne pogoje (PIM_test: kartica
 // »Komerciala — klasifikacija in objava«). ABC klasifikacija in skupina artikla sta
 // komercialni razvrstitvi, ne sifranta ERP.
-foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.IsActive", "Product.WebPublish",
-                            "ProductCommercial.Purchase", "ProductStockAccounting" })
+foreach (var key in new[] { "Product.Department", "Product.ItemGroup", "Product.IsActive", "Product.WebPublish" })
 {
   Assert(comBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Komerciala: " + key);
   Assert(!erpBlock.Contains(key, StringComparison.Ordinal), "Polje ne sme biti tudi na ERP: " + key);
 }
 
-// Splet nosi objavo, spletna besedila, kategorije in atribute.
-foreach (var key in new[] { "WEB_TITLE", "ProductCategory.", "canon.WebSite" })
+// Splet nosi objavo, spletna besedila, kategorije in atribute. Od 2026-09-28 se kategorije urejajo na
+// kartici (ProductCategoryEditor pod polji zavihka Splet), atribut se da dodati (AddedAttributes).
+Assert(Regex.Matches(card, "<ProductCategoryEditor ").Count == 1 && card.Contains("Dodaj atribut", StringComparison.Ordinal),
+  "Na zavihku Splet mora biti urejanje kategorij in dodajanje atributa.");
+foreach (var key in new[] { "WEB_TITLE", "AddedAttributes" })
 {
   Assert(webBlock.Contains(key, StringComparison.Ordinal), "Polje mora biti na kanalu Splet: " + key);
   Assert(!erpBlock.Contains(key, StringComparison.Ordinal) && !comBlock.Contains(key, StringComparison.Ordinal),
@@ -235,8 +253,10 @@ Assert(card.Contains("52401 or 52402", StringComparison.Ordinal),
 Assert(channel.Contains("<label for=\"@controlId\">", StringComparison.Ordinal), "Vsako polje mora imeti povezano oznako.");
 foreach (var control in new[] { "<input id=\"@controlId\"", "<textarea id=\"@controlId\"", "<select id=\"@controlId\"" })
   Assert(channel.Contains(control, StringComparison.Ordinal), "Panel mora znati urejati polje s kontrolo " + control + ".");
-Assert(channel.Contains("disabled=\"@row.Pending\"", StringComparison.Ordinal),
-  "Polje, ki ze caka potrditev SAOP, se ne sme urejati naprej.");
+// 2026-09-23: čakajoča sprememba polja ne zaklene več (nova vrednost nadomesti staro sporočilo);
+// onemogočeno je samo polje brez poti za zapis ali za vlogo brez pravice.
+Assert(!channel.Contains("disabled=\"@row.Pending\"", StringComparison.Ordinal) && channel.Contains("disabled=\"@(!Editable(row))\"", StringComparison.Ordinal),
+  "Polje se onemogoči samo, kadar ga ni mogoče zapisati, ne zato, ker čaka SAOP.");
 Assert(channel.Contains("Drafts", StringComparison.Ordinal) && channel.Contains("FieldChanged", StringComparison.Ordinal),
   "Neshranjena sprememba mora ziveti v kartici, ne v panelu.");
 // Slog obrazca mora biti pri komponenti, ki nosi oznako. Ko je bil pri kartici, obrazec ni
@@ -318,7 +338,7 @@ Assert(card.Contains("OrganizationName = organization.Name", StringComparison.Or
 // A1: kar je izdelek shranil, mora biti na zaslonu — tudi polje, ki ga nihce ni predvidel.
 Assert(card.Contains("IEnumerable<ProductChannelField> StoredFields(", StringComparison.Ordinal),
   "Kartica mora izpisati tudi polja, ki jih pripravljen seznam ne nasteje.");
-Assert(System.Text.RegularExpressions.Regex.Matches(card, @"StoredFields\(rows,").Count >= 4,
+Assert(System.Text.RegularExpressions.Regex.Matches(card, @"StoredFields\(rows[,.]").Count >= 4,
   "Vsak kanal mora dodati svoja shranjena polja.");
 
 // A2: ERP nazivi so pari (naziv in naziv 2) in se berejo po jezikih.

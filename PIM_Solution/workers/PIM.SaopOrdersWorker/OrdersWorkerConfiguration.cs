@@ -41,6 +41,30 @@ public sealed record OrdersSettings
   public int RetryMaxExtraAttempts { get; init; } = 3;
   public int RetryBaseDelayMilliseconds { get; init; } = 1000;
 
+  /// <summary>
+  /// Zajem po številkah (2026-09-25): v rednem teku se od največje znane številke naprej ustavi po toliko zaporednih
+  /// neobstoječih številkah. Majhno, ker nova naročila pridejo zaporedno in ker vsak zgrešen klic obremeni SAOP.
+  /// </summary>
+  public int SweepTailGap { get; init; } = 10;
+
+  /// <summary>Pri enkratnem zajemu zgodovine (--zgodovina-od) je luknja v številčenju lahko daljša (storno, osnutki).</summary>
+  public int SweepHistoryGap { get; init; } = 50;
+
+  /// <summary>Varovalka: največ klicev po številkah v enem teku na knjigo in leto.</summary>
+  public int SweepMaxCalls { get; init; } = 30000;
+
+  /// <summary>Redni (urni) tek: največ toliko klicev po številkah na knjigo in leto, da posel ne preseže časovne meje; ostalo nadaljuje naslednji tek.</summary>
+  public int SweepTailMaxCalls { get; init; } = 1500;
+
+  /// <summary>Premor med klici po številkah (ekipa SAOP 2026-09-22: manj obremenitve).</summary>
+  public int DelayBetweenCallsMilliseconds { get; init; } = 150;
+
+  /// <summary>Odprta naročila se enkrat na toliko ur preberejo znova (odpremljene/prevzete količine se spreminjajo).</summary>
+  public int OpenRefreshHours { get; init; } = 20;
+
+  /// <summary>Koliko dni nazaj se osvežujejo odprta naročila.</summary>
+  public int OpenRefreshDays { get; init; } = 180;
+
   public IReadOnlyList<SaopOrganization> Organizations { get; init; } = [];
 
   public bool HasCredentials =>
@@ -64,6 +88,13 @@ public static class OrdersWorkerConfiguration
       LookbackDays = Int(saop, "LookbackDays") ?? 7,
       RetryMaxExtraAttempts = Int(saop, "RetryMaxExtraAttempts") ?? 3,
       RetryBaseDelayMilliseconds = Int(saop, "RetryBaseDelayMilliseconds") ?? 1000,
+      SweepTailGap = Int(saop, "OrderSweepTailGap") ?? 10,
+      SweepHistoryGap = Int(saop, "OrderSweepHistoryGap") ?? 50,
+      SweepMaxCalls = Int(saop, "OrderSweepMaxCalls") ?? 30000,
+      SweepTailMaxCalls = Int(saop, "OrderSweepTailMaxCalls") ?? 1500,
+      DelayBetweenCallsMilliseconds = Int(saop, "OrderDelayBetweenCallsMilliseconds") ?? 150,
+      OpenRefreshHours = Int(saop, "OrderOpenRefreshHours") ?? 20,
+      OpenRefreshDays = Int(saop, "OrderOpenRefreshDays") ?? 180,
       Organizations = ReadOrganizations(saop)
     };
   }

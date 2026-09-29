@@ -1,0 +1,57 @@
+/* Uvoz cen in uvoz strank (prenova 2026-09-26) imata isto obliko korakov in predogleda.
+   Skupne oblike (ui-card, panel, data-table, message-state) so v app.css. Samo žetoni --pim-*. */
+
+.page-help { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-soft); font-size: .82rem; margin: -.5rem 0 1rem; }
+.page-help > summary { color: var(--pim-text-strong); cursor: pointer; font-weight: 600; padding: .55rem .85rem; }
+.page-help[open] > summary { border-bottom: 1px solid var(--pim-border); }
+.page-help ul { line-height: 1.5; margin: 0; padding: .65rem .85rem .75rem 2rem; }
+.page-help li + li { margin-top: .3rem; }
+
+.import-steps { counter-reset: step; display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; margin: 0 0 1rem; padding: 0; }
+.import-steps li { align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: 999px; color: var(--pim-text-muted); counter-increment: step; display: inline-flex; font-size: .8rem; font-weight: 600; gap: .45rem; padding: .3rem .8rem .3rem .35rem; }
+.import-steps li::before { align-items: center; background: var(--pim-neutral-bg); border-radius: 50%; color: var(--pim-text-soft); content: counter(step); display: inline-flex; font-size: .72rem; height: 1.35rem; justify-content: center; width: 1.35rem; }
+.import-steps li.current { border-color: var(--pim-accent); color: var(--pim-text-strong); }
+.import-steps li.current::before { background: var(--pim-accent); color: var(--pim-surface); }
+.import-steps li.done::before { background: var(--pim-good-bg); color: var(--pim-good-text); }
+
+.import-grid { grid-template-columns: repeat(2, minmax(14rem, 1fr)); }
+.import-grid .form-field label { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.loading-inline { color: var(--pim-text-muted); font-size: .85rem; margin: .75rem 0 0; }
+
+.import-summary { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 .9rem; }
+.import-summary > span { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-soft); font-size: .82rem; padding: .4rem .7rem; }
+.import-summary strong { color: var(--pim-text-strong); font-variant-numeric: tabular-nums; }
+.import-summary > span.good { background: var(--pim-good-bg); border-color: var(--pim-good-border); }
+.import-summary > span.bad { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); color: var(--pim-bad-strong); }
+
+.hint { color: var(--pim-text-muted); font-size: .82rem; margin: .6rem 0; }
+.issue-list { border: 1px solid var(--pim-bad-border); border-radius: var(--pim-radius-sm); font-size: .82rem; margin: .6rem 0; }
+.issue-list.warn { border-color: var(--pim-warn-border); }
+.issue-list > summary { background: var(--pim-bad-bg); color: var(--pim-bad-strong); cursor: pointer; font-weight: 600; padding: .45rem .75rem; }
+.issue-list.warn > summary { background: var(--pim-warn-bg); color: var(--pim-warn-text); }
+.issue-list ul { line-height: 1.45; margin: 0; max-height: 18rem; overflow: auto; padding: .5rem .75rem .6rem 1.8rem; }
+
+.preview-filter { background: var(--pim-surface-subtle); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: inline-flex; flex-wrap: wrap; gap: 2px; margin: .5rem 0 .75rem; padding: 3px; }
+.preview-option { align-items: center; background: none; border: 0; border-radius: var(--pim-radius-xs); color: var(--pim-text-soft); cursor: pointer; display: inline-flex; font: inherit; font-size: .82rem; font-weight: 500; gap: .4rem; padding: .35rem .75rem; }
+.preview-option:hover { background: var(--pim-surface-hover); color: var(--pim-text-strong); }
+.preview-option.on { background: var(--pim-surface); box-shadow: var(--pim-shadow); color: var(--pim-text-strong); font-weight: 600; }
+.preview-count { color: var(--pim-text-muted); font-size: .72rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.preview-count.warn { color: var(--pim-warn-text); }
+.big-change { color: var(--pim-warn-text); font-weight: 700; }
+
+.confirm-actions { align-items: center; flex-wrap: wrap; gap: .6rem; }
+.confirm-text { color: var(--pim-bad-text); font-size: .85rem; font-weight: 600; margin-right: auto; }
+.panel-actions { gap: .6rem; }
+.link-as-button { align-items: center; display: inline-flex; text-decoration: none; }
+.link-button { background: none; border: 0; color: var(--pim-accent); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; }
+.link-button:hover { text-decoration: underline; }
+.change-list { font-size: .85rem; line-height: 1.5; margin: 0 0 .5rem; padding-left: 1.2rem; }
+
+.page-help > summary:focus-visible, .issue-list > summary:focus-visible, .preview-option:focus-visible,
+.primary-button:focus-visible, .secondary-button:focus-visible, .link-button:focus-visible,
+.filter-select:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+
+@media (max-width: 900px) {
+  .import-grid { grid-template-columns: 1fr; }
+  .confirm-text { margin-right: 0; width: 100%; }
+}

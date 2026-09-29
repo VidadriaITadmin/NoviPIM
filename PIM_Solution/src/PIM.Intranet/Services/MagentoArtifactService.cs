@@ -89,16 +89,42 @@ public sealed class MagentoArtifactService(IConfiguration configuration)
     return opened.Artifact;
   }
 
+  /// <summary>
+  /// Ločilo stolpcev iz glave: katalog.csv ima od 277 podpičje (cene z decimalno vejico brez narekovajev),
+  /// stranke.csv in starejše datoteke vejico. Šteje se zunaj narekovajev; tok se vrne na začetek.
+  /// </summary>
+  internal static string SniffDelimiter(Stream stream)
+  {
+    if (!stream.CanSeek) return ",";
+    var start = stream.Position;
+    var buffer = new byte[65_536];
+    var read = stream.Read(buffer, 0, buffer.Length);
+    stream.Position = start;
+    int commas = 0, semicolons = 0;
+    var quoted = false;
+    for (var index = 0; index < read; index++)
+    {
+      var value = buffer[index];
+      if (value == (byte)'"') quoted = !quoted;
+      else if (quoted) continue;
+      else if (value == (byte)'\n') break;
+      else if (value == (byte)',') commas++;
+      else if (value == (byte)';') semicolons++;
+    }
+    return semicolons > commas ? ";" : ",";
+  }
+
   public async Task<MagentoArtifactPage> PreviewAsync(string profile, string? search, int skip, int take = 50, CancellationToken ct = default)
   {
     if (skip < 0 || take is < 1 or > 200) throw new ArgumentOutOfRangeException(nameof(take));
     var opened = await OpenAsync(profile, ct);
     await using var stream = opened.Stream;
+    var delimiter = SniffDelimiter(stream);
     return await Task.Run(() =>
     {
       using var parser = new TextFieldParser(stream, new UTF8Encoding(false, true), detectEncoding: true, leaveOpen: true)
         { TextFieldType = FieldType.Delimited, HasFieldsEnclosedInQuotes = true, TrimWhiteSpace = false };
-      parser.SetDelimiters(",");
+      parser.SetDelimiters(delimiter);
       var columns = parser.ReadFields() ?? throw new InvalidDataException("CSV nima glave.");
       var rows = new List<IReadOnlyList<string?>>();
       var matched = 0;
@@ -115,5 +141,58 @@ public sealed class MagentoArtifactService(IConfiguration configuration)
       }
       return new MagentoArtifactPage(opened.Artifact, new(columns, rows, matched, skip, take), total);
     }, ct);
+  }
+
+  /// <summary>
+  /// Izdelani CSV kot zvezek za Excel. CSV ostane za Magento (UTF-8 brez BOM; cene od 277 z decimalno vejico, ostala števila s piko);
+  /// slovenski Excel iz njega naredi »koliÄŤina« in iz 29.78 število 2978. Zvezek nosi tip celice
+  /// s sabo, zato so šumniki in decimalke pravilni ne glede na nastavitve računalnika.
+  /// Vrednosti so iste kot v izdelani datoteki, le zapisane drugače — nič se ne sestavlja znova iz baze.
+  /// </summary>
+  public async Task<(byte[] Bytes, string FileName)> ExcelAsync(string profile, CancellationToken ct = default)
+  {
+    var opened = await OpenAsync(profile, ct);
+    await using var stream = opened.Stream;
+    var delimiter = SniffDelimiter(stream);
+    return await Task.Run(() =>
+    {
+      using var parser = new TextFieldParser(stream, new UTF8Encoding(false, true), detectEncoding: true, leaveOpen: true)
+        { TextFieldType = FieldType.Delimited, HasFieldsEnclosedInQuotes = true, TrimWhiteSpace = false };
+      parser.SetDelimiters(delimiter);
+      var header = parser.ReadFields() ?? throw new InvalidDataException("CSV nima glave.");
+      var rows = new List<string[]>();
+      while (!parser.EndOfData)
+      {
+        ct.ThrowIfCancellationRequested();
+        var row = parser.ReadFields()!;
+        if (row.Length != header.Length) throw new InvalidDataException($"Vrstica {rows.Count + 1} nima pravilnega števila stolpcev.");
+        rows.Add(row);
+      }
+
+      // Stolpec je številski samo, če je VSAKA neprazna vrednost število brez vodilne ničle in
+      // z največ deset celimi mesti. Tako EAN (13 mest) in šifre z vodilnimi ničlami (00001625)
+      // ostanejo besedilo in jih Excel ne pokvari v 5,9E+12 ali 1625.
+      var numeric = Enumerable.Range(0, header.Length)
+        .Select(index => rows.Any(row => row[index].Length > 0) && rows.All(row => row[index].Length == 0 || IsPlainNumber(row[index])))
+        .ToArray();
+      var columns = header.Select((name, index) => new WorkbookColumn(name, numeric[index] ? WorkbookCellKind.Number : WorkbookCellKind.Text)).ToArray();
+      // 277: cene so v datoteki z decimalno vejico (13,02), ostala števila s piko — oboje je isto število.
+      var cells = rows.Select(row => (IReadOnlyList<object?>)row.Select((value, index) => (object?)(value.Length == 0 ? null
+        : numeric[index] ? decimal.Parse(value.Replace(',', '.'), NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) : value)).ToArray());
+      var sheet = Path.GetFileNameWithoutExtension(opened.Artifact.FileName);
+      return (WorkbookWriter.Write(sheet, columns, cells), sheet + ".xlsx");
+    }, ct);
+  }
+
+  /// <summary>Število brez ločila tisočic, z decimalno piko ali (277, cene) decimalno vejico — nikoli z obema.</summary>
+  static bool IsPlainNumber(string value)
+  {
+    var digits = value.StartsWith('-') ? value[1..] : value;
+    if (digits.Contains('.') && digits.Contains(',')) return false;
+    var dot = digits.IndexOfAny(['.', ',']);
+    var whole = dot < 0 ? digits : digits[..dot];
+    var fraction = dot < 0 ? "0" : digits[(dot + 1)..];
+    return whole.Length is > 0 and <= 10 && (whole.Length == 1 || whole[0] != '0')
+      && whole.All(char.IsAsciiDigit) && fraction.Length > 0 && fraction.All(char.IsAsciiDigit);
   }
 }

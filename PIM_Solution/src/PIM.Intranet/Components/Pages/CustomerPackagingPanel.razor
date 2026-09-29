@@ -1,0 +1,208 @@
+@inject PackagingDiscountService Packaging
+@inject AuthenticationStateProvider Authentication
+
+@* 274: katerim artiklom ima stranka kateri S — lastna pravila stranke in pravila njenega tipa
+   (stranka ima prednost; znotraj zmaga najbolj specifično: artikel, S koda, rabatna skupina, vsi).
+   Isto gre v katalog.csv: stolpec »Posebni popust za stranko« (ŠIFRA\S2) in »Posebni S za skupino
+   strank« (MAGENTO_SKUPINA\S2). *@
+<section class="ui-card data-card section-gap" aria-labelledby="customer-packaging-title">
+  <div class="subsection-head">
+    <h2 id="customer-packaging-title">S-popust na polno pakiranje</h2>
+    <span>posebni S stranke in njenega tipa — katalog.csv</span>
+  </div>
+
+  @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+  @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+
+  @if (View is null)
+  {
+    <p class="muted">Nalaganje S-popustov …</p>
+  }
+  else
+  {
+    <p class="card-note">
+      @if (!View.PackagingDiscountEnabled)
+      {
+        <strong>Stranka nima kljukice »Popust na polno pakiranje«</strong><text> — S-popust (privzeti ali posebni) v trgovini zanjo ne velja, dokler kljukice ne vklopiš zgoraj.</text>
+      }
+      else
+      {
+        <text>Stranka ima kljukico »Popust na polno pakiranje«: pri količini ≥ PAK2 dobi privzeti S izdelka (@View.DefaultProductCount.ToString("N0") izdelkov ima S), razen kjer spodnja pravila določajo drugače.</text>
+      }
+      Tip stranke: <strong>@(View.TypeName ?? "ni določen")</strong>.
+      Posebni S velja za <strong>@View.SpecialProductCount.ToString("N0")</strong> izdelkov.
+    </p>
+
+    <h3 class="packaging-subtitle">Pravila, ki veljajo za stranko</h3>
+    <PimState Empty="@(View.Rules.Count == 0)" EmptyText="Ni posebnih pravil — velja privzeti S izdelkov.">
+      <PimTable Caption="Pravila posebnega S za stranko in njen tip" Columns="RuleColumns">
+        <Rows>
+          @foreach (var rule in View.Rules)
+          {
+            <tr>
+              <td>@(rule.TargetKind == PackagingDiscountService.TargetCustomer ? "Stranka" : $"Tip ({rule.TargetName})")</td>
+              <td>@rule.ScopeLabel</td>
+              <td><strong>@rule.DiscountCode</strong> (@(rule.Percent?.ToString("0.##") ?? "?") %)</td>
+              <td class="numeric">@rule.ProductCount.ToString("N0")</td>
+              <td>@Day(rule.ValidFrom) – @Day(rule.ValidTo)</td>
+              <td>
+                @if (rule.TargetKind == PackagingDiscountService.TargetCustomer)
+                {
+                  <button type="button" class="small-action" disabled="@Busy" @onclick="() => RemoveAsync(rule)">Umakni</button>
+                }
+                else
+                {
+                  <a href="pravila-popustov?podrocje=spopusti">pravilo tipa</a>
+                }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+
+    <div class="form-grid section-gap">
+      <label class="form-field">Za artikle
+        <select class="filter-select" @bind="NewScope">
+          <option value="ITEM">En artikel</option>
+          <option value="ITEM_GROUP">Rabatna skupina</option>
+          <option value="S_CODE">Vsi artikli z privzeto S kodo</option>
+          <option value="ALL">Vsi artikli</option>
+        </select>
+      </label>
+      @if (NewScope == PackagingDiscountService.ScopeItem)
+      {
+        <label class="form-field">Šifra artikla<input class="form-input" placeholder="npr. BA.BC15.00300" @bind="NewItem" /></label>
+      }
+      else if (NewScope == PackagingDiscountService.ScopeGroup)
+      {
+        <label class="form-field">Rabatna skupina<input class="form-input" placeholder="npr. BRAYTRON" @bind="NewGroup" /></label>
+      }
+      else if (NewScope == PackagingDiscountService.ScopeCode)
+      {
+        <label class="form-field">Privzeta S koda artiklov
+          <select class="filter-select" @bind="NewFrom">
+            @foreach (var entry in Codes) { <option value="@entry.Code">@entry.Code</option> }
+          </select>
+        </label>
+      }
+      <label class="form-field">Nova S koda
+        <select class="filter-select" @bind="NewCode">
+          @foreach (var entry in Codes) { <option value="@entry.Code">@entry.Code (@entry.Percent.ToString("0.##") %)</option> }
+        </select>
+      </label>
+      <div class="form-action"><button type="button" class="primary-button" disabled="@(Busy || !CanAdd)" @onclick="AddAsync">Dodaj pravilo</button></div>
+    </div>
+
+    <h3 class="packaging-subtitle">Izdelki s posebnim S za to stranko</h3>
+    <PimState Empty="@(View.Items.Count == 0)" EmptyText="Stranka nima izdelkov s posebnim S.">
+      <PimTable Caption="Izdelki, pri katerih stranka dobi drug S kot privzeti" Columns="ItemColumns">
+        <Rows>
+          @foreach (var item in View.Items)
+          {
+            <tr>
+              <td>@if (item.ProductId is long id) { <a href="izdelki/@id"><span class="code-value">@item.ItemId</span></a> } else { <span class="code-value">@item.ItemId</span> }</td>
+              <td>@item.Name</td>
+              <td>@(item.DiscountGroup ?? "—")</td>
+              <td class="numeric">@(item.Pak2?.ToString("0.##") ?? "—")</td>
+              <td>@(item.DefaultCode is null ? "—" : $"{item.DefaultCode} ({item.DefaultPercent:0.##} %)")</td>
+              <td><strong>@item.DiscountCode</strong> (@(item.Percent?.ToString("0.##") ?? "?") %)</td>
+              <td>@(item.Source == PackagingDiscountService.TargetCustomer ? "stranka" : "tip") · @ScopeWord(item.ScopeKind)</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+    @if (View.SpecialProductCount > View.Items.Count)
+    {
+      <p class="hint">Prikazanih je prvih @View.Items.Count.ToString("N0") od @View.SpecialProductCount.ToString("N0") izdelkov.
+        Cel seznam: <a href="izdelki?podjetje=@OrganizationId&posebni=@Uri.EscapeDataString("CUSTOMER:" + CustomerKey)">Izdelki s posebnim S za to stranko</a>.</p>
+    }
+  }
+</section>
+
+@code {
+  [Parameter, EditorRequired] public int OrganizationId { get; set; }
+  [Parameter, EditorRequired] public long CustomerId { get; set; }
+  [Parameter, EditorRequired] public string CustomerKey { get; set; } = "";
+  /// <summary>Tip in kljukica stranke: ob spremembi na kartici se panel prebere znova.</summary>
+  [Parameter] public string? Version { get; set; }
+
+  CustomerPackagingView? View;
+  IReadOnlyList<PackagingCode> Codes = [];
+  string NewScope = PackagingDiscountService.ScopeItem;
+  string NewItem = "", NewGroup = "", NewFrom = "", NewCode = "";
+  bool Busy;
+  string? Error, Message;
+  string? LoadedVersion;
+
+  static readonly IReadOnlyList<PimColumn> RuleColumns =
+    [new("Komu"), new("Za artikle"), new("S koda"), new("Izdelkov", Numeric: true), new("Velja"), new("Dejanje")];
+  static readonly IReadOnlyList<PimColumn> ItemColumns =
+    [new("Artikel"), new("Naziv"), new("Rabatna skupina"), new("PAK2", Numeric: true), new("Privzeti S"), new("S za stranko"), new("Vir")];
+
+  bool CanAdd => NewCode.Length > 0 && NewScope switch
+  {
+    PackagingDiscountService.ScopeItem => NewItem.Trim().Length > 0,
+    PackagingDiscountService.ScopeGroup => NewGroup.Trim().Length > 0,
+    PackagingDiscountService.ScopeCode => NewFrom.Length > 0,
+    _ => true,
+  };
+
+  protected override async Task OnParametersSetAsync()
+  {
+    var version = $"{CustomerId}|{Version}";
+    if (LoadedVersion == version) return;
+    LoadedVersion = version;
+    try
+    {
+      if (Codes.Count == 0)
+      {
+        Codes = await Packaging.GetCatalogAsync();
+        NewCode = NewFrom = Codes.FirstOrDefault()?.Code ?? "";
+      }
+      View = await Packaging.GetCustomerAsync(OrganizationId, CustomerId);
+    }
+    catch { Error = "S-popustov stranke trenutno ni mogoče naložiti."; }
+  }
+
+  async Task AddAsync() => await RunAsync(async actor =>
+  {
+    await Packaging.SaveRuleAsync(OrganizationId, new(PackagingDiscountService.TargetCustomer, null, CustomerId, null, NewScope,
+      NewScope == PackagingDiscountService.ScopeItem ? NewItem.Trim() : null,
+      NewScope == PackagingDiscountService.ScopeGroup ? NewGroup.Trim() : null,
+      NewScope == PackagingDiscountService.ScopeCode ? NewFrom : null, NewCode), actor);
+    NewItem = NewGroup = "";
+    return "Pravilo posebnega S je dodano.";
+  });
+
+  async Task RemoveAsync(PackagingRule rule) => await RunAsync(async actor =>
+  {
+    await Packaging.RemoveRuleAsync(OrganizationId, rule.RuleId, actor);
+    return "Pravilo je umaknjeno.";
+  });
+
+  async Task RunAsync(Func<string, Task<string>> action)
+  {
+    Busy = true; Error = null; Message = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      Message = await action(actor);
+      View = await Packaging.GetCustomerAsync(OrganizationId, CustomerId);
+    }
+    catch (Microsoft.Data.SqlClient.SqlException failure) { Error = failure.Message; }
+    catch (Exception) { Error = "Sprememba ni shranjena. Poskusi znova."; }
+    finally { Busy = false; }
+  }
+
+  static string ScopeWord(string scope) => scope switch
+  {
+    PackagingDiscountService.ScopeItem => "artikel",
+    PackagingDiscountService.ScopeGroup => "rabatna skupina",
+    PackagingDiscountService.ScopeCode => "po S kodi",
+    _ => "vsi artikli",
+  };
+
+  static string Day(DateTime? value) => value?.ToString("d. M. yyyy") ?? "—";
+}

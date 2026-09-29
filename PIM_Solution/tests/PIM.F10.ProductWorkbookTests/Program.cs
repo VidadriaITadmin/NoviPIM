@@ -194,7 +194,7 @@ var export = new ProductExportService(configuration, workbench);
 var guard = PimWriteGuard.Trusted("konzolni test PIM.F10.ProductWorkbookTests");
 var Categories = new CategoryTreeService(database, configuration, guard);
 var edit = new ProductEditService(configuration, guard);
-var categoryMapping = new CategoryMappingService(database, configuration);
+var categoryMapping = new CategoryMappingService(database, configuration, guard);
 var saop = new SaopWriteService(configuration, guard, NullLogger<SaopWriteService>.Instance);
 var data = new IntranetDataService(configuration, guard);
 var attributeDefinitions = new AttributeMappingService(database, configuration, guard);
@@ -255,7 +255,7 @@ var narrowExport = WorkbookTable.Read(
   new MemoryStream(await workbook.BuildAsync(narrowed, includeFieldKeys: new HashSet<string> { singleField.FieldKey })),
   null, ProductWorkbookContract.HeaderHints);
 var expectedNarrowHeaders = new HashSet<string>(StringComparer.Ordinal)
-  { "Podjetje", "Šifra artikla", "Naziv", singleField.Header };
+  { "Podjetje", "Šifra artikla", singleField.Header };
 Check($"izbira enega polja ({singleField.Header}) da kljuc plus natanko to polje",
   narrowExport.Headers.ToHashSet(StringComparer.Ordinal).SetEquals(expectedNarrowHeaders),
   string.Join(", ", narrowExport.Headers));
@@ -307,6 +307,38 @@ Check($"izbira enega polja ({singleField.Header}) da kljuc plus natanko to polje
   Check("prevzem datoteke se zabelezi", exports.Get(jobId)?.Downloaded == true);
   Check("lastnik obvestilo zapre in ga ni vec", exports.Dismiss(jobId, "ana") && exports.ForOwner("ana").Count == 0);
   if (store.TryGet(done.DownloadToken.Value, out var producedPath, out _, out _)) File.Delete(producedPath);
+
+  // Preklic: uporabnik 2026-09-23 je po pomoti kliknil »Izvozi« na celem pogledu (180.000 vrstic)
+  // in ga ni mogel ustaviti. Tu tece cel pogled (brez iskanja) in se prekliče ob prvem napredku —
+  // koncati se mora hitro, kot preklican, brez zetona in brez zacasne datoteke.
+  var cancelId = Guid.NewGuid();
+  var canceled = new TaskCompletionSource<ExportJobState>(TaskCreationOptions.RunContinuationsAsynchronously);
+  var cancelRequested = 0;
+  exports.Changed += state =>
+  {
+    if (state.JobId != cancelId) return;
+    if (state.Status == ExportRunStatus.Running && state.TotalRows > 0 && Interlocked.Exchange(ref cancelRequested, 1) == 0)
+    {
+      Check("tuji uporabnik izvoza ne more preklicati", !exports.Cancel(cancelId, "bor"));
+      Check("lastnik tekoč izvoz prekliče", exports.Cancel(cancelId, "ana"));
+    }
+    if (!state.IsActive) canceled.TrySetResult(state);
+  };
+  var exportFolder = Path.Combine(Path.GetTempPath(), "PIM.Intranet", "izvozi");
+  var tempBefore = Directory.GetFiles(exportFolder).ToHashSet();
+  exports.StartWorkbookExport(cancelId, "ana", "preklic.xlsx", new ProductListFilter(null, 0, 25), selection: null);
+  var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+  var afterCancel = await canceled.Task.WaitAsync(TimeSpan.FromMinutes(5));
+  Check("preklican izvoz se konca kot preklican, ne kot napaka", afterCancel.Status == ExportRunStatus.Canceled,
+    $"{afterCancel.Status} {afterCancel.Error}");
+  Check("preklican izvoz nima datoteke za prenos", afterCancel.DownloadToken is null);
+  Check("preklican izvoz se ustavi hitro", stopwatch.Elapsed < TimeSpan.FromMinutes(1), stopwatch.Elapsed.ToString());
+  Check("koncanega izvoza ni mogoce preklicati", !exports.Cancel(cancelId, "ana"));
+  Check("odprt prenos preklicanega izvoza ne dobi datoteke",
+    (await exports.WaitForBrowserAsync(cancelId, "ana", CancellationToken.None))?.Status == ExportRunStatus.Canceled);
+  Check("obvestilo o preklicu se da zapreti", exports.Dismiss(cancelId, "ana"));
+  Check("preklic ne pusti zacasne datoteke",
+    !Directory.GetFiles(exportFolder).Except(tempBefore).Any());
 }
 
 // --- Izvoz po kategoriji ----------------------------------------------------------------

@@ -147,6 +147,15 @@ public sealed class AutomationEngine(
     var stagger = 0;
     lastRequestScan = now;
 
+    // Ročna zahteva ima v pasu SAOP prednost pred rednimi posli (glej JobCatalog.SaopRequestFirst).
+    HashSet<string> runningKeys;
+    lock (gate) runningKeys = [.. running.Keys];
+    var saopRequest = JobCatalog.SaopRequestFirst(jobs
+      .Where(row => JobCatalog.Find(row.JobKey) is not null
+        && (options.RunOnceJob is null || row.JobKey == options.RunOnceJob)
+        && (options.AllowedJobs is not { } allowedKeys || allowedKeys.Contains(row.JobKey)))
+      .Select(row => (row.JobKey, row.IsRequested, row.IsRunning || runningKeys.Contains(row.JobKey))));
+
     foreach (var job in jobs)
     {
       if (stopping.IsCancellationRequested) return;
@@ -184,6 +193,7 @@ public sealed class AutomationEngine(
       // začne šele po tišini od konca zadnjega. Velja tudi za ročne zahteve in --enkrat.
       if (JobCatalog.UsesSaop(job.JobKey))
       {
+        if (!force && JobCatalog.YieldsSaopLane(job.JobKey, job.IsRequested, saopRequest)) continue;
         string? saopBusy;
         lock (gate) saopBusy = running.Keys.FirstOrDefault(JobCatalog.UsesSaop);
         saopBusy ??= jobs.FirstOrDefault(other => other.IsRunning && JobCatalog.UsesSaop(other.JobKey))?.JobKey;

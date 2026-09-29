@@ -144,12 +144,12 @@ public static class WorkerCycles
     return steps;
   }
 
-  /// <summary>Dobaviteljev XML na podjetje: mapa prevzema, sicer fixtures (razvoj), sicer preskok.</summary>
-  internal static IReadOnlyList<CycleStep> XmlSteps(string sourceCode, string fixtureFolder, CycleEnvironment env)
+  /// <summary>Dobaviteljev XML na podjetje: mapa prevzema, sicer fixtures (razvoj, samo če je <paramref name="fixtureFolder"/> podan), sicer preskok.</summary>
+  internal static IReadOnlyList<CycleStep> XmlSteps(string sourceCode, string? fixtureFolder, CycleEnvironment env)
   {
     var prevzeta = Path.Combine(env.LandingRoot, sourceCode);
     string? root = env.DirectoryExists(prevzeta) && env.ListFiles(prevzeta).Count > 0 ? prevzeta
-      : env.FixturesRoot is { } fixtures && env.DirectoryExists(Path.Combine(fixtures, fixtureFolder)) ? Path.Combine(fixtures, fixtureFolder)
+      : fixtureFolder is not null && env.FixturesRoot is { } fixtures && env.DirectoryExists(Path.Combine(fixtures, fixtureFolder)) ? Path.Combine(fixtures, fixtureFolder)
       : null;
     if (root is null) return [Note($"XML {sourceCode}", $"preskočeno: ni mape {prevzeta} z datotekami")];
 

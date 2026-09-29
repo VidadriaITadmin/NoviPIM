@@ -3,19 +3,24 @@ using System.Xml.XPath;
 
 namespace PIM.XmlMapping;
 
+/// <param name="IsMultiValue">map.FieldMapping.IsMultiValue: preslikava vrne VSE zadetke v zapisu (slike, vrste slik),
+/// ne samo prvega; zaporedje je <see cref="ExtractedValue.ValueOrdinal"/>.</param>
 public sealed record FieldMapping(
   int FieldMappingId,
   int MappingVersion,
   string FieldXPath,
   string TargetFieldCode,
-  bool IsRequired);
+  bool IsRequired,
+  bool IsMultiValue = false);
 
+/// <param name="ValueOrdinal">Zaporedje zadetka pri večvrednostni preslikavi (1, 2 …); sicer 1.</param>
 public sealed record ExtractedValue(
   int RecordOrdinal,
   int FieldMappingId,
   int MappingVersion,
   string TargetFieldCode,
-  string? Value);
+  string? Value,
+  int ValueOrdinal = 1);
 
 /// <summary>
 /// Kako se pri viru najde posamezen atribut. Vsak dobavitelj nosi atribute drugace, zato je to
@@ -68,6 +73,20 @@ public sealed class XPathMappingExtractor
       for (var index = 0; index < mappings.Count; index++)
       {
         var mapping = mappings[index];
+        // 2026-09-24: večvrednostno branje je manjkalo (od konca avgusta), zato je iz NW XML prišla samo
+        // prva slika vsakega artikla (map.ProcessRawInbox korak 13 pričakuje vse, v zaporedju ValueOrdinal).
+        if (mapping.IsMultiValue)
+        {
+          var valueOrdinal = 0;
+          var matches = record.Select(compiled[index]);
+          while (matches.MoveNext())
+          {
+            var match = matches.Current!.Value;
+            if (string.IsNullOrEmpty(match)) continue;
+            result.Add(new ExtractedValue(ordinal, mapping.FieldMappingId, mapping.MappingVersion, mapping.TargetFieldCode, match, ++valueOrdinal));
+          }
+          if (valueOrdinal > 0) continue;
+        }
         var value = record.SelectSingleNode(compiled[index])?.Value;
         result.Add(new ExtractedValue(
           ordinal,

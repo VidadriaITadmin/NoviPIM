@@ -1,0 +1,216 @@
+@page "/analitika/nastavitve"
+@attribute [Authorize(Roles = "ADMIN,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject AnalyticsService Analytics
+@inject IntranetDataService Data
+@using System.Globalization
+@using System.Text.Json
+
+<PageTitle>Analitika · nastavitve izračuna</PageTitle>
+
+@* 284: parametri formule po podjetju. Zapis gre skozi politiko AnalyticsSettings (servis), vsaka sprememba
+   pusti zgodovino (ana.SettingHistory: kdo, kdaj, prej/potem). Učinek: ob naslednjem preračunu ali takoj. *@
+<PimPage Title="Nastavitve izračuna" OrganizationScope="true"
+         Subtitle="Kako PIM računa predlog naročila, varnostno zalogo in zaležano zalogo. Velja za izbrano podjetje.">
+</PimPage>
+
+<PimTabs Active="settings" Tabs="AnalyticsTabs.Tabs" Label="Analitika" />
+
+<NavigationLock ConfirmExternalNavigation="IsDirty" OnBeforeInternalNavigation="ConfirmLeave" />
+
+<PimState Loading="Loading" Error="@Error" LoadingText="Nalaganje nastavitev …">
+  @if (View is not null)
+  {
+    @if (!CanEdit)
+    {
+      <p class="info-message" role="status">Samo za branje: nastavitve lahko spremeni skrbnik ali komercialist.</p>
+    }
+    @if (Message is not null) { <p class="success-message" role="status">@Message</p> }
+    @if (SaveError is not null) { <p class="error-message" role="alert">@SaveError</p> }
+
+    <section class="ui-card ana-chart" aria-labelledby="ana-settings-form">
+      <h2 id="ana-settings-form" class="ana-section-title">Parametri formule</h2>
+      <div class="ana-form">
+        <div class="form-field">
+          <label for="set-z">Servisna raven (z)</label>
+          <input id="set-z" class="form-input" type="number" step="0.05" min="0" max="4" disabled="@(!CanEdit)" @bind="Z" @bind:event="oninput" aria-describedby="set-z-hint set-z-err" />
+          <span id="set-z-hint" class="hint">1,28 ≈ 90 %, 1,65 ≈ 95 %, 2,05 ≈ 98 % verjetnost, da zaloga ne zmanjka. Višje = več varnostne zaloge.</span>
+          @if (Invalid(Z, 0, 4) is { } e1) { <span id="set-z-err" class="field-error">@e1</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-review">Razmik med naročili (dni)</label>
+          <input id="set-review" class="form-input" type="number" min="1" max="365" disabled="@(!CanEdit)" @bind="Review" @bind:event="oninput" aria-describedby="set-review-hint" />
+          <span id="set-review-hint" class="hint">Kako pogosto naročamo pri istem dobavitelju. Predlog pokrije dobavni čas in ta razmik.</span>
+          @if (Invalid(Review, 1, 365) is { } e2) { <span class="field-error">@e2</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-lead">Privzeti dobavni čas (dni)</label>
+          <input id="set-lead" class="form-input" type="number" min="1" max="365" disabled="@(!CanEdit)" @bind="Lead" @bind:event="oninput" aria-describedby="set-lead-hint" />
+          <span id="set-lead-hint" class="hint">Velja, ko ni izmerjenih prevzemov niti nabavnega časa v SAOP.</span>
+          @if (Invalid(Lead, 1, 365) is { } e3) { <span class="field-error">@e3</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-window">Obdobje povprečne prodaje (dni)</label>
+          <input id="set-window" class="form-input" type="number" min="30" max="730" disabled="@(!CanEdit)" @bind="Window" @bind:event="oninput" aria-describedby="set-window-hint" />
+          <span id="set-window-hint" class="hint">Iz koliko zadnjih dni prodaje se računa dnevno povpraševanje.</span>
+          @if (Invalid(Window, 30, 730) is { } e4) { <span class="field-error">@e4</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-dead">Zaležano po (dni brez prodaje)</label>
+          <input id="set-dead" class="form-input" type="number" min="30" max="1095" disabled="@(!CanEdit)" @bind="Dead" @bind:event="oninput" aria-describedby="set-dead-hint" />
+          <span id="set-dead-hint" class="hint">Zaloga brez prodaje in brez novega prevzema v tem času je zaležana.</span>
+          @if (Invalid(Dead, 30, 1095) is { } e5) { <span class="field-error">@e5</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-over">Preveč zaloge nad (dni pokritosti)</label>
+          <input id="set-over" class="form-input" type="number" min="30" max="1825" disabled="@(!CanEdit)" @bind="Over" @bind:event="oninput" aria-describedby="set-over-hint" />
+          <span id="set-over-hint" class="hint">Zaloga, ki zadošča za več dni prodaje, je presežek.</span>
+          @if (Invalid(Over, 30, 1825) is { } e6) { <span class="field-error">@e6</span> }
+        </div>
+        <div class="form-field">
+          <label for="set-cost">Cenik nabavne cene</label>
+          <select id="set-cost" class="filter-select" disabled="@(!CanEdit)" @bind="CostList" aria-describedby="set-cost-hint">
+            @foreach (var list in PriceListOptions) { <option value="@list">@list</option> }
+          </select>
+          <span id="set-cost-hint" class="hint">Uporabi se, kadar SAOP ne da povprečne nabavne cene.</span>
+        </div>
+      </div>
+      @if (CanEdit)
+      {
+        <div class="panel-actions" style="margin-top:1rem">
+          <button type="button" class="primary-button" disabled="@(Saving || !IsDirty || !IsValid)" @onclick="SaveAsync">@(Saving ? "Shranjujem …" : "Shrani")</button>
+          <button type="button" class="secondary-button" disabled="@(Saving || !IsDirty)" @onclick="Reset">Zavrzi spremembe</button>
+          <button type="button" class="secondary-button" disabled="@(Saving || Refreshing || IsDirty)" @onclick="RefreshAsync"
+                  title="Preračun iz podatkov v bazi, brez klica v SAOP (do pol minute).">@(Refreshing ? "Preračunavam …" : "Preračunaj zdaj")</button>
+        </div>
+      }
+      <p class="muted" style="margin-top:.75rem;font-size:.8rem">Zadnja sprememba: @View.Settings.UpdatedBy, @View.Settings.UpdatedUtc.ToPimLocal().ToString("d. M. yyyy HH:mm", Sl)</p>
+    </section>
+
+    <section class="ui-card ana-chart" aria-labelledby="ana-settings-history">
+      <h2 id="ana-settings-history" class="ana-section-title">Zgodovina sprememb</h2>
+      @if (View.History.Count == 0)
+      {
+        <p class="muted">Nastavitve še niso bile spremenjene; veljajo privzete vrednosti.</p>
+      }
+      else
+      {
+        <table class="data-table ana-table">
+          <caption class="visually-hidden">Zadnjih 20 sprememb nastavitev izračuna</caption>
+          <thead><tr><th scope="col">Kdaj</th><th scope="col">Kdo</th><th scope="col">Kaj se je spremenilo</th></tr></thead>
+          <tbody>
+            @foreach (var change in View.History)
+            {
+              <tr><td>@change.ChangedUtc.ToPimLocal().ToString("d. M. yyyy HH:mm", Sl)</td><td>@change.ChangedBy</td><td>@Diff(change)</td></tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+</PimState>
+
+@code {
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly Dictionary<string, string> Labels = new()
+  {
+    ["ServiceLevelZ"] = "servisna raven", ["ReviewPeriodDays"] = "razmik med naročili", ["DefaultLeadTimeDays"] = "privzeti dobavni čas",
+    ["DemandWindowDays"] = "obdobje prodaje", ["DeadStockDays"] = "zaležano po", ["OverstockCoverDays"] = "preveč zaloge nad", ["CostPriceList"] = "cenik nabavne cene",
+  };
+
+  AnalyticsSettingsView? View;
+  int OrganizationId;
+  bool Loading = true, Saving, Refreshing, CanEdit;
+  string? Error, Message, SaveError;
+  decimal Z; int Review, Lead, Window, Dead, Over; string CostList = "NAB";
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  async Task LoadAsync()
+  {
+    Loading = true;
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      OrganizationId = organization.OrganizationId;
+      View = await Analytics.GetSettingsAsync(OrganizationId);
+      CanEdit = await Analytics.CanEditSettingsAsync();
+      Reset();
+    }
+    catch (Exception exception) { Error = $"Nastavitev ni bilo mogoče naložiti: {exception.Message}"; }
+    finally { Loading = false; }
+  }
+
+  void Reset()
+  {
+    if (View is null) return;
+    var s = View.Settings;
+    (Z, Review, Lead, Window, Dead, Over, CostList) = (s.ServiceLevelZ, s.ReviewPeriodDays, s.DefaultLeadTimeDays, s.DemandWindowDays, s.DeadStockDays, s.OverstockCoverDays, s.CostPriceList);
+  }
+
+  IEnumerable<string> PriceListOptions => (View?.PriceLists ?? []).Append(CostList).Distinct().Order();
+
+  bool IsDirty => View is { } v && (Z != v.Settings.ServiceLevelZ || Review != v.Settings.ReviewPeriodDays || Lead != v.Settings.DefaultLeadTimeDays
+    || Window != v.Settings.DemandWindowDays || Dead != v.Settings.DeadStockDays || Over != v.Settings.OverstockCoverDays || CostList != v.Settings.CostPriceList);
+
+  bool IsValid => Invalid(Z, 0, 4) is null && Invalid(Review, 1, 365) is null && Invalid(Lead, 1, 365) is null && Invalid(Window, 30, 730) is null
+    && Invalid(Dead, 30, 1095) is null && Invalid(Over, 30, 1825) is null && !string.IsNullOrWhiteSpace(CostList);
+
+  static string? Invalid(decimal value, decimal min, decimal max) =>
+    value < min || value > max ? $"Vrednost mora biti med {min.ToString("N0", Sl)} in {max.ToString("N0", Sl)}." : null;
+
+  async Task SaveAsync()
+  {
+    if (View is null || !IsValid) return;
+    Saving = true; Message = null; SaveError = null;
+    try
+    {
+      await Analytics.SaveSettingsAsync(View.Settings with { ServiceLevelZ = Z, ReviewPeriodDays = Review, DefaultLeadTimeDays = Lead,
+        DemandWindowDays = Window, DeadStockDays = Dead, OverstockCoverDays = Over, CostPriceList = CostList });
+      View = await Analytics.GetSettingsAsync(OrganizationId);
+      Reset();
+      Message = "Shranjeno. Nove vrednosti veljajo ob naslednjem preračunu (vsako noč) — ali takoj z gumbom »Preračunaj zdaj«.";
+    }
+    catch (UnauthorizedAccessException exception) { SaveError = exception.Message; }
+    catch (Exception exception) { SaveError = $"Shranjevanje ni uspelo: {exception.Message}"; }
+    finally { Saving = false; }
+  }
+
+  async Task RefreshAsync()
+  {
+    Refreshing = true; Message = null; SaveError = null;
+    try { Message = await Analytics.RefreshAsync(OrganizationId); }
+    catch (UnauthorizedAccessException exception) { SaveError = exception.Message; }
+    catch (Exception exception) { SaveError = $"Preračun ni uspel: {exception.Message}"; }
+    finally { Refreshing = false; }
+  }
+
+  void ConfirmLeave(LocationChangingContext context)
+  {
+    // Neshranjene spremembe: prvi odhod prepreči in pove zakaj; ob drugem poskusu uporabnik gre.
+    if (!IsDirty || LeaveWarned) return;
+    LeaveWarned = true;
+    SaveError = "Spremembe niso shranjene. Shrani ali zavrzi jih; ponoven klic povezave stran zapusti brez shranjevanja.";
+    context.PreventNavigation();
+  }
+  bool LeaveWarned;
+
+  static string Diff(AnalyticsSettingsChange change)
+  {
+    try
+    {
+      JsonElement? before = change.OldValueJson is null ? null : JsonDocument.Parse(change.OldValueJson).RootElement;
+      var after = JsonDocument.Parse(change.NewValueJson).RootElement;
+      var parts = new List<string>();
+      foreach (var property in after.EnumerateObject())
+      {
+        var old = before is { } b && b.TryGetProperty(property.Name, out var o) ? o.ToString() : null;
+        if (old != property.Value.ToString())
+          parts.Add($"{Labels.GetValueOrDefault(property.Name, property.Name)}: {old ?? "—"} → {property.Value}");
+      }
+      return parts.Count == 0 ? "brez spremembe" : string.Join("; ", parts);
+    }
+    catch (JsonException) { return change.NewValueJson; }
+  }
+}

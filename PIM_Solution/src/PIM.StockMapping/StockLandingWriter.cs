@@ -8,6 +8,12 @@ namespace PIM.StockMapping;
 public sealed class StockLandingWriter(string connectionString)
 {
   /// <summary>
+  /// 283: zadnji klic posnetka ni zapisal, ker je varovalka zaznala prevelik padec (manj artiklov ali veliko artiklov
+  /// brez zaloge) glede na veljavni posnetek — velja prejšnji. Null = zapisano ali varovalka ni zadržala.
+  /// </summary>
+  public string? HeldReason { get; private set; }
+
+  /// <summary>
   /// Zapise en posnetek zaloge. Cetrti clen pove, da je bil ta posnetek ze v bazi in da ta
   /// klic ni zapisal nicesar.
   /// </summary>
@@ -54,6 +60,14 @@ public sealed class StockLandingWriter(string connectionString)
         return (alreadyRunId, counts.Applied, counts.Quarantined, true);
       }
 
+      // 283: okrnjena ali prazna datoteka ne sme pobrati zaloge — nov posnetek v celoti nadomesti prejšnjega.
+      HeldReason = await EvaluateSafeguardAsync(connection, transaction, organizationId, connectorId, sourceCode, records, fields, cancellationToken);
+      if (HeldReason is not null)
+      {
+        await transaction.CommitAsync(cancellationToken);
+        return (Guid.Empty, 0, 0, false);
+      }
+
       var identityRule = await LoadIdentityRuleAsync(connection, transaction, connectorId, cancellationToken);
       await ExecuteAsync(connection, transaction, """
         INSERT stock.SyncRun(SyncRunId,OrganizationId,SourceConnectorId,Status,Endpoint,StartedUtc,FetchedUtc,RecordsRead)
@@ -89,6 +103,40 @@ public sealed class StockLandingWriter(string connectionString)
       return(runId,applied,quarantined,false);
     }
     catch { await transaction.RollbackAsync(cancellationToken); throw; }
+  }
+
+  /// <summary>
+  /// 283: ops.EvaluateStockFeedSafeguards — število vrstic in vrstic z zalogo > 0 proti veljavnemu posnetku. Vrne razlog
+  /// zadržanja ali null. Baza pred 283 (procedure ni) ne zadrži ničesar.
+  /// </summary>
+  static async Task<string?> EvaluateSafeguardAsync(SqlConnection c, SqlTransaction t, int organizationId, int connectorId, string sourceCode,
+    IReadOnlyList<ExtractedStockRow> records, StockFieldContract fields, CancellationToken ct)
+  {
+    var withQuantity = records.Count(row => HasStock(row, fields.AvailableQuantityField) ?? HasStock(row, fields.QuantityField) ?? false);
+    try
+    {
+      await using var cmd = new SqlCommand("ops.EvaluateStockFeedSafeguards", c, t) { CommandType = System.Data.CommandType.StoredProcedure, CommandTimeout = 120 };
+      cmd.Parameters.AddWithValue("@OrganizationId", organizationId);
+      cmd.Parameters.AddWithValue("@SourceConnectorId", connectorId);
+      cmd.Parameters.AddWithValue("@SourceCode", sourceCode);
+      cmd.Parameters.AddWithValue("@RecordCount", records.Count);
+      cmd.Parameters.AddWithValue("@WithQuantity", withQuantity);
+      await using var reader = await cmd.ExecuteReaderAsync(ct);
+      if (!await reader.ReadAsync(ct) || !reader.GetBoolean(0)) return null;
+      return reader.IsDBNull(1) ? "zadržano (varovalka zaloge vira)" : reader.GetString(1);
+    }
+    catch (SqlException exception) when (exception.Number == 2812)
+    {
+      return null;
+    }
+
+    static bool? HasStock(ExtractedStockRow row, string? field)
+    {
+      if (string.IsNullOrEmpty(field) || !row.Values.TryGetValue(field, out var text) || string.IsNullOrWhiteSpace(text)) return null;
+      var normalized = text.Trim().Replace(',', '.');
+      return decimal.TryParse(normalized, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value)
+        ? value > 0 : null;
+    }
   }
 
   /// <summary>Ali ta posnetek (podjetje, konektor, cas) v bazi ze obstaja; ce da, vrne njegov zagon.</summary>

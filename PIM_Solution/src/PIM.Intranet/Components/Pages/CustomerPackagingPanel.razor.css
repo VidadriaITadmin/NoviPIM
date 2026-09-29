@@ -1,0 +1,5 @@
+/* 274: S-popust na kartici stranke. */
+.data-card { padding: 1rem 1.1rem; }
+.packaging-subtitle { font-size: .92rem; margin: 1rem 0 .5rem; }
+.section-gap { margin-top: .9rem; }
+.card-note { color: var(--pim-text-muted, #475569); font-size: .88rem; margin: .25rem 0 .5rem; }
