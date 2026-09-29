@@ -399,7 +399,7 @@ function izrisi() {
       <div class="q">${esc(n.odlocitev)}</div>
       <textarea aria-label="Tvoj odgovor na vprašanje naloge ${n.id}" placeholder="Odgovori s svojimi besedami …"></textarea>
       <div class="vr"><button class="gumb glavni" data-poslji="${n.id}">Pošlji odgovor</button></div></div>`).join('') +
-    zaZdr.map(n => `<div class="vpr zdr"><div class="q">Naloga #${n.id} je preizkušena in sprejeta: ${esc(n.naslov)}</div><div class="mut" style="font-size:14px">Združim jo v skupno kodo?</div>
+    zaZdr.map(n => `<div class="vpr zdr"><div class="q">Pripravljeno za tvoj preizkus: #${n.id} ${esc(n.naslov)}</div><div class="mut" style="font-size:14px">Ekipa je nalogo naredila in preizkusila. Preizkusi jo še sam; ko si zadovoljen, klikni <b>Združi</b> in nato objavi v PRD (Navodila/03_Publish.md). Če kaj ni prav, napiši v Claude »popravi nalogo ${n.id}: …«.</div>
       <div class="vr"><button class="gumb" data-id="${n.id}">Poglej</button><button class="gumb ok" data-zdruzi="${n.id}">Združi</button></div></div>`).join('') + '</div></div>' : '';
 
   $('#pripravljenih').textContent = cakajo.length ? `Pripravljenih za začetek: ${cakajo.length} (#${cakajo.map(n => n.id).join(', #')}).` : 'Trenutno ni pripravljenih nalog.';
