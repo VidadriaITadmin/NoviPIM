@@ -419,8 +419,8 @@ h1:focus { outline: none; }
 .ana-form .hint { color: var(--pim-text-muted); font-size: .76rem; line-height: 1.4; }
 .ana-form .field-error { color: var(--pim-bad-text); font-size: .78rem; font-weight: 600; }
 .page-actions a.disabled { opacity: .45; pointer-events: none; }
-:where(.ana-bar, .ana-selection, .ana-columns, .ana-chart, .pim-filterbar, .pim-selection) .ghost-button { align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-strong); cursor: pointer; display: inline-flex; font: inherit; font-size: .82rem; font-weight: 600; min-height: var(--pim-control-height); padding: .4rem .8rem; white-space: nowrap; }
-:where(.ana-bar, .ana-selection, .ana-columns, .ana-chart, .pim-filterbar, .pim-selection) .ghost-button:hover { background: var(--pim-surface-hover); }
+:where(.ana-bar, .ana-selection, .ana-columns, .ana-chart, .pim-filterbar, .pim-selection, .organization-scope) .ghost-button { align-items: center; background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-strong); cursor: pointer; display: inline-flex; font: inherit; font-size: .82rem; font-weight: 600; min-height: var(--pim-control-height); padding: .4rem .8rem; white-space: nowrap; }
+:where(.ana-bar, .ana-selection, .ana-columns, .ana-chart, .pim-filterbar, .pim-selection, .organization-scope) .ghost-button:hover { background: var(--pim-surface-hover); }
 :where(.ana-bar, .ana-selection, .ana-columns, .ana-chart) .link-button { background: none; border: 0; color: var(--pim-accent-link); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 600; padding: .25rem; text-decoration: none; }
 :where(.ana-bar, .ana-selection, .ana-columns, .ana-chart) .link-button:hover { text-decoration: underline; }
 .ana-bar .search-input { flex: 1 1 18rem; min-width: 12rem; }
