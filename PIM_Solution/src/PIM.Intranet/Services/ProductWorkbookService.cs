@@ -534,7 +534,7 @@ public sealed class ProductWorkbookService(
 
     // Dvoumni stolpci (»Naziv«) niso »neznani«: v okno za izbiro atributa ne sodijo, opozorilo pa
     // gre med težave na vrh — s tem tudi v izid in v ops.ImportRun.Problems (ProductImport.ApplyAsync).
-    problems.InsertRange(0, AmbiguousColumnWarnings(matches));
+    problems.InsertRange(0, AmbiguousColumnWarnings(matches, definition));
     var unknown = matches.Where(match => match.Column is null && !match.Ambiguous && !string.IsNullOrWhiteSpace(match.Header))
       .Select(match => match.Header).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     var readOnly = matches.Where(match => match.Column?.Target == ProductWorkbookTarget.ReadOnly)
@@ -1061,9 +1061,11 @@ public sealed class ProductWorkbookService(
   }
 
   /// <summary>Opozorilo za vsak preskočen dvoumen stolpec (»Naziv«), enkrat na naslov (#6).</summary>
-  public static IReadOnlyList<string> AmbiguousColumnWarnings(IReadOnlyList<ProductWorkbookHeaderMatch> matches) =>
+  public static IReadOnlyList<string> AmbiguousColumnWarnings(IReadOnlyList<ProductWorkbookHeaderMatch> matches,
+    IReadOnlyList<ProductWorkbookColumn> columns) =>
     matches.Where(match => match.Ambiguous).Select(match => match.Header.Trim())
-      .Distinct(StringComparer.OrdinalIgnoreCase).Select(ProductWorkbookContract.AmbiguousHeaderWarning).ToList();
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .Select(header => ProductWorkbookContract.AmbiguousHeaderWarning(header, columns)).ToList();
 
   // Stolpec pod skupino atributov, ki se je po naslovu ujel s poljem SAOP (»Dolžina« = ItemLength), je
   // atribut: uporabnik 2026-09-29 — »5m« pod Atributi je šel v številsko polje SAOP in bil preskočen.

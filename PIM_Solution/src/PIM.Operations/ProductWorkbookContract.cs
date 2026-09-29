@@ -352,10 +352,33 @@ public static class ProductWorkbookContract
   /// <summary>Ali je naslov na seznamu dvoumnih (<see cref="AmbiguousHeaders"/>).</summary>
   public static bool IsAmbiguousHeader(string? header) => AmbiguousHeaderSet.Contains(WorkbookHeader.Normalize(header));
 
-  /// <summary>Opozorilo za preskočen dvoumen stolpec; gre v predogled, izid in ops.ImportRun.Problems.</summary>
-  public static string AmbiguousHeaderWarning(string header) =>
-    $"Stolpec »{header.Trim()}« je preskočen, ker je dvoumen (spletni naziv ali naziv ERP?). "
-    + "Uporabi »Spletni naziv (sl)« ali »Naziv ERP (sl)«.";
+  /// <summary>
+  /// Opozorilo za preskočen dvoumen stolpec; gre v predogled, izid in ops.ImportRun.Problems.
+  /// Predlagana naslova se vzameta iz stolpcev lista (<paramref name="columns"/>), ne iz besedila v
+  /// kodi: naziv ERP ima na listu naslov iz registra SAOP (danes »Naziv 1«), ne »Naziv ERP (sl)« —
+  /// tak nasvet je vodil v napačen nov atribut (preverjalec #6).
+  /// </summary>
+  public static string AmbiguousHeaderWarning(string header, IReadOnlyList<ProductWorkbookColumn> columns)
+  {
+    ArgumentNullException.ThrowIfNull(columns);
+    var web = TitleColumnHeader(columns, "WEB_TITLE");
+    var erp = TitleColumnHeader(columns, "TITLE_ERP");
+    var advice = new List<string>();
+    if (web is not null) advice.Add($"»{web}« za spletni naziv");
+    if (erp is not null) advice.Add($"»{erp}« za naziv iz ERP (sprememba gre v vrsto za SAOP)");
+    return $"Stolpec »{header.Trim()}« je preskočen, ker je dvoumen (spletni naziv ali naziv ERP?)."
+      + (advice.Count > 0 ? " Vrednosti prepiši v stolpec " + string.Join(" ali ", advice) + "." : "");
+  }
+
+  /// <summary>Naslov stolpca z nazivom dane vrste, raje v slovenščini; <c>null</c>, če ga list nima.</summary>
+  static string? TitleColumnHeader(IReadOnlyList<ProductWorkbookColumn> columns, string textType)
+  {
+    var prefix = $"{TextFieldPrefix}{textType}.";
+    var candidates = columns.Where(column => column.FieldKey.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+      && column.Target != ProductWorkbookTarget.ReadOnly).ToList();
+    return (candidates.FirstOrDefault(column => column.FieldKey.EndsWith(".sl", StringComparison.OrdinalIgnoreCase))
+      ?? candidates.FirstOrDefault())?.Header;
+  }
 
   /// <summary>
   /// Poveže naslove iz datoteke s stolpci pogodbe. Kar se ne ujame, dobi <c>Column = null</c> —

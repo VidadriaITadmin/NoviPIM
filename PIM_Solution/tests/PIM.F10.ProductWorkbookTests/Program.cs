@@ -124,11 +124,27 @@ Check("dvoumen je tudi »Naziv artikla« in »Title« (brez razlike v presledkih
 Check("pravi stolpci in atributi »Nazivna …« niso dvoumni (natančna primerjava, ne »vsebuje«)",
   !ProductWorkbookContract.IsAmbiguousHeader("Spletni naziv (sl)") && !ProductWorkbookContract.IsAmbiguousHeader("Naziv ERP (sl)")
   && !ProductWorkbookContract.IsAmbiguousHeader("Nazivna napetost") && !ProductWorkbookContract.IsAmbiguousHeader("Ime"));
-var titleWarnings = ProductWorkbookService.AmbiguousColumnWarnings(titles);
-Check("opozorilo pove, kateri stolpec je preskočen, zakaj in kaj uporabiti",
+// Nasvet mora imenovati stolpca, ki na listu res obstajata: naziv ERP ima naslov iz registra SAOP
+// (»Naziv 1«), ne »Naziv ERP (sl)« — ta naslov uvoz ne pozna in bi vodil v napačen nov atribut.
+var titleColumns = ProductWorkbookContract.Build(spec with
+{
+  SaopFields = [.. spec.SaopFields, new("ProductText.TITLE_ERP.sl", "ItemTitle1", "Naziv 1", "text")],
+});
+var titleWarnings = ProductWorkbookService.AmbiguousColumnWarnings(titles, titleColumns);
+Check("opozorilo pove, kateri stolpec je preskočen, zakaj in kaj uporabiti (dejanska naslova lista)",
   titleWarnings.Count == 3 && titleWarnings[0].Contains("»Naziv«") && titleWarnings[0].Contains("dvoumen")
-  && titleWarnings[0].Contains("Spletni naziv (sl)") && titleWarnings[0].Contains("Naziv ERP (sl)"),
+  && titleWarnings[0].Contains("»Spletni naziv (sl)«") && titleWarnings[0].Contains("»Naziv 1«")
+  && !titleWarnings[0].Contains("Naziv ERP (sl)"),
   string.Join(" | ", titleWarnings));
+var advisedHeaders = new[] { "Spletni naziv (sl)", "Naziv 1" };
+Check("predlagana stolpca uvoz res prepozna (spletni naziv in naziv ERP za SAOP)",
+  ProductWorkbookContract.Match(advisedHeaders, titleColumns) is var advised
+  && advised[0].Column?.FieldKey == "ProductText.WEB_TITLE.sl"
+  && advised[1].Column?.FieldKey == "ProductText.TITLE_ERP.sl" && advised[1].Column?.Target == ProductWorkbookTarget.Saop);
+Check("list brez stolpca naziva ERP ga v nasvetu ne omenja",
+  ProductWorkbookService.AmbiguousColumnWarnings(titles, columns)[0] is var noErp
+  && noErp.Contains("»Spletni naziv (sl)«") && !noErp.Contains("ERP (")
+  && !noErp.Contains("Naziv 1"), ProductWorkbookService.AmbiguousColumnWarnings(titles, columns)[0]);
 Check("atribut z dvoumnim imenom dobi v izvozu naslov s kodo (uvoz bi ga sicer preskočil)",
   ProductWorkbookContract.Build(spec with { Attributes = [.. spec.Attributes, new("NAZIV", "Naziv")] })
     .Any(column => column.FieldKey == "ProductAttribute.NAZIV" && !ProductWorkbookContract.IsAmbiguousHeader(column.Header)));
