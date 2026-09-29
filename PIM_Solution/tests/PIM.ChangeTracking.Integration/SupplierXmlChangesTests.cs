@@ -95,19 +95,27 @@ public sealed class SupplierXmlChangesTests
     await connection.OpenAsync();
     // Isti izbor paketov kot storitev, nato število vrstic za podjetje 2 — primerjava z neposrednim
     // SELECT iz načrta preverjanja (#7: ChangedBy dobaviteljev, podjetje v vrstici zgodovine).
-    var viaService = await ScalarAsync<long>(connection, Constant("SupplierXmlBatchesSql") + """
+    // Razvojno bazo hkrati polnijo druga vrata (zajem XML v testih F5), zato štetje ponovimo, če se
+    // med obema poizvedbama spremeni; obe bereta brez deljenih zaklepov (kot storitev), da nista žrtvi zastoja.
+    long viaService = -1, direct = -2;
+    for (var poskus = 0; poskus < 5 && viaService != direct; poskus++)
+    {
+      if (poskus > 0) await Task.Delay(TimeSpan.FromSeconds(2));
+      viaService = await ScalarAsync<long>(connection, Constant("SupplierXmlBatchesSql") + """
 
-      SELECT COUNT_BIG(*) FROM pim.ProductFieldHistory h
-      INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
-      WHERE h.OrganizationId = 2;
-      """, ("@SourceCode", DBNull.Value));
-    var direct = await ScalarAsync<long>(connection, """
-      SELECT COUNT_BIG(*) FROM pim.ProductFieldHistory h
-      INNER JOIN pim.ProductChangeBatch b ON b.ChangeBatchId = h.ChangeBatchId
-      WHERE b.ChangeSource = N'XML_FEED'
-        AND b.ChangedBy IN (SELECT N'PIM.XmlMapping:' + SourceCode FROM map.SourceConnector WHERE ConnectorType = N'FILE_XML')
-        AND h.OrganizationId = 2;
-      """);
+        SELECT COUNT_BIG(*) FROM pim.ProductFieldHistory h
+        INNER JOIN @Paket paket ON paket.ChangeBatchId = h.ChangeBatchId
+        WHERE h.OrganizationId = 2;
+        """, ("@SourceCode", DBNull.Value));
+      direct = await ScalarAsync<long>(connection, """
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT COUNT_BIG(*) FROM pim.ProductFieldHistory h
+        INNER JOIN pim.ProductChangeBatch b ON b.ChangeBatchId = h.ChangeBatchId
+        WHERE b.ChangeSource = N'XML_FEED'
+          AND b.ChangedBy IN (SELECT N'PIM.XmlMapping:' + SourceCode FROM map.SourceConnector WHERE ConnectorType = N'FILE_XML')
+          AND h.OrganizationId = 2;
+        """);
+    }
     Assert.Equal(direct, viaService);
 
     var saopRows = await ScalarAsync<long>(connection, Constant("SupplierXmlBatchesSql") + """

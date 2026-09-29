@@ -269,8 +269,11 @@ public sealed class SupplierCandidateReadService(IConfiguration configuration)
   /// isto oznako nosi tudi preslikava SAOP (<c>PIM.XmlMapping:SAOP_*</c>), ki bi se sicer pokazala kot
   /// »novost dobavitelja«. Dobavitelj = vir z vrsto <c>FILE_XML</c> v <c>map.SourceConnector</c>.
   /// Podjetje je v vrstici zgodovine, ne v paketu (paket XML ga nima).
+  /// Branje brez deljenih zaklepov: zgodovina se samo dopisuje, zajem XML in drugi pisci pa jo polnijo
+  /// v dolgih transakcijah — bralec (ta pregled) bi bil sicer žrtev zastoja (napaka 1205).
   /// </summary>
   internal const string SupplierXmlBatchesSql = """
+    SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
     DECLARE @Paket TABLE (ChangeBatchId bigint NOT NULL PRIMARY KEY, SourceCode nvarchar(100) NOT NULL);
     INSERT @Paket (ChangeBatchId, SourceCode)
     SELECT paket.ChangeBatchId, vir.SourceCode
