@@ -15,6 +15,9 @@ export const meta = {
 const ids = ((args && args.ids) || []).map(Number).filter(Boolean)
 const seja = (args && args.seja) || 'Ekipa'
 const zdruzi = !(args && args.zdruzi === false)
+// Nočni način: lastnik spi, rok je jutro. Ekipa ne čaka odgovorov, razen kjer bi napačna izbira škodila.
+const nocni = !!(args && args.nocni)
+const NOCNI = nocni ? ' NOČNI NAČIN (lastnik spi, rok jutro): ne čakaj lastnika. Pri poslovni nejasnosti izberi NAJBOLJ VARNO možnost, jo zapiši z -Ukaz Sporocilo kot »PRIVZETO ZA NOČ: …, lastnik lahko spremeni« in nadaljuj. Blokiraj (odlocitevBlokira=true) SAMO, če bi napačna izbira trajno pokvarila podatke, šla v SAOP ali na produkcijo. Pri velikih nalogah naredi najpomembnejši del do konca in preostanek zapiši kot nove naloge (-Ukaz Nova).' : ''
 if (!ids.length) throw new Error('Podaj args.ids — številke nalog s table (dispečer jih izbere z -Ukaz Json).')
 
 const KOORD = 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Koordinacija.ps1'
@@ -98,7 +101,7 @@ async function razvijaj(id, vpliv, poskus) {
     `${KOORD} -Ukaz Prevzemi -Id ${id} -Seja "${ime('razvijalec', id)}" (iz kopije). Če Prevzemi zavrne zaradi prekrivanja, NE nadaljuj: ` +
     `vrni uspeh=false in v prekrivanjeZ številke nalog iz sporočila. ` +
     `Območje, strani in teste iz analize zapiši na nalogo (-Ukaz Nastavi -Polje obmocje / strani / testi), če se razlikujejo. ` +
-    `Končaj z uspešnimi vrati (-Ukaz Preveri -Id ${id}) in commitom na veji. Ne kliči Koncaj. ` +
+    `Končaj z uspešnimi vrati (-Ukaz Preveri -Id ${id}) in commitom na veji. Ne kliči Koncaj. ` + NOCNI + ' ' +
     (vpliv.odlocitevPotrebna ? `Odprto vprašanje, ki te naloge ne blokira: "${vpliv.odlocitevPotrebna}" — ustvari zanj ločeno nalogo (-Ukaz Nova) z -Ukaz Odlocitev in nadaljuj po najbolj varni poti. ` : '') +
     `Če potrebuješ odločitev lastnika, jo zapiši (-Ukaz Odlocitev) in se ustavi.` + tabla('razvijalec', id),
     // Brez isolation: 'worktree' — ta kopija izhaja iz main (prazen GitHub začetek) in prepove zagon table.
@@ -129,7 +132,7 @@ async function obdelaj(id) {
     const vpliv = await agent(
       `Analiziraj vpliv naloge #${id} s table PIM (${KOORD} -Ukaz Json; besedilo naloge je v <git-common-dir>/pim-koordinacija/naloge/${String(id).padStart(4, '0')}.md). ` +
       `Predlagaj natančno območje datotek za zaklep, strani za klikalnik in teste. Preveri, ali se območje prekriva z nalogami v delu. ` +
-      `Če je potrebna poslovna odločitev, ki blokira nalogo, jo SAM zapiši na tablo: ${KOORD} -Ukaz Odlocitev -Id ${id} -Besedilo "<vprašanje po domače, z možnostmi>".` +
+      `Če je potrebna poslovna odločitev, ki blokira nalogo, jo SAM zapiši na tablo: ${KOORD} -Ukaz Odlocitev -Id ${id} -Besedilo "<vprašanje po domače, z možnostmi>".` + NOCNI +
       tabla('vpliv', id),
       { agentType: 'pim-vpliv', phase: 'Vpliv', label: `vpliv #${id}`, schema: VPLIV })
     izid.vpliv = vpliv

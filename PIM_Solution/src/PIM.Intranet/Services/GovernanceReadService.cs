@@ -141,30 +141,57 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
         PimDb.Int64(reader, "InvalidCount")),
       command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
 
-  public Task<IReadOnlyList<FieldRequirementRow>> GetFieldRequirementsAsync(int validationProfileId, int organizationId, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("""
-      SELECT requirement.FieldRequirementId, requirement.FieldCode, requirement.IsRequired, requirement.IsActive, requirement.Severity,
-             requirement.CategoryTreeCode, requirement.CategoryCode, requirement.OriginScope,
+  /// <summary>
+  /// Vse zahteve vseh profilov v eni poizvedbi, razvrščene po profilu (ValidationProfileId), znotraj
+  /// profila po IsActive DESC, FieldCode, CategoryPath.
+  ///
+  /// Zakaj ena poizvedba (naloga #24): prej je šla poizvedba na vsak profil in v njej štetje odprtih
+  /// napak na vsako zahtevo posebej (val.ProductIssue ima milijone vrstic, indeksa po FieldRequirementId
+  /// ni) — stran se je nalagala 10-20 s. Zdaj: eno skupinsko štetje za podjetje (#Stevci) in pot
+  /// kategorije (rekurzivni pogled) enkrat, samo za kategorije, ki jih zahteve uporabljajo (#Poti).
+  /// </summary>
+  public async Task<IReadOnlyDictionary<int, IReadOnlyList<FieldRequirementRow>>> GetFieldRequirementsAsync(
+    int organizationId, CancellationToken cancellationToken = default)
+  {
+    var rows = await database.QueryAsync("""
+      SET NOCOUNT ON;
+      SELECT issue.FieldRequirementId, COUNT_BIG(*) AS OpenIssueCount
+      INTO #Stevci
+      FROM val.ProductIssue issue
+      INNER JOIN canon.Product product ON product.ProductId = issue.ProductId
+      WHERE issue.IsActive = 1 AND issue.FieldRequirementId IS NOT NULL AND product.OrganizationId = @OrganizationId
+      GROUP BY issue.FieldRequirementId;
+
+      SELECT path.CategoryTreeCode COLLATE DATABASE_DEFAULT AS CategoryTreeCode,
+             path.CategoryCode COLLATE DATABASE_DEFAULT AS CategoryCode,
+             path.CategoryPath COLLATE DATABASE_DEFAULT AS CategoryPath
+      INTO #Poti
+      FROM canon.CategoryPathTranslated path
+      WHERE path.LanguageCode = N'sl'
+        AND EXISTS (SELECT 1 FROM val.FieldRequirement used
+                    WHERE used.CategoryTreeCode = path.CategoryTreeCode AND used.CategoryCode = path.CategoryCode);
+
+      SELECT requirement.ValidationProfileId, requirement.FieldRequirementId, requirement.FieldCode, requirement.IsRequired,
+             requirement.IsActive, requirement.Severity, requirement.CategoryTreeCode, requirement.CategoryCode, requirement.OriginScope,
              COALESCE(path.CategoryPath, requirement.CategoryCode) AS CategoryPath,
-             (SELECT COUNT_BIG(*) FROM val.ProductIssue issue
-              INNER JOIN canon.Product product ON product.ProductId = issue.ProductId
-              WHERE issue.FieldRequirementId = requirement.FieldRequirementId AND issue.IsActive = 1
-                AND product.OrganizationId = @OrganizationId) AS OpenIssueCount
+             COALESCE(counts.OpenIssueCount, 0) AS OpenIssueCount
       FROM val.FieldRequirement requirement
-      LEFT JOIN canon.CategoryPathTranslated path
-        ON path.CategoryTreeCode = requirement.CategoryTreeCode AND path.CategoryCode = requirement.CategoryCode AND path.LanguageCode = N'sl'
-      WHERE requirement.ValidationProfileId = @ValidationProfileId
-      ORDER BY requirement.IsActive DESC, requirement.FieldCode, path.CategoryPath;
+      LEFT JOIN #Poti path
+        ON path.CategoryTreeCode = requirement.CategoryTreeCode AND path.CategoryCode = requirement.CategoryCode
+      LEFT JOIN #Stevci counts ON counts.FieldRequirementId = requirement.FieldRequirementId
+      ORDER BY requirement.ValidationProfileId, requirement.IsActive DESC, requirement.FieldCode, path.CategoryPath;
       """,
-      reader => new FieldRequirementRow(PimDb.Int32(reader, "FieldRequirementId"), PimDb.TextOrEmpty(reader, "FieldCode"),
+      reader => (ProfileId: PimDb.Int32(reader, "ValidationProfileId"), Requirement: new FieldRequirementRow(
+        PimDb.Int32(reader, "FieldRequirementId"), PimDb.TextOrEmpty(reader, "FieldCode"),
         PimDb.Bool(reader, "IsRequired"), PimDb.Bool(reader, "IsActive"), PimDb.Text(reader, "Severity"),
         PimDb.Int64(reader, "OpenIssueCount"), PimDb.Text(reader, "CategoryTreeCode"), PimDb.Text(reader, "CategoryCode"),
-        PimDb.Text(reader, "CategoryPath"), PimDb.Text(reader, "OriginScope")),
-      command =>
-      {
-        command.Parameters.AddWithValue("@ValidationProfileId", validationProfileId);
-        command.Parameters.AddWithValue("@OrganizationId", organizationId);
-      }, cancellationToken);
+        PimDb.Text(reader, "CategoryPath"), PimDb.Text(reader, "OriginScope"))),
+      command => command.Parameters.AddWithValue("@OrganizationId", organizationId), cancellationToken);
+
+    // GroupBy ohrani vrstni red znotraj skupine (vrstni red iz SQL).
+    return rows.GroupBy(row => row.ProfileId)
+      .ToDictionary(group => group.Key, group => (IReadOnlyList<FieldRequirementRow>)group.Select(row => row.Requirement).ToArray());
+  }
 
   public async Task<IReadOnlyList<ValidationLayerSummary>> GetValidationLayerSummariesAsync(
     int organizationId, IReadOnlyList<ValidationProfileRow> profiles, string? webSite = null,
