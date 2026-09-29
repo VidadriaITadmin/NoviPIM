@@ -192,8 +192,8 @@ public static class JobQueue
         : Gate(job.JobKey, requested.ContainsKey(job.JobKey), WaitingSince(job), known, dependencies, nowSnapshot, nowUtc);
     }
 
-    // Prvi razlog, zaradi katerega simulacija posla ni spustila (npr. ta isti tik je pred njim začel drug posel
-    // v pasu SAOP). Posel, ki je »zdaj« prost, a ga simulacija spusti šele kasneje, dobi ta razlog.
+    // Zadnji razlog (s poslom), zaradi katerega simulacija posla pred začetkom ni spustila (npr. pred njim je
+    // v pasu SAOP začel drug posel). Posel, ki je »zdaj« prost, a ga simulacija spusti šele kasneje, dobi ta razlog.
     var simulatedBlock = new Dictionary<string, JobGate>(StringComparer.Ordinal);
     var firstStart = new Dictionary<string, DateTime>(StringComparer.Ordinal);
     var firstEnd = new Dictionary<string, DateTime>(StringComparer.Ordinal);
@@ -233,7 +233,11 @@ public static class JobQueue
           var gate = Gate(job.JobKey, requested.ContainsKey(job.JobKey), WaitingSince(job), known, dependencies, Snapshot(at), at);
           if (!gate.CanStart)
           {
-            if (!firstStart.ContainsKey(job.JobKey)) simulatedBlock.TryAdd(job.JobKey, gate);
+            // ZADNJI razlog pred začetkom (ne prvi): v verigi SAOP A → B → C posel C na koncu čaka B, ne A
+            // (preverjalec #12, 3. krog). Razlog brez posla (tišina SAOP, meja) ne prepiše razloga s poslom,
+            // sicer bi stran namesto »v vrsti za B« rekla samo »tišina SAOP« brez ocene, kdaj je B na vrsti.
+            if (!firstStart.ContainsKey(job.JobKey) && (gate.BlockingJobKey is not null || !simulatedBlock.ContainsKey(job.JobKey)))
+              simulatedBlock[job.JobKey] = gate;
             continue;
           }
           var end = at.AddSeconds(estimate[job.JobKey].Seconds);

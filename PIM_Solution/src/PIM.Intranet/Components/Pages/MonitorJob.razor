@@ -85,8 +85,9 @@ else
         <span class="monitor-running">zahteva za zagon oddana@(job.RequestedBy is { Length: > 0 } kdo ? $" ({kdo})" : "")@(job.RequestedRunUtc is { } kdaj ? $" ob {PimTime.FormatTime(kdaj)}" : "")</span>
       }
     </div>
-    <p class="monitor-head-reason">@presoja.Reason</p>
-    @if (posel.ForecastText is { Length: > 0 } napoved && napoved != presoja.Reason && posel.Forecast?.Kind != JobWaitKind.HostDown)
+    @{ var (razlog, napoved) = RazlogInKdaj(presoja.Reason, posel.ForecastText, posel.Forecast?.Kind); }
+    <p class="monitor-head-reason">@razlog</p>
+    @if (napoved is not null)
     {
       @* Napoved razporejevalnika (JobQueue, naloga #12): kdaj bo zagon, koliko traja, naslednji redni zagon. *@
       <p class="monitor-forecast" role="status" aria-live="polite"><strong>Kdaj:</strong> @napoved</p>
@@ -1366,6 +1367,21 @@ else
     posel.Code?.ReachNote is { Length: > 0 } opomba ? opomba
     : posel.Job.Reach == "SendsEmail" ? "pošlje e-pošto"
     : "kliče SAOP ali dobavitelja";
+
+  /// <summary>
+  /// Razlog pod »Stanje« in vrstica »Kdaj« brez ponavljanja (preverjalec #12, 3. krog): presoja zamude že vsebuje
+  /// napoved (»Termin je minil …, ker ga razporejevalnik namenoma zadrži. &lt;napoved&gt;«), zato jo iz razloga
+  /// umaknemo in pokažemo samo v »Kdaj«. Kadar je razlog enak napovedi, ostane samo razlog.
+  /// </summary>
+  internal static (string Razlog, string? Kdaj) RazlogInKdaj(string razlog, string? napoved, JobWaitKind? vrsta)
+  {
+    if (napoved is not { Length: > 0 } || vrsta == JobWaitKind.HostDown) return (razlog, null);
+    if (string.Equals(razlog.Trim(), napoved.Trim(), StringComparison.Ordinal)) return (razlog, null);
+    var mesto = razlog.IndexOf(napoved, StringComparison.Ordinal);
+    if (mesto < 0) return (razlog, napoved);
+    var ostanek = (razlog[..mesto] + razlog[(mesto + napoved.Length)..]).Trim();
+    return ostanek.Length == 0 ? (razlog, null) : (ostanek, napoved);
+  }
 
   static string Naslednji(global::PIM.Intranet.Services.MonitorJob posel)
   {

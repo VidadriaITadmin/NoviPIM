@@ -151,6 +151,29 @@ static class JobQueueChecks
       Check(!Explain(waiting).Contains("naslednjem tiku", StringComparison.Ordinal), "Razlog je iz simulacije: " + Explain(waiting));
     }
 
+    // ─── Veriga SAOP A → B → C: vsak čaka svojega neposrednega predhodnika (preverjalec #12, 3. krog) ──
+    // Trije lahki posli SAOP zapadli naenkrat, nič ne teče. C mora imenovati B (ne A), njegova ocena začetka
+    // pa mora biti konec B + tišina SAOP (na tik natančno).
+    var chainKeys = new[] { JobCatalog.SaopProductImport, JobCatalog.StockImport, JobCatalog.PriceImport };
+    var chainScene = Quiet(all).Select(job => chainKeys.Contains(job.JobKey) ? job with { NextDueUtc = Now.AddMinutes(-20) } : job).ToList();
+    var chainForecast = JobQueue.Forecast(chainScene, Dependencies, stats, true, Now, Zone);
+    var chain = chainKeys.Select(key => chainForecast[key]).OrderBy(f2 => f2.EstimatedStartUtc).ToList();
+    Check(chain.All(f2 => f2.EstimatedStartUtc is not null && f2.EstimatedEndUtc is not null), "Veriga: vsi trije imajo oceno začetka in konca.");
+    Check(chain[0].Kind == JobWaitKind.Ready, "Veriga: prvi posel SAOP je na vrsti zdaj: " + chain[0]);
+    for (var i = 1; i < chain.Count; i++)
+    {
+      var (prev, cur) = (chain[i - 1], chain[i]);
+      var prevEnd = prev.EstimatedEndUtc!.Value;
+      Check(cur.BlockingJobKey == prev.JobKey && cur.BlockingEndUtc == prevEnd && cur.BlockingStartUtc == prev.EstimatedStartUtc,
+        $"Veriga: {cur.JobKey} čaka neposrednega predhodnika {prev.JobKey}, ne prvega v vrsti: {cur}");
+      Check(cur.EstimatedStartUtc >= prevEnd.AddSeconds(JobCatalog.SaopQuietSeconds)
+        && cur.EstimatedStartUtc <= prevEnd.AddSeconds(JobCatalog.SaopQuietSeconds + JobQueue.TickSeconds),
+        $"Veriga: ocena začetka {cur.JobKey} = konec {prev.JobKey} + tišina SAOP (na tik): {cur.EstimatedStartUtc:HH:mm:ss}, konec {prevEnd:HH:mm:ss}.");
+      var chainWhy = Explain(cur);
+      Check(chainWhy.Contains(JobCatalog.Find(prev.JobKey)!.Label, StringComparison.Ordinal) && chainWhy.Contains("na vrsti ob ~", StringComparison.Ordinal),
+        $"Veriga: razlog imenuje neposrednega predhodnika in kdaj je ta na vrsti: {chainWhy}");
+    }
+
     // ─── Ko nič ne teče, noben razlog ne trdi »teče« (preverjalec #12) ──────
     // Gostitelj z --samo-nadzor: vsi posli zapadli, nobeden ne teče. Razlogi pridejo iz simulacije, zato
     // morajo reči »v vrsti za X (na vrsti ob ~HH:MM, traja ~44 s)«, ne »X, ki ravno teče«.
