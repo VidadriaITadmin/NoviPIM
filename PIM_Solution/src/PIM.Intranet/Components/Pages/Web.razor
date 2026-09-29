@@ -1,133 +1,121 @@
 @page "/splet"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@using System.Collections.Concurrent
+@using System.Globalization
+@using PIM.Automation
 @inject MagentoArtifactService Artifacts
 @inject AdminConsoleService AdminConsole
 @inject QualityReadService Quality
 @inject SafeguardService Safeguards
+@inject MonitorService Monitor
+@inject AuthenticationStateProvider Authentication
+
+@* #25 (lastnik 2026-09-29): prej osem enakovrednih gumbov, dolge tehnične opombe in rdeča opozorila tudi,
+   ko je bilo vse v redu. Zdaj: zavihki področja (WebTabs), stanje datoteke v enem stavku po domače, eno
+   glavno dejanje (skrbnik: »Izdelaj zdaj«), tehnika pod »Tehnične podrobnosti« (odprta samo, ko je vzrok
+   napake). Število vrstic je iz zadnje uspešne izdelave (out.ExportRun), ne iz sestave: od 285 je katalog.csv
+   sestavljen iz več podjetij (out.CatalogSource), sestava pa se računa po podjetju. *@
 
 <PageTitle>CSV za Magento</PageTitle>
-<PimPage Title="CSV za Magento" Subtitle="Dejanski izhod PIM-a za IQLighting: katalog.csv in stranke.csv, ki ju bere Magento." />
-<div class="page-actions section-gap">
-  <button class="filter-button" disabled="@(Loading || PreviewLoading)" @onclick="LoadAsync">Osveži stanje</button>
-  <a href="sistem/posel/WEB_CATALOG_EXPORT">Urnik in zagon: CSV za Magento</a>
-  <a href="varovalke">Varovalke</a>
-  <a href="splet/katalog">Nadzor objave artiklov</a>
-  <a href="splet/umaknjeni">Umaknjeni s spleta</a>
-  <a href="splet/neskladja">Neskladja med podjetji</a>
-  <a href="kakovost/artikli?podjetje=2">Validacija artiklov</a>
-  <a href="splet/izvoz">Predogled trenutnih podatkov PIM</a>
-</div>
-<p class="card-note">Izdelava CSV bere podatke v PIM-u in ima svoj cikel. Čas izdelave potrjuje nastanek datoteke; ne potrjuje, da jo je Magento že prebral. Popravki na karticah se prenesejo ob naslednji uspešni izdelavi.</p>
-<PimState Loading="Loading" Error="@Error" Empty="false">
-  @* 277: ali je zadnja izdelava šla na splet ali čaka potrditev varovalke (cena ×100, umik s spleta …). *@
-  <SafeguardBanner Check="Safeguard" />
-  @* 242: mapa in pravice so bile vzrok, da datoteki dneve nista nastajali; stran to pove pred prvim padcem. *@
-  <section class="ui-card data-card section-gap">
-    <h2>Izhodna mapa</h2>
-    @if (Folder is null)
+<PimPage Title="CSV za Magento" Subtitle="katalog.csv in stranke.csv, ki ju bere Magento. PIM ju izdela samodejno po urniku; tu vidiš, ali sta v redu in kaj gre na splet.">
+  <Actions>
+    @if (IsAdmin)
     {
-      <p class="message-state error-message">Izhodne mape ni mogoče določiti. Preveri register EXPORT_ROOT na strani Mape in povezavo z bazo.</p>
-    }
-    else
-    {
-      <p><strong>@Folder.Root</strong> <span class="tree-path">vir: @Folder.Source</span></p>
-      <p class="card-note">
-        Mapa @(Folder.Exists ? "obstaja" : "NE obstaja") ·
-        zapis iz tega procesa intraneta (račun @Folder.Account): @(Folder.WritableByThisProcess ? "mogoč" : "NI mogoč") ·
-        dokončan par datotek: @(Folder.HasCompletePair ? "da" : "ne").
-        Worker, ki datoteki izdela, lahko teče pod drugim računom (Windows naloga, storitev); zanj velja napaka zadnjega poskusa spodaj.
-      </p>
-      @if (!Folder.Exists || !Folder.WritableByThisProcess)
+      @if (ConfirmRun)
       {
-        <p class="message-state error-message">Pravice do izhodne mape uredi kot skrbnik: <code>powershell -ExecutionPolicy Bypass -File scripts\Nastavi-pravice-izvozne-mape.ps1</code> (doda pravico spreminjanja računu nalog in bazenu IIS, nato preveri z -SamoPreveri). Do takrat vsak poskus izdelave pade, prejšnji veljavni par pa ostane.</p>
+        <span class="run-confirm" role="group" aria-label="Potrditev izdelave">
+          <span>Izdelati katalog.csv in stranke.csv zdaj?</span>
+          <button type="button" class="primary-button" disabled="@RunBusy" @onclick="RequestRunAsync">@(RunBusy ? "Oddajam …" : "Da, izdelaj")</button>
+          <button type="button" class="secondary-button" disabled="@RunBusy" @onclick="() => ConfirmRun = false">Prekliči</button>
+        </span>
+      }
+      else
+      {
+        <button type="button" class="primary-button" disabled="@(RunBusy || Loading)" @onclick="() => ConfirmRun = true">Izdelaj zdaj</button>
       }
     }
+    <button type="button" class="secondary-button" disabled="@(Loading || PreviewLoading)" @onclick="RefreshAsync">Osveži</button>
+  </Actions>
+</PimPage>
+<PimTabs Active="overview" Tabs="WebTabs.Tabs" Label="Izhod na splet" />
+
+@if (RunMessage is not null) { <p class="message-state success-message" role="status">@RunMessage</p> }
+@if (RunError is not null) { <p class="message-state error-message" role="alert">@RunError</p> }
+
+<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Berem stanje datotek za splet …">
+  @* 277: ali je zadnja izdelava šla na splet ali čaka potrditev varovalke (cena ×100, umik s spleta …). *@
+  <SafeguardBanner Check="Safeguard" />
+
+  <section class="ui-card web-status web-status-@Headline.Tone section-gap" role="@(Headline.Tone == "bad" ? "alert" : "status")" aria-labelledby="web-status-title">
+    <span class="web-status-mark" aria-hidden="true"></span>
+    <div class="web-status-body">
+      <h2 id="web-status-title">@Headline.Sentence</h2>
+      @if (Headline.Next is not null) { <p class="web-status-next">@Headline.Next</p> }
+      <ul class="web-status-files">
+        @foreach (var file in Files.Where(file => file.Sentence != Headline.Sentence))
+        {
+          <li>
+            <PimChip Text="@file.Chip" Tone="@file.Tone" />
+            <span>@file.Sentence</span>
+          </li>
+        }
+      </ul>
+      <p class="web-status-foot">
+        @if (!IsAdmin) { <PimChip Text="Samo za branje" Prefix="" /> }
+        @ScheduleText
+        @if (IsAdmin) { @(" ")<a href="@($"sistem/posel/{JobCatalog.WebCatalogExport}")">Urnik in zagon</a><text>.</text> } else { @(" Ročni zagon sproži skrbnik.") }
+        Popravki na karticah artiklov gredo na splet ob naslednji uspešni izdelavi. Čas izdelave ne pomeni, da je Magento datoteko že prebral.
+        @if (LoadedAtUtc is { } loaded) { <span class="loaded-at">Stanje prebrano ob @At(loaded).</span> }
+      </p>
+    </div>
   </section>
-  <section class="ui-card data-card section-gap">
-    <table class="data-table"><caption>Dokončane datoteke za Magento</caption>
-      <thead><tr><th>Datoteka</th><th>Dejanska datoteka</th><th>Zadnji poskus in zadnji uspeh izdelave</th><th>Dejanje</th></tr></thead>
-      <tbody>@foreach (var code in Codes)
-      {
-        var artifact = Status.GetValueOrDefault(code);
-        var attempt = Runs.FirstOrDefault(run => run.ProfileCode == code && (run.Status != "Succeeded" || run.Sha256 is not null || run.ByteCountValue is not null));
-        var success = Runs.FirstOrDefault(run => run.ProfileCode == code && run.Status == "Succeeded" && (run.Sha256 is not null || run.ByteCountValue is not null));
-        <tr>
-          <td><strong>@MagentoArtifactService.FileName(code)</strong></td>
-          <td>@if (artifact is not null)
-          {
-            <div>@artifact.PublishedUtc.ToPimLocal().ToString("g") · @PimFormat.Ago(artifact.PublishedUtc)</div>
-            <div class="tree-path">@((artifact.Bytes / 1024d / 1024d).ToString("N1")) MB · generacija @artifact.Generation</div>
-            @if (Safeguard is { IsWaiting: true, HeldCount: > 0 } held && code == "MAGENTO_PRODUCTS") { <PimChip Text="@($"brez zadržanih artiklov: {held.HeldCount:N0}")" Tone="warn" /> }
-            else if (DateTime.UtcNow - artifact.PublishedUtc > TimeSpan.FromMinutes(StaleAfterMinutes)) { <PimChip Text="@($"Starejša od {StaleAfterMinutes} minut — preveri urnik")" Tone="warn" /> }
-          }
-          else { <span class="message-state error-message">@FileErrors.GetValueOrDefault(code)</span> }</td>
-          <td>@if (attempt is not null)
-          {
-            <PimChip Text="@StatusLabel(attempt.Status)" Tone="@(attempt.Status == "Succeeded" ? "good" : attempt.Status == "Running" ? "warn" : "bad")" Prefix="Zadnji poskus: " />
-            <div>@attempt.StartedUtc.ToPimLocal().ToString("g") · @Sprozilec(attempt.TriggeredBy) @attempt.Actor</div>
-            @if (attempt.ErrorRedacted is not null) { <div class="error-message">@attempt.ErrorRedacted</div> }
-            @if (attempt.Status != "Succeeded")
-            {
-              <div class="tree-path">Zadnji uspeh: @(success is null ? "nikoli" : $"{success.StartedUtc.ToPimLocal():g} · {PimFormat.Ago(success.StartedUtc)} · {success.RowCountValue?.ToString("N0")} vrstic")</div>
-            }
-          } else { <span>Ni zabeleženega poskusa.</span> }</td>
-          <td>
-            <button class="small-action" disabled="@(artifact is null || PreviewLoading)" @onclick="() => SelectAsync(code)">Preglej vsebino</button>
-            @if (artifact is not null)
-            {
-              <a class="small-action" href="@($"izvoz/magento-datoteka/{code}")">Prenesi izdelano datoteko</a>
-              <a class="small-action" href="@($"izvoz/magento-datoteka/{code}/excel")" title="Iste vrednosti kot CSV, s pravilnimi šumniki in decimalkami za Excel">Prenesi za Excel</a>
-            }
-          </td>
-        </tr>
-      }</tbody>
-    </table>
+
+  <section class="ui-card data-card section-gap" aria-labelledby="web-files-title">
+    <h2 id="web-files-title">Datoteki</h2>
+    <PimTable Caption="Zadnji izdelani datoteki za Magento" Columns="FileColumns">
+      <Rows>
+        @foreach (var file in Files)
+        {
+          <tr>
+            <td><strong>@file.FileName</strong></td>
+            <td>@if (file.MadeUtc is { } made) { <span>@When(made)</span> <span class="tree-path">@PimFormat.Ago(made)</span> } else { <span>—</span> }</td>
+            <td class="numeric">@(file.Rows?.ToString("N0") ?? "—")</td>
+            <td class="numeric">@(file.Artifact is null ? "—" : (file.Artifact.Bytes / 1024d / 1024d).ToString("N1") + " MB")</td>
+            <td class="row-actions">
+              <button type="button" class="small-action" disabled="@(file.Artifact is null || PreviewLoading)" @onclick="() => SelectAsync(file.Code)">Preglej vsebino</button>
+              @if (file.Artifact is not null)
+              {
+                <a class="small-action" href="@($"izvoz/magento-datoteka/{file.Code}/excel")" title="Iste vrednosti kot CSV, s pravilnimi šumniki in decimalkami za Excel">Prenesi za Excel</a>
+                <a class="small-action" href="@($"izvoz/magento-datoteka/{file.Code}")">Prenesi izdelano datoteko</a>
+              }
+            </td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
   </section>
-  @* 242: sestava kataloga po istih pravilih, po katerih nastane katalog.csv — koliko vrstic bo v datoteki in zakaj ostalih ni. *@
-  <section class="ui-card data-card section-gap">
-    <h2>Sestava kataloga (podjetje @WorkerCycles.CatalogOrganization) po izvoznih pravilih</h2>
-    @if (SummaryLoading) { <p class="card-note">Računam sestavo kataloga …</p> }
-    else if (SummaryError is not null) { <p class="message-state error-message">@SummaryError</p> }
-    else if (Summary is { } s)
-    {
-      <div class="kpi-grid">
-        <PimStat Label="Aktivni artikli" Value="@s.ActiveCount.ToString("N0")" />
-        <PimStat Label="Objavljeni v PIM" Value="@s.PromotedCount.ToString("N0")" Note="po uspešni validaciji" />
-        <PimStat Label="Vrstic v katalog.csv" Value="@s.InCsvCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=IN_CSV" />
-        <PimStat Label="Objavljeni na spletu" Value="@s.PublishedCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=PUBLISHED" Note="s spletno stranjo" />
-        <PimStat Label="Brez spletnega mesta" Value="@s.NoSiteCount.ToString("N0")" Href="kakovost/artikli?podjetje=2&stanje=NO_SITE" Note="v CSV samo kot odjava, če so bili prej na spletu" />
-        <PimStat Label="Strank v stranke.csv" Value="@s.CustomerCount.ToString("N0")" />
-      </div>
-      <table class="data-table"><caption>Zakaj artikel ni v katalog.csv</caption>
-        <thead><tr><th>Razlog</th><th>Artiklov</th><th>Pojasnilo</th></tr></thead>
-        <tbody>
-          <tr><td>@WebExportStates.Label(WebExportStates.NotPromoted)</td><td>@s.NotPromotedCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.NotPromoted)</td></tr>
-          <tr><td>@WebExportStates.Label(WebExportStates.NoCategory)</td><td>@s.NoCategoryCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.NoCategory)</td></tr>
-          <tr><td>@WebExportStates.Label(WebExportStates.BlockedErrors)</td><td>@s.BlockedErrorsCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.BlockedErrors)</td></tr>
-          <tr><td>@WebExportStates.Label(WebExportStates.Hold)</td><td>@s.HoldCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.Hold)</td></tr>
-          <tr><td>@WebExportStates.Label(WebExportStates.Excluded)</td><td>@s.ExcludedCount.ToString("N0")</td><td>@WebExportStates.Explain(WebExportStates.Excluded)</td></tr>
-        </tbody>
-      </table>
-      <p class="card-note">Validacija: @s.StaleCount.ToString("N0") artiklov z zastarelo validacijo (starejša od 2 ur); najstarejša validacija @(s.OldestValidationUtc?.ToPimLocal().ToString("g") ?? "nikoli"). Števila veljajo za trenutno stanje baze; datoteka zgoraj je nastala ob svojem času in se lahko razlikuje do naslednje izdelave.</p>
-    }
-  </section>
+
   @if (Selected is not null)
   {
-    <section class="ui-card data-card section-gap">
-      <h2>@MagentoArtifactService.FileName(Selected): pregled vsebine</h2>
-      <div class="filter-bar">
-        <label class="field-control"><span>Šifra, EAN, naziv ali druga vrednost v CSV</span><input class="search-input" @bind="SearchDraft" /></label>
-        <button class="filter-button" disabled="@PreviewLoading" @onclick="SearchAsync">Poišči v datoteki</button>
-        <label><input type="checkbox" @bind="AllColumns" /> Vsi stolpci</label>
+    <section class="ui-card data-card section-gap" aria-labelledby="web-preview-title">
+      <div class="section-heading">
+        <h2 id="web-preview-title">@MagentoArtifactService.FileName(Selected): vsebina</h2>
+        <button type="button" class="small-action" @onclick="ClosePreview">Zapri</button>
       </div>
-      <PimState Loading="PreviewLoading" Error="@PreviewError" Empty="@(Preview?.Page.Rows.Count == 0)" EmptyText="V izdelani datoteki ni zadetkov.">
+      <div class="filter-bar">
+        <label class="field-control"><span>Šifra, EAN, naziv ali druga vrednost</span><input class="search-input" @bind="SearchDraft" @onkeydown="OnSearchKeyAsync" /></label>
+        <button type="button" class="filter-button" disabled="@PreviewLoading" @onclick="SearchAsync">Poišči v datoteki</button>
+        <label class="checkbox-control"><input type="checkbox" @bind="AllColumns" aria-label="Pokaži vse stolpce" /> Vsi stolpci</label>
+      </div>
+      <PimState Loading="PreviewLoading" Error="@PreviewError" Empty="@(Preview?.Page.Rows.Count == 0)" EmptyText="V izdelani datoteki ni zadetkov. Poskusi s krajšim iskanjem.">
         @if (Preview is not null)
         {
-          <p class="card-note">Generacija @Preview.Artifact.Generation · @Preview.Artifact.PublishedUtc.ToPimLocal().ToString("g") · @Preview.FileRows.ToString("N0") vrstic v datoteki · @Preview.Page.TotalCount.ToString("N0") zadetkov · @Preview.Page.Columns.Count stolpcev.</p>
-          <p class="card-note">Prazne oznake spletnih mest lahko pomenijo umik artikla iz spletnih mest. Prisotnost vrstice v CSV sama ne pomeni dovoljenja za objavo.</p>
+          <p class="card-note">Izdelana @When(Preview.Artifact.PublishedUtc) · @PimFormat.Count(Preview.FileRows, "vrstica", "vrstici", "vrstice", "vrstic") v datoteki · @PimFormat.Count(Preview.Page.TotalCount, "zadetek", "zadetka", "zadetki", "zadetkov") · @PimFormat.Count(Preview.Page.Columns.Count, "stolpec", "stolpca", "stolpci", "stolpcev").
+            Prazne »Spletne strani« pomenijo umik artikla s spletišča.</p>
           <div class="csv-preview" role="region" tabindex="0" aria-label="Vsebina izdelanega CSV">
-            <table class="data-table csv-table"><thead><tr>@foreach (var index in VisibleColumns) { <th>@Preview.Page.Columns[index]</th> }</tr></thead>
+            <table class="data-table csv-table"><caption class="visually-hidden">Vrstice izdelane datoteke @MagentoArtifactService.FileName(Selected)</caption>
+              <thead><tr>@foreach (var index in VisibleColumns) { <th scope="col">@Preview.Page.Columns[index]</th> }</tr></thead>
               <tbody>@foreach (var row in Preview.Page.Rows) { <tr>@foreach (var index in VisibleColumns) { <td>@row[index]</td> }</tr> }</tbody>
             </table>
           </div>
@@ -136,38 +124,222 @@
       </PimState>
     </section>
   }
-  <section class="ui-card data-card section-gap">
-    <h2>Zgodovina izdelave in ročnih prenosov</h2>
-    <p class="card-note">Ročni prenos iz trenutne baze ne osveži datoteke za Magento. Uspešno izdelavo datoteke potrjuje zabeležen SHA-256 (oziroma velikost, kadar kontrolne vsote ni bilo mogoče prebrati).</p>
-    <table class="data-table"><thead><tr><th>Datoteka</th><th>Čas</th><th>Izid</th><th>Vrstic</th><th>Vrsta</th><th>Sprožil</th><th>Napaka</th></tr></thead>
-      <tbody>@foreach (var run in Runs.Take(30))
-      { <tr><td>@MagentoArtifactService.FileName(run.ProfileCode)</td><td>@run.StartedUtc.ToPimLocal().ToString("g")</td><td>@StatusLabel(run.Status)</td><td>@(run.RowCountValue?.ToString("N0") ?? "—")</td><td>@(run.Sha256 is not null || run.ByteCountValue is not null ? "Izdelana datoteka" : run.Status == "Succeeded" ? "Prenos iz baze" : "Poskus")</td><td>@Sprozilec(run.TriggeredBy) @run.Actor</td><td>@(run.ErrorRedacted ?? "—")</td></tr> }</tbody>
-    </table>
+
+  @* 242 + 285: sestava po istih pravilih, po katerih nastane katalog.csv — po podjetju, ker jo sestavlja več podjetij. *@
+  <section class="ui-card data-card section-gap" aria-labelledby="web-composition-title">
+    <h2 id="web-composition-title">Kaj gre na splet</h2>
+    <p class="composition-lead">
+      @if (CatalogRows is { } catalogRows) { <text>Zadnji katalog.csv ima <strong>@PimFormat.Count(catalogRows, "vrstico", "vrstici", "vrstice", "vrstic")</strong></text> }
+      else if (Files.FirstOrDefault()?.Artifact is null) { <text>Izdelanega katalog.csv PIM trenutno ne vidi</text> }
+      else { <text>Števila vrstic zadnjega katalog.csv zgodovina izdelave ne pozna</text> }
+      @if (Sources.Count > 1) { <text>; sestavljen je iz podjetij @string.Join(" in ", Sources.Select(source => source.Name)) (ista šifra je v datoteki enkrat)</text> }.
+      @if (CustomerCount is { } customers) { <text>V stranke.csv gre zdaj @PimFormat.Count(customers, "stranka", "stranki", "stranke", "strank").</text> }
+    </p>
+    @if (SummaryLoading) { <p class="card-note" role="status">Računam, zakaj artikli niso v katalog.csv …</p> }
+    @if (SummaryError is not null) { <p class="message-state warn-message" role="alert">@SummaryError</p> }
+    @if (Summaries.Count > 0)
+    {
+      <PimTable Caption="Kaj gre v katalog.csv in zakaj ostali artikli ne, po podjetjih" Columns="ReasonColumns">
+        <Rows>
+          <tr class="in-csv-row">
+            <td><strong>V katalog.csv (zdaj)</strong></td>
+            @foreach (var source in Sources)
+            {
+              var inCsv = Summaries.GetValueOrDefault(source.OrganizationId)?.InCsvCount;
+              <td class="numeric">@if (inCsv is { } value) { <a href="@($"kakovost/artikli?podjetje={source.OrganizationId}&stanje={InCsvState}")">@value.ToString("N0")</a> } else { <span>…</span> }</td>
+            }
+            <td class="reason-explain">Artikli, ki gredo po izvoznih pravilih v datoteko z izpolnjenimi »Spletne strani«. Klik odpre seznam.</td>
+          </tr>
+          @foreach (var reason in Reasons)
+          {
+            <tr>
+              <td>@WebExportStates.Label(reason)</td>
+              @foreach (var source in Sources)
+              {
+                var count = Summaries.TryGetValue(source.OrganizationId, out var s) ? ReasonCount(s, reason) : (long?)null;
+                <td class="numeric">@if (count is > 0) { <a href="@($"kakovost/artikli?podjetje={source.OrganizationId}&stanje={reason}")">@count.Value.ToString("N0")</a> } else { @(count?.ToString("N0") ?? "—") }</td>
+              }
+              <td class="reason-explain">@WebExportStates.Explain(reason)</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      <p class="card-note">
+        Števila so trenutno stanje baze@(SummaryAtUtc is { } at ? $" (izračunano {At(at)})" : ""); datoteka zgoraj je nastala ob svojem času.
+        Ista šifra iz več podjetij je v datoteki enkrat, zato vsota podjetij ni enaka številu vrstic.
+        @if (StaleValidation > 0) { <text>@PimFormat.Count(StaleValidation, "artikel ima", "artikla imata", "artikli imajo", "artiklov ima") validacijo, starejšo od 2 ur. </text> }
+        Kaj bi bilo v datoteki zdaj, po stolpcih profila: <a href="splet/izvoz">Predogled trenutnih podatkov PIM</a>.
+      </p>
+    }
   </section>
+
+  <details class="ui-card section-gap web-more">
+    <summary>Zgodovina izdelave</summary>
+    <div class="filter-bar history-filters" role="search" aria-label="Filtri zgodovine">
+      <label class="field-control" for="history-file"><span>Datoteka</span>
+        <select id="history-file" class="filter-select" @bind="HistoryFile">
+          <option value="">Obe datoteki</option>
+          @foreach (var profileCode in Codes) { <option value="@profileCode">@MagentoArtifactService.FileName(profileCode)</option> }
+        </select>
+      </label>
+      <label class="checkbox-control"><input type="checkbox" @bind="HistoryManual" aria-label="Pokaži tudi ročne prenose iz baze" /> Tudi ročni prenosi iz baze</label>
+      <span class="tree-path" role="status">@PimFormat.Count(HistoryRows.Count, "zapis", "zapisa", "zapisi", "zapisov") (zadnjih 30 dni, največ 30)</span>
+    </div>
+    <PimTable Caption="Zgodovina izdelave datotek za Magento" Columns="HistoryColumns">
+      <Rows>
+        @foreach (var run in HistoryRows)
+        {
+          <tr>
+            <td>@MagentoArtifactService.FileName(run.ProfileCode)</td>
+            <td>@When(run.StartedUtc)</td>
+            <td><PimChip Text="@StatusLabel(run.Status)" Tone="@StatusTone(run.Status)" /></td>
+            <td class="numeric">@(run.RowCountValue?.ToString("N0") ?? "—")</td>
+            <td>@(IsBuilt(run) ? "Izdelana datoteka" : run.Status == "Succeeded" ? "Ročni prenos iz baze" : "Poskus izdelave")</td>
+            <td>@Sprozilec(run.TriggeredBy) @run.Actor</td>
+            <td>@(run.ErrorRedacted ?? "—")</td>
+          </tr>
+        }
+      </Rows>
+    </PimTable>
+    <p class="card-note">Ročni prenos iz baze ne zamenja datoteke za Magento. Izdelano datoteko potrjuje zabeležena kontrolna vsota.</p>
+  </details>
+
+  <details class="ui-card section-gap web-more" open="@FolderIsCause">
+    <summary>Tehnične podrobnosti</summary>
+    @if (Folder is null)
+    {
+      <p>Izhodne mape ni mogoče določiti. Skrbnik naj preveri register EXPORT_ROOT na strani <a href="administracija/mape">Mesta shranjevanja</a> in povezavo z bazo.</p>
+    }
+    else
+    {
+      <dl class="tech-list">
+        <dt>Izhodna mapa</dt><dd><code>@Folder.Root</code> <span class="tree-path">(@Folder.Source)</span></dd>
+        <dt>Mapa obstaja</dt><dd>@(Folder.Exists ? "da" : "ne")</dd>
+        <dt>Intranet lahko piše vanjo</dt><dd>@(Folder.WritableByThisProcess ? "da" : "ne") <span class="tree-path">(račun @Folder.Account)</span></dd>
+        <dt>Dokončan par datotek</dt><dd>@(Folder.HasCompletePair ? "da" : "ne")</dd>
+      </dl>
+      <p class="card-note">Datoteki izdela gostitelj avtomatike, ki lahko teče pod drugim računom; zanj velja napaka zadnjega poskusa v zgodovini.</p>
+      @if (!Folder.Exists || !Folder.WritableByThisProcess)
+      {
+        <p class="card-note">Pravice uredi skrbnik: <code>powershell -ExecutionPolicy Bypass -File scripts\Nastavi-pravice-izvozne-mape.ps1</code> (nato preveri z <code>-SamoPreveri</code>). Do takrat vsak poskus izdelave pade, prejšnja veljavna datoteka pa ostane.</p>
+      }
+    }
+    <p class="card-note">Povezano: <a href="varovalke">Varovalke</a> · <a href="kakovost/artikli?stanje=BLOCKED_ERRORS">Artikli z blokirajočimi napakami</a> · <a href="izvozi/profili">Izvozni profili</a></p>
+  </details>
 </PimState>
 
 @code {
   static readonly string[] Codes = ["MAGENTO_PRODUCTS", "MAGENTO_CUSTOMERS"];
-  /// <summary>Cikel magento-csv teče vsakih 15 min (242) in izvoz traja minute; starost nad 30 min pomeni, da cikel ne teče ali pada.</summary>
-  const int StaleAfterMinutes = 30;
+  static readonly string[] Reasons = [WebExportStates.NotPromoted, WebExportStates.NoCategory, WebExportStates.BlockedErrors, WebExportStates.Hold, WebExportStates.Excluded, WebExportStates.NoSite];
+  const string InCsvState = "IN_CSV";
+  /// <summary>Meja svežine: SlaSeconds posla (ista kot na Nadzoru), sicer dvakratni razmik, sicer 2 uri.</summary>
+  TimeSpan StaleAfter => TimeSpan.FromSeconds(Job?.SlaSeconds ?? (Job?.IntervalSeconds * 2) ?? 7200);
+  MagentoCatalogJob? Job;
+  string ScheduleText => Job switch
+  {
+    null => "Datoteki izdela avtomatika po urniku.",
+    { IsEnabled: false } => "Samodejna izdelava je izklopljena: datoteki se ne osvežujeta sami.",
+    { IsRunning: true } => "Izdelava ravno teče.",
+    { RequestedRunUtc: { } requested } => $"Zahteva za izdelavo čaka od {When(requested)}.",
+    { NextDueUtc: { } next } when next < DateTime.UtcNow.AddMinutes(-10) => $"Samodejno {Every(Job.IntervalSeconds)}; izdelava je bila na vrsti {When(next)} in zamuja — gostitelj avtomatike morda ne teče.",
+    { NextDueUtc: { } next } => $"Samodejno {Every(Job.IntervalSeconds)}; naslednja izdelava {When(next)}.",
+    _ => $"Samodejno {Every(Job.IntervalSeconds)}.",
+  };
+  static string Every(int? seconds) => seconds switch
+  {
+    null or <= 0 => "po urniku",
+    < 3600 => $"vsakih {seconds / 60} min",
+    3600 => "vsako uro",
+    _ when seconds % 3600 == 0 => $"vsakih {seconds / 3600} ur",
+    _ => $"vsakih {seconds / 60} min",
+  };
+  static string Duration(TimeSpan span) => span.TotalHours >= 1 && span.TotalMinutes % 60 == 0
+    ? PimFormat.Count((long)span.TotalHours, "ura", "uri", "ure", "ur") : PimFormat.Count((long)span.TotalMinutes, "minuta", "minuti", "minute", "minut");
+  /// <summary>Sestava je izračun nad vsemi aktivnimi artikli (~2 s na podjetje); kratek predpomnilnik, da vsak obisk ne računa znova.</summary>
+  static readonly TimeSpan SummaryCacheFor = TimeSpan.FromMinutes(3);
+  static readonly ConcurrentDictionary<int, (DateTime AtUtc, WebExportSummary Summary)> SummaryCache = new();
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+
+  static readonly IReadOnlyList<PimColumn> FileColumns = [new("Datoteka"), new("Izdelana"), new("Vrstic", Numeric: true), new("Velikost", Numeric: true), new("Dejanja")];
+  static readonly IReadOnlyList<PimColumn> HistoryColumns = [new("Datoteka"), new("Čas"), new("Izid"), new("Vrstic", Numeric: true), new("Vrsta"), new("Sprožil"), new("Napaka")];
+  IReadOnlyList<PimColumn> ReasonColumns => [new("Razlog"), .. Sources.Select(source => new PimColumn(source.Name, Numeric: true)), new("Pojasnilo")];
+
+  sealed record FileState(string Code, string FileName, MagentoArtifact? Artifact, DateTime? MadeUtc, long? Rows, string Tone, string Chip, string Sentence, string? Next);
+  sealed record HeadlineState(string Tone, string Sentence, string? Next);
+
   readonly Dictionary<string, MagentoArtifact> Status = [];
   readonly Dictionary<string, string> FileErrors = [];
+  readonly Dictionary<int, WebExportSummary> Summaries = [];
   IReadOnlyList<ExportRunRow> Runs = [];
+  IReadOnlyList<MagentoCatalogSource> Sources = [];
+  IReadOnlyList<FileState> Files = [];
+  HeadlineState Headline = new("neutral", "Berem stanje …", null);
   MagentoOutputFolder? Folder;
-  WebExportSummary? Summary;
-  bool Loading = true, PreviewLoading, AllColumns, SummaryLoading;
-  string? Error, Selected, PreviewError, SummaryError;
-  string SearchDraft = "", AppliedSearch = "";
+  SafeguardCheckRow? Safeguard;
+  bool Loading = true, PreviewLoading, AllColumns, SummaryLoading, IsAdmin, ConfirmRun, RunBusy;
+  string? Error, Selected, PreviewError, SummaryError, RunMessage, RunError;
+  string SearchDraft = "", AppliedSearch = "", UserName = "neznan";
+  DateTime? SummaryAtUtc, LoadedAtUtc;
   MagentoArtifactPage? Preview;
+
+  string HistoryFile = "";
+  bool HistoryManual;
+  /// <summary>Privzeto samo izdelave in poskusi; ročni prenos (npr. klikalnik) datoteke za Magento ne zamenja in je šum.</summary>
+  IReadOnlyList<ExportRunRow> HistoryRows => Runs
+    .Where(run => (HistoryFile.Length == 0 || run.ProfileCode == HistoryFile) && (HistoryManual || IsBuilt(run) || run.Status != "Succeeded"))
+    .Take(30).ToArray();
+  long? CatalogRows => Files.FirstOrDefault(file => file.Code == Codes[0])?.Rows;
+  long? CustomerCount => Summaries.GetValueOrDefault(WorkerCycles.CatalogOrganization)?.CustomerCount;
+  long StaleValidation => Summaries.Values.Sum(summary => summary.StaleCount);
+  bool FolderIsCause => Folder is null || !Folder.Exists || !Folder.WritableByThisProcess;
+
   IEnumerable<int> VisibleColumns => Preview is null ? [] : Enumerable.Range(0, Preview.Page.Columns.Count)
     .Where(index => AllColumns || index < 8 || Preview.Page.Columns[index].Contains("splet", StringComparison.OrdinalIgnoreCase)
       || Preview.Page.Columns[index].Contains("zaloga", StringComparison.OrdinalIgnoreCase)
       || Preview.Page.Columns[index].Contains("cena", StringComparison.OrdinalIgnoreCase));
+
   static string StatusLabel(string status) => status switch { "Succeeded" => "Uspešno", "Failed" => "Napaka", "Running" => "V teku", "Abandoned" => "Zapuščen", _ => status };
-  SafeguardCheckRow? Safeguard;
-  static string Sprozilec(string triggeredBy) => triggeredBy switch { "Scheduler" => "razporejevalnik", "Task" => "naloga", _ => "ročno" };
-  protected override Task OnInitializedAsync() => LoadAsync();
-  async Task LoadAsync()
+  static string? StatusTone(string status) => status switch { "Succeeded" => "good", "Running" => "warn", "Failed" or "Abandoned" => "bad", _ => null };
+  static string Sprozilec(string triggeredBy) => triggeredBy switch { "Scheduler" => "urnik", "Task" => "naloga", _ => "ročno" };
+  static bool IsBuilt(ExportRunRow run) => run.Sha256 is not null || run.ByteCountValue is not null;
+  static long ReasonCount(WebExportSummary s, string reason) => reason switch
+  {
+    WebExportStates.NotPromoted => s.NotPromotedCount,
+    WebExportStates.NoCategory => s.NoCategoryCount,
+    WebExportStates.BlockedErrors => s.BlockedErrorsCount,
+    WebExportStates.Hold => s.HoldCount,
+    WebExportStates.Excluded => s.ExcludedCount,
+    WebExportStates.NoSite => s.NoSiteCount,
+    _ => 0,
+  };
+
+  /// <summary>»danes ob 18:22«, »včeraj ob 7:05« ali »27. 9. 2026 ob 18:22« — po domače, v lokalnem času PIM.</summary>
+  static string When(DateTime utc)
+  {
+    var local = utc.ToPimLocal();
+    var today = DateTime.UtcNow.ToPimLocal().Date;
+    var time = local.ToString("H:mm", Sl);
+    if (local.Date == today) return $"danes ob {time}";
+    if (local.Date == today.AddDays(-1)) return $"včeraj ob {time}";
+    return $"{local.ToString("d. M. yyyy", Sl)} ob {time}";
+  }
+  static string At(DateTime utc) => utc.ToPimLocal().ToString("H:mm", Sl);
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      IsAdmin = user.IsInRole(PimRoles.Admin);
+      UserName = user.Identity?.Name ?? "neznan";
+    }
+    catch (InvalidOperationException) { IsAdmin = false; }
+    await LoadAsync(forceSummary: false);
+  }
+
+  Task RefreshAsync() { RunMessage = null; RunError = null; return LoadAsync(forceSummary: true); }
+
+  async Task LoadAsync(bool forceSummary)
   {
     Loading = true; Error = null; Status.Clear(); FileErrors.Clear(); Preview = null; Selected = null;
     try
@@ -177,30 +349,137 @@
       // 277: varovalka je dodatek — če je baza še nima, stran deluje kot prej.
       try { Safeguard = await Safeguards.GetCurrentAsync(SafeguardText.CatalogArea, WorkerCycles.CatalogOrganization); }
       catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.SqlClient.SqlException) { Safeguard = null; }
+      try { Job = await Artifacts.CatalogJobAsync(); }
+      catch (Microsoft.Data.SqlClient.SqlException) { Job = null; }
+      try { Sources = await Artifacts.CatalogSourcesAsync(); }
+      catch (Microsoft.Data.SqlClient.SqlException) { Sources = []; }
+      if (Sources.Count == 0) Sources = [new(WorkerCycles.CatalogOrganization, $"podjetje {WorkerCycles.CatalogOrganization}", 10, null, null)];
       var runs = new List<ExportRunRow>();
       foreach (var code in Codes)
       {
         runs.AddRange(await AdminConsole.GetExportRunsAsync(30, code, 200));
         try { Status[code] = await Artifacts.StatusAsync(code); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { FileErrors[code] = ex is InvalidOperationException ? ex.Message : "Datoteka ni dosegljiva. Preveri izhodno mapo in pravice procesa."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException) { FileErrors[code] = ex.Message; }
       }
       Runs = runs.Where(run => run.OrganizationId == WorkerCycles.CatalogOrganization).OrderByDescending(run => run.StartedUtc).ToArray();
+      Files = Codes.Select(BuildFileState).ToArray();
+      Headline = BuildHeadline();
+      LoadedAtUtc = DateTime.UtcNow;
     }
-    catch { Error = "Stanja izvoza ni mogoče prebrati. Preveri povezavo z bazo in dnevnik aplikacije."; }
+    catch { Error = "Stanja datotek za splet ni mogoče prebrati. Preveri povezavo z bazo; če se ponavlja, obvesti skrbnika."; }
     finally { Loading = false; }
-    // Sestava kataloga je izračun nad vsemi aktivnimi artikli (nekaj sekund); ne sme zadrževati stanja datotek.
-    _ = LoadSummaryAsync();
+    // Sestava kataloga je izračun nad vsemi aktivnimi artikli (nekaj sekund na podjetje); ne sme zadrževati stanja datotek.
+    _ = LoadSummaryAsync(forceSummary);
   }
-  async Task LoadSummaryAsync()
+
+  FileState BuildFileState(string code)
+  {
+    var name = MagentoArtifactService.FileName(code);
+    var artifact = Status.GetValueOrDefault(code);
+    var attempt = Runs.FirstOrDefault(run => run.ProfileCode == code && (run.Status != "Succeeded" || IsBuilt(run)));
+    var success = Runs.FirstOrDefault(run => run.ProfileCode == code && run.Status == "Succeeded" && IsBuilt(run));
+    var made = artifact?.PublishedUtc ?? success?.StartedUtc;
+    // Vrstice veljajo za datoteko v mapi samo, če ji izdelava ustreza (ista velikost, konec ob objavi); sicer
+    // (npr. zgodovina iz druge kopije na isti bazi) število ne sme veljati za to datoteko.
+    var matching = artifact is null ? success : Runs.FirstOrDefault(run => run.ProfileCode == code && run.Status == "Succeeded" && IsBuilt(run)
+      && (run.ByteCountValue is null || run.ByteCountValue == artifact.Bytes)
+      && run.EndedUtc is { } ended && (ended - artifact.PublishedUtc).Duration() < TimeSpan.FromMinutes(15));
+    var rows = matching?.RowCountValue;
+    var rowsText = rows is { } r ? ", " + PimFormat.Count(r, "vrstica", "vrstici", "vrstice", "vrstic") : "";
+    var lastGood = success is null ? "Uspešne izdelave v zadnjih 30 dneh ni." : $"Veljavna ostaja datoteka, izdelana {When(success.StartedUtc)}{rowsText}.";
+
+    if (attempt is { Status: "Failed" or "Abandoned" })
+      return new(code, name, artifact, made, rows, "bad", "Izdelava ni uspela",
+        $"Zadnja izdelava datoteke {name} ({When(attempt.StartedUtc)}) ni uspela. {lastGood}",
+        "Na splet gre šele naslednja uspešna izdelava. " + (attempt.ErrorRedacted is { Length: > 0 } error ? $"Sporočilo: {error} " : "") + "Obvesti skrbnika.");
+    if (attempt is { Status: "Running" })
+      return new(code, name, artifact, made, rows, "warn", "Se izdeluje",
+        $"{name} se ravno izdeluje (začetek {When(attempt.StartedUtc)}). {lastGood}", null);
+    if (artifact is null)
+    {
+      var cause = Folder is null ? "PIM ne ve, v katero mapo shranjuje datoteke za splet."
+        : !Folder.Exists ? "Mapa, v katero PIM shranjuje datoteke za splet, na tem računalniku ne obstaja."
+        : !Folder.WritableByThisProcess ? "PIM nima pravice pisati v mapo za datoteke za splet."
+        : FileErrors.GetValueOrDefault(code) ?? "Datoteka ni dosegljiva.";
+      return new(code, name, null, made, rows, "bad", "Datoteke ni",
+        $"PIM ne vidi datoteke {name}. {cause}",
+        "Na preizkusni ali razvojni kopiji je to pričakovano. Na strežniku pomeni, da nova datoteka ne more nastati: obvesti skrbnika (podrobnosti spodaj).");
+    }
+    if (code == Codes[0] && Safeguard is { IsWaiting: true, HeldCount: > 0 } held)
+      return new(code, name, artifact, made, rows, "warn", "Varovalka",
+        $"{name} je bil izdelan {When(artifact.PublishedUtc)}{rowsText}, brez {PimFormat.Count(held.HeldCount, "zadržanega artikla", "zadržanih artiklov", "zadržanih artiklov", "zadržanih artiklov")}.",
+        "Zadržane spremembe čakajo potrditev na strani Varovalke.");
+    if (DateTime.UtcNow - artifact.PublishedUtc > StaleAfter)
+      return new(code, name, artifact, made, rows, "warn", "Stara",
+        $"{name} je bil nazadnje izdelan {When(artifact.PublishedUtc)} ({PimFormat.Ago(artifact.PublishedUtc)}){rowsText}.",
+        Job is { IsEnabled: false }
+          ? "Samodejna izdelava je izklopljena, zato se datoteka ne osvežuje. Vklopi jo skrbnik na strani Urnik in zagon."
+          : $"Datoteka je starejša od {Duration(StaleAfter)}; izdelava po urniku morda ne teče. Obvesti skrbnika.");
+    return new(code, name, artifact, made, rows, "good", "V redu",
+      $"{name} je bil uspešno izdelan {When(artifact.PublishedUtc)}{rowsText}.", null);
+  }
+
+  HeadlineState BuildHeadline()
+  {
+    var catalog = Files[0];
+    var worst = Files.OrderBy(file => file.Tone switch { "bad" => 0, "warn" => 1, _ => 2 }).First();
+    if (worst.Tone == "good") return new("good", catalog.Sentence, null);
+    return new(worst.Tone, worst.Sentence, worst.Next);
+  }
+
+  async Task LoadSummaryAsync(bool force)
   {
     SummaryLoading = true; SummaryError = null;
     await InvokeAsync(StateHasChanged);
-    try { Summary = await Quality.GetWebExportSummaryAsync(WorkerCycles.CatalogOrganization); }
-    catch { SummaryError = "Sestave kataloga ni mogoče izračunati. Preveri povezavo z bazo (migracija 242)."; }
-    finally { SummaryLoading = false; await InvokeAsync(StateHasChanged); }
+    var failed = new List<string>();
+    foreach (var source in Sources)
+    {
+      try
+      {
+        if (!force && SummaryCache.TryGetValue(source.OrganizationId, out var cached) && DateTime.UtcNow - cached.AtUtc < SummaryCacheFor)
+        {
+          Summaries[source.OrganizationId] = cached.Summary; SummaryAtUtc = cached.AtUtc;
+        }
+        else
+        {
+          var summary = await Quality.GetWebExportSummaryAsync(source.OrganizationId);
+          var at = DateTime.UtcNow;
+          SummaryCache[source.OrganizationId] = (at, summary);
+          Summaries[source.OrganizationId] = summary; SummaryAtUtc = at;
+        }
+      }
+      catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { failed.Add(source.Name); }
+      await InvokeAsync(StateHasChanged);
+    }
+    if (failed.Count > 0) SummaryError = $"Sestave za {string.Join(", ", failed)} ni bilo mogoče izračunati. Stanje datotek zgoraj velja; poskusi z »Osveži«.";
+    SummaryLoading = false;
+    await InvokeAsync(StateHasChanged);
   }
+
+  async Task RequestRunAsync()
+  {
+    if (RunBusy) return;
+    RunBusy = true; RunMessage = null; RunError = null;
+    const string done = "Zahteva za izdelavo je oddana. Avtomatika jo prevzame v nekaj trenutkih; izdelava traja nekaj minut. Nato klikni »Osveži«.";
+    try
+    {
+      await Monitor.RequestRunAsync(JobCatalog.WebCatalogExport, UserName);
+      RunMessage = done;
+    }
+    catch (MonitorTraceException trace) { RunMessage = done; RunError = trace.Message; }
+    catch (UnauthorizedAccessException) { RunError = "Izdelavo lahko sproži samo skrbnik."; }
+    catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 52377) { RunError = "Izdelava že teče. Počakaj nekaj minut in klikni »Osveži«."; }
+    catch (Exception ex) when (ex is Microsoft.Data.SqlClient.SqlException or InvalidOperationException or ArgumentException) { RunError = "Zahteve ni bilo mogoče oddati: " + ex.Message; }
+    finally { RunBusy = false; ConfirmRun = false; }
+    // Stavek o urniku pokaže oddano zahtevo (»Zahteva za izdelavo čaka od …«), dokler je gostitelj ne prevzame.
+    try { Job = await Artifacts.CatalogJobAsync(); }
+    catch (Microsoft.Data.SqlClient.SqlException) { }
+  }
+
+  void ClosePreview() { Selected = null; Preview = null; PreviewError = null; }
   async Task SelectAsync(string code) { Selected = code; SearchDraft = AppliedSearch = ""; await PageAsync(0); }
   async Task SearchAsync() { AppliedSearch = SearchDraft.Trim(); await PageAsync(0); }
+  async Task OnSearchKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await SearchAsync(); }
   async Task PageAsync(int skip)
   {
     if (Selected is null || PreviewLoading) return;
@@ -213,7 +492,7 @@
       if (skip > 0 && previous is not null && previous != Preview.Artifact.Generation)
         Preview = await Artifacts.PreviewAsync(Selected, AppliedSearch, 0);
     }
-    catch { PreviewError = "Vsebine ni mogoče prebrati ali CSV ni veljaven. Osveži stanje in preveri zadnji izvoz."; }
+    catch { PreviewError = "Vsebine ni mogoče prebrati: datoteka se morda ravno zamenjuje. Klikni »Osveži« in poskusi znova."; }
     finally { PreviewLoading = false; }
   }
 }

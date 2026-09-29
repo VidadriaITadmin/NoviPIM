@@ -1,11 +1,50 @@
-/* Izoliran slog strani /splet. */
+/* Izoliran slog strani /splet (#25: stanje v enem stavku, zavihki, tehnika pod »Tehnične podrobnosti«). */
 
-/* Predogled CSV je sirok: 213 stolpcev Magento predloge se ne stisne, ampak se pomika. */
+/* Stanje datotek: ena kartica z barvnim robom po najslabši datoteki; rdeče samo, ko je res napaka. */
+.web-status { align-items: flex-start; border-left: 4px solid var(--pim-border); display: flex; gap: .9rem; padding: 1rem 1.15rem; }
+.web-status-good { border-left-color: var(--pim-good-bar); }
+.web-status-warn { border-left-color: var(--pim-warn-bar); background: var(--pim-warn-bg); }
+.web-status-bad { border-left-color: var(--pim-bad-text); background: var(--pim-bad-bg); }
+.web-status-mark { border-radius: 999px; flex: 0 0 auto; height: .8rem; margin-top: .35rem; width: .8rem; background: var(--pim-border); }
+.web-status-good .web-status-mark { background: var(--pim-good-bar); }
+.web-status-warn .web-status-mark { background: var(--pim-warn-bar); }
+.web-status-bad .web-status-mark { background: var(--pim-bad-text); }
+.web-status-body { min-width: 0; }
+.web-status h2 { font-size: 1.05rem; line-height: 1.4; margin: 0; }
+.web-status-bad h2 { color: var(--pim-bad-strong); }
+.web-status-next { font-size: .875rem; line-height: 1.5; margin: .35rem 0 0; }
+.web-status-files { display: grid; gap: .35rem; list-style: none; margin: .75rem 0 0; padding: 0; }
+.web-status-files li { align-items: baseline; display: flex; flex-wrap: wrap; font-size: .85rem; gap: .5rem; }
+.web-status-foot { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.5; margin: .75rem 0 0; }
+
+.run-confirm { align-items: center; display: inline-flex; flex-wrap: wrap; font-size: .875rem; gap: .5rem; }
+
+.row-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+.reason-explain { color: var(--pim-text-muted); font-size: .78rem; line-height: 1.45; max-width: 36rem; }
+
+/* Zložljivi razdelki: zgodovina in tehnika sta na voljo, a ne kričita. */
+.web-more { padding: .85rem 1.15rem; }
+.web-more > summary { color: var(--pim-accent); cursor: pointer; font-weight: 600; width: max-content; }
+.web-more[open] > summary { margin-bottom: .75rem; }
+.web-more > summary:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+.tech-list { display: grid; font-size: .85rem; gap: .35rem 1rem; grid-template-columns: max-content 1fr; margin: 0; }
+.tech-list dt { color: var(--pim-text-muted); }
+.tech-list dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Predogled CSV je širok: 213 stolpcev Magento predloge se ne stisne, ampak se pomika. */
 .csv-preview { max-height: 26rem; overflow: auto; }
 .csv-preview:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
 .csv-table { font-size: .72rem; white-space: nowrap; }
 .csv-table th { background: var(--pim-surface-hover); position: sticky; top: 0; z-index: 1; }
 .csv-table td { max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }
-.preview-row > td { background: var(--pim-surface-hover); padding: .75rem 1rem; }
-.is-open { background: #eef2ff; }
 .small-action:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .web-status { padding: .85rem; }
+  .tech-list { grid-template-columns: 1fr; }
+}
+
+.composition-lead { font-size: .9rem; line-height: 1.55; margin: .25rem 0 .75rem; }
+.in-csv-row td { background: var(--pim-good-bg); }
+.history-filters { align-items: flex-end; margin-bottom: .5rem; }
+.loaded-at { white-space: nowrap; }
