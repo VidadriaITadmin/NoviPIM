@@ -1,0 +1,21 @@
+/* #7a: spremembe iz XML dobaviteljev po šifri — samo branje, gosta tabela. */
+.xml-intro { margin: .25rem 0 .75rem; max-width: 70rem; }
+.xml-freshness { align-items: center; display: flex; flex-wrap: wrap; font-size: .8rem; gap: .4rem .6rem; margin: 0 0 .9rem; }
+.xml-freshness > span:first-child { color: var(--pim-text-muted); font-weight: 600; }
+.xml-freshness .muted { font-size: .76rem; }
+.xml-item { color: var(--pim-text-strong); font-weight: 650; text-decoration: none; white-space: nowrap; }
+.xml-item:hover, .xml-item:focus-visible { color: var(--pim-accent-link); text-decoration: underline; }
+.xml-sub { display: block; font-size: .74rem; margin-top: .1rem; }
+.xml-field { color: var(--pim-text-strong); font-size: .82rem; font-weight: 600; margin-top: .25rem; }
+.xml-value { font-size: .82rem; max-width: 26rem; overflow-wrap: anywhere; vertical-align: top; }
+.xml-new { color: var(--pim-text-strong); }
+.xml-text { white-space: pre-line; }
+.xml-when { color: var(--pim-text-muted); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.xml-media { align-items: center; color: var(--pim-accent-link); display: inline-flex; gap: .45rem; text-decoration: none; }
+.xml-media:hover span, .xml-media:focus-visible span { text-decoration: underline; }
+.xml-media img { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); height: 2.75rem; object-fit: contain; width: 2.75rem; }
+.xml-tag { background: var(--pim-warn-bg); border-radius: 999px; color: var(--pim-warn-text); font-size: .64rem; font-weight: 700; letter-spacing: .04em; margin-left: .35rem; padding: .1rem .45rem; text-transform: uppercase; vertical-align: middle; }
+.muted { color: var(--pim-text-muted); }
+.xml-export { display: inline-flex; flex-wrap: wrap; gap: .4rem; }
+.xml-export-note { font-size: .82rem; margin: .5rem 0 0; }
+.xml-export-note.is-error { color: var(--pim-bad-text); font-weight: 600; }
