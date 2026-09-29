@@ -660,8 +660,11 @@ switch ($Ukaz) {
       $mapaKopij = Join-Path $Glavna '.claude\worktrees'
       if ($potNaloge -ne $Glavna -and $potNaloge.StartsWith($mapaKopij, [StringComparison]::OrdinalIgnoreCase) -and
           -not @(& git -C $potNaloge status --porcelain 2>$null).Count) {
-        & git -C $Glavna worktree remove $potNaloge 2>$null
-        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." }
+        # Pospravljanje ni del združitve: kopija je lahko v rabi (odprta mapa, tekoč proces) — takrat ostane.
+        $ErrorActionPreference = 'Continue'
+        & git -C $Glavna worktree remove $potNaloge 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." } else { Write-Host "Delovna kopija $potNaloge ostane (v rabi)." }
+        $ErrorActionPreference = 'Stop'
       }
       Write-Host "Naloga #$Id združena v $GlavnaVeja ($commit)." -ForegroundColor Green
     } finally { Remove-Item $zaklepZ -Force -ErrorAction SilentlyContinue }
