@@ -410,9 +410,10 @@ foreach (var (file, markup, route) in new[]
 }
 Assert(monitor.Contains("<PimTabs Active=\"nadzor\"", StringComparison.Ordinal) && monitor.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
   "Nadzor mora prikazati skupni zavihek NadzorTabs z aktivnim zavihkom »nadzor«.");
-foreach (var pogodba in new[] { "GetOverviewAsync", "RequestRunAsync", "sistem/posel/", "Vse teče", "sistem/samotest", "sistem/sled" })
+foreach (var pogodba in new[] { "GetOverviewAsync", "RequestRunAsync", "sistem/posel/", "Vse teče", "sistem/sled" })
   Assert(monitor.Contains(pogodba, StringComparison.Ordinal), "Nadzor nima pogodbe: " + pogodba);
-Assert(!monitor.Contains("SelfTestSteps", StringComparison.Ordinal), "Koraki samotesta ne smejo biti na Nadzoru; so na /sistem/samotest.");
+Assert(!monitor.Contains("SelfTestSteps", StringComparison.Ordinal) && !monitor.Contains("sistem/samotest", StringComparison.Ordinal),
+  "Samotesta ni na Nadzoru: ne korakov ne povezave (stran /sistem/samotest se briše, naloga #21).");
 foreach (var pogodba in new[] { "GetJobAsync", "PhaseCodes.Label" })
   Assert(monitorJob.Contains(pogodba, StringComparison.Ordinal), "Stran posla nima pogodbe: " + pogodba);
 Assert(monitorJob.Contains("ReadLog", StringComparison.Ordinal) || monitorJob.Contains("LogTail", StringComparison.Ordinal),

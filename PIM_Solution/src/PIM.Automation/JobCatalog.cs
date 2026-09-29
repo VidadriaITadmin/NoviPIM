@@ -328,6 +328,18 @@ public static class JobCatalog
 
   public const int SaopQuietSeconds = 120;
 
+  static readonly HashSet<string> HeavyJobs = new(StringComparer.Ordinal)
+  {
+    ProductValidation, ProductPublication, WebCatalogExport, WebStockExport, SaopDeliveryImport, SaopAnalyticsImport, NightlyReconciliation,
+  };
+
+  /// <summary>
+  /// Težak posel (naloga #12): dolgo obremeni bazo ali procesor (validacija ~90 s na podjetje, objava, izvoz
+  /// 90.000 vrstic, ~8.800 klicev za dobavne datume, preračun analitike, nočna uskladitev). Dva težka posla ne
+  /// tečeta hkrati; drugi počaka največ <see cref="JobQueue.HeavyMaxWaitSeconds"/> (<see cref="JobQueue.Gate"/>).
+  /// </summary>
+  public static bool IsHeavy(string jobKey) => HeavyJobs.Contains(jobKey);
+
   /// <summary>
   /// Ročna zahteva ima v pasu SAOP prednost (2026-09-23): nočna uskladitev je v vrstnem redu zadnja in jo je
   /// »Poženi zdaj« čakal, dokler je bil na vrsti katerikoli redni SAOP posel (zaloga vsakih 10 min) — lahko ure.

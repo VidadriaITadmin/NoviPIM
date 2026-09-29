@@ -119,9 +119,14 @@ public static class MonitorPolicy
   /// <param name="saopLaneBusyWith">Oznaka posla, ki trenutno kliče SAOP (null, kadar pot do SAOP ni zasedena).
   /// Posli, ki kličejo SAOP, tečejo po eden z dvema minutama premora (JobCatalog.UsesSaop); posel, ki čaka na
   /// to pot, NI zamujen — sicer je vsak daljši tek (naročila, ponoči dobavni roki) obarval zalogo in cene rdeče.</param>
+  /// <param name="forecast">Napoved razporejevalnika (JobQueue.Forecast, naloga #12): posel, ki ga razporejevalnik
+  /// namenoma zadrži (vrsta, pas SAOP, težak posel, meja hkratnih poslov), ni zamujen, in oddana ročna zahteva
+  /// je »V vrsti«, ne rdeča.</param>
+  /// <param name="forecastText">Napoved po domače (JobQueue.Explain) za razlog.</param>
   public static MonitorVerdict Evaluate(
     JobDefinitionRow job, IReadOnlyList<SourceStateRow> sources, IReadOnlyList<PipelineHealthRow> pipelines,
-    IReadOnlyList<MonitorAlertRow> alerts, bool hostLive, DateTime nowUtc, string? saopLaneBusyWith = null)
+    IReadOnlyList<MonitorAlertRow> alerts, bool hostLive, DateTime nowUtc, string? saopLaneBusyWith = null,
+    JobForecast? forecast = null, string? forecastText = null)
   {
     var jobPipelines = PipelinesOf(job.JobKey);
     var mySources = sources.Where(source => source.JobKey == job.JobKey).ToList();
@@ -150,6 +155,12 @@ public static class MonitorPolicy
       return Verdict(MonitorTone.Bad, "Gostitelj ne teče",
         "Gostitelj avtomatike (PIM.AutomationHost) ne utripa, zato noben posel ne teče po urniku in zahteve za zagon čakajo.",
         MonitorAction.CheckHost, "Kako zagnati gostitelja", null);
+
+    // 2b. Oddana ročna zahteva, ki še ni prevzeta: skrbnik je že ukrepal, zato ni rdeče ne glede na zadnji tek.
+    //     Razlog pove, kdaj bo zagon (naloga #12: »ko klikne Poženi, mu takoj pove, kdaj bo zagon«).
+    if (job.IsRequested && !job.IsRunning)
+      return Verdict(MonitorTone.Idle, "V vrsti",
+        forecastText ?? "Zahteva za zagon je oddana; gostitelj jo prevzame ob naslednjem tiku.", MonitorAction.None, null, null);
 
     // 3. Padel zadnji tek. Med ponovnim tekom pravilo ne velja: izid bo povedal nov tek.
     if (!job.IsRunning && JobRunStatus.IsFailure(job.LastStatus))
@@ -227,6 +238,10 @@ public static class MonitorPolicy
     if (!job.IsRunning && job.NextDueUtc is { } due)
     {
       var graceSeconds = Math.Max(0d, (double)(job.WarnAfterMultiplier - 1m) * (job.IntervalSeconds ?? 86400));
+      if (due < nowUtc.AddSeconds(-graceSeconds) && forecast is { IsHeldByScheduler: true })
+        return Verdict(MonitorTone.Idle, "Čaka v vrsti",
+          $"Termin je minil pred {AgeLabel(nowUtc - due)}, ker ga razporejevalnik namenoma zadrži. {forecastText ?? ""}".TrimEnd(),
+          MonitorAction.None, null, null);
       if (due < nowUtc.AddSeconds(-graceSeconds) && saopLaneBusyWith is not null && JobCatalog.UsesSaop(job.JobKey))
         return Verdict(MonitorTone.Idle, "Čaka na SAOP",
           $"Termin je minil pred {AgeLabel(nowUtc - due)}, ker posli, ki kličejo SAOP, tečejo po eden. Zdaj teče »{saopLaneBusyWith}«; ta posel pride na vrsto takoj za njim.",
