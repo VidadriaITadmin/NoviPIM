@@ -27,7 +27,7 @@ var catalog = new CatalogReadService(database);
 var export = new ProductExportService(configuration, workbench);
 var guard = PimWriteGuard.Trusted("konzolni test PIM.F10.ArtikelKrogTests");
 var workbook = new ProductWorkbookService(configuration, workbench, export, catalog,
-  new ProductEditService(configuration, guard), new CategoryMappingService(database, configuration),
+  new ProductEditService(configuration, guard), new CategoryMappingService(database, configuration, guard),
   new SaopWriteService(configuration, guard, NullLogger<SaopWriteService>.Instance),
   new IntranetDataService(configuration, guard), new AttributeMappingService(database, configuration, guard));
 

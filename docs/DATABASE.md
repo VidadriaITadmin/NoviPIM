@@ -2392,6 +2392,28 @@ Uporabnik: atribut ima svojo mersko enoto; uvozi prepoznajo, v kateri enoti je v
 
 **Objekti:** `canon.AttributeDefinition` (Unit, UnitOfAttributeCode), `canon.UnitConversion`, `canon.AttributeUnitValue`, `canon.NormalizeAttributeUnits`, `canon.AlignAttributeUnits`, spremembe `val.Promote`, `pim.SaveProductAttributes`, `pim.SaveProductAttributesBulk`; podatki `pim.ProductAttribute`. **Ročni korak:** ne. **Povratek:** `OldValue` v dnevniku; `val.Promote` vrniti na blok MERGE iz `canon.ProductAttribute`.
 
+## Odprodaja tudi v starih stolpcih katalog.csv (migracija 304_OdprodajaVStarihStolpcihKataloga, 2026-09-29)
+
+Preizkus uvoza Azzardo (2026-09-29): artikel v odprodaji je imel v novih stolpcih (234) »Odprodaja - popust %« 55 in »Odprodaja - količina« 2, v starih (204/207) »Popust na artikel«, »Popust odprodaje %« in »Količina odprodaje« pa 0. Kateri stolpec bere Magento, iz kode ni razvidno. Uporabnik: »popravi stare stolpce odprodaje v katalog.csv«.
+
+- **`out.GetExportRows`** (oznaka OdprodajaStariStolpci304, tik pred `CREATE CLUSTERED INDEX IX_Value`): za vrstice z »Odprodaja« = DA se polji `Product.ClearancePercent` in `Clearance.Quantity` zamenjata z že izračunanima `ClearanceItem.DiscountPercent` in `ClearanceItem.Quantity` — stari stolpci so vedno enaki novim, tudi po popravkih količine (288, 297).
+- Artikli brez aktivne odprodaje: nespremenjeno (oddelčni popust X/O iz Nadzora kataloga, zaloga X/O).
+- Glave, število in vrstni red stolpcev ostanejo enaki. Velja za vse profile nad `out.GetExportRows` (tudi MAGENTO_STOCK_PRICES).
+- Razvojna baza: 119 artiklov v odprodaji, v starih stolpcih 0 neusklajenih, ostalih 2.775 vrstic nespremenjenih; izvoz 40 s kot prej.
+
+**Objekti:** `out.GetExportRows`. **Ročni korak:** ne. **Povratek:** iz definicije odstraniti blok OdprodajaStariStolpci304.
+
+## »Popust na artikel« brez odprodaje (migracija 305_PopustNaArtikluBrezOdprodaje, 2026-09-29)
+
+304 je popust odprodaje zapisala v `Product.ClearancePercent`, ki ga bereta dva stolpca: »Popust odprodaje %« in »Popust na artikel« (COL030). Uporabnik: »Popust na artikel« ne sme mešati odprodaje (nevarnost dvojnega popusta v Magentu). »Popust na artikel« ne izhaja iz cenikov SAOP — PIM iz cenikov zajema samo neto ceno in DDV; vir je od 204 oddelčni popust X/O iz Nadzora kataloga (045: prazen stolpec »Popust«, 217: preimenovan).
+
+- **`out.GetExportRows`** (oznaka PopustNaArtikluBrezOdprodaje305 v bloku 304): novo polje `Clearance.CatalogDiscountPercent` = `Product.ClearancePercent`; blok 304 pri artiklih v odprodaji prepiše to polje (in `Clearance.Quantity`), `Product.ClearancePercent` ostane nedotaknjen.
+- **`out.ExportColumn`:** »Popust odprodaje %« (MAGENTO_PRODUCTS COL217 in CATALOG_CLEARANCE, MAGENTO_STOCK_PRICES CATALOG_CLEARANCE) → `Clearance.CatalogDiscountPercent`. »Popust na artikel« (COL030) ostane `Product.ClearancePercent`.
+- Razvojna baza: 119 artiklov v odprodaji — »Popust na artikel« 0, »Popust odprodaje %« in »Količina odprodaje« enaka novima stolpcema; hitri izvoz cen enako; ostale vrstice nespremenjene. F7 catalog lifecycle (X/O) PASS.
+- Besedilo v proceduri je brez šumnikov: `Invoke-PendingMigrations.ps1` dinamičnega SQL ne bere kot UTF-8 (komentar bloka 304 ima zato pokvarjene znake, na delovanje ne vpliva).
+
+**Objekti:** `out.GetExportRows`, podatki `out.ExportColumn`. **Ročni korak:** ne. **Povratek:** stolpce »Popust odprodaje %« vrniti na `Product.ClearancePercent` in iz bloka 304 odstraniti vrstice 305.
+
 ## Pakirno naročanje (migraciji 302_PakirnoNarocanje in 303_PakirnoNarocanjeEnaNic, 2026-09-29, naloga #5)
 
 Artikel se na spletu naroča samo po celih paketih; količino paketa Magento vzame iz stolpca »Pakirna količina« (Pakiranje 2 = SAOP `ItemQuantityOfPackaging2`). Oznaka je samo PIM, po podjetju, privzeto ne; v SAOP ne gre.

@@ -151,8 +151,16 @@ async function pojdi(cdp, url) {
   const t0 = Date.now();
   await cdp.poslji('Page.navigate', { url });
   await spi(300);
-  // Strani brez gumbov in polj so statične (SSR) in nimajo povezave Blazor — to ni napaka.
-  const staticna = await js(cdp, `!document.querySelector('main button, main input, main select, main textarea')`).catch(() => false);
+  // Oznake Blazor so v HTML; počakamo, da je dokument prebran (največ 15 s).
+  for (let i = 0; i < 75 && await js(cdp, `document.readyState === 'loading'`).catch(() => true); i++) await spi(200);
+  // Statične strani (SSR, brez @rendermode) nimajo povezave Blazor — to ni napaka.
+  // Interaktivna komponenta pusti v HTML oznako <!--Blazor:{"type":"server"…}-->; glava (zvonec, Odjava)
+  // so navadni obrazci in stran ne naredijo interaktivne (#23: /nadzorna-plosca je čakala 30 s zaman).
+  const staticna = await js(cdp, `(() => {
+    if (window.__blazor?.odprt) return false;
+    const w = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+    for (let c = w.nextNode(); c; c = w.nextNode()) if (/^\\s*Blazor:\\s*\\{[^}]*"type"\\s*:\\s*"(server|auto|webassembly)"/.test(c.data)) return false;
+    return true; })()`).catch(() => false);
   const inter = staticna ? true : await interaktivna(cdp, 30000);
   const s = await stabilno(cdp);
   return { ms: Date.now() - t0, interaktivna: inter, stabilna: s >= 0 };
