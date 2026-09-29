@@ -5,10 +5,10 @@ podrocje: 08-upravljanje
 stanje: deluje
 bere: [pim.nastavitve, pim.atributi, pim.kategorije, pim.kategorije-izdelka]
 pise: [pim.nastavitve, pim.atributi, pim.prevodi, pim.pravila]
-strani: [/nastavitve, /nastavitve/atributi, /nastavitve/atributi/{Code}, /nastavitve/nabori-atributov, /nastavitve/kategorije]
+strani: [/nastavitve, /nastavitve/atributi, /nastavitve/atributi/ciscenje, /nastavitve/atributi/{Code}, /nastavitve/nabori-atributov, /nastavitve/kategorije]
 posli: [PRODUCT_VALIDATION, WEB_CATALOG_EXPORT]
-koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributes.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributeDetail.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/CategoryAttributeSets.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogSettings.razor, PIM_Solution/src/PIM.Intranet/Services/AttributeMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryTreeService.cs, PIM_Solution/src/PIM.Intranet/Services/IntranetFeatureReadService.cs]
-migracije: [147, 177, 184, 185, 238, 266, 268, 291, 294, 295, 299, 301]
+koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributes.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/AttributeCleanup.razor, PIM_Solution/src/PIM.Intranet/Services/AttributeDuplicatePolicy.cs, PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogAttributeDetail.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/CategoryAttributeSets.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/CatalogSettings.razor, PIM_Solution/src/PIM.Intranet/Services/AttributeMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryTreeService.cs, PIM_Solution/src/PIM.Intranet/Services/IntranetFeatureReadService.cs]
+migracije: [147, 177, 184, 185, 238, 266, 268, 291, 294, 295, 299, 301, 307]
 ---
 
 # Atributi in nabori atributov po kategorijah
@@ -91,6 +91,7 @@ flowchart LR
 | 6 | Urednik | isto | Dodaš atribute: izbereš jih v seznamu, **Raven** in **Dodaj izbrane (N)**; ali **Prilepi seznam** (vrstica »ime;obvezen«) → **Uvozi seznam**; ali **Kopiraj nabor** iz druge kategorije. | Neznana imena ponudi: **Ustvari v registru in dodaj vse** ali **Dodaj samo znane**. Predlogi »Atributi, ki jih izdelki te kategorije že nosijo …« imajo gumbe *priporočen* / *obvezen* / *ustvari v registru in dodaj*. | Sporočilo »V nabor kategorije … je zapisanih N atributov. Validacija jih upošteva ob naslednjem teku.« |
 | 7 | Urednik | isto ali `/nastavitve/kategorije` (zavihek Atributi) | Spremeniš raven v izbirniku (obvezen/priporočen/izločen) ali klikneš **Odstrani** / **Izloči tu**. Na `/nastavitve/nabori-atributov` (2026-09-29) tudi več naenkrat: kljukice, »Označi vse«, »Označi brez vrednosti«, nato **Nastavi raven**, **Odstrani iz te kategorije** (lastno izbriše, podedovano ali tudi zgoraj določeno tu izloči) ali **Odstrani pri izvoru …** (izbriše vrstico v kategoriji, kjer je določena, torej za vse njene podkategorije; potrditev pove, koliko izdelkov pod izvorom ima vrednost, in ponudi »samo prazne«). | Podedovanega atributa ni mogoče izbrisati tu, samo izločiti ali odstraniti pri izvoru. | Sporočilo in gumb **Razveljavi** (vrne prejšnje ravni); vsaka vrstica gre v `b2b.AuditLog`. |
 | 8 | Avtomatika | — | — | `PRODUCT_VALIDATION` ustvari ali zapre napake: obvezen atribut = napaka v spletnem profilu drevesa, priporočen = opozorilo. | `/kakovost/napake`, `/pravila/validacija` (vrstice »iz nabora atributov«). |
+| 8a | Urednik ali komerciala | `/nastavitve/atributi/ciscenje` (gumb **Čiščenje atributov** na registru) | Zavihek **Podvojeni atributi**: pregledaš predloge »Isti podatek« (isti izdelki, ista vrednost), »Podobne vrednosti« (drugi izdelki, iste vrednosti — različni dobavitelji) in »Podobno ime«; filter, iskanje, razvrščanje, **Izvozi v Excel**. Zavihek **Lep zapis vrednosti**: predogled prej/potem predloga zapisa (enote, presledki, velike začetnice). | Samo branje (#15): nič se ne združi, izbriše ali prepiše. Predlog zapisa (`pim.PolishAttributeValue`, 307) ni vklopljen v zajem, validacijo ali katalog.csv. | Seznam parov s številom izdelkov po podjetju in tremi primeri vrednosti; predogled s številom zapisov in vrstic, ki bi se spremenile. |
 | 9 | Urednik ali skrbnik | `/nastavitve/atributi` | Brisanje: »Izbriši atribut …« → **Preveri uporabo** → po potrebi kljukica »Izbriši tudi vrednosti pri N izdelkih« → vpišeš `IZBRIŠI` → **Trajno izbriši atribut**. | Odstranijo se vrstice naborov, preslikave virov se deaktivirajo, pari enot razvežejo, zahteve validacije deaktivirajo, prevodi izbrišejo. | Sporočilo »Atribut … je trajno izbrisan …«. |
 
 ## 7. Pravila in varovalke
@@ -102,6 +103,7 @@ flowchart LR
 - Trajni izbris zahteva vpis `IZBRIŠI`; atributa z vrednostmi ne izbrišeš brez dodatne kljukice. Priporočeno je deaktiviranje namesto brisanja.
 - Nabor se deduje na podkategorije; najbližja vrstica zmaga. Kategorija brez nabora: na kartici in v izvozu gredo **vsi** atributi izdelka. Od 291 v katalog.csv gredo vsi atributi tudi pri kategoriji z naborom — nabor izloči samo atribut z ravnijo EXCLUDED (prej je izpadlo vse, kar ni bilo v naboru).
 - Pisanje: samo ADMIN in CATALOG_EDITOR (politika `CatalogWrite`, preverjena v storitvi). COMMERCIAL stran vidi.
+- **Čiščenje atributov (#15, 2026-09-29):** podvojeni atributi se samo predlagajo; primerja se po imenu, kot je shranjeno pri vrednostih (153 od 164 imen je v registru, ostala so označena »ni v registru«). Spremljevalni atributi »Enota …« niso v primerjavi. Vrednosti 0, 1, 2, da, ne ne štejejo kot ujemanje. Predlog zapisa vrednosti: »50m« → »50 m«, »30 - 50 m« → »30-50 m«, »3CCT,IP65« → »3CCT, IP65«, »toplo bela« → »Toplo bela«; »do 30 m«, »IP44«, »LED«, šifre iz SAOP in povezave ostanejo. Ni vklopljen, ker bi samo za nove uvoze na spletu nastala dva zapisa iste vrednosti.
 
 ## 8. Ko gre kaj narobe
 
@@ -132,6 +134,7 @@ flowchart LR
 - ⚠️ Na `/nastavitve/atributi` je vrstica »Paketne akcije« (izbor več atributov), vendar za izbrane atribute ni nobenega dejanja — samo izbor in »Počisti izbor«. Napis obljublja »Paketni zapis zahteva predogled vpliva«, česar ni.
 - ⚠️ Stran za COMMERCIAL prikaže vse gumbe za urejanje in brisanje; zavrnitev pride šele ob kliku (napaka iz storitve).
 - ⚠️ Opomba atributa se prebere šele iz pregleda uporabe (`GetUsageAsync`); če ta pade, se polje Opomba prikaže prazno in shranjevanje lahko opombo izbriše (prazno polje pomeni »pobriši«).
+- ❓ Odločitev lastnika (#15): kateri predlagani pari podvojenih atributov se združijo, in ali se predlog lepega zapisa vklopi za vse naenkrat (zajem + katalog.csv + obstoječe vrednosti z dnevnikom `pim.AttributeValueNormalizationLog` in povratkom). Do takrat oboje samo predogled.
 - ⚠️ Učinek nabora na validacijo ni takojšen — sporočilo to pove, a urednik mora sam sprožiti validacijo, če želi takoj videti rezultat.
 
 ## Povezani procesi

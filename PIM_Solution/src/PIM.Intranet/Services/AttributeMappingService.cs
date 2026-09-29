@@ -305,6 +305,269 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
     return value is null or DBNull ? 0 : Convert.ToInt32(value);
   }
 
+  // --- Čiščenje atributov (naloga #15, migracija 307) ----------------------------------------
+  // Lastnik 2026-09-29: »kateri atributi pomenijo isto … seznam kandidatov za združitev, s številom
+  // artiklov in primeri vrednosti; lastnik odloči, kaj se združi«. Tu je samo branje: nič se ne
+  // združi, izbriše ali prepiše. Vrednosti se v pim.ProductAttribute hranijo po SLOVENSKEM IMENU
+  // atributa (125), zato se primerja po imenu, koda registra je samo povezava.
+
+  public sealed record DuplicateReport(
+    IReadOnlyList<CleanupAttribute> Attributes, IReadOnlyList<DuplicateCandidate> Candidates, long ElapsedMs, DateTime ComputedUtc);
+
+  // Pregled je težka poizvedba (~3 s podvojeni, ~9 s zapis) in se čez dan komaj spremeni, zato velja
+  // izračun 10 minut za vse uporabnike; »Osveži« na strani ga izračuna znova.
+  static readonly TimeSpan CleanupCacheAge = TimeSpan.FromMinutes(10);
+  static readonly SemaphoreSlim CleanupGate = new(1, 1);
+  static DuplicateReport? cachedDuplicates;
+  static PolishPreview? cachedPolish;
+
+  /// <summary>
+  /// Kandidati za združitev atributov iz ene množične poizvedbe (brez zanke po atributih):
+  /// pari, ki pri istih izdelkih nosijo isto vrednost, pari z enakim naborom vrednosti pri drugih
+  /// izdelkih in pari s skoraj enakim imenom. Spremljevalni atributi »Enota …« so izpuščeni, ker po
+  /// zasnovi nosijo iste enote (mm, kg) pri vseh merah. Nepomembne vrednosti (0, 1, 2, da, ne) ne
+  /// štejejo kot ujemanje, sicer bi bil par vsak števec.
+  /// </summary>
+  public async Task<DuplicateReport> GetDuplicateCandidatesAsync(bool refresh = false, CancellationToken cancellationToken = default)
+  {
+    var cached = cachedDuplicates;
+    if (!refresh && cached is not null && DateTime.UtcNow - cached.ComputedUtc < CleanupCacheAge) return cached;
+    await CleanupGate.WaitAsync(cancellationToken);
+    try
+    {
+      cached = cachedDuplicates;
+      if (!refresh && cached is not null && DateTime.UtcNow - cached.ComputedUtc < CleanupCacheAge) return cached;
+      return cachedDuplicates = await ComputeDuplicateCandidatesAsync(cancellationToken);
+    }
+    finally { CleanupGate.Release(); }
+  }
+
+  async Task<DuplicateReport> ComputeDuplicateCandidatesAsync(CancellationToken cancellationToken)
+  {
+    const string sql = """
+      SET NOCOUNT ON;
+      CREATE TABLE #n (Id int IDENTITY PRIMARY KEY, Name nvarchar(400) COLLATE DATABASE_DEFAULT NOT NULL UNIQUE);
+      INSERT #n (Name)
+      SELECT DISTINCT AttributeCode FROM pim.ProductAttribute
+      WHERE AttributeCode NOT LIKE N'Enota %' AND Value IS NOT NULL AND Value <> N'';
+
+      CREATE TABLE #v (P int NOT NULL, A int NOT NULL, L tinyint NOT NULL, H int NOT NULL, Informative bit NOT NULL);
+      INSERT #v (P, A, L, H, Informative)
+      SELECT value.PimProductId, name.Id,
+             CASE value.LanguageCode WHEN N'sl' THEN 1 WHEN N'en' THEN 2 ELSE 0 END, CHECKSUM(folded.V),
+             CASE WHEN (folded.V NOT LIKE N'%[^0-9]%' AND LEN(folded.V) <= 2)
+                    OR folded.V IN (N'da', N'ne', N'yes', N'no', N'true', N'false', N'-', N'/', N'x') THEN 0 ELSE 1 END
+      FROM pim.ProductAttribute AS value
+      JOIN #n AS name ON name.Name = value.AttributeCode
+      CROSS APPLY (SELECT LOWER(LTRIM(RTRIM(value.Value))) AS V) AS folded
+      WHERE value.Value IS NOT NULL AND value.Value <> N'';
+      CREATE CLUSTERED INDEX CX_v ON #v (P, L, A);
+
+      SELECT x.A, y.A AS B, COUNT(DISTINCT x.P) AS SharedProducts,
+             COUNT(DISTINCT CASE WHEN x.H = y.H AND x.Informative = 1 THEN x.P END) AS SameValueProducts
+      INTO #shared
+      FROM #v AS x JOIN #v AS y ON y.P = x.P AND y.L = x.L AND y.A > x.A
+      GROUP BY x.A, y.A;
+
+      SELECT DISTINCT A, H INTO #av FROM #v WHERE Informative = 1;
+      SELECT x.A, y.A AS B, COUNT(*) AS CommonValues
+      INTO #common
+      FROM #av AS x JOIN #av AS y ON y.H = x.H AND y.A > x.A
+      GROUP BY x.A, y.A;
+
+      /* 1. atributi s štetjem po podjetju in tremi najpogostejšimi vrednostmi (vse iz začasnih tabel, brez
+            poizvedbe na atribut) */
+      SELECT v.A, product.OrganizationId, COUNT(DISTINCT v.P) AS Products
+      INTO #po
+      FROM #v AS v JOIN pim.Product AS product ON product.PimProductId = v.P
+      GROUP BY v.A, product.OrganizationId;
+
+      SELECT name.Id AS A, LEFT(value.Value, 60) COLLATE DATABASE_DEFAULT AS Value, COUNT(*) AS Uses,
+             ROW_NUMBER() OVER (PARTITION BY name.Id ORDER BY COUNT(*) DESC, LEFT(value.Value, 60)) AS Position
+      INTO #samples
+      FROM pim.ProductAttribute AS value
+      JOIN #n AS name ON name.Name = value.AttributeCode
+      WHERE value.Value IS NOT NULL AND value.Value <> N''
+      GROUP BY name.Id, LEFT(value.Value, 60);
+
+      SELECT name.Name,
+             registry.AttributeCode,
+             COALESCE(counts.Products, 0) AS Products, COALESCE(counts.DistinctValues, 0) AS DistinctValues,
+             (SELECT COUNT(*) FROM #av AS v WHERE v.A = name.Id) AS InformativeValues,
+             (SELECT STRING_AGG(COALESCE(config.Name, CONCAT(N'Podjetje ', po.OrganizationId)) + N' '
+                       + FORMAT(po.Products, N'N0', N'sl-SI'), N' · ') WITHIN GROUP (ORDER BY po.Products DESC)
+              FROM #po AS po LEFT JOIN dbo.OrganizationConfig AS config ON config.OrganizationId = po.OrganizationId
+              WHERE po.A = name.Id) AS ByOrganization,
+             (SELECT STRING_AGG(sample.Value, N' | ') WITHIN GROUP (ORDER BY sample.Position)
+              FROM #samples AS sample WHERE sample.A = name.Id AND sample.Position <= 3) AS Samples
+      FROM #n AS name
+      OUTER APPLY (SELECT COUNT(DISTINCT v.P) AS Products, COUNT(DISTINCT v.H) AS DistinctValues FROM #v AS v WHERE v.A = name.Id) AS counts
+      OUTER APPLY (SELECT TOP (1) translation.AttributeCode FROM canon.AttributeTranslation AS translation
+                   WHERE translation.LanguageCode = N'sl' AND translation.Name = name.Name ORDER BY translation.AttributeCode) AS registry;
+
+      /* 2. pari s skupnimi izdelki ali skupnimi vrednostmi */
+      SELECT first.Name AS FirstName, second.Name AS SecondName,
+             COALESCE(shared.SharedProducts, 0) AS SharedProducts, COALESCE(shared.SameValueProducts, 0) AS SameValueProducts,
+             COALESCE(common.CommonValues, 0) AS CommonValues
+      FROM #shared AS shared
+      FULL JOIN #common AS common ON common.A = shared.A AND common.B = shared.B
+      JOIN #n AS first ON first.Id = COALESCE(shared.A, common.A)
+      JOIN #n AS second ON second.Id = COALESCE(shared.B, common.B)
+      WHERE COALESCE(shared.SameValueProducts, 0) > 0 OR COALESCE(common.CommonValues, 0) > 0;
+      """;
+
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    var attributes = new List<CleanupAttribute>();
+    var pairs = new List<(string First, string Second, long Shared, long Same, long Common)>();
+    await using (var connection = new SqlConnection(ConnectionString))
+    {
+      await connection.OpenAsync(cancellationToken);
+      await using var command = new SqlCommand(sql, connection) { CommandTimeout = 180 };
+      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+      while (await reader.ReadAsync(cancellationToken))
+        attributes.Add(new CleanupAttribute(
+          PimDb.TextOrEmpty(reader, "Name"), PimDb.Text(reader, "AttributeCode"), PimDb.Int64(reader, "Products"),
+          PimDb.Int64(reader, "DistinctValues"), PimDb.Int64(reader, "InformativeValues"),
+          PimDb.Text(reader, "ByOrganization"), PimDb.Text(reader, "Samples")));
+      await reader.NextResultAsync(cancellationToken);
+      while (await reader.ReadAsync(cancellationToken))
+        pairs.Add((PimDb.TextOrEmpty(reader, "FirstName"), PimDb.TextOrEmpty(reader, "SecondName"),
+          PimDb.Int64(reader, "SharedProducts"), PimDb.Int64(reader, "SameValueProducts"), PimDb.Int64(reader, "CommonValues")));
+    }
+    watch.Stop();
+    return new DuplicateReport(attributes, AttributeDuplicatePolicy.Classify(attributes, pairs), watch.ElapsedMilliseconds, DateTime.UtcNow);
+  }
+
+  /// <param name="Rows">Vrstic v pim.ProductAttribute s tem zapisom.</param>
+  public sealed record PolishPreviewRow(string AttributeCode, string OldValue, string NewValue, long Rows, long Products);
+
+  public sealed record PolishPreview(IReadOnlyList<PolishPreviewRow> Changes, long DistinctValues, long ElapsedMs, DateTime ComputedUtc);
+
+  /// <summary>
+  /// Predogled predloga lepega zapisa (pim.PolishAttributeValue, 307): kaj bi se spremenilo, če bi
+  /// lastnik pravilo vklopil. Funkcija se kliče enkrat na RAZLIČNO vrednost (ne na vrstico); podatki,
+  /// zajem in katalog.csv ostanejo nespremenjeni.
+  /// </summary>
+  public async Task<PolishPreview> GetPolishPreviewAsync(bool refresh = false, CancellationToken cancellationToken = default)
+  {
+    var cached = cachedPolish;
+    if (!refresh && cached is not null && DateTime.UtcNow - cached.ComputedUtc < CleanupCacheAge) return cached;
+    await CleanupGate.WaitAsync(cancellationToken);
+    try
+    {
+      cached = cachedPolish;
+      if (!refresh && cached is not null && DateTime.UtcNow - cached.ComputedUtc < CleanupCacheAge) return cached;
+      return cachedPolish = await ComputePolishPreviewAsync(cancellationToken);
+    }
+    finally { CleanupGate.Release(); }
+  }
+
+  async Task<PolishPreview> ComputePolishPreviewAsync(CancellationToken cancellationToken)
+  {
+    const string sql = """
+      SET NOCOUNT ON;
+      SELECT AttributeCode, Value, COUNT_BIG(*) AS Rows, COUNT_BIG(DISTINCT PimProductId) AS Products
+      INTO #d
+      FROM pim.ProductAttribute
+      WHERE Value IS NOT NULL AND Value <> N''
+      GROUP BY AttributeCode, Value;
+
+      SELECT COUNT_BIG(*) AS DistinctValues FROM #d;
+
+      SELECT d.AttributeCode, d.Value AS OldValue, polished.NewValue, d.Rows, d.Products
+      FROM #d AS d
+      CROSS APPLY (SELECT pim.PolishAttributeValue(d.AttributeCode, d.Value) AS NewValue) AS polished
+      WHERE polished.NewValue COLLATE Latin1_General_BIN <> d.Value COLLATE Latin1_General_BIN
+      ORDER BY d.Rows DESC, d.AttributeCode, d.Value;
+      """;
+
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    var changes = new List<PolishPreviewRow>();
+    long distinctValues = 0;
+    await using (var connection = new SqlConnection(ConnectionString))
+    {
+      await connection.OpenAsync(cancellationToken);
+      await using var command = new SqlCommand(sql, connection) { CommandTimeout = 180 };
+      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+      if (await reader.ReadAsync(cancellationToken)) distinctValues = PimDb.Int64(reader, "DistinctValues");
+      await reader.NextResultAsync(cancellationToken);
+      while (await reader.ReadAsync(cancellationToken))
+        changes.Add(new PolishPreviewRow(
+          PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "OldValue"), PimDb.TextOrEmpty(reader, "NewValue"),
+          PimDb.Int64(reader, "Rows"), PimDb.Int64(reader, "Products")));
+    }
+    watch.Stop();
+    return new PolishPreview(changes, distinctValues, watch.ElapsedMilliseconds, DateTime.UtcNow);
+  }
+
+  /// <summary>Jeziki, v katere slovar prevaja angleške vrednosti atributov. IT slovar pozna, izdelek
+  /// pa vrednosti hrani samo v sl/en, zato katalog.csv italijanskih vrednosti (še) ne izvozi.</summary>
+  public static readonly IReadOnlyList<string> DictionaryLanguages = ["SL", "DE", "HR", "IT"];
+
+  public sealed record DictionaryCoverage(string Language, long Total, long Covered)
+  {
+    public long Missing => Total - Covered;
+  }
+
+  public sealed record DictionaryGap(string AttributeCode, string Value, long Products);
+
+  public sealed record DictionaryCoverageReport(
+    IReadOnlyList<DictionaryCoverage> Languages, IReadOnlyList<DictionaryGap> Gaps, string Language);
+
+  /// <summary>
+  /// »Kaj bi slovar prevedel«: za vsako različno angleško vrednost atributa (pim.ProductAttribute,
+  /// jezik en) pogleda, ali ima map.ValueLookup prevod v jezik (domena * ali ime atributa, kot jo
+  /// uporablja pretvorba LOOKUP v zajemu). Samodejni prevod je obstoječa pot LOOKUP; tu je samo pregled.
+  /// </summary>
+  public async Task<DictionaryCoverageReport> GetDictionaryCoverageAsync(string? language, CancellationToken cancellationToken = default)
+  {
+    var chosen = DictionaryLanguages.FirstOrDefault(value => string.Equals(value, language?.Trim(), StringComparison.OrdinalIgnoreCase)) ?? "IT";
+    const string sql = """
+      SET NOCOUNT ON;
+      SELECT AttributeCode COLLATE DATABASE_DEFAULT AS AttributeCode, Value COLLATE DATABASE_DEFAULT AS Value,
+             LOWER(LTRIM(RTRIM(Value))) COLLATE DATABASE_DEFAULT AS SourceKey, COUNT_BIG(DISTINCT PimProductId) AS Products
+      INTO #d
+      FROM pim.ProductAttribute
+      WHERE LanguageCode = N'en' AND Value IS NOT NULL AND Value <> N''
+      GROUP BY AttributeCode, Value;
+
+      SELECT lookup.Language COLLATE DATABASE_DEFAULT AS Language, lookup.SourceKey COLLATE DATABASE_DEFAULT AS SourceKey,
+             lookup.Domain COLLATE DATABASE_DEFAULT AS Domain
+      INTO #k
+      FROM map.ValueLookup AS lookup
+      WHERE lookup.IsActive = 1 AND lookup.Language IN (N'SL', N'DE', N'HR', N'IT');
+
+      SELECT d.AttributeCode, d.Value, d.Products, language.Code AS Language,
+             CASE WHEN EXISTS (SELECT 1 FROM #k AS k WHERE k.Language = language.Code AND k.SourceKey = d.SourceKey
+                                 AND k.Domain IN (N'*', d.AttributeCode, d.AttributeCode + N' SLO')) THEN 1 ELSE 0 END AS Covered
+      INTO #c
+      FROM #d AS d CROSS JOIN (VALUES (N'SL'), (N'DE'), (N'HR'), (N'IT')) AS language(Code);
+
+      SELECT Language, COUNT_BIG(*) AS Total, SUM(CONVERT(bigint, Covered)) AS Covered FROM #c GROUP BY Language;
+
+      SELECT AttributeCode, Value, Products FROM #c
+      WHERE Language = @Language AND Covered = 0
+      ORDER BY Products DESC, AttributeCode, Value;
+      """;
+
+    var languages = new List<DictionaryCoverage>();
+    var gaps = new List<DictionaryGap>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+    command.Parameters.AddWithValue("@Language", chosen);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      languages.Add(new DictionaryCoverage(PimDb.TextOrEmpty(reader, "Language"), PimDb.Int64(reader, "Total"), PimDb.Int64(reader, "Covered")));
+    await reader.NextResultAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      gaps.Add(new DictionaryGap(PimDb.TextOrEmpty(reader, "AttributeCode"), PimDb.TextOrEmpty(reader, "Value"), PimDb.Int64(reader, "Products")));
+    var ordered = DictionaryLanguages
+      .Select(code => languages.FirstOrDefault(row => row.Language == code) ?? new DictionaryCoverage(code, 0, 0))
+      .ToList();
+    return new DictionaryCoverageReport(ordered, gaps, chosen);
+  }
+
   async Task<string> ScalarTextAsync(string sql, Action<SqlCommand> bind, CancellationToken cancellationToken)
   {
     await using var connection = new SqlConnection(ConnectionString);
