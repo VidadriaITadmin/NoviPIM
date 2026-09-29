@@ -7,13 +7,13 @@ bere: [pim.urniki, saop.artikli, saop.cene, saop.zaloge, dobavitelj.xml, pim.val
 pise: [pim.urniki, pim.surovi-zajem, pim.izdelek, pim.cene, pim.zaloge, pim.validacija, splet.katalog-csv, splet.stranke-csv, splet.magento, obvestila]
 strani: [/sistem, /sistem/posel/{JobKey}]
 posli: [SAOP_PRODUCT_IMPORT, SUPPLIER_CATALOG_IMPORT, SAOP_ORDER_IMPORT, STOCK_IMPORT, PRICE_IMPORT, SAOP_DELIVERY_IMPORT, SUPPLIER_STOCK_IMPORT, PRODUCT_VALIDATION, PRODUCT_PUBLICATION, WEB_CATALOG_EXPORT, WEB_STOCK_EXPORT, ALERT_EVALUATION, ALERT_DELIVERY, NIGHTLY_RECONCILIATION, STOCK_REPLENISHMENT_DIGEST, SYSTEM_SELF_TEST, SAOP_OUTBOUND_DISPATCH]
-koda: [PIM_Solution/src/PIM.Automation/*.cs, PIM_Solution/workers/PIM.AutomationHost/*.cs, PIM_Solution/deploy/Install-AutomationHost.ps1, PIM_Solution/deploy/Configure-ScheduledTasks.ps1, PIM_Solution/deploy/Configure-WorkerScheduledTasks.ps1, scripts/Namesti-opravila.ps1, scripts/Namesti-nadzor-avtomatike.ps1, scripts/Katalog-cikel.ps1, scripts/Zaloga-cikel.ps1, scripts/Magento-cikel.ps1, scripts/Nadzor.ps1, scripts/Nocno-vse.ps1, scripts/Sql.ps1, scripts/Tiho.vbs, PIM_Solution/src/PIM.Intranet/Services/MonitorService.cs]
+koda: [PIM_Solution/src/PIM.Automation/*.cs, PIM_Solution/src/PIM.Automation/JobQueue.cs, PIM_Solution/workers/PIM.AutomationHost/*.cs, PIM_Solution/deploy/Install-AutomationHost.ps1, PIM_Solution/deploy/Configure-ScheduledTasks.ps1, PIM_Solution/deploy/Configure-WorkerScheduledTasks.ps1, scripts/Namesti-opravila.ps1, scripts/Namesti-nadzor-avtomatike.ps1, scripts/Katalog-cikel.ps1, scripts/Zaloga-cikel.ps1, scripts/Magento-cikel.ps1, scripts/Nadzor.ps1, scripts/Nocno-vse.ps1, scripts/Sql.ps1, scripts/Tiho.vbs, PIM_Solution/src/PIM.Intranet/Services/MonitorService.cs]
 migracije: [118, 221, 237, 246, 247, 254, 255, 256, 259, 260, 261, 276]
 ---
 
 # Avtomatika in urniki poslov
 
-> **Področje:** Administracija · **Lastnik:** skrbnik (ADMIN) · **Stanje:** ⚠️ delno · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Administracija · **Lastnik:** skrbnik (ADMIN) · **Stanje:** ⚠️ delno · **Preverjeno:** 2026-09-29, iz kode
 
 ## 1. Namen
 
@@ -54,6 +54,19 @@ Avtomatika po urniku prinaša podatke v PIM (SAOP, dobavitelji), validira in obj
 - **Po urniku (stara Windows opravila, če so registrirana):** »PIM nocni tok« 02:30, »PIM zaloga« 5 min, »PIM katalog« 1 h, »PIM magento« 15 min, »PIM nadzor« 5 min (`scripts/Namesti-opravila.ps1`) ter `PIM-SaopKatalog`, `PIM-SaopStockWorker`, `PIM-MagentoProducts` … (`deploy/Configure-WorkerScheduledTasks.ps1`). ⚠️
 - **Ročno:** skrbnik na `/sistem` ali `/sistem/posel/{JobKey}` klikne **Poženi zdaj**; ročna zahteva ima v pasu SAOP prednost pred rednimi posli.
 - **Ob dogodku:** uspeh predhodnika sproži naslednika (zajem artiklov → validacija → objava → katalog za splet; zaloga → cene in zaloga za splet).
+
+### Prednosti, teža poslov in ocena časa (naloga #12, 2026-09-29)
+
+Ko je posel na vrsti (termin je minil ali je zahtevan), ga gostitelj ta tik začne samo, če ga ne zadrži nobeno od teh pravil (po vrsti; `JobQueue.Gate`):
+
+1. **Predhodnik teče** — po celi verigi (validacija med objavo, objava med izvozom kataloga).
+2. **Pas SAOP** — ročna zahteva ima prednost pred rednimi SAOP posli; posel, ki kliče SAOP, nikoli ne teče hkrati z drugim takim in začne šele po **2 min tišine** od konca zadnjega (ekipa SAOP 22. 9.).
+3. **En težak posel naenkrat** — težki so validacija, objava, katalog za splet, cene in zaloga za splet, datumi dobave, analitika in nočna uskladitev. Drugi težak posel počaka, a **največ 15 min**, nato gre vseeno (da zadrževanje ne postane zamuda in alarm).
+4. **Največ 3 posli hkrati** — nadzornik in razpošiljanje alarmov sta lahka in gresta mimo te meje, zato ju ročni zagon nikoli ne izrine.
+
+Vrstni red pregleda v tiku: **ročne zahteve najprej**, nato redni posli po vrstnem redu kataloga.
+
+**Ocena časa:** trajanje posla je povprečje uspešnih tekov zadnjih **14 dni** (`ops.JobRun`, ena poizvedba za vse posle; najmanj 3 teki, sicer stran napiše »ocene še ni«). Stran Nadzor ista pravila simulira naprej po tikih (`JobQueue.Forecast`) in pove: kdaj bo zagon (takoj / za poslom X, ki se konča čez ~N min / po tišini SAOP), koliko bo trajal in kdaj je naslednji redni zagon. Posel, ki ga razporejevalnik namenoma zadrži, je na Nadzoru siv (»Čaka v vrsti«, »V vrsti«), ne rdeč. Odločitve lastnika o prednostih so na nalogi #17 (do takrat velja zgornji privzeti predlog).
 
 ## 4. Vhod in izhod
 
@@ -109,8 +122,8 @@ flowchart LR
 | 2 | Skrbnik | strežnik | Odstraniš stara opravila: `scripts\Namesti-opravila.ps1 -Odstrani`; preveriš `Get-ScheduledTask 'PIM *'`. | Ostane samo »PIM nadzor avtomatike«. | Seznam opravil. |
 | 3 | Skrbnik | `/sistem` | Razdelek **Podjetja v avtomatiki**: **Izključi** → **Potrdi izključitev** ali **Vključi**. | Za izključeno podjetje posli ne tečejo in obvestila se ne ustvarjajo (podjetje DEMO je izključeno od 246). | Oznaka »Vključeno« / »Izključeno«. |
 | 4 | Skrbnik | `/sistem/posel/{JobKey}` | Razdelek **5. Nastavitve** → **Urnik**: »na razmik« ali »enkrat na dan«, razmik ali ura, časovna meja → **Shrani**. **Izklopi** / **Vklopi** posel. | Velja od naslednjega tika gostitelja; gostitelj ob zagonu urnika ne povozi (posodobi samo imena in opise). Razmik 1 min – 1 dan. | »Zdaj: vsakih …« v razdelku Urnik. |
-| 5 | Skrbnik | `/sistem` ali stran posla | **Poženi zdaj**; pri poslih, ki kličejo SAOP, dobavitelja ali pošiljajo e-pošto, še **Potrdi zagon**. Med tekom **Ustavi**. | Zahteva se zapiše v bazo; gostitelj jo prevzame v 15 s. Če gostitelj ne teče, zahteva čaka. | Pri poslu »teče: korak …«, nato zelena oznaka. |
-| 6 | Avtomatika | — | — | Posli, ki kličejo SAOP, tečejo po eden, z 2 min tišine vmes; največ 3 posli hkrati; naslednji termin se računa od konca teka; po zaporednih napakah se razmik podvaja do največ 4 h. Workerji tečejo v Windows Job Object (padec gostitelja jih ustavi). | Stran posla, razdelek »4. Zgodovina tekov«. |
+| 5 | Skrbnik | `/sistem` ali stran posla | **Poženi zdaj**; pri poslih, ki kličejo SAOP, dobavitelja ali pošiljajo e-pošto, še **Potrdi zagon**. Med tekom **Ustavi**. | Zahteva se zapiše v bazo; gostitelj jo prevzame v 15 s, če je ne zadrži vrsta (predhodnik, pas SAOP, težak posel, meja 3 poslov). Če gostitelj ne teče, zahteva čaka. Sporočilo po kliku pove oceno začetka, trajanje in naslednji redni zagon. | Posel je »V vrsti« z oceno začetka (razdelek **Vrsta poslov** na `/sistem`, vrstica **Kdaj** na strani posla), nato »teče: korak …«, nato zelena oznaka. |
+| 6 | Avtomatika | — | — | Posli, ki kličejo SAOP, tečejo po eden, z 2 min tišine vmes; največ 3 posli hkrati, od tega en težak (čaka največ 15 min); ročne zahteve imajo prednost; naslednji termin se računa od konca teka; po zaporednih napakah se razmik podvaja do največ 4 h. Workerji tečejo v Windows Job Object (padec gostitelja jih ustavi). | Stran posla, razdelek »4. Zgodovina tekov«; na `/sistem` razdelek **Vrsta poslov**. |
 
 ## 7. Pravila in varovalke
 
@@ -127,7 +140,8 @@ flowchart LR
 |---|---|---|
 | »Gostitelj avtomatike ne teče — posli ne tečejo« | Storitev ustavljena ali padla | `Start-Service PIM.AutomationHost`; dnevnik `<LOG_ROOT>\gostitelj\`. |
 | Na `/sistem` piše `console` namesto `service` | Na isto bazo je priklopljen gostitelj z razvojnega računalnika | Ugasni ga; na bazi naj teče en gostitelj. |
-| Utrip živ, posel pa ne teče | Posel ali podjetje izklopljeno, čaka na pas SAOP ali je blokiran zaradi predhodnika | Razlog piše v vrstici posla; odpri predhodnika. |
+| Utrip živ, posel pa ne teče | Posel ali podjetje izklopljeno, čaka na pas SAOP, na težak posel, na mejo 3 poslov ali je blokiran zaradi predhodnika | Razlog in ocena začetka pišeta v razdelku **Vrsta poslov** in v vrstici posla; odpri predhodnika. |
+| Ocena začetka se ne ujema z dejanskim | Gostitelj teče s starim binarjem (pred nalogo #12 ne pozna teže poslov) ali je malo tekov za oceno | Ponovno zaženi gostitelja; ocena se izboljša s teki. |
 | Ekipa SAOP se pritožuje zaradi obremenitve | Poleg gostitelja tečejo še stara Windows opravila ali drug računalnik (DEV) kliče isti SAOP | Odstrani stara opravila; ugasni gostitelja na DEV. |
 | Rdeče »prestari podatki«, čeprav posel uspe | Vir ne prinaša novih podatkov (npr. dobavitelj vrača isto datoteko) | Stran posla → »1. Viri podatkov«; po potrebi meja svežine. |
 | Tek visi »brez utripa« | Worker zamrznil (npr. premalo pomnilnika na SQL) | **Ustavi**; gostitelj viseče teke po 10 min zapre kot opuščene. |
@@ -137,7 +151,7 @@ flowchart LR
 <details>
 <summary>Za skrbnika in razvoj</summary>
 
-- **Knjižnica:** `PIM_Solution/src/PIM.Automation` — `JobCatalog.cs` (seznam poslov, privzeti urniki, odvisnosti, načrt korakov, pas SAOP `UsesSaop`, `SaopQuietSeconds = 120`, `NextAfterEnd`, `MaxBackoffSeconds = 4 h`), `AutomationEngine.cs` (tik 15 s, zakup 90 s, `MaxConcurrentJobs = 3`), `AutomationStore.cs` (`ops.EnsureJobDefinition` ne prepiše urnika), `JobRunner.cs`, `ChildProcessJob.cs`, `MonitorPolicy.cs`.
+- **Knjižnica:** `PIM_Solution/src/PIM.Automation` — `JobCatalog.cs` (seznam poslov, privzeti urniki, odvisnosti, načrt korakov, pas SAOP `UsesSaop`, `SaopQuietSeconds = 120`, `NextAfterEnd`, `MaxBackoffSeconds = 4 h`), `JobQueue.cs` (pravila čakanja `Gate`, napoved `Forecast`/`Explain`, meje `MaxConcurrentJobs = 3`, `HeavyMaxWaitSeconds = 900`, ocena iz 14 dni), `AutomationEngine.cs` (tik 15 s, zakup 90 s, vrata iz `JobQueue.Gate`), `AutomationStore.cs` (`ops.EnsureJobDefinition` ne prepiše urnika), `JobRunner.cs`, `ChildProcessJob.cs`, `MonitorPolicy.cs`.
 - **Gostitelj:** `PIM_Solution/workers/PIM.AutomationHost` — stikala `--enkrat <POSEL>`, `--posli A,B`, `--samo-nadzor`, `--preveri`, `--pomoc`.
 - **Namestitev:** `deploy/Install-AutomationHost.ps1` (storitev, ne LocalSystem), `scripts/Namesti-nadzor-avtomatike.ps1` (zunanji nadzor, alarm `AutomationHostDown` po 10 min molka).
 - **Stara opravila:** `scripts/Namesti-opravila.ps1` (5 nalog prek `Tiho.vbs` → PowerShell cikli), `deploy/Configure-ScheduledTasks.ps1` (Watchdog, AlertDispatcher), `deploy/Configure-WorkerScheduledTasks.ps1` (SAOP katalog, zaloga, dobave, Magento).

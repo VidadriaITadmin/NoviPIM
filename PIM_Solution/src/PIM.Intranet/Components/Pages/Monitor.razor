@@ -66,6 +66,57 @@
       }
     </section>
 
+    @* ── Vrsta: kaj teče zdaj, kaj čaka in kdaj pride na vrsto (JobQueue, naloga #12) ── *@
+    var tece = pregled.Jobs.Where(p => p.Forecast?.Kind == JobWaitKind.Running).ToList();
+    var caka = pregled.Jobs.Where(p => p.Forecast is { } f && (f.IsQueued || f.IsHeldByScheduler || f.Kind == JobWaitKind.Ready))
+      .OrderBy(p => p.Forecast!.EstimatedStartUtc ?? DateTime.MaxValue).ToList();
+    var sledi = pregled.Jobs.Where(p => p.Forecast is { Kind: JobWaitKind.NotDue, EstimatedStartUtc: not null })
+      .OrderBy(p => p.Forecast!.EstimatedStartUtc).Take(3).ToList();
+    @if (pregled.HostLive)
+    {
+      <section id="vrsta" class="ui-card monitor-queue" aria-labelledby="vrsta-naslov">
+        <div class="monitor-section-head">
+          <h2 id="vrsta-naslov">Vrsta poslov</h2>
+          <p>
+            Hkrati tečejo največ @JobQueue.MaxConcurrentJobs posli, od tega en težak; posli, ki kličejo SAOP, tečejo po eden z
+            @(JobCatalog.SaopQuietSeconds / 60) min tišine vmes; ročni zagon ima prednost. Ocene so iz tekov zadnjih @JobQueue.EstimateDays dni.
+          </p>
+        </div>
+        <div class="monitor-queue-cols">
+          <div role="group" aria-labelledby="vrsta-tece">
+            <h3 id="vrsta-tece">Teče zdaj (@tece.Count)</h3>
+            @if (tece.Count == 0) { <p class="monitor-note">Trenutno ne teče noben posel.</p> }
+            <ul class="monitor-queue-list">
+              @foreach (var p in tece)
+              {
+                <li><a href="@PoselHref(p.Job.JobKey)">@p.Job.Label</a> <span class="monitor-note">@Naslednji(p, pregled.NowUtc)@(JobCatalog.IsHeavy(p.Job.JobKey) ? " · težak" : "")</span></li>
+              }
+            </ul>
+          </div>
+          <div role="group" aria-labelledby="vrsta-caka">
+            <h3 id="vrsta-caka">Čaka na vrsto (@caka.Count)</h3>
+            @if (caka.Count == 0) { <p class="monitor-note">Nič ne čaka.</p> }
+            <ul class="monitor-queue-list">
+              @foreach (var p in caka)
+              {
+                <li><a href="@PoselHref(p.Job.JobKey)">@p.Job.Label</a> <span class="monitor-note">@p.ForecastText</span></li>
+              }
+            </ul>
+          </div>
+          <div role="group" aria-labelledby="vrsta-sledi">
+            <h3 id="vrsta-sledi">Naslednji po urniku</h3>
+            @if (sledi.Count == 0) { <p class="monitor-note">Ni rednih terminov v naslednjih urah.</p> }
+            <ul class="monitor-queue-list">
+              @foreach (var p in sledi)
+              {
+                <li><a href="@PoselHref(p.Job.JobKey)">@p.Job.Label</a> <span class="monitor-note">ob @MonitorService.ForecastTime(p.Forecast!.EstimatedStartUtc!.Value, pregled.NowUtc)</span></li>
+              }
+            </ul>
+          </div>
+        </div>
+      </section>
+    }
+
     @* ── Povzetek: ena vrstica, ki pove, ali je treba kaj narediti ──────────── *@
     var pozornost = pregled.Jobs.Where(p => p.Verdict.Tone == MonitorTone.Bad).ToList();
     var vRedu = pregled.Jobs.Count(p => p.Verdict.Tone == MonitorTone.Good);
@@ -119,11 +170,15 @@
                   {
                     <div class="monitor-note">zahteva za zagon oddana@(job.RequestedBy is { Length: > 0 } kdo ? $" ({kdo})" : "")</div>
                   }
+                  else if (posel.Forecast is { IsHeldByScheduler: true } zadrzan)
+                  {
+                    <div class="monitor-note">@ZadrzanKratko(zadrzan, pregled)</div>
+                  }
                 </td>
                 <td class="monitor-reason" title="@presoja.Reason">@Skrajsaj(presoja.Reason)</td>
                 <td class="nowrap" title="@SvezinaOpis(posel)">@presoja.DataAgeLabel</td>
                 <td>@PimTime.FormatWithAge(job.LastStartedUtc, "še nikoli")</td>
-                <td>@Naslednji(job)</td>
+                <td class="nowrap" title="@posel.ForecastText">@Naslednji(posel, pregled.NowUtc)</td>
                 <td class="monitor-action">
                   @if (presoja.Action == MonitorAction.RunNow)
                   {
@@ -269,6 +324,7 @@
 
     <nav class="monitor-links" aria-label="Več o nadzoru">
       <a href="sistem/sled">Kdo je kaj spremenil</a>
+      <a href="sistem/samotest">Nočni samotest</a>
     </nav>
   }
 </PimState>
@@ -385,7 +441,7 @@
     finally { Busy = false; }
   }
 
-  Task PozeniAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  async Task PozeniAsync(global::PIM.Intranet.Services.MonitorJob posel)
   {
     // Posel, ki kliče SAOP ali dobavitelja oziroma pošilja e-pošto, ima učinek zunaj PIM-a: zahteva drugi klik
     // (isti vzorec kot prej na Opravilih). Notranji posli (validacija, objava, izvoz) tečejo takoj.
@@ -395,13 +451,16 @@
       Potrjuje = kljuc;
       Message = null;
       Error = null;
-      return Task.CompletedTask;
+      return;
     }
     Potrjuje = null;
     var uspeh = Pregled?.HostLive == true
       ? $"{posel.Job.Label}: zahteva za zagon je oddana; gostitelj jo prevzame ob naslednjem tiku (do 15 s)."
       : $"{posel.Job.Label}: zahteva je oddana, a gostitelj avtomatike ne teče — zagon počaka, dokler se ne zažene.";
-    return IzvediAsync(() => Nadzor.RequestRunAsync(posel.Job.JobKey, Uporabnik), uspeh, "Zahteve za zagon ni bilo mogoče oddati");
+    await IzvediAsync(() => Nadzor.RequestRunAsync(posel.Job.JobKey, Uporabnik), uspeh, "Zahteve za zagon ni bilo mogoče oddati");
+    // Takoj po kliku povej, kdaj bo zagon (napoved iz sveže prebrane vrste).
+    if (Message == uspeh && Pregled?.Jobs.FirstOrDefault(p => p.Job.JobKey == posel.Job.JobKey)?.ForecastText is { Length: > 0 } napoved)
+      Message = $"{posel.Job.Label}: zahteva za zagon je oddana. {napoved}";
   }
 
   Task VklopiPoselAsync(global::PIM.Intranet.Services.MonitorJob posel)
@@ -477,10 +536,27 @@
   static string IzpisHref(JobDefinitionRow job) =>
     job.LastJobRunId is { } tek ? $"sistem/posel/{job.JobKey}?tek={tek}#izpis" : PoselHref(job.JobKey);
 
-  static string Naslednji(JobDefinitionRow job) =>
-    !job.IsEnabled ? "—"
-    : job.IsRequested ? "zdaj (ročna zahteva)"
-    : PimTime.Format(job.NextDueUtc, "ob naslednjem tiku");
+  // Napoved razporejevalnika (JobQueue.ShortLabel); cel stavek je v title in na strani posla.
+  static string Naslednji(global::PIM.Intranet.Services.MonitorJob posel, DateTime nowUtc) =>
+    posel.Forecast is { } napoved ? JobQueue.ShortLabel(napoved, utc => MonitorService.ForecastTime(utc, nowUtc))
+    : !posel.Job.IsEnabled ? "—"
+    : posel.Job.IsRequested ? "zdaj (ročna zahteva)"
+    : PimTime.Format(posel.Job.NextDueUtc, "ob naslednjem tiku");
+
+  static string ZadrzanKratko(JobForecast napoved, MonitorOverview pregled)
+  {
+    var drugi = napoved.BlockingJobKey is { } kljuc ? pregled.Jobs.FirstOrDefault(p => p.Job.JobKey == kljuc)?.Job.Label ?? kljuc : null;
+    return napoved.Kind switch
+    {
+      JobWaitKind.Predecessor => $"čaka predhodnika {drugi}",
+      JobWaitKind.SaopBusy => $"čaka SAOP (teče {drugi})",
+      JobWaitKind.SaopQuiet => "čaka tišino SAOP",
+      JobWaitKind.SaopYields => $"prednost ima ročni zagon {drugi}",
+      JobWaitKind.HeavyBusy => $"čaka težak posel {drugi}",
+      JobWaitKind.ConcurrencyLimit => $"meja {JobQueue.MaxConcurrentJobs} hkratnih poslov",
+      _ => "",
+    };
+  }
 
   static string Doseg(global::PIM.Intranet.Services.MonitorJob posel) =>
     posel.Code?.ReachNote is { Length: > 0 } opomba ? opomba
