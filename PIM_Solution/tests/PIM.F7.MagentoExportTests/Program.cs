@@ -180,6 +180,8 @@ var fixedProductColumns = registryProductColumns.Where(column => !column.ColumnC
 Equal(true, automaticProductColumns.All(column => column.CanonicalFieldCode.StartsWith("Attr.", StringComparison.Ordinal)
     && column.SortOrder > fixedProductColumns.Max(fixedColumn => fixedColumn.SortOrder)),
   "Samodejni stolpci atributov (286) so za stalnimi in berejo Attr.*.");
+// Datoteka nosi vse aktivne stolpce (stalne + samodejne 286); pogodbe o mestih veljajo za stalni del.
+var activeProductColumnCount = registryProductColumns.Count;
 registryProductColumns = fixedProductColumns;
 Equal(181, registryProductColumns.Count, "Profil MAGENTO_PRODUCTS ima po migraciji 234 še štiri stolpce odprodaje in eksponata, po 274 še »Posebni S za skupino strank« (brez samodejnih stolpcev 286).");
 Equal(19, registryCustomerColumns.Count, "Profil MAGENTO_CUSTOMERS mora imeti 19 aktivnih stolpcev.");
@@ -289,8 +291,9 @@ await Throws<ExportContractException>(
 // Od migracije 201 gre v datoteko samo aktiven izdelek s kljukico spletisca, veljaven v vseh
 // profilih, ki blokirajo splet in veljajo za njegovo stran. Izbira je zato "prvi, ki na splet
 // sploh sme", in to na svetila_si: na videlektro danes ni oznacen noben izdelek, zato tam za
-// splet ni veljaven nihce. Izdelek mora biti brez nabora atributov po kategoriji (147), sicer
-// bi nabor izlocil posajena atributa in test bi dokazoval nabor namesto izvoza.
+// splet ni veljaven nihce. Od 291 imajo vse kategorije nabor atributov, a nabor izloci samo
+// atribut z nivojem EXCLUDED; izdelek zato ne sme imeti kategorije, ki izloca posajena atributa,
+// sicer bi test dokazoval nabor namesto izvoza.
 long pimProductId;
 long canonProductId;
 string itemId;
@@ -318,13 +321,22 @@ await using (var pick = new SqlCommand("""
     )
     AND NOT EXISTS
     (
+      /* 291: nabor izloci samo atribut z Level = EXCLUDED (ime iz canon.AttributeTranslation 'sl').
+         Posajena atributa torej ne smeta biti izlocena v nobeni kategoriji izdelka. */
       SELECT 1 FROM pim.ProductCategory AS category
       INNER JOIN canon.WebSite AS site ON site.WebSiteCode = category.WebSite
       INNER JOIN canon.Category AS node
         ON node.CategoryTreeCode = site.CategoryTreeCode AND node.CategoryPath = category.CategoryPath
       CROSS APPLY canon.CategoryAttributeEffective(node.CategoryTreeCode, node.CategoryCode) AS effective
-      WHERE category.PimProductId = promoted.PimProductId AND effective.Level <> N'EXCLUDED'
+      LEFT JOIN canon.AttributeTranslation AS translation
+        ON translation.AttributeCode = effective.AttributeCode AND translation.LanguageCode = N'sl'
+      WHERE category.PimProductId = promoted.PimProductId AND effective.Level = N'EXCLUDED'
+        AND COALESCE(translation.Name, effective.AttributeCode) IN (@GrloName, N'Prevladujoč material')
     )
+    /* Izdelek ne sme ze imeti teh dveh atributov: sicer bi v stolpcu SLO tekmovali dve vrednosti
+       in test bi dokazoval izbiro med njima namesto polnjenja stolpca. */
+    AND NOT EXISTS (SELECT 1 FROM pim.ProductAttribute AS own
+                    WHERE own.PimProductId = promoted.PimProductId AND own.AttributeCode IN (@GrloName, N'Prevladujoč material'))
   /* Raje izdelek brez kljukice videlektro: dokaz "stran brez kljukice ne gre v izvoz" je tako
      brez posega. Ce ga ni (masovna oznaka NW je vsem dala obe), se kljukica zacasno umakne. */
   ORDER BY CASE WHEN EXISTS (SELECT 1 FROM pim.ProductWebShop AS shop
@@ -333,8 +345,9 @@ await using (var pick = new SqlCommand("""
   """, connection))
 {
   pick.Parameters.AddWithValue("@OrgId", organizationId);
+  pick.Parameters.AddWithValue("@GrloName", MagentoCsvContract.ProductHeaders[47].Trim());
   await using var reader = await pick.ExecuteReaderAsync();
-  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni aktivnega, za svetila_si oznacenega in veljavnega izdelka organizacije 2 brez nabora atributov za dokaz izvoza.");
+  if (!await reader.ReadAsync()) throw new InvalidOperationException("V pim.Product ni aktivnega, za svetila_si oznacenega in veljavnega izdelka organizacije 2, ki mu nabor atributov ne izloca grla in prevladujocega materiala in jih se nima, za dokaz izvoza.");
   pimProductId = reader.GetInt64(0);
   itemId = reader.GetString(1);
   canonProductId = reader.GetInt64(2);
@@ -565,7 +578,7 @@ try
   var customerLines = (await File.ReadAllTextAsync(customersCsv, Encoding.UTF8))
     .Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-  Equal(registryProductColumns.Count, SplitCsvLine(productLines[0], ';').Count, "Glava izdelkov mora ustrezati aktivnemu registru.");
+  Equal(activeProductColumnCount, SplitCsvLine(productLines[0], ';').Count, "Glava izdelkov mora ustrezati aktivnemu registru (stalni + samodejni stolpci 286).");
   Equal(19, SplitCsvLine(customerLines[0], ';').Count, "Glava strank mora imeti 19 stolpcev.");
   Equal(true, productLines.Length > 1, "Izvoz mora vrniti vsaj eno vrstico izdelka — če je SQL padel, jih ni.");
 
@@ -574,7 +587,7 @@ try
     .FirstOrDefault(fields => fields.Count > 0 && fields[0] == itemId)
     ?? throw new InvalidOperationException($"Izvoz ne vsebuje vrstice za izdelek {itemId}.");
 
-  Equal(registryProductColumns.Count, row.Count, "Vrstica izdelka mora ustrezati aktivnemu registru.");
+  Equal(activeProductColumnCount, row.Count, "Vrstica izdelka mora ustrezati aktivnemu registru (stalni + samodejni stolpci 286).");
   // 277: cene so v datoteki z decimalno vejico (uporabnik 2026-09-24: »cene morajo imeti vejico, ne piko«).
   Equal("111,11", row[22], "Cena B2C mora biti tekoca cena, ne vnaprej pripravljena — z decimalno vejico.");
   Equal("222,22", row[21],
