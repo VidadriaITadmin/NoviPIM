@@ -132,6 +132,30 @@ static class JobQueueChecks
     Check(idle.Kind == JobWaitKind.NotDue && idle.NextRegularUtc == Now.AddMinutes(5) && Explain(idle).StartsWith("Naslednji redni zagon ob", StringComparison.Ordinal),
       "Posel brez zahteve pove naslednji redni zagon: " + Explain(idle));
 
+    // ─── Po izpadu gostitelja: več SAOP poslov naenkrat na vrsti ───────────
+    // Vsi posli SAOP so zapadli (gostitelj je bil dol); »zdaj« je prost samo prvi, drugi so v vrsti za njim
+    // z razlogom iz simulacije (preverjalec #12: »zdaj« na /sistem, v »Vrsti poslov« pa ocena 19:27).
+    var saopKeys = JobCatalog.All.Where(job => JobCatalog.UsesSaop(job.Key)).Select(job => job.Key).ToHashSet();
+    var restart = Quiet(all).Select(job => saopKeys.Contains(job.JobKey) ? job with { NextDueUtc = Now.AddMinutes(-20) } : job).ToList();
+    var after = JobQueue.Forecast(restart, Dependencies, stats, true, Now, Zone);
+    var saopForecasts = restart.Where(job => job.IsEnabled && saopKeys.Contains(job.JobKey)).Select(job => after[job.JobKey]).ToList();
+    Check(saopForecasts.Count >= 2, "Scenarij potrebuje vsaj dva vklopljena posla SAOP.");
+    Check(saopForecasts.Count(f2 => f2.Kind == JobWaitKind.Ready) == 1, "Po izpadu je »zdaj« na vrsti samo en posel SAOP: "
+      + string.Join("; ", saopForecasts.Select(f2 => $"{f2.JobKey}={f2.Kind}")));
+    foreach (var waiting in saopForecasts.Where(f2 => f2.Kind != JobWaitKind.Ready))
+    {
+      Check(waiting.IsHeldByScheduler && waiting.EstimatedStartUtc is { } ws && ws > Now.AddSeconds(JobQueue.TickSeconds),
+        $"Posel SAOP za prvim je v vrsti z oceno začetka: {waiting}");
+      var label = JobQueue.ShortLabel(waiting, utc => utc.ToString("HH:mm"));
+      Check(label.StartsWith("v vrsti · ~", StringComparison.Ordinal), $"Stolpec »Naslednji« pove »v vrsti · ~HH:MM«, ne »zdaj«: {label}");
+      Check(!Explain(waiting).Contains("naslednjem tiku", StringComparison.Ordinal), "Razlog je iz simulacije: " + Explain(waiting));
+    }
+
+    // ─── Izklopljen posel brez gostitelja ───────────────────────────────────
+    var offDown = JobQueue.Forecast([Job(JobCatalog.StockImport) with { IsEnabled = false }], [], stats, false, Now, Zone)[JobCatalog.StockImport];
+    Check(offDown.Kind == JobWaitKind.Disabled && JobQueue.ShortLabel(offDown, utc => utc.ToString("HH:mm")) == "—",
+      "Izklopljen posel ima »—« tudi, ko gostitelj ne teče: " + offDown);
+
     // ─── Nadzor: v vrsti ni rdeče ───────────────────────────────────────────
     var failedRequested = Requested(Job(JobCatalog.ProductValidation)) with { LastStatus = JobRunStatus.Failed, LastError = "padlo" };
     var verdict = MonitorPolicy.Evaluate(failedRequested, [], [], [], true, Now, null, null, "Na vrsti takoj.");

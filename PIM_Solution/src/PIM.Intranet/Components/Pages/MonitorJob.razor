@@ -1391,8 +1391,11 @@ else
     posel.Forecast?.Stats is { } s && s.Runs >= JobQueue.MinRunsForEstimate
       ? $"~{JobQueue.Span(TimeSpan.FromSeconds(s.AverageSeconds))} (povprečje {s.Runs} tekov, najdlje {JobQueue.Span(TimeSpan.FromSeconds(s.MaxSeconds))})"
       : posel.Forecast?.Stats is { } malo
-        ? $"ocene še ni (samo {malo.Runs} {(malo.Runs == 1 ? "tek" : "teki")} v {JobQueue.EstimateDays} dneh)"
+        ? $"ocene še ni (samo {malo.Runs} {Teki(malo.Runs)} v {JobQueue.EstimateDays} dneh)"
         : $"ocene še ni (ni uspešnih tekov v {JobQueue.EstimateDays} dneh)";
+
+  // Slovenska dvojina in množina: 1 tek, 2 teka, 3–4 teki, 5 tekov (101 tek, 102 teka …).
+  static string Teki(int n) => (n % 100) switch { 1 => "tek", 2 => "teka", 3 or 4 => "teki", _ => "tekov" };
 
   static string Razporejanje(string jobKey)
   {

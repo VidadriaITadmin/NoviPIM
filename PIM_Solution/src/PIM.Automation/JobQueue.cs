@@ -182,12 +182,16 @@ public static class JobQueue
     foreach (var job in known)
     {
       gateNow[job.JobKey] =
-        !hostLive ? new(JobWaitKind.HostDown)
+        // Izklopljen posel brez zahteve je »izklopljen« tudi, ko gostitelj ne teče (ne »gostitelj ne teče«).
+        !hostLive ? new(job.IsEnabled || job.IsRequested || job.IsRunning ? JobWaitKind.HostDown : JobWaitKind.Disabled)
         : runningEnd.ContainsKey(job.JobKey) ? new(JobWaitKind.Running)
         : !IsDue(job, nowUtc) ? new(job.IsEnabled ? JobWaitKind.NotDue : JobWaitKind.Disabled)
         : Gate(job.JobKey, requested.ContainsKey(job.JobKey), WaitingSince(job), known, dependencies, nowSnapshot, nowUtc);
     }
 
+    // Prvi razlog, zaradi katerega simulacija posla ni spustila (npr. ta isti tik je pred njim začel drug posel
+    // v pasu SAOP). Posel, ki je »zdaj« prost, a ga simulacija spusti šele kasneje, dobi ta razlog.
+    var simulatedBlock = new Dictionary<string, JobGate>(StringComparer.Ordinal);
     var firstStart = new Dictionary<string, DateTime>(StringComparer.Ordinal);
     var firstEnd = new Dictionary<string, DateTime>(StringComparer.Ordinal);
     foreach (var job in known.Where(job => job.IsRunning))
@@ -224,7 +228,11 @@ public static class JobQueue
         {
           if (runningEnd.ContainsKey(job.JobKey) || !IsDue(job, at)) continue;
           var gate = Gate(job.JobKey, requested.ContainsKey(job.JobKey), WaitingSince(job), known, dependencies, Snapshot(at), at);
-          if (!gate.CanStart) continue;
+          if (!gate.CanStart)
+          {
+            if (!firstStart.ContainsKey(job.JobKey)) simulatedBlock.TryAdd(job.JobKey, gate);
+            continue;
+          }
           var end = at.AddSeconds(estimate[job.JobKey].Seconds);
           runningEnd[job.JobKey] = end;
           requested.Remove(job.JobKey);
@@ -238,6 +246,12 @@ public static class JobQueue
     foreach (var job in known)
     {
       var gate = gateNow[job.JobKey];
+      // »Na vrsti« zdaj, a simulacija ga spusti šele čez več kot en tik (ali sploh ne v obzorju): pred njim so
+      // posli, ki jih gostitelj ta tik spusti prej. Razlog in ocena pridejo iz simulacije, ne iz stanja zdaj.
+      if (gate.Kind == JobWaitKind.Ready
+          && (!firstStart.TryGetValue(job.JobKey, out var readyStart) || readyStart > nowUtc + tick)
+          && simulatedBlock.TryGetValue(job.JobKey, out var queued))
+        gate = queued;
       var (seconds, hasEstimate) = estimate[job.JobKey];
       DateTime? start = firstStart.TryGetValue(job.JobKey, out var s) ? s
         : gate.Kind == JobWaitKind.NotDue ? job.NextDueUtc

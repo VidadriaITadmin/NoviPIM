@@ -66,7 +66,7 @@ Ko je posel na vrsti (termin je minil ali je zahtevan), ga gostitelj ta tik zač
 
 Vrstni red pregleda v tiku: **ročne zahteve najprej**, nato redni posli po vrstnem redu kataloga.
 
-**Ocena časa:** trajanje posla je povprečje uspešnih tekov zadnjih **14 dni** (`ops.JobRun`, ena poizvedba za vse posle; najmanj 3 teki, sicer stran napiše »ocene še ni«). Stran Nadzor ista pravila simulira naprej po tikih (`JobQueue.Forecast`) in pove: kdaj bo zagon (takoj / za poslom X, ki se konča čez ~N min / po tišini SAOP), koliko bo trajal in kdaj je naslednji redni zagon. Posel, ki ga razporejevalnik namenoma zadrži, je na Nadzoru siv (»Čaka v vrsti«, »V vrsti«), ne rdeč. Odločitve lastnika o prednostih so na nalogi #17 (do takrat velja zgornji privzeti predlog).
+**Ocena časa:** trajanje posla je povprečje uspešnih tekov zadnjih **14 dni** (`ops.JobRun`, ena poizvedba za vse posle; najmanj 3 teki, sicer stran napiše »ocene še ni«). Stran Nadzor ista pravila simulira naprej po tikih (`JobQueue.Forecast`) in pove: kdaj bo zagon (takoj / za poslom X, ki se konča čez ~N min / po tišini SAOP), koliko bo trajal in kdaj je naslednji redni zagon. Kadar je naenkrat na vrsti več poslov (npr. po izpadu gostitelja), »zdaj« dobi samo posel, ki ga gostitelj res spusti ob naslednjem tiku; drugi imajo »v vrsti · ~HH:MM« in razlog iz simulacije (npr. za poslom X v pasu SAOP). Izklopljen posel ima »—« tudi, ko gostitelj ne teče. Posel, ki ga razporejevalnik namenoma zadrži, je na Nadzoru siv (»Čaka v vrsti«, »V vrsti«), ne rdeč. Odločitve lastnika o prednostih so na nalogi #17 (do takrat velja zgornji privzeti predlog).
 
 ## 4. Vhod in izhod
 
