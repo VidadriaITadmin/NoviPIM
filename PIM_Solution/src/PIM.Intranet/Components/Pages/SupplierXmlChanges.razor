@@ -5,13 +5,13 @@
 @* #7a (lastnik 2026-09-29): »ni jasno, ali novosti iz XML delujejo; stran ne pokaže, kaj se je
    spremenilo in pri katerem artiklu«. Zajem XML (SUPPLIER_CATALOG_IMPORT, na 6 ur) obstoječe artikle
    posodablja sam in vsako spremembo zapiše v pim.ProductFieldHistory; ta pogled jo pokaže po šifri:
-   kaj, prej → potem, kdaj, iz katerega vira. Samo branje — povratek čaka odločitev lastnika (#27).
+   kaj, prej → potem, kdaj, iz katerega vira. Samo branje — gumba »Vrni« ni (odločitev lastnika pri #27, 2026-09-29).
    Filtri so v naslovu (deljiva povezava, Nazaj deluje), listanje in štetje sta v bazi. *@
 
 <p class="card-note xml-intro">
   Zajem dobaviteljevega XML obstoječim artiklom sam posodobi atribute, besedila in slike. Tu je vsaka taka sprememba po šifri:
   kaj, prej → potem in kdaj. Spremembe iz SAOP in ročni popravki tu niso — ti so na kartici artikla pod Zgodovina.
-  Povratka sprememb iz XML še ni: odločitev je pri lastniku (naloga #27).
+  Gumba za povratek ni (odločitev lastnika): naslednji prevzem XML bi ročno vrnjeno vrednost spet prepisal.
 </p>
 
 @if (Page is { LastReceived.Count: > 0 })
@@ -137,7 +137,7 @@
 
   protected override async Task OnParametersSetAsync()
   {
-    if (CurrentUri == loadedUri) return;
+    if (string.IsNullOrEmpty(CurrentUri) || CurrentUri == loadedUri) return;
     loadedUri = CurrentUri;
     Filter = FromUri(CurrentUri);
     OrganizationText = Filter.OrganizationId?.ToString(CultureInfo.InvariantCulture) ?? "";

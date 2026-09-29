@@ -342,6 +342,9 @@ else
 
   protected override async Task OnInitializedAsync()
   {
+    // Naslov pred prvim await: ob predupodabljanju se pogled sprememb izriše že med branjem podjetij
+    // in s praznim naslovom je padel (UriFormatException, stran 500 ob odprtju/osvežitvi povezave).
+    CurrentUri = Navigation.Uri;
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Organizations = []; }
 

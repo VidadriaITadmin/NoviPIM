@@ -97,7 +97,7 @@ flowchart LR
 - Zaloga dobavitelja se ne pokaže pri artiklu, ki ga podjetje nima (262).
 - Svežina: `NW_XML` sme biti star 7 dni, `BT_XML` 36 h; zaloga `NW_STOCK` 4 h, `BT_STOCK` 6 h (merjeno po **novih** podatkih — Braytron je 2026-09-22 pet dni vračal isto datoteko). Prekoračitev odpre alarm »SourceStale«.
 - Naslov z dostopnim žetonom stoji samo v `appsettings.Local.json` na strežniku, ne v bazi.
-- Vsaka sprememba, ki jo zajem XML naredi pri obstoječem artiklu, gre v zgodovino polj (sprožilci 034, `ChangeSource = XML_FEED`, `ChangedBy = PIM.XmlMapping:<vir>`); pregled po šifri je zavihek »Spremembe iz XML« (#7). Povratka teh sprememb še ni (odločitev lastnika, naloga #27) — naslednji zajem bi vrnjeno vrednost spet prepisal.
+- Vsaka sprememba, ki jo zajem XML naredi pri obstoječem artiklu, gre v zgodovino polj (sprožilci 034, `ChangeSource = XML_FEED`, `ChangedBy = PIM.XmlMapping:<vir>`); pregled po šifri je zavihek »Spremembe iz XML« (#7). Povratka teh sprememb ni in ga ne bo (odločitev lastnika pri #27, 2026-09-29: samo pregled, filtri in izvoz v Excel, brez zaklepanja polj) — naslednji zajem bi vrnjeno vrednost spet prepisal.
 
 ## 8. Ko gre kaj narobe
 
