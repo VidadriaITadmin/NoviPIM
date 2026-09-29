@@ -731,7 +731,7 @@
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Page?.TotalCount ?? 0:N0} rezultatov";
+    : PimFormat.Count(Page?.TotalCount ?? 0, "rezultat", "rezultata", "rezultati", "rezultatov");
 
   /* --- Kategorija -------------------------------------------------------------------------
      Vrednost filtra je »drevo:koda«. Dve polji bi pomenili dva spustna seznama in dve stanji v

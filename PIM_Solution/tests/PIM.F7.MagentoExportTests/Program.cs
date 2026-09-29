@@ -158,6 +158,7 @@ const string galleryUrl = "https://test.local/f7-gallery.jpg";
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 await CatalogLifecycleTests.RunAsync(connection);
+await PackageOrderHoldTests.RunAsync(connection);
 
 // ---------------------------------------------------------------------------
 // 5a. Register izvoznih stolpcev je resnica o obliki datoteke.

@@ -130,6 +130,7 @@ public static class MagentoExportCommand
             var mergedCatalog = sources.Count > 1 || sources[0].OrganizationId != organizationId;
             foreach (var source in sources)
             {
+                await SyncPackageOrderHoldsAsync(connection, source.OrganizationId, ct);
                 await RefreshCatalogReviewAsync(connection, source.OrganizationId, ct);
                 if (publishToMagento) await WithdrawIneligibleWebShopsAsync(connection, source.OrganizationId, ct);
             }
@@ -470,6 +471,7 @@ public static class MagentoExportCommand
         try
         {
             directoryLock = AcquireOutputDirectory(outputDir);
+            await SyncPackageOrderHoldsAsync(connection, organizationId, ct);
             await RefreshCatalogReviewAsync(connection, organizationId, ct);
 
             // Samo objavljeni izdelki s spletno stranjo; ali je zahtevana tudi veljavnost za splet,
@@ -704,6 +706,46 @@ public static class MagentoExportCommand
         catch (SqlException exception) when (!ct.IsCancellationRequested)
         {
             Console.Error.WriteLine($"Opozorilo: stolpci atributov niso usklajeni z nabori (izvoz se nadaljuje s trenutnimi stolpci): {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 302: zadržki za splet pri »Pakirnem naročanju« brez Pakiranja 2 (> 1) se uskladijo pred sestavo datoteke —
+    /// zajem iz SAOP lahko Pakiranje 2 vpiše ali pobriše mimo kartice in uvoza Excela. Ena množična procedura na
+    /// podjetje (val.SyncPackageOrderHolds), ne zanka po artiklih. Napaka tu izvoza ne ustavi: zadržki ostanejo,
+    /// kot so bili, uskladi jih naslednji zagon; baza pred 302 procedure nima.
+    /// </summary>
+    internal static async Task<(int Held, int Released)> SyncPackageOrderHoldsAsync(
+        SqlConnection connection, int organizationId, CancellationToken ct, SqlTransaction? transaction = null)
+    {
+        try
+        {
+            await using var command = new SqlCommand("val.SyncPackageOrderHolds", connection, transaction)
+            {
+                CommandType = CommandType.StoredProcedure,
+                CommandTimeout = 120,
+            };
+            command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+            var held = command.Parameters.Add("@Held", SqlDbType.Int);
+            held.Direction = ParameterDirection.Output;
+            var released = command.Parameters.Add("@Released", SqlDbType.Int);
+            released.Direction = ParameterDirection.Output;
+            await command.ExecuteNonQueryAsync(ct);
+            var heldCount = held.Value is int h ? h : 0;
+            var releasedCount = released.Value is int r ? r : 0;
+            if (heldCount > 0 || releasedCount > 0)
+                Console.WriteLine($"Pakirno naročanje (podjetje {organizationId}): {heldCount} artiklov zadržanih s spleta (brez objavljenega Pakiranja 2), {releasedCount} sproščenih.");
+            return (heldCount, releasedCount);
+        }
+        catch (SqlException exception) when (exception.Number == 2812)
+        {
+            // Baza pred 302: procedure ni, zadržkov za Pakirno naročanje ni.
+            return (0, 0);
+        }
+        catch (SqlException exception) when (!ct.IsCancellationRequested && transaction is null)
+        {
+            Console.Error.WriteLine($"Opozorilo: zadržki za Pakirno naročanje niso usklajeni (izvoz se nadaljuje): {exception.Message}");
+            return (0, 0);
         }
     }
 

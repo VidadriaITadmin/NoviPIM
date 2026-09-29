@@ -386,12 +386,14 @@ function Invoke-Vrata($n) {
 
 function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
   $rez = @()
-  # Testni podatki (PIM_Solution/fixtures) niso v gitu; delovna kopija jih dobi iz glavne kopije.
-  $fix = Join-Path $Koren 'PIM_Solution/fixtures'
-  $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
-  if (-not (Test-Path $fix) -and (Test-Path $fixGlavna) -and ($fix -ne $fixGlavna)) {
-    Copy-Item $fixGlavna $fix -Recurse
-    Write-Host '  · testni podatki (fixtures) prekopirani iz glavne kopije'
+  # Testni podatki, ki niso v gitu (fixtures, ceniki v pdf_datoteke — .gitignore), delovna kopija dobi iz glavne.
+  foreach ($podmapa in 'PIM_Solution/fixtures', 'PIM_Solution/pdf_datoteke') {
+    $fix = Join-Path $Koren $podmapa
+    $fixGlavna = Join-Path $Glavna $podmapa
+    if (-not (Test-Path $fix) -and (Test-Path $fixGlavna) -and ($fix -ne $fixGlavna)) {
+      Copy-Item $fixGlavna $fix -Recurse
+      Write-Host "  · $podmapa prekopirano iz glavne kopije (ni v gitu)"
+    }
   }
 
   $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log
@@ -686,9 +688,12 @@ switch ($Ukaz) {
     else { & git -C $Glavna worktree add -b $veja $pot $GlavnaVeja 2>&1 | Write-Host }
     $ErrorActionPreference = 'Stop'
     if (-not (Test-Path (Join-Path $pot '.git'))) { throw "Kopije $pot ni bilo mogoče ustvariti." }
-    $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
-    if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Join-Path $pot 'PIM_Solution/fixtures') -Recurse -Force }
-    if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $pot (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
+    foreach ($podmapa in 'PIM_Solution/fixtures', 'PIM_Solution/pdf_datoteke') {
+      $fixGlavna = Join-Path $Glavna $podmapa
+      if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Split-Path (Join-Path $pot $podmapa) -Parent) -Recurse -Force }
+    }
+    $potKopije = $pot  # Use-Zaklep ima svoj $pot (datoteka zaklepa)
+    if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $potKopije (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
     Write-Output $pot
     return
   }

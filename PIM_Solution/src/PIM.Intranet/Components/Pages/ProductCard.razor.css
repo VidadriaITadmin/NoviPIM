@@ -231,6 +231,8 @@
 .key-data-list > div { align-items: center; border-top: 1px solid var(--pim-border); display: grid; gap: 1rem; grid-template-columns: 8rem minmax(0, 1fr); min-height: 2.6rem; }
 .key-data-list dt { color: var(--pim-text-muted); font-size: .77rem; font-weight: 700; }
 .key-data-list dd { align-items: center; display: flex; font-size: .84rem; gap: .6rem; justify-content: space-between; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.key-data-list dd .hold-list { display: flex; flex-direction: column; gap: .3rem; }
+.key-data-list dd .hold-line { display: block; }
 .owner-label { background: var(--pim-good-bg); border: 1px solid var(--pim-good-border); border-radius: 999px; color: var(--pim-good-text); flex: 0 0 auto; font-size: .68rem; font-weight: 700; padding: .1rem .45rem; }
 .detail-link { background: transparent; border: 0; color: var(--pim-primary); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 700; margin-top: .75rem; padding: 0; }
 
