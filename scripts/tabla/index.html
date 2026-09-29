@@ -399,14 +399,14 @@ function izrisi() {
   $('#stanje').innerHTML = `<div class="ik">${ik(s[1])}</div><div><h1>${esc(s[2])}</h1><p>${esc(s[3])}</p></div>`;
 
   // čaka tebe
-  const kljucTebe = JSON.stringify([tebe.map(n => [n.id, n.odlocitev]), zaZdr.map(n => n.id)]);
+  const kljucTebe = JSON.stringify([tebe.map(n => [n.id, n.odlocitev]), zaZdr.map(n => n.id), S.preizkusi]);
   if (kljucTebe !== zadnjiTebe) { zadnjiTebe = kljucTebe; $('#tebe').innerHTML = (tebe.length || zaZdr.length) ? `<div class="kartica" style="border-color:var(--you)"><div class="naslov"><h2 style="color:var(--you)">Čaka tvoj odgovor</h2></div><div style="display:grid;gap:12px">` +
     tebe.map(n => `<div class="vpr"><div class="mut" style="font-size:13px">Naloga <span class="id" data-id="${n.id}">#${n.id}</span> · ${esc(n.naslov)}</div>
       <div class="q">${esc(n.odlocitev)}</div>
       <textarea data-odg="${n.id}" aria-label="Tvoj odgovor na vprašanje naloge ${n.id}" placeholder="Odgovori s svojimi besedami …"></textarea>
       <div class="vr"><button class="gumb glavni" data-poslji="${n.id}">Pošlji odgovor</button></div></div>`).join('') +
-    zaZdr.map(n => `<div class="vpr zdr"><div class="q">Pripravljeno za tvoj preizkus: #${n.id} ${esc(n.naslov)}</div><div class="mut" style="font-size:14px">Ekipa je nalogo naredila in preizkusila. Preizkusi jo še sam; ko si zadovoljen, klikni <b>Združi</b> in nato objavi v PRD (Navodila/03_Publish.md). Če kaj ni prav, napiši v Claude »popravi nalogo ${n.id}: …«.</div>
-      <div class="vr"><button class="gumb" data-id="${n.id}">Poglej</button><button class="gumb ok" data-zdruzi="${n.id}">Združi</button></div></div>`).join('') + '</div></div>' : ''; }
+    zaZdr.map(n => `<div class="vpr zdr"><div class="q">Pripravljeno za tvoj preizkus: #${n.id} ${esc(n.naslov)}</div><div class="mut" style="font-size:14px">Ekipa je nalogo naredila in preizkusila. 1) <b>Preizkusi v aplikaciji</b> odpre intranet s to spremembo (razvojna baza, brez prijave). 2) Ko si zadovoljen, <b>Združi</b> — sprememba gre v tvojo glavno kodo. 3) Objavi v PRD (Navodila/03_Publish.md). Če kaj ni prav, napiši v Claude »popravi nalogo ${n.id}: …«.</div>
+      <div class="vr" style="flex-wrap:wrap;align-items:center">${preizkusHtml(n.id)}<button class="gumb" data-id="${n.id}">Poglej</button><button class="gumb ok" data-zdruzi="${n.id}">Združi</button></div></div>`).join('') + '</div></div>' : ''; }
 
   $('#pripravljenih').textContent = cakajo.length ? `Pripravljenih za začetek: ${cakajo.length} (#${cakajo.map(n => n.id).join(', #')}).` : 'Trenutno ni pripravljenih nalog.';
   const red = { V: 0, S: 1, N: 2 };
@@ -420,6 +420,13 @@ function izrisi() {
   obnoviOsnutke();
 }
 
+function preizkusHtml(id) {
+  const p = (S.preizkusi || []).find(x => x.id === Number(id));
+  if (!p) return `<button class="gumb" data-preizkus="${id}">Preizkusi v aplikaciji</button>`;
+  if (p.stanje === 'tece') return `<a class="gumb glavni" href="${esc(p.url)}" target="_blank" rel="noopener">Odpri aplikacijo</a><button class="gumb majhen" data-ustavi="${id}">Ustavi</button>`;
+  if (p.stanje === 'napaka') return `<span class="cip bad">${esc(p.sporocilo)}</span><button class="gumb majhen" data-preizkus="${id}">Poskusi znova</button>`;
+  return `<span class="cip warn"><span class="utrip" style="background:var(--warn)"></span>${esc(p.sporocilo)}</span>`;
+}
 function pot(n) {
   const f = FAZA[n.faza] || FAZA.predlog;
   const agent = agentNaloge(n);
@@ -574,7 +581,7 @@ function odpriNalogo(id, tiho) {
     ${n.faza === 'opuscena' ? '' : pot(n)}
     <div class="opis-faze">${a ? '<span class="utrip"></span>' : ''}<b>${esc(n.odlocitev ? 'Čaka tvoj odgovor' : f.t)}</b>${a ? ' — ' + esc(poDomace(a.korak)) : ''}</div>
     ${n.odlocitev ? `<div class="vpr"><div class="q">${esc(n.odlocitev)}</div><textarea data-odg="${n.id}" aria-label="Tvoj odgovor"></textarea><div class="vr"><button class="gumb glavni" data-poslji="${n.id}">Pošlji odgovor</button></div></div>` : ''}
-    ${n.stanje === 'pregled' && !S.nastavitve.samodejnoZdruzi ? `<div class="vpr zdr"><div class="q">Preizkušena in sprejeta. Združim?</div><div class="vr"><button class="gumb ok" data-zdruzi="${n.id}">Združi</button></div></div>` : ''}
+    ${n.stanje === 'pregled' && !S.nastavitve.samodejnoZdruzi ? `<div class="vpr zdr"><div class="q">Preizkušena in sprejeta. Preizkusi jo sam, nato združi.</div><div class="vr" style="flex-wrap:wrap;align-items:center">${preizkusHtml(n.id)}<button class="gumb ok" data-zdruzi="${n.id}">Združi</button></div></div>` : ''}
     <div><h4>Kaj je treba narediti</h4><div style="white-space:pre-wrap">${esc(n.opis) || '<span class="mut">—</span>'}</div></div>
     ${v ? `<div><h4>Samodejni preizkus</h4><div style="margin-bottom:8px"><span class="cip ${v.ok ? 'ok' : 'bad'}">${v.ok ? 'Uspel' : 'Našel napako'}</span> <span class="mut" style="font-size:13px">${esc(String(v.cas).replace('T', ' ').slice(0, 16))}</span></div>
       ${v.posnetki.length ? `<div class="galerija">${v.posnetki.map(p => `<img loading="lazy" src="${dat(p)}" alt="Posnetek strani ${esc(p.split('/').pop())}" data-povecaj>`).join('')}</div><p class="namig">Tako je stran izgledala med preizkusom. Klik poveča.</p>` : ''}</div>` : ''}
@@ -625,6 +632,14 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-zapri]')) return t.closest('.okno').classList.remove('odprt');
   const pos = t.closest('[data-poslji]');
   if (pos) { const ta = pos.closest('.vpr').querySelector('textarea'); if (!ta.value.trim()) { ta.focus(); return obvesti('Najprej napiši odgovor.', true); } const id = pos.dataset.poslji; return ukaz('Odlocitev', { id, odgovor: ta.value.trim() }, pos).then(ok => { if (ok) { delete osnutki[id]; shraniOsnutke(); zadnjiTebe = ''; nalozi(); } }); }
+  const pz = t.closest('[data-preizkus],[data-ustavi]');
+  if (pz) {
+    const ustavi = pz.hasAttribute('data-ustavi'), id = pz.dataset.preizkus || pz.dataset.ustavi;
+    pz.disabled = true;
+    fetch('api/preizkus/' + id + (ustavi ? '/ustavi' : ''), { method: 'POST', headers: { 'x-tabla': '1' } }).then(r => r.json())
+      .then(j => { obvesti(j.ok ? (ustavi ? 'Preizkusna aplikacija ustavljena.' : 'Pripravljam aplikacijo — ko bo pripravljena, se pokaže gumb »Odpri aplikacijo«.') : 'Ni uspelo: ' + j.izhod, !j.ok); nalozi(); });
+    return;
+  }
   const zd = t.closest('[data-zdruzi]');
   if (zd) { if (confirm(`Združim nalogo #${zd.dataset.zdruzi} v skupno kodo? Pred tem se še enkrat sestavi (nekaj minut).`)) ukaz('Zdruzi', { id: zd.dataset.zdruzi }, zd); return; }
   const na = t.closest('[data-nastavi]');
@@ -665,6 +680,7 @@ function povezi() {
   es.onerror = () => { $('#zivo').className = 'zivo'; $('#zivo span').textContent = 'brez povezave — poskušam znova'; };
 }
 pokazi(); nalozi(); povezi(); setInterval(nalozi, 20000);
+setInterval(() => { if (S && (S.preizkusi || []).some(p => p.stanje === 'gradim')) nalozi(); }, 4000);
 </script>
 </body>
 </html>
