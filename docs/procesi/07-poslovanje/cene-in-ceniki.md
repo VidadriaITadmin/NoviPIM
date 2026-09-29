@@ -13,7 +13,7 @@ migracije: [83, 208, 210, 213, 265, 280]
 
 # Cene in ceniki — pregled, sprememba, uvoz in pošiljanje v SAOP
 
-> **Področje:** Poslovanje · **Lastnik:** urednik kataloga (zapis v SAOP), komerciala (pregled) · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Poslovanje · **Lastnik:** urednik kataloga (zapis v SAOP), komerciala (pregled) · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-29, iz kode (paketna sprememba #31)
 
 ## 1. Namen
 
@@ -24,13 +24,13 @@ Pregled cen vseh podjetij po cenikih, kot jih vodi SAOP, in pot za spremembo: sp
 | Vloga | Kaj naredi v procesu |
 |---|---|
 | Komerciala | Pregleduje cene in cenike, izvozi Excel; uvrstiti v vrsto ali odobriti **ne more**. |
-| Urednik kataloga | Spremeni ceno, doda ceno ali cenik, uvozi Excel, odobri in pošlje v SAOP. |
+| Urednik kataloga | Spremeni ceno (eno ali paketno), doda ceno ali cenik, uvozi Excel, odobri in pošlje v SAOP. |
 | Skrbnik | Enako kot urednik; povratek uvoza na `/uvozi`. |
 | Avtomatika (PIM) | Zajem cen iz SAOP vsakih 10 minut; pošiljanje odobrenih serij v ozadju (najprej ceniki, nato cene). |
 
 ## 3. Kdaj se sproži
 
-- **Ročno:** urednik na `/cene` (gumbi **Spremeni**, **V vrsto za SAOP**, **Nov cenik**) ali `/cene/uvoz`; odobritev na zavihku »V SAOP«.
+- **Ročno:** urednik na `/cene` (gumbi **Spremeni**, **V vrsto za SAOP**, **Spremeni ceno …** za izbrane, **Nov cenik**) ali `/cene/uvoz`; odobritev na zavihku »V SAOP«.
 - **Po urniku:** `PRICE_IMPORT` (spremembe cen `GetPrices`, vsakih 600 s po podjetjih); šifrant cenikov v nočni uskladitvi.
 - **Ob dogodku:** ni.
 
@@ -85,6 +85,8 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | Komerciala / urednik | `/cene` → **Cene po izdelkih** | Iščeš po šifri ali EAN, v **Filtri** izbereš podjetje, cenik, število cenikov, »Vrsta za SAOP«. | Ena vrstica na izdelek s ceniki, min/max neto in stanjem vrste. | Število zadetkov. |
 | 2 | Urednik | `/cene` | Klikneš vrstico izdelka, pri ceniku **Spremeni**, popraviš neto, DDV, »velja od«, aktivna in klikneš **V vrsto za SAOP**. Novo ceno dodaš v »Dodaj ceno v cenik« → **V vrsto za SAOP**. | Nastane serija »ročno na strani«, ki čaka odobritev. Stara cena ostane prikazana z oznako stanja vrste. | Oznaka »čaka odobritev« ob ceni; značka na zavihku »V SAOP«. |
+| 2a | Urednik | `/cene` | **Paketno:** označiš izdelke (kljukica v vrstici, »Označi vse na strani« ali »Označi vse, ki ustrezajo filtru (N)«), klikneš **Spremeni ceno …**, izbereš cenik, »za odstotek« (npr. +5) ali »na novo neto vrednost«, datum »velja od« (privzeto danes) in **Pokaži predogled**. | Predogled prej/potem (prvih 50), število sprememb, enakih in preskočenih (brez cene v ceniku, neaktivne), opozorilo za spremembe nad 25 %. Pri »vse po filtru« nabor prebere strežnik po filtru strani (največ 20.000 cen). | Povzetek »N cen se spremeni« in tabela prej/potem. |
+| 2b | Urednik | `/cene` | **Uvrsti N cen v vrsto za SAOP …** → potrditev »Uvrstiti N cen v ceniku X (podjetja) v vrsto za SAOP?« → **Da**. | Ena serija »paketno« na podjetje, ki čaka odobritev; zapis v zgodovino uvozov (vrsta CENE) s cenami prej/potem. V PIM se ne spremeni nič, dokler zajem ne prinese cene iz SAOP. | Sporočilo s številko serije in povezavo »uvoz #N«; serija na zavihku »V SAOP«. |
 | 3 | Urednik | `/cene` → **Ceniki** | **Nov cenik**: podjetje, šifra, naziv, valuta (978 = EUR), po želji »Napolni s cenami iz cenika« s faktorjem; **Uvrsti v vrsto za SAOP**. | Cenik in cene gredo v isto serijo; cene počakajo, da odide cenik. | Cenik v seznamu z oznako »cenik: čaka odobritev«. |
 | 4 | Urednik | `/cene` | **Izvozi Excel (N)** → urediš neto, DDV, datum ali aktivnost. | Ena vrstica = cenik × izdelek. | Datoteka `.xlsx`. |
 | 5 | Urednik | `/cene/uvoz` | Naložiš datoteko (po želji podjetje za vrstice brez stolpca »Podjetje«). | Predogled: spremenjene, nove, brez sprememb, sprememba v %, opozorila. | Razdelek »2. Kaj bo šlo v SAOP«. |
@@ -99,6 +101,7 @@ flowchart LR
 - Zapis v SAOP (uvrstitev in odobritev) smeta samo ADMIN in CATALOG_EDITOR (dovoljenje zapisa v SAOP); komerciala lahko samo gleda in predogleda uvoz.
 - SAOP za cene nima PATCH: nova cena `AddPrices`, sprememba `ModifyPricesV2`, nov cenik `AddPriceLists`. Cena za cenik, ki ga SAOP še ne pozna, počaka.
 - Nov cenik se doda na zavihku »Ceniki«, ne z uvozom.
+- Paketna sprememba (#31, privzeto za noč, odločitev #38): spremeni samo neto v enem ceniku, DDV in aktivnost ostaneta, zaokroži na cent (AwayFromZero), osnova za odstotek je cena iz SAOP (ne tista v vrsti). Novih cen ne dodaja; neaktivne cene preskoči. Izbira se nikoli ne pomeša med podjetji — serija nastane za vsako podjetje posebej.
 - Cene v SAOP ni mogoče izbrisati; povratek uvoza jo izklopi (Aktivna = N). Povrne se samo cena, ki jo je zajem že prinesel; sicer je pravi povratek preklic čakajoče serije.
 - Na splet: B2B cena IQ artiklov je VID-ova cena B2B po isti šifri; artikel brez nje je brez B2B cene.
 
@@ -111,7 +114,9 @@ flowchart LR
 | Gumba **V vrsto za SAOP** ni | Vloga brez dovoljenja zapisa v SAOP | Prosi urednika kataloga. |
 | »čaka, da odide cenik« | Cenik iz iste serije še ni v SAOP | Odobri serijo s cenikom. |
 | Cena na spletu se ne spremeni | Izvoz še ni tekel ali je varovalka zadržala artikel | `/splet`, `/varovalke`. |
-| Napačen uvoz cen | — | `/uvozi/{id}` → **Prekliči, kar še čaka v SAOP** ali **Pripravi povratek**. |
+| Napačen uvoz cen ali paketna sprememba | — | `/uvozi/{id}` → **Prekliči, kar še čaka v SAOP** ali **Pripravi povratek**. |
+| »Filter zajame … cen — največ 20.000 naenkrat« | Paketna sprememba po filtru je prevelika | Zoži filter (podjetje, iskanje) ali uporabi izvoz in uvoz Excela. |
+| »Zgodovina spremembe ni bila zapisana« | Zapis v `ops.ImportRun` ni uspel | Serija v vrsti ostane; če je napačna, jo prekliči na zavihku »V SAOP«. |
 
 ## 9. Tehnično ozadje
 
@@ -119,6 +124,7 @@ flowchart LR
 <summary>Za skrbnika in razvoj</summary>
 
 - **Strani:** `Prices.razor` (zavihki `cene`, `ceniki`, `saop`), `PriceImport.razor`; izvoz `/izvoz/cene.xlsx`.
+- **Paketna sprememba (#31):** `PriceWorkbookService.PlanBulkAsync` (predogled kot uvoz, `PriceImportPreview`) → `ApplyAsync(source: "BULK")` → `ImportHistoryService.RecordAsync(CENE)`. Izbira na strani je začasno lokalna; zamenja jo skupni `PimBulkBar` (naloga #39).
 - **Storitve / delavci:** `PriceService`, `PriceWorkbookService`, `PriceSendJobs` (pošiljanje v ozadju iz intraneta), `ImportHistoryService`; zajem `PIM.KatalogWorker --endpoints GetPrices`.
 - **Tabele in pogledi:** `canon.ProductPrice`, `out.OutboundBatch`, `out.OutboxMessage`, `out.EnqueueSaopPriceChanges`, `out.EnqueueSaopPriceList`, `out.ApproveOutboundBatch`, `out.CancelOutboundBatch`, `out.ClaimSaopDocument`, `out.ExportPriceList` (B2B iz podjetja 3), `ops.ImportRun`.
 - **Migracije:** 083, 208, 210, 213, 265, 280.

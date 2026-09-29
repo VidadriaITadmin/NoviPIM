@@ -58,6 +58,30 @@ Assert(PriceQuery.FromQuery(name => query.ToQueryString().Split('&').Select(part
   .Where(part => part[0] == name).Select(part => Uri.UnescapeDataString(part[1])).FirstOrDefault()) == query,
   "Filter mora preživeti pot v povezavo in nazaj.");
 
+/* --- C6 (#31): paketna sprememba cen ------------------------------------------------------- */
+foreach (var contract in new[]
+{
+  "aria-label=\"Označi vse na tej strani\"",          // izbira strani
+  "aria-label=\"Izberi izdelek @row.ItemId",            // kljukica na vrstici
+  "Označi vse, ki ustrezajo filtru",                     // vse po filtru (filter, ne seznam ključev)
+  "Izbranih <strong>",                                   // število izbranih je vedno vidno
+  "Workbook.PlanBulkAsync(change, AllMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
+  "Predogled: cena prej in potem",                       // predogled prej/potem
+  "Uvrstiti <strong>@preview.Rows.Count.ToString(\"N0\") cen</strong>", // potrditev pove število
+  "source: \"BULK\"",                                   // gre po poti uvoza v vrsto za SAOP
+  "History.RecordAsync(ImportKinds.Prices",              // zgodovina za povratek na /uvozi
+  "Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)", // samo urednik (SaopWrite); komerciala ne
+})
+  Assert(markup.Contains(contract, StringComparison.Ordinal), "Paketna sprememba cen (#31) nima: " + contract);
+Assert(!markup.Contains("canon.ProductPrice SET", StringComparison.OrdinalIgnoreCase), "Paketna sprememba ne sme pisati v canon.ProductPrice.");
+
+var percent = new PriceBulkChange("B2C", true, 5m, null);
+Assert(PriceWorkbookService.NewNet(10.00m, percent) == 10.50m, "+5 % od 10,00 mora biti 10,50.");
+Assert(PriceWorkbookService.NewNet(0.99m, new PriceBulkChange("B2C", true, 5m, null)) == 1.04m, "Zaokroževanje na cent (AwayFromZero): 0,99 × 1,05 = 1,0395 → 1,04.");
+Assert(PriceWorkbookService.NewNet(12.345m, new PriceBulkChange("B2C", false, 12.345m, null)) == 12.35m, "Nova vrednost se zaokroži na cent.");
+Assert(PriceWorkbookService.BulkTitle(percent).Contains("B2C", StringComparison.Ordinal) && PriceWorkbookService.BulkTitle(percent).Contains("+5 %", StringComparison.Ordinal),
+  "Opis serije mora povedati cenik in odstotek: " + PriceWorkbookService.BulkTitle(percent));
+
 Console.WriteLine("F10 prices UX contract PASS.");
 
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);
@@ -148,6 +172,28 @@ static async Task RoundTripAsync(string connectionString)
     var listXml = File.ReadAllText(Directory.GetFiles(output, NewList + ".POST.Add.xml").Single());
     foreach (var element in new[] { "<PriceList>", $"<PriceListId>{NewList}</PriceListId>", "<PriceListDescription>Testni cenik F10</PriceListDescription>", "<CurrencyId>978</CurrencyId>", "<Active>true</Active>" })
       Assert(listXml.Contains(element, StringComparison.Ordinal), $"Dokument cenika nima {element}:\n{listXml}");
+
+    // 5. Paketna sprememba (#31): +5 % za eno izbrano ceno in za isto ceno »po filtru«; gre v vrsto (BULK), ne v canon.
+    var bulkLine = (await prices.GetLinesAsync(new PriceQuery(Organization, "B2C", null)))
+      .First(candidate => candidate.QueueStatus is null && candidate.Net is > 1 && candidate.IsActive && candidate.ItemId != line.ItemId);
+    var bulkChange = new PriceBulkChange("B2C", true, 5m, null);
+    var expected = Math.Round(bulkLine.Net!.Value * 1.05m, 2, MidpointRounding.AwayFromZero);
+    var picked = await workbook.PlanBulkAsync(bulkChange, null, [new PriceBulkKey(Organization, bulkLine.ItemId)]);
+    Assert(picked.Rows.Count == 1 && picked.Rows[0].OldNet == bulkLine.Net && picked.Rows[0].NewNet == expected && picked.Rows[0].NewVat is null,
+      $"Paketna sprememba izbrane cene: pričakovano {bulkLine.Net} → {expected}, samo neto.");
+    var byFilter = await workbook.PlanBulkAsync(bulkChange, new PriceQuery(Organization, null, bulkLine.ItemId), []);
+    Assert(byFilter.Rows.Any(row => row.ItemId == bulkLine.ItemId && row.NewNet == expected && row.PriceList == "B2C")
+      && byFilter.Rows.All(row => row.PriceList == "B2C" && row.OrganizationId == Organization),
+      "»Vse po filtru« mora vzeti samo izbrani cenik in podjetje filtra.");
+    var missing = await workbook.PlanBulkAsync(new PriceBulkChange(NewList, true, 5m, null), null, [new PriceBulkKey(Organization, bulkLine.ItemId)]);
+    Assert(missing.Rows.Count == 0 && missing.Problems.Count == 1, "Paketna sprememba ne dodaja novih cen v cenik, kjer jih artikel nima.");
+    var bulkOutcome = await workbook.ApplyAsync(picked, Actor, null, source: "BULK", title: PriceWorkbookService.BulkTitle(bulkChange));
+    Assert(bulkOutcome.Queued == 1 && bulkOutcome.Batches.Single().BatchId is { } bulkBatch
+      && await ScalarAsync(connection, $"SELECT CONVERT(bigint, COUNT(*)) FROM out.OutboundBatch WHERE OutboundBatchId = {bulkBatch} AND Source = N'BULK' AND Note LIKE N'Paketna sprememba cen B2C%'") == 1,
+      "Paketna sprememba mora iti v vrsto kot serija BULK z opisom.");
+    var bulkOverlay = (await prices.GetProductLinesAsync(bulkLine.ProductId)).Single(candidate => candidate.PriceList == "B2C");
+    Assert(bulkOverlay.Net == bulkLine.Net && bulkOverlay.QueuedNet == expected && bulkOverlay.QueueStatus == "PendingApproval",
+      "Po paketni spremembi ostane v PIM cena iz SAOP, nova čaka odobritev.");
   }
   finally
   {
@@ -165,13 +211,13 @@ static string Safe(string value) => string.Concat(value.Select(character => Path
 
 static async Task<long> ScalarAsync(SqlConnection connection, string sql)
 {
-  await using var command = new SqlCommand(sql, connection);
+  await using var command = new SqlCommand(sql, connection) { CommandTimeout = 900 }; // razvojna baza je ob vzporednih vratih zasedena; ops.SaopHeldForApproval zdaj traja minute (naloga #51)
   return Convert.ToInt64(await command.ExecuteScalarAsync());
 }
 
 static async Task ExecuteAsync(SqlConnection connection, string sql, long id)
 {
-  await using var command = new SqlCommand(sql.Replace("@Id", "@First"), connection);
+  await using var command = new SqlCommand(sql.Replace("@Id", "@First"), connection) { CommandTimeout = 900 };
   command.Parameters.Add("@First", SqlDbType.BigInt).Value = id;
   await command.ExecuteNonQueryAsync();
 }

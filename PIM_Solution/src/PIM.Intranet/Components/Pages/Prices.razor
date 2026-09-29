@@ -3,8 +3,11 @@
 @rendermode InteractiveServer
 @implements IDisposable
 @inject PriceService PriceData
+@inject PriceWorkbookService Workbook
+@inject ImportHistoryService History
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
+@inject IAuthorizationService Authorization
 @inject NavigationManager Navigation
 
 <PageTitle>Cene in ceniki</PageTitle>
@@ -117,15 +120,170 @@
     </section>
   }
 
+  @* #31: paketna sprememba cen. Izbira ima tri načine (PIM_DOBRE_PRAKSE §9.3): ta stran, vse po filtru
+     (filter, ne seznam ključev — nabor prebere strežnik) in nič. Začasno lokalno; ko je združena #10,
+     jo zamenja skupni PimBulkBar/PimRowSelection (naloga #39). Samo za SaopWrite — servis to preveri še enkrat. *@
+  @if (CanBulk)
+  {
+    <div class="price-bulk-bar @(SelectedCount > 0 ? "has-selection" : null)" role="region" aria-label="Izbira cen in paketna sprememba">
+      <label class="price-bulk-page">
+        <input type="checkbox" aria-label="Označi vse na tej strani" checked="@PageSelected" disabled="@(Rows.Count == 0)" @onchange="PageChanged" />
+        <span>Označi vse na strani</span>
+      </label>
+      @if (SelectedCount > 0)
+      {
+        <span class="price-bulk-count" role="status" aria-live="polite">
+          Izbranih <strong>@SelectedCount.ToString("N0")</strong> izdelkov@(AllMatching ? " — vsi, ki ustrezajo filtru" : "")
+        </span>
+        @if (!AllMatching && Total > SelectedCount)
+        {
+          <button type="button" class="small-action" @onclick="SelectAllMatching">Izberi vse, ki ustrezajo filtru (@Total.ToString("N0"))</button>
+        }
+        <span class="price-bulk-sep" aria-hidden="true"></span>
+        <button type="button" class="primary-button small" aria-expanded="@BulkOpen.ToString().ToLowerInvariant()" aria-controls="price-bulk-panel" @onclick="OpenBulk">Spremeni ceno …</button>
+        <button type="button" class="link-button price-bulk-clear" @onclick="ClearSelection">Počisti izbiro</button>
+      }
+      else
+      {
+        @if (Total > 0)
+        {
+          <button type="button" class="small-action" @onclick="SelectAllMatching">Označi vse, ki ustrezajo filtru (@Total.ToString("N0"))</button>
+        }
+        <span class="price-bulk-hint">Označi izdelke in jim v izbranem ceniku spremeni ceno za odstotek ali na novo vrednost.</span>
+      }
+    </div>
+
+    @if (BulkOpen && SelectedCount > 0)
+    {
+      <section id="price-bulk-panel" class="ui-card panel price-bulk-panel" role="group" aria-labelledby="price-bulk-title">
+        <h2 id="price-bulk-title">Paketna sprememba cen — @SelectionLabel</h2>
+        <p class="hint">
+          Spremeni se samo <strong>neto cena</strong> v enem ceniku; DDV in aktivnost ostaneta. Cena se zaokroži na cent.
+          Izdelki brez cene v tem ceniku in neaktivne cene se preskočijo. Vse gre <strong>v vrsto za SAOP</strong> in čaka odobritev
+          na zavihku »V SAOP« — nič ne odide samo. V PIM se nova cena pokaže, ko jo zajem cen prinese nazaj iz SAOP.
+        </p>
+        <div class="filter-grid">
+          <div class="filter-field">
+            <label for="bulk-list">Cenik</label>
+            <select id="bulk-list" class="filter-select" @bind="BulkList" @bind:after="ResetBulkPreview" aria-invalid="@(BulkErrorField == "list" ? "true" : null)">
+              <option value="">— izberi cenik —</option>
+              @foreach (var option in ListCodes) { <option value="@option.Code">@option.Label</option> }
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="bulk-mode">Sprememba</label>
+            <select id="bulk-mode" class="filter-select" @bind="BulkMode" @bind:after="ResetBulkPreview">
+              <option value="percent">Za odstotek (+ ali −)</option>
+              <option value="value">Na novo neto vrednost</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="bulk-value">@(BulkMode == "percent" ? "Odstotek (npr. 5 ali −3,5)" : "Nova neto cena (EUR)")</label>
+            <input id="bulk-value" class="form-input numeric-input" inputmode="decimal" @bind="BulkValue" @bind:event="oninput" @bind:after="ResetBulkPreview"
+                   aria-invalid="@(BulkErrorField == "value" ? "true" : null)" aria-describedby="bulk-error" />
+          </div>
+          <div class="filter-field">
+            <label for="bulk-from">Velja od</label>
+            <input id="bulk-from" type="date" class="form-input" @bind="BulkFrom" @bind:after="ResetBulkPreview" />
+          </div>
+        </div>
+        @if (BulkError is not null) { <p id="bulk-error" class="message-state error-message" role="alert">@BulkError</p> }
+        <div class="filter-actions">
+          <button type="button" class="secondary-button" disabled="@Busy" @onclick="PlanBulkAsync">@(Busy && BulkPreview is null ? "Pripravljam predogled …" : "Pokaži predogled")</button>
+          <button type="button" class="link-button" @onclick="CloseBulk">Prekliči</button>
+        </div>
+
+        @if (BulkPreview is { } preview)
+        {
+          <div class="price-bulk-preview" role="status" aria-live="polite">
+            <p class="price-bulk-summary">
+              <strong>@preview.Rows.Count.ToString("N0")</strong> cen se spremeni
+              @if (preview.Organizations.Count > 0) { <span>(@string.Join(", ", preview.Organizations))</span> }
+              · @preview.UnchangedRows.ToString("N0") enakih · @preview.Problems.Count.ToString("N0") preskočenih
+              @if (BigChanges > 0) { <span> · <strong class="warn-text">@BigChanges.ToString("N0") za več kot 25 %</strong></span> }
+            </p>
+            @if (preview.Warnings.Count > 0)
+            {
+              <details class="price-bulk-details"><summary>Opozorila (@preview.Warnings.Count.ToString("N0"))</summary>
+                <ul class="change-list">@foreach (var warning in preview.Warnings.Take(100)) { <li>@warning</li> }</ul>
+                @if (preview.Warnings.Count > 100) { <p class="hint">… in še @(preview.Warnings.Count - 100).</p> }
+              </details>
+            }
+            @if (preview.Problems.Count > 0)
+            {
+              <details class="price-bulk-details"><summary>Preskočeno (@preview.Problems.Count.ToString("N0"))</summary>
+                <ul class="change-list">@foreach (var problem in preview.Problems.Take(100)) { <li>@problem</li> }</ul>
+                @if (preview.Problems.Count > 100) { <p class="hint">… in še @(preview.Problems.Count - 100).</p> }
+              </details>
+            }
+            @if (preview.Rows.Count > 0)
+            {
+              <PimTable Caption="Predogled: cena prej in potem" AriaLabel="Predogled paketne spremembe cen" Columns="PreviewColumns">
+                <Rows>
+                  @foreach (var line in preview.Rows.Take(50))
+                  {
+                    <tr>
+                      <td>@line.OrganizationName</td>
+                      <td><span class="code-value">@line.PriceList</span></td>
+                      <td><span class="code-value">@line.ItemId</span></td>
+                      <td class="numeric">@(line.OldNet?.ToString("N2") ?? "—")</td>
+                      <td class="numeric"><strong>@line.NewNet.ToString("N2")</strong></td>
+                      <td class="numeric @(line.ChangePercent is { } p && Math.Abs(p) > 25 ? "warn-text" : null)">@(line.ChangePercent is { } percent ? percent.ToString("+0.0;-0.0;0") + " %" : "—")</td>
+                      <td>@(line.ValidFrom is { } from ? from.ToString("d. M. yyyy") : "ostane")</td>
+                    </tr>
+                  }
+                </Rows>
+              </PimTable>
+              @if (preview.Rows.Count > 50) { <p class="hint">Prikazanih je prvih 50 od @preview.Rows.Count.ToString("N0") cen; v vrsto gredo vse.</p> }
+
+              @if (!BulkConfirming)
+              {
+                <div class="filter-actions">
+                  <button type="button" class="primary-button" disabled="@Busy" @onclick="() => BulkConfirming = true">Uvrsti @preview.Rows.Count.ToString("N0") cen v vrsto za SAOP …</button>
+                </div>
+              }
+              else
+              {
+                <div class="price-bulk-confirm" role="alertdialog" aria-labelledby="bulk-confirm-text">
+                  <p id="bulk-confirm-text">
+                    Uvrstiti <strong>@preview.Rows.Count.ToString("N0") cen</strong> v ceniku <strong>@BulkList</strong>
+                    (@string.Join(", ", preview.Organizations)) v vrsto za SAOP? Nič ne odide brez odobritve na zavihku »V SAOP«.
+                    @if (BigChanges > 0) { <strong class="warn-text"> Pozor: @BigChanges.ToString("N0") cen se spremeni za več kot 25 %.</strong> }
+                  </p>
+                  <div class="filter-actions">
+                    <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyBulkAsync">@(Busy ? "Uvrščam …" : "Da, uvrsti v vrsto")</button>
+                    <button type="button" class="link-button" disabled="@Busy" @onclick="() => BulkConfirming = false">Ne</button>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+      </section>
+    }
+  }
+
+  @if (BulkHistoryId is { } bulkHistory)
+  {
+    <p class="hint price-bulk-history">Paketna sprememba je zapisana v zgodovino kot <a href="@($"uvozi/{bulkHistory}")">uvoz #@bulkHistory</a> — tam jo lahko povrneš, ko jo zajem prinese iz SAOP. Dokler čaka v vrsti, jo prekliči na zavihku »V SAOP«.</p>
+  }
+
   <section class="ui-card data-card price-list-card" aria-label="Cene po izdelkih">
     <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni izdelkov s ceno." LoadingText="Nalaganje cen …">
-      <PimTable Caption="Izdelki in njihovi ceniki" AriaLabel="Tabela cen po izdelkih" Columns="Columns">
+      <PimTable Caption="Izdelki in njihovi ceniki" AriaLabel="Tabela cen po izdelkih" Columns="VisibleColumns">
         <Rows>
           @foreach (var row in Rows)
           {
             var open = Expanded == row.ProductId;
-            <tr class="row-link @(open ? "open" : null)" tabindex="0" @onclick="() => ToggleAsync(row)" @onkeydown="args => ToggleKeyAsync(args, row)"
+            var key = SelectionKey(row);
+            <tr class="row-link @(open ? "open" : null) @(IsSelected(key) ? "selected" : null)" tabindex="0" @onclick="() => ToggleAsync(row)" @onkeydown="args => ToggleKeyAsync(args, row)"
                 aria-expanded="@open.ToString().ToLowerInvariant()" aria-label="Pokaži cenike izdelka @row.ItemId">
+              @if (CanBulk)
+              {
+                <td class="select-cell" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+                  <input type="checkbox" aria-label="Izberi izdelek @row.ItemId (@row.OrganizationName)" checked="@IsSelected(key)" @onchange="args => ToggleRow(row, args)" />
+                </td>
+              }
               <td>
                 <span class="product-name">@(row.Name ?? row.ItemId)</span>
                 <span class="product-meta"><span class="code-value">@row.ItemId</span></span>
@@ -146,7 +304,7 @@
             @if (open)
             {
               <tr class="detail-row">
-                <td colspan="7">
+                <td colspan="@VisibleColumns.Count">
                   <PimState Loading="DetailLoading" Empty="@(!DetailLoading && Detail.Count == 0)" EmptyText="Izdelek nima cen." LoadingText="Nalaganje cenikov …">
                     <PimTable Caption="@($"Ceniki izdelka {row.ItemId}")" AriaLabel="Tabela cenikov izdelka" Columns="DetailColumns">
                       <Rows>
@@ -466,6 +624,16 @@ else
     new("Najvišja neto", Numeric: true), new("Zadnja veljavnost"), new("V SAOP"),
   ];
 
+  static readonly IReadOnlyList<PimColumn> SelectableColumns = [new("Izbira"), .. Columns];
+
+  IReadOnlyList<PimColumn> VisibleColumns => CanBulk ? SelectableColumns : Columns;
+
+  static readonly IReadOnlyList<PimColumn> PreviewColumns =
+  [
+    new("Podjetje"), new("Cenik"), new("Artikel"), new("Neto prej", Numeric: true), new("Neto potem", Numeric: true),
+    new("Sprememba", Numeric: true), new("Velja od"),
+  ];
+
   static readonly IReadOnlyList<PimColumn> DetailColumns =
   [
     new("Cenik"), new("Neto", Numeric: true), new("DDV", Numeric: true), new("Bruto", Numeric: true),
@@ -521,6 +689,12 @@ else
   protected override async Task OnInitializedAsync()
   {
     try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+    try
+    {
+      var user = (await Authentication.GetAuthenticationStateAsync()).User;
+      CanBulk = (await Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)).Succeeded;
+    }
+    catch { CanBulk = false; }
     if (int.TryParse(QueryOrganization, out var requested) && Organizations.Any(row => row.OrganizationId == requested))
       OrganizationText = requested.ToString();
     Search = QueryProduct ?? "";
@@ -545,6 +719,14 @@ else
       Rows = result.Rows;
       Total = result.Total;
       Lines = result.Lines;
+      // Drug filter = druga izbira »vse po filtru«; posamezne kljukice ostanejo, predogled pa ne velja več.
+      var signature = Query.ToQueryString();
+      if (!string.Equals(signature, SelectionSignature, StringComparison.Ordinal))
+      {
+        if (AllMatching) { AllMatching = false; BulkOpen = false; }
+        SelectionSignature = signature;
+        ResetBulkPreview();
+      }
     }
     catch { Error = "Cen trenutno ni mogoče naložiti."; Rows = []; }
     finally { Loading = false; }
@@ -704,6 +886,159 @@ else
     .Where(list => !Detail.Any(line => string.Equals(line.PriceList, list.Code, StringComparison.OrdinalIgnoreCase)))
     .OrderBy(list => list.Code, StringComparer.OrdinalIgnoreCase).ToArray();
 
+  /* --- paketna sprememba (#31) --------------------------------------------------------------- */
+
+  bool CanBulk, AllMatching, BulkOpen, BulkConfirming;
+  string? SelectionSignature, BulkError, BulkErrorField;
+  readonly Dictionary<string, PriceBulkKey> Selected = new(StringComparer.OrdinalIgnoreCase);
+  string BulkList = "", BulkMode = "percent", BulkValue = "";
+  DateTime? BulkFrom = DateTime.Today;
+  PriceBulkChange? BulkChange;
+  PriceImportPreview? BulkPreview;
+  bool BulkPlannedForFilter;
+  long? BulkHistoryId;
+
+  static string SelectionKey(PriceProductRow row) => $"{row.OrganizationId}|{row.ItemId}";
+
+  bool IsSelected(string key) => AllMatching || Selected.ContainsKey(key);
+
+  /// <summary>Pri »vse po filtru« je to število zadetkov filtra (izdelkov), sicer število kljukic.</summary>
+  long SelectedCount => AllMatching ? Total : Selected.Count;
+
+  bool PageSelected => Rows.Count > 0 && Rows.All(row => IsSelected(SelectionKey(row)));
+
+  string SelectionLabel => AllMatching
+    ? $"vseh {Total:N0} izdelkov, ki ustrezajo filtru"
+    : $"{Selected.Count:N0} izbranih izdelkov";
+
+  int BigChanges => BulkPreview?.Rows.Count(row => row.ChangePercent is { } percent && Math.Abs(percent) > 25) ?? 0;
+
+  void ToggleRow(PriceProductRow row, ChangeEventArgs args)
+  {
+    var selected = args.Value is true;
+    var key = SelectionKey(row);
+    // Odkljukana vrstica pri »vse po filtru« ta način konča: ostane trenutna stran brez nje.
+    if (AllMatching && !selected)
+    {
+      AllMatching = false;
+      Selected.Clear();
+      foreach (var pageRow in Rows) Selected[SelectionKey(pageRow)] = new(pageRow.OrganizationId, pageRow.ItemId);
+    }
+    if (selected) Selected[key] = new(row.OrganizationId, row.ItemId);
+    else Selected.Remove(key);
+    ResetBulkPreview();
+  }
+
+  void PageChanged(ChangeEventArgs args)
+  {
+    var selected = args.Value is true;
+    if (AllMatching && !selected) { ClearSelection(); return; }
+    foreach (var row in Rows)
+      if (selected) Selected[SelectionKey(row)] = new(row.OrganizationId, row.ItemId);
+      else Selected.Remove(SelectionKey(row));
+    ResetBulkPreview();
+  }
+
+  void SelectAllMatching()
+  {
+    Selected.Clear();
+    AllMatching = Total > 0;
+    ResetBulkPreview();
+  }
+
+  void ClearSelection()
+  {
+    Selected.Clear();
+    AllMatching = false;
+    BulkOpen = false;
+    ResetBulkPreview();
+  }
+
+  void OpenBulk()
+  {
+    BulkOpen = !BulkOpen;
+    Message = ActionError = null;
+    if (BulkList.Length == 0 && PriceList.Length > 0) BulkList = PriceList;
+    BulkFrom ??= DateTime.Today;
+  }
+
+  void CloseBulk()
+  {
+    BulkOpen = false;
+    ResetBulkPreview();
+  }
+
+  void ResetBulkPreview()
+  {
+    BulkPreview = null;
+    BulkChange = null;
+    BulkConfirming = false;
+    BulkError = BulkErrorField = null;
+  }
+
+  async Task PlanBulkAsync()
+  {
+    ResetBulkPreview();
+    Message = ActionError = null;
+    if (BulkList.Length == 0) { BulkError = "Izberi cenik, v katerem se cene spremenijo."; BulkErrorField = "list"; return; }
+    // Znak »−« (npr. prilepljen iz Worda) je minus.
+    if (CustomerWorkbookService.ParseDecimal(BulkValue.Replace('−', '-').Replace('–', '-')) is not { } value)
+    {
+      BulkError = BulkMode == "percent" ? "Vpiši odstotek, npr. 5 ali −3,5." : "Vpiši novo neto ceno, npr. 12,90.";
+      BulkErrorField = "value";
+      return;
+    }
+    var change = new PriceBulkChange(BulkList, BulkMode == "percent", value, BulkFrom);
+    Busy = true;
+    try
+    {
+      var keys = AllMatching ? Array.Empty<PriceBulkKey>() : Selected.Values.ToArray();
+      BulkPreview = await Workbook.PlanBulkAsync(change, AllMatching ? Query : null, keys);
+      BulkChange = change;
+      BulkPlannedForFilter = AllMatching;
+    }
+    catch (ArgumentException exception) { BulkError = exception.Message; BulkErrorField = exception.Message.StartsWith("Odstotek", StringComparison.Ordinal) || exception.Message.StartsWith("Nova", StringComparison.Ordinal) ? "value" : null; }
+    catch (Exception exception) { BulkError = "Predogleda ni bilo mogoče pripraviti: " + exception.Message; }
+    finally { Busy = false; }
+  }
+
+  async Task ApplyBulkAsync()
+  {
+    if (BulkPreview is not { Rows.Count: > 0 } preview || BulkChange is not { } change) return;
+    Busy = true; Message = ActionError = null; BulkHistoryId = null;
+    try
+    {
+      var actor = await ActorAsync();
+      var title = PriceWorkbookService.BulkTitle(change);
+      var outcome = await Workbook.ApplyAsync(preview, actor, null, source: "BULK", title: title);
+      var scope = BulkPlannedForFilter
+        ? "Vse po filtru" + (Query.ToQueryString() is { Length: > 0 } filter ? ": " + Uri.UnescapeDataString(filter) : "")
+        : $"{Selected.Count:N0} izbranih izdelkov";
+      var batches = outcome.Batches.Where(batch => batch.BatchId is not null).Select(batch => batch.BatchId!.Value).ToArray();
+      // Zgodovina (prej/potem) za povratek na /uvozi; če se ne zapiše, to povemo — serija v vrsti ostane.
+      BulkHistoryId = await History.RecordAsync(ImportKinds.Prices, title, scope, actor, preview.Rows.Count, outcome.Queued, batches,
+        outcome.Rejected.Select(row => $"{row.PriceList} {row.ItemId}: {row.Reason}"), null, ImportHistoryService.FromPrices(preview));
+
+      var parts = new List<string> { $"{outcome.Queued:N0} cen čaka odobritev na zavihku »V SAOP«" + (batches.Length > 0 ? $" (serija {string.Join(", ", batches)})" : "") };
+      if (outcome.Duplicates > 0) parts.Add($"{outcome.Duplicates:N0} je bilo v vrsti že enakih");
+      if (outcome.Unchanged > 0) parts.Add($"{outcome.Unchanged:N0} enakih kot v SAOP");
+      if (outcome.Rejected.Count > 0) parts.Add($"{outcome.Rejected.Count:N0} zavrnjenih: " + string.Join("; ", outcome.Rejected.Take(3).Select(row => $"{row.ItemId} — {row.Reason}")));
+      Message = string.Join(" · ", parts) + ". Cena na tej strani ostane stara z oznako »čaka SAOP«, dokler je zajem ne prinese nazaj.";
+      if (BulkHistoryId is null && outcome.Queued > 0)
+        ActionError = "Zgodovina spremembe ni bila zapisana, zato je na /uvozi ne bo mogoče povrniti. Če je sprememba napačna, prekliči serijo na zavihku »V SAOP«.";
+
+      // Predogled se umakne, da drugi klik iste spremembe ne uvrsti dvakrat.
+      Selected.Clear();
+      AllMatching = false;
+      BulkOpen = false;
+      ResetBulkPreview();
+      BulkValue = "";
+      await Task.WhenAll(LoadAsync(), LoadBatchesAsync());
+    }
+    catch (Exception exception) { ActionError = "Paketne spremembe ni bilo mogoče uvrstiti v vrsto: " + exception.Message; }
+    finally { Busy = false; }
+  }
+
   /* --- ceniki -------------------------------------------------------------------------------- */
 
   void ToggleNewList()
@@ -855,7 +1190,7 @@ else
   {
     "EXCEL" => "uvoz iz Excela",
     "CARD" => "ročno na strani",
-    "BULK" => "napolnjeno iz cenika",
+    "BULK" => "paketno na strani ali iz cenika",
     "SINGLE" => "nov cenik",
     _ => source,
   };
