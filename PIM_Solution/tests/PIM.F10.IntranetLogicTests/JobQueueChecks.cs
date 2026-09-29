@@ -151,6 +151,35 @@ static class JobQueueChecks
       Check(!Explain(waiting).Contains("naslednjem tiku", StringComparison.Ordinal), "Razlog je iz simulacije: " + Explain(waiting));
     }
 
+    // ─── Ko nič ne teče, noben razlog ne trdi »teče« (preverjalec #12) ──────
+    // Gostitelj z --samo-nadzor: vsi posli zapadli, nobeden ne teče. Razlogi pridejo iz simulacije, zato
+    // morajo reči »v vrsti za X (na vrsti ob ~HH:MM, traja ~44 s)«, ne »X, ki ravno teče«.
+    var stalled = all.Select(job => job with { LastEndedUtc = Now.AddHours(-1), NextDueUtc = Now.AddMinutes(-20) }).ToList();
+    var idleForecast = JobQueue.Forecast(stalled, Dependencies, stats, true, Now, Zone);
+    Check(idleForecast.Values.All(f2 => f2.Kind != JobWaitKind.Running), "Scenarij: nič ne teče.");
+    var heldIdle = idleForecast.Values.Where(f2 => f2.IsHeldByScheduler).ToList();
+    Check(heldIdle.Count(f2 => f2.BlockingJobKey is not null) >= 2, "Scenarij potrebuje vsaj dva posla, zadržana za drugim: "
+      + string.Join("; ", idleForecast.Values.Select(f2 => $"{f2.JobKey}={f2.Kind}")));
+    foreach (var f2 in idleForecast.Values)
+    {
+      var why = Explain(f2);
+      var chip = JobQueue.HeldLabel(f2, key => JobCatalog.Find(key)?.Label ?? key);
+      Check(!why.Contains("teče", StringComparison.OrdinalIgnoreCase) && !chip.Contains("teče", StringComparison.OrdinalIgnoreCase),
+        $"Ko nič ne teče, razlog ne sme reči »teče« ({f2.JobKey}, {f2.Kind}): {why} | {chip}");
+      Check(!why.Contains(", ki", StringComparison.Ordinal) || why.IndexOf(", ki", StringComparison.Ordinal) == why.LastIndexOf(", ki", StringComparison.Ordinal),
+        "Največ en odvisni stavek z »ki«: " + why);
+      if (f2.IsHeldByScheduler && f2.BlockingJobKey is not null && f2.Kind != JobWaitKind.SaopYields)
+      {
+        Check(!f2.BlockingIsRunning && f2.BlockingStartUtc is not null && why.Contains("na vrsti ob ~", StringComparison.Ordinal),
+          $"Zadržan za poslom, ki še ne teče: pove, kdaj je ta na vrsti: {why}");
+        Check(chip.StartsWith("v vrsti za ", StringComparison.Ordinal), "Čip pove »v vrsti za X«: " + chip);
+      }
+    }
+    // Ko posel pred njim res teče, besedilo to pove — in brez dveh »ki« zapored (preverjalec #12, NIZKA).
+    Check(f.BlockingIsRunning && JobQueue.HeldLabel(f, key => JobCatalog.Find(key)?.Label ?? key) == "čaka SAOP (teče Cene iz SAOP)",
+      "Ko cene res tečejo, čip pove »teče«.");
+    Check(text.Split(", ki").Length <= 2, "Brez dveh odvisnih stavkov z »ki« zapored: " + text);
+
     // ─── Izklopljen posel brez gostitelja ───────────────────────────────────
     var offDown = JobQueue.Forecast([Job(JobCatalog.StockImport) with { IsEnabled = false }], [], stats, false, Now, Zone)[JobCatalog.StockImport];
     Check(offDown.Kind == JobWaitKind.Disabled && JobQueue.ShortLabel(offDown, utc => utc.ToString("HH:mm")) == "—",

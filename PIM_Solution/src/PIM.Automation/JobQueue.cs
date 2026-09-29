@@ -53,10 +53,13 @@ public sealed record JobDurationStats(string JobKey, int Runs, int AverageSecond
 /// <param name="BlockingEndUtc">Ocena konca posla, ki ta posel zadržuje.</param>
 /// <param name="NextRegularUtc">Naslednji redni zagon (po urniku), po ročnem ali tekočem teku šteto od ocene konca.</param>
 /// <param name="IsQueued">Ročna zahteva čaka na prevzem.</param>
+/// <param name="BlockingIsRunning">Ali posel, ki ta posel zadržuje, ZDAJ res teče (pri meji: ali je meja zdaj dosežena).
+/// Ne, kadar razlog pride iz simulacije (posel pred njim je šele na vrsti) — takrat besedilo ne sme reči »teče«.</param>
+/// <param name="BlockingStartUtc">Ocena začetka posla, ki ta posel zadržuje (samo kadar ta še ne teče).</param>
 public sealed record JobForecast(
   string JobKey, JobWaitKind Kind, string? BlockingJobKey, DateTime? BlockingEndUtc, DateTime? QuietUntilUtc,
   DateTime? EstimatedStartUtc, int EstimatedSeconds, bool HasEstimate, DateTime? EstimatedEndUtc, DateTime? NextRegularUtc,
-  bool IsQueued, JobDurationStats? Stats)
+  bool IsQueued, JobDurationStats? Stats, bool BlockingIsRunning = true, DateTime? BlockingStartUtc = null)
 {
   /// <summary>Posel čaka namenoma (vrsta, pas SAOP, težak posel, meja): to ni zamuda.</summary>
   public bool IsHeldByScheduler => Kind is JobWaitKind.Predecessor or JobWaitKind.SaopYields or JobWaitKind.SaopBusy
@@ -242,6 +245,8 @@ public static class JobQueue
       }
     }
 
+    // Kar zdaj res teče (brez gostitelja nič): razlog iz simulacije ne sme trditi, da posel pred njim »teče«.
+    var runningNow = hostLive ? known.Where(job => job.IsRunning).Select(job => job.JobKey).ToHashSet(StringComparer.Ordinal) : [];
     var result = new Dictionary<string, JobForecast>(StringComparer.Ordinal);
     foreach (var job in known)
     {
@@ -259,6 +264,10 @@ public static class JobQueue
       DateTime? end = firstEnd.TryGetValue(job.JobKey, out var e) ? e : start?.AddSeconds(seconds);
       // Konec posla, ki ta posel zadržuje (tekoči posli imajo konec iz ocene že v firstEnd).
       DateTime? blockingEnd = gate.BlockingJobKey is { } blocking && firstEnd.TryGetValue(blocking, out var be) ? be : null;
+      DateTime? blockingStart = gate.BlockingJobKey is { } blocker && firstStart.TryGetValue(blocker, out var bs) ? bs : null;
+      var blockingIsRunning = gate.Kind == JobWaitKind.ConcurrencyLimit
+        ? runningNow.Count(key => !BypassesConcurrencyLimit(key)) >= Math.Max(1, maxConcurrent)
+        : gate.BlockingJobKey is { } holder && runningNow.Contains(holder);
 
       // Naslednji redni zagon: po teku, ki teče, je zahtevan ali čaka v vrsti, šteje od ocene konca (gostitelj
       // termin računa od konca teka); posel, ki še ni na vrsti, ima termin iz baze. Brez gostitelja ni ocene.
@@ -268,13 +277,14 @@ public static class JobQueue
         : job.NextDueUtc;
 
       result[job.JobKey] = new(job.JobKey, gate.Kind, gate.BlockingJobKey, blockingEnd, gate.UntilUtc,
-        start, seconds, hasEstimate, end, nextRegular, job.IsRequested && !job.IsRunning, stats.GetValueOrDefault(job.JobKey));
+        start, seconds, hasEstimate, end, nextRegular, job.IsRequested && !job.IsRunning, stats.GetValueOrDefault(job.JobKey),
+        blockingIsRunning, blockingIsRunning ? null : blockingStart);
     }
     return result;
   }
 
   /// <summary>
-  /// Napoved po domače, npr. »Zagon za poslom »Cene iz SAOP«, ki se konča čez ~1 min; nato 2 min tišine SAOP.
+  /// Napoved po domače, npr. »SAOP zdaj uporablja posel »Cene iz SAOP«; konec čez ~1 min; zagon sledi po 2 min tišine SAOP.
   /// Ocena začetka 14:32 · trajanje ~1 min · naslednji redni zagon 15:33.«
   /// </summary>
   /// <param name="label">Ključ posla → ime za človeka.</param>
@@ -294,12 +304,22 @@ public static class JobQueue
       JobWaitKind.Disabled => "Izklopljen: po urniku ne teče, ročni zagon deluje.",
       JobWaitKind.NotDue => forecast.NextRegularUtc is { } next ? $"Naslednji redni zagon ob {time(next)} ({In(next)})." : "Termin določi gostitelj ob naslednjem tiku.",
       JobWaitKind.Ready => forecast.IsQueued ? "Na vrsti takoj: gostitelj ga prevzame ob naslednjem tiku (do 15 s)." : "Na vrsti ob naslednjem tiku gostitelja.",
-      JobWaitKind.Predecessor => $"Čaka predhodnika {Name(forecast.BlockingJobKey)}, ki ravno teče{Ends(forecast.BlockingEndUtc)}.",
+      // Posel pred njim ZDAJ teče: »ravno teče; konec čez ~44 s«. Sicer je šele na vrsti (razlog iz simulacije):
+      // »(na vrsti ob ~14:32, traja ~44 s)« — nikoli »teče«, kadar nič ne teče (preverjalec #12).
+      JobWaitKind.Predecessor => forecast.BlockingIsRunning
+        ? $"Čaka predhodnika {Name(forecast.BlockingJobKey)}, ki ravno teče{Ends(forecast.BlockingEndUtc)}."
+        : $"Čaka predhodnika {Name(forecast.BlockingJobKey)}{Queued()}.",
       JobWaitKind.SaopYields => $"Prednost v pasu SAOP ima ročni zagon {Name(forecast.BlockingJobKey)}; ta posel pride na vrsto za njim.",
-      JobWaitKind.SaopBusy => $"Zagon za poslom {Name(forecast.BlockingJobKey)}, ki uporablja SAOP{Ends(forecast.BlockingEndUtc)}; nato {quiet}.",
+      JobWaitKind.SaopBusy => forecast.BlockingIsRunning
+        ? $"SAOP zdaj uporablja posel {Name(forecast.BlockingJobKey)}{Ends(forecast.BlockingEndUtc)}; zagon sledi po {quiet}."
+        : $"V pasu SAOP je pred njim posel {Name(forecast.BlockingJobKey)}{Queued()}; zagon sledi po {quiet}.",
       JobWaitKind.SaopQuiet => $"Posli, ki kličejo SAOP, imajo med seboj {quiet}; tišina traja do {Time(forecast.QuietUntilUtc)}.",
-      JobWaitKind.HeavyBusy => $"Teče težak posel {Name(forecast.BlockingJobKey)}{Ends(forecast.BlockingEndUtc)}; dva težka posla ne tečeta hkrati (čaka največ {HeavyMaxWaitSeconds / 60} min).",
-      JobWaitKind.ConcurrencyLimit => $"Hkrati že tečejo {MaxConcurrentJobs} posli (meja); ta pride na vrsto, ko se kateri konča.",
+      JobWaitKind.HeavyBusy => forecast.BlockingIsRunning
+        ? $"Ravno teče težak posel {Name(forecast.BlockingJobKey)}{Ends(forecast.BlockingEndUtc)}; dva težka posla ne gresta hkrati (čaka največ {HeavyMaxWaitSeconds / 60} min)."
+        : $"Za težkim poslom {Name(forecast.BlockingJobKey)}{Queued()}; dva težka posla ne gresta hkrati (čaka največ {HeavyMaxWaitSeconds / 60} min).",
+      JobWaitKind.ConcurrencyLimit => forecast.BlockingIsRunning
+        ? $"Hkrati že tečejo {MaxConcurrentJobs} posli (meja); ta pride na vrsto, ko se kateri konča."
+        : $"Pred njim so na vrsti drugi posli; hkrati gredo največ {MaxConcurrentJobs}.",
       _ => "",
     };
 
@@ -312,7 +332,14 @@ public static class JobQueue
     if (forecast.NextRegularUtc is { } regular) parts.Add($"naslednji redni zagon {time(regular)}");
     return $"{cause} {Capital(string.Join(" · ", parts))}.";
 
-    string Ends(DateTime? end) => end is { } at ? $", ki se konča {In(at)}" : "";
+    string Ends(DateTime? end) => end is { } at ? $"; konec {In(at)}" : "";
+    string Queued()
+    {
+      var bits = new List<string>();
+      if (forecast.BlockingStartUtc is { } from) bits.Add($"na vrsti ob ~{time(from)}");
+      if (forecast.BlockingStartUtc is { } s0 && forecast.BlockingEndUtc is { } e0 && e0 > s0) bits.Add($"traja ~{Span(e0 - s0)}");
+      return bits.Count == 0 ? " (v vrsti pred njim)" : $" ({string.Join(", ", bits)})";
+    }
     string Time(DateTime? at) => at is { } value ? time(value) : "—";
   }
 
@@ -324,6 +351,25 @@ public static class JobQueue
     if (span.TotalMinutes < 60) return $"{(int)Math.Round(span.TotalMinutes)} min";
     var hours = (int)span.TotalHours;
     return span.Minutes == 0 ? $"{hours} h" : $"{hours} h {span.Minutes} min";
+  }
+
+  /// <summary>
+  /// Kratek razlog pod čipom na Nadzoru, npr. »čaka SAOP (teče Cene iz SAOP)«, ali »v vrsti za Cene iz SAOP«,
+  /// kadar posel pred njim še ne teče (razlog iz simulacije).
+  /// </summary>
+  public static string HeldLabel(JobForecast forecast, Func<string, string> label)
+  {
+    var other = forecast.BlockingJobKey is { } key ? label(key) : "drugim poslom";
+    return forecast.Kind switch
+    {
+      JobWaitKind.Predecessor => forecast.BlockingIsRunning ? $"čaka predhodnika {other}" : $"v vrsti za {other}",
+      JobWaitKind.SaopBusy => forecast.BlockingIsRunning ? $"čaka SAOP (teče {other})" : $"v vrsti za {other}",
+      JobWaitKind.SaopQuiet => "čaka tišino SAOP",
+      JobWaitKind.SaopYields => $"prednost ima ročni zagon {other}",
+      JobWaitKind.HeavyBusy => forecast.BlockingIsRunning ? $"čaka težak posel {other}" : $"v vrsti za {other}",
+      JobWaitKind.ConcurrencyLimit => $"meja {MaxConcurrentJobs} hkratnih poslov",
+      _ => "",
+    };
   }
 
   /// <summary>Oznaka napovedi za stolpec »Naslednji« na Nadzoru: kratka, s časom v naši uri.</summary>

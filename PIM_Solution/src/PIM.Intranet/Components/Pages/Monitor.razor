@@ -543,20 +543,9 @@
     : posel.Job.IsRequested ? "zdaj (ročna zahteva)"
     : PimTime.Format(posel.Job.NextDueUtc, "ob naslednjem tiku");
 
-  static string ZadrzanKratko(JobForecast napoved, MonitorOverview pregled)
-  {
-    var drugi = napoved.BlockingJobKey is { } kljuc ? pregled.Jobs.FirstOrDefault(p => p.Job.JobKey == kljuc)?.Job.Label ?? kljuc : null;
-    return napoved.Kind switch
-    {
-      JobWaitKind.Predecessor => $"čaka predhodnika {drugi}",
-      JobWaitKind.SaopBusy => $"čaka SAOP (teče {drugi})",
-      JobWaitKind.SaopQuiet => "čaka tišino SAOP",
-      JobWaitKind.SaopYields => $"prednost ima ročni zagon {drugi}",
-      JobWaitKind.HeavyBusy => $"čaka težak posel {drugi}",
-      JobWaitKind.ConcurrencyLimit => $"meja {JobQueue.MaxConcurrentJobs} hkratnih poslov",
-      _ => "",
-    };
-  }
+  // Isto besedilo kot v testu F10 (JobQueue.HeldLabel): »teče« samo, kadar posel pred njim zdaj res teče.
+  static string ZadrzanKratko(JobForecast napoved, MonitorOverview pregled) =>
+    JobQueue.HeldLabel(napoved, kljuc => pregled.Jobs.FirstOrDefault(p => p.Job.JobKey == kljuc)?.Job.Label ?? kljuc);
 
   static string Doseg(global::PIM.Intranet.Services.MonitorJob posel) =>
     posel.Code?.ReachNote is { Length: > 0 } opomba ? opomba
