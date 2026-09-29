@@ -32,7 +32,7 @@
   powershell -ExecutionPolicy Bypass -File scripts\Koordinacija.ps1 -Ukaz Prevzemi -Id 3 -Seja "Popravki strani"
 #>
 param(
-  [ValidateSet('Stanje', 'Nova', 'Prevzemi', 'Sprosti', 'Sporocilo', 'Odlocitev', 'Migracija', 'Preveri', 'Koncaj', 'Zdruzi', 'Nastavi', 'Utrip', 'Odjava', 'Json')]
+  [ValidateSet('Stanje', 'Nova', 'Prevzemi', 'Sprosti', 'Sporocilo', 'Odlocitev', 'Migracija', 'Preveri', 'Koncaj', 'Zdruzi', 'Nastavi', 'Utrip', 'Odjava', 'Json', 'Kopija')]
   [string]$Ukaz = 'Stanje',
   [int]$Id,
   [string]$Seja = $env:USERNAME,
@@ -394,7 +394,7 @@ function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
     Write-Host '  · testni podatki (fixtures) prekopirani iz glavne kopije'
   }
 
-  $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q') 20 $log
+  $rez += Invoke-Korak 'build' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log
 
   foreach ($t in @($n.testi)) {
     if ($t -match 'ProductWorkbook' -and -not $Kljub) { $rez += @{ ok = $true; opis = "test ${t}: preskočen (DB del zamrzne SQL; -Kljub za zagon)" }; continue }
@@ -431,7 +431,7 @@ function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
   $env:KLIKALNIK_STREZNIK = [string]$Nastavitve.razvojniStreznik
   $env:KLIKALNIK_IZHOD = $izhodK
   try {
-    $b = Invoke-Korak 'klikalnik-build' 'dotnet' @('build', '-c', 'Release', '-nologo', '-v', 'q') 15 $log $mapaK
+    $b = Invoke-Korak 'klikalnik-build' 'dotnet' @('build', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 15 $log $mapaK
     if (-not $b.ok) { return $b }
     Set-KorakMesta 'klikalnik-zagon'
     $gostitelj = Start-Process dotnet -ArgumentList @('bin\Release\net10.0\PIM.Klikalnik.dll') -WorkingDirectory $mapaK -PassThru -WindowStyle Hidden `
@@ -635,7 +635,7 @@ switch ($Ukaz) {
       if ((& git -C $potNaloge rev-parse HEAD) -ne $pred) {
         $log = Join-Path $MapaPreverjanj ("{0:D4}-{1}-zdruzi" -f [int]$Id, (Get-Date).ToString('yyyyMMdd-HHmmss'))
         [void](Enter-MestoVrat)
-        try { $b = Invoke-Korak 'build po posodobitvi' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q') 20 $log $potNaloge }
+        try { $b = Invoke-Korak 'build po posodobitvi' 'dotnet' @('build', 'PIM_Solution\PIM.sln', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false') 20 $log $potNaloge }
         finally { Exit-MestoVrat }
         if (-not $b.ok) {
           Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: po posodobitvi z $GlavnaVeja build ne gre skozi ($($b.izhod))"; Write-Naloga $n }
@@ -654,8 +654,44 @@ switch ($Ukaz) {
       $commit = (& git -C $Glavna rev-parse --short HEAD)
       Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'koncana'; $n.zdruzeno = "$commit $(Get-Cas)"; Add-Dnevnik $n "združena v $GlavnaVeja ($commit)"; Write-Naloga $n }
       Set-Utrip "#$Id združena v $GlavnaVeja ($commit)" 'končal'
+      # Kopija, ki jo je naredila tabla (-Ukaz Kopija), po združitvi ni več potrebna.
+      $mapaKopij = Join-Path $Glavna '.claude\worktrees'
+      if ($potNaloge -ne $Glavna -and $potNaloge.StartsWith($mapaKopij, [StringComparison]::OrdinalIgnoreCase) -and
+          -not @(& git -C $potNaloge status --porcelain 2>$null).Count) {
+        & git -C $Glavna worktree remove $potNaloge 2>$null
+        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." }
+      }
       Write-Host "Naloga #$Id združena v $GlavnaVeja ($commit)." -ForegroundColor Green
     } finally { Remove-Item $zaklepZ -Force -ErrorAction SilentlyContinue }
+  }
+  'Kopija' {
+    # Delovna kopija naloge iz INTEGRACIJSKE veje (ne iz main, ki je lahko prazen GitHub začetek).
+    # Agenti delajo v njej prek cd; varovalka samodejnih kopij bi jim prepovedala zagon table.
+    $pot = Join-Path $Glavna ".claude\worktrees\naloga-$Id"
+    if (Test-Path (Join-Path $pot '.git')) { Write-Host "Kopija že obstaja."; Write-Output $pot; return }
+    $veja = "naloga/$Id"
+    & git -C $Glavna show-ref --verify --quiet "refs/heads/$veja"
+    if ($LASTEXITCODE -eq 0) {
+      # Obstoječa veja brez skupnega prednika z integracijsko vejo (npr. iz praznega main) ni uporabna.
+      $mb = & git -C $Glavna merge-base $GlavnaVeja $veja 2>$null
+      if (-not $mb) {
+        $k = 2
+        while ($true) { & git -C $Glavna show-ref --verify --quiet "refs/heads/$veja-$k"; if ($LASTEXITCODE -ne 0) { break }; $k++ }
+        $veja = "$veja-$k"
+      }
+    }
+    $ErrorActionPreference = 'Continue'
+    & git -C $Glavna show-ref --verify --quiet "refs/heads/$veja"
+    if ($LASTEXITCODE -eq 0) { & git -C $Glavna worktree add $pot $veja 2>&1 | Write-Host }
+    else { & git -C $Glavna worktree add -b $veja $pot $GlavnaVeja 2>&1 | Write-Host }
+    $ErrorActionPreference = 'Stop'
+    if (-not (Test-Path (Join-Path $pot '.git'))) { throw "Kopije $pot ni bilo mogoče ustvariti." }
+    $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
+    if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Join-Path $pot 'PIM_Solution/fixtures') -Recurse -Force }
+    $potKopije = $pot  # Use-Zaklep ima svoj $pot (datoteka zaklepa)
+    if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $potKopije (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
+    Write-Output $pot
+    return
   }
   'Utrip' {
     if (-not $Besedilo) { throw 'Manjka -Besedilo (kaj agent dela zdaj).' }

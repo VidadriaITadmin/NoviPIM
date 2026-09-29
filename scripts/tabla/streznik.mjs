@@ -6,7 +6,7 @@
 // Pisanje gre VEDNO prek Koordinacija.ps1 (ista pravila, zaklepi in dnevnik kot pri agentih).
 
 import http from 'node:http';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { promises as fsp, readFileSync, existsSync, watch, statSync } from 'node:fs';
 import { join, dirname, resolve, extname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -170,7 +170,7 @@ async function seje() {
       for (const e of await fsp.readdir(mapa, { withFileTypes: true })) {
         const p = join(mapa, e.name);
         if (e.isDirectory()) { await pregledaj(p, e.name.startsWith('wf_') ? e.name : tok); continue; }
-        if (!e.name.endsWith('.jsonl')) continue;
+        if (!e.name.endsWith('.jsonl') || !e.name.startsWith('agent-')) continue;
         const s = statSync(p);
         if (s.mtimeMs < zdaj() - 15 * 60000) continue;
         const meta = await beriJson(p.replace(/\.jsonl$/, '.meta.json')) || {};
@@ -212,7 +212,7 @@ async function stanje() {
   }
   return {
     cas: new Date().toISOString(), glavna: GLAVNA, glavnaVeja, nastavitve, naloge: nal, agenti: ag, mesta: me,
-    zdruzevanje: existsSync(join(MAPA, '.zdruzevanje')), dnevnik: dn, migracije: mig, ...g, ...s,
+    zdruzevanje: existsSync(join(MAPA, '.zdruzevanje')), preizkusi: javno(), dnevnik: dn, migracije: mig, ...g, ...s,
   };
 }
 
@@ -234,6 +234,43 @@ function izvediUkaz(ukaz, telo) {
   return new Promise((res) => execFile('powershell.exe', args, { cwd: GLAVNA, encoding: 'utf8', timeout: ukaz === 'Zdruzi' ? 30 * 60000 : 60000, maxBuffer: 8 << 20 },
     (e, out, err) => res({ ok: !e, izhod: (out || '') + (err ? '\n' + err : ''), koda: e?.code ?? 0 })));
 }
+
+// ------------------------------------------------------------------ preizkus v aplikaciji (lastnik pred »Združi«)
+// Intranet iz KOPIJE naloge (klikalnikov gostitelj: razvojna baza, vgrajen skrbnik, brez prijave) na vratih 5200+id.
+const preizkusi = new Map();
+async function zazeniPreizkus(id) {
+  const obstojec = preizkusi.get(id);
+  if (obstojec && obstojec.stanje !== 'napaka') return obstojec;
+  const nal = (await naloge()).find(n => n.id === id);
+  if (!nal || !nal.pot || !existsSync(nal.pot)) throw new Error('Naloga nima delovne kopije (pot).');
+  const nastavitve = await beriJson(join(MAPA, 'nastavitve.json')) || {};
+  const streznik = nastavitve.razvojniStreznik, baza = nastavitve.razvojnaBaza || 'PIM';
+  if (!streznik) throw new Error('V nastavitve.json ni razvojniStreznik.');
+  const port = 5200 + id, mapaK = join(nal.pot, 'PIM_Solution', 'tools', 'PIM.Klikalnik');
+  const p = { id, port, url: `http://localhost:${port}/`, stanje: 'gradim', sporocilo: 'Sestavljam aplikacijo iz kopije naloge (1–3 min) …', od: new Date().toISOString() };
+  preizkusi.set(id, p);
+  const env = { ...process.env, KLIKALNIK_PORT: String(port), KLIKALNIK_STREZNIK: streznik,
+    PIM_CONNECTION_STRING: `Server=${streznik};Database=${baza};Integrated Security=True;Encrypt=True;TrustServerCertificate=True` };
+  execFile('dotnet', ['build', '-c', 'Release', '-nologo', '-v', 'q', '-nodeReuse:false'], { cwd: mapaK, env, maxBuffer: 16 << 20, timeout: 15 * 60000 }, async (e, out) => {
+    if (e) { p.stanje = 'napaka'; p.sporocilo = 'Sestavljanje ni uspelo: ' + String(out || e.message).split(/\r?\n/).filter(v => /error/i.test(v)).slice(0, 2).join(' ').slice(0, 300); return; }
+    p.sporocilo = 'Zaganjam aplikacijo …';
+    p.proc = spawn('dotnet', [join('bin', 'Release', 'net10.0', 'PIM.Klikalnik.dll')], { cwd: mapaK, env, stdio: 'ignore', windowsHide: true });
+    p.proc.on('exit', () => { if (p.stanje !== 'ustavljen') { p.stanje = 'napaka'; p.sporocilo = 'Aplikacija se je ustavila.'; } });
+    for (let i = 0; i < 80 && p.stanje === 'gradim'; i++) {
+      try { const r = await fetch(p.url + 'brez-dostopa'); if (r.ok) { p.stanje = 'tece'; p.sporocilo = 'Aplikacija teče — razvojna baza, skrbnik brez prijave.'; break; } } catch { }
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    if (p.stanje === 'gradim') { p.stanje = 'napaka'; p.sporocilo = 'Aplikacija se ni odzvala v 4 min.'; }
+  });
+  return p;
+}
+function ustaviPreizkus(id) {
+  const p = preizkusi.get(id);
+  if (p?.proc && !p.proc.killed) { p.stanje = 'ustavljen'; try { execFileSync('taskkill', ['/PID', String(p.proc.pid), '/T', '/F']); } catch { } }
+  preizkusi.delete(id);
+}
+process.on('exit', () => { for (const id of preizkusi.keys()) ustaviPreizkus(id); });
+const javno = () => [...preizkusi.values()].map(({ proc, ...p }) => p);
 
 // ------------------------------------------------------------------ strežnik
 const TIPI = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
@@ -264,6 +301,14 @@ const strežnik = http.createServer(async (req, res) => {
       const p = resolve(MAPA, url.searchParams.get('p') || '');
       if (!p.startsWith(MAPA + sep) || !existsSync(p)) return poslji(404, TIPI['.txt'], 'Ni datoteke.');
       return poslji(200, TIPI[extname(p)] || TIPI['.txt'], await fsp.readFile(p));
+    }
+    const mp = /^\/api\/preizkus\/(\d+)(\/ustavi)?$/.exec(url.pathname);
+    if (req.method === 'POST' && mp) {
+      if (req.headers['x-tabla'] !== '1') return poslji(403, TIPI['.txt'], 'Prepovedano.');
+      const id = Number(mp[1]);
+      if (mp[2]) { ustaviPreizkus(id); return poslji(200, TIPI['.json'], JSON.stringify({ ok: true })); }
+      try { const p = await zazeniPreizkus(id); const { proc, ...j } = p; return poslji(200, TIPI['.json'], JSON.stringify({ ok: true, ...j })); }
+      catch (e) { return poslji(400, TIPI['.json'], JSON.stringify({ ok: false, izhod: e.message })); }
     }
     if (req.method === 'POST' && url.pathname.startsWith('/api/ukaz/')) {
       // Varovalka: samo lastna stran (glava, ki je tuja stran brez predhodnega preverjanja ne more poslati).
