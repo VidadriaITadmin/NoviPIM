@@ -73,7 +73,7 @@ flowchart LR
 | 2 | Urednik | `/kakovost/prevodi` | V izbirniku izbereš jezik (ali »Vsi jeziki«). | Seznam se takoj osveži za ta jezik. | Števec »… vrstic (največ 300)«. |
 | 3 | Urednik | `/kakovost/prevodi` | Pri vrstici klikneš »Dodaj prevod«. | Odpre se `/pravila/slovar` z vnaprej izpolnjeno domeno, vrednostjo in jezikom. | Na slovarju vidiš izpolnjen obrazec. |
 | 4 | Urednik | `/pravila/slovar` | Vpišeš prevod in ga shraniš. | Vnos slovarja velja za vsa podjetja. | Ob naslednji preslikavi vrstica izgine s seznama. |
-| 4a | Urednik | `/kakovost/prevodi`, razdelek »Kaj bi slovar prevedel« | Izbereš jezik (SL, DE, HR, IT) in pri angleški vrednosti atributa klikneš »Dodaj prevod«. | Za vsako različno angleško vrednost atributa pri izdelkih se preveri, ali ima slovar prevod (domena * ali ime atributa). Samo pregled; prevod se vpiše v slovar. | Število »prevedenih / vseh« za jezik se poveča. |
+| 4a | Urednik | `/kakovost/prevodi`, razdelek »Kaj bi slovar prevedel« | Izbereš jezik (SL, DE, HR, IT) in pri angleški vrednosti atributa klikneš »Dodaj prevod«. | Za vsako različno angleško vrednost atributa pri izdelkih se preveri, ali ima slovar prevod (domena * ali ime atributa). Samo pregled; prevod se vpiše v slovar. Rimske številke in števila (npr. Električni razred I/II/III) niso na seznamu, ker se ne prevajajo. | Število »prevedenih / vseh« za jezik se poveča. |
 | 5 | Avtomatika | — | — | Naslednji zajem ali ponovna obdelava vira uporabi nov prevod. | Na kartici izdelka je lastnost prevedena. |
 
 ## 7. Pravila in varovalke

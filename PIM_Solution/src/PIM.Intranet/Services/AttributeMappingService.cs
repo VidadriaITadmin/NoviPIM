@@ -326,7 +326,8 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
   /// pari, ki pri istih izdelkih nosijo isto vrednost, pari z enakim naborom vrednosti pri drugih
   /// izdelkih in pari s skoraj enakim imenom. Spremljevalni atributi »Enota …« so izpuščeni, ker po
   /// zasnovi nosijo iste enote (mm, kg) pri vseh merah. Nepomembne vrednosti (0, 1, 2, da, ne) ne
-  /// štejejo kot ujemanje, sicer bi bil par vsak števec.
+  /// štejejo kot ujemanje, sicer bi bil par vsak števec. Čista števila (50, 100, 120) ne štejejo kot
+  /// skupna vrednost med različnimi izdelki (mere pomenijo različno). Samo aktivna podjetja.
   /// </summary>
   public async Task<DuplicateReport> GetDuplicateCandidatesAsync(bool refresh = false, CancellationToken cancellationToken = default)
   {
@@ -346,21 +347,31 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
   {
     const string sql = """
       SET NOCOUNT ON;
-      CREATE TABLE #n (Id int IDENTITY PRIMARY KEY, Name nvarchar(400) COLLATE DATABASE_DEFAULT NOT NULL UNIQUE);
-      INSERT #n (Name)
-      SELECT DISTINCT AttributeCode FROM pim.ProductAttribute
-      WHERE AttributeCode NOT LIKE N'Enota %' AND Value IS NOT NULL AND Value <> N'';
-
-      CREATE TABLE #v (P int NOT NULL, A int NOT NULL, L tinyint NOT NULL, H int NOT NULL, Informative bit NOT NULL);
-      INSERT #v (P, A, L, H, Informative)
-      SELECT value.PimProductId, name.Id,
-             CASE value.LanguageCode WHEN N'sl' THEN 1 WHEN N'en' THEN 2 ELSE 0 END, CHECKSUM(folded.V),
-             CASE WHEN (folded.V NOT LIKE N'%[^0-9]%' AND LEN(folded.V) <= 2)
-                    OR folded.V IN (N'da', N'ne', N'yes', N'no', N'true', N'false', N'-', N'/', N'x') THEN 0 ELSE 1 END
+      /* Samo aktivna podjetja (DEMO je neaktiven): en prehod čez pim.ProductAttribute, vse drugo iz #r/#v. */
+      SELECT value.PimProductId AS P, product.OrganizationId AS O, value.AttributeCode COLLATE DATABASE_DEFAULT AS Name,
+             CASE value.LanguageCode WHEN N'sl' THEN 1 WHEN N'en' THEN 2 ELSE 0 END AS L,
+             LOWER(LTRIM(RTRIM(value.Value))) COLLATE DATABASE_DEFAULT AS V,
+             LEFT(value.Value, 60) COLLATE DATABASE_DEFAULT AS Sample
+      INTO #r
       FROM pim.ProductAttribute AS value
-      JOIN #n AS name ON name.Name = value.AttributeCode
-      CROSS APPLY (SELECT LOWER(LTRIM(RTRIM(value.Value))) AS V) AS folded
-      WHERE value.Value IS NOT NULL AND value.Value <> N'';
+      JOIN pim.Product AS product ON product.PimProductId = value.PimProductId
+      JOIN dbo.OrganizationConfig AS organization ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+      WHERE value.Value IS NOT NULL AND value.Value <> N'' AND value.AttributeCode NOT LIKE N'Enota %';
+
+      CREATE TABLE #n (Id int IDENTITY PRIMARY KEY, Name nvarchar(400) COLLATE DATABASE_DEFAULT NOT NULL UNIQUE);
+      INSERT #n (Name) SELECT DISTINCT Name FROM #r;
+
+      /* Informative = 0: nepomembna vrednost (0–99, da/ne). Textual = 0: čisto število (50, 100, 1,5) —
+         ne šteje kot skupna vrednost med različnimi izdelki, sicer so Premer, Širina in Dolžina »podobni«. */
+      CREATE TABLE #v (P int NOT NULL, O int NOT NULL, A int NOT NULL, L tinyint NOT NULL, H int NOT NULL,
+                       Informative bit NOT NULL, Textual bit NOT NULL, S nvarchar(60) COLLATE DATABASE_DEFAULT NOT NULL);
+      INSERT #v (P, O, A, L, H, Informative, Textual, S)
+      SELECT r.P, r.O, name.Id, r.L, CHECKSUM(r.V),
+             CASE WHEN (r.V NOT LIKE N'%[^0-9]%' AND LEN(r.V) <= 2)
+                    OR r.V IN (N'da', N'ne', N'yes', N'no', N'true', N'false', N'-', N'/', N'x') THEN 0 ELSE 1 END,
+             CASE WHEN r.V NOT LIKE N'%[^0-9.,+ -]%' THEN 0 ELSE 1 END,
+             r.Sample
+      FROM #r AS r JOIN #n AS name ON name.Name = r.Name;
       CREATE CLUSTERED INDEX CX_v ON #v (P, L, A);
 
       SELECT x.A, y.A AS B, COUNT(DISTINCT x.P) AS SharedProducts,
@@ -369,7 +380,7 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
       FROM #v AS x JOIN #v AS y ON y.P = x.P AND y.L = x.L AND y.A > x.A
       GROUP BY x.A, y.A;
 
-      SELECT DISTINCT A, H INTO #av FROM #v WHERE Informative = 1;
+      SELECT DISTINCT A, H INTO #av FROM #v WHERE Informative = 1 AND Textual = 1;
       SELECT x.A, y.A AS B, COUNT(*) AS CommonValues
       INTO #common
       FROM #av AS x JOIN #av AS y ON y.H = x.H AND y.A > x.A
@@ -377,23 +388,21 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
 
       /* 1. atributi s štetjem po podjetju in tremi najpogostejšimi vrednostmi (vse iz začasnih tabel, brez
             poizvedbe na atribut) */
-      SELECT v.A, product.OrganizationId, COUNT(DISTINCT v.P) AS Products
-      INTO #po
-      FROM #v AS v JOIN pim.Product AS product ON product.PimProductId = v.P
-      GROUP BY v.A, product.OrganizationId;
+      SELECT A, O AS OrganizationId, COUNT(DISTINCT P) AS Products INTO #po FROM #v GROUP BY A, O;
 
-      SELECT name.Id AS A, LEFT(value.Value, 60) COLLATE DATABASE_DEFAULT AS Value, COUNT(*) AS Uses,
-             ROW_NUMBER() OVER (PARTITION BY name.Id ORDER BY COUNT(*) DESC, LEFT(value.Value, 60)) AS Position
+      SELECT A, COUNT(DISTINCT P) AS Products, COUNT(DISTINCT H) AS DistinctValues,
+             COUNT(DISTINCT CASE WHEN Informative = 1 AND Textual = 1 THEN H END) AS InformativeValues
+      INTO #counts FROM #v GROUP BY A;
+
+      SELECT grouped.A, grouped.Sample AS Value, grouped.Uses,
+             ROW_NUMBER() OVER (PARTITION BY grouped.A ORDER BY grouped.Uses DESC, grouped.Sample) AS Position
       INTO #samples
-      FROM pim.ProductAttribute AS value
-      JOIN #n AS name ON name.Name = value.AttributeCode
-      WHERE value.Value IS NOT NULL AND value.Value <> N''
-      GROUP BY name.Id, LEFT(value.Value, 60);
+      FROM (SELECT A, MIN(S) AS Sample, COUNT(*) AS Uses FROM #v GROUP BY A, H) AS grouped;
 
       SELECT name.Name,
              registry.AttributeCode,
              COALESCE(counts.Products, 0) AS Products, COALESCE(counts.DistinctValues, 0) AS DistinctValues,
-             (SELECT COUNT(*) FROM #av AS v WHERE v.A = name.Id) AS InformativeValues,
+             COALESCE(counts.InformativeValues, 0) AS InformativeValues,
              (SELECT STRING_AGG(COALESCE(config.Name, CONCAT(N'Podjetje ', po.OrganizationId)) + N' '
                        + FORMAT(po.Products, N'N0', N'sl-SI'), N' · ') WITHIN GROUP (ORDER BY po.Products DESC)
               FROM #po AS po LEFT JOIN dbo.OrganizationConfig AS config ON config.OrganizationId = po.OrganizationId
@@ -401,7 +410,7 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
              (SELECT STRING_AGG(sample.Value, N' | ') WITHIN GROUP (ORDER BY sample.Position)
               FROM #samples AS sample WHERE sample.A = name.Id AND sample.Position <= 3) AS Samples
       FROM #n AS name
-      OUTER APPLY (SELECT COUNT(DISTINCT v.P) AS Products, COUNT(DISTINCT v.H) AS DistinctValues FROM #v AS v WHERE v.A = name.Id) AS counts
+      LEFT JOIN #counts AS counts ON counts.A = name.Id
       OUTER APPLY (SELECT TOP (1) translation.AttributeCode FROM canon.AttributeTranslation AS translation
                    WHERE translation.LanguageCode = N'sl' AND translation.Name = name.Name ORDER BY translation.AttributeCode) AS registry;
 
@@ -468,8 +477,11 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
       SET NOCOUNT ON;
       SELECT AttributeCode, Value, COUNT_BIG(*) AS Rows, COUNT_BIG(DISTINCT PimProductId) AS Products
       INTO #d
-      FROM pim.ProductAttribute
+      FROM pim.ProductAttribute AS value
       WHERE Value IS NOT NULL AND Value <> N''
+        AND EXISTS (SELECT 1 FROM pim.Product AS product
+                    JOIN dbo.OrganizationConfig AS organization ON organization.OrganizationId = product.OrganizationId AND organization.IsActive = 1
+                    WHERE product.PimProductId = value.PimProductId)
       GROUP BY AttributeCode, Value;
 
       SELECT COUNT_BIG(*) AS DistinctValues FROM #d;
@@ -529,6 +541,8 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
       INTO #d
       FROM pim.ProductAttribute
       WHERE LanguageCode = N'en' AND Value IS NOT NULL AND Value <> N''
+        /* rimske številke (Električni razred I/II/III), števila in ločila se ne prevajajo */
+        AND LOWER(LTRIM(RTRIM(Value))) COLLATE Latin1_General_BIN LIKE N'%[^ivx0-9 .,/+-]%'
       GROUP BY AttributeCode, Value;
 
       SELECT lookup.Language COLLATE DATABASE_DEFAULT AS Language, lookup.SourceKey COLLATE DATABASE_DEFAULT AS SourceKey,

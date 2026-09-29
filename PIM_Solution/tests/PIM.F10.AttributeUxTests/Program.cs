@@ -141,6 +141,17 @@ Assert(service.Contains("GROUP BY AttributeCode, Value;", StringComparison.Ordin
     && service.Contains("pim.PolishAttributeValue(d.AttributeCode, d.Value)", StringComparison.Ordinal),
   "Predogled zapisa mora klicati pravilo enkrat na različno vrednost.");
 
+// Preverjalec #15: »Podobne vrednosti« so bile skoraj vse lažne (Premer ↔ Širina ↔ Dolžina zaradi skupnih
+// 50, 100, 120), štetje pa je vključevalo neaktivni DEMO. Čista števila se ne štejejo kot skupna vrednost,
+// vse poizvedbe čiščenja pa berejo samo aktivna podjetja.
+Assert(service.Contains("SELECT DISTINCT A, H INTO #av FROM #v WHERE Informative = 1 AND Textual = 1;", StringComparison.Ordinal),
+  "Skupne vrednosti med različnimi izdelki ne smejo šteti čistih števil.");
+Assert(Regex.Matches(service, @"organization\.IsActive = 1").Count >= 2,
+  "Podvojeni atributi in predogled zapisa morata brati samo aktivna podjetja (DEMO je neaktiven).");
+Assert(!cleanup.Contains("pregledanih pari", StringComparison.Ordinal), "Slovnica: »pregledanih parov«.");
+Assert(service.Contains("LIKE N'%[^ivx0-9 .,/+-]%'", StringComparison.Ordinal),
+  "Rimske številke in števila (Električni razred I/II) se ne prevajajo in ne smejo biti med manjkajočimi prevodi.");
+
 // Pravila za kandidata (brez baze).
 var attributeA = new PIM.Intranet.Services.CleanupAttribute("Grlo", "GRLO", 400, 12, 12, null, null);
 var attributeB = new PIM.Intranet.Services.CleanupAttribute("Podnožje / socket", null, 350, 10, 10, null, null);

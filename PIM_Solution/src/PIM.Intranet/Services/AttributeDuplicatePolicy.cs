@@ -21,7 +21,7 @@ public static class AttributeDuplicatePolicy
   /// <summary>
   /// Pravila za kandidata (javno zaradi testa). Isti podatek: vsaj 5 skupnih izdelkov in pri vsaj 80 %
   /// ista pomenljiva vrednost. Podobne vrednosti: izdelki se skoraj ne prekrivajo (največ 20 %), skupnih
-  /// vrednosti pa je vsaj 3 in vsaj polovica manjšega nabora. Podobno ime: enak ključ imena
+  /// besedilnih vrednosti (čista števila se ne štejejo) pa je vsaj 3 in vsaj polovica manjšega nabora. Podobno ime: enak ključ imena
   /// (<see cref="NameKey"/>) ali eno ime vsebuje drugo in imata vsaj eno skupno vrednost.
   /// </summary>
   public static IReadOnlyList<DuplicateCandidate> Classify(

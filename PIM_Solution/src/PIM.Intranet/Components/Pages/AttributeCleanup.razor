@@ -53,7 +53,7 @@
   @if (Polish is not null)
   {
     <section class="kpi-grid" aria-label="Obseg predloga">
-      <PimStat Label="Različnih vrednosti" Value="@Polish.DistinctValues.ToString("N0")" Note="pregledanih pari atribut–vrednost" />
+      <PimStat Label="Različnih vrednosti" Value="@Polish.DistinctValues.ToString("N0")" Note="pregledanih parov atribut–vrednost" />
       <PimStat Label="Spremenil bi" Value="@Polish.Changes.Count.ToString("N0")" Note="različnih zapisov" />
       <PimStat Label="Vrstic pri izdelkih" Value="@Polish.Changes.Sum(row => row.Rows).ToString("N0")" Note="bi dobilo nov zapis" />
       <PimStat Label="Izračunano" Value="@Polish.ComputedUtc.ToPimLocal().ToString("HH:mm")" Note="@($"v {Polish.ElapsedMs / 1000.0:N1} s; velja 10 min, »Osveži« na novo")" />
