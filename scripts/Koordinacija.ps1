@@ -585,6 +585,7 @@ switch ($Ukaz) {
       Add-Dnevnik $n "vrata $(if ($v.ok) { 'OK' } else { 'NAPAKA' }): $($v.povzetek) (dnevnik $($v.log)*)"
       Write-Naloga $n
     }
+    Set-Utrip "vrata $(if ($v.ok) { 'OK' } else { 'NAPAKA' }): $($v.povzetek)" 'dela'
     Write-Host "`n$(if ($v.ok) { 'VRATA OK' } else { 'VRATA NISO ŠLA SKOZI' }): $($v.povzetek)" -ForegroundColor $(if ($v.ok) { 'Green' } else { 'Red' })
     if (-not $v.ok) { exit 1 }
   }
