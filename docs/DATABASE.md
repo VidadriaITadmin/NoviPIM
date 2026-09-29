@@ -2391,3 +2391,14 @@ Uporabnik: atribut ima svojo mersko enoto; uvozi prepoznajo, v kateri enoti je v
 - katalog.csv: glave ostanejo enake (stalni stolpci iz 216); pretvorba 216d dobi atribut enote že v ciljni enoti (količnik 1).
 
 **Objekti:** `canon.AttributeDefinition` (Unit, UnitOfAttributeCode), `canon.UnitConversion`, `canon.AttributeUnitValue`, `canon.NormalizeAttributeUnits`, `canon.AlignAttributeUnits`, spremembe `val.Promote`, `pim.SaveProductAttributes`, `pim.SaveProductAttributesBulk`; podatki `pim.ProductAttribute`. **Ročni korak:** ne. **Povratek:** `OldValue` v dnevniku; `val.Promote` vrniti na blok MERGE iz `canon.ProductAttribute`.
+
+## Odprodaja tudi v starih stolpcih katalog.csv (migracija 304_OdprodajaVStarihStolpcihKataloga, 2026-09-29)
+
+Preizkus uvoza Azzardo (2026-09-29): artikel v odprodaji je imel v novih stolpcih (234) »Odprodaja - popust %« 55 in »Odprodaja - količina« 2, v starih (204/207) »Popust na artikel«, »Popust odprodaje %« in »Količina odprodaje« pa 0. Kateri stolpec bere Magento, iz kode ni razvidno. Uporabnik: »popravi stare stolpce odprodaje v katalog.csv«.
+
+- **`out.GetExportRows`** (oznaka OdprodajaStariStolpci304, tik pred `CREATE CLUSTERED INDEX IX_Value`): za vrstice z »Odprodaja« = DA se polji `Product.ClearancePercent` in `Clearance.Quantity` zamenjata z že izračunanima `ClearanceItem.DiscountPercent` in `ClearanceItem.Quantity` — stari stolpci so vedno enaki novim, tudi po popravkih količine (288, 297).
+- Artikli brez aktivne odprodaje: nespremenjeno (oddelčni popust X/O iz Nadzora kataloga, zaloga X/O).
+- Glave, število in vrstni red stolpcev ostanejo enaki. Velja za vse profile nad `out.GetExportRows` (tudi MAGENTO_STOCK_PRICES).
+- Razvojna baza: 119 artiklov v odprodaji, v starih stolpcih 0 neusklajenih, ostalih 2.775 vrstic nespremenjenih; izvoz 40 s kot prej.
+
+**Objekti:** `out.GetExportRows`. **Ročni korak:** ne. **Povratek:** iz definicije odstraniti blok OdprodajaStariStolpci304.
