@@ -532,7 +532,10 @@ public sealed class ProductWorkbookService(
 
     await ComparePackagingQuantitiesAsync(rows, vpakByItem, problems, cancellationToken);
 
-    var unknown = matches.Where(match => match.Column is null && !string.IsNullOrWhiteSpace(match.Header))
+    // Dvoumni stolpci (»Naziv«) niso »neznani«: v okno za izbiro atributa ne sodijo, opozorilo pa
+    // gre med težave na vrh — s tem tudi v izid in v ops.ImportRun.Problems (ProductImport.ApplyAsync).
+    problems.InsertRange(0, AmbiguousColumnWarnings(matches));
+    var unknown = matches.Where(match => match.Column is null && !match.Ambiguous && !string.IsNullOrWhiteSpace(match.Header))
       .Select(match => match.Header).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     var readOnly = matches.Where(match => match.Column?.Target == ProductWorkbookTarget.ReadOnly)
       .Select(match => match.Header).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1052,28 +1055,50 @@ public sealed class ProductWorkbookService(
     IReadOnlyList<ProductWorkbookHeaderMatch> matches, WorkbookSheet sheet,
     IReadOnlyDictionary<string, string>? columnAttributes, CancellationToken cancellationToken)
   {
-    var suggestions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-    // Stolpec pod skupino atributov, ki se je po naslovu ujel s poljem SAOP (»Dolžina« = ItemLength), je
-    // atribut: uporabnik 2026-09-29 — »5m« pod Atributi je šel v številsko polje SAOP in bil preskočen.
-    bool UnderAttributeGroupAsField(ProductWorkbookHeaderMatch match) =>
-      match.Column is not null && !match.Column.FieldKey.StartsWith(ProductWorkbookContract.AttributeFieldPrefix, StringComparison.Ordinal)
-      && match.Column.Group != ProductWorkbookContract.GroupKey
-      && ProductWorkbookContract.IsAttributeGroup(sheet.GroupOf(match.Index));
-    if (matches.All(match => (match.Column is not null && !UnderAttributeGroupAsField(match)) || string.IsNullOrWhiteSpace(match.Header)))
-      return (matches, [], suggestions);
+    if (!NeedsAttributeMatching(matches, sheet.GroupOf))
+      return (matches, [], new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    return MatchAttributes(matches, sheet.GroupOf, await AttributeNamesAsync(cancellationToken), columnAttributes);
+  }
 
-    var known = await AttributeNamesAsync(cancellationToken);
+  /// <summary>Opozorilo za vsak preskočen dvoumen stolpec (»Naziv«), enkrat na naslov (#6).</summary>
+  public static IReadOnlyList<string> AmbiguousColumnWarnings(IReadOnlyList<ProductWorkbookHeaderMatch> matches) =>
+    matches.Where(match => match.Ambiguous).Select(match => match.Header.Trim())
+      .Distinct(StringComparer.OrdinalIgnoreCase).Select(ProductWorkbookContract.AmbiguousHeaderWarning).ToList();
+
+  // Stolpec pod skupino atributov, ki se je po naslovu ujel s poljem SAOP (»Dolžina« = ItemLength), je
+  // atribut: uporabnik 2026-09-29 — »5m« pod Atributi je šel v številsko polje SAOP in bil preskočen.
+  static bool UnderAttributeGroupAsField(ProductWorkbookHeaderMatch match, Func<int, string> groupOf) =>
+    match.Column is not null && !match.Column.FieldKey.StartsWith(ProductWorkbookContract.AttributeFieldPrefix, StringComparison.Ordinal)
+    && match.Column.Group != ProductWorkbookContract.GroupKey
+    && ProductWorkbookContract.IsAttributeGroup(groupOf(match.Index));
+
+  /// <summary>Ali ima list kak stolpec, ki ga je treba iskati med atributi (šifrant se bere samo takrat).</summary>
+  static bool NeedsAttributeMatching(IReadOnlyList<ProductWorkbookHeaderMatch> matches, Func<int, string> groupOf) =>
+    !matches.All(match => (match.Column is not null && !UnderAttributeGroupAsField(match, groupOf))
+      || match.Ambiguous || string.IsNullOrWhiteSpace(match.Header));
+
+  /// <summary>Čisti del <see cref="MatchAttributesAsync"/> (brez baze; preizkus F10.ProductWorkbookTests).</summary>
+  /// <param name="known">Normaliziran naslov (ime ali koda atributa) → slovensko ime atributa.</param>
+  public static (IReadOnlyList<ProductWorkbookHeaderMatch> Matches, IReadOnlyList<string> NewAttributes, IReadOnlyDictionary<string, string> Suggestions) MatchAttributes(
+    IReadOnlyList<ProductWorkbookHeaderMatch> matches, Func<int, string> groupOf,
+    IReadOnlyDictionary<string, string> known, IReadOnlyDictionary<string, string>? columnAttributes)
+  {
+    var suggestions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    bool UnderAttributeGroupAsField(ProductWorkbookHeaderMatch match) => ProductWorkbookService.UnderAttributeGroupAsField(match, groupOf);
     var used = matches.Where(match => match.Column is not null && !UnderAttributeGroupAsField(match))
       .Select(match => match.Column!.FieldKey).ToHashSet(StringComparer.Ordinal);
     var result = new List<ProductWorkbookHeaderMatch>(matches.Count);
     var created = new List<string>();
     foreach (var match in matches)
     {
+      // Dvoumen naslov (»Naziv«) ni atribut, tudi pod skupino atributov ne in tudi če ga je kdo
+      // izbral v oknu: ne dobi predloga (»Nazivna napetost«) in se ne ustvari kot nov atribut (#6).
+      if (match.Ambiguous) { result.Add(match); continue; }
       if (UnderAttributeGroupAsField(match))
       {
         // Samo, če atribut s tem imenom obstaja; sicer ostane polje, kot je bilo (ne ustvarjamo atributa z imenom polja SAOP).
         if (known.TryGetValue(WorkbookHeader.Normalize(match.Header.Trim()), out var attributeName)
-          && ProductWorkbookContract.AttributeColumn(sheet.GroupOf(match.Index), match.Header.Trim(), attributeName) is var attributeColumn
+          && ProductWorkbookContract.AttributeColumn(groupOf(match.Index), match.Header.Trim(), attributeName) is var attributeColumn
           && used.Add(attributeColumn.FieldKey))
         {
           result.Add(match with { Column = attributeColumn });
@@ -1084,7 +1109,7 @@ public sealed class ProductWorkbookService(
         continue;
       }
       if (match.Column is not null || string.IsNullOrWhiteSpace(match.Header)) { result.Add(match); continue; }
-      var group = sheet.GroupOf(match.Index);
+      var group = groupOf(match.Index);
       var header = match.Header.Trim();
       string? name = known.TryGetValue(WorkbookHeader.Normalize(header), out var existing) ? existing : null;
       // Odločitev uporabnika iz pojavnega okna ima prednost: stolpec gre v izbrani (obstoječi ali nov) atribut.

@@ -79,7 +79,9 @@ public sealed record ProductWorkbookSpec(
 public sealed record WorkbookFlag(string Code, string Name);
 
 /// <param name="Column">Stolpec pogodbe; null pomeni naslov, ki mu ne ustreza noben stolpec.</param>
-public sealed record ProductWorkbookHeaderMatch(int Index, string Header, ProductWorkbookColumn? Column);
+/// <param name="Ambiguous">Naslov je na seznamu dvoumnih (<see cref="ProductWorkbookContract.AmbiguousHeaders"/>):
+/// stolpec se namenoma preskoči — ne gre v polje, ne v atribut, ne v okno za izbiro atributa.</param>
+public sealed record ProductWorkbookHeaderMatch(int Index, string Header, ProductWorkbookColumn? Column, bool Ambiguous = false);
 
 /// <summary>
 /// Ena sama pogodba stolpcev za izvoz in uvoz delovnega lista izdelkov.
@@ -211,7 +213,7 @@ public static class ProductWorkbookContract
         Aliases: ["ItemID", "Sifra artikla", "Šifra", "Artikel"]),
       // »Naziv« (spletni naziv, sicer naziv ERP, sicer šifra) je bil tu do 2026-09-29. Uporabnik ga je
       // odstranil: mešal je dva podatka in se je iz Excela prepisal v »Spletni naziv (sl)«. Naziv ERP
-      // in spletni naziv sta svoja stolpca. Uvoz ga ne pozna več: v stari datoteki je neznan stolpec in se ne uvozi.
+      // in spletni naziv sta svoja stolpca. Uvoz ga v stari datoteki preskoči kot dvoumen naslov in to pove (AmbiguousHeaders, naloga #6).
     };
 
     // --- ERP: stolpci pridejo iz registra, ne iz tega seznama ---------------------------
@@ -314,7 +316,8 @@ public static class ProductWorkbookContract
   /// </summary>
   static IReadOnlyList<ProductWorkbookColumn> Disambiguate(IReadOnlyList<ProductWorkbookColumn> columns)
   {
-    var used = new HashSet<string>(StringComparer.Ordinal);
+    // Dvoumen naslov (npr. atribut z imenom »Naziv«) izvoz nikoli ne izpiše golega: uvoz bi ga preskočil.
+    var used = new HashSet<string>(AmbiguousHeaderSet, StringComparer.Ordinal);
     var result = new List<ProductWorkbookColumn>(columns.Count);
     foreach (var column in columns)
     {
@@ -330,8 +333,34 @@ public static class ProductWorkbookContract
   }
 
   /// <summary>
+  /// Naslovi, ki ne povedo, v katero polje sodijo (naloga #6, uporabnik 2026-09-29). Stari stolpec
+  /// »Naziv« je izpisal spletni naziv, sicer naziv ERP, sicer šifro — ob uvozu se je vpisal v
+  /// »Spletni naziv (sl)« in tako spletni naziv prepisal z nazivom ERP. Tak stolpec uvoz preskoči
+  /// in to pove; ne ujame ga ne pogodba ne atribut (»Naziv« ≠ »Nazivna napetost«). Primerjava je
+  /// natančna (<see cref="WorkbookHeader.Normalize"/>), ne po »vsebuje«. »Ime« ni na seznamu, ker
+  /// je pravi atribut (IME).
+  /// </summary>
+  public static readonly IReadOnlyList<string> AmbiguousHeaders =
+  [
+    "Naziv", "Naziv artikla", "Naziv izdelka", "Ime artikla", "Ime izdelka", "Naslov",
+    "Name", "Title", "Product name", "Item name",
+  ];
+
+  static readonly HashSet<string> AmbiguousHeaderSet =
+    AmbiguousHeaders.Select(WorkbookHeader.Normalize).ToHashSet(StringComparer.Ordinal);
+
+  /// <summary>Ali je naslov na seznamu dvoumnih (<see cref="AmbiguousHeaders"/>).</summary>
+  public static bool IsAmbiguousHeader(string? header) => AmbiguousHeaderSet.Contains(WorkbookHeader.Normalize(header));
+
+  /// <summary>Opozorilo za preskočen dvoumen stolpec; gre v predogled, izid in ops.ImportRun.Problems.</summary>
+  public static string AmbiguousHeaderWarning(string header) =>
+    $"Stolpec »{header.Trim()}« je preskočen, ker je dvoumen (spletni naziv ali naziv ERP?). "
+    + "Uporabi »Spletni naziv (sl)« ali »Naziv ERP (sl)«.";
+
+  /// <summary>
   /// Poveže naslove iz datoteke s stolpci pogodbe. Kar se ne ujame, dobi <c>Column = null</c> —
   /// uvoz to izpiše, namesto da bi tiho spregledal stolpec, ki ga je uporabnik izpolnjeval.
+  /// Dvoumen naslov (<see cref="AmbiguousHeaders"/>) dobi <c>Ambiguous = true</c> in nikoli stolpca.
   /// </summary>
   public static IReadOnlyList<ProductWorkbookHeaderMatch> Match(
     IReadOnlyList<string> headers, IReadOnlyList<ProductWorkbookColumn> columns)
@@ -353,6 +382,7 @@ public static class ProductWorkbookContract
     for (var index = 0; index < headers.Count; index++)
     {
       var key = WorkbookHeader.Normalize(headers[index]);
+      if (AmbiguousHeaderSet.Contains(key)) { matches.Add(new(index, headers[index], null, Ambiguous: true)); continue; }
       // Isti naslov dvakrat v datoteki: upošteva se prvi. Drugi bi tiho povozil prvega.
       var column = key.Length > 0 && byHeader.TryGetValue(key, out var found) && used.Add(key) ? found : null;
       matches.Add(new(index, headers[index], column));
