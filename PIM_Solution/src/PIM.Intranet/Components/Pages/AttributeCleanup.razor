@@ -287,10 +287,19 @@ else
   int KindCount(string kind) => Report?.Candidates.Count(candidate => candidate.Kind == kind) ?? 0;
 
   string DuplicateSummary => DuplicateLoading ? "Računam …" : Error is not null ? "Rezultati niso na voljo"
-    : $"{FilteredCandidates.Count:N0} predlogov";
+    : Count(FilteredCandidates.Count, "predlog", "predloga", "predlogi", "predlogov");
 
   string PolishSummary => PolishLoading ? "Računam …" : Error is not null ? "Rezultati niso na voljo"
-    : $"{FilteredPolish.Count:N0} zapisov, {FilteredPolish.Sum(row => row.Rows):N0} vrstic";
+    : $"{Count(FilteredPolish.Count, "zapis", "zapisa", "zapisi", "zapisov")}, {Count(FilteredPolish.Sum(row => row.Rows), "vrstica", "vrstici", "vrstice", "vrstic")}";
+
+  /// <summary>Slovenska dvojina in množina: 1 predlog, 2 predloga, 3 predlogi, 5 predlogov.</summary>
+  static string Count(long n, string one, string two, string few, string many) => (n % 100) switch
+  {
+    1 => $"{n:N0} {one}",
+    2 => $"{n:N0} {two}",
+    3 or 4 => $"{n:N0} {few}",
+    _ => $"{n:N0} {many}",
+  };
 
   static string KindLabel(string kind) => Kinds.FirstOrDefault(item => item.Key == kind).Label ?? kind;
   static string? KindTone(string kind) => kind switch { "SAME_DATA" => "bad", "SIMILAR_VALUES" => "warn", _ => null };
