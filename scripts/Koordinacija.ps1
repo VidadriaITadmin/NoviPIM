@@ -444,11 +444,16 @@ function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
     $k = Invoke-Korak 'klikalnik' 'node' @('klikalnik.mjs', "http://localhost:$vrata/", ($strani -join ',')) 30 $log $mapaK
     $json = Join-Path $izhodK 'klikalnik.json'
     if (Test-Path $json) {
-      $najdbe = @(([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json) | ForEach-Object { $_.najdbe })
+      $pregledane = @([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json)
+      # Brez tega so vrata rekla OK, čeprav klikalnik ni odprl niti ene strani (ime strani ne ustreza @page).
+      if ($pregledane.Count -eq 0) {
+        return @{ ok = $false; opis = "klikalnik: pregledal 0 strani — nobena od '$($strani -join ', ')' ne ustreza @page v intranetu"; izhod = "$log.klikalnik.txt" }
+      }
+      $najdbe = @($pregledane | ForEach-Object { $_.najdbe })
       $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
       $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' })
       Copy-Item (Join-Path $izhodK 'klikalnik.md') "$log.klikalnik.md" -Force
-      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($strani.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"; izhod = "$log.klikalnik.md" }
+      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($pregledane.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"; izhod = "$log.klikalnik.md" }
     }
     return @{ ok = $false; opis = "klikalnik: ni poročila ($($k.opis))" }
   } finally {
