@@ -8,7 +8,7 @@ pise: [pim.izdelek, pim.besedila, pim.atributi, pim.kategorije-izdelka, pim.odpr
 strani: [/izdelki, /izdelki/{ProductId}]
 posli: []
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard/*, PIM_Solution/src/PIM.Intranet/Services/ProductWorkbenchService.cs, PIM_Solution/src/PIM.Intranet/Services/ProductEditService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopWriteService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryTreeService.cs, PIM_Solution/src/PIM.Intranet/Services/WebWithdrawalService.cs, PIM_Solution/src/PIM.Intranet/Services/AiTextService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopEndpointSnapshotService.cs, PIM_Solution/src/PIM.Intranet/Services/PimAuthorization.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs]
-migracije: [101, 108, 109, 182, 186, 233, 239, 242, 249, 251, 273, 298, 300]
+migracije: [101, 108, 109, 182, 186, 233, 239, 242, 249, 251, 273, 298, 300, 302, 306]
 ---
 
 # Iskanje izdelka in urejanje na kartici
@@ -91,7 +91,7 @@ flowchart LR
 | 7 | Urednik | Kartica, zgoraj desno | Klikneš **Shrani spremembe** (ali **Prekliči** za zavrnitev osnutkov). | Besedila in atributi se zapišejo takoj; polja SAOP se zapišejo v PIM in uvrstijo v odhodno vrsto (vir »CARD«); izdelek se ponovno validira. | Sporočilo npr. »3 besedil shranjenih — velja takoj · 1 polj velja v PIM takoj; v SAOP gre zadnja vrednost po odobritvi na Izhod v SAOP (skupina …)«. |
 | 8 | Urednik | Kartica, **Splet → Spletišča** | Obkljukaš ali odkljukaš spletišče in klikneš **Shrani spletišča**. | Kljukica določa, kam gre izdelek in kateri spletni profil ga validira. Kljukica, ki je PIM ne dovoli (npr. ni kategorije), se ne shrani. | Sporočilo »Shranjeno. Izdelek gre na N spletišč(a)« ali razlog zavrnitve. |
 | 9 | Urednik | Kartica, **Splet → Objava za splet (katalog.csv)** | Klikneš **Preveri zdaj**. | Validacija tega izdelka se požene znova; v SAOP se nič ne pošlje in CSV se ne izdela. | Tabela po spletiščih pove, ali gre izdelek v stolpec »Spletne strani« in zakaj ne. |
-| 10 | Urednik | Kartica, **Splet → Oznake** | Označiš npr. »Razstavni eksponat« in klikneš **Shrani oznake**. | Oznaka se zapiše v PIM. | »Oznake shranjene.« |
+| 10 | Urednik | Kartica, **Splet → Oznake** | Označiš npr. »Razstavni eksponat« ali »Pakirno naročanje« in klikneš **Shrani oznake**. | Oznaka se zapiše v PIM z zgodovino (`pim.ProductFieldHistory`, polje `ProductFlag.<koda>`). Pri »Pakirnem naročanju« brez objavljenega Pakiranja 2 (večjega od 1) dobi artikel takoj zadržek za splet (302). | »Oznake shranjene. Ob naslednjem izvozu gre v katalog.csv »Pakirno naročanje« = 1« (ali 0) oziroma opozorilo, da je artikel zadržan s spleta in zakaj (Pakiranje 2 manjka ali je vpisano, a še ni objavljeno v PIM). V razdelku Objava za splet vrstica »Zadržek« pove kanal, ali je ročni (kdo) ali samodejni (pravilo), in razlog. |
 | 11 | Skrbnik | Kartica, **ERP**, pri napaki EAN/proizvajalec/dobavitelj | Klikneš »… — potrdi«. | Potrditev skrbnika se zapiše, izdelek se takoj ponovno validira. | Napaka izgine, potrditev je vidna pod »Potrditve skrbnika«. |
 | 12 | Urednik | Kartica, **Kakovost in zgodovina** | Pregledaš odprte težave, »Zapisi v SAOP« in »Izvor podatkov«. | Izvor se naloži šele ob odprtju zavihka (počasno iskanje). | Tabela sporočil na poti v SAOP s stanjem (Čaka odobritev, Poslano, Potrjeno, Odklon). |
 
@@ -110,6 +110,7 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 - **Vse je okence (2026-09-28).** Zaklenjeni (onemogočeni okenci z razlogom) ostajata samo **Šifra artikla** (ključ v SAOP in PIM) in **Sledenje serij** (vpliva na zalogo, nastavi se v SAOP). Katero polje gre v SAOP, pove register `out.SaopXmlField` + pravilo lastništva `out.OwnershipPolicy` (Owner = PIM); dolžina (`ItemLength`) in prostornina (`ItemVolumePerUnit`) sta tam od migracij 298/300.
 - **Števci pomenijo isto povsod:** značke v levem meniju in številki »Ustavi objavo« / »Priporočeno« v glavi zavihka štejejo prazna polja **na tem zavihku** (napaka komercialnega profila, npr. Pak1, se šteje tam, kjer polje stoji — na ERP). Rdeče je samo, kar ustavi objavo; število slik in zalogovnih vrstic je sivo in ima opis.
 - **Prazno = kot validacija:** 0 v številskem polju pakiranja/mer šteje za prazno.
+- **Pakirno naročanje (302):** oznaka Da/Ne, samo v PIM (v SAOP ne gre), po podjetju. Privzeto Ne. V `katalog.csv` gre kot stolpec »Pakirno naročanje« = 1/0 (303, odločitev lastnika 29. 9.); količino paketa Magento vzame iz »Pakirna količina« (Pakiranje 2). Artikel z oznako brez **objavljenega** Pakiranja 2 (> 1) je zadržan s spleta (`val.ProductHold`, »pravilo 302«). Kartica drugje kaže Pakiranje 2 iz zajema/uvoza; na splet gre objavljena vrednost (`pim.ProductCommercial`, prenese jo objava v PIM po uspešni validaciji). Opomba ob oznaki zato pove obe, ko se razlikujeta (npr. »vpisano 50, na splet gre še 1«). Zadržek se sprosti sam, ko je objavljeno Pakiranje 2 večje od 1 — ob shranjevanju kartice, uvozu Excela ali najkasneje ob naslednjem izvozu `katalog.csv` (306: razlog zadržka loči »manjka« in »čaka objavo«).
 
 ## 8. Ko gre kaj narobe
 
@@ -132,7 +133,7 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 - **Storitve / delavci:** `ProductWorkbenchService` (seznam, fasete, kartica, izvor), `ProductEditService` (`SaveTextsAsync`, `SaveAttributesAsync`, `SaveErpFieldsBulkAsync`, `SaveWebShopsAsync`, `SaveProductFlagsAsync`), `SaopWriteService.EnqueueAsync` (vir `CARD`), `QualityWriteService` (`ValidateAsync`, `SetFieldWaiverAsync`), `WebWithdrawalService.AfterChangeAsync`, `AiTextService.SuggestWebTextsAsync`, `SaopEndpointSnapshotService`.
 - **Tabele in pogledi:** `intranet.GetProductList`, `intranet.GetProductListFilters`, `intranet.GetProductCard`, `intranet.GetProductOrigin`, `val.ProductChannelReadiness`, `pim.ProductWebShop`, `pim.ProductFlag`, `out.SaopXmlField` (register pisljivih polj), `pim.ProductFieldHistory`.
 - **Pravice:** politike `CatalogWrite` (ADMIN, CATALOG_EDITOR), `SaopWrite`, `BusinessWrite`, `FieldWaiver` (ADMIN) v `Services/PimAuthorization.cs`; ključ strani `view.products.list`.
-- **Migracije:** 101, 108 (seznam), 182 (spletišča), 186 (spori), 233 (oznake), 239 (ERP besedila), 242 (objava za splet), 249 (potrditve), 251 (umik s spleta), 273 (PIM takoj, SAOP po odobritvi).
+- **Migracije:** 101, 108 (seznam), 182 (spletišča), 186 (spori), 233 (oznake), 239 (ERP besedila), 242 (objava za splet), 249 (potrditve), 251 (umik s spleta), 273 (PIM takoj, SAOP po odobritvi), 302 (Pakirno naročanje, `pim.SetProductFlagsBulk`, `val.SyncPackageOrderHolds`), 306 (razlog zadržka).
 - **Urniki:** ni.
 
 </details>

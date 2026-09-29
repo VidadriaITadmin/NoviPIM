@@ -304,20 +304,50 @@ public sealed class ProductEditService(IConfiguration configuration, PimWriteGua
     return (held.Value is int h ? h : 0, released.Value is int r ? r : 0);
   }
 
-  /// <summary>Ali ima artikel Pakiranje 2 večje od 1 — brez tega Pakirno naročanje drži artikel s spleta.</summary>
-  public async Task<decimal?> GetPackageQuantityAsync(long productId, CancellationToken cancellationToken = default)
+  /// <summary>Aktiven zadržek artikla (val.ProductHold). <see cref="IsRule"/> = postavilo ga je pravilo
+  /// (npr. »pravilo 302« za Pakirno naročanje), ne uporabnik z »Zadrži …«.</summary>
+  public sealed record ProductHoldInfo(string ChannelCode, string Reason, string CreatedBy, DateTime CreatedUtc)
+  {
+    public bool IsRule => CreatedBy.StartsWith("pravilo ", StringComparison.OrdinalIgnoreCase);
+  }
+
+  /// <param name="PublishedPak2">Pakiranje 2, ki ga nosi katalog.csv (pim.ProductCommercial, polni ga
+  /// objava v PIM po uspešni validaciji). Kartica drugje kaže vrednost iz zajema/uvoza.</param>
+  public sealed record PackageOrderState(bool IsPromoted, decimal? PublishedPak2, IReadOnlyList<ProductHoldInfo> Holds);
+
+  /// <summary>
+  /// Kar pravilo 302 in katalog.csv dejansko vidita: objavljeno Pakiranje 2 in aktivni zadržki z
+  /// razlogom in izvorom. Kartica s tem pove isto kot izvoz (zajem 50, objavljeno 1 = zadržan).
+  /// </summary>
+  public async Task<PackageOrderState> GetPackageOrderStateAsync(long productId, CancellationToken cancellationToken = default)
   {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
-      SELECT commercial.Pak2
+      SELECT IsPromoted = CONVERT(bit, CASE WHEN promoted.PimProductId IS NULL THEN 0 ELSE 1 END), commercial.Pak2
       FROM canon.Product AS product
       LEFT JOIN pim.Product AS promoted ON promoted.OrganizationId = product.OrganizationId AND promoted.ItemID = product.ItemID
       LEFT JOIN pim.ProductCommercial AS commercial ON commercial.PimProductId = promoted.PimProductId
       WHERE product.ProductId = @ProductId;
+      SELECT ChannelCode, Reason, CreatedBy, CreatedUtc
+      FROM val.ProductHold
+      WHERE ProductId = @ProductId AND IsActive = 1
+      ORDER BY CreatedUtc DESC;
       """, connection);
     command.Parameters.Add("@ProductId", SqlDbType.BigInt).Value = productId;
-    return await command.ExecuteScalarAsync(cancellationToken) is decimal value ? value : null;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    bool promoted = false; decimal? pak2 = null;
+    if (await reader.ReadAsync(cancellationToken))
+    {
+      promoted = PimDb.Bool(reader, "IsPromoted");
+      pak2 = reader["Pak2"] is decimal value ? value : null;
+    }
+    var holds = new List<ProductHoldInfo>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        holds.Add(new(PimDb.TextOrEmpty(reader, "ChannelCode"), PimDb.TextOrEmpty(reader, "Reason"),
+          PimDb.TextOrEmpty(reader, "CreatedBy"), PimDb.NullableDateTime(reader, "CreatedUtc") ?? DateTime.MinValue));
+    return new(promoted, pak2, holds);
   }
 
   /* ─── Mnozicni zapis (218) — uvoz delovnega lista ──────────────────────────────────── */

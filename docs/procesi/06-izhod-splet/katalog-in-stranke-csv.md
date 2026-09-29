@@ -8,7 +8,7 @@ pise: [splet.katalog-csv, splet.stranke-csv, pim.varovalke, pim.izdelek, obvesti
 strani: [/splet]
 posli: [WEB_CATALOG_EXPORT]
 koda: [PIM_Solution/workers/PIM.B2bWorker/*.cs, PIM_Solution/src/PIM.B2b/*.cs, PIM_Solution/src/PIM.Intranet/Components/Pages/Web.razor, PIM_Solution/src/PIM.Intranet/Services/MagentoArtifactService.cs, PIM_Solution/src/PIM.Intranet/Services/ExportDownloadEndpoint.cs, PIM_Solution/src/PIM.Intranet/Services/QualityReadService.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs]
-migracije: [142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279, 285, 291, 292, 293]
+migracije: [142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279, 285, 291, 292, 293, 302, 306]
 ---
 
 # Katalog in stranke za splet (katalog.csv in stranke.csv)
@@ -92,7 +92,7 @@ flowchart LR
 | # | Kdo | Kje (stran) | Kaj narediš | Kaj se zgodi v sistemu | Kako preveriš, da je uspelo |
 |---|---|---|---|---|---|
 | 1 | Avtomatika | — | — | Po uspešni objavi (ali najkasneje po urniku) se zažene `PIM.B2bWorker --export-magento --organization-id 2`. Če drug zagon že teče, se ta umakne. | `/sistem/posel/WEB_CATALOG_EXPORT`: zadnji tek. |
-| 2 | Avtomatika | — | — | Osveži se čakalna vrsta pregleda artiklov z oznako O (glej [Nadzor kataloga](nadzor-kataloga.md)). Če je za podjetje vklopljen samodejni umik, PIM artikle, ki na spletišče ne smejo več, ponovno validira in jim odkljuka spletišče z zapisanim razlogom. | `/splet/umaknjeni`, zavihek »Samodejni umik«. |
+| 2 | Avtomatika | — | — | Najprej se uskladijo zadržki za »Pakirno naročanje« (302, `val.SyncPackageOrderHolds`, ena poizvedba na podjetje): artikel z oznako brez **objavljenega** Pakiranja 2 (> 1; to je vrednost, ki gre v »Pakirno količino«) dobi zadržek za splet, artikel, ki ga je medtem dobil, se sprosti. Zajem iz SAOP piše Pakiranje 2 v zajem (`canon`); na splet pride šele z objavo v PIM (`val.Promote`, po uspešni validaciji) — do takrat razlog zadržka pove »Pakiranje 2 je vpisano (X), čaka objavo« (306). Nato se osveži čakalna vrsta pregleda artiklov z oznako O (glej [Nadzor kataloga](nadzor-kataloga.md)). Če je za podjetje vklopljen samodejni umik, PIM artikle, ki na spletišče ne smejo več, ponovno validira in jim odkljuka spletišče z zapisanim razlogom. | `/splet/umaknjeni`, zavihek »Samodejni umik«. |
 | 3 | Avtomatika | — | — | Vrstice se sestavijo po izvoznem profilu `MAGENTO_PRODUCTS`: artikel je v datoteki, če je aktiven, ima kljukico svetila ali videlektro, kategorijo na tem spletišču, je objavljen v PIM, veljaven za splet, brez ročnega zadržka in ni izključen. Artikel, ki je bil na spletu in ne sme več, gre še 14 dni kot **odjavna vrstica** s prazno »Spletne strani«. Stranke: profil `MAGENTO_CUSTOMERS`. | — |
 | 4 | Avtomatika | — | — | **Varovalka** primerja nove vrstice z zadnjo objavo (cena ni število, ×10/×100, 0, prazna, skok nad 25 %, množičen umik …). Sumljive artikle izpusti iz datoteke, ostale objavi. Posel zaradi varovalke nikoli ne pade. | Na `/splet` pasica varovalke in čip »brez zadržanih artiklov: N« ob katalog.csv. |
 | 5 | Avtomatika | — | — | Obe datoteki se zapišeta ob strani in šele nato skupaj zamenjata; nastane oznaka `magento-export.complete`. Ob kakršnikoli napaki ostane prejšnji veljavni par. | `/splet` → »Dokončane datoteke za Magento«: čas, velikost in generacija. |
@@ -116,6 +116,7 @@ flowchart LR
 - Par se zamenja skupaj — nikoli nov katalog ob stari datoteki strank. Neuspešen tek pusti prejšnji veljavni par.
 - Varovalka (277) zadrži samo sumljive artikle; zadržan artikel ostane na spletu s prejšnjimi podatki, nov artikel ne pride na splet.
 - Posel ne validira; bere samo objavljeno stanje. Cene in zaloga se berejo sproti (ne čakajo objave).
+- **Pakirno naročanje (302):** stolpec 28 »Pakirno naročanje« (prej prazen »Omejitev pri naročanju«) = 1/0 iz oznake artikla `PAKIRNO_NAROCANJE` (303; prej DA/NE); brez oznake 0. 1 pomeni, da Magento prodaja samo po celih paketih po »Pakirni količini« (Pakiranje 2). Artikel z 1 brez objavljenega Pakiranja 2 (> 1) v datoteko ne gre (zadržek »pravilo 302«, na kartici »samodejni (pravilo Pakirno naročanje)« z razlogom): dokler Pakiranje 2 ni vpisano ali dokler vpisano še ni objavljeno v PIM (306).
 - »Popust na artikel« pri oznakah X in O gre ven samo ob sveži (do 30 min) pozitivni lastni zalogi, sicer 0.
 - Stran `/splet` vidijo vloge z dovoljenjem `page.web`; potrditi na `/varovalke` smejo ADMIN, CATALOG_EDITOR in COMMERCIAL.
 
@@ -140,7 +141,7 @@ flowchart LR
 - **Strani:** `PIM.Intranet/Components/Pages/Web.razor`, komponenta `SafeguardBanner`; prenos `izvoz/magento-datoteka/{koda}` in `…/excel` (`ExportDownloadEndpoint.cs`).
 - **Storitve / delavci:** `PIM.B2bWorker` (`Program.cs`, `MagentoExportCommand.ExecuteAsync`, `CatalogSafeguard`, `RegistryCsvWriter`, `MagentoExportLock`), `PIM.B2b` (`CustomerCsvGenerator`, `MagentoCsvContract`, `ExportValueFormat`), `MagentoArtifactService`, `QualityReadService.GetWebExportSummaryAsync`. `MagentoExportRunner.cs` je star in se ne uporablja.
 - **Tabele in pogledi:** `out.ExportProfile` (`FieldDelimiter`, `IncludeWithdrawals`), `out.ExportColumn` (`DecimalSeparator`, `GuardKind`), `out.GetExportRows`, `out.ExportPriceList` (`PriceOrganizationId = 3` za B2B), `out.ExportStockSource`, `out.CatalogStock`, `out.WebPublication`, `out.CatalogPublishedValue`, `out.ExportRun`, `ops.SafeguardCheck/Finding/Approval`, `pim.WebPublicationPolicy`, `val.ProductChannelReadiness`, `intranet.GetWebExportSummary`, `b2b.CustomerGroupDiscounts`.
-- **Migracije:** 142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279.
+- **Migracije:** 142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279, 302 (Pakirno naročanje, `val.SyncPackageOrderHolds` pred sestavo datoteke), 306 (razlog zadržka: manjka / čaka objavo).
 - **Urniki:** `WEB_CATALOG_EXPORT` (3600 s, odvisen od `PRODUCT_PUBLICATION`), faza DATOTEKA pod `MAGENTO_PRODUCTS`.
 - **Pot:** `EXPORT_ROOT` iz argumenta, okolja `PIM_EXPORT_ROOT`, registra `ops.SystemPath` ali privzeto; na PRD `C:\inetpub\wwwroot\PIM_exports_csv`.
 
@@ -152,7 +153,7 @@ flowchart LR
 - ⚠️ Od 277 sta ločilo `;` in cene z decimalno vejico. Ali je uvoznik Magento že preklopljen, iz kode ni mogoče preveriti.
 - ⚠️ Če varovalka pade (napaka v bazi), gre datoteka ven brez preverjanja; ostane samo opozorilo v zvoncu.
 - ⚠️ Stranke v `stranke.csv` so samo iz podjetja 2. Dodatni popust P2, referent in baza kupcev ViD (279) so vodeni za Vidadrio (podjetje 3), a do spleta ne pridejo. Predlog združitve IQ + VID po šifri z lastništvom spletišča je odprt (ni odločeno).
-- ⚠️ V katalogu sta dva ločena popusta za odprodajo: »Popust na artikel« / »Popust odprodaje %« (Nadzor kataloga, oznaka X/O) in »Odprodaja - popust %« (`/izdelki/odprodaja`). Katerega Magento upošteva, iz kode ni razvidno.
+- ⚠️ V katalogu sta dva ločena popusta za odprodajo: »Popust na artikel« / »Popust odprodaje %« (Nadzor kataloga, oznaka X/O) in »Odprodaja - popust %« (`/izdelki/odprodaja`). Katerega Magento upošteva, iz kode ni razvidno. Po migraciji 304 (naloga #8) to za artikle v odprodaji ne velja več — glej [Odprodaja](../03-izdelki/odprodaja.md).
 - ⚠️ Pravila poštnine (`/pravila-popustov`) v nobeni od datotek niso.
 - ⚠️ Stran `/stranke/uvoz` po uvozu napoti na »Pripravi izvoz« za ročno izdelavo — ta stran pa izdela samo prenos, ne osveži datoteke za Magento.
 

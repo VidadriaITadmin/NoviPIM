@@ -2391,3 +2391,21 @@ Uporabnik: atribut ima svojo mersko enoto; uvozi prepoznajo, v kateri enoti je v
 - katalog.csv: glave ostanejo enake (stalni stolpci iz 216); pretvorba 216d dobi atribut enote že v ciljni enoti (količnik 1).
 
 **Objekti:** `canon.AttributeDefinition` (Unit, UnitOfAttributeCode), `canon.UnitConversion`, `canon.AttributeUnitValue`, `canon.NormalizeAttributeUnits`, `canon.AlignAttributeUnits`, spremembe `val.Promote`, `pim.SaveProductAttributes`, `pim.SaveProductAttributesBulk`; podatki `pim.ProductAttribute`. **Ročni korak:** ne. **Povratek:** `OldValue` v dnevniku; `val.Promote` vrniti na blok MERGE iz `canon.ProductAttribute`.
+
+## Pakirno naročanje (migraciji 302_PakirnoNarocanje in 303_PakirnoNarocanjeEnaNic, 2026-09-29, naloga #5)
+
+Artikel se na spletu naroča samo po celih paketih; količino paketa Magento vzame iz stolpca »Pakirna količina« (Pakiranje 2 = SAOP `ItemQuantityOfPackaging2`). Oznaka je samo PIM, po podjetju, privzeto ne; v SAOP ne gre.
+
+- **302:** oznaka `PAKIRNO_NAROCANJE` v `pim.ProductFlagDefinition` (kartica, Oznake; zapis `pim.SaveProductFlags` z zgodovino); `out.ExportColumn` COL034 profila MAGENTO_PRODUCTS = »Pakirno naročanje« (prej prazen »Omejitev pri naročanju«); vrednost v `out.GetExportRows`; `val.SyncPackageOrderHolds` (artikel z oznako brez Pakiranja 2 > 1 dobi zadržek WEB »pravilo 302«, sprosti se sam); `pim.SetProductFlagsBulk` (uvoz delovnega lista). Izvoz katalog.csv pred sestavo pokliče `val.SyncPackageOrderHolds` enkrat na podjetje.
+- **303:** odločitev lastnika 29. 9. 16:59 (naloga #13): v katalog.csv je vrednost **1/0**, ne DA/NE. Popravek žive definicije `out.GetExportRows` (REPLACE natanko enega izraza v bloku 302, marker `PakirnoNarocanje303`). Kartica in Excel ostaneta Da/Ne oziroma D/N. »Razstavni eksponat« in »Odprodaja« ostaneta DA/NE.
+
+**Objekti:** `pim.ProductFlagDefinition` (podatek), `out.ExportColumn` (podatek), `out.GetExportRows`, `val.SyncPackageOrderHolds`, `pim.SetProductFlagsBulk`. **Ročni korak:** ne. **Vrstni red:** 303 zahteva 302. **Povratek 303:** v `out.GetExportRows` vrni `N'1'`/`N'0'` na `N'DA'`/`N'NE'`. Na DEV 303 uveljavljena posamično s `sqlcmd -f 65001` in vpisom v `dbo.SchemaMigration` (hash kot `Invoke-PendingMigrations.ps1`). **PRD:** 302 in 303 skupaj, šele po lastnikovi potrditvi.
+
+## Pakirno naročanje: razlog zadržka (migracija 306_PakirnoNarocanjeRazlogZadrzka, 2026-09-29, naloga #5)
+
+Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`, npr. 50), pravilo 302 in katalog.csv pa objavljeno vrednost (`pim.ProductCommercial`, npr. 1 ali artikel še ni objavljen); razlog zadržka je velel »vpiši Pakiranje 2«, čeprav je bilo vpisano (163 od 166 zadržkov na DEV).
+
+- `val.SyncPackageOrderHolds` (CREATE OR ALTER, isti parametri in izhodi): pravilo ostane (zadržek, dokler **objavljeno** Pakiranje 2 ni > 1, ker ga nosi »Pakirna količina« v katalog.csv), razlog pa loči: manjka tudi v zajemu → »vpiši Pakiranje 2 ali odstrani oznako«; vpisano, artikel še ni objavljen v PIM → »čaka objavo«; vpisano, objavljena vrednost je še stara → »na splet gre še objavljena vrednost Y«. Razlog aktivnega zadržka »pravilo 302« se posodobi, ko se stanje spremeni. Ročnih zadržkov ne spreminja.
+- Migracija na koncu pokliče `val.SyncPackageOrderHolds` (obstoječi zadržki dobijo pravi razlog; na DEV 163 posodobljenih).
+
+**Objekti:** `val.SyncPackageOrderHolds`, podatki `val.ProductHold.Reason` (samo aktivni zadržki »pravilo 302«). **Ročni korak:** ne. **Vrstni red:** zahteva 302. **Povratek:** ponovno izvedi blok 4 iz 302. **PRD:** skupaj s 302 in 303, šele po lastnikovi potrditvi.

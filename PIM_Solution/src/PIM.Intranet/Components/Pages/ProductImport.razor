@@ -14,7 +14,7 @@
 <PageTitle>Uvoz delovnega lista</PageTitle>
 
 <PimPage Title="Uvoz delovnega lista izdelkov"
-         Subtitle="Ista datoteka, ki jo izvozi gumb »Delovni list« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
+         Subtitle="Ista datoteka, ki jo izvozi gumb »Izvozi Excel« na strani Izdelki. Vse se zapiše v PIM takoj — spletni podatki, atributi, slike, dokumenti in ERP polja. ERP polja gredo poleg tega v vrsto za SAOP, kjer čakajo odobritev." />
 <PimTabs Active="uvoz" Tabs="ProductTabs.Tabs" Label="Pogledi izdelkov" />
 
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
@@ -114,7 +114,7 @@
         <input id="import-note" class="form-input" @bind="Note" placeholder="npr. dopolnitev spletnih opisov, september" />
       </label>
       <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyAsync">
-        Uvozi @(Preview.PimChangeCount + Preview.SaopChangeCount) sprememb
+        Uvozi @PimFormat.Count(Preview.PimChangeCount + Preview.SaopChangeCount, "spremembo", "spremembi", "spremembe", "sprememb")
       </button>
       <p class="hint">
         Vse se zapiše v PIM takoj in gre skozi zgodovino sprememb ter ponovno validacijo — tudi
@@ -349,9 +349,19 @@
     catch (Exception failure) { Error = "Povratka ni bilo mogoče pripraviti: " + failure.Message; }
   }
 
-  static string Describe(IReadOnlyDictionary<string, string> values) =>
-    values.Count == 0 ? "—" : string.Join(", ", values.Take(6).Select(pair => $"{Short(pair.Key)} = {Trim(pair.Value)}"))
+  /// <summary>Predogled pove naslov stolpca iz datoteke (npr. »Pakirno naročanje«), ne notranje kode polja,
+  /// in pri poljih D/N namesto 1/0 napiše Da/Ne.</summary>
+  string Describe(IReadOnlyDictionary<string, string> values) =>
+    values.Count == 0 ? "—" : string.Join(", ", values.Take(6).Select(pair => $"{Label(pair.Key)} = {Shown(pair.Key, pair.Value)}"))
       + (values.Count > 6 ? $" … (+{values.Count - 6})" : "");
+
+  string Label(string fieldKey) =>
+    Preview?.FieldLabels is { } labels && labels.TryGetValue(fieldKey, out var label) && !string.IsNullOrWhiteSpace(label)
+      ? label : Short(fieldKey);
+
+  string Shown(string fieldKey, string value) =>
+    Preview?.BoolFields?.Contains(fieldKey) == true && value is "1" or "0"
+      ? (value == "1" ? "Da" : "Ne") : Trim(value);
 
   static string Short(string fieldKey) => fieldKey.Split('.').Last();
   static string Trim(string value) => value.Length == 0 ? "(izprazni)" : value.Length <= 40 ? value : value[..40] + "…";
@@ -533,6 +543,10 @@
         Preview = ProductWorkbookService.WithoutNewAttributes(Preview, RejectedAttributes);
         Outcome = await Workbook.ApplyAsync(Preview, actor,
           string.IsNullOrWhiteSpace(Note) ? null : Note.Trim(), progress);
+        // Opozorila branja datoteke (npr. »morda« ni D ali N, polje preskočeno) so nastala v predogledu;
+        // brez tega jih izid in zgodovina uvoza (ops.ImportRun.Problems) ne bi imela.
+        if (Preview.Problems.Count > 0)
+          Outcome = Outcome with { Problems = Preview.Problems.Concat(Outcome.Problems).Distinct(StringComparer.Ordinal).ToList() };
         // 280: zgodovina uvoza (prej → potem po celicah) — iz nje se uvoz lahko povrne.
         HistoryId = await History.RecordAsync(ImportKinds.Products,
           UndoOf is { } undone ? $"Povratek uvoza #{undone.ImportRunId}" : FileName ?? "Delovni list izdelkov",
@@ -546,7 +560,7 @@
             organization.Select(row => row.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             "DELOVNI_LIST", actor, revalidate: true));
       }
-      Message = $"Uvoz končan: {Outcome.PimChanges} vrednosti zapisanih v PIM, {Outcome.SaopQueued} ERP sprememb uvrščenih v vrsto za SAOP.";
+      Message = $"Uvoz končan: v PIM {PimFormat.Count(Outcome.PimChanges, "zapisana vrednost", "zapisani vrednosti", "zapisane vrednosti", "zapisanih vrednosti")}, v vrsto za SAOP {PimFormat.Count(Outcome.SaopQueued, "ERP sprememba", "ERP spremembi", "ERP spremembe", "ERP sprememb")}.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvozi datoteke dvakrat.
       Preview = null;
     }
