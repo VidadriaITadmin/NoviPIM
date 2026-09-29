@@ -92,6 +92,7 @@ JobCatalogChecks.Run();
 JobCatalogChecks.CheckSources();
 PhaseLogChecks.Run();
 MonitorPolicyChecks.Run();
+JobQueueChecks.Run();
 TextOwnershipChecks.Run();
 Console.WriteLine("F10 intranet logic PASS.");
 
