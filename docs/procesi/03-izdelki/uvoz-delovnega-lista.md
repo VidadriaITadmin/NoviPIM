@@ -8,7 +8,7 @@ pise: [excel.izdelki, pim.izdelek, pim.besedila, pim.atributi, pim.kategorije-iz
 strani: [/izdelki, /izdelki/uvoz]
 posli: []
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/ProductImport.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor, PIM_Solution/src/PIM.Intranet/Services/ProductWorkbookService.cs, PIM_Solution/src/PIM.Intranet/Services/ExportJobService.cs, PIM_Solution/src/PIM.Operations/ProductWorkbookContract.cs, PIM_Solution/src/PIM.Operations/Workbook*.cs, PIM_Solution/src/PIM.Intranet/Services/ProductEditService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopWriteService.cs, PIM_Solution/src/PIM.Intranet/Services/ImportHistoryService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/WebWithdrawalService.cs]
-migracije: [218, 245, 251, 273, 274, 276, 280, 301]
+migracije: [218, 245, 251, 273, 274, 276, 280, 301, 302]
 ---
 
 # Izvoz in uvoz delovnega lista izdelkov (Excel)
@@ -94,7 +94,7 @@ flowchart LR
 | 10 | Urednik | `/nastavitve/nabori-atributov` | Nove atribute dodaš v nabor kategorije. | Brez tega atribut ne gre na splet. | Atribut je na kartici v skupini »Atributi kategorije (nabor)«. |
 | 11 | Urednik | `/uvozi` → uvoz #N | Po potrebi uvoz povrneš (povezava vodi na `/izdelki/uvoz?povrni=N`). | Pripravi se predogled s prejšnjimi vrednostmi; polja, ki jih je medtem nekdo spremenil, se izpustijo in izpišejo. Potrdiš z istim gumbom **Uvozi**. | Glej [Zgodovina uvozov in povratek](../01-nadzor/zgodovina-uvozov-in-povratek.md). |
 
-**Kaj je v datoteki:** Ključ · ERP (stolpci iz registra pisljivih polj SAOP) · Splet (Spletne strani, Kategorije — {spletišče}, Spletni naziv/opis po jezikih, Slike, Dokumenti) · S-popust (S koda, Posebni S — tipi strank, Posebni S — stranke) · Atributi kategorije — nabor · Atributi izven nabora · Stanje (samo za branje).
+**Kaj je v datoteki:** Ključ · ERP (stolpci iz registra pisljivih polj SAOP) · Splet (Spletne strani, Kategorije — {spletišče}, Spletni naziv/opis po jezikih, Slike, Dokumenti) · S-popust (S koda, Posebni S — tipi strank, Posebni S — stranke) · Oznake (Pakirno naročanje, Razstavni eksponat — D/N) · Atributi kategorije — nabor · Atributi izven nabora · Stanje (samo za branje).
 
 ## 7. Pravila in varovalke
 
@@ -105,6 +105,7 @@ flowchart LR
 - **Spletne strani:** sprejme ime ali kodo (»svetila«, »Videlektro«); kljukica, ki je PIM ne dovoli (npr. brez kategorije), se ne postavi.
 - **Enote atributov (301):** atribut z enoto (npr. Dolžina = mm) sprejme karkoli: »5 m«, »3,5 m« ali 5 + stolpec »Enota dolžine« se pretvori v mm; ista enota se samo odstrani; vrednost, ki je ni mogoče pretvoriti (»5 ft«, »do 30m«), se zapiše, kot je, predogled pa opozori, naj bo v enoti atributa. Stolpec pod skupino »Atributi …«, katerega naslov je ime atributa, gre v atribut tudi, če ima polje SAOP isto ime (»Dolžina«).
 - **Novi atributi:** stolpec pod skupino atributov, ki ga šifrant ne pozna, uvoz ustvari kot besedilni atribut.
+- **Oznake (302):** »Pakirno naročanje« in »Razstavni eksponat« sta D/N (sprejme tudi da/ne, 1/0; `-` = ne). Druga vrednost (npr. »morda«) je napaka vrstice »… ni D ali N; polje se preskoči«. Zapis gre v PIM z zgodovino (`pim.SetProductFlagsBulk`), v SAOP ne. Pakirno naročanje brez Pakiranja 2 (> 1) artikel zadrži s spleta; izid uvoza pove, koliko artiklov je zadržanih. Povratek uvoza vrne prejšnjo vrednost (manjkajoča oznaka = N).
 - **S-popust** se zapiše samo izdelku, ki je že objavljen v PIM; brez PAK2 nima učinka.
 - **Isti artikel večkrat** v datoteki: upošteva se prva vrstica. Dva stolpca za isto polje z različno vrednostjo: polje se preskoči.
 - **Hkratni uvozi:** največ dva hkrati, ostali čakajo v vrsti (stran to izpiše).
@@ -132,7 +133,7 @@ flowchart LR
 - **Strani:** `PIM.Intranet/Components/Pages/Products.razor` (izvoz, okno Stolpci), `ProductImport.razor` (`/izdelki/uvoz`), `Components/Shared/ImportUndoBanner`.
 - **Storitve / delavci:** `ProductWorkbookService` (`DescribeColumnsAsync`, `PreviewAsync`, `ApplyAsync`, `PlanUndoAsync`), `ExportJobService.StartWorkbookExport` + prenos `izvoz/zvezek/{jobId}` (največ 90 min gradnje), `PIM.Operations/ProductWorkbookContract.cs` (stolpci, D/N, `|`), `SaopWriteService.EnqueueAsync` (vir `EXCEL`), `ProductEditService` (`SaveTextsBulkAsync`, `SaveAttributesBulkAsync`, `SaveMediaBulkAsync`, `SaveErpFieldsBulkAsync`, `SaveWebShopsAsync`), `CategoryMappingService.SetProductCategoriesAsync`, `PackagingDiscountService`, `ImportHistoryService.RecordAsync`, `WebWithdrawalService.AfterChangeByItemsAsync`, `HeavyWorkGate.Imports`.
 - **Tabele in pogledi:** `intranet.GetProductWorkbook`, `intranet.GetProductExportSheet`, `pim.SaveProductTextsBulk`, `pim.SaveProductAttributesBulk`, `pim.SaveProductMediaBulk`, `pim.SetProductCategories`, `out.SaopXmlField`, `ops.ImportRun`, `ops.ImportChange`.
-- **Migracije:** 218 (množični zapis), 245 (ERP takoj, slike, dokumenti), 251, 273, 274, 276 (rumene glave), 280 (zgodovina uvozov).
+- **Migracije:** 218 (množični zapis), 245 (ERP takoj, slike, dokumenti), 251, 273, 274, 276 (rumene glave), 280 (zgodovina uvozov), 301 (enote atributov), 302 (oznake D/N, `pim.SetProductFlagsBulk`).
 - **Urniki:** ni.
 
 </details>
