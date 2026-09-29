@@ -4,7 +4,7 @@ export const meta = {
   whenToUse: 'Ko lastnik reče »delaj naloge« (vse pripravljene ali naštete številke). Dispečer najprej prebere tablo (scripts/Koordinacija.ps1 -Ukaz Json) in poda args: {ids: [številke], seja: "ime", zdruzi: true}',
   phases: [
     { title: 'Vpliv', detail: 'pim-vpliv: veriga podatka, avtomatika, območje za zaklep, poslovna vprašanja' },
-    { title: 'Razvoj', detail: 'pim-razvijalec v lastni delovni kopiji (veja naloga/N) do uspešnih vrat' },
+    { title: 'Razvoj', detail: 'pim-razvijalec v kopiji naloge (-Ukaz Kopija, veja naloga/N iz integracijske veje) do uspešnih vrat' },
     { title: 'Preverjanje', detail: 'pim-preverjalec: vrata, brskalnik v lastnem zavihku, scenarij, hitrost, baza' },
     { title: 'Popravki', detail: 'razvijalec popravi najdbe preverjalca (največ 2 kroga)' },
     { title: 'Združevanje', detail: 'integrator: posodobi vejo, ponovni build, združi v integracijsko vejo; konflikt -> razvijalec' },
@@ -92,14 +92,17 @@ for (const id of ids) konec[id] = new Promise((r) => { razresi[id] = r })
 async function razvijaj(id, vpliv, poskus) {
   return agent(
     `Izvedi nalogo #${id} s table PIM. Analiza vpliva:\n${JSON.stringify(vpliv, null, 2)}\n\n` +
-    `Delaš v svoji delovni kopiji (worktree). Najprej: git switch -c naloga/${id}${poskus ? '-' + poskus : ''}; nato ` +
-    `${KOORD} -Ukaz Prevzemi -Id ${id} -Seja "${ime('razvijalec', id)}". Če Prevzemi zavrne zaradi prekrivanja, NE nadaljuj: ` +
+    `Delaš v svoji delovni kopiji naloge, ki jo naredi tabla iz integracijske veje: ${KOORD} -Ukaz Kopija -Id ${id} -Seja "${ime('razvijalec', id)}" ` +
+    `(zadnja vrstica izpisa je pot). OD TU NAPREJ vsak ukaz poganjaj v tej mapi (cd "<pot>" && ...), datoteke beri in urejaj samo pod to potjo, ` +
+    `tudi tablo kliči iz nje (powershell ... -File scripts/Koordinacija.ps1). Glavne kopije ne spreminjaj. Nato ` +
+    `${KOORD} -Ukaz Prevzemi -Id ${id} -Seja "${ime('razvijalec', id)}" (iz kopije). Če Prevzemi zavrne zaradi prekrivanja, NE nadaljuj: ` +
     `vrni uspeh=false in v prekrivanjeZ številke nalog iz sporočila. ` +
     `Območje, strani in teste iz analize zapiši na nalogo (-Ukaz Nastavi -Polje obmocje / strani / testi), če se razlikujejo. ` +
     `Končaj z uspešnimi vrati (-Ukaz Preveri -Id ${id}) in commitom na veji. Ne kliči Koncaj. ` +
     (vpliv.odlocitevPotrebna ? `Odprto vprašanje, ki te naloge ne blokira: "${vpliv.odlocitevPotrebna}" — ustvari zanj ločeno nalogo (-Ukaz Nova) z -Ukaz Odlocitev in nadaljuj po najbolj varni poti. ` : '') +
     `Če potrebuješ odločitev lastnika, jo zapiši (-Ukaz Odlocitev) in se ustavi.` + tabla('razvijalec', id),
-    { agentType: 'pim-razvijalec', phase: 'Razvoj', label: `razvoj #${id}${poskus ? ' (znova)' : ''}`, isolation: 'worktree', schema: RAZVOJ })
+    // Brez isolation: 'worktree' — ta kopija izhaja iz main (prazen GitHub začetek) in prepove zagon table.
+    { agentType: 'pim-razvijalec', phase: 'Razvoj', label: `razvoj #${id}${poskus ? ' (znova)' : ''}`, schema: RAZVOJ })
 }
 
 async function popravi(id, razvoj, navodilo, faza, oznaka) {
