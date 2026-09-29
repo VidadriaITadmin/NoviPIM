@@ -17,6 +17,9 @@
 .monitor-head.bad .monitor-head-reason { color: var(--pim-bad-strong); font-weight: 600; }
 
 /* Tri škatle enake višine: Kdaj teče, Zadnji rezultat, Kaj kliče. */
+/* Napoved razporejevalnika (naloga #12): kdaj bo zagon. Nevtralna, ker čakanje v vrsti ni napaka. */
+.monitor-forecast { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-soft); font-size: .85rem; line-height: 1.5; margin: .5rem 0 .75rem; padding: .5rem .75rem; }
+.monitor-forecast strong { color: var(--pim-text-strong); }
 .monitor-boxes { align-items: stretch; display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1rem; }
 .monitor-box { background: var(--pim-surface); border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); min-width: 0; padding: .75rem .9rem .85rem; }
 .monitor-box h3 { color: var(--pim-text-soft); font-size: .72rem; font-weight: 700; letter-spacing: .04em; margin: 0 0 .55rem; text-transform: uppercase; }

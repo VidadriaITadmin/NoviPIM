@@ -144,8 +144,10 @@ foreach (var contract in new[] { "izvoz/magento-datoteka", "Artifacts.PreviewAsy
     Assert(bytes.Length >= 3 && !(bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF),
       "CSV uporablja isto UTF-8 pogodbo brez BOM kot worker.");
     var csvText = new UTF8Encoding(false).GetString(bytes);
-    Assert(csvText.StartsWith(string.Join(',', expectedColumns.Select(WebExportBuildService.Escape)) + "\n", StringComparison.Ordinal),
-      "CSV glava mora ohraniti registrski vrstni red, vejico in LF.");
+    // 277: ločilo stolpcev je v registru (out.ExportProfile.FieldDelimiter); katalog.csv ima podpičje.
+    var delimiter = await FieldDelimiterAsync(connection, profileId);
+    Assert(csvText.StartsWith(string.Join(delimiter, expectedColumns.Select(column => PIM.B2b.RegistryCsvWriter.Escape(column, delimiter))) + "\n", StringComparison.Ordinal),
+      $"CSV glava mora ohraniti registrski vrstni red, ločilo profila ('{delimiter}') in LF.");
     Assert(WebExportBuildService.Escape("a;\"b") == "\"a;\"\"b\"",
       "Podpičje in dvojni narekovaj morata biti pravilno ubežana.");
     Assert(WebExportBuildService.FileName("WEB_B2C_PRODUCTS", new DateTime(2026, 9, 2, 14, 5, 0))
@@ -193,6 +195,17 @@ static async Task ArtifactChecks()
     Assert(rejected, "Dovoljeni sta le pogodbeni datoteki; poljubna pot je zavrnjena.");
   }
   finally { Environment.SetEnvironmentVariable("PIM_EXPORT_ROOT", originalRoot); Directory.Delete(directory, true); }
+}
+
+/// <summary>Ločilo stolpcev profila iz registra (277); brez stolpca ali vrednosti velja vejica, enako kot v servisu.</summary>
+static async Task<char> FieldDelimiterAsync(SqlConnection connection, int profileId)
+{
+  await using var command = new SqlCommand("""
+    IF COL_LENGTH(N'out.ExportProfile', N'FieldDelimiter') IS NOT NULL
+      EXEC sys.sp_executesql N'SELECT FieldDelimiter FROM out.ExportProfile WHERE ExportProfileId = @Id;', N'@Id int', @Id = @ProfileId;
+    """, connection);
+  command.Parameters.Add("@ProfileId", SqlDbType.Int).Value = profileId;
+  return await command.ExecuteScalarAsync() is string { Length: > 0 } value ? value[0] : ',';
 }
 
 static async Task<int> ProfileIdAsync(SqlConnection connection, string code)
