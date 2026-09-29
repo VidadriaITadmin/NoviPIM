@@ -178,6 +178,9 @@ function Test-Prekrivanje([string[]]$a, [string[]]$b) {
     if (-not $px -or -not $py) { continue }
     # Migracije niso zaklep področja: številke se rezervirajo z -Ukaz Migracija.
     if ($px -eq 'pim_solution/sql/migrations' -or $py -eq 'pim_solution/sql/migrations') { continue }
+    # Ustvarjen graf procesov in dnevnik baze (union merge) nista zaklep: konflikt reši Zdruzi.
+    $skupne = 'docs/procesi/pim-procesi.html', 'docs/database.md'
+    if ($skupne -contains $px -or $skupne -contains $py) { continue }
     if ($px -eq $py -or $px.StartsWith("$py/") -or $py.StartsWith("$px/")) { return "$x ↔ $y" }
   } }
   return $null
