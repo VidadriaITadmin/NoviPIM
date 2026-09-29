@@ -12,6 +12,10 @@
 @inject IJSRuntime Js
 @inject AuthenticationStateProvider Authentication
 @inject PackagingDiscountService Packaging
+@inject PimWriteGuard Guard
+@inject ImportHistoryService History
+@inject WebWithdrawalService Withdrawals
+@inject HeavyWorkGate Gate
 
 <PageTitle>Izdelki</PageTitle>
 
@@ -365,8 +369,8 @@
       </div>
     </div>
     <div class="filter-actions">
-      <button type="button" class="primary-button" disabled="@(BulkBusy || Selected.Count == 0)" @onclick="() => ApplyBulkAsync(false)">
-        Uporabi za izbrane (@Selected.Count.ToString("N0"))
+      <button type="button" class="primary-button" disabled="@(BulkBusy || Selection.IsEmpty)" @onclick="() => ApplyBulkAsync(false)">
+        Uporabi za izbrane (@Selection.Count.ToString("N0"))
       </button>
       <button type="button" class="ghost-button" disabled="@(BulkBusy || Page is null || Page.TotalCount == 0)" @onclick="() => ApplyBulkAsync(true)">
         Uporabi za cel pogled (@((Page?.TotalCount ?? 0).ToString("N0")))
@@ -377,6 +381,183 @@
     @if (BulkMessage is not null) { <p class="message-state success-message" role="status">@BulkMessage</p> }
     @foreach (var problem in BulkProblems.Take(20)) { <p class="message-state warn-message">@problem</p> }
     @if (BulkProblems.Count > 20) { <p class="hint">… in še @(BulkProblems.Count - 20) opozoril.</p> }
+  </section>
+}
+
+@* #10: paketno urejanje polja za izbrane izdelke ali za vse po filtru. Pot je »navidezen uvoz Excela«
+   (ProductBulkEdit): isto preverjanje, zapis, ponovna validacija, zgodovina in povratek na /uvozi kot pri
+   uvozu delovnega lista. Samo podatki PIM — polja SAOP ostanejo uvozu Excela (PRIVZETO ZA NOČ). *@
+@if (CanEditCatalog && EditOpen)
+{
+  <section class="ui-card bulk-edit" aria-labelledby="bulk-edit-title">
+    <div class="bulk-discount-head">
+      <h2 id="bulk-edit-title">Nastavi polje za @EditScopeLabel</h2>
+      <button type="button" class="small-action" disabled="@EditWriting" @onclick="CloseEdit">Zapri</button>
+    </div>
+
+    @if (EditColumnsLoading)
+    {
+      <p class="muted" role="status"><span class="opening-spinner" aria-hidden="true"></span> Nalagam seznam polj …</p>
+    }
+    else if (EditPreview is null && EditResult is null)
+    {
+      <div class="filter-grid">
+        <div class="filter-field filter-field-wide">
+          <label for="bulk-edit-field">Polje</label>
+          <PimPicker Id="bulk-edit-field" Options="EditFieldOptions" Value="@EditFieldKey" ValueChanged="EditFieldChanged"
+                     Placeholder="Izberi polje (spletni naziv, atribut, kategorija, oznaka …)" EmptyText="Ni polj." Disabled="EditBusy" />
+        </div>
+
+        @if (EditColumn is { } column)
+        {
+          @if (column.IsBool)
+          {
+            <div class="filter-field">
+              <label for="bulk-edit-bool">Vrednost</label>
+              <select id="bulk-edit-bool" class="filter-select" @bind="EditValue" disabled="@EditBusy">
+                <option value="D">Da</option>
+                <option value="N">Ne</option>
+              </select>
+            </div>
+          }
+          else if (column.FieldKey == ProductWorkbookContract.WebSitesField)
+          {
+            <fieldset class="filter-field filter-field-wide bulk-edit-sites" disabled="@(EditBusy || EditClear)">
+              <legend>Spletišča</legend>
+              @foreach (var tree in EditTrees)
+              {
+                <label class="bulk-edit-check">
+                  <input type="checkbox" aria-label="Spletišče @tree.Name" checked="@EditSiteValues.Contains(tree.Code)"
+                         @onchange="e => ToggleEditSite(tree.Code, e.Value is true)" />
+                  <span>@tree.Name</span>
+                </label>
+              }
+            </fieldset>
+          }
+          else if (ProductBulkEdit.CategorySite(column, EditSites) is { } site)
+          {
+            <div class="filter-field filter-field-wide">
+              <label for="bulk-edit-category">Kategorija (@site.Name)</label>
+              <PimPicker Id="bulk-edit-category" Options="EditCategoryOptions(site)" @bind-Value="EditCategoryValue"
+                         Placeholder="Izberi kategorijo" EmptyText="Drevo te strani nima kategorij." Disabled="@(EditBusy || EditClear)" />
+            </div>
+          }
+          else if (column.FieldKey.Contains("DESCRIPTION", StringComparison.OrdinalIgnoreCase))
+          {
+            <div class="filter-field filter-field-wide">
+              <label for="bulk-edit-text">Vrednost</label>
+              <textarea id="bulk-edit-text" class="filter-select bulk-edit-textarea" rows="4" @bind="EditValue" @bind:event="oninput" disabled="@(EditBusy || EditClear)"></textarea>
+            </div>
+          }
+          else
+          {
+            <div class="filter-field filter-field-wide">
+              <label for="bulk-edit-value">Vrednost</label>
+              <input id="bulk-edit-value" class="filter-select" @bind="EditValue" @bind:event="oninput" disabled="@(EditBusy || EditClear)" />
+            </div>
+          }
+
+          @if (column.IsMultiValue)
+          {
+            <fieldset class="filter-field bulk-edit-mode" disabled="@(EditBusy || EditClear)">
+              <legend>Kako</legend>
+              <label class="bulk-edit-check"><input type="radio" name="bulk-edit-mode" checked="@(EditMode == ProductBulkEdit.ListMode.Add)" @onchange="() => EditMode = ProductBulkEdit.ListMode.Add" /> <span>Dodaj k obstoječim</span></label>
+              <label class="bulk-edit-check"><input type="radio" name="bulk-edit-mode" checked="@(EditMode == ProductBulkEdit.ListMode.Replace)" @onchange="() => EditMode = ProductBulkEdit.ListMode.Replace" /> <span>Zamenjaj ves seznam</span></label>
+            </fieldset>
+          }
+          @if (!column.IsBool)
+          {
+            <div class="filter-field">
+              <span class="bulk-edit-label">Praznjenje</span>
+              <label class="bulk-edit-check"><input type="checkbox" checked="@EditClear" disabled="@EditBusy" @onchange="e => EditClear = e.Value is true" /> <span>Izprazni polje</span></label>
+            </div>
+          }
+          <div class="filter-field filter-field-wide">
+            <label for="bulk-edit-note">Opomba (v zgodovini uvozov)</label>
+            <input id="bulk-edit-note" class="filter-select" @bind="EditNote" disabled="@EditBusy" />
+          </div>
+        }
+      </div>
+      @if (EditValidation is { } invalid) { <p class="field-error" role="alert">@invalid</p> }
+      <div class="filter-actions">
+        <button type="button" class="primary-button" disabled="@(EditBusy || EditColumn is null || EditValidation is not null || Selection.IsEmpty)" @onclick="PreviewEditAsync">
+          Pokaži predogled (@Selection.Count.ToString("N0"))
+        </button>
+        @if (EditBusy)
+        {
+          <span class="opening-spinner" aria-hidden="true"></span>
+          <button type="button" class="small-action" @onclick="CancelEdit">Prekliči</button>
+        }
+      </div>
+      <p class="muted">Nič se ne zapiše, dokler ne potrdiš predogleda. Polja, ki gredo v SAOP (ERP naziv, enota, skupina …), se paketno urejajo z <a href="izdelki/uvoz">uvozom Excela</a>, kjer čakajo odobritev.</p>
+    }
+    else if (EditPreview is not null && EditSummary is { } summary && EditColumn is { } previewColumn)
+    {
+      @if (summary.Products == 0)
+      {
+        <p class="message-state warn-message" role="status">Nobenemu od izbranih izdelkov (@EditSelectedCount.ToString("N0")) se »@previewColumn.Header« ne spremeni — vrednost je že taka ali izdelka ni.</p>
+      }
+      else
+      {
+        <p class="bulk-edit-question" role="status">
+          Nastaviti <strong>»@previewColumn.Header«</strong> na <strong>»@ProductBulkEdit.Shown(EditDisplayValue, previewColumn.IsBool)«</strong>@(EditMode == ProductBulkEdit.ListMode.Add && previewColumn.IsMultiValue && !EditClear ? " (dodano k obstoječim)" : "")
+          za <strong>@PimFormat.Count(summary.Products, "izdelek", "izdelka", "izdelke", "izdelkov")</strong>
+          @(summary.ByOrganization.Count == 1 ? $"v podjetju {summary.ByOrganization[0].Organization}" : $"v {summary.ByOrganization.Count} podjetjih")?
+        </p>
+        <ul class="bulk-edit-orgs">
+          @foreach (var organization in summary.ByOrganization) { <li>@organization.Organization: <strong>@organization.Products.ToString("N0")</strong></li> }
+          @if (summary.Unchanged > 0) { <li class="muted">Brez spremembe (že tako ali ni izdelka): @summary.Unchanged.ToString("N0")</li> }
+        </ul>
+        @if (summary.LosingWebSite > 0)
+        {
+          <p class="message-state warn-message" role="alert">Izdelkov, ki izgubijo kljukico vsaj enega spletišča: @summary.LosingWebSite.ToString("N0") — ob naslednjem izvozu gredo s te spletne strani.</p>
+        }
+        <div class="table-scroll">
+          <table class="data-table bulk-edit-table">
+            <caption>Prej → potem (prvih @Math.Min(summary.Products, ProductBulkEdit.SampleSize) od @summary.Products.ToString("N0"))</caption>
+            <thead><tr><th scope="col">Podjetje</th><th scope="col">Šifra</th><th scope="col">Prej</th><th scope="col">Potem</th></tr></thead>
+            <tbody>
+              @foreach (var sample in summary.Samples)
+              {
+                <tr>
+                  <td>@sample.OrganizationName</td>
+                  <td class="code-value">@sample.ItemId</td>
+                  <td class="muted">@ProductBulkEdit.Shown(sample.Before, previewColumn.IsBool)</td>
+                  <td>@ProductBulkEdit.Shown(sample.After, previewColumn.IsBool)</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @foreach (var problem in EditPreview.Problems.Take(10)) { <p class="message-state warn-message">@problem</p> }
+      @if (EditPreview.Problems.Count > 10) { <p class="hint">… in še @(EditPreview.Problems.Count - 10) opozoril.</p> }
+      <div class="filter-actions">
+        @if (summary.Products > 0)
+        {
+          <button type="button" class="primary-button" disabled="@EditBusy" @onclick="ApplyEditAsync">
+            Potrdi in zapiši (@summary.Products.ToString("N0"))
+          </button>
+        }
+        <button type="button" class="ghost-button" disabled="@EditBusy" @onclick="BackToEdit">Nazaj na urejanje</button>
+        @if (EditBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+      </div>
+      <p class="muted">Zapis se zabeleži v <a href="uvozi">zgodovino uvozov</a>, od koder ga lahko v celoti povrneš. Validacija se ponovi samo za spremenjene izdelke; v katalog.csv gre ob naslednjem izvozu. Zapisa, ko se začne, ni mogoče prekiniti.</p>
+    }
+
+    @if (EditResult is { } result)
+    {
+      <p class="message-state @(result.Failure is null ? "success-message" : "warn-message")" role="status">
+        @EditResultText(result)
+        @if (result.HistoryId is { } historyId) { <text> </text><a href="@($"uvozi/{historyId}")">Odpri zapis #@historyId (tam je »Povrni«)</a> }
+      </p>
+      @foreach (var problem in (result.Outcome?.Problems ?? []).Take(10)) { <p class="message-state warn-message">@problem</p> }
+      <div class="filter-actions">
+        <button type="button" class="ghost-button" @onclick="BackToEdit">Nova paketna sprememba</button>
+      </div>
+    }
+    @if (EditMessage is not null && EditBusy) { <p class="muted" role="status" aria-live="polite">@EditMessage</p> }
+    @if (EditError is not null) { <p class="message-state error-message" role="alert">@EditError</p> }
   </section>
 }
 
@@ -397,6 +578,21 @@
   </select>
 </div>
 
+<PimBulkBar Count="Selection.Count" AllMatching="Selection.AllMatching" MatchingTotal="Selection.MatchingTotal"
+            PageSelected="PageFullySelected" PageRowCount="@(Page?.Rows.Count ?? 0)"
+            OnPageChanged="SelectPage" OnSelectAllMatching="SelectAllMatching" OnClear="ClearSelection"
+            AriaLabel="Izbira izdelkov in paketna dejanja" Hint="Označi izdelke, ki jim želiš paketno nastaviti polje, S-popust ali jih izvoziti.">
+  @if (CanEditCatalog)
+  {
+    <button type="button" class="ghost-button" @onclick="OpenEditAsync">Nastavi polje …</button>
+  }
+  @if (CanEditDiscounts)
+  {
+    <button type="button" class="ghost-button" @onclick="() => BulkOpen = true">S-popust …</button>
+  }
+  <button type="button" class="ghost-button" disabled="@(ExportState is ExportRunStatus.Running or ExportRunStatus.Queued)" @onclick="StartExportAsync">Izvozi v Excel</button>
+</PimBulkBar>
+
 <section class="ui-card data-card @(Opening is null ? null : "opening-card")" aria-label="Seznam izdelkov">
   @if (Opening is not null)
   {
@@ -415,7 +611,7 @@
                 aria-label="Odpri izdelek @row.ItemId" aria-busy="@(Opening == row.ProductId ? "true" : null)">
               @* Klikanje po vrstici ne sme prekljukati izbire, zato ima celica izbire svojo ustavitev. *@
               <td class="select-cell" @onclick:stopPropagation="true">
-                <input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selected.ContainsKey(SelectionKey(row))" @onchange="e => Toggle(row, e)" />
+                <input type="checkbox" aria-label="Izberi izdelek @row.ItemId" checked="@Selection.Contains(SelectionKey(row))" @onchange="e => Toggle(row, e)" />
               </td>
               <td class="thumb-cell">
                 <span class="thumb">
@@ -489,7 +685,10 @@
   // filter in izbere se nekaj. Ce bi se izbira ob vsakem premiku izgubila, bi bilo mnozicno
   // urejanje uporabno samo za eno stran rezultatov. Kljuc nosi podjetje, ker je sifra artikla
   // enolicna samo znotraj podjetja — 0000000000001 obstaja v DEMO in v Vidadrii.
-  readonly Dictionary<string, SelectedItem> Selected = new(StringComparer.OrdinalIgnoreCase);
+  // #10: skupni model izbire (PimRowSelection) s tremi nacini — nic, posamezne vrstice, vse po
+  // filtru. Pri »vse po filtru« izbira ni seznam kljucev, ampak filter: nabor se ob dejanju prebere
+  // znova s streznika (CollectTargetsAsync).
+  readonly PimRowSelection<SelectedItem> Selection = new();
 
   ProductListPage? Page;
   IReadOnlyList<ProductListFacet> Facets = [];
@@ -521,6 +720,7 @@
   IReadOnlyList<PackagingCode> PackagingCodes = [];
   IReadOnlyList<CustomerTypeRow> CustomerTypes = [];
   bool CanEditDiscounts;
+  bool CanEditCatalog;
   bool BulkOpen;
   bool BulkBusy;
   string BulkKind = "DEFAULT";
@@ -662,6 +862,9 @@
     catch { PackagingCodes = []; CustomerTypes = []; }
     var user = (await Authentication.GetAuthenticationStateAsync()).User;
     CanEditDiscounts = user.IsInRole("ADMIN") || user.IsInRole("CATALOG_EDITOR") || user.IsInRole("COMMERCIAL");
+    // Paketno urejanje polj: politika CatalogWrite (Admin, CatalogEditor). Skrit gumb je samo videz —
+    // pravico preveri tudi ProductBulkEdit.ApplyAsync (PimWriteGuard) in zapisovalne procedure.
+    CanEditCatalog = user.IsInRole("ADMIN") || user.IsInRole("CATALOG_EDITOR");
   }
 
   protected override async Task OnParametersSetAsync()
@@ -718,6 +921,8 @@
         "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
         CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
         QueryPackaging, QueryDiscountGroup, QuerySpecial));
+      // Drug filter = druga izbira »vse po filtru«; stran (listanje) filtra ne spremeni.
+      Selection.UpdateFilter(Href(page: 1), Page.TotalCount);
     }
     catch
     {
@@ -835,7 +1040,7 @@
   // izbrani, sicer cel pogled. Gumb to izpise, da uporabniku ni treba ugibati. Brez zgornje
   // meje — uporabnikova zahteva 2026-09-17, ker izbira zdaj potuje v pomnilniku do izvoza v
   // ozadju (StartExportAsync), ne vec skozi dolzino naslova (ExportJobService).
-  string ExportScopeLabel => Selected.Count == 0 ? "(cel pogled)" : $"(izbrani: {Selected.Count:N0})";
+  string ExportScopeLabel => Selection.IsEmpty || Selection.AllMatching ? "(cel pogled)" : $"(izbrani: {Selection.Count:N0})";
 
   // Stanje uporabnikovega izvoza v ozadju, samo za zaklep gumba; napredek, napako in prenos
   // kaze okno izvozov v kotu strani. JobId sluzi kot filter na dogodku ExportJobs.Changed —
@@ -935,8 +1140,9 @@
 
     var jobId = Guid.NewGuid();
     ExportJobId = jobId;
-    var selection = Selected.Count > 0
-      ? Selected.Values.Select(item => $"{item.OrganizationId}|{item.ItemId}").ToList()
+    // »Vse po filtru« je cel pogled — izvoz ga itak bere s streznika po istem filtru.
+    var selection = !Selection.IsEmpty && !Selection.AllMatching
+      ? Selection.Items.Select(item => $"{item.OrganizationId}|{item.ItemId}").ToList()
       : null;
     // null pomeni »vsa polja« — privzeto stanje, dokler uporabnik ne odpre okna »Stolpci« in
     // kaj odkljuka; tako izvoz z nespremenjeno izbiro ostane popolnoma isti kot doslej.
@@ -969,7 +1175,13 @@
     });
   }
 
-  public void Dispose() => ExportJobs.Changed -= OnExportJobChanged;
+  public void Dispose()
+  {
+    ExportJobs.Changed -= OnExportJobChanged;
+    // Predogled se ob odhodu prekine (nic se ne zapise); zapis, ki ze tece, se ne prekine — pol
+    // zapisanega paketa bi bilo slabse od celega, zgodovina pa ga v obeh primerih zna povrniti.
+    if (!EditWriting) EditCancel?.Cancel();
+  }
 
   Task ApplyFiltersAsync()
   {
@@ -1036,12 +1248,20 @@
   // Izdelek, ki se odpira; null pomeni, da se nic ne odpira.
   long? Opening;
 
-  void Toggle(ProductListRow row, ChangeEventArgs args)
-  {
-    var key = SelectionKey(row);
-    if (args.Value is true) Selected[key] = new(row.OrganizationId, row.OrganizationName, row.ItemId);
-    else Selected.Remove(key);
-  }
+  void Toggle(ProductListRow row, ChangeEventArgs args) =>
+    Selection.Toggle(SelectionKey(row), new(row.OrganizationId, row.OrganizationName, row.ItemId), args.Value is true, PageRows);
+
+  /// <summary>Vrstice trenutne strani kot pari kljuc → izbrana vrstica (za »Označi vse na strani«).</summary>
+  IEnumerable<KeyValuePair<string, SelectedItem>> PageRows =>
+    (Page?.Rows ?? []).Select(row => new KeyValuePair<string, SelectedItem>(SelectionKey(row), new(row.OrganizationId, row.OrganizationName, row.ItemId)));
+
+  bool PageFullySelected => Selection.AllSelected((Page?.Rows ?? []).Select(SelectionKey));
+
+  void SelectPage(bool selected) => Selection.SetPage(PageRows, selected);
+
+  void SelectAllMatching() => Selection.SelectAllMatching();
+
+  void ClearSelection() => Selection.Clear();
 
   // Sifre gredo skupaj s podjetjem, ker jih mnozicno urejanje pise nazaj v SAOP tega podjetja.
   string OrganizationLabel(string? value) =>
@@ -1079,18 +1299,8 @@
     {
       var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
       List<(int OrganizationId, string ItemId)> targets;
-      if (wholeView)
-      {
-        targets = [];
-        var filter = BuildExportFilter();
-        for (var skip = 0; ; skip += 20_000)
-        {
-          var page = await Workbench.GetProductListAsync(filter with { Skip = skip, Take = 20_000 });
-          targets.AddRange(page.Rows.Select(row => (row.OrganizationId, row.ItemId)));
-          if (page.Rows.Count == 0 || targets.Count >= page.TotalCount) break;
-        }
-      }
-      else targets = Selected.Values.Select(item => (item.OrganizationId, item.ItemId)).ToList();
+      targets = (await CollectTargetsAsync(wholeView, CancellationToken.None))
+        .Select(target => (target.OrganizationId, target.ItemId)).ToList();
 
       var code = BulkCode.Length == 0 ? null : BulkCode;
       var customerKey = BulkKind == "CUSTOMER" ? BulkCustomer.Trim() : null;
@@ -1140,6 +1350,251 @@
     }
     catch (Exception failure) { BulkProblems.Add("Zapis ni uspel: " + failure.Message); }
     finally { BulkBusy = false; }
+  }
+
+  /* --- Paketno urejanje polja (#10) -------------------------------------------------------
+     Izbrane vrstice ali vse po filtru → polje → vrednost → predogled prej/potem s številom →
+     potrditev → zapis skozi uvoz delovnega lista (ProductBulkEdit). Predogled in zapis gresta skozi
+     vrata za uvoze (HeavyWorkGate.Imports), da deset hkratnih paketov ne bere kataloga naenkrat. */
+
+  bool EditOpen;
+  bool EditColumnsLoading;
+  bool EditBusy;
+  bool EditWriting;
+  string? EditMessage;
+  string? EditError;
+  IReadOnlyList<ProductWorkbookColumn> EditColumns = [];
+  IReadOnlyList<WorkbookWebSite> EditSites = [];
+  string? EditFieldKey;
+  string EditValue = "";
+  string? EditCategoryValue;
+  bool EditClear;
+  string EditNote = "";
+  ProductBulkEdit.ListMode EditMode = ProductBulkEdit.ListMode.Add;
+  readonly HashSet<string> EditSiteValues = new(StringComparer.OrdinalIgnoreCase);
+  ProductWorkbookPreview? EditPreview;
+  ProductBulkEdit.Summary? EditSummary;
+  ProductBulkEdit.Result? EditResult;
+  int EditSelectedCount;
+  CancellationTokenSource? EditCancel;
+
+  ProductWorkbookColumn? EditColumn => EditColumns.FirstOrDefault(column => column.FieldKey == EditFieldKey);
+
+  string EditScopeLabel => Selection.AllMatching
+    ? $"vse, ki ustrezajo filtru ({Selection.Count:N0})"
+    : PimFormat.Count(Selection.Count, "izbrani izdelek", "izbrana izdelka", "izbrane izdelke", "izbranih izdelkov");
+
+  List<PimPickerOption> EditFieldOptions =>
+    EditColumns.Select(column => new PimPickerOption(column.FieldKey, column.Header, Group: column.Group)).ToList();
+
+  /// <summary>Spletišča po drevesu (kljukica je na drevesu: jezikovni različici delita eno).</summary>
+  List<(string Code, string Name)> EditTrees =>
+    EditSites.GroupBy(site => site.CategoryTreeCode, StringComparer.OrdinalIgnoreCase)
+      .Select(tree => (tree.Key, tree.First().Name)).ToList();
+
+  List<PimPickerOption> EditCategoryOptions(WorkbookWebSite site) =>
+    CategoryOptions.Where(node => string.Equals(node.CategoryTreeCode, site.CategoryTreeCode, StringComparison.OrdinalIgnoreCase)
+        && !string.IsNullOrWhiteSpace(node.CategoryPath))
+      .Select(node => new PimPickerOption(ProductWorkbookService.CategoryPathText(node.CategoryPath!), node.CategoryPath!,
+        Level: node.LevelNo - 1, Badge: $"{node.ProductCount:N0} izd."))
+      .ToList();
+
+  /// <summary>Vrednost, kot gre v celico zvezka (»-« izprazni, D/N, seznam z »|«).</summary>
+  string? EditCellValue
+  {
+    get
+    {
+      if (EditColumn is not { } column) return null;
+      if (EditClear && !column.IsBool) return ProductWorkbookContract.ClearToken;
+      if (column.IsBool) return EditValue is "D" or "N" ? EditValue : "D";
+      if (column.FieldKey == ProductWorkbookContract.WebSitesField)
+        return ProductWorkbookContract.JoinList(EditTrees.Where(tree => EditSiteValues.Contains(tree.Code)).Select(tree => tree.Code));
+      if (ProductBulkEdit.CategorySite(column, EditSites) is not null) return EditCategoryValue;
+      var text = EditValue.Trim();
+      return text.Length == 0 ? null : text;
+    }
+  }
+
+  /// <summary>Kar potrditev pokaže kot novo vrednost (spletišča z imeni, ne s kodami).</summary>
+  string? EditDisplayValue => EditColumn?.FieldKey == ProductWorkbookContract.WebSitesField && !EditClear
+    ? string.Join(", ", EditTrees.Where(tree => EditSiteValues.Contains(tree.Code)).Select(tree => tree.Name))
+    : EditCellValue;
+
+  /// <summary>Napaka ob polju — gumb predogleda je onemogočen, dokler ni popravljena.</summary>
+  string? EditValidation
+  {
+    get
+    {
+      if (EditColumn is not { } column) return null;
+      if (EditCellValue is null)
+        return column.FieldKey == ProductWorkbookContract.WebSitesField ? "Izberi vsaj eno spletišče ali označi »Izprazni polje«."
+          : ProductBulkEdit.CategorySite(column, EditSites) is not null ? "Izberi kategorijo ali označi »Izprazni polje«."
+          : "Vpiši vrednost ali označi »Izprazni polje«.";
+      if (EditCellValue == ProductWorkbookContract.ClearToken) return null;
+      if (EditCellValue.Contains(ProductWorkbookContract.ListSeparator, StringComparison.Ordinal) && !column.IsMultiValue)
+        return "Znak »|« loči vrednosti seznama; to polje ima eno vrednost.";
+      return null;
+    }
+  }
+
+  async Task OpenEditAsync()
+  {
+    EditOpen = true;
+    BulkOpen = false;
+    EditResult = null; EditPreview = null; EditSummary = null; EditError = null;
+    // Seznam polj se prebere ob vsakem odprtju: izbrana kategorija v filtru določa nabor atributov.
+    EditColumnsLoading = true;
+    StateHasChanged();
+    try
+    {
+      // Seznam polj je isti kot v oknu »Stolpci« (kategorija določa nabor atributov), zožen na
+      // podatke PIM, ki jih sme paketno pisati urednik kataloga.
+      EditSites = await Workbook.ActiveWebSitesAsync();
+      EditColumns = ProductBulkEdit.EditableColumns(await Workbook.DescribeColumnsAsync(BuildExportFilter()), EditSites);
+    }
+    catch
+    {
+      EditError = "Seznama polj trenutno ni mogoče naložiti.";
+    }
+    finally
+    {
+      EditColumnsLoading = false;
+    }
+  }
+
+  void CloseEdit()
+  {
+    EditCancel?.Cancel();
+    EditOpen = false;
+  }
+
+  void EditFieldChanged(string? fieldKey)
+  {
+    EditFieldKey = fieldKey;
+    EditValue = EditColumn?.IsBool == true ? "D" : "";
+    EditCategoryValue = null;
+    EditClear = false;
+    EditSiteValues.Clear();
+    EditMode = ProductBulkEdit.ListMode.Add;
+  }
+
+  void ToggleEditSite(string code, bool selected)
+  {
+    if (selected) EditSiteValues.Add(code); else EditSiteValues.Remove(code);
+  }
+
+  void CancelEdit() => EditCancel?.Cancel();
+
+  void BackToEdit()
+  {
+    EditPreview = null; EditSummary = null; EditResult = null; EditError = null;
+  }
+
+  /// <summary>
+  /// Izdelki, na katere gre dejanje: posamezno izbrani ali — pri »vse po filtru« — ves pogled, prebran
+  /// s strežnika po straneh po 20.000 (isti filter kot seznam in izvoz).
+  /// </summary>
+  async Task<List<ProductBulkEdit.Target>> CollectTargetsAsync(bool wholeView, CancellationToken cancellationToken)
+  {
+    if (!wholeView && !Selection.AllMatching)
+      return Selection.Items.Select(item => new ProductBulkEdit.Target(item.OrganizationId, item.OrganizationName, item.ItemId)).ToList();
+    var targets = new List<ProductBulkEdit.Target>();
+    var filter = BuildExportFilter();
+    for (var skip = 0; ; skip += 20_000)
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      var page = await Workbench.GetProductListAsync(filter with { Skip = skip, Take = 20_000 });
+      targets.AddRange(page.Rows.Select(row => new ProductBulkEdit.Target(row.OrganizationId, row.OrganizationName, row.ItemId)));
+      if (page.Rows.Count == 0 || targets.Count >= page.TotalCount) break;
+    }
+    return targets;
+  }
+
+  async Task PreviewEditAsync()
+  {
+    if (EditColumn is not { } column || EditCellValue is not { } value || EditValidation is not null) return;
+    EditBusy = true; EditError = null; EditPreview = null; EditSummary = null; EditResult = null;
+    EditCancel?.Dispose();
+    EditCancel = new CancellationTokenSource();
+    var token = EditCancel.Token;
+    try
+    {
+      // Pravica se preveri že pred branjem — Komerciala do sem ne pride niti mimo gumba.
+      await Guard.RequireAsync(PimPolicies.CatalogWrite);
+      EditMessage = Selection.AllMatching ? $"Zbiram izdelke filtra ({Selection.Count:N0}) …" : "Zbiram izbrane izdelke …";
+      StateHasChanged();
+      var targets = await CollectTargetsAsync(false, token);
+      EditSelectedCount = targets.Count;
+      EditMessage = $"Berem trenutno stanje {targets.Count:N0} izdelkov in pripravljam predogled …";
+      StateHasChanged();
+      using (await EnterEditLaneAsync(token))
+        EditPreview = await ProductBulkEdit.PreviewAsync(Workbook, column, targets, value, EditMode, token);
+      EditSummary = ProductBulkEdit.Summarize(EditPreview, column.FieldKey, targets.Count);
+    }
+    catch (OperationCanceledException) { EditError = "Predogled preklican. Nič ni zapisano."; EditPreview = null; }
+    catch (UnauthorizedAccessException) { EditError = "Za paketno urejanje polj nimaš pravice (urednik kataloga ali skrbnik)."; EditPreview = null; }
+    catch (WorkbookReadException failure) { EditError = failure.Message; EditPreview = null; }
+    catch (Exception failure) { EditError = "Predogleda ni bilo mogoče pripraviti: " + failure.Message; EditPreview = null; }
+    finally { EditBusy = false; EditMessage = null; }
+  }
+
+  async Task<IDisposable> EnterEditLaneAsync(CancellationToken cancellationToken)
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    EditMessage = $"Čakam v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync(cancellationToken);
+  }
+
+  async Task ApplyEditAsync()
+  {
+    if (EditPreview is null) return;
+    EditBusy = true; EditWriting = true; EditError = null;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      var progress = new Progress<string>(text => { EditMessage = text; _ = InvokeAsync(StateHasChanged); });
+      EditMessage = "Zapisujem …";
+      StateHasChanged();
+      using (await EnterEditLaneAsync(CancellationToken.None))
+        EditResult = await ProductBulkEdit.ApplyAsync(Guard, Workbook, History, Withdrawals, EditPreview, actor,
+          string.IsNullOrWhiteSpace(EditNote) ? null : EditNote.Trim(), progress);
+      // Predogled se umakne, da drugi klik istega gumba paketa ne zapiše dvakrat.
+      EditPreview = null; EditSummary = null;
+      await ReloadListAsync();
+    }
+    catch (UnauthorizedAccessException) { EditError = "Za paketno urejanje polj nimaš pravice (urednik kataloga ali skrbnik)."; }
+    catch (Exception failure) { EditError = "Zapis ni uspel: " + failure.Message; }
+    finally { EditBusy = false; EditWriting = false; EditMessage = null; }
+  }
+
+  string EditResultText(ProductBulkEdit.Result result)
+  {
+    if (result.Outcome is not { } outcome)
+      return result.Failure is null ? "Ni bilo kaj zapisati." : "Zapis se je ustavil: " + result.Failure;
+    var text = $"Zapisano: {PimFormat.Count(outcome.PimChanges, "vrednost", "vrednosti", "vrednosti", "vrednosti")} na "
+      + $"{PimFormat.Count(outcome.RowsTouched, "izdelku", "izdelkih", "izdelkih", "izdelkih")}. Validacija je ponovljena za spremenjene izdelke "
+      + "(stolpec Splet v seznamu); na splet gre ob naslednjem izvozu katalog.csv.";
+    if (result.Withdrawn > 0) text += $" Samodejni umik s spleta: {result.Withdrawn:N0} (glej Splet → Umaknjeni).";
+    if (result.Failure is not null) text += " Opozorilo: " + result.Failure;
+    return text;
+  }
+
+  /// <summary>Seznam znova, da stolpca ERP/Splet in »Zadnja sprememba« pokažeta stanje po zapisu.</summary>
+  async Task ReloadListAsync()
+  {
+    try
+    {
+      Page = await Workbench.GetProductListAsync(new ProductListFilter(
+        OrganizationScope, Skip, Take, QuerySearch, ActiveView,
+        QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
+        QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
+        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
+        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
+        QueryPackaging, QueryDiscountGroup, QuerySpecial));
+      Selection.UpdateFilter(Href(page: 1), Page.TotalCount);
+    }
+    catch { }
   }
 
   static string ActivityLabel(string? value) => value switch
