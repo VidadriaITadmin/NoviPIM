@@ -688,7 +688,8 @@ switch ($Ukaz) {
     if (-not (Test-Path (Join-Path $pot '.git'))) { throw "Kopije $pot ni bilo mogoče ustvariti." }
     $fixGlavna = Join-Path $Glavna 'PIM_Solution/fixtures'
     if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Join-Path $pot 'PIM_Solution/fixtures') -Recurse -Force }
-    if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $pot (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
+    $potKopije = $pot  # Use-Zaklep ima svoj $pot (datoteka zaklepa)
+    if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $potKopije (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }
     Write-Output $pot
     return
   }
