@@ -129,6 +129,27 @@ Blocked  (zapisan takoj ob prevzemu: predhodnik ni uspel ali je njegov uspeh pre
 Dokaz: `tests\PIM.F11.AutomationTests` nad živo bazo (blokada, ponovitev, sprožilec, alarm,
 zapuščen zagon, ustavitev, ročna zahteva, neveljaven urnik).
 
+### Razporejanje in napoved zagona (naloga #12, 2026-09-29)
+
+Pred prevzemom gostitelj vpraša `JobQueue.Gate` (`src/PIM.Automation/JobQueue.cs`), ali posel ta
+tik sme začeti. Pravila po vrsti: predhodnik po verigi teče → pas SAOP (ročna zahteva ima
+prednost, en SAOP posel naenkrat, 120 s tišine) → **en težak posel naenkrat** (`JobCatalog.IsHeavy`:
+validacija, objava, izvoza za splet, datumi dobave, analitika, nočna uskladitev; čaka največ
+`HeavyMaxWaitSeconds` = 15 min) → **največ 3 posli hkrati** (nadzornik in razpošiljanje alarmov
+izvzeta). Ročne zahteve se v tiku pregledajo prve (`JobQueue.Order`).
+
+Stran Nadzor ista pravila simulira naprej (`JobQueue.Forecast`) z oceno trajanja iz
+`AutomationStore.GetDurationStatsAsync` (uspešni teki zadnjih 14 dni, `GROUP BY JobKey`, najmanj
+3 teki) in pove oceno začetka, trajanje in naslednji redni zagon (`JobQueue.Explain`). Brez
+migracije: vse se izračuna iz `ops.JobDefinition` in `ops.JobRun`.
+
+Omejitve: gostitelj ne ve za izvoze v Excel v intranetu (`HeavyWorkGate` je v drugem procesu) —
+vprašanje za lastnika je na nalogi #17. Ocena je natančna na tik (15 s) in ob malo tekih groba.
+Stari binar gostitelja teže poslov ne pozna, dokler ga skrbnik ne zažene znova.
+
+Dokaz: `tests\PIM.F10.IntranetLogicTests\JobQueueChecks.cs` (vrata, zasedeni pas SAOP, predhodnik,
+meja, brez zgodovine, Nadzor ne rdeč ob čakanju) in F11 (ocena trajanja nad bazo).
+
 ---
 
 ## 5. Nadzor
@@ -180,7 +201,7 @@ ob druge workerje; nastavitve bere iz `appsettings.Local.json` ob intranetu, ist
 ```
 
 Nastavitve (`appsettings.json` ob gostitelju ali `appsettings.Local.json`): `Automation:TickSeconds`
-(15), `LeaseSeconds` (90), `MaxConcurrentJobs` (3), `StaleMinutes` (10), `RepositoryRoot`,
+(15), `LeaseSeconds` (90), `MaxConcurrentJobs` (3, `JobQueue.MaxConcurrentJobs`), `StaleMinutes` (10), `RepositoryRoot`,
 `PublishedWorkersRoot`, `LogRoot`; `Pim:TimeZone`. Dnevnik gostitelja:
 `<LOG_ROOT>\gostitelj\gostitelj-<datum>.log`.
 
