@@ -1,0 +1,20 @@
+/* #9: povzetek preverjanja — trije števci in pojasnilo, kako posel šteje pokvarjeno sliko. */
+.check-summary { align-items: stretch; display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; margin-bottom: 1rem; padding: 1rem 1.25rem; }
+.check-stat { color: var(--pim-text-strong); display: flex; flex-direction: column; gap: .15rem; min-width: 11rem; text-decoration: none; }
+.check-stat strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.check-stat span { color: var(--pim-text-muted); font-size: .8rem; }
+.check-stat.bad strong { color: var(--pim-bad-text); }
+a.check-stat:hover span, a.check-stat:focus-visible span { text-decoration: underline; }
+a.check-stat:focus-visible { border-radius: var(--pim-radius-xs); outline: 2px solid var(--pim-primary); outline-offset: 3px; }
+.check-note { color: var(--pim-text-soft); flex: 1 1 22rem; font-size: .8rem; line-height: 1.45; margin: 0; }
+
+.pim-pill .dot.neutral { background: var(--pim-neutral-text); }
+
+.check-url { max-width: 34rem; overflow-wrap: anywhere; }
+.check-url a { color: var(--pim-accent-link); }
+.check-blocked { color: var(--pim-bad-text); font-weight: 600; }
+.numeric { font-variant-numeric: tabular-nums; text-align: right; }
+.nowrap { white-space: nowrap; }
+
+.check-export { background: var(--pim-info-bg); border: 1px solid var(--pim-info-border); border-radius: var(--pim-radius-sm); color: var(--pim-text-strong); font-size: .85rem; margin: 0 0 1rem; padding: .6rem .9rem; }
+.check-export.failed { background: var(--pim-bad-bg); border-color: var(--pim-bad-border); color: var(--pim-bad-strong); }

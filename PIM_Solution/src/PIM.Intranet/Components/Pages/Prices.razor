@@ -177,7 +177,7 @@
         {
           <div class="price-bulk-preview" role="status" aria-live="polite">
             <p class="price-bulk-summary">
-              <strong>@preview.Rows.Count.ToString("N0")</strong> cen se spremeni
+              Spremeni se: <strong>@Cene(preview.Rows.Count)</strong>
               @if (preview.Organizations.Count > 0) { <span>(@string.Join(", ", preview.Organizations))</span> }
               · @preview.UnchangedRows.ToString("N0") enakih · @preview.Problems.Count.ToString("N0") preskočenih
               @if (BigChanges > 0) { <span> · <strong class="warn-text">@BigChanges.ToString("N0") za več kot 25 %</strong></span> }
@@ -220,16 +220,16 @@
               @if (!BulkConfirming)
               {
                 <div class="filter-actions">
-                  <button type="button" class="primary-button" disabled="@Busy" @onclick="() => BulkConfirming = true">Uvrsti @preview.Rows.Count.ToString("N0") cen v vrsto za SAOP …</button>
+                  <button type="button" class="primary-button" disabled="@Busy" @onclick="() => BulkConfirming = true">Uvrsti @CeneTozilnik(preview.Rows.Count) v vrsto za SAOP …</button>
                 </div>
               }
               else
               {
                 <div class="price-bulk-confirm" role="alertdialog" aria-labelledby="bulk-confirm-text">
                   <p id="bulk-confirm-text">
-                    Uvrstiti <strong>@preview.Rows.Count.ToString("N0") cen</strong> v ceniku <strong>@BulkList</strong>
+                    Uvrstiti <strong>@CeneTozilnik(preview.Rows.Count)</strong> v ceniku <strong>@BulkList</strong>
                     (@string.Join(", ", preview.Organizations)) v vrsto za SAOP? Nič ne odide brez odobritve na zavihku »V SAOP«.
-                    @if (BigChanges > 0) { <strong class="warn-text"> Pozor: @BigChanges.ToString("N0") cen se spremeni za več kot 25 %.</strong> }
+                    @if (BigChanges > 0) { <strong class="warn-text"> Pozor: za več kot 25 % se spremeni: @Cene(BigChanges).</strong> }
                   </p>
                   <div class="filter-actions">
                     <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyBulkAsync">@(Busy ? "Uvrščam …" : "Da, uvrsti v vrsto")</button>
@@ -371,7 +371,7 @@ else if (Tab == "ceniki")
         <option value="">Vsa podjetja</option>
         @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
       </select>
-      <span class="result-count" role="status">@Lists.Count.ToString("N0") cenikov</span>
+      <span class="result-count" role="status">@PimFormat.Count(Lists.Count, "cenik", "cenika", "ceniki", "cenikov")</span>
       <AuthorizeView Policy="@PimPolicies.SaopWrite">
         <div class="toolbar-actions">
           <button type="button" class="primary-button" aria-expanded="@NewListOpen.ToString().ToLowerInvariant()" @onclick="ToggleNewList">Nov cenik</button>
@@ -444,7 +444,7 @@ else if (Tab == "ceniki")
                 @if (list.QueueStatus is { } status) { <PimChip Text="@("cenik: " + PriceService.QueueLabel(status))" Tone="@(PriceService.QueueTone(status) ?? "warn")" /> }
                 else if (!list.InSaop) { <PimChip Text="ni v SAOP" Tone="warn" /> }
                 else { <PimChip Text="@(list.IsActive ? "aktiven" : "neaktiven")" Tone="@(list.IsActive ? "good" : null)" /> }
-                @if (list.QueuedPrices > 0) { <span class="queue-note warn">@list.QueuedPrices.ToString("N0") cen v vrsti</span> }
+                @if (list.QueuedPrices > 0) { <span class="queue-note warn">@Cene(list.QueuedPrices) v vrsti</span> }
               </td>
             </tr>
           }
@@ -466,7 +466,7 @@ else
         <option value="">Vsa podjetja</option>
         @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
       </select>
-      <span class="result-count" role="status">@Batches.Count.ToString("N0") serij</span>
+      <span class="result-count" role="status">@PimFormat.Count(Batches.Count, "serija", "seriji", "serije", "serij")</span>
       <div class="toolbar-actions">
         <button type="button" class="ghost-button" @onclick="LoadBatchesAsync">Osveži</button>
       </div>
@@ -567,6 +567,8 @@ else
   [SupplyParameterFromQuery(Name = "podjetje")] public string? QueryOrganization { get; set; }
   [SupplyParameterFromQuery(Name = "cenik")] public string? QueryPriceList { get; set; }
   [SupplyParameterFromQuery(Name = "zavihek")] public string? QueryTab { get; set; }
+  [SupplyParameterFromQuery(Name = "cenikov")] public string? QueryMinPriceLists { get; set; }
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? QueryQueue { get; set; }
 
   /// <summary>281: seznam cen, ki čakajo potrditev, se osveži po odobritvi.</summary>
   int SafeguardVersion;
@@ -661,7 +663,7 @@ else
       if (!string.IsNullOrWhiteSpace(Search)) filters.Add(new("search", $"Iskanje: {Search}"));
       if (OrganizationId is { } organization) filters.Add(new("organization", $"Podjetje: {OrganizationName(organization)}"));
       if (!string.IsNullOrWhiteSpace(PriceList)) filters.Add(new("list", $"Cenik: {PriceList}"));
-      if (MinPriceLists != "1") filters.Add(new("min", $"Vsaj {MinPriceLists} cenikov"));
+      if (MinPriceLists != "1") filters.Add(new("min", "Vsaj " + PimFormat.Count(int.TryParse(MinPriceLists, out var least) ? least : 1, "cenik", "cenika", "ceniki", "cenikov")));
       if (!string.IsNullOrWhiteSpace(Queue)) filters.Add(new("queue", "V vrsti za SAOP"));
       return filters;
     }
@@ -669,6 +671,9 @@ else
 
   protected override async Task OnInitializedAsync()
   {
+    // 96: predupodabljanje (brez povezave) ne bere baze — sicer se seznam cen naloži dvakrat
+    // (enkrat za HTML, enkrat za interaktivni krog). Do interaktivnosti stran kaže »Nalaganje«.
+    if (!RendererInfo.IsInteractive) { Loading = ListsLoading = BatchesLoading = true; return; }
     try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
     try
     {
@@ -676,13 +681,10 @@ else
       CanBulk = (await Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)).Succeeded;
     }
     catch { CanBulk = false; }
-    if (int.TryParse(QueryOrganization, out var requested) && Organizations.Any(row => row.OrganizationId == requested))
-      OrganizationText = requested.ToString();
-    Search = QueryProduct ?? "";
-    PriceList = QueryPriceList ?? "";
-    Tab = QueryTab is "ceniki" or "saop" ? QueryTab : "cene";
-    FiltersOpen = PriceList.Length > 0;
+    ReadUrl();
+    FiltersOpen = PriceList.Length > 0 || MinPriceLists != "1" || Queue.Length > 0;
     await Task.WhenAll(LoadAsync(), LoadListsAsync(), LoadBatchesAsync());
+    UrlRead = true;
     RefreshJobs();
     poll = new System.Threading.Timer(_ => InvokeAsync(PollAsync), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
   }
@@ -755,6 +757,7 @@ else
   {
     Tab = tab;
     Message = ActionError = null;
+    SyncUrl();
     if (tab == "saop") await LoadBatchesAsync();
     if (tab == "ceniki") await LoadListsAsync();
   }
@@ -785,10 +788,54 @@ else
   {
     PriceList = "";
     Skip = 0;
+    SyncUrl();
     await Task.WhenAll(LoadAsync(), LoadListsAsync(), LoadBatchesAsync());
   }
 
-  async Task ApplyAsync() { Skip = 0; await LoadAsync(); }
+  async Task ApplyAsync() { Skip = 0; SyncUrl(); await LoadAsync(); }
+
+  // 96: iskanje, filtri in zavihek v URL-ju — povezavo se da deliti, osvežitev ohrani filter,
+  // »Nazaj« v brskalniku vrne prejšnji filter (OnParametersSetAsync ga prebere in znova naloži).
+  bool UrlRead;
+
+  string UrlState => string.Join("|", OrganizationText, Blank(Search), Blank(PriceList), MinPriceLists, Blank(Queue), Tab);
+
+  void ReadUrl()
+  {
+    OrganizationText = int.TryParse(QueryOrganization, out var requested) && Organizations.Any(row => row.OrganizationId == requested)
+      ? requested.ToString() : "";
+    Search = QueryProduct ?? "";
+    PriceList = QueryPriceList ?? "";
+    MinPriceLists = QueryMinPriceLists is "2" or "4" or "8" ? QueryMinPriceLists : "1";
+    Queue = QueryQueue == "QUEUED" ? QueryQueue : "";
+    Tab = QueryTab is "ceniki" or "saop" ? QueryTab : "cene";
+  }
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (!UrlRead) return;
+    var before = UrlState;
+    var organizationBefore = OrganizationText;
+    ReadUrl();
+    if (UrlState == before) return;
+    Skip = 0;
+    if (OrganizationText != organizationBefore) await Task.WhenAll(LoadAsync(), LoadListsAsync(), LoadBatchesAsync());
+    else await LoadAsync();
+  }
+
+  void SyncUrl()
+  {
+    var uri = Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+      ["izdelek"] = Blank(Search),
+      ["podjetje"] = OrganizationId,
+      ["cenik"] = Blank(PriceList),
+      ["cenikov"] = MinPriceLists == "1" ? null : MinPriceLists,
+      ["vrsta"] = Blank(Queue),
+      ["zavihek"] = Tab == "cene" ? null : Tab,
+    });
+    if (!string.Equals(uri, Navigation.Uri, StringComparison.Ordinal)) Navigation.NavigateTo(uri);
+  }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
   async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
 
@@ -892,7 +939,7 @@ else
 
   string SelectionLabel => Selection.AllMatching
     ? $"vseh {Selection.Count:N0} izdelkov, ki ustrezajo filtru"
-    : $"{Selection.Count:N0} izbranih izdelkov";
+    : PimFormat.Count(Selection.Count, "izbrani izdelek", "izbrana izdelka", "izbrani izdelki", "izbranih izdelkov");
 
   int BigChanges => BulkPreview?.Rows.Count(row => row.ChangePercent is { } percent && Math.Abs(percent) > 25) ?? 0;
 
@@ -983,13 +1030,13 @@ else
       var outcome = await Workbook.ApplyAsync(preview, actor, null, source: "BULK", title: title);
       var scope = BulkPlannedForFilter
         ? "Vse po filtru" + (Query.ToQueryString() is { Length: > 0 } filter ? ": " + Uri.UnescapeDataString(filter) : "")
-        : $"{Selection.Count:N0} izbranih izdelkov";
+        : PimFormat.Count(Selection.Count, "izbrani izdelek", "izbrana izdelka", "izbrani izdelki", "izbranih izdelkov");
       var batches = outcome.Batches.Where(batch => batch.BatchId is not null).Select(batch => batch.BatchId!.Value).ToArray();
       // Zgodovina (prej/potem) za povratek na /uvozi; če se ne zapiše, to povemo — serija v vrsti ostane.
       BulkHistoryId = await History.RecordAsync(ImportKinds.Prices, title, scope, actor, preview.Rows.Count, outcome.Queued, batches,
         outcome.Rejected.Select(row => $"{row.PriceList} {row.ItemId}: {row.Reason}"), null, ImportHistoryService.FromPrices(preview));
 
-      var parts = new List<string> { $"{outcome.Queued:N0} cen čaka odobritev na zavihku »V SAOP«" + (batches.Length > 0 ? $" (serija {string.Join(", ", batches)})" : "") };
+      var parts = new List<string> { $"{Cene(outcome.Queued)} {Oblika(outcome.Queued, "čaka", "čakata", "čakajo", "čaka")} odobritev na zavihku »V SAOP«" + (batches.Length > 0 ? $" (serija {string.Join(", ", batches)})" : "") };
       if (outcome.Duplicates > 0) parts.Add($"{outcome.Duplicates:N0} je bilo v vrsti že enakih");
       if (outcome.Unchanged > 0) parts.Add($"{outcome.Unchanged:N0} enakih kot v SAOP");
       if (outcome.Rejected.Count > 0) parts.Add($"{outcome.Rejected.Count:N0} zavrnjenih: " + string.Join("; ", outcome.Rejected.Take(3).Select(row => $"{row.ItemId} — {row.Reason}")));
@@ -1041,7 +1088,7 @@ else
         {
           var outcome = await PriceData.EnqueueAsync(organizationId, changes, actor, "BULK", $"Cenik {code} iz {NewSource} × {factor:0.####}", batchId);
           batchId ??= outcome.BatchId;
-          text += $", z {outcome.Queued:N0} cenami iz {NewSource} × {factor:0.####}" + (outcome.Rejected > 0 ? $" ({outcome.Rejected:N0} zavrnjenih)" : "");
+          text += $", z {PimFormat.Count(outcome.Queued, "ceno", "cenama", "cenami", "cenami")} iz {NewSource} × {factor:0.####}" + (outcome.Rejected > 0 ? $" ({outcome.Rejected:N0} zavrnjenih)" : "");
         }
       }
       Message = text + $" (serija {batchId}) na zavihku »V SAOP«.";
@@ -1087,8 +1134,8 @@ else
     {
       var (approved, job, notConfigured) = await PriceData.ApproveAndSendAsync(batch.BatchId, batch.OrganizationId, await ActorAsync());
       Message = notConfigured
-        ? $"Odobrenih {approved:N0} sprememb. Poverilnice SAOP (razdelek »Saop« ali PIM_SAOP_*) niso nastavljene, zato ni bilo poslano nič — spremembe čakajo v vrsti."
-        : $"Odobrenih {approved:N0} sprememb; pošiljanje v SAOP teče v ozadju — najprej ceniki, nato cene.";
+        ? $"Odobreno: {Spremembe(approved)}. Poverilnice SAOP (razdelek »Saop« ali PIM_SAOP_*) niso nastavljene, zato ni bilo poslano nič — spremembe čakajo v vrsti."
+        : $"Odobreno: {Spremembe(approved)}; pošiljanje v SAOP teče v ozadju — najprej ceniki, nato cene.";
       RefreshJobs();
       await LoadBatchesAsync();
     }
@@ -1180,9 +1227,17 @@ else
 
   static string? Blank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
+  // 96: števila s pravo sklanjatvijo (»1 cena, 2 ceni, 3 cene, 5 cen«); tožilnik za »Uvrsti 1 ceno«.
+  static string Cene(long count) => PimFormat.Count(count, "cena", "ceni", "cene", "cen");
+  static string CeneTozilnik(long count) => PimFormat.Count(count, "ceno", "ceni", "cene", "cen");
+  static string Izdelki(long count) => PimFormat.Count(count, "izdelek", "izdelka", "izdelki", "izdelkov");
+  static string Spremembe(long count) => PimFormat.Count(count, "sprememba", "spremembi", "spremembe", "sprememb");
+  static string Oblika(long count, string one, string two, string few, string many) =>
+    (Math.Abs(count) % 100) switch { 1 => one, 2 => two, 3 or 4 => few, _ => many };
+
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Total:N0} izdelkov · {Lines:N0} cen";
+    : $"{Izdelki(Total)} · {Cene(Lines)}";
 
   public void Dispose() => poll?.Dispose();
 }
