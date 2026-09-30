@@ -4,6 +4,7 @@
 @using PIM.Intranet.Services
 @inject CategoryTreeService Tree
 @inject AuthenticationStateProvider Authentication
+@inject PimWriteGuard Guard
 
 @* Uporabnik 2026-09-08: "nova stran pod nastavitve ... da povemo po kategorijah ali od svetil ali
    od videlektra koliko atributov in katerih ima katera kategorija in na podlagi tega lahko
@@ -16,6 +17,14 @@
          Subtitle="Za vsako drevo (svetila, videlektro) pove, koliko in katere atribute ima katera kategorija. Nabor se deduje na podkategorije; določa, kateri atributi so na kartici izdelka, kaj zahteva spletna validacija in kateri atributi gredo v spletni izvoz."
          Crumbs="Crumbs" />
 
+@* 77: stran odpre tudi komerciala, zapis pa varuje servis (CategoryTreeService, politika WritePolicy).
+   Kdor zapisa nima, vidi nabor brez gumbov za urejanje, namesto da klik pade na pravici. *@
+@if (!CanWrite && !Loading)
+{
+  <p class="message-state info-message" role="status">
+    Samo za branje: nabore atributov lahko spreminja skrbnik ali urednik kataloga. Nabor posamezne kategorije si ogledaš z gumbom »Poglej«.
+  </p>
+}
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 
@@ -124,7 +133,7 @@
             </td>
             <td class="table-actions">
               <button type="button" class="@(Editing == row.CategoryCode ? "primary-button" : "secondary-button")" disabled="@Busy"
-                      @onclick="() => ToggleEditorAsync(row)">@(Editing == row.CategoryCode ? "Zapri" : "Uredi")</button>
+                      @onclick="() => ToggleEditorAsync(row)">@(Editing == row.CategoryCode ? "Zapri" : CanWrite ? "Uredi" : "Poglej")</button>
             </td>
           </tr>
 
@@ -136,6 +145,7 @@
                   <div class="editor-head">
                     <span class="editor-origin">Nabor za: <strong>@row.CategoryName</strong></span>
                     <span class="editor-path">@row.CategoryPath</span>
+                    @if (!CanWrite) { <PimChip Text="samo za branje" Tone="warn" Prefix="Način: " /> }
                     <span class="editor-note">Obvezen atribut blokira splet, priporočen opozori, izločen razveljavi podedovanega. Velja tudi za podkategorije; najbližja vrstica zmaga.</span>
                   </div>
 
@@ -146,7 +156,7 @@
                       <div class="editor-block">
                         <h3>Trenutni nabor (@EditorSet.Rows.Count(setRow => setRow.Level != "EXCLUDED"))@(EditorSet.Rows.Any(setRow => setRow.Level == "EXCLUDED") ? $" · izločenih {EditorSet.Rows.Count(setRow => setRow.Level == "EXCLUDED")}" : "")</h3>
 
-                        @if (EditorSet.Rows.Count > 0)
+                        @if (CanWrite && EditorSet.Rows.Count > 0)
                         {
                           @* 2026-09-29 uporabnik: "omogoci da vec na enkrat odstranim ... tiste atribute ki v tej
                              kategoriji nimajo vrednosti". Izbira + mnozicna dejanja; podedovane vrstice se tu izlocijo
@@ -175,7 +185,7 @@
                           </div>
                         }
 
-                        @if (Pending is not null)
+                        @if (CanWrite && Pending is not null)
                         {
                           <div class="confirm-panel" role="alertdialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
                             <p id="confirm-title"><strong>@Pending.Title</strong></p>
@@ -193,7 +203,7 @@
                           </div>
                         }
 
-                        @if (Undo is not null && Pending is null)
+                        @if (CanWrite && Undo is not null && Pending is null)
                         {
                           <div class="undo-panel" role="status">
                             <span>@Undo.Label</span>
@@ -204,35 +214,51 @@
                         <table class="attribute-set">
                           <caption class="visually-hidden">Učinkovit nabor atributov kategorije @row.CategoryName</caption>
                           <thead><tr>
-                            <th scope="col" class="check-cell">
-                              <input type="checkbox" aria-label="Označi vse atribute nabora" checked="@(EditorSet.Rows.Count > 0 && SelectedRows.Count == EditorSet.Rows.Count)"
-                                     disabled="@(EditorSet.Rows.Count == 0)" @onchange="args => SelectAll(args.Value is true)" />
-                            </th>
-                            <th scope="col">Atribut</th><th scope="col">Raven</th><th scope="col">Določen na</th><th scope="col" class="numeric">Ima vrednost</th><th scope="col"><span class="visually-hidden">Dejanje</span></th>
+                            @if (CanWrite)
+                            {
+                              <th scope="col" class="check-cell">
+                                <input type="checkbox" aria-label="Označi vse atribute nabora" checked="@(EditorSet.Rows.Count > 0 && SelectedRows.Count == EditorSet.Rows.Count)"
+                                       disabled="@(EditorSet.Rows.Count == 0)" @onchange="args => SelectAll(args.Value is true)" />
+                              </th>
+                            }
+                            <th scope="col">Atribut</th><th scope="col">Raven</th><th scope="col">Določen na</th><th scope="col" class="numeric">Ima vrednost</th>
+                            @if (CanWrite) { <th scope="col"><span class="visually-hidden">Dejanje</span></th> }
                           </tr></thead>
                           <tbody>
                             @if (EditorSet.Rows.Count == 0)
                             {
-                              <tr><td colspan="6" class="muted">Nabor še ni določen. Dodaj atribute iz registra, jih prilepi ali kopiraj nabor druge kategorije.</td></tr>
+                              <tr><td colspan="@(CanWrite ? 6 : 4)" class="muted">@(CanWrite ? "Nabor še ni določen. Dodaj atribute iz registra, jih prilepi ali kopiraj nabor druge kategorije." : "Nabor še ni določen.")</td></tr>
                             }
                             @foreach (var setRow in EditorSet.Rows)
                             {
                               <tr class="@(setRow.IsInherited ? "is-inherited" : null) @(setRow.Level == "EXCLUDED" ? "is-excluded" : null) @(Selected.Contains(setRow.AttributeCode) ? "is-selected" : null)">
-                                <td class="check-cell">
-                                  <input type="checkbox" aria-label="@($"Označi {setRow.AttributeName}")" checked="@Selected.Contains(setRow.AttributeCode)"
-                                         @onchange="args => ToggleSelected(setRow.AttributeCode, args.Value)" />
-                                </td>
+                                @if (CanWrite)
+                                {
+                                  <td class="check-cell">
+                                    <input type="checkbox" aria-label="@($"Označi {setRow.AttributeName}")" checked="@Selected.Contains(setRow.AttributeCode)"
+                                           @onchange="args => ToggleSelected(setRow.AttributeCode, args.Value)" />
+                                  </td>
+                                }
                                 <td>@setRow.AttributeName <span class="code-value">@setRow.AttributeCode</span></td>
                                 <td>
-                                  <select class="filter-select" value="@setRow.Level" disabled="@Busy" aria-label="@($"Raven za {setRow.AttributeName}")"
-                                          @onchange="args => SetLevelAsync(row, setRow.AttributeCode, args.Value?.ToString())">
-                                    <option value="REQUIRED">obvezen</option>
-                                    <option value="RECOMMENDED">priporočen</option>
-                                    <option value="EXCLUDED">izločen</option>
-                                  </select>
+                                  @if (CanWrite)
+                                  {
+                                    <select class="filter-select" value="@setRow.Level" disabled="@Busy" aria-label="@($"Raven za {setRow.AttributeName}")"
+                                            @onchange="args => SetLevelAsync(row, setRow.AttributeCode, args.Value?.ToString())">
+                                      <option value="REQUIRED">obvezen</option>
+                                      <option value="RECOMMENDED">priporočen</option>
+                                      <option value="EXCLUDED">izločen</option>
+                                    </select>
+                                  }
+                                  else
+                                  {
+                                    <PimChip Text="@LevelLabel(setRow.Level)" Tone="@LevelTone(setRow.Level)" Prefix="Raven: " />
+                                  }
                                 </td>
                                 <td>@(setRow.IsInherited ? $"podedovan: {setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}" : "tu")</td>
                                 <td class="numeric @(setRow.ProductsWithValue == 0 ? "zero-value" : null)" title="Izdelki v tej kategoriji in pod njo, ki atribut imajo / vsi">@setRow.ProductsWithValue.ToString("N0") / @setRow.ProductCount.ToString("N0")</td>
+                                @if (CanWrite)
+                                {
                                 <td>
                                   @if (!setRow.IsInherited)
                                   {
@@ -245,6 +271,7 @@
                                             title="@($"Atribut je določen na »{setRow.DefinedAtCategoryName ?? setRow.DefinedAtCategoryCode}«. Tu se izloči, tam ostane. Za odstranitev povsod ga označi in izberi »Odstrani pri izvoru«.")">Izloči tu</button>
                                   }
                                 </td>
+                                }
                               </tr>
                             }
                           </tbody>
@@ -260,7 +287,10 @@
                                 <li>
                                   <span>@suggestion.AttributeName</span>
                                   <span class="muted">@suggestion.ProductsWithValue.ToString("N0") izdelkov</span>
-                                  @if (suggestion.InRegister)
+                                  @if (!CanWrite)
+                                  {
+                                  }
+                                  else if (suggestion.InRegister)
                                   {
                                     <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "RECOMMENDED")'>priporočen</button>
                                     <button type="button" class="small-action" disabled="@Busy" @onclick='() => SetLevelAsync(row, suggestion.AttributeCode, "REQUIRED")'>obvezen</button>
@@ -272,7 +302,7 @@
                                 </li>
                               }
                             </ul>
-                            @if (EditorSet.Suggestions.Any(suggestion => suggestion.InRegister))
+                            @if (CanWrite && EditorSet.Suggestions.Any(suggestion => suggestion.InRegister))
                             {
                               <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => AddAllSuggestionsAsync(row)">
                                 Dodaj vse iz registra kot priporočene (@EditorSet.Suggestions.Count(suggestion => suggestion.InRegister))
@@ -282,6 +312,8 @@
                         }
                       </div>
 
+                      @if (CanWrite)
+                      {
                       <div class="editor-block">
                         <h3>Dodaj iz registra</h3>
                         <label class="visually-hidden" for="pick-search">Išči atribut</label>
@@ -370,6 +402,7 @@
                           <button type="button" class="secondary-button" disabled="@(Busy || string.IsNullOrWhiteSpace(CopyCategory))" @onclick="() => CopyAsync(row)">Kopiraj nabor</button>
                         </div>
                       </div>
+                      }
                     </div>
                   }
                 </div>
@@ -405,6 +438,14 @@
   CategoryTreeService.OverviewView? Overview;
   IReadOnlyList<CategoryTreeService.AttributeOptionRow> AttributeOptions = [];
 
+  /// <summary>
+  /// Politika, s katero CategoryTreeService varuje zapise nabora (SaveAttributeSet*, CopyAttributeSet,
+  /// EnsureAttributeDefinition). Stran jo samo prebere, da ne ponuja gumbov, ki bi padli na pravici;
+  /// ko #100 komerciali odpre zapis z novo politiko, se zamenja tu in v servisu.
+  /// </summary>
+  const string WritePolicy = PimPolicies.CatalogWrite;
+
+  bool CanWrite;
   bool Loading = true;
   bool Busy;
   string? Error;
@@ -475,6 +516,7 @@
 
   protected override async Task OnInitializedAsync()
   {
+    CanWrite = await Guard.AllowsAsync(WritePolicy);
     try
     {
       Trees = await Tree.GetAttributeSetTreesAsync();
@@ -532,7 +574,7 @@
     CopyCategory = "";
     if (string.IsNullOrWhiteSpace(CopyTree)) CopyTree = TreeCode;
     await LoadEditorAsync(row);
-    await LoadCopySourcesAsync();
+    if (CanWrite) await LoadCopySourcesAsync();
   }
 
   async Task LoadEditorAsync(CategoryTreeService.OverviewRow row)
@@ -990,6 +1032,12 @@
     var state = await Authentication.GetAuthenticationStateAsync();
     return state.User.Identity?.Name ?? "neznan";
   }
+
+  /// <summary>Raven v nacinu samo za branje: obvezen blokira splet (rdec), priporocen opozori, izlocen je nevtralen.</summary>
+  static string? LevelTone(string level) => level switch
+  {
+    "REQUIRED" => "bad", "RECOMMENDED" => "warn", _ => null,
+  };
 
   static string LevelLabel(string level) => level switch
   {
