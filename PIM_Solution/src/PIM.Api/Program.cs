@@ -193,81 +193,32 @@ app.MapPost("/mcp", async (HttpContext context) =>
 {
   var client = (ApiClient)context.Items["client"]!;
   var runner = context.RequestServices.GetRequiredService<QueryRunner>();
-  JsonNode? message;
-  try { message = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted); }
-  catch (JsonException) { return Results.Json(RpcError(null, -32700, "Neveljaven JSON."), statusCode: 400); }
-
-  var id = message?["id"]?.DeepClone();
-  var method = message?["method"]?.GetValue<string>();
-  if (id is null) return Results.Accepted(); // obvestilo (npr. notifications/initialized)
-
-  switch (method)
-  {
-    case "initialize":
-      var requestedVersion = message?["params"]?["protocolVersion"]?.GetValue<string>();
-      return Results.Json(RpcResult(id, new JsonObject
-      {
-        ["protocolVersion"] = requestedVersion is "2025-03-26" or "2025-06-18" or "2024-11-05" ? requestedVersion : "2025-06-18",
-        ["capabilities"] = new JsonObject { ["tools"] = new JsonObject { ["listChanged"] = false } },
-        ["serverInfo"] = new JsonObject { ["name"] = "pim-api", ["version"] = Catalog.Version },
-        ["instructions"] = ApiDocs.Guide(BaseUrl(context.Request)),
-      }));
-    case "ping":
-      return Results.Json(RpcResult(id, new JsonObject()));
-    case "tools/list":
-      var tools = new JsonArray();
-      foreach (var endpoint in Catalog.Endpoints.Where(e => client.HasScope(e.Scope)))
-        tools.Add(new JsonObject
-        {
-          ["name"] = endpoint.Tool,
-          ["title"] = endpoint.Summary,
-          ["description"] = endpoint.Description,
-          ["inputSchema"] = ApiDocs.InputSchema(endpoint),
-          ["annotations"] = new JsonObject { ["readOnlyHint"] = true, ["openWorldHint"] = false },
-        });
-      return Results.Json(RpcResult(id, new JsonObject { ["tools"] = tools }));
-    case "tools/call":
-      var name = message?["params"]?["name"]?.GetValue<string>() ?? "";
-      var endpointForTool = Catalog.ByTool(name);
-      if (endpointForTool is null) return Results.Json(RpcError(id, -32602, $"Neznano orodje: {name}."));
-      var arguments = message?["params"]?["arguments"] as JsonObject ?? new JsonObject();
-      var input = arguments.ToDictionary(pair => pair.Key, pair => pair.Value switch
-      {
-        null => null,
-        JsonValue value when value.TryGetValue<string>(out var text) => text,
-        var other => other.ToJsonString(),
-      }, StringComparer.OrdinalIgnoreCase);
+  var reply = await McpProtocol.HandleAsync(context.Request.Body, client.HasScope, ApiDocs.Guide(BaseUrl(context.Request)),
+    async (endpoint, input, cancellationToken) =>
+    {
       try
       {
-        var result = await runner.RunAsync(endpointForTool, input, client, context.RequestAborted);
+        var result = await runner.RunAsync(endpoint, input, client, cancellationToken);
         context.Items["org"] = result.OrganizationId;
         context.Items["rows"] = result.Rows.Count;
-        return Results.Json(RpcResult(id, ToolText(JsonSerializer.Serialize(result.Body, json), false)));
+        return new McpToolResult(JsonSerializer.Serialize(result.Body, json), false);
       }
       catch (ApiException exception)
       {
-        var text = exception.Message + (exception.Details.Count > 0 ? " " + string.Join(" ", exception.Details) : "");
-        return Results.Json(RpcResult(id, ToolText(text, true)));
+        return new McpToolResult(exception.Message + (exception.Details.Count > 0 ? " " + string.Join(" ", exception.Details) : ""), true);
       }
       catch (SqlException exception)
       {
-        app.Logger.LogError(exception, "Orodje {Tool} ni uspelo.", name);
-        return Results.Json(RpcResult(id, ToolText("Branje iz baze ni uspelo.", true)));
+        app.Logger.LogError(exception, "Orodje {Tool} ni uspelo.", endpoint.Tool);
+        return new McpToolResult("Branje iz baze ni uspelo.", true);
       }
-    default:
-      return Results.Json(RpcError(id, -32601, $"Metoda ni podprta: {method}."));
-  }
+    }, context.RequestAborted);
+  return reply.Body is null ? Results.StatusCode(reply.Status) : Results.Json(reply.Body, statusCode: reply.Status);
 });
 app.MapGet("/mcp", () => Results.StatusCode(StatusCodes.Status405MethodNotAllowed));
 
 app.Run();
 return 0;
-
-static JsonObject RpcResult(JsonNode id, JsonNode result) => new() { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result };
-static JsonObject RpcError(JsonNode? id, int code, string text) => new()
-  { ["jsonrpc"] = "2.0", ["id"] = id?.DeepClone(), ["error"] = new JsonObject { ["code"] = code, ["message"] = text } };
-static JsonObject ToolText(string text, bool isError) => new()
-  { ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }), ["isError"] = isError };
 
 static IResult Error(int status, string message, IReadOnlyList<string>? details = null) =>
   Results.Json(new { status, error = message, details = details ?? [] }, statusCode: status);
