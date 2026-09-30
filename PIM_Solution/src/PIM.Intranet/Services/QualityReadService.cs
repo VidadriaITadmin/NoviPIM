@@ -354,7 +354,12 @@ public sealed class QualityReadService(IConfiguration configuration)
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand($"""
       SET NOCOUNT ON;
-      CREATE TABLE #Page (ProductId bigint NOT NULL PRIMARY KEY, ItemID nvarchar(100) NOT NULL);
+      /* 321: bralni pregled ne caka na zaklepe validacije (baza nima READ_COMMITTED_SNAPSHOT);
+         nastavitvi se na koncu vrneta, ker gre povezava nazaj v bazen. */
+      SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+      SET LOCK_TIMEOUT 20000;
+      CREATE TABLE #Match (ProductId bigint NOT NULL PRIMARY KEY, ItemID nvarchar(100) COLLATE DATABASE_DEFAULT NOT NULL);
+      CREATE TABLE #Page (ProductId bigint NOT NULL PRIMARY KEY, ItemID nvarchar(100) COLLATE DATABASE_DEFAULT NOT NULL);
       /* 177: vecnivojski obseg kategorije, isto pravilo kot v intranet.GetQualityIssues. */
       CREATE TABLE #Scope (ProductId bigint NOT NULL PRIMARY KEY);
       IF @CategoryCode IS NOT NULL
@@ -374,7 +379,8 @@ public sealed class QualityReadService(IConfiguration configuration)
         INNER JOIN canon.ProductCategory productCategory ON productCategory.WebSite = site.WebSiteCode AND productCategory.CategoryPath = translated.CategoryPath;
       END;
 
-      INSERT #Page (ProductId, ItemID)
+      /* 321: ujemajoci izdelki enkrat; stran in TotalCount iz #Match (prej dvakratni EXISTS). */
+      INSERT #Match (ProductId, ItemID)
       SELECT product.ProductId, product.ItemID
       FROM canon.Product product
       WHERE product.OrganizationId = @OrganizationId
@@ -391,7 +397,12 @@ public sealed class QualityReadService(IConfiguration configuration)
             AND (@Severity IS NULL OR COALESCE(requirement.Severity, N'ERROR') = @Severity)
             AND (@FieldCode IS NULL OR requirement.FieldCode = @FieldCode)
         )
-      ORDER BY product.ItemID OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY OPTION (RECOMPILE);
+      OPTION (RECOMPILE);
+      DECLARE @TotalCount bigint = @@ROWCOUNT;
+
+      INSERT #Page (ProductId, ItemID)
+      SELECT ProductId, ItemID FROM #Match
+      ORDER BY ItemID OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
 
       SELECT product.ProductId, product.ItemID, product.EAN,
         Name = COALESCE(webTitle.Value, erpTitle.Value, product.ItemID),
@@ -433,24 +444,12 @@ public sealed class QualityReadService(IConfiguration configuration)
         AND (@FieldCode IS NULL OR requirement.FieldCode = @FieldCode)
       ORDER BY pageRow.ItemID, profile.ProfileCode, requirement.FieldCode;
 
-      SELECT COUNT_BIG(*)
-      FROM canon.Product product
-      WHERE product.OrganizationId = @OrganizationId
-        AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN LIKE N'%' + @Search + N'%'
-          OR EXISTS (SELECT 1 FROM canon.ProductText textValue WHERE textValue.ProductId = product.ProductId AND textValue.Value LIKE N'%' + @Search + N'%'))
-        AND (@CategoryCode IS NULL OR EXISTS (SELECT 1 FROM #Scope scope WHERE scope.ProductId = product.ProductId))
-        AND EXISTS
-        (
-          SELECT 1 FROM val.ProductIssue issue
-          INNER JOIN val.ValidationProfile profile ON profile.ValidationProfileId = issue.ValidationProfileId
-          LEFT JOIN val.FieldRequirement requirement ON requirement.FieldRequirementId = issue.FieldRequirementId
-          WHERE issue.ProductId = product.ProductId AND issue.IsActive = 1
-            AND profile.ProfileCode IN ({codeParameters})
-            AND (@Severity IS NULL OR COALESCE(requirement.Severity, N'ERROR') = @Severity)
-            AND (@FieldCode IS NULL OR requirement.FieldCode = @FieldCode)
-        ) OPTION (RECOMPILE);
+      SELECT TotalCount = @TotalCount;
       DROP TABLE #Page;
+      DROP TABLE #Match;
       DROP TABLE #Scope;
+      SET LOCK_TIMEOUT -1;
+      SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
       """, connection) { CommandTimeout = 60 };
     command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = filter.OrganizationId;
     command.Parameters.Add("@Skip", SqlDbType.Int).Value = filter.Skip;
