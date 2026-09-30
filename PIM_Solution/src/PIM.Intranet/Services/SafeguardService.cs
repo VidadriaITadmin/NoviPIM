@@ -366,7 +366,9 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     try
     {
       await using var connection = await OpenAsync(cancellationToken);
-      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
+      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 15 };
+      // 46: pasica na strani ne sme čakati minute (na mirni bazi ~1 s); ob izteku pasica pokaže prazno —
+      // pošiljanje je vseeno varno, ker zadržana sprememba brez potrditve ne gre v SAOP.
       command.Parameters.Add("@OutboundBatchId", SqlDbType.BigInt).Value = (object?)outboundBatchId ?? DBNull.Value;
       command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
       command.Parameters.Add("@EntityKeysJson", SqlDbType.NVarChar, -1).Value = itemIds is null ? DBNull.Value : JsonSerializer.Serialize(itemIds);
