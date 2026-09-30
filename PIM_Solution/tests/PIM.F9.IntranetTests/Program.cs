@@ -24,6 +24,13 @@ foreach (var method in new[] { "RequestRunAsync(", "RequestCancelAsync(", "SetJo
   var body = service.Substring(at, service.IndexOf('{', at) + 60 - at);
   Assert(body.Contains("await RequireAdminAsync();", StringComparison.Ordinal), "metoda ne kliče RequireAdminAsync na začetku: " + method);
 }
+// Naloga #69: umik oddane zahteve za zagon je upravljalno dejanje kot zagon — enaka zapora na testnem intranetu.
+{
+  var at = service.IndexOf("public async Task<DateTime?> CancelRunRequestAsync(", StringComparison.Ordinal);
+  Assert(at > 0, "upravljalna metoda manjka: CancelRunRequestAsync(");
+  var body = service.Substring(at, service.IndexOf('{', at) + 60 - at);
+  Assert(body.Contains("await RequireAdminAsync();", StringComparison.Ordinal), "metoda ne kliče RequireAdminAsync na začetku: CancelRunRequestAsync(");
+}
 // Naloga #73: potrditev varovalk v bazi odda zahtevo za zagon izvoza (ops.RequestJobRun) oz. spusti SAOP sporočila;
 // na testnem intranetu mora biti zavrnjena v servisu PRED klicem baze, stran pa pokaže sporočilo zapore.
 var safeguards = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Services/SafeguardService.cs"));
