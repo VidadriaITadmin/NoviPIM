@@ -39,6 +39,10 @@ var css = File.ReadAllText(cssPath);
 var service = File.ReadAllText(servicePath);
 var labels = File.ReadAllText(labelsPath);
 
+// #76: pasica »V SAOP čaka potrditev« pokaže in potrdi samo podjetje, v katerem stran dela.
+Assert(markup.Contains("<SaopSafeguardBanner Version=\"SafeguardVersion\" OrganizationId=\"OrganizationId\" />", StringComparison.Ordinal),
+  "Pasica na /saop/artikli mora dobiti podjetje strani, sicer meša spremembe vseh podjetij.");
+
 // --- 1. Pot, zascita, nacin izrisa ----------------------------------------
 Assert(markup.Contains("@page \"/saop/artikli\"", StringComparison.Ordinal), "Pot strani mora biti /saop/artikli.");
 Assert(markup.Contains("@attribute [Authorize(Roles = \"ADMIN,CATALOG_EDITOR\")]", StringComparison.Ordinal),
