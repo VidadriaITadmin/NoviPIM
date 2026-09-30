@@ -2461,3 +2461,16 @@ Stran Izvozi (`/outbound`) se je odpirala 50-60 s, ker je pasica z zadržanimi s
 - Intranet (ni migracija): pasica bere seznam šele po prvem izrisu strani, meja branja 15 s.
 
 **Objekti:** `ops.SaopHeldMessage`, `intranet.GetSaopHeldMessages`. **Ročni korak:** ne. **SAOP:** nič (samo branje). **Povratek:** ponovno izvedi definiciji pogleda in procedure iz 281. **PRD:** lahko skupaj z intranetom.
+## Hitrejši predogled spletnega izvoza (migracija 315_HitrejsiPredogledIzvoza, 2026-09-30, naloga #80)
+
+Predogled `/splet/izvoz` (`intranet.GetWebExportRows` → `out.GetExportRows`, profil MAGENTO_PRODUCTS, 200 vrstic) je trajal 8–55 s. Meritev na DEV (`sys.dm_exec_query_stats`, `sys.dm_os_waiting_tasks`): strežnik ima `cost threshold for parallelism` = 5 in MAXDOP 10, zato so majhni stavki nad začasnimi tabelami tekli z 10 nitmi; porabili so 0,1–0,5 s CPU, čakali pa do 46 s (CXPACKET/CXCONSUMER, LATCH_EX NESTING_TRANSACTION_FULL), kadar je bil strežnik obremenjen. Poleg tega je osnovni `INSERT #Value` za 200 vrstic trikrat razvrstil vse cene `pim.ProductPrice`, štetje in stran pa sta filter (z iskanjem LIKE po besedilih) izvedla dvakrat.
+
+Popravek bere živo definicijo `out.GetExportRows` (kot 304/305), preveri vsa sidra (vsako natanko enkrat) in spremeni samo vejo PIM_PRODUCT in skupni rep:
+- filter izdelkov se izvede enkrat v `#Match80` (ROW_NUMBER po `product.ItemID`); `@TotalCount` in stran (`OFFSET/FETCH`) prideta iz nje. Migracija pred zamenjavo preveri, da sta bila filtra štetja in strani besedilno enaka;
+- cene (B2B, B2C, katerakoli) v osnovnem `INSERT #Value` se razvrščajo samo za izdelke strani (`PARTITION BY PimProductId`, izid enak);
+- `#ValidPath291` vsebuje samo poti, ki jih imajo izdelki strani (tabela se bere samo s temi potmi);
+- `OPTION (MAXDOP 1)` na `#SpecialAll274`, osnovnem `INSERT #Value`, `#Attribute`, `#UnitValue292` in `#GroupDiscount` (stranke).
+
+Isto proceduro uporablja nočni `katalog.csv` (`@Take = 0`). Primerjava izhoda pred/po na DEV (vse vrstice, vsi stolpci, `@TotalCount`) v 11 primerih — IQ (2) MAGENTO_PRODUCTS celoten in strani 0/400, iskanje »AZ.0722« in »led«, MAGENTO_STOCK_PRICES celoten, Vidadria (3) celoten in stran, Ediito (4) celoten, MAGENTO_CUSTOMERS za 2 in 3: **enako do bajta**. Čas 200 vrstic brez tuje obremenitve 3,7–5,5 s (prej 7–10 s, ob obremenitvi 45–55 s zaradi vzporednih načrtov).
+
+**Objekti:** `out.GetExportRows`. **Podatki:** nič. **Ročni korak:** ne. **SAOP:** nič. **Povratek:** definicija pred 315 ni shranjena v datoteki — povratek je `ALTER` z odstranitvijo sprememb z oznako `HitrejsiPredogled80` (vsebina izvoza je v obeh različicah enaka). **Opomba za PRD:** migracija zahteva, da so 142, 251, 274, 291, 292, 304 že uveljavljene (sidra); če sidro manjka, se ustavi brez sprememb.
