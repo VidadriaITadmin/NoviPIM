@@ -62,7 +62,9 @@ Assert(banner.Contains("Items.Where(item => item.OrganizationId == organizationI
   "Potrditev sme poslati samo sporočila podjetja, katerega gumb je bil kliknjen.");
 Assert(heldList.Contains("OrganizationName", StringComparison.Ordinal) && heldList.Contains("\"Cene\"", StringComparison.Ordinal) && heldList.Contains("\"Artikli\"", StringComparison.Ordinal),
   "Seznam mora v naslovu povedati podjetje in ločiti cene od artiklov.");
-Assert(markup.Contains("[\"zavihek\"] = Tab == \"cene\" ? null : Tab", StringComparison.Ordinal) && markup.Contains("Navigation.NavigateTo(uri, replace: true)", StringComparison.Ordinal),
+// 96 zapiše URL kot nov korak zgodovine (»Nazaj« vrne prejšnji filter), zato brez replace.
+Assert(markup.Contains("[\"zavihek\"] = Tab == \"cene\" ? null : Tab", StringComparison.Ordinal) && markup.Contains("[\"podjetje\"] = OrganizationId", StringComparison.Ordinal)
+  && markup.Contains("Navigation.NavigateTo(uri", StringComparison.Ordinal),
   "Zavihek (npr. V SAOP) in podjetje morata biti v naslovu, da osvežitev ohrani pogled.");
 
 /* --- C4: oblike dokumentov ----------------------------------------------------------------- */
