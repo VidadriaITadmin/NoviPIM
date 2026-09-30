@@ -20,8 +20,22 @@ Assert(File.Exists(Path.Combine(pages, "CategoryAttributeSets.razor.css")),
 // --- Pot, vloge, nacin -------------------------------------------------------------------------
 Assert(page.Contains("@page \"/nastavitve/nabori-atributov\"", StringComparison.Ordinal),
   "Stran mora biti na /nastavitve/nabori-atributov.");
-Assert(page.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal),
+// Komerciala (COMMERCIAL) sme nabore gledati; pisanje varuje servis s politiko CatalogWrite (samo ADMIN in
+// CATALOG_EDITOR). Skrivanje gumbov je samo videz, zato test drzi pravico v servisu, ne na strani.
+Assert(page.Contains("Roles = \"ADMIN,CATALOG_EDITOR,COMMERCIAL\"", StringComparison.Ordinal),
   "Nabor spreminja katalog in validacijo, zato ni dovolj samo prijava.");
+var authorization = Read(Path.Combine(services, "PimAuthorization.cs"));
+Assert(authorization.Contains("[CatalogWrite] = [PimRoles.Admin, PimRoles.CatalogEditor]", StringComparison.Ordinal),
+  "Politika CatalogWrite sme dovoliti samo ADMIN in CATALOG_EDITOR - komerciala nabora ne sme spremeniti.");
+foreach (var writer in new[] { "SaveAttributeSetAsync", "SaveAttributeSetBulkAsync", "CopyAttributeSetAsync" })
+{
+  var at = service.IndexOf(" " + writer + "(", StringComparison.Ordinal);
+  Assert(at >= 0, "Servis mora imeti " + writer + ".");
+  var guardAt = service.IndexOf("guard.RequireAsync(PimPolicies.CatalogWrite)", at, StringComparison.Ordinal);
+  var nextMethod = service.IndexOf("public async", at + 1, StringComparison.Ordinal);
+  Assert(guardAt >= 0 && (nextMethod < 0 || guardAt < nextMethod),
+    writer + " mora zahtevati politiko CatalogWrite, ker stran vidi tudi komerciala.");
+}
 Assert(page.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
   "Brez interaktivnega nacina urejanje ne dela.");
 Assert(page.Contains("ActorAsync", StringComparison.Ordinal),
@@ -170,7 +184,10 @@ Assert(catalogCategories.Contains("NewSiblingDuplicate", StringComparison.Ordina
 var missing = Read(Path.Combine(pages, "MissingCategories.razor"));
 Assert(missing.Contains("CreateLabel=\"Ustvari novo kategorijo\"", StringComparison.Ordinal) && missing.Contains("SiblingDuplicate", StringComparison.Ordinal),
   "Preslikava kategorij mora ponuditi ustvarjanje manjkajoce kategorije z izbiro starsa in preverbo podvajanja.");
-Assert(Read(Path.Combine(pages, "ProductCategories.razor")).Contains("<PimPicker", StringComparison.Ordinal),
+// Od 2026-09-28 je izbirnik v skupnem gradniku ProductCategoryEditor (tudi na kartici izdelka).
+Assert(Read(Path.Combine(pages, "ProductCategories.razor")).Contains("<ProductCategoryEditor", StringComparison.Ordinal),
+  "/izdelki/kategorije mora vgraditi gradnik ProductCategoryEditor.");
+Assert(Read(Path.Combine(pages, "ProductCard", "ProductCategoryEditor.razor")).Contains("<PimPicker", StringComparison.Ordinal),
   "Dodeljevanje kategorij izdelku mora uporabljati izbirnik s tipkanjem.");
 
 Console.WriteLine("PIM.F10.CategoryAttributeSetUxTests: vse pogodbe drzijo.");
