@@ -116,9 +116,29 @@ Assert(quality.Contains("Task.WhenAll(Organizations.Select", StringComparison.Or
   "Branja po podjetjih morajo teci vzporedno; zaporedna zanka je bila merjeno ozko grlo strani.");
 Assert(!Regex.IsMatch(quality, @"foreach \(var organization in Organizations\)\s*\{\s*var profiles = await"),
   "Zaporedna zanka po podjetjih se ne sme vrniti.");
-Assert(quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal)
-  && governanceService.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
-  "Stevila aktivnih izdelkov in izdelkov s tezavo morajo se vedno priti iz bralnega modela.");
+/* Naloga #102: glava rabi samo dve stevili. Nacrt odblokiranja je zanju prenesel vse pare
+   (izdelek, polje) — 1,29 milijona vrstic — in stran je pod obremenjeno bazo nalagala 86 s. */
+Assert(quality.Contains("GetIssueTotalsByOrganizationAsync", StringComparison.Ordinal)
+  && governanceService.Contains("GetIssueTotalsByOrganizationAsync", StringComparison.Ordinal),
+  "Stevila aktivnih izdelkov in izdelkov s tezavo morajo priti iz enega stetja v bazi.");
+Assert(!quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
+  "Nacrt odblokiranja prenese vse pare (izdelek, polje); za glavo /kakovost je predrag (#102).");
+Assert(Regex.IsMatch(governanceService, @"GetIssueTotalsByOrganizationAsync[\s\S]{0,1200}COUNT_BIG\(issues\.ProductId\)[\s\S]{0,400}GROUP BY product\.OrganizationId"),
+  "Stetje mora biti strezniško in zdruzeno po podjetju, ne prenos vrstic v aplikacijo.");
+Assert(quality.Contains("ProfilesLoaded", StringComparison.Ordinal),
+  "Profili se berejo samo na zavihku Profili, ne na zavihku Po kategorijah.");
+/* Naloga #102 (najdba preverjalca): gola /kakovost preusmeri na /kakovost/artikli, ki je 26-73 s cakala
+   na intranet.GetQualityProducts (SELECT * INTO #Rows iz val.ProductChannelReadiness za vse artikle). */
+Assert(qualityProducts.Contains("prerender: false", StringComparison.Ordinal),
+  "/kakovost/artikli ne sme brati pripravljenosti dvakrat (predupodabljanje + interaktivni izris).");
+var qualityProductsMigration = Read(Path.Combine(root, "sql", "migrations", "318_HitrejsaKakovostArtikli.sql"));
+Assert(qualityProductsMigration.Contains("CREATE OR ALTER PROCEDURE intranet.GetQualityProducts", StringComparison.Ordinal)
+  && !Regex.IsMatch(qualityProductsMigration, @"SELECT \* INTO #\w+ FROM val\.ProductChannelReadiness", RegexOptions.IgnoreCase),
+  "GetQualityProducts ne sme kopirati celega pogleda za vse artikle v zacasno tabelo.");
+Assert(Regex.IsMatch(qualityProductsMigration, @"#Page[\s\S]{0,600}val\.ProductChannelReadiness AS v WHERE v\.ProductId=page\.ProductId"),
+  "Polne vrstice pogleda se berejo samo za artikle na strani.");
+Assert(qualityProductsMigration.Contains("x.WebExportState=@State", StringComparison.Ordinal),
+  "Povezave s /splet (stanje=BLOCKED_ERRORS, NO_CATEGORY ...) morajo filtrirati po stanju katalog.csv.");
 
 
 /* ─── Gostota strani pravil (P2-16, pregled 2026-09-08) ───────────────────────
@@ -226,6 +246,36 @@ foreach (var id in new[] { "quarantine-organization", "quarantine-source", "quar
   Assert(quarantine.Contains($"id=\"{id}\"", StringComparison.Ordinal), "Karantena mora imeti filter: " + id);
 Assert(quarantine.Contains("izvoz/karantena.xlsx", StringComparison.Ordinal),
   "Karantena mora imeti izvoz v Excel, ki uposteva trenutne filtre.");
+
+// #112: izvoz napak je vzel samo prvo stran procedure (najvec 200 izdelkov) in v datoteki je bilo
+// "Izvozenih 200 od 9.044". Izvoz mora brati po straneh, dokler ne prebere vseh izdelkov filtra.
+Assert(qualityExport.Contains("PagedExportReader.ReadAllAsync", StringComparison.Ordinal)
+    && qualityExport.Contains("ProcedurePageSize", StringComparison.Ordinal),
+  "Izvoz napak mora brati intranet.GetQualityIssues po straneh (procedura vrne najvec 200 izdelkov na klic).");
+Assert(!qualityExport.Contains("Izvoženih {rows.Length", StringComparison.Ordinal),
+  "Opomba izvoza ne sme primerjati vrstic napak s stevilom izdelkov.");
+{
+  const int total = 9_044, procedureCap = 200;
+  var calls = 0;
+  Task<PIM.Intranet.Services.ExportPage<int, (int Product, int Issue)>> Fetch(int skip, int take, CancellationToken _)
+  {
+    calls++;
+    var ids = Enumerable.Range(skip + 1, Math.Max(0, Math.Min(Math.Min(take, procedureCap), total - skip))).ToArray();
+    var rows = ids.SelectMany(id => new[] { (id, 1), (id, 2) }).ToArray();
+    return Task.FromResult(new PIM.Intranet.Services.ExportPage<int, (int Product, int Issue)>(ids, rows, total));
+  }
+  var all = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(procedureCap, 1_048_000, Fetch, id => id, row => row.Product);
+  Assert(all.Items.Count == total && all.Items.Distinct().Count() == total, $"Izvoz mora prebrati vseh {total} izdelkov, prebral je {all.Items.Count}.");
+  Assert(all.Details.Count == total * 2 && !all.Truncated, "Izvoz mora prinesti vse napake vseh izdelkov.");
+  Assert(calls == (total + procedureCap - 1) / procedureCap, $"Pricakovanih {(total + procedureCap - 1) / procedureCap} klicev, bilo jih je {calls}.");
+
+  var capped = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(procedureCap, 1_000, Fetch, id => id, row => row.Product);
+  Assert(capped.Details.Count == 1_000 && capped.Truncated, "Na zgornji meji lista se izvoz ustavi in to javi.");
+
+  // Procedura sama skrajsa stran (vec zahtevano kot 200): zanka se ne sme ustaviti na krajsi strani.
+  var larger = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(500, 1_048_000, Fetch, id => id, row => row.Product);
+  Assert(larger.Items.Count == total, "Krajsa stran od zahtevane ne pomeni konca podatkov.");
+}
 
 Console.WriteLine("F10 quality UX contract PASS.");
 

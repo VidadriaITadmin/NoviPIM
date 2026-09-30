@@ -1,12 +1,15 @@
 @page "/kakovost/artikli"
 @attribute [Authorize]
-@rendermode InteractiveServer
+@* Naloga #102: brez predupodabljanja. Prej je stran intranet.GetQualityProducts (pripravljenost ~160.000
+   artiklov) klicala dvakrat — ob predupodabljanju in ob interaktivnem izrisu. Gola /kakovost preusmeri sem. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using PIM.Intranet.Services
 @inject QualityReadService Quality
 @inject QualityWriteService QualityWrite
 @inject IntranetDataService Data
 @inject AuthenticationStateProvider Authentication
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <PageTitle>Pripravljenost artiklov</PageTitle>
 <PimPage Title="Kakovost podatkov" Subtitle="En artikel, jasna pripravljenost za vsak izhodni kanal in neposredna pot do popravka." />
@@ -68,8 +71,13 @@
   const int Take=50; int Skip => Math.Max(0,QueryPage-1)*Take;
   IReadOnlyList<OrganizationContext> Organizations=[]; ProductReadinessPage? Page; bool Loading=true,Busy; string? Error,Message,ActionError;
   string OrganizationDraft="",SearchDraft="",StateDraft="",HoldChannel="ALL",HoldReason=""; long? EditingProductId;
-  protected override async Task OnParametersSetAsync(){ OrganizationDraft=QueryOrganization??"";SearchDraft=QuerySearch??"";StateDraft=QueryState??"";await LoadAsync(); }
-  async Task LoadAsync(){Loading=true;Error=null;try{if(Organizations.Count==0)Organizations=await Data.GetOrganizationsAsync();Page=await Quality.GetProductReadinessAsync(int.TryParse(QueryOrganization,out var id)?id:null,QuerySearch,QueryState,Skip,Take);}catch(Exception ex){Error=ex.Message;}finally{Loading=false;}}
+  // Naloga #108: en klic procedure na obisk. Isti filtri (npr. »Uporabi filtre« brez spremembe) ne naložijo
+  // znova; nov filter ali stran prekliče prejšnje nalaganje, da se počasne poizvedbe ne kopičijo na bazi.
+  CancellationTokenSource? LoadCts; string? LoadedKey;
+  string QueryKey=>$"{QueryOrganization}|{QuerySearch}|{QueryState}|{Skip}";
+  protected override async Task OnParametersSetAsync(){ OrganizationDraft=QueryOrganization??"";SearchDraft=QuerySearch??"";StateDraft=QueryState??"";if(Page is not null&&Error is null&&LoadedKey==QueryKey)return;await LoadAsync(); }
+  async Task LoadAsync(){LoadCts?.Cancel();LoadCts?.Dispose();var cts=LoadCts=new CancellationTokenSource();var key=QueryKey;Loading=true;Error=null;try{if(Organizations.Count==0)Organizations=await Data.GetOrganizationsAsync();var page=await Quality.GetProductReadinessAsync(int.TryParse(QueryOrganization,out var id)?id:null,QuerySearch,QueryState,Skip,Take,cts.Token);if(cts.IsCancellationRequested)return;Page=page;LoadedKey=key;}catch(Exception)when(cts.IsCancellationRequested){return;}catch(Exception ex){Error=ex.Message;}finally{if(ReferenceEquals(LoadCts,cts))Loading=false;}}
+  public void Dispose(){LoadCts?.Cancel();LoadCts?.Dispose();LoadCts=null;}
   void Apply()=>Navigation.NavigateTo(Href(1)); Task PageTo(int skip){Navigation.NavigateTo(Href(skip/Take+1));return Task.CompletedTask;}
   string Href(int page){var q=new List<string>();if(OrganizationDraft.Length>0)q.Add("podjetje="+Uri.EscapeDataString(OrganizationDraft));if(SearchDraft.Trim().Length>0)q.Add("isci="+Uri.EscapeDataString(SearchDraft.Trim()));if(StateDraft.Length>0)q.Add("stanje="+Uri.EscapeDataString(StateDraft));if(page>1)q.Add("stran="+page);return "kakovost/artikli"+(q.Count==0?"":"?"+string.Join('&',q));}
   void BeginHold(long id){EditingProductId=id;HoldChannel="ALL";HoldReason="";} async Task<string> ActorAsync()=>(await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name??"neznan";

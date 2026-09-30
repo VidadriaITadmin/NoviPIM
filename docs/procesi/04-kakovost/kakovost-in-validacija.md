@@ -6,9 +6,9 @@ stanje: delno
 bere: [pim.izdelek, pim.atributi, pim.besedila, pim.kategorije-izdelka, pim.mediji, pim.pravila]
 pise: [pim.validacija]
 strani: [/kakovost, /kakovost/artikli, /kakovost/napake]
-posli: [PRODUCT_VALIDATION, PRODUCT_PUBLICATION, NIGHTLY_RECONCILIATION]
+posli: [PRODUCT_VALIDATION, PRODUCT_PUBLICATION, NIGHTLY_RECONCILIATION, MEDIA_URL_CHECK]
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Quality.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/QualityProducts.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationErrors.razor, PIM_Solution/src/PIM.Intranet/Services/Quality*.cs, PIM_Solution/src/PIM.Intranet/Services/ValidationLayer.cs, PIM_Solution/src/PIM.Intranet/Services/GovernanceReadService.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs]
-migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251]
+migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251, 312, 320, 321]
 ---
 
 # Kakovost in validacija artiklov
@@ -96,6 +96,7 @@ flowchart LR
 - **Karantena ni napaka validacije:** karantena je zapis iz vira, ki ga preslikava ni sprejela (artikla še ni); napaka validacije je na obstoječem artiklu. Glej [Karantena](karantena.md).
 - **Nivoji:** `SHARED` profil šteje v ERP in splet (kar blokira), `ERP` profil v ERP_SLO ali ERP_EU/THIRD (po imenu profila), `COMMERCIAL` v KOMERCIALA (nikoli ne blokira), `WEB` v SPLET. Napaka profila, ki nič ne blokira, je prikazana kot »Manjka (ne blokira)«.
 - **Resnost:** `ERROR` naredi profil neveljaven, `WARNING` se samo pokaže.
+- **Slike, ki se ne odprejo (312, naloga #9):** poleg »slika je vpisana« (`ProductMedia.Url`) spletna profila preverjata še izpeljani polji iz posla `MEDIA_URL_CHECK`: `ProductMedia.DelujocaSlika` (`ERROR` — izdelek ima slike, a so vse potrjeno pokvarjene) in `ProductMedia.VseSlikeDelujejo` (`WARNING` — ena ali več pokvarjenih ob vsaj eni delujoči). Pokvarjena = 2 neuspeha v razmiku 24 ur; izpad strežnika ne šteje. Dokler posel ne teče, se nič ne spremeni. Popravek: [Napačni naslovi slik](../03-izdelki/mediji.md).
 - **Svežina:** validacija, starejša od 2 ur, velja za zastarelo; objava (`PRODUCT_PUBLICATION`) teče samo po uspešni in sveži validaciji.
 - **Splet:** stolpec »Splet / katalog.csv« uporablja ista pravila kot izvoz: kljukice spletišč, kategorija na označenem spletišču, ročni zadržek, izključitev iz kataloga, veljavnost spletnih profilov. Oznaka »ERP: za splet« iz SAOP je samo informativna.
 - **ERP pripravljenost je samo informativna.** Od migracije 236 ne blokira vpisa ali pošiljanja v SAOP; odloči SAOP ob prejemu. ⚠️ glej razdelek 10.
@@ -119,7 +120,7 @@ flowchart LR
 - **Strani:** `PIM.Intranet/Components/Pages/Quality.razor` (`/kakovost`, pogleda `profili` in `kategorije`), `QualityProducts.razor` (`/kakovost/artikli`), `ValidationErrors.razor` (`/kakovost/napake`); zavihki `Components/Shared/PimTab.cs` → `QualityTabs`.
 - **Storitve / delavci:** `QualityReadService` (`GetProductReadinessAsync`, `GetIssuesAsync`, `GetByCategoryAsync`, `GetOverviewAsync`), `QualityWriteService` (`val.RunValidationForProduct`, `val.SetProductHold`, `val.SetProductFieldWaiver`), `GovernanceReadService`, `QualityIssueExportService`, `ValidationLayer.cs`; avtomatika `PIM.Automation/JobCatalog.cs` (koraka `Validate`, `Promote`).
 - **Tabele in pogledi:** `val.ValidationProfile`, `val.FieldRequirement`, `val.ProductIssue`, `val.ProductValidationState`, `val.ProductHold`, `val.ProductChannelReadiness`; procedure `val.RunValidation`, `val.RunValidationForProducts`, `val.Promote`, `pim.WithdrawIneligibleWebShops`, `intranet.GetQualityIssues`, `intranet.GetQualityOverview`, `intranet.GetQualityByCategory`.
-- **Migracije:** 102 (bralne procedure), 146–148 (zahteve po kategoriji), 177 (po kategorijah), 194/195/236 (ERP varovalka uvedena in odstranjena), 211 (prioriteta zastoja), 218 (zmogljivost), 236 (sveža validacija), 242 (pripravljenost = pravila izvoza), 249 (izjema polja), 251 (samodejni umik kljukic).
+- **Migracije:** 312 (izpeljani polji slik v `canon.FieldValue`, zahtevi v spletnih profilih), 102 (bralne procedure), 146–148 (zahteve po kategoriji), 177 (po kategorijah), 194/195/236 (ERP varovalka uvedena in odstranjena), 211 (prioriteta zastoja), 218 (zmogljivost), 236 (sveža validacija), 242 (pripravljenost = pravila izvoza), 249 (izjema polja), 251 (samodejni umik kljukic), 320 (hitra validacija paketov: `val.RunValidationForProducts` izračuna vse enkrat za izbrane izdelke in piše po 25 izdelkov v kratkih transakcijah — 1.000 izdelkov v nekaj sekundah, brez zaklepanja drugih), 321 (hitrejši seznam in pregled na `/kakovost/napake`: branje brez čakanja na zaklepe validacije).
 - **Urniki:** `PRODUCT_VALIDATION` 3600 s, `PRODUCT_PUBLICATION` 3600 s (odvisen od validacije, največ 7200 s stare), `NIGHTLY_RECONCILIATION`.
 
 </details>

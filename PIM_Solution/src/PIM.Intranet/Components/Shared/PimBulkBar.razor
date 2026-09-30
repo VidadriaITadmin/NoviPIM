@@ -1,0 +1,63 @@
+@* Vrstica izbire in množičnih dejanj nad tabelo (PIM_DOBRE_PRAKSE §9.3–9.4, CLAUDE.md §2).
+   Tri načine izbire pove na glas: »Označi vse na strani«, »vse, ki ustrezajo filtru (N)« in
+   »Počisti izbiro«. Dejanja (ChildContent) poda stran, ker so odvisna od podatka in vloge; nevarna
+   dejanja naj stran postavi zadnja z razredom »danger«. Model izbire je PimRowSelection. *@
+
+<div class="pim-bulk-bar @(Count > 0 ? "has-selection" : null)" role="region" aria-label="@AriaLabel">
+  <label class="pim-bulk-page">
+    <input type="checkbox" aria-label="Označi vse na tej strani" checked="@PageSelected" disabled="@(PageRowCount == 0)"
+           @onchange="PageChangedAsync" />
+    <span>Označi vse na strani</span>
+  </label>
+
+  @if (Count > 0)
+  {
+    <span class="pim-bulk-count" role="status" aria-live="polite">
+      Izbranih <strong>@Count.ToString("N0")</strong>@(AllMatching ? " — vsi, ki ustrezajo filtru" : "")
+    </span>
+    @if (!AllMatching && MatchingTotal > Count)
+    {
+      <button type="button" class="small-action" @onclick="OnSelectAllMatching">Izberi vse, ki ustrezajo filtru (@MatchingTotal.ToString("N0"))</button>
+    }
+    <span class="pim-bulk-sep" aria-hidden="true"></span>
+    <span class="pim-bulk-actions">@ChildContent</span>
+    <button type="button" class="small-action pim-bulk-clear" @onclick="OnClear">Počisti izbiro</button>
+  }
+  else
+  {
+    @if (MatchingTotal > 0)
+    {
+      <button type="button" class="small-action" @onclick="OnSelectAllMatching">Označi vse, ki ustrezajo filtru (@MatchingTotal.ToString("N0"))</button>
+    }
+    <span class="pim-bulk-hint">@Hint</span>
+  }
+</div>
+
+@code {
+  /// <summary>Koliko je izbranih (pri »vse po filtru« število zadetkov filtra).</summary>
+  [Parameter] public int Count { get; set; }
+
+  /// <summary>Izbran je cel filter, ne posamezne vrstice.</summary>
+  [Parameter] public bool AllMatching { get; set; }
+
+  /// <summary>Koliko vrstic ustreza filtru.</summary>
+  [Parameter] public int MatchingTotal { get; set; }
+
+  /// <summary>Ali je izbrana vsaka vrstica trenutne strani.</summary>
+  [Parameter] public bool PageSelected { get; set; }
+
+  /// <summary>Vrstic na trenutni strani (0 = kljukica strani onemogočena).</summary>
+  [Parameter] public int PageRowCount { get; set; }
+
+  [Parameter] public EventCallback<bool> OnPageChanged { get; set; }
+  [Parameter] public EventCallback OnSelectAllMatching { get; set; }
+  [Parameter] public EventCallback OnClear { get; set; }
+
+  /// <summary>Množična dejanja; vidna samo, kadar je kaj izbrano.</summary>
+  [Parameter] public RenderFragment? ChildContent { get; set; }
+
+  [Parameter] public string AriaLabel { get; set; } = "Izbira in množična dejanja";
+  [Parameter] public string Hint { get; set; } = "Označi vrstice za množično urejanje.";
+
+  Task PageChangedAsync(ChangeEventArgs args) => OnPageChanged.InvokeAsync(args.Value is true);
+}

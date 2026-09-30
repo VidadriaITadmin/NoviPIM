@@ -5,4 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- #112: bralna zanka izvoza napak se preizkusi brez baze. -->
+    <Compile Include="..\..\src\PIM.Intranet\Services\PagedExportReader.cs" Link="Linked\PagedExportReader.cs" />
+  </ItemGroup>
 </Project>

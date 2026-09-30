@@ -16,7 +16,29 @@ public sealed record ProductPendingOverlay(
   string FieldKey, string? Value, string Status, long OutboxMessageId, long? OutboundBatchId,
   DateTime CreatedUtc, DateTime? SentUtc, string? LastError, string? SaopErrorKind);
 public sealed record ProductCardText(long ProductTextId, string Language, string TextType, string Value, string FieldKey, string Owner);
-public sealed record ProductCardAttribute(long ProductAttributeId, string AttributeCode, string Value, string FieldKey, string Owner);
+/// <param name="LanguageCode">
+/// Jezik vrstice (124); null pri atributu brez jezika. Prevedljiv atribut ima vrstico na jezik z ISTIM
+/// <paramref name="FieldKey"/> — kartica mora zato sama ločiti urejljivo (sl) in bralne vrstice (116).
+/// </param>
+public sealed record ProductCardAttribute(long ProductAttributeId, string AttributeCode, string Value, string FieldKey, string Owner,
+  string? LanguageCode = null);
+
+/// <summary>
+/// 116: ena vrstica prevedljivega atributa na kartici je urejljiva (slovenska, sicer brez jezika, sicer prva
+/// po jeziku), ostale so samo za branje in dobijo svoj ključ polja — dva soseda z istim @key sesujeta krog.
+/// </summary>
+public static class ProductCardAttributes
+{
+  public static ProductCardAttribute Primary(IEnumerable<ProductCardAttribute> rows) => rows
+    .OrderBy(row => string.Equals(row.LanguageCode?.Trim(), "sl", StringComparison.OrdinalIgnoreCase) ? 0 : string.IsNullOrWhiteSpace(row.LanguageCode) ? 1 : 2)
+    .ThenBy(row => row.LanguageCode, StringComparer.OrdinalIgnoreCase)
+    .ThenBy(row => row.ProductAttributeId)
+    .First();
+
+  /// <summary>Ključ bralnega polja jezikovne vrstice: jezik + id vrstice — edinstven in stabilen med nalaganji.</summary>
+  public static string ReadOnlyKey(ProductCardAttribute row) =>
+    $"ProductAttribute.{row.AttributeCode}@{(string.IsNullOrWhiteSpace(row.LanguageCode) ? "-" : row.LanguageCode.Trim().ToLowerInvariant())}#{row.ProductAttributeId}";
+}
 public sealed record ProductCardCategory(long ProductCategoryId, string WebSite, string CategoryPath, string? CategoryTreeCode, string? CategoryCode, string? CategoryName, string Owner);
 public sealed record ProductCardMedia(long ProductMediaId, string Url, string Role, int SortOrder, string Owner);
 public sealed record ProductCardDocument(long ProductDocumentId, string Role, string Url, string? Title, int SortOrder);
@@ -221,7 +243,8 @@ public sealed class ProductWorkbenchService(IConfiguration configuration)
     await NextAsync(reader, cancellationToken);
     var attributes = await ReadAsync(reader, row => new ProductCardAttribute(
       PimDb.Int64(row, "ProductAttributeId"), PimDb.TextOrEmpty(row, "AttributeCode"), PimDb.TextOrEmpty(row, "Value"),
-      PimDb.TextOrEmpty(row, "FieldKey"), PimDb.TextOrEmpty(row, "Owner")), cancellationToken);
+      PimDb.TextOrEmpty(row, "FieldKey"), PimDb.TextOrEmpty(row, "Owner"),
+      PimDb.Text(row, "LanguageCode")), cancellationToken);
 
     await NextAsync(reader, cancellationToken);
     var categories = await ReadAsync(reader, row => new ProductCardCategory(

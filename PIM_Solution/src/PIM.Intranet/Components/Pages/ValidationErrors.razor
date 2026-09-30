@@ -7,6 +7,8 @@
 @inject CatalogReadService Catalog
 @inject NavigationManager Navigation
 @inject CategoryTreeService Tree
+@inject ILogger<ValidationErrors> Log
+@implements IDisposable
 
 <PageTitle>Napake validacije</PageTitle>
 
@@ -29,7 +31,7 @@
   @* U1, pregled 2026-09-08: stran je tiho kazala samo prvo podjetje (17.413 izdelkov proti
      177.653 na /kakovost), izbirnika pa ni bilo. Obseg mora biti viden in izbirljiv. *@
   <label class="visually-hidden" for="issue-organization">Podjetje</label>
-  <select id="issue-organization" class="filter-select" @bind="OrganizationDraft">
+  <select id="issue-organization" class="filter-select" @bind="OrganizationDraft" @bind:after="ApplyFiltersAsync">
     @foreach (var organization in Organizations)
     {
       <option value="@organization.OrganizationId">@organization.Name</option>
@@ -37,7 +39,7 @@
   </select>
 
   <label class="visually-hidden" for="issue-layer">Nivo</label>
-  <select id="issue-layer" class="filter-select" @bind="LayerDraft">
+  <select id="issue-layer" class="filter-select" @bind="LayerDraft" @bind:after="ApplyFiltersAsync">
     <option value="">Vsi nivoji</option>
     @foreach (var layer in Layers)
     {
@@ -49,7 +51,7 @@
   <input id="issue-search" type="search" class="search-input" placeholder="Poišči po šifri ali EAN …" @bind="SearchDraft" @bind:event="oninput" @onkeydown="SearchKeyAsync" />
 
   <label class="visually-hidden" for="issue-profile">Profil</label>
-  <select id="issue-profile" class="filter-select" @bind="ProfileDraft">
+  <select id="issue-profile" class="filter-select" @bind="ProfileDraft" @bind:after="ApplyFiltersAsync">
     <option value="">Vsi profili</option>
     @foreach (var profile in ProfileCodes)
     {
@@ -60,7 +62,7 @@
   @if (LayerDraft == "SPLET")
   {
     <label class="visually-hidden" for="issue-site">Spletno mesto</label>
-    <select id="issue-site" class="filter-select" @bind="WebSiteDraft">
+    <select id="issue-site" class="filter-select" @bind="WebSiteDraft" @bind:after="ApplyFiltersAsync">
       <option value="">Vsa spletna mesta</option>
       @foreach (var site in WebSites)
       {
@@ -70,14 +72,14 @@
   }
 
   <label class="visually-hidden" for="issue-severity">Resnost</label>
-  <select id="issue-severity" class="filter-select" @bind="SeverityDraft">
+  <select id="issue-severity" class="filter-select" @bind="SeverityDraft" @bind:after="ApplyFiltersAsync">
     <option value="">Vse resnosti</option>
     <option value="ERROR">Samo napake</option>
     <option value="WARNING">Samo opozorila</option>
   </select>
 
   <label class="visually-hidden" for="issue-blocks">Kaj blokira</label>
-  <select id="issue-blocks" class="filter-select" @bind="BlocksDraft">
+  <select id="issue-blocks" class="filter-select" @bind="BlocksDraft" @bind:after="ApplyFiltersAsync">
     <option value="">Blokira: vseeno</option>
     <option value="ERP">Blokira ERP</option>
     <option value="WEB">Blokira splet</option>
@@ -86,7 +88,7 @@
 
   @* 177: vecnivojski obseg — izbrana kategorija zajame tudi vse podkategorije. *@
   <label class="visually-hidden" for="issue-tree">Drevo kategorij</label>
-  <select id="issue-tree" class="filter-select" @bind="TreeDraft" @bind:after="LoadCategoryOptionsAsync">
+  <select id="issue-tree" class="filter-select" @bind="TreeDraft" @bind:after="TreeChangedAsync">
     <option value="">Vse kategorije</option>
     @foreach (var tree in Trees) { <option value="@tree">@TreeLabel(tree)</option> }
   </select>
@@ -94,13 +96,13 @@
   {
     <label class="visually-hidden" for="issue-category">Kategorija (s podkategorijami)</label>
     <div class="category-select">
-      <PimPicker Id="issue-category" Options="CategoryPickerOptions" @bind-Value="CategoryDraftOrNull"
+      <PimPicker Id="issue-category" Options="CategoryPickerOptions" @bind-Value="CategoryDraftOrNull" @bind-Value:after="ApplyFiltersAsync"
                  Placeholder="Kategorija (celo drevo) — vpiši ime ali pot …" />
     </div>
   }
 
   <label class="visually-hidden" for="issue-field">Polje</label>
-  <select id="issue-field" class="filter-select" @bind="FieldDraft">
+  <select id="issue-field" class="filter-select" @bind="FieldDraft" @bind:after="ApplyFiltersAsync">
     <option value="">Vsa polja</option>
     @foreach (var field in FieldCodes)
     {
@@ -108,7 +110,9 @@
     }
   </select>
 
-  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync">Uporabi filtre</button>
+  @* 101: spustni seznami se uveljavijo takoj ob izbiri (naslov strani, stevec in cipi se osvezijo);
+     iskanje po sifri/EAN se uveljavi z Enter ali tem gumbom, da ne sprozi poizvedbe ob vsaki crki. *@
+  <button type="button" class="filter-button" @onclick="ApplyFiltersAsync" title="Uveljavi iskanje po šifri ali EAN; izbire v seznamih se uveljavijo takoj.">Išči</button>
   @* Izvoz uporabi natanko iste filtre kot pogled — kar vidis, je to, kar se izvozi (kot na
      strani Izdelki). Vrstica v zvezku je obarvana po resnosti: rdeca za napako, bleda oranzna
      za opozorilo. Uporabnikova zahteva 2026-09-10. *@
@@ -185,7 +189,7 @@
 
 <h2 class="section-title">Katera zahteva ustavi največ izdelkov</h2>
 <section class="ui-card data-card" aria-label="Pravila z največjim vplivom">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Rules.Count == 0)"
+  <PimState Loading="OverviewLoading" Error="@OverviewError" Empty="@(Overview is not null && Overview.Rules.Count == 0)"
             EmptyText="Odprtih zahtev ni." LoadingText="Nalaganje pravil …">
     @if (Overview is not null)
     {
@@ -214,7 +218,7 @@
 
 <h2 class="section-title">Pri katerem dobavitelju se napake kopičijo</h2>
 <section class="ui-card data-card" aria-label="Vpliv po dobavitelju">
-  <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && Overview.Suppliers.Count == 0)"
+  <PimState Loading="OverviewLoading" Error="@OverviewError" Empty="@(Overview is not null && Overview.Suppliers.Count == 0)"
             EmptyText="Razčlenitve po dobavitelju ni." LoadingText="Nalaganje razčlenitve …">
     @if (Overview is not null)
     {
@@ -238,7 +242,7 @@
 
 <p class="muted source-note">
   Vir: <span class="code-value">intranet.GetQualityIssues</span> in <span class="code-value">intranet.GetQualityOverview</span>
-  (migracija 102). Stran je bralna: napake ni mogoče zapreti ročno, ker status izhaja iz podatka, ne iz oznake.
+  (migracija 102, pospešeno v 321). Stran je bralna: napake ni mogoče zapreti ročno, ker status izhaja iz podatka, ne iz oznake.
 </p>
 
 @code {
@@ -258,6 +262,12 @@
   QualityOverview? Overview;
   bool Loading = true;
   string? Error;
+  // #122: pregled (stevci, pravila, dobavitelji) se nalaga loceno od seznama; napaka enega ne skrije drugega.
+  bool OverviewLoading = true;
+  string? OverviewError;
+  int? OverviewOrganizationId;
+  CancellationTokenSource? listRead;
+  CancellationTokenSource? overviewRead;
   int? OrganizationId;
   string SearchDraft = "";
   string LayerDraft = "";
@@ -324,6 +334,14 @@
     TreeDraft = QueryTree ?? "";
     CategoryDraft = QueryCategory ?? "";
 
+    // #122: vsako branje dobi svoj preklic. Hitro zaporedje filtrov (ali klikalnik) je prej sprozilo
+    // vec hkratnih branj, ki so se med seboj prehitevala in cakala na isto bazo; zdaj se prejsnje
+    // branje preklice in njegov rezultat ne more prepisati novejsega.
+    listRead?.Cancel();
+    listRead?.Dispose();
+    var mine = listRead = new CancellationTokenSource();
+    var token = mine.Token;
+
     Loading = true;
     Error = null;
     try
@@ -337,41 +355,110 @@
       var organization = requested is int wanted
         ? Organizations.FirstOrDefault(row => row.OrganizationId == wanted) ?? await Data.GetCurrentOrganizationAsync()
         : await Data.GetCurrentOrganizationAsync();
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      if (token.IsCancellationRequested) return;
+      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; OverviewLoading = false; return; }
       OrganizationDraft = organization.OrganizationId.ToString();
 
       if (OrganizationId != organization.OrganizationId)
       {
         OrganizationId = organization.OrganizationId;
-        Overview = await Quality.GetOverviewAsync(organization.OrganizationId);
         Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
         Sites = await Catalog.GetWebSitesAsync();
         Trees = await Tree.GetTreeCodesAsync();
       }
+      // Pregled tece vzporedno s seznamom in ga ne zadrzuje; ponovi se ob menjavi podjetja ali po napaki.
+      if (OverviewOrganizationId != organization.OrganizationId || (Overview is null && !OverviewLoading))
+        _ = LoadOverviewAsync(organization.OrganizationId);
       await LoadCategoryOptionsAsync();
+      if (token.IsCancellationRequested) return;
 
       var filter = new QualityIssueFilter(
         organization.OrganizationId, Skip, Take, QuerySearch, QueryProfile,
         QuerySeverity, QueryBlocks, QueryField,
         CategoryTreeCode: QueryTree, CategoryCode: QueryCategory);
       var layerProfiles = ProfilesForLayer(QueryLayer, QueryWebSite).Select(profile => profile.ProfileCode).ToArray();
-      PageData = string.IsNullOrWhiteSpace(QueryLayer)
-        ? await Quality.GetIssuesAsync(filter)
-        : await Quality.GetIssuesForProfilesAsync(filter, layerProfiles);
+      var page = string.IsNullOrWhiteSpace(QueryLayer)
+        ? await Quality.GetIssuesAsync(filter, token)
+        : await Quality.GetIssuesForProfilesAsync(filter, layerProfiles, token);
+      if (token.IsCancellationRequested) return;
+      PageData = page;
     }
-    catch
+    catch (Exception) when (token.IsCancellationRequested)
     {
-      Error = "Odprtih težav trenutno ni mogoče naložiti.";
+      // Preklicano, ker je ze na poti novejse branje (drug filter); to ni napaka.
+    }
+    catch (Exception ex) when (IsBusy(ex))
+    {
+      Log.LogWarning(ex, "Napake validacije: baza je zasedena (podjetje {Podjetje}, filter {Filter}).", OrganizationDraft, Navigation.Uri);
+      Error = "Baza je ta trenutek zasedena (verjetno teče validacija ali uvoz). Poskusite znova čez nekaj sekund.";
+    }
+    catch (Exception ex)
+    {
+      // Napaka gre v dnevnik: brez tega se casovna omejitev baze in vse druge napake vidijo enako.
+      Log.LogError(ex, "Napake validacije: seznama ni bilo mogoce prebrati (podjetje {Podjetje}, filter {Filter}).", OrganizationDraft, Navigation.Uri);
+      Error = "Odprtih težav trenutno ni mogoče naložiti. Poskusite ožji filter ali znova čez minuto; napaka je zapisana v dnevnik.";
     }
     finally
     {
-      Loading = false;
+      if (ReferenceEquals(listRead, mine)) Loading = false;
     }
+  }
+
+  async Task LoadOverviewAsync(int organizationId)
+  {
+    overviewRead?.Cancel();
+    overviewRead?.Dispose();
+    var mine = overviewRead = new CancellationTokenSource();
+    OverviewOrganizationId = organizationId;
+    OverviewLoading = true;
+    OverviewError = null;
+    Overview = null;
+    try
+    {
+      var overview = await Quality.GetOverviewAsync(organizationId, mine.Token);
+      if (mine.IsCancellationRequested) return;
+      Overview = overview;
+    }
+    catch (Exception) when (mine.IsCancellationRequested)
+    {
+      // Preklicano (drugo podjetje ali odhod s strani).
+    }
+    catch (Exception ex)
+    {
+      Log.LogError(ex, "Napake validacije: pregleda ni bilo mogoce prebrati (podjetje {Podjetje}).", organizationId);
+      OverviewError = IsBusy(ex)
+        ? "Povzetka ta trenutek ni mogoče prebrati, ker je baza zasedena. Osvežite stran čez nekaj sekund."
+        : "Povzetka trenutno ni mogoče prebrati; napaka je zapisana v dnevnik. Seznam zgoraj deluje neodvisno.";
+    }
+    finally
+    {
+      if (ReferenceEquals(overviewRead, mine) && !disposed)
+      {
+        OverviewLoading = false;
+        try { await InvokeAsync(StateHasChanged); } catch (ObjectDisposedException) { }
+      }
+    }
+  }
+
+  // 1222 = zaklep ni bil sproscen v LOCK_TIMEOUT (321), -2 = casovna omejitev ukaza.
+  static bool IsBusy(Exception ex) =>
+    PIM.Intranet.Services.AdminConsoleService.IsLockTimeout(ex)
+    || ex is Microsoft.Data.SqlClient.SqlException { Number: -2 };
+
+  bool disposed;
+
+  public void Dispose()
+  {
+    disposed = true;
+    listRead?.Cancel();
+    listRead?.Dispose();
+    overviewRead?.Cancel();
+    overviewRead?.Dispose();
   }
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{PageData?.TotalCount ?? 0:N0} izdelkov z odprto težavo";
+    : PimFormat.Count(PageData?.TotalCount ?? 0, "izdelek", "izdelka", "izdelki", "izdelkov") + " z odprto težavo";
 
   IEnumerable<QualityIssueRow> IssuesOf(long productId) => PageData is null ? []
     : PageData.Issues.Where(issue => issue.ProductId == productId).Take(VisibleIssuesPerProduct);
@@ -452,11 +539,23 @@
 
   Task ApplyFiltersAsync()
   {
+    // Spletno mesto velja samo za nivo SPLET; ob menjavi nivoja ne sme ostati skrit filter.
+    if (LayerDraft != "SPLET") WebSiteDraft = "";
+    // Profil, ki ga novi nivo (ali spletno mesto) nima med izbirami, bi ostal skrit filter v URL-ju in cipu.
+    if (!string.IsNullOrWhiteSpace(ProfileDraft) && Profiles.Count > 0
+      && !ProfileCodes.Contains(ProfileDraft, StringComparer.OrdinalIgnoreCase)) ProfileDraft = "";
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
       blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1,
       tree: TreeDraft, category: CategoryDraft, organization: OrganizationDraft));
     return Task.CompletedTask;
+  }
+
+  // Drevo: najprej se naloži seznam kategorij (izbira kategorije se pobriše), nato se filter uveljavi.
+  async Task TreeChangedAsync()
+  {
+    await LoadCategoryOptionsAsync();
+    await ApplyFiltersAsync();
   }
 
   Task SearchKeyAsync(KeyboardEventArgs args) =>

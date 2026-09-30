@@ -194,6 +194,31 @@ public sealed class MonitorService(
     await TraceAsync(actor, "JOB_RUN_REQUEST", "Opravilo", $"Zahteva za zagon posla {code.Label} {source}.", jobKey, ct: ct);
   }
 
+  /// <summary>
+  /// Umik oddane, še ne prevzete ročne zahteve za zagon (naloga #69) — tudi zahteve, ki jo je oddala varovalka
+  /// kataloga ali stran /splet. Posel, ki že teče, ali zahtevo, ki je ni več (gostitelj jo je prevzel tik pred
+  /// klikom), baza zavrne pod zaklepom. Ker je »Poženi zdaj« prepisal izvirni termin, dobi posel naslednji redni
+  /// termin po urniku od zdaj (dnevni posel: naslednja dnevna ura; ponavljajoč: zdaj + razmik), ne »zdaj«.
+  /// Vrne novi termin (null pri izklopljenem poslu, ki po urniku ne teče).
+  /// </summary>
+  public async Task<DateTime?> CancelRunRequestAsync(string jobKey, string actor, CancellationToken ct = default)
+  {
+    await RequireAdminAsync();
+    var code = KnownJob(jobKey);
+    var row = await DefinitionAsync(jobKey, ct);
+    var (interval, daily) = CurrentSchedule(row, code);
+    DateTime? nextDue = row.IsEnabled
+      ? JobCatalog.NextAfterEnd(interval, daily, DateTime.UtcNow, PimTime.Zone, consecutiveFailures: 0)
+      : null;
+    var (requestedBy, requestedUtc) = await store.CancelRunRequestAsync(jobKey, actor, nextDue, ct);
+    var whose = requestedBy is { Length: > 0 } who ? $" (oddal {who}{(requestedUtc is { } at ? $" ob {PimTime.FormatTime(at)}" : "")})" : "";
+    await TraceAsync(actor, "JOB_RUN_REQUEST_CANCEL", "Opravilo",
+      $"Umik zahteve za zagon posla {code.Label}{whose} z Nadzora.", jobKey,
+      oldValue: requestedBy is { Length: > 0 } ? $"zahteva: {requestedBy}" : "zahteva oddana",
+      newValue: nextDue is { } due ? $"naslednji redni zagon {PimTime.Format(due)}" : "brez zahteve", ct: ct);
+    return nextDue;
+  }
+
   /// <summary>Zahteva za ustavitev teka; gostitelj jo izvede ob naslednjem utripu.</summary>
   public async Task RequestCancelAsync(long jobRunId, string actor, CancellationToken ct = default)
   {

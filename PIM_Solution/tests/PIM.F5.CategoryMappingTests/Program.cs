@@ -62,6 +62,20 @@ var payload = $"""
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+// Test pise v iste tabele kot F5.Integration (org, NW_XML, raw.Inbox, canon.*). Ko vrata tecejo
+// vzporedno, je SQL enega od njiju ubil kot zrtev deadlocka 1205 (naloga #104). Enako ime vira
+// kot v PIM.F5.Integration ju postavi v vrsto; zaklep seje se sprosti ob zaprtju povezave.
+await using (var applock = Command(connection, """
+  DECLARE @Result int;
+  EXEC @Result = sp_getapplock @Resource=N'PIM.F5.Integration', @LockMode=N'Exclusive', @LockOwner=N'Session', @LockTimeout=900000;
+  SELECT @Result;
+  """))
+{
+  applock.CommandTimeout = 960;
+  var lockResult = Convert.ToInt32(await applock.ExecuteScalarAsync());
+  if (lockResult < 0)
+    throw new InvalidOperationException($"F5 kategorije: drug zagon F5 drzi bazo ze 15 min (sp_getapplock={lockResult}). Pocakaj, da konca, in ponovi.");
+}
 await CleanupAsync(connection);
 try
 {

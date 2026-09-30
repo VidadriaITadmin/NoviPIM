@@ -5,10 +5,10 @@ podrocje: 07-poslovanje
 stanje: delno
 bere: [pim.stranke, pim.izdelek, saop.popusti]
 pise: [pim.popusti, pim.stranke]
-strani: [/pravila-popustov]
+strani: [/pravila-popustov, /izdelki]
 posli: [WEB_CATALOG_EXPORT]
-koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/DiscountRules.razor, PIM_Solution/src/PIM.Intranet/Services/PackagingDiscountService.cs, PIM_Solution/src/PIM.Intranet/Services/IntranetDataService.cs, PIM_Solution/src/PIM.B2b/DiscountCalculator.cs]
-migracije: [20, 98, 205, 214, 216, 252, 253, 274, 279]
+koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/DiscountRules.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor, PIM_Solution/src/PIM.Intranet/Services/PackagingDiscountService.cs, PIM_Solution/src/PIM.Intranet/Services/IntranetDataService.cs, PIM_Solution/src/PIM.B2b/DiscountCalculator.cs]
+migracije: [20, 98, 205, 214, 216, 252, 253, 274, 279, 317]
 ---
 
 # Komercialna pravila — Magento skupine, vrednostni pragovi, poštnina, izjeme in S-popusti
@@ -31,6 +31,7 @@ Komerciala na enem mestu nastavi pravila, ki določajo ceno in popust kupca na s
 ## 3. Kdaj se sproži
 
 - **Ročno:** komerciala na `/pravila-popustov` (Pravila → zavihek »Komercialna pravila«), ob spremembi prodajne politike.
+- **Ročno, za več izdelkov naenkrat:** na `/izdelki` → **S-popust …** (izbrani izdelki ali cel pogled po filtru).
 - **Po urniku:** ni; pravila se upoštevajo ob naslednjem `WEB_CATALOG_EXPORT`.
 - **Ob dogodku:** ni.
 
@@ -93,6 +94,8 @@ flowchart LR
 | 5 | Komerciala | `/pravila-popustov` | **S-popusti** → v šifrantu S kod **Uredi** ali vpišeš novo kodo in »Popust %« ter **Shrani kodo**. | Odstotek velja za vse izdelke s to kodo. | Tabela »Šifrant S kod«. |
 | 6 | Komerciala | `/pravila-popustov` | **S-popusti** → »Dodaj pravilo posebnega S«: »Komu« (tip ali stranka), »Za artikle« (rabatna skupina, vsi z S kodo, vsi, en artikel), »Nova S koda«, datumi, **Shrani pravilo**. | Obstoječe pravilo za isti cilj in obseg se posodobi. Zmaga najbolj specifično (artikel > S koda > skupina > vsi), stranka pred tipom. | V tabeli pravil štetje »izdelkov« in »strank«; v `katalog.csv` stolpca »Posebni S …«. |
 | 7 | Komerciala | `/pravila-popustov` | Pri pravilu S klikneš **Umakni**. | Pravilo preneha veljati. | Vrstica izgine. |
+| 7a | Komerciala | `/izdelki` | Filtriraš ali označiš izdelke, klikneš **S-popust …**, izbereš »Posebni S za tip stranke« ali »… za stranko«, S kodo (prazno = odstrani) in **Uporabi za izbrane** / **Uporabi za cel pogled**, nato **Potrdi in zapiši**. | En zapis na podjetje (ena transakcija, en paket): pravilo na izdelek se ustvari, posodobi ali umakne; vsak spremenjen izdelek gre v `b2b.AuditLog` (prej/potem, številka paketa). Neobjavljeni izdelki se izpustijo z razlogom. | Sporočilo »spremenjenih N, že enakih N, …« in paket v seznamu »Moji zadnji paketi posebnega S«. |
+| 7b | Komerciala | `/izdelki` | V seznamu »Moji zadnji paketi posebnega S« klikneš **Razveljavi**. | Vsak izdelek paketa se vrne v prejšnje stanje (prej brez pravila = umik, prej druga koda = stara koda in veljavnost, prej umaknjeno = spet velja). Izdelka, ki ga je kdo medtem spet spremenil, ne povozi. | Sporočilo »vrnjenih N«; paket označen »razveljavljeno«. |
 | 8 | Avtomatika | — | — | Naslednji `WEB_CATALOG_EXPORT` zapiše nova pravila v `stranke.csv` in `katalog.csv`. | `/splet` → Preglej vsebino. |
 
 ## 7. Pravila in varovalke
@@ -103,6 +106,7 @@ flowchart LR
 - S-popust velja pri količini ≥ PAK2 in samo za stranke s kljukico »Popust polno pakiranje«.
 - Datum »velja do« ne sme biti pred »velja od«.
 - Vse spremembe gredo v revizijsko sled (`b2b.AuditLog`); v SAOP se nič ne pošlje.
+- Množični posebni S z `/izdelki` (317): en paket na podjetje (`b2b.PackagingDiscountRuleBatch` + vrstice prej/potem), razveljavitev celega paketa; pravico (BusinessWrite) preveri storitev, ne samo gumb. Nova koda na izdelku pobriše omejitev veljavnosti od/do (enako kot pravilo po vrstici).
 - Dostop: ADMIN, CATALOG_EDITOR, COMMERCIAL.
 
 ## 8. Ko gre kaj narobe
@@ -120,9 +124,9 @@ flowchart LR
 <summary>Za skrbnika in razvoj</summary>
 
 - **Strani:** `PIM.Intranet/Components/Pages/DiscountRules.razor` (razdelki `types`, `tiers`, `shipping`, `overrides`, `spopusti`).
-- **Storitve / delavci:** `IntranetDataService` (`SaveCustomerTypeMappingAsync`, `SaveValueTierAsync`, `SaveShippingRuleAsync`, `SaveGroupOverrideAsync`), `PackagingDiscountService`; `PIM.B2b.DiscountCalculator`.
-- **Tabele in pogledi:** `pim.CustomerTypeMagentoGroup`, `pim.ValueDiscountTier`, `pim.ShippingRuleCatalog`, `b2b.GroupDiscountOverride`, `pim.PackagingDiscountCatalog`, `b2b.PackagingDiscountRule`, `b2b.PackagingDiscountSpecials`, `b2b.CustomerGroupDiscounts`, `b2b.AuditLog`; `intranet.GetDiscountRules`, `intranet.GetPackagingDiscountRules`.
-- **Migracije:** 020, 098, 205, 214, 216, 252, 253, 274, 279.
+- **Storitve / delavci:** `IntranetDataService` (`SaveCustomerTypeMappingAsync`, `SaveValueTierAsync`, `SaveShippingRuleAsync`, `SaveGroupOverrideAsync`), `PackagingDiscountService` (`SaveRulesBulkAsync`, `UndoRulesBatchAsync`, `GetRuleBatchesAsync` — 317); `PIM.B2b.DiscountCalculator`.
+- **Tabele in pogledi:** `pim.CustomerTypeMagentoGroup`, `pim.ValueDiscountTier`, `pim.ShippingRuleCatalog`, `b2b.GroupDiscountOverride`, `pim.PackagingDiscountCatalog`, `b2b.PackagingDiscountRule`, `b2b.PackagingDiscountSpecials`, `b2b.CustomerGroupDiscounts`, `b2b.AuditLog`, `b2b.PackagingDiscountRuleBatch`, `b2b.PackagingDiscountRuleBatchItem`; `intranet.GetDiscountRules`, `intranet.GetPackagingDiscountRules`, `b2b.SavePackagingDiscountRulesBulk`, `b2b.UndoPackagingDiscountRuleBatch`, `intranet.GetPackagingDiscountRuleBatches`.
+- **Migracije:** 020, 098, 205, 214, 216, 252, 253, 274, 279, 317.
 - **Urniki:** ni lastnega; bere `WEB_CATALOG_EXPORT`.
 
 </details>

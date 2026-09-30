@@ -146,19 +146,28 @@ public sealed class OrganizationMismatchService(IConfiguration configuration)
     WorkbookColumn Text(string header, double width = 14, string? group = null) => new(header, WorkbookCellKind.Text, width, group);
     IReadOnlyList<WorkbookColumn> columns =
     [
-      Text("Šifra", 18, "Artikel"), Text("Naziv (spletni, sicer ERP)", 44, "Artikel"), Text("Predpona", 10, "Artikel"),
+      Text("Šifra", 18, "Artikel"), Text(ProductTitleLookup.WebHeader, 40, "Artikel"), Text(ProductTitleLookup.ErpHeader, 40, "Artikel"), Text("Predpona", 10, "Artikel"),
       Text("Neskladje", 20, "Neskladje"), Text("Posledica", 50, "Neskladje"), Text("Kaj narediti", 44, "Neskladje"),
       Text($"Kartica {page.PrimaryName}", 16, page.PrimaryName), Text($"Kljukice {page.PrimaryName}", 20, page.PrimaryName),
       Text("Drugo podjetje", 14, "Drugo podjetje"), Text("Kartica", 16, "Drugo podjetje"), Text("Kljukice", 20, "Drugo podjetje"),
       Text("V katalogu po kljukicah", 22, "Katalog"), Text("Ne gre na", 16, "Katalog"),
     ];
     static string Card(bool exists, bool active) => !exists ? "ni kartice" : active ? "aktivna" : "neaktivna";
+    // #99: dva ločena naziva kot pri cenah. Naziv je s kartice glavnega podjetja, sicer drugega (kot stolpec
+    // Name v GetOrganizationMismatches); en paket za vse vrstice, ne poizvedba na vrstico.
+    var primaryId = page.Primary?.OrganizationId;
+    (int, string)? TitleKey(OrganizationMismatchRow row) =>
+      row.PrimaryCard && primaryId is { } id ? (id, row.ItemId) : row.OtherCard ? (row.OtherOrganizationId, row.ItemId) : null;
+    var titles = await ProductTitleLookup.ByItemAsync(
+      ConnectionString, page.Rows.Select(TitleKey).Where(key => key is not null).Select(key => key!.Value), ct);
+    ProductTitles TitlesOf(OrganizationMismatchRow row) =>
+      TitleKey(row) is { } key && titles.TryGetValue(key, out var found) ? found : ProductTitles.None;
     var rows = page.Rows.Select(row =>
     {
       var kind = OrganizationMismatchKinds.Find(kinds, row.Kind);
       return (IReadOnlyList<object?>)
       [
-        row.ItemId, row.Name, row.Prefix, kind.Label, kind.Effect, kind.Action,
+        row.ItemId, TitlesOf(row).WebTitle, TitlesOf(row).ErpTitle, row.Prefix, kind.Label, kind.Effect, kind.Action,
         Card(row.PrimaryCard, row.PrimaryActive), row.PrimaryFlags,
         page.OtherName(row.OtherOrganizationId), Card(row.OtherCard, row.OtherActive), row.OtherFlags,
         row.CatalogSites, row.LostSites,

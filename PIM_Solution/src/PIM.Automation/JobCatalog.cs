@@ -110,8 +110,10 @@ public static class JobCatalog
   public const string StockReplenishmentDigest = "STOCK_REPLENISHMENT_DIGEST";
   public const string SystemSelfTest = "SYSTEM_SELF_TEST";
   public const string SaopOutboundDispatch = "SAOP_OUTBOUND_DISPATCH";
+  public const string MediaUrlCheck = "MEDIA_URL_CHECK";
 
   const string MagentoProducts = "MAGENTO_PRODUCTS";
+  const string MediaUrlCheckPipeline = "MEDIA_URL_CHECK";
   const string MagentoCustomers = "MAGENTO_CUSTOMERS";
   const string MagentoStockPrices = "MAGENTO_STOCK_PRICES";
 
@@ -252,6 +254,13 @@ public static class JobCatalog
       "Prehodi celo verigo (baza, razporedi, utripi, katalog, izvoz) in rezultat zapiše v ops.SelfTestRun. Samo bere. Privzeto izklopljen: brez objavljenega samotesta ga gostitelj poganja z dotnet run, ki ponoči gradi projekt.",
       JobFlows.System, false, 70, WorkerJobReach.Internal, null, null, new TimeOnly(4, 30), 1800, 129600, false,
       [], [], ["PIM.SelfTest.Nightly"], []),
+    // Naloga #9 (migracija 312): ali se slike na naslovih res odprejo. Privzeto IZKLOPLJEN — kliče strežnike
+    // dobaviteljev; vklopi ga skrbnik na /sistem. Izid gre v val.MediaUrlCheck: validacija (izdelek brez delujoče
+    // slike = napaka za splet) in katalog.csv (izpust potrjeno pokvarjenih slik) ga bereta ob svojem naslednjem teku.
+    new(MediaUrlCheck, "Preverjanje slik (URL)",
+      "Preveri, ali se slike izdelkov na naslovih res odprejo (glava odgovora, brez prenosa slike). Največ 1.500 naslovov na tek, en zahtevek naenkrat na strežnik s premorom 0,5 s, tek največ 40 min. Slika je pokvarjena šele po 2 neuspehih v razmiku 24 h; 429, 5xx in brez odziva ne štejejo. Seznam: Mediji → Napačni naslovi. SAOP ne kliče.",
+      JobFlows.WebCatalog, false, 45, WorkerJobReach.ExternalCall, "kliče strežnike slik dobaviteljev", 7200, null, 3000, 172800, false,
+      [], [MediaUrlCheckPipeline], ["PIM.SourceFetchWorker"], []),
     new(SaopOutboundDispatch, "Pošiljanje v SAOP (odhodna vrsta)",
       "Odhodna pot v SAOP (PIM.OutboxDispatcher). Privzeto izklopljeno: pošiljanje je ročna odločitev z odobritvijo in zahteva razpored OUTBOUND ter poverilnice.",
       JobFlows.System, false, 80, WorkerJobReach.ExternalCall, "piše v SAOP", 300, null, 900, null, false,
@@ -307,6 +316,8 @@ public static class JobCatalog
         ["--organizations", WorkerCycles.Orgs(env)], env.Paths)]),
     ],
     SystemSelfTest => WorkerCycles.PlanSamotest(env),
+    MediaUrlCheck => [new("Preverjanje slik", [WorkerCycles.Worker("Preverjanje naslovov slik", "PIM.SourceFetchWorker",
+      ["--preveri-slike", "--najvec", "1500", "--premor-ms", "500", "--najvec-minut", "40"], env.Paths)])],
     SaopOutboundDispatch => [new("Odhodna vrsta v SAOP", [WorkerCycles.Worker("Odhodna vrsta", "PIM.OutboxDispatcher", [], env.Paths)])],
     _ => throw new InvalidOperationException($"Neznan posel: {jobKey}."),
   };

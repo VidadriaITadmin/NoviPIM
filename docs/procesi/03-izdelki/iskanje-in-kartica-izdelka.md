@@ -1,30 +1,30 @@
 ---
 id: iskanje-in-kartica-izdelka
-naslov: Iskanje izdelka in urejanje na kartici
+naslov: Iskanje izdelka, urejanje na kartici in paketno na seznamu
 podrocje: 03-izdelki
 stanje: deluje
 bere: [pim.izdelek, pim.besedila, pim.atributi, pim.prevodi, pim.kategorije-izdelka, pim.mediji, pim.cene, pim.zaloge, pim.popusti, pim.odprodaja, pim.validacija, pim.saop-vrsta, pim.nastavitve, pim.surovi-zajem]
-pise: [pim.izdelek, pim.besedila, pim.atributi, pim.kategorije-izdelka, pim.odprodaja, pim.validacija, pim.saop-vrsta]
+pise: [pim.izdelek, pim.besedila, pim.atributi, pim.kategorije-izdelka, pim.odprodaja, pim.validacija, pim.saop-vrsta, pim.zgodovina-uvozov]
 strani: [/izdelki, /izdelki/{ProductId}]
 posli: []
-koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard/*, PIM_Solution/src/PIM.Intranet/Services/ProductWorkbenchService.cs, PIM_Solution/src/PIM.Intranet/Services/ProductEditService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopWriteService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryTreeService.cs, PIM_Solution/src/PIM.Intranet/Services/WebWithdrawalService.cs, PIM_Solution/src/PIM.Intranet/Services/AiTextService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopEndpointSnapshotService.cs, PIM_Solution/src/PIM.Intranet/Services/PimAuthorization.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs]
-migracije: [101, 108, 109, 182, 186, 233, 239, 242, 249, 251, 273, 298, 300, 302, 306]
+koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Products.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ProductCard/*, PIM_Solution/src/PIM.Intranet/Services/ProductWorkbenchService.cs, PIM_Solution/src/PIM.Intranet/Services/ProductEditService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopWriteService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryMappingService.cs, PIM_Solution/src/PIM.Intranet/Services/CategoryTreeService.cs, PIM_Solution/src/PIM.Intranet/Services/WebWithdrawalService.cs, PIM_Solution/src/PIM.Intranet/Services/AiTextService.cs, PIM_Solution/src/PIM.Intranet/Services/SaopEndpointSnapshotService.cs, PIM_Solution/src/PIM.Intranet/Services/PimAuthorization.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs, PIM_Solution/src/PIM.Intranet/Services/ProductBulkEdit.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimBulkBar.razor, PIM_Solution/src/PIM.Intranet/Components/Shared/PimRowSelection.cs]
+migracije: [101, 108, 109, 182, 186, 233, 239, 242, 249, 251, 273, 298, 300, 302, 306, 323, 326]
 ---
 
-# Iskanje izdelka in urejanje na kartici
+# Iskanje izdelka, urejanje na kartici in paketno na seznamu
 
 > **Področje:** Izdelki · **Lastnik:** urednik kataloga · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-28, v brskalniku (razvojna baza)
 
 ## 1. Namen
 
-Najti izdelek (ali skupino izdelkov) po šifri, EAN in filtrih ter na kartici izdelka pregledati in popraviti njegove podatke. Rezultat je popravljen izdelek v PIM: spletna besedila in atributi veljajo takoj, polja SAOP veljajo v PIM takoj, v SAOP pa gredo šele po odobritvi.
+Najti izdelek (ali skupino izdelkov) po šifri, EAN in filtrih ter na kartici izdelka pregledati in popraviti njegove podatke — ali pa isto polje popraviti **paketno** za več izdelkov naenkrat na seznamu (izbrane vrstice ali vse, ki ustrezajo filtru). Rezultat je popravljen izdelek v PIM: spletna besedila in atributi veljajo takoj, polja SAOP veljajo v PIM takoj, v SAOP pa gredo šele po odobritvi.
 
 ## 2. Kdo sodeluje
 
 | Vloga | Kaj naredi v procesu |
 |---|---|
 | Komerciala | Išče in pregleduje izdelke, na seznamu nastavlja S-popuste; kartice ne more urejati (samo branje). |
-| Urednik kataloga | Ureja kartico: spletna besedila, atribute, polja SAOP, spletišča, oznake, odprodajo. |
+| Urednik kataloga | Ureja kartico: spletna besedila, atribute, polja SAOP, spletišča, oznake, odprodajo. Na seznamu paketno nastavi polje PIM za več izdelkov. |
 | Skrbnik | Vse kot urednik; poleg tega potrdi, da artikel nima EAN, proizvajalca ali dobavitelja. |
 | Avtomatika (PIM) | Po shranjevanju ponovno validira izdelek, uvrsti polja SAOP v odhodno vrsto in po potrebi sam odkljuka spletišče (samodejni umik s spleta). |
 
@@ -95,6 +95,16 @@ flowchart LR
 | 11 | Skrbnik | Kartica, **ERP**, pri napaki EAN/proizvajalec/dobavitelj | Klikneš »… — potrdi«. | Potrditev skrbnika se zapiše, izdelek se takoj ponovno validira. | Napaka izgine, potrditev je vidna pod »Potrditve skrbnika«. |
 | 12 | Urednik | Kartica, **Kakovost in zgodovina** | Pregledaš odprte težave, »Zapisi v SAOP« in »Izvor podatkov«. | Izvor se naloži šele ob odprtju zavihka (počasno iskanje). | Tabela sporočil na poti v SAOP s stanjem (Čaka odobritev, Poslano, Potrjeno, Odklon). |
 
+### Paketno urejanje na seznamu (#10, 2026-09-29)
+
+| # | Kdo | Kje (stran) | Kaj narediš | Kaj se zgodi v sistemu | Kako preveriš, da je uspelo |
+|---|---|---|---|---|---|
+| P1 | Urednik | `/izdelki`, vrstica nad tabelo | Označiš vrstice (kljukica na vrstici), **Označi vse na strani** ali **Označi vse, ki ustrezajo filtru (N)**. | Izbira živi čez strani in filtre; »vse po filtru« je filter, ne seznam (ob drugem filtru se sprosti). | Vrstica pove »Izbranih N« (ali »vsi, ki ustrezajo filtru«). |
+| P2 | Urednik | Vrstica izbire → **Nastavi polje …** | Izbereš polje (spletni naziv/opis po jeziku, atribut, kategorija spletišča, spletišča, oznaka) in vpišeš vrednost; pri seznamih izbereš **Dodaj k obstoječim** ali **Zamenjaj ves seznam**; **Izprazni polje** polje pobriše. | Nič se še ne zapiše. | Gumb **Pokaži predogled (N)** je omogočen, ko je vrednost veljavna. |
+| P3 | Urednik | Isto okno | Klikneš **Pokaži predogled**. | PIM sestavi majhen delovni list (Podjetje, Šifra, polje) in ga prebere kot uvoz Excela: preveri vrednost, izloči izdelke, ki vrednost že imajo, prebere »prej«. Teče skozi vrata za uvoze; **Prekliči** ga ustavi. | Vprašanje »Nastaviti ›polje‹ na ›vrednost‹ za N izdelkov v podjetju …?«, razdelitev po podjetjih, tabela prej → potem (prvih 25), opozorilo, koliko izdelkov izgubi spletišče. |
+| P4 | Urednik | Isto okno | Klikneš **Potrdi in zapiši (N)**. | NAJPREJ zapis v zgodovini uvozov (»Seznam izdelkov – paketno«, celoten prej → potem), nato zapis po paketih po 200 izdelkov skozi uvoz delovnega lista (`pim.Save*Bulk`, `pim.SetProductFlagsBulk`); vsak paket validira samo svoje izdelke in takoj preveri samodejni umik s spleta. Preklic velja med paketi. | Napredek »Paket k od m: zapisanih X od N izdelkov · še približno … min«; na koncu »Zapisano: N vrednosti na M izdelkih …« in ali gre polje na splet (atribut izven nabora ne gre) s povezavo na `/uvozi/{Id}`. |
+| P5 | Urednik | `/uvozi/{Id}` | Klikneš **Povrni**. | Povratek vrne »prej« povsod, kjer je v PIM še vrednost paketa (glej [Zgodovina uvozov in povratek](../01-nadzor/zgodovina-uvozov-in-povratek.md)). | Nov zapis »Povratek uvoza #Id«. |
+
 Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP)« (vse po poti PIM + SAOP); cene po cenikih so tabela (urejanje na strani Cene), S-popust glej [Popusti](../07-poslovanje/popusti.md). Samo za branje so **SAOP endpoint** (zapis, kot ga ima ERP, z označenimi odkloni), **Mediji**, **Zaloga**. Desni stolpec **Aktivnosti** pokaže zadnje spremembe izdelka.
 
 ## 7. Pravila in varovalke
@@ -107,6 +117,8 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 - **Samodejni umik s spleta:** če po spremembi besedila, atributa ali po »Preveri zdaj« izdelek ni več veljaven za označeno spletišče, ga PIM (ob vklopljenem umiku) odkljuka in to izpiše; na kartici se pojavi pasica »Samodejno umaknjen s spleta«.
 - **Pravice:** urejanje kartice samo ADMIN in CATALOG_EDITOR (vsi ostali vidijo »Samo za branje«); **Preveri zdaj** tudi COMMERCIAL; potrditev manjkajočega EAN/proizvajalca/dobavitelja samo ADMIN. Na seznamu gumb **S-popust …** vidijo ADMIN, CATALOG_EDITOR in COMMERCIAL.
 - Šifra artikla je enolična samo znotraj podjetja, zato je podjetje vedno izpisano ob šifri.
+- **Zgodovina sprememb atributov in besedil (323, #115):** sprememba samo velike/male črke (»bela« → »Bela«, »kgs« → »Kgs«) se zapiše v zgodovino izdelka (`pim.ProductFieldHistory`, prej/potem) kot vsaka druga sprememba; prej je sprožilec takšne spremembe spregledal. Presledek na koncu vrednosti še vedno ne šteje kot sprememba. Za osnovna polja izdelka, komercialna polja in medije to še ne velja (ločena naloga). **Shranjevanje (326):** kartica izdelka in delovni list (atributi, besedila, SAOP stolpci) takšno spremembo tudi dejansko zapišeta — prej je shranjevanje »max 25 W« → »Max 25 W« tiho preskočilo. Če je nekdo drug medtem spremenil samo veliko/malo črko, kartica to pokaže kot spor.
+- **Paketno urejanje (#10):** samo podatki PIM (spletna besedila, atributi, kategorije primarnega spletišča, spletišča, oznake). **Polj SAOP paketno ne ponuja** (PRIVZETO ZA NOČ 2026-09-29, odločitev lastnika je odprta kot ločena naloga) — ta ostanejo uvozu Excela, kjer gredo v vrsto za SAOP; pomočnica zapis s poljem SAOP zavrne. S-popust ima svoje dejanje (Komerciala), slike in dokumenti ne (naloga #32). Pravico preveri `ProductBulkEdit.ApplyAsync` (`CatalogWrite`) in zapisovalne procedure; Komerciala gumba **Nastavi polje** ne vidi. Zapis ni ena transakcija: zgodovina se zapiše PRED zapisom izdelkov, nato gre zapis po paketih po 200 (`ProductBulkEdit.ChunkSize`), ker vsak paket validira svoje izdelke (`val.RunValidationForProducts`, pri 1.000 izdelkih 9,5 min in zaklepi za druge seje — hitrost validacije je naloga #105). Če se zapis ustavi (preklic med paketi, napaka, izpad intraneta), povratek na `/uvozi/{Id}` povrne natanko celice, ki nosijo novo vrednost.
 - **Vse je okence (2026-09-28).** Zaklenjeni (onemogočeni okenci z razlogom) ostajata samo **Šifra artikla** (ključ v SAOP in PIM) in **Sledenje serij** (vpliva na zalogo, nastavi se v SAOP). Katero polje gre v SAOP, pove register `out.SaopXmlField` + pravilo lastništva `out.OwnershipPolicy` (Owner = PIM); dolžina (`ItemLength`) in prostornina (`ItemVolumePerUnit`) sta tam od migracij 298/300.
 - **Števci pomenijo isto povsod:** značke v levem meniju in številki »Ustavi objavo« / »Priporočeno« v glavi zavihka štejejo prazna polja **na tem zavihku** (napaka komercialnega profila, npr. Pak1, se šteje tam, kjer polje stoji — na ERP). Rdeče je samo, kar ustavi objavo; število slik in zalogovnih vrstic je sivo in ima opis.
 - **Prazno = kot validacija:** 0 v številskem polju pakiranja/mer šteje za prazno.
@@ -123,6 +135,9 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 | Spletišče obkljukano, izdelka pa ni v katalog.csv | Neaktiven, zadržan, izključen, ni objavljen v PIM ali ima blokirajoče napake. | Poglej stolpec »V stolpcu Spletne strani« v razdelku Objava za splet in klikni **Preveri zdaj**. |
 | Gumb AI je siv, »AI ni nastavljen« | Na strežniku ni ključa AI. | Skrbnik nastavi ključ (Ai:ApiKey). |
 | »Kartice izdelka trenutno ni mogoče naložiti.« | Napaka baze ali povezave. | Osveži; če ostane, skrbnik pogleda dnevnik. |
+| Predogled paketa: »Nobenemu … se ne spremeni« | Izbrani izdelki vrednost že imajo (ali jih ni). | Preveri filter ali izbiro. |
+| Predogled paketa: »… poti kategorij ne obstaja« | Kategorija ni v drevesu tega spletišča. | Izberi kategorijo iz izbirnika; nove ustvariš na strani kategorij ali z uvozom Excela. |
+| »Zapis se je ustavil …« po paketu | Napaka baze sredi zapisa. | Zapis je v zgodovini uvozov: odpri ga in po potrebi **Povrni**, nato ponovi paket. |
 
 ## 9. Tehnično ozadje
 
@@ -134,6 +149,7 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 - **Tabele in pogledi:** `intranet.GetProductList`, `intranet.GetProductListFilters`, `intranet.GetProductCard`, `intranet.GetProductOrigin`, `val.ProductChannelReadiness`, `pim.ProductWebShop`, `pim.ProductFlag`, `out.SaopXmlField` (register pisljivih polj), `pim.ProductFieldHistory`.
 - **Pravice:** politike `CatalogWrite` (ADMIN, CATALOG_EDITOR), `SaopWrite`, `BusinessWrite`, `FieldWaiver` (ADMIN) v `Services/PimAuthorization.cs`; ključ strani `view.products.list`.
 - **Migracije:** 101, 108 (seznam), 182 (spletišča), 186 (spori), 233 (oznake), 239 (ERP besedila), 242 (objava za splet), 249 (potrditve), 251 (umik s spleta), 273 (PIM takoj, SAOP po odobritvi), 302 (Pakirno naročanje, `pim.SetProductFlagsBulk`, `val.SyncPackageOrderHolds`), 306 (razlog zadržka).
+- **Paketno urejanje (#10):** `Services/ProductBulkEdit.cs` (statična pomočnica: zvezek → `ProductWorkbookService.PreviewAsync` / `ApplyAsync` → `ImportHistoryService.RecordAsync(ImportKinds.Products)` → `WebWithdrawalService.AfterChangeByItemsAsync`), skupna gradnika `Components/Shared/PimRowSelection.cs` (izbira: stran / vse po filtru / nič) in `PimBulkBar.razor` (vrstica izbranih in dejanj). Brez nove migracije. Test `PIM.F10.BulkEditTests`.
 - **Urniki:** ni.
 
 </details>
@@ -148,7 +164,8 @@ Zavihek **Komerciala** ureja ABC, skupino, aktivnost in »Objava na spletu (SAOP
 
 ## Povezani procesi
 
-- [Uvoz delovnega lista](uvoz-delovnega-lista.md): isti podatki množično, prek Excela; izvoz se sproži z gumbom na seznamu Izdelki.
+- [Uvoz delovnega lista](uvoz-delovnega-lista.md): isti podatki množično, prek Excela; izvoz se sproži z gumbom na seznamu Izdelki. Paketno urejanje na seznamu gre po isti poti (navidezen zvezek).
+- [Zgodovina uvozov in povratek](../01-nadzor/zgodovina-uvozov-in-povratek.md): povratek paketne spremembe.
 - [Kategorije izdelka](kategorije-izdelka.md): ročna uvrstitev — isti gradnik je na kartici (Splet) in na strani Uvrstitev izdelka.
 - [Mediji](mediji.md): vse slike in dokumenti izdelka.
 - [Odprodaja](odprodaja.md): razdelek Odprodaja na kartici.

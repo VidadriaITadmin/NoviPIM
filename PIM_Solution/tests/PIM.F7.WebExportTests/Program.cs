@@ -97,6 +97,113 @@ foreach (var contract in new[] { "izvoz/magento-datoteka", "Artifacts.PreviewAsy
     Assert(magentoProducts.FirstValues.Count(value => !string.IsNullOrWhiteSpace(value)) > 5,
       "Vrstica z eno samo izpolnjeno vrednostjo pomeni, da vir vrednosti ni pravi.");
 
+    // --- #80 (315): stetje in stran iz enega filtra (#Match80) -------------------------
+    // Predogled /splet/izvoz je trajal 8-55 s; 315 izvede filter enkrat in stran vzame iz njega.
+    // Pogodba: vse strani imajo isto @TotalCount, sosednji strani se ne prekrivata in gresta
+    // po sifri naprej, zadnja stran ima preostanek, stran za koncem je prazna, iskanje po sifri najde vrstico.
+    var definition = await ScalarStringAsync(connection, "SELECT OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))");
+    Assert(definition.Contains("#Match80", StringComparison.Ordinal) && definition.Contains("HitrejsiPredogled80", StringComparison.Ordinal),
+      "out.GetExportRows mora imeti popravek 315 (en filter za stetje in stran).");
+    var firstPage = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: 0, take: 3, search: null);
+    var secondPage = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: 3, take: 3, search: null);
+    Assert(firstPage.Total == magentoProducts.Total && secondPage.Total == magentoProducts.Total,
+      "@TotalCount mora biti enak na vseh straneh.");
+    if (firstPage.Total > 3)
+    {
+      Assert(firstPage.Keys.Count == 3 && secondPage.Keys.Count > 0 && !firstPage.Keys.Intersect(secondPage.Keys).Any(),
+        "Sosednji strani predogleda se ne smeta prekrivati.");
+      var sixRows = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: 0, take: 6, search: null);
+      Assert(sixRows.Keys.SequenceEqual(firstPage.Keys.Concat(secondPage.Keys)),
+        "Stran 2 se mora nadaljevati tocno za stranjo 1 (isti vrstni red kot ena daljsa stran).");
+    }
+    var lastPage = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: firstPage.Total - 1, take: 3, search: null);
+    var beyond = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: firstPage.Total, take: 3, search: null);
+    Assert(lastPage.Keys.Count == 1 && beyond.Keys.Count == 0 && beyond.Total == firstPage.Total,
+      "Zadnja stran ima preostanek, stran za koncem je prazna, stetje ostane.");
+    var searched = await ReadKeysAsync(connection, 2, magentoProductProfileId, skip: 0, take: 200, search: firstPage.Keys[0]);
+    Assert(searched.Total >= 1 && searched.Total == searched.Keys.Count && searched.Keys.Contains(firstPage.Keys[0]),
+      "Iskanje po sifri mora najti vrstico in povedati pravo stevilo zadetkov.");
+
+    // --- #114 (322): veljavne poti in zaloga brez pogledov nad celo bazo ------------------
+    // 322 je v out.GetExportRows prepisala logiko pogledov canon.CategoryPathTranslated /
+    // canon.WebSiteCategoryPath (veljavne poti, 291) in out.CatalogStock (zaloga za odprodajo).
+    // Ce kdo spremeni pogled, mora spremeniti tudi proceduro - spodnja primerjava to ujame:
+    // ista logika kot v proceduri (HitrejsiPredogled114) mora dati natanko isto kot pogled.
+    Assert(definition.Contains("HitrejsiPredogled114", StringComparison.Ordinal)
+        && definition.Contains("#StockPos114", StringComparison.Ordinal)
+        && definition.Contains("#CatName114", StringComparison.Ordinal)
+        && !definition.Contains("JOIN out.CatalogStock", StringComparison.Ordinal)
+        && !definition.Contains("canon.WebSiteCategoryPath AS valid80", StringComparison.Ordinal),
+      "out.GetExportRows mora imeti popravek 322 (poti in zaloga od strani navzdol).");
+    var pathDifferences = await ScalarStringAsync(connection, """
+      SET NOCOUNT ON;
+      CREATE TABLE #CatName114 (CategoryTreeCode nvarchar(100) COLLATE DATABASE_DEFAULT NOT NULL,
+        CategoryCode nvarchar(400) COLLATE DATABASE_DEFAULT NOT NULL, ParentCategoryCode nvarchar(400) COLLATE DATABASE_DEFAULT NULL,
+        LanguageCode nvarchar(20) COLLATE DATABASE_DEFAULT NOT NULL, CategoryName nvarchar(400) COLLATE DATABASE_DEFAULT NULL);
+      INSERT #CatName114
+      SELECT category.CategoryTreeCode, category.CategoryCode, category.ParentCategoryCode, jezik.LanguageCode,
+        CONVERT(nvarchar(400), ISNULL(prevod.CategoryName, category.CategoryName))
+      FROM canon.Category AS category
+      CROSS JOIN (SELECT DISTINCT LanguageCode FROM canon.CategoryTranslation) AS jezik
+      LEFT JOIN canon.CategoryTranslation AS prevod ON prevod.CategoryTreeCode = category.CategoryTreeCode
+        AND prevod.CategoryCode = category.CategoryCode AND prevod.LanguageCode = jezik.LanguageCode
+      WHERE category.IsActive = 1;
+      CREATE TABLE #TransPath114 (CategoryTreeCode nvarchar(100) COLLATE DATABASE_DEFAULT NOT NULL,
+        LanguageCode nvarchar(20) COLLATE DATABASE_DEFAULT NOT NULL, CategoryPath nvarchar(1000) COLLATE DATABASE_DEFAULT NULL);
+      WITH veriga AS (
+        SELECT ime.CategoryTreeCode, ime.CategoryCode, ime.LanguageCode, CONVERT(nvarchar(1000), ime.CategoryName) AS CategoryPath
+        FROM #CatName114 AS ime WHERE ime.ParentCategoryCode IS NULL
+        UNION ALL
+        SELECT ime.CategoryTreeCode, ime.CategoryCode, ime.LanguageCode, CONVERT(nvarchar(1000), starsi.CategoryPath + N' > ' + ime.CategoryName)
+        FROM #CatName114 AS ime INNER JOIN veriga AS starsi ON starsi.CategoryTreeCode = ime.CategoryTreeCode
+          AND starsi.CategoryCode = ime.ParentCategoryCode AND starsi.LanguageCode = ime.LanguageCode)
+      INSERT #TransPath114 SELECT CategoryTreeCode, LanguageCode, CategoryPath FROM veriga;
+      SELECT CONCAT(
+        (SELECT COUNT(*) FROM (SELECT CategoryTreeCode, LanguageCode, CategoryPath COLLATE Latin1_General_BIN2 AS P FROM #TransPath114
+          EXCEPT SELECT CategoryTreeCode, LanguageCode, CategoryPath COLLATE Latin1_General_BIN2 FROM canon.CategoryPathTranslated) AS a), N'/',
+        (SELECT COUNT(*) FROM (SELECT CategoryTreeCode, LanguageCode, CategoryPath COLLATE Latin1_General_BIN2 AS P FROM canon.CategoryPathTranslated
+          EXCEPT SELECT CategoryTreeCode, LanguageCode, CategoryPath COLLATE Latin1_General_BIN2 FROM #TransPath114) AS b), N'/',
+        (SELECT COUNT(*) FROM (
+          SELECT site.WebSiteCode, path.CategoryPath FROM canon.WebSite AS site
+          INNER JOIN #TransPath114 AS path ON path.CategoryTreeCode = site.CategoryTreeCode AND path.LanguageCode = site.LanguageCode
+          WHERE site.IsActive = 1
+          UNION SELECT site.WebSiteCode, category.CategoryPath FROM canon.WebSite AS site
+          INNER JOIN canon.Category AS category ON category.CategoryTreeCode = site.CategoryTreeCode AND category.IsActive = 1
+          WHERE site.IsActive = 1 AND site.LanguageCode = N'sl'
+          EXCEPT SELECT WebSiteCode, CategoryPath FROM canon.WebSiteCategoryPath) AS c), N'/',
+        (SELECT COUNT(*) FROM (
+          SELECT WebSiteCode, CategoryPath FROM canon.WebSiteCategoryPath
+          EXCEPT (SELECT site.WebSiteCode, path.CategoryPath FROM canon.WebSite AS site
+            INNER JOIN #TransPath114 AS path ON path.CategoryTreeCode = site.CategoryTreeCode AND path.LanguageCode = site.LanguageCode
+            WHERE site.IsActive = 1
+            UNION SELECT site.WebSiteCode, category.CategoryPath FROM canon.WebSite AS site
+            INNER JOIN canon.Category AS category ON category.CategoryTreeCode = site.CategoryTreeCode AND category.IsActive = 1
+            WHERE site.IsActive = 1 AND site.LanguageCode = N'sl')) AS d));
+      """);
+    Assert(pathDifferences == "0/0/0/0",
+      "Logika veljavnih poti v out.GetExportRows (322) se ne ujema vec s pogledoma canon.CategoryPathTranslated / "
+      + "canon.WebSiteCategoryPath (razlike " + pathDifferences + "). Popravi oba kraja enako.");
+    var stockDifferences = await ScalarStringAsync(connection, """
+      SET NOCOUNT ON;
+      WITH mine AS (
+        SELECT registry.OrganizationId, product.ItemID,
+          OwnAvailable = SUM(CASE WHEN registry.Contribution IN (N'BASE', N'ADD') THEN COALESCE(position.AvailableQuantity, position.Quantity) ELSE 0 END),
+          OwnSnapshotUtc = MIN(CASE WHEN registry.Contribution IN (N'BASE', N'ADD') THEN snapshot.SnapshotUtc END)
+        FROM canon.Product AS product
+        INNER JOIN stock.Position AS position ON position.MatchedProductId = product.ProductId
+        INNER JOIN stock.Snapshot AS snapshot ON snapshot.SnapshotId = position.SnapshotId AND snapshot.IsActive = 1
+        INNER JOIN map.SourceConnector AS connector ON connector.SourceConnectorId = snapshot.SourceConnectorId
+        INNER JOIN out.ExportStockSource AS registry ON registry.StockOrganizationId = connector.OrganizationId
+          AND registry.SourceCode = connector.SourceCode AND registry.IsActive = 1
+        GROUP BY registry.OrganizationId, product.ItemID)
+      SELECT CONCAT(
+        (SELECT COUNT(*) FROM (SELECT * FROM mine EXCEPT SELECT OrganizationId, ItemID, OwnAvailable, OwnSnapshotUtc FROM out.CatalogStock) AS a), N'/',
+        (SELECT COUNT(*) FROM (SELECT OrganizationId, ItemID, OwnAvailable, OwnSnapshotUtc FROM out.CatalogStock EXCEPT SELECT * FROM mine) AS b));
+      """);
+    Assert(stockDifferences == "0/0",
+      "Zaloga v out.GetExportRows (322, #CatalogStock114) se ne ujema vec s pogledom out.CatalogStock (razlike "
+      + stockDifferences + "). Popravi oba kraja enako.");
+
     // --- Magento stranke: profil, ki ga je 139 se zavracala --------------------------
     var magentoCustomerProfileId = await ProfileIdAsync(connection, "MAGENTO_CUSTOMERS");
     var magentoCustomerColumns = await ColumnNamesAsync(connection, magentoCustomerProfileId);
@@ -260,6 +367,36 @@ static async Task<(IReadOnlyList<string> Columns, int Rows, int Total, IReadOnly
     }
   }
   return (columns, rows, Convert.ToInt32(total.Value), firstValues);
+}
+
+static async Task<(IReadOnlyList<string> Keys, int Total)> ReadKeysAsync(
+  SqlConnection connection, int organizationId, int profileId, int skip, int take, string? search)
+{
+  await using var command = new SqlCommand("intranet.GetWebExportRows", connection)
+  {
+    CommandType = CommandType.StoredProcedure,
+    CommandTimeout = 600,
+  };
+  command.Parameters.AddWithValue("@OrganizationId", organizationId);
+  command.Parameters.AddWithValue("@ExportProfileId", profileId);
+  command.Parameters.AddWithValue("@WebSite", DBNull.Value);
+  command.Parameters.AddWithValue("@OnlyPublished", false);
+  command.Parameters.AddWithValue("@Search", (object?)search ?? DBNull.Value);
+  command.Parameters.AddWithValue("@Skip", skip);
+  command.Parameters.AddWithValue("@Take", take);
+  var total = command.Parameters.Add("@TotalCount", SqlDbType.Int);
+  total.Direction = ParameterDirection.Output;
+  var keys = new List<string>();
+  await using (var reader = await command.ExecuteReaderAsync())
+    while (await reader.ReadAsync())
+      keys.Add(reader.IsDBNull(0) ? "" : reader.GetString(0));
+  return (keys, Convert.ToInt32(total.Value));
+}
+
+static async Task<string> ScalarStringAsync(SqlConnection connection, string sql)
+{
+  await using var command = new SqlCommand(sql, connection);
+  return Convert.ToString(await command.ExecuteScalarAsync()) ?? "";
 }
 
 static async Task<string?> FieldCodeAsync(SqlConnection connection, int profileId, string columnCode)

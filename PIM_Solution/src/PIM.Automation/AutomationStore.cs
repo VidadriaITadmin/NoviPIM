@@ -239,6 +239,24 @@ public sealed class AutomationStore(string connectionString)
     await command.ExecuteNonQueryAsync(cancellationToken);
   }
 
+  /// <summary>
+  /// Umik oddane, še ne prevzete ročne zahteve (ops.CancelJobRunRequest, 324). Posel, ki že teče (52388), ali
+  /// zahteva, ki je ni več (52389), baza zavrne. <paramref name="nextDueUtc"/> je novi redni termin (RequestJobRun
+  /// je izvirnega prepisal); null = gostitelj ga izračuna sam. Vrne, čigava zahteva je bila umaknjena.
+  /// </summary>
+  public async Task<(string? RequestedBy, DateTime? RequestedRunUtc)> CancelRunRequestAsync(
+    string jobKey, string actor, DateTime? nextDueUtc, CancellationToken cancellationToken = default)
+  {
+    await using var connection = await OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("ops.CancelJobRunRequest", connection) { CommandType = CommandType.StoredProcedure };
+    command.Parameters.Add("@JobKey", SqlDbType.NVarChar, 60).Value = jobKey;
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@NextDueUtc", SqlDbType.DateTime2).Value = (object?)nextDueUtc ?? DBNull.Value;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (!await reader.ReadAsync(cancellationToken)) return (null, null);
+    return (NullableText(reader, "RequestedBy"), NullableDate(reader, "RequestedRunUtc"));
+  }
+
   public async Task RequestCancelAsync(long jobRunId, string actor, CancellationToken cancellationToken = default)
   {
     await using var connection = await OpenAsync(cancellationToken);

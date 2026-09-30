@@ -107,7 +107,7 @@
     <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
       <header>
         <div><strong>@errorPreview.Title</strong><span>Napaka pošiljanja</span></div>
-        <button type="button" class="small-action" @onclick="CloseError">Zapri</button>
+        <button type="button" class="small-action" data-pim-close @onclick="CloseError">Zapri</button>
       </header>
       <div class="xml-lightbox-body"><p class="error-state" role="alert">@errorPreview.Detail</p></div>
     </div>

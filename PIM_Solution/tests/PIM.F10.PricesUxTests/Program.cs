@@ -47,6 +47,54 @@ Assert(Regex.Matches(markup, "<AuthorizeView Policy=\"@PimPolicies.SaopWrite\">"
   "Urejanje cene, nov cenik in odobritev morajo biti za politiko SaopWrite.");
 Assert(import.Contains("<AuthorizeView Policy=\"@PimPolicies.SaopWrite\">", StringComparison.Ordinal), "Uvrstitev uvoza v vrsto mora biti za SaopWrite.");
 
+/* --- C6 (#76): pasica »V SAOP čaka potrditev« ne meša podjetij, zavihek je v naslovu ------- */
+var shared = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared");
+var banner = File.ReadAllText(Path.Combine(shared, "SaopSafeguardBanner.razor"));
+var heldList = File.ReadAllText(Path.Combine(shared, "SaopDeactivationConfirm.razor"));
+Assert(markup.Contains("<SaopSafeguardBanner Version=\"SafeguardVersion\" OrganizationId=\"OrganizationId\" />", StringComparison.Ordinal),
+  "Pasica na /cene mora dobiti izbrano podjetje (sicer pokaže in potrdi spremembe vseh podjetij).");
+foreach (var other in new[] { "BulkOutbound.razor", "SaopItems.razor", "Outbound.razor" })
+  Assert(Regex.IsMatch(File.ReadAllText(Path.Combine(pages, other)), "<SaopSafeguardBanner[^>]*OrganizationId=\"OrganizationId\""),
+    "Pasica na " + other + " mora dobiti podjetje strani.");
+Assert(banner.Contains("GroupBy(item => item.OrganizationId)", StringComparison.Ordinal) && banner.Contains("ConfirmAsync(organizationId)", StringComparison.Ordinal),
+  "Pri »vsa podjetja« mora pasica ločiti podjetja in potrjevati po podjetju.");
+
+/* --- C7 (#113): cenik za tisk in uvoz cen — izbira v naslovu, sprememba se pozna, sklanjatev ------ */
+var sheet = File.ReadAllText(Path.Combine(pages, "PriceSheet.razor"));
+foreach (var name in new[] { "podjetje", "cenik", "jezik", "mesto", "kategorija", "sifre", "vsi", "slike" })
+{
+  Assert(sheet.Contains($"[SupplyParameterFromQuery(Name = \"{name}\")]", StringComparison.Ordinal), "Cenik za tisk mora brati »" + name + "« iz naslova.");
+  Assert(sheet.Contains($"[\"{name}\"] =", StringComparison.Ordinal), "Cenik za tisk mora zapisati »" + name + "« v naslov.");
+}
+foreach (var id in new[] { "sheet-organization", "sheet-pricelist", "sheet-language", "sheet-site", "sheet-category", "sheet-items" })
+  Assert(Regex.IsMatch(sheet, "id=\"" + id + "\"[^\\n]*@bind:after=\"ChangedAsync\""), "Sprememba polja " + id + " mora osvežiti cenik in naslov.");
+Assert(!Regex.IsMatch(sheet, "@bind:event=\"oninput\""), "Cenik za tisk ne sme brati baze ob vsakem pritisku tipke.");
+Assert(sheet.Contains("OnParametersSetAsync", StringComparison.Ordinal), "»Nazaj« v brskalniku mora vrniti prejšnji cenik.");
+Assert(sheet.Contains("RendererInfo.IsInteractive", StringComparison.Ordinal), "Predupodabljanje ne sme brati cenika (dvojno nalaganje).");
+Assert(import.Contains("[SupplyParameterFromQuery(Name = \"podjetje\")]", StringComparison.Ordinal)
+    && import.Contains("GetUriWithQueryParameter(\"podjetje\"", StringComparison.Ordinal), "Podjetje za vrstice uvoza mora biti v naslovu.");
+Assert(!import.Contains("ToString(\"N0\") cen", StringComparison.Ordinal), "Število cen na uvozu mora biti sklanjano (PimFormat.Count).");
+Assert(import.Contains("PimFormat.Count(Preview.Rows.Count, \"ceno\", \"ceni\", \"cene\", \"cen\")", StringComparison.Ordinal), "Gumb uvoza: »Uvrsti 2 ceni«.");
+Assert(PimFormat.Count(2, "ceno", "ceni", "cene", "cen") == "2 ceni" && PimFormat.Count(5, "ceno", "ceni", "cene", "cen") == "5 cen"
+    && PimFormat.Count(101, "ceno", "ceni", "cene", "cen") == "101 ceno", "Sklanjatev cen je napačna.");
+Assert(markup.Contains("\"izbrana izdelka\"", StringComparison.Ordinal), "Na /cene: »2 izbrana izdelka«, ne »2 izbranih izdelkov«.");
+/* --- C8 (#107): prazen cenik pove zakaj, manjkajoče šifre so naštete, jezik in podjetje uvoza razložena ---- */
+Assert(sheet.Contains("EmptyText=\"@EmptyMessage\"", StringComparison.Ordinal) && !sheet.Contains("EmptyText=\"Za to izbiro ni artiklov s ceno.\"", StringComparison.Ordinal),
+  "Prazen cenik mora povedati, zakaj je prazen (kategorija, šifre, podjetje), ne splošnega besedila.");
+Assert(sheet.Contains("MissingItems", StringComparison.Ordinal) && sheet.Contains("LoadedItems.Except(Rows.Select(row => row.ItemID)", StringComparison.Ordinal),
+  "Vpisane šifre, ki jih v ceniku ni, morajo biti naštete.");
+Assert(sheet.Contains("Language != \"sl\"", StringComparison.Ordinal), "Pri jeziku, ki ni sl, mora stran povedati, da artikli brez prevoda ostanejo slovenski.");
+Assert(import.Contains("aria-describedby=\"import-organization-hint\"", StringComparison.Ordinal) && import.Contains("id=\"import-organization-hint\"", StringComparison.Ordinal),
+  "Izbira podjetja na uvozu mora imeti razlago, kdaj se uporabi.");
+Assert(banner.Contains("Items.Where(item => item.OrganizationId == organizationId)", StringComparison.Ordinal),
+  "Potrditev sme poslati samo sporočila podjetja, katerega gumb je bil kliknjen.");
+Assert(heldList.Contains("OrganizationName", StringComparison.Ordinal) && heldList.Contains("\"Cene\"", StringComparison.Ordinal) && heldList.Contains("\"Artikli\"", StringComparison.Ordinal),
+  "Seznam mora v naslovu povedati podjetje in ločiti cene od artiklov.");
+// 96 zapiše URL kot nov korak zgodovine (»Nazaj« vrne prejšnji filter), zato brez replace.
+Assert(markup.Contains("[\"zavihek\"] = Tab == \"cene\" ? null : Tab", StringComparison.Ordinal) && markup.Contains("[\"podjetje\"] = OrganizationId", StringComparison.Ordinal)
+  && markup.Contains("Navigation.NavigateTo(uri", StringComparison.Ordinal),
+  "Zavihek (npr. V SAOP) in podjetje morata biti v naslovu, da osvežitev ohrani pogled.");
+
 /* --- C4: oblike dokumentov ----------------------------------------------------------------- */
 var price = SaopKnownShapes.Price;
 Assert(price.AddPath == "api/Price/AddPrices" && price.AddOperation == "POST", "Nova cena gre s POST api/Price/AddPrices.");
@@ -62,13 +110,13 @@ Assert(PriceQuery.FromQuery(name => query.ToQueryString().Split('&').Select(part
 /* --- C6 (#31): paketna sprememba cen ------------------------------------------------------- */
 foreach (var contract in new[]
 {
-  "aria-label=\"Označi vse na tej strani\"",          // izbira strani
   "aria-label=\"Izberi izdelek @row.ItemId",            // kljukica na vrstici
-  "Označi vse, ki ustrezajo filtru",                     // vse po filtru (filter, ne seznam ključev)
-  "Izbranih <strong>",                                   // število izbranih je vedno vidno
-  "Workbook.PlanBulkAsync(change, AllMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
+  "<PimBulkBar Count=\"Selection.Count\"",              // #39: skupna vrstica izbire (izbira strani, vse po filtru, število)
+  "PimRowSelection<PriceBulkKey> Selection",             // #39: skupni model izbire, ključ org|šifra
+  "Selection.UpdateFilter(signature, Total)",            // sprememba filtra sprosti »vse po filtru«
+  "Workbook.PlanBulkAsync(change, allMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
   "Predogled: cena prej in potem",                       // predogled prej/potem
-  "Uvrstiti <strong>@preview.Rows.Count.ToString(\"N0\") cen</strong>", // potrditev pove število
+  "Uvrstiti <strong>@CeneTozilnik(preview.Rows.Count)</strong>", // potrditev pove število (#96: »3 cene«, ne »3 cen«)
   "source: \"BULK\"",                                   // gre po poti uvoza v vrsto za SAOP
   "History.RecordAsync(ImportKinds.Prices",              // zgodovina za povratek na /uvozi
   "Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)", // samo urednik (SaopWrite); komerciala ne
@@ -76,6 +124,36 @@ foreach (var contract in new[]
   "new(\"Z DDV potem\", Numeric: true)",                  // predogled pokaže tudi ceno z DDV
 })
   Assert(markup.Contains(contract, StringComparison.Ordinal), "Paketna sprememba cen (#31) nima: " + contract);
+Assert(!markup.Contains("price-bulk-bar", StringComparison.Ordinal) && !File.ReadAllText(Path.Combine(pages, "Prices.razor.css")).Contains("price-bulk-bar", StringComparison.Ordinal),
+  "#39: lokalna vrstica izbire (price-bulk-bar) mora biti zamenjana s skupnim PimBulkBar, brez mrtvega CSS.");
+Assert(Regex.IsMatch(markup, @"void ToggleRow\([^)]*\)\s*\{[^}]*ResetBulkPreview\(\)", RegexOptions.Singleline)
+  && Regex.IsMatch(markup, @"void ClearSelection\(\)\s*\{[^}]*BulkOpen = false;[^}]*ResetBulkPreview\(\)", RegexOptions.Singleline),
+  "#39: vsaka sprememba izbire mora umakniti predogled; počiščena izbira zapre panel.");
+var bulkBar = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimBulkBar.razor"));
+foreach (var contract in new[] { "aria-label=\"Označi vse na tej strani\"", "Označi vse, ki ustrezajo filtru", "Izbranih <strong>" })
+  Assert(bulkBar.Contains(contract, StringComparison.Ordinal), "PimBulkBar nima: " + contract);
+/* --- #96: sklanjatev, filtri v URL-ju, eno branje seznama ------------------------------------ */
+foreach (var (count, expected) in new[] { (1L, "1 cena"), (2L, "2 ceni"), (3L, "3 cene"), (5L, "5 cen"), (101L, "101 cena") })
+  Assert(PimFormat.Count(count, "cena", "ceni", "cene", "cen") == expected,
+    $"Sklanjatev cen: {count} -> {expected}");
+foreach (var wrong in new[] { "ToString(\"N0\") cen ", "ToString(\"N0\") cen<", ":N0} cen ", ":N0} cen\"", "Count.ToString(\"N0\") cenikov", "Odobrenih {approved" })
+  Assert(!markup.Contains(wrong, StringComparison.Ordinal), "Število brez sklanjatve na /cene (#96): " + wrong);
+Assert(markup.Contains("Uvrsti @CeneTozilnik(preview.Rows.Count) v vrsto za SAOP", StringComparison.Ordinal), "Gumb paketne spremembe mora sklanjati (»Uvrsti 3 cene«).");
+Assert(markup.Contains("{Cene(outcome.Queued)} {Oblika(outcome.Queued, \"čaka\", \"čakata\", \"čakajo\", \"čaka\")} odobritev", StringComparison.Ordinal),
+  "Sporočilo po paketni spremembi mora sklanjati (»3 cene čakajo odobritev«).");
+foreach (var parameter in new[] { "[\"izdelek\"] = Blank(Search)", "[\"podjetje\"] = OrganizationId", "[\"cenik\"] = Blank(PriceList)", "[\"cenikov\"]", "[\"vrsta\"]", "[\"zavihek\"]" })
+  Assert(markup.Contains(parameter, StringComparison.Ordinal), "Iskanje in filtri /cene morajo biti v URL-ju (#96): " + parameter);
+Assert(markup.Contains("async Task ApplyAsync() { Skip = 0; SyncUrl(); await LoadAsync(); }", StringComparison.Ordinal), "Iskanje (Enter) mora zapisati URL.");
+Assert(markup.Contains("protected override async Task OnParametersSetAsync()", StringComparison.Ordinal) && markup.Contains("ReadUrl();", StringComparison.Ordinal),
+  "»Nazaj« v brskalniku mora prebrati filter iz URL-ja.");
+Assert(markup.Contains("if (!RendererInfo.IsInteractive) { Loading = ListsLoading = BatchesLoading = true; return; }", StringComparison.Ordinal),
+  "Predupodabljanje ne sme brati cen (dvojno nalaganje, #96).");
+var priceService = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "PriceService.cs"));
+var productsMethod = priceService[priceService.IndexOf("GetProductsAsync(", StringComparison.Ordinal)..priceService.IndexOf("GetProductLinesAsync(", StringComparison.Ordinal)];
+Assert(productsMethod.Contains("CREATE TABLE #grouped", StringComparison.Ordinal) && Regex.Matches(productsMethod, "FROM canon.ProductPrice AS price").Count == 1,
+  "Seznam cen mora cel canon.ProductPrice prebrati enkrat (začasna tabela za stran in število), ne dvakrat (#96).");
+Assert(productsMethod.Contains("COLLATE DATABASE_DEFAULT", StringComparison.Ordinal), "Začasna tabela s tekstom potrebuje COLLATE DATABASE_DEFAULT.");
+
 Assert(!markup.Contains("canon.ProductPrice SET", StringComparison.OrdinalIgnoreCase), "Paketna sprememba ne sme pisati v canon.ProductPrice.");
 
 var percent = new PriceBulkChange("B2C", true, 5m, null);

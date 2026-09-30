@@ -390,6 +390,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
   public async Task<int> ConfirmSaopHeldAsync(IReadOnlyCollection<long> outboxMessageIds, string actor, CancellationToken cancellationToken = default)
   {
     await guard.RequireAsync(PimPolicies.SaopWrite);
+    RequireRealIntranet();
     if (outboxMessageIds.Count == 0) return 0;
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand("ops.ConfirmSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
@@ -439,6 +440,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     long checkId, IReadOnlyCollection<long>? findingIds, string actor, string? note, CancellationToken cancellationToken = default)
   {
     await guard.RequireAsync(PimPolicies.SafeguardConfirm);
+    RequireRealIntranet();
     if (findingIds is { Count: 0 }) return new(0, -1, false);
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand("ops.ApproveSafeguardFindings", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
@@ -452,6 +454,21 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
       ? new(PimDb.Int32(reader, "ApprovedCount"), PimDb.Int32(reader, "RemainingCount"), PimDb.Bool(reader, "RunRequested"))
       : new(0, -1, false);
   }
+
+  /// <summary>
+  /// Naloga #73: potrditev na /varovalke/{id} v bazi takoj odda zahtevo za zagon izvoza (ops.RequestJobRun:
+  /// katalog.csv, zaloga, SAOP), potrditev zadržanih SAOP sprememb pa sporočila spusti iz vrste. Na testnem
+  /// intranetu (klikalnik, preverjalec; <see cref="MonitorService.TestIntranetWithoutJobsKey"/>) je oboje
+  /// zavrnjeno PRED klicem baze — nič se ne zapiše in nič ne gre ven. Pravi intranet ključa nima.
+  /// </summary>
+  void RequireRealIntranet()
+  {
+    if (MonitorService.IsTestIntranetWithoutJobs(configuration))
+      throw new UnauthorizedAccessException(TestIntranetMessage);
+  }
+
+  public const string TestIntranetMessage =
+    "Testni intranet: potrjevanje varovalk je izklopljeno, ker bi sprožilo izvoz ali pošiljanje v SAOP. Potrdi na pravem intranetu.";
 
   public async Task<IReadOnlyList<SafeguardRule>> SaveRuleAsync(SafeguardRuleChange change, string actor, CancellationToken cancellationToken = default)
   {
