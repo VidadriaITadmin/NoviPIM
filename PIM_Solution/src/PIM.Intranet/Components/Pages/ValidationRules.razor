@@ -5,6 +5,8 @@
 @inject IntranetDataService Data
 @inject RulesWriteService Rules
 @inject AuthenticationStateProvider Authentication
+@inject PersistentComponentState ApplicationState
+@implements IDisposable
 
 <PageTitle>Validacijski profili</PageTitle>
 <PimPage OrganizationScope="true" Title="Validacijski profili" Subtitle="Katera polja mora imeti artikel in kaj se zgodi, če manjkajo. Validacija se ravna natanko po tem, kar piše tu." Crumbs="Crumbs">
@@ -281,8 +283,51 @@
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Validacijski profili")];
 
-  protected override Task OnInitializedAsync() => ReloadAsync();
+  /// <summary>
+  /// Kar je predupodabljanje prebralo iz baze, gre z njim v brskalnik (naloga #52): interaktivni del
+  /// ga prevzame in baze ne bere še enkrat (prej: dve polni nalaganji in utrip »Nalaganje«).
+  /// Ključ vsebuje podjetje, ker se to izbere s piškotkom.
+  /// </summary>
+  sealed record SavedPage(int OrganizationId, ValidationProfileRow[] Profiles,
+    Dictionary<int, FieldRequirementRow[]> Requirements, string[] KnownFields);
 
+  PersistingComponentStateSubscription PersistingSubscription;
+  SavedPage? Loaded;
+
+  static string StateKey(int organizationId) => $"pravila-validacija:{organizationId}";
+
+  protected override async Task OnInitializedAsync()
+  {
+    PersistingSubscription = ApplicationState.RegisterOnPersisting(PersistPageAsync);
+    try
+    {
+      var organization = await Data.GetCurrentOrganizationAsync();
+      if (organization is not null
+          && ApplicationState.TryTakeFromJson<SavedPage>(StateKey(organization.OrganizationId), out var saved)
+          && saved is not null && saved.OrganizationId == organization.OrganizationId)
+      {
+        Apply(saved);
+        Loading = false;
+        return;
+      }
+    }
+    catch (Exception exception)
+    {
+      Console.Error.WriteLine($"Validacijski profili (obnova stanja): {exception}");
+    }
+    await ReloadAsync();
+  }
+
+  Task PersistPageAsync()
+  {
+    if (Loaded is not null && Error is null)
+      ApplicationState.PersistAsJson(StateKey(Loaded.OrganizationId), Loaded);
+    return Task.CompletedTask;
+  }
+
+  public void Dispose() => PersistingSubscription.Dispose();
+
+  /// <summary>Po Shrani vedno polno branje iz baze, nikoli iz shranjenega stanja.</summary>
   async Task ReloadAsync()
   {
     Loading = AllRows.Count == 0;
@@ -292,27 +337,11 @@
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
       if (KnownFields.Count == 0) KnownFields = await Governance.GetCanonicalFieldCodesAsync();
-      Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      var profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
       // Ena poizvedba za vse profile (naloga #24), ne ena na profil.
       var requirementsByProfile = await Governance.GetFieldRequirementsAsync(organization.OrganizationId);
-      var results = new List<RequirementWithProfile>();
-      foreach (var profile in Profiles)
-        if (requirementsByProfile.TryGetValue(profile.ValidationProfileId, out var requirements))
-          foreach (var requirement in requirements)
-            results.Add(new(profile, requirement));
-      AllRows = results;
-      FieldOptions = KnownFields.Concat(AllRows.Select(row => row.Requirement.FieldCode))
-        .Distinct(StringComparer.OrdinalIgnoreCase)
-        .OrderBy(code => QualityFieldPolicy.EntityLabel(code)).ThenBy(code => QualityFieldPolicy.FieldName(code))
-        .Select(code => new PimPickerOption(code, QualityFieldPolicy.FieldName(code), code, Group: QualityFieldPolicy.EntityLabel(code)))
-        .ToArray();
-      if (!InitialFilterApplied)
-      {
-        var requested = (RequestedProfile ?? "").Trim();
-        var match = Profiles.FirstOrDefault(profile => string.Equals(profile.ProfileCode, requested, StringComparison.OrdinalIgnoreCase));
-        if (match is not null) { FilterProfile = match.ProfileCode; NewProfileId = match.ValidationProfileId; }
-        InitialFilterApplied = true;
-      }
+      Apply(new SavedPage(organization.OrganizationId, profiles.ToArray(),
+        requirementsByProfile.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()), KnownFields.ToArray()));
     }
     catch (Exception exception)
     {
@@ -320,6 +349,32 @@
       Console.Error.WriteLine($"Validacijski profili: {exception}");
     }
     finally { Loading = false; }
+  }
+
+  void Apply(SavedPage page)
+  {
+    Loaded = page;
+    KnownFields = page.KnownFields;
+    Profiles = page.Profiles;
+    var requirementsByProfile = page.Requirements;
+    var results = new List<RequirementWithProfile>();
+    foreach (var profile in Profiles)
+      if (requirementsByProfile.TryGetValue(profile.ValidationProfileId, out var requirements))
+        foreach (var requirement in requirements)
+          results.Add(new(profile, requirement));
+    AllRows = results;
+    FieldOptions = KnownFields.Concat(AllRows.Select(row => row.Requirement.FieldCode))
+      .Distinct(StringComparer.OrdinalIgnoreCase)
+      .OrderBy(code => QualityFieldPolicy.EntityLabel(code)).ThenBy(code => QualityFieldPolicy.FieldName(code))
+      .Select(code => new PimPickerOption(code, QualityFieldPolicy.FieldName(code), code, Group: QualityFieldPolicy.EntityLabel(code)))
+      .ToArray();
+    if (!InitialFilterApplied)
+    {
+      var requested = (RequestedProfile ?? "").Trim();
+      var match = Profiles.FirstOrDefault(profile => string.Equals(profile.ProfileCode, requested, StringComparison.OrdinalIgnoreCase));
+      if (match is not null) { FilterProfile = match.ProfileCode; NewProfileId = match.ValidationProfileId; }
+      InitialFilterApplied = true;
+    }
   }
 
   async Task<string> ActorAsync() =>

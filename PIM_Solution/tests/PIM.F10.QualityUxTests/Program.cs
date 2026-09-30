@@ -134,6 +134,25 @@ Assert(rules.Contains("prikazano @VisibleCount", StringComparison.Ordinal)
 Assert(rules.Contains(".Where(Matches)", StringComparison.Ordinal),
   "Filter mora veljati na vrsticah vseh nivojev, ne samo na stevcu.");
 
+/* ─── Naloga #52: /pravila/validacija se nalaga enkrat in šteje v enem prehodu ───
+   Predupodabljanje je bralo bazo, nato še interaktivni del (utrip »Nalaganje«); števci profilov
+   so imeli dve podpoizvedbi na profil nad val.ProductValidationState. */
+Assert(rules.Contains("PersistentComponentState", StringComparison.Ordinal)
+    && rules.Contains("TryTakeFromJson", StringComparison.Ordinal)
+    && rules.Contains("PersistAsJson", StringComparison.Ordinal),
+  "Stran pravil mora predupodobljene podatke prenesti v interaktivni del, ne jih brati dvakrat.");
+Assert(Regex.IsMatch(rules, @"StateKey\(int organizationId\)\s*=>\s*\$""[^""]*\{organizationId\}"),
+  "Ključ shranjenega stanja mora vsebovati podjetje (izbira s piškotkom).");
+var profilesMethod = governanceService[governanceService.IndexOf("GetValidationProfilesAsync(int organizationId", StringComparison.Ordinal)..];
+profilesMethod = profilesMethod[..profilesMethod.IndexOf("reader =>", StringComparison.Ordinal)];
+Assert(!Regex.IsMatch(profilesMethod, @"\(SELECT\s+COUNT_BIG", RegexOptions.IgnoreCase),
+  "Števci profilov ne smejo imeti podpoizvedbe na profil (naloga #52).");
+Assert(profilesMethod.Contains("GROUP BY state.ValidationProfileId", StringComparison.Ordinal)
+    && profilesMethod.Contains("product.OrganizationId = @OrganizationId", StringComparison.Ordinal)
+    && profilesMethod.Contains("LEFT JOIN", StringComparison.Ordinal)
+    && profilesMethod.Contains("COALESCE(states.ValidCount, 0)", StringComparison.Ordinal),
+  "Števci profilov: eno skupinsko štetje po podjetju, profil brez vrstic dobi 0.");
+
 
 /* ─── Izbirnik podjetja na seznamu napak (U1, P2-10) ──────────────────────────
    Stran je tiho kazala samo prvo podjetje: 17.413 izdelkov proti 177.653 na /kakovost. */
