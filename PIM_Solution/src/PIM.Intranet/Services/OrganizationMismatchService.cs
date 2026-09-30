@@ -146,7 +146,7 @@ public sealed class OrganizationMismatchService(IConfiguration configuration)
     WorkbookColumn Text(string header, double width = 14, string? group = null) => new(header, WorkbookCellKind.Text, width, group);
     IReadOnlyList<WorkbookColumn> columns =
     [
-      Text("Šifra", 18, "Artikel"), Text("Naziv", 44, "Artikel"), Text("Predpona", 10, "Artikel"),
+      Text("Šifra", 18, "Artikel"), Text("Naziv (spletni, sicer ERP)", 44, "Artikel"), Text("Predpona", 10, "Artikel"),
       Text("Neskladje", 20, "Neskladje"), Text("Posledica", 50, "Neskladje"), Text("Kaj narediti", 44, "Neskladje"),
       Text($"Kartica {page.PrimaryName}", 16, page.PrimaryName), Text($"Kljukice {page.PrimaryName}", 20, page.PrimaryName),
       Text("Drugo podjetje", 14, "Drugo podjetje"), Text("Kartica", 16, "Drugo podjetje"), Text("Kljukice", 20, "Drugo podjetje"),

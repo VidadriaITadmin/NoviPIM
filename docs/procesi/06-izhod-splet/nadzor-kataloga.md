@@ -13,7 +13,7 @@ migracije: [204, 205, 206, 207]
 
 # Nadzor kataloga (izključitev, popust X/O, pregled oznake O)
 
-> **Področje:** Izhod na splet · **Lastnik:** urednik kataloga · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Izhod na splet · **Lastnik:** urednik kataloga · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-30, iz kode (#88)
 
 ## 1. Namen
 
@@ -47,7 +47,7 @@ Urednik na enem mestu izključi artikel iz spletnega kataloga, vpiše popust odp
 ```mermaid
 flowchart LR
   subgraph U["👤 Uporabnik"]
-    A([Odpre Nadzor kataloga]) --> B[Išče po šifri ali EAN in klikne Prikaži]
+    A([Odpre Nadzor kataloga]) --> B[Išče po šifri ali EAN: Enter ali Prikaži]
     B --> C[Uredi: izključitev in popust]
     C --> D[Shrani]
     R[Na kartici spremeni oznako ali aktivnost] --> Q[Zaključi pregled z opisom]
@@ -77,11 +77,11 @@ flowchart LR
 
 | # | Kdo | Kje (stran) | Kaj narediš | Kaj se zgodi v sistemu | Kako preveriš, da je uspelo |
 |---|---|---|---|---|---|
-| 1 | Urednik | `/splet/katalog` | V polje »Šifra ali EAN« vpišeš začetek šifre ali cel EAN; po želji odkljukaš »Samo čakalna vrsta O« in klikneš **Prikaži**. | Prikaže se največ 100 artiklov podjetja 2 z izborom, aktivnostjo, validacijo, lastno in dobaviteljevo zalogo. | Tabela z artikli. |
+| 1 | Urednik | `/splet/katalog` | V polje »Šifra ali EAN« vpišeš začetek šifre ali cel EAN in pritisneš **Enter** (ali klikneš **Prikaži**); po želji odkljukaš »Samo čakalna vrsta O« (seznam se takoj osveži). | Prikaže se največ 100 artiklov podjetja 2 (ime podjetja je v podnaslovu) z izborom, aktivnostjo, validacijo, lastno in dobaviteljevo zalogo. Iskanje in kljukica sta v naslovu strani (`?iskanje=…&vrsta=1|0`), zato povezavo lahko deliš, F5 in Nazaj pa ju ohranita. | Tabela s številom artiklov; brez zadetkov sporočilo »Ni artikla s šifro ali EAN …« s predlogom, kaj narediti. |
 | 2 | Urednik | `/splet/katalog` | Pri artiklu klikneš **Uredi**. | Odpre se razdelek z imenom artikla. | — |
 | 3 | Urednik | `/splet/katalog` | Obkljukaš »Izključen iz kataloga« in/ali vpišeš »Popust odprodaje %« (0–100) ter klikneš **Shrani**. | Pravilo se zapiše z zgodovino. Izključen artikel ne gre v `katalog.csv`, ne glede na kljukice. | Sporočilo »Pravilo je shranjeno. Upošteva ga naslednji izvoz.«; v tabeli »/ Izključen« oziroma nov odstotek. |
 | 4 | Avtomatika | — | — | Artikel z oznako O, aktiven, ne izključen, z lastno zalogo ≤ 0 v svežem posnetku, gre v čakalno vrsto pregleda. | Stolpec »Pregled«: »Potreben pregled«. |
-| 5 | Urednik | `/splet/katalog` | Klikneš **Osveži čakalno vrsto**, če ne želiš čakati na izvoz. | Čakalna vrsta se osveži takoj (samo, če je lastna zaloga sveža). | Novi artikli v vrsti. |
+| 5 | Urednik | `/splet/katalog` | Klikneš **Osveži čakalno vrsto**, če ne želiš čakati na izvoz. | Čakalna vrsta se osveži takoj (samo, če je lastna zaloga sveža). | Sporočilo »Čakalna vrsta je osvežena. Na pregled čaka N artiklov.« (pri iskanju: koliko med prikazanimi). |
 | 6 | Urednik | Kartica artikla | Spremeniš ABC oznako ali aktivnost (ali artikel na `/splet/katalog` izključiš). | — | — |
 | 7 | Urednik | `/splet/katalog` | Pri artiklu **Uredi**, vpišeš »Opravljen pregled« in klikneš **Zaključi pregled**. | Pregled se zaključi. Če je artikel še vedno O, aktiven in ne izključen, sistem zavrne z »Najprej spremeni ABC oznako …«. | Sporočilo »Pregled je zaključen.« |
 
@@ -97,7 +97,7 @@ flowchart LR
 
 | Znak (kaj vidiš) | Verjeten vzrok | Kaj narediš |
 |---|---|---|
-| »Artikel ne pripada izbranemu podjetju.« | Artikel ni iz podjetja 2 | Stran dela samo s podjetjem 2. |
+| »Artikel ne pripada izbranemu podjetju.« | Artikel ni iz podjetja 2 (IQ Lighting) | Stran dela samo s podjetjem 2; ime je v podnaslovu strani. |
 | »Vnesi popust med 0 in 100 …« | Neveljaven odstotek | Popravi vrednost. |
 | »Najprej spremeni ABC oznako …« | Pregled O zaključuješ, a artikel je še O in aktiven | Na kartici spremeni oznako/aktivnost ali ga izključi. |
 | »Osveži čakalno vrsto« ne doda ničesar | Lastna zaloga ni sveža (starejša od 30 min) | Preveri zajem zalog na `/zaloge` (Svežina po viru). |
