@@ -29,3 +29,12 @@ vrstico, mrtve in absolutne povezave, `<caption>` na tabelah.
 Česa ne naredi: nikoli ne klikne gumbov, ki pišejo ali pošiljajo (Shrani, Izbriši, Pošlji, Zaženi,
 Uvozi, Potrdi, Odobri ...), in ne spreminja polj v urejevalnih obrazcih. Shranjevanje in pravice po
 vlogah je zato treba preveriti posebej.
+
+Testni intranet posle **zaklene**: gumbi Poženi zdaj, Ustavi, Izklopi/Vklopi, urnik, meja svežine,
+postopki in avtomatika podjetij na `/sistem` vrnejo sporočilo »Testni intranet: zagon in urejanje poslov
+sta izklopljena« (nastavitev `Pim:TestniIntranet:BrezPoslov`, ki jo postavi `Program.cs`; naloga #57).
+Zahteva za zagon bi jo sicer gostitelj avtomatike izvedel zares, npr. izvoz kataloga za splet. Tudi
+preverjalec v brskalniku zato na testnem intranetu posla ne more zagnati.
+
+Nevarne besede klikalnik išče v besedilu gumba, v `aria-label` in v `title`, tako da ne klikne niti
+gumba z ikono, ki ima nevarno besedo samo v opisu.
