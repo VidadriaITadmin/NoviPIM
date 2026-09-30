@@ -2476,6 +2476,18 @@ Stran Izvozi (`/outbound`) se je odpirala 50-60 s, ker je pasica z zadržanimi s
 - Intranet (ni migracija): pasica bere seznam šele po prvem izrisu strani, meja branja 15 s.
 
 **Objekti:** `ops.SaopHeldMessage`, `intranet.GetSaopHeldMessages`. **Ročni korak:** ne. **SAOP:** nič (samo branje). **Povratek:** ponovno izvedi definiciji pogleda in procedure iz 281. **PRD:** lahko skupaj z intranetom.
+## Posebni S za tip/stranko z /izdelki v enem paketu z razveljavitvijo (migracija 317_SPosebniMnozicnoInRazveljavitev, 2026-09-30, naloga #33)
+
+Seznam izdelkov (`/izdelki` → S-popust …) je posebni S za tip stranke ali stranko pisal po vrstici (`b2b.SavePackagingDiscountRule` / `RemovePackagingDiscountRule`): pri celem pogledu do ~90.000 klicev, brez skupne sledi in brez razveljavitve.
+
+- **`b2b.PackagingDiscountRuleBatch`** — en paket = en množični zapis v enem podjetju za en cilj (TYPE ali CUSTOMER): koda (NULL = umik), zahtevano/spremenjeno/enako/izpuščeno, kdo in kdaj, razveljavitev (`UndoneUtc`, `UndoneBy`, `UndoneCount`).
+- **`b2b.PackagingDiscountRuleBatchItem`** — vrstica na spremenjen izdelek: `ActionCode` INSERT/UPDATE/DEACTIVATE, `RuleId`, stara koda in veljavnost, nova koda.
+- **`b2b.SavePackagingDiscountRulesBulk`** (`@OrganizationId`, `@TargetKind`, `@CustomerTypeCode` | `@CustomerKey`, `@DiscountCode` NULL = umik, `@ItemsJson` = JSON seznam šifer, `@Actor`, `@Note`, `@ChangeSource`): ena transakcija, pravila ITEM se ustvarijo/posodobijo/umaknejo naenkrat; vsaka sprememba gre v `b2b.AuditLog` (EntityType `PackagingDiscountRule`, prej/potem, `$.PackagingBatchId` v `NewValueJson`). Izdelki brez `pim.Product` se izpustijo z razlogom. Vrne `BatchId, ChangedCount, UnchangedCount, SkippedCount` in izpuščene vrstice. Vedenje enako kot 274 po vrstici (nova koda pobriše veljavnost od/do).
+- **`b2b.UndoPackagingDiscountRuleBatch`** — prej brez pravila = umik, prej druga koda = stara koda in veljavnost, prej umaknjeno = spet aktivno; vrstice, ki jih je kdo po paketu spremenil, ostanejo (vrnjene kot izpuščene z razlogom). Drugič istega paketa ne razveljavi. V `b2b.AuditLog` `ActionCode = UNDO`, `$.UndoOfPackagingBatchId`.
+- **`intranet.GetPackagingDiscountRuleBatches`** (`@CreatedBy`, `@Take`) — zadnji paketi za seznam na `/izdelki`.
+- DEV (IQ, 89.855 izdelkov, en klic): zapis 16 s, sprememba kode 12 s, umik 11 s, razveljavitev 14 s; 6.000 izdelkov ~1 s. Prej 90.000 klicev po vrstici.
+
+**Objekti:** tabeli `b2b.PackagingDiscountRuleBatch`, `b2b.PackagingDiscountRuleBatchItem`; procedure zgoraj. Obstoječe procedure nespremenjene. **Ročni korak:** ne. **SAOP:** nič. **Izvoz:** posebni S gre v `katalog.csv` ob naslednjem `WEB_CATALOG_EXPORT` kot doslej. **Povratek:** `DROP PROCEDURE` treh procedur, `DROP TABLE b2b.PackagingDiscountRuleBatchItem, b2b.PackagingDiscountRuleBatch` (pravila ostanejo, kot so).
 ## Hitrejši predogled spletnega izvoza (migracija 315_HitrejsiPredogledIzvoza, 2026-09-30, naloga #80)
 
 Predogled `/splet/izvoz` (`intranet.GetWebExportRows` → `out.GetExportRows`, profil MAGENTO_PRODUCTS, 200 vrstic) je trajal 8–55 s. Meritev na DEV (`sys.dm_exec_query_stats`, `sys.dm_os_waiting_tasks`): strežnik ima `cost threshold for parallelism` = 5 in MAXDOP 10, zato so majhni stavki nad začasnimi tabelami tekli z 10 nitmi; porabili so 0,1–0,5 s CPU, čakali pa do 46 s (CXPACKET/CXCONSUMER, LATCH_EX NESTING_TRANSACTION_FULL), kadar je bil strežnik obremenjen. Poleg tega je osnovni `INSERT #Value` za 200 vrstic trikrat razvrstil vse cene `pim.ProductPrice`, štetje in stran pa sta filter (z iskanjem LIKE po besedilih) izvedla dvakrat.
