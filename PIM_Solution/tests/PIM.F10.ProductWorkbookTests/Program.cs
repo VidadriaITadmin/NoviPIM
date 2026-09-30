@@ -490,6 +490,10 @@ else
     preview.Rows.Count == 1 && preview.Rows[0].PimValues.ContainsKey("ProductText.WEB_TITLE.sl"));
 
   if (target.row is null) Console.WriteLine("  (noben izvozen izdelek nima spletnega naziva; preskok zapisa)");
+  // 124: zapis samo, kadar predogled nosi natanko eno spremembo v PIM. Sicer je zapis 30. 9. na
+  // razvojno bazo prepisal enoto mere 455 artiklom in jih poslal v vrsto za SAOP.
+  else if (!(preview.Rows.Count == 1 && preview.PimChangeCount == 1 && preview.SaopChangeCount == 0))
+    Console.WriteLine("  (predogled nima natanko ene spremembe; zapis v bazo preskočen, da test ne pokvari podatkov)");
   else
   {
     // Zapis v razvojno bazo in vrnitev v prejsnje stanje. AGENTS.md §4.1 dovoli testu pisanje
@@ -500,7 +504,10 @@ else
     try
     {
       var write = await workbook.PreviewAsync(new MemoryStream(EditCell(exported, titleIndex, target.index, marker)), null);
-      var outcome = await workbook.ApplyAsync(write, "test:PIM.F10.ProductWorkbookTests", "preizkus delovnega lista");
+      // Tudi drugi predogled se preveri, preden gre karkoli v bazo ali v vrsto za SAOP.
+      var outcome = write.Rows.Count == 1 && write.SaopChangeCount == 0
+        ? await workbook.ApplyAsync(write, "test:PIM.F10.ProductWorkbookTests", "preizkus delovnega lista")
+        : new ProductWorkbookOutcome(write.Rows.Count, 0, write.SaopChangeCount, 0, 0, [], ["zapis preskočen: predogled ni ena sprememba v PIM"]);
       Check("uvoz zapiše natanko en izdelek",
         outcome.RowsTouched == 1 && outcome.PimChanges == 1 && outcome.SaopQueued == 0,
         $"izdelkov {outcome.RowsTouched}, PIM {outcome.PimChanges}, SAOP {outcome.SaopQueued}; {string.Join("; ", outcome.Problems)}");
@@ -512,7 +519,7 @@ else
     {
       var restore = await workbook.PreviewAsync(
         new MemoryStream(EditCell(exported, titleIndex, target.index, original)), null);
-      if (restore.Rows.Count > 0)
+      if (restore.Rows.Count > 0 && restore.SaopChangeCount == 0)
         await workbook.ApplyAsync(restore, "test:PIM.F10.ProductWorkbookTests", "vrnitev v prejšnje stanje");
       var back = await StoredTitleAsync(database, itemId);
       Check("stara vrednost je vrnjena", back == original, $"'{back}' namesto '{original}'");
