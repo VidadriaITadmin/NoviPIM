@@ -187,6 +187,47 @@ Assert(treePage.Contains("IsFallback(row)", StringComparison.Ordinal)
 Assert(!treeStyle.Contains("outline: 2px solid var(--pim-primary)", StringComparison.Ordinal),
   "Znacka izbranega jezika ne sme biti obrobljena - barva je motila in ni nosila informacije.");
 
+// --- #34: paketna preslikava poti na /kakovost/kategorije ------------------------------------------
+// Izbira vrstic je skupni gradnik (PimBulkBar + PimRowSelection), ne kopija na strani.
+Assert(mappingPage.Contains("<PimBulkBar", StringComparison.Ordinal)
+  && mappingPage.Contains("PimRowSelection<", StringComparison.Ordinal),
+  "Paketna preslikava mora uporabljati skupna gradnika PimBulkBar in PimRowSelection.");
+Assert(mappingPage.Contains("aria-label=\"@($\"Izberi pot", StringComparison.Ordinal),
+  "Potrditveno polje na vrstici mora imeti aria-label.");
+Assert(mappingPage.Contains("Selection.UpdateFilter(FilterSignature, Total)", StringComparison.Ordinal),
+  "»Vse, ki ustrezajo filtru« se mora sprostiti ob spremembi filtra.");
+// Potrditev pove koliko in kam, pred zapisom.
+Assert(mappingPage.Contains("Preslikati @PathCount(BulkRows.Count) v »@BulkCategoryLabel«?", StringComparison.Ordinal),
+  "Potrditev mora povedati število poti in ciljno kategorijo.");
+Assert(mappingPage.Contains("Samo za branje", StringComparison.Ordinal)
+  && mappingPage.Contains("Mapping.CanWriteAsync()", StringComparison.Ordinal),
+  "Brez pravice stran pokaže »Samo za branje« in ne ponudi izbire.");
+Assert(mappingPage.Contains("catch (Exception exception) { BulkError = exception.Message", StringComparison.Ordinal),
+  "Zavrnitev paketa iz baze mora priti do uporabnika.");
+
+// Servis: ista politika za posamično, paketno preslikavo in ugašanje; en paket = ena transakcija.
+foreach (var writer in new[] { "SaveMappingAsync", "SaveMappingsAsync", "DeactivateMappingAsync" })
+{
+  var at = service.IndexOf(" " + writer + "(", StringComparison.Ordinal);
+  Assert(at >= 0, "CategoryMappingService mora imeti " + writer + ".");
+  var guardAt = service.IndexOf("guard.RequireAsync(PimPolicies.CatalogWrite)", at, StringComparison.Ordinal);
+  var nextMethod = service.IndexOf("public ", at + 1, StringComparison.Ordinal);
+  Assert(guardAt >= 0 && (nextMethod < 0 || guardAt < nextMethod),
+    writer + " mora zahtevati politiko CatalogWrite (stran je samo videz).");
+}
+var bulkAt = service.IndexOf(" SaveMappingsAsync(", StringComparison.Ordinal);
+var bulkBody = service[bulkAt..service.IndexOf("static void BindSave", bulkAt, StringComparison.Ordinal)];
+Assert(bulkBody.Contains("BeginTransactionAsync", StringComparison.Ordinal)
+  && bulkBody.Contains("CommitAsync", StringComparison.Ordinal)
+  && bulkBody.Contains("RollbackAsync", StringComparison.Ordinal),
+  "Paketna preslikava mora biti ena transakcija: vse ali nič.");
+Assert(bulkBody.Contains("map.SaveCategoryPathMap", StringComparison.Ordinal),
+  "Paket mora iti čez isti postopek kot posamična preslikava (pravila in zgodovina v bazi).");
+Assert(bulkBody.Contains("MaxBulkPaths", StringComparison.Ordinal),
+  "Paket mora imeti izrecno zgornjo mejo.");
+Assert(bulkBody.Contains("Izbrane poti so iz več dreves", StringComparison.Ordinal),
+  "Servis mora zavrniti poti iz drugega drevesa kot ciljna kategorija.");
+
 Console.WriteLine("PIM.F10.CategoryMappingUxTests: vse pogodbe drzijo.");
 return 0;
 
