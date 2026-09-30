@@ -411,9 +411,31 @@ public sealed class AdminConsoleService(PimDb database, IConfiguration configura
       command => command.Parameters.AddWithValue("@Days", days), cancellationToken);
 
   // ─── Sled uporabnikov ─────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Sled samo bere in je pregled za človeka. Baza nima READ_COMMITTED_SNAPSHOT, zato bi branje pod
+  /// READ COMMITTED čakalo na zaklepe sočasnih zapisov v <c>pim.ProductFieldHistory</c> (uvozi,
+  /// validacija, testi) in padlo na 30 s časovni omejitvi ukaza (#44: stran je enkrat po 30 s
+  /// pokazala napako, ponovitve pa so trajale 0,3–1,5 s). READ UNCOMMITTED ne čaka na zaklepe vrstic
+  /// (enako kot <see cref="SupplierCandidateReadService"/>); LOCK_TIMEOUT omeji še čakanje na zaklep
+  /// sheme (npr. gradnjo indeksa), da stran dobi jasno napako 1222 namesto molka do časovne omejitve.
+  /// Na koncu serije se nastavitvi vrneta, ker povezava gre nazaj v bazen.
+  /// </summary>
+  internal const string ActivityTrailSql = """
+    SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+    SET LOCK_TIMEOUT 15000;
+    EXEC intranet.GetUserActivityTrail @Days = @Days, @Actor = @Actor, @Search = @Search, @Take = @Take;
+    SET LOCK_TIMEOUT -1;
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    """;
+
+  /// <summary>SQL napaka 1222: zaklep ni bil sproščen v času LOCK_TIMEOUT (baza je zasedena).</summary>
+  public static bool IsLockTimeout(Exception ex) =>
+    ex is SqlException sql && sql.Number == 1222;
+
   public Task<IReadOnlyList<ActivityRow>> GetActivityAsync(
     int days, string? actor, string? search, int take, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("EXEC intranet.GetUserActivityTrail @Days = @Days, @Actor = @Actor, @Search = @Search, @Take = @Take;",
+    database.QueryAsync(ActivityTrailSql,
       reader => new ActivityRow(
         PimDb.DateTimeValue(reader, "OccurredUtc"), PimDb.TextOrEmpty(reader, "Actor"),
         PimDb.TextOrEmpty(reader, "ActionCode"), PimDb.TextOrEmpty(reader, "EntityType"),
