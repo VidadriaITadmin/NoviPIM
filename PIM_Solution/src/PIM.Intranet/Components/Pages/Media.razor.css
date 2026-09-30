@@ -196,3 +196,6 @@ tr.is-selected { background: var(--pim-info-bg); }
 .media-bulk-table td { overflow-wrap: anywhere; vertical-align: top; }
 .media-bulk-urls { font-size: .78rem; margin: 0; padding-left: 1.2rem; }
 .media-bulk-urls li.changed { color: var(--pim-text-strong); font-weight: 600; }
+
+/* #119: gumb »Ponovi« pod napako seznama (vzorec Products.razor.css). */
+.retry-row { display: flex; justify-content: center; padding: 0 1.5rem 2rem; }
