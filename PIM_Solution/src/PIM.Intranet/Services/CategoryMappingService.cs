@@ -146,25 +146,102 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
       reader => PimDb.TextOrEmpty(reader, "CategoryTreeCode"), null, cancellationToken);
 
   /// <summary>Zapiše ali popravi preslikavo. Vrne izid postopka (Created / Updated / Unchanged).</summary>
-  public Task<string> SaveMappingAsync(
+  public async Task<string> SaveMappingAsync(
     string sourceCode, string categoryTreeCode, string sourcePathKey, string categoryCode,
-    string actor, string? note, CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    string actor, string? note, CancellationToken cancellationToken = default)
+  {
+    // #34: preslikava spremeni uvrstitev izdelkov na spletu (katalog), zato ista politika kot uvrstitev izdelka
+    // in paketna preslikava. Prej je zadoščala prijava; skrivanje gumba ni meja.
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC map.SaveCategoryPathMap @SourceCode, @CategoryTreeCode, @SourcePathKey, @CategoryCode, @Actor, @Note;",
-      command =>
-      {
-        command.Parameters.AddWithValue("@SourceCode", sourceCode);
-        command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
-        command.Parameters.AddWithValue("@SourcePathKey", sourcePathKey);
-        command.Parameters.AddWithValue("@CategoryCode", categoryCode);
-        command.Parameters.AddWithValue("@Actor", actor);
-        command.Parameters.AddWithValue("@Note", Nullable(note));
-      }, cancellationToken);
+      command => BindSave(command, sourceCode, categoryTreeCode, sourcePathKey, categoryCode, actor, note),
+      cancellationToken);
+  }
 
-  public Task<string> DeactivateMappingAsync(
+  /// <summary>Največ poti v enem paketu — toliko, kolikor jih <c>intranet.GetCategoryMappings</c> vrne na eno stran.</summary>
+  public const int MaxBulkPaths = 500;
+
+  /// <summary>Ključ ene izvorne poti za paketno preslikavo.</summary>
+  public sealed record PathKey(string SourceCode, string CategoryTreeCode, string SourcePathKey);
+
+  /// <summary>Izid paketne preslikave: koliko poti je dobilo cilj na novo, koliko ga je zamenjalo in koliko je bilo že takšnih.</summary>
+  public sealed record BulkMapOutcome(int Created, int Updated, int Unchanged)
+  {
+    public int Total => Created + Updated + Unchanged;
+  }
+
+  /// <summary>
+  /// #34: več izvornih poti naenkrat v isto kategorijo. Vse ali nič: ena povezava, ena transakcija, za vsako pot
+  /// isti postopek <c>map.SaveCategoryPathMap</c> kot pri posamični preslikavi — zato ista pravila (kategorija
+  /// obstaja, ima prevedeno pot za vsako spletno stran drevesa) in po ena vrstica v
+  /// <c>map.CategoryPathMapHistory</c> na pot (akter, stara in nova kategorija). Če baza zavrne eno pot,
+  /// se ne zapiše nobena. Poti morajo biti iz istega drevesa kot ciljna kategorija.
+  /// </summary>
+  public async Task<BulkMapOutcome> SaveMappingsAsync(
+    IReadOnlyCollection<PathKey> paths, string categoryTreeCode, string categoryCode,
+    string actor, string? note, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    if (paths.Count == 0) throw new InvalidOperationException("Ni izbrane nobene poti.");
+    if (paths.Count > MaxBulkPaths)
+      throw new InvalidOperationException($"Naenkrat lahko preslikaš največ {MaxBulkPaths:N0} poti; izbranih je {paths.Count:N0}. Zoži filter.");
+    if (string.IsNullOrWhiteSpace(categoryCode)) throw new InvalidOperationException("Izberi ciljno kategorijo.");
+    var otherTrees = paths.Select(path => path.CategoryTreeCode)
+      .Where(tree => !string.Equals(tree, categoryTreeCode, StringComparison.OrdinalIgnoreCase))
+      .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    if (otherTrees.Count > 0)
+      throw new InvalidOperationException(
+        $"Izbrane poti so iz več dreves ({string.Join(", ", otherTrees.Prepend(categoryTreeCode))}). Kategorija velja samo v svojem drevesu — filtriraj po drevesu.");
+
+    int created = 0, updated = 0, unchanged = 0;
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+    try
+    {
+      foreach (var path in paths.DistinctBy(path => (path.SourceCode, path.CategoryTreeCode, path.SourcePathKey)))
+      {
+        await using var command = new SqlCommand(
+          "EXEC map.SaveCategoryPathMap @SourceCode, @CategoryTreeCode, @SourcePathKey, @CategoryCode, @Actor, @Note;",
+          connection, transaction);
+        BindSave(command, path.SourceCode, path.CategoryTreeCode, path.SourcePathKey, categoryCode, actor, note);
+        var outcome = Convert.ToString(await command.ExecuteScalarAsync(cancellationToken));
+        switch (outcome)
+        {
+          case "Created": created++; break;
+          case "Updated": updated++; break;
+          default: unchanged++; break;
+        }
+      }
+      await transaction.CommitAsync(cancellationToken);
+    }
+    catch
+    {
+      // XACT_ABORT v postopku transakcijo ob napaki že prekliče; drugi preklic bi vrgel in skril pravo napako.
+      try { await transaction.RollbackAsync(CancellationToken.None); } catch (InvalidOperationException) { }
+      throw;
+    }
+    return new BulkMapOutcome(created, updated, unchanged);
+  }
+
+  static void BindSave(SqlCommand command, string sourceCode, string categoryTreeCode, string sourcePathKey,
+    string categoryCode, string actor, string? note)
+  {
+    command.Parameters.AddWithValue("@SourceCode", sourceCode);
+    command.Parameters.AddWithValue("@CategoryTreeCode", categoryTreeCode);
+    command.Parameters.AddWithValue("@SourcePathKey", sourcePathKey);
+    command.Parameters.AddWithValue("@CategoryCode", categoryCode);
+    command.Parameters.AddWithValue("@Actor", actor);
+    command.Parameters.AddWithValue("@Note", Nullable(note));
+  }
+
+  public async Task<string> DeactivateMappingAsync(
     string sourceCode, string categoryTreeCode, string sourcePathKey,
-    string actor, string? note, CancellationToken cancellationToken = default) =>
-    ScalarTextAsync(
+    string actor, string? note, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    return await ScalarTextAsync(
       "EXEC map.DeactivateCategoryPathMap @SourceCode, @CategoryTreeCode, @SourcePathKey, @Actor, @Note;",
       command =>
       {
@@ -174,6 +251,10 @@ public sealed class CategoryMappingService(PimDb database, IConfiguration config
         command.Parameters.AddWithValue("@Actor", actor);
         command.Parameters.AddWithValue("@Note", Nullable(note));
       }, cancellationToken);
+  }
+
+  /// <summary>Ali sme trenutni uporabnik preslikovati — za izris izbire in gumbov, ne kot varovalka.</summary>
+  public Task<bool> CanWriteAsync() => guard.AllowsAsync(PimPolicies.CatalogWrite);
 
   public Task<IReadOnlyList<ProductCategoryRow>> GetProductCategoriesAsync(
     int organizationId, string itemId, CancellationToken cancellationToken = default) =>

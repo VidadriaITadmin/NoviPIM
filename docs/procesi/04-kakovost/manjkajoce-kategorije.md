@@ -13,7 +13,7 @@ migracije: [109, 178]
 
 # Manjkajoče kategorije (preslikave kategorij dobaviteljev)
 
-> **Področje:** Kakovost · **Lastnik:** urednik kataloga · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Kakovost · **Lastnik:** urednik kataloga · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-30, iz kode (#34 paketna preslikava)
 
 ## 1. Namen
 
@@ -24,7 +24,7 @@ Vsaki poti kategorije, ki jo pošlje dobavitelj (vir), določi našo kategorijo 
 | Vloga | Kaj naredi v procesu |
 |---|---|
 | Komerciala | Ne sodeluje. |
-| Urednik kataloga | Izbere ciljno kategorijo za pot, po potrebi ustvari novo kategorijo, spremeni ali ugasne preslikavo. |
+| Urednik kataloga | Izbere ciljno kategorijo za pot (ali za več izbranih poti naenkrat), po potrebi ustvari novo kategorijo, spremeni ali ugasne preslikavo. |
 | Skrbnik | Ureja drevo kategorij in prevode poti (pogoj za shranjevanje). |
 | Avtomatika (PIM) | Ob naslednji preslikavi vira artiklom za to potjo dodeli kategorijo. |
 
@@ -81,6 +81,7 @@ flowchart LR
 | 4 | Urednik | `/kakovost/kategorije` | Vpišeš del imena ali poti in izbereš kategorijo; neobvezno »Opomba«. | — | Izbrana pot je vidna v polju. |
 | 4a | Urednik | `/kakovost/kategorije` | Če kategorije ni: v izbirniku »Ustvari novo kategorijo«, izbereš nadrejeno (prazno = koren) → »Ustvari in izberi«. | Nova kategorija nastane v drevesu; enako ime pod istim staršem je zavrnjeno že na strani. | Sporočilo »Kategorija … je ustvarjena … Shrani preslikavo.« |
 | 5 | Urednik | `/kakovost/kategorije` | Klikneš »Shrani«. | Baza preveri, da kategorija obstaja in ima prevedeno pot; zapiše preslikavo z imenom uporabnika. | Sporočilo »Preslikava je zapisana. Velja za N izdelkov ob naslednji preslikavi vira.«; stanje »Preslikano«. |
+| 5a | Urednik | `/kakovost/kategorije` | Več poti naenkrat: označiš vrstice (ali »Označi vse na strani« / »Označi vse, ki ustrezajo filtru«), klikneš »Preslikaj v kategorijo …«, izbereš kategorijo, »Naprej« in potrdiš »Preslikati N poti v »…«?«. | Poti morajo biti iz enega drevesa (največ 500). Vse ali nič: ena transakcija, za vsako pot isti postopek in po ena vrstica zgodovine (kdo, kdaj, prejšnja kategorija). | Sporočilo »Preslikanih N poti …: novih, spremenjenih, že takšnih«; izbira se počisti, poti izginejo iz »Nepreslikano«. |
 | 6 | Urednik | `/kakovost/kategorije` | Za preklic pri preslikani vrstici »Uredi« → »Ugasni preslikavo«. | Vrstica ostane v stanju »Ugasnjeno« (sled odločitve). | Stanje »Ugasnjeno«. |
 | 7 | Avtomatika | — | — | Naslednja preslikava vira artiklom za to potjo dodeli kategorijo. | Na kartici izdelka je kategorija; zavihek »Po kategorijah« na `/kakovost` jo šteje. |
 
@@ -88,7 +89,9 @@ flowchart LR
 
 - Seznam in preslikava sta **skupna vsem podjetjem**, ker je drevo dobaviteljevo.
 - Baza zavrne neobstoječo kategorijo (napaka 106003) in kategorijo brez prevedene poti (106004); sporočilo baze se pokaže nespremenjeno.
-- Preslikava se ne briše, samo ugasne.
+- Preslikava se ne briše, samo ugasne (tudi paketno se samo preslikuje, ne briše).
+- Preslikovanje in ugašanje (posamično in paketno) smeta samo urednik kataloga in skrbnik (politika `CatalogWrite`, preverja servis). Ostali vidijo stran »Samo za branje«.
+- Paket: poti iz enega drevesa, največ 500, vse ali nič; če baza zavrne eno pot, se ne zapiše nobena.
 - Učinek ni takojšen: velja ob naslednji preslikavi vira.
 
 ## 8. Ko gre kaj narobe
@@ -98,6 +101,8 @@ flowchart LR
 | Napaka o kategoriji brez prevedene poti | Kategorija nima prevoda poti v jezik spletišča. | V drevesu dodaj prevod (glej [Drevo kategorij](../08-upravljanje/drevo-kategorij.md)) in shrani znova. |
 | »Izberi ciljno kategorijo« | Klik »Shrani« brez izbire. | Izberi kategorijo. |
 | Preslikava shranjena, artikli še brez kategorije | Vir še ni bil znova preslikan. | Počakaj na naslednji zajem ali ponovno obdelaj vir. |
+| »Izbrane poti so iz več dreves …« | Izbira ali filter zajema več dreves spletišč. | V filtru izberi drevo in označi znova. |
+| »Filtru ustreza N poti; … največ 500« | »Vse po filtru« zajema preveč poti. | Zoži filter (vir, drevo, iskanje). |
 | »Ustvari in izberi« je onemogočen | Pod istim staršem že obstaja enako ime. | Izberi obstoječo kategorijo. |
 
 ## 9. Tehnično ozadje
@@ -106,7 +111,7 @@ flowchart LR
 <summary>Za skrbnika in razvoj</summary>
 
 - **Strani:** `PIM.Intranet/Components/Pages/MissingCategories.razor`
-- **Storitve / delavci:** `CategoryMappingService` (`GetMappingsAsync`, `SaveMappingAsync`, `DeactivateMappingAsync`, `GetTreeNodesAsync`), `CategoryTreeService.CreateCategoryAsync`.
+- **Storitve / delavci:** `CategoryMappingService` (`GetMappingsAsync`, `SaveMappingAsync`, `SaveMappingsAsync` — paket v eni transakciji, `DeactivateMappingAsync`, `GetTreeNodesAsync`), skupna gradnika `PimBulkBar` in `PimRowSelection`, `CategoryTreeService.CreateCategoryAsync`.
 - **Tabele in pogledi:** `map.SourceCategory`, preslikave kategorij (migracija 109), procedura `intranet.GetCategoryMappings`.
 - **Migracije:** 109 (urejanje preslikav), 178 (nova kategorija iz izbirnika).
 - **Urniki:** ni lastnega.
@@ -115,7 +120,8 @@ flowchart LR
 
 ## 10. Odprta vprašanja in razlike
 
-- ⚠️ `CategoryMappingService` pravice ne preverja sam (nima `PimWriteGuard`); zapis varuje samo dostop do zavihka `tab.quality.categories` in pravila v bazi. Vsak prijavljen uporabnik z dostopom do zavihka lahko spremeni preslikavo, ki velja za vsa podjetja.
+- ✅ (#34) `CategoryMappingService` zapise varuje s `PimWriteGuard` (`CatalogWrite`): prej je lahko vsak prijavljen uporabnik z dostopom do zavihka spremenil preslikavo za vsa podjetja.
+- ⚠️ Paketne razveljavitve ni: zgodovina (`map.CategoryPathMapHistory`) ima staro kategorijo za vsako pot, gumba »Povrni« pa še ni.
 - ⚠️ Stran ne ponudi ponovne obdelave vira; uporabnik ne ve, kdaj bo sprememba vidna.
 - ⚠️ Ime datoteke je »manjkajoče kategorije«, v meniju pa se zavihek imenuje »Nepreslikane kategorije« in naslov strani »Preslikave kategorij«.
 
