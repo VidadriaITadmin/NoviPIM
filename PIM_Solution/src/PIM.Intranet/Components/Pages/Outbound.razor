@@ -146,7 +146,7 @@ else {
   IReadOnlyList<string> ArticleStatuses => Articles.Select(a => StatusLabel(a.Status)).Distinct().Concat(StatusFilter == "" ? [] : [StatusFilter]).Distinct().Order().ToArray();
   IReadOnlyList<ArticleRow> FilteredArticles => Articles
     .Where(a => (StatusFilter == "" || StatusLabel(a.Status) == StatusFilter)
-      && (Search == "" || a.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+      && (Search == "" || PIM.Intranet.Services.PimText.Matches(a.EntityKey, Search)))
     .OrderByDescending(a => a.LastChangeUtc).ToList();
   IEnumerable<ArticleRow> PageArticles => FilteredArticles.Skip(CurrentPage*PageSize).Take(PageSize);
   int PageCount=>Math.Max(1,(int)Math.Ceiling(FilteredArticles.Count/(decimal)PageSize));

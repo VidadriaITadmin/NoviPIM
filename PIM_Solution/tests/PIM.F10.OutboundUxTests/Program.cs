@@ -202,6 +202,7 @@ Assert(markup.Contains("Organizations.Any(o => o.OrganizationId == id)", StringC
 Assert(markup.Contains("@bind:after=\"SearchChanged\"", StringComparison.Ordinal) && markup.Contains("@bind:after=\"StatusChanged\"", StringComparison.Ordinal),
   "Sprememba iskanja in statusa mora posodobiti naslov strani.");
 Assert(Regex.IsMatch(markup, "<button type=\"button\"[^>]*@onclick=\"ClearFilters\">Počisti filtre</button>"), "Manjka gumb »Počisti filtre«.");
+Assert(markup.Contains("PimText.Matches(a.EntityKey, Search)", StringComparison.Ordinal), "Iskanje mora biti brez šumnikov in velikosti črk (PimText.Matches).");
 // #54: sklanjatev (»1 artikel«, ne »1 artiklov«) in podrobnosti po polju po istih filtrih, izrisane šele ob odprtju.
 Assert(!Regex.IsMatch(markup, "\\} artiklov"), "Število artiklov mora biti sklanjano (PimFormat.Count), ne »{n} artiklov«.");
 Assert(markup.Contains("FilteredArticles.SelectMany(a => a.Messages)", StringComparison.Ordinal),
