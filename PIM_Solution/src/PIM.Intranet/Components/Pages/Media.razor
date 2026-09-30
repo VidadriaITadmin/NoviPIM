@@ -1,6 +1,9 @@
 @page "/mediji"
 @attribute [Authorize]
-@rendermode InteractiveServer
+@* #119: brez predupodabljanja (kot Products.razor). S predupodabljanjem je stran vse poizvedbe
+   pognala dvakrat — enkrat za predupodobitev, enkrat za interaktivno vezje; pod obremenitvijo
+   je vsaka dosegla casovno mejo 30 s, zato je stran po ~60 s pokazala napako. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject CatalogReadService Catalog
 @inject IntranetDataService Data
 @inject PimWriteGuard Guard
@@ -9,6 +12,7 @@
 @inject WebWithdrawalService Withdrawals
 @inject HeavyWorkGate Gate
 @inject AuthenticationStateProvider Authentication
+@inject ILogger<Media> Log
 
 <PageTitle>Mediji</PageTitle>
 
@@ -73,8 +77,8 @@
     </select>
 
     <div class="media-view" role="group" aria-label="Način prikaza">
-      <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@GridView" @onclick="() => SetView(true)">Mreža</button>
-      <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(!GridView)" @onclick="() => SetView(false)">Seznam</button>
+      <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@(GridView ? "true" : "false")" @onclick="() => SetView(true)">Mreža</button>
+      <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(GridView ? "false" : "true")" @onclick="() => SetView(false)">Seznam</button>
     </div>
   </div>
 
@@ -117,7 +121,7 @@
 <nav class="media-kinds" aria-label="Vrsta medija">
   @foreach (var option in KindOptions)
   {
-    <button type="button" class="kind-chip @(Kind == option.Code ? "active" : null)" aria-pressed="@(Kind == option.Code)" @onclick="() => SelectKindAsync(option.Code)">
+    <button type="button" class="kind-chip @(Kind == option.Code ? "active" : null)" aria-pressed="@(Kind == option.Code ? "true" : "false")" @onclick="() => SelectKindAsync(option.Code)">
       @KindGlyph(option.Code)
       <span>@option.Label</span>
       <em>@option.Count.ToString("N0")</em>
@@ -349,6 +353,12 @@
     }
     <PimPager Skip="Skip" Take="PageSize" Total="Total" SkipChanged="OnSkipChangedAsync" Label="Strani medijev" />
   </PimState>
+  @if (Error is not null && !Loading)
+  {
+    <div class="retry-row">
+      <button type="button" class="ghost-button" @onclick="RetryAsync">Ponovi</button>
+    </div>
+  }
 </section>
 
 @if (Selected is MediaRow selected)
@@ -362,7 +372,7 @@
           <span>@selected.Role · #@selected.SortOrder · @selected.Kind@(string.IsNullOrWhiteSpace(selected.Title) ? "" : " · " + selected.Title)</span>
           <span>@selected.OrganizationName@(string.IsNullOrWhiteSpace(selected.ProductName) ? "" : " · " + selected.ProductName) · @AddedTitle(selected)</span>
         </div>
-        <button type="button" class="ghost-button" @onclick="Close">Zapri</button>
+        <button type="button" class="ghost-button" data-pim-close @onclick="Close">Zapri</button>
       </header>
       <div class="media-lightbox-body">
         @if (selected.Kind == MediaKindPolicy.ImageCode && selectedUrl.Href is not null && !Failed.Contains(selected.Key))
@@ -490,9 +500,19 @@
     AddressState = QueryAddressState ?? "";
     Search = QueryProduct ?? "";
     Kind = QueryKind ?? "";
-    try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+    try { Organizations = await Data.GetOrganizationsAsync(); }
+    catch (Exception failure)
+    {
+      Log.LogWarning(failure, "Mediji: seznam podjetij ni prebran ({Kind}).", FailureKind(failure));
+      Organizations = [];
+    }
     // Samo videz: pravico preveri tudi MediaBulkEdit (PimWriteGuard) in zapisovalna procedura.
-    try { CanEdit = await Guard.AllowsAsync(PimPolicies.CatalogWrite); } catch { CanEdit = false; }
+    try { CanEdit = await Guard.AllowsAsync(PimPolicies.CatalogWrite); }
+    catch (Exception failure)
+    {
+      Log.LogWarning(failure, "Mediji: pravica CatalogWrite ni preverjena ({Kind}); paketno urejanje skrito.", FailureKind(failure));
+      CanEdit = false;
+    }
     // Brez izbire v naslovu so privzeto vsa aktivna podjetja — ne prvo po sifri (DEMO).
     if (int.TryParse(QueryOrganization, out var chosen) && Organizations.Any(row => row.OrganizationId == chosen))
     {
@@ -521,9 +541,12 @@
         if (version != ScopeVersion) return;
         Summary = await summaryTask; Roles = await rolesTask; Hosts = await hostsTask;
       }
-      catch
+      catch (Exception failure)
       {
         if (version != ScopeVersion) return;
+        // Povzetek, vloge in strezniki niso seznam: stran brez njih deluje, vzrok pa gre v dnevnik.
+        Log.LogError(failure, "Mediji: povzetek, vloge ali strezniki niso naloženi ({Kind}). Podjetje={Organization}",
+          FailureKind(failure), organizationId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "vsa");
         Summary = null; Roles = []; Hosts = [];
       }
     }
@@ -542,32 +565,71 @@
     await LoadScopeAsync();
   }
 
+  /// <summary>
+  /// Seznam in stevci po vrsti hkrati. Skupno stevilo ni loceno stetje: je vsota stevcev po vrsti
+  /// (ali stevec izbrane vrste), ker stevci veljajo za isto zozitev brez filtra vrste (#119).
+  /// Napaka gre v dnevnik z vrsto, filtrom in podjetjem; uporabnik vidi samo besedilo in »Ponovi«.
+  /// </summary>
   async Task LoadAsync()
   {
     var version = ++LoadVersion;
     var filter = CurrentFilter;
     Loading = true; Error = null;
+    var watch = System.Diagnostics.Stopwatch.StartNew();
     try
     {
-      var rowsTask = Catalog.GetMediaAsync(filter, Skip, PageSize);
+      var rowsTask = Catalog.GetMediaAsync(filter, Skip, PageSize, includeCount: false);
       var countsTask = Catalog.GetMediaKindCountsAsync(filter);
       await Task.WhenAll(rowsTask, countsTask);
       if (version != LoadVersion) return;
-      (Rows, Total) = await rowsTask;
+      (Rows, _) = await rowsTask;
       KindCounts = await countsTask;
+      Total = TotalFromKindCounts(KindCounts, filter.Kind);
       Selection.UpdateFilter(SelectionSignature(filter), Total);
       Failed.Clear();
+      if (watch.ElapsedMilliseconds > SlowLoadMilliseconds)
+        Log.LogWarning("Mediji: seznam se je nalagal {Milliseconds} ms. Iskanje={Search}, podjetje={Organization}, filter={Filter}",
+          watch.ElapsedMilliseconds, filter.Search, filter.OrganizationId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "vsa", filter);
     }
-    catch
+    catch (Exception failure)
     {
       if (version != LoadVersion) return;
-      Error = "Medijev trenutno ni mogoče naložiti."; Rows = []; Total = 0;
+      Log.LogError(failure, "Mediji: seznam ni naložen po {Milliseconds} ms ({Kind}). Iskanje={Search}, podjetje={Organization}, filter={Filter}",
+        watch.ElapsedMilliseconds, FailureKind(failure), filter.Search,
+        filter.OrganizationId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "vsa", filter);
+      Error = IsDatabaseBusy(failure)
+        ? "Baza je trenutno zasedena in mediji se niso naložili pravočasno. Poskusi znova čez nekaj trenutkov."
+        : "Medijev trenutno ni mogoče naložiti. Napaka je zapisana v dnevnik aplikacije.";
+      Rows = []; Total = 0;
     }
     finally
     {
       if (version == LoadVersion) Loading = false;
     }
   }
+
+  Task RetryAsync() => LoadScopeAsync();
+
+  /// <summary>Nad to mejo gre v dnevnik opozorilo s casom — pocasnost se vidi, preden postane napaka.</summary>
+  const long SlowLoadMilliseconds = 5000;
+
+  /// <summary>Skupno stevilo iz stevcev po vrsti: vsota, ali samo stevec izbrane vrste.</summary>
+  static long TotalFromKindCounts(IReadOnlyList<MediaKindCount> counts, string? kind) =>
+    string.IsNullOrWhiteSpace(kind)
+      ? counts.Sum(count => count.RowCount)
+      : counts.Where(count => string.Equals(count.Kind, kind.Trim(), StringComparison.OrdinalIgnoreCase)).Sum(count => count.RowCount);
+
+  static bool IsDatabaseBusy(Exception failure) => failure switch
+  {
+    Microsoft.Data.SqlClient.SqlException sql => sql.Number is -2 or 1205 or 1222,
+    TimeoutException => true,
+    InvalidOperationException invalid => invalid.Message.Contains("pool", StringComparison.OrdinalIgnoreCase),
+    _ => failure.InnerException is not null && IsDatabaseBusy(failure.InnerException),
+  };
+
+  static string FailureKind(Exception failure) => failure is Microsoft.Data.SqlClient.SqlException sql
+    ? $"SqlException {sql.Number}{(IsDatabaseBusy(sql) ? ", baza zasedena" : "")}"
+    : failure.GetType().Name + (IsDatabaseBusy(failure) ? ", baza zasedena" : "");
 
   /// <summary>Ploscica »novih v 7 dneh« je bliznjica do filtra, ne okras.</summary>
   async Task ShowRecentAsync()

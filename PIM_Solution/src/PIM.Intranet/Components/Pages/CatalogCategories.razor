@@ -446,7 +446,7 @@
         }
       </div>
       <footer class="dialog-footer">
-        <button type="button" disabled="@Busy" @onclick="CloseMoveDialog">Prekliči</button>
+        <button type="button" data-pim-close disabled="@Busy" @onclick="CloseMoveDialog">Prekliči</button>
         <button type="button" class="button-primary" disabled="@(Busy || MovePreviewLoading || MoveImpact is null || OperationError is not null || (!MoveToRoot && MoveTarget is null))" @onclick="ConfirmMoveAsync">
           @(Busy ? "Premikam …" : "Potrdi premik")
         </button>
@@ -489,7 +489,7 @@
         </label>
       </div>
       <footer class="dialog-footer">
-        <button type="button" disabled="@Busy" @onclick="CloseDeleteDialog">Prekliči</button>
+        <button type="button" data-pim-close disabled="@Busy" @onclick="CloseDeleteDialog">Prekliči</button>
         <button type="button" class="danger-primary" disabled="@(Busy || DeletePreviewLoading || DeleteImpact is null || !DeleteConfirmed)" @onclick="ConfirmDeleteAsync">
           @(Busy ? "Brišem …" : $"Trajno izbriši {DeleteImpact?.CategoryCount ?? 0}")
         </button>
