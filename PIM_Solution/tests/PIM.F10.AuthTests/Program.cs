@@ -108,7 +108,8 @@ var stocksPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Com
 Assert(stocksPage.Contains("<caption>", StringComparison.Ordinal) || stocksPage.Contains("<PimTable Caption=\"", StringComparison.Ordinal),
   "Tabela zalog mora imeti programsko določen napis.");
 var quarantinePage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "RawQuarantine.razor"));
-Assert(quarantinePage.Contains("<h1>Karantena</h1>", StringComparison.Ordinal), "Vidni naslov karantene mora biti dosleden.");
+// Od prenove je naslov parameter skupnega PimPage (ta izriše <h1>); stran se imenuje »Napake uvoza«.
+Assert(quarantinePage.Contains("<PimPage Title=\"Napake uvoza\"", StringComparison.Ordinal), "Vidni naslov karantene mora biti dosleden.");
 // SystemIntegrations.razor (/sistem/integracije) je odstranjena v bloku 7 prenove nadzora (2026-09-22);
 // alarme in izključitev podjetij zdaj kaže Nadzor, ki bere vsa podjetja, ne »aktivne organizacije«.
 // PipelineRuns.razor je od pregleda 2026-09-22 samo preusmeritev na /zajem/teki.
@@ -298,15 +299,17 @@ await AssertReachesDatabaseAsync("ProductEditService.SaveTextsAsync z vlogo CATA
   () => new ProductEditService(unusableConfiguration, editorGuard)
     .SaveTextsAsync(1, 1, [new ProductTextEdit("sl", "WEB_TITLE", "x")], "qa_editor"));
 
-// --- Geslo: dolzina je samo priporocilo (zahteva 2026-09-22) -----------------------------
-// Uporabnik: »nobenih omejitev glede znakov, lahko je samo priporocilo«. Kratko geslo mora zato
-// priti mimo servisa do baze (tu nedosegljive), prazno pa se zavrne prej, ker ga prijava ne sprejme.
+// --- Geslo: vrsta znakov ni pogoj (zahteva 2026-09-22) ---------------------------------
+// Uporabnik: »nobenih omejitev glede znakov, lahko je samo priporocilo«. Geslo iz samih malih črk
+// mora zato priti mimo servisa do baze (tu nedosegljive), prazno pa se zavrne prej, ker ga prijava
+// ne sprejme. Servis zahteva najmanj MinimumPasswordLength (6) znakov (Migrator in /sistem/uporabniki
+// enako); test je do #21 zahteval, da gre skozi tudi 3-znakovno geslo — odločitev lastnika je naloga #79.
 var userAdministration = new IntranetUserAdministrationService(unusableConfiguration,
   new ActiveDirectoryService(unusableConfiguration), new UserSecurityStateService(unusableConfiguration));
-await AssertPasswordReachesDatabaseAsync("ResetPasswordAsync s kratkim geslom",
-  () => userAdministration.ResetPasswordAsync("qa_ni_uporabnik", "abc"));
-await AssertPasswordReachesDatabaseAsync("CreateLocalUserAsync s kratkim geslom",
-  () => userAdministration.CreateLocalUserAsync("qa_ni_uporabnik", "QA", "1", "VIEWER", null));
+await AssertPasswordReachesDatabaseAsync("ResetPasswordAsync z geslom brez posebnih znakov",
+  () => userAdministration.ResetPasswordAsync("qa_ni_uporabnik", new string('a', IntranetUserAdministrationService.MinimumPasswordLength)));
+await AssertPasswordReachesDatabaseAsync("CreateLocalUserAsync z geslom brez posebnih znakov",
+  () => userAdministration.CreateLocalUserAsync("qa_ni_uporabnik", "QA", new string('a', IntranetUserAdministrationService.MinimumPasswordLength), "VIEWER", null));
 foreach (var emptyPassword in new[] { "", "   " })
 {
   var refused = false;
@@ -340,7 +343,9 @@ Assert(Regex.Matches(productCard, @"ReadOnly=""@\(!CanEdit\)""").Count == 3,
   "Vsi trije kanalni obrazci kartice morajo dobiti ReadOnly iz iste pravice.");
 Assert(productCard.Contains("if (!CanEdit) { SaveError", StringComparison.Ordinal),
   "Shranjevanje kartice mora zavrniti vlogo brez pravice tudi, ce gumb pride do klica.");
-Assert(channelPanel.Contains("ProductFieldEdit.None || ReadOnly", StringComparison.Ordinal),
+// Od prenove kartice je pogoj v Editable(): !ReadOnly && field.Edit != ProductFieldEdit.None.
+Assert(channelPanel.Contains("ProductFieldEdit.None || ReadOnly", StringComparison.Ordinal)
+    || channelPanel.Contains("!ReadOnly && field.Edit != ProductFieldEdit.None", StringComparison.Ordinal),
   "Obrazec kanala mora ob ReadOnly izrisati vrednost namesto vnosnega polja.");
 
 // --- A4: potrjevanje in resevanje alarmov ni vec odprto vsem prijavljenim ------------------
@@ -447,7 +452,6 @@ foreach (var (path, expected) in new[]
   ("sistem?pogled=postopki", "tab.system.overview"),
   ("sistem/posel/SAOP_STOCK_IMPORT", "tab.system.overview"),
   ("sistem/posel/WEB_CATALOG_EXPORT?tek=12", "tab.system.overview"),
-  ("sistem/samotest", "view.system.self-test"),
   ("sistem/sled", "view.system.activity"),
   // 277: varovalke — pregled, eno preverjanje in izvoz ugotovitev v Excel spadajo pod isto pravico.
   ("varovalke", "page.safeguards"),
@@ -455,7 +459,7 @@ foreach (var (path, expected) in new[]
   ("varovalke/42/excel", "page.safeguards"),
 })
   Assert(PimAccessCatalog.Resolve(path) == expected, $"Pot {path} mora zahtevati {expected}, zahteva pa {PimAccessCatalog.Resolve(path)}.");
-foreach (var removedPath in new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi" })
+foreach (var removedPath in new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem/samotest" })
   Assert(PimAccessCatalog.Resolve(removedPath) == "__unknown__", "Odstranjena pot ne sme imeti pravice: " + removedPath);
 foreach (var tab in PIM.Intranet.Components.Shared.NadzorTabs.Tabs)
 {
@@ -463,8 +467,8 @@ foreach (var tab in PIM.Intranet.Components.Shared.NadzorTabs.Tabs)
   Assert(PimAccessCatalog.ParentOf(tab.PermissionKey!) == PimAccessCatalog.System, $"Zavihek nadzora {tab.Key} mora spadati pod {PimAccessCatalog.System}.");
   Assert(PimAccessCatalog.Resolve(tab.Href) == tab.PermissionKey, $"Zavihek nadzora {tab.Key} vodi na pot z drugo pravico kot jo sam zahteva.");
 }
-Assert(PIM.Intranet.Components.Shared.NadzorTabs.Tabs.Select(tab => tab.Key).SequenceEqual(["nadzor", "samotest", "sled"]),
-  "Nadzor ima natanko tri zavihke: Nadzor, Samotest, Sled sprememb.");
+Assert(PIM.Intranet.Components.Shared.NadzorTabs.Tabs.Select(tab => tab.Key).SequenceEqual(["nadzor", "teki", "sled"]),
+  "Nadzor ima natanko tri zavihke: Nadzor, Teki, Sled sprememb (samotest odstranjen).");
 foreach (var child in PimAccessCatalog.All.Where(item => item.ParentKey is not null))
   Assert(PimAccessCatalog.Pages.Any(item => item.Key == child.ParentKey), $"Pravica {child.Key} kaže na neobstoječo stran {child.ParentKey}.");
 foreach (var pageDefinition in PimAccessCatalog.Pages)
@@ -569,7 +573,7 @@ static async Task AssertPasswordReachesDatabaseAsync(string what, Func<Task> cal
   }
   catch (Exception other)
   {
-    throw new InvalidOperationException($"{what} je bil zavrnjen pred bazo ({other.GetType().Name}: {other.Message}); dolzina gesla ne sme biti pogoj.");
+    throw new InvalidOperationException($"{what} je bil zavrnjen pred bazo ({other.GetType().Name}: {other.Message}); vrsta znakov gesla ne sme biti pogoj.");
   }
 
   throw new InvalidOperationException($"{what} bi moral obtičati na nedosegljivi bazi, ne uspeti.");

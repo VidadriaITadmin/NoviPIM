@@ -133,6 +133,7 @@ flowchart LR
 - V SAOP avtomatika sama ne piše: `SAOP_OUTBOUND_DISPATCH` je privzeto izklopljen.
 - Zagon posla z zunanjim učinkom zahteva drugi klik (potrditev).
 - Stran in dejanja: samo ADMIN.
+- **Testni intranet** (`PIM.Klikalnik`, kjer preizkušata klikalnik in preverjalec; vsak obiskovalec je skrbnik »klikalnik«) posla ne more zagnati, ustaviti, izklopiti ali mu spremeniti urnika/meje svežine; tudi postopkov in avtomatike podjetij ne. Servis (`MonitorService.RequireAdminAsync`) ob nastavitvi `Pim:TestniIntranet:BrezPoslov=true` vrne »Testni intranet: zagon in urejanje poslov sta izklopljena«. Nastavitev postavi samo `tools/PIM.Klikalnik/Program.cs`, pravi intranet je nima (naloga #57: 29. 9. je preizkus s testnega intraneta oddal zahtevo za izvoz kataloga).
 
 ## 8. Ko gre kaj narobe
 
@@ -174,6 +175,7 @@ flowchart LR
 - ⚠️ `Navodila/05_AutomationHost.md` navaja ključe poslov (`SAOP_STOCK`, `NW_STOCK`, `BT_XML` …), ki niso ključi v `JobCatalog` (npr. `STOCK_IMPORT`, `SUPPLIER_STOCK_IMPORT`, `SUPPLIER_CATALOG_IMPORT`); `--enkrat SAOP_STOCK` zato ne bo deloval.
 - ⚠️ `SUPPLIER_CATALOG_IMPORT` na PRD potrebuje nastavitev `Fetch:NW_XML` (in verjetno `Fetch:BT_XML`) v `appsettings.Local.json`; brez nje prevzem pade in branje se preskoči.
 - ⚠️ Dnevniki gostitelja: čiščenje (`PruneLogs`) obstaja, obseg hrambe ni viden na strani.
+- ⚠️ Zahtevo za zagon `WEB_CATALOG_EXPORT` lahko odda tudi odobritev na varovalkah katalog.csv (`ops.RequestJobRun` iz migracije 277, `SafeguardService`); zapora testnega intraneta (#57) te poti ne pokrije.
 
 ## Povezani procesi
 
