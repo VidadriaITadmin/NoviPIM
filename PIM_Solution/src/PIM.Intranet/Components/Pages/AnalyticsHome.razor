@@ -40,7 +40,7 @@
 
 <PimState Loading="Loading" Error="@Error" Empty="@(Overview is not null && !Overview.HasData)"
           LoadingText="Nalaganje analitike …"
-          EmptyText="Analitika za to podjetje še ni preračunana. Preračun teče vsako noč (posel »Analitika iz SAOP«); takoj ga lahko sproži skrbnik na zavihku Nastavitve izračuna.">
+          EmptyText="@EmptyText">
   @if (Overview is { HasData: true } o)
   {
     @if (o.Kpi.DemandSource == "BREZ")
@@ -152,34 +152,38 @@
         </section>
       }
     </div>
-
-    <section class="ui-card ana-chart" aria-labelledby="ana-streams">
-      <h2 id="ana-streams" class="ana-section-title">Od kod so podatki</h2>
-      <table class="data-table ana-table">
-        <caption class="visually-hidden">Zadnji zajem posameznega vira analitike</caption>
-        <thead><tr><th scope="col">Vir</th><th scope="col">Zadnji uspeh</th><th scope="col" class="numeric">Vrstic</th><th scope="col">Stanje</th></tr></thead>
-        <tbody>
-          @foreach (var stream in StreamRows(o.Streams))
-          {
-            <tr>
-              <td>@AnalyticsService.StreamLabel(stream.Stream)</td>
-              <td>@(stream.LastSuccessUtc?.ToPimLocal().ToString("d. M. yyyy HH:mm", Sl) ?? "še nikoli")</td>
-              <td class="numeric">@(stream.LastRowCount?.ToString("N0", Sl) ?? "—")</td>
-              <td>
-                @if (stream.LastError is { } error && (stream.LastSuccessUtc is null || stream.LastAttemptUtc > stream.LastSuccessUtc))
-                {
-                  <PimChip Text="Napaka" Tone="bad" /><span class="sub" title="@error">@Shorten(error)</span>
-                }
-                else if (stream.LastSuccessUtc is null) { <PimChip Text="Čaka prvi zajem" /> }
-                else { <PimChip Text="V redu" Tone="good" /> }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
   }
 </PimState>
+
+@* 120: zajem iz SAOP je viden tudi, ko podjetje še nima preračuna — tako je jasno, zakaj je prazno (ista poizvedba, brez dodatnega klica). *@
+@if (!Loading && Error is null && Overview is { } loaded)
+{
+  <section class="ui-card ana-chart" aria-labelledby="ana-streams">
+    <h2 id="ana-streams" class="ana-section-title">Od kod so podatki · @OrganizationName</h2>
+    <table class="data-table ana-table">
+      <caption class="visually-hidden">Zadnji zajem posameznega vira analitike za podjetje @OrganizationName</caption>
+      <thead><tr><th scope="col">Vir</th><th scope="col">Zadnji uspeh</th><th scope="col" class="numeric">Vrstic</th><th scope="col">Stanje</th></tr></thead>
+      <tbody>
+        @foreach (var stream in StreamRows(loaded.Streams))
+        {
+          <tr>
+            <td>@AnalyticsService.StreamLabel(stream.Stream)</td>
+            <td>@(stream.LastSuccessUtc?.ToPimLocal().ToString("d. M. yyyy HH:mm", Sl) ?? "še nikoli")</td>
+            <td class="numeric">@(stream.LastRowCount?.ToString("N0", Sl) ?? "—")</td>
+            <td>
+              @if (stream.LastError is { } error && (stream.LastSuccessUtc is null || stream.LastAttemptUtc > stream.LastSuccessUtc))
+              {
+                <PimChip Text="Napaka" Tone="bad" /><span class="sub" title="@error">@Shorten(error)</span>
+              }
+              else if (stream.LastSuccessUtc is null) { <PimChip Text="Čaka prvi zajem" /> }
+              else { <PimChip Text="V redu" Tone="good" /> }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}
 
 @code {
   [SupplyParameterFromQuery(Name = "dobavitelj")] public string? QuerySupplier { get; set; }
@@ -188,6 +192,7 @@
   static readonly string[] AllStreams = ["RACUNI", "NAROCILA_KUPCEV", "NAROCILA_DOBAVITELJEM", "NABAVNI_PODATKI", "IZRACUN"];
 
   AnalyticsOverview? Overview;
+  string? OrganizationName;
   IReadOnlyList<AnalyticsSupplierRow> Suppliers = [];
   bool Loading = true;
   string? Error;
@@ -203,6 +208,8 @@
     {
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      if (organization.Name != OrganizationName) Suppliers = []; // seznam dobaviteljev je po podjetju
+      OrganizationName = organization.Name;
       Overview = await Analytics.GetOverviewAsync(organization.OrganizationId, QuerySupplier);
       if (Suppliers.Count == 0)
         Suppliers = (await Analytics.GetSuppliersAsync(organization.OrganizationId, null, "naziv", false, 0, 2000, true)).Rows;
@@ -223,6 +230,12 @@
       m.MonthStart.ToString("MMM yy", Sl).Replace(".", ""),
       ShowQuantity ? m.Qty : m.Net ?? 0,
       ShowQuantity ? m.PrevYearQty : m.PrevYearNet)).ToList();
+
+  // 120: prazno stanje pove, za katero podjetje ni podatkov — preklop podjetja se tako vidi tudi, ko sta obe prazni.
+  string EmptyText =>
+    $"Za podjetje {OrganizationName} analitika še ni preračunana"
+    + (string.IsNullOrEmpty(QuerySupplier) ? "" : $" (dobavitelj {QuerySupplier})")
+    + ". Preračun teče vsako noč (posel »Analitika iz SAOP«); takoj ga lahko sproži skrbnik na zavihku Nastavitve izračuna. Spodaj je stanje zajema iz SAOP za to podjetje.";
 
   void SupplierChanged() => Navigation.NavigateTo(string.IsNullOrEmpty(SupplierFilter) ? "analitika" : $"analitika?dobavitelj={Uri.EscapeDataString(SupplierFilter)}");
   void ClearSupplier() => Navigation.NavigateTo("analitika");

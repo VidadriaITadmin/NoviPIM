@@ -48,6 +48,11 @@ foreach (var (method, procedure) in new[] { ("ApproveAsync(", "ops.ApproveSafegu
 }
 var safeguardPage = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Pages/SafeguardReview.razor"));
 Assert(safeguardPage.Contains("SafeguardService.TestIntranetMessage", StringComparison.Ordinal), "/varovalke/{id} ne pokaže sporočila zapore testnega intraneta");
+// Naloga #117: pasica zadržanih SAOP sprememb (/cene, /saop/...) na testnem intranetu ne sme trditi, da vloga ne dovoljuje.
+var banner = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Shared/SaopSafeguardBanner.razor"));
+var bannerTest = banner.IndexOf("when (exception.Message == SafeguardService.TestIntranetMessage)", StringComparison.Ordinal);
+var bannerRole = banner.IndexOf("catch (UnauthorizedAccessException) {", StringComparison.Ordinal);
+Assert(bannerTest > 0 && bannerRole > bannerTest, "pasica SAOP varovalk ne pokaže sporočila zapore testnega intraneta pred sporočilom o vlogi");
 var klikalnik = File.ReadAllText(Path.Combine(root, "tools/PIM.Klikalnik/Program.cs"));
 Assert(klikalnik.Contains("MonitorService.TestIntranetWithoutJobsKey] = \"true\"", StringComparison.Ordinal), "testni intranet ne izklopi poslov");
 foreach (var settings in Directory.GetFiles(Path.Combine(root, "src/PIM.Intranet"), "appsettings*.json"))
