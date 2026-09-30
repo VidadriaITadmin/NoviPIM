@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject ILogger<AdminActivity> Log
 
 @*
   Kdo je kaj spremenil.
@@ -93,7 +94,12 @@
     Loading = true;
     Error = null;
     try { Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take); }
-    catch { Error = "Sledi trenutno ni mogoče prebrati."; }
+    catch (Exception ex)
+    {
+      // Napako zapišemo v dnevnik: brez tega se časovna omejitev baze in vse druge napake vidijo enako.
+      Log.LogError(ex, "Sled sprememb: branje ni uspelo (dni {Dni}, iskanje {Iskanje}).", Dni, Iskanje);
+      Error = "Sledi trenutno ni mogoče prebrati. Poskusite krajše obdobje ali ožje iskanje; napaka je zapisana v dnevnik.";
+    }
     finally { Loading = false; }
   }
 
