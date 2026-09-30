@@ -286,7 +286,7 @@ foreach (Match write in Regex.Matches(markup, @"(?<![\w.])Packaging\.(\w+)"))
   Assert(new[] { "GetCatalogAsync", "SaveDefaultsBulkAsync", "SaveRulesBulkAsync", "UndoRulesBatchAsync", "GetRuleBatchesAsync" }
       .Contains(write.Groups[1].Value, StringComparer.Ordinal),
     "Nova pisalna pot s seznama izdelkov ni v obsegu: " + write.Value);
-Assert(!Regex.IsMatch(markup, @"foreach[^\n]*\n[^\n]*\{[^}]*Packaging\.", RegexOptions.Singleline) || !markup.Contains("Packaging.SaveRuleAsync", StringComparison.Ordinal),
+Assert(!markup.Contains("Packaging.SaveRuleAsync", StringComparison.Ordinal) && !markup.Contains("Packaging.RemoveRuleAsync", StringComparison.Ordinal),
   "Posebni S se s seznama ne pise po vrstici (do 90.000 klicev brez skupne sledi) — samo b2b.SavePackagingDiscountRulesBulk.");
 Assert(markup.Contains("BulkConfirmText", StringComparison.Ordinal) && markup.Contains("UndoBulkBatchAsync", StringComparison.Ordinal),
   "Mnozicni S-popust mora vprasati »koliko in cesa« in ponuditi razveljavitev paketa.");
