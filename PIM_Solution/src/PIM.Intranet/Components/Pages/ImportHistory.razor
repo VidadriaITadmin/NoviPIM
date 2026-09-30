@@ -15,11 +15,21 @@
 <div class="history-filters section-gap" role="group" aria-label="Vrsta uvoza">
   @foreach (var (kind, label) in Kinds)
   {
-    <button type="button" class="@(Kind == kind ? "primary-button" : "secondary-button")" aria-pressed="@(Kind == kind)"
+    <button type="button" class="@(Kind == kind ? "primary-button" : "secondary-button")" aria-pressed="@(Kind == kind ? "true" : "false")"
             @onclick="() => SelectAsync(kind)">@label</button>
   }
 </div>
 
+@if (!Loading && LoadError is null && Runs.Count == 0 && Kind is not null)
+{
+  @* #94: prazen filter ni isto kot prazna zgodovina — povej, česa ni, in ponudi pot nazaj na vse uvoze. *@
+  <div class="empty-state" role="status">
+    Ni uvozov @KindGenitive(Kind) med zadnjimi 200 uvozi.
+    <button type="button" class="secondary-button" @onclick="() => SelectAsync(null)">Pokaži vse</button>
+  </div>
+}
+else
+{
 <PimState Loading="Loading" Error="@LoadError" Empty="@(Runs.Count == 0)"
           EmptyText="Uvozov še ni v zgodovini — zapisujejo se od migracije 280 naprej (uvoz izdelkov, cen in strank).">
   <section class="ui-card data-card section-gap">
@@ -47,6 +57,7 @@
     </PimTable>
   </section>
 </PimState>
+}
 
 @code {
   static readonly IReadOnlyList<PimColumn> Columns =
@@ -54,6 +65,15 @@
      new("Sprememb", Numeric: true), new("V SAOP", Numeric: true), new("Stanje")];
   static readonly IReadOnlyList<(string? Kind, string Label)> Kinds =
     [(null, "Vsi"), (ImportKinds.Products, "Izdelki"), (ImportKinds.Prices, "Cene"), (ImportKinds.Customers, "Stranke")];
+
+  // Rodilnik za sporočilo praznega filtra (»Ni uvozov strank«); ImportKinds.Label vrne imenovalnik.
+  static string KindGenitive(string? kind) => kind switch
+  {
+    ImportKinds.Products => "izdelkov",
+    ImportKinds.Prices => "cen",
+    ImportKinds.Customers => "strank",
+    _ => ImportKinds.Label(kind ?? "").ToLowerInvariant()
+  };
 
   [SupplyParameterFromQuery(Name = "vrsta")] public string? KindQuery { get; set; }
 
