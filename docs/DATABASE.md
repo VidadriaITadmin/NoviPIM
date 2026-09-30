@@ -2560,6 +2560,28 @@ Paketno urejanje na `/izdelki` (#10), uvoz delovnega lista (`/izdelki/uvoz`), zd
 - DEV (vzorec 1.005 izdelkov IQ Lighting: 500 s kljukico spletišča, 500 brez, 5 neaktivnih z odprtimi napakami; posnetek napak, stanj profilov in stanja izdelka pred in po, `EXCEPT` v obe smeri): **0 razlik** med stanjem pred tekom, po novi proceduri in po stari proceduri na istih izdelkih. Čas: nova 5,4–6,3 s za 1.005 izdelkov (prvi teki pod obremenitvijo drugih sej 34–42 s, pred popravkom branja pogleda), po uveljavitvi 5,6 s in **nobena druga seja ni čakala na zaklep**; stara 2.153 s (36 min) za samo 200 izdelkov istega vzorca pod obremenitvijo, ves čas je blokirala druge (`LCK_M_IX`, `LCK_M_IS`, `RESOURCE_SEMAPHORE`, 110 mio branj v prvih 10 min). Preizkus s pokvarjenim stanjem v transakciji z ROLLBACK (40 izdelkov: 3.827 obrnjenih napak, 242 izbrisanih stanj, lažna stanja spletnega profila, napačno stanje izdelka): nova procedura v 0,5 s vse aktivne izdelke vrne natanko v stanje stare; neaktivnih izdelkov (kot 249) ne validira.
 
 **Objekti:** `val.RunValidationForProducts`. **Podatki:** nič. **Ročni korak:** ne. **SAOP:** nič. **Povratek:** ponovno izvedi definicijo procedure iz 249. **PRD:** neodvisno od intraneta (parameter in izhod enaka).
+## Zgodovina zapiše tudi spremembo velike/male črke (migracija 323_ZgodovinaVelikeMaleCrke, 2026-09-30, naloga #115)
+
+Sprožilca `canon.TR_ProductAttribute_FieldHistory` in `canon.TR_ProductText_FieldHistory` (034) sta staro in novo vrednost primerjala z `EXCEPT` v kolaciji baze (`SQL_Latin1_General_CP1_CI_AS`, ne loči velikih in malih črk), zato se sprememba »kgs« → »Kgs« ali »bela« → »Bela« ni zapisala v `pim.ProductFieldHistory` (pri 314 je od 27.490 sprememb v zgodovino šlo 17.502, ostale so samo v `pim.AttributeValueNormalizationLog`).
+
+- V **živi** definiciji obeh sprožilcev se zamenja samo pogoj: obe strani `EXCEPT` dobita `COLLATE Latin1_General_BIN2` (oznaka `/* 323: tudi velika/mala crka */`). Loči velike/male črke in naglase; presledek na koncu vrednosti se še vedno ne šteje kot sprememba (kot prej). Paket, vir, kdo in zapisane vrednosti ostanejo enaki. Sidro mora biti v vsakem sprožilcu natanko enkrat (sicer napaka 53232, drift); ponovni zagon ne naredi nič.
+- Samopreizkus v shranjeni točki z ROLLBACK: velike črke na enem obstoječem atributu dajo natanko eno vrstico zgodovine, zapis enake vrednosti nobene; podatki ostanejo nespremenjeni.
+- DEV (po uveljavitvi, transakcija z ROLLBACK): atribut »cm« → »Cm« in besedilo `TITLE_ERP.sl` »svetilka« → »Svetilka« dasta po eno vrstico prej/potem; `UPDATE ... SET Value = Value` nobene.
+- Ni spremenjeno: sprožilci `canon.TR_Product_FieldHistory`, `canon.TR_ProductCommercial_FieldHistory` (polja iz SAOP, bere jih tudi pogled zadržanih sprememb za SAOP, 311) in `canon.TR_ProductMedia_FieldHistory` imajo enak vzorec — ločena naloga. Stara zgodovina se ne dopolnjuje.
+
+**Objekti:** `canon.TR_ProductAttribute_FieldHistory`, `canon.TR_ProductText_FieldHistory` (ALTER). **Podatki:** nič. **Vpliv:** pri množičnih menjavah samo velikosti črk (poenotenje vrednosti, uvoz) več vrstic v `pim.ProductFieldHistory`. **SAOP:** nič. **Ročni korak:** ne. **Povratek:** ponovno izvedi definiciji sprožilcev iz 034. **PRD:** neodvisno od intraneta.
+
+## Shranjevanje loči velike/male črke (migracija 326_ShranjevanjeVelikeMaleCrke, 2026-09-30, naloga #115)
+
+Po 323 sta sprožilca zgodovine ločila velike/male črke, a kartica izdelka spremembe »max 25 W« → »Max 25 W« sploh ni zapisala: shranjevalne procedure imajo v `MERGE` pogoj `WHEN MATCHED AND ISNULL(target.Value, N'') <> source.Value` v kolaciji baze (CI), zato vrstice niso posodobile (gumb je pokazal (1), v bazi je ostala stara vrednost, zgodovine ni bilo).
+
+- V **živi** definiciji procedur `pim.SaveProductAttributes`, `pim.SaveProductTexts`, `pim.SaveProductAttributesBulk`, `pim.SaveProductTextsBulk` in `pim.SaveProductErpFieldsBulk` (2× MERGE) obe strani pogoja dobita `COLLATE Latin1_General_BIN2` (oznaka `/* 326 */`).
+- V `pim.SaveProductAttributes` in `pim.SaveProductTexts` enako preverjanje sočasne spremembe (`ISNULL(current_.Value) <> ISNULL(change.Expected)`): sprememba samo velikosti črk pri drugem uporabniku je zdaj spor, ne tiho prepisovanje.
+- Sidra morajo biti v vsaki proceduri natanko pričakovano število krat (sicer 53262/53263, drift); ponovni zagon ne naredi nič. Presledek na koncu se še vedno ne šteje kot sprememba.
+- DEV (po uveljavitvi, transakcija z ROLLBACK): `pim.SaveProductAttributes` na izdelku 546 »max 25 W« → »Max 25 W« zapiše vrednost in 1 vrstico v `pim.ProductFieldHistory`; nato `expected` »max 25 W« ob vrednosti »Max 25 W« vrne 1 spor.
+- Ni spremenjeno: `map.ProcessRawInbox` (zajem dobaviteljev), `out.RecordExportPublication` (sled objav). Razveljavitev (`pim.UndoProductField`/`UndoProductBatch`) atributov in besedil ne podpira, zato tam ni kaj popraviti.
+
+**Objekti:** 5 zgornjih procedur (ALTER). **Podatki:** nič. **Vpliv:** sprememba samo velikosti črk gre v bazo, zgodovino, validacijo in ob izvozu v `katalog.csv`; pri SAOP stolpcih delovnega lista v vrsto za SAOP kot vsaka ročna sprememba (nič samodejno). **Ročni korak:** ne. **Povratek:** odstrani `COLLATE Latin1_General_BIN2 ... /* 326 */` iz pogojev. **PRD:** neodvisno od intraneta.
 ## Brez fiksnega števila stolpcev v imenu profila (migracija 325_OdstraniStevecStolpcevIzImenaProfila, 2026-09-30, naloga #92)
 
 Na `/splet/izvoz` je profil MAGENTO_PRODUCTS nosil ime »Magento - izdelki (predloga 215 stolpcev)« (migracija 045), izvožen CSV pa ima 223 stolpcev. Število je bilo zapisano v imenu in je zastarelo.
