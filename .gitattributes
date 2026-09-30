@@ -3,3 +3,4 @@
 
 # Skupna dnevnika sprememb: vsaka naloga doda svoj razdelek — ob združevanju obdrži oba.
 docs/DATABASE.md merge=union
+PIM_Solution/PIM.sln merge=union

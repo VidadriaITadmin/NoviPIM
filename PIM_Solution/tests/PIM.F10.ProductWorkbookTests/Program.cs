@@ -109,6 +109,69 @@ Check("koda besedila je sprejeta kot naslov", byCode[3].Column?.FieldKey == "Pro
 var unknown = ProductWorkbookContract.Match(["Šifra artikla", "Nekaj izmišljenega"], columns);
 Check("neznan stolpec se ne prilepi na napačno polje", unknown[1].Column is null);
 
+// Naloga #6: stari stolpec »Naziv« (spletni naziv, sicer naziv ERP) se je ob uvozu vpisal v
+// »Spletni naziv (sl)«. Izvoz ga nima več, uvoz pa ga preskoči kot dvoumnega in to pove.
+Check("izvoz nima dvoumnega stolpca »Naziv«",
+  !columns.Any(column => ProductWorkbookContract.IsAmbiguousHeader(column.Header)),
+  string.Join(", ", columns.Where(column => ProductWorkbookContract.IsAmbiguousHeader(column.Header)).Select(column => column.Header)));
+var titles = ProductWorkbookContract.Match(["Šifra artikla", "Naziv", "Spletni naziv (sl)", " naziv  artikla ", "Title"], columns);
+Check("»Naziv« se ne ujame z nobenim poljem in je označen kot dvoumen",
+  titles[1].Column is null && titles[1].Ambiguous);
+Check("»Spletni naziv (sl)« gre v spletni naziv (sl)",
+  titles[2].Column?.FieldKey == "ProductText.WEB_TITLE.sl" && !titles[2].Ambiguous);
+Check("dvoumen je tudi »Naziv artikla« in »Title« (brez razlike v presledkih in velikosti)",
+  titles[3].Ambiguous && titles[4].Ambiguous && titles[3].Column is null && titles[4].Column is null);
+Check("pravi stolpci in atributi »Nazivna …« niso dvoumni (natančna primerjava, ne »vsebuje«)",
+  !ProductWorkbookContract.IsAmbiguousHeader("Spletni naziv (sl)") && !ProductWorkbookContract.IsAmbiguousHeader("Naziv ERP (sl)")
+  && !ProductWorkbookContract.IsAmbiguousHeader("Nazivna napetost") && !ProductWorkbookContract.IsAmbiguousHeader("Ime"));
+// Nasvet mora imenovati stolpca, ki na listu res obstajata: naziv ERP ima naslov iz registra SAOP
+// (»Naziv 1«), ne »Naziv ERP (sl)« — ta naslov uvoz ne pozna in bi vodil v napačen nov atribut.
+var titleColumns = ProductWorkbookContract.Build(spec with
+{
+  SaopFields = [.. spec.SaopFields, new("ProductText.TITLE_ERP.sl", "ItemTitle1", "Naziv 1", "text")],
+});
+var titleWarnings = ProductWorkbookService.AmbiguousColumnWarnings(titles, titleColumns);
+Check("opozorilo pove, kateri stolpec je preskočen, zakaj in kaj uporabiti (dejanska naslova lista)",
+  titleWarnings.Count == 3 && titleWarnings[0].Contains("»Naziv«") && titleWarnings[0].Contains("dvoumen")
+  && titleWarnings[0].Contains("»Spletni naziv (sl)«") && titleWarnings[0].Contains("»Naziv 1«")
+  && !titleWarnings[0].Contains("Naziv ERP (sl)"),
+  string.Join(" | ", titleWarnings));
+var advisedHeaders = new[] { "Spletni naziv (sl)", "Naziv 1" };
+Check("predlagana stolpca uvoz res prepozna (spletni naziv in naziv ERP za SAOP)",
+  ProductWorkbookContract.Match(advisedHeaders, titleColumns) is var advised
+  && advised[0].Column?.FieldKey == "ProductText.WEB_TITLE.sl"
+  && advised[1].Column?.FieldKey == "ProductText.TITLE_ERP.sl" && advised[1].Column?.Target == ProductWorkbookTarget.Saop);
+Check("list brez stolpca naziva ERP ga v nasvetu ne omenja",
+  ProductWorkbookService.AmbiguousColumnWarnings(titles, columns)[0] is var noErp
+  && noErp.Contains("»Spletni naziv (sl)«") && !noErp.Contains("ERP (")
+  && !noErp.Contains("Naziv 1"), ProductWorkbookService.AmbiguousColumnWarnings(titles, columns)[0]);
+Check("atribut z dvoumnim imenom dobi v izvozu naslov s kodo (uvoz bi ga sicer preskočil)",
+  ProductWorkbookContract.Build(spec with { Attributes = [.. spec.Attributes, new("NAZIV", "Naziv")] })
+    .Any(column => column.FieldKey == "ProductAttribute.NAZIV" && !ProductWorkbookContract.IsAmbiguousHeader(column.Header)));
+
+// Atributi: »Naziv« ne sme dobiti predloga »Nazivna napetost« in se ne sme ustvariti kot nov
+// atribut — ne brez skupine, ne pod »Atributi kategorije — nabor«, ne po izbiri v oknu.
+var knownAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+{
+  [WorkbookHeader.Normalize("Nazivna napetost")] = "Nazivna napetost",
+  [WorkbookHeader.Normalize("NAZIVNA_NAPETOST")] = "Nazivna napetost",
+  [WorkbookHeader.Normalize("Barva ohišja")] = "Barva ohišja",
+};
+string AttributeGroup(int index) => index >= 2 ? "Atributi kategorije — nabor" : ProductWorkbookContract.GroupKey;
+var attributeHeaders = ProductWorkbookContract.Match(["Šifra artikla", "Naziv", "Naziv", "Barva ohisja", "Nov atribut"], columns);
+var attributeMatch = ProductWorkbookService.MatchAttributes(attributeHeaders, AttributeGroup, knownAttributes,
+  new Dictionary<string, string> { ["Naziv"] = "Naziv" });
+Check("»Naziv« ne postane atribut (ne v ključu, ne pod skupino atributov, ne po izbiri v oknu)",
+  attributeMatch.Matches[1].Column is null && attributeMatch.Matches[2].Column is null
+  && !attributeMatch.NewAttributes.Contains("Naziv", StringComparer.OrdinalIgnoreCase),
+  string.Join(", ", attributeMatch.NewAttributes));
+Check("»Naziv« ne dobi predloga atributa (»Nazivna napetost«)",
+  !attributeMatch.Suggestions.ContainsKey("Naziv"));
+Check("ostali stolpci pod skupino atributov delujejo kot prej",
+  attributeMatch.Matches[3].Column?.FieldKey == ProductWorkbookContract.AttributeFieldPrefix + "Barva ohišja"
+  && attributeMatch.NewAttributes.Contains("Nov atribut"),
+  $"{attributeMatch.Matches[3].Column?.FieldKey}; {string.Join(", ", attributeMatch.NewAttributes)}");
+
 Check("seznam se loči z |",
   ProductWorkbookContract.SplitList("Svetila.si | Videlektro").SequenceEqual(["Svetila.si", "Videlektro"]));
 Check("prazna celica da prazen seznam", ProductWorkbookContract.SplitList("   ").Count == 0);
@@ -172,6 +235,14 @@ Check("koncan izvoz je brez ocene", (halfway with { Status = ExportRunStatus.Com
 
 Console.WriteLine();
 Console.WriteLine("=== Krog izvoz → uvoz nad razvojno bazo ===");
+
+// CLAUDE.md §6: DB del zna na razvojnem računalniku zamrzniti SQL (8 GB RAM). PIM_TEST_BREZ_BAZE=1
+// zažene samo pogodbo zgoraj, tudi če povezava obstaja.
+if (Environment.GetEnvironmentVariable("PIM_TEST_BREZ_BAZE") == "1")
+{
+  Console.WriteLine("  Del z bazo PRESKOČEN: PIM_TEST_BREZ_BAZE=1.");
+  return Report();
+}
 
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString();
 if (string.IsNullOrWhiteSpace(connectionString))

@@ -5,9 +5,9 @@ podrocje: 09-administracija
 stanje: deluje
 bere: [pim.urniki, pim.surovi-zajem, pim.uporabniki]
 pise: [pim.urniki, obvestila]
-strani: [/sistem, /sistem/posel/{JobKey}, /sistem/teki, /sistem/teki/{RunId}, /sistem/sled, /sistem/samotest]
+strani: [/sistem, /sistem/posel/{JobKey}, /sistem/teki, /sistem/teki/{RunId}, /sistem/sled]
 posli: [ALERT_EVALUATION, ALERT_DELIVERY, SYSTEM_SELF_TEST]
-koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Monitor.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/MonitorJob.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRuns.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRunDetail.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/AdminActivity.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/AdminSelfTest.razor, PIM_Solution/src/PIM.Intranet/Services/MonitorService.cs, PIM_Solution/src/PIM.Intranet/Services/AdminConsoleService.cs, PIM_Solution/src/PIM.Intranet/Services/PipelineReadService.cs, PIM_Solution/src/PIM.Automation/MonitorPolicy.cs, PIM_Solution/src/PIM.Automation/AutomationOverview.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs]
+koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Monitor.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/MonitorJob.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRuns.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRunDetail.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/AdminActivity.razor, PIM_Solution/src/PIM.Intranet/Services/MonitorService.cs, PIM_Solution/src/PIM.Intranet/Services/AdminConsoleService.cs, PIM_Solution/src/PIM.Intranet/Services/PipelineReadService.cs, PIM_Solution/src/PIM.Automation/MonitorPolicy.cs, PIM_Solution/src/PIM.Automation/AutomationOverview.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs]
 migracije: [247, 254, 255, 256, 259, 260, 261, 276]
 ---
 
@@ -17,9 +17,9 @@ migracije: [247, 254, 255, 256, 259, 260, 261, 276]
 
 ## 1. Namen
 
-Skrbnik na eni strani vidi, ali gostitelj avtomatike teče, ali so podatki vsakega posla sveži (zeleno/sivo/rdeče), zakaj je kaj rdeče in kateri en korak težavo reši; od tam gre v podrobnosti posla (koraki, faze, izpis, zgodovina, nastavitve), v teke vhodnih podatkov, v sled, kdo je kaj spremenil, in v zgodovino nočnih samotestov.
+Skrbnik na eni strani vidi, ali gostitelj avtomatike teče, ali so podatki vsakega posla sveži (zeleno/sivo/rdeče), zakaj je kaj rdeče in kateri en korak težavo reši; od tam gre v podrobnosti posla (koraki, faze, izpis, zgodovina, nastavitve), v teke vhodnih podatkov in v sled, kdo je kaj spremenil.
 
-**Nočni samotest** (`SYSTEM_SELF_TEST`, ob 04:30, privzeto izklopljen) vsako noč prehodi celo verigo (baza, urniki, utripi, katalog, svežina zaloge po virih, karantena, kakovost, spletni CSV, odhodna vrsta, odmev iz ERP, svežina izvozov) in vsakemu koraku izmeri čas. Samo bere: ne kliče SAOP-a, ne pošilja ničesar in ne spreminja podatkov; edini zapis je njegov lastni rezultat (`ops.SelfTestRun`, `ops.SelfTestStep`). Stran `/sistem/samotest` pokaže zgodovino zagonov, da se vidi, ali se stanje ali trajanje slabša. Podrobnosti: `docs/NADZOR_SKRBNIKA.md` §3.
+**Nočni samotest** (`SYSTEM_SELF_TEST`, ob 04:30, privzeto izklopljen) vsako noč prehodi celo verigo (baza, urniki, utripi, katalog, svežina zaloge po virih, karantena, kakovost, spletni CSV, odhodna vrsta, odmev iz ERP, svežina izvozov) in vsakemu koraku izmeri čas. Samo bere: ne kliče SAOP-a, ne pošilja ničesar in ne spreminja podatkov; edini zapis je njegov lastni rezultat (`ops.SelfTestRun`, `ops.SelfTestStep`). Ločene strani za zgodovino samotestov ni več (odstranjena 2026-09-29, odločitev lastnika): padel samotest se šteje v zvonec, zgodovina ostane v `ops.SelfTestRun` in dnevniku `samotest_*.log`. Podrobnosti: `docs/NADZOR_SKRBNIKA.md` §3.
 
 ## 2. Kdo sodeluje
 
@@ -43,7 +43,7 @@ Skrbnik na eni strani vidi, ali gostitelj avtomatike teče, ali so podatki vsake
 | **Vhod** | Zakup gostitelja, posli, teki, koraki, faze, viri s svežino, alarmi | PIM (`ops.*`) |
 | **Vhod** | Teki vhodnih podatkov (strani, zavrnjeni zapisi) | PIM (`ops.PipelineRun`, `raw.Inbox`) |
 | **Vhod** | Sledi sprememb iz več tabel | PIM (`intranet.GetUserActivityTrail`) |
-| **Vhod** | Zagoni in koraki nočnega samotesta | PIM (`ops.SelfTestRun`, `ops.SelfTestStep` prek `intranet.GetSelfTestHistory`) |
+| **Vhod** | Zadnji zagon nočnega samotesta (za zvonec) | PIM (`ops.SelfTestRun`, `ops.SelfTestStep` prek `intranet.GetAdminPulse`) |
 | **Izhod** | Zahteve za zagon/ustavitev, vklopi poslov in postopkov, spremembe urnika in meje svežine, potrjeni/razrešeni alarmi | PIM (`ops.*`, sled `ops.LogUserActivity`) |
 
 ## 5. Diagram
@@ -91,7 +91,6 @@ flowchart LR
 | 6 | Skrbnik | `/sistem/teki` | Filtriraš podjetje, vir, postopek, status → **Uporabi filtre**; klik na čas odpre tek. | Seznam izvedb vhodov (katalog, XML, zaloga …) s prebranimi, uspešnimi in zavrnjenimi zapisi. | — |
 | 7 | Skrbnik | `/sistem/teki/{RunId}` | Pregledaš identiteto teka, rezultat, korake in strani; klik na stran odpre težavo zajema. | Samo branje. | — |
 | 8 | Skrbnik | `/sistem/sled` | Izbereš obdobje (dan … leto), iščeš po uporabniku, šifri ali opisu → **Poišči**. | Kronološka sled iz vseh tabel s stolpcem Vir (iz katere tabele). | Vrstica z dejanjem, ki ga iščeš. |
-| 9 | Skrbnik | `/sistem/samotest` (naslov vpišeš ročno, glej §10) | Pregledaš korake zadnjega zagona in zgodovino: izid, koliko korakov je uspelo, trajanje; hitri izbor po izidu (`?izid=`); **Osveži**. | Samo branje. Stran primerja trajanje zadnjega zagona z mediano zadnjih uspešnih. | Zadnji zagon je od danes ponoči in brez padlih korakov. |
 
 ## 7. Pravila in varovalke
 
@@ -115,8 +114,8 @@ flowchart LR
 <details>
 <summary>Za skrbnika in razvoj</summary>
 
-- **Strani:** `Monitor.razor` (`/sistem`), `MonitorJob.razor` (`/sistem/posel/{JobKey}`), `IngestRuns.razor` in `IngestRunDetail.razor` (`/sistem/teki`, tudi stari naslov `/zajem/teki`), `AdminActivity.razor` (`/sistem/sled`), `AdminSelfTest.razor` (`/sistem/samotest`); zavihki `NadzorTabs` (Nadzor, Teki, Sled sprememb).
-- **Storitve:** `MonitorService` (`RequestRunAsync`, `RequestCancelAsync`, `SetJobEnabledAsync`, `EnablePipelineAsync`, `SetOrganizationAutomationAsync`, `SaveJobScheduleAsync`, `SaveSourceMaxAgeAsync`, `AcknowledgeAlertAsync`, `ResolveAlertAsync`), `AdminConsoleService` (`MarkAlertsSeenAsync`, `intranet.GetUserActivityTrail`, `GetSelfTestHistoryAsync` → `intranet.GetSelfTestHistory`), `PipelineReadService`.
+- **Strani:** `Monitor.razor` (`/sistem`), `MonitorJob.razor` (`/sistem/posel/{JobKey}`), `IngestRuns.razor` in `IngestRunDetail.razor` (`/sistem/teki`, tudi stari naslov `/zajem/teki`), `AdminActivity.razor` (`/sistem/sled`); zavihki `NadzorTabs` (Nadzor, Teki, Sled sprememb).
+- **Storitve:** `MonitorService` (`RequestRunAsync`, `RequestCancelAsync`, `SetJobEnabledAsync`, `EnablePipelineAsync`, `SetOrganizationAutomationAsync`, `SaveJobScheduleAsync`, `SaveSourceMaxAgeAsync`, `AcknowledgeAlertAsync`, `ResolveAlertAsync`), `AdminConsoleService` (`MarkAlertsSeenAsync`, `intranet.GetUserActivityTrail`), `PipelineReadService`.
 - **Presoja barve:** `PIM.Automation/MonitorPolicy.cs`, pregled `AutomationOverview.cs`.
 - **Tabele:** `ops.SchedulerLease`, `ops.JobDefinition`, `ops.JobRun`, `ops.JobStepRun`, `ops.JobPhaseRun`, `ops.JobSource`, `ops.Alert`, `ops.PipelineRun`, `ops.ScheduleProfile`, `ops.SelfTestRun`, `ops.SelfTestStep`.
 - **Samotest:** `PIM_Solution/tests/PIM.SelfTest.Nightly`, posel `SYSTEM_SELF_TEST` v `PIM.Automation/JobCatalog.cs` (opis poslov v [Avtomatika in urniki](avtomatika-in-urniki.md)).
@@ -129,7 +128,6 @@ flowchart LR
 - ⚠️ `/sistem/teki` in `/sistem/teki/{RunId}` imata samo `[Authorize]` (vsak prijavljen), dostop pa zapira dovoljenje `tab.ingest.runs`; podrobnosti teka kažejo še stare zavihke zajema (`IngestTabs`: Vhodi, Teki, Težave), čeprav je meni »Zajem podatkov« odstranjen.
 - ⚠️ Stran »Nadzor« prikazuje samo posle gostitelja; kar poženejo stara Windows opravila, se tu vidi le posredno (faze, teki), ne kot posel. Če na PRD še tečejo opravila, je slika na `/sistem` nepopolna.
 - ⚠️ Stran posla se sklicuje na odstranjene strani (`/sistem/opravila` v besedilu alarmov iz 254); preveriti besedila alarmov.
-- ⚠️ `/sistem/samotest` nima vhoda: zavihki `NadzorTabs` (Nadzor, Teki, Sled sprememb) zavihka Samotest nimajo, čeprav ga stran označi kot dejavnega (`Active="samotest"`), in nobena druga stran ne vodi nanjo. Ločena naloga na tabli.
 - ⚠️ Stran v brskalniku ni bila preverjena s prijavljenim skrbnikom (znano iz sej 2026-09-21/22).
 
 ## Povezani procesi
