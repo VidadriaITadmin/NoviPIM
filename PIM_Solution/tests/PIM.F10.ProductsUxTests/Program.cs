@@ -184,13 +184,15 @@ Assert(!markup.Contains("izvoz/izdelki.csv", StringComparison.Ordinal), "Gumb za
 // »Kar vidis, se izvozi«: filter izvoza (BuildExportFilter) mora nositi natanko iste parametre
 // naslova (Query*) kot poizvedba seznama. Prej je to varoval ExportHref iz Href(page: 1); ker
 // izvoz ne gre vec skozi naslov, primerjamo obe sestavi ProductListFilter neposredno.
-var listFilter = Regex.Match(markup, @"Workbench\.GetProductListAsync\(new ProductListFilter\((.*?)\)\);", RegexOptions.Singleline);
+// #74: seznam gradi filter v CurrentFilter() (en vir za branje, Ponovi in osvezitev po zapisu).
+var listFilter = Regex.Match(markup, @"ProductListFilter CurrentFilter\(\) => new\((.*?)\);", RegexOptions.Singleline);
 var exportFilter = Regex.Match(markup, @"ProductListFilter BuildExportFilter\(\) => new\((.*?)\);", RegexOptions.Singleline);
 static string FilterShape(string arguments) =>
   string.Join(",", Regex.Matches(arguments, @"\b(?:Query\w+|ActiveView|CategoryTreeOf|CategoryCodeOf)\b").Select(match => match.Value));
 Assert(listFilter.Success && exportFilter.Success
     && FilterShape(listFilter.Groups[1].Value) == FilterShape(exportFilter.Groups[1].Value)
-    && markup.Contains("BuildExportFilter(), selection", StringComparison.Ordinal),
+    && markup.Contains("BuildExportFilter(), selection", StringComparison.Ordinal)
+    && markup.Contains("Workbench.GetProductListAsync(filter)", StringComparison.Ordinal),
   "Izvoz mora sestaviti naslov iz istih filtrov kot seznam.");
 // Uporabnik 2026-08-28: »Kaj je point polja Pregled – cel pregled, ker ko spreminjam se nic ne
 // zgodi tako da odstrani.« Spustni seznam obsega je zato odpravljen: obseg pove izbira v tabeli
@@ -290,13 +292,24 @@ Assert(!markup.Contains("Packaging.SaveRuleAsync", StringComparison.Ordinal) && 
   "Posebni S se s seznama ne pise po vrstici (do 90.000 klicev brez skupne sledi) — samo b2b.SavePackagingDiscountRulesBulk.");
 Assert(markup.Contains("BulkConfirmText", StringComparison.Ordinal) && markup.Contains("UndoBulkBatchAsync", StringComparison.Ordinal),
   "Mnozicni S-popust mora vprasati »koliko in cesa« in ponuditi razveljavitev paketa.");
+// #74: pod zasedeno bazo stran ne sme izgubiti zadetkov in napaka mora v dnevnik aplikacije.
+Assert(markup.Contains("@rendermode @(new InteractiveServerRenderMode(prerender: false))", StringComparison.Ordinal),
+  "/izdelki se ne sme nalagati dvakrat (predupodabljanje + interaktivni krog), glej #74.");
+Assert(markup.Contains("@inject ILogger<Products> Log", StringComparison.Ordinal) && markup.Contains("Log.LogError(failure, \"Seznam izdelkov ni naložen", StringComparison.Ordinal),
+  "Napaka seznama izdelkov mora v dnevnik aplikacije (vrsta, iskanje, podjetje).");
+Assert(markup.Contains("IsDatabaseBusy", StringComparison.Ordinal) && markup.Contains("Baza je trenutno zasedena", StringComparison.Ordinal),
+  "Zasedena baza (casovna meja, zastoj, zaklep) mora imeti svoje sporocilo s Ponovi.");
+Assert(markup.Contains("PageFilter == filter", StringComparison.Ordinal) && markup.Contains("LoadFilterValuesAsync", StringComparison.Ordinal),
+  "Neuspela osvezitev istega filtra ohrani zadetke; fasete in drevo kategorij ne podrejo seznama.");
 // Gumbi okna »Stolpci« samo spreminjajo izbor polj izvoza v pomnilniku strani.
 // #10: okno paketnega urejanja polj (odpri, predogled, potrdi, nazaj, preklic, zapri).
 // #33: okno S-popusta (odpri s seznamom paketov, potrdi po vprasanju »koliko in cesa«).
 var allowedHandlers = new[] { "ApplyFiltersAsync", "ToggleFilters", "OpenColumnPickerAsync", "StartExportAsync",
   "CloseColumnPicker", "SelectAllColumns", "SelectNoColumns",
   "OpenEditAsync", "CloseEdit", "PreviewEditAsync", "ApplyEditAsync", "BackToEdit", "CancelEdit",
-  "OpenBulkAsync", "ConfirmBulkAsync" };
+  "OpenBulkAsync", "ConfirmBulkAsync",
+  // #74: »Ponovi« samo znova prebere seznam (brez zapisa).
+  "RetryAsync" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
