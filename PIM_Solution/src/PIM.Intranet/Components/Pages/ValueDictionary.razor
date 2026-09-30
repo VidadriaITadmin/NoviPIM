@@ -46,10 +46,10 @@
   <div class="compact-details-body">
     <div class="form-grid dictionary-create-grid">
       <label class="form-field">Domena
-        <input class="form-input" list="dictionary-domains" placeholder="* ali koda lastnosti" @bind="NewDomain" />
+        <input class="form-input" list="dictionary-domains" placeholder="* ali koda lastnosti" @bind="NewDomain" @bind:event="oninput" />
       </label>
       <label class="form-field">Vrednost iz vira
-        <input class="form-input" placeholder="npr. Black" @bind="NewSourceValue" />
+        <input class="form-input" placeholder="npr. Black" @bind="NewSourceValue" @bind:event="oninput" />
       </label>
       <label class="form-field">Jezik
         <select class="filter-select" @bind="NewLanguage">
@@ -60,10 +60,10 @@
         </select>
       </label>
       <label class="form-field">Ciljna vrednost
-        <input class="form-input" placeholder="npr. črna" @bind="NewTargetValue" />
+        <input class="form-input" placeholder="npr. črna" @bind="NewTargetValue" @bind:event="oninput" />
       </label>
       <label class="form-field dictionary-note">Opomba (neobvezno)
-        <input class="form-input" placeholder="Zakaj ali od kod je preslikava" @bind="NewNote" />
+        <input class="form-input" placeholder="Zakaj ali od kod je preslikava" @bind="NewNote" @bind:event="oninput" />
       </label>
       <div class="form-action">
         <button type="button" class="primary-button" disabled="@(Busy || !CanSaveNew)" @onclick="AddAsync">Dodaj v slovar</button>
@@ -110,23 +110,23 @@
           var editing = EditingId == row.ValueLookupId;
           <tr class="@(editing ? "is-editing" : null)">
             <td>
-              @if (editing) { <input class="table-input" aria-label="Domena" list="dictionary-domains" @bind="EditDomain" /> }
+              @if (editing) { <input class="table-input" aria-label="Domena" list="dictionary-domains" @bind="EditDomain" @bind:event="oninput" /> }
               else { <span class="code-value">@row.Domain</span> }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Izvorna vrednost" @bind="EditSourceValue" /> }
+              @if (editing) { <input class="table-input" aria-label="Izvorna vrednost" @bind="EditSourceValue" @bind:event="oninput" /> }
               else { @row.SourceValue }
             </td>
             <td>
-              @if (editing) { <input class="table-input dictionary-language" aria-label="Jezik" maxlength="10" @bind="EditLanguage" /> }
+              @if (editing) { <input class="table-input dictionary-language" aria-label="Jezik" maxlength="10" @bind="EditLanguage" @bind:event="oninput" /> }
               else { @(row.Language ?? "—") }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Ciljna vrednost" @bind="EditTargetValue" /> }
+              @if (editing) { <input class="table-input" aria-label="Ciljna vrednost" @bind="EditTargetValue" @bind:event="oninput" /> }
               else { <strong>@row.TargetValue</strong> }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Opomba" @bind="EditNote" /> }
+              @if (editing) { <input class="table-input" aria-label="Opomba" @bind="EditNote" @bind:event="oninput" /> }
               else { <span class="muted">@(row.Note ?? "—")</span> }
             </td>
             <td>
@@ -229,7 +229,8 @@
 
   async Task AddAsync()
   {
-    await SaveAsync(null, NewDomain, NewSourceValue, NewLanguage, NewTargetValue, NewNote, true, "Vrednost je dodana v slovar.");
+    await SaveAsync(null, NewDomain, NewSourceValue, NewLanguage, NewTargetValue, NewNote, true,
+      "Vrednost je dodana v slovar. " + NextStepText(NewLanguage, true));
     if (SaveError is null)
     {
       NewSourceValue = NewTargetValue = NewNote = "";
@@ -238,7 +239,8 @@
   }
 
   Task SaveEditAsync(ValueLookupRow row) => SaveAsync(row.ValueLookupId, EditDomain, EditSourceValue,
-    EditLanguage, EditTargetValue, EditNote, EditActive, "Vrstica slovarja je shranjena.");
+    EditLanguage, EditTargetValue, EditNote, EditActive,
+    "Vrstica slovarja je shranjena. " + NextStepText(EditLanguage, EditActive));
 
   async Task SaveAsync(long? id, string domain, string source, string language, string target, string? note, bool active, string message)
   {
@@ -257,6 +259,17 @@
     }
     catch (Exception exception) { SaveError = exception.Message; }
     finally { Busy = false; }
+  }
+
+  /* 60: po shranjevanju povej, kdaj sistem vrstico uporabi. Prevod (SL, DE, …) se uporabi ob naslednjem zajemu
+     ali ponovni obdelavi vira (SqlMappingPipeline); ENOTNO pa velja tudi takoj v katalog.csv (out.GetExportRows kliče
+     pim.NormalizeAttributeValue). Vrednosti, ki so že v PIM, se ne prepišejo takoj. */
+  static string NextStepText(string language, bool active)
+  {
+    if (!active) return "Vrstica je neaktivna, zato je zajem in izvoz ne uporabljata več.";
+    return string.Equals(language?.Trim(), UnifyLanguage, StringComparison.OrdinalIgnoreCase)
+      ? "Poenotenje velja ob naslednji izdelavi katalog.csv in ob naslednjem zajemu; vrednosti, ki so že v PIM, se ne prepišejo."
+      : "Prevod se uporabi ob naslednjem zajemu ali ponovni obdelavi vira; vrednosti izdelkov, ki so že v PIM, se ne spremenijo takoj.";
   }
 
   async Task ApplyAsync() { Skip = 0; EditingId = null; await LoadAsync(); }
