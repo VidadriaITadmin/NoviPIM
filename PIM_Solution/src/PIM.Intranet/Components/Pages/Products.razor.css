@@ -153,6 +153,29 @@
 .bulk-discount .filter-actions { flex-wrap: wrap; }
 .bulk-discount .muted { font-size: .8rem; margin: .6rem 0 0; }
 
+/* #10: paketno urejanje polja (Nastavi polje ...). */
+.bulk-edit { margin-bottom: 1rem; padding: .9rem 1.1rem; }
+.bulk-edit .filter-actions { align-items: center; flex-wrap: wrap; }
+.bulk-edit .muted { font-size: .8rem; margin: .6rem 0 0; }
+.bulk-edit fieldset { border: 0; margin: 0; min-width: 0; padding: 0; }
+.bulk-edit legend, .bulk-edit-label { color: var(--pim-text-muted); font-size: .72rem; font-weight: 600; letter-spacing: .02em; margin-bottom: .25rem; padding: 0; text-transform: uppercase; }
+.bulk-edit-sites { display: flex; flex-flow: row wrap; gap: .35rem 1rem; }
+.bulk-edit-sites legend { flex-basis: 100%; }
+.filter-field label.bulk-edit-check { align-items: center; color: var(--pim-text); cursor: pointer; display: inline-flex; font-size: .875rem; font-weight: 400; gap: .4rem; letter-spacing: 0; text-transform: none; }
+.bulk-edit-check input { accent-color: var(--pim-accent); }
+.bulk-edit-check input:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.bulk-edit-textarea { font: inherit; min-height: 6rem; resize: vertical; }
+.bulk-edit .field-error { color: var(--pim-bad-text); font-size: .8rem; font-weight: 600; margin: .5rem 0 0; }
+.bulk-edit-question { color: var(--pim-text-strong); font-size: .95rem; line-height: 1.5; margin: 0 0 .4rem; }
+.bulk-edit-orgs { color: var(--pim-text-soft); display: flex; flex-wrap: wrap; font-size: .85rem; gap: .25rem 1.25rem; list-style: none; margin: 0 0 .6rem; padding: 0; }
+/* Preverjanje #10: na ozkem zaslonu je bil stolpec »Potem« odrezan (min-width 36rem v kartici, ki ne drsi).
+   Zdaj se tabela prilagodi širini: stalna razdelitev stolpcev, dolge vrednosti se prelomijo. */
+.bulk-edit { min-width: 0; max-width: 100%; }
+.bulk-edit-table { table-layout: fixed; width: 100%; }
+.bulk-edit-table th:nth-child(1), .bulk-edit-table th:nth-child(2) { width: 20%; }
+.bulk-edit-table th:nth-child(3), .bulk-edit-table th:nth-child(4) { width: 30%; }
+.bulk-edit-table td { overflow-wrap: anywhere; }
+
 /* Kartica se nalaga vec kot trenutek; do takrat mora seznam povedati, da se odpira. */
 .opening-card { position: relative; }
 .opening-overlay { align-items: center; background: rgba(255, 255, 255, .78); color: var(--pim-text-strong); display: flex; font-size: .85rem; gap: .6rem; inset: 0; justify-content: center; position: absolute; z-index: 2; }
