@@ -17,6 +17,7 @@
     <a class="secondary-button @(Page?.Total is null or 0 ? "disabled" : null)" href="@ExportHref" download data-enhance-nav="false">Izvozi Excel (@((Page?.Total ?? 0).ToString("N0", Sl)))</a>
   </Actions>
 </PimPage>
+<PimTabs Active="mismatches" Tabs="WebTabs.Tabs" Label="Izhod na splet" />
 
 <p class="card-note section-gap">
   Kljukica spletišča na kartici odloča, kam gre artikel. Ista šifra v več podjetjih gre v katalog.csv enkrat:
