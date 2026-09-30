@@ -24,6 +24,9 @@ in misliti kot komercialist, ki bo stran uporabljal vsak dan.
      osveži, deli povezavo (filtri v URL?), preizkusi prazno stanje in napako;
    - pri shranjevanju na razvojni bazi preveri učinek s SELECT in zgodovino; testne spremembe povrni.
      Nikoli ne klikaj pošiljanja v SAOP, zagona poslov, izvoza celotnega kataloga, brisanja pravih podatkov.
+     Množični preizkus (paketno, uvoz) največ ~300 izdelkov in SAMO, če ima aplikacija pot nazaj (»Povrni«
+     na /uvozi); najprej preveri, da se zapis pokaže v zgodovini. Testne spremembe povrni prek aplikacije,
+     ne z DELETE/UPDATE v bazi. Če povrnitev ni mogoča, ustavi in zapiši lastniku, kaj je ostalo.
    - preveri kontrolni seznam iz `CLAUDE.md` §2 in pravila iz `docs/PIM_DOBRE_PRAKSE.md` §9.
 4. **Hitrost**: stran nad 3 s je opozorilo, nad 10 s napaka. Ugotovi vzrok (poizvedba — `sys.dm_exec_requests`,
    načrt izvajanja, poizvedba na vrstico, dvojno nalaganje zaradi predupodabljanja) in predlagaj popravek.
