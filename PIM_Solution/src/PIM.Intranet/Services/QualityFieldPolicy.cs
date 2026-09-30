@@ -55,6 +55,9 @@ public static class QualityFieldPolicy
     var entity = Entity(value);
     var name = FieldName(value);
 
+    // #9 (312): slika je vpisana, a se ne odpre — popravi se naslov, ne doda nova slika.
+    if (value is "ProductMedia.DelujocaSlika" or "ProductMedia.VseSlikeDelujejo")
+      return new("Napačni naslovi slik", "mediji/napacni-naslovi", "popravi naslov slike v viru ali na kartici izdelka; posel ga preveri znova");
     if (entity == "ProductMedia" || entity == "ProductDocument")
       return new("Mediji", "mediji", "dodaj sliko ali dokument temu izdelku");
     if (entity == "ProductCategory" || value.Contains("Category", StringComparison.OrdinalIgnoreCase))

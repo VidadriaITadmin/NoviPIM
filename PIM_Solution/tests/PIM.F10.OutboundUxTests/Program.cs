@@ -139,7 +139,9 @@ Assert(bulk.Success, "Skupinska dejanja morajo ostati v <section class=\"ui-card
 Assert(bulk.Value.Contains("role=\"toolbar\"", StringComparison.Ordinal) && bulk.Value.Contains("aria-label=", StringComparison.Ordinal),
   "Vrstica skupinskih dejanj mora biti role=\"toolbar\" z aria-label.");
 Assert(markup.Contains("@if (Selected.Count > 0) {", StringComparison.Ordinal), "Skupinska dejanja se pokažejo šele ob izbiri.");
-Assert(markup.Contains("Izbranih artiklov: @Selected.Count", StringComparison.Ordinal), "Vrstica skupinskih dejanj mora povedati, koliko je izbranih.");
+// #84: »Izbrano: 1 artikel«, ne »Izbranih artiklov: 1«.
+Assert(markup.Contains("Izbrano: @Artikli(Selected.Count)", StringComparison.Ordinal), "Vrstica skupinskih dejanj mora povedati, koliko je izbranih (sklanjano).");
+Assert(!markup.Contains("Izbranih artiklov:", StringComparison.Ordinal), "Število izbranih mora biti sklanjano (Artikli), ne »Izbranih artiklov: N«.");
 var checkboxes = Regex.Matches(markup, "<input type=\"checkbox\"[^>]*>");
 Assert(checkboxes.Count == 2, "Stran ima dve potrditveni polji: izberi vse na strani in izbira vrstice.");
 foreach (Match checkbox in checkboxes)
@@ -194,8 +196,37 @@ Assert(Regex.IsMatch(markup, @"Select\(\w+ ?=> ?(StatusLabel\()?\w+\.Status\)?\)
 Assert(markup.Contains("Select(a => StatusLabel(a.Status)).Distinct()", StringComparison.Ordinal)
   && markup.Contains("StatusLabel(a.Status) == StatusFilter", StringComparison.Ordinal),
   "Filter statusa mora ponujati in primerjati slovenske oznake (StatusLabel), ne surovih statusov.");
+// #54: podjetje, iskanje in status so v naslovu strani; podjetje iz naslova samo, če je med naloženimi.
+foreach (var query in new[] { "[SupplyParameterFromQuery(Name = \"podjetje\")]", "[SupplyParameterFromQuery(Name = \"isci\")]", "[SupplyParameterFromQuery(Name = \"stanje\")]" })
+  Assert(markup.Contains(query, StringComparison.Ordinal), "Filter mora biti v naslovu strani; manjka: " + query);
+Assert(markup.Contains("Organizations.Any(o => o.OrganizationId == id)", StringComparison.Ordinal),
+  "Podjetje iz naslova mora biti preverjeno proti naloženim podjetjem.");
+Assert(markup.Contains("@bind:after=\"SearchChanged\"", StringComparison.Ordinal) && markup.Contains("@bind:after=\"StatusChanged\"", StringComparison.Ordinal),
+  "Sprememba iskanja in statusa mora posodobiti naslov strani.");
+Assert(Regex.IsMatch(markup, "<button type=\"button\"[^>]*@onclick=\"ClearFilters\">Počisti filtre</button>"), "Manjka gumb »Počisti filtre«.");
+Assert(markup.Contains("PimText.Matches(a.EntityKey, Search)", StringComparison.Ordinal), "Iskanje mora biti brez šumnikov in velikosti črk (PimText.Matches).");
+// #54: sklanjatev (»1 artikel«, ne »1 artiklov«) in podrobnosti po polju po istih filtrih, izrisane šele ob odprtju.
+Assert(!Regex.IsMatch(markup, "\\} artiklov"), "Število artiklov mora biti sklanjano (PimFormat.Count), ne »{n} artiklov«.");
+Assert(markup.Contains("FilteredArticles.SelectMany(a => a.Messages)", StringComparison.Ordinal),
+  "Podrobnosti po polju morajo slediti istim filtrom kot tabela artiklov.");
+Assert(markup.Contains("@if (FieldDetailOpen) {", StringComparison.Ordinal), "Podrobnosti po polju se izrišejo šele ob odprtju.");
 foreach (var condition in new[] { "row.Status==\"PendingApproval\"", "\"PendingApproval\" or \"Pending\" or \"Error\" or \"Retry\"", "row.Status is \"Error\" or \"Dead\"" })
   Assert(markup.Contains(condition, StringComparison.Ordinal), "Pogoj razpoložljivosti dejanja je spremenjen; manjka: " + condition);
+
+// 13a. #84: pogovorni okni (XML, napaka) se zapreta z Esc, fokus gre v okno in nazaj (pim-shell.js).
+var dialogs = Regex.Matches(markup, "<div class=\"xml-lightbox\" role=\"dialog\" aria-modal=\"true\"[^>]*>(?<body>.*?)Zapri</button>", RegexOptions.Singleline);
+Assert(dialogs.Count == 2, "Stran ima dve pogovorni okni (XML in napaka) z role=\"dialog\" aria-modal=\"true\".");
+foreach (Match dialog in dialogs)
+  Assert(Regex.IsMatch(dialog.Groups["body"].Value, "<button type=\"button\"[^>]*data-pim-close[^>]*>$"),
+    "Gumb Zapri v pogovornem oknu mora imeti data-pim-close (Esc in fokus v pim-shell.js).");
+var shell = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "wwwroot", "js", "pim-shell.js"));
+foreach (var piece in new[] { "[role=\"dialog\"][aria-modal=\"true\"]", "'[data-pim-close]'", "event.key === 'Escape'", "event.key !== 'Tab'", "returnTo.focus()", "MutationObserver" })
+  Assert(shell.Contains(piece, StringComparison.Ordinal), "pim-shell.js mora obravnavati pogovorna okna (Esc, zanka fokusa, vrnitev fokusa); manjka: " + piece);
+// #84: podrobnosti po polju se ne sestavijo ob vsakem izrisu na novo.
+Assert(markup.Contains("fieldRowsCache", StringComparison.Ordinal) && markup.Contains("filteredCache", StringComparison.Ordinal),
+  "Filtrirani artikli in sporočila po polju morajo biti predpomnjeni, ne sestavljeni ob vsakem izrisu.");
+Assert(markup.Contains("FieldRows.Take(FieldDetailLimit)", StringComparison.Ordinal) && markup.Contains("const int FieldDetailLimit = 300;", StringComparison.Ordinal),
+  "Tabela po polju izriše največ 300 vrstic.");
 
 // 14. Varovalka: brez novih zapisovalnih poti in nepodprtih kontrol.
 foreach (var forbidden in new[] { "<form", "@onsubmit", "method=\"post\"", "<img", "type=\"file\"", "<dialog", "contenteditable" })

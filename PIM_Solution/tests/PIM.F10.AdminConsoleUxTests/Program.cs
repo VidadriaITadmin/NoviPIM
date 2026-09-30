@@ -430,6 +430,35 @@ foreach (var (file, markup) in new[] { ("Monitor.razor", monitor), ("MonitorJob.
 Assert(monitorJob.Contains("RequestCancelAsync", StringComparison.Ordinal), "Stran posla mora omogočiti ustavitev teka (RequestCancelAsync).");
 Assert(monitor.Contains("MarkAlertsSeenAsync", StringComparison.Ordinal), "Nadzor mora ob odprtju označiti obvestila kot videna (zvonec).");
 
+// Naloga 86: sklanjatev ob števniku (1 uporabnik, 2 uporabnika, 3-4 uporabniki, 5+ uporabnikov; po ostanku %100).
+foreach (var (stevilo, pricakovano) in new (long, string)[]
+{
+  (0, "uporabnikov"), (1, "uporabnik"), (2, "uporabnika"), (3, "uporabniki"), (4, "uporabniki"), (5, "uporabnikov"),
+  (11, "uporabnikov"), (12, "uporabnikov"), (101, "uporabnik"), (102, "uporabnika"), (103, "uporabniki"),
+  (104, "uporabniki"), (111, "uporabnikov"), (1001, "uporabnik")
+})
+  Assert(PIM.Intranet.Services.SlovenianPlural.Users(stevilo) == pricakovano,
+    $"{stevilo} mora biti »{pricakovano}«, je »{PIM.Intranet.Services.SlovenianPlural.Users(stevilo)}«.");
+Assert(PIM.Intranet.Services.SlovenianPlural.Format(3, "a", "b", "c", "d") == "3 c", "Format mora vrniti število in obliko.");
+var uporabnikiStran = Read(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "SystemUsers.razor"));
+var vlogeStran = Read(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "SystemRoles.razor"));
+Assert(uporabnikiStran.Contains("SlovenianPlural.Users", StringComparison.Ordinal)
+  && vlogeStran.Contains("SlovenianPlural.Users", StringComparison.Ordinal)
+  && !vlogeStran.Contains("dovoljenj</span>", StringComparison.Ordinal),
+  "Uporabniki in vloge morajo števce sklanjati s skupnim SlovenianPlural (ne lokalno 1/2/ostalo).");
+
+// ── aria-pressed vedno kot "true"/"false" (naloga 109) ───────────────────────
+// Blazor goli bool v atributu izpiše kot prazen atribut (true) ali ga izpusti (false), kar bralnik
+// zaslona ne razume. Vrednost mora biti niz, npr. @(x ? "true" : "false") ali .ToString().ToLowerInvariant().
+var ariaPressed = new System.Text.RegularExpressions.Regex("aria-pressed=\"@(?<izraz>\\([^\\r\\n]*?\\)|[A-Za-z_][\\w.!]*)\"");
+foreach (var razor in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet", "Components"), "*.razor", SearchOption.AllDirectories))
+  foreach (System.Text.RegularExpressions.Match zadetek in ariaPressed.Matches(File.ReadAllText(razor)))
+  {
+    var izraz = zadetek.Groups["izraz"].Value;
+    Assert(izraz.Contains("\"true\"", StringComparison.Ordinal) || izraz.Contains("ToLowerInvariant()", StringComparison.Ordinal),
+      $"{Path.GetFileName(razor)}: aria-pressed=\"@{izraz}\" mora dati niz \"true\"/\"false\", ne golega boola.");
+  }
+
 Console.WriteLine("F10 admin console UX contract PASS.");
 
 static string Read(string path)

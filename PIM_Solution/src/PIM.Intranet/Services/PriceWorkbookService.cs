@@ -73,7 +73,9 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     new(PriceListKey, "Cenik", GroupKey, false, Width: 10),
     new(ItemKey, "Šifra artikla", GroupKey, false, Width: 18),
 
-    new("TITLE", "Naziv", GroupInfo, false, Width: 44),
+    // #62: gol »Naziv« ni povedal, ali je spletni ali iz SAOP — zato dva ločena stolpca.
+    new("WEB_TITLE", "Spletni naziv (sl)", GroupInfo, false, Width: 40),
+    new("TITLE_ERP", "Naziv ERP (sl)", GroupInfo, false, Width: 40),
     new("EAN", "EAN", GroupInfo, false, Width: 15),
     new("LIST_NAME", "Naziv cenika", GroupInfo, false, Width: 22),
 
@@ -87,6 +89,12 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     new("QUEUE_STATE", "Stanje v vrsti", GroupState, false, Width: 22),
   ];
 
+  /// <summary>Naslovi iz starejših izvozov (pred #62), ki jih uvoz tiho prezre kot »samo za branje«, ne kot neznane.</summary>
+  static readonly IReadOnlySet<string> LegacyReadOnlyHeaders = new HashSet<string>(StringComparer.Ordinal)
+  {
+    WorkbookHeader.Normalize("Naziv"),
+  };
+
   static readonly IReadOnlyList<string> Notes =
   [
     "Ena vrstica je ena cena: podjetje + cenik + šifra artikla. Uredi Neto cena, DDV %, Velja od ali Aktivna in datoteko vrni prek »Uvozi Excel« na strani Cene.",
@@ -94,6 +102,7 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     "Prazna celica pomeni »ne spreminjaj«. Vrstica s cenikom, v katerem artikel še nima cene, je nova cena (v SAOP gre kot AddPrices). Nov cenik najprej dodaj na zavihku »Ceniki«.",
     "Neto cena je cena brez DDV, kot jo vodi SAOP (Price), z decimalno vejico ali piko. Aktivna: D ali N. Velja od: datum, npr. 1. 10. 2026.",
     "Stolpci pod »samo za branje« se pri uvozu prezrejo. Sprememba nad 25 % je v predogledu označena kot opozorilo.",
+    "Spletni naziv (sl) je naziv za splet, Naziv ERP (sl) je naziv iz SAOP; prazna celica pomeni, da ga artikel nima. Oba sta samo za branje — nazive urejaš na kartici izdelka.",
   ];
 
   public static string FileName(DateTime utc) => $"PIM_cene_{utc:yyyyMMdd_HHmm}.xlsx";
@@ -112,7 +121,7 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     return
     [
       row.OrganizationName, row.PriceList, row.ItemId,
-      row.Title, row.Ean, row.PriceListName,
+      row.WebTitle, row.ErpTitle, row.Ean, row.PriceListName,
       row.Net, row.VatRate, row.ValidFrom is { Year: > 1900 } from ? from : null,
       ProductWorkbookContract.SheetYesNo(row.IsActive),
       row.Gross,
@@ -135,7 +144,11 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
     {
       var header = sheet.Headers[index];
       if (string.IsNullOrWhiteSpace(header)) continue;
-      if (!byHeader.TryGetValue(WorkbookHeader.Normalize(header), out var column)) { unknown.Add(header); continue; }
+      if (!byHeader.TryGetValue(WorkbookHeader.Normalize(header), out var column))
+      {
+        if (LegacyReadOnlyHeaders.Contains(WorkbookHeader.Normalize(header))) readOnly.Add(header); else unknown.Add(header);
+        continue;
+      }
       if (column.Editable || column.Key is OrganizationKey or PriceListKey or ItemKey) matched.TryAdd(column.Key, index);
       else readOnly.Add(header);
     }

@@ -9,6 +9,11 @@ using PIM.SourceFetchWorker;
 //
 //   dotnet run --project PIM_Solution\workers\PIM.SourceFetchWorker -- [--source BT_STOCK]
 //              [--target <mapa>] [--samo-nastavitve]
+//   dotnet run --project PIM_Solution\workers\PIM.SourceFetchWorker -- --preveri-slike
+//              [--najvec 1500] [--premor-ms 500] [--najvec-minut 40]
+//
+// --preveri-slike (naloga #9, migracija 312, posel MEDIA_URL_CHECK): preveri, ali se slike na naslovih
+// res odprejo, in izide zapise v val.MediaUrlCheck. Datotek ne prenasa.
 //
 // Prevzemnik samo prinese datoteko. Branje v bazo opravi PIM.StockFileWorker oziroma
 // PIM.XmlFileWorker — locitev je namerna, ker so napake prevzema (omrezje, poverilnice,
@@ -18,6 +23,10 @@ string? onlySource = null;
 string? targetOverride = null;
 var onlySettings = false;
 var bySchedule = false;
+var checkMedia = false;
+var mediaLimit = 1500;
+var mediaPauseMs = 500;
+var mediaMaxMinutes = 40;
 
 for (var index = 0; index < args.Length; index++)
 {
@@ -37,6 +46,17 @@ for (var index = 0; index < args.Length; index++)
     case "--po-urniku":
       bySchedule = true;
       break;
+    case "--preveri-slike":
+      checkMedia = true;
+      break;
+    case "--najvec" or "--premor-ms" or "--najvec-minut":
+      if (index + 1 >= args.Length || !int.TryParse(args[index + 1], out var number) || number < 1)
+        return Napaka($"{args[index]} potrebuje pozitivno stevilo.");
+      if (args[index] == "--najvec") mediaLimit = number;
+      else if (args[index] == "--premor-ms") mediaPauseMs = number;
+      else mediaMaxMinutes = number;
+      index++;
+      break;
     default:
       return Napaka($"Neznan argument: {args[index]}.");
   }
@@ -50,6 +70,9 @@ var fetchSection = LocalSettings.Section("Fetch") ?? default;
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+
+if (checkMedia)
+  return await MediaCheckRun.RunAsync(connectionString, connection, mediaLimit, TimeSpan.FromMilliseconds(mediaPauseMs), TimeSpan.FromMinutes(mediaMaxMinutes));
 
 // Vrstni red je enak povsod (glej PIM.Operations.SystemPaths): argument, okolje, register,
 // privzetek. Register je tretji zato, da rocni zagon z --target ostane mocnejsi od nastavitve
@@ -160,6 +183,7 @@ static int Napaka(string sporocilo)
 {
   Console.Error.WriteLine(sporocilo);
   Console.Error.WriteLine("Uporaba: PIM.SourceFetchWorker [--source <sifra>] [--target <mapa>] [--samo-nastavitve]");
+  Console.Error.WriteLine("         PIM.SourceFetchWorker --preveri-slike [--najvec 1500] [--premor-ms 500] [--najvec-minut 40]");
   return 2;
 }
 

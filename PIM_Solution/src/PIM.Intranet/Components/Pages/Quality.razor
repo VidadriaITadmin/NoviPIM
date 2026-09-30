@@ -190,6 +190,7 @@ else if (ShowProfiles)
   /// <param name="ActiveProducts">Vsi aktivni izdelki, vsa podjetja — imenovalec deležev.</param>
   sealed record QualityTotals(long ProductsWithIssue, long ActiveProducts);
   bool Loading = true;
+  bool ProfilesLoaded;
   string? Error;
 
   static readonly IReadOnlyList<PimColumn> ProfileColumns =
@@ -214,27 +215,47 @@ else if (ShowProfiles)
     try
     {
       Organizations = await Data.GetOrganizationsAsync();
-      if (Organizations.Count == 0) { Error = "Nobeno podjetje ni aktivno."; return; }
-      Trees = await Tree.GetTreeCodesAsync();
+      if (Organizations.Count == 0) { Error = "Nobeno podjetje ni aktivno."; Loading = false; return; }
+
+      /* Naloga #102: glava potrebuje samo dve stevili, zato ena poizvedba za vsa podjetja
+         (GetIssueTotalsByOrganizationAsync, ~0,3 s) namesto nacrta odblokiranja na podjetje, ki je
+         v aplikacijo prenesel 1,29 milijona parov (izdelek, polje). Drevesa in stevila tecejo
+         vzporedno; profili se preberejo sele na zavihku Profili (OnParametersSetAsync). */
+      var treesTask = Tree.GetTreeCodesAsync();
+      var totalsTask = LoadTotalsAsync();
+      Trees = await treesTask;
       CategoryTree = Trees.FirstOrDefault(tree => tree == "svetila_si") ?? Trees.FirstOrDefault() ?? "";
+      await totalsTask;
+    }
+    catch { Error = "Kakovosti trenutno ni mogoče naložiti."; Loading = false; }
+  }
 
-      /* P2-11: branja tecejo vzporedno po podjetjih, ker so med seboj neodvisna. Vsak klic si
-         odpre svojo povezavo (PimDb), zato skupnega stanja ni; stanje strani se spremeni sele,
-         ko so vsi odgovori tu. */
-      var perOrganization = await Task.WhenAll(Organizations.Select(async organization =>
-      {
-        var profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
-        UnblockPlan? plan = null;
-        try { plan = await Governance.GetUnblockPlanAsync(organization.OrganizationId); } catch { }
-        return (Profiles: profiles, Plan: plan);
-      }));
+  /// <summary>Stevili v glavi; ce odpove, glava pokaze splosen opis in stran dela naprej.</summary>
+  async Task LoadTotalsAsync()
+  {
+    try
+    {
+      var totals = await Governance.GetIssueTotalsByOrganizationAsync();
+      var active = Organizations.Select(organization => organization.OrganizationId).ToHashSet();
+      var rows = totals.Where(entry => active.Contains(entry.Key)).Select(entry => entry.Value).ToList();
+      Totals = rows.Count == 0 ? null : new(rows.Sum(row => row.ProductsWithIssue), rows.Sum(row => row.ActiveProducts));
+    }
+    catch { Totals = null; }
+  }
 
-      var plans = perOrganization.Where(row => row.Plan is not null).Select(row => row.Plan!).ToList();
-
-      Profiles = MergeProfiles(perOrganization.Select(row => row.Profiles).ToList());
-      Totals = plans.Count == 0 ? null : new(
-        plans.Sum(plan => plan.ProductsWithIssue),
-        plans.Sum(plan => plan.ActiveProducts));
+  /// <summary>
+  /// Profili po podjetjih vzporedno (P2-11): vsak klic si odpre svojo povezavo (PimDb), zato
+  /// skupnega stanja ni; stanje strani se spremeni sele, ko so vsi odgovori tu.
+  /// </summary>
+  async Task LoadProfilesAsync()
+  {
+    ProfilesLoaded = true;
+    Loading = true;
+    try
+    {
+      var perOrganization = await Task.WhenAll(Organizations.Select(organization =>
+        Governance.GetValidationProfilesAsync(organization.OrganizationId)));
+      Profiles = MergeProfiles(perOrganization);
     }
     catch { Error = "Kakovosti trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
@@ -263,6 +284,8 @@ else if (ShowProfiles)
 
     ShowProfiles = string.Equals(QueryView, "profili", StringComparison.OrdinalIgnoreCase);
     ShowCategories = string.Equals(QueryView, "kategorije", StringComparison.OrdinalIgnoreCase);
+    if (ShowProfiles && !ProfilesLoaded && Error is null && Organizations.Count > 0)
+      await LoadProfilesAsync();
     if (ShowCategories && CategoryRows.Count == 0 && !CategoriesLoading && !string.IsNullOrWhiteSpace(CategoryTree))
       await LoadCategoriesAsync();
   }

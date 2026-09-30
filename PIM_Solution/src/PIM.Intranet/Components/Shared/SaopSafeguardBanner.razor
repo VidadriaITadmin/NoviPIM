@@ -9,6 +9,7 @@
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (LoadError is not null) { <p class="message-state error-message" role="alert">@LoadError</p> }
 @foreach (var group in Groups)
 {
   var organizationId = group.Key;
@@ -28,9 +29,10 @@
 
   IReadOnlyList<SaopHeldRow> Items = [];
   readonly HashSet<int> Hidden = [];
-  (int Version, int? OrganizationId)? loaded;
+  (int Version, int? OrganizationId)? loadedKey;
+  bool rendered, loading;
   bool Busy;
-  string? Message, Error;
+  string? Message, Error, LoadError;
 
   IEnumerable<OrganizationGroup> Groups => Items
     .GroupBy(item => item.OrganizationId)
@@ -40,20 +42,51 @@
 
   static string SendText(string organizationName) => $"Da, prav je — pošlji v SAOP ({organizationName})";
 
+  /* 46: seznam se bere šele po prvem izrisu — stran (tudi predupodabljanje) nikoli ne čaka na pasico.
+     Nov Version (po odobritvi) ali drugo podjetje seznam prebere znova. */
   protected override async Task OnParametersSetAsync()
   {
-    if (loaded == (Version, OrganizationId)) return;
-    var organizationChanged = loaded is { } previous && previous.OrganizationId != OrganizationId;
-    loaded = (Version, OrganizationId);
-    Hidden.Clear();
-    if (organizationChanged) { Message = null; Error = null; }
-    await LoadAsync();
+    if (rendered && loadedKey != (Version, OrganizationId)) await ReloadAsync();
+  }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (!firstRender) return;
+    rendered = true;
+    loadedKey = null;
+    await ReloadAsync();
+  }
+
+  async Task ReloadAsync()
+  {
+    if (loading) return;
+    loading = true;
+    try
+    {
+      /* parametri so se med branjem lahko spet spremenili — beri, dokler seznam ne ustreza zadnjim */
+      while (loadedKey != (Version, OrganizationId))
+      {
+        var organizationChanged = loadedKey is { } previous && previous.OrganizationId != OrganizationId;
+        loadedKey = (Version, OrganizationId);
+        Hidden.Clear();
+        if (organizationChanged) { Message = null; Error = null; }
+        await LoadAsync();
+      }
+    }
+    finally { loading = false; }
+    await InvokeAsync(StateHasChanged);
   }
 
   async Task LoadAsync()
   {
-    try { Items = await Safeguards.GetSaopHeldAsync(organizationId: OrganizationId); }
-    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { Items = []; }
+    try { Items = await Safeguards.GetSaopHeldAsync(organizationId: OrganizationId); LoadError = null; }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      /* 46: napaka ali iztek branja ne sme izgledati kot »nič ne čaka« */
+      Items = [];
+      LoadError = "Seznama sprememb, ki čakajo potrditev za SAOP, ni bilo mogoče prebrati. Osveži stran čez nekaj trenutkov. "
+        + "Spremembe, ki čakajo potrditev, medtem ne gredo v SAOP.";
+    }
     // Varovalka: če bi postopek vrnil tuje podjetje, ga pasica ne pokaže in ne potrdi.
     if (OrganizationId is { } only) Items = Items.Where(item => item.OrganizationId == only).ToList();
   }

@@ -118,21 +118,35 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
       }, cancellationToken);
 
   // ─── Validacijski profili ─────────────────────────────────────────────────
+  /// <summary>
+  /// Profili s števci za podjetje. Naloga #52: prej sta šli na vsak profil dve podpoizvedbi COUNT nad
+  /// val.ProductValidationState (~700k vrstic); zdaj je eno skupinsko štetje (GROUP BY profil) za
+  /// podjetje, ki se z LEFT JOIN poveže s profili — profil brez vrstic dobi 0 in ne izpade.
+  /// </summary>
   public Task<IReadOnlyList<ValidationProfileRow>> GetValidationProfilesAsync(int organizationId, CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT profile.ValidationProfileId, profile.ProfileCode, profile.Name, profile.Scope,
              profile.BlocksErp, profile.BlocksWeb, profile.IsActive,
-             (SELECT COUNT_BIG(*) FROM val.FieldRequirement requirement
-              WHERE requirement.ValidationProfileId = profile.ValidationProfileId AND requirement.IsActive = 1) AS RequirementCount,
-             (SELECT COUNT_BIG(*) FROM val.ProductValidationState state
-              INNER JOIN canon.Product product ON product.ProductId = state.ProductId
-              WHERE state.ValidationProfileId = profile.ValidationProfileId AND product.OrganizationId = @OrganizationId
-                AND state.Status = N'VALID') AS ValidCount,
-             (SELECT COUNT_BIG(*) FROM val.ProductValidationState state
-              INNER JOIN canon.Product product ON product.ProductId = state.ProductId
-              WHERE state.ValidationProfileId = profile.ValidationProfileId AND product.OrganizationId = @OrganizationId
-                AND state.Status = N'INVALID') AS InvalidCount
+             COALESCE(requirements.RequirementCount, 0) AS RequirementCount,
+             COALESCE(states.ValidCount, 0) AS ValidCount,
+             COALESCE(states.InvalidCount, 0) AS InvalidCount
       FROM val.ValidationProfile profile
+      LEFT JOIN (
+        SELECT requirement.ValidationProfileId, COUNT_BIG(*) AS RequirementCount
+        FROM val.FieldRequirement requirement
+        WHERE requirement.IsActive = 1
+        GROUP BY requirement.ValidationProfileId
+      ) requirements ON requirements.ValidationProfileId = profile.ValidationProfileId
+      LEFT JOIN (
+        SELECT state.ValidationProfileId,
+               SUM(CASE WHEN state.Status = N'VALID' THEN CAST(1 AS bigint) ELSE 0 END) AS ValidCount,
+               SUM(CASE WHEN state.Status = N'INVALID' THEN CAST(1 AS bigint) ELSE 0 END) AS InvalidCount
+        FROM val.ProductValidationState state
+        INNER JOIN canon.Product product ON product.ProductId = state.ProductId
+        WHERE product.OrganizationId = @OrganizationId
+          AND state.Status IN (N'VALID', N'INVALID')
+        GROUP BY state.ValidationProfileId
+      ) states ON states.ValidationProfileId = profile.ValidationProfileId
       ORDER BY profile.IsActive DESC, profile.ProfileCode;
       """,
       reader => new ValidationProfileRow(PimDb.Int32(reader, "ValidationProfileId"), PimDb.TextOrEmpty(reader, "ProfileCode"),
@@ -361,6 +375,39 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
 
     var average = Math.Round((decimal)pairs.Count / masks.Count, 1);
     return new UnblockPlan(masks.Count, activeProducts, average, steps, Math.Max(0, order.Length - bits.Count));
+  }
+
+  /// <summary>
+  /// Skupni stevili za glavo /kakovost, po podjetjih: aktivni izdelki in aktivni izdelki z vsaj
+  /// eno odprto zahtevo (enaka definicija kot ProductsWithIssue v GetUnblockPlanAsync: aktivna
+  /// vrstica val.ProductIssue z obstojeco zahtevo val.FieldRequirement).
+  ///
+  /// Zakaj ne GetUnblockPlanAsync (naloga #102): nacrt prenese vse pare (izdelek, polje) v
+  /// aplikacijo — na razvojni bazi 1,29 milijona vrstic in ~2 s streznika za vsa podjetja — stran
+  /// pa je iz njega uporabila samo ti dve stevili. To stetje je ena poizvedba za vsa podjetja
+  /// (izmerjeno 0,27 s) in vrne stiri vrstice.
+  /// </summary>
+  public async Task<IReadOnlyDictionary<int, (long ProductsWithIssue, long ActiveProducts)>> GetIssueTotalsByOrganizationAsync(
+    CancellationToken cancellationToken = default)
+  {
+    var rows = await database.QueryAsync("""
+      SELECT product.OrganizationId,
+             COUNT_BIG(*) AS ActiveProducts,
+             COUNT_BIG(issues.ProductId) AS ProductsWithIssue
+      FROM canon.Product product
+      LEFT JOIN (
+        SELECT DISTINCT issue.ProductId
+        FROM val.ProductIssue issue
+        INNER JOIN val.FieldRequirement requirement ON requirement.FieldRequirementId = issue.FieldRequirementId
+        WHERE issue.IsActive = 1
+      ) issues ON issues.ProductId = product.ProductId
+      WHERE product.IsActive = 1
+      GROUP BY product.OrganizationId;
+      """,
+      reader => (Organization: PimDb.Int32(reader, "OrganizationId"),
+                 WithIssue: PimDb.Int64(reader, "ProductsWithIssue"), Active: PimDb.Int64(reader, "ActiveProducts")),
+      cancellationToken: cancellationToken);
+    return rows.ToDictionary(row => row.Organization, row => (row.WithIssue, row.Active));
   }
 
   public Task<IReadOnlyList<ValueDomainRow>> GetValueDomainsAsync(CancellationToken cancellationToken = default) =>

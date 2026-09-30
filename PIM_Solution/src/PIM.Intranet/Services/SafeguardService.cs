@@ -366,7 +366,9 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     try
     {
       await using var connection = await OpenAsync(cancellationToken);
-      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
+      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 15 };
+      // 46: pasica na strani ne sme čakati minute (na mirni bazi ~1 s); ob izteku pasica pokaže prazno —
+      // pošiljanje je vseeno varno, ker zadržana sprememba brez potrditve ne gre v SAOP.
       command.Parameters.Add("@OutboundBatchId", SqlDbType.BigInt).Value = (object?)outboundBatchId ?? DBNull.Value;
       command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
       command.Parameters.Add("@EntityKeysJson", SqlDbType.NVarChar, -1).Value = itemIds is null ? DBNull.Value : JsonSerializer.Serialize(itemIds);
@@ -388,6 +390,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
   public async Task<int> ConfirmSaopHeldAsync(IReadOnlyCollection<long> outboxMessageIds, string actor, CancellationToken cancellationToken = default)
   {
     await guard.RequireAsync(PimPolicies.SaopWrite);
+    RequireRealIntranet();
     if (outboxMessageIds.Count == 0) return 0;
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand("ops.ConfirmSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
@@ -437,6 +440,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     long checkId, IReadOnlyCollection<long>? findingIds, string actor, string? note, CancellationToken cancellationToken = default)
   {
     await guard.RequireAsync(PimPolicies.SafeguardConfirm);
+    RequireRealIntranet();
     if (findingIds is { Count: 0 }) return new(0, -1, false);
     await using var connection = await OpenAsync(cancellationToken);
     await using var command = new SqlCommand("ops.ApproveSafeguardFindings", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
@@ -450,6 +454,21 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
       ? new(PimDb.Int32(reader, "ApprovedCount"), PimDb.Int32(reader, "RemainingCount"), PimDb.Bool(reader, "RunRequested"))
       : new(0, -1, false);
   }
+
+  /// <summary>
+  /// Naloga #73: potrditev na /varovalke/{id} v bazi takoj odda zahtevo za zagon izvoza (ops.RequestJobRun:
+  /// katalog.csv, zaloga, SAOP), potrditev zadržanih SAOP sprememb pa sporočila spusti iz vrste. Na testnem
+  /// intranetu (klikalnik, preverjalec; <see cref="MonitorService.TestIntranetWithoutJobsKey"/>) je oboje
+  /// zavrnjeno PRED klicem baze — nič se ne zapiše in nič ne gre ven. Pravi intranet ključa nima.
+  /// </summary>
+  void RequireRealIntranet()
+  {
+    if (MonitorService.IsTestIntranetWithoutJobs(configuration))
+      throw new UnauthorizedAccessException(TestIntranetMessage);
+  }
+
+  public const string TestIntranetMessage =
+    "Testni intranet: potrjevanje varovalk je izklopljeno, ker bi sprožilo izvoz ali pošiljanje v SAOP. Potrdi na pravem intranetu.";
 
   public async Task<IReadOnlyList<SafeguardRule>> SaveRuleAsync(SafeguardRuleChange change, string actor, CancellationToken cancellationToken = default)
   {
@@ -475,7 +494,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     var rules = detail.Rules.ToDictionary(rule => rule.RuleCode, StringComparer.Ordinal);
     var columns = new WorkbookColumn[]
     {
-      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv", Width: 40),
+      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv ERP (sl)", Width: 40),
       new("Polje", Width: 16), new("Prej", Width: 18), new("Zdaj", Width: 18), new("Sprememba", Width: 12),
       new("Spletišče", Width: 12), new("Razlog", Width: 60),
     };

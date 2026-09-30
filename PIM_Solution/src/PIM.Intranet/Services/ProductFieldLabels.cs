@@ -47,6 +47,9 @@ public static class ProductFieldLabels
     ["ProductStockAccounting"] = "Knjigovodske šifre",
     ["Product.WebPublish"] = "Objava na spletu",
     ["ProductMedia"] = "Slike za splet",
+    // #9 (312): izpeljani polji iz preverjanja naslovov slik (val.MediaUrlCheck), ne vnos na kartici.
+    ["ProductMedia.DelujocaSlika"] = "Delujoča slika (vsaj ena se odpre)",
+    ["ProductMedia.VseSlikeDelujejo"] = "Vse slike se odprejo",
     ["canon.WebSite"] = "Spletni kanali",
   };
 

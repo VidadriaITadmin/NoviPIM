@@ -447,6 +447,75 @@ function Get-KlikalnikPovzetek($pregledane) {
 }
 
 function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
+  # Čas začetka v UTC (ops.UserActivity.OccurredUtc je UTC), vzet PRED zagonom testnega intraneta.
+  $zacetekUtc = [DateTime]::UtcNow
+  $klik = Invoke-KlikalnikTek $strani $log $vrata
+  # Preverjanje teče po koncu testnega intraneta (finally ga ustavi), da so vsi njegovi zapisi že v bazi.
+  Set-KorakMesta 'klikalnik-posli'
+  $posli = Test-KlikalnikPosli $zacetekUtc
+  $barva = if ($posli.ok) { 'Green' } else { 'Red' }
+  Write-Host "  · $($posli.opis)" -ForegroundColor $barva
+  return @($klik, $posli)
+}
+
+function Test-KlikalnikPosli([DateTime]$zacetekUtc) {
+  # Varovalka (#68): testni intranet (uporabnik 'klikalnik', vloga ADMIN) ne sme oddati zahteve za posel —
+  # gostitelj avtomatike bi jo izvedel zares (npr. izvoz kataloga). Zapora je v MonitorService
+  # (Pim:TestniIntranet:BrezPoslov); tu vrata preverijo sled v razvojni bazi. Samo SELECT.
+  # Isti uporabnik 'klikalnik' velja za vsa mesta vrat, zato zadetek lahko izvira iz sočasnih vrat —
+  # napaka zato navede posel, dejanje in čas.
+  # PRIVZETO ZA NOČ: če baza ni dosegljiva, vrata NE padejo (klikalnik bi v tem primeru padel že sam),
+  # korak pa to jasno izpiše.
+  $sql = @"
+SET NOCOUNT ON;
+SELECT N'dnevnik' AS Vir, a.ActionCode AS Dejanje, a.EntityKey AS Posel, COALESCE(d.Label, a.EntityKey) AS Ime, a.OccurredUtc AS CasUtc
+FROM ops.UserActivity a LEFT JOIN ops.JobDefinition d ON d.JobKey = a.EntityKey
+WHERE a.Actor = N'klikalnik' AND a.OccurredUtc >= @Zacetek
+  AND (a.ActionCode LIKE N'JOB[_]%' OR a.ActionCode LIKE N'PIPELINE%' OR a.ActionCode LIKE N'AUTOMATION%')
+UNION ALL
+SELECT N'zahteva', N'RequestedBy', d.JobKey, d.Label, d.RequestedRunUtc
+FROM ops.JobDefinition d
+WHERE d.RequestedBy = N'klikalnik' AND d.RequestedRunUtc >= @Zacetek
+UNION ALL
+SELECT N'urnik', N'UpdatedBy', d.JobKey, d.Label, d.UpdatedUtc
+FROM ops.JobDefinition d
+WHERE d.UpdatedBy = N'klikalnik' AND d.UpdatedUtc >= @Zacetek
+UNION ALL
+SELECT N'tek', N'JobRun', r.JobKey, COALESCE(d.Label, r.JobKey), r.StartedUtc
+FROM ops.JobRun r LEFT JOIN ops.JobDefinition d ON d.JobKey = r.JobKey
+WHERE (r.StartedBy = N'klikalnik' OR r.TriggeredBy = N'klikalnik' OR r.CancelRequestedBy = N'klikalnik') AND r.StartedUtc >= @Zacetek
+ORDER BY CasUtc;
+"@
+  $povezava = $null
+  try {
+    $cs = "Server=$($Nastavitve.razvojniStreznik);Database=$($Nastavitve.razvojnaBaza);Integrated Security=True;Encrypt=True;TrustServerCertificate=True;Connect Timeout=15;Application Name=PIM vrata #68"
+    $povezava = New-Object System.Data.SqlClient.SqlConnection $cs
+    $povezava.Open()
+    $ukaz = $povezava.CreateCommand()
+    $ukaz.CommandText = $sql
+    $ukaz.CommandTimeout = 60
+    $null = $ukaz.Parameters.Add('@Zacetek', [System.Data.SqlDbType]::DateTime2)
+    $ukaz.Parameters['@Zacetek'].Value = $zacetekUtc
+    $bralnik = $ukaz.ExecuteReader()
+    $zadetki = @()
+    while ($bralnik.Read()) {
+      $cas = if ($bralnik.IsDBNull(4)) { '?' } else { $bralnik.GetDateTime(4).ToLocalTime().ToString('d.M. HH:mm:ss') }
+      $zadetki += "$($bralnik.GetString(3)) ($($bralnik.GetString(2)), $($bralnik.GetString(1)), $cas)"
+    }
+    $bralnik.Close()
+  } catch {
+    return @{ ok = $true; opis = "klikalnik-posli: ni bilo mogoče preveriti zahtev za posle ($($_.Exception.Message -replace '\s+', ' '))" }
+  } finally {
+    if ($povezava) { $povezava.Dispose() }
+  }
+  $od = $zacetekUtc.ToLocalTime().ToString('d.M. HH:mm:ss')
+  if ($zadetki.Count -eq 0) { return @{ ok = $true; opis = "klikalnik-posli: testni intranet ni oddal zahtev za posle (od $od)" } }
+  $izpis = @($zadetki | Select-Object -Unique)
+  if ($izpis.Count -gt 10) { $izpis = @($izpis | Select-Object -First 10) + "… še $($izpis.Count - 10)" }
+  return @{ ok = $false; opis = "klikalnik-posli: testni intranet je oddal zahtevo za posel od $od — $($izpis -join '; ') (gostitelj avtomatike bi jo izvedel zares; lahko je tudi od sočasnih vrat)" }
+}
+
+function Invoke-KlikalnikTek([string[]]$strani, [string]$log, [int]$vrata) {
   # Vsako mesto za vrata ima svoja vrata testnega intraneta, zato klikalnikov teče več hkrati.
   $mapaK = Join-Path $Koren 'PIM_Solution\tools\PIM.Klikalnik'
   $izhodK = "$log-klikalnik"

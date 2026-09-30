@@ -24,6 +24,23 @@ foreach (var method in new[] { "RequestRunAsync(", "RequestCancelAsync(", "SetJo
   var body = service.Substring(at, service.IndexOf('{', at) + 60 - at);
   Assert(body.Contains("await RequireAdminAsync();", StringComparison.Ordinal), "metoda ne kliče RequireAdminAsync na začetku: " + method);
 }
+// Naloga #73: potrditev varovalk v bazi odda zahtevo za zagon izvoza (ops.RequestJobRun) oz. spusti SAOP sporočila;
+// na testnem intranetu mora biti zavrnjena v servisu PRED klicem baze, stran pa pokaže sporočilo zapore.
+var safeguards = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Services/SafeguardService.cs"));
+var safeguardGuard = safeguards.IndexOf("void RequireRealIntranet()", StringComparison.Ordinal);
+Assert(safeguardGuard > 0, "SafeguardService: zapora testnega intraneta manjka");
+Assert(safeguards.Substring(safeguardGuard, 200).Contains("MonitorService.IsTestIntranetWithoutJobs(configuration)", StringComparison.Ordinal),
+  "SafeguardService: zapora ne bere ključa testnega intraneta");
+foreach (var (method, procedure) in new[] { ("ApproveAsync(", "ops.ApproveSafeguardFindings"), ("ConfirmSaopHeldAsync(", "ops.ConfirmSaopHeldMessages") })
+{
+  var at = safeguards.IndexOf(" " + method, StringComparison.Ordinal);
+  Assert(at > 0, "SafeguardService: metoda manjka: " + method);
+  var guardAt = safeguards.IndexOf("RequireRealIntranet();", at, StringComparison.Ordinal);
+  var sqlAt = safeguards.IndexOf("new SqlCommand(\"" + procedure, at, StringComparison.Ordinal);
+  Assert(guardAt > 0 && sqlAt > 0 && guardAt < sqlAt, "SafeguardService: zapora testnega intraneta ni pred klicem baze v " + method);
+}
+var safeguardPage = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Pages/SafeguardReview.razor"));
+Assert(safeguardPage.Contains("SafeguardService.TestIntranetMessage", StringComparison.Ordinal), "/varovalke/{id} ne pokaže sporočila zapore testnega intraneta");
 var klikalnik = File.ReadAllText(Path.Combine(root, "tools/PIM.Klikalnik/Program.cs"));
 Assert(klikalnik.Contains("MonitorService.TestIntranetWithoutJobsKey] = \"true\"", StringComparison.Ordinal), "testni intranet ne izklopi poslov");
 foreach (var settings in Directory.GetFiles(Path.Combine(root, "src/PIM.Intranet"), "appsettings*.json"))

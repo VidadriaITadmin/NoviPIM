@@ -20,6 +20,8 @@ using PIM.Operations;
 //   S5  filtri seznama izdelkov: S koda, rabatna skupina, posebni S za tip in za stranko
 //   S6  delovni list strank: posebni S po obsegu (SKUPINA:, S:, *) in list »S po tipih strank«
 //   S7  delovni list izdelkov: stolpca posebnih S po tipih in strankah
+//   S8  množični posebni S s seznama /izdelki (317): en paket, b2b.AuditLog prej/potem, razveljavitev,
+//       pravica BusinessWrite v servisu
 //
 // Test pusti v bazi SAMO privzete S kode iz cenika (to je namen uvoza). Pravila, ki jih ustvari, in
 // profil testne stranke na koncu vrne v prvotno stanje.
@@ -233,6 +235,88 @@ try
   Check("uvoz izdelkov: stranka S2 na izdelku", siblingSpecials.Any(row => row.TargetCode == customer.CustomerKey && row.DiscountCode == "S2"));
   var productAgain = await PreviewAsync(workbook, productSheet);
   Check("drugi uvoz iste datoteke izdelkov ne spremeni ničesar", productAgain.Rows.Count == 0);
+
+  /* --- S8: množični posebni S s seznama izdelkov (317): en paket, zgodovina, razveljavitev ---- */
+  Console.WriteLine("=== S8 množični posebni S (tip, stranka) z razveljavitvijo ===");
+  var bulkPackaging = new PackagingDiscountService(configuration, guard);
+  var bulkItems = new List<string> { sibling };
+  var promotedJson = await ScalarAsync<string>(connection, """
+    SELECT ISNULL((SELECT TOP (300) product.ItemID FROM pim.Product AS product
+      WHERE product.OrganizationId = @Org AND product.ItemID <> @Sibling
+        AND NOT EXISTS (SELECT 1 FROM b2b.PackagingDiscountRule AS rule317 WHERE rule317.PimProductId = product.PimProductId
+          AND rule317.IsActive = 1 AND rule317.ScopeKind = N'ITEM' AND rule317.TargetKind = N'TYPE' AND rule317.CustomerTypeCode = N'RESELLER')
+      ORDER BY product.ItemID FOR JSON PATH), N'[]');
+    """, ("@Org", Organization), ("@Sibling", sibling));
+  bulkItems.AddRange(JsonSerializer.Deserialize<List<Dictionary<string, string>>>(promotedJson)!.Select(row => row["ItemID"]));
+  const string Missing = "F11-NI-TAKEGA-ARTIKLA";
+
+  async Task<string> SpecialStateAsync(string targetKind, string target) => await ScalarAsync<string>(connection, """
+    SELECT ISNULL(STRING_AGG(CONVERT(nvarchar(max), product.ItemID + N'=' + rule317.DiscountCode + ISNULL(N'/' + CONVERT(nvarchar(10), rule317.ValidTo, 23), N'')), N';')
+      WITHIN GROUP (ORDER BY product.ItemID), N'')
+    FROM OPENJSON(@Items) AS wanted
+    INNER JOIN pim.Product AS product ON product.OrganizationId = @Org AND product.ItemID = wanted.[value]
+    INNER JOIN b2b.PackagingDiscountRule AS rule317 ON rule317.PimProductId = product.PimProductId AND rule317.IsActive = 1
+      AND rule317.ScopeKind = N'ITEM' AND rule317.OrganizationId = @Org AND rule317.TargetKind = @Kind
+    LEFT JOIN b2b.Customer AS customer317 ON customer317.CustomerId = rule317.CustomerId
+    WHERE ISNULL(rule317.CustomerTypeCode, customer317.CustomerKey) = @Target;
+    """, ("@Items", JsonSerializer.Serialize(bulkItems)), ("@Org", Organization), ("@Kind", targetKind), ("@Target", target));
+
+  var typeBefore = await SpecialStateAsync("TYPE", "RESELLER");
+  Check("S8 izhodišče: drugi artikel skupine ima trgovce S3 (iz S7)", typeBefore.Contains(sibling + "=S3", StringComparison.Ordinal), typeBefore);
+  var watch = System.Diagnostics.Stopwatch.StartNew();
+  var set = await bulkPackaging.SaveRulesBulkAsync(Organization, "TYPE", "RESELLER", null, "S2", [.. bulkItems, Missing], "F11", "TEST");
+  Console.WriteLine($"  zapis {bulkItems.Count} izdelkov: {watch.ElapsedMilliseconds} ms, paket #{set.BatchId}, spremenjenih {set.Changed}, enakih {set.Unchanged}, izpuščenih {set.Skipped.Count}");
+  Check("S8 en paket za vse izdelke, vsi spremenjeni", set.BatchId is not null && set.Changed == bulkItems.Count, $"{set.Changed} od {bulkItems.Count}");
+  Check("S8 neznan artikel izpuščen z razlogom, zapis se ne ustavi",
+    set.Skipped.Count == 1 && set.Skipped[0].ItemId == Missing && set.Skipped[0].Reason.Length > 0);
+  var auditRows = await ScalarAsync<int>(connection, """
+    SELECT COUNT(*) FROM b2b.AuditLog WHERE OrganizationId = @Org AND EntityType = N'PackagingDiscountRule'
+      AND JSON_VALUE(NewValueJson, '$.PackagingBatchId') = @Batch;
+    """, ("@Org", Organization), ("@Batch", set.BatchId?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0"));
+  Check("S8 zgodovina: v b2b.AuditLog ena vrstica prej/potem na izdelek paketa", auditRows == set.Changed, $"{auditRows} / {set.Changed}");
+  var afterSet = await SpecialStateAsync("TYPE", "RESELLER");
+  Check("S8 vsi izbrani izdelki imajo trgovce S2", afterSet.Split(';').Length == bulkItems.Count && !afterSet.Contains("=S3", StringComparison.Ordinal));
+
+  var same = await bulkPackaging.SaveRulesBulkAsync(Organization, "TYPE", "RESELLER", null, "S2", bulkItems, "F11", "TEST");
+  Check("S8 ponovni isti zapis ne ustvari paketa in ne spremeni ničesar", same.BatchId is null && same.Changed == 0 && same.Unchanged == bulkItems.Count);
+
+  var removed = await bulkPackaging.SaveRulesBulkAsync(Organization, "TYPE", "RESELLER", null, null, bulkItems, "F11", "TEST");
+  Check("S8 prazna koda umakne posebni S vsem izbranim", removed.Changed == bulkItems.Count && await SpecialStateAsync("TYPE", "RESELLER") == "");
+  var undoRemove = await bulkPackaging.UndoRulesBatchAsync(Organization, removed.BatchId!.Value);
+  Check("S8 razveljavitev umika vrne S2 vsem", undoRemove.Undone == bulkItems.Count && await SpecialStateAsync("TYPE", "RESELLER") == afterSet);
+  var undoSet = await bulkPackaging.UndoRulesBatchAsync(Organization, set.BatchId!.Value);
+  var typeAfterUndo = await SpecialStateAsync("TYPE", "RESELLER");
+  Check("S8 razveljavitev zapisa: stanje enako kot pred zapisom (prej brez pravila = umik, prej S3 = spet S3)",
+    undoSet.Undone == bulkItems.Count && typeAfterUndo == typeBefore, typeAfterUndo);
+  var undoneTwice = false;
+  try { await bulkPackaging.UndoRulesBatchAsync(Organization, set.BatchId.Value); }
+  catch (SqlException failure) when (failure.Message.Contains("razveljavljen", StringComparison.Ordinal)) { undoneTwice = true; }
+  Check("S8 paketa ni mogoče razveljaviti dvakrat", undoneTwice);
+
+  var customerItems = bulkItems.Take(20).ToList();
+  var customerBefore = await SpecialStateAsync("CUSTOMER", customer.CustomerKey);
+  var forCustomer = await bulkPackaging.SaveRulesBulkAsync(Organization, "CUSTOMER", null, customer.CustomerKey, "S3", customerItems, "F11", "TEST");
+  Check("S8 stranka: posebni S3 na 20 izdelkih v enem paketu", forCustomer.BatchId is not null && forCustomer.Changed + forCustomer.Unchanged == customerItems.Count);
+  if (forCustomer.BatchId is { } customerBatch) await bulkPackaging.UndoRulesBatchAsync(Organization, customerBatch);
+  Check("S8 stranka: po razveljavitvi enako kot prej", await SpecialStateAsync("CUSTOMER", customer.CustomerKey) == customerBefore);
+
+  // Izvajalec je ime varovalke (konzolni test), ne Actor — seznam zato brez filtra po avtorju.
+  var listed = await bulkPackaging.GetRuleBatchesAsync(null, 20);
+  Check("S8 seznam paketov pokaže oba paketa kot razveljavljena",
+    new[] { set.BatchId, removed.BatchId }.All(id => listed.Any(batch => batch.BatchId == id && batch.UndoneUtc is not null && batch.TargetCode == "RESELLER")));
+
+  var refusedWithoutGuard = false;
+  try { await packaging.SaveRulesBulkAsync(Organization, "TYPE", "RESELLER", null, "S2", bulkItems, "F11", "TEST"); }
+  catch (UnauthorizedAccessException) { refusedWithoutGuard = true; }
+  Check("S8 brez varovalke (delovni list) množični zapis ni dovoljen", refusedWithoutGuard);
+  var viewer = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+    [new(System.Security.Claims.ClaimTypes.Name, "f11-bralec"), new(System.Security.Claims.ClaimTypes.Role, "VIEWER")], "test"));
+  var viewerGuard = new PimWriteGuard(new EmptyServices(), new FixedHttpContext(new Microsoft.AspNetCore.Http.DefaultHttpContext { User = viewer }));
+  var refusedViewer = false;
+  try { await new PackagingDiscountService(configuration, viewerGuard).SaveRulesBulkAsync(Organization, "TYPE", "RESELLER", null, "S2", bulkItems, "F11", "TEST"); }
+  catch (UnauthorizedAccessException) { refusedViewer = true; }
+  Check("S8 bralna vloga pade v servisu (BusinessWrite), ne šele v bazi", refusedViewer);
+  Check("S8 po zavrnjenih klicih stanje nespremenjeno", await SpecialStateAsync("TYPE", "RESELLER") == typeBefore);
 }
 catch (Exception failure)
 {
@@ -338,4 +422,16 @@ static string FindRoot()
   var directory = new DirectoryInfo(AppContext.BaseDirectory);
   while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "sql", "migrations"))) directory = directory.Parent;
   return directory?.FullName ?? throw new DirectoryNotFoundException("PIM_Solution ni najden.");
+}
+
+/// <summary>Vsebnik brez storitev: PimWriteGuard mora uporabnika najti v HttpContext (kot F10.AuthTests).</summary>
+sealed class EmptyServices : IServiceProvider
+{
+  public object? GetService(Type serviceType) => null;
+}
+
+/// <summary>En kontekst na eno varovalko; brez skupnega statičnega AsyncLocal.</summary>
+sealed class FixedHttpContext(Microsoft.AspNetCore.Http.HttpContext? context) : Microsoft.AspNetCore.Http.IHttpContextAccessor
+{
+  public Microsoft.AspNetCore.Http.HttpContext? HttpContext { get; set; } = context;
 }

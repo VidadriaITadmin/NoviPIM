@@ -119,9 +119,9 @@ Assert(!Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-direction: 
   "Stolpcni razpored prevodov se ne sme vrniti.");
 
 /* ─── Čiščenje atributov (naloga #15, migracija 307) ──────────────────────────
-   Lastnik 2026-09-29: pregled podvojenih atributov in lep zapis vrednosti. Nočna privzeta izbira:
-   samo pregled — nič se ne združi, ne izbriše in ne prepiše; pravilo zapisa ni vklopljeno v zajem
-   ali izvoz, ker bi sicer spletni filter imel dva zapisa iste vrednosti (»10W« in »10 W«). */
+   Lastnik 2026-09-29: pregled podvojenih atributov in lep zapis vrednosti. Stran je samo pregled —
+   nič se ne združi, ne izbriše in ne prepiše. Pravilo zapisa je z 314 (#49) vklopljeno v zajem, izvoz
+   in obstoječe vrednosti (vse naenkrat, z dnevnikom in povratkom). */
 var cleanup = Read(Path.Combine(pages, "AttributeCleanup.razor"));
 Assert(cleanup.Contains("@page \"/nastavitve/atributi/ciscenje\"", StringComparison.Ordinal),
   "Čiščenje atributov mora biti na poti nastavitve/atributi/ciscenje (dostop pokriva register atributov).");
@@ -129,7 +129,7 @@ Assert(catalog.Contains("href=\"nastavitve/atributi/ciscenje\"", StringCompariso
   "Register atributov mora voditi na čiščenje, sicer strani nihče ne najde.");
 foreach (var forbidden in new[] { "INSERT ", "UPDATE ", "DELETE ", "DeleteDefinitionAsync", "SaveMapAsync", "UpdateDefinitionAsync" })
   Assert(!cleanup.Contains(forbidden, StringComparison.Ordinal),
-    "Čiščenje je samo pregled, dokler lastnik ne odloči, kaj se združi: " + forbidden);
+    "Stran ne piše v bazo sama; združitev gre prek servisa in postopka (#48): " + forbidden);
 foreach (var required in new[] { "PimTable", "PimState", "Počisti filtre", "Izvozi v Excel", "SupplyParameterFromQuery", "ByOrganization", "Samples", "ni v registru" })
   Assert(cleanup.Contains(required, StringComparison.Ordinal), "Čiščenju atributov manjka: " + required);
 
@@ -174,6 +174,76 @@ Assert(migration307Sql.Contains("pim.PolishAttributeValue", StringComparison.Ord
     && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'))", StringComparison.Ordinal)
     && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))", StringComparison.Ordinal),
   "307 samo doda predlog; zajema in izvoza ne spreminja, dokler lastnik ne potrdi.");
+
+// #49 (314, 316): vklop za vse naenkrat — obstoječe vrednosti z dnevnikom, zajem in izvoz, povratek.
+var migration314 = Path.Combine(migrations, "314_VklopLepegaZapisaVrednostiAtributov.sql");
+Assert(File.Exists(migration314), "Manjka migracija 314 z vklopom lepega zapisa.");
+var migration314Sql = File.ReadAllText(migration314);
+foreach (var required in new[]
+{
+  "OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'))", "OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))",
+  "pim.AttributeValueNormalizationLog", "N'migracija 314'", "pim.RevertAttributeValueNormalization", "out.SaopXmlField",
+  "COLLATE DATABASE_DEFAULT", "BEGIN TRAN;", "COMMIT;"
+})
+  Assert(migration314Sql.Contains(required, StringComparison.Ordinal), "Migraciji 314 manjka: " + required);
+Assert(!migration314Sql.Contains("EXEC out.EnqueueSaop", StringComparison.Ordinal) && !migration314Sql.Contains("INSERT out.", StringComparison.Ordinal),
+  "Lep zapis ne sme ničesar postaviti v vrsto za SAOP (lastnik: nič SAOP).");
+Assert(File.Exists(Path.Combine(migrations, "316_LepZapisBrezEnotAtributov.sql")), "Manjka popravek 316 (enote »Enota …« ostanejo).");
+
+// Stran pove, da je pravilo vklopljeno, in pokaže dnevnik poenotenj z izvozom (prej/potem); nič ne zapiše.
+foreach (var required in new[] { "<strong>vklopljeno</strong>", "Dnevnik poenotenj", "GetNormalizationRunsAsync", "GetNormalizationLogCsvAsync", "RunColumns" })
+  Assert(cleanup.Contains(required, StringComparison.Ordinal), "Čiščenju atributov (lep zapis) manjka: " + required);
+Assert(!cleanup.Contains("ni vklopljeno", StringComparison.Ordinal), "Pasica ne sme več trditi, da pravilo ni vklopljeno.");
+Assert(!cleanup.Contains("RevertAttributeValueNormalizationAsync", StringComparison.Ordinal),
+  "Gumb za povratek potrebuje politiko v PimAuthorization in potrditev s številom vrstic; do takrat povratek naredi skrbnik baze.");
+Assert(service.Contains("GROUP BY ChangedBy", StringComparison.Ordinal),
+  "Dnevnik poenotenj mora biti ena združevalna poizvedba (ne vrstica po vrstica).");
+
+// #48 (319): združitev izbranih parov — izbira vrstic, predogled po podjetjih, pisanje samo s CatalogWrite
+// v servisu, ena transakcija v bazi z dnevnikom in povratkom, nič v SAOP.
+foreach (var required in new[]
+{
+  "PimBulkBar", "PimRowSelection", "aria-label=\"@($\"Izberi par", "Združi v …", "Samo za branje", "role=\"dialog\"",
+  "Podjetje", "Trki", "Zgodovina združitev", "Razveljavi združitev", "PimPolicies.CatalogWrite", "Prekliči validacijo",
+  "Angleško ime atributa, ki ostane", "RevalidateAsync"
+})
+  Assert(cleanup.Contains(required, StringComparison.Ordinal), "Združevanju atributov manjka: " + required);
+foreach (var method in new[] { "MergeAsync", "RevertMergeAsync", "RevalidateAsync" })
+{
+  var start = Regex.Match(service, @"public async Task<[^>]+> " + method + @"\(").Index;
+  Assert(start > 0, "Servisu manjka " + method);
+  var body = service.Substring(start, Math.Min(600, service.Length - start));
+  Assert(body.Contains("guard.RequireAsync(PimPolicies.CatalogWrite)", StringComparison.Ordinal),
+    method + " mora v servisu zahtevati CatalogWrite (skrit gumb ni varovalka).");
+}
+Assert(service.Contains("canon.MergeAttributeDefinitions", StringComparison.Ordinal) && service.Contains("canon.RevertAttributeMerge", StringComparison.Ordinal),
+  "Združitev in povratek morata iti prek postopkov v bazi (ena transakcija).");
+Assert(service.Contains("cachedDuplicates = null", StringComparison.Ordinal),
+  "Po združitvi mora seznam podvojenih pozabiti predpomnjen izračun, sicer par ostane na seznamu.");
+Assert(service.Contains("Chunk(ValidationChunk)", StringComparison.Ordinal),
+  "Validacija po združitvi mora teči v paketih (#105), ne en klic za vse izdelke.");
+Assert(!Regex.IsMatch(cleanup, @"foreach[^\n]*\n[^\n]*MergeAsync[^\n]*ProductId", RegexOptions.None),
+  "Združitev ne sme iti po izdelkih (ena množična poizvedba v postopku).");
+
+var migration319 = Path.Combine(migrations, "319_ZdruziAtribute.sql");
+Assert(File.Exists(migration319), "Manjka migracija 319 z združitvijo atributov.");
+var migration319Sql = File.ReadAllText(migration319);
+foreach (var required in new[]
+{
+  "CREATE OR ALTER PROCEDURE canon.MergeAttributeDefinitions", "CREATE OR ALTER PROCEDURE canon.RevertAttributeMerge",
+  "pim.AttributeMergeItem", "BEGIN TRANSACTION;", "COMMIT TRANSACTION;", "b2b.AuditLog", "map.FieldMapping", "map.AttributeMap",
+  "canon.CategoryAttributeSet", "val.FieldRequirement", "out.ExportColumn", "N'ZDRUZITEV_ATRIBUTOV'", "N'POVRAT_ZDRUZITVE'",
+  "DROPPED_CONFLICT", "IsActive = 0", "COLLATE DATABASE_DEFAULT", "@DryRun = 1"
+})
+  Assert(migration319Sql.Contains(required, StringComparison.Ordinal), "Migraciji 319 manjka: " + required);
+Assert(!migration319Sql.Contains("DELETE FROM canon.AttributeDefinition", StringComparison.Ordinal)
+    && !migration319Sql.Contains("DELETE canon.AttributeDefinition", StringComparison.Ordinal),
+  "Opuščeni atribut se deaktivira, ne izbriše.");
+Assert(!migration319Sql.Contains("EnqueueSaop", StringComparison.Ordinal) && !migration319Sql.Contains("out.SaopOutbound", StringComparison.Ordinal)
+    && !migration319Sql.Contains("INSERT out.", StringComparison.Ordinal),
+  "Združitev ne sme ničesar postaviti v vrsto za SAOP.");
+Assert(!Regex.IsMatch(migration319Sql, @"\bCURSOR\b|WHILE\s+@@FETCH_STATUS", RegexOptions.IgnoreCase),
+  "Združitev mora biti množična (brez kurzorja po izdelkih).");
 
 // Prevodi: pregled, kaj bi slovar prevedel, tudi za italijanščino.
 var translations = Read(Path.Combine(pages, "MissingTranslations.razor"));

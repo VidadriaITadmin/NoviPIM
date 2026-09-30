@@ -1,6 +1,9 @@
 @page "/pravila/validacija"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
-@rendermode InteractiveServer
+@* Naloga #52: brez predupodabljanja. Prej se je stran naložila dvakrat (predupodabljanje + interaktivni del,
+   vmes utrip »Nalaganje«). Prenos predupodobljenih podatkov (PersistentComponentState) ne gre: 850+ zahtev
+   preseže omejitev sporočila SignalR (32 KB) in poruši povezavo. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inject GovernanceReadService Governance
 @inject IntranetDataService Data
 @inject RulesWriteService Rules
@@ -291,10 +294,15 @@
     {
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
-      if (KnownFields.Count == 0) KnownFields = await Governance.GetCanonicalFieldCodesAsync();
-      Profiles = await Governance.GetValidationProfilesAsync(organization.OrganizationId);
+      // Naloga #52: poizvedbe tečejo vzporedno (vsaka na svoji povezavi PimDb), stran čaka najdaljšo, ne vsote.
+      var knownFieldsTask = KnownFields.Count == 0 ? Governance.GetCanonicalFieldCodesAsync() : Task.FromResult(KnownFields);
+      var profilesTask = Governance.GetValidationProfilesAsync(organization.OrganizationId);
       // Ena poizvedba za vse profile (naloga #24), ne ena na profil.
-      var requirementsByProfile = await Governance.GetFieldRequirementsAsync(organization.OrganizationId);
+      var requirementsTask = Governance.GetFieldRequirementsAsync(organization.OrganizationId);
+      await Task.WhenAll(knownFieldsTask, profilesTask, requirementsTask);
+      KnownFields = knownFieldsTask.Result;
+      Profiles = profilesTask.Result;
+      var requirementsByProfile = requirementsTask.Result;
       var results = new List<RequirementWithProfile>();
       foreach (var profile in Profiles)
         if (requirementsByProfile.TryGetValue(profile.ValidationProfileId, out var requirements))
