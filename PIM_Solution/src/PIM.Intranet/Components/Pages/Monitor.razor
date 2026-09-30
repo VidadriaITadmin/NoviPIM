@@ -180,6 +180,12 @@
                 <td>@PimTime.FormatWithAge(job.LastStartedUtc, "še nikoli")</td>
                 <td class="nowrap" title="@posel.ForecastText">@Naslednji(posel, pregled.NowUtc)</td>
                 <td class="monitor-action">
+                  @if (job.IsRequested && !job.IsRunning)
+                  {
+                    @* Oddana, še ne prevzeta zahteva za zagon (tudi varovalke ali /splet) se da umakniti (naloga #69). *@
+                    <button type="button" class="small-action" disabled="@Busy" title="Umakni zahtevo za zagon; posel ostane na rednem urniku."
+                            @onclick="() => PrekliciZahtevoAsync(posel)">Prekliči zahtevo</button>
+                  }
                   @if (presoja.Action == MonitorAction.RunNow)
                   {
                     if (Potrjuje == ZagonKljuc(job.JobKey))
@@ -460,6 +466,20 @@
     // Takoj po kliku povej, kdaj bo zagon (napoved iz sveže prebrane vrste).
     if (Message == uspeh && Pregled?.Jobs.FirstOrDefault(p => p.Job.JobKey == posel.Job.JobKey)?.ForecastText is { Length: > 0 } napoved)
       Message = $"{posel.Job.Label}: zahteva za zagon je oddana. {napoved}";
+  }
+
+  async Task PrekliciZahtevoAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    Potrjuje = null;
+    DateTime? naslednji = null;
+    var kdo = posel.Job.RequestedBy is { Length: > 0 } oddal ? $" (oddal {oddal})" : "";
+    await IzvediAsync(async () => naslednji = await Nadzor.CancelRunRequestAsync(posel.Job.JobKey, Uporabnik),
+      "", "Zahteve ni bilo mogoče umakniti");
+    if (Message is not null)
+      Message = $"{posel.Job.Label}: zahteva za zagon{kdo} je umaknjena. "
+        + (naslednji is { } kdaj ? $"Naslednji redni zagon po urniku: {PimTime.Format(kdaj)}." : "Posel je izklopljen, zato po urniku ne teče.");
+    // Gostitelj je zahtevo morda prevzel tik pred klikom: pokaži, kar je zdaj v bazi.
+    else if (Error is not null) { try { await NaloziAsync(); } catch (Exception) { /* napaka je že prikazana */ } }
   }
 
   Task VklopiPoselAsync(global::PIM.Intranet.Services.MonitorJob posel)

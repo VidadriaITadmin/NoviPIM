@@ -100,6 +100,15 @@ foreach (var name in new[] { "AnalyticsHome", "AnalyticsItems", "AnalyticsItemCa
   Check($"{name}: brez Bootstrapa", !Regex.IsMatch(markup, "class=\"(?:[^\"]*\\s)?(btn|row|col-[\\w-]+|form-control|card-body)(?:\\s[^\"]*)?\""));
   Check($"{name}: povezave so base-relativne", !Regex.IsMatch(markup, "href=\"/"));
 }
+// 120: ob praznih ana.* je bil preklop podjetja neviden (vsa podjetja enako prazno stanje) — prazno stanje mora imenovati podjetje.
+foreach (var name in new[] { "AnalyticsHome", "AnalyticsItems", "AnalyticsSuppliers" })
+{
+  var markup = File.ReadAllText(Path.Combine(pages, name + ".razor"));
+  Check($"{name}: prazno stanje imenuje izbrano podjetje", markup.Contains("EmptyText=\"@EmptyText\"")
+    && Regex.IsMatch(markup, @"string EmptyText =>[\s\S]{0,400}\{OrganizationName\}") && markup.Contains("OrganizationName = organization.Name"));
+}
+Check("Pregled: stanje zajema iz SAOP je vidno tudi brez preračuna", Regex.IsMatch(File.ReadAllText(Path.Combine(pages, "AnalyticsHome.razor")),
+  @"</PimState>[\s\S]*aria-labelledby=""ana-streams"""));
 var items = File.ReadAllText(Path.Combine(pages, "AnalyticsItems.razor"));
 Check("Artikli: označi vse na strani in vse po filtru, izvoz izbranih", items.Contains("Označi vse na tej strani") && items.Contains("ki ustrezajo filtru")
   && items.Contains("Izvozi izbrane v Excel") && items.Contains("<PimPager"));

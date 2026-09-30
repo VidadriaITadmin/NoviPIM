@@ -327,6 +327,25 @@ Assert(catalog.Contains("bool includeCount = true", StringComparison.Ordinal),
 Assert(page.Contains("SlowLoadMilliseconds", StringComparison.Ordinal),
   "Pocasno nalaganje mora pustiti opozorilo s casom v dnevniku.");
 
+// ─── #127: vsi filtri v naslovu strani ─────────────────────────────────────
+// Klikalnik (#109, #119): podjetje, razvrstitev, vloga, streznik, cas vnosa in stanje izdelka so bili
+// samo stanje komponente — povezave ni bilo mogoce deliti, »Nazaj« jih je izgubil.
+foreach (var name in new[] { "podjetje", "izdelek", "vrsta", "razvrstitev", "vloga", "streznik", "dodano", "aktivnost" })
+{
+  Assert(page.Contains("Name = \"" + name + "\"", StringComparison.Ordinal), "Filter »" + name + "« se mora brati iz naslova.");
+  Assert(page.Contains("[\"" + name + "\"] =", StringComparison.Ordinal), "Filter »" + name + "« se mora zapisati v naslov.");
+}
+Assert(page.Contains("Navigation.GetUriWithQueryParameters", StringComparison.Ordinal) && page.Contains("Navigation.NavigateTo(uri, replace: replace)", StringComparison.Ordinal),
+  "Naslov se uskladi prek GetUriWithQueryParameters.");
+Assert(page.Contains("protected override async Task OnParametersSetAsync()", StringComparison.Ordinal),
+  "»Nazaj« v brskalniku mora stran prebrati znova (OnParametersSetAsync).");
+Assert(page.Contains("OwnNavigations", StringComparison.Ordinal),
+  "Zapozneli povratek lastnega naslova med tipkanjem ne sme povoziti vnosa ali sprozit dvojnega nalaganja.");
+Assert(page.Contains("DropUnknownScopeFilters", StringComparison.Ordinal) && page.Contains("UrlNotice", StringComparison.Ordinal),
+  "Vloga ali streznik iz povezave, ki ju podjetje nima, se zavrze z obvestilom — ne tiho prazen seznam.");
+Assert(page.Contains("ApplyAsync(replaceUrl: true)", StringComparison.Ordinal),
+  "Tipkanje v iskanje ne sme polniti zgodovine brskalnika z vsako vmesno besedo.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 
