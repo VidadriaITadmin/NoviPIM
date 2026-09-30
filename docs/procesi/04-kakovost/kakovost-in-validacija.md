@@ -8,7 +8,7 @@ pise: [pim.validacija]
 strani: [/kakovost, /kakovost/artikli, /kakovost/napake]
 posli: [PRODUCT_VALIDATION, PRODUCT_PUBLICATION, NIGHTLY_RECONCILIATION, MEDIA_URL_CHECK]
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Quality.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/QualityProducts.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationErrors.razor, PIM_Solution/src/PIM.Intranet/Services/Quality*.cs, PIM_Solution/src/PIM.Intranet/Services/ValidationLayer.cs, PIM_Solution/src/PIM.Intranet/Services/GovernanceReadService.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs]
-migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251, 312]
+migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251, 312, 320]
 ---
 
 # Kakovost in validacija artiklov
@@ -120,7 +120,7 @@ flowchart LR
 - **Strani:** `PIM.Intranet/Components/Pages/Quality.razor` (`/kakovost`, pogleda `profili` in `kategorije`), `QualityProducts.razor` (`/kakovost/artikli`), `ValidationErrors.razor` (`/kakovost/napake`); zavihki `Components/Shared/PimTab.cs` → `QualityTabs`.
 - **Storitve / delavci:** `QualityReadService` (`GetProductReadinessAsync`, `GetIssuesAsync`, `GetByCategoryAsync`, `GetOverviewAsync`), `QualityWriteService` (`val.RunValidationForProduct`, `val.SetProductHold`, `val.SetProductFieldWaiver`), `GovernanceReadService`, `QualityIssueExportService`, `ValidationLayer.cs`; avtomatika `PIM.Automation/JobCatalog.cs` (koraka `Validate`, `Promote`).
 - **Tabele in pogledi:** `val.ValidationProfile`, `val.FieldRequirement`, `val.ProductIssue`, `val.ProductValidationState`, `val.ProductHold`, `val.ProductChannelReadiness`; procedure `val.RunValidation`, `val.RunValidationForProducts`, `val.Promote`, `pim.WithdrawIneligibleWebShops`, `intranet.GetQualityIssues`, `intranet.GetQualityOverview`, `intranet.GetQualityByCategory`.
-- **Migracije:** 312 (izpeljani polji slik v `canon.FieldValue`, zahtevi v spletnih profilih), 102 (bralne procedure), 146–148 (zahteve po kategoriji), 177 (po kategorijah), 194/195/236 (ERP varovalka uvedena in odstranjena), 211 (prioriteta zastoja), 218 (zmogljivost), 236 (sveža validacija), 242 (pripravljenost = pravila izvoza), 249 (izjema polja), 251 (samodejni umik kljukic).
+- **Migracije:** 312 (izpeljani polji slik v `canon.FieldValue`, zahtevi v spletnih profilih), 102 (bralne procedure), 146–148 (zahteve po kategoriji), 177 (po kategorijah), 194/195/236 (ERP varovalka uvedena in odstranjena), 211 (prioriteta zastoja), 218 (zmogljivost), 236 (sveža validacija), 242 (pripravljenost = pravila izvoza), 249 (izjema polja), 251 (samodejni umik kljukic), 320 (hitra validacija paketov: `val.RunValidationForProducts` izračuna vse enkrat za izbrane izdelke in piše po 25 izdelkov v kratkih transakcijah — 1.000 izdelkov v nekaj sekundah, brez zaklepanja drugih).
 - **Urniki:** `PRODUCT_VALIDATION` 3600 s, `PRODUCT_PUBLICATION` 3600 s (odvisen od validacije, največ 7200 s stare), `NIGHTLY_RECONCILIATION`.
 
 </details>
