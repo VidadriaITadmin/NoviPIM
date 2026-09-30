@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ImportHistoryService History
+@inject NavigationManager Navigation
 
 @* 280: vsi uveljavljeni uvozi izdelkov, cen in strank. Uporabnik 2026-09-24: »mišljeno je, da ko se spremenijo
    artikli, da se povrne — pri uvozih artiklov, cen, strank in SAOP«. Uvoz je tu ena vrstica (ne desetine serij
@@ -36,9 +37,9 @@
             <td class="numeric">@run.ChangeCount.ToString("N0")</td>
             <td class="numeric">@(run.SaopCount > 0 ? run.SaopCount.ToString("N0") : "—")</td>
             <td>
-              @if (run.IsUndone) { <PimChip Text="@($"povrnjen (#{run.UndoneByImportRunId})")" Tone="warn" /> }
-              else if (run.IsUndo) { <PimChip Text="@($"povratek #{run.UndoOfImportRunId}")" /> }
-              else { <span class="muted">uveljavljen</span> }
+              @{ var status = ImportKinds.StatusOf(run, QueueStates.GetValueOrDefault(run.ImportRunId)); }
+              @if (status.Text == "uveljavljen") { <span class="muted">uveljavljen</span> }
+              else { <PimChip Text="@status.Text" Tone="@status.Tone" /> }
             </td>
           </tr>
         }
@@ -57,26 +58,33 @@
   [SupplyParameterFromQuery(Name = "vrsta")] public string? KindQuery { get; set; }
 
   IReadOnlyList<ImportRunRow> Runs = [];
+  // #66: stanje v vrsti za SAOP za vse prikazane uvoze iz ENE poizvedbe (preklican / delno preklican).
+  IReadOnlyDictionary<long, ImportQueueState> QueueStates = new Dictionary<long, ImportQueueState>();
   string? Kind;
   bool Loading = true;
   string? LoadError;
 
-  protected override async Task OnInitializedAsync()
+  // Vrsta je v URL-ju (?vrsta=CENE): povezavo se da deliti, »nazaj« v brskalniku deluje.
+  protected override async Task OnParametersSetAsync()
   {
     Kind = Kinds.Any(item => item.Kind == KindQuery) ? KindQuery : null;
     await LoadAsync();
   }
 
-  async Task SelectAsync(string? kind)
+  Task SelectAsync(string? kind)
   {
-    Kind = kind;
-    await LoadAsync();
+    Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("vrsta", kind));
+    return Task.CompletedTask;
   }
 
   async Task LoadAsync()
   {
     Loading = Runs.Count == 0; LoadError = null;
-    try { Runs = await History.GetRunsAsync(Kind, 200); }
+    try
+    {
+      Runs = await History.GetRunsAsync(Kind, 200);
+      QueueStates = await History.GetQueueStatesAsync(Runs);
+    }
     catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
     {
       LoadError = "Zgodovine uvozov ni mogoče prebrati (migracija 280: intranet.GetImportRuns).";
