@@ -2431,3 +2431,14 @@ Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`,
 - Migracija na koncu pokliče `val.SyncPackageOrderHolds` (obstoječi zadržki dobijo pravi razlog; na DEV 163 posodobljenih).
 
 **Objekti:** `val.SyncPackageOrderHolds`, podatki `val.ProductHold.Reason` (samo aktivni zadržki »pravilo 302«). **Ročni korak:** ne. **Vrstni red:** zahteva 302. **Povratek:** ponovno izvedi blok 4 iz 302. **PRD:** skupaj s 302 in 303, šele po lastnikovi potrditvi.
+
+## Indeksa zgodovine za razveljavitev in brisanje artikla (migracija 313_IndeksUndoOfChangeId, 2026-09-30, naloga #82)
+
+`pim.UndoProductField` in `pim.UndoProductBatch` (037) preverjata, ali je sprememba že razveljavljena (`WHERE UndoOfChangeId = @ChangeId`). Na tem stolpcu ni bilo indeksa, zato je vsaka razveljavitev pregledala celo `pim.ProductFieldHistory` (~2,7 mio vrstic; DEV 88.730 logičnih branj) in čakala na vsako tujo odprto transakcijo, ki piše zgodovino. Enak pregled je delal tuji ključ `FK_PimProductFieldHistory_Undo` ob brisanju vrstic zgodovine, `FK_PimProductFieldHistory_Product` pa ob brisanju artikla (obstoječi indeks se začne z `OrganizationId`).
+
+- **`IX_PimProductFieldHistory_UndoOf`** (`UndoOfChangeId`) `WHERE UndoOfChangeId IS NOT NULL` — filtriran, vsebuje samo vrstice razveljavitev (na DEV 0 strani), navadno pisanje zgodovine ga ne vzdržuje. Vse procedure in sprožilci, ki pišejo v tabelo, imajo `QUOTED_IDENTIFIER ON` (preverjeno v `sys.sql_modules`).
+- **`IX_PimProductFieldHistory_ProductId`** (`ProductId`) — ozek indeks za tuji ključ na `canon.Product` (DEV 7.810 strani ≈ 61 MB).
+- Gradnja z `ONLINE = ON`, kjer izdaja to dopušča (Enterprise/Developer/Azure); sicer navadno (na Standard med gradnjo zaklene pisanje zgodovine — poženi izven konice). DEV: 5 s.
+- DEV po migraciji: preverba razveljavitve 0 logičnih branj (prej 88.730), iskanje po `ProductId` 3 (prej 12.592).
+
+**Objekti:** indeksa na `pim.ProductFieldHistory`; procedure nespremenjene. **Ročni korak:** ne. **Povratek:** `DROP INDEX IX_PimProductFieldHistory_UndoOf ON pim.ProductFieldHistory; DROP INDEX IX_PimProductFieldHistory_ProductId ON pim.ProductFieldHistory;`
