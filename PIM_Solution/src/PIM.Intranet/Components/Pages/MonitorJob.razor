@@ -138,6 +138,12 @@ else
         <button type="button" class="small-action danger-action" disabled="@Busy" @onclick="() => PozeniAsync(posel)">Potrdi zagon (@Doseg(posel))</button>
         <button type="button" class="small-action" @onclick="() => PotrjujeZagon = false">Prekliči</button>
       }
+      else if (job.IsRequested)
+      {
+        @* Oddana, še ne prevzeta zahteva (tudi varovalke ali /splet) se da umakniti (naloga #69). *@
+        <button type="button" class="small-action" disabled="@Busy" title="Umakni zahtevo za zagon; posel ostane na rednem urniku."
+                @onclick="() => PrekliciZahtevoAsync(posel)">Prekliči zahtevo</button>
+      }
       else
       {
         <button type="button" class="small-action @(presoja.Action == MonitorAction.RunNow ? "primary-small" : null)" disabled="@(Busy || job.IsRequested)"
@@ -960,6 +966,20 @@ else
     // Takoj po kliku povej, kdaj bo zagon: napoved iz sveže prebrane vrste (naloga #12).
     if (Message == uspeh && Podrobnosti?.Job.ForecastText is { Length: > 0 } napoved)
       Message = $"{posel.Job.Label}: zahteva za zagon je oddana. {napoved}";
+  }
+
+  async Task PrekliciZahtevoAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    PotrjujeZagon = false;
+    DateTime? naslednji = null;
+    var kdo = posel.Job.RequestedBy is { Length: > 0 } oddal ? $" (oddal {oddal})" : "";
+    await IzvediAsync(async () => naslednji = await Nadzor.CancelRunRequestAsync(posel.Job.JobKey, Uporabnik),
+      "", "Zahteve ni bilo mogoče umakniti");
+    if (Message is not null)
+      Message = $"{posel.Job.Label}: zahteva za zagon{kdo} je umaknjena. "
+        + (naslednji is { } kdaj ? $"Naslednji redni zagon po urniku: {PimTime.Format(kdaj)}." : "Posel je izklopljen, zato po urniku ne teče.");
+    // Gostitelj je zahtevo morda prevzel tik pred klikom: pokaži, kar je zdaj v bazi.
+    else if (Error is not null) { try { await NaloziAsync(); } catch (Exception) { /* napaka je že prikazana */ } }
   }
 
   Task UstaviAsync(global::PIM.Intranet.Services.MonitorJob posel, long jobRunId) =>

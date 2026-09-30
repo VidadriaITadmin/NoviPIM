@@ -2,28 +2,45 @@
 @inject AuthenticationStateProvider Authentication
 
 @* 281: spremembe za SAOP, ki čakajo potrditev, pokazane na strani odobritve s seznamom in potrditvijo na mestu —
-   brez skakanja na druge strani (uporabnik 2026-09-24). Nesumljive spremembe so ob odobritvi že šle. *@
+   brez skakanja na druge strani (uporabnik 2026-09-24). Nesumljive spremembe so ob odobritvi že šle.
+   #76 (2026-09-30): pasica je mešala podjetja (/cene je kazala 1.380 = IQ + Vidadria + …) in en gumb je potrdil vse.
+   Zdaj: stran poda OrganizationId in pasica kaže samo to podjetje; brez njega (»vsa podjetja«) en seznam na podjetje
+   z imenom in potrditev po podjetju. Potrdi se natanko to, kar je na seznamu tega podjetja. *@
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 @if (LoadError is not null) { <p class="message-state error-message" role="alert">@LoadError</p> }
-@if (Items.Count > 0 && !Hidden)
+@foreach (var group in Groups)
 {
-  <SaopDeactivationConfirm Items="Items" Busy="Busy" OnSendAll="ConfirmAsync" OnCancel="() => Hidden = true" />
+  var organizationId = group.Key;
+  <SaopDeactivationConfirm @key="organizationId" Items="group.Rows" Busy="Busy" OrganizationId="organizationId" OrganizationName="@group.Name"
+                           SendAllText="@SendText(group.Name)"
+                           OnSendAll="() => ConfirmAsync(organizationId)" OnCancel="() => Hidden.Add(organizationId)" />
 }
 
 @code {
   /// <summary>Stran ga poveča po odobritvi, da se seznam osveži.</summary>
   [Parameter] public int Version { get; set; }
 
-  /// <summary>Samo spremembe tega podjetja (stran z izbranim podjetjem); null = vse.</summary>
+  /// <summary>Samo spremembe tega podjetja (stran z izbranim podjetjem); null = vsa, ločeno po podjetju.</summary>
   [Parameter] public int? OrganizationId { get; set; }
 
+  sealed record OrganizationGroup(int Key, string Name, IReadOnlyList<SaopHeldRow> Rows);
+
   IReadOnlyList<SaopHeldRow> Items = [];
+  readonly HashSet<int> Hidden = [];
   (int Version, int? OrganizationId)? loadedKey;
   bool rendered, loading;
-  bool Busy, Hidden;
+  bool Busy;
   string? Message, Error, LoadError;
+
+  IEnumerable<OrganizationGroup> Groups => Items
+    .GroupBy(item => item.OrganizationId)
+    .Where(group => !Hidden.Contains(group.Key))
+    .OrderBy(group => group.Key)
+    .Select(group => new OrganizationGroup(group.Key, group.First().OrganizationName, group.ToList()));
+
+  static string SendText(string organizationName) => $"Da, prav je — pošlji v SAOP ({organizationName})";
 
   /* 46: seznam se bere šele po prvem izrisu — stran (tudi predupodabljanje) nikoli ne čaka na pasico.
      Nov Version (po odobritvi) ali drugo podjetje seznam prebere znova. */
@@ -49,8 +66,10 @@
       /* parametri so se med branjem lahko spet spremenili — beri, dokler seznam ne ustreza zadnjim */
       while (loadedKey != (Version, OrganizationId))
       {
+        var organizationChanged = loadedKey is { } previous && previous.OrganizationId != OrganizationId;
         loadedKey = (Version, OrganizationId);
-        Hidden = false;
+        Hidden.Clear();
+        if (organizationChanged) { Message = null; Error = null; }
         await LoadAsync();
       }
     }
@@ -68,20 +87,29 @@
       LoadError = "Seznama sprememb, ki čakajo potrditev za SAOP, ni bilo mogoče prebrati. Osveži stran čez nekaj trenutkov. "
         + "Spremembe, ki čakajo potrditev, medtem ne gredo v SAOP.";
     }
+    // Varovalka: če bi postopek vrnil tuje podjetje, ga pasica ne pokaže in ne potrdi.
+    if (OrganizationId is { } only) Items = Items.Where(item => item.OrganizationId == only).ToList();
   }
 
-  async Task ConfirmAsync()
+  async Task ConfirmAsync(int organizationId)
   {
+    var rows = Items.Where(item => item.OrganizationId == organizationId).ToList();
+    if (rows.Count == 0) return;
+    var name = rows[0].OrganizationName;
     Busy = true; Error = null; Message = null;
     try
     {
       var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
-      var confirmed = await Safeguards.ConfirmSaopHeldAsync(Items.Select(item => item.OutboxMessageId).ToList(), actor);
-      Message = $"Potrjeno: {confirmed:N0} sprememb gre v SAOP.";
+      var confirmed = await Safeguards.ConfirmSaopHeldAsync(rows.Select(item => item.OutboxMessageId).Distinct().ToList(), actor);
+      var remaining = Items.Where(item => item.OrganizationId != organizationId).Select(item => item.OrganizationId).Distinct().Count();
+      Message = $"{name}: potrjeno {confirmed:N0} sprememb — odobrene so za pošiljanje v SAOP."
+        + (remaining > 0 ? $" Spremembe drugih podjetij ({remaining:N0}) še čakajo potrditev spodaj." : "");
       await LoadAsync();
     }
+    // Naloga #117: zapora testnega intraneta ni vprašanje vloge — pokaži njeno pravo sporočilo.
+    catch (UnauthorizedAccessException exception) when (exception.Message == SafeguardService.TestIntranetMessage) { Error = exception.Message; }
     catch (UnauthorizedAccessException) { Error = "Tvoja vloga pošiljanja v SAOP ne dovoljuje."; }
-    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = "Potrditev ni uspela: " + exception.Message; }
+    catch (Microsoft.Data.SqlClient.SqlException exception) { Error = $"Potrditev za {name} ni uspela: " + exception.Message; }
     finally { Busy = false; }
   }
 }

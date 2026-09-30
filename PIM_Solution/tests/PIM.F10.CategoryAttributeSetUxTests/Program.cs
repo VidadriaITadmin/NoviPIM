@@ -36,6 +36,22 @@ foreach (var writer in new[] { "SaveAttributeSetAsync", "SaveAttributeSetBulkAsy
   Assert(guardAt >= 0 && (nextMethod < 0 || guardAt < nextMethod),
     writer + " mora zahtevati politiko CatalogWrite, ker stran vidi tudi komerciala.");
 }
+// 77: kdor zapisa nima (danes komerciala), vidi »Samo za branje« in nobenega gumba, ki bi padel na pravici.
+// Stran bere ISTO politiko kot servis - ko #100 zamenja politiko, se mora zamenjati na obeh mestih.
+var writePolicy = System.Text.RegularExpressions.Regex.Match(page, @"const string WritePolicy = PimPolicies\.(\w+);");
+Assert(writePolicy.Success, "Stran mora imeti eno konstanto WritePolicy s politiko zapisa nabora.");
+Assert(service.Contains("guard.RequireAsync(PimPolicies." + writePolicy.Groups[1].Value + ")", StringComparison.Ordinal),
+  "WritePolicy na strani mora biti ista politika, s katero servis varuje zapis nabora.");
+Assert(page.Contains("CanWrite = await Guard.AllowsAsync(WritePolicy)", StringComparison.Ordinal),
+  "Stran mora pravico zapisa prebrati prek PimWriteGuard, ne iz imena vloge.");
+Assert(page.Contains("Samo za branje:", StringComparison.Ordinal) && page.Contains("role=\"status\"", StringComparison.Ordinal),
+  "Brez pravice zapisa mora stran jasno reci »Samo za branje« (CLAUDE.md §2, stanje brez pravic).");
+foreach (var gated in new[] { "@if (CanWrite && EditorSet.Rows.Count > 0)", "@if (CanWrite && Pending is not null)", "@if (CanWrite && Undo is not null", "@if (CanWrite && EditorSet.Suggestions.Any" })
+  Assert(page.Contains(gated, StringComparison.Ordinal), "Mnozicna dejanja, potrditve, razveljavitev in predlogi morajo biti samo za uporabnika s pravico: " + gated);
+var addBlock = page.IndexOf("<h3>Dodaj iz registra</h3>", StringComparison.Ordinal);
+Assert(addBlock > 0 && page.LastIndexOf("@if (CanWrite)", addBlock, StringComparison.Ordinal) > page.LastIndexOf("</table>", addBlock, StringComparison.Ordinal),
+  "Dodajanje, lepljenje in kopiranje nabora morajo biti skriti, ce uporabnik zapisa nima.");
+
 Assert(page.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
   "Brez interaktivnega nacina urejanje ne dela.");
 Assert(page.Contains("ActorAsync", StringComparison.Ordinal),

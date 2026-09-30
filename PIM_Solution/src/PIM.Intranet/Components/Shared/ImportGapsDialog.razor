@@ -156,7 +156,7 @@
 
     <footer class="dialog-footer">
       <p class="footer-note">Isto datoteko vira ponovno pošlje skozi preslikavo — brez ponovnega nalaganja. Pri velikem podjetju traja lahko 10 minut in več; okna ne zapiraj.</p>
-      <button type="button" disabled="@Busy" @onclick="CloseAsync">Zapri</button>
+      <button type="button" data-pim-close disabled="@Busy" @onclick="CloseAsync">Zapri</button>
       <button type="button" class="button-primary" disabled="@(Busy || Loading)" @onclick="ReprocessAsync">
         @(Reprocessing ? "Preslikujem vir …" : "Ponovno preslikaj vir")
       </button>

@@ -195,7 +195,7 @@
           <strong>Manjkajoče kategorije in novi atributi</strong>
           <span>Označi, kar naj PIM ustvari. Kar ni označeno, uvoz izpusti in pove, zakaj.</span>
         </div>
-        <button type="button" class="small-action" @onclick="() => MissingOpen = false">Zapri</button>
+        <button type="button" class="small-action" data-pim-close @onclick="() => MissingOpen = false">Zapri</button>
       </header>
       <div class="xml-lightbox-body">
         @if (Preview.MissingCategories is { Count: > 0 } missing)

@@ -562,6 +562,34 @@ Assert(card.Contains("Del je bil shranjen pred napako", StringComparison.Ordinal
 Assert(Regex.IsMatch(card, @"foreach \(var key in savedKeys\) \{ Drafts\.Remove\(key\)"),
   "Osnutki neshranjenih polj morajo ostati; pobrisati se smejo samo tisti, ki so sli skozi.");
 
+/* ─── Prevedljiv atribut: ena vrstica na jezik z istim ključem (116) ─────────────
+   Izdelek 504 (»Oblika svetilke« sl + en) je sesul krog: kartica je iz vsake jezikovne vrstice naredila
+   svoje polje s ključem »ProductAttribute.<koda>«, @key v ProductChannelPanel pa zahteva edinstvene ključe.
+   Urejljiva je ena vrstica (sl, sicer brez jezika), ostali jeziki so samo za branje s svojim ključem;
+   jezikovna vrstica se shrani samo v svojem jeziku (pim.SaveProductAttributesBulk z languageCode, 277). */
+{
+  var sl = new ProductCardAttribute(11, "Oblika svetilke", "Neusmerjena", "ProductAttribute.Oblika svetilke", "PIM", "sl");
+  var en = new ProductCardAttribute(10, "Oblika svetilke", "Non-Directional", "ProductAttribute.Oblika svetilke", "PIM", "en");
+  var none = new ProductCardAttribute(12, "Oblika svetilke", "x", "ProductAttribute.Oblika svetilke", "PIM", null);
+  Assert(ProductCardAttributes.Primary([en, sl]) == sl, "Urejljiva vrstica prevedljivega atributa mora biti slovenska.");
+  Assert(ProductCardAttributes.Primary([en, none]) == none, "Brez slovenske vrstice je urejljiva vrstica brez jezika.");
+  var keys = new[] { sl.FieldKey, ProductCardAttributes.ReadOnlyKey(en), ProductCardAttributes.ReadOnlyKey(none) };
+  Assert(keys.Distinct(StringComparer.Ordinal).Count() == keys.Length,
+    "Dve vrstici iste kode v razlicnih jezikih morata dati razlicna kljuca polj (@key).");
+  Assert(ProductCardAttributes.ReadOnlyKey(en) == ProductCardAttributes.ReadOnlyKey(en with { Value = "drugo" }),
+    "Kljuc bralnega polja mora biti stabilen (ne sme se spremeniti z vrednostjo).");
+
+  var workbenchSource = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "ProductWorkbenchService.cs"));
+  Assert(workbenchSource.Contains("PimDb.Text(row, \"LanguageCode\")", StringComparison.Ordinal),
+    "Kartica mora prebrati jezik atributa (GetProductCard ga vrne od 124).");
+  Assert(Regex.IsMatch(card, @"GroupBy\(row => row\.AttributeCode, StringComparer\.OrdinalIgnoreCase\)"),
+    "Atributi izven nabora morajo biti zdruzeni po kodi, ne polje na vrstico.");
+  Assert(!Regex.IsMatch(card, @"Detail\.Attributes\s*\.OrderBy\([^)]*\)\s*\.Select\(row => AttributeField\("),
+    "Polje na vrstico atributa je sesulo kartico (116).");
+  Assert(card.Contains("SaveAttributesBulkAsync", StringComparison.Ordinal) && card.Contains("field.Language is null", StringComparison.Ordinal),
+    "Jezikovna vrstica se mora shraniti samo v svojem jeziku; SaveProductAttributes bi povozil vse jezike.");
+}
+
 Console.WriteLine("F10 product detail UX contract PASS.");
 
 static void Assert(bool condition, string message)
