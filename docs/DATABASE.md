@@ -2476,3 +2476,14 @@ Stran Izvozi (`/outbound`) se je odpirala 50-60 s, ker je pasica z zadržanimi s
 - Intranet (ni migracija): pasica bere seznam šele po prvem izrisu strani, meja branja 15 s.
 
 **Objekti:** `ops.SaopHeldMessage`, `intranet.GetSaopHeldMessages`. **Ročni korak:** ne. **SAOP:** nič (samo branje). **Povratek:** ponovno izvedi definiciji pogleda in procedure iz 281. **PRD:** lahko skupaj z intranetom.
+## Hitra pripravljenost artiklov na /kakovost/artikli (migracija 318_HitrejsaKakovostArtikli, 2026-09-30, naloga #102)
+
+Stran `/kakovost/artikli` (in gola `/kakovost`, ki preusmeri nanjo) se je odpirala 26-73 s. `intranet.GetQualityProducts` (264) je naredil `SELECT * INTO #Rows` iz pogleda `val.ProductChannelReadiness` za vse aktivne artikle (~160.000) — za vsakega naziv, števce napak, zadržke, kljukice spletišč s kategorijo in veljavnostjo profilov ter korelirano iskanje odjavnega okna 251 — in šele nato razvrstil in preštel. DEV: CPU 13-14 s na klic.
+
+- **`intranet.GetQualityProducts`** (CREATE OR ALTER, isti parametri, isti izhodni stolpci in vrstni red): po korakih v ozkih začasnih tabelah izračuna samo to, kar potrebujejo razvrstitev, filter stanja in števci — `#Org` (podjetja v obsegu enkrat), `#P` (artikli + iskanje po šifri/EAN/nazivu), `#Issue` (samo blokirajoče napake), `#Shop`/`#Sites` (~12.000 kljukic spletišč), `#Hold`, `#Withdrawal` (odjavno okno enkrat na podjetje), `#R` (stanje na artikel). Polne vrstice pogleda se preberejo samo za `@Take` artiklov na strani.
+- Pravila so ista kot v `val.ProductChannelReadiness` (242/251); pogled ostane nespremenjen (bere ga tudi kartica izdelka). **Ob spremembi pravil v pogledu popravi tudi to proceduro.**
+- Novo: neznano stanje se primerja s stanjem za katalog.csv (`WebExportState`), zato povezave s `/splet` in `/splet/umaknjeni` (`stanje=BLOCKED_ERRORS`, `NO_CATEGORY` …) vrnejo artikle namesto praznega seznama.
+- DEV (stara in nova definicija, 7 kombinacij filtrov — vsa podjetja, WEB_BLOCKED stran 2, PUBLISHED, IN_CSV za IQ, HOLD, iskanje, iskanje + NO_SITE): enaki števci in enake vrstice. Čas pod obremenitvijo drugih sej: vsa podjetja 1,8-3,6 s (prej 5-30 s), PUBLISHED 3,7 s (prej 47 s), iskanje 1,0 s (prej 7,4 s); CPU ~4 s (prej 13-14 s). Ob močno zasedenem strežniku (tempdb, CPU) še vedno do ~20 s.
+- Intranet (ni migracija): `/kakovost/artikli` brez predupodabljanja, zato se procedura ob odprtju strani izvede enkrat namesto dvakrat.
+
+**Objekti:** `intranet.GetQualityProducts`. **Podatki:** nič. **SAOP:** nič (samo branje). **Ročni korak:** ne. **Povratek:** ponovno izvedi definicijo procedure iz 264. **PRD:** lahko skupaj z intranetom.
