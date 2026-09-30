@@ -6,6 +6,7 @@
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
+@if (LoadError is not null) { <p class="message-state error-message" role="alert">@LoadError</p> }
 @if (Items.Count > 0 && !Hidden)
 {
   <SaopDeactivationConfirm Items="Items" Busy="Busy" OnSendAll="ConfirmAsync" OnCancel="() => Hidden = true" />
@@ -22,7 +23,7 @@
   (int Version, int? OrganizationId)? loadedKey;
   bool rendered, loading;
   bool Busy, Hidden;
-  string? Message, Error;
+  string? Message, Error, LoadError;
 
   /* 46: seznam se bere šele po prvem izrisu — stran (tudi predupodabljanje) nikoli ne čaka na pasico.
      Nov Version (po odobritvi) ali drugo podjetje seznam prebere znova. */
@@ -59,8 +60,14 @@
 
   async Task LoadAsync()
   {
-    try { Items = await Safeguards.GetSaopHeldAsync(organizationId: OrganizationId); }
-    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException) { Items = []; }
+    try { Items = await Safeguards.GetSaopHeldAsync(organizationId: OrganizationId); LoadError = null; }
+    catch (Exception exception) when (exception is Microsoft.Data.SqlClient.SqlException or InvalidOperationException)
+    {
+      /* 46: napaka ali iztek branja ne sme izgledati kot »nič ne čaka« */
+      Items = [];
+      LoadError = "Seznama sprememb, ki čakajo potrditev za SAOP, ni bilo mogoče prebrati. Osveži stran čez nekaj trenutkov. "
+        + "Spremembe, ki čakajo potrditev, medtem ne gredo v SAOP.";
+    }
   }
 
   async Task ConfirmAsync()
