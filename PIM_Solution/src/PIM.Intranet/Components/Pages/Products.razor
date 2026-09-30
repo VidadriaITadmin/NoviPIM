@@ -512,6 +512,10 @@
         {
           <p class="message-state warn-message" role="alert">Izdelkov, ki izgubijo kljukico vsaj enega spletišča: @summary.LosingWebSite.ToString("N0") — ob naslednjem izvozu gredo s te spletne strani.</p>
         }
+        @if (summary.Products > ProductBulkEdit.LargeBatch)
+        {
+          <p class="message-state warn-message">Velik paket: zapis gre po @ProductBulkEdit.ChunkSize izdelkov, vsak paket se takoj tudi validira, zato traja nekaj minut. Napredek in preostali čas vidiš sproti; zapis lahko prekličeš med paketi — kar je že zapisano, povrneš na /uvozi.</p>
+        }
         <div class="table-scroll">
           <table class="data-table bulk-edit-table">
             <caption>Prej → potem (prvih @Math.Min(summary.Products, ProductBulkEdit.SampleSize) od @summary.Products.ToString("N0"))</caption>
@@ -541,8 +545,12 @@
         }
         <button type="button" class="ghost-button" disabled="@EditBusy" @onclick="BackToEdit">Nazaj na urejanje</button>
         @if (EditBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+        @if (EditWriting)
+        {
+          <button type="button" class="small-action" disabled="@EditCancelRequested" @onclick="CancelEdit">@(EditCancelRequested ? "Ustavljam po tem paketu …" : "Prekliči zapis")</button>
+        }
       </div>
-      <p class="muted">Zapis se zabeleži v <a href="uvozi">zgodovino uvozov</a>, od koder ga lahko v celoti povrneš. Validacija se ponovi samo za spremenjene izdelke; v katalog.csv gre ob naslednjem izvozu. Zapisa, ko se začne, ni mogoče prekiniti.</p>
+      <p class="muted">Zapis se najprej zabeleži v <a href="uvozi">zgodovino uvozov</a>, od koder ga lahko v celoti povrneš — tudi če se ustavi na pol. Validacija se ponovi samo za spremenjene izdelke. @ProductBulkEdit.WebNote(previewColumn) Preklic velja med paketi po @ProductBulkEdit.ChunkSize izdelkov.</p>
     }
 
     @if (EditResult is { } result)
@@ -562,10 +570,7 @@
 }
 
 <div class="table-toolbar">
-  @if (CanEditDiscounts)
-  {
-    <button type="button" class="ghost-button" @onclick="() => BulkOpen = !BulkOpen">S-popust …</button>
-  }
+  @* S-popust je v vrstici izbire (PimBulkBar) — preverjanje #10: gumb je bil na strani dvakrat. *@
   <label for="product-sort">Razvrstitev</label>
   <select id="product-sort" class="filter-select" @bind="SortDraft" @bind:after="ApplySortAsync">
     <option value="ITEM">Šifra naraščajoče</option>
@@ -1377,6 +1382,9 @@
   ProductBulkEdit.Result? EditResult;
   int EditSelectedCount;
   CancellationTokenSource? EditCancel;
+  bool EditCancelRequested;
+  /// <summary>Polje zadnjega zapisa — sporočilo po zapisu pove, ali gre na splet (atribut izven nabora ne gre).</summary>
+  ProductWorkbookColumn? EditResultColumn;
 
   ProductWorkbookColumn? EditColumn => EditColumns.FirstOrDefault(column => column.FieldKey == EditFieldKey);
 
@@ -1483,7 +1491,11 @@
     if (selected) EditSiteValues.Add(code); else EditSiteValues.Remove(code);
   }
 
-  void CancelEdit() => EditCancel?.Cancel();
+  void CancelEdit()
+  {
+    EditCancel?.Cancel();
+    if (EditWriting) EditCancelRequested = true;
+  }
 
   void BackToEdit()
   {
@@ -1549,23 +1561,30 @@
   async Task ApplyEditAsync()
   {
     if (EditPreview is null) return;
-    EditBusy = true; EditWriting = true; EditError = null;
+    EditBusy = true; EditWriting = true; EditError = null; EditCancelRequested = false;
+    EditResultColumn = EditColumn;
+    EditCancel?.Dispose();
+    EditCancel = new CancellationTokenSource();
+    var token = EditCancel.Token;
     try
     {
       var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
       var progress = new Progress<string>(text => { EditMessage = text; _ = InvokeAsync(StateHasChanged); });
       EditMessage = "Zapisujem …";
       StateHasChanged();
-      using (await EnterEditLaneAsync(CancellationToken.None))
+      // Zapis po paketih (ProductBulkEdit.ChunkSize): najprej zgodovina, nato paket za paketom z
+      // napredkom; preklic velja med paketi.
+      using (await EnterEditLaneAsync(token))
         EditResult = await ProductBulkEdit.ApplyAsync(Guard, Workbook, History, Withdrawals, EditPreview, actor,
-          string.IsNullOrWhiteSpace(EditNote) ? null : EditNote.Trim(), progress);
+          string.IsNullOrWhiteSpace(EditNote) ? null : EditNote.Trim(), progress, token);
       // Predogled se umakne, da drugi klik istega gumba paketa ne zapiše dvakrat.
       EditPreview = null; EditSummary = null;
       await ReloadListAsync();
     }
+    catch (OperationCanceledException) { EditError = "Zapis preklican, preden se je začel. Nič ni zapisano."; }
     catch (UnauthorizedAccessException) { EditError = "Za paketno urejanje polj nimaš pravice (urednik kataloga ali skrbnik)."; }
     catch (Exception failure) { EditError = "Zapis ni uspel: " + failure.Message; }
-    finally { EditBusy = false; EditWriting = false; EditMessage = null; }
+    finally { EditBusy = false; EditWriting = false; EditCancelRequested = false; EditMessage = null; }
   }
 
   string EditResultText(ProductBulkEdit.Result result)
@@ -1574,9 +1593,10 @@
       return result.Failure is null ? "Ni bilo kaj zapisati." : "Zapis se je ustavil: " + result.Failure;
     var text = $"Zapisano: {PimFormat.Count(outcome.PimChanges, "vrednost", "vrednosti", "vrednosti", "vrednosti")} na "
       + $"{PimFormat.Count(outcome.RowsTouched, "izdelku", "izdelkih", "izdelkih", "izdelkih")}. Validacija je ponovljena za spremenjene izdelke "
-      + "(stolpec Splet v seznamu); na splet gre ob naslednjem izvozu katalog.csv.";
+      + "(stolpec Splet v seznamu).";
+    if (EditResultColumn is { } column) text += " " + ProductBulkEdit.WebNote(column);
     if (result.Withdrawn > 0) text += $" Samodejni umik s spleta: {result.Withdrawn:N0} (glej Splet → Umaknjeni).";
-    if (result.Failure is not null) text += " Opozorilo: " + result.Failure;
+    if (result.Failure is not null) text += " " + result.Failure;
     return text;
   }
 

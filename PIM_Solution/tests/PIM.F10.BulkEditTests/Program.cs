@@ -138,6 +138,43 @@ Check(ProductBulkEdit.Shown(null, false) == "(prazno)", "Prazno se pokaže kot (
 Check(ProductBulkEdit.Shown(ProductWorkbookContract.ClearToken, false) == "(izprazni)", "»-« se pokaže kot (izprazni).");
 Check(ProductBulkEdit.Shown("1", true) == "Da" && ProductBulkEdit.Shown("0", true) == "Ne", "D/N polje se pokaže kot Da/Ne.");
 
+// --- 6b. Velik paket (preverjanje #10, 30. 9.): zgodovina pred zapisom, paketi, preklic ----------
+// 2.021 izdelkov je v enem kosu trajalo več kot 20 min (validacija po 1.000), med izpadom procesa pa je
+// v bazi ostalo 2.000 vrednosti brez zapisa na /uvozi.
+var historyAt = helper.IndexOf("history.RecordAsync(ImportKinds.Products", StringComparison.Ordinal);
+var applyAt = helper.IndexOf("workbook.ApplyAsync(", StringComparison.Ordinal);
+Check(historyAt >= 0 && applyAt > historyAt, "Zgodovina (ops.ImportRun) se mora zapisati PRED zapisom izdelkov, da se da povrniti tudi delni zapis.");
+Check(helper.Contains("if (historyId is null)", StringComparison.Ordinal), "Brez zgodovine se paket ne sme zapisati.");
+Check(ProductBulkEdit.ChunkSize is > 0 and <= 250, $"Paket mora biti majhen (validacija po paketu drži bazo); ChunkSize = {ProductBulkEdit.ChunkSize}.");
+var big = new ProductWorkbookPreview(
+  Enumerable.Range(1, 2021).Select(number => Row(number, "I" + number, sitesField, "videlektro", null)).ToList(),
+  [], [], [], NewAttributes: ["Novi atribut"]);
+var chunks = ProductBulkEdit.Chunks(big);
+Check(chunks.Count == (2021 + ProductBulkEdit.ChunkSize - 1) / ProductBulkEdit.ChunkSize, $"2.021 izdelkov gre v {chunks.Count} paketov.");
+Check(chunks.Sum(chunk => chunk.Rows.Count) == 2021 && chunks.All(chunk => chunk.Rows.Count <= ProductBulkEdit.ChunkSize),
+  "Paketi skupaj nosijo vse izdelke, nobeden ni večji od ChunkSize.");
+Check(chunks[0].Rows[0].ItemId == "I1" && chunks[^1].Rows[^1].ItemId == "I2021", "Vrstni red izdelkov ostane.");
+Check(chunks[0].NewAttributes?.Count == 1 && chunks.Skip(1).All(chunk => chunk.NewAttributes is { Count: 0 }),
+  "Nov atribut ustvari samo prvi paket, ne vsak.");
+Check(ProductBulkEdit.Remaining(TimeSpan.Zero, 0, 2021) == "", "Pred prvim paketom ni izmišljenega preostalega časa.");
+Check(ProductBulkEdit.Remaining(TimeSpan.FromMinutes(1), 200, 2021).Contains("min", StringComparison.Ordinal),
+  "Po prvem paketu napredek pove izmerjen preostali čas.");
+Check(helper.Contains("CancellationToken cancellationToken", StringComparison.Ordinal) && page.Contains("Prekliči zapis", StringComparison.Ordinal),
+  "Zapis se mora dati preklicati med paketi.");
+Check(helper.Contains("Paket {index + 1} od {chunks.Count}", StringComparison.Ordinal), "Napredek mora šteti pakete, da ne izgleda zamrznjeno.");
+
+// Sporočilo po zapisu ne sme obljubiti spleta atributu izven nabora.
+var outside = new ProductWorkbookColumn(ProductWorkbookContract.GroupAttributesOutside, "Barva svetlobe", "ProductAttribute.COLOR_TEMP", ProductWorkbookTarget.Pim);
+var inside = outside with { Group = "Atributi" };
+Check(!ProductBulkEdit.WebNote(outside).Contains("katalog.csv", StringComparison.Ordinal) && ProductBulkEdit.WebNote(outside).Contains("ne gre na splet", StringComparison.Ordinal),
+  "Atribut izven nabora: sporočilo pove, da ne gre na splet.");
+Check(ProductBulkEdit.WebNote(inside).Contains("katalog.csv", StringComparison.Ordinal), "Polje v naboru gre na splet ob izvozu katalog.csv.");
+Check(!page.Contains("na splet gre ob naslednjem izvozu katalog.csv.\";", StringComparison.Ordinal) && page.Contains("ProductBulkEdit.WebNote(", StringComparison.Ordinal),
+  "Stran mora sporočilo o spletu vzeti iz WebNote (glede na polje).");
+Check(Regex.Matches(page, ">S-popust …</button>").Count == 1, "Gumb »S-popust …« je na strani samo enkrat (v vrstici izbire).");
+Check(!Regex.IsMatch(Source("Components", "Pages", "Products.razor.css"), @"\.bulk-edit-table\s*\{[^}]*min-width:\s*36rem"),
+  "Tabela prej → potem ne sme imeti fiksne najmanjše širine (na ozkem zaslonu je bil stolpec Potem odrezan).");
+
 // --- 7. Model izbire -----------------------------------------------------------------------
 var selection = new PimRowSelection<string>();
 var pageRows = new[] { new KeyValuePair<string, string>("2|A", "A"), new KeyValuePair<string, string>("2|B", "B") };

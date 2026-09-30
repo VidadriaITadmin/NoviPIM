@@ -168,7 +168,12 @@
 .bulk-edit .field-error { color: var(--pim-bad-text); font-size: .8rem; font-weight: 600; margin: .5rem 0 0; }
 .bulk-edit-question { color: var(--pim-text-strong); font-size: .95rem; line-height: 1.5; margin: 0 0 .4rem; }
 .bulk-edit-orgs { color: var(--pim-text-soft); display: flex; flex-wrap: wrap; font-size: .85rem; gap: .25rem 1.25rem; list-style: none; margin: 0 0 .6rem; padding: 0; }
-.bulk-edit-table { min-width: 36rem; }
+/* Preverjanje #10: na ozkem zaslonu je bil stolpec »Potem« odrezan (min-width 36rem v kartici, ki ne drsi).
+   Zdaj se tabela prilagodi širini: stalna razdelitev stolpcev, dolge vrednosti se prelomijo. */
+.bulk-edit { min-width: 0; max-width: 100%; }
+.bulk-edit-table { table-layout: fixed; width: 100%; }
+.bulk-edit-table th:nth-child(1), .bulk-edit-table th:nth-child(2) { width: 20%; }
+.bulk-edit-table th:nth-child(3), .bulk-edit-table th:nth-child(4) { width: 30%; }
 .bulk-edit-table td { overflow-wrap: anywhere; }
 
 /* Kartica se nalaga vec kot trenutek; do takrat mora seznam povedati, da se odpira. */

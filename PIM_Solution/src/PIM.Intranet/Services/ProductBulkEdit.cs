@@ -50,9 +50,56 @@ public static class ProductBulkEdit
 
   public sealed record Sample(string OrganizationName, string ItemId, string? Before, string After);
 
-  /// <param name="HistoryId">Zapis na /uvozi/{Id}; null, če ni bilo sprememb ali zgodovina ni uspela.</param>
+  /// <param name="HistoryId">Zapis na /uvozi/{Id}; null, če ni bilo sprememb.</param>
   /// <param name="Failure">Zapis se je ustavil; kar je zapisano, je v zgodovini in se da povrniti.</param>
-  public sealed record Result(ProductWorkbookOutcome? Outcome, long? HistoryId, int Withdrawn, string? Failure);
+  /// <param name="Done">Izdelkov v paketih, ki so se zapisali (vsi, razen ob preklicu ali napaki).</param>
+  /// <param name="Total">Izdelkov v predogledu.</param>
+  /// <param name="Cancelled">Uporabnik je zapis preklical med paketi.</param>
+  public sealed record Result(ProductWorkbookOutcome? Outcome, long? HistoryId, int Withdrawn, string? Failure,
+    int Done = 0, int Total = 0, bool Cancelled = false);
+
+  /// <summary>
+  /// Koliko izdelkov gre v en zapis. Vsak zapis (pim.Save*Bulk) po MERGE-u validira svoje izdelke
+  /// (val.RunValidationForProducts); pri 1.000 izdelkih je to trajalo 9,5 min in ves čas obremenilo
+  /// bazo, da so druge seje čakale na zaklepe (preverjanje #10, 30. 9.; hitrost validacije je naloga #105).
+  /// Manjši paketi: krajša obremenitev naenkrat, napredek po paketih, preklic med paketi.
+  /// </summary>
+  public const int ChunkSize = 200;
+
+  /// <summary>Nad toliko izdelki predogled opozori, da zapis traja dlje (validacija po paketih).</summary>
+  public const int LargeBatch = 500;
+
+  /// <summary>Predogled, razrezan na pakete po <paramref name="size"/> izdelkov (vrstni red ostane).</summary>
+  public static IReadOnlyList<ProductWorkbookPreview> Chunks(ProductWorkbookPreview preview, int size = ChunkSize)
+  {
+    ArgumentNullException.ThrowIfNull(preview);
+    if (size <= 0) throw new ArgumentOutOfRangeException(nameof(size));
+    return preview.Rows.Chunk(size)
+      .Select((rows, index) => preview with
+      {
+        Rows = rows,
+        // Nove atribute ustvari samo prvi paket (šifrant enkrat, ne na paket).
+        NewAttributes = index == 0 ? preview.NewAttributes : [],
+      })
+      .ToList();
+  }
+
+  /// <summary>
+  /// Ali polje gre na splet: atribut pod skupino »izven nabora« ne gre (out.GetExportRows), zato mu
+  /// sporočilo po zapisu ne sme obljubiti katalog.csv.
+  /// </summary>
+  public static bool GoesToWeb(ProductWorkbookColumn column) =>
+    !string.Equals(column.Group, ProductWorkbookContract.GroupAttributesOutside, StringComparison.Ordinal);
+
+  /// <summary>Stavek »kaj bo sistem naredil naprej« po zapisu tega polja.</summary>
+  public static string WebNote(ProductWorkbookColumn column) => GoesToWeb(column)
+    ? "Na splet gre ob naslednjem izvozu katalog.csv."
+    : "Atribut ni v naboru kategorije, zato ne gre na splet; v nabor ga dodaš na Nastavitve → Nabori atributov.";
+
+  /// <summary>Besedila in atributi se validirajo že v zapisovalni proceduri (pim.Save*Bulk).</summary>
+  static bool ValidatedOnWrite(string fieldKey) =>
+    fieldKey.StartsWith(ProductWorkbookContract.TextFieldPrefix, StringComparison.Ordinal)
+    || fieldKey.StartsWith(ProductWorkbookContract.AttributeFieldPrefix, StringComparison.Ordinal);
 
   /// <summary>Ali sme paketno urejanje ponuditi to polje (glej opombo razreda).</summary>
   public static bool IsEditable(ProductWorkbookColumn column) =>
@@ -173,14 +220,22 @@ public static class ProductBulkEdit
 
   /// <summary>
   /// Zapis. Pravico preveri tukaj (CatalogWrite) IN zapisovalne procedure v ProductEditService — skrit
-  /// gumb je samo videz. Zapis ni transakcija čez ves paket (ApplyAsync piše po 1.000 izdelkov): če se
-  /// ustavi, se vseeno zabeleži v zgodovino, ker povratek (PlanUndoAsync) povrne samo celice, ki res
-  /// nosijo novo vrednost — torej tudi delni zapis. Po zapisu se kandidati za umik s spleta (251)
-  /// ponovno validirajo, kot pri uvozu.
+  /// gumb je samo videz.
+  ///
+  /// Vrstni red je namenski (preverjanje #10, 30. 9.: intranet je med 20-minutnim zapisom izstopil in v
+  /// bazi je ostalo 2.000 vrednosti brez zapisa na /uvozi):
+  ///   1. NAJPREJ zgodovina (ops.ImportRun s celotnim prej → potem). Povratek (PlanUndoAsync) povrne samo
+  ///      celice, ki res nosijo novo vrednost, zato zapis pred pisanjem pokrije tudi delni zapis — ob
+  ///      preklicu, napaki ali izpadu procesa. Brez zgodovine se ne zapiše nič.
+  ///   2. Zapis po paketih po <see cref="ChunkSize"/> izdelkov; po vsakem paketu napredek s preostalim
+  ///      časom (izmerjenim, ne ocenjenim vnaprej) in preverjanje umika s spleta (251) za ta paket.
+  ///      Besedil in atributov ne validira še enkrat — to je že naredila zapisovalna procedura.
+  ///   3. Preklic velja med paketi: paket, ki se piše, se dokonča (MERGE + validacija), naslednji ne začne.
   /// </summary>
   public static async Task<Result> ApplyAsync(
     PimWriteGuard guard, ProductWorkbookService workbook, ImportHistoryService history, WebWithdrawalService withdrawals,
-    ProductWorkbookPreview preview, string actor, string? note, IProgress<string>? progress = null)
+    ProductWorkbookPreview preview, string actor, string? note, IProgress<string>? progress = null,
+    CancellationToken cancellationToken = default)
   {
     ArgumentNullException.ThrowIfNull(guard);
     ArgumentNullException.ThrowIfNull(preview);
@@ -190,47 +245,83 @@ public static class ProductBulkEdit
     if (preview.Rows.Any(row => row.SaopValues.Count > 0))
       throw new InvalidOperationException("Paketno urejanje ne piše polj SAOP; uporabi uvoz Excela (/izdelki/uvoz).");
 
-    ProductWorkbookOutcome? outcome = null;
+    var total = preview.Rows.Count;
+    progress?.Report("Zapisujem zgodovino (prej → potem), da se bo paket dalo povrniti …");
+    var historyId = await history.RecordAsync(ImportKinds.Products, HistoryTitle, note, actor,
+      total, 0, null, preview.Problems, null, ImportHistoryService.FromProducts(preview));
+    if (historyId is null)
+      throw new InvalidOperationException("Zgodovine uvozov ni bilo mogoče zapisati, zato se ni zapisalo nič (brez nje paketa ne bi mogel povrniti). Poskusi znova čez nekaj minut.");
+
+    var revalidate = !preview.Rows.SelectMany(row => row.PimValues.Keys).All(ValidatedOnWrite);
+    var chunks = Chunks(preview);
+    var clock = System.Diagnostics.Stopwatch.StartNew();
+    var done = 0; var touched = 0; var changes = 0; var withdrawn = 0;
+    var problems = new List<string>();
+    var created = new List<string>();
     string? failure = null;
-    try
+    var cancelled = false;
+
+    for (var index = 0; index < chunks.Count; index++)
     {
-      outcome = await workbook.ApplyAsync(preview, actor, note, progress);
-    }
-    catch (Exception exception) when (exception is not UnauthorizedAccessException)
-    {
-      failure = exception.Message;
+      if (cancellationToken.IsCancellationRequested) { cancelled = true; break; }
+      var chunk = chunks[index];
+      var prefix = $"Paket {index + 1} od {chunks.Count}: zapisanih {done:N0} od {total:N0} izdelkov{Remaining(clock.Elapsed, done, total)}";
+      progress?.Report(prefix + " — zapisujem in validiram …");
+      var inner = progress is null ? null : new InlineProgress(text => progress.Report($"{prefix} — {text}"));
+      try
+      {
+        // Brez žetona preklica: paket, ki se je začel, se dokonča (zapis + validacija skupaj).
+        var outcome = await workbook.ApplyAsync(chunk, actor, note, inner, CancellationToken.None);
+        touched += outcome.RowsTouched;
+        changes += outcome.PimChanges;
+        problems.AddRange(outcome.Problems);
+        created.AddRange(outcome.CreatedAttributes ?? []);
+      }
+      catch (Exception exception) when (exception is not UnauthorizedAccessException)
+      {
+        failure = $"paket {index + 1} od {chunks.Count} ni zapisan — {exception.Message}";
+        break;
+      }
+      done += chunk.Rows.Count;
+
+      try
+      {
+        progress?.Report($"Paket {index + 1} od {chunks.Count}: preverjam umik s spleta …");
+        foreach (var organization in chunk.Rows.GroupBy(row => row.OrganizationId))
+          withdrawn += (await withdrawals.AfterChangeByItemsAsync(organization.Key,
+            organization.Select(row => row.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            WithdrawalSource, actor, revalidate)).Count;
+      }
+      catch (Exception exception)
+      {
+        problems.Add("Preverjanje umika s spleta ni uspelo: " + exception.Message);
+      }
     }
 
-    var problems = preview.Problems.Concat(outcome?.Problems ?? []).Distinct(StringComparer.Ordinal).ToList();
-    if (failure is not null)
-      problems.Insert(0, "Zapis se je ustavil: " + failure + " Kar je bilo zapisano, lahko povrneš s »Povrni«.");
-    progress?.Report("Zapisujem zgodovino (prej → potem) …");
-    long? historyId = null;
-    try
-    {
-      historyId = await history.RecordAsync(ImportKinds.Products, HistoryTitle, note, actor,
-        outcome?.RowsTouched ?? preview.Rows.Count, 0, outcome?.OutboundBatchIds, problems, null,
-        ImportHistoryService.FromProducts(preview));
-    }
-    catch (Exception exception)
-    {
-      failure ??= "Zgodovina ni zapisana: " + exception.Message;
-    }
+    if (cancelled)
+      failure = $"Preklicano: zapisanih {done:N0} od {total:N0} izdelkov, ostali niso spremenjeni. Zapisane povrneš s »Povrni«.";
+    else if (failure is not null)
+      failure = $"Zapis se je ustavil po {done:N0} od {total:N0} izdelkih: {failure}. Zapisane povrneš s »Povrni«.";
 
-    var withdrawn = 0;
-    try
-    {
-      progress?.Report("Preverjam, ali kak izdelek po spremembi ni več veljaven za splet …");
-      foreach (var organization in preview.Rows.GroupBy(row => row.OrganizationId))
-        withdrawn += (await withdrawals.AfterChangeByItemsAsync(organization.Key,
-          organization.Select(row => row.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-          WithdrawalSource, actor, revalidate: true)).Count;
-    }
-    catch (Exception exception)
-    {
-      failure ??= "Preverjanje umika s spleta ni uspelo: " + exception.Message;
-    }
-    return new(outcome, historyId, withdrawn, failure);
+    var aggregate = new ProductWorkbookOutcome(touched, changes, 0, 0, 0, [],
+      problems.Distinct(StringComparer.Ordinal).ToList(), CreatedAttributes: created);
+    return new(aggregate, historyId, withdrawn, failure, done, total, cancelled);
+  }
+
+  /// <summary>» · še približno 4 min« iz izmerjenega tempa dosedanjih paketov; prazno pred prvim.</summary>
+  public static string Remaining(TimeSpan elapsed, int done, int total)
+  {
+    if (done <= 0 || done >= total || elapsed <= TimeSpan.Zero) return "";
+    var seconds = elapsed.TotalSeconds / done * (total - done);
+    return seconds < 90
+      ? $" · še približno {Math.Max(10, (int)Math.Round(seconds / 10) * 10)} s"
+      : $" · še približno {(int)Math.Ceiling(seconds / 60)} min";
+  }
+
+  /// <summary>Progress brez SynchronizationContext: sporočilo gre takoj naprej (stran ga sama prenese v krog).</summary>
+  sealed class InlineProgress(Action<string> report) : IProgress<string>
+  {
+    public void Report(string value) => report(value);
   }
 
   /// <summary>Kratek prikaz vrednosti v predogledu (»-« = izprazni, 1/0 = Da/Ne pri D/N poljih).</summary>
