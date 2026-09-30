@@ -1,6 +1,8 @@
 @page "/kakovost/artikli"
 @attribute [Authorize]
-@rendermode InteractiveServer
+@* Naloga #102: brez predupodabljanja. Prej je stran intranet.GetQualityProducts (pripravljenost ~160.000
+   artiklov) klicala dvakrat — ob predupodabljanju in ob interaktivnem izrisu. Gola /kakovost preusmeri sem. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using PIM.Intranet.Services
 @inject QualityReadService Quality
 @inject QualityWriteService QualityWrite
