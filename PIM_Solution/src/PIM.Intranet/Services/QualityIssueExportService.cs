@@ -12,8 +12,12 @@ namespace PIM.Intranet.Services;
 /// barvo cele vrstice: rdeca (WorkbookCellTone.Missing) za napako, ki blokira, bleda oranzna
 /// (WorkbookCellTone.Warning) za opozorilo — enako kot zaslonski prikaz (.issue-severity).
 /// </summary>
-public sealed class QualityIssueExportService(QualityReadService quality, GovernanceReadService governance)
+public sealed class QualityIssueExportService(
+  QualityReadService quality, GovernanceReadService governance, IConfiguration configuration)
 {
+  string ConnectionString => ConnectionStringResolver.Resolve(configuration)
+    ?? throw new InvalidOperationException("Povezava PIM ni nastavljena.");
+
   /// <summary>Fizična meja lista .xlsx, ne poslovna — glej WorkbookTable.MaxRows (2026-09-17).</summary>
   public const int MaxRows = WorkbookTable.MaxRows;
 
@@ -24,7 +28,9 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
   [
     new("Šifra artikla", Width: 18),
     new("EAN", Width: 16),
-    new("Naziv (spletni, sicer ERP)", Width: 46), // #62: vir je mešan (GetQualityIssues), zato naslov pove, kateri
+    // #99: dva ločena naziva kot pri cenah (prej en stolpec »spletni, sicer ERP« iz GetQualityIssues).
+    new(ProductTitleLookup.WebHeader, Width: 46),
+    new(ProductTitleLookup.ErpHeader, Width: 46),
     new("Nivo", Width: 16),
     new("Profil", Width: 16),
     new("Polje", Width: 24),
@@ -69,6 +75,7 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
     }
 
     var products = page.Products.ToDictionary(product => product.ProductId);
+    var titles = await ProductTitleLookup.ByProductIdAsync(ConnectionString, page.Products.Select(product => product.ProductId), cancellationToken);
     var profileByCode = (await governance.GetValidationProfilesAsync(filter.OrganizationId))
       .ToDictionary(profile => profile.ProfileCode, StringComparer.OrdinalIgnoreCase);
 
@@ -82,7 +89,8 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
 
       IReadOnlyList<object?> line =
       [
-        Cell(product?.ItemId, tone), Cell(product?.Ean, tone), Cell(product?.Name, tone),
+        Cell(product?.ItemId, tone), Cell(product?.Ean, tone),
+        Cell(ProductTitleLookup.Find(titles, issue.ProductId).WebTitle, tone), Cell(ProductTitleLookup.Find(titles, issue.ProductId).ErpTitle, tone),
         Cell(layers.Count == 0 ? "—" : string.Join(" · ", layers.Select(ValidationLayer.Label)), tone),
         Cell(issue.ProfileCode, tone), Cell(issue.FieldCode ?? issue.IssueCode, tone),
         Cell(SeverityLabel(issue.Severity), tone), Cell(BlocksLabel(issue.BlocksErp, issue.BlocksWeb), tone),

@@ -400,7 +400,7 @@ public sealed class AnalyticsService(IConfiguration configuration, PimWriteGuard
     WorkbookColumn Date(string header, string? group = null) => new(header, WorkbookCellKind.DateTime, 12, group);
     IReadOnlyList<WorkbookColumn> columns =
     [
-      Text("Šifra", 16, "Artikel"), Text("Naziv (ERP, sicer spletni)", 40, "Artikel"), Text("EAN", 15, "Artikel"), Text("Dobavitelj", 12, "Artikel"),
+      Text("Šifra", 16, "Artikel"), Text(ProductTitleLookup.WebHeader, 40, "Artikel"), Text(ProductTitleLookup.ErpHeader, 40, "Artikel"), Text("EAN", 15, "Artikel"), Text("Dobavitelj", 12, "Artikel"),
       Text("Ime dobavitelja", 28, "Artikel"), Text("ABC"), Text("XYZ"), Text("Signal", 14),
       Number("Zaloga", 10, "Zaloga"), Number("Razpoložljivo", 12, "Zaloga"), Number("Naročeno pri dobaviteljih", 14, "Zaloga"), Date("Naslednja dobava", "Zaloga"),
       Number("Nabavna cena", 12, "Zaloga"), Number("Vrednost zaloge", 14, "Zaloga"),
@@ -412,9 +412,11 @@ public sealed class AnalyticsService(IConfiguration configuration, PimWriteGuard
       Number("Večkratnik", 10, "Predlog"), Number("Predlog količine", 12, "Predlog"), Number("Predlog vrednost €", 12, "Predlog"),
       Text("Razlog", 30, "Predlog"), Number("Presežek količina", 12, "Presežek"), Number("Presežek vrednost €", 12, "Presežek"),
     ];
+    // #99: dva ločena naziva kot pri cenah (ana.ItemMetric.ItemName je »ERP, sicer spletni«) — en paket, ne na vrstico.
+    var titles = await ProductTitleLookup.ByProductIdAsync(ConnectionString, page.Rows.Select(row => row.ProductId), ct);
     var rows = page.Rows.Select(row => (IReadOnlyList<object?>)
     [
-      row.ItemId, row.ItemName, row.Ean, row.SupplierId, row.SupplierName, row.AbcClass, row.XyzClass, AnalyticsSignals.Find(row.Signal).Label,
+      row.ItemId, ProductTitleLookup.Find(titles, row.ProductId).WebTitle, ProductTitleLookup.Find(titles, row.ProductId).ErpTitle, row.Ean, row.SupplierId, row.SupplierName, row.AbcClass, row.XyzClass, AnalyticsSignals.Find(row.Signal).Label,
       row.Stock, row.Available, row.OnOrder, row.NextDeliveryDate, row.UnitCost, row.StockValue,
       row.Sales30Qty, row.Sales90Qty, row.Sales365Qty, row.Sales365Net, row.Sales365Margin, row.TrendPct, row.YoyPct, row.LastSaleDate, row.CoverDays,
       row.LeadTimeDays, LeadTimeSourceLabel(row.LeadTimeSource), Math.Round(row.SafetyStock, 1), Math.Round(row.ReorderPoint, 1),
