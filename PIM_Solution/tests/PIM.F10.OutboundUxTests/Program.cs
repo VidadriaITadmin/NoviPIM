@@ -127,8 +127,8 @@ foreach (var handler in new[] { "ApproveSelected", "CancelSelected", "VerifyEcho
   foreach (Match button in buttons)
     Assert(Regex.IsMatch(button.Value, "disabled=\"@\\(?[^\"]*ActionBusy"), "Dejanje mora biti med izvajanjem onemogočeno: " + button.Value);
 }
-var rowActions = Regex.Matches(markup, "<button[^>]*@onclick=\"\\(\\)=>(Approve|Cancel|RetryArticle|RetryMessage|SendNow|OpenXmlAsync)\\([^>]*>");
-Assert(rowActions.Count == 8, "Vrstična dejanja obeh tabel morajo ostati: pet pri artiklu, tri pri sporočilu po polju.");
+var rowActions = Regex.Matches(markup, "<button[^>]*@onclick=\"\\(\\)=>(Approve|Cancel|RetryArticle|RetryMessage|SendNow|OpenXmlAsync|OpenError|OpenErrorForRow)\\([^>]*>");
+Assert(rowActions.Count == 10, "Vrstična dejanja obeh tabel morajo ostati: šest pri artiklu, štiri pri sporočilu po polju.");
 foreach (Match button in rowActions)
   Assert(Regex.IsMatch(button.Value, "aria-label=\"[^\"]*@\\w+\\.EntityKey"),
     "Ponovljeno vrstično dejanje mora imeti razločljiv aria-label s šifro artikla: " + button.Value);
