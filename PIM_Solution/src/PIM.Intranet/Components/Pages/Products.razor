@@ -408,10 +408,10 @@
         @foreach (var batch in BulkBatches)
         {
           <li>
-            <span>#@batch.BatchId · @batch.CreatedUtc.ToLocalTime().ToString("d. M. yyyy HH:mm") · @batch.OrganizationName · @batch.TargetLabel · @batch.ActionLabel · @PimFormat.Count(batch.ChangedCount, "izdelek", "izdelka", "izdelki", "izdelkov")</span>
+            <span>#@batch.BatchId · @batch.CreatedUtc.ToPimLocal().ToString("d. M. yyyy HH:mm") · @batch.OrganizationName · @batch.TargetLabel · @batch.ActionLabel · @PimFormat.Count(batch.ChangedCount, "izdelek", "izdelka", "izdelki", "izdelkov")</span>
             @if (batch.UndoneUtc is { } undone)
             {
-              <span class="muted"> · razveljavljeno @undone.ToLocalTime().ToString("d. M. HH:mm") (@batch.UndoneBy)</span>
+              <span class="muted"> · razveljavljeno @undone.ToPimLocal().ToString("d. M. HH:mm") (@batch.UndoneBy)</span>
             }
             else
             {
