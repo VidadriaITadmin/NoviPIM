@@ -188,7 +188,7 @@ foreach ($p in $xprojekti) {
     if ($Verbose_) { Write-Host $xizhod }
     else {
       # Zadnje vrstice so pri xUnit samo sklad klicev; bistvo (kateri test, katera napaka) je vise.
-      $bistvo = $xizhod -split "`n" | Where-Object { $_ -match '^\s+Failed |Error Message:|Exception :|Assert\.|^Failed!|\[FAIL\]' } | Select-Object -First 30
+      $bistvo = $xizhod -split "`n" | Where-Object { $_ -match '^\s+Failed |Error Message:|Exception :|Assert\.|^\s*Expected:|^\s*Actual:|^Failed!|\[FAIL\]' } | Select-Object -First 30
       Write-Host (($bistvo | ForEach-Object { $_.TrimEnd() }) -join "`n")
     }
   } else {
