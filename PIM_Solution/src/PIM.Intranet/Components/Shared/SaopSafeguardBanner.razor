@@ -19,16 +19,42 @@
   [Parameter] public int? OrganizationId { get; set; }
 
   IReadOnlyList<SaopHeldRow> Items = [];
-  int? loadedVersion;
+  (int Version, int? OrganizationId)? loadedKey;
+  bool rendered, loading;
   bool Busy, Hidden;
   string? Message, Error;
 
+  /* 46: seznam se bere šele po prvem izrisu — stran (tudi predupodabljanje) nikoli ne čaka na pasico.
+     Nov Version (po odobritvi) ali drugo podjetje seznam prebere znova. */
   protected override async Task OnParametersSetAsync()
   {
-    if (loadedVersion == Version) return;
-    loadedVersion = Version;
-    Hidden = false;
-    await LoadAsync();
+    if (rendered && loadedKey != (Version, OrganizationId)) await ReloadAsync();
+  }
+
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (!firstRender) return;
+    rendered = true;
+    loadedKey = null;
+    await ReloadAsync();
+  }
+
+  async Task ReloadAsync()
+  {
+    if (loading) return;
+    loading = true;
+    try
+    {
+      /* parametri so se med branjem lahko spet spremenili — beri, dokler seznam ne ustreza zadnjim */
+      while (loadedKey != (Version, OrganizationId))
+      {
+        loadedKey = (Version, OrganizationId);
+        Hidden = false;
+        await LoadAsync();
+      }
+    }
+    finally { loading = false; }
+    await InvokeAsync(StateHasChanged);
   }
 
   async Task LoadAsync()
