@@ -1045,6 +1045,63 @@
       PendingStatus: LiveOverlay(fieldKey)?.Status);
   }
 
+  /// <summary>
+  /// 116: prevedljiv atribut ima v canon.ProductAttribute vrstico na jezik (124) z ISTIM ključem polja
+  /// »ProductAttribute.&lt;koda&gt;«. Kartica je iz vsake vrstice naredila svoje polje, dva soseda z istim
+  /// @key pa sta sesula krog (izdelek 504, »Oblika svetilke« sl + en). Zdaj: ena vrstica na atribut je
+  /// urejljiva (slovenska, sicer brez jezika), ostali jeziki so samo za branje z oznako jezika in lastnim
+  /// ključem. Urejljiva jezikovna vrstica se shrani samo v svojem jeziku (pim.SaveProductAttributesBulk,
+  /// 277) — pim.SaveProductAttributes jezika ne pozna in bi povozil vse jezike.
+  /// </summary>
+  static ProductCardAttribute PrimaryAttribute(IReadOnlyList<ProductCardAttribute> rows) => ProductCardAttributes.Primary(rows);
+
+  /// <summary>Vrstice enega atributa (vsi jeziki).</summary>
+  IReadOnlyList<ProductCardAttribute> StoredAttributes(string attributeCode) => Detail?.Attributes
+    .Where(row => string.Equals(row.AttributeCode, attributeCode, StringComparison.OrdinalIgnoreCase))
+    .ToList() ?? [];
+
+  /// <summary>Vrednost atributa za prikaz v enem polju: slovenska vrstica, sicer brez jezika, sicer prva.</summary>
+  string? StoredAttributeValue(string attributeCode)
+  {
+    var rows = StoredAttributes(attributeCode);
+    return rows.Count == 0 ? null : PrimaryAttribute(rows).Value;
+  }
+
+  /// <summary>
+  /// Polja enega atributa: eno urejljivo (glej <see cref="PrimaryAttribute"/>) in bralna za ostale jezike.
+  /// Brez shranjene vrstice ali z eno samo vrstico ostane dosedanje eno polje.
+  /// </summary>
+  IEnumerable<ProductChannelField> AttributeFields(string attributeCode, IReadOnlyList<ProductCardAttribute> rows, string group,
+    string? label = null, bool required = false)
+  {
+    var primary = rows.Count == 0 ? null : PrimaryAttribute(rows);
+    var field = AttributeField(attributeCode, primary?.Value, group);
+    field = field with { Label = label ?? field.Label, Required = field.Required || required };
+    if (rows.Count > 1 && primary is not null)
+    {
+      var language = string.IsNullOrWhiteSpace(primary.LanguageCode) ? null : primary.LanguageCode.Trim().ToLowerInvariant();
+      if (language is null || field.Edit != ProductFieldEdit.Attribute)
+        // Vrstice brez jezika ni mogoče zapisati, ne da bi povozili prevode; SAOP pot jezika ne pozna.
+        field = field with { Edit = ProductFieldEdit.None,
+          LockReason = "Atribut ima vrednosti v več jezikih — uredi ga v delovnem listu (Excel), kjer ima vsak jezik svojo vrednost." };
+      else
+        field = field with { Label = $"{field.Label} · {language}", Language = language };
+    }
+    yield return field;
+
+    if (primary is null) yield break;
+    foreach (var row in rows.Where(row => row.ProductAttributeId != primary.ProductAttributeId)
+      .OrderBy(row => row.LanguageCode, StringComparer.OrdinalIgnoreCase))
+    {
+      var language = string.IsNullOrWhiteSpace(row.LanguageCode) ? "brez jezika" : row.LanguageCode.Trim().ToLowerInvariant();
+      yield return new ProductChannelField($"{attributeCode} · {language}",
+        ProductCardAttributes.ReadOnlyKey(row),
+        row.Value, "PIM", null, null, false, true, ProductFieldEdit.None, "text",
+        Language: row.LanguageCode, AttributeCode: attributeCode, Hint: group,
+        LockReason: $"Prevod ({language}) je tu samo za branje; uredi ga v delovnem listu (Excel), kjer ima vsak jezik svojo vrednost.");
+    }
+  }
+
   /// <summary>Atributi, dodani z »Dodaj atribut«, ki še nimajo vrednosti; po nalaganju kartice se pobrišejo.</summary>
   readonly List<string> AddedAttributes = [];
   IReadOnlyList<CategoryTreeService.AttributeOptionRow> AttributeOptions = [];
@@ -1210,8 +1267,7 @@
         // polje ni bilo v registru, zato ga ni bilo mogoče urediti, in kazalo je »ni v bralnem modelu«.
         Channel("Izloči iz rezervacije zaloge", "Planning.ExcludeQtyReservation", YesNo(ReservationExcluded), slovenia),
         Channel("Garancija", "ProductAttribute.Garancija",
-          Detail.Attributes.FirstOrDefault(row => string.Equals(
-            row.AttributeCode, "Garancija", StringComparison.OrdinalIgnoreCase))?.Value, slovenia),
+          StoredAttributeValue("Garancija"), slovenia),
 
         TextField("ERP naziv 2 (sl)", "TITLE_ERP2", "sl", null, extra),
         TextField("Ime za iskanje", "SEARCH_NAME", "sl", null, extra),
@@ -1347,21 +1403,22 @@
         const string outsideSet = "Atributi izven nabora — ne gredo na splet";
         foreach (var setRow in inSet.Values.OrderBy(row => row.Level == "REQUIRED" ? 0 : 1).ThenBy(row => row.AttributeName, StringComparer.CurrentCulture))
         {
-          var stored = Detail.Attributes.FirstOrDefault(row => string.Equals(row.AttributeCode, setRow.AttributeName, StringComparison.OrdinalIgnoreCase));
-          var attributeField = AttributeField(setRow.AttributeName, stored?.Value, categorySet);
-          rows.Add(attributeField with { Label = $"{setRow.AttributeName} ({(setRow.Level == "REQUIRED" ? "obvezen" : "priporočen")})",
-            Required = attributeField.Required || setRow.Level == "REQUIRED" });
+          rows.AddRange(AttributeFields(setRow.AttributeName, StoredAttributes(setRow.AttributeName), categorySet,
+            $"{setRow.AttributeName} ({(setRow.Level == "REQUIRED" ? "obvezen" : "priporočen")})", setRow.Level == "REQUIRED"));
         }
-        rows.AddRange(Detail.Attributes
+        // 116: po kodi združeno — prevedljiv atribut ima vrstico na jezik z istim ključem polja.
+        foreach (var group in Detail.Attributes
           .Where(row => !inSet.ContainsKey(row.AttributeCode))
-          .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
-          .Select(row => AttributeField(row.AttributeCode, row.Value, outsideSet)));
+          .GroupBy(row => row.AttributeCode, StringComparer.OrdinalIgnoreCase)
+          .OrderBy(group => group.Key, StringComparer.CurrentCulture))
+          rows.AddRange(AttributeFields(group.Key, group.ToList(), outsideSet));
       }
       else
       {
-        rows.AddRange(Detail.Attributes
-          .OrderBy(row => row.AttributeCode, StringComparer.CurrentCulture)
-          .Select(row => AttributeField(row.AttributeCode, row.Value, attributes)));
+        foreach (var group in Detail.Attributes
+          .GroupBy(row => row.AttributeCode, StringComparer.OrdinalIgnoreCase)
+          .OrderBy(group => group.Key, StringComparer.CurrentCulture))
+          rows.AddRange(AttributeFields(group.Key, group.ToList(), attributes));
       }
 
       // »Dodaj atribut« (2026-09-28): atribut, ki ga izdelek še nima in ga nabor ne predvideva, dobi prazno
@@ -1705,7 +1762,20 @@
         foreach (var field in texts) saved.Add(field.FieldKey);
       }
 
-      var attributes = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute).ToList();
+      // 116: jezikovna vrstica prevedljivega atributa gre samo v svoj jezik (277). pim.SaveProductAttributes
+      // jezika ne pozna in bi isto vrednost zapisal v vse jezike (slovenska »Neusmerjena« tudi v angleščino).
+      var translated = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute && field.Language is not null).ToList();
+      if (translated.Count > 0)
+      {
+        var result = await Edits.SaveAttributesBulkAsync(OrganizationId,
+          translated.Select(field => new ProductAttributeBulkEdit(ProductId, field.AttributeCode!, Drafts[field.FieldKey], field.Language)),
+          actor, note);
+        outcome.Add($"{result.ChangedCount:N0} lastnosti shranjenih v svojem jeziku — velja takoj");
+        foreach (var skip in result.Skipped) outcome.Add($"Lastnosti niso shranjene — {skip.Reason}");
+        if (result.Skipped.Count == 0) foreach (var field in translated) saved.Add(field.FieldKey);
+      }
+
+      var attributes = DraftFields.Values.Where(field => field.Edit == ProductFieldEdit.Attribute && field.Language is null).ToList();
       if (attributes.Count > 0)
       {
         var result = await Edits.SaveAttributesAsync(OrganizationId, ProductId,
