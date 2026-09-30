@@ -2432,6 +2432,25 @@ Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`,
 
 **Objekti:** `val.SyncPackageOrderHolds`, podatki `val.ProductHold.Reason` (samo aktivni zadržki »pravilo 302«). **Ročni korak:** ne. **Vrstni red:** zahteva 302. **Povratek:** ponovno izvedi blok 4 iz 302. **PRD:** skupaj s 302 in 303, šele po lastnikovi potrditvi.
 
+## Hitra sled sprememb (migracija 310_SledSpremembHitrejse, 2026-09-30, naloga #44)
+
+Stran `/sistem/sled` se ni naložila: `intranet.GetUserActivityTrail` (172) je ob vsakem odprtju prebrala celo `pim.ProductFieldHistory` (2,7 milijona vrstic) in jo šele na koncu razvrstila za TOP.
+
+- Nov indeks `IX_PimProductFieldHistory_Changed` na `pim.ProductFieldHistory (ChangedAtUtc DESC) INCLUDE (ChangeBatchId, OrganizationId, ItemID, FieldKey, Owner)`; `IF NOT EXISTS`, `ONLINE = ON` samo na izdajah, ki to znajo (EngineEdition 3/5/8).
+- `intranet.GetUserActivityTrail` (CREATE OR ALTER, isti parametri, isti stolpci, istih 7 virov, isto iskanje): vsaka veja vzame največ `@Take` najnovejših ustreznih vrstic (filter uporabnika in iskanja je v veji), nato združitev in TOP. Polja izdelkov v dveh korakih (`#polje`: ChangeId, nato vrednosti za največ `@Take` vrstic). Pri iskanju se LIKE za uporabnika izračuna enkrat na paket (`#paket`), za opis »Polje X (lastnik)« enkrat na par polje/lastnik (`#opis`), po vrsticah samo za šifro; prazen način se preskoči.
+- Meritev na DEV (obremenjen strežnik): 7 dni / 500 vrstic 0,13–0,27 s (prej 6 s topel, 77–108 s hladen predpomnilnik); leto + iskanje »cena« 0,7 s (prej 12 s); leto + šifra »NW.79« 1,7–4,3 s. Primerjava z definicijo 172 v 10 scenarijih (obdobje, uporabnik, iskanje po uporabniku/šifri/opisu/alarmu/urniku/B2B): enake vrstice (razlika le v vrstnem redu vrstic s popolnoma enakim časom na meji TOP, kar je bilo nedoločeno že prej).
+
+**Objekti:** indeks `IX_PimProductFieldHistory_Changed`, `intranet.GetUserActivityTrail`. **Podatki:** nič. **Ročni korak:** na PRD uveljavi izven urnikov uvozov — gradnja indeksa traja od nekaj sekund do nekaj minut; na izdaji brez ONLINE (Standard/Express) je med gradnjo pisanje v `pim.ProductFieldHistory` blokirano. **Strošek:** en indeks več pri vsakem zapisu zgodovine polj (~60.000 vrstic na dan ob uvozih). **Povratek:** ponovno izvedi razdelek 8 iz `172_AdminConsole.sql` in `DROP INDEX IX_PimProductFieldHistory_Changed ON pim.ProductFieldHistory`.
+## Indeksa zgodovine za razveljavitev in brisanje artikla (migracija 313_IndeksUndoOfChangeId, 2026-09-30, naloga #82)
+
+`pim.UndoProductField` in `pim.UndoProductBatch` (037) preverjata, ali je sprememba že razveljavljena (`WHERE UndoOfChangeId = @ChangeId`). Na tem stolpcu ni bilo indeksa, zato je vsaka razveljavitev pregledala celo `pim.ProductFieldHistory` (~2,7 mio vrstic; DEV 88.730 logičnih branj) in čakala na vsako tujo odprto transakcijo, ki piše zgodovino. Enak pregled je delal tuji ključ `FK_PimProductFieldHistory_Undo` ob brisanju vrstic zgodovine, `FK_PimProductFieldHistory_Product` pa ob brisanju artikla (obstoječi indeks se začne z `OrganizationId`).
+
+- **`IX_PimProductFieldHistory_UndoOf`** (`UndoOfChangeId`) `WHERE UndoOfChangeId IS NOT NULL` — filtriran, vsebuje samo vrstice razveljavitev (na DEV 0 strani), navadno pisanje zgodovine ga ne vzdržuje. Vse procedure in sprožilci, ki pišejo v tabelo, imajo `QUOTED_IDENTIFIER ON` (preverjeno v `sys.sql_modules`).
+- **`IX_PimProductFieldHistory_ProductId`** (`ProductId`) — ozek indeks za tuji ključ na `canon.Product` (DEV 7.810 strani ≈ 61 MB).
+- Gradnja z `ONLINE = ON`, kjer izdaja to dopušča (Enterprise/Developer/Azure); sicer navadno (na Standard med gradnjo zaklene pisanje zgodovine — poženi izven konice). DEV: 5 s.
+- DEV po migraciji: preverba razveljavitve 0 logičnih branj (prej 88.730), iskanje po `ProductId` 3 (prej 12.592).
+
+**Objekti:** indeksa na `pim.ProductFieldHistory`; procedure nespremenjene. **Ročni korak:** ne. **Povratek:** `DROP INDEX IX_PimProductFieldHistory_UndoOf ON pim.ProductFieldHistory; DROP INDEX IX_PimProductFieldHistory_ProductId ON pim.ProductFieldHistory;`
 ## Pasica »spremembe za SAOP čakajo potrditev« brez čakanja (migraciji 309_HitraPasicaSaop in 311_HitriPogledZadrzanihSaop, 2026-09-30, naloga #46)
 
 Stran Izvozi (`/outbound`) se je odpirala 50-60 s, ker je pasica z zadržanimi spremembami za SAOP (`intranet.GetSaopHeldMessages`) tekla toliko časa; isto so čakale `/cene`, `/saop/artikli`, `/izvozi/mnozicno` in odobritev serije.
