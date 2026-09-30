@@ -30,12 +30,18 @@
   <div class="form-grid">
     <label class="form-field" for="import-organization">
       Podjetje za vrstice brez stolpca »Podjetje«
-      <select id="import-organization" class="filter-select" @bind="OrganizationText" @bind:after="OrganizationChanged">
+      <select id="import-organization" class="filter-select" @bind="OrganizationText" @bind:after="OrganizationChanged" aria-describedby="import-organization-hint">
         <option value="">— iz stolpca v datoteki —</option>
         @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
       </select>
     </label>
   </div>
+  <p class="hint" id="import-organization-hint">
+    @* #107: izbira sama ne spremeni ničesar na strani — uporabi se ob branju datoteke. *@
+    Izbira podjetja se uporabi ob branju datoteke: vrstice brez stolpca »Podjetje« gredo v izbrano podjetje.
+    @(Organizations.FirstOrDefault(row => row.OrganizationId.ToString() == OrganizationText)?.Name is { } chosen ? $"Zdaj: {chosen}." : "Zdaj: vsaka vrstica mora imeti podjetje v stolpcu.")
+    Če podjetje zamenjaš po branju, datoteko izberi znova.
+  </p>
   <p class="hint">
     Naslovov stolpcev ne spreminjaj — po njih uvoz prepozna, kaj je kaj. Ključ vrstice je <strong>Podjetje + Cenik + Šifra artikla</strong>.
     <strong>Prazna celica pomeni, da se polja ne dotaknemo</strong>. Vrstica s cenikom, v katerem artikel še nima cene, je nova cena.

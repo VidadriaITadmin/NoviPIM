@@ -78,6 +78,14 @@ Assert(import.Contains("PimFormat.Count(Preview.Rows.Count, \"ceno\", \"ceni\", 
 Assert(PimFormat.Count(2, "ceno", "ceni", "cene", "cen") == "2 ceni" && PimFormat.Count(5, "ceno", "ceni", "cene", "cen") == "5 cen"
     && PimFormat.Count(101, "ceno", "ceni", "cene", "cen") == "101 ceno", "Sklanjatev cen je napačna.");
 Assert(markup.Contains("\"izbrana izdelka\"", StringComparison.Ordinal), "Na /cene: »2 izbrana izdelka«, ne »2 izbranih izdelkov«.");
+/* --- C8 (#107): prazen cenik pove zakaj, manjkajoče šifre so naštete, jezik in podjetje uvoza razložena ---- */
+Assert(sheet.Contains("EmptyText=\"@EmptyMessage\"", StringComparison.Ordinal) && !sheet.Contains("EmptyText=\"Za to izbiro ni artiklov s ceno.\"", StringComparison.Ordinal),
+  "Prazen cenik mora povedati, zakaj je prazen (kategorija, šifre, podjetje), ne splošnega besedila.");
+Assert(sheet.Contains("MissingItems", StringComparison.Ordinal) && sheet.Contains("LoadedItems.Except(Rows.Select(row => row.ItemID)", StringComparison.Ordinal),
+  "Vpisane šifre, ki jih v ceniku ni, morajo biti naštete.");
+Assert(sheet.Contains("Language != \"sl\"", StringComparison.Ordinal), "Pri jeziku, ki ni sl, mora stran povedati, da artikli brez prevoda ostanejo slovenski.");
+Assert(import.Contains("aria-describedby=\"import-organization-hint\"", StringComparison.Ordinal) && import.Contains("id=\"import-organization-hint\"", StringComparison.Ordinal),
+  "Izbira podjetja na uvozu mora imeti razlago, kdaj se uporabi.");
 Assert(banner.Contains("Items.Where(item => item.OrganizationId == organizationId)", StringComparison.Ordinal),
   "Potrditev sme poslati samo sporočila podjetja, katerega gumb je bil kliknjen.");
 Assert(heldList.Contains("OrganizationName", StringComparison.Ordinal) && heldList.Contains("\"Cene\"", StringComparison.Ordinal) && heldList.Contains("\"Artikli\"", StringComparison.Ordinal),

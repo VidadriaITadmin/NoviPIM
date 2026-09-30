@@ -13,7 +13,7 @@ migracije: [150]
 
 # Cenik za tisk (PDF iz kategorije ali izbranih artiklov)
 
-> **Področje:** Poslovanje · **Lastnik:** komerciala · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-30, iz kode (#113)
+> **Področje:** Poslovanje · **Lastnik:** komerciala · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-30, iz kode (#113, #107)
 
 ## 1. Namen
 
@@ -86,6 +86,10 @@ flowchart LR
   povezavo lahko pošlješ sodelavcu in odpre isti cenik istega podjetja; »Nazaj« v brskalniku vrne prejšnjo izbiro.
 - Besedilni polji (kategorija, šifre) bereta bazo šele ob Enter ali izhodu iz polja, ne na vsak pritisk tipke.
 - Brez kategorije in šifer (cel cenik podjetja) se cenik pripravi samo na gumb.
+- Prazen cenik pove, zakaj je prazen (kategorija s poljem poti, šifre, podjetje, cenik, »samo objavljeni«) in kaj poskusiti (#107).
+- Če del vpisanih šifer ni v ceniku, stran našteje, katerih ni (ne obstajajo v podjetju, nimajo cene v ceniku ali niso objavljene).
+- Jezik vpliva samo na naziv: artikli brez prevoda v izbrani jezik ostanejo s slovenskim nazivom (stran to napiše).
+- Spletno mesto izbere pot kategorije na tem mestu; brez mesta velja prva kategorija artikla.
 
 ## 8. Ko gre kaj narobe
 
