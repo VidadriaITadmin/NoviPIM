@@ -219,7 +219,8 @@ public static class ProductBulkEdit
   }
 
   /// <summary>
-  /// Zapis. Pravico preveri tukaj (CatalogWrite) IN zapisovalne procedure v ProductEditService — skrit
+  /// Zapis. <paramref name="title"/> je naslov zapisa na /uvozi (privzeto <see cref="HistoryTitle"/>; stran Mediji,
+  /// naloga #32, poda svojega). Pravico preveri tukaj (CatalogWrite) IN zapisovalne procedure v ProductEditService — skrit
   /// gumb je samo videz.
   ///
   /// Vrstni red je namenski (preverjanje #10, 30. 9.: intranet je med 20-minutnim zapisom izstopil in v
@@ -235,7 +236,7 @@ public static class ProductBulkEdit
   public static async Task<Result> ApplyAsync(
     PimWriteGuard guard, ProductWorkbookService workbook, ImportHistoryService history, WebWithdrawalService withdrawals,
     ProductWorkbookPreview preview, string actor, string? note, IProgress<string>? progress = null,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default, string? title = null)
   {
     ArgumentNullException.ThrowIfNull(guard);
     ArgumentNullException.ThrowIfNull(preview);
@@ -247,7 +248,7 @@ public static class ProductBulkEdit
 
     var total = preview.Rows.Count;
     progress?.Report("Zapisujem zgodovino (prej → potem), da se bo paket dalo povrniti …");
-    var historyId = await history.RecordAsync(ImportKinds.Products, HistoryTitle, note, actor,
+    var historyId = await history.RecordAsync(ImportKinds.Products, title ?? HistoryTitle, note, actor,
       total, 0, null, preview.Problems, null, ImportHistoryService.FromProducts(preview));
     if (historyId is null)
       throw new InvalidOperationException("Zgodovine uvozov ni bilo mogoče zapisati, zato se ni zapisalo nič (brez nje paketa ne bi mogel povrniti). Poskusi znova čez nekaj minut.");

@@ -149,6 +149,85 @@ Assert(mediaCss.Contains(".preview-fallback.preview-broken", StringComparison.Or
   "Nedosegljiv medij mora biti viden tudi brez besedila; bela slicica je bila past.");
 
 
+/* ─── Paketno urejanje medijev (naloga #32) ───────────────────────────────────
+   Izbira vrstic + odstrani / na prvo mesto / dodaj sliko ali dokument za izdelke izbranih vrstic. Zapis gre
+   skozi uvoz delovnega lista (ops.ImportRun, pim.SaveProductMediaBulk 245, »Povrni« na /uvozi), pravica
+   CatalogWrite v servisu. PRIVZETO ZA NOČ: dodajanje obstoječe ohrani, največ 5.000 izdelkov. */
+var bulk = Read(Path.Combine(services, "MediaBulkEdit.cs"));
+var productBulk = Read(Path.Combine(services, "ProductBulkEdit.cs"));
+var contract = Read(Path.Combine(root, "src", "PIM.Operations", "ProductWorkbookContract.cs"));
+Assert(mediaPage.Contains("<PimBulkBar", StringComparison.Ordinal) && mediaPage.Contains("PimRowSelection<MediaRow>", StringComparison.Ordinal),
+  "Mediji uporabljajo skupni gradnik izbire (PimBulkBar + PimRowSelection), ne svojega.");
+Assert(mediaPage.Contains("aria-label=\"Izberi medij", StringComparison.Ordinal) && mediaPage.Contains("new(\"Izbira\")", StringComparison.Ordinal),
+  "Vsaka vrstica in ploscica ima potrditveno polje z oznako; tabela ima stolpec izbire.");
+Assert(mediaPage.Contains("Guard.AllowsAsync(PimPolicies.CatalogWrite)", StringComparison.Ordinal) && mediaPage.Contains("Samo za branje", StringComparison.Ordinal),
+  "Brez pravice so dejanja skrita in stran pove »Samo za branje«.");
+Assert(bulk.Contains("guard.RequireAsync(PimPolicies.CatalogWrite)", StringComparison.Ordinal)
+    && productBulk.Contains("await guard.RequireAsync(PimPolicies.CatalogWrite);", StringComparison.Ordinal),
+  "Pravico preveri servis (predogled in zapis), skrit gumb je samo videz.");
+Assert(bulk.Contains("ProductBulkEdit.ApplyAsync(", StringComparison.Ordinal) && bulk.Contains("HistoryTitle", StringComparison.Ordinal)
+    && productBulk.Contains("title ?? HistoryTitle", StringComparison.Ordinal),
+  "Zapis gre skozi isto pot kot paketno urejanje izdelkov (zgodovina najprej, paketi, povratek) s svojim naslovom na /uvozi.");
+Assert(mediaPage.Contains("Pozor: če dobavitelj ta naslov še pošilja", StringComparison.Ordinal),
+  "Pred odstranitvijo stran pove, da jo zajem dobavitelja lahko vrne.");
+Assert(mediaPage.Contains("uvozi/{historyId}", StringComparison.Ordinal) && mediaPage.Contains("V SAOP se nič ne pošlje", StringComparison.Ordinal),
+  "Po zapisu povezava na zapis uvoza (Povrni); stran pove, da nic ne gre v SAOP.");
+Assert(contract.Contains($"\"{MediaBulkEdit.ImagesHeader}\", ImagesField", StringComparison.Ordinal)
+    && contract.Contains($"\"{MediaBulkEdit.DocumentsHeader}\", DocumentsField", StringComparison.Ordinal),
+  "Naslova stolpcev navideznega zvezka se ujemata s pogodbo delovnega lista.");
+
+// Preracun seznama izdelka (vrstni red je pomen: prva slika je glavna).
+const string a = "https://x.si/a.jpg", b = "https://x.si/b.jpg", c = "https://x.si/c.jpg";
+var abc = new[] { a, b, c };
+Assert(MediaBulkEdit.Apply(MediaBulkEdit.Operation.Remove, abc, [b]).SequenceEqual([a, c]), "Odstrani vzame samo izbrani naslov.");
+Assert(MediaBulkEdit.Apply(MediaBulkEdit.Operation.Remove, abc, ["HTTPS://X.SI/B.JPG"]).SequenceEqual([a, c]), "Primerjava naslovov je brez razlike v velikosti crk (kot zapis).");
+Assert(MediaBulkEdit.Apply(MediaBulkEdit.Operation.MoveFirst, abc, [c, b]).SequenceEqual([b, c, a]), "Na prvo mesto: izbrane v dosedanjem vrstnem redu naprej.");
+Assert(MediaBulkEdit.Apply(MediaBulkEdit.Operation.AddDocument, abc, ["https://x.si/n.pdf"]).SequenceEqual([a, b, c, "https://x.si/n.pdf"]), "Dodaj ohrani obstojece in doda na konec.");
+Assert(MediaBulkEdit.NewCell(MediaBulkEdit.Operation.AddImage, $"{a} | {b}", [b]) is null, "Ze dodan naslov ni sprememba (izdelek odpade).");
+Assert(MediaBulkEdit.NewCell(MediaBulkEdit.Operation.Remove, a, [a]) == "-", "Odstranitev zadnjega naslova izprazni seznam (»-«), ne pusti celice prazne (prazna = ne dotikaj se).");
+Assert(MediaBulkEdit.NewCell(MediaBulkEdit.Operation.Remove, null, [a]) is null, "Izdelek brez seznama se ne spremeni.");
+Assert(MediaBulkEdit.NewCell(MediaBulkEdit.Operation.MoveFirst, $"{a} | {b}", [a]) is null, "Ze prva slika ni sprememba.");
+Assert(MediaBulkEdit.ValidateUrl("https://x.si/navodila.pdf") is null && MediaBulkEdit.ValidateUrl("x.si/a.pdf") is not null
+    && MediaBulkEdit.ValidateUrl("ftp://x.si/a.pdf") is not null && MediaBulkEdit.ValidateUrl("https://x.si/a|b.pdf") is not null
+    && MediaBulkEdit.ValidateUrl("") is not null && MediaBulkEdit.ValidateUrl("https://x.si/" + new string('a', 1000)) is not null,
+  "Naslov mora biti celoten http(s) naslov brez »|« in ne predolg.");
+Assert(MediaBulkEdit.Fields(MediaBulkEdit.Operation.Remove).Count == 2 && MediaBulkEdit.Fields(MediaBulkEdit.Operation.AddDocument).Single() == PIM.Operations.ProductWorkbookContract.DocumentsField,
+  "Odstrani bere oba seznama, dodaj dokument samo dokumente.");
+
+// Izdelki: vsak enkrat po podjetju (sifra je enolicna samo v podjetju), meja 5.000.
+var items = new[]
+{
+  new MediaBulkEdit.Item(2, "IQ", "A1", a, MediaKindPolicy.ImageCode),
+  new MediaBulkEdit.Item(2, "IQ", "a1", b, MediaKindPolicy.ImageCode),
+  new MediaBulkEdit.Item(3, "ViD", "A1", c, MediaKindPolicy.ImageCode),
+};
+Assert(MediaBulkEdit.Products(items).Count == 2, "Isti izdelek z dvema izbranima medijema je en izdelek; ista sifra v drugem podjetju je drug izdelek.");
+Assert(MediaBulkEdit.MaxProducts == 5_000, "Meja izdelkov na potrditev je 5.000 (PRIVZETO ZA NOC).");
+var tooMany = Enumerable.Range(0, MediaBulkEdit.MaxProducts + 1).Select(index => new MediaBulkEdit.Product(2, "IQ", "X" + index)).ToList();
+var refused = false;
+try { MediaBulkEdit.BuildWorkbook(MediaBulkEdit.Operation.Remove, tooMany); } catch (InvalidOperationException) { refused = true; }
+Assert(refused, "Vec kot 5.000 izdelkov se zavrne z jasnim sporocilom.");
+Assert(MediaBulkEdit.BuildWorkbook(MediaBulkEdit.Operation.AddImage, MediaBulkEdit.Products(items), "https://x.si/n.jpg").Length > 0, "Navidezni zvezek nastane; pri dodajanju je v celici dodani naslov (izdelek brez seznama je tudi sprememba).");
+
+// Preracun predogleda: polje brez spremembe odpade, izdelek brez spremembe odpade, SAOP nikoli.
+var imagesField = PIM.Operations.ProductWorkbookContract.ImagesField;
+var documentsField = PIM.Operations.ProductWorkbookContract.DocumentsField;
+var rawPreview = new ProductWorkbookPreview(
+[
+  new(2, 2, "IQ", "A1", new Dictionary<string, string> { [imagesField] = "-", [documentsField] = "-" }, new Dictionary<string, string>(),
+    new Dictionary<string, string?> { [imagesField] = $"{a} | {b}", [documentsField] = null }),
+  new(3, 3, "ViD", "A1", new Dictionary<string, string> { [imagesField] = "-", [documentsField] = "-" }, new Dictionary<string, string> { ["X"] = "1" },
+    new Dictionary<string, string?> { [imagesField] = a, [documentsField] = null }),
+], [], [], []);
+var transformed = MediaBulkEdit.Transform(rawPreview, MediaBulkEdit.Operation.Remove,
+  (organization, item, field) => organization == 2 ? [b] : ["https://x.si/ni.jpg"]);
+Assert(transformed.Rows.Count == 1 && transformed.Rows[0].PimValues.Count == 1 && transformed.Rows[0].PimValues[imagesField] == a
+    && transformed.Rows[0].SaopValues.Count == 0,
+  "Odstrani: ostane samo izdelek, ki se mu seznam res spremeni, samo spremenjeno polje, brez SAOP.");
+var summary = MediaBulkEdit.Summarize(transformed, 2);
+Assert(summary.Products == 1 && summary.Unchanged == 1 && summary.Removed == 1 && summary.Added == 0, "Potrditev pove koliko izdelkov in naslovov.");
+
+
 /* ─── Izbirnik podjetja na medijih (U1, P2-10) ────────────────────────────────
    Napis je govoril o »izbrani organizaciji«, izbrati je ni bilo mogoce. */
 Assert(mediaPage.Contains("id=\"media-organization\"", StringComparison.Ordinal),
