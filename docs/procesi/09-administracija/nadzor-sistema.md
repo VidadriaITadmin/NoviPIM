@@ -8,7 +8,7 @@ pise: [pim.urniki, obvestila]
 strani: [/sistem, /sistem/posel/{JobKey}, /sistem/teki, /sistem/teki/{RunId}, /sistem/sled]
 posli: [ALERT_EVALUATION, ALERT_DELIVERY, SYSTEM_SELF_TEST]
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Monitor.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/MonitorJob.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRuns.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/IngestRunDetail.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/AdminActivity.razor, PIM_Solution/src/PIM.Intranet/Services/MonitorService.cs, PIM_Solution/src/PIM.Intranet/Services/AdminConsoleService.cs, PIM_Solution/src/PIM.Intranet/Services/PipelineReadService.cs, PIM_Solution/src/PIM.Automation/MonitorPolicy.cs, PIM_Solution/src/PIM.Automation/AutomationOverview.cs, PIM_Solution/src/PIM.Intranet/Components/Shared/PimTab.cs]
-migracije: [247, 254, 255, 256, 259, 260, 261, 276]
+migracije: [247, 254, 255, 256, 259, 260, 261, 276, 324]
 ---
 
 # Nadzor sistema — posli, teki, alarmi, sled sprememb in nočni samotest
@@ -86,8 +86,9 @@ flowchart LR
 | 1 | Skrbnik | `/sistem` (zavihek Nadzor) | Pogledaš prvi okvir: »Gostitelj avtomatike teče« (vrsta, računalnik, utrip) ali »… ne teče — posli ne tečejo«. | Odprtje strani označi obvestila kot videna (zvonec). | Utrip nekaj sekund star. |
 | 2 | Skrbnik | isto | Preberi povzetek: »Vse teče« ali »N poslov potrebuje pozornost: …«. Posli so razvrščeni po tokovih: Spletni katalog, Cene in zaloga, Naročila, Vhodni viri, Sistem. | Barva pomeni svežino **podatkov**, ne izhodno kodo procesa: zelena = sveži, siva = izklopljeno ali brez dela, rdeča = napaka ali prestari podatki. | — |
 | 3 | Skrbnik | isto | V rdeči vrstici klikneš ponujeno dejanje: **Poženi zdaj** (+ **Potrdi zagon** za zunanje klice), **Vklopi** (+ **Potrdi vklop**), **Vklopi postopek**, **Odpri posel**, **Odpri izpis**, **Kako zagnati gostitelja**. | Zahteva se zapiše; gostitelj jo prevzame ob naslednjem tiku. | »zahteva za zagon oddana«, nato »teče: …«. |
+| 3b | Skrbnik | `/sistem` ali `/sistem/posel/{JobKey}` | Pri poslu »V vrsti« (zahteva oddana, gostitelj je še ni prevzel — tudi zahteva varovalke kataloga ali strani `/splet`) klikneš **Prekliči zahtevo**. | Zahteva se umakne (`ops.CancelJobRunRequest`), posel dobi naslednji redni termin po urniku od zdaj (dnevni: naslednja dnevna ura; ponavljajoč: zdaj + razmik; izklopljen: brez termina). Če jo je gostitelj tik prej že prevzel, stran pove, da posel že teče (takrat samo **Ustavi**). Sled `JOB_RUN_REQUEST_CANCEL` z imenom, kdo je zahtevo oddal. | »zahteva za zagon (oddal …) je umaknjena. Naslednji redni zagon po urniku: …«; stolpec Naslednji ni več »zdaj«. |
 | 4 | Skrbnik | isto, »Druga obvestila« | **Potrdi** (videl sem) ali **Razreši** (rešeno). | Alarm se označi; razrešen izgine s seznama. | Vrstica izgine ali je potrjena. |
-| 5 | Skrbnik | `/sistem/posel/{JobKey}` | Stran posla: **Stanje zdaj** (Kdaj teče, Zadnji rezultat, Kaj kliče), **1. Viri podatkov**, **2. Zadnji tek** (koraki in faze; `?tek=<id>` za starejši tek), **3. Izpis dnevnika** (**Pokaži cel izpis**), **4. Zgodovina tekov**, **5. Nastavitve** (Urnik, Meja svežine virov, Postopki, Odvisnosti, Datoteke). Krmila: **Poženi zdaj**, **Ustavi**, **Izklopi**, **Vklopi**. | Sprememba urnika ali meje svežine velja od naslednjega tika gostitelja; **Nazaj na kodo** vrne mejo svežine na privzeto. | Sporočilo o uspehu; vrednost v razdelku Nastavitve. |
+| 5 | Skrbnik | `/sistem/posel/{JobKey}` | Stran posla: **Stanje zdaj** (Kdaj teče, Zadnji rezultat, Kaj kliče), **1. Viri podatkov**, **2. Zadnji tek** (koraki in faze; `?tek=<id>` za starejši tek), **3. Izpis dnevnika** (**Pokaži cel izpis**), **4. Zgodovina tekov**, **5. Nastavitve** (Urnik, Meja svežine virov, Postopki, Odvisnosti, Datoteke). Krmila: **Poženi zdaj** (ali **Prekliči zahtevo**, dokler zahteva čaka), **Ustavi**, **Izklopi**, **Vklopi**. | Sprememba urnika ali meje svežine velja od naslednjega tika gostitelja; **Nazaj na kodo** vrne mejo svežine na privzeto. | Sporočilo o uspehu; vrednost v razdelku Nastavitve. |
 | 6 | Skrbnik | `/sistem/teki` | Filtriraš podjetje, vir, postopek, status → **Uporabi filtre**; klik na čas odpre tek. | Seznam izvedb vhodov (katalog, XML, zaloga …) s prebranimi, uspešnimi in zavrnjenimi zapisi. | — |
 | 7 | Skrbnik | `/sistem/teki/{RunId}` | Pregledaš identiteto teka, rezultat, korake in strani; klik na stran odpre težavo zajema. | Samo branje. | — |
 | 8 | Skrbnik | `/sistem/sled` | Izbereš obdobje (dan … leto), iščeš po uporabniku, šifri ali opisu → **Poišči**. | Kronološka sled iz vseh tabel s stolpcem Vir (iz katere tabele). | Vrstica z dejanjem, ki ga iščeš. |
@@ -96,6 +97,7 @@ flowchart LR
 
 - Rumene barve ni: vsaka rdeča vrstica ima razlog in natanko en predlagan korak.
 - Zagon ali vklop posla, ki kliče SAOP ali dobavitelja ali pošilja e-pošto, zahteva drugi klik.
+- Oddano, še ne prevzeto zahtevo za zagon lahko skrbnik umakne (**Prekliči zahtevo**); izvirnega termina ni mogoče vrniti (»Poženi zdaj« ga prepiše), zato posel dobi naslednji redni termin po urniku.
 - Dejanja se zapišejo v sled; če zapis sledi pade, stran pove, da je bilo dejanje izvedeno (da ga ne ponoviš).
 - Vse strani `/sistem*` razen tekov so `[Authorize(Roles = "ADMIN")]`; pravice `tab.system.overview`, `tab.ingest.runs`, `view.system.activity`.
 
@@ -115,7 +117,7 @@ flowchart LR
 <summary>Za skrbnika in razvoj</summary>
 
 - **Strani:** `Monitor.razor` (`/sistem`), `MonitorJob.razor` (`/sistem/posel/{JobKey}`), `IngestRuns.razor` in `IngestRunDetail.razor` (`/sistem/teki`, tudi stari naslov `/zajem/teki`), `AdminActivity.razor` (`/sistem/sled`); zavihki `NadzorTabs` (Nadzor, Teki, Sled sprememb).
-- **Storitve:** `MonitorService` (`RequestRunAsync`, `RequestCancelAsync`, `SetJobEnabledAsync`, `EnablePipelineAsync`, `SetOrganizationAutomationAsync`, `SaveJobScheduleAsync`, `SaveSourceMaxAgeAsync`, `AcknowledgeAlertAsync`, `ResolveAlertAsync`), `AdminConsoleService` (`MarkAlertsSeenAsync`, `intranet.GetUserActivityTrail`), `PipelineReadService`.
+- **Storitve:** `MonitorService` (`RequestRunAsync`, `CancelRunRequestAsync`, `RequestCancelAsync`, `SetJobEnabledAsync`, `EnablePipelineAsync`, `SetOrganizationAutomationAsync`, `SaveJobScheduleAsync`, `SaveSourceMaxAgeAsync`, `AcknowledgeAlertAsync`, `ResolveAlertAsync`), `AdminConsoleService` (`MarkAlertsSeenAsync`, `intranet.GetUserActivityTrail`), `PipelineReadService`.
 - **Presoja barve:** `PIM.Automation/MonitorPolicy.cs`, pregled `AutomationOverview.cs`.
 - **Tabele:** `ops.SchedulerLease`, `ops.JobDefinition`, `ops.JobRun`, `ops.JobStepRun`, `ops.JobPhaseRun`, `ops.JobSource`, `ops.Alert`, `ops.PipelineRun`, `ops.ScheduleProfile`, `ops.SelfTestRun`, `ops.SelfTestStep`.
 - **Samotest:** `PIM_Solution/tests/PIM.SelfTest.Nightly`, posel `SYSTEM_SELF_TEST` v `PIM.Automation/JobCatalog.cs` (opis poslov v [Avtomatika in urniki](avtomatika-in-urniki.md)).
