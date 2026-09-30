@@ -9,7 +9,7 @@
   Samotest enkrat na noc prehodi celo verigo — baza, razporedi, srcni utrip, zagoni, katalog,
   karantena, kakovost, spletna datoteka, odhodna vrsta, echo in svezina izvozov — in vsakemu
   koraku izmeri cas. Rezultat gre v ops.SelfTestRun in ops.SelfTestStep (migracija 172); skrbnik
-  ga vidi na /sistem in /sistem/samotest, brez branja dnevnikov.
+  ga vidi na /sistem (padel samotest se steje v zvonec), brez branja dnevnikov.
 
   Samotest samo bere. Ne klice SAOP-a, ne posilja nicesar navzven in ne spreminja podatkov;
   edini zapis je njegov lastni rezultat, edina datoteka pa zacasni CSV, ki ga na koncu pobrise.
