@@ -447,6 +447,18 @@ Assert(uporabnikiStran.Contains("SlovenianPlural.Users", StringComparison.Ordina
   && !vlogeStran.Contains("dovoljenj</span>", StringComparison.Ordinal),
   "Uporabniki in vloge morajo števce sklanjati s skupnim SlovenianPlural (ne lokalno 1/2/ostalo).");
 
+// ── aria-pressed vedno kot "true"/"false" (naloga 109) ───────────────────────
+// Blazor goli bool v atributu izpiše kot prazen atribut (true) ali ga izpusti (false), kar bralnik
+// zaslona ne razume. Vrednost mora biti niz, npr. @(x ? "true" : "false") ali .ToString().ToLowerInvariant().
+var ariaPressed = new System.Text.RegularExpressions.Regex("aria-pressed=\"@(?<izraz>\\([^\\r\\n]*?\\)|[A-Za-z_][\\w.!]*)\"");
+foreach (var razor in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet", "Components"), "*.razor", SearchOption.AllDirectories))
+  foreach (System.Text.RegularExpressions.Match zadetek in ariaPressed.Matches(File.ReadAllText(razor)))
+  {
+    var izraz = zadetek.Groups["izraz"].Value;
+    Assert(izraz.Contains("\"true\"", StringComparison.Ordinal) || izraz.Contains("ToLowerInvariant()", StringComparison.Ordinal),
+      $"{Path.GetFileName(razor)}: aria-pressed=\"@{izraz}\" mora dati niz \"true\"/\"false\", ne golega boola.");
+  }
+
 Console.WriteLine("F10 admin console UX contract PASS.");
 
 static string Read(string path)
