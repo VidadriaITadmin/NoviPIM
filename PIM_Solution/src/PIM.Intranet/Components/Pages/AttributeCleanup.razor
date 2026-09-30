@@ -1,18 +1,22 @@
 @page "/nastavitve/atributi/ciscenje"
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
 @rendermode InteractiveServer
+@implements IDisposable
 @inject PIM.Intranet.Services.AttributeMappingService Attributes
 @inject NavigationManager Navigation
 @inject IJSRuntime Js
+@inject PimWriteGuard Guard
 
 @* Naloga #15 (lastnik 2026-09-29): »kateri atributi pomenijo isto … seznam kandidatov za združitev, s
    številom artiklov in primeri vrednosti; lastnik odloči, kaj se združi« in »uvoz naj besedilo lepo
-   uredi (enote, presledki, velike začetnice)«. Stran je SAMO PREGLED: nič se ne združi, izbriše ali
-   prepiše. Združevanje je ločena naloga (#48). Pravilo zapisa je vklopljeno z migracijo 314 (#49, lastnik
+   uredi (enote, presledki, velike začetnice)«. Pregled je za vse vloge; združitev izbranih parov (#48,
+   migracija 319, lastnik 2026-09-29 »Grlo … angleško socket, pa še kej se najde«) sme samo CatalogWrite
+   (ADMIN, CATALOG_EDITOR) — preverja servis, stran samo skrije gumbe. Nič se ne združi samodejno; vsaka
+   združitev ima dnevnik prej/potem in povratek (Zgodovina združitev spodaj). Pravilo zapisa je vklopljeno z migracijo 314 (#49, lastnik
    2026-09-29 »Da«): zajem, katalog.csv in obstoječe vrednosti; tu je pregled ostanka in dnevnik poenotenj. *@
 
 <PageTitle>Čiščenje atributov</PageTitle>
-<PimPage Title="Čiščenje atributov" Subtitle="Predlogi, kateri atributi pomenijo isto, in lep zapis vrednosti (vklopljen za uvoz, katalog.csv in obstoječe vrednosti). Na tej strani se nič ne zapiše." Crumbs="Crumbs">
+<PimPage Title="Čiščenje atributov" Subtitle="Predlogi, kateri atributi pomenijo isto (izbrane pare lahko združiš, s povratkom), in lep zapis vrednosti (vklopljen za uvoz, katalog.csv in obstoječe vrednosti)." Crumbs="Crumbs">
   <Actions>
     <a class="secondary-button" href="nastavitve/atributi">Register atributov</a>
   </Actions>
@@ -27,7 +31,7 @@
   }
   else
   {
-    <span>Seznam je predlog. Nič se ne združi ali izbriše; kateri par se združi, odloči lastnik. Spremljevalni atributi »Enota …« niso v seznamu, ker po zasnovi pri vseh merah nosijo iste enote (mm, kg).</span>
+    <span>Seznam je predlog. Nič se ne združi samodejno: izbereš par, določiš, kateri atribut ostane, in potrdiš po predogledu (izdelki po podjetjih, trki). Opuščeni atribut se deaktivira, ne izbriše; vsako združitev lahko razveljaviš. Spremljevalni atributi »Enota …« niso v seznamu, ker po zasnovi pri vseh merah nosijo iste enote (mm, kg).</span>
   }
 </p>
 
@@ -145,19 +149,166 @@ else
     <button type="button" class="secondary-button" disabled="@DuplicateLoading" @onclick="RefreshDuplicatesAsync" title="@ComputedTitle(Report?.ComputedUtc)">Osveži</button>
   </section>
 
+  @if (Result is not null)
+  {
+    <div class="message-state success-message merge-result" role="status">
+      <span>@Result</span>
+      @if (IsAdmin) { <a class="small-action" href="sistem/sled">Sled sprememb</a> }
+      <button type="button" class="small-action" @onclick="() => Result = null">Zapri</button>
+    </div>
+  }
+  @if (MergeError is not null)
+  {
+    <p class="message-state error-message" role="alert">@MergeError</p>
+  }
+
+  <PimBulkBar Count="Selection.Count" AllMatching="false" MatchingTotal="MergeableFiltered.Count"
+              PageSelected="Selection.AllSelected(MergeableFiltered.Select(PairKey))" PageRowCount="MergeableFiltered.Count"
+              OnPageChanged="SelectAllPairs" OnSelectAllMatching="() => SelectAllPairs(true)" OnClear="ClearSelection"
+              AriaLabel="Izbira parov in združevanje" Hint="Označi pare, ki pomenijo isto, in jih združi v enega.">
+    @if (CanWrite)
+    {
+      <button type="button" class="primary-button" disabled="@Merging" @onclick="() => OpenMergeAsync(SelectedPairs)">Združi v … (@Selection.Count.ToString("N0"))</button>
+    }
+    else
+    {
+      <span class="bulk-readonly" role="status">Samo za branje: pare združuje skrbnik ali urednik kataloga.</span>
+    }
+  </PimBulkBar>
+
+  @if (CanWrite && Plans.Count > 0)
+  {
+    <section class="ui-card merge-panel" role="dialog" aria-modal="false" aria-labelledby="merge-title" aria-describedby="merge-help">
+      <div class="merge-head">
+        <h2 id="merge-title">@MergeTitle</h2>
+        <button type="button" class="small-action" disabled="@Merging" @onclick="CloseMerge">Zapri</button>
+      </div>
+      <p id="merge-help" class="card-note">Izberi, kateri atribut ostane. Vrednosti opuščenega preidejo nanj; kjer imata izdelka različni vrednosti, <strong>ostane vrednost atributa, ki ostane</strong> (trk je zapisan in se da vrniti). Opuščeni atribut se deaktivira, ne izbriše. V SAOP ne gre nič.</p>
+      @if (OverlapMessage is not null)
+      {
+        <p class="message-state warn-message" role="alert">@OverlapMessage</p>
+      }
+      @foreach (var plan in Plans)
+      {
+        <fieldset class="merge-pair" disabled="@Merging">
+          <legend>@plan.First.Name · @plan.Second.Name</legend>
+          <div class="merge-choice" role="radiogroup" aria-label="@($"Kateri atribut ostane ({plan.First.Name} ali {plan.Second.Name})")">
+            <span class="merge-label">Ostane</span>
+            @foreach (var option in new[] { plan.First, plan.Second })
+            {
+              <label class="merge-radio">
+                <input type="radio" name="@($"keep-{plan.Id}")" checked="@(plan.KeepCode == option.AttributeCode)"
+                       @onchange="() => ChangeKeepAsync(plan, option.AttributeCode!)" />
+                <span>@option.Name <span class="attribute-meta">(@option.Products.ToString("N0") izdelkov)</span></span>
+              </label>
+            }
+          </div>
+          <label class="form-field merge-english" for="@($"english-{plan.Id}")">
+            Angleško ime atributa, ki ostane
+            <input id="@($"english-{plan.Id}")" class="form-input" maxlength="200" @bind="plan.EnglishName" @bind:event="oninput"
+                   placeholder="npr. Socket" aria-describedby="@($"english-help-{plan.Id}")" />
+            <span id="@($"english-help-{plan.Id}")" class="attribute-meta">@EnglishHelp(plan)</span>
+          </label>
+          @if (plan.Loading)
+          {
+            <p class="card-note" role="status">Računam predogled …</p>
+          }
+          else if (plan.Error is not null)
+          {
+            <p class="message-state error-message" role="alert">@plan.Error</p>
+          }
+          else if (plan.Preview is { } preview)
+          {
+            var summary = preview.Summary;
+            <p class="merge-summary">
+              Opusti se <strong>@summary.SourceName</strong>, ostane <strong>@summary.TargetName</strong>:
+              @Count(summary.Values, "vrednost", "vrednosti", "vrednosti", "vrednosti") pri @Count(summary.Products, "izdelku", "izdelkih", "izdelkih", "izdelkih").
+            </p>
+            <table class="merge-table">
+              <caption class="visually-hidden">Vrednosti po podjetjih za par @summary.SourceName in @summary.TargetName</caption>
+              <thead><tr><th scope="col">Podjetje</th><th scope="col" class="numeric">Izdelkov</th><th scope="col" class="numeric">Novih pri cilju</th><th scope="col" class="numeric">Enakih</th><th scope="col" class="numeric">Trkov</th></tr></thead>
+              <tbody>
+                @foreach (var organization in preview.Organizations)
+                {
+                  <tr>
+                    <td>@organization.Name @if (!organization.IsActive) { <PimChip Text="neaktivno" Prefix="Podjetje: " /> }</td>
+                    <td class="numeric">@organization.Products.ToString("N0")</td>
+                    <td class="numeric">@organization.Moved.ToString("N0")</td>
+                    <td class="numeric">@organization.Same.ToString("N0")</td>
+                    <td class="numeric">@organization.Conflicts.ToString("N0")</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <p class="attribute-meta">Vrednosti so štete v obeh plasteh (podatek iz vira in podatek v PIM), zato jih je lahko več kot izdelkov.</p>
+            <ul class="merge-effects">
+              @foreach (var line in EffectLines(summary)) { <li>@line</li> }
+            </ul>
+            @if (preview.Conflicts.Count > 0)
+            {
+              <details class="merge-conflicts">
+                <summary>Trki (@summary.Conflicts.ToString("N0")) — ostane vrednost atributa @summary.TargetName</summary>
+                <table class="merge-table">
+                  <caption class="visually-hidden">Izdelki z različno vrednostjo (prvih @preview.Conflicts.Count)</caption>
+                  <thead><tr><th scope="col">Podjetje</th><th scope="col">Šifra</th><th scope="col">@summary.SourceName (gre)</th><th scope="col">@summary.TargetName (ostane)</th></tr></thead>
+                  <tbody>
+                    @foreach (var conflict in preview.Conflicts)
+                    {
+                      <tr><td>@conflict.Organization</td><td>@conflict.ItemId</td><td><span class="value-before">@conflict.SourceValue</span></td><td><span class="value-after">@conflict.TargetValue</span></td></tr>
+                    }
+                  </tbody>
+                </table>
+              </details>
+            }
+          }
+        </fieldset>
+      }
+      @if (Merging)
+      {
+        <p class="card-note merge-progress" role="status" aria-live="polite">@Progress</p>
+      }
+      <div class="merge-actions">
+        <button type="button" class="primary-button" disabled="@(!CanConfirm)" @onclick="ConfirmMergeAsync">@ConfirmLabel</button>
+        @if (Merging && Validating)
+        {
+          <button type="button" class="secondary-button" @onclick="CancelValidation">Prekliči validacijo</button>
+        }
+        else
+        {
+          <button type="button" class="secondary-button" disabled="@Merging" @onclick="CloseMerge">Prekliči</button>
+        }
+      </div>
+    </section>
+  }
+
   <section class="ui-card data-card section-gap" aria-label="Kandidati za združitev atributov">
     <PimState Loading="DuplicateLoading" Error="@Error" Empty="@(FilteredCandidates.Count == 0)" EmptyText="@(HasFilters ? "Za ta filter ni predlogov. Počisti filtre." : "Ni atributov, ki bi bili videti podvojeni.")" LoadingText="Primerjam atribute, izdelke in vrednosti …">
       <PimTable Caption="Pari atributov, ki morda pomenijo isto" Columns="DuplicateColumns">
         <Rows>
           @foreach (var candidate in FilteredCandidates)
           {
-            <tr>
+            var key = PairKey(candidate);
+            var mergeable = Mergeable(candidate);
+            <tr class="@(Selection.Contains(key) ? "is-selected" : null)">
+              <td class="check-cell">
+                <input type="checkbox" checked="@Selection.Contains(key)" disabled="@(!mergeable || Merging)"
+                       aria-label="@($"Izberi par {candidate.First.Name} in {candidate.Second.Name}")"
+                       title="@(mergeable ? null : "Atribut ni v registru — najprej ga dodaj v register atributov")"
+                       @onchange="args => TogglePair(candidate, args.Value is true)" />
+              </td>
               <td><PimChip Text="@KindLabel(candidate.Kind)" Tone="@KindTone(candidate.Kind)" Prefix="Vrsta predloga: " /></td>
               <td>@AttributeCell(candidate.First)</td>
               <td>@AttributeCell(candidate.Second)</td>
               <td class="numeric">@candidate.SharedProducts.ToString("N0")</td>
               <td class="numeric">@candidate.SameValueProducts.ToString("N0")</td>
               <td class="numeric">@candidate.CommonValues.ToString("N0")</td>
+              <td>
+                @if (CanWrite && mergeable)
+                {
+                  <button type="button" class="small-action" disabled="@Merging" aria-label="@($"Združi {candidate.First.Name} in {candidate.Second.Name}")"
+                          @onclick="() => OpenMergeAsync([candidate])">Združi …</button>
+                }
+              </td>
             </tr>
           }
         </Rows>
@@ -170,6 +321,59 @@ else
     <strong>Podobno ime</strong>: ime se razlikuje samo v »(2)«, oznaki jezika ali ločilih oziroma eno vsebuje drugo.
     @if (Report is not null) { <span>Izračunano ob @Report.ComputedUtc.ToPimLocal().ToString("HH:mm") (@($"{Report.ElapsedMs / 1000.0:N1} s") za @Report.Attributes.Count.ToString("N0") atributov); izračun velja 10 minut, »Osveži« ga naredi znova.</span> }
   </p>
+
+  <section class="ui-card data-card section-gap" aria-labelledby="merge-history-title">
+    <h2 id="merge-history-title" class="log-title">Zgodovina združitev</h2>
+    <p class="card-note">Vsaka združitev je zapisana po vrstici (izdelek, vrednost prej in potem, nastavitve). Razveljavitev vrne vrednosti in nastavitve; kar je kdo po združitvi spremenil, ostane. Združitve, ki si delijo atribut, razveljaviš od zadnje proti prvi.</p>
+    @if (RevertTarget is { } revertRun)
+    {
+      <div class="merge-panel revert-panel" role="alertdialog" aria-labelledby="revert-title" aria-describedby="revert-body">
+        <p id="revert-title"><strong>Razveljaviti združitev »@revertRun.SourceName« → »@revertRun.TargetName«?</strong></p>
+        <p id="revert-body" class="card-note">@RevertText(revertRun)</p>
+        <div class="merge-actions">
+          <button type="button" class="danger-button" disabled="@(Merging || RevertPreview is null)" @onclick="ConfirmRevertAsync">Razveljavi združitev</button>
+          <button type="button" class="secondary-button" disabled="@Merging" @onclick="CancelRevert">Prekliči</button>
+        </div>
+      </div>
+    }
+    <PimState Loading="MergesLoading" Error="@MergesError" Empty="@(Merges.Count == 0)" EmptyText="Ni še nobene združitve. Izberi par zgoraj in ga združi." LoadingText="Berem zgodovino združitev …">
+      <PimTable Caption="Združitve atributov (najnovejše najprej)" Columns="MergeColumns">
+        <Rows>
+          @foreach (var run in Merges)
+          {
+            <tr>
+              <td>@run.MergedUtc.ToPimLocal().ToString("d. M. yyyy HH:mm")</td>
+              <td>
+                <span class="value-before">@run.SourceName</span> → <a class="attribute-name" href="@($"nastavitve/atributi/{Uri.EscapeDataString(run.TargetCode)}")">@run.TargetName</a>
+              </td>
+              <td class="numeric">@((run.Summary?.Values ?? 0).ToString("N0"))</td>
+              <td class="numeric">@((run.Summary?.Products ?? 0).ToString("N0"))</td>
+              <td class="numeric">@((run.Summary?.Conflicts ?? 0).ToString("N0"))</td>
+              <td>@run.MergedBy</td>
+              <td>
+                @if (run.RevertedUtc is { } reverted)
+                {
+                  <PimChip Text="@($"razveljavljeno {reverted.ToPimLocal():d. M. HH:mm}")" Prefix="Stanje: " />
+                }
+                else
+                {
+                  <PimChip Text="združeno" Tone="good" Prefix="Stanje: " />
+                }
+              </td>
+              <td>
+                @if (CanWrite && run.RevertedUtc is null)
+                {
+                  <button type="button" class="small-action" disabled="@(Merging || !run.CanRevert)"
+                          title="@(run.CanRevert ? null : "Najprej razveljavi poznejšo združitev z istim atributom")"
+                          aria-label="@($"Razveljavi združitev {run.SourceName} v {run.TargetName}")" @onclick="() => AskRevertAsync(run)">Razveljavi …</button>
+                }
+              </td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+  </section>
 }
 
 @code {
@@ -187,8 +391,8 @@ else
     [("SAME_DATA", "Isti podatek"), ("SIMILAR_VALUES", "Podobne vrednosti"), ("SIMILAR_NAME", "Podobno ime")];
   static readonly IReadOnlyList<PimColumn> DuplicateColumns =
   [
-    new("Predlog"), new("Atribut A"), new("Atribut B"), new("Skupni izdelki", Numeric: true),
-    new("Ista vrednost", Numeric: true), new("Skupne vrednosti", Numeric: true)
+    new("Izbor"), new("Predlog"), new("Atribut A"), new("Atribut B"), new("Skupni izdelki", Numeric: true),
+    new("Ista vrednost", Numeric: true), new("Skupne vrednosti", Numeric: true), new("Dejanje")
   ];
   static readonly IReadOnlyList<PimColumn> PolishColumns =
     [new("Atribut"), new("Prej"), new("Potem"), new("Vrstic", Numeric: true), new("Izdelkov", Numeric: true)];
@@ -231,7 +435,7 @@ else
   {
     // Vsak pogled se samodejno naloži enkrat; po napaki ga uporabnik ponovi z »Osveži« (brez zanke).
     if (View == ViewPolish && !polishAttempted) { polishAttempted = true; await LoadRunsAsync(); await LoadPolishAsync(false); }
-    else if (View == ViewDuplicates && !duplicatesAttempted) { duplicatesAttempted = true; await LoadDuplicatesAsync(false); }
+    else if (View == ViewDuplicates && !duplicatesAttempted) { duplicatesAttempted = true; await LoadDuplicatesAsync(false); await LoadMergesAsync(); }
   }
 
   bool duplicatesAttempted, polishAttempted;
@@ -411,5 +615,328 @@ else
 
     static string Cell(string value) =>
       value.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+  }
+  /* ─── Združitev atributov (#48, migracija 319) ─────────────────────────────────────────────
+     Pravila so v canon.MergeAttributeDefinitions; stran izbere pare, pokaže predogled (po podjetjih,
+     trki, nastavitve), združi in nato validira prizadete izdelke v paketih (napredek, preklic). */
+
+  static readonly IReadOnlyList<PimColumn> MergeColumns =
+  [
+    new("Kdaj"), new("Opuščen → ostane"), new("Vrednosti", Numeric: true), new("Izdelkov", Numeric: true),
+    new("Trkov", Numeric: true), new("Kdo"), new("Stanje"), new("Dejanje")
+  ];
+
+  sealed class MergePlan
+  {
+    public required int Id { get; init; }
+    public required PIM.Intranet.Services.CleanupAttribute First { get; init; }
+    public required PIM.Intranet.Services.CleanupAttribute Second { get; init; }
+    public required string KeepCode { get; set; }
+    public string? EnglishName { get; set; }
+    public PIM.Intranet.Services.AttributeMappingService.MergePreview? Preview { get; set; }
+    public bool Loading { get; set; }
+    public string? Error { get; set; }
+    public PIM.Intranet.Services.CleanupAttribute Keep => KeepCode == First.AttributeCode ? First : Second;
+    public PIM.Intranet.Services.CleanupAttribute Drop => KeepCode == First.AttributeCode ? Second : First;
+  }
+
+  readonly PimRowSelection<PIM.Intranet.Services.DuplicateCandidate> Selection = new();
+  List<MergePlan> Plans = [];
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.MergeRun> Merges = [];
+  PIM.Intranet.Services.AttributeMappingService.MergeRun? RevertTarget;
+  PIM.Intranet.Services.AttributeMappingService.RevertSummary? RevertPreview;
+  bool CanWrite, IsAdmin, Merging, Validating, MergesLoading = true;
+  string? Result, MergeError, MergesError, Progress;
+  CancellationTokenSource? validationCancel;
+
+  protected override async Task OnInitializedAsync()
+  {
+    CanWrite = await Guard.AllowsAsync(PimPolicies.CatalogWrite);
+    IsAdmin = (await Guard.CurrentUserAsync())?.IsInRole("ADMIN") == true;
+  }
+
+  public void Dispose() => validationCancel?.Cancel();
+
+  static string PairKey(PIM.Intranet.Services.DuplicateCandidate candidate) => candidate.First.Name + "\u001f" + candidate.Second.Name;
+
+  /// <summary>Združiti se da samo atributa iz registra (postopek dela po kodi, vrednosti po slovenskem imenu).</summary>
+  static bool Mergeable(PIM.Intranet.Services.DuplicateCandidate candidate) =>
+    candidate.First.AttributeCode is not null && candidate.Second.AttributeCode is not null
+    && !string.Equals(candidate.First.AttributeCode, candidate.Second.AttributeCode, StringComparison.OrdinalIgnoreCase);
+
+  IReadOnlyList<PIM.Intranet.Services.DuplicateCandidate> MergeableFiltered => FilteredCandidates.Where(Mergeable).ToList();
+
+  IReadOnlyList<PIM.Intranet.Services.DuplicateCandidate> SelectedPairs => Selection.Items.ToList();
+
+  void TogglePair(PIM.Intranet.Services.DuplicateCandidate candidate, bool selected) => Selection.Toggle(PairKey(candidate), candidate, selected);
+
+  void SelectAllPairs(bool selected) =>
+    Selection.SetPage(MergeableFiltered.Select(candidate => KeyValuePair.Create(PairKey(candidate), candidate)), selected);
+
+  void ClearSelection() => Selection.Clear();
+
+  async Task LoadMergesAsync()
+  {
+    MergesLoading = true;
+    MergesError = null;
+    try { Merges = await Attributes.GetMergesAsync(); }
+    catch (Exception exception) { MergesError = "Zgodovine združitev ni bilo mogoče prebrati: " + exception.Message; }
+    finally { MergesLoading = false; StateHasChanged(); }
+  }
+
+  async Task OpenMergeAsync(IReadOnlyList<PIM.Intranet.Services.DuplicateCandidate> candidates)
+  {
+    Result = MergeError = null;
+    RevertTarget = null;
+    var id = 0;
+    // Privzeto ostane atribut z več izdelki (pri »Grlo« in »Podnožje / socket« je to Grlo — odločitev lastnika).
+    Plans = candidates.Where(Mergeable).Select(candidate => new MergePlan
+    {
+      Id = ++id,
+      First = candidate.First,
+      Second = candidate.Second,
+      KeepCode = (candidate.Second.Products > candidate.First.Products ? candidate.Second : candidate.First).AttributeCode!,
+    }).ToList();
+    StateHasChanged();
+    foreach (var plan in Plans.ToList()) await LoadPreviewAsync(plan);
+  }
+
+  async Task LoadPreviewAsync(MergePlan plan)
+  {
+    plan.Loading = true;
+    plan.Error = null;
+    plan.Preview = null;
+    StateHasChanged();
+    try
+    {
+      plan.Preview = await Attributes.PreviewMergeAsync(plan.Drop.AttributeCode!, plan.KeepCode, null);
+      if (string.IsNullOrWhiteSpace(plan.EnglishName))
+        plan.EnglishName = plan.Preview.Summary.EnglishNameBefore ?? SuggestEnglish(plan.Drop.Name);
+    }
+    catch (Exception exception) { plan.Error = "Predogleda ni bilo mogoče izračunati: " + exception.Message; }
+    finally { plan.Loading = false; StateHasChanged(); }
+  }
+
+  Task ChangeKeepAsync(MergePlan plan, string keepCode)
+  {
+    if (plan.KeepCode == keepCode) return Task.CompletedTask;
+    plan.KeepCode = keepCode;
+    plan.EnglishName = null;
+    return LoadPreviewAsync(plan);
+  }
+
+  /// <summary>»Podnožje / socket« → »Socket«: dvojezično ime opuščenega atributa pove angleško ime (lastnik: »angleško socket«).</summary>
+  static string? SuggestEnglish(string name)
+  {
+    var slash = name.LastIndexOf(" / ", StringComparison.Ordinal);
+    if (slash < 0) return null;
+    var english = name[(slash + 3)..].Trim();
+    return english.Length == 0 ? null : char.ToUpperInvariant(english[0]) + english[1..];
+  }
+
+  static string EnglishHelp(MergePlan plan) => plan.Preview?.Summary.EnglishNameBefore is { } before
+    ? $"Zdaj »{before}«. Če ime pustiš, se ne spremeni."
+    : "Atribut, ki ostane, zdaj nima angleškega imena. Prazno polje = brez spremembe.";
+
+  string? OverlapMessage
+  {
+    get
+    {
+      var repeated = Plans.SelectMany(plan => new[] { plan.First, plan.Second })
+        .GroupBy(attribute => attribute.AttributeCode, StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Count() > 1).Select(group => group.First().Name).ToList();
+      return repeated.Count == 0 ? null
+        : $"Atribut »{string.Join("«, »", repeated)}« je v več izbranih parih. Združi jih enega za drugim (najprej en par, nato naslednjega), da je jasno, kaj ostane.";
+    }
+  }
+
+  bool CanConfirm => CanWrite && !Merging && Plans.Count > 0 && OverlapMessage is null
+    && Plans.All(plan => plan.Preview is not null && !plan.Loading && plan.Error is null);
+
+  string MergeTitle => Plans.Count == 1
+    ? $"Združi »{Plans[0].Drop.Name}« v »{Plans[0].Keep.Name}«"
+    : $"Združi {Count(Plans.Count, "par", "para", "pare", "parov")} atributov";
+
+  string ConfirmLabel
+  {
+    get
+    {
+      if (Merging) return "Združujem …";
+      var values = Plans.Sum(plan => plan.Preview?.Summary.Values ?? 0);
+      var products = Plans.Sum(plan => plan.Preview?.Summary.Products ?? 0);
+      var pairs = Plans.Count == 1 ? "Združi" : $"Združi {Count(Plans.Count, "par", "para", "pare", "parov")}";
+      return $"{pairs}: {Count(values, "vrednost", "vrednosti", "vrednosti", "vrednosti")} pri {Count(products, "izdelku", "izdelkih", "izdelkih", "izdelkih")}";
+    }
+  }
+
+  /// <summary>Glagol v številu: 1 se izklopi, 2 se izklopita, 3–4 se izklopijo, 5+ se izklopi.</summary>
+  static string Verb(long n, string one, string two, string few, string many) => (n % 100) switch
+  {
+    1 => one,
+    2 => two,
+    3 or 4 => few,
+    _ => many,
+  };
+
+  static IEnumerable<string> EffectLines(PIM.Intranet.Services.AttributeMappingService.MergeSummary summary)
+  {
+    if (summary.Moved + summary.Filled > 0)
+      yield return $"»{summary.TargetName}« dobi {Count(summary.Moved + summary.Filled, "novo vrednost", "novi vrednosti", "nove vrednosti", "novih vrednosti")} (izdelki bodo ponovno validirani).";
+    if (summary.Same > 0)
+      yield return $"{Count(summary.Same, "vrednost je", "vrednosti sta", "vrednosti so", "vrednosti je")} pri »{summary.TargetName}« že enakih — pri »{summary.SourceName}« se samo odstranijo.";
+    if (summary.Conflicts > 0)
+      yield return $"{Count(summary.Conflicts, "trk", "trka", "trki", "trkov")}: ostane vrednost »{summary.TargetName}«, vrednost »{summary.SourceName}« je zapisana v zgodovini in se z razveljavitvijo vrne.";
+    if (summary.FieldMappingsDeactivated > 0)
+      yield return $"Zajem XML: {Count(summary.FieldMappingsDeactivated, "preslikava", "preslikavi", "preslikave", "preslikav")} v »{summary.SourceName}« {Verb(summary.FieldMappingsDeactivated, "se izklopi", "se izklopita", "se izklopijo", "se izklopi")} — isti podatek iz vira že gre v »{summary.TargetName}«.";
+    if (summary.FieldMappingsRetargeted > 0)
+      yield return $"Zajem XML: {Count(summary.FieldMappingsRetargeted, "preslikava", "preslikavi", "preslikave", "preslikav")} odslej {Verb(summary.FieldMappingsRetargeted, "piše", "pišeta", "pišejo", "piše")} v »{summary.TargetName}«, zato naslednji zajem opuščenega atributa ne napolni znova.";
+    if (summary.AttributeMaps > 0)
+      yield return $"Register virov: {Count(summary.AttributeMaps, "izvorni atribut kaže", "izvorna atributa kažeta", "izvorni atributi kažejo", "izvornih atributov kaže")} na »{summary.TargetName}«.";
+    if (summary.CategorySetsRetargeted + summary.CategorySetsDeactivated > 0)
+      yield return $"Nabori kategorij: {summary.CategorySetsRetargeted:N0} preneseno na »{summary.TargetName}«, {summary.CategorySetsDeactivated:N0} izklopljeno (kategorija ga že ima).";
+    if (summary.RequirementsRetargeted + summary.RequirementsDeactivated > 0)
+      yield return $"Zahteve validacije: {summary.RequirementsRetargeted:N0} prenesenih na »{summary.TargetName}«, {summary.RequirementsDeactivated:N0} izklopljenih (enaka že obstaja).";
+    if (summary.ExportColumnsRetargeted > 0)
+      yield return $"katalog.csv: {Count(summary.ExportColumnsRetargeted, "stolpec bere", "stolpca bereta", "stolpci berejo", "stolpcev bere")} »{summary.TargetName}« (ime stolpca ostane).";
+    if (summary.ExportColumnsKeptEmpty > 0)
+      yield return $"katalog.csv: stolpec »{summary.ExportColumnsKeptNames ?? summary.SourceName}« ostane v glavi, a bo prazen — podatek je v stolpcu »{summary.TargetName}«.";
+    if (summary.UnitPairs > 0)
+      yield return $"Par enote: {Count(summary.UnitPairs, "atribut »Enota …« se veže", "atributa »Enota …« se vežeta", "atributi »Enota …« se vežejo", "atributov »Enota …« se veže")} na »{summary.TargetName}«.";
+    yield return $"»{summary.SourceName}« se deaktivira (ostane v registru z opombo, v kaj je združen). V SAOP ne gre nič.";
+  }
+
+  void CloseMerge()
+  {
+    if (Merging) return;
+    Plans = [];
+  }
+
+  void CancelValidation() => validationCancel?.Cancel();
+
+  async Task ConfirmMergeAsync()
+  {
+    if (!CanConfirm) return;
+    Merging = true;
+    MergeError = Result = null;
+    var done = new List<string>();
+    var products = new List<long>();
+    try
+    {
+      var index = 0;
+      foreach (var plan in Plans.ToList())
+      {
+        index++;
+        Progress = $"Združujem {index} od {Plans.Count}: »{plan.Drop.Name}« v »{plan.Keep.Name}« …";
+        StateHasChanged();
+        try
+        {
+          var outcome = await Attributes.MergeAsync(plan.Drop.AttributeCode!, plan.KeepCode, plan.EnglishName);
+          products.AddRange(outcome.ProductIds);
+          var summary = outcome.Summary;
+          done.Add($"»{plan.Drop.Name}« → »{plan.Keep.Name}« ({Count(summary?.Values ?? 0, "vrednost", "vrednosti", "vrednosti", "vrednosti")} pri {Count(summary?.Products ?? 0, "izdelku", "izdelkih", "izdelkih", "izdelkih")}"
+            + (summary?.EnglishNameAfter is { } english && english != summary.EnglishNameBefore ? $", angleško »{english}«" : "") + ")");
+        }
+        catch (Exception exception)
+        {
+          MergeError = $"Par »{plan.Drop.Name}« in »{plan.Keep.Name}« ni združen: {exception.Message}"
+            + (done.Count > 0 ? " Prejšnji pari so združeni (glej Zgodovina združitev)." : "");
+          break;
+        }
+      }
+      var validation = await ValidateAsync(products);
+      if (done.Count > 0)
+        Result = $"Združeno: {string.Join("; ", done)}. {validation} Združeni par izgine s seznama; razveljaviš ga v Zgodovini združitev spodaj.";
+    }
+    finally
+    {
+      Merging = Validating = false;
+      Progress = null;
+      if (MergeError is null) { Plans = []; Selection.Clear(); }
+      StateHasChanged();
+    }
+    await LoadMergesAsync();
+    await LoadDuplicatesAsync(true);
+  }
+
+  /// <summary>Validacija izdelkov, pri katerih se je vrednost ciljnega atributa spremenila (v paketih, s preklicem).</summary>
+  async Task<string> ValidateAsync(IReadOnlyList<long> products)
+  {
+    var distinct = products.Distinct().ToList();
+    if (distinct.Count == 0) return "Atribut, ki ostane, ni dobil ali izgubil nobene vrednosti, zato validacija ni potrebna.";
+    Validating = true;
+    validationCancel = new CancellationTokenSource();
+    var progress = new Progress<int>(count =>
+    {
+      Progress = $"Validacija: {count:N0} od {distinct.Count:N0} izdelkov …";
+      _ = InvokeAsync(StateHasChanged);
+    });
+    Progress = $"Validacija: 0 od {distinct.Count:N0} izdelkov …";
+    StateHasChanged();
+    try
+    {
+      var validated = await Attributes.RevalidateAsync(distinct, progress, validationCancel.Token);
+      return $"Validacija ponovljena za {Count(validated, "izdelek", "izdelka", "izdelke", "izdelkov")}.";
+    }
+    catch (OperationCanceledException)
+    {
+      return "Validacija je preklicana; ostali izdelki se preverijo ob naslednji validaciji.";
+    }
+    catch (Exception exception)
+    {
+      return "Validacija ni uspela (" + exception.Message + "); izdelki se preverijo ob naslednji validaciji.";
+    }
+    finally
+    {
+      Validating = false;
+      validationCancel?.Dispose();
+      validationCancel = null;
+    }
+  }
+
+  async Task AskRevertAsync(PIM.Intranet.Services.AttributeMappingService.MergeRun run)
+  {
+    Result = MergeError = null;
+    Plans = [];
+    RevertTarget = run;
+    RevertPreview = null;
+    StateHasChanged();
+    try { RevertPreview = await Attributes.PreviewRevertAsync(run.MergeId); }
+    catch (Exception exception) { MergeError = "Razveljavitve ni bilo mogoče pripraviti: " + exception.Message; RevertTarget = null; }
+  }
+
+  void CancelRevert()
+  {
+    RevertTarget = null;
+    RevertPreview = null;
+  }
+
+  string RevertText(PIM.Intranet.Services.AttributeMappingService.MergeRun run)
+  {
+    if (RevertPreview is not { } preview) return "Računam, kaj se da vrniti …";
+    var skipped = preview.ValuesSkipped + preview.SettingsSkipped;
+    return $"Vrne se {Count(preview.ValuesReverted, "vrednost", "vrednosti", "vrednosti", "vrednosti")} in "
+      + $"{Count(preview.SettingsReverted, "nastavitev", "nastavitvi", "nastavitve", "nastavitev")} (preslikave, nabori, zahteve, izvoz, register, angleško ime). "
+      + (skipped > 0 ? $"{Count(skipped, "sprememba je bila", "spremembi sta bili", "spremembe so bile", "sprememb je bilo")} od združitve urejenih in ostanejo, kot so. " : "")
+      + $"Atribut »{run.SourceName}« bo spet aktiven.";
+  }
+
+  async Task ConfirmRevertAsync()
+  {
+    if (RevertTarget is not { } run || Merging) return;
+    Merging = true;
+    MergeError = Result = null;
+    try
+    {
+      var outcome = await Attributes.RevertMergeAsync(run.MergeId);
+      var validation = await ValidateAsync(outcome.ProductIds);
+      Result = $"Razveljavljeno: »{run.SourceName}« je spet samostojen atribut ({Count(outcome.Summary?.ValuesReverted ?? 0, "vrednost vrnjena", "vrednosti vrnjeni", "vrednosti vrnjene", "vrednosti vrnjenih")}"
+        + (outcome.Summary is { ValuesSkipped: > 0 } summary ? $", {summary.ValuesSkipped:N0} ostalo, ker so bile medtem spremenjene" : "") + $"). {validation}";
+      RevertTarget = null;
+      RevertPreview = null;
+    }
+    catch (Exception exception) { MergeError = "Razveljavitev ni uspela: " + exception.Message; }
+    finally { Merging = false; Progress = null; StateHasChanged(); }
+    await LoadMergesAsync();
+    await LoadDuplicatesAsync(true);
   }
 }

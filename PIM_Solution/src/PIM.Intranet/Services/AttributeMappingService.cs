@@ -513,6 +513,203 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
     return new PolishPreview(changes, distinctValues, watch.ElapsedMilliseconds, DateTime.UtcNow);
   }
 
+  // --- Združitev atributov (naloga #48, migracija 319) ----------------------------------------
+  // Lastnik 2026-09-29: »Grlo« in »Podnožje / socket« sta isto — ostane Grlo, angleško socket; ostale
+  // pare izbere sam na strani. Vse pravilo je v canon.MergeAttributeDefinitions (ena transakcija, dnevnik
+  // pim.AttributeMergeItem prej/potem, povratek canon.RevertAttributeMerge); servis samo kliče in varuje.
+
+  /// <summary>Povzetek združitve (predogled ali rezultat) iz JSON, ki ga vrne postopek.</summary>
+  public sealed record MergeSummary(
+    string SourceCode, string SourceName, string TargetCode, string TargetName,
+    string? EnglishNameBefore, string? EnglishNameAfter,
+    int Products, int Moved, int Filled, int Same, int Conflicts,
+    int FieldMappingsRetargeted, int FieldMappingsDeactivated, int AttributeMaps,
+    int CategorySetsRetargeted, int CategorySetsDeactivated, int RequirementsRetargeted, int RequirementsDeactivated,
+    int ExportColumnsRetargeted, int ExportColumnsKeptEmpty, string? ExportColumnsKeptNames, int UnitPairs)
+  {
+    /// <summary>Vrednosti pri izdelkih, ki jih združitev prestavi ali pobriše.</summary>
+    public int Values => Moved + Filled + Same + Conflicts;
+    public int Settings => FieldMappingsRetargeted + FieldMappingsDeactivated + AttributeMaps + CategorySetsRetargeted
+      + CategorySetsDeactivated + RequirementsRetargeted + RequirementsDeactivated + ExportColumnsRetargeted + UnitPairs;
+  }
+
+  /// <param name="Moved">Vrednosti, ki jih ciljni atribut dobi na novo (prej jih ni imel).</param>
+  public sealed record MergeOrganization(int OrganizationId, string Name, bool IsActive, int Products, int Moved, int Same, int Conflicts);
+
+  public sealed record MergeConflict(string Organization, string ItemId, string? Language, string SourceValue, string TargetValue);
+
+  public sealed record MergePreview(MergeSummary Summary, IReadOnlyList<MergeOrganization> Organizations, IReadOnlyList<MergeConflict> Conflicts);
+
+  /// <param name="ProductIds">Izdelki (canon), pri katerih se je ciljna vrednost spremenila — za validacijo.</param>
+  public sealed record MergeOutcome(long MergeId, MergeSummary? Summary, IReadOnlyList<long> ProductIds);
+
+  public sealed record RevertSummary(int ValuesReverted, int ValuesSkipped, int SettingsReverted, int SettingsSkipped);
+
+  public sealed record RevertOutcome(long MergeId, RevertSummary? Summary, IReadOnlyList<long> ProductIds);
+
+  public sealed record MergeRun(
+    long MergeId, string SourceCode, string TargetCode, string SourceName, string TargetName, MergeSummary? Summary,
+    string MergedBy, DateTime MergedUtc, string? RevertedBy, DateTime? RevertedUtc, RevertSummary? RevertSummary, bool CanRevert);
+
+  static readonly JsonSerializerOptions MergeJson = new() { PropertyNameCaseInsensitive = true };
+
+  static MergeSummary? ParseMergeSummary(string? json)
+  {
+    if (string.IsNullOrWhiteSpace(json)) return null;
+    try { return JsonSerializer.Deserialize<MergeSummary>(json, MergeJson); }
+    catch (JsonException) { return null; }
+  }
+
+  static RevertSummary? ParseRevertSummary(string? json)
+  {
+    if (string.IsNullOrWhiteSpace(json)) return null;
+    try { return JsonSerializer.Deserialize<RevertSummary>(json, MergeJson); }
+    catch (JsonException) { return null; }
+  }
+
+  /// <summary>
+  /// Predogled za potrditev (postopek z @DryRun = 1, nič se ne zapiše): koliko vrednosti in izdelkov po
+  /// podjetjih, trki (cilj ima drugo vrednost — cilj zmaga) in katere nastavitve se prestavijo.
+  /// </summary>
+  public async Task<MergePreview> PreviewMergeAsync(string sourceCode, string targetCode, string? englishName, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = MergeCommand(connection, sourceCode, targetCode, englishName, "predogled", dryRun: true);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    MergeSummary? summary = null;
+    if (await reader.ReadAsync(cancellationToken)) summary = ParseMergeSummary(PimDb.Text(reader, "SummaryJson"));
+    var organizations = new List<MergeOrganization>();
+    await reader.NextResultAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      organizations.Add(new MergeOrganization(PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"),
+        PimDb.Bool(reader, "IsActive"), PimDb.Int32(reader, "Products"), PimDb.Int32(reader, "Moved"), PimDb.Int32(reader, "Same"),
+        PimDb.Int32(reader, "Conflicts")));
+    var conflicts = new List<MergeConflict>();
+    await reader.NextResultAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      conflicts.Add(new MergeConflict(PimDb.TextOrEmpty(reader, "OrganizationName"), PimDb.TextOrEmpty(reader, "ItemID"),
+        PimDb.Text(reader, "LanguageCode"), PimDb.TextOrEmpty(reader, "SourceValue"), PimDb.TextOrEmpty(reader, "TargetValue")));
+    return new MergePreview(summary ?? throw new InvalidOperationException("Predogled združitve ni vrnil povzetka."), organizations, conflicts);
+  }
+
+  /// <summary>
+  /// Združi izvorni atribut v ciljnega (ena transakcija v bazi, dnevnik, povratek). Samo CatalogWrite.
+  /// Po uspehu razveljavi predpomnjen seznam podvojenih, da združeni par izgine.
+  /// </summary>
+  public async Task<MergeOutcome> MergeAsync(string sourceCode, string targetCode, string? englishName, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var actor = await ActorAsync();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = MergeCommand(connection, sourceCode, targetCode, englishName, actor, dryRun: false);
+    var (id, json, products) = await ReadIdSummaryAndProductsAsync(command, cancellationToken);
+    cachedDuplicates = null;
+    return new MergeOutcome(id, ParseMergeSummary(json), products);
+  }
+
+  /// <summary>Koliko bi povratek vrnil (nič se ne zapiše).</summary>
+  public async Task<RevertSummary?> PreviewRevertAsync(long mergeId, CancellationToken cancellationToken = default)
+  {
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = RevertCommand(connection, mergeId, "predogled", dryRun: true);
+    var (_, json, _) = await ReadIdSummaryAndProductsAsync(command, cancellationToken);
+    return ParseRevertSummary(json);
+  }
+
+  /// <summary>
+  /// Povratek združitve. Vrednost, ki jo je kdo po združitvi spremenil, in nastavitev, ki ni več v stanju
+  /// »potem«, ostane (preskočena). Samo CatalogWrite.
+  /// </summary>
+  public async Task<RevertOutcome> RevertMergeAsync(long mergeId, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var actor = await ActorAsync();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = RevertCommand(connection, mergeId, actor, dryRun: false);
+    var (id, json, products) = await ReadIdSummaryAndProductsAsync(command, cancellationToken);
+    cachedDuplicates = null;
+    return new RevertOutcome(id, ParseRevertSummary(json), products);
+  }
+
+  public Task<IReadOnlyList<MergeRun>> GetMergesAsync(CancellationToken cancellationToken = default) =>
+    database.QueryAsync(
+      "EXEC intranet.GetAttributeMerges @Top;",
+      reader => new MergeRun(
+        PimDb.Int64(reader, "AttributeMergeId"), PimDb.TextOrEmpty(reader, "SourceAttributeCode"), PimDb.TextOrEmpty(reader, "TargetAttributeCode"),
+        PimDb.TextOrEmpty(reader, "SourceName"), PimDb.TextOrEmpty(reader, "TargetName"), ParseMergeSummary(PimDb.Text(reader, "SummaryJson")),
+        PimDb.TextOrEmpty(reader, "MergedBy"), PimDb.DateTimeValue(reader, "MergedUtc"), PimDb.Text(reader, "RevertedBy"),
+        PimDb.NullableDateTime(reader, "RevertedUtc"), ParseRevertSummary(PimDb.Text(reader, "RevertSummaryJson")), PimDb.Bool(reader, "CanRevert")),
+      command => command.Parameters.AddWithValue("@Top", 50), cancellationToken);
+
+  /// <summary>Koliko izdelkov gre v en klic validacije (val.RunValidationForProducts); glej ProductBulkEdit.ChunkSize (#105).</summary>
+  public const int ValidationChunk = 200;
+
+  /// <summary>
+  /// Validacija izdelkov, pri katerih se je ciljna vrednost spremenila — v paketih, z napredkom in preklicem
+  /// med paketi (dolgo opravilo, CLAUDE.md §2). Vrne število validiranih izdelkov.
+  /// </summary>
+  public async Task<int> RevalidateAsync(IReadOnlyList<long> productIds, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.CatalogWrite);
+    var done = 0;
+    foreach (var chunk in productIds.Distinct().Chunk(ValidationChunk))
+    {
+      cancellationToken.ThrowIfCancellationRequested();
+      await using var connection = new SqlConnection(ConnectionString);
+      await connection.OpenAsync(cancellationToken);
+      await using var command = new SqlCommand("EXEC val.RunValidationForProducts @ProductIdsJson;", connection) { CommandTimeout = 600 };
+      command.Parameters.Add("@ProductIdsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(chunk);
+      await command.ExecuteNonQueryAsync(cancellationToken);
+      done += chunk.Length;
+      progress?.Report(done);
+    }
+    return done;
+  }
+
+  async Task<string> ActorAsync() => (await guard.CurrentUserAsync())?.Identity?.Name ?? "neznan";
+
+  static SqlCommand MergeCommand(SqlConnection connection, string sourceCode, string targetCode, string? englishName, string actor, bool dryRun)
+  {
+    var command = new SqlCommand(
+      "EXEC canon.MergeAttributeDefinitions @SourceAttributeCode, @TargetAttributeCode, @TargetEnglishName, @Actor, @DryRun;", connection)
+    { CommandTimeout = 300 };
+    command.Parameters.Add("@SourceAttributeCode", SqlDbType.NVarChar, 200).Value = sourceCode;
+    command.Parameters.Add("@TargetAttributeCode", SqlDbType.NVarChar, 200).Value = targetCode;
+    command.Parameters.Add("@TargetEnglishName", SqlDbType.NVarChar, 400).Value = Nullable(englishName);
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@DryRun", SqlDbType.Bit).Value = dryRun;
+    return command;
+  }
+
+  static SqlCommand RevertCommand(SqlConnection connection, long mergeId, string actor, bool dryRun)
+  {
+    var command = new SqlCommand("EXEC canon.RevertAttributeMerge @AttributeMergeId, @Actor, @DryRun;", connection) { CommandTimeout = 300 };
+    command.Parameters.Add("@AttributeMergeId", SqlDbType.BigInt).Value = mergeId;
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@DryRun", SqlDbType.Bit).Value = dryRun;
+    return command;
+  }
+
+  static async Task<(long Id, string? Json, IReadOnlyList<long> Products)> ReadIdSummaryAndProductsAsync(SqlCommand command, CancellationToken cancellationToken)
+  {
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    long id = 0;
+    string? json = null;
+    if (await reader.ReadAsync(cancellationToken))
+    {
+      id = reader.IsDBNull(reader.GetOrdinal("AttributeMergeId")) ? 0 : PimDb.Int64(reader, "AttributeMergeId");
+      json = PimDb.Text(reader, "SummaryJson");
+    }
+    var products = new List<long>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken)) products.Add(PimDb.Int64(reader, "ProductId"));
+    return (id, json, products);
+  }
+
   /// <summary>Eno poenotenje vrednosti v dnevniku pim.AttributeValueNormalizationLog (291, 294, 314 …).</summary>
   /// <param name="ChangedBy">Oznaka poenotenja (npr. »migracija 314« ali »povratek migracija 314 (kdo)«).</param>
   public sealed record NormalizationRun(string ChangedBy, long Rows, long Products, int Organizations, DateTime FirstUtc, DateTime LastUtc);
