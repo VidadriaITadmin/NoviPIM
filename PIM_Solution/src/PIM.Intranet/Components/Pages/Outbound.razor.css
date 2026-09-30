@@ -2,9 +2,6 @@
 .toolbar { flex-wrap: wrap; row-gap: 10px; }
 .result-count { font-variant-numeric: tabular-nums; }
 
-/* Delež pod vrednostjo hitrega pregleda je izpeljan podatek, zato ostane vizualno podrejen. */
-.kpi-share { color: #64748b; display: block; font-size: 12px; margin-top: 4px; }
-
 /* Deset stolpcev je gostih; na ozkih zaslonih se tabela pomika, namesto da bi se stiskala. */
 .table-scroll { overflow-x: auto; }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }

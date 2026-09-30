@@ -14,6 +14,22 @@ window.pimDownloadFile = function (url) {
   link.remove();
 };
 
+// Majhen izvoz, ki ga stran ze ima v pomnilniku (npr. /nastavitve/atributi/ciscenje, #15): CSV z BOM,
+// da ga Excel odpre s sumniki. Brez povezave data: v strani, ker bi jo pregledovalnik povezav stel
+// za pokvarjeno, in brez strezniske poti (Program.cs). Klicati takoj po uporabnikovem kliku.
+window.pimDownloadText = function (fileName, text, mimeType) {
+  const blob = new Blob(['﻿' + text], { type: mimeType || 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName || 'izvoz.csv');
+  link.setAttribute('data-enhance-nav', 'false');
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+};
+
 // Okno izvozov v kotu vsake strani (MainLayout: #pim-export-tray). Izvoz pripada uporabniku, ne
 // strani, ki ga je sprozila — uporabnik 2026-09-22 je kliknil »Izvozi«, takoj za tem »Uvozi«, in
 // obvestilo je izginilo skupaj s stranjo, gradnja pa je tekla naprej brez sledi. Okno zato bere
