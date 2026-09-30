@@ -242,6 +242,8 @@ Assert(mediaPage.Contains("<option value=\"\">Vsa podjetja</option>", StringComp
   "Izbirnik podjetja mora ponuditi vsa podjetja.");
 Assert(!mediaPage.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal),
   "Obseg ne sme priti iz GetCurrentOrganizationAsync — ta vedno vrne prvo podjetje po sifri (DEMO).");
+// Pogodba je natancen niz: ce se SQL obsega v CatalogReadService.cs preoblikuje, je treba tu posodobiti trditev
+// (naloga #111: vrata #94 so tekla na veji, kjer je bila trditev se stara »@OrganizationId IS NULL OR« iz casa pred 264).
 // 264 je izraz obsega zapisala kot »@OrganizationId IS NULL AND ... IN (aktivna podjetja) OR = @OrganizationId«; pomen je isti.
 Assert(catalog.Contains("organization.IsActive = 1", StringComparison.Ordinal)
     && catalog.Contains("@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)", StringComparison.Ordinal)
@@ -317,7 +319,11 @@ static void Assert(bool condition, string message)
   Environment.Exit(1);
 }
 
-static string Read(string path) => File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+// Naloga #111: manjkajoca datoteka je bila prej tiho prazen niz, zato je padla vsebinska trditev
+// (npr. »Obseg medijev ...«) namesto jasne napake. Zdaj test pove, katere datoteke ni.
+static string Read(string path) => File.Exists(path)
+  ? File.ReadAllText(path)
+  : throw new FileNotFoundException("Datoteke, ki jo test preverja, ni: " + path, path);
 
 static string FindRoot()
 {
