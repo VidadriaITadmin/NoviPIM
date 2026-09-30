@@ -14,7 +14,7 @@
 <section class="ui-card toolbar" role="search" aria-labelledby="translation-filter-title">
   <h2 id="translation-filter-title" class="visually-hidden">Filtriranje manjkajočih prevodov</h2>
   <label class="visually-hidden" for="translation-language">Jezik</label>
-  <select id="translation-language" class="filter-select" @bind="Language" @bind:after="LoadAsync">
+  <select id="translation-language" class="filter-select" @bind="Language" @bind:after="ChooseLanguageAsync">
     <option value="">Vsi jeziki</option>
     @foreach (var language in Languages)
     {
@@ -107,6 +107,8 @@
   ];
 
   [SupplyParameterFromQuery(Name = "slovar")] public string? RequestedCoverageLanguage { get; set; }
+  /* 60: jezikovni filter seznama je v URL-ju (osvežitev in deljena povezava pokažeta isti nabor). */
+  [SupplyParameterFromQuery(Name = "jezik")] public string? RequestedLanguage { get; set; }
 
   PIM.Intranet.Services.AttributeMappingService.DictionaryCoverageReport? Coverage;
   bool CoverageLoading = true;
@@ -153,6 +155,19 @@
     await LoadAsync();
     // Jeziki v izbirniku so tisti, ki dejansko nastopajo v vrzelih — ne celoten sifrant.
     Languages = Rows.Select(row => row.Language).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(value => value).ToList();
+    var requested = RequestedLanguage?.Trim() ?? "";
+    if (requested.Length > 0)
+    {
+      Language = Languages.FirstOrDefault(code => string.Equals(code, requested, StringComparison.OrdinalIgnoreCase)) ?? requested.ToUpperInvariant();
+      if (!Languages.Contains(Language, StringComparer.OrdinalIgnoreCase)) Languages = [.. Languages, Language];
+      await LoadAsync();
+    }
+  }
+
+  async Task ChooseLanguageAsync()
+  {
+    Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("jezik", string.IsNullOrWhiteSpace(Language) ? null : Language), replace: true);
+    await LoadAsync();
   }
 
   async Task LoadAsync()
