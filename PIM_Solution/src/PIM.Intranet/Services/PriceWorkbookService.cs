@@ -24,6 +24,13 @@ public sealed record PriceImportPreview(
   public IReadOnlyList<string> Organizations => Rows.Select(row => row.OrganizationName).Distinct().ToArray();
 }
 
+/// <summary>Paketna sprememba cene (#31): za odstotek (<paramref name="Percent"/>) ali na vrednost, v enem ceniku.</summary>
+/// <param name="ValidFrom">Velja od; null = datum ostane.</param>
+public sealed record PriceBulkChange(string PriceList, bool Percent, decimal Value, DateTime? ValidFrom);
+
+/// <summary>Izbran izdelek na /cene: podjetje + šifra (cena se nikoli ne vpiše drugemu podjetju).</summary>
+public sealed record PriceBulkKey(int OrganizationId, string ItemId);
+
 /// <param name="Batches">Serija na podjetje: čaka odobritev na zavihku »V SAOP«.</param>
 public sealed record PriceImportOutcome(
   IReadOnlyList<(string Organization, long? BatchId, PriceEnqueueOutcome Outcome)> Batches)
@@ -240,19 +247,119 @@ public sealed class PriceWorkbookService(PriceService prices, IntranetDataServic
 
   /* --- uvoz: vrsta za SAOP ------------------------------------------------------------------ */
 
+  /// <param name="source">EXCEL (uvoz datoteke) ali BULK (paketna sprememba na /cene, #31).</param>
+  /// <param name="title">Opis serije namesto »Uvoz cen &lt;datoteka&gt;«.</param>
   public async Task<PriceImportOutcome> ApplyAsync(PriceImportPreview preview, string actor, string? fileName,
-    CancellationToken cancellationToken = default)
+    CancellationToken cancellationToken = default, string source = "EXCEL", string? title = null)
   {
     var batches = new List<(string, long?, PriceEnqueueOutcome)>();
+    // Ena serija na podjetje: cena se nikoli ne vpiše drugemu podjetju kot tistemu, v katerem je bila prebrana.
     foreach (var organization in preview.Rows.GroupBy(row => (row.OrganizationId, row.OrganizationName)))
     {
       var changes = organization.Select(row => new PriceChange(row.PriceList, row.ItemId, row.NewNet, row.NewVat, row.ValidFrom, row.Active)).ToArray();
-      var note = $"Uvoz cen{(string.IsNullOrWhiteSpace(fileName) ? "" : " " + fileName)}: {changes.Length:N0} cen";
-      var outcome = await prices.EnqueueAsync(organization.Key.OrganizationId, changes, actor, "EXCEL", note, cancellationToken: cancellationToken);
+      var note = $"{title ?? "Uvoz cen" + (string.IsNullOrWhiteSpace(fileName) ? "" : " " + fileName)}: {changes.Length:N0} cen";
+      var outcome = await prices.EnqueueAsync(organization.Key.OrganizationId, changes, actor, source, note, cancellationToken: cancellationToken);
       batches.Add((organization.Key.OrganizationName, outcome.BatchId, outcome));
     }
     return new(batches);
   }
+
+  /* --- paketna sprememba na /cene (#31) ----------------------------------------------------- */
+
+  /// <summary>Največ cen v eni paketni spremembi; nad tem stran predlaga ožji filter (PIM_DOBRE_PRAKSE §9.24).</summary>
+  public const int BulkLimit = 20_000;
+
+  /// <summary>
+  /// Predogled paketne spremembe: izbrane cene (ali vse, ki ustrezajo filtru strani) v enem ceniku
+  /// se spremenijo za odstotek ali na novo vrednost. Isti predogled kot uvoz Excela, zato gre naprej
+  /// po isti poti: <see cref="ApplyAsync"/> (vrsta za SAOP, ena serija na podjetje, čaka odobritev) in
+  /// zgodovina uvozov (CENE), iz katere se sprememba povrne na /cene/uvoz?undo.
+  ///
+  /// Privzeto za noč (#31, odločitev #38): spremeni se samo neto; DDV in aktivnost ostaneta; cena se
+  /// zaokroži na cent (kot polnjenje cenika); nove cene v cenikih, kjer je artikel nima, paket ne doda;
+  /// neaktivne cene preskoči. Osnova za odstotek je cena iz SAOP, ne tista, ki morda čaka v vrsti.
+  /// </summary>
+  /// <param name="filter">»Vse, ki ustrezajo filtru«: nabor se prebere na strežniku (brez poizvedbe na vrstico).</param>
+  /// <param name="keys">Posamezno izbrani izdelki (podjetje + šifra), kadar filter ni podan.</param>
+  public async Task<PriceImportPreview> PlanBulkAsync(
+    PriceBulkChange change, PriceQuery? filter, IReadOnlyCollection<PriceBulkKey> keys, CancellationToken cancellationToken = default)
+  {
+    if (string.IsNullOrWhiteSpace(change.PriceList)) throw new ArgumentException("Izberi cenik.");
+    if (change.Percent && (change.Value <= -90 || change.Value > 500 || change.Value == 0))
+      throw new ArgumentException("Odstotek mora biti med −90 in +500 in različen od 0 (npr. 5 ali −3,5).");
+    if (!change.Percent && change.Value < 0) throw new ArgumentException("Nova neto cena mora biti večja ali enaka 0.");
+
+    var priceList = change.PriceList.Trim();
+    var organizations = (await data.GetOrganizationsAsync(cancellationToken)).ToDictionary(row => row.OrganizationId, row => row.Name);
+    var problems = new List<string>();
+    var lines = new List<PriceLine>();
+    int read;
+
+    if (filter is not null)
+    {
+      var all = await prices.GetLinesAsync(filter with { PriceList = priceList }, cancellationToken);
+      if (all.Count > BulkLimit)
+        throw new ArgumentException($"Filter zajame {all.Count:N0} cen v ceniku {priceList} — največ {BulkLimit:N0} naenkrat. Zoži filter (podjetje, iskanje) ali uporabi izvoz in uvoz Excela.");
+      lines.AddRange(all);
+      read = all.Count;
+    }
+    else
+    {
+      if (keys.Count > BulkLimit) throw new ArgumentException($"Izbranih je {keys.Count:N0} izdelkov — največ {BulkLimit:N0} naenkrat.");
+      read = keys.Count;
+      foreach (var organization in keys.GroupBy(key => key.OrganizationId))
+      {
+        var itemIds = organization.Select(key => key.ItemId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var current = await prices.GetCurrentAsync(organization.Key, itemIds, cancellationToken);
+        var name = organizations.GetValueOrDefault(organization.Key, organization.Key.ToString(CultureInfo.InvariantCulture));
+        foreach (var itemId in itemIds)
+        {
+          if (current.TryGetValue((organization.Key, priceList, itemId), out var line)) lines.Add(line with { OrganizationName = name });
+          else problems.Add($"{name} {itemId}: v ceniku {priceList} nima cene — paketna sprememba ne dodaja novih cen (dodaj jo v vrstici izdelka).");
+        }
+      }
+    }
+
+    var rows = new List<PriceImportRow>();
+    var warnings = new List<string>();
+    var unchanged = 0;
+    var validFrom = change.ValidFrom?.Date;
+    foreach (var line in lines.OrderBy(line => line.OrganizationId).ThenBy(line => line.ItemId, StringComparer.OrdinalIgnoreCase))
+    {
+      var organizationName = line.OrganizationName is { Length: > 0 } known ? known
+        : organizations.GetValueOrDefault(line.OrganizationId, line.OrganizationId.ToString(CultureInfo.InvariantCulture));
+      var where = $"{organizationName} {line.PriceList} {line.ItemId}";
+      if (line.Net is not { } oldNet) { problems.Add($"{where}: cena nima neto vrednosti — preskočena."); continue; }
+      if (!line.IsActive) { problems.Add($"{where}: cena je neaktivna — preskočena."); continue; }
+
+      var newNet = NewNet(oldNet, change);
+      var oldFrom = line.ValidFrom is { Year: > 1900 } date ? date.Date : (DateTime?)null;
+      if (newNet == oldNet && (validFrom is null || validFrom == oldFrom)) { unchanged++; continue; }
+
+      var row = new PriceImportRow(rows.Count + 1, line.OrganizationId, organizationName, line.PriceList, line.ItemId,
+        oldNet, newNet, line.VatRate, null, oldFrom, validFrom, line.IsActive, null);
+      if (row.ChangePercent is { } percent && Math.Abs(percent) > 25)
+        warnings.Add($"{where}: neto {oldNet:N2} → {newNet:N2} ({percent:+0.#;-0.#} %).");
+      if (newNet == 0) warnings.Add($"{where}: nova neto cena je 0.");
+      if (line.QueueStatus is { } status && status != "Sent")
+        warnings.Add($"{where}: v vrsti že čaka sprememba ({PriceService.QueueLabel(status)}{(line.QueuedNet is { } queued ? $" {queued:N2}" : "")}); nova jo nadomesti.");
+      rows.Add(row);
+    }
+
+    return new(rows, read, unchanged, problems, warnings, [], []);
+  }
+
+  /// <summary>Nova neto cena: odstotek od cene iz SAOP ali vpisana vrednost, zaokroženo na cent (kot <see cref="PriceService.CopyFromPriceListAsync"/>).</summary>
+  public static decimal NewNet(decimal oldNet, PriceBulkChange change) => change.Percent
+    ? Math.Round(oldNet * (1 + change.Value / 100m), 2, MidpointRounding.AwayFromZero)
+    : Math.Round(change.Value, 2, MidpointRounding.AwayFromZero);
+
+  /// <summary>Opis za serijo in zgodovino, npr. »Paketna sprememba cen B2C +5 %«.</summary>
+  public static string BulkTitle(PriceBulkChange change) => change.Percent
+    ? $"Paketna sprememba cen {change.PriceList} {change.Value.ToString("+0.##;-0.##", Slovenian)} %"
+    : $"Paketna sprememba cen {change.PriceList} na {change.Value.ToString("N2", Slovenian)}";
+
+  static readonly CultureInfo Slovenian = CultureInfo.GetCultureInfo("sl-SI");
 
   /* --- povratek uvoza (280) ------------------------------------------------------------------ */
 

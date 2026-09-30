@@ -1,0 +1,345 @@
+@using System.Globalization
+@inject SupplierCandidateReadService Candidates
+@inject NavigationManager Navigation
+@inject ExportResultStore ExportFiles
+@inject HeavyWorkGate Gate
+@inject IJSRuntime Js
+@implements IDisposable
+
+@* #7a (lastnik 2026-09-29): »ni jasno, ali novosti iz XML delujejo; stran ne pokaže, kaj se je
+   spremenilo in pri katerem artiklu«. Zajem XML (SUPPLIER_CATALOG_IMPORT, na 6 ur) obstoječe artikle
+   posodablja sam in vsako spremembo zapiše v pim.ProductFieldHistory; ta pogled jo pokaže po šifri:
+   kaj, prej → potem, kdaj, iz katerega vira. Samo branje — gumba »Vrni« ni (odločitev lastnika pri #27, 2026-09-29).
+   Filtri so v naslovu (deljiva povezava, Nazaj deluje), listanje in štetje sta v bazi. *@
+
+<p class="card-note xml-intro">
+  Zajem dobaviteljevega XML obstoječim artiklom sam posodobi atribute, besedila in slike. Tu je vsaka taka sprememba po šifri:
+  kaj, prej → potem in kdaj. Spremembe iz SAOP in ročni popravki tu niso — ti so na kartici artikla pod Zgodovina.
+  Gumba za povratek ni (odločitev lastnika): naslednji prevzem XML bi ročno vrnjeno vrednost spet prepisal.
+</p>
+
+@if (Page is { LastReceived.Count: > 0 })
+{
+  <p class="xml-freshness" role="status">
+    <span>Zadnji prevzem datoteke:</span>
+    @foreach (var (source, received) in Page.LastReceived)
+    {
+      var stale = DateTime.UtcNow - received > TimeSpan.FromDays(1);
+      <PimChip Text="@($"{source} · {received.ToPimLocal().ToString("g", Sl)}")" Tone="@(stale ? "warn" : "good")" Prefix="Prevzem XML: " />
+    }
+    @if (Page.LastReceived.Any(item => DateTime.UtcNow - item.ReceivedUtc > TimeSpan.FromDays(1)))
+    {
+      <span class="muted">Zajem je na 6 ur; starejši prevzem pomeni, da XML ne prihaja — preveri posel na <a href="sistem">Nadzor</a>.</span>
+    }
+  </p>
+}
+
+<nav class="pim-pills" aria-label="Vrsta spremembe">
+  <a class="pim-pill" href="@Href(Filter with { Kind = null, Skip = 0 })" aria-current="@((Filter.Kind is null).ToString().ToLowerInvariant())">
+    Vse spremembe <span class="count">@AllKinds.ToString("N0", Sl)</span>
+  </a>
+  @foreach (var (kindCode, kindLabel) in SupplierXmlChangeKinds.Kinds)
+  {
+    <a class="pim-pill" href="@Href(Filter with { Kind = kindCode, Skip = 0 })" aria-current="@((Filter.Kind == kindCode).ToString().ToLowerInvariant())">
+      @kindLabel <span class="count">@KindCount(kindCode).ToString("N0", Sl)</span>
+    </a>
+  }
+</nav>
+
+<section class="ui-card toolbar" role="search" aria-labelledby="xml-change-filter-title">
+  <h2 id="xml-change-filter-title" class="visually-hidden">Filtriranje sprememb iz XML</h2>
+
+  <label class="visually-hidden" for="xml-change-organization">Podjetje</label>
+  <select id="xml-change-organization" class="filter-select" @bind="OrganizationText" @bind:after="ApplyFilters">
+    <option value="">Vsa podjetja</option>
+    @foreach (var organization in Organizations)
+    {
+      <option value="@organization.OrganizationId">@organization.Name</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="xml-change-source">Vir</label>
+  <select id="xml-change-source" class="filter-select" @bind="SourceText" @bind:after="ApplyFilters">
+    <option value="">Vsi dobavitelji (XML)</option>
+    @foreach (var source in Sources) { <option value="@source">@source</option> }
+  </select>
+
+  <label class="visually-hidden" for="xml-change-days">Obdobje</label>
+  <select id="xml-change-days" class="filter-select" @bind="DaysText" @bind:after="ApplyFilters">
+    <option value="">Vsa zgodovina</option>
+    @foreach (var days in SupplierXmlChangeKinds.DayOptions)
+    {
+      <option value="@days">@(days == 1 ? "Zadnji dan" : $"Zadnjih {days} dni")</option>
+    }
+  </select>
+
+  <label class="visually-hidden" for="xml-change-sort">Razvrsti</label>
+  <select id="xml-change-sort" class="filter-select" @bind="SortText" @bind:after="ApplyFilters">
+    @foreach (var (sortCode, sortLabel) in SupplierXmlChangeKinds.Sorts) { <option value="@sortCode">@sortLabel</option> }
+  </select>
+
+  <label class="visually-hidden" for="xml-change-search">Poišči šifro artikla</label>
+  <input id="xml-change-search" type="search" class="search-input" placeholder="Šifra artikla … (Enter)" @bind="SearchText" @bind:after="ApplyFilters" />
+
+  @if (HasFilters)
+  {
+    <button type="button" class="secondary-button" @onclick="ClearFilters">Počisti filtre</button>
+  }
+  <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
+
+  @* Odločitev lastnika (#27): pregled s filtri IN izvozom v Excel. Izvoz vzame iste filtre in vrstni red
+     kot seznam, a vse strani; gradi se v ozadju te strani z možnostjo preklica. *@
+  <span class="xml-export">
+    @if (Exporting)
+    {
+      <button type="button" class="secondary-button" disabled aria-busy="true">Pripravljam Excel …</button>
+      <button type="button" class="ghost-button" @onclick="CancelExport">Prekliči izvoz</button>
+    }
+    else
+    {
+      <button type="button" class="secondary-button" disabled="@(Page is null || Page.Total == 0)" @onclick="ExportAsync"
+              title="Vse spremembe, ki ustrezajo filtrom (vse strani), v Excel — isti stolpci in vrstni red kot na zaslonu.">
+        Izvozi Excel (@((Page?.Total ?? 0).ToString("N0", Sl)))
+      </button>
+    }
+  </span>
+</section>
+
+@if (ExportMessage is not null)
+{
+  <p class="xml-export-note @(ExportFailed ? "is-error" : null)" role="@(ExportFailed ? "alert" : "status")">@ExportMessage</p>
+}
+
+<section class="ui-card data-card section-gap" aria-label="Spremembe iz XML dobaviteljev">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)" EmptyText="@EmptyText" LoadingText="Berem zgodovino sprememb iz XML …">
+    @if (Page is { Rows.Count: > 0 })
+    {
+      <PimTable Caption="@Caption" Columns="Columns">
+        <Rows>
+          @foreach (var row in Page.Rows)
+          {
+            <tr>
+              <td>
+                <a class="xml-item" href="izdelki/@row.ProductId" title="Odpri kartico artikla (zgodovina vseh sprememb)">@row.ItemId</a>
+                <span class="muted xml-sub">@row.OrganizationName</span>
+              </td>
+              <td><span class="code-value">@row.SourceCode</span></td>
+              <td>
+                <PimChip Text="@SupplierXmlChangeKinds.KindLabel(row.Kind)" Tone="@KindTone(row.Kind)" Prefix="Vrsta: " />
+                <div class="xml-field">@row.FieldLabel</div>
+                <span class="muted xml-sub">@row.Change</span>
+              </td>
+              <td class="xml-value">@Value(row, row.OldValue, row.OldTruncated)</td>
+              <td class="xml-value xml-new">@Value(row, row.NewValue, row.NewTruncated)</td>
+              <td class="xml-when">@row.ChangedAtUtc.ToPimLocal().ToString("g", Sl)</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      <PimPager Skip="Filter.Skip" Take="Filter.Take" Total="Page.Total" SkipChanged="GoToSkip" Label="Strani sprememb iz XML" />
+    }
+  </PimState>
+</section>
+
+@code {
+  /// <summary>Trenutni naslov strani; ob vsaki spremembi filtra ga starš poda znova in pogled se osveži.</summary>
+  [Parameter, EditorRequired] public required string CurrentUri { get; set; }
+  [Parameter] public IReadOnlyList<OrganizationContext> Organizations { get; set; } = [];
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly IReadOnlyList<string> Sources = ["NW_XML", "BT_XML"];
+  static readonly IReadOnlyList<PimColumn> Columns =
+  [
+    new("Artikel"), new("Vir"), new("Kaj"), new("Prej"), new("Potem"), new("Kdaj"),
+  ];
+
+  const int Take = 50;
+  SupplierXmlChangeFilter Filter = new();
+  SupplierXmlChangePage? Page;
+  bool Loading = true;
+  string? Error;
+  string? loadedUri;
+  string OrganizationText = "", SourceText = "", DaysText = "", SortText = "novejse", SearchText = "";
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (string.IsNullOrEmpty(CurrentUri) || CurrentUri == loadedUri) return;
+    loadedUri = CurrentUri;
+    Filter = FromUri(CurrentUri);
+    OrganizationText = Filter.OrganizationId?.ToString(CultureInfo.InvariantCulture) ?? "";
+    SourceText = Filter.SourceCode ?? "";
+    DaysText = Filter.Days?.ToString(CultureInfo.InvariantCulture) ?? "";
+    SortText = Filter.Sort;
+    SearchText = Filter.Search ?? "";
+
+    Loading = true;
+    Error = null;
+    try { Page = await Candidates.GetXmlChangesAsync(Filter); }
+    catch (Exception exception)
+    {
+      Page = null;
+      Error = $"Sprememb iz XML ni bilo mogoče prebrati: {exception.Message} Poskusi znova; če se ponovi, zoži obdobje ali poišči po šifri.";
+    }
+    finally { Loading = false; }
+  }
+
+  /// <summary>Filter iz naslova: podjetje, vir, vrsta, isci, dni, razvrsti, stran.</summary>
+  static SupplierXmlChangeFilter FromUri(string uri)
+  {
+    var query = System.Web.HttpUtility.ParseQueryString(new System.Uri(uri).Query);
+    string? Text(string name) => string.IsNullOrWhiteSpace(query[name]) ? null : query[name]!.Trim();
+    int? Number(string name) => int.TryParse(Text(name), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+
+    var source = Text("vir")?.ToUpperInvariant();
+    var kind = Text("vrsta")?.ToUpperInvariant();
+    var sort = Text("razvrsti");
+    var days = Number("dni");
+    var page = Math.Max(1, Number("stran") ?? 1);
+    return new(
+      OrganizationId: Number("podjetje"),
+      SourceCode: source is not null && Sources.Contains(source) ? source : null,
+      Kind: SupplierXmlChangeKinds.Kinds.Any(item => item.Code == kind) ? kind : null,
+      Search: Text("isci"),
+      Days: days is > 0 ? days : null,
+      Sort: SupplierXmlChangeKinds.Sorts.Any(item => item.Code == sort) ? sort! : "novejse",
+      Skip: (page - 1) * Take,
+      Take: Take);
+  }
+
+  static string Href(SupplierXmlChangeFilter filter)
+  {
+    var parts = new List<string> { "pogled=spremembe" };
+    void Add(string name, string? value) { if (!string.IsNullOrWhiteSpace(value)) parts.Add(name + "=" + System.Uri.EscapeDataString(value)); }
+    Add("podjetje", filter.OrganizationId?.ToString(CultureInfo.InvariantCulture));
+    Add("vir", filter.SourceCode);
+    Add("vrsta", filter.Kind);
+    Add("isci", filter.Search);
+    Add("dni", filter.Days?.ToString(CultureInfo.InvariantCulture));
+    if (filter.Sort != "novejse") Add("razvrsti", filter.Sort);
+    if (filter.Skip > 0) Add("stran", (filter.Skip / Math.Max(1, filter.Take) + 1).ToString(CultureInfo.InvariantCulture));
+    return "izdelki/novi-artikli?" + string.Join("&", parts);
+  }
+
+  void Go(SupplierXmlChangeFilter filter) => Navigation.NavigateTo(Href(filter));
+
+  void ApplyFilters() => Go(Filter with
+  {
+    OrganizationId = int.TryParse(OrganizationText, out var organization) ? organization : null,
+    SourceCode = SourceText == "" ? null : SourceText,
+    Days = int.TryParse(DaysText, out var days) ? days : null,
+    Sort = SortText,
+    Search = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
+    Skip = 0,
+  });
+
+  void ClearFilters() => Go(new SupplierXmlChangeFilter(Take: Take));
+  void GoToSkip(int skip) => Go(Filter with { Skip = skip });
+
+  bool HasFilters => Filter.OrganizationId is not null || Filter.SourceCode is not null || Filter.Kind is not null
+    || Filter.Search is not null || Filter.Days is not null || Filter.Sort != "novejse";
+
+  long KindCount(string kind) => Page?.KindCounts.TryGetValue(kind, out var count) == true ? count : 0;
+  long AllKinds => Page?.KindCounts.Values.Sum() ?? 0;
+
+  string ResultSummary => Loading ? "Nalaganje …" : Error is not null ? "Rezultati niso na voljo"
+    : Page is null ? "" : SupplierXmlChangeKinds.Summary(Page.Total, Page.ProductCount)
+      + (Page.LastChangedUtc is { } last ? $" · zadnja {last.ToPimLocal().ToString("g", Sl)}" : "");
+
+  /* --- izvoz v Excel ------------------------------------------------------ */
+
+  bool Exporting, ExportFailed;
+  string? ExportMessage;
+  CancellationTokenSource? exportCancel;
+  const string XlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  async Task ExportAsync()
+  {
+    if (Exporting || Page is null || Page.Total == 0) return;
+    Exporting = true;
+    ExportFailed = false;
+    ExportMessage = $"Pripravljam Excel ({SupplierXmlChangeKinds.Summary(Page.Total, Page.ProductCount)}) … Pri celotni zgodovini to traja do minute; stran lahko medtem uporabljaš.";
+    exportCancel = new CancellationTokenSource();
+    var token = exportCancel.Token;
+    var filter = Filter;
+    var path = ExportFiles.CreateTempFile();
+    try
+    {
+      long rows;
+      using (await Gate.Exports.EnterAsync(token))
+      await using (var file = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+        rows = await Candidates.WriteXmlChangesWorkbookAsync(filter, file, token);
+      var fileName = $"PIM_spremembe_iz_XML_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx";
+      var download = ExportFiles.Put(path, fileName, XlsxType);
+      await Js.InvokeVoidAsync("pimDownloadFile", $"izvoz/prenos/{download}");
+      ExportMessage = $"Izvoženih {rows.ToString("N0", Sl)} vrstic v {fileName}. Če se prenos ni začel sam, ga najdeš v prenosih brskalnika.";
+    }
+    catch (OperationCanceledException)
+    {
+      ExportMessage = "Izvoz preklican; datoteka ni bila narejena.";
+    }
+    catch (Exception exception)
+    {
+      ExportFailed = true;
+      ExportMessage = $"Izvoz ni uspel: {exception.Message} Poskusi znova ali zoži filtre (obdobje, vir).";
+    }
+    finally
+    {
+      Exporting = false;
+      exportCancel?.Dispose();
+      exportCancel = null;
+      if (File.Exists(path)) { try { File.Delete(path); } catch (IOException) { } }
+    }
+  }
+
+  void CancelExport() => exportCancel?.Cancel();
+
+  public void Dispose()
+  {
+    exportCancel?.Cancel();
+  }
+
+  string Caption => "Spremembe iz XML dobaviteljev po šifri"
+    + (Filter.Kind is { } kind ? " — " + SupplierXmlChangeKinds.Kinds.First(item => item.Code == kind).Label : "")
+    + $", stran {Filter.Skip / Filter.Take + 1}";
+
+  string EmptyText => HasFilters
+    ? "Za izbrane filtre ni sprememb iz XML. Počisti filtre ali razširi obdobje."
+    : "Zajem XML še ni spremenil nobenega obstoječega artikla. Če XML prihaja (zgoraj), so podatki pri dobavitelju enaki našim.";
+
+  static string? KindTone(string kind) => kind switch
+  {
+    SupplierXmlChangeKinds.Media => "info", SupplierXmlChangeKinds.Text => "warn", _ => null,
+  };
+
+  static RenderFragment Value(SupplierXmlChangeRow row, string? value, bool truncated) => __builder =>
+  {
+    if (value is null)
+    {
+      <span class="muted">(prazno)</span>
+      return;
+    }
+    if (row.IsMedia)
+    {
+      var href = MediaUrlPolicy.Normalize(value).Href;
+      if (href is not null)
+      {
+        <a class="xml-media" href="@href" target="_blank" rel="noopener" title="@value">
+          <img src="@href" alt="" loading="lazy" />
+          <span>@ShortUrl(value)</span>
+        </a>
+        return;
+      }
+    }
+    <span class="xml-text">@value</span>
+    if (truncated)
+    {
+      <span class="xml-tag" title="Zgodovina hrani prvih 400 znakov; celotno besedilo je na kartici artikla.">skrajšano</span>
+    }
+  };
+
+  static string ShortUrl(string url)
+  {
+    var slash = url.TrimEnd('/').LastIndexOf('/');
+    return slash < 0 ? url : "…" + url[slash..];
+  }
+}

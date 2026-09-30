@@ -178,6 +178,10 @@ function Test-Prekrivanje([string[]]$a, [string[]]$b) {
     if (-not $px -or -not $py) { continue }
     # Migracije niso zaklep področja: številke se rezervirajo z -Ukaz Migracija.
     if ($px -eq 'pim_solution/sql/migrations' -or $py -eq 'pim_solution/sql/migrations') { continue }
+    # Ustvarjen graf procesov in dnevnik baze (union merge) nista zaklep: konflikt reši Zdruzi.
+    $skupne = 'docs/procesi/pim-procesi.html', 'docs/database.md', 'pim_solution/pim.sln'
+    if ($skupne -contains $px -or $skupne -contains $py) { continue }
+    if ($px.StartsWith('pim_solution/sql/migrations/') -or $py.StartsWith('pim_solution/sql/migrations/')) { continue }
     if ($px -eq $py -or $px.StartsWith("$py/") -or $py.StartsWith("$px/")) { return "$x ↔ $y" }
   } }
   return $null
@@ -424,6 +428,24 @@ function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
   return @{ ok = $ok; povzetek = $povzetek; log = $log }
 }
 
+function Get-KlikalnikPovzetek($pregledane) {
+  # Povzetek poročila klikalnika za vrata. Počasne strani (najdbe vrste 'hitrost', nad 15 s) se štejejo
+  # posebej in izpišejo z imenom strani in časom; vrat ne zaprejo, ker je počasnost lahko od druge naloge
+  # (PRIVZETO ZA NOČ #64, odločitev lastnika v ločeni nalogi). Vrata zapre samo visoka najdba druge vrste.
+  $pregledane = @($pregledane | ForEach-Object { $_ } | Where-Object { $_ })
+  $najdbe = @($pregledane | ForEach-Object { @($_.najdbe) } | Where-Object { $_ })
+  $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
+  $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' -and $_.vrsta -ne 'hitrost' })
+  $pocasne = @($pregledane | Where-Object { @(@($_.najdbe) | Where-Object { $_ -and $_.vrsta -eq 'hitrost' }).Count -gt 0 } | ForEach-Object {
+    $ms = 0; if ($_.cas -and $_.cas.nalaganjeMs) { $ms = [double]$_.cas.nalaganjeMs }
+    $zelo = @(@($_.najdbe) | Where-Object { $_ -and $_.vrsta -eq 'hitrost' -and $_.resnost -eq 'VISOKA' }).Count -gt 0
+    "$($_.pot) $([Math]::Round($ms / 1000)) s$(if ($zelo) { ', zelo počasna' })"
+  })
+  $opis = "klikalnik: $($pregledane.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"
+  if ($pocasne.Count -gt 0) { $opis += ", počasnih $($pocasne.Count) ($($pocasne -join '; '))" }
+  return @{ ok = ($visoke.Count -eq 0); opis = $opis; visokih = $visoke.Count; srednjih = $srednje.Count; pocasnih = $pocasne.Count }
+}
+
 function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
   # Vsako mesto za vrata ima svoja vrata testnega intraneta, zato klikalnikov teče več hkrati.
   $mapaK = Join-Path $Koren 'PIM_Solution\tools\PIM.Klikalnik'
@@ -446,16 +468,15 @@ function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
     $k = Invoke-Korak 'klikalnik' 'node' @('klikalnik.mjs', "http://localhost:$vrata/", ($strani -join ',')) 30 $log $mapaK
     $json = Join-Path $izhodK 'klikalnik.json'
     if (Test-Path $json) {
-      $pregledane = @([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json)
+      # PS5: ConvertFrom-Json da seznam kot EN objekt; ForEach ga razgrne (sicer je Count vedno 1, tudi pri []).
+      $pregledane = @([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json | ForEach-Object { $_ })
       # Brez tega so vrata rekla OK, čeprav klikalnik ni odprl niti ene strani (ime strani ne ustreza @page).
       if ($pregledane.Count -eq 0) {
         return @{ ok = $false; opis = "klikalnik: pregledal 0 strani — nobena od '$($strani -join ', ')' ne ustreza @page v intranetu"; izhod = "$log.klikalnik.txt" }
       }
-      $najdbe = @($pregledane | ForEach-Object { $_.najdbe })
-      $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
-      $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' })
+      $pov = Get-KlikalnikPovzetek $pregledane
       Copy-Item (Join-Path $izhodK 'klikalnik.md') "$log.klikalnik.md" -Force
-      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($pregledane.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"; izhod = "$log.klikalnik.md" }
+      return @{ ok = $pov.ok; opis = $pov.opis; izhod = "$log.klikalnik.md" }
     }
     return @{ ok = $false; opis = "klikalnik: ni poročila ($($k.opis))" }
   } finally {
@@ -632,6 +653,17 @@ switch ($Ukaz) {
       $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
       if ($izhodMerge -ne 0) {
         $konf = @(& git -C $potNaloge diff --name-only --diff-filter=U 2>$null)
+        # Graf procesov je ustvarjen iz docs/procesi/*.md: konflikt v njem se reši s ponovnim Graf, ne ročno.
+        if ($konf.Count -eq 1 -and $konf[0] -eq 'docs/procesi/PIM-procesi.html') {
+          $ErrorActionPreference = 'Continue'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $potNaloge 'scripts\Procesi.ps1') -Ukaz Graf 2>&1 | Out-Null
+          & git -C $potNaloge add -- docs/procesi/PIM-procesi.html 2>&1 | Out-Null
+          & git -C $potNaloge commit --no-edit 2>&1 | Write-Host
+          $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
+          if ($izhodMerge -eq 0) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "združevanje: konflikt v grafu procesov rešen s ponovnim Procesi.ps1 -Ukaz Graf"; Write-Naloga $n }; $konf = @() }
+        }
+      }
+      if ($izhodMerge -ne 0) {
         & git -C $potNaloge merge --abort 2>$null
         Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: konflikt z $GlavnaVeja v $($konf -join ', ') — razvijalec mora vejo posodobiti ročno"; Write-Naloga $n }
         throw "Konflikt z $GlavnaVeja ($($konf -join ', '))."

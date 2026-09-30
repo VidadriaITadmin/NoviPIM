@@ -17,7 +17,9 @@ Assert(program.Contains("AddScoped<AttributeMappingService>", StringComparison.O
 
 foreach (var markup in new[] { worklist, catalog })
 {
-  Assert(markup.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal),
+  // Register sme brati tudi komerciala (COMMERCIAL, samo ogled); pisanje varuje servis s CatalogWrite.
+  Assert(markup.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal)
+      || markup.Contains("Roles = \"ADMIN,CATALOG_EDITOR,COMMERCIAL\"", StringComparison.Ordinal),
     "Urejanje atributov spreminja katalog, zato ni dovolj samo prijava.");
   Assert(markup.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
     "Brez interaktivnega nacina urejanje ne dela.");
@@ -115,6 +117,69 @@ Assert(Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-wrap: wrap")
   "Prevodi se morajo prelivati v vrstico in ne zlagati v stolpec.");
 Assert(!Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-direction: column"),
   "Stolpcni razpored prevodov se ne sme vrniti.");
+
+/* ─── Čiščenje atributov (naloga #15, migracija 307) ──────────────────────────
+   Lastnik 2026-09-29: pregled podvojenih atributov in lep zapis vrednosti. Nočna privzeta izbira:
+   samo pregled — nič se ne združi, ne izbriše in ne prepiše; pravilo zapisa ni vklopljeno v zajem
+   ali izvoz, ker bi sicer spletni filter imel dva zapisa iste vrednosti (»10W« in »10 W«). */
+var cleanup = Read(Path.Combine(pages, "AttributeCleanup.razor"));
+Assert(cleanup.Contains("@page \"/nastavitve/atributi/ciscenje\"", StringComparison.Ordinal),
+  "Čiščenje atributov mora biti na poti nastavitve/atributi/ciscenje (dostop pokriva register atributov).");
+Assert(catalog.Contains("href=\"nastavitve/atributi/ciscenje\"", StringComparison.Ordinal),
+  "Register atributov mora voditi na čiščenje, sicer strani nihče ne najde.");
+foreach (var forbidden in new[] { "INSERT ", "UPDATE ", "DELETE ", "DeleteDefinitionAsync", "SaveMapAsync", "UpdateDefinitionAsync" })
+  Assert(!cleanup.Contains(forbidden, StringComparison.Ordinal),
+    "Čiščenje je samo pregled, dokler lastnik ne odloči, kaj se združi: " + forbidden);
+foreach (var required in new[] { "PimTable", "PimState", "Počisti filtre", "Izvozi v Excel", "SupplyParameterFromQuery", "ByOrganization", "Samples", "ni v registru" })
+  Assert(cleanup.Contains(required, StringComparison.Ordinal), "Čiščenju atributov manjka: " + required);
+
+// Ena množična poizvedba, ne zanka po atributih; pravilo zapisa na RAZLIČNO vrednost, ne na vrstico.
+Assert(service.Contains("GetDuplicateCandidatesAsync", StringComparison.Ordinal)
+    && service.Contains("FROM #v AS x JOIN #v AS y ON y.P = x.P", StringComparison.Ordinal),
+  "Pari atributov morajo nastati v eni poizvedbi prek skupnih izdelkov.");
+Assert(service.Contains("GROUP BY AttributeCode, Value;", StringComparison.Ordinal)
+    && service.Contains("pim.PolishAttributeValue(d.AttributeCode, d.Value)", StringComparison.Ordinal),
+  "Predogled zapisa mora klicati pravilo enkrat na različno vrednost.");
+
+// Preverjalec #15: »Podobne vrednosti« so bile skoraj vse lažne (Premer ↔ Širina ↔ Dolžina zaradi skupnih
+// 50, 100, 120), štetje pa je vključevalo neaktivni DEMO. Čista števila se ne štejejo kot skupna vrednost,
+// vse poizvedbe čiščenja pa berejo samo aktivna podjetja.
+Assert(service.Contains("SELECT DISTINCT A, H INTO #av FROM #v WHERE Informative = 1 AND Textual = 1;", StringComparison.Ordinal),
+  "Skupne vrednosti med različnimi izdelki ne smejo šteti čistih števil.");
+Assert(Regex.Matches(service, @"organization\.IsActive = 1").Count >= 2,
+  "Podvojeni atributi in predogled zapisa morata brati samo aktivna podjetja (DEMO je neaktiven).");
+Assert(!cleanup.Contains("pregledanih pari", StringComparison.Ordinal), "Slovnica: »pregledanih parov«.");
+Assert(service.Contains("LIKE N'%[^ivx0-9 .,/+-]%'", StringComparison.Ordinal),
+  "Rimske številke in števila (Električni razred I/II) se ne prevajajo in ne smejo biti med manjkajočimi prevodi.");
+
+// Pravila za kandidata (brez baze).
+var attributeA = new PIM.Intranet.Services.CleanupAttribute("Grlo", "GRLO", 400, 12, 12, null, null);
+var attributeB = new PIM.Intranet.Services.CleanupAttribute("Podnožje / socket", null, 350, 10, 10, null, null);
+var attributeC = new PIM.Intranet.Services.CleanupAttribute("Bruto teža (2)", "BRUTO_TEZA_2", 90, 40, 40, null, null);
+var attributeD = new PIM.Intranet.Services.CleanupAttribute("Bruto teža", "BRUTO_TEZA", 80, 30, 30, null, null);
+var candidates = PIM.Intranet.Services.AttributeDuplicatePolicy.Classify(
+  [attributeA, attributeB, attributeC, attributeD],
+  [("Grlo", "Podnožje / socket", 349, 349, 10), ("Bruto teža (2)", "Grlo", 20, 0, 0)]);
+Assert(candidates.Any(candidate => candidate.Kind == "SAME_DATA" && candidate.First.Name == "Grlo"),
+  "Atributa z isto vrednostjo pri istih izdelkih morata biti predlog »Isti podatek«.");
+Assert(candidates.Any(candidate => candidate.Kind == "SIMILAR_NAME" && candidate.First.Name.StartsWith("Bruto", StringComparison.Ordinal)),
+  "»Bruto teža« in »Bruto teža (2)« morata biti predlog »Podobno ime«.");
+Assert(!candidates.Any(candidate => candidate.First.Name == "Bruto teža (2)" && candidate.Second.Name == "Grlo"),
+  "Skupni izdelki brez skupnih vrednosti niso predlog.");
+
+var migration307 = Path.Combine(migrations, "307_PoenotenjeVrednostiAtributovPredogled.sql");
+Assert(File.Exists(migration307), "Manjka migracija 307 s predlogom zapisa vrednosti.");
+var migration307Sql = File.ReadAllText(migration307);
+Assert(migration307Sql.Contains("pim.PolishAttributeValue", StringComparison.Ordinal)
+    && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'))", StringComparison.Ordinal)
+    && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))", StringComparison.Ordinal),
+  "307 samo doda predlog; zajema in izvoza ne spreminja, dokler lastnik ne potrdi.");
+
+// Prevodi: pregled, kaj bi slovar prevedel, tudi za italijanščino.
+var translations = Read(Path.Combine(pages, "MissingTranslations.razor"));
+Assert(translations.Contains("GetDictionaryCoverageAsync", StringComparison.Ordinal)
+    && service.Contains("[\"SL\", \"DE\", \"HR\", \"IT\"]", StringComparison.Ordinal),
+  "Manjkajoči prevodi morajo pokazati pokritost slovarja za SL, DE, HR in IT.");
 
 Console.WriteLine("PIM.F10.AttributeUxTests: vse pogodbe drzijo.");
 return 0;
