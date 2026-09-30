@@ -188,7 +188,7 @@ public sealed class StockReadService(IConfiguration configuration)
 
     IReadOnlyList<WorkbookColumn> columns =
     [
-      new("Šifra artikla", Width: 18), new("EAN", Width: 16), new("Naziv", Width: NameMaxLength + 4),
+      new("Šifra artikla", Width: 18), new("EAN", Width: 16), new("Naziv (spletni, sicer ERP)", Width: NameMaxLength + 4),
       new("Skladišče", Width: 24), new("SAOP količina", WorkbookCellKind.Number), new("SAOP razpoložljivo", WorkbookCellKind.Number),
       new("SAOP prihodna količina", WorkbookCellKind.Number), new("SAOP datum prihoda", Width: 18),
       new("Minimalna zaloga", WorkbookCellKind.Number), new("Maksimalna zaloga", WorkbookCellKind.Number),

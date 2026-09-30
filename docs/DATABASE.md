@@ -2432,6 +2432,21 @@ Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`,
 
 **Objekti:** `val.SyncPackageOrderHolds`, podatki `val.ProductHold.Reason` (samo aktivni zadržki »pravilo 302«). **Ročni korak:** ne. **Vrstni red:** zahteva 302. **Povratek:** ponovno izvedi blok 4 iz 302. **PRD:** skupaj s 302 in 303, šele po lastnikovi potrditvi.
 
+## Preverjanje slik: ali se naslov res odpre (migracija 312_PreverjanjeSlik, 2026-09-30, naloga #9)
+
+Lastnik (odločitev #18, 29. 9.): napaka validacije samo, če izdelek nima nobene delujoče slike (ena pokvarjena od več = opozorilo); pokvarjena šele po 2 neuspehih v razmiku 24 ur; pokvarjene slike se izpustijo iz katalog.csv, glavna postane prva delujoča.
+
+- **`val.MediaUrlCheck`** (nova): izid na **naslov** (ključ `UrlHash` = SHA2_256 obrezanega naslova), ne na `ProductMediaId` — zajem XML vrstice slik zamenja. Stolpci: zadnji izid (`OK` / `NAPAKA` / `NI_ODZIVA`), HTTP status, vrsta vsebine, koda in besedilo napake, prvič/zadnjič neuspešno, število neuspehov; `IsBroken` je izračunan stolpec (≥ 2 neuspeha, zadnji vsaj 24 h po prvem). `NI_ODZIVA` (429, 5xx, 401/403, časovna meja) števca ne poveča; `OK` ga ponastavi.
+- **`val.GetMediaUrlsToCheck`** (vpiše nove naslove aktivnih izdelkov aktivnih podjetij, vrne paket: novi, potrditev po 24 h, brez odziva po 6 h, ostali po 7 dneh) in **`val.RecordMediaUrlChecks`** (izidi kot JSON; vrne število na novo pokvarjenih in popravljenih). Kliče ju `PIM.SourceFetchWorker --preveri-slike` (posel `MEDIA_URL_CHECK`, privzeto izklopljen).
+- **`canon.FieldValue`** (zamenjava žive definicije, oznaka PreverjanjeSlik312): izpeljani polji `ProductMedia.DelujocaSlika` (manjka, ko ima izdelek slike in so vse pokvarjene) in `ProductMedia.VseSlikeDelujejo` (manjka, ko ima vsaj eno pokvarjeno in vsaj eno delujočo). Izdelek brez slik ima obe polji izpolnjeni (zanj velja `ProductMedia.Url`).
+- **`val.FieldRequirement`** (podatek): v profilih z zahtevo `ProductMedia.Url` (DEV: WEB_svetila_si, WEB_videlektro) `DelujocaSlika` = ERROR, `VseSlikeDelujejo` = WARNING. Validacija (`val.RunValidation*`) ju bere kot vsako polje — en JOIN, brez spremembe procedur.
+- **`out.GetExportRows`** (zamenjava žive definicije, bloki 302–306 ostanejo): blok B3 izpusti potrjeno pokvarjene slike; če je bila izpuščena glavna, postane glavna prva preostala.
+- **`intranet.GetMediaUrlChecks`**: stran `/mediji/napacni-naslovi` in izvoz (strežniško listanje, filtri stanje/podjetje/strežnik/napaka, števci).
+- **`ops.ScheduleProfile`** (podatek): `MEDIA_URL_CHECK` pod prvim aktivnim podjetjem (za `ops.BeginRun`); vklop posla je v katalogu poslov.
+- Dokler posel ne teče, v `val.MediaUrlCheck` ni pokvarjenih naslovov in se validacija ter katalog.csv ne spremenita. DEV: 19.016 naslovov vpisanih, 60 preverjenih (58 OK, 2× 404 na www.vipelektro.si). Dokaz v transakciji z ROLLBACK: izdelek z eno pokvarjeno od dveh slik ostane VALID z opozorilom in katalog.csv ima samo delujočo; izdelek z edino pokvarjeno sliko postane INVALID (napaka DelujocaSlika v obeh spletnih profilih) in slike v katalog.csv nima.
+- Proceduri z izračunanim stolpcem zahtevata `QUOTED_IDENTIFIER ON` (sqlcmd `-I`, SqlClient privzeto).
+
+**Objekti:** `val.MediaUrlCheck`, `val.GetMediaUrlsToCheck`, `val.RecordMediaUrlChecks`, `intranet.GetMediaUrlChecks`, `canon.FieldValue`, `out.GetExportRows`, podatki `val.FieldRequirement` in `ops.ScheduleProfile`. **Ročni korak:** ne (posel ostane izklopljen, dokler ga skrbnik ne vklopi). **Povratek:** zahtevi `DelujocaSlika`/`VseSlikeDelujejo` nastaviti na `IsActive = 0` in `DELETE val.MediaUrlCheck` (validacija in katalog.csv se vrneta v stanje pred 312). **PRD:** skupaj z intranetom in workerjem; pred vklopom posla preštej, koliko izdelkov bi padlo s spleta.
 ## Hitra sled sprememb (migracija 310_SledSpremembHitrejse, 2026-09-30, naloga #44)
 
 Stran `/sistem/sled` se ni naložila: `intranet.GetUserActivityTrail` (172) je ob vsakem odprtju prebrala celo `pim.ProductFieldHistory` (2,7 milijona vrstic) in jo šele na koncu razvrstila za TOP.
@@ -2474,3 +2489,14 @@ Popravek bere živo definicijo `out.GetExportRows` (kot 304/305), preveri vsa si
 Isto proceduro uporablja nočni `katalog.csv` (`@Take = 0`). Primerjava izhoda pred/po na DEV (vse vrstice, vsi stolpci, `@TotalCount`) v 11 primerih — IQ (2) MAGENTO_PRODUCTS celoten in strani 0/400, iskanje »AZ.0722« in »led«, MAGENTO_STOCK_PRICES celoten, Vidadria (3) celoten in stran, Ediito (4) celoten, MAGENTO_CUSTOMERS za 2 in 3: **enako do bajta**. Čas 200 vrstic brez tuje obremenitve 3,7–5,5 s (prej 7–10 s, ob obremenitvi 45–55 s zaradi vzporednih načrtov).
 
 **Objekti:** `out.GetExportRows`. **Podatki:** nič. **Ročni korak:** ne. **SAOP:** nič. **Povratek:** definicija pred 315 ni shranjena v datoteki — povratek je `ALTER` z odstranitvijo sprememb z oznako `HitrejsiPredogled80` (vsebina izvoza je v obeh različicah enaka). **Opomba za PRD:** migracija zahteva, da so 142, 251, 274, 291, 292, 304 že uveljavljene (sidra); če sidro manjka, se ustavi brez sprememb.
+## Hitra pripravljenost artiklov na /kakovost/artikli (migracija 318_HitrejsaKakovostArtikli, 2026-09-30, naloga #102)
+
+Stran `/kakovost/artikli` (in gola `/kakovost`, ki preusmeri nanjo) se je odpirala 26-73 s. `intranet.GetQualityProducts` (264) je naredil `SELECT * INTO #Rows` iz pogleda `val.ProductChannelReadiness` za vse aktivne artikle (~160.000) — za vsakega naziv, števce napak, zadržke, kljukice spletišč s kategorijo in veljavnostjo profilov ter korelirano iskanje odjavnega okna 251 — in šele nato razvrstil in preštel. DEV: CPU 13-14 s na klic.
+
+- **`intranet.GetQualityProducts`** (CREATE OR ALTER, isti parametri, isti izhodni stolpci in vrstni red): po korakih v ozkih začasnih tabelah izračuna samo to, kar potrebujejo razvrstitev, filter stanja in števci — `#Org` (podjetja v obsegu enkrat), `#P` (artikli + iskanje po šifri/EAN/nazivu), `#Issue` (samo blokirajoče napake), `#Shop`/`#Sites` (~12.000 kljukic spletišč), `#Hold`, `#Withdrawal` (odjavno okno enkrat na podjetje), `#R` (stanje na artikel). Polne vrstice pogleda se preberejo samo za `@Take` artiklov na strani.
+- Pravila so ista kot v `val.ProductChannelReadiness` (242/251); pogled ostane nespremenjen (bere ga tudi kartica izdelka). **Ob spremembi pravil v pogledu popravi tudi to proceduro.**
+- Novo: neznano stanje se primerja s stanjem za katalog.csv (`WebExportState`), zato povezave s `/splet` in `/splet/umaknjeni` (`stanje=BLOCKED_ERRORS`, `NO_CATEGORY` …) vrnejo artikle namesto praznega seznama.
+- DEV (stara in nova definicija, 7 kombinacij filtrov — vsa podjetja, WEB_BLOCKED stran 2, PUBLISHED, IN_CSV za IQ, HOLD, iskanje, iskanje + NO_SITE): enaki števci in enake vrstice. Čas pod obremenitvijo drugih sej: vsa podjetja 1,8-3,6 s (prej 5-30 s), PUBLISHED 3,7 s (prej 47 s), iskanje 1,0 s (prej 7,4 s); CPU ~4 s (prej 13-14 s). Ob močno zasedenem strežniku (tempdb, CPU) še vedno do ~20 s.
+- Intranet (ni migracija): `/kakovost/artikli` brez predupodabljanja, zato se procedura ob odprtju strani izvede enkrat namesto dvakrat.
+
+**Objekti:** `intranet.GetQualityProducts`. **Podatki:** nič. **SAOP:** nič (samo branje). **Ročni korak:** ne. **Povratek:** ponovno izvedi definicijo procedure iz 264. **PRD:** lahko skupaj z intranetom.

@@ -355,6 +355,36 @@ foreach (var page in new[] { "Web.razor", "WebExportBuild.razor", "WebWithdrawal
   Assert(File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", page)).Contains("Tabs=\"WebTabs.Tabs\"", StringComparison.Ordinal),
     "Strani izhoda na splet imajo iste zavihke (WebTabs): " + page);
 
+// #88: /splet/katalog — Enter sproži iskanje (obrazec), iskanje in čakalna vrsta sta v naslovu,
+// prazen rezultat ima PimState s predlogom, podnaslov kaže ime podjetja iz baze, osvežitev javi izid.
+var catalogControlPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "CatalogControl.razor"));
+Assert(catalogControlPage.Contains("@onsubmit=\"SubmitAsync\"", StringComparison.Ordinal)
+    && catalogControlPage.Contains("type=\"submit\"", StringComparison.Ordinal),
+  "/splet/katalog: iskanje mora biti obrazec, da ga sproži tudi Enter v polju (#88).");
+Assert(catalogControlPage.Contains("SupplyParameterFromQuery(Name = \"iskanje\")", StringComparison.Ordinal)
+    && catalogControlPage.Contains("SupplyParameterFromQuery(Name = \"vrsta\")", StringComparison.Ordinal),
+  "/splet/katalog: iskanje in »Samo čakalna vrsta O« morata biti v naslovu (#88).");
+Assert(catalogControlPage.Contains("<PimState", StringComparison.Ordinal) && catalogControlPage.Contains("EmptyText=\"@EmptyText\"", StringComparison.Ordinal),
+  "/splet/katalog: prazen rezultat mora pokazati PimState s predlogom (#88).");
+Assert(!catalogControlPage.Contains("Katalog podjetja 2", StringComparison.Ordinal)
+    && catalogControlPage.Contains("GetOrganizationsAsync", StringComparison.Ordinal),
+  "/splet/katalog: podnaslov mora kazati ime podjetja iz baze, ne »podjetja 2« (#88).");
+Assert(catalogControlPage.Contains("Čakalna vrsta je osvežena", StringComparison.Ordinal),
+  "/splet/katalog: »Osveži čakalno vrsto« mora javiti izid (#88).");
+
+// #89: /splet/umaknjeni — podjetje, obdobje in iskanje so v naslovu; neveljavne vrednosti padejo na privzeto.
+var withdrawalsPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "WebWithdrawals.razor"));
+Assert(withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"podjetje\")", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"obdobje\")", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"isci\")", StringComparison.Ordinal),
+  "/splet/umaknjeni: podjetje, obdobje in iskanje morajo biti v naslovu (#89).");
+Assert(withdrawalsPage.Contains("AllowedDays.Contains(", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("Organizations.Any(organization => organization.OrganizationId == requested)", StringComparison.Ordinal),
+  "/splet/umaknjeni: obdobje in podjetje iz naslova se preverita proti dovoljenim vrednostim (#89).");
+Assert(!withdrawalsPage.Contains("splet/umaknjeni?pogled={view}", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("replace: true", StringComparison.Ordinal),
+  "/splet/umaknjeni: preklop zavihka ne sme izgubiti ostalih parametrov naslova (#89).");
+
 
 /* ─── Obseg podjetja je viden in resnicen (U1, P2-10) ─────────────────────────
    Napis tabele je pisal »Izdelki v aktivni organizaciji«, stran pa je privzeto kazala vsa
