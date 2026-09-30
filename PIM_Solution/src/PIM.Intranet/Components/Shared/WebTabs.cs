@@ -10,10 +10,11 @@ public static class WebTabs
 {
   public static readonly IReadOnlyList<PimTab> Tabs =
   [
-    new("overview", "Pregled", "splet", "Ali je katalog.csv v redu", PermissionKey: "view.web.overview"),
-    new("withdrawals", "Umaknjeni s spleta", "splet/umaknjeni", "Kaj je šlo s spleta in zakaj", PermissionKey: "view.web.withdrawals"),
-    new("mismatches", "Neskladja med podjetji", "splet/neskladja", "Ista šifra v IQ in Vidadrii", PermissionKey: "view.web.mismatches"),
-    new("catalog", "Nadzor kataloga", "splet/katalog", "Izključitve in odprodaja", PermissionKey: "view.web.catalog"),
-    new("build", "Predogled izvoza", "splet/izvoz", "Trenutni podatki po profilu", PermissionKey: "view.web.build"),
+    // Kratki napisi: pri 1024 px mora biti vseh pet zavihkov vidnih brez vodoravnega drsnika (#25).
+    new("overview", "Pregled", "splet", "Stanje katalog.csv", PermissionKey: "view.web.overview"),
+    new("withdrawals", "Umaknjeni", "splet/umaknjeni", "Kaj je šlo s spleta", PermissionKey: "view.web.withdrawals"),
+    new("mismatches", "Neskladja", "splet/neskladja", "IQ in Vidadria", PermissionKey: "view.web.mismatches"),
+    new("catalog", "Nadzor kataloga", "splet/katalog", "Izključitve, odprodaja", PermissionKey: "view.web.catalog"),
+    new("build", "Predogled izvoza", "splet/izvoz", "Podatki po profilu", PermissionKey: "view.web.build"),
   ];
 }
