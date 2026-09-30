@@ -39,6 +39,10 @@ var css = File.ReadAllText(cssPath);
 var service = File.ReadAllText(servicePath);
 var labels = File.ReadAllText(labelsPath);
 
+// #76: pasica »V SAOP čaka potrditev« pokaže in potrdi samo podjetje, v katerem stran dela.
+Assert(markup.Contains("<SaopSafeguardBanner Version=\"SafeguardVersion\" OrganizationId=\"OrganizationId\" />", StringComparison.Ordinal),
+  "Pasica na /saop/artikli mora dobiti podjetje strani, sicer meša spremembe vseh podjetij.");
+
 // --- 1. Pot, zascita, nacin izrisa ----------------------------------------
 Assert(markup.Contains("@page \"/saop/artikli\"", StringComparison.Ordinal), "Pot strani mora biti /saop/artikli.");
 Assert(markup.Contains("@attribute [Authorize(Roles = \"ADMIN,CATALOG_EDITOR\")]", StringComparison.Ordinal),
@@ -134,7 +138,9 @@ foreach (var element in new[] { "ItemTitle1", "ItemGroup", "SupplierID", "ItemEA
   Assert(labels.Contains("[\"" + element + "\"]", StringComparison.Ordinal), "Manjka slovenska oznaka za element " + element + ".");
 
 // --- 12. Stran je dosegljiva iz razdelilne strani SAOP --------------------
-var saopPage = File.ReadAllText(Path.Combine(pages, "Saop.razor"));
+// Zavihki SAOP so od prenove v skupnem seznamu PimTab.cs (razdelilna stran jih riše iz njega).
+var saopPage = File.ReadAllText(Path.Combine(pages, "Saop.razor"))
+  + File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimTab.cs"));
 Assert(saopPage.Contains("saop/artikli", StringComparison.Ordinal),
   "Do vnosa artiklov mora biti mogoce priti z razdelilne strani SAOP.");
 

@@ -127,7 +127,7 @@ flowchart LR
 <details>
 <summary>Za skrbnika in razvoj</summary>
 
-- **Strani:** `PIM.Intranet/Components/Pages/SafeguardOverview.razor` (`/varovalke`), `SafeguardReview.razor` (`/varovalke/{Id}`), Excel `GET /varovalke/{id}/excel` (`Program.cs`); okvir `Components/Shared/SaopSafeguardBanner.razor` in `SaopDeactivationConfirm.razor` na straneh odobritve SAOP.
+- **Strani:** `PIM.Intranet/Components/Pages/SafeguardOverview.razor` (`/varovalke`), `SafeguardReview.razor` (`/varovalke/{Id}`), Excel `GET /varovalke/{id}/excel` (`Program.cs`); okvir `Components/Shared/SaopSafeguardBanner.razor` in `SaopDeactivationConfirm.razor` na straneh odobritve SAOP. Okvir kaže in potrjuje samo podjetje strani (`/outbound`, `/izvozi/mnozicno`, `/saop/artikli`, na `/cene?zavihek=saop` izbrano podjetje); pri »Vsa podjetja« je en seznam na podjetje z imenom in svojim gumbom za potrditev, v seznamu sta cene in artikli ločeni skupini (#76).
 - **Storitve / delavci:** `SafeguardService` (`GetChecksAsync`, `GetCheckAsync`, `ApproveAsync`, `SaveRuleAsync`, `EvaluateSaopAsync`, `GetSaopDeactivationsAsync`, `ConfirmSaopDeactivationsAsync`); `PIM.B2bWorker/CatalogSafeguard.cs` kliče `ops.EvaluateCatalogSafeguards` pred zamenjavo datotek in `out.RecordCatalogPublication` po objavi.
 - **Tabele in pogledi:** `ops.SafeguardRule`, `ops.SafeguardCheck` (CLEAN, WARNED, WAITING, CONFIRMED, SUPERSEDED), `ops.SafeguardFinding`, `ops.SafeguardApproval`, `out.CatalogPublishedValue`, `pim.WebShopReason()`, pogled `ops.SaopHeldDeactivation`; procedure `ops.ApproveSafeguardFindings` → `ops.OnSafeguardApproved` → `ops.RequestJobRun`.
 - **Migracije:** `277_VarovalkeKatalogCsv.sql` (tudi ločilo `;` in decimalna vejica v katalog.csv), `281_VarovalkaSaopNeaktivniArtikli.sql`.

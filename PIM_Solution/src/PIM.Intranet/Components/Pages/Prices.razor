@@ -34,12 +34,6 @@
 
 @if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
 @if (ActionError is not null) { <p class="message-state error-message" role="alert">@ActionError</p> }
-@if (Tab == "saop")
-{
-  @* 281: sumljive cene (×10/×100, 0, velik skok, izklop) počakajo potrditev — seznam in potrditev tu. *@
-  <SaopSafeguardBanner Version="SafeguardVersion" />
-}
-
 @if (Tab == "cene")
 {
   <section class="ui-card toolbar price-toolbar" role="search" aria-labelledby="price-filter-title">
@@ -494,6 +488,10 @@ else
     </div>
   </section>
 
+  @* 281: sumljive cene (×10/×100, 0, velik skok, izklop) počakajo potrditev — seznam in potrditev tu.
+     #76: samo podjetje iz izbire zgoraj; pri »Vsa podjetja« en seznam na podjetje in potrditev po podjetju. *@
+  <SaopSafeguardBanner Version="SafeguardVersion" OrganizationId="OrganizationId" />
+
   @foreach (var job in Jobs)
   {
     <section class="ui-card panel send-job" aria-live="polite" aria-label="Pošiljanje v SAOP">
@@ -773,8 +771,21 @@ else
   {
     Tab = tab;
     Message = ActionError = null;
+    SyncUrl();
     if (tab == "saop") await LoadBatchesAsync();
     if (tab == "ceniki") await LoadListsAsync();
+  }
+
+  /// <summary>#76: zavihek in podjetje v naslov — osvežitev ali deljena povezava odpre isti pogled (npr. cene?zavihek=saop&amp;podjetje=2).</summary>
+  void SyncUrl()
+  {
+    var uri = Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+      ["zavihek"] = Tab == "cene" ? null : Tab,
+      ["podjetje"] = OrganizationId,
+      ["cenik"] = PriceList.Length > 0 ? PriceList : null,
+    });
+    if (!string.Equals(uri, Navigation.Uri, StringComparison.Ordinal)) Navigation.NavigateTo(uri, replace: true);
   }
 
   /* --- seznam cen ---------------------------------------------------------------------------- */
@@ -803,6 +814,7 @@ else
   {
     PriceList = "";
     Skip = 0;
+    SyncUrl();
     await Task.WhenAll(LoadAsync(), LoadListsAsync(), LoadBatchesAsync());
   }
 
@@ -1095,6 +1107,7 @@ else
     FiltersOpen = true;
     Tab = "cene";
     Skip = 0;
+    SyncUrl();
     await LoadAsync();
   }
 

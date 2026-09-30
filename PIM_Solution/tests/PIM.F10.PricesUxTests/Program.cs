@@ -46,6 +46,24 @@ Assert(Regex.Matches(markup, "<AuthorizeView Policy=\"@PimPolicies.SaopWrite\">"
   "Urejanje cene, nov cenik in odobritev morajo biti za politiko SaopWrite.");
 Assert(import.Contains("<AuthorizeView Policy=\"@PimPolicies.SaopWrite\">", StringComparison.Ordinal), "Uvrstitev uvoza v vrsto mora biti za SaopWrite.");
 
+/* --- C6 (#76): pasica »V SAOP čaka potrditev« ne meša podjetij, zavihek je v naslovu ------- */
+var shared = Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared");
+var banner = File.ReadAllText(Path.Combine(shared, "SaopSafeguardBanner.razor"));
+var heldList = File.ReadAllText(Path.Combine(shared, "SaopDeactivationConfirm.razor"));
+Assert(markup.Contains("<SaopSafeguardBanner Version=\"SafeguardVersion\" OrganizationId=\"OrganizationId\" />", StringComparison.Ordinal),
+  "Pasica na /cene mora dobiti izbrano podjetje (sicer pokaže in potrdi spremembe vseh podjetij).");
+foreach (var other in new[] { "BulkOutbound.razor", "SaopItems.razor", "Outbound.razor" })
+  Assert(Regex.IsMatch(File.ReadAllText(Path.Combine(pages, other)), "<SaopSafeguardBanner[^>]*OrganizationId=\"OrganizationId\""),
+    "Pasica na " + other + " mora dobiti podjetje strani.");
+Assert(banner.Contains("GroupBy(item => item.OrganizationId)", StringComparison.Ordinal) && banner.Contains("ConfirmAsync(organizationId)", StringComparison.Ordinal),
+  "Pri »vsa podjetja« mora pasica ločiti podjetja in potrjevati po podjetju.");
+Assert(banner.Contains("Items.Where(item => item.OrganizationId == organizationId)", StringComparison.Ordinal),
+  "Potrditev sme poslati samo sporočila podjetja, katerega gumb je bil kliknjen.");
+Assert(heldList.Contains("OrganizationName", StringComparison.Ordinal) && heldList.Contains("\"Cene\"", StringComparison.Ordinal) && heldList.Contains("\"Artikli\"", StringComparison.Ordinal),
+  "Seznam mora v naslovu povedati podjetje in ločiti cene od artiklov.");
+Assert(markup.Contains("[\"zavihek\"] = Tab == \"cene\" ? null : Tab", StringComparison.Ordinal) && markup.Contains("Navigation.NavigateTo(uri, replace: true)", StringComparison.Ordinal),
+  "Zavihek (npr. V SAOP) in podjetje morata biti v naslovu, da osvežitev ohrani pogled.");
+
 /* --- C4: oblike dokumentov ----------------------------------------------------------------- */
 var price = SaopKnownShapes.Price;
 Assert(price.AddPath == "api/Price/AddPrices" && price.AddOperation == "POST", "Nova cena gre s POST api/Price/AddPrices.");
