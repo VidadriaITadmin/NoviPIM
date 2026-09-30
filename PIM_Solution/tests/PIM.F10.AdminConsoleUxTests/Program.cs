@@ -428,6 +428,20 @@ foreach (var (file, markup) in new[] { ("Monitor.razor", monitor), ("MonitorJob.
   Assert(markup.Contains("Potrdi zagon", StringComparison.Ordinal) && markup.Contains("Reach != \"Internal\"", StringComparison.Ordinal),
     $"{file}: zagon posla, ki kliče SAOP ali dobavitelja, zahteva drugi klik (»Potrdi zagon«).");
 Assert(monitorJob.Contains("RequestCancelAsync", StringComparison.Ordinal), "Stran posla mora omogočiti ustavitev teka (RequestCancelAsync).");
+// Naloga #69: oddano, še ne prevzeto zahtevo za zagon se da umakniti na Nadzoru in na strani posla; sled
+// JOB_RUN_REQUEST_CANCEL, samo skrbnik, baza pod zaklepom zavrne zahtevo, ki jo je gostitelj že prevzel.
+Assert(monitorService.Contains("\"JOB_RUN_REQUEST_CANCEL\"", StringComparison.Ordinal), "MonitorService: umik zahteve mora pustiti sled JOB_RUN_REQUEST_CANCEL.");
+var umikStart = monitorService.IndexOf("public async Task<DateTime?> CancelRunRequestAsync(", StringComparison.Ordinal);
+Assert(umikStart > 0 && monitorService.IndexOf("await RequireAdminAsync();", umikStart, StringComparison.Ordinal) is var umikVarovalo
+  && umikVarovalo > umikStart && umikVarovalo < monitorService.IndexOf("store.CancelRunRequestAsync", umikStart, StringComparison.Ordinal),
+  "MonitorService.CancelRunRequestAsync mora najprej preveriti skrbnika (RequireAdminAsync).");
+foreach (var (file, markup) in new[] { ("Monitor.razor", monitor), ("MonitorJob.razor", monitorJob) })
+  Assert(markup.Contains("Prekliči zahtevo", StringComparison.Ordinal) && markup.Contains("Nadzor.CancelRunRequestAsync", StringComparison.Ordinal),
+    $"{file}: oddano zahtevo za zagon mora biti mogoče umakniti (»Prekliči zahtevo«).");
+var migration324 = Read(Path.Combine(root, "sql", "migrations", "324_PrekliciZahtevoZaZagon.sql"));
+Assert(migration324.Contains("ops.CancelJobRunRequest", StringComparison.Ordinal) && migration324.Contains("UPDLOCK", StringComparison.Ordinal)
+  && migration324.Contains("52388", StringComparison.Ordinal) && migration324.Contains("52389", StringComparison.Ordinal),
+  "Migracija 324: ops.CancelJobRunRequest mora pod zaklepom zavrniti posel, ki teče, in zahtevo, ki je ni več.");
 Assert(monitor.Contains("MarkAlertsSeenAsync", StringComparison.Ordinal), "Nadzor mora ob odprtju označiti obvestila kot videna (zvonec).");
 
 // Naloga 86: sklanjatev ob števniku (1 uporabnik, 2 uporabnika, 3-4 uporabniki, 5+ uporabnikov; po ostanku %100).
