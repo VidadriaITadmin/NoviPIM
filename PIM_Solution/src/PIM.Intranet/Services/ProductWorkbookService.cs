@@ -994,35 +994,42 @@ public sealed class ProductWorkbookService(
     await using var command = new SqlCommand("""
       DECLARE @Org TABLE (OrganizationId int PRIMARY KEY);
       INSERT @Org SELECT DISTINCT CONVERT(int, value) FROM OPENJSON(@OrganizationIdsJson);
-      SELECT p.OrganizationId, v.FieldKey, v.Code
-      FROM canon.Product AS p
-      INNER JOIN @Org AS o ON o.OrganizationId = p.OrganizationId
-      CROSS APPLY (VALUES (N'Product.UoM', p.UoM), (N'Product.ItemGroup', p.ItemGroup),
-        (N'Product.AccountingGroup', p.AccountingGroup), (N'Product.Department', p.Department),
-        (N'Product.DiscountGroup', p.DiscountGroup), (N'Product.VatRateId', p.VatRateId),
-        (N'Product.PriceListCode', p.PriceListCode), (N'Product.Supplier', p.Supplier),
-        (N'Product.Manufacturer', p.Manufacturer)) AS v(FieldKey, Code)
-      WHERE NULLIF(LTRIM(v.Code), N'') IS NOT NULL
-      GROUP BY p.OrganizationId, v.FieldKey, v.Code
-      UNION ALL
-      SELECT p.OrganizationId, v.FieldKey, v.Code
-      FROM canon.ProductCommercial AS c
-      INNER JOIN canon.Product AS p ON p.ProductId = c.ProductId
-      INNER JOIN @Org AS o ON o.OrganizationId = p.OrganizationId
-      CROSS APPLY (VALUES (N'ProductCommercial.DimensionUnit', c.DimensionUnit),
-        (N'ProductCommercial.CountryOfOrigin', c.CountryOfOrigin)) AS v(FieldKey, Code)
-      WHERE NULLIF(LTRIM(v.Code), N'') IS NOT NULL
-      GROUP BY p.OrganizationId, v.FieldKey, v.Code
-      UNION ALL
-      SELECT n.OrganizationId, v.FieldKey, n.PartnerCode
-      FROM canon.PartnerName AS n
-      INNER JOIN @Org AS o ON o.OrganizationId = n.OrganizationId
-      CROSS APPLY (VALUES (N'Product.Supplier'), (N'Product.Manufacturer')) AS v(FieldKey)
-      UNION ALL
-      SELECT b.OrganizationId, N'Product.PriceListCode', b.EntryCode
-      FROM canon.Codebook AS b
-      INNER JOIN @Org AS o ON o.OrganizationId = b.OrganizationId
-      WHERE b.CodebookCode = N'PRICELIST' AND b.IsActive = 1;
+      -- 124: zapis šifre se loči po velikih črkah (BIN2). Baza je CI, zato je GROUP BY po v.Code
+      -- »KPL« in »kpl« zlil v en (naključen) zapis; »KPL« potem ni bil znan natanko, uvoz nespremenjene
+      -- datoteke ga je »popravil« na »kpl« in 455 artiklov poslal v vrsto za SAOP.
+      WITH Uses AS (
+        SELECT p.OrganizationId, v.FieldKey, v.Code, Uses = 1
+        FROM canon.Product AS p
+        INNER JOIN @Org AS o ON o.OrganizationId = p.OrganizationId
+        CROSS APPLY (VALUES (N'Product.UoM', p.UoM), (N'Product.ItemGroup', p.ItemGroup),
+          (N'Product.AccountingGroup', p.AccountingGroup), (N'Product.Department', p.Department),
+          (N'Product.DiscountGroup', p.DiscountGroup), (N'Product.VatRateId', p.VatRateId),
+          (N'Product.PriceListCode', p.PriceListCode), (N'Product.Supplier', p.Supplier),
+          (N'Product.Manufacturer', p.Manufacturer)) AS v(FieldKey, Code)
+        WHERE NULLIF(LTRIM(v.Code), N'') IS NOT NULL
+        UNION ALL
+        SELECT p.OrganizationId, v.FieldKey, v.Code, 1
+        FROM canon.ProductCommercial AS c
+        INNER JOIN canon.Product AS p ON p.ProductId = c.ProductId
+        INNER JOIN @Org AS o ON o.OrganizationId = p.OrganizationId
+        CROSS APPLY (VALUES (N'ProductCommercial.DimensionUnit', c.DimensionUnit),
+          (N'ProductCommercial.CountryOfOrigin', c.CountryOfOrigin)) AS v(FieldKey, Code)
+        WHERE NULLIF(LTRIM(v.Code), N'') IS NOT NULL
+        UNION ALL
+        SELECT n.OrganizationId, v.FieldKey, n.PartnerCode, 0
+        FROM canon.PartnerName AS n
+        INNER JOIN @Org AS o ON o.OrganizationId = n.OrganizationId
+        CROSS APPLY (VALUES (N'Product.Supplier'), (N'Product.Manufacturer')) AS v(FieldKey)
+        UNION ALL
+        SELECT b.OrganizationId, N'Product.PriceListCode', b.EntryCode, 0
+        FROM canon.Codebook AS b
+        INNER JOIN @Org AS o ON o.OrganizationId = b.OrganizationId
+        WHERE b.CodebookCode = N'PRICELIST' AND b.IsActive = 1
+      )
+      SELECT OrganizationId, FieldKey, Code = Code COLLATE Latin1_General_BIN2, Uses = SUM(Uses)
+      FROM Uses
+      GROUP BY OrganizationId, FieldKey, Code COLLATE Latin1_General_BIN2
+      ORDER BY Uses DESC;
       """, connection) { CommandTimeout = 120 };
     command.Parameters.Add("@OrganizationIdsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(organizationIds);
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1031,8 +1038,8 @@ public sealed class ProductWorkbookService(
       var key = (PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "FieldKey"));
       var code = PimDb.TextOrEmpty(reader, "Code").Trim();
       if (!known.TryGetValue(key, out var codes)) known[key] = codes = new(StringComparer.Ordinal);
-      // Pri več zapisih iste šifre (»kom« in »KOM«) zmaga pogostejši — vrstni red poizvedbe ga ne pozna,
-      // zato zmaga prvi; oba sta veljavna v SAOP, ker ju artikli že nosijo.
+      // Pri več zapisih iste šifre (»kom« in »KOM«) zmaga pogostejši: poizvedba jih vrne po številu
+      // artiklov padajoče, zato ga TryAdd vzame prvega; oba sta veljavna v SAOP, ker ju artikli že nosijo.
       codes.TryAdd(CodeKey(code, CodeFields[key.Item2].Partner), code);
       // Drugi zapis iste šifre (»KOS« ob »kos«) je tudi veljaven; ključ z zapisom ga ohrani.
       codes.TryAdd(ExactCode + code, code);
