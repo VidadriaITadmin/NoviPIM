@@ -185,6 +185,25 @@ foreach (var required in new[] { "AppliedFilter", "StockQuery.ToQueryString" })
 Assert(!markup.Contains("izvoz/zaloge.xlsx?virsifra", StringComparison.Ordinal) && !markup.Contains("\"virsifra=", StringComparison.Ordinal),
   "Izvoz ne gradi vec svojih imen parametrov.");
 
+// #99: Excel zaloge, analitike, napak kakovosti in neskladij ima dva locena naziva kot ceniki (#62):
+// »Spletni naziv (sl)« in »Naziv ERP (sl)«, brez mesanega stolpca »spletni, sicer ERP«. Oba pridejo iz
+// skupnega bralnika v enem paketu (ne poizvedba na vrstico).
+var servicesPath = Path.Combine(root, "src", "PIM.Intranet", "Services");
+var titleLookup = File.ReadAllText(Path.Combine(servicesPath, "ProductTitleLookup.cs"));
+Assert(titleLookup.Contains("\"Spletni naziv (sl)\"", StringComparison.Ordinal) && titleLookup.Contains("\"Naziv ERP (sl)\"", StringComparison.Ordinal),
+  "Skupni bralnik nazivov mora imeti naslova »Spletni naziv (sl)« in »Naziv ERP (sl)«.");
+Assert(titleLookup.Contains("N'WEB_TITLE'", StringComparison.Ordinal) && titleLookup.Contains("N'TITLE_ERP'", StringComparison.Ordinal)
+    && titleLookup.Contains("OPENJSON", StringComparison.Ordinal),
+  "Nazivi morajo priti iz canon.ProductText (WEB_TITLE, TITLE_ERP) v paketu prek OPENJSON.");
+foreach (var export in new[] { "StockReadService.cs", "QualityIssueExportService.cs", "AnalyticsService.cs", "OrganizationMismatchService.cs" })
+{
+  var source = File.ReadAllText(Path.Combine(servicesPath, export));
+  Assert(source.Contains("ProductTitleLookup.WebHeader", StringComparison.Ordinal) && source.Contains("ProductTitleLookup.ErpHeader", StringComparison.Ordinal),
+    export + ": izvoz mora imeti dva stolpca naziva (spletni in ERP).");
+  Assert(!source.Contains("sicer ERP)\"", StringComparison.Ordinal) && !source.Contains("sicer spletni)\"", StringComparison.Ordinal),
+    export + ": mesani stolpec naziva (»spletni, sicer ERP«) je zamenjan z dvema.");
+}
+
 Console.WriteLine("F10 stocks UX contract PASS.");
 
 static void Assert(bool condition, string message)
