@@ -74,7 +74,7 @@ vir obvestil je stopnjevanje neopdrjenih napak pri odhodni pošti v SAOP (`ops.E
 migracija 090). Ko je Resend enkrat priklopljen, je isti mehanizem (isti `EmailAlertSender`, drugačna
 vsebina) mogoče brez večjega dela razširiti na:
 
-- **Nočni samotest** (`/sistem/samotest`) — obvestilo, če pade.
+- **Nočni samotest** (`ops.SelfTestRun`) — obvestilo, če pade.
 - **Zastali/tihi postopki** (`ops.RunWatchdog`, `StaleHeartbeat` alarmi) — trenutno gredo v isto vrsto
   (`ops.Alert` → `ops.AlertDelivery`), torej to že deluje takoj, ko je Resend priklopljen — ni dodatnega
   dela.
