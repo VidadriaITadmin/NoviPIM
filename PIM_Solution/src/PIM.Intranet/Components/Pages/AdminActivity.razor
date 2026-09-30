@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.AdminConsoleService Nadzor
 @inject ILogger<AdminActivity> Log
+@implements IDisposable
 
 @*
   Kdo je kaj spremenil.
@@ -89,23 +90,52 @@
     if (e.Key == "Enter") await NaloziAsync();
   }
 
+  // Vsako branje dobi svoj preklic. Če uporabnik hitro dvakrat pritisne Poišči (ali zamenja obdobje
+  // med branjem), se prejšnje branje prekliče in njegov rezultat ne more prepisati novejšega.
+  CancellationTokenSource? branje;
+
   async Task NaloziAsync()
   {
+    branje?.Cancel();
+    branje?.Dispose();
+    var moje = branje = new CancellationTokenSource();
+    var dni = Dni;
+    var iskanje = string.IsNullOrWhiteSpace(Iskanje) ? null : Iskanje.Trim();
     Loading = true;
     Error = null;
     try
     {
-      Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take);
-      NalozenoDni = Dni;
-      NalozenoIskanje = string.IsNullOrWhiteSpace(Iskanje) ? null : Iskanje.Trim();
+      var vrstice = await Nadzor.GetActivityAsync(dni, null, iskanje, Take, moje.Token);
+      if (moje.IsCancellationRequested) return;
+      Rows = vrstice;
+      NalozenoDni = dni;
+      NalozenoIskanje = iskanje;
+    }
+    catch (Exception) when (moje.IsCancellationRequested)
+    {
+      // Preklicano, ker je že na poti novejše branje; to ni napaka.
+    }
+    catch (Exception ex) when (PIM.Intranet.Services.AdminConsoleService.IsLockTimeout(ex))
+    {
+      Log.LogWarning(ex, "Sled sprememb: baza je zasedena (dni {Dni}, iskanje {Iskanje}).", dni, iskanje);
+      Error = "Baza je ta trenutek zasedena z drugim delom (npr. uvozom). Poskusite znova čez nekaj sekund.";
     }
     catch (Exception ex)
     {
       // Napako zapišemo v dnevnik: brez tega se časovna omejitev baze in vse druge napake vidijo enako.
-      Log.LogError(ex, "Sled sprememb: branje ni uspelo (dni {Dni}, iskanje {Iskanje}).", Dni, Iskanje);
+      Log.LogError(ex, "Sled sprememb: branje ni uspelo (dni {Dni}, iskanje {Iskanje}).", dni, iskanje);
       Error = "Sledi trenutno ni mogoče prebrati. Poskusite krajše obdobje ali ožje iskanje; napaka je zapisana v dnevnik.";
     }
-    finally { Loading = false; }
+    finally
+    {
+      if (ReferenceEquals(branje, moje)) Loading = false;
+    }
+  }
+
+  public void Dispose()
+  {
+    branje?.Cancel();
+    branje?.Dispose();
   }
 
   string Povzetek => Loading ? "Nalaganje …"
