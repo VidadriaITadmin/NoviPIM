@@ -1,20 +1,22 @@
 @* 281: potrditev sumljivih sprememb za SAOP na mestu odobritve. Uporabnik 2026-09-24: »če je artikel aktiven, takoj
    uvoziš v SAOP; če je neaktiven, ti javi toliko artiklov je neaktivnih — fino bi bilo še, da se vidi seznam«; »dej mi
-   še ostale varovalke notri«. Seznam po razlogu (neaktivni, cene, ključna polja, množično, staro), odločitev tu. *@
+   še ostale varovalke notri«. Seznam po razlogu (neaktivni, cene, ključna polja, množično, staro), odločitev tu.
+   #76: en seznam = eno podjetje (ime v naslovu), znotraj ločeno cene in artikli, da komercialist ve, kaj potrjuje. *@
 
 @if (Items.Count > 0)
 {
-  <section class="ui-card deactivation-confirm section-gap" role="alertdialog" aria-labelledby="held-title">
-    <h2 id="held-title">@Heading</h2>
-    <p>Preveri, ali je prav. Ostale spremembe so že šle v SAOP; te gredo, ko potrdiš.</p>
-    @foreach (var group in Items.GroupBy(item => (item.RuleCode, item.RuleTitle, item.RuleOrder)).OrderBy(group => group.Key.RuleOrder))
+  <section class="ui-card deactivation-confirm section-gap" role="alertdialog" aria-labelledby="@TitleId" data-organization="@OrganizationId">
+    <h2 id="@TitleId">@Heading</h2>
+    <p>Preveri, ali je prav. Ostale spremembe so že šle v SAOP; te gredo, ko potrdiš@(OrganizationName is { Length: > 0 } ? $" — samo za podjetje {OrganizationName}" : "").</p>
+    @foreach (var group in Items.GroupBy(item => (Kind: KindOf(item), item.RuleCode, item.RuleTitle, item.RuleOrder)).OrderBy(group => group.Key.Kind).ThenBy(group => group.Key.RuleOrder))
     {
       var rows = group.ToList();
       var messages = rows.Select(row => row.OutboxMessageId).Distinct().Count();
-      <h3>@group.Key.RuleTitle (@messages.ToString("N0"))</h3>
+      var title = $"{KindTitle(group.Key.Kind)} · {group.Key.RuleTitle}";
+      <h3>@title (@messages.ToString("N0"))</h3>
       <div class="table-scroll">
         <table class="data-table">
-          <caption class="visually-hidden">@group.Key.RuleTitle</caption>
+          <caption class="visually-hidden">@(OrganizationName is { Length: > 0 } ? $"{OrganizationName}: {title}" : title)</caption>
           <thead><tr><th>Šifra</th><th>Naziv</th><th>Sprememba</th><th>Od kod</th><th>Pripravil</th></tr></thead>
           <tbody>
             @foreach (var item in rows.Take(MaxRows))
@@ -43,19 +45,28 @@
   const int MaxRows = 200;
 
   [Parameter] public IReadOnlyList<SaopHeldRow> Items { get; set; } = [];
+  /// <summary>#76: podjetje, ki mu seznam pripada; ime gre v naslov in na gumb.</summary>
+  [Parameter] public int? OrganizationId { get; set; }
+  [Parameter] public string? OrganizationName { get; set; }
   [Parameter] public bool Busy { get; set; }
   [Parameter] public string SendAllText { get; set; } = "Da, prav je — pošlji v SAOP";
   [Parameter] public string CancelText { get; set; } = "Ne zdaj";
   [Parameter] public EventCallback OnSendAll { get; set; }
   [Parameter] public EventCallback OnCancel { get; set; }
 
+  readonly string TitleId = "held-title-" + Guid.NewGuid().ToString("N")[..8];
+
+  /// <summary>0 = cene (cenik), 1 = artikli (enota, EAN, aktivnost …) — ločeni skupini v seznamu.</summary>
+  static int KindOf(SaopHeldRow item) => item.FieldKey.StartsWith("Price.", StringComparison.Ordinal) ? 0 : 1;
+  static string KindTitle(int kind) => kind == 0 ? "Cene" : "Artikli";
+
   int Messages => Items.Select(item => item.OutboxMessageId).Distinct().Count();
 
   /// <summary>Samo neaktivni: »V SAOP 3 artikli bodo neaktivni«; sicer »V SAOP čaka potrditev: N sprememb«.</summary>
-  string Heading => Items.All(item => item.IsDeactivation)
+  string Heading => (OrganizationName is { Length: > 0 } ? OrganizationName + ": " : "") + (Items.All(item => item.IsDeactivation)
     ? $"V SAOP {SafeguardText.ItemsInactive(Items.Select(item => item.ItemId).Distinct().Count())}"
     : $"V SAOP čaka potrditev: {Messages:N0} sprememb"
-      + (Items.Any(item => item.IsDeactivation) ? $", od tega {SafeguardText.ItemsInactive(Items.Where(item => item.IsDeactivation).Select(item => item.ItemId).Distinct().Count())}" : "");
+      + (Items.Any(item => item.IsDeactivation) ? $", od tega {SafeguardText.ItemsInactive(Items.Where(item => item.IsDeactivation).Select(item => item.ItemId).Distinct().Count())}" : ""));
 
   static string Show(string? value) =>
     value is null ? "—"
