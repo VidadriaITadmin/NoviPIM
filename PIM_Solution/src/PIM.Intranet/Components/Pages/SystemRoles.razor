@@ -70,7 +70,7 @@
           @foreach (var role in FilteredRoles)
           {
             <button type="button" class="role-list-item @(role.RoleId == SelectedRoleId ? "is-selected" : null)"
-                    aria-pressed="@(role.RoleId == SelectedRoleId)" @onclick="() => SelectRoleAsync(role.RoleId)">
+                    aria-pressed="@(role.RoleId == SelectedRoleId ? "true" : "false")" @onclick="() => SelectRoleAsync(role.RoleId)">
               <span class="role-avatar" aria-hidden="true">@Initials(role.Name)</span>
               <span class="role-list-copy">
                 <strong>@role.Name</strong>

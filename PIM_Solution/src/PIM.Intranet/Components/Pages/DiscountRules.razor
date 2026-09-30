@@ -38,19 +38,19 @@
 }
 
 <nav class="commercial-sections" aria-label="Področja komercialnih pravil">
-  <button type="button" class="@(Section == "types" ? "active" : null)" aria-pressed="@(Section == "types")" @onclick='() => Section = "types"'>
+  <button type="button" class="@(Section == "types" ? "active" : null)" aria-pressed="@(Section == "types" ? "true" : "false")" @onclick='() => Section = "types"'>
     <strong>Skupine strank</strong><span>@MappedTypeCount.ToString("N0") preslikanih</span>
   </button>
-  <button type="button" class="@(Section == "tiers" ? "active" : null)" aria-pressed="@(Section == "tiers")" @onclick='() => Section = "tiers"'>
+  <button type="button" class="@(Section == "tiers" ? "active" : null)" aria-pressed="@(Section == "tiers" ? "true" : "false")" @onclick='() => Section = "tiers"'>
     <strong>Vrednostni pragovi</strong><span>@Tiers.Count.ToString("N0") stopenj</span>
   </button>
-  <button type="button" class="@(Section == "shipping" ? "active" : null)" aria-pressed="@(Section == "shipping")" @onclick='() => Section = "shipping"'>
+  <button type="button" class="@(Section == "shipping" ? "active" : null)" aria-pressed="@(Section == "shipping" ? "true" : "false")" @onclick='() => Section = "shipping"'>
     <strong>Poštnina</strong><span>@(Rows?.Count ?? 0) pravil</span>
   </button>
-  <button type="button" class="@(Section == "overrides" ? "active" : null)" aria-pressed="@(Section == "overrides")" @onclick='() => Section = "overrides"'>
+  <button type="button" class="@(Section == "overrides" ? "active" : null)" aria-pressed="@(Section == "overrides" ? "true" : "false")" @onclick='() => Section = "overrides"'>
     <strong>Posebne izjeme</strong><span>@Overrides.Count.ToString("N0") vnosov</span>
   </button>
-  <button type="button" class="@(Section == "spopusti" ? "active" : null)" aria-pressed="@(Section == "spopusti")" @onclick='() => Section = "spopusti"'>
+  <button type="button" class="@(Section == "spopusti" ? "active" : null)" aria-pressed="@(Section == "spopusti" ? "true" : "false")" @onclick='() => Section = "spopusti"'>
     <strong>S-popusti</strong><span>@PackagingRules.Count.ToString("N0") pravil</span>
   </button>
 </nav>
