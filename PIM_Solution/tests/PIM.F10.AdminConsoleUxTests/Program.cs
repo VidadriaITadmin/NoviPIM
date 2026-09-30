@@ -430,6 +430,23 @@ foreach (var (file, markup) in new[] { ("Monitor.razor", monitor), ("MonitorJob.
 Assert(monitorJob.Contains("RequestCancelAsync", StringComparison.Ordinal), "Stran posla mora omogočiti ustavitev teka (RequestCancelAsync).");
 Assert(monitor.Contains("MarkAlertsSeenAsync", StringComparison.Ordinal), "Nadzor mora ob odprtju označiti obvestila kot videna (zvonec).");
 
+// Naloga 86: sklanjatev ob števniku (1 uporabnik, 2 uporabnika, 3-4 uporabniki, 5+ uporabnikov; po ostanku %100).
+foreach (var (stevilo, pricakovano) in new (long, string)[]
+{
+  (0, "uporabnikov"), (1, "uporabnik"), (2, "uporabnika"), (3, "uporabniki"), (4, "uporabniki"), (5, "uporabnikov"),
+  (11, "uporabnikov"), (12, "uporabnikov"), (101, "uporabnik"), (102, "uporabnika"), (103, "uporabniki"),
+  (104, "uporabniki"), (111, "uporabnikov"), (1001, "uporabnik")
+})
+  Assert(PIM.Intranet.Services.SlovenianPlural.Users(stevilo) == pricakovano,
+    $"{stevilo} mora biti »{pricakovano}«, je »{PIM.Intranet.Services.SlovenianPlural.Users(stevilo)}«.");
+Assert(PIM.Intranet.Services.SlovenianPlural.Format(3, "a", "b", "c", "d") == "3 c", "Format mora vrniti število in obliko.");
+var uporabnikiStran = Read(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "SystemUsers.razor"));
+var vlogeStran = Read(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "SystemRoles.razor"));
+Assert(uporabnikiStran.Contains("SlovenianPlural.Users", StringComparison.Ordinal)
+  && vlogeStran.Contains("SlovenianPlural.Users", StringComparison.Ordinal)
+  && !vlogeStran.Contains("dovoljenj</span>", StringComparison.Ordinal),
+  "Uporabniki in vloge morajo števce sklanjati s skupnim SlovenianPlural (ne lokalno 1/2/ostalo).");
+
 Console.WriteLine("F10 admin console UX contract PASS.");
 
 static string Read(string path)

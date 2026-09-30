@@ -25,6 +25,8 @@
     <div class="media-meta">
       <span class="media-meta-item"><strong>@Number(Summary?.ProductsWithMedia)</strong> izdelkov ima medij</span>
       <a class="media-meta-item warn" href="@WithoutImageHref"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
+      @* #9 (312): slike, ki so vpisane, a se na naslovu ne odprejo — preverja jih posel MEDIA_URL_CHECK. *@
+      <a class="media-meta-item" href="@BrokenHref">Napačni naslovi slik</a>
       @if (Summary?.AddedLastWeek > 0)
       {
         <button type="button" class="media-meta-item fresh" title="Pokaži medije, vnesene v zadnjih 7 dneh, najnovejše najprej" @onclick="ShowRecentAsync">
@@ -479,6 +481,8 @@
 
   // Seznam izdelkov pozna filtra »slika=NO« in »aktivnost=ACTIVE«; nekdanji
   // izdelki?pogled=BREZ_SLIKE je seznam tiho odprl brez filtra.
+  string BrokenHref => "mediji/napacni-naslovi" + (OrganizationId is int scope ? $"?podjetje={scope}" : "");
+
   string WithoutImageHref => "izdelki?slika=NO&aktivnost=ACTIVE" + (OrganizationId is int id ? $"&podjetje={id}" : "");
 
   protected override async Task OnInitializedAsync()

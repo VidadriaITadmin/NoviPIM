@@ -27,7 +27,7 @@
 
 <section class="ui-card toolbar section-gap" aria-label="Podjetje">
   <label for="withdrawal-organization">Podjetje</label>
-  <select id="withdrawal-organization" class="filter-select" @bind="OrganizationText" @bind:after="ReloadAllAsync">
+  <select id="withdrawal-organization" class="filter-select" @bind="OrganizationText" @bind:after="OnOrganizationChangedAsync">
     @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
   </select>
 </section>
@@ -64,7 +64,7 @@
     </p>
     <div class="filter-bar">
       <label class="field-control"><span>Obdobje</span>
-        <select class="filter-select" @bind="DaysText" @bind:after="LoadWithdrawnAsync">
+        <select class="filter-select" @bind="DaysText" @bind:after="ApplyWithdrawnAsync">
           <option value="7">zadnjih 7 dni</option>
           <option value="30">zadnjih 30 dni</option>
           <option value="90">zadnjih 90 dni</option>
@@ -72,7 +72,7 @@
         </select>
       </label>
       <label class="field-control"><span>Šifra ali naziv</span><input class="search-input" @bind="WithdrawnSearch" @bind:event="oninput" @onkeydown="OnWithdrawnKeyAsync" /></label>
-      <button type="button" class="filter-button" disabled="@Busy" @onclick="LoadWithdrawnAsync">Prikaži</button>
+      <button type="button" class="filter-button" disabled="@Busy" @onclick="ApplyWithdrawnAsync">Prikaži</button>
     </div>
     <PimState Loading="WithdrawnLoading" Error="@WithdrawnError" Empty="@(Withdrawn is { Rows.Count: 0 } && WithdrawnReason is null)" EmptyText="V izbranem obdobju ni bil s spleta umaknjen noben artikel.">
       @if (Withdrawn is not null)
@@ -306,6 +306,15 @@ else
     [new("Artikel"), new("Spletišče"), new("Zakaj ne gre na splet"), new("Kljukica od")];
 
   [SupplyParameterFromQuery(Name = "pogled")] public string? Pogled { get; set; }
+  // #89: podjetje, obdobje in iskanje umaknjenih so v naslovu (deljenje povezave, osvežitev, Nazaj).
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? Podjetje { get; set; }
+  [SupplyParameterFromQuery(Name = "obdobje")] public string? Obdobje { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? Isci { get; set; }
+
+  /// <summary>Dovoljena obdobja = možnosti spustnega seznama; drugo število iz naslova pade na privzeto.</summary>
+  static readonly string[] AllowedDays = ["7", "30", "90", "365"];
+  const string DefaultDays = "30";
+  const int MaxSearchLength = 100;
 
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<WebShopWithdrawalRow> Rows = [];
@@ -318,8 +327,10 @@ else
   string View = ViewWithdrawn;
   string OrganizationText = "2";
   string Search = "";
-  string DaysText = "30";
+  string DaysText = DefaultDays;
   string WithdrawnSearch = "";
+  /// <summary>Iskanje, ki ga poizvedba res uporablja (zapiše se ob Enter/Prikaži, ne ob vsaki tipki).</summary>
+  string AppliedWithdrawnSearch = "";
   string? WithdrawnReason;
   string BlockedShop = "";
   string BlockedSearch = "";
@@ -357,8 +368,47 @@ else
     catch { Organizations = []; }
     if (Organizations.Count > 0 && Organizations.All(organization => organization.OrganizationId != 2))
       OrganizationText = Organizations[0].OrganizationId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    // Podjetje iz naslova velja samo, če je na seznamu (aktivna podjetja); sicer ostane privzeto.
+    if (int.TryParse(Podjetje, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var requested)
+        && Organizations.Any(organization => organization.OrganizationId == requested))
+      OrganizationText = requested.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    DaysText = Obdobje is { } days && AllowedDays.Contains(days) ? days : DefaultDays;
+    WithdrawnSearch = AppliedWithdrawnSearch = CleanSearch(Isci);
     View = Pogled is ViewBlocked or ViewAuto ? Pogled : ViewWithdrawn;
     await ReloadAllAsync();
+  }
+
+  static string CleanSearch(string? text)
+  {
+    var trimmed = (text ?? "").Trim();
+    return trimmed.Length > MaxSearchLength ? trimmed[..MaxSearchLength] : trimmed;
+  }
+
+  /// <summary>Naslov strani iz trenutnih izbir; privzete vrednosti izpusti. Samo zamenja vnos v zgodovini
+  /// (replace) in ne sproži ponovnega nalaganja — stran nima OnParametersSet.</summary>
+  void SyncUrl()
+  {
+    var query = new List<string>();
+    if (View != ViewWithdrawn) query.Add("pogled=" + View);
+    query.Add("podjetje=" + OrganizationId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    if (DaysText != DefaultDays) query.Add("obdobje=" + Uri.EscapeDataString(DaysText));
+    if (AppliedWithdrawnSearch.Length > 0) query.Add("isci=" + Uri.EscapeDataString(AppliedWithdrawnSearch));
+    Navigation.NavigateTo("splet/umaknjeni?" + string.Join('&', query), forceLoad: false, replace: true);
+  }
+
+  async Task OnOrganizationChangedAsync()
+  {
+    SyncUrl();
+    await ReloadAllAsync();
+  }
+
+  /// <summary>Obdobje, »Prikaži« ali Enter v iskanju: uporabi iskanje, zapiši ga v naslov in naloži.</summary>
+  async Task ApplyWithdrawnAsync()
+  {
+    WithdrawnSearch = CleanSearch(WithdrawnSearch);
+    AppliedWithdrawnSearch = WithdrawnSearch;
+    SyncUrl();
+    await LoadWithdrawnAsync();
   }
 
   async Task ReloadAllAsync()
@@ -373,7 +423,7 @@ else
   {
     View = view;
     Message = null; Error = null; RestoreRejected = [];
-    Navigation.NavigateTo($"splet/umaknjeni?pogled={view}", forceLoad: false, replace: true);
+    SyncUrl();
     await Task.CompletedTask;
   }
 
@@ -403,8 +453,8 @@ else
     WithdrawnLoading = Withdrawn is null; WithdrawnError = null;
     try
     {
-      var days = int.TryParse(DaysText, out var parsed) ? parsed : 30;
-      Withdrawn = await Withdrawals.GetWithdrawnItemsAsync(OrganizationId, days, WithdrawnReason, WithdrawnSearch);
+      var days = int.TryParse(AllowedDays.Contains(DaysText) ? DaysText : DefaultDays, out var parsed) ? parsed : 30;
+      Withdrawn = await Withdrawals.GetWithdrawnItemsAsync(OrganizationId, days, WithdrawnReason, AppliedWithdrawnSearch);
       WithdrawnTotal = Withdrawn.Counts.Sum(count => count.ProductCount);
       Selected.RemoveWhere(key => !Withdrawn.Rows.Any(row => row.CanRestore && Key(row.ProductId, row.WebShopCode) == key));
     }
@@ -433,7 +483,7 @@ else
   async Task OnWithdrawnReasonAsync(string? reason) { WithdrawnReason = reason; await LoadWithdrawnAsync(); }
   async Task OnBlockedReasonAsync(string? key) { BlockedKey = key; await LoadBlockedAsync(); }
   async Task OnBlockedShopAsync() { BlockedKey = null; await LoadBlockedAsync(); }
-  async Task OnWithdrawnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadWithdrawnAsync(); }
+  async Task OnWithdrawnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyWithdrawnAsync(); }
   async Task OnBlockedKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadBlockedAsync(); }
   async Task OnSearchKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await LoadAsync(); }
 

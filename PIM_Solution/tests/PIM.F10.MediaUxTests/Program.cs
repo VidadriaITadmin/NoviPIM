@@ -267,6 +267,46 @@ var migration249 = Read(Path.Combine(root, "sql", "migrations", "249_MedijiCasVn
 Assert(migration249.Contains("history.OldValue IS NULL", StringComparison.Ordinal) && migration249.Contains("BeforeChangeId", StringComparison.Ordinal),
   "Polnitev casa slik mora slediti prepisom naslovov (220) nazaj do pravega vnosa.");
 
+/* ─── Napacni naslovi slik (naloga #9, migracija 312) ─────────────────────────
+   Lastnik (#18): pokvarjena je slika sele po 2 neuspehih v razmiku 24 ur; napaka za splet samo brez druge
+   delujoce slike; pokvarjene slike ne gredo v katalog.csv. Stran samo bere, filtri v naslovu, listanje v bazi. */
+var checksPage = Read(Path.Combine(pages, "MediaUrlChecks.razor"));
+var checksService = Read(Path.Combine(root, "src", "PIM.Intranet", "Services", "MediaCheckReadService.cs"));
+var migration312 = Read(Path.Combine(root, "sql", "migrations", "312_PreverjanjeSlik.sql"));
+Assert(checksPage.Contains("@page \"/mediji/napacni-naslovi\"", StringComparison.Ordinal), "Stran napacnih naslovov slik mora obstajati.");
+Assert(page.Contains("mediji/napacni-naslovi", StringComparison.Ordinal), "Mediji morajo voditi na napacne naslove slik.");
+foreach (var name in new[] { "podjetje", "isci", "stanje", "streznik", "napaka", "razvrsti", "smer", "stran" })
+  Assert(checksPage.Contains($"SupplyParameterFromQuery(Name = \"{name}\")", StringComparison.Ordinal), "Filter mora ziveti v naslovu: " + name);
+Assert(checksPage.Contains("<PimPager", StringComparison.Ordinal) && checksPage.Contains("<caption", StringComparison.Ordinal)
+    && checksPage.Contains("Počisti filtre", StringComparison.Ordinal) && checksPage.Contains("role=\"status\"", StringComparison.Ordinal),
+  "Seznam: strezniško listanje, napis tabele, Pocisti filtre in stevec zadetkov.");
+Assert(checksPage.Contains("href=\"izdelki/@row.ProductId\"", StringComparison.Ordinal), "Sifra odpre kartico izdelka.");
+Assert(checksPage.Contains("BuildWorkbookAsync(filter)", StringComparison.Ordinal) && checksService.Contains("Take = WorkbookWriter.MaxRows", StringComparison.Ordinal),
+  "Izvoz v Excel je natanko ta pogled (isti filter), do meje zvezka.");
+Assert(!checksPage.Contains("<form", StringComparison.Ordinal) && !checksService.Contains("ExecuteNonQuery", StringComparison.Ordinal),
+  "Stran napacnih naslovov samo bere.");
+Assert(migration312.Contains("FailureCount >= 2 AND LastFailedUtc >= DATEADD(HOUR, 24, FirstFailedUtc)", StringComparison.Ordinal),
+  "Pokvarjena je slika sele po dveh neuspehih v razmiku 24 ur.");
+Assert(migration312.Contains("ELSE mediaCheck.FailureCount END", StringComparison.Ordinal),
+  "NI_ODZIVA (429, 5xx, casovna meja) ne sme povecati stevca neuspehov.");
+Assert(migration312.Contains("(N'ProductMedia.DelujocaSlika', N'ERROR'), (N'ProductMedia.VseSlikeDelujejo', N'WARNING')", StringComparison.Ordinal),
+  "Brez delujoce slike = napaka, ena pokvarjena od vec = opozorilo.");
+Assert(migration312.Contains("UrlHash", StringComparison.Ordinal) && !migration312.Contains("ProductMediaId bigint NOT NULL", StringComparison.Ordinal),
+  "Izid je vezan na naslov, ne na vrstico slike (zajem XML vrstice zamenja).");
+Assert(migration312.Contains("PreverjanjeSlik312", StringComparison.Ordinal) && migration312.Contains("OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))", StringComparison.Ordinal),
+  "Izpust iz katalog.csv je zamenjava zive definicije GetExportRows (bloki 302-306 ostanejo).");
+Assert(MediaCheckQuery.FromQuery(name => name switch { "stanje" => "POKVARJENA", "stran" => "3", "podjetje" => "2", _ => null }) is { State: "POKVARJENA", Skip: 100, OrganizationId: 2 }
+    && MediaCheckQuery.FromQuery(name => name == "stanje" ? "IZMISLJENO" : null).State is null,
+  "Naslov strani se prebere v filter; neznano stanje se zavrne.");
+Assert(MediaCheckQuery.ToQueryString(new MediaCheckFilter(State: "SUMLJIVA", Host: "pim.nowodvorski.com"), 2) == "stanje=SUMLJIVA&streznik=pim.nowodvorski.com&stran=2",
+  "Filter se zapise v naslov (deljiva povezava).");
+Assert(MediaCheckQuery.IsDescending(new MediaCheckFilter()) && !MediaCheckQuery.IsDescending(new MediaCheckFilter(Sort: "sifra"))
+    && MediaCheckQuery.IsDescending(new MediaCheckFilter(Sort: "sifra", Reverse: true)),
+  "Privzeto najnovejse preverjanje najprej; sifra narascajoce, obrnjeno zamenja smer.");
+Assert(ProductFieldLabels.For("ProductMedia.DelujocaSlika").Contains("Delujoča", StringComparison.Ordinal)
+    && QualityFieldPolicy.FixTarget("ProductMedia.DelujocaSlika").Href == "mediji/napacni-naslovi",
+  "Napaka validacije »Delujoca slika« ima ime po domace in vodi na napacne naslove slik.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 
