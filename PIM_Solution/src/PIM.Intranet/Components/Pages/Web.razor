@@ -463,7 +463,7 @@
     const string done = "Zahteva za izdelavo je oddana. Avtomatika jo prevzame v nekaj trenutkih; izdelava traja nekaj minut. Nato klikni »Osveži«.";
     try
     {
-      await Monitor.RequestRunAsync(JobCatalog.WebCatalogExport, UserName);
+      await Monitor.RequestRunAsync(JobCatalog.WebCatalogExport, UserName, "s strani Splet (katalog.csv za Magento)");
       RunMessage = done;
     }
     catch (MonitorTraceException trace) { RunMessage = done; RunError = trace.Message; }
