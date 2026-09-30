@@ -303,7 +303,7 @@ await AssertReachesDatabaseAsync("ProductEditService.SaveTextsAsync z vlogo CATA
 // Uporabnik: »nobenih omejitev glede znakov, lahko je samo priporocilo«. Geslo iz samih malih črk
 // mora zato priti mimo servisa do baze (tu nedosegljive), prazno pa se zavrne prej, ker ga prijava
 // ne sprejme. Servis zahteva najmanj MinimumPasswordLength (6) znakov (Migrator in /sistem/uporabniki
-// enako); test je do #21 zahteval, da gre skozi tudi 3-znakovno geslo — ta razkorak je odprt za lastnika.
+// enako); test je do #21 zahteval, da gre skozi tudi 3-znakovno geslo — odločitev lastnika je naloga #79.
 var userAdministration = new IntranetUserAdministrationService(unusableConfiguration,
   new ActiveDirectoryService(unusableConfiguration), new UserSecurityStateService(unusableConfiguration));
 await AssertPasswordReachesDatabaseAsync("ResetPasswordAsync z geslom brez posebnih znakov",
