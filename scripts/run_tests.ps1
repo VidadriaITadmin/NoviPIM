@@ -10,10 +10,12 @@
   vracal 0, tudi ce ni izvedel prakticno nicesar.
 
   Ta skripta pozene vse: najprej build, nato vsak konzolni testni projekt prek
-  `dotnet run`, na koncu se `dotnet test` za xUnit projekte.
+  `dotnet run`, na koncu se `dotnet test` za vsak xUnit projekt posebej.
 
 .PARAMETER Filter
   Zazene samo projekte, katerih ime ustreza vzorcu, npr. -Filter "F5".
+  Velja za konzolne IN xUnit projekte: -Filter F12 ne pozene PIM.ChangeTracking.Integration,
+  -Filter ChangeTracking pa samo tega.
 
 .PARAMETER Verbose_
   Ob napaki izpise cel izhod projekta, ne samo zadnjih vrstic.
@@ -142,19 +144,61 @@ foreach ($p in $projekti) {
 }
 
 # --- 3. xUnit projekti -----------------------------------------------------
+# Tudi xUnit projekti upostevajo -Filter (#43). Prej je 'dotnet test PIM.sln' tekel ob VSAKEM
+# filtru, zato so vrata vsake naloge poganjala PIM.ChangeTracking.Integration nad razvojno bazo in
+# se med seboj zaklepala (napaka 1205). Posledica: vrata z drugimi filtri (F10, F12 ...) testov
+# razveljavitve (pim.UndoProductField, pim.UndoProductBatch) ne pozenejo vec. Naloga, ki se dotika
+# pim.ProductFieldHistory ali razveljavitve, mora imeti med testi 'ChangeTracking'.
 Zapisi Cyan ""
 Zapisi Cyan "=== xUnit (dotnet test) ==="
 $xpreskok = 0
-$xizhod = & dotnet test $sln --no-build --nologo 2>&1 | Out-String
-$xkoda = $LASTEXITCODE
-if ($xkoda -ne 0) {
-  $padli += "dotnet test (xUnit)"
-  Zapisi Red "  FAIL  dotnet test"
-  Write-Host (($xizhod -split "`n" | Select-Object -Last 15) -join "`n")
-} else {
-  $xpreskok = ([regex]::Matches($xizhod, "Skipped:\s+(\d+)") | ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Sum).Sum
-  if ($xpreskok -gt 0) { Zapisi Yellow "  OK    dotnet test ($xpreskok preskocenih)" }
-  else { Zapisi Green "  OK    dotnet test" }
+$xprojekti = Get-ChildItem $testsDir -Directory | Sort-Object Name | Where-Object {
+  $cp = Join-Path $_.FullName "$($_.Name).csproj"
+  (Test-Path $cp) -and (Select-String -Path $cp -Pattern "Microsoft.NET.Test.Sdk" -Quiet)
+}
+if ($Filter) { $xprojekti = @($xprojekti | Where-Object { $_.Name -like "*$Filter*" }) }
+
+if (-not $xprojekti) {
+  Zapisi Yellow "  xUnit preskocen: noben xUnit projekt ne ustreza filtru '$Filter'."
+}
+foreach ($p in $xprojekti) {
+  $csproj = Join-Path $p.FullName "$($p.Name).csproj"
+  # Enako kot pri konzolnih testih: stderr v datoteko, sicer ga PS 5.1 ob
+  # ErrorActionPreference=Stop zavije v ErrorRecord in skripta se ustavi brez povzetka.
+  $tmpOut = [System.IO.Path]::GetTempFileName()
+  $tmpErr = [System.IO.Path]::GetTempFileName()
+  try {
+    $prej = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $proc = Start-Process -FilePath "dotnet" `
+      -ArgumentList @("test", "`"$csproj`"", "--no-build", "--nologo") `
+      -NoNewWindow -Wait -PassThru `
+      -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
+    $xkoda = $proc.ExitCode
+    $ErrorActionPreference = $prej
+    $xizhod = (Get-Content $tmpOut -Raw -ErrorAction SilentlyContinue) + "`n" +
+              (Get-Content $tmpErr -Raw -ErrorAction SilentlyContinue)
+  } finally {
+    Remove-Item $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
+  }
+
+  if ($xkoda -ne 0) {
+    $padli += "$($p.Name) (xUnit)"
+    Zapisi Red ("  FAIL  {0}  (dotnet test, izhod {1})" -f $p.Name, $xkoda)
+    if ($Verbose_) { Write-Host $xizhod }
+    else {
+      # Zadnje vrstice so pri xUnit samo sklad klicev; bistvo (kateri test, katera napaka) je vise.
+      $bistvo = $xizhod -split "`n" | Where-Object { $_ -match '^\s+Failed |Error Message:|Exception :|Assert\.|^\s*Expected:|^\s*Actual:|^Failed!|\[FAIL\]' } | Select-Object -First 30
+      Write-Host (($bistvo | ForEach-Object { $_.TrimEnd() }) -join "`n")
+    }
+  } else {
+    $n = ([regex]::Matches($xizhod, "Skipped:\s+(\d+)") | ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Sum).Sum
+    if (-not $n) { $n = 0 }
+    $xpreskok += $n
+    if ($n -gt 0) { Zapisi Yellow ("  OK    {0} (dotnet test, {1} preskocenih)" -f $p.Name, $n) }
+    else { Zapisi Green ("  OK    {0} (dotnet test)" -f $p.Name) }
+    $uspeli += "$($p.Name) (xUnit)"
+  }
 }
 
 # --- 4. Povzetek -----------------------------------------------------------
