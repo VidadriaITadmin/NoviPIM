@@ -24,7 +24,7 @@
       <option value="0">Izberi profil</option>
       @foreach (var profile in Profiles)
       {
-        <option value="@profile.ExportProfileId">@profile.Name (@profile.ProfileCode)</option>
+        <option value="@profile.ExportProfileId">@profile.Name (@profile.ProfileCode, @ColumnsText(profile.ColumnCount))</option>
       }
     </select>
   </label>
@@ -113,6 +113,9 @@
   string EffectiveSite => IsProductProfile ? SelectedSite : "";
   bool EffectiveOnlyPublished => IsProductProfile ? OnlyPublished : SelectedProfile!.OnlyPublishedDefault;
   bool HasFilters => SelectedSite.Length > 0 || Search.Trim().Length > 0 || !OnlyPublished;
+  /// <summary>#92: število aktivnih stolpcev profila (out.ExportColumn IsActive = 1) — isti nabor kot glava CSV;
+  /// prej je bilo število zapisano v imenu profila in je zastarelo.</summary>
+  static string ColumnsText(long count) => PimFormat.Count(count, "stolpec", "stolpca", "stolpci", "stolpcev");
   string RowsText => PimFormat.Count(Preview?.TotalCount ?? 0, "vrstica", "vrstici", "vrstice", "vrstic");
   /// <summary>Rodilnik za »od …«: od 1 vrstice, od 2 vrstic, od 5 vrstic.</summary>
   string RowsGenitive => PimFormat.Count(Preview?.TotalCount ?? 0, "vrstice", "vrstic", "vrstic", "vrstic");
@@ -122,10 +125,10 @@
     ? $"Filter zajema {(OnlyPublished ? "samo objavljene" : "vse")} izdelke"
       + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SiteName}")
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
-      + $"; v datoteki bo {RowsText}."
+      + $"; v datoteki bo {RowsText} in {ColumnsText(Preview?.Columns.Count ?? 0)}."
     : $"Filter zajema {(EffectiveOnlyPublished ? "samo aktivne stranke" : "vse stranke")}"
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
-      + $"; v datoteki bo {RowsText}.";
+      + $"; v datoteki bo {RowsText} in {ColumnsText(Preview?.Columns.Count ?? 0)}.";
   string DownloadHref => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
   {
     $"podjetje={OrganizationId}", $"profil={SelectedProfileId}", $"koda={Uri.EscapeDataString(SelectedProfile?.ProfileCode ?? string.Empty)}",

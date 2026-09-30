@@ -2560,6 +2560,15 @@ Paketno urejanje na `/izdelki` (#10), uvoz delovnega lista (`/izdelki/uvoz`), zd
 - DEV (vzorec 1.005 izdelkov IQ Lighting: 500 s kljukico spletišča, 500 brez, 5 neaktivnih z odprtimi napakami; posnetek napak, stanj profilov in stanja izdelka pred in po, `EXCEPT` v obe smeri): **0 razlik** med stanjem pred tekom, po novi proceduri in po stari proceduri na istih izdelkih. Čas: nova 5,4–6,3 s za 1.005 izdelkov (prvi teki pod obremenitvijo drugih sej 34–42 s, pred popravkom branja pogleda), po uveljavitvi 5,6 s in **nobena druga seja ni čakala na zaklep**; stara 2.153 s (36 min) za samo 200 izdelkov istega vzorca pod obremenitvijo, ves čas je blokirala druge (`LCK_M_IX`, `LCK_M_IS`, `RESOURCE_SEMAPHORE`, 110 mio branj v prvih 10 min). Preizkus s pokvarjenim stanjem v transakciji z ROLLBACK (40 izdelkov: 3.827 obrnjenih napak, 242 izbrisanih stanj, lažna stanja spletnega profila, napačno stanje izdelka): nova procedura v 0,5 s vse aktivne izdelke vrne natanko v stanje stare; neaktivnih izdelkov (kot 249) ne validira.
 
 **Objekti:** `val.RunValidationForProducts`. **Podatki:** nič. **Ročni korak:** ne. **SAOP:** nič. **Povratek:** ponovno izvedi definicijo procedure iz 249. **PRD:** neodvisno od intraneta (parameter in izhod enaka).
+## Brez fiksnega števila stolpcev v imenu profila (migracija 325_OdstraniStevecStolpcevIzImenaProfila, 2026-09-30, naloga #92)
+
+Na `/splet/izvoz` je profil MAGENTO_PRODUCTS nosil ime »Magento - izdelki (predloga 215 stolpcev)« (migracija 045), izvožen CSV pa ima 223 stolpcev. Število je bilo zapisano v imenu in je zastarelo.
+
+- **`out.ExportProfile.Name`** za `MAGENTO_PRODUCTS` in `MAGENTO_CUSTOMERS`: odstranjena pripona » (predloga N stolpcev)« → »Magento - izdelki«, »Magento - stranke«; `UpdatedUtc` osvežen. Ponovljivo (brez pripone se ne spremeni nič).
+- Intranet (ni migracija): izbirnik profila na `/splet/izvoz` pokaže živo število aktivnih stolpcev (`out.ExportColumn IsActive = 1`, isti nabor kot glava CSV), povzetek predogleda pa »v datoteki bo N vrstic in M stolpcev« iz glave predogleda. Čas v privzetem imenu prenesene datoteke (`PIM_splet_<profil>_yyyyMMdd_HHmm.csv`) je v naši uri (`PimTime`), ne več UTC.
+- Profili se iščejo po `ProfileCode`, nikjer po imenu — sprememba ne vpliva na katalog.csv, stranke.csv, avtomatiko ali SAOP.
+
+**Objekti:** `out.ExportProfile` (podatki, 2 vrstici). **Ročni korak:** ne. **SAOP:** nič. **Povratek:** `UPDATE out.ExportProfile SET Name = N'Magento - izdelki (predloga 215 stolpcev)' WHERE ProfileCode = N'MAGENTO_PRODUCTS'` (in »Magento - stranke (predloga 19 stolpcev)« za `MAGENTO_CUSTOMERS`). **PRD:** neodvisno od intraneta.
 ## Umik oddane zahteve za zagon posla (migracija 324_PrekliciZahtevoZaZagon, 2026-09-30, naloga #69)
 
 Po »Poženi zdaj« (`ops.RequestJobRun`, 237) zahteve ni bilo mogoče umakniti: ostala je v `ops.JobDefinition.RequestedRunUtc`, dokler je gostitelj ni prevzel (29. 9. je tako preizkus s testnega intraneta sprožil izvoz kataloga). Na `/sistem` in `/sistem/posel/{JobKey}` je zdaj gumb **Prekliči zahtevo**.
