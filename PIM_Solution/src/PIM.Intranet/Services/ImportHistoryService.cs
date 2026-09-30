@@ -17,51 +17,14 @@ public sealed record ImportChange(
   int OrganizationId, string? OrganizationName, string RowKey, string? RowLabel, string FieldKey, string? FieldLabel,
   string Target, string ValueKind, string? OldValue, string? NewValue);
 
-/// <summary>En uveljavljen uvoz (<c>ops.ImportRun</c>).</summary>
-public sealed record ImportRunRow(
-  long ImportRunId, string Kind, string Title, string? Note, string Actor, DateTime AppliedUtc, int RowCount,
-  int ChangeCount, int SaopCount, string? OutboundBatchIds, long? UndoOfImportRunId, long? UndoneByImportRunId,
-  DateTime? UndoneUtc, string? UndoneBy, string? Organizations, string? Problems = null)
-{
-  public bool IsUndone => UndoneByImportRunId is not null;
-  public bool IsUndo => UndoOfImportRunId is not null;
-}
-
 /// <param name="Snapshot">Stranke: vrstice seznama strank tik pred uvozom (JSON) — iz njih nastane povratek.</param>
 public sealed record ImportRunDetail(ImportRunRow Run, IReadOnlyList<ImportChange> Changes, string? Snapshot);
-
-/// <summary>Stanje sporočil uvoza v vrsti za SAOP: koliko še čaka (lahko se prekliče) in koliko je že poslanih.</summary>
-public sealed record ImportQueueState(int Waiting, int Sent, int Cancelled);
 
 /// <summary>Povratek strank: predogled s prejšnjimi vrednostmi in kar se ne povrne.</summary>
 public sealed record CustomerUndoPlan(CustomerWorkbookPreview Preview, IReadOnlyList<string> Skipped);
 
 /// <summary>Povratek izdelkov: predogled, ki vrne »prej«, in kar se ne povrne (spor, prazno v SAOP, artikla ni).</summary>
 public sealed record ProductUndoPlan(ProductWorkbookPreview Preview, IReadOnlyList<string> Skipped, int Conflicts, int AlreadyReverted);
-
-public static class ImportKinds
-{
-  public const string Products = "IZDELKI";
-  public const string Prices = "CENE";
-  public const string Customers = "STRANKE";
-
-  public static string Label(string kind) => kind switch
-  {
-    Products => "Izdelki (delovni list)",
-    Prices => "Cene",
-    Customers => "Stranke",
-    _ => kind,
-  };
-
-  /// <summary>Stran uvoza, ki zna povratek pokazati v predogledu in ga uveljaviti.</summary>
-  public static string ImportPage(string kind) => kind switch
-  {
-    Products => "izdelki/uvoz",
-    Prices => "cene/uvoz",
-    Customers => "stranke/uvoz",
-    _ => "uvozi",
-  };
-}
 
 /// <summary>
 /// Zgodovina uvozov in povratek (migracija 280). Uporabnik 2026-09-24: »mišljeno je, da ko se spremenijo artikli,
@@ -144,24 +107,60 @@ public sealed class ImportHistoryService(IConfiguration configuration, PimWriteG
     return new(run, changes, snapshot);
   }
 
-  /// <summary>Sporočila uvoza v odhodni vrsti (skupine iz <see cref="ImportRunRow.OutboundBatchIds"/>).</summary>
+  /// <summary>Stanje uvoza v vrsti za SAOP, šteto po zapisih (cena, artikel), ne po sporočilih po polju (#66).</summary>
   public async Task<ImportQueueState> GetQueueStateAsync(IReadOnlyCollection<long> batchIds, CancellationToken cancellationToken = default)
   {
     if (batchIds.Count == 0) return new(0, 0, 0);
+    var states = await QueueStatesAsync(batchIds.Select(batch => (0L, batch)), cancellationToken);
+    return states.TryGetValue(0, out var state) ? state : new(0, 0, 0);
+  }
+
+  /// <summary>
+  /// Stanje v vrsti za vse prikazane uvoze naenkrat (seznam /uvozi, do 200 vrstic): ena poizvedba, nikoli poizvedba
+  /// na vrstico. Uvozi brez skupin v vrsti v slovarju niso.
+  /// </summary>
+  public async Task<IReadOnlyDictionary<long, ImportQueueState>> GetQueueStatesAsync(IEnumerable<ImportRunRow> runs, CancellationToken cancellationToken = default)
+  {
+    var pairs = runs.SelectMany(run => BatchIds(run.OutboundBatchIds).Select(batch => (run.ImportRunId, batch))).ToList();
+    return pairs.Count == 0 ? new Dictionary<long, ImportQueueState>() : await QueueStatesAsync(pairs, cancellationToken);
+  }
+
+  /// <remarks>
+  /// Zapis = organizacija + vrsta + ključ sporočila (»B2C|šifra« za ceno, šifra za artikel). Zapis šteje v prvo stanje,
+  /// ki velja za katerokoli njegovo sporočilo: čaka → v SAOP → neuspelo → preklicano; tako se nobena cena ne šteje dvakrat.
+  /// </remarks>
+  async Task<Dictionary<long, ImportQueueState>> QueueStatesAsync(IEnumerable<(long Run, long Batch)> pairs, CancellationToken cancellationToken)
+  {
     await using var connection = new SqlConnection(ConnectionString);
     await connection.OpenAsync(cancellationToken);
     await using var command = new SqlCommand("""
-      SELECT
-        Waiting = SUM(CASE WHEN message.Status IN (N'PendingApproval', N'Pending', N'Retry', N'Error') THEN 1 ELSE 0 END),
-        Sent = SUM(CASE WHEN message.Status = N'Sent' THEN 1 ELSE 0 END),
-        Cancelled = SUM(CASE WHEN message.Status IN (N'Cancelled', N'Superseded') THEN 1 ELSE 0 END)
-      FROM out.OutboxMessage AS message
-      WHERE message.OutboundBatchId IN (SELECT CONVERT(bigint, value) FROM OPENJSON(@Batches));
+      WITH pairs AS (
+        SELECT DISTINCT RunId, BatchId FROM OPENJSON(@Pairs) WITH (RunId bigint '$.r', BatchId bigint '$.b')
+      ), entries AS (
+        SELECT pairs.RunId,
+          W = MAX(CASE WHEN message.Status IN (N'PendingApproval', N'Pending', N'Retry', N'Error') THEN 1 ELSE 0 END),
+          S = MAX(CASE WHEN message.Status IN (N'Sending', N'Sent', N'Verified', N'Drift') THEN 1 ELSE 0 END),
+          F = MAX(CASE WHEN message.Status = N'Dead' THEN 1 ELSE 0 END),
+          C = MAX(CASE WHEN message.Status IN (N'Cancelled', N'Superseded') THEN 1 ELSE 0 END)
+        FROM pairs
+        JOIN out.OutboxMessage AS message ON message.OutboundBatchId = pairs.BatchId
+        GROUP BY pairs.RunId, message.OrganizationId, message.EntityType, message.EntityKey
+      )
+      SELECT RunId,
+        Waiting = SUM(W),
+        Sent = SUM(CASE WHEN W = 0 AND S = 1 THEN 1 ELSE 0 END),
+        Cancelled = SUM(CASE WHEN W = 0 AND S = 0 AND F = 0 AND C = 1 THEN 1 ELSE 0 END),
+        Failed = SUM(CASE WHEN W = 0 AND S = 0 AND F = 1 THEN 1 ELSE 0 END)
+      FROM entries
+      GROUP BY RunId;
       """, connection) { CommandTimeout = 60 };
-    command.Parameters.Add("@Batches", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(batchIds);
+    command.Parameters.Add("@Pairs", SqlDbType.NVarChar, -1).Value =
+      JsonSerializer.Serialize(pairs.Select(pair => new { r = pair.Run, b = pair.Batch }));
     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-    if (!await reader.ReadAsync(cancellationToken)) return new(0, 0, 0);
-    return new(reader.IsDBNull(0) ? 0 : reader.GetInt32(0), reader.IsDBNull(1) ? 0 : reader.GetInt32(1), reader.IsDBNull(2) ? 0 : reader.GetInt32(2));
+    var states = new Dictionary<long, ImportQueueState>();
+    while (await reader.ReadAsync(cancellationToken))
+      states[reader.GetInt64(0)] = new(reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4));
+    return states;
   }
 
   /// <summary>
