@@ -139,6 +139,8 @@ Assert(rules.Contains(".Where(Matches)", StringComparison.Ordinal),
    so imeli dve podpoizvedbi na profil nad val.ProductValidationState. */
 Assert(rules.Contains("@rendermode @(new InteractiveServerRenderMode(prerender: false))", StringComparison.Ordinal),
   "Stran pravil se mora naložiti enkrat (brez predupodabljanja; prenos stanja preseže 32 KB SignalR).");
+Assert(rules.Contains("await Task.WhenAll(knownFieldsTask, profilesTask, requirementsTask)", StringComparison.Ordinal),
+  "Polja, profili in zahteve se naložijo vzporedno (stran čaka najdaljšo poizvedbo, ne vsote).");
 var profilesMethod = governanceService[governanceService.IndexOf("GetValidationProfilesAsync(int organizationId", StringComparison.Ordinal)..];
 profilesMethod = profilesMethod[..profilesMethod.IndexOf("reader =>", StringComparison.Ordinal)];
 Assert(!Regex.IsMatch(profilesMethod, @"\(SELECT\s+COUNT_BIG", RegexOptions.IgnoreCase),
