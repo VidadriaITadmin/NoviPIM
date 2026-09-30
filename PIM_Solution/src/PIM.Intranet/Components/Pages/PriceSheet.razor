@@ -48,6 +48,18 @@
   {
     <p class="message-state warn-message" role="status">Prikazanih je prvih @MaxRows.ToString("N0") artiklov. Zoži izbiro s kategorijo ali šiframi.</p>
   }
+  @if (Loaded && Rows.Count > 0 && MissingItems.Count > 0)
+  {
+    @* #107: del vpisanih šifer ni v ceniku — povej katere, ne tiho izpusti. *@
+    <p class="message-state warn-message" role="status">
+      @PimFormat.Count(MissingItems.Count, "vpisana šifra ni", "vpisani šifri nista", "vpisane šifre niso", "vpisanih šifer ni") v ceniku @PriceList: @string.Join(", ", MissingItems.Take(20))@(MissingItems.Count > 20 ? " …" : "").
+      Šifra ne obstaja v tem podjetju, nima cene v tem ceniku@(OnlyPublished ? " ali ni objavljena (odkljukaj »samo objavljeni«)" : "").
+    </p>
+  }
+  @if (Loaded && Language != "sl")
+  {
+    <p class="hint" role="status">Nazivi so v jeziku »@Language«, kjer prevod obstaja; artikli brez prevoda ostanejo s slovenskim nazivom.</p>
+  }
 </div>
 
 <section class="ui-card data-card price-sheet" aria-label="Cenik">
@@ -55,7 +67,7 @@
     <h2>@(Organizations.FirstOrDefault(organization => organization.OrganizationId == OrganizationId)?.Name) — cenik @PriceList</h2>
     <span>@DateTime.Now.ToString("dd.MM.yyyy") · @PimFormat.Count(Rows.Count, "artikel", "artikla", "artikli", "artiklov") · cene v EUR @(PriceList == "B2C" ? "z DDV" : "brez DDV")</span>
   </header>
-  <PimState Loading="Loading" Error="@Error" Empty="@(Loaded && Rows.Count == 0)" EmptyText="Za to izbiro ni artiklov s ceno." LoadingText="Priprava cenika …">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Loaded && Rows.Count == 0)" EmptyText="@EmptyMessage" LoadingText="Priprava cenika …">
     @foreach (var group in Rows.GroupBy(row => row.CategoryPath ?? "Brez kategorije"))
     {
       <h3 class="sheet-category">@group.Key</h3>
@@ -178,6 +190,30 @@
     if (!string.Equals(uri, Navigation.Uri, StringComparison.Ordinal)) Navigation.NavigateTo(uri);
   }
 
+  // #107: šifre, s katerimi je bil pripravljen prikazani cenik (za sporočilo o manjkajočih).
+  IReadOnlyList<string> LoadedItems = [];
+  IReadOnlyList<string> LoadedCategory = [];
+
+  /// <summary>#107: vpisane šifre, ki jih v pripravljenem ceniku ni.</summary>
+  IReadOnlyList<string> MissingItems => LoadedItems.Count == 0 ? []
+    : LoadedItems.Except(Rows.Select(row => row.ItemID), StringComparer.OrdinalIgnoreCase).ToList();
+
+  /// <summary>#107: prazen cenik pove, zakaj je prazen in kaj narediti — ne tiha praznina.</summary>
+  string EmptyMessage
+  {
+    get
+    {
+      var organization = Organizations.FirstOrDefault(row => row.OrganizationId == OrganizationId)?.Name ?? "izbranem podjetju";
+      var site = string.IsNullOrEmpty(WebSite) ? "" : $" na spletnem mestu »{Sites.FirstOrDefault(row => row.WebSiteCode == WebSite)?.WebSiteName ?? WebSite}«";
+      var published = OnlyPublished ? " Poskusi brez kljukice »samo objavljeni«." : "";
+      if (LoadedItems.Count > 0)
+        return $"Nobena od vpisanih šifer ({PimFormat.Count(LoadedItems.Count, "šifra", "šifri", "šifre", "šifer")}) nima cene v ceniku {PriceList} podjetja {organization}. Preveri šifre (npr. {LoadedItems[0]}) ali izberi drug cenik ali podjetje.{published}";
+      if (LoadedCategory.Count > 0)
+        return $"V kategoriji »{LoadedCategory[0]}«{site} ni artiklov s ceno v ceniku {PriceList} podjetja {organization}. Pot kategorije mora biti natančna, npr. »Notranja svetila > Viseča svetila« (velja tudi za vse podkategorije).{published}";
+      return $"Podjetje {organization} nima artiklov s ceno v ceniku {PriceList}{site}.{published}";
+    }
+  }
+
   static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
   /// <summary>
@@ -208,6 +244,8 @@
       // Hitra zaporedna sprememba: velja samo zadnja poizvedba.
       if (version != loadVersion) return;
       Rows = rows;
+      LoadedItems = items.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+      LoadedCategory = string.IsNullOrWhiteSpace(CategoryPath) ? [] : [CategoryPath.Trim()];
       Loaded = true;
       LoadedState = state;
     }
