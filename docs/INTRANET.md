@@ -147,7 +147,6 @@ postavk, ki jih vloga ne sme odpreti, ne kaže več: `PimNavigation` ima vloge n
 | `/sistem/sled` | `Pages/AdminActivity.razor` — kdo je kaj spremenil, kdaj in iz katere vrednosti v katero; en seznam iz šestih virov (`intranet.GetUserActivityTrail`) | `ADMIN` | `MainLayout` |
 | `/sistem/izvozi` | `Pages/AdminExports.razor` — zagoni izvozov: vrstice, stolpci, velikost, trajanje, SHA-256 (`out.ExportRun`) | `ADMIN` | `MainLayout` |
 | `/sistem/zmogljivost` | `Pages/AdminPerformance.razor` — zagoni, uspešnost in trajanja po postopku; označi postopke, ki trajajo dlje od svojega razmika | `ADMIN` | `MainLayout` |
-| `/sistem/samotest` | `Pages/AdminSelfTest.razor` — zgodovina nočnih samotestov | `ADMIN` | `MainLayout` |
 | `/sistem/napake`, `/sistem/vloge` | bralni pogledi | `ADMIN` | `MainLayout` |
 | `/system/integracije` | `Pages/SystemIntegrations.razor` | `ADMIN` | `MainLayout` |
 | `/system/uporabniki` | `Pages/SystemUsers.razor` | `ADMIN` | `MainLayout` |
