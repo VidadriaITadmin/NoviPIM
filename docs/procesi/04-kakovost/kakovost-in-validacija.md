@@ -8,7 +8,7 @@ pise: [pim.validacija]
 strani: [/kakovost, /kakovost/artikli, /kakovost/napake]
 posli: [PRODUCT_VALIDATION, PRODUCT_PUBLICATION, NIGHTLY_RECONCILIATION, MEDIA_URL_CHECK]
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Quality.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/QualityProducts.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationErrors.razor, PIM_Solution/src/PIM.Intranet/Services/Quality*.cs, PIM_Solution/src/PIM.Intranet/Services/ValidationLayer.cs, PIM_Solution/src/PIM.Intranet/Services/GovernanceReadService.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs]
-migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251, 312]
+migracije: [102, 146, 147, 148, 177, 211, 218, 236, 242, 249, 251, 312, 321]
 ---
 
 # Kakovost in validacija artiklov
