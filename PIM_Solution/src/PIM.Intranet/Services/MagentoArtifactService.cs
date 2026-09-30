@@ -18,9 +18,70 @@ public sealed record MagentoArtifactPage(MagentoArtifact Artifact, WebExportPage
 /// <param name="Source">Od kod pot: okolje PIM_EXPORT_ROOT, register ops.SystemPath (EXPORT_ROOT) ali vgrajeni privzetek.</param>
 public sealed record MagentoOutputFolder(string Root, string Source, bool Exists, bool WritableByThisProcess, string Account, bool HasCompletePair);
 
+/// <summary>Podjetje, iz katerega se sestavlja katalog.csv (out.CatalogSource, 285), v vrstnem redu prednosti.</summary>
+/// <param name="WebSiteLabels">Spletišča, ki jih vir sme prispevati; null = vsa.</param>
+public sealed record MagentoCatalogSource(int OrganizationId, string Name, int Priority, string? WebSiteLabels, string? Note);
+
+/// <summary>Urnik posla, ki izdela katalog.csv in stranke.csv (ops.JobDefinition), kot ga vidi stran /splet.</summary>
+/// <param name="SlaSeconds">Meja svežine, ki jo uporablja tudi Nadzor; datoteka, starejša od nje, je »stara«.</param>
+/// <param name="RequestedRunUtc">Oddana ročna zahteva, ki je gostitelj še ni prevzel.</param>
+public sealed record MagentoCatalogJob(bool IsEnabled, int? IntervalSeconds, int? SlaSeconds, DateTime? NextDueUtc, DateTime? RequestedRunUtc, bool IsRunning);
+
 /// <summary>Bere izdelani CSV. Predogled nikoli ne sestavlja nove vsebine iz baze.</summary>
 public sealed class MagentoArtifactService(IConfiguration configuration)
 {
+  /// <summary>
+  /// Urnik posla WEB_CATALOG_EXPORT (#25): stran meri starost datoteke po meji svežine posla (SlaSeconds),
+  /// ne po vpisani konstanti — prej je čip »starejša od 30 minut« gorel ob urnem razmiku brez napake.
+  /// Samo branje; null, če posla (še) ni v bazi.
+  /// </summary>
+  public async Task<MagentoCatalogJob?> CatalogJobAsync(CancellationToken ct = default)
+  {
+    await using var connection = new SqlConnection(ConnectionStringResolver.Resolve(configuration)
+      ?? throw new InvalidOperationException("Povezava PIM ni nastavljena."));
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("""
+      IF OBJECT_ID(N'ops.JobDefinition', N'U') IS NOT NULL
+        SELECT IsEnabled, IntervalSeconds, SlaSeconds, NextDueUtc, RequestedRunUtc, CAST(CASE WHEN RunningJobRunId IS NULL THEN 0 ELSE 1 END AS bit)
+        FROM ops.JobDefinition WHERE JobKey = @JobKey;
+      """, connection);
+    command.Parameters.Add("@JobKey", System.Data.SqlDbType.NVarChar, 100).Value = JobCatalog.WebCatalogExport;
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    if (!await reader.ReadAsync(ct)) return null;
+    return new(reader.GetBoolean(0), reader.IsDBNull(1) ? null : reader.GetInt32(1), reader.IsDBNull(2) ? null : reader.GetInt32(2),
+      reader.IsDBNull(3) ? null : DateTime.SpecifyKind(reader.GetDateTime(3), DateTimeKind.Utc),
+      reader.IsDBNull(4) ? null : DateTime.SpecifyKind(reader.GetDateTime(4), DateTimeKind.Utc), reader.GetBoolean(5));
+  }
+
+  /// <summary>
+  /// Podjetja, ki skupaj sestavljajo katalog.csv (#25): od 285 datoteka ni več samo IQ, zato pregled na /splet
+  /// razloge kaže po podjetju. Brez tabele (baza pred 285) je vir samo podjetje kataloga.
+  /// </summary>
+  public async Task<IReadOnlyList<MagentoCatalogSource>> CatalogSourcesAsync(CancellationToken ct = default)
+  {
+    await using var connection = new SqlConnection(ConnectionStringResolver.Resolve(configuration)
+      ?? throw new InvalidOperationException("Povezava PIM ni nastavljena."));
+    await connection.OpenAsync(ct);
+    await using var command = new SqlCommand("""
+      IF OBJECT_ID(N'out.CatalogSource', N'U') IS NULL
+        SELECT o.OrganizationId, o.Name, CAST(10 AS int) AS Priority, CAST(NULL AS nvarchar(400)) AS WebSiteLabels, CAST(NULL AS nvarchar(400)) AS Note
+        FROM dbo.OrganizationConfig o WHERE o.OrganizationId = @Catalog;
+      ELSE
+        SELECT s.SourceOrganizationId AS OrganizationId, o.Name, s.Priority, s.WebSiteLabels, s.Note
+        FROM out.CatalogSource s
+        INNER JOIN dbo.OrganizationConfig o ON o.OrganizationId = s.SourceOrganizationId
+        WHERE s.CatalogOrganizationId = @Catalog AND s.IsActive = 1 AND o.IsActive = 1
+        ORDER BY s.Priority;
+      """, connection);
+    command.Parameters.Add("@Catalog", System.Data.SqlDbType.Int).Value = WorkerCycles.CatalogOrganization;
+    var result = new List<MagentoCatalogSource>();
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    while (await reader.ReadAsync(ct))
+      result.Add(new(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4)));
+    return result;
+  }
+
   public static string FileName(string profile) => profile switch
   {
     "MAGENTO_PRODUCTS" => "katalog.csv",
