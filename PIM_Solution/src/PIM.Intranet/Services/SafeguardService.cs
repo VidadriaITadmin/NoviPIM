@@ -366,7 +366,9 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     try
     {
       await using var connection = await OpenAsync(cancellationToken);
-      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 60 };
+      await using var command = new SqlCommand("intranet.GetSaopHeldMessages", connection) { CommandType = CommandType.StoredProcedure, CommandTimeout = 15 };
+      // 46: pasica na strani ne sme čakati minute (na mirni bazi ~1 s); ob izteku pasica pokaže prazno —
+      // pošiljanje je vseeno varno, ker zadržana sprememba brez potrditve ne gre v SAOP.
       command.Parameters.Add("@OutboundBatchId", SqlDbType.BigInt).Value = (object?)outboundBatchId ?? DBNull.Value;
       command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = (object?)organizationId ?? DBNull.Value;
       command.Parameters.Add("@EntityKeysJson", SqlDbType.NVarChar, -1).Value = itemIds is null ? DBNull.Value : JsonSerializer.Serialize(itemIds);
@@ -475,7 +477,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     var rules = detail.Rules.ToDictionary(rule => rule.RuleCode, StringComparer.Ordinal);
     var columns = new WorkbookColumn[]
     {
-      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv", Width: 40),
+      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv ERP (sl)", Width: 40),
       new("Polje", Width: 16), new("Prej", Width: 18), new("Zdaj", Width: 18), new("Sprememba", Width: 12),
       new("Spletišče", Width: 12), new("Razlog", Width: 60),
     };

@@ -28,3 +28,9 @@
 
 /* .xml-lightbox* je zdaj v app.css (globalno) — uporablja ga tudi /saop/zgodovina za isto
    pojavno okno z napako, zato ne sme biti izolirano samo na to stran. */
+
+/* #54: prazno stanje pri filtrih ponudi »Počisti filtre«; opomba ob omejenem izpisu po polju. */
+.empty-state p { margin: 0 0 12px; }
+.empty-state p:last-child { margin-bottom: 0; }
+.field-detail-note { color: var(--pim-text-soft); font-size: 13px; margin: 0 0 8px; }
+.field-detail summary:focus-visible { outline: 2px solid var(--pim-primary); outline-offset: 2px; }
