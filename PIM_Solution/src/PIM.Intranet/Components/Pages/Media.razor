@@ -73,8 +73,8 @@
     </select>
 
     <div class="media-view" role="group" aria-label="Način prikaza">
-      <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@GridView" @onclick="() => SetView(true)">Mreža</button>
-      <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(!GridView)" @onclick="() => SetView(false)">Seznam</button>
+      <button type="button" class="view-button @(GridView ? "active" : null)" aria-pressed="@(GridView ? "true" : "false")" @onclick="() => SetView(true)">Mreža</button>
+      <button type="button" class="view-button @(GridView ? null : "active")" aria-pressed="@(GridView ? "false" : "true")" @onclick="() => SetView(false)">Seznam</button>
     </div>
   </div>
 
@@ -117,7 +117,7 @@
 <nav class="media-kinds" aria-label="Vrsta medija">
   @foreach (var option in KindOptions)
   {
-    <button type="button" class="kind-chip @(Kind == option.Code ? "active" : null)" aria-pressed="@(Kind == option.Code)" @onclick="() => SelectKindAsync(option.Code)">
+    <button type="button" class="kind-chip @(Kind == option.Code ? "active" : null)" aria-pressed="@(Kind == option.Code ? "true" : "false")" @onclick="() => SelectKindAsync(option.Code)">
       @KindGlyph(option.Code)
       <span>@option.Label</span>
       <em>@option.Count.ToString("N0")</em>
