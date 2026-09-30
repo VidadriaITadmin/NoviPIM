@@ -129,92 +129,97 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
 
   /* --- branje: seznam po izdelkih -------------------------------------------------------------- */
 
+  /// <summary>
+  /// Stran seznama po izdelkih in skupno število (izdelki, cenovne vrstice) v enem klicu (96):
+  /// seštevek po izdelku se izračuna enkrat v začasno tabelo, iz nje pride število in stran.
+  /// Prej sta seznam in štetje vsak zase prebrala cel canon.ProductPrice (2 × ~3–8 s).
+  /// </summary>
   public async Task<(IReadOnlyList<PriceProductRow> Rows, long Total, long Lines)> GetProductsAsync(
     PriceQuery query, int skip, int take, CancellationToken cancellationToken = default)
   {
     var sql = $"""
+      SET NOCOUNT ON;
+      CREATE TABLE #grouped
+      (
+        ProductId bigint NOT NULL PRIMARY KEY, OrganizationId int NOT NULL,
+        ItemID nvarchar(100) COLLATE DATABASE_DEFAULT NOT NULL,
+        PriceListCount int NOT NULL, Lines bigint NOT NULL,
+        MinNet decimal(19,4) NULL, MaxNet decimal(19,4) NULL, LastValidFrom datetime2(3) NULL
+      );
+
       WITH org AS ({ActiveOrganizations}),
       open_price AS ({OpenPriceMessages}),
-      grouped AS
+      per_list AS
       (
-        SELECT price.ProductId,
-          PriceListCount = COUNT(DISTINCT price.PriceList), Lines = COUNT_BIG(*),
+        SELECT price.ProductId, Lines = COUNT_BIG(*),
           MinNet = MIN(price.Net), MaxNet = MAX(price.Net), LastValidFrom = MAX(price.ValidFrom)
         FROM canon.ProductPrice AS price
-        INNER JOIN canon.Product AS product ON product.ProductId = price.ProductId
-        INNER JOIN org ON org.OrganizationId = product.OrganizationId
-        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
-          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-          AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN = @Search)
-          AND (@Queue IS NULL OR EXISTS (SELECT 1 FROM open_price WHERE open_price.OrganizationId = product.OrganizationId
-            AND open_price.ItemID = product.ItemID AND open_price.QueueStatus <> N'Sent'))
-        GROUP BY price.ProductId
-        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
+        WHERE (@PriceList IS NULL OR price.PriceList = @PriceList)
+        GROUP BY price.ProductId, price.PriceList
       )
-      SELECT grouped.ProductId, product.OrganizationId, OrganizationName = org.Name, product.ItemID, Name = title.Value,
-        grouped.PriceListCount, grouped.MinNet, grouped.MaxNet, grouped.LastValidFrom,
+      INSERT INTO #grouped (ProductId, OrganizationId, ItemID, PriceListCount, Lines, MinNet, MaxNet, LastValidFrom)
+      SELECT per_list.ProductId, product.OrganizationId, product.ItemID,
+        COUNT(*), SUM(per_list.Lines), MIN(per_list.MinNet), MAX(per_list.MaxNet), MAX(per_list.LastValidFrom)
+      FROM per_list
+      INNER JOIN canon.Product AS product ON product.ProductId = per_list.ProductId
+      INNER JOIN org ON org.OrganizationId = product.OrganizationId
+      WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
+        AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN = @Search)
+        AND (@Queue IS NULL OR EXISTS (SELECT 1 FROM open_price WHERE open_price.OrganizationId = product.OrganizationId
+          AND open_price.ItemID = product.ItemID AND open_price.QueueStatus <> N'Sent'))
+      GROUP BY per_list.ProductId, product.OrganizationId, product.ItemID
+      HAVING COUNT(*) >= @MinPriceLists
+      OPTION (RECOMPILE);
+
+      SELECT Total = COUNT_BIG(*), Lines = ISNULL(SUM(Lines), 0) FROM #grouped;
+
+      WITH org AS ({ActiveOrganizations}),
+      open_price AS ({OpenPriceMessages}),
+      page AS
+      (
+        SELECT grouped.* FROM #grouped AS grouped
+        ORDER BY grouped.ItemID, grouped.OrganizationId
+        OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY
+      )
+      SELECT page.ProductId, page.OrganizationId, OrganizationName = org.Name, page.ItemID, Name = title.Value,
+        page.PriceListCount, page.MinNet, page.MaxNet, page.LastValidFrom,
         PriceListPreview = STUFF((
           SELECT TOP (3) N', ' + preview.PriceList
-          FROM (SELECT DISTINCT inner_price.PriceList FROM canon.ProductPrice inner_price WHERE inner_price.ProductId = grouped.ProductId) AS preview
+          FROM (SELECT DISTINCT inner_price.PriceList FROM canon.ProductPrice inner_price WHERE inner_price.ProductId = page.ProductId) AS preview
           ORDER BY preview.PriceList
           FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, N''),
-        QueuedCount = (SELECT COUNT(*) FROM open_price WHERE open_price.OrganizationId = product.OrganizationId
-          AND open_price.ItemID = product.ItemID AND open_price.QueueStatus <> N'Sent')
-      FROM grouped
-      INNER JOIN canon.Product AS product ON product.ProductId = grouped.ProductId
-      INNER JOIN org ON org.OrganizationId = product.OrganizationId
+        QueuedCount = (SELECT COUNT(*) FROM open_price WHERE open_price.OrganizationId = page.OrganizationId
+          AND open_price.ItemID = page.ItemID AND open_price.QueueStatus <> N'Sent')
+      FROM page
+      INNER JOIN org ON org.OrganizationId = page.OrganizationId
       OUTER APPLY
       (
         SELECT TOP (1) textValue.Value
         FROM canon.ProductText textValue
-        WHERE textValue.ProductId = grouped.ProductId AND textValue.TextType IN (N'WEB_TITLE', N'TITLE_ERP')
+        WHERE textValue.ProductId = page.ProductId AND textValue.TextType IN (N'WEB_TITLE', N'TITLE_ERP')
         ORDER BY CASE WHEN textValue.TextType = N'WEB_TITLE' THEN 0 ELSE 1 END,
           CASE WHEN textValue.Lang = N'sl' THEN 0 ELSE 1 END, textValue.Lang
       ) AS title
-      ORDER BY product.ItemID, product.OrganizationId
-      OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
-      """;
-    var countSql = $"""
-      WITH org AS ({ActiveOrganizations}),
-      open_price AS ({OpenPriceMessages}),
-      grouped AS
-      (
-        SELECT price.ProductId, Lines = COUNT_BIG(*)
-        FROM canon.ProductPrice AS price
-        INNER JOIN canon.Product AS product ON product.ProductId = price.ProductId
-        INNER JOIN org ON org.OrganizationId = product.OrganizationId
-        WHERE (@OrganizationId IS NULL OR product.OrganizationId = @OrganizationId)
-          AND (@PriceList IS NULL OR price.PriceList = @PriceList)
-          AND (@Search IS NULL OR product.ItemID LIKE N'%' + @Search + N'%' OR product.EAN = @Search)
-          AND (@Queue IS NULL OR EXISTS (SELECT 1 FROM open_price WHERE open_price.OrganizationId = product.OrganizationId
-            AND open_price.ItemID = product.ItemID AND open_price.QueueStatus <> N'Sent'))
-        GROUP BY price.ProductId
-        HAVING COUNT(DISTINCT price.PriceList) >= @MinPriceLists
-      )
-      SELECT Total = COUNT_BIG(*), Lines = ISNULL(SUM(Lines), 0) FROM grouped;
+      ORDER BY page.ItemID, page.OrganizationId;
       """;
 
     await using var connection = await OpenAsync(cancellationToken);
+    await using var command = Command(connection, sql, query);
+    command.Parameters.Add("@Skip", SqlDbType.Int).Value = Math.Max(0, skip);
+    command.Parameters.Add("@Take", SqlDbType.Int).Value = Math.Clamp(take, 1, 500);
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    await reader.ReadAsync(cancellationToken);
+    var total = PimDb.Int64(reader, "Total");
+    var lines = PimDb.Int64(reader, "Lines");
     var rows = new List<PriceProductRow>();
-    await using (var command = Command(connection, sql, query))
-    {
-      command.Parameters.Add("@Skip", SqlDbType.Int).Value = Math.Max(0, skip);
-      command.Parameters.Add("@Take", SqlDbType.Int).Value = Math.Clamp(take, 1, 500);
-      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    if (await reader.NextResultAsync(cancellationToken))
       while (await reader.ReadAsync(cancellationToken))
         rows.Add(new(
           PimDb.Int64(reader, "ProductId"), PimDb.Int32(reader, "OrganizationId"), PimDb.TextOrEmpty(reader, "OrganizationName"),
           PimDb.TextOrEmpty(reader, "ItemID"), PimDb.Text(reader, "Name"), PimDb.Int32(reader, "PriceListCount"),
           PimDb.TextOrEmpty(reader, "PriceListPreview"), PimDb.NullableDecimal(reader, "MinNet"), PimDb.NullableDecimal(reader, "MaxNet"),
           PimDb.NullableDateTime(reader, "LastValidFrom"), PimDb.Int32(reader, "QueuedCount")));
-    }
-
-    await using (var command = Command(connection, countSql, query))
-    {
-      await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-      await reader.ReadAsync(cancellationToken);
-      return (rows, PimDb.Int64(reader, "Total"), PimDb.Int64(reader, "Lines"));
-    }
+    return (rows, total, lines);
   }
 
   /// <summary>Vse cene enega izdelka, skupaj z novimi cenami, ki čakajo v vrsti in jih SAOP še nima.</summary>
