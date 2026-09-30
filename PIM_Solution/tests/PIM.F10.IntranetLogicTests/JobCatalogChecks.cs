@@ -19,7 +19,7 @@ static class JobCatalogChecks
   {
     // ─── Katalog ─────────────────────────────────────────────────────────────
     var keys = JobCatalog.All.Select(job => job.Key).ToList();
-    Check(keys.Distinct().Count() == keys.Count && keys.Count == 18, $"Osemnajst enoličnih poslov (284: analitika), dobil {keys.Count}.");
+    Check(keys.Distinct().Count() == keys.Count && keys.Count == 19, $"Devetnajst enoličnih poslov (#9: preverjanje slik), dobil {keys.Count}.");
     Check(JobCatalog.All.All(job => (job.IntervalSeconds is not null) != (job.DailyAtLocal is not null)), "Posel ima bodisi razmik bodisi dnevno uro.");
     Check(JobCatalog.All.All(job => job.TimeoutSeconds >= 30), "Vsak posel ima časovno mejo.");
     Check(JobCatalog.All.All(job => job.Reach == WorkerJobReach.Internal || !string.IsNullOrWhiteSpace(job.ReachNote)), "Posel, ki seže navzven, pove, kam.");
@@ -120,6 +120,20 @@ static class JobCatalogChecks
     Check(!JobCatalog.Find(JobCatalog.SaopDeliveryImport)!.EnabledByDefault && !JobCatalog.Find(JobCatalog.SystemSelfTest)!.EnabledByDefault,
       "Datumi dobave (nočna uskladitev jih bere) in samotest (dotnet run) sta privzeto izklopljena.");
     Check(JobCatalog.Find(JobCatalog.NightlyReconciliation)!.DailyAtLocal == new TimeOnly(0, 30), "Nočna uskladitev ob 00:30, zunaj okna poletnega časa.");
+
+    // Naloga #9: preverjanje slik kliče strežnike dobaviteljev — privzeto izklopljeno, izven pasu SAOP, ni težak
+    // posel, ne blokira kataloga in ima mejo hitrosti v argumentih (en tek: največ 1.500 naslovov, 0,5 s premora, 40 min).
+    var media = JobCatalog.Find(JobCatalog.MediaUrlCheck)!;
+    var mediaPlan = Expand(JobCatalog.Plan(JobCatalog.MediaUrlCheck, env));
+    var mediaArgs = mediaPlan.Single().Steps.Single().Process!.Arguments;
+    Check(!media.EnabledByDefault && media.Reach == WorkerJobReach.ExternalCall && !JobCatalog.UsesSaop(media.Key) && !JobCatalog.IsHeavy(media.Key)
+      && media.Dependencies.Count == 0 && JobCatalog.All.All(job => job.Dependencies.All(d => d.DependsOnJobKey != media.Key))
+      && media.Pipelines.SequenceEqual(["MEDIA_URL_CHECK"]) && media.Flow == JobFlows.WebCatalog && !media.IsFlowResult,
+      "MEDIA_URL_CHECK je privzeto izklopljen, kliče navzven, ni v pasu SAOP in nihče ni odvisen od njega.");
+    Check(mediaArgs.Contains("--preveri-slike") && mediaArgs.SkipWhile(a => a != "--najvec").Skip(1).First() == "1500"
+      && mediaArgs.SkipWhile(a => a != "--premor-ms").Skip(1).First() == "500" && mediaArgs.SkipWhile(a => a != "--najvec-minut").Skip(1).First() == "40"
+      && media.TimeoutSeconds > 40 * 60,
+      "Preverjanje slik: SourceFetchWorker --preveri-slike z mejo hitrosti; časovna meja posla je daljša od meje teka.");
 
     // Termin od konca in odlog po napakah.
     var end = new DateTime(2026, 9, 22, 10, 0, 0, DateTimeKind.Utc);

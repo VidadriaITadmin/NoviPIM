@@ -161,9 +161,10 @@ foreach (var parameter in new[] { "pogled", "isci", "podjetje", "proizvajalec", 
 // pomnilniku do izvoza v ozadju. Zahteva ostaja, da uporabnik vidi, koliko je izbral in kaj gre ven.
 Assert(!markup.Contains("SelectionOverflow", StringComparison.Ordinal),
   "Meje izbire ni vec; ce se vrne, mora biti spet povedana na glas (role=\"status\"), ne tiho odrezana.");
-Assert(Regex.IsMatch(markup, @"ExportScopeLabel => Selected\.Count == 0 \? ""\(cel pogled\)"" : \$""\(izbrani: \{Selected\.Count"),
+// #10: izbira je skupni PimRowSelection (Selection); »vse po filtru« je cel pogled.
+Assert(Regex.IsMatch(markup, @"ExportScopeLabel => Selection\.IsEmpty \|\| Selection\.AllMatching \? ""\(cel pogled\)"" : \$""\(izbrani: \{Selection\.Count"),
   "Gumb za izvoz mora povedati stevilo izbranih ali da gre ven cel pogled.");
-Assert(markup.Contains("Selected.Values.Select(item => $\"{item.OrganizationId}|{item.ItemId}\")", StringComparison.Ordinal),
+Assert(markup.Contains("Selection.Items.Select(item => $\"{item.OrganizationId}|{item.ItemId}\")", StringComparison.Ordinal),
   "Izvoz izbranih mora nesti celotno izbiro s podjetjem, ne odrezanega dela.");
 
 // 8.1 Sifra artikla je enolicna samo znotraj podjetja, zato mora izbira nositi podjetje.
@@ -273,19 +274,29 @@ foreach (var writeSurface in new[] { "SaopWriteService", "EnqueueAsync", "Approv
 // izvoza.
 Assert(!markup.Contains("izvozi/mnozicno", StringComparison.Ordinal),
   "Seznam izdelkov ne vodi vec na mnozicno urejanje; pot do njega je izvoz in uvoz.");
-// Edina pisalna pot s seznama je S-popust (274, narocilo lastnika): gre skozi PackagingDiscountService
-// (procedure b2b.*PackagingDiscount*, ki pisejo zgodovino), okno in gumb pa sta vidna samo
-// urednikom popustov. Druge pisalne poti ostanejo prepovedane (zgoraj).
+// Pisalni poti s seznama sta S-popust (274, narocilo lastnika) in paketno urejanje polj (#10, skozi
+// ProductBulkEdit in zgodovino uvozov). S-popust gre skozi PackagingDiscountService: privzeti S z
+// enim mnozicnim zapisom, posebni S za tip/stranko od #33 (317) z enim paketom na podjetje
+// (b2b.SavePackagingDiscountRulesBulk, b2b.AuditLog, razveljavitev) — nikoli vec po vrstici.
+// Okno in gumb sta vidna samo urednikom popustov; pravico preveri storitev (BusinessWrite).
 Assert(markup.Contains("@if (CanEditDiscounts && BulkOpen)", StringComparison.Ordinal)
     && Regex.IsMatch(markup, @"@if \(CanEditDiscounts\)\s*\{\s*<button[^\n]*>S-popust"),
   "S-popust na seznamu mora biti skrit uporabnikom brez pravice urejanja popustov.");
 foreach (Match write in Regex.Matches(markup, @"(?<![\w.])Packaging\.(\w+)"))
-  Assert(new[] { "GetCatalogAsync", "GetRulesAsync", "OpenAsync", "SaveDefaultsBulkAsync", "SaveRuleAsync", "RemoveRuleAsync" }
+  Assert(new[] { "GetCatalogAsync", "SaveDefaultsBulkAsync", "SaveRulesBulkAsync", "UndoRulesBatchAsync", "GetRuleBatchesAsync" }
       .Contains(write.Groups[1].Value, StringComparer.Ordinal),
     "Nova pisalna pot s seznama izdelkov ni v obsegu: " + write.Value);
+Assert(!markup.Contains("Packaging.SaveRuleAsync", StringComparison.Ordinal) && !markup.Contains("Packaging.RemoveRuleAsync", StringComparison.Ordinal),
+  "Posebni S se s seznama ne pise po vrstici (do 90.000 klicev brez skupne sledi) — samo b2b.SavePackagingDiscountRulesBulk.");
+Assert(markup.Contains("BulkConfirmText", StringComparison.Ordinal) && markup.Contains("UndoBulkBatchAsync", StringComparison.Ordinal),
+  "Mnozicni S-popust mora vprasati »koliko in cesa« in ponuditi razveljavitev paketa.");
 // Gumbi okna »Stolpci« samo spreminjajo izbor polj izvoza v pomnilniku strani.
+// #10: okno paketnega urejanja polj (odpri, predogled, potrdi, nazaj, preklic, zapri).
+// #33: okno S-popusta (odpri s seznamom paketov, potrdi po vprasanju »koliko in cesa«).
 var allowedHandlers = new[] { "ApplyFiltersAsync", "ToggleFilters", "OpenColumnPickerAsync", "StartExportAsync",
-  "CloseColumnPicker", "SelectAllColumns", "SelectNoColumns" };
+  "CloseColumnPicker", "SelectAllColumns", "SelectNoColumns",
+  "OpenEditAsync", "CloseEdit", "PreviewEditAsync", "ApplyEditAsync", "BackToEdit", "CancelEdit",
+  "OpenBulkAsync", "ConfirmBulkAsync" };
 foreach (Match handler in Regex.Matches(markup, "@onclick=\"(\\w+)\""))
   Assert(allowedHandlers.Contains(handler.Groups[1].Value, StringComparer.Ordinal), "Novo dejanje ni v obsegu naloge: " + handler.Value);
 
@@ -354,6 +365,36 @@ Assert(webExportPage.Contains("SupplyParameterFromQuery(Name = \"profil\")", Str
 foreach (var page in new[] { "Web.razor", "WebExportBuild.razor", "WebWithdrawals.razor", "OrganizationMismatches.razor", "CatalogControl.razor" })
   Assert(File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", page)).Contains("Tabs=\"WebTabs.Tabs\"", StringComparison.Ordinal),
     "Strani izhoda na splet imajo iste zavihke (WebTabs): " + page);
+
+// #88: /splet/katalog — Enter sproži iskanje (obrazec), iskanje in čakalna vrsta sta v naslovu,
+// prazen rezultat ima PimState s predlogom, podnaslov kaže ime podjetja iz baze, osvežitev javi izid.
+var catalogControlPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "CatalogControl.razor"));
+Assert(catalogControlPage.Contains("@onsubmit=\"SubmitAsync\"", StringComparison.Ordinal)
+    && catalogControlPage.Contains("type=\"submit\"", StringComparison.Ordinal),
+  "/splet/katalog: iskanje mora biti obrazec, da ga sproži tudi Enter v polju (#88).");
+Assert(catalogControlPage.Contains("SupplyParameterFromQuery(Name = \"iskanje\")", StringComparison.Ordinal)
+    && catalogControlPage.Contains("SupplyParameterFromQuery(Name = \"vrsta\")", StringComparison.Ordinal),
+  "/splet/katalog: iskanje in »Samo čakalna vrsta O« morata biti v naslovu (#88).");
+Assert(catalogControlPage.Contains("<PimState", StringComparison.Ordinal) && catalogControlPage.Contains("EmptyText=\"@EmptyText\"", StringComparison.Ordinal),
+  "/splet/katalog: prazen rezultat mora pokazati PimState s predlogom (#88).");
+Assert(!catalogControlPage.Contains("Katalog podjetja 2", StringComparison.Ordinal)
+    && catalogControlPage.Contains("GetOrganizationsAsync", StringComparison.Ordinal),
+  "/splet/katalog: podnaslov mora kazati ime podjetja iz baze, ne »podjetja 2« (#88).");
+Assert(catalogControlPage.Contains("Čakalna vrsta je osvežena", StringComparison.Ordinal),
+  "/splet/katalog: »Osveži čakalno vrsto« mora javiti izid (#88).");
+
+// #89: /splet/umaknjeni — podjetje, obdobje in iskanje so v naslovu; neveljavne vrednosti padejo na privzeto.
+var withdrawalsPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "WebWithdrawals.razor"));
+Assert(withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"podjetje\")", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"obdobje\")", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("SupplyParameterFromQuery(Name = \"isci\")", StringComparison.Ordinal),
+  "/splet/umaknjeni: podjetje, obdobje in iskanje morajo biti v naslovu (#89).");
+Assert(withdrawalsPage.Contains("AllowedDays.Contains(", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("Organizations.Any(organization => organization.OrganizationId == requested)", StringComparison.Ordinal),
+  "/splet/umaknjeni: obdobje in podjetje iz naslova se preverita proti dovoljenim vrednostim (#89).");
+Assert(!withdrawalsPage.Contains("splet/umaknjeni?pogled={view}", StringComparison.Ordinal)
+    && withdrawalsPage.Contains("replace: true", StringComparison.Ordinal),
+  "/splet/umaknjeni: preklop zavihka ne sme izgubiti ostalih parametrov naslova (#89).");
 
 
 /* ─── Obseg podjetja je viden in resnicen (U1, P2-10) ─────────────────────────

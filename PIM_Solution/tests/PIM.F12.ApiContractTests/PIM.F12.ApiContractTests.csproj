@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Pogodba bralnega API-ja brez baze: katalog končnih točk (src/PIM.Api/Catalog.cs) se mora ujemati s
-       postopki in parametri v migraciji 287. Napaka tu = API bi ob klicu padel z »parameter ne obstaja«. -->
+       postopki in parametri v migraciji 287, MCP (McpProtocol.cs) mora odgovarjati po protokolu.
+       Sklic na cel projekt PIM.Api: napaka prevajanja kjerkoli v API-ju podre ta test (in vrata). -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,6 +9,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\src\PIM.Api\Catalog.cs" Link="Catalog.cs" />
+    <ProjectReference Include="..\..\src\PIM.Api\PIM.Api.csproj" />
   </ItemGroup>
 </Project>

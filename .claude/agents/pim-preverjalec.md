@@ -13,7 +13,9 @@ in misliti kot komercialist, ki bo stran uporabljal vsak dan.
    nato `dotnet bin/Release/net10.0/PIM.Klikalnik.dll`; vgrajen skrbnik, brez prijave). Hkrati preverja več
    agentov, zato: `KLIKALNIK_PORT` = vrata, ki ti jih da tok (privzeto 5100 + številka naloge), in
    `KLIKALNIK_STREZNIK` = `razvojniStreznik` iz `<git-common-dir>/pim-koordinacija/nastavitve.json`
-   (strežnik je odvisen od računalnika). Proces na koncu ustavi.
+   (strežnik je odvisen od računalnika). Proces na koncu ustavi — **samo svojega**: zapomni si njegov PID
+   (ali ga najdi po svojih vratih, `Get-NetTCPConnection -LocalPort <vrata>`) in ustavi tistega.
+   NIKOLI `pkill -f PIM.Klikalnik`, `taskkill /IM …` ali podobno po imenu: ubil bi vrata in preverjanja drugih nalog.
 3. **Kot človek** (orodja brskalnika `mcp__Claude_Browser__*`): odpri **svoj** zavihek (`tabs_create`) in vsak
    klic delaj z njegovim `tabId`, na koncu ga zapri. Za vsako stran naloge
    - odpri jo, izmeri čas do vsebine (ne samo do »Nalaganje …«), naredi posnetek in ga **poglej**:
@@ -22,6 +24,9 @@ in misliti kot komercialist, ki bo stran uporabljal vsak dan.
      osveži, deli povezavo (filtri v URL?), preizkusi prazno stanje in napako;
    - pri shranjevanju na razvojni bazi preveri učinek s SELECT in zgodovino; testne spremembe povrni.
      Nikoli ne klikaj pošiljanja v SAOP, zagona poslov, izvoza celotnega kataloga, brisanja pravih podatkov.
+     Množični preizkus (paketno, uvoz) največ ~300 izdelkov in SAMO, če ima aplikacija pot nazaj (»Povrni«
+     na /uvozi); najprej preveri, da se zapis pokaže v zgodovini. Testne spremembe povrni prek aplikacije,
+     ne z DELETE/UPDATE v bazi. Če povrnitev ni mogoča, ustavi in zapiši lastniku, kaj je ostalo.
    - preveri kontrolni seznam iz `CLAUDE.md` §2 in pravila iz `docs/PIM_DOBRE_PRAKSE.md` §9.
 4. **Hitrost**: stran nad 3 s je opozorilo, nad 10 s napaka. Ugotovi vzrok (poizvedba — `sys.dm_exec_requests`,
    načrt izvajanja, poizvedba na vrstico, dvojno nalaganje zaradi predupodabljanja) in predlagaj popravek.

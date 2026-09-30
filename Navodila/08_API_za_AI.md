@@ -37,6 +37,28 @@ powershell -ExecutionPolicy Bypass -File PIM_Solution\deploy\Publish-Api.ps1
 Nastane mapa `publish_api_<datum>` ob repozitoriju (PIM.Api.exe, web.config, Install-PimApi.ps1).
 Prenesi jo na strežnik (npr. `C:\prenos\publish_api_2026-09-26`).
 
+### 1.2a Preizkus na razvojnem računalniku (brez IIS)
+
+Če želiš API samo preizkusiti, ga lahko zaženeš neposredno iz repozitorija (bere razvojno bazo):
+
+```powershell
+cd C:\Users\David\Desktop\PIM\NoviPIM\PIM_Solution
+$env:PIM_API_CONNECTION_STRING = 'Server=DESKTOP-TONVQHJ\MSSQLSERVER3;Database=PIM;Integrated Security=True;TrustServerCertificate=True'
+$env:ASPNETCORE_URLS = 'http://localhost:5095'
+dotnet run --project src\PIM.Api -c Release
+```
+
+V drugem oknu preveri `http://localhost:5095/health` (mora vrniti `"status":"ok"`). Ključ za preizkus
+ustvari z istim ukazom kot v 2, le da namesto `.\PIM.Api.exe` napišeš
+`dotnet run --project src\PIM.Api -c Release --`, na primer:
+
+```powershell
+dotnet run --project src\PIM.Api -c Release -- odjemalec dodaj --ime "Preizkus" --podjetja 2,3 --podrocja izdelki,cene,zaloga --velja-do 2026-10-06
+```
+
+Po preizkusu ključ prekliči (`odjemalec preklici --id N`). Ključa s področjem `stranke` za preizkus ne
+ustvarjaj (osebni podatki).
+
 ### 1.3 Namestitev na strežniku
 
 Predpogoj je isti kot za intranet: IIS in **ASP.NET Core Hosting Bundle 10**.
@@ -145,6 +167,13 @@ V `%APPDATA%\Claude\claude_desktop_config.json` (potreben Node.js):
 
 Po spremembi Claude Desktop zapri in odpri.
 
+### Claude.ai v brskalniku
+
+Povezovalniki po meri v Claude.ai (in v ChatGPT) tečejo v oblaku: do strežnika v podjetju ne vidijo,
+potrebujejo javni HTTPS naslov in praviloma prijavo OAuth, ne ključa v glavi. Zato danes zanesljivo
+delujeta **Claude Code** in **Claude Desktop** na računalniku v notranjem omrežju. Objava na internet (1.4)
+je tvoja odločitev; brez nje API ostane samo v notranjem omrežju.
+
 ### ChatGPT (GPT z akcijami) in druga orodja z OpenAPI
 
 Uvozi opis z `https://<javni naslov>/openapi.json`, preverjanje pristnosti **API Key**, glava
@@ -207,6 +236,7 @@ Primeri vprašanj za AI:
 | 429 »Preveč klicev na minuto« | počakaj minuto ali `odjemalec spremeni --id N --na-minuto 300` |
 | 500 pri klicu | v IIS dnevniku (Event Viewer → Application) je vzrok; pogosto manjkajoča migracija 287 |
 | `odjemalec dodaj` javi »nima pravice upravljati ključev« | ukaz poženi kot skrbnik baze ali dodaj `--povezava "Server=...;Database=PIM;Integrated Security=True;TrustServerCertificate=True"` |
+| AI pravi, da ima izdelek napako, v intranetu pa je v redu (ali obratno) | `validationStatus` v iskanju je shranjeno stanje zadnje validacije; merodajen je nabor `validation` na kartici izdelka (`get_product`). Naj AI pogleda kartico. |
 | Podatki so stari | API bere, kar PIM ima. Svežino pove `/api/v1/freshness`; osvežuje jo gostitelj avtomatike ([05](05_AutomationHost.md)) |
 
 Kdo je kaj klical: `SELECT TOP 100 * FROM api.RequestLog ORDER BY RequestLogId DESC;` (v SSMS).

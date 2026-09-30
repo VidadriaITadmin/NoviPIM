@@ -73,7 +73,7 @@ public sealed class XPathMappingExtractor
       for (var index = 0; index < mappings.Count; index++)
       {
         var mapping = mappings[index];
-        // 2026-09-24: večvrednostno branje je manjkalo (od konca avgusta), zato je iz NW XML prišla samo
+        // 2026-09-24: večvrednostno branje je manjkalo (od konca avgusta), zato je iz dobaviteljevega XML prišla samo
         // prva slika vsakega artikla (map.ProcessRawInbox korak 13 pričakuje vse, v zaporedju ValueOrdinal).
         if (mapping.IsMultiValue)
         {

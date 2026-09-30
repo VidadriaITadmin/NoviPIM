@@ -25,7 +25,7 @@
 </section>
 @if (Selected.Count > 0) {
   <section class="ui-card toolbar bulk-actions" role="toolbar" aria-label="Skupinska dejanja za izbrane artikle">
-    <span class="result-count" role="status" aria-live="polite">Izbranih artiklov: @Selected.Count</span>
+    <span class="result-count" role="status" aria-live="polite">Izbrano: @Artikli(Selected.Count)</span>
     <button type="button" class="small-action good-action" disabled="@ActionBusy" @onclick="ApproveSelected">Odobri izbrane artikle</button>
     <button type="button" class="small-action" disabled="@ActionBusy" @onclick="CancelSelected">Prekliči izbrane artikle</button>
     <button type="button" class="small-action" disabled="@ActionBusy" @onclick="ClearSelection">Počisti izbor</button>
@@ -70,7 +70,7 @@ else {
           <strong>@previewArticle.EntityKey</strong>
           <span>@(XmlPreviewPlan is { } headerPlan ? $"{headerPlan.Operation} {headerPlan.Path}" : XmlLoading ? "Sestavljanje …" : "")</span>
         </div>
-        <button type="button" class="small-action" @onclick="CloseXml">Zapri</button>
+        <button type="button" class="small-action" data-pim-close @onclick="CloseXml">Zapri</button>
       </header>
       <div class="xml-lightbox-body">
         @if (XmlLoading) { <p>Nalaganje …</p> }
@@ -97,7 +97,7 @@ else {
     <div class="xml-lightbox-panel" @onclick:stopPropagation="true">
       <header>
         <div><strong>@errorPreview.Title</strong><span>Napaka pošiljanja</span></div>
-        <button type="button" class="small-action" @onclick="CloseError">Zapri</button>
+        <button type="button" class="small-action" data-pim-close @onclick="CloseError">Zapri</button>
       </header>
       <div class="xml-lightbox-body"><p class="error-state" role="alert">@errorPreview.Detail</p></div>
     </div>
@@ -136,18 +136,45 @@ else {
 
   // Artikel, ki nima vec nobenega aktivnega polja (vse je Verified/Cancelled/…), tu ne spada —
   // je ze v Zgodovini. Ta stran je namenoma samo tisto, kar se dogaja, ne vse, kar se je zgodilo.
-  IReadOnlyList<ArticleRow> Articles => (Rows ?? [])
-    .GroupBy(row => (row.EntityType, row.EntityKey))
-    .Where(group => group.Any(row => !Terminal.Contains(row.Status)))
-    .Select(group => new ArticleRow(group.Key.EntityType, group.Key.EntityKey, group.First().Operation, group.ToArray()))
-    .ToArray();
+  // #84: seznami so predpomnjeni — prej se je vseh ~800 sporočil ob vsakem izrisu večkrat
+  // na novo združilo in razvrstilo (vsak klic Articles/FilteredArticles/FieldRows posebej).
+  // Predpomnilnik velja, dokler se ne zamenjajo Rows (Reload) ali iskanje/status.
+  static readonly IReadOnlyList<PIM.Intranet.Services.OutboundRow> NoRows = Array.Empty<PIM.Intranet.Services.OutboundRow>();
+  IReadOnlyList<PIM.Intranet.Services.OutboundRow>? articlesSource; IReadOnlyList<ArticleRow> articlesCache = [];
+  IReadOnlyList<ArticleRow> Articles
+  {
+    get
+    {
+      if (articlesSource is null || !ReferenceEquals(articlesSource, Rows ?? NoRows)) {
+        articlesSource = Rows ?? NoRows;
+        articlesCache = articlesSource
+          .GroupBy(row => (row.EntityType, row.EntityKey))
+          .Where(group => group.Any(row => !Terminal.Contains(row.Status)))
+          .Select(group => new ArticleRow(group.Key.EntityType, group.Key.EntityKey, group.First().Operation, group.ToArray()))
+          .ToArray();
+      }
+      return articlesCache;
+    }
+  }
   // Filter po slovenski oznaki: Error/Dead sta oba »Napaka«, Pending/Retry/Sending »V obdelavi«.
   // Status iz povezave, ki ga v vrsti trenutno ni, ostane izbran (sicer bi izbirnik kazal »Vsi statusi«, tabela pa 0).
   IReadOnlyList<string> ArticleStatuses => Articles.Select(a => StatusLabel(a.Status)).Distinct().Concat(StatusFilter == "" ? [] : [StatusFilter]).Distinct().Order().ToArray();
-  IReadOnlyList<ArticleRow> FilteredArticles => Articles
-    .Where(a => (StatusFilter == "" || StatusLabel(a.Status) == StatusFilter)
-      && (Search == "" || PIM.Intranet.Services.PimText.Matches(a.EntityKey, Search)))
-    .OrderByDescending(a => a.LastChangeUtc).ToList();
+  (IReadOnlyList<ArticleRow> Source, string Search, string Status)? filteredKey; IReadOnlyList<ArticleRow> filteredCache = [];
+  IReadOnlyList<ArticleRow> FilteredArticles
+  {
+    get
+    {
+      var articles = Articles;
+      if (filteredKey is not { } key || !ReferenceEquals(key.Source, articles) || key.Search != Search || key.Status != StatusFilter) {
+        filteredKey = (articles, Search, StatusFilter);
+        filteredCache = articles
+          .Where(a => (StatusFilter == "" || StatusLabel(a.Status) == StatusFilter)
+            && (Search == "" || PIM.Intranet.Services.PimText.Matches(a.EntityKey, Search)))
+          .OrderByDescending(a => a.LastChangeUtc).ToList();
+      }
+      return filteredCache;
+    }
+  }
   IEnumerable<ArticleRow> PageArticles => FilteredArticles.Skip(CurrentPage*PageSize).Take(PageSize);
   int PageCount=>Math.Max(1,(int)Math.Ceiling(FilteredArticles.Count/(decimal)PageSize));
 
@@ -399,7 +426,20 @@ else {
   /* --- podrobnosti po polju: isti filtri, izris šele ob odprtju -------------- */
   bool FieldDetailOpen;
   const int FieldDetailLimit = 300;
-  IReadOnlyList<PIM.Intranet.Services.OutboundRow> FieldRows => FilteredArticles.SelectMany(a => a.Messages).OrderByDescending(r => r.CreatedUtc).ToList();
+  // #84: sestavi se enkrat na nabor filtriranih artiklov, ne ob vsakem izrisu (Count in Take).
+  IReadOnlyList<ArticleRow>? fieldRowsSource; IReadOnlyList<PIM.Intranet.Services.OutboundRow> fieldRowsCache = [];
+  IReadOnlyList<PIM.Intranet.Services.OutboundRow> FieldRows
+  {
+    get
+    {
+      var filtered = FilteredArticles;
+      if (!ReferenceEquals(fieldRowsSource, filtered)) {
+        fieldRowsSource = filtered;
+        fieldRowsCache = FilteredArticles.SelectMany(a => a.Messages).OrderByDescending(r => r.CreatedUtc).ToList();
+      }
+      return fieldRowsCache;
+    }
+  }
   void ToggleFieldDetail() => FieldDetailOpen = !FieldDetailOpen;
   // Odziv sestavljata koda in korelacijski ključ; kadar ju procedura ne vrne, ostane celica pošteno prazna.
   static string ResponseSummary(PIM.Intranet.Services.OutboundRow row){var parts=new[]{row.ResponseStatusCode?.ToString(System.Globalization.CultureInfo.InvariantCulture),row.ResponseCorrelationId}.Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray();return parts.Length==0?"—":string.Join(" ",parts);}

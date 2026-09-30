@@ -3,6 +3,12 @@
 @rendermode InteractiveServer
 @inject CatalogReadService Catalog
 @inject IntranetDataService Data
+@inject PimWriteGuard Guard
+@inject ProductWorkbookService Workbook
+@inject ImportHistoryService History
+@inject WebWithdrawalService Withdrawals
+@inject HeavyWorkGate Gate
+@inject AuthenticationStateProvider Authentication
 
 <PageTitle>Mediji</PageTitle>
 
@@ -10,12 +16,17 @@
    uvozov (XML, Excel, SAOP), pristane tu; pim.ProductMedia je le podmnozica za izvoz. Bralna
    stran — trajni popravek naslova je naloga preslikave vira, ne te strani. Vrsta medija se
    izpelje v MediaKindPolicy, ker je baza nima; isti izraz filtrira in steje, da se ploscica in
-   filter ne razideta. *@
+   filter ne razideta.
+   #32: izbira vrstic + paketna dejanja (odstrani, na prvo mesto, dodaj sliko/dokument) za izdelke
+   izbranih vrstic. Zapis gre skozi uvoz delovnega lista (MediaBulkEdit -> ProductBulkEdit): ops.ImportRun,
+   pim.SaveProductMediaBulk (245) in »Povrni« na /uvozi. Politika CatalogWrite. *@
 <PimPage Title="Mediji" Subtitle="Slike, videi in dokumenti izdelkov vseh aktivnih podjetij, na enem mestu — najnovejši najprej.">
   <Actions>
     <div class="media-meta">
       <span class="media-meta-item"><strong>@Number(Summary?.ProductsWithMedia)</strong> izdelkov ima medij</span>
       <a class="media-meta-item warn" href="@WithoutImageHref"><strong>@Number(Summary?.ProductsWithoutMedia)</strong> aktivnih brez slike</a>
+      @* #9 (312): slike, ki so vpisane, a se na naslovu ne odprejo — preverja jih posel MEDIA_URL_CHECK. *@
+      <a class="media-meta-item" href="@BrokenHref">Napačni naslovi slik</a>
       @if (Summary?.AddedLastWeek > 0)
       {
         <button type="button" class="media-meta-item fresh" title="Pokaži medije, vnesene v zadnjih 7 dneh, najnovejše najprej" @onclick="ShowRecentAsync">
@@ -115,6 +126,150 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </nav>
 
+@* #32: izbira medijev in paketna dejanja. Dejanje dela na IZDELKIH izbranih vrstic: odstrani in »na prvo
+   mesto« vzameta izbrane naslove, »dodaj« doda isti naslov vsakemu izdelku izbranih vrstic. *@
+<PimBulkBar Count="Selection.Count" AllMatching="Selection.AllMatching" MatchingTotal="Selection.MatchingTotal"
+            PageSelected="PageFullySelected" PageRowCount="Rows.Count"
+            OnPageChanged="SelectPage" OnSelectAllMatching="SelectAllMatching" OnClear="ClearSelection"
+            AriaLabel="Izbira medijev in paketna dejanja" Hint="@BulkHint">
+  @if (CanEdit)
+  {
+    <button type="button" class="ghost-button" disabled="@BulkWriting" @onclick="() => OpenBulk(MediaBulkEdit.Operation.AddDocument)">Dodaj dokument …</button>
+    <button type="button" class="ghost-button" disabled="@BulkWriting" @onclick="() => OpenBulk(MediaBulkEdit.Operation.AddImage)">Dodaj sliko …</button>
+    <button type="button" class="ghost-button" disabled="@BulkWriting" @onclick="() => OpenBulk(MediaBulkEdit.Operation.MoveFirst)">Na prvo mesto …</button>
+    <button type="button" class="ghost-button danger-button" disabled="@BulkWriting" @onclick="() => OpenBulk(MediaBulkEdit.Operation.Remove)">Odstrani …</button>
+  }
+  else
+  {
+    <span class="read-only-note">Samo za branje — paketno urejanje medijev zahteva vlogo urednika kataloga ali skrbnika.</span>
+  }
+</PimBulkBar>
+
+@if (CanEdit && BulkOperation is { } operation)
+{
+  <section class="ui-card media-bulk" aria-labelledby="media-bulk-title">
+    <div class="media-bulk-head">
+      <h2 id="media-bulk-title">@MediaBulkEdit.Label(operation) — @BulkScopeLabel</h2>
+      <button type="button" class="small-action" disabled="@BulkWriting" @onclick="CloseBulk">Zapri</button>
+    </div>
+
+    @if (BulkPreview is null && BulkResult is null)
+    {
+      @if (MediaBulkEdit.IsAdd(operation))
+      {
+        <div class="media-bulk-field">
+          <label for="media-bulk-url">@(operation == MediaBulkEdit.Operation.AddImage ? "Naslov slike (URL)" : "Naslov dokumenta (URL), npr. navodila v PDF")</label>
+          <input id="media-bulk-url" type="url" class="search-input" autocomplete="off" placeholder="https://…"
+                 value="@BulkUrl" @oninput="OnBulkUrlInput" aria-invalid="@(BulkUrl.Length > 0 && BulkUrlError is not null)"
+                 aria-describedby="media-bulk-url-help" disabled="@BulkBusy" />
+          @if (BulkUrlError is not null && BulkUrl.Length > 0) { <p class="field-error" role="alert">@BulkUrlError</p> }
+          <p id="media-bulk-url-help" class="muted">
+            @(operation == MediaBulkEdit.Operation.AddImage
+              ? "Slika gre na konec galerije vsakega izdelka; izdelek brez slik jo dobi kot glavno. Obstoječe slike ostanejo."
+              : "Dokument dobi vlogo »Dokument«. Obstoječi dokumenti in slike ostanejo.")
+            Vsak izdelek izbranih vrstic ga dobi enkrat.
+          </p>
+        </div>
+      }
+      else if (operation == MediaBulkEdit.Operation.MoveFirst)
+      {
+        <p class="muted">Izbrane slike gredo na začetek galerije svojega izdelka — prva slika je glavna in gre na splet kot glavna. Izbrani dokumenti in videi se ne premikajo.</p>
+      }
+      else
+      {
+        <p class="muted">Izbrani naslovi se odstranijo pri svojem izdelku; drugi mediji istega izdelka ostanejo.</p>
+      }
+      <div class="media-bulk-actions">
+        <button type="button" class="primary-button" disabled="@(BulkBusy || Selection.IsEmpty || (MediaBulkEdit.IsAdd(operation) && BulkUrlError is not null))" @onclick="PreviewBulkAsync">
+          Pokaži predogled (@Selection.Count.ToString("N0"))
+        </button>
+        @if (BulkBusy)
+        {
+          <span class="opening-spinner" aria-hidden="true"></span>
+          <button type="button" class="small-action" @onclick="CancelBulk">Prekliči</button>
+        }
+      </div>
+      <p class="muted">Nič se ne zapiše, dokler ne potrdiš predogleda. Naenkrat največ @MediaBulkEdit.MaxProducts.ToString("N0") izdelkov.</p>
+    }
+    else if (BulkPreview is not null && BulkSummary is { } summary)
+    {
+      @if (summary.Products == 0)
+      {
+        <p class="message-state warn-message" role="status">Nobenemu od izbranih izdelkov (@BulkSelectedProducts.ToString("N0")) se seznam medijev ne spremeni — naslov je že tak ali izdelka ni.</p>
+      }
+      else
+      {
+        <p class="media-bulk-question" role="status">@BulkQuestion(operation, summary)</p>
+        <ul class="media-bulk-orgs">
+          @foreach (var organization in summary.ByOrganization) { <li>@organization.Organization: <strong>@organization.Products.ToString("N0")</strong></li> }
+          @if (summary.Unchanged > 0) { <li class="muted">Brez spremembe: @summary.Unchanged.ToString("N0")</li> }
+        </ul>
+        @if (operation == MediaBulkEdit.Operation.Remove)
+        {
+          @* PRIVZETO ZA NOČ 2026-09-29: slika, ki jo dobavitelj še pošilja, se ob zajemu vrne. *@
+          <p class="message-state warn-message" role="alert">
+            Pozor: če dobavitelj ta naslov še pošilja v svojem XML katalogu, ga naslednji zajem (vsakih 6 ur) vrne
+            na konec galerije. Trajni umik je popravek preslikave vira dobavitelja.
+          </p>
+        }
+        @if (summary.Products > ProductBulkEdit.LargeBatch)
+        {
+          <p class="message-state warn-message">Velik paket: zapis gre po @ProductBulkEdit.ChunkSize izdelkov in vsak paket se takoj validira, zato traja nekaj minut. Napredek vidiš sproti, preklic velja med paketi.</p>
+        }
+        <div class="table-scroll">
+          <table class="data-table media-bulk-table">
+            <caption>Prej → potem (prvih @summary.Samples.Count od @summary.Products.ToString("N0") izdelkov)</caption>
+            <thead><tr><th scope="col">Podjetje</th><th scope="col">Šifra</th><th scope="col">Seznam</th><th scope="col">Prej</th><th scope="col">Potem</th></tr></thead>
+            <tbody>
+              @foreach (var sample in summary.Samples)
+              {
+                <tr>
+                  <td>@sample.OrganizationName</td>
+                  <td class="code-value">@sample.ItemId</td>
+                  <td>@sample.Field</td>
+                  <td class="muted">@UrlList(sample.Before, sample.After)</td>
+                  <td>@UrlList(sample.After, sample.Before)</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @foreach (var problem in BulkPreview.Problems.Take(10)) { <p class="message-state warn-message">@problem</p> }
+      @if (BulkPreview.Problems.Count > 10) { <p class="muted">… in še @(BulkPreview.Problems.Count - 10) opozoril.</p> }
+      <div class="media-bulk-actions">
+        @if (summary.Products > 0)
+        {
+          <button type="button" class="primary-button @(operation == MediaBulkEdit.Operation.Remove ? "danger-primary" : null)" disabled="@BulkBusy" @onclick="ApplyBulkAsync">
+            @(operation == MediaBulkEdit.Operation.Remove ? "Potrdi in odstrani" : "Potrdi in zapiši") (@summary.Products.ToString("N0"))
+          </button>
+        }
+        <button type="button" class="ghost-button" disabled="@BulkBusy" @onclick="BackToBulk">Nazaj</button>
+        @if (BulkBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+        @if (BulkWriting)
+        {
+          <button type="button" class="small-action" disabled="@BulkCancelRequested" @onclick="CancelBulk">@(BulkCancelRequested ? "Ustavljam po tem paketu …" : "Prekliči zapis")</button>
+        }
+      </div>
+      <p class="muted">Zapis se najprej zabeleži v <a href="uvozi">zgodovino uvozov</a>, od koder ga v celoti povrneš. Validacija se ponovi za spremenjene izdelke; na splet gre ob naslednjem izvozu katalog.csv. V SAOP se nič ne pošlje.</p>
+    }
+
+    @if (BulkResult is { } result)
+    {
+      <p class="message-state @(result.Failure is null ? "success-message" : "warn-message")" role="status">
+        @BulkResultText(result)
+        @if (result.HistoryId is { } historyId) { <text> </text><a href="@($"uvozi/{historyId}")">Odpri zapis #@historyId (tam je »Povrni«)</a> }
+      </p>
+      @foreach (var problem in (result.Outcome?.Problems ?? []).Take(10)) { <p class="message-state warn-message">@problem</p> }
+      <div class="media-bulk-actions">
+        <button type="button" class="ghost-button" @onclick="CloseBulk">Zapri</button>
+      </div>
+    }
+    @if (BulkMessage is not null && BulkBusy) { <p class="muted" role="status" aria-live="polite">@BulkMessage</p> }
+    @if (BulkError is not null) { <p class="message-state error-message" role="alert">@BulkError</p> }
+  </section>
+}
+
 <section class="ui-card data-card" aria-label="Seznam medijev">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni medijev." LoadingText="Nalaganje medijev …">
     @if (GridView)
@@ -123,7 +278,7 @@
         @foreach (var row in Rows)
         {
           var url = MediaUrlPolicy.Normalize(row.Url);
-          <article class="media-tile">
+          <article class="media-tile @(Selection.Contains(row.Key) ? "is-selected" : null)">
             <button type="button" class="media-preview" title="@(MediaKindPolicy.IsInlineViewable(row.Url) ? "Pokaži prvo stran dokumenta" : "Povečaj predogled")" @onclick="() => Open(row)">
               @Preview(row, url, false)
               <span class="kind-badge @KindTone(row.Kind)">@row.Kind</span>
@@ -131,6 +286,8 @@
             </button>
             <div class="media-tile-body">
               <span class="media-item-line">
+                <input type="checkbox" class="media-check" aria-label="Izberi medij @MediaKindPolicy.FileName(row.Url) artikla @row.ItemId"
+                       checked="@Selection.Contains(row.Key)" @onchange="e => Toggle(row, e)" />
                 <a class="media-item" href="izdelki/@row.ProductId">@row.ItemId</a>
                 @if (!row.ProductActive) { <span class="inactive-badge" title="Izdelek ni aktiven">neaktiven</span> }
               </span>
@@ -165,7 +322,11 @@
           @foreach (var row in Rows)
           {
             var url = MediaUrlPolicy.Normalize(row.Url);
-            <tr>
+            <tr class="@(Selection.Contains(row.Key) ? "is-selected" : null)">
+              <td class="select-cell">
+                <input type="checkbox" class="media-check" aria-label="Izberi medij @MediaKindPolicy.FileName(row.Url) artikla @row.ItemId"
+                       checked="@Selection.Contains(row.Key)" @onchange="e => Toggle(row, e)" />
+              </td>
               <td class="media-thumb">
                 <button type="button" class="thumb-button" title="Povečaj predogled" @onclick="() => Open(row)">@Preview(row, url, true)</button>
               </td>
@@ -287,7 +448,7 @@
   int PageSize => GridView ? 48 : 50;
 
   static readonly IReadOnlyList<PimColumn> Columns =
-    [new("Predogled"), new("Artikel"), new("Podjetje"), new("Vrsta"), new("Vloga"), new("Naziv"), new("Vrstni red", true), new("Dodano"), new("Naslov medija")];
+    [new("Izbira"), new("Predogled"), new("Artikel"), new("Podjetje"), new("Vrsta"), new("Vloga"), new("Naziv"), new("Vrstni red", true), new("Dodano"), new("Naslov medija")];
 
   static readonly string[] KindOrder = [MediaKindPolicy.ImageCode, MediaKindPolicy.VideoCode, MediaKindPolicy.DocumentCode, MediaKindPolicy.OtherCode];
 
@@ -320,6 +481,8 @@
 
   // Seznam izdelkov pozna filtra »slika=NO« in »aktivnost=ACTIVE«; nekdanji
   // izdelki?pogled=BREZ_SLIKE je seznam tiho odprl brez filtra.
+  string BrokenHref => "mediji/napacni-naslovi" + (OrganizationId is int scope ? $"?podjetje={scope}" : "");
+
   string WithoutImageHref => "izdelki?slika=NO&aktivnost=ACTIVE" + (OrganizationId is int id ? $"&podjetje={id}" : "");
 
   protected override async Task OnInitializedAsync()
@@ -328,6 +491,8 @@
     Search = QueryProduct ?? "";
     Kind = QueryKind ?? "";
     try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+    // Samo videz: pravico preveri tudi MediaBulkEdit (PimWriteGuard) in zapisovalna procedura.
+    try { CanEdit = await Guard.AllowsAsync(PimPolicies.CatalogWrite); } catch { CanEdit = false; }
     // Brez izbire v naslovu so privzeto vsa aktivna podjetja — ne prvo po sifri (DEMO).
     if (int.TryParse(QueryOrganization, out var chosen) && Organizations.Any(row => row.OrganizationId == chosen))
     {
@@ -390,6 +555,7 @@
       if (version != LoadVersion) return;
       (Rows, Total) = await rowsTask;
       KindCounts = await countsTask;
+      Selection.UpdateFilter(SelectionSignature(filter), Total);
       Failed.Clear();
     }
     catch
@@ -566,4 +732,193 @@
   }
   static string Number(long? value) => value?.ToString("N0") ?? "—";
   static string Shorten(string value) => value.Length <= 72 ? value : value[..36] + " … " + value[^30..];
+
+  /* ─── #32: izbira in paketna dejanja ────────────────────────────────────────────
+     Izbira je po vrsticah (medijih) in živi čez strani in filtre; »vse, ki ustrezajo filtru« je filter,
+     ki se ob dejanju prebere s strežnika (največ MediaBulkEdit.MaxRows). Dejanje dela na izdelkih izbranih
+     vrstic, po podjetjih ločeno (šifra je enolična samo v podjetju). */
+  readonly PimRowSelection<MediaRow> Selection = new();
+  bool CanEdit;
+  MediaBulkEdit.Operation? BulkOperation;
+  string BulkUrl = "";
+  string? BulkUrlError = MediaBulkEdit.ValidateUrl(null);
+  bool BulkBusy;
+  bool BulkWriting;
+  bool BulkCancelRequested;
+  string? BulkMessage;
+  string? BulkError;
+  int BulkSelectedProducts;
+  ProductWorkbookPreview? BulkPreview;
+  MediaBulkEdit.Summary? BulkSummary;
+  ProductBulkEdit.Result? BulkResult;
+  CancellationTokenSource? BulkCancel;
+
+  /// <summary>Filter, na katerega se nanaša »vse, ki ustrezajo filtru« (zapis je vrednostni, zato primerljiv).</summary>
+  static string SelectionSignature(MediaFilter filter) => filter.ToString();
+
+  string BulkHint => CanEdit
+    ? "Označi medije, ki jih želiš odstraniti ali postaviti na prvo mesto, ali izdelke, ki jim dodaš isto sliko ali dokument."
+    : "Označi medije za pregled; urejanje zahteva vlogo urednika kataloga.";
+
+  IEnumerable<KeyValuePair<string, MediaRow>> PageRows => Rows.Select(row => new KeyValuePair<string, MediaRow>(row.Key, row));
+  bool PageFullySelected => Selection.AllSelected(Rows.Select(row => row.Key));
+  void SelectPage(bool selected) => Selection.SetPage(PageRows, selected);
+  void SelectAllMatching() => Selection.SelectAllMatching();
+  void ClearSelection() => Selection.Clear();
+  void Toggle(MediaRow row, ChangeEventArgs args) => Selection.Toggle(row.Key, row, args.Value is true, PageRows);
+
+  string BulkScopeLabel => Selection.AllMatching
+    ? $"vsi mediji, ki ustrezajo filtru ({Selection.Count:N0})"
+    : PimFormat.Count(Selection.Count, "izbran medij", "izbrana medija", "izbrani mediji", "izbranih medijev");
+
+  void OpenBulk(MediaBulkEdit.Operation operation)
+  {
+    BulkOperation = operation;
+    BackToBulk();
+  }
+
+  void CloseBulk()
+  {
+    if (BulkWriting) return;
+    BulkCancel?.Cancel();
+    BulkOperation = null;
+    BackToBulk();
+  }
+
+  void BackToBulk()
+  {
+    BulkPreview = null; BulkSummary = null; BulkResult = null; BulkError = null;
+  }
+
+  void CancelBulk()
+  {
+    BulkCancelRequested = BulkWriting;
+    BulkCancel?.Cancel();
+  }
+
+  void OnBulkUrlInput(ChangeEventArgs args)
+  {
+    BulkUrl = args.Value?.ToString() ?? "";
+    BulkUrlError = MediaBulkEdit.ValidateUrl(BulkUrl);
+  }
+
+  /// <summary>Izbrane vrstice ali — pri »vse po filtru« — ves pogled s strežnika (največ MaxRows).</summary>
+  async Task<List<MediaBulkEdit.Item>> CollectItemsAsync(CancellationToken cancellationToken)
+  {
+    if (!Selection.AllMatching) return Selection.Items.Select(MediaBulkEdit.From).ToList();
+    if (Selection.MatchingTotal > MediaBulkEdit.MaxRows)
+      throw new InvalidOperationException($"Filtru ustreza {Selection.MatchingTotal:N0} medijev; paketno jih lahko naenkrat zajameš največ {MediaBulkEdit.MaxRows:N0}. Zoži filter (podjetje, strežnik, vrsta ali iskanje).");
+    var (rows, _) = await Catalog.GetMediaAsync(CurrentFilter, 0, MediaBulkEdit.MaxRows, cancellationToken);
+    return rows.Select(MediaBulkEdit.From).ToList();
+  }
+
+  async Task<IDisposable> EnterBulkLaneAsync(CancellationToken cancellationToken)
+  {
+    if (Gate.Imports.TryEnter() is { } immediate) return immediate;
+    BulkMessage = $"Čakam v vrsti — hkrati tečeta največ {Gate.Imports.Limit} uvoza, pred tabo: {Gate.Imports.Waiting}. Začel se bo sam.";
+    StateHasChanged();
+    return await Gate.Imports.EnterAsync(cancellationToken);
+  }
+
+  async Task PreviewBulkAsync()
+  {
+    if (BulkOperation is not { } operation) return;
+    if (MediaBulkEdit.IsAdd(operation) && (BulkUrlError = MediaBulkEdit.ValidateUrl(BulkUrl)) is not null) return;
+    BulkBusy = true; BulkError = null; BulkPreview = null; BulkSummary = null; BulkResult = null;
+    BulkCancel?.Dispose();
+    BulkCancel = new CancellationTokenSource();
+    var token = BulkCancel.Token;
+    try
+    {
+      // Pravica se preveri že pred branjem — Komerciala do sem ne pride niti mimo gumba.
+      await Guard.RequireAsync(PimPolicies.CatalogWrite);
+      BulkMessage = Selection.AllMatching ? $"Zbiram medije filtra ({Selection.Count:N0}) …" : "Zbiram izbrane medije …";
+      StateHasChanged();
+      var items = await CollectItemsAsync(token);
+      BulkSelectedProducts = MediaBulkEdit.Products(items).Count;
+      if (BulkSelectedProducts > MediaBulkEdit.MaxProducts) { BulkError = MediaBulkEdit.TooMany(BulkSelectedProducts); return; }
+      BulkMessage = $"Berem trenutne sezname {BulkSelectedProducts:N0} izdelkov in pripravljam predogled …";
+      StateHasChanged();
+      using (await EnterBulkLaneAsync(token))
+        BulkPreview = await MediaBulkEdit.PreviewAsync(Guard, Workbook, operation, items, BulkUrl, token);
+      BulkSummary = MediaBulkEdit.Summarize(BulkPreview, BulkSelectedProducts);
+    }
+    catch (OperationCanceledException) { BulkError = "Predogled preklican. Nič ni zapisano."; BulkPreview = null; }
+    catch (UnauthorizedAccessException) { BulkError = "Za paketno urejanje medijev nimaš pravice (urednik kataloga ali skrbnik)."; BulkPreview = null; }
+    catch (InvalidOperationException failure) { BulkError = failure.Message; BulkPreview = null; }
+    catch (Exception failure) { BulkError = "Predogleda ni bilo mogoče pripraviti: " + failure.Message; BulkPreview = null; }
+    finally { BulkBusy = false; BulkMessage = null; }
+  }
+
+  async Task ApplyBulkAsync()
+  {
+    if (BulkPreview is null || BulkOperation is not { } operation) return;
+    BulkBusy = true; BulkWriting = true; BulkError = null; BulkCancelRequested = false;
+    BulkCancel?.Dispose();
+    BulkCancel = new CancellationTokenSource();
+    var token = BulkCancel.Token;
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      var progress = new Progress<string>(text => { BulkMessage = text; _ = InvokeAsync(StateHasChanged); });
+      BulkMessage = "Zapisujem …";
+      StateHasChanged();
+      var note = "Mediji: " + MediaBulkEdit.Label(operation) + (MediaBulkEdit.IsAdd(operation) ? " " + BulkUrl.Trim() : "");
+      using (await EnterBulkLaneAsync(token))
+        BulkResult = await MediaBulkEdit.ApplyAsync(Guard, Workbook, History, Withdrawals, BulkPreview, actor,
+          note.Length <= 400 ? note : note[..400], progress, token);
+      // Predogled se umakne, da drugi klik istega gumba ne zapiše dvakrat.
+      BulkPreview = null; BulkSummary = null;
+      Selection.Clear();
+      await LoadScopeAsync();
+    }
+    catch (OperationCanceledException) { BulkError = "Zapis preklican, preden se je začel. Nič ni zapisano."; }
+    catch (UnauthorizedAccessException) { BulkError = "Za paketno urejanje medijev nimaš pravice (urednik kataloga ali skrbnik)."; }
+    catch (Exception failure) { BulkError = "Zapis ni uspel: " + failure.Message; }
+    finally { BulkBusy = false; BulkWriting = false; BulkCancelRequested = false; BulkMessage = null; }
+  }
+
+  static string BulkQuestion(MediaBulkEdit.Operation operation, MediaBulkEdit.Summary summary)
+  {
+    var at = PimFormat.Count(summary.Products, "izdelku", "izdelkih", "izdelkih", "izdelkih");
+    var to = PimFormat.Count(summary.Products, "izdelku", "izdelkoma", "izdelkom", "izdelkom");
+    var where = summary.ByOrganization.Count == 1 ? $" v podjetju {summary.ByOrganization[0].Organization}" : $" v {summary.ByOrganization.Count} podjetjih";
+    return operation switch
+    {
+      MediaBulkEdit.Operation.Remove => $"Odstraniti {PimFormat.Count(summary.Removed, "naslov", "naslova", "naslove", "naslovov")} pri {at}{where}?",
+      MediaBulkEdit.Operation.MoveFirst => $"Postaviti izbrane slike na prvo mesto pri {at}{where}?",
+      MediaBulkEdit.Operation.AddImage => $"Dodati 1 sliko {to}{where}?",
+      _ => $"Dodati 1 dokument {to}{where}?",
+    };
+  }
+
+  static string BulkResultText(ProductBulkEdit.Result result)
+  {
+    if (result.Outcome is not { } outcome)
+      return result.Failure is null ? "Ni bilo kaj zapisati." : "Zapis se je ustavil: " + result.Failure;
+    var text = $"Zapisano pri {PimFormat.Count(result.Done, "izdelku", "izdelkih", "izdelkih", "izdelkih")}. "
+      + "Validacija je ponovljena za spremenjene izdelke; na splet gre ob naslednjem izvozu katalog.csv.";
+    if (result.Withdrawn > 0) text += $" Samodejni umik s spleta: {result.Withdrawn:N0} (glej Splet → Umaknjeni).";
+    if (outcome.Problems.Count > 0) text += $" Opozoril: {outcome.Problems.Count:N0} (spodaj).";
+    if (result.Failure is not null) text += " " + result.Failure;
+    return text;
+  }
+
+  /// <summary>Seznam naslovov v predogledu: ime datoteke, naslov, ki ga na drugi strani ni, je poudarjen.</summary>
+  static RenderFragment UrlList(IReadOnlyList<string> list, IReadOnlyList<string> other) => __builder =>
+  {
+    @if (list.Count == 0)
+    {
+      <span class="muted">(prazno)</span>
+    }
+    else
+    {
+      <ol class="media-bulk-urls">
+        @foreach (var url in list)
+        {
+          <li class="@(other.Contains(url, StringComparer.OrdinalIgnoreCase) ? null : "changed")" title="@url">@MediaBulkEdit.Short(url)</li>
+        }
+      </ol>
+    }
+  };
 }
