@@ -9,9 +9,12 @@ namespace PIM.Intranet.Services;
 /// <param name="Sources">Viri tega posla (ops.JobSourceState), po podjetjih.</param>
 /// <param name="Pipelines">Postopki tega posla (<see cref="MonitorPolicy.PipelinesOf"/>) za vsa aktivna podjetja.</param>
 /// <param name="Alerts">Odprti nepodatkovni alarmi, ki pripadajo poslu (<see cref="MonitorPolicy.BelongsTo"/>).</param>
+/// <param name="Forecast">Napoved razporejevalnika (<see cref="JobQueue.Forecast"/>): kdaj začne, koliko traja, zakaj čaka.</param>
+/// <param name="ForecastText">Ista napoved po domače (<see cref="JobQueue.Explain"/>), časi v naši uri.</param>
 public sealed record MonitorJob(
   JobDefinitionRow Job, JobDefinition? Code, MonitorVerdict Verdict,
-  IReadOnlyList<SourceStateRow> Sources, IReadOnlyList<PipelineHealthRow> Pipelines, IReadOnlyList<MonitorAlertRow> Alerts);
+  IReadOnlyList<SourceStateRow> Sources, IReadOnlyList<PipelineHealthRow> Pipelines, IReadOnlyList<MonitorAlertRow> Alerts,
+  JobForecast? Forecast = null, string? ForecastText = null);
 
 /// <param name="OtherAlerts">Odprti nepodatkovni alarmi, ki jih nobena vrstica posla ne pokaže: ne pripadajo nobenemu
 /// poslu (OutboundDead, gostitelj) ali pripadajo samo izklopljenim poslom (izklop je pravilo 1 in bi alarm skril).</param>
@@ -90,7 +93,8 @@ public sealed class MonitorService(
     var pipelinesTask = GetPipelinesAsync(ct);
     var alertsTask = GetAlertsAsync(ct);
     var organizationsTask = GetOrganizationsAsync(ct);
-    await Task.WhenAll(definitionsTask, hostTask, sourcesTask, pipelinesTask, alertsTask, organizationsTask);
+    var statsTask = DurationStatsAsync(ct);
+    await Task.WhenAll(definitionsTask, hostTask, sourcesTask, pipelinesTask, alertsTask, organizationsTask, statsTask);
 
     var host = hostTask.Result;
     var hostLive = host?.IsAutomationHostLive == true;
@@ -100,8 +104,9 @@ public sealed class MonitorService(
     var alerts = alertsTask.Result;
 
     var lane = SaopLaneBusyWith(definitionsTask.Result.Jobs);
+    var forecasts = JobQueue.Forecast(definitionsTask.Result.Jobs, definitionsTask.Result.Dependencies, statsTask.Result, hostLive, nowUtc, PimTime.Zone);
     var jobs = Displayed(definitionsTask.Result.Jobs)
-      .Select(row => BuildJob(row, sources, pipelines, alerts, hostLive, nowUtc, lane))
+      .Select(row => BuildJob(row, sources, pipelines, alerts, hostLive, nowUtc, lane, forecasts, definitionsTask.Result.Jobs))
       .ToList();
     var otherAlerts = alerts
       .Where(alert => !jobs.Any(job => job.Job.IsEnabled && MonitorPolicy.BelongsTo(alert, job.Job.JobKey)))
@@ -123,7 +128,8 @@ public sealed class MonitorService(
     var pipelinesTask = GetPipelinesAsync(ct);
     var alertsTask = GetAlertsAsync(ct);
     var runsTask = store.GetRunsAsync(HistoryRuns, jobKey, null, null, ct);
-    await Task.WhenAll(definitionsTask, hostTask, sourcesTask, pipelinesTask, alertsTask, runsTask);
+    var statsTask = DurationStatsAsync(ct);
+    await Task.WhenAll(definitionsTask, hostTask, sourcesTask, pipelinesTask, alertsTask, runsTask, statsTask);
 
     var (definitions, dependencies, artifacts) = definitionsTask.Result;
     var row = definitions.FirstOrDefault(definition => definition.JobKey == jobKey);
@@ -131,8 +137,10 @@ public sealed class MonitorService(
 
     var host = hostTask.Result;
     var nowUtc = host?.NowUtc ?? DateTime.UtcNow;
-    var job = BuildJob(row, sourcesTask.Result, pipelinesTask.Result, alertsTask.Result, host?.IsAutomationHostLive == true, nowUtc,
-      SaopLaneBusyWith(definitions));
+    var hostLive = host?.IsAutomationHostLive == true;
+    var forecasts = JobQueue.Forecast(definitions, dependencies, statsTask.Result, hostLive, nowUtc, PimTime.Zone);
+    var job = BuildJob(row, sourcesTask.Result, pipelinesTask.Result, alertsTask.Result, hostLive, nowUtc,
+      SaopLaneBusyWith(definitions), forecasts, definitions);
 
     var runs = runsTask.Result;
     JobRunRow? selected = null;
@@ -344,16 +352,48 @@ public sealed class MonitorService(
 
   static MonitorJob BuildJob(
     JobDefinitionRow row, IReadOnlyList<SourceStateRow> sources, IReadOnlyList<PipelineHealthRow> pipelines,
-    IReadOnlyList<MonitorAlertRow> alerts, bool hostLive, DateTime nowUtc, string? saopLaneBusyWith)
+    IReadOnlyList<MonitorAlertRow> alerts, bool hostLive, DateTime nowUtc, string? saopLaneBusyWith,
+    IReadOnlyDictionary<string, JobForecast> forecasts, IReadOnlyList<JobDefinitionRow> all)
   {
     var jobPipelines = MonitorPolicy.PipelinesOf(row.JobKey);
     // Posel, ki sam teče, ne čaka na drugega.
     var lane = saopLaneBusyWith is not null && !row.IsRunning && saopLaneBusyWith != row.Label ? saopLaneBusyWith : null;
+    var forecast = forecasts.GetValueOrDefault(row.JobKey);
+    var text = forecast is null ? null : ExplainForecast(forecast, all, nowUtc);
     return new(
-      row, JobCatalog.Find(row.JobKey), MonitorPolicy.Evaluate(row, sources, pipelines, alerts, hostLive, nowUtc, lane),
+      row, JobCatalog.Find(row.JobKey), MonitorPolicy.Evaluate(row, sources, pipelines, alerts, hostLive, nowUtc, lane, forecast, text),
       sources.Where(source => source.JobKey == row.JobKey).ToList(),
       pipelines.Where(pipeline => jobPipelines.Contains(pipeline.Pipeline)).ToList(),
-      alerts.Where(alert => MonitorPolicy.BelongsTo(alert, row.JobKey)).ToList());
+      alerts.Where(alert => MonitorPolicy.BelongsTo(alert, row.JobKey)).ToList(),
+      forecast, text);
+  }
+
+  /// <summary>Napoved po domače, z imeni poslov in časi v naši uri.</summary>
+  public static string ExplainForecast(JobForecast forecast, IReadOnlyList<JobDefinitionRow> all, DateTime nowUtc) =>
+    JobQueue.Explain(forecast,
+      key => all.FirstOrDefault(row => row.JobKey == key)?.Label ?? JobCatalog.Find(key)?.Label ?? key,
+      utc => ForecastTime(utc, nowUtc), nowUtc);
+
+  /// <summary>Čas napovedi v naši uri: »14:32«, drug dan »30. 9. 00:30«.</summary>
+  public static string ForecastTime(DateTime utc, DateTime nowUtc)
+  {
+    var local = PimTime.Local(utc);
+    return local.Date == PimTime.Local(nowUtc).Date
+      ? local.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+      : local.ToString("d. M. HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+  }
+
+  /// <summary>
+  /// Ocene trajanja (ena poizvedba za vse posle). Napaka ne sme podreti Nadzora: brez ocen stran pove
+  /// »ocene še ni«, stanje poslov pa ostane.
+  /// </summary>
+  async Task<IReadOnlyDictionary<string, JobDurationStats>> DurationStatsAsync(CancellationToken ct)
+  {
+    try { return await store.GetDurationStatsAsync(JobQueue.EstimateDays, ct); }
+    catch (Exception exception) when (exception is SqlException or InvalidOperationException)
+    {
+      return new Dictionary<string, JobDurationStats>();
+    }
   }
 
   /// <summary>Urnik, kot ga ima vrstica; posel brez obojega (ne bi smel obstajati) dobi privzetek kode, sicer ga baza zavrne (52373).</summary>

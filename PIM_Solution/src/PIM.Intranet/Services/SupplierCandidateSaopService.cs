@@ -61,7 +61,7 @@ public sealed record CandidateSaopQueueOutcome(
 /// izgledal kot napaka SAOP, čeprav je manjkal podatek na naši strani.
 /// </summary>
 public sealed class SupplierCandidateSaopService(
-  SaopItemWriteService documents, SaopWriteService write, IntranetDataService data,
+  SaopItemWriteService documents, SaopWriteService write, IntranetDataService data, PimWriteGuard guard,
   ILogger<SupplierCandidateSaopService> logger)
 {
   readonly Dictionary<int, SaopItemContract> contracts = new();
@@ -87,6 +87,8 @@ public sealed class SupplierCandidateSaopService(
   {
     ArgumentNullException.ThrowIfNull(items);
     if (items.Count == 0) throw new ArgumentException("Izberi vsaj en artikel.", nameof(items));
+    // Najprej vloga, šele nato branje in vrsta (#7): gumb na strani je samo videz.
+    await guard.RequireAsync(PimPolicies.SaopWrite);
 
     var changes = new List<(string ItemId, string FieldKey, string? Value)>();
     var ready = new List<string>();
@@ -138,7 +140,7 @@ public sealed class SupplierCandidateSaopService(
       {
         // Po artiklu (152), ne po skupini: odobrijo se tudi sporocila, ki jih je isti artikel medtem
         // dobil s kartice, sicer bi worker sestavil dokument brez njih.
-        try { approved += await data.ApproveItemAsync(organizationId, "Product", itemId, actor, cancellationToken); }
+        try { approved += await ApproveAsync(organizationId, itemId, actor, cancellationToken); }
         catch (Exception exception) { logger.LogWarning(exception, "Novi artikli iz XML: odobritev {Artikel} ni uspela.", itemId); }
       }
     }
@@ -146,9 +148,23 @@ public sealed class SupplierCandidateSaopService(
     return new(outcome.OutboundBatchId, outcome.Queued, outcome.Duplicates, approved, ready, skipped, rejected);
   }
 
+  /// <summary>
+  /// Odobri vsa čakajoča sporočila enega artikla (<c>out.ApproveItemDocument</c>). Odobritev je
+  /// dovoljenje za pošiljanje v SAOP, zato ima isto varovalko kot uvrstitev (#7: prej jo je stran
+  /// klicala mimo servisa in bralna vloga je lahko odobrila pošiljanje).
+  /// </summary>
+  public async Task<int> ApproveAsync(int organizationId, string itemId, string actor, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.SaopWrite);
+    return await data.ApproveItemAsync(organizationId, "Product", itemId, actor, cancellationToken);
+  }
+
   /// <summary>Takoj poskusi poslati en artikel (isti mehanizem kot gumb »Pošlji zdaj« na /outbound).</summary>
-  public Task<SaopSendBatchResult> SendNowAsync(int organizationId, string itemId, CancellationToken cancellationToken = default) =>
-    write.TrySendArticleAsync(organizationId, itemId, cancellationToken);
+  public async Task<SaopSendBatchResult> SendNowAsync(int organizationId, string itemId, CancellationToken cancellationToken = default)
+  {
+    await guard.RequireAsync(PimPolicies.SaopWrite);
+    return await write.TrySendArticleAsync(organizationId, itemId, cancellationToken);
+  }
 
   /// <summary>Zakaj dokument ne sme oditi, v besedah urednika (»manjka Naziv 1, Merska enota«).</summary>
   public static string DescribeBlock(SaopItemPlan plan)

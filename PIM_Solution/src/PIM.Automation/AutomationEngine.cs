@@ -10,7 +10,7 @@ namespace PIM.Automation;
 /// <param name="RunOnceJob">Posel za en sam zagon (--enkrat): prevzame se takoj (ne čaka na termin, spoštuje vrata), nato se motor ustavi.</param>
 public sealed record AutomationOptions(
   string Application, TimeZoneInfo Zone, string LogRoot,
-  int TickSeconds = 15, int LeaseSeconds = 90, int MaxConcurrentJobs = 3, int StaleMinutes = 10, int MaxParallel = 4,
+  int TickSeconds = JobQueue.TickSeconds, int LeaseSeconds = 90, int MaxConcurrentJobs = JobQueue.MaxConcurrentJobs, int StaleMinutes = 10, int MaxParallel = 4,
   IReadOnlySet<string>? AllowedJobs = null, bool MonitorOnly = false, string? RunOnceJob = null);
 
 public sealed record RunningJob(string JobKey, long JobRunId, DateTime StartedUtc, string LogPath);
@@ -155,8 +155,11 @@ public sealed class AutomationEngine(
         && (options.RunOnceJob is null || row.JobKey == options.RunOnceJob)
         && (options.AllowedJobs is not { } allowedKeys || allowedKeys.Contains(row.JobKey)))
       .Select(row => (row.JobKey, row.IsRequested, row.IsRunning || runningKeys.Contains(row.JobKey))));
+    var lastSaopEnd = LastSaopEnd(jobs);
 
-    foreach (var job in jobs)
+    // Ročne zahteve najprej, nato vrstni red iz baze (JobQueue.Order); vsa pravila čakanja so v JobQueue.Gate,
+    // ki ga uporablja tudi napoved na strani Nadzor.
+    foreach (var job in JobQueue.Order(jobs))
     {
       if (stopping.IsCancellationRequested) return;
       if (options.RunOnceJob is { } once && job.JobKey != once) continue;
@@ -180,39 +183,19 @@ public sealed class AutomationEngine(
         if (job.NextDueUtc > now) continue;
       }
 
-      // Predhodnik po celi verigi, ki ravno teče (validacija med objavo, objava med izvozom): počakamo na
-      // naslednji tik. ops.ClaimJobRun čaka samo na neposrednega predhodnika; izvoz kataloga (65 s branja
-      // 90.000 vrstic) ne sme teči vzporedno z validacijo istega podjetja.
-      if (AutomationOverview.Upstream(job.JobKey, jobs, dependencies).FirstOrDefault(upstream => upstream.IsRunning) is { } busy)
+      // Tekoči posli: v tem gostitelju (tudi tisti, ki jih je ta tik ravno začel) in po bazi.
+      HashSet<string> busyKeys;
+      lock (gate) busyKeys = [.. running.Keys];
+      busyKeys.UnionWith(jobs.Where(row => row.IsRunning).Select(row => row.JobKey));
+      var waitingSince = job.IsRequested ? job.RequestedRunUtc : job.NextDueUtc;
+      var decision = JobQueue.Gate(job.JobKey, job.IsRequested, waitingSince, jobs, dependencies,
+        new QueueSnapshot(busyKeys, lastSaopEnd, saopRequest, options.MaxConcurrentJobs), now, force);
+      if (!decision.CanStart)
       {
-        if (job.IsRequested || force) Note($"{job.Label} čaka: predhodnik {busy.Label} ravno teče.");
+        // Opomba samo za ročne zahteve in --enkrat (redni posli bi vsak tik ponavljali isto) in za mejo hkratnih poslov.
+        if (job.IsRequested || force || decision.Kind == JobWaitKind.ConcurrencyLimit) Note(WaitNote(job, decision, jobs));
         continue;
       }
-
-      // Pas SAOP (ekipa SAOP 2026-09-22): posel, ki kliče SAOP, nikoli ne teče hkrati z drugim takim in
-      // začne šele po tišini od konca zadnjega. Velja tudi za ročne zahteve in --enkrat.
-      if (JobCatalog.UsesSaop(job.JobKey))
-      {
-        if (!force && JobCatalog.YieldsSaopLane(job.JobKey, job.IsRequested, saopRequest)) continue;
-        string? saopBusy;
-        lock (gate) saopBusy = running.Keys.FirstOrDefault(JobCatalog.UsesSaop);
-        saopBusy ??= jobs.FirstOrDefault(other => other.IsRunning && JobCatalog.UsesSaop(other.JobKey))?.JobKey;
-        if (saopBusy is not null)
-        {
-          if (job.IsRequested || force) Note($"{job.Label} čaka: SAOP ravno uporablja {saopBusy}.");
-          continue;
-        }
-        if (LastSaopEnd(jobs)?.AddSeconds(JobCatalog.SaopQuietSeconds) is { } quietUntil && quietUntil > now)
-        {
-          if (job.IsRequested || force) Note($"{job.Label} čaka na tišino SAOP do {Local(quietUntil)}.");
-          continue;
-        }
-      }
-
-      int active;
-      lock (gate) active = running.Count;
-      // continue, ne return: posel za mejo ne sme zapreti poti tistim za njim (nadzor in alarmi so zadnji).
-      if (active >= Math.Max(1, options.MaxConcurrentJobs)) { Note($"Meja hkratnih poslov ({options.MaxConcurrentJobs}) je dosežena; {job.Label} počaka."); continue; }
 
       await StartJobAsync(job, force, stopping);
     }
@@ -365,6 +348,21 @@ public sealed class AutomationEngine(
       if (failures > 1) log($"{job.Label}: {failures}. zaporedna napaka; naslednji poskus ob {Local(next)}.");
     }
     catch (Exception exception) { warn($"Naslednjega termina za {job.JobKey} ni bilo mogoče zapisati.", exception); }
+  }
+
+  string WaitNote(JobDefinitionRow job, JobGate decision, IReadOnlyList<JobDefinitionRow> jobs)
+  {
+    var other = decision.BlockingJobKey is { } key ? jobs.FirstOrDefault(row => row.JobKey == key)?.Label ?? key : null;
+    return decision.Kind switch
+    {
+      JobWaitKind.Predecessor => $"{job.Label} čaka: predhodnik {other} ravno teče.",
+      JobWaitKind.SaopYields => $"{job.Label} čaka: v pasu SAOP ima prednost ročni zagon {other}.",
+      JobWaitKind.SaopBusy => $"{job.Label} čaka: SAOP ravno uporablja {other}.",
+      JobWaitKind.SaopQuiet => $"{job.Label} čaka na tišino SAOP do {(decision.UntilUtc is { } until ? Local(until) : "?")}.",
+      JobWaitKind.HeavyBusy => $"{job.Label} čaka: teče težak posel {other} (največ {JobQueue.HeavyMaxWaitSeconds / 60} min).",
+      JobWaitKind.ConcurrencyLimit => $"Meja hkratnih poslov ({options.MaxConcurrentJobs}) je dosežena; {job.Label} počaka.",
+      _ => $"{job.Label} čaka ({decision.Kind}).",
+    };
   }
 
   DateTime? LastSaopEnd(IReadOnlyList<JobDefinitionRow> jobs)

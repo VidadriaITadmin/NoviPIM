@@ -1,0 +1,349 @@
+@page "/nastavitve/atributi/ciscenje"
+@attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR,COMMERCIAL")]
+@rendermode InteractiveServer
+@inject PIM.Intranet.Services.AttributeMappingService Attributes
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+
+@* Naloga #15 (lastnik 2026-09-29): »kateri atributi pomenijo isto … seznam kandidatov za združitev, s
+   številom artiklov in primeri vrednosti; lastnik odloči, kaj se združi« in »uvoz naj besedilo lepo
+   uredi (enote, presledki, velike začetnice)«. Stran je SAMO PREGLED: nič se ne združi, izbriše ali
+   prepiše. Združevanje in vklop pravila zapisa sta ločeni nalogi po odločitvi lastnika. *@
+
+<PageTitle>Čiščenje atributov</PageTitle>
+<PimPage Title="Čiščenje atributov" Subtitle="Predlogi, kateri atributi pomenijo isto, in predogled lepega zapisa vrednosti. Samo pregled — podatki, uvoz in katalog.csv se ne spremenijo." Crumbs="Crumbs">
+  <Actions>
+    <a class="secondary-button" href="nastavitve/atributi">Register atributov</a>
+  </Actions>
+</PimPage>
+
+<PimTabs Active="@View" Tabs="Tabs" Label="Pogledi čiščenja atributov" />
+
+<p class="message-state info-message cleanup-note" role="status">
+  @if (View == ViewPolish)
+  {
+    <span>Pravilo je pripravljeno, a <strong>ni vklopljeno</strong>: uvoz, izvoz katalog.csv in obstoječe vrednosti ostanejo, kot so. Če bi veljalo samo za nove uvoze, bi imel spletni filter dva zapisa iste vrednosti (»10W« in »10 W«). Vklop za vse naenkrat, z zgodovino prej/potem in povratkom, potrdi lastnik.</span>
+  }
+  else
+  {
+    <span>Seznam je predlog. Nič se ne združi ali izbriše; kateri par se združi, odloči lastnik. Spremljevalni atributi »Enota …« niso v seznamu, ker po zasnovi pri vseh merah nosijo iste enote (mm, kg).</span>
+  }
+</p>
+
+@if (View == ViewPolish)
+{
+  <section class="ui-card toolbar section-gap" role="search" aria-labelledby="polish-filter-title">
+    <h2 id="polish-filter-title" class="visually-hidden">Filtriranje predogleda zapisa</h2>
+    <label class="visually-hidden" for="polish-search">Išči po atributu ali vrednosti</label>
+    <input id="polish-search" class="search-input cleanup-search" type="search" placeholder="Išči po atributu ali vrednosti" @bind="Search" @bind:after="SyncUrl" />
+    <label class="visually-hidden" for="polish-attribute">Atribut</label>
+    <select id="polish-attribute" class="filter-select" @bind="AttributeFilter" @bind:after="SyncUrl">
+      <option value="">Vsi atributi (@(Polish?.Changes.Count ?? 0))</option>
+      @foreach (var group in PolishAttributes)
+      {
+        <option value="@group.Name">@group.Name (@group.Count)</option>
+      }
+    </select>
+    @if (HasFilters) { <button type="button" class="secondary-button" @onclick="ClearFiltersAsync">Počisti filtre</button> }
+    <span class="result-count" role="status" aria-live="polite">@PolishSummary</span>
+    <button type="button" class="secondary-button" disabled="@(FilteredPolish.Count == 0)" @onclick="ExportPolishAsync">Izvozi v Excel (@FilteredPolish.Count.ToString("N0"))</button>
+    <button type="button" class="secondary-button" disabled="@PolishLoading" @onclick="RefreshPolishAsync" title="@ComputedTitle(Polish?.ComputedUtc)">Osveži</button>
+  </section>
+
+  @if (Polish is not null)
+  {
+    <section class="kpi-grid" aria-label="Obseg predloga">
+      <PimStat Label="Različnih vrednosti" Value="@Polish.DistinctValues.ToString("N0")" Note="pregledanih parov atribut–vrednost" />
+      <PimStat Label="Spremenil bi" Value="@Polish.Changes.Count.ToString("N0")" Note="različnih zapisov" />
+      <PimStat Label="Vrstic pri izdelkih" Value="@Polish.Changes.Sum(row => row.Rows).ToString("N0")" Note="bi dobilo nov zapis" />
+      <PimStat Label="Izračunano" Value="@Polish.ComputedUtc.ToPimLocal().ToString("HH:mm")" Note="@($"v {Polish.ElapsedMs / 1000.0:N1} s; velja 10 min, »Osveži« na novo")" />
+    </section>
+  }
+
+  <details class="ui-card rule-help">
+    <summary>Kaj pravilo naredi</summary>
+    <ul>
+      <li>najprej obstoječe poenotenje (presledki, »≥ 80« → »≥80«, decimalna pika, napetost, frekvenca, slovar ENOTNO);</li>
+      <li>razpon brez presledkov: »30 - 50« → »30-50«;</li>
+      <li>presledek med številom in enoto: »50m« → »50 m«, »do 30m« → »do 30 m«, »10W« → »10 W«; »IP44«, »E27«, »GU10« ostanejo;</li>
+      <li>presledek za vejico v seznamu: »3CCT,IP65« → »3CCT, IP65«; decimalna »1,5« ostane število;</li>
+      <li>velika začetnica samo pri čistem besedilu: »toplo bela« → »Toplo bela«; »LED«, »mm«, šifre iz SAOP in povezave ostanejo.</li>
+    </ul>
+    <p class="card-note">Izjeme (npr. tipkarske napake) dodaš v <a href="pravila/slovar">slovar vrednosti</a> z jezikom ENOTNO.</p>
+  </details>
+
+  <section class="ui-card data-card section-gap" aria-label="Predogled zapisa vrednosti">
+    <PimState Loading="PolishLoading" Error="@Error" Empty="@(FilteredPolish.Count == 0)" EmptyText="@(HasFilters ? "Za ta filter predlog ne spremeni ničesar. Počisti filtre." : "Predlog ne bi spremenil nobene vrednosti.")" LoadingText="Računam predogled za vse različne vrednosti (približno 10 s) …">
+      <PimTable Caption="Vrednosti, ki bi jih predlog zapisal drugače (prej in potem)" Columns="PolishColumns">
+        <Rows>
+          @foreach (var row in FilteredPolish.Take(PolishTake))
+          {
+            <tr>
+              <td>@row.AttributeCode</td>
+              <td><span class="value-before">@row.OldValue</span></td>
+              <td><span class="value-after">@row.NewValue</span></td>
+              <td class="numeric">@row.Rows.ToString("N0")</td>
+              <td class="numeric">@row.Products.ToString("N0")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (FilteredPolish.Count > PolishTake)
+      {
+        <p class="card-note table-more">Prikazanih je prvih @PolishTake.ToString("N0") od @FilteredPolish.Count.ToString("N0"). Izvoz v Excel vsebuje vse. <button type="button" class="small-action" @onclick="() => PolishTake += 500">Pokaži še 500</button></p>
+      }
+    </PimState>
+  </section>
+}
+else
+{
+  <section class="ui-card toolbar section-gap" role="search" aria-labelledby="duplicate-filter-title">
+    <h2 id="duplicate-filter-title" class="visually-hidden">Filtriranje kandidatov za združitev</h2>
+    <label class="visually-hidden" for="duplicate-search">Išči po imenu atributa</label>
+    <input id="duplicate-search" class="search-input cleanup-search" type="search" placeholder="Išči po imenu atributa" @bind="Search" @bind:after="SyncUrl" />
+    <label class="visually-hidden" for="duplicate-kind">Vrsta predloga</label>
+    <select id="duplicate-kind" class="filter-select" @bind="KindFilter" @bind:after="SyncUrl">
+      <option value="">Vse vrste (@(Report?.Candidates.Count ?? 0))</option>
+      @foreach (var kind in Kinds)
+      {
+        <option value="@kind.Key">@kind.Label (@KindCount(kind.Key))</option>
+      }
+    </select>
+    <label class="visually-hidden" for="duplicate-sort">Razvrsti</label>
+    <select id="duplicate-sort" class="filter-select" @bind="Sort" @bind:after="SyncUrl">
+      <option value="">Najmočnejši predlog najprej</option>
+      <option value="izdelki">Največ izdelkov najprej</option>
+      <option value="ime">Po imenu atributa</option>
+    </select>
+    @if (HasFilters) { <button type="button" class="secondary-button" @onclick="ClearFiltersAsync">Počisti filtre</button> }
+    <span class="result-count" role="status" aria-live="polite">@DuplicateSummary</span>
+    <button type="button" class="secondary-button" disabled="@(FilteredCandidates.Count == 0)" @onclick="ExportDuplicatesAsync">Izvozi v Excel (@FilteredCandidates.Count.ToString("N0"))</button>
+    <button type="button" class="secondary-button" disabled="@DuplicateLoading" @onclick="RefreshDuplicatesAsync" title="@ComputedTitle(Report?.ComputedUtc)">Osveži</button>
+  </section>
+
+  <section class="ui-card data-card section-gap" aria-label="Kandidati za združitev atributov">
+    <PimState Loading="DuplicateLoading" Error="@Error" Empty="@(FilteredCandidates.Count == 0)" EmptyText="@(HasFilters ? "Za ta filter ni predlogov. Počisti filtre." : "Ni atributov, ki bi bili videti podvojeni.")" LoadingText="Primerjam atribute, izdelke in vrednosti …">
+      <PimTable Caption="Pari atributov, ki morda pomenijo isto" Columns="DuplicateColumns">
+        <Rows>
+          @foreach (var candidate in FilteredCandidates)
+          {
+            <tr>
+              <td><PimChip Text="@KindLabel(candidate.Kind)" Tone="@KindTone(candidate.Kind)" Prefix="Vrsta predloga: " /></td>
+              <td>@AttributeCell(candidate.First)</td>
+              <td>@AttributeCell(candidate.Second)</td>
+              <td class="numeric">@candidate.SharedProducts.ToString("N0")</td>
+              <td class="numeric">@candidate.SameValueProducts.ToString("N0")</td>
+              <td class="numeric">@candidate.CommonValues.ToString("N0")</td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+    </PimState>
+  </section>
+  <p class="card-note">
+    <strong>Isti podatek</strong>: ista izdelka, pri vsaj 80 % skupnih izdelkov ista vrednost (0, 1, 2, da, ne se ne štejejo).
+    <strong>Podobne vrednosti</strong>: skoraj drugi izdelki, vsaj polovica vrednosti enakih — isti pomen pri različnih dobaviteljih.
+    <strong>Podobno ime</strong>: ime se razlikuje samo v »(2)«, oznaki jezika ali ločilih oziroma eno vsebuje drugo.
+    @if (Report is not null) { <span>Izračunano ob @Report.ComputedUtc.ToPimLocal().ToString("HH:mm") (@($"{Report.ElapsedMs / 1000.0:N1} s") za @Report.Attributes.Count.ToString("N0") atributov); izračun velja 10 minut, »Osveži« ga naredi znova.</span> }
+  </p>
+}
+
+@code {
+  const string ViewDuplicates = "podvojeni";
+  const string ViewPolish = "zapis";
+
+  [SupplyParameterFromQuery(Name = "pogled")] public string? RequestedView { get; set; }
+  [SupplyParameterFromQuery(Name = "q")] public string? RequestedSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "vrsta")] public string? RequestedKind { get; set; }
+  [SupplyParameterFromQuery(Name = "atribut")] public string? RequestedAttribute { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? RequestedSort { get; set; }
+
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Nastavitve", "nastavitve"), new("Atributi", "nastavitve/atributi"), new("Čiščenje")];
+  static readonly IReadOnlyList<(string Key, string Label)> Kinds =
+    [("SAME_DATA", "Isti podatek"), ("SIMILAR_VALUES", "Podobne vrednosti"), ("SIMILAR_NAME", "Podobno ime")];
+  static readonly IReadOnlyList<PimColumn> DuplicateColumns =
+  [
+    new("Predlog"), new("Atribut A"), new("Atribut B"), new("Skupni izdelki", Numeric: true),
+    new("Ista vrednost", Numeric: true), new("Skupne vrednosti", Numeric: true)
+  ];
+  static readonly IReadOnlyList<PimColumn> PolishColumns =
+    [new("Atribut"), new("Prej"), new("Potem"), new("Vrstic", Numeric: true), new("Izdelkov", Numeric: true)];
+
+  PIM.Intranet.Services.AttributeMappingService.DuplicateReport? Report;
+  PIM.Intranet.Services.AttributeMappingService.PolishPreview? Polish;
+  bool DuplicateLoading = true, PolishLoading = true;
+  string? Error;
+  string View = ViewDuplicates;
+  string Search = "", KindFilter = "", AttributeFilter = "", Sort = "";
+  int PolishTake = 500;
+
+  IReadOnlyList<PimTab> Tabs =>
+  [
+    new(ViewDuplicates, "Podvojeni atributi", "nastavitve/atributi/ciscenje", "Kandidati za združitev",
+      Report is null ? null : Report.Candidates.Count.ToString("N0")),
+    new(ViewPolish, "Lep zapis vrednosti", "nastavitve/atributi/ciscenje?pogled=zapis", "Predogled prej in potem",
+      Polish is null ? null : Polish.Changes.Count.ToString("N0")),
+  ];
+
+  protected override async Task OnParametersSetAsync()
+  {
+    View = string.Equals(RequestedView, ViewPolish, StringComparison.OrdinalIgnoreCase) ? ViewPolish : ViewDuplicates;
+    Search = RequestedSearch ?? "";
+    KindFilter = Kinds.Any(kind => kind.Key == RequestedKind) ? RequestedKind! : "";
+    AttributeFilter = RequestedAttribute ?? "";
+    Sort = RequestedSort is "izdelki" or "ime" ? RequestedSort : "";
+    Error = null;
+    await Task.CompletedTask;
+  }
+
+  /* Težka poizvedba teče šele po prvem izrisu: stran se odpre takoj s stanjem »Računam …«
+     (klikalnik je pri nalaganju v OnParametersSetAsync izmeril 21 s do prvega prikaza). */
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    // Vsak pogled se samodejno naloži enkrat; po napaki ga uporabnik ponovi z »Osveži« (brez zanke).
+    if (View == ViewPolish && !polishAttempted) { polishAttempted = true; await LoadPolishAsync(false); }
+    else if (View == ViewDuplicates && !duplicatesAttempted) { duplicatesAttempted = true; await LoadDuplicatesAsync(false); }
+  }
+
+  bool duplicatesAttempted, polishAttempted;
+
+  async Task LoadDuplicatesAsync(bool refresh)
+  {
+    DuplicateLoading = true;
+    Error = null;
+    StateHasChanged();
+    try { Report = await Attributes.GetDuplicateCandidatesAsync(refresh); }
+    catch (Exception exception) { Error = "Primerjave atributov ni bilo mogoče izračunati: " + exception.Message; }
+    finally { DuplicateLoading = false; StateHasChanged(); }
+  }
+
+  async Task LoadPolishAsync(bool refresh)
+  {
+    PolishLoading = true;
+    Error = null;
+    StateHasChanged();
+    try { Polish = await Attributes.GetPolishPreviewAsync(refresh); }
+    catch (Exception exception) { Error = "Predogleda zapisa ni bilo mogoče izračunati: " + exception.Message; }
+    finally { PolishLoading = false; StateHasChanged(); }
+  }
+
+  Task RefreshDuplicatesAsync() => LoadDuplicatesAsync(true);
+  Task RefreshPolishAsync() => LoadPolishAsync(true);
+
+  static string? ComputedTitle(DateTime? computedUtc) =>
+    computedUtc is null ? null : $"Izračunano ob {computedUtc.Value.ToPimLocal():HH:mm}; izračunaj znova";
+
+  async Task ExportDuplicatesAsync() => await Js.InvokeVoidAsync("pimDownloadText", "podvojeni-atributi.csv", DuplicateCsv, "text/csv;charset=utf-8");
+  async Task ExportPolishAsync() => await Js.InvokeVoidAsync("pimDownloadText", "predogled-zapisa-atributov.csv", PolishCsv, "text/csv;charset=utf-8");
+
+  bool HasFilters => Search.Length > 0 || KindFilter.Length > 0 || AttributeFilter.Length > 0 || Sort.Length > 0;
+
+  void SyncUrl() => Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+  {
+    ["pogled"] = View == ViewPolish ? ViewPolish : null,
+    ["q"] = string.IsNullOrWhiteSpace(Search) ? null : Search.Trim(),
+    ["vrsta"] = View == ViewDuplicates && KindFilter.Length > 0 ? KindFilter : null,
+    ["atribut"] = View == ViewPolish && AttributeFilter.Length > 0 ? AttributeFilter : null,
+    ["razvrsti"] = View == ViewDuplicates && Sort.Length > 0 ? Sort : null,
+  }));
+
+  Task ClearFiltersAsync()
+  {
+    Search = KindFilter = AttributeFilter = Sort = "";
+    SyncUrl();
+    return Task.CompletedTask;
+  }
+
+  bool Matches(string? text) => Search.Length == 0 || PimText.Fold(text).Contains(PimText.Fold(Search), StringComparison.Ordinal);
+
+  IReadOnlyList<PIM.Intranet.Services.DuplicateCandidate> FilteredCandidates
+  {
+    get
+    {
+      if (Report is null) return [];
+      var rows = Report.Candidates
+        .Where(candidate => KindFilter.Length == 0 || candidate.Kind == KindFilter)
+        .Where(candidate => Matches(candidate.First.Name) || Matches(candidate.Second.Name));
+      rows = Sort switch
+      {
+        "izdelki" => rows.OrderByDescending(candidate => candidate.First.Products + candidate.Second.Products),
+        "ime" => rows.OrderBy(candidate => candidate.First.Name, StringComparer.CurrentCulture),
+        _ => rows,
+      };
+      return rows.ToList();
+    }
+  }
+
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.PolishPreviewRow> FilteredPolish =>
+    Polish is null ? [] : Polish.Changes
+      .Where(row => AttributeFilter.Length == 0 || row.AttributeCode == AttributeFilter)
+      .Where(row => Matches(row.AttributeCode) || Matches(row.OldValue) || Matches(row.NewValue))
+      .ToList();
+
+  IReadOnlyList<(string Name, int Count)> PolishAttributes =>
+    Polish is null ? [] : Polish.Changes.GroupBy(row => row.AttributeCode)
+      .Select(group => (group.Key, group.Count())).OrderBy(group => group.Key, StringComparer.CurrentCulture).ToList();
+
+  int KindCount(string kind) => Report?.Candidates.Count(candidate => candidate.Kind == kind) ?? 0;
+
+  string DuplicateSummary => DuplicateLoading ? "Računam …" : Error is not null ? "Rezultati niso na voljo"
+    : Count(FilteredCandidates.Count, "predlog", "predloga", "predlogi", "predlogov");
+
+  string PolishSummary => PolishLoading ? "Računam …" : Error is not null ? "Rezultati niso na voljo"
+    : $"{Count(FilteredPolish.Count, "zapis", "zapisa", "zapisi", "zapisov")}, {Count(FilteredPolish.Sum(row => row.Rows), "vrstica", "vrstici", "vrstice", "vrstic")}";
+
+  /// <summary>Slovenska dvojina in množina: 1 predlog, 2 predloga, 3 predlogi, 5 predlogov.</summary>
+  static string Count(long n, string one, string two, string few, string many) => (n % 100) switch
+  {
+    1 => $"{n:N0} {one}",
+    2 => $"{n:N0} {two}",
+    3 or 4 => $"{n:N0} {few}",
+    _ => $"{n:N0} {many}",
+  };
+
+  static string KindLabel(string kind) => Kinds.FirstOrDefault(item => item.Key == kind).Label ?? kind;
+  static string? KindTone(string kind) => kind switch { "SAME_DATA" => "bad", "SIMILAR_VALUES" => "warn", _ => null };
+
+  static RenderFragment AttributeCell(PIM.Intranet.Services.CleanupAttribute item) => __builder =>
+  {
+    <div class="attribute-cell">
+      @if (item.AttributeCode is not null)
+      {
+        <a class="attribute-name" href="@($"nastavitve/atributi/{Uri.EscapeDataString(item.AttributeCode)}")">@item.Name</a>
+      }
+      else
+      {
+        <span class="attribute-name">@item.Name</span> <PimChip Text="ni v registru" Tone="warn" Prefix="Register: " />
+      }
+      <span class="attribute-meta">@item.Products.ToString("N0") izdelkov · @item.DistinctValues.ToString("N0") vrednosti@(item.ByOrganization is null ? "" : " · " + item.ByOrganization)</span>
+      @if (item.Samples is not null) { <span class="attribute-samples" title="Najpogostejše vrednosti">@item.Samples</span> }
+    </div>
+  };
+
+  string DuplicateCsv => Csv(
+    ["Predlog", "Atribut A", "Koda A", "Izdelkov A", "Po podjetjih A", "Primeri A", "Atribut B", "Koda B", "Izdelkov B",
+     "Po podjetjih B", "Primeri B", "Skupni izdelki", "Ista vrednost", "Skupne vrednosti"],
+    FilteredCandidates.Select(candidate => new[]
+    {
+      KindLabel(candidate.Kind), candidate.First.Name, candidate.First.AttributeCode ?? "ni v registru", candidate.First.Products.ToString(),
+      candidate.First.ByOrganization ?? "", candidate.First.Samples ?? "", candidate.Second.Name, candidate.Second.AttributeCode ?? "ni v registru",
+      candidate.Second.Products.ToString(), candidate.Second.ByOrganization ?? "", candidate.Second.Samples ?? "",
+      candidate.SharedProducts.ToString(), candidate.SameValueProducts.ToString(), candidate.CommonValues.ToString()
+    }));
+
+  string PolishCsv => Csv(
+    ["Atribut", "Prej", "Potem", "Vrstic", "Izdelkov"],
+    FilteredPolish.Select(row => new[] { row.AttributeCode, row.OldValue, row.NewValue, row.Rows.ToString(), row.Products.ToString() }));
+
+  /// <summary>CSV s podpičjem (BOM doda pimDownloadText), da ga Excel odpre s šumniki; filtri na zaslonu so upoštevani.</summary>
+  static string Csv(IReadOnlyList<string> header, IEnumerable<string[]> rows)
+  {
+    var builder = new System.Text.StringBuilder();
+    builder.AppendLine(string.Join(';', header.Select(Cell)));
+    foreach (var row in rows) builder.AppendLine(string.Join(';', row.Select(Cell)));
+    return builder.ToString();
+
+    static string Cell(string value) =>
+      value.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+  }
+}

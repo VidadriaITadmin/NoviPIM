@@ -6,7 +6,12 @@
 @inject AuthenticationStateProvider Authentication
 
 <PageTitle>Atributi</PageTitle>
-<PimPage Title="Atributi" Subtitle="Register atributov s stalnimi kodami. Nov atribut dodaš zgoraj, izbrana vrstica se ureja in briše v desnem panelu." Crumbs="Crumbs" />
+<PimPage Title="Atributi" Subtitle="Register atributov s stalnimi kodami. Nov atribut dodaš zgoraj, izbrana vrstica se ureja in briše v desnem panelu." Crumbs="Crumbs">
+  <Actions>
+    @* #15: pregled podvojenih atributov in predogled lepega zapisa vrednosti (samo branje). *@
+    <a class="secondary-button cleanup-link" href="nastavitve/atributi/ciscenje">Čiščenje atributov</a>
+  </Actions>
+</PimPage>
 @if (Message is not null) { <p class="message-state" role="status">@Message</p> }
 @if (Error is not null) { <p class="message-state error-message" role="alert">@Error</p> }
 

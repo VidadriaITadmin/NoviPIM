@@ -32,7 +32,7 @@
 31;Valuta;;;;brez vira;
 32;DDV;Product.VatRate;;;se polni iz SAOP;
 33;PAK2;Product.Pak2;;;se polni iz SAOP;
-34;Omejitev pri naročanju;;;;brez vira;
+34;Pakirno naročanje;Oznaka PAKIRNO_NAROCANJE (pim.ProductFlag);;;1 = na spletu samo po celih paketih (Pakirna količina), 0 = po kosih (302/303);
 35;Skupina popusta;Product.PackagingDiscountCode;;;se polni iz SAOP;
 36;S popust %;Product.PackagingDiscountPercent;;;se polni iz SAOP;
 37;Posebni popust za stranko;;;;brez vira;
