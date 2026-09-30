@@ -70,6 +70,7 @@ ko gostitelj neha utripati, in takrat poganja samo stare cikle kot rezervo preho
 | `NIGHTLY_RECONCILIATION` | Vhodni viri | 02:30 | 6 h | vsi vhodi (kot `Nocno-vse.ps1 -ZalogaIzSaop`), nato validacija in objava vseh podjetij — **blokirani**, če je padel katerikoli vhod | — |
 | `STOCK_REPLENISHMENT_DIGEST` | Naročila | 05:30 | 15 min | `PIM.StockReplenishmentWorker` | — |
 | `SYSTEM_SELF_TEST` | Sistem | 04:30 | 30 min | `PIM.SelfTest.Nightly` | — |
+| `MEDIA_URL_CHECK` | Spletni katalog | 2 h, **izklopljen** | 50 min | `PIM.SourceFetchWorker --preveri-slike` (naloga #9, 312): ali se slike na naslovih odprejo; do 1.500 naslovov na tek, en zahtevek naenkrat na strežnik, 0,5 s premora, največ 40 min. Izid v `val.MediaUrlCheck` bereta validacija in katalog.csv ob svojem naslednjem teku. Kliče strežnike dobaviteljev, SAOP ne. | — (nobena, nihče ni odvisen) |
 | `SAOP_OUTBOUND_DISPATCH` | Sistem | 5 min, **izklopljen** | 15 min | `PIM.OutboxDispatcher` (pošiljanje v SAOP je ročna odločitev) | — |
 
 Vsak worker iz `workers\` ima svoj posel (test `JobCatalogChecks`). Kar cikel potrebuje od sveta

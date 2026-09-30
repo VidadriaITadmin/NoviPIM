@@ -2432,6 +2432,21 @@ Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`,
 
 **Objekti:** `val.SyncPackageOrderHolds`, podatki `val.ProductHold.Reason` (samo aktivni zadržki »pravilo 302«). **Ročni korak:** ne. **Vrstni red:** zahteva 302. **Povratek:** ponovno izvedi blok 4 iz 302. **PRD:** skupaj s 302 in 303, šele po lastnikovi potrditvi.
 
+## Preverjanje slik: ali se naslov res odpre (migracija 312_PreverjanjeSlik, 2026-09-30, naloga #9)
+
+Lastnik (odločitev #18, 29. 9.): napaka validacije samo, če izdelek nima nobene delujoče slike (ena pokvarjena od več = opozorilo); pokvarjena šele po 2 neuspehih v razmiku 24 ur; pokvarjene slike se izpustijo iz katalog.csv, glavna postane prva delujoča.
+
+- **`val.MediaUrlCheck`** (nova): izid na **naslov** (ključ `UrlHash` = SHA2_256 obrezanega naslova), ne na `ProductMediaId` — zajem XML vrstice slik zamenja. Stolpci: zadnji izid (`OK` / `NAPAKA` / `NI_ODZIVA`), HTTP status, vrsta vsebine, koda in besedilo napake, prvič/zadnjič neuspešno, število neuspehov; `IsBroken` je izračunan stolpec (≥ 2 neuspeha, zadnji vsaj 24 h po prvem). `NI_ODZIVA` (429, 5xx, 401/403, časovna meja) števca ne poveča; `OK` ga ponastavi.
+- **`val.GetMediaUrlsToCheck`** (vpiše nove naslove aktivnih izdelkov aktivnih podjetij, vrne paket: novi, potrditev po 24 h, brez odziva po 6 h, ostali po 7 dneh) in **`val.RecordMediaUrlChecks`** (izidi kot JSON; vrne število na novo pokvarjenih in popravljenih). Kliče ju `PIM.SourceFetchWorker --preveri-slike` (posel `MEDIA_URL_CHECK`, privzeto izklopljen).
+- **`canon.FieldValue`** (zamenjava žive definicije, oznaka PreverjanjeSlik312): izpeljani polji `ProductMedia.DelujocaSlika` (manjka, ko ima izdelek slike in so vse pokvarjene) in `ProductMedia.VseSlikeDelujejo` (manjka, ko ima vsaj eno pokvarjeno in vsaj eno delujočo). Izdelek brez slik ima obe polji izpolnjeni (zanj velja `ProductMedia.Url`).
+- **`val.FieldRequirement`** (podatek): v profilih z zahtevo `ProductMedia.Url` (DEV: WEB_svetila_si, WEB_videlektro) `DelujocaSlika` = ERROR, `VseSlikeDelujejo` = WARNING. Validacija (`val.RunValidation*`) ju bere kot vsako polje — en JOIN, brez spremembe procedur.
+- **`out.GetExportRows`** (zamenjava žive definicije, bloki 302–306 ostanejo): blok B3 izpusti potrjeno pokvarjene slike; če je bila izpuščena glavna, postane glavna prva preostala.
+- **`intranet.GetMediaUrlChecks`**: stran `/mediji/napacni-naslovi` in izvoz (strežniško listanje, filtri stanje/podjetje/strežnik/napaka, števci).
+- **`ops.ScheduleProfile`** (podatek): `MEDIA_URL_CHECK` pod prvim aktivnim podjetjem (za `ops.BeginRun`); vklop posla je v katalogu poslov.
+- Dokler posel ne teče, v `val.MediaUrlCheck` ni pokvarjenih naslovov in se validacija ter katalog.csv ne spremenita. DEV: 19.016 naslovov vpisanih, 60 preverjenih (58 OK, 2× 404 na www.vipelektro.si). Dokaz v transakciji z ROLLBACK: izdelek z eno pokvarjeno od dveh slik ostane VALID z opozorilom in katalog.csv ima samo delujočo; izdelek z edino pokvarjeno sliko postane INVALID (napaka DelujocaSlika v obeh spletnih profilih) in slike v katalog.csv nima.
+- Proceduri z izračunanim stolpcem zahtevata `QUOTED_IDENTIFIER ON` (sqlcmd `-I`, SqlClient privzeto).
+
+**Objekti:** `val.MediaUrlCheck`, `val.GetMediaUrlsToCheck`, `val.RecordMediaUrlChecks`, `intranet.GetMediaUrlChecks`, `canon.FieldValue`, `out.GetExportRows`, podatki `val.FieldRequirement` in `ops.ScheduleProfile`. **Ročni korak:** ne (posel ostane izklopljen, dokler ga skrbnik ne vklopi). **Povratek:** zahtevi `DelujocaSlika`/`VseSlikeDelujejo` nastaviti na `IsActive = 0` in `DELETE val.MediaUrlCheck` (validacija in katalog.csv se vrneta v stanje pred 312). **PRD:** skupaj z intranetom in workerjem; pred vklopom posla preštej, koliko izdelkov bi padlo s spleta.
 ## Hitra sled sprememb (migracija 310_SledSpremembHitrejse, 2026-09-30, naloga #44)
 
 Stran `/sistem/sled` se ni naložila: `intranet.GetUserActivityTrail` (172) je ob vsakem odprtju prebrala celo `pim.ProductFieldHistory` (2,7 milijona vrstic) in jo šele na koncu razvrstila za TOP.

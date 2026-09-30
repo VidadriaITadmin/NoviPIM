@@ -137,6 +137,92 @@ finally
   try { Directory.Delete(koren, recursive: true); } catch (IOException) { }
 }
 
+// ── 7. Preverjanje slik (naloga #9): lažen strežnik, brez omrežja ────────────
+// Pogodba: 404/410/spletna stran namesto slike = napaka; 429, 5xx, 403 in časovna meja NE štejejo (NI_ODZIVA),
+// sicer bi izdelki padli s spleta zaradi začasnega izpada dobavitelja. En zahtevek naenkrat na strežnik s premorom.
+{
+  var odgovori = new Dictionary<string, Func<HttpResponseMessage>>(StringComparer.Ordinal)
+  {
+    ["/ok.jpg"] = () => Odgovor(HttpStatusCode.OK, "image/jpeg"),
+    ["/ok.webp"] = () => Odgovor(HttpStatusCode.OK, "image/webp"),
+    ["/brez-vrste.jpg"] = () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([1, 2, 3]) },
+    ["/manjka.jpg"] = () => Odgovor(HttpStatusCode.NotFound, "text/html"),
+    ["/odstranjena.jpg"] = () => Odgovor(HttpStatusCode.Gone, "text/html"),
+    ["/stran.jpg"] = () => Odgovor(HttpStatusCode.OK, "text/html; charset=utf-8"),
+    ["/omejeno.jpg"] = () => Odgovor(HttpStatusCode.TooManyRequests, "text/plain"),
+    ["/izpad.jpg"] = () => Odgovor(HttpStatusCode.ServiceUnavailable, "text/html"),
+    ["/prepovedano.jpg"] = () => Odgovor(HttpStatusCode.Forbidden, "text/html"),
+  };
+  var zahtevki = new List<(string Host, DateTime Cas)>();
+  var hkrati = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+  var najvecHkrati = 0;
+  var handler = new LazniStreznik(async (request, token) =>
+  {
+    var host = request.RequestUri!.Host;
+    lock (zahtevki)
+    {
+      zahtevki.Add((host, DateTime.UtcNow));
+      hkrati[host] = hkrati.GetValueOrDefault(host) + 1;
+      najvecHkrati = Math.Max(najvecHkrati, hkrati[host]);
+    }
+    try
+    {
+      if (request.RequestUri.AbsolutePath == "/pocasi.jpg") await Task.Delay(TimeSpan.FromSeconds(5), token);
+      await Task.Delay(20, token);
+      return odgovori.TryGetValue(request.RequestUri.AbsolutePath, out var make) ? make() : Odgovor(HttpStatusCode.NotFound, "text/html");
+    }
+    finally { lock (zahtevki) hkrati[host]--; }
+  });
+  using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+  var premori = new List<TimeSpan>();
+  var checker = new MediaUrlChecker(http, new MediaCheckOptions(TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(500), 4),
+    (cas, token) => { lock (premori) premori.Add(cas); return Task.CompletedTask; });
+
+  var cilji = new List<MediaCheckTarget>
+  {
+    new("H01", "https://a.test/ok.jpg"),
+    new("H02", "  https://a.test/ok.webp  "),
+    new("H03", "https://a.test/brez-vrste.jpg"),
+    new("H04", "https://a.test/manjka.jpg"),
+    new("H05", "https://b.test/odstranjena.jpg"),
+    new("H06", "https://b.test/stran.jpg"),
+    new("H07", "https://b.test/omejeno.jpg"),
+    new("H08", "https://c.test/izpad.jpg"),
+    new("H09", "https://c.test/prepovedano.jpg"),
+    new("H10", "https://c.test/pocasi.jpg"),
+    new("H11", "ftp://a.test/slika.jpg"),
+    new("H12", ""),
+    new("H13", "//a.test/ok.jpg"),
+    new("H14", "https://a.test/Zdjęcia z wymiarami/7678-2.jpg"),
+  };
+  var izidi = (await checker.CheckAsync(cilji)).ToDictionary(r => r.UrlHash);
+  string Izid(string h) => izidi[h].Outcome;
+
+  Assert(izidi.Count == cilji.Count, $"Vsak naslov dobi izid ({izidi.Count}/{cilji.Count}).");
+  Assert(Izid("H01") == MediaCheckOutcomes.Ok && Izid("H02") == MediaCheckOutcomes.Ok && Izid("H03") == MediaCheckOutcomes.Ok && Izid("H13") == MediaCheckOutcomes.Ok,
+    "Slika (image/*, brez vrste, obrezan naslov, //naslov) se odpre.");
+  Assert(Izid("H04") == MediaCheckOutcomes.Failed && izidi["H04"].ErrorCode == "NI_NAJDENA" && izidi["H04"].HttpStatus == 404
+    && izidi["H04"].ErrorText!.Contains("404", StringComparison.Ordinal), "404 je napaka s kodo NI_NAJDENA in razlago po domače.");
+  Assert(Izid("H05") == MediaCheckOutcomes.Failed && izidi["H05"].ErrorCode == "ODSTRANJENA", "410 je napaka.");
+  Assert(Izid("H06") == MediaCheckOutcomes.Failed && izidi["H06"].ErrorCode == "NI_SLIKA", "Spletna stran namesto slike je napaka.");
+  Assert(Izid("H07") == MediaCheckOutcomes.NoResponse && Izid("H08") == MediaCheckOutcomes.NoResponse && Izid("H09") == MediaCheckOutcomes.NoResponse,
+    "429, 503 in 403 NE štejejo kot pokvarjena slika.");
+  Assert(Izid("H10") == MediaCheckOutcomes.NoResponse && izidi["H10"].ErrorCode == "CAS_POTEKEL", "Časovna meja ne šteje kot pokvarjena slika.");
+  Assert(Izid("H11") == MediaCheckOutcomes.Failed && Izid("H12") == MediaCheckOutcomes.Failed && izidi["H11"].ErrorCode == "NEVELJAVEN_NASLOV",
+    "Naslov, ki ni spletna povezava, je napaka brez zahtevka.");
+  Assert(izidi["H14"].HttpStatus == 404,
+    "Naslov s presledki in šumniki gre na strežnik kodiran (lažen strežnik ga ne pozna → 404).");
+  Assert(zahtevki.Count == 12, $"Neveljavna naslova ne sprožita zahtevka ({zahtevki.Count} zahtevkov).");
+  Assert(najvecHkrati == 1, $"En zahtevek naenkrat na strežnik (največ hkrati {najvecHkrati}).");
+  Assert(premori.Count == 12 - 3 && premori.All(p => p == TimeSpan.FromMilliseconds(300)),
+    $"Premor pred vsakim naslednjim zahtevkom istega strežnika ({premori.Count}).");
+
+  Assert(MediaUrlRules.Classify(200, "image/png").Outcome == MediaCheckOutcomes.Ok
+    && MediaUrlRules.Classify(500, null).Outcome == MediaCheckOutcomes.NoResponse
+    && MediaUrlRules.Classify(400, null).Outcome == MediaCheckOutcomes.Failed, "Pravila razvrstitve odgovora.");
+  Console.WriteLine("F6 preverjanje slik PASS.");
+}
+
 return 0;
 
 static int Arhivov(string mapa) => Directory.Exists(mapa) ? Directory.GetFiles(mapa).Length : 0;
@@ -159,7 +245,20 @@ static int ProstaVrata()
   return vrata;
 }
 
+static HttpResponseMessage Odgovor(HttpStatusCode status, string contentType)
+{
+  var vsebina = new ByteArrayContent([1, 2, 3]);
+  vsebina.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+  return new HttpResponseMessage(status) { Content = vsebina };
+}
+
 static void Assert(bool condition, string message)
 {
   if (!condition) throw new InvalidOperationException(message);
+}
+
+
+sealed class LazniStreznik(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> odgovor) : HttpMessageHandler
+{
+  protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => odgovor(request, cancellationToken);
 }

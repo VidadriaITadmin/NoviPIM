@@ -34,6 +34,20 @@ var xml = $"""
 
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
+// Test pise v razvojno bazo z enakimi testnimi kljuci (org 2, NW_XML, F5-*). Ko vrata tecejo
+// vzporedno, sta se dva zagona F5 medsebojno zaklenila in eden je padel na "Execution Timeout
+// Expired" (naloga #56). Zaklep na ravni seje ju postavi v vrsto; sprosti se ob zaprtju povezave.
+await using (var applock = Command(connection, """
+  DECLARE @Result int;
+  EXEC @Result = sp_getapplock @Resource=N'PIM.F5.Integration', @LockMode=N'Exclusive', @LockOwner=N'Session', @LockTimeout=900000;
+  SELECT @Result;
+  """))
+{
+  applock.CommandTimeout = 960;
+  var lockResult = Convert.ToInt32(await applock.ExecuteScalarAsync());
+  if (lockResult < 0)
+    throw new InvalidOperationException($"F5 integracija: drug zagon F5 drzi bazo ze 15 min (sp_getapplock={lockResult}). Pocakaj, da konca, in ponovi.");
+}
 await CleanupAsync(connection);
 await SeedBaseProductAsync(connection);
 var runId = Guid.NewGuid();
@@ -42,7 +56,12 @@ var originalPayload = await ScalarAsync<string>(connection, "SELECT TOP(1) Paylo
 
 await new SqlMappingPipeline(connectionString).ExtractAndApplyAsync(runId, organizationId, sourceCode);
 
-Equal(xml, await ScalarAsync<string>(connection, "SELECT TOP(1) PayloadXml FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)), "raw.Inbox payload se je spremenil.");
+// Od migracije 197 se surov payload ob uspesni obdelavi pobrise (Status=Processed, PayloadXml=NULL),
+// da raw.Inbox ne raste v gigabajte. Namen prvotne trditve ("apply ne prepise payloada") zato
+// preverimo prek zgostitve, ki ostane: ta mora biti enaka zgostitvi vstavljenega XML.
+Equal("Processed|NULL|" + Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(xml))), await ScalarAsync<string>(connection,
+  "SELECT TOP(1) Status + N'|' + CASE WHEN PayloadXml IS NULL THEN N'NULL' ELSE N'OSTAL' END + N'|' + PayloadHash FROM raw.Inbox WHERE RunId=@RunId;", ("@RunId", runId)),
+  "raw.Inbox po obdelavi ni Processed s pobrisanim payloadom in nespremenjeno zgostitvijo.");
 Equal(originalPayload, xml, "Vstavljeni payload ni identičen.");
 var configuredFieldMappings = await ScalarAsync<int>(connection, """
   SELECT COUNT(*)
@@ -66,32 +85,18 @@ Equal("Interior lighting", await ScalarAsync<string>(connection, """
   INNER JOIN canon.Product product ON product.ProductId=category.ProductId
   WHERE product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID AND category.WebSite=N'svetila_si_en';
   """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "Angleska pot kategorije ni nastala.");
-Equal("//example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
+// Od migracije 220 se protokolno relativni URL dobavitelja ("//...") shrani kot https://.
+Equal("https://example.invalid/f5-203.jpg", await ProductValueAsync(connection, "canon.ProductMedia", "Url"), "EAN medij ni obogaten.");
 Equal("F5-203", await ProductValueAsync(connection, "canon.ProductAttribute", "Value"), "EAN atribut ni obogaten.");
 
 await VerifyReviewRemediationAsync(connection);
 
-await ExecuteAsync(connection, "EXEC val.RunValidation @OrganizationId=@OrganizationId;", ("@OrganizationId", organizationId));
-Equal("VALID", await ScalarAsync<string>(connection, """
-  SELECT validationState.Status FROM val.ProductValidationState validationState
-  INNER JOIN val.ValidationProfile profile ON profile.ValidationProfileId=validationState.ValidationProfileId
-  INNER JOIN canon.Product product ON product.ProductId=validationState.ProductId
-  WHERE profile.ProfileCode=N'WEB_B2C' AND product.OrganizationId=@OrganizationId AND product.ItemID=@ItemID;
-  """, ("@OrganizationId", organizationId), ("@ItemID", itemId)), "B2C validacija ni uspela.");
-await ExecuteAsync(connection, "EXEC val.Promote @OrganizationId=@OrganizationId,@ValidationProfileCode=N'WEB_B2C';", ("@OrganizationId", organizationId));
-Equal(1, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM pim.Product WHERE OrganizationId=@OrganizationId AND ItemID=@ItemID;", ("@OrganizationId", organizationId), ("@ItemID", itemId)), "Promocija v pim ni uspela.");
-
-await using (var export = Command(connection, "EXEC out.ExportProductsCsv @OrganizationId=@OrganizationId,@ProfileCode=N'WEB_B2C_PRODUCTS';", ("@OrganizationId", organizationId)))
-await using (var reader = await export.ExecuteReaderAsync())
-{
-  var found = false;
-  while (await reader.ReadAsync())
-  {
-    if (Enumerable.Range(0, reader.FieldCount).Any(index =>
-      !reader.IsDBNull(index) && reader.GetValue(index).ToString()!.Contains(ean, StringComparison.Ordinal))) found = true;
-  }
-  if (!found) throw new InvalidOperationException("B2C CSV ne vsebuje F5 EAN.");
-}
+// Konec verige (validacija WEB_B2C -> val.Promote -> out.ExportProductsCsv WEB_B2C_PRODUCTS) je
+// odstranjen v nalogi #56: profila WEB_B2C in WEB_B2C_PRODUCTS je migracija 217 pobrisala, zato ta
+// del ni vec mogel uspeti (prej ga je zakrila casovna meja). Namen F5 je genericna preslikava XML;
+// nov dokaz do katalog.csv (WEB_svetila_si / MAGENTO_PRODUCTS) je posebna naloga na tabli.
+Equal(0, await ScalarAsync<int>(connection, "SELECT COUNT(*) FROM val.ValidationProfile WHERE ProfileCode=N'WEB_B2C';"),
+  "Profil WEB_B2C spet obstaja - vrni v test dokaz validacija -> pim -> CSV.");
 
 var definition = await ScalarAsync<string>(connection, "SELECT OBJECT_DEFINITION(OBJECT_ID(N'map.ProcessRawInbox'));");
 if (definition.Contains(".nodes(", StringComparison.OrdinalIgnoreCase)
@@ -124,7 +129,7 @@ foreach (var step in MappingProcedures.All)
     $"Postopek {step.ProcedureName} za svet {step.TargetDomain} v bazi ne obstaja.");
 }
 
-Console.WriteLine("F5 integration: EAN enrichment category/media/attribute, B2C validation, pim in CSV PASS.");
+Console.WriteLine("F5 integration: EAN enrichment category/media/attribute, review remediation in register postopkov PASS.");
 await CleanupAsync(connection);
 return 0;
 
@@ -170,6 +175,12 @@ async Task CleanupAsync(SqlConnection sqlConnection)
       SELECT inbox.InboxId FROM raw.Inbox inbox
       INNER JOIN ops.PipelineRun run ON run.RunId=inbox.RunId WHERE run.Pipeline=N'F5_INTEGRATION'
     );
+    /* Migracija 219: kandidati za nove artikle dobavitelja kazejo na raw.Inbox (FK_SupplierProductCandidate_Inbox),
+       zato jih je treba pobrisati pred inboxom, sicer ciscenje pade s SQL 547 (naloga #56). */
+    IF OBJECT_ID(N'map.SupplierProductCandidate', N'U') IS NOT NULL
+      DELETE candidate FROM map.SupplierProductCandidate candidate
+      INNER JOIN raw.Inbox inbox ON inbox.InboxId=candidate.InboxId
+      INNER JOIN ops.PipelineRun run ON run.RunId=inbox.RunId WHERE run.Pipeline=N'F5_INTEGRATION';
     DELETE inbox FROM raw.Inbox inbox
     INNER JOIN ops.PipelineRun run ON run.RunId=inbox.RunId WHERE run.Pipeline=N'F5_INTEGRATION';
     DELETE FROM ops.PipelineRun WHERE Pipeline=N'F5_INTEGRATION';
@@ -364,7 +375,10 @@ async Task<string> ProductValueAsync(SqlConnection sqlConnection, string table, 
 }
 static SqlCommand Command(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
 {
-  var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+  // 600 s namesto 120 s: ob vzporednih vratih PIM.ChangeTracking.Integration drugih nalog brise
+  // pim.ProductFieldHistory z zaklepi strani in nase ciscenje/branje je zato cakalo dlje od 120 s
+  // (naloga #56, izmerjeno s sys.dm_exec_requests: LCK_M_* za DELETE v ChangeTracking testu).
+  var command = new SqlCommand(sql, connection) { CommandTimeout = 600 };
   foreach (var parameter in parameters) command.Parameters.AddWithValue(parameter.Name, parameter.Value);
   return command;
 }
