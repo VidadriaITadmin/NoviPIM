@@ -2557,3 +2557,15 @@ Sprožilca `canon.TR_ProductAttribute_FieldHistory` in `canon.TR_ProductText_Fie
 - Ni spremenjeno: sprožilci `canon.TR_Product_FieldHistory`, `canon.TR_ProductCommercial_FieldHistory` (polja iz SAOP, bere jih tudi pogled zadržanih sprememb za SAOP, 311) in `canon.TR_ProductMedia_FieldHistory` imajo enak vzorec — ločena naloga. Stara zgodovina se ne dopolnjuje.
 
 **Objekti:** `canon.TR_ProductAttribute_FieldHistory`, `canon.TR_ProductText_FieldHistory` (ALTER). **Podatki:** nič. **Vpliv:** pri množičnih menjavah samo velikosti črk (poenotenje vrednosti, uvoz) več vrstic v `pim.ProductFieldHistory`. **SAOP:** nič. **Ročni korak:** ne. **Povratek:** ponovno izvedi definiciji sprožilcev iz 034. **PRD:** neodvisno od intraneta.
+
+## Shranjevanje loči velike/male črke (migracija 326_ShranjevanjeVelikeMaleCrke, 2026-09-30, naloga #115)
+
+Po 323 sta sprožilca zgodovine ločila velike/male črke, a kartica izdelka spremembe »max 25 W« → »Max 25 W« sploh ni zapisala: shranjevalne procedure imajo v `MERGE` pogoj `WHEN MATCHED AND ISNULL(target.Value, N'') <> source.Value` v kolaciji baze (CI), zato vrstice niso posodobile (gumb je pokazal (1), v bazi je ostala stara vrednost, zgodovine ni bilo).
+
+- V **živi** definiciji procedur `pim.SaveProductAttributes`, `pim.SaveProductTexts`, `pim.SaveProductAttributesBulk`, `pim.SaveProductTextsBulk` in `pim.SaveProductErpFieldsBulk` (2× MERGE) obe strani pogoja dobita `COLLATE Latin1_General_BIN2` (oznaka `/* 326 */`).
+- V `pim.SaveProductAttributes` in `pim.SaveProductTexts` enako preverjanje sočasne spremembe (`ISNULL(current_.Value) <> ISNULL(change.Expected)`): sprememba samo velikosti črk pri drugem uporabniku je zdaj spor, ne tiho prepisovanje.
+- Sidra morajo biti v vsaki proceduri natanko pričakovano število krat (sicer 53262/53263, drift); ponovni zagon ne naredi nič. Presledek na koncu se še vedno ne šteje kot sprememba.
+- DEV (po uveljavitvi, transakcija z ROLLBACK): `pim.SaveProductAttributes` na izdelku 546 »max 25 W« → »Max 25 W« zapiše vrednost in 1 vrstico v `pim.ProductFieldHistory`; nato `expected` »max 25 W« ob vrednosti »Max 25 W« vrne 1 spor.
+- Ni spremenjeno: `map.ProcessRawInbox` (zajem dobaviteljev), `out.RecordExportPublication` (sled objav). Razveljavitev (`pim.UndoProductField`/`UndoProductBatch`) atributov in besedil ne podpira, zato tam ni kaj popraviti.
+
+**Objekti:** 5 zgornjih procedur (ALTER). **Podatki:** nič. **Vpliv:** sprememba samo velikosti črk gre v bazo, zgodovino, validacijo in ob izvozu v `katalog.csv`; pri SAOP stolpcih delovnega lista v vrsto za SAOP kot vsaka ročna sprememba (nič samodejno). **Ročni korak:** ne. **Povratek:** odstrani `COLLATE Latin1_General_BIN2 ... /* 326 */` iz pogojev. **PRD:** neodvisno od intraneta.
