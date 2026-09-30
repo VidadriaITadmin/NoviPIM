@@ -134,9 +134,16 @@ foreach (var element in new[] { "ItemTitle1", "ItemGroup", "SupplierID", "ItemEA
   Assert(labels.Contains("[\"" + element + "\"]", StringComparison.Ordinal), "Manjka slovenska oznaka za element " + element + ".");
 
 // --- 12. Stran je dosegljiva iz razdelilne strani SAOP --------------------
+// Razdelilna stran /saop povezave ne pise vec sama, ampak jih prikaze prek zavihkov
+// (PimTabs + SaopTabs.Tabs v Components/Shared/PimTab.cs). Preverimo celo pot: stran
+// uporablja zavihke SAOP in med zavihki je vnos artiklov.
 var saopPage = File.ReadAllText(Path.Combine(pages, "Saop.razor"));
-Assert(saopPage.Contains("saop/artikli", StringComparison.Ordinal),
-  "Do vnosa artiklov mora biti mogoce priti z razdelilne strani SAOP.");
+var tabsSource = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimTab.cs"));
+var saopTabsStart = tabsSource.IndexOf("class SaopTabs", StringComparison.Ordinal);
+var saopTabsBlock = saopTabsStart < 0 ? "" : tabsSource[saopTabsStart..tabsSource.IndexOf("];", saopTabsStart, StringComparison.Ordinal)];
+Assert(saopPage.Contains("saop/artikli", StringComparison.Ordinal)
+  || (Regex.IsMatch(saopPage, @"<PimTabs[^>]*Tabs=""SaopTabs\.Tabs""") && saopTabsBlock.Contains("\"saop/artikli\"", StringComparison.Ordinal)),
+  "Do vnosa artiklov mora biti mogoce priti z razdelilne strani SAOP (povezava ali zavihek SaopTabs).");
 
 // --- 13. Voden in razumljiv delovni potek ---------------------------------
 Assert(markup.Contains("aria-label=\"Napredek priprave za SAOP\"", StringComparison.Ordinal),

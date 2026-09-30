@@ -400,7 +400,7 @@ public sealed class AnalyticsService(IConfiguration configuration, PimWriteGuard
     WorkbookColumn Date(string header, string? group = null) => new(header, WorkbookCellKind.DateTime, 12, group);
     IReadOnlyList<WorkbookColumn> columns =
     [
-      Text("Šifra", 16, "Artikel"), Text("Naziv", 40, "Artikel"), Text("EAN", 15, "Artikel"), Text("Dobavitelj", 12, "Artikel"),
+      Text("Šifra", 16, "Artikel"), Text("Naziv (ERP, sicer spletni)", 40, "Artikel"), Text("EAN", 15, "Artikel"), Text("Dobavitelj", 12, "Artikel"),
       Text("Ime dobavitelja", 28, "Artikel"), Text("ABC"), Text("XYZ"), Text("Signal", 14),
       Number("Zaloga", 10, "Zaloga"), Number("Razpoložljivo", 12, "Zaloga"), Number("Naročeno pri dobaviteljih", 14, "Zaloga"), Date("Naslednja dobava", "Zaloga"),
       Number("Nabavna cena", 12, "Zaloga"), Number("Vrednost zaloge", 14, "Zaloga"),

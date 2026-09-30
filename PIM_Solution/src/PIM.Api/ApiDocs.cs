@@ -132,6 +132,7 @@ public static class ApiDocs
     text.AppendLine("- Zaloga: `erpQuantity` = lastna trenutna zaloga v SAOP, `erpCustomerOrdered` = rezervirano za kupce, `erpAvailable` = razpoložljivo, `erpSupplierOrdered` = naročeno pri dobaviteljih, `supplierQuantity` = zaloga pri dobavitelju (Nowodvorski, Braytron), ne naša. `minimumStock`/`maximumStock` sta iz SAOP.");
     text.AppendLine("- Šifre dobaviteljev in proizvajalcev dobiš z `/api/v1/partners` (iskanje po imenu).");
     text.AppendLine("- Iskanje (`search`) ne loči šumnikov in velikih črk; več besed pomeni, da morajo biti najdene vse.");
+    text.AppendLine("- Kakovost podatkov: `validationStatus` in `completeness` v iskanju sta shranjeno stanje zadnje validacije in sta lahko zastarela (PENDING = še ni preverjeno, ne pomeni napake). Merodajen je nabor `validation` na kartici izdelka (`/api/v1/products/detail`); ko govoriš o napakah izdelka, se opri nanj.");
     text.AppendLine("- Za Excel dodaj `format=csv` (podpičje, decimalna vejica).");
     text.AppendLine("- Napaka 400 v `details` pove, kateri parameter je napačen in kateri so dovoljeni.");
     text.AppendLine();

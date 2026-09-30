@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using PIM.Intranet.Services;
+using PIM.Operations;
 using PIM.Outbound;
 
 // Pogodbeni test strani /cene (265): cene in ceniki gredo iz PIM v SAOP.
@@ -64,10 +65,10 @@ foreach (var contract in new[]
   "aria-label=\"Označi vse na tej strani\"",          // izbira strani
   "aria-label=\"Izberi izdelek @row.ItemId",            // kljukica na vrstici
   "Označi vse, ki ustrezajo filtru",                     // vse po filtru (filter, ne seznam ključev)
-  "Izbranih <strong>",                                   // število izbranih je vedno vidno
+  "Izbrano: <strong>@Izdelki(SelectedCount)</strong>",  // število izbranih je vedno vidno (#96: sklanjatev)
   "Workbook.PlanBulkAsync(change, AllMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
   "Predogled: cena prej in potem",                       // predogled prej/potem
-  "Uvrstiti <strong>@preview.Rows.Count.ToString(\"N0\") cen</strong>", // potrditev pove število
+  "Uvrstiti <strong>@CeneTozilnik(preview.Rows.Count)</strong>", // potrditev pove število (#96: »3 cene«, ne »3 cen«)
   "source: \"BULK\"",                                   // gre po poti uvoza v vrsto za SAOP
   "History.RecordAsync(ImportKinds.Prices",              // zgodovina za povratek na /uvozi
   "Authorization.AuthorizeAsync(user, PimPolicies.SaopWrite)", // samo urednik (SaopWrite); komerciala ne
@@ -75,6 +76,28 @@ foreach (var contract in new[]
   "new(\"Z DDV potem\", Numeric: true)",                  // predogled pokaže tudi ceno z DDV
 })
   Assert(markup.Contains(contract, StringComparison.Ordinal), "Paketna sprememba cen (#31) nima: " + contract);
+/* --- #96: sklanjatev, filtri v URL-ju, eno branje seznama ------------------------------------ */
+foreach (var (count, expected) in new[] { (1L, "1 cena"), (2L, "2 ceni"), (3L, "3 cene"), (5L, "5 cen"), (101L, "101 cena") })
+  Assert(PimFormat.Count(count, "cena", "ceni", "cene", "cen") == expected,
+    $"Sklanjatev cen: {count} -> {expected}");
+foreach (var wrong in new[] { "ToString(\"N0\") cen ", "ToString(\"N0\") cen<", ":N0} cen ", ":N0} cen\"", "Count.ToString(\"N0\") cenikov", "Odobrenih {approved" })
+  Assert(!markup.Contains(wrong, StringComparison.Ordinal), "Število brez sklanjatve na /cene (#96): " + wrong);
+Assert(markup.Contains("Uvrsti @CeneTozilnik(preview.Rows.Count) v vrsto za SAOP", StringComparison.Ordinal), "Gumb paketne spremembe mora sklanjati (»Uvrsti 3 cene«).");
+Assert(markup.Contains("{Cene(outcome.Queued)} {Oblika(outcome.Queued, \"čaka\", \"čakata\", \"čakajo\", \"čaka\")} odobritev", StringComparison.Ordinal),
+  "Sporočilo po paketni spremembi mora sklanjati (»3 cene čakajo odobritev«).");
+foreach (var parameter in new[] { "[\"izdelek\"] = Blank(Search)", "[\"podjetje\"] = OrganizationId", "[\"cenik\"] = Blank(PriceList)", "[\"cenikov\"]", "[\"vrsta\"]", "[\"zavihek\"]" })
+  Assert(markup.Contains(parameter, StringComparison.Ordinal), "Iskanje in filtri /cene morajo biti v URL-ju (#96): " + parameter);
+Assert(markup.Contains("async Task ApplyAsync() { Skip = 0; SyncUrl(); await LoadAsync(); }", StringComparison.Ordinal), "Iskanje (Enter) mora zapisati URL.");
+Assert(markup.Contains("protected override async Task OnParametersSetAsync()", StringComparison.Ordinal) && markup.Contains("ReadUrl();", StringComparison.Ordinal),
+  "»Nazaj« v brskalniku mora prebrati filter iz URL-ja.");
+Assert(markup.Contains("if (!RendererInfo.IsInteractive) { Loading = ListsLoading = BatchesLoading = true; return; }", StringComparison.Ordinal),
+  "Predupodabljanje ne sme brati cen (dvojno nalaganje, #96).");
+var priceService = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Services", "PriceService.cs"));
+var productsMethod = priceService[priceService.IndexOf("GetProductsAsync(", StringComparison.Ordinal)..priceService.IndexOf("GetProductLinesAsync(", StringComparison.Ordinal)];
+Assert(productsMethod.Contains("CREATE TABLE #grouped", StringComparison.Ordinal) && Regex.Matches(productsMethod, "FROM canon.ProductPrice AS price").Count == 1,
+  "Seznam cen mora cel canon.ProductPrice prebrati enkrat (začasna tabela za stran in število), ne dvakrat (#96).");
+Assert(productsMethod.Contains("COLLATE DATABASE_DEFAULT", StringComparison.Ordinal), "Začasna tabela s tekstom potrebuje COLLATE DATABASE_DEFAULT.");
+
 Assert(!markup.Contains("canon.ProductPrice SET", StringComparison.OrdinalIgnoreCase), "Paketna sprememba ne sme pisati v canon.ProductPrice.");
 
 var percent = new PriceBulkChange("B2C", true, 5m, null);
@@ -84,6 +107,22 @@ Assert(PriceWorkbookService.NewNet(12.345m, new PriceBulkChange("B2C", false, 12
 Assert(PriceWorkbookService.BulkTitle(percent).Contains("B2C", StringComparison.Ordinal) && PriceWorkbookService.BulkTitle(percent).Contains("+5 %", StringComparison.Ordinal),
   "Opis serije mora povedati cenik in odstotek: " + PriceWorkbookService.BulkTitle(percent));
 
+// #62: Excel cen loči spletni naziv in naziv iz SAOP; gol »Naziv« iz starih datotek se pri uvozu prezre kot »samo za branje«.
+var priceHeaders = PriceWorkbookService.Columns.Select(column => column.Header).ToArray();
+Assert(priceHeaders.Contains("Spletni naziv (sl)") && priceHeaders.Contains("Naziv ERP (sl)"),
+  "Izvoz cen mora imeti ločena stolpca »Spletni naziv (sl)« in »Naziv ERP (sl)«.");
+Assert(!priceHeaders.Contains("Naziv"), "Izvoz cen ne sme imeti golega stolpca »Naziv« (ne pove, ali je spletni ali ERP).");
+Assert(PriceWorkbookService.Columns.Where(column => column.Header.Contains("naziv", StringComparison.OrdinalIgnoreCase) && column.Header != "Naziv cenika").All(column => !column.Editable),
+  "Nazivi v izvozu cen so samo za branje — uvoz cen jih ne sme zapisati.");
+var titleProbe = new PriceLine(1, "Org", 1, "X", "Spletni", null, "B2C", null, 1m, 22m, null, true, null, null, null, null, true) { WebTitle = null, ErpTitle = "ERP naziv" };
+using (var probe = new MemoryStream(PriceWorkbookService.Build([titleProbe])))
+{
+  var probeSheet = WorkbookTable.Read(probe, headerHints: ["Šifra artikla", "Cenik"]);
+  var webAt = probeSheet.Headers.ToList().IndexOf("Spletni naziv (sl)");
+  var erpAt = probeSheet.Headers.ToList().IndexOf("Naziv ERP (sl)");
+  Assert(webAt >= 0 && erpAt >= 0 && string.IsNullOrEmpty(probeSheet.Rows[0][webAt]) && probeSheet.Rows[0][erpAt] == "ERP naziv",
+    "Artikel brez spletnega naziva: »Spletni naziv (sl)« prazen, »Naziv ERP (sl)« = naziv iz SAOP (ne zamenjan s spletnim).");
+}
 Console.WriteLine("F10 prices UX contract PASS.");
 
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);
