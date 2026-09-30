@@ -30,7 +30,7 @@ Izvozni profil (register stolpcev) določa, kateri stolpci, v katerem vrstnem re
 
 ## 3. Kdaj se sproži
 
-- **Ročno:** uporabnik na `/splet/izvoz` (povezava »Predogled trenutnih podatkov PIM« na `/splet`) ali na `/izvozi/profili/{Id}`.
+- **Ročno:** uporabnik na `/splet/izvoz` (zavihek **Predogled izvoza** na vseh straneh izhoda na splet in povezava »Predogled trenutnih podatkov PIM« na `/splet`) ali na `/izvozi/profili/{Id}`.
 - **Po urniku:** `WEB_STOCK_EXPORT` (profil `MAGENTO_STOCK_PRICES`, datoteka `magento-stock-prices.csv` za vsako podjetje) — od migracije 272 **privzeto izklopljen**.
 - **Ob dogodku:** ni (če bi bil `WEB_STOCK_EXPORT` vklopljen, ga sproži uspešen zajem zaloge iz SAOP).
 
@@ -80,7 +80,7 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | Urednik / komerciala | `/splet/izvoz` | V »Izvozni profil« izbereš profil (npr. katalog ali stranke). | Ponujeni so samo aktivni profili, ki jih zna sestaviti izvoz na zahtevo, brez SAOP/ERP kanalov. Podjetje je vedno 2. | — |
 | 2 | Urednik / komerciala | `/splet/izvoz` | Pri profilu izdelkov izbereš »Spletno mesto«, vpišeš iskanje (šifra, EAN, naziv) in pustiš ali odkljukaš »Samo objavljeni«. Pri strankah sta spletno mesto in objava onemogočena. | — | — |
-| 3 | Urednik / komerciala | `/splet/izvoz` | Klikneš **Prikaži**. | Sestavi se prvih 200 vrstic trenutnega stanja. | Tabela »Prvih 200 vrstic spletnega izvoza« in povzetek »v datoteki bo N vrstic«. |
+| 3 | Urednik / komerciala | `/splet/izvoz` | Klikneš **Prikaži** (ali Enter v iskanju); **Počisti filtre** vrne privzete. | Filtri gredo v naslov (`?profil=…&spletisce=…&isci=…&objavljeni=false`), zato povezavo lahko deliš, osvežitev in »nazaj« pa obdržita izbor in predogled. Sestavi se prvih 200 vrstic trenutnega stanja podjetja kataloga (IQ Lighting, napisano v podnaslovu). | Tabela »Prvih N od M vrstic spletnega izvoza« in povzetek »v datoteki bo 2 vrstici« (sklanjano). |
 | 4 | Urednik / komerciala | `/splet/izvoz` | Klikneš **Prenesi CSV**. | Prenos cele datoteke po istih filtrih, z ločilom profila (`;` za katalog in stranke) in decimalno vejico pri cenah; zapis v zgodovino izvozov. | Datoteka v mapi Prenosi; na `/splet` v zgodovini vrsta »Prenos iz baze«. |
 | 5 | Urednik / skrbnik | `/izvozi/profili/{Id}` | Odpreš profil po številki (URL). | Stran pokaže stolpce: vrstni red, koda, izhodno ime, kanonično polje (ali »Ni preslikano«), obvezen/neobvezen, aktiven; spodaj predogled prvih 20 vrstic za izbrano podjetje. | Število vrstic celotne datoteke v napisu predogleda. |
 | 6 | Skrbnik | `/sistem/posel/WEB_STOCK_EXPORT` | Po potrebi vklopi posel cen in zaloge. | Za vsako podjetje nastane `magento-stock-prices.csv` v podmapi `EXPORT_ROOT`. | Faza DATOTEKA na strani posla. |
