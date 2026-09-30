@@ -38,7 +38,7 @@
 
 <section class="ui-card data-card" aria-label="Dobavitelji">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows is not null && Rows.Count == 0)" LoadingText="Nalaganje dobaviteljev …"
-            EmptyText="@(string.IsNullOrEmpty(QSearch) ? "Analitika dobaviteljev še ni preračunana ali pa noben dobavitelj nima prometa ali zaloge." : "Noben dobavitelj ne ustreza iskanju.")">
+            EmptyText="@EmptyText">
     @if (Rows is { Count: > 0 })
     {
       <div class="table-scroll">
@@ -124,6 +124,7 @@
   int Skip;
   bool Loading = true, Descending = true, ShowAll;
   string? Error;
+  string? OrganizationName;
   string SearchText = "", SortText = "promet";
 
   protected override async Task OnParametersSetAsync()
@@ -139,6 +140,7 @@
     {
       var organization = await Data.GetCurrentOrganizationAsync();
       if (organization is null) { Error = "Aktivno podjetje ni na voljo. Izberi podjetje v glavi strani."; return; }
+      OrganizationName = organization.Name;
       (Rows, Total) = await Analytics.GetSuppliersAsync(organization.OrganizationId, QSearch, SortText, Descending, Skip, Take, !ShowAll);
     }
     catch (Exception exception)
@@ -150,6 +152,11 @@
       Loading = false;
     }
   }
+
+  // 120: prazno stanje pove, za katero podjetje ni podatkov — preklop podjetja se tako vidi tudi, ko sta obe prazni.
+  string EmptyText => string.IsNullOrEmpty(QSearch)
+    ? $"Za podjetje {OrganizationName} analitika dobaviteljev še ni preračunana ali pa noben dobavitelj nima prometa ali zaloge. Stanje zajema iz SAOP je na zavihku Pregled."
+    : $"V podjetju {OrganizationName} noben dobavitelj ne ustreza iskanju.";
 
   string Query(int page = 1)
   {

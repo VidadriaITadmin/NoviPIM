@@ -24,6 +24,13 @@ foreach (var method in new[] { "RequestRunAsync(", "RequestCancelAsync(", "SetJo
   var body = service.Substring(at, service.IndexOf('{', at) + 60 - at);
   Assert(body.Contains("await RequireAdminAsync();", StringComparison.Ordinal), "metoda ne kliče RequireAdminAsync na začetku: " + method);
 }
+// Naloga #69: umik oddane zahteve za zagon je upravljalno dejanje kot zagon — enaka zapora na testnem intranetu.
+{
+  var at = service.IndexOf("public async Task<DateTime?> CancelRunRequestAsync(", StringComparison.Ordinal);
+  Assert(at > 0, "upravljalna metoda manjka: CancelRunRequestAsync(");
+  var body = service.Substring(at, service.IndexOf('{', at) + 60 - at);
+  Assert(body.Contains("await RequireAdminAsync();", StringComparison.Ordinal), "metoda ne kliče RequireAdminAsync na začetku: CancelRunRequestAsync(");
+}
 // Naloga #73: potrditev varovalk v bazi odda zahtevo za zagon izvoza (ops.RequestJobRun) oz. spusti SAOP sporočila;
 // na testnem intranetu mora biti zavrnjena v servisu PRED klicem baze, stran pa pokaže sporočilo zapore.
 var safeguards = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Services/SafeguardService.cs"));
@@ -41,6 +48,11 @@ foreach (var (method, procedure) in new[] { ("ApproveAsync(", "ops.ApproveSafegu
 }
 var safeguardPage = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Pages/SafeguardReview.razor"));
 Assert(safeguardPage.Contains("SafeguardService.TestIntranetMessage", StringComparison.Ordinal), "/varovalke/{id} ne pokaže sporočila zapore testnega intraneta");
+// Naloga #117: pasica zadržanih SAOP sprememb (/cene, /saop/...) na testnem intranetu ne sme trditi, da vloga ne dovoljuje.
+var banner = File.ReadAllText(Path.Combine(root, "src/PIM.Intranet/Components/Shared/SaopSafeguardBanner.razor"));
+var bannerTest = banner.IndexOf("when (exception.Message == SafeguardService.TestIntranetMessage)", StringComparison.Ordinal);
+var bannerRole = banner.IndexOf("catch (UnauthorizedAccessException) {", StringComparison.Ordinal);
+Assert(bannerTest > 0 && bannerRole > bannerTest, "pasica SAOP varovalk ne pokaže sporočila zapore testnega intraneta pred sporočilom o vlogi");
 var klikalnik = File.ReadAllText(Path.Combine(root, "tools/PIM.Klikalnik/Program.cs"));
 Assert(klikalnik.Contains("MonitorService.TestIntranetWithoutJobsKey] = \"true\"", StringComparison.Ordinal), "testni intranet ne izklopi poslov");
 foreach (var settings in Directory.GetFiles(Path.Combine(root, "src/PIM.Intranet"), "appsettings*.json"))

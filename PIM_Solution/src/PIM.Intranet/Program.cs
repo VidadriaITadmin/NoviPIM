@@ -739,9 +739,11 @@ app.MapGet("/izvoz/splet-na-zahtevo", async (
   if (profile is null) return Results.BadRequest("Profil in njegova koda se ne ujemata ali profil ni aktiven.");
   // "ime" pride iz /splet za stalni par katalog.csv/stranke.csv; brez njega (npr. splet/izvoz
   // z izbranim poljubnim profilom) ostane privzeto, casovno zigosano ime.
+  // #92: čas v imenu datoteke je v naši uri (kot ura na računalniku), ne UTC.
+  var localNow = PimTime.Local(DateTime.UtcNow);
   var fileName = Optional("ime") is { } requestedFileName
-    ? WebExportBuildService.SafeFileName(requestedFileName, profileCode, DateTime.UtcNow)
-    : WebExportBuildService.FileName(profileCode, DateTime.UtcNow);
+    ? WebExportBuildService.SafeFileName(requestedFileName, profileCode, localNow)
+    : WebExportBuildService.FileName(profileCode, localNow);
   context.Response.ContentType = "text/csv; charset=utf-8";
   context.Response.Headers.ContentDisposition =
     $"attachment; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
