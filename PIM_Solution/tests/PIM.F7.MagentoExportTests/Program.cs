@@ -375,6 +375,16 @@ long? seededCustomerId = null;
 var exportDirectory = Path.Combine(Path.GetTempPath(), "f7-magento-db-" + Guid.NewGuid().ToString("N"));
 var registryExportDirectory = Path.Combine(Path.GetTempPath(), "f7-cenik-" + Guid.NewGuid().ToString("N"));
 
+// Vsak izvoz (tudi namerno neuspel) zapise vrstico v out.ExportRun. To so najnovejse izdelave
+// podjetja 2, zato bi /splet po testu pokazal rdeco "Zadnja izdelava katalog.csv ni uspela"
+// (naloga #71). ExportRunLog zapise Actor iz PIM_ACTOR, zato test dobi svoj enkratni Actor in
+// v finally pobrise samo svoje vrstice; pravi izvozi (urnik, uporabnik) ostanejo. Nastavi se
+// PRED try, da se pobrise tudi, ce test pade sredi poti.
+var previousActor = Environment.GetEnvironmentVariable("PIM_ACTOR");
+var testActor = "f7-test-" + Guid.NewGuid().ToString("N");
+Environment.SetEnvironmentVariable("PIM_ACTOR", testActor);
+Exception? exportRunCleanupError = null;
+
 // try se zacne PRED prvim vstavljanjem. Ce bi se zacel sele po sajenju, bi neuspeh
 // vmesnega koraka (krsitev omejitve, manjkajoc privzeti prag) pustil testne vrstice
 // v skupni razvojni bazi - finally se v tem primeru sploh ne bi izvedel.
@@ -932,6 +942,25 @@ try
 }
 finally
 {
+  // Najprej izdelave tega testa (naloga #71), z lastno povezavo: glavna je lahko po padcu
+  // pokvarjena, ostalo ciscenje pa lahko vrze in tega ne bi vec dosegli. Brise samo
+  // Actor = testActor (enkraten GUID), nikoli tujih izvozov.
+  Environment.SetEnvironmentVariable("PIM_ACTOR", previousActor);
+  try
+  {
+    await using var runCleanupConnection = new SqlConnection(connectionString);
+    await runCleanupConnection.OpenAsync();
+    await using var cleanupRuns = new SqlCommand("DELETE FROM out.ExportRun WHERE Actor = @Actor;", runCleanupConnection);
+    cleanupRuns.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = testActor;
+    var removedRuns = await cleanupRuns.ExecuteNonQueryAsync();
+    Console.WriteLine($"F7: pobrisanih {removedRuns} testnih izdelav iz out.ExportRun (Actor {testActor}).");
+  }
+  catch (Exception ex)
+  {
+    exportRunCleanupError = ex;
+    Console.Error.WriteLine($"F7: testnih izdelav v out.ExportRun ni bilo mogoce pobrisati (Actor {testActor}): {ex.Message}");
+  }
+
   if (videlektroFlagSuspended)
   {
     await using var restore = new SqlCommand(
@@ -1017,6 +1046,17 @@ finally
 
   if (Directory.Exists(exportDirectory)) Directory.Delete(exportDirectory, true);
   if (Directory.Exists(registryExportDirectory)) Directory.Delete(registryExportDirectory, true);
+}
+
+// Test je sicer uspel, a je pustil izdelave v skupni bazi: to je napaka (naloga #71).
+if (exportRunCleanupError is not null)
+  throw new InvalidOperationException("F7 je pustil testne izdelave v out.ExportRun.", exportRunCleanupError);
+
+// Dokaz: po ciscenju ni nobene vrstice tega testa.
+await using (var leftover = new SqlCommand("SELECT COUNT(*) FROM out.ExportRun WHERE Actor = @Actor;", connection))
+{
+  leftover.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = testActor;
+  Equal(0, (int)(await leftover.ExecuteScalarAsync())!, "F7 ne sme pustiti svojih izdelav v out.ExportRun");
 }
 
 Console.WriteLine("F7 Magento export: pogodba, shema, vloga glavne slike, LF/UTF8 brez BOM, escape in izvoz proti bazi PASS.");
