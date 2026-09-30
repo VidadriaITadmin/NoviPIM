@@ -1,0 +1,13 @@
+.not-found { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem; }
+.not-found p { margin: 0; }
+
+.not-found-path { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.not-found-path span { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pim-text-muted); }
+.not-found-path code { overflow-wrap: anywhere; }
+
+.not-found-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.not-found-actions a { text-decoration: none; }
+
+/* Gumba sta povezavi, zato jima je treba vrniti obliko gumba (globalni razred stavi na <button>). */
+.not-found-actions .primary-button,
+.not-found-actions .secondary-button { display: inline-flex; align-items: center; }
