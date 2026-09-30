@@ -12,3 +12,6 @@
 .restore-bar { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 .75rem; }
 .restore-confirm { align-items: center; display: inline-flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
 .muted { color: var(--pim-text-muted); font-size: .8125rem; }
+/* #25: oznaka nad poljem kot na ostalih straneh izhoda na splet (prej ob polju, v velikosti naslova). */
+.field-control { color: var(--pim-text-soft); display: flex; flex-direction: column; font-size: .72rem; font-weight: 600; gap: .25rem; }
+.filter-bar { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0; }

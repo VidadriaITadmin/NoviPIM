@@ -92,7 +92,6 @@ DREVESNA STRUKTURA
    │  ├─ /sistem/sled                          Sled sprememb
    │  ├─ /sistem/izvozi                        Zagoni izvozov
    │  ├─ /sistem/zmogljivost                   Zmogljivost
-   │  ├─ /sistem/samotest                      Nočni samotest
    │  └─ /sistem/napake                        Sistemske napake
    └─ /administracija                          Sistemske zadeve
       ├─ /administracija/uporabniki            Uporabniki
@@ -519,11 +518,6 @@ in ali je dostava uspela.
 /sistem/zmogljivost – Zmogljivost postopkov
 Dostop: samo ADMIN; view.system.performance. Storitev: AdminConsoleService. Vsebuje
 trajanja, količine, trende in ozka grla postopkov. Omogoča prepoznavo počasnih procesov.
-
-/sistem/samotest – Nočni samotest
-Dostop: samo ADMIN; view.system.self-test. Storitev: AdminConsoleService. Vsebuje izid
-nočnega samotesta, korake, opozorila in napake. Omogoča pregled zdravja sistema in po
-pravicah ponovni zagon dovoljenih korakov.
 
 /sistem/napake – Sistemske napake
 Dostop: samo ADMIN; view.system.errors. Storitev: GovernanceReadService. Vsebuje tehnični

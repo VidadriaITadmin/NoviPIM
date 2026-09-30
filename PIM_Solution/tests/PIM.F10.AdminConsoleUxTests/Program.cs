@@ -63,7 +63,7 @@ Assert(!Read(Path.Combine(root, "PIM.sln")).Contains("PIM.F10.SystemIntegrations
 // Nobena stran, storitev ali skript v intranetu ne sme voditi na odstranjeno pot (prazna stran 404).
 // Iščemo naslov v narekovajih (href, niz v kodi, $"…"), ne omembe v komentarju. Velja tudi za postavitev
 // (povezava »Odpri vsa obvestila« v zvoncu vodi na /sistem).
-var odstranjenePoti = new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem?pogled=" };
+var odstranjenePoti = new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem/samotest", "sistem?pogled=" };
 foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.*", SearchOption.AllDirectories))
 {
   if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)

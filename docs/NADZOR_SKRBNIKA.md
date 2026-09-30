@@ -17,7 +17,7 @@ celoti:
 |---|---|---|
 | Sled uporabnika čez vse | zgodovina je obstajala samo za polja izdelkov; kdo je izklopil urnik ali odobril sporočilo, je bilo v `UpdatedBy`/`ApprovedBy` in nikjer skupaj | `/sistem/sled` |
 | Izvozi | `out.ExportProfile` pove, kakšna naj bi datoteka bila, ne pa ali je nastala, koliko vrstic je imela in kako dolgo je trajalo | `/sistem/izvozi` |
-| Ali celota dela | vsak kos je imel svoj zeleni test, celota nobenega | `/sistem/samotest` |
+| Ali celota dela | vsak kos je imel svoj zeleni test, celota nobenega | nočni samotest (`ops.SelfTestRun`, padel se šteje v zvonec) |
 
 ---
 
@@ -31,7 +31,6 @@ Vse so odprte **samo vlogi `ADMIN`** in vse kažejo čas v naši uri, ne v UTC.
 | `/sistem/sled` | Kdo je kaj spremenil, kdaj (na sekundo) in iz katere vrednosti v katero. Filtri: obdobje in iskanje po uporabniku, ključu ali opisu. Stolpec **Vir** pove, iz katere tabele vrstica prihaja. |
 | `/sistem/izvozi` | Zagoni izvozov: profil, podjetje, izid, vrstice, stolpci, velikost, trajanje, sprožilec in SHA-256 datoteke. |
 | `/sistem/zmogljivost` | Na postopek: zagoni, uspešnost, povprečno in najdaljše trajanje, razmik iz urnika. Postopek, ki traja dlje od svojega razmika, je označen — takrat se zagoni lovijo sami s seboj. |
-| `/sistem/samotest` | Zgodovina nočnih samotestov: izid, koliko korakov je uspelo in koliko časa je zagon potreboval. |
 
 Obstoječe podstrani (`/sistem/urniki`, `/sistem/integracije`, `/sistem/uporabniki`,
 `/sistem/vloge`, `/sistem/napake`) so nespremenjene in dosegljive z razdelilnega dela plošče.
@@ -245,7 +244,7 @@ je prazen in zagona ni bilo nikoli.
 | Obvestilo izven aplikacije | zvonec vidi samo, kdor je prijavljen; ponoči ni nikogar | `ops.AlertRecipientConfig` in `PIM.AlertDispatcher` že obstajata za e-pošto in webhook — manjkata SMTP nastavitev in odločitev, kateri alarmi grejo ven |
 | Dostava izvoza | `out.ExportRun` dokazuje, da je datoteka nastala, ne da jo je Magento prevzel | dodati `DeliveredUtc` in potrditev prevzema, ko bo dostava zaprta |
 | E2E enega artikla | samotest dokaže, da vsak člen dela; ne dokaže, da isti artikel preide celo verigo | `docs/E2E_EN_ARTIKEL.md` je načrt; potrebuje izolirano testno organizacijo in fixture konektor |
-| Zgodovina meritev | trajanja se hranijo, trend pa se ne riše | graf trajanja po korakih na `/sistem/samotest` |
+| Zgodovina meritev | trajanja se hranijo, trend pa se ne riše | stran `/sistem/samotest` je odstranjena (2026-09-29); trajanja so v `ops.SelfTestStep` |
 | Živi SAOP write-back | samotest ga namenoma ne izvede | ostaja ročni korak z odobritvijo |
 | Pregled po uporabniku | sled se filtrira po iskanju, ne po izbiri uporabnika iz seznama | spustni seznam akterjev na `/sistem/sled` |
 | Nočna opravila na strežniku | vsa tri današnja opravila so `InteractiveToken` (»Run only when user is logged on«); na strežniku z IIS, kjer ni prijavljenega uporabnika, se **ne bi zagnala nikoli** in tega ne bi javila — konzola bi to pokazala kot »vse molči« | `docs/NACRT_RAZPOREJEVALNIK.md` (`PIM.Scheduler` kot Windows storitev); do takrat je konzola edini način, da se to sploh opazi |

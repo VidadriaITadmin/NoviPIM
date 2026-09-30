@@ -160,6 +160,21 @@ public sealed class SupplierXmlChangesTests
   {
     await using var connection = new SqlConnection(LocalSettings.ConnectionString()!);
     await connection.OpenAsync();
+    // Dva hkratna zagona (vrata dveh nalog) bi vstavila kandidata za ISTI zadnji zapis zajema in
+    // cakala drug na drugega (#43), zato primer tece pod skupnim zaklepom projekta.
+    await IntegrationDbLock.AcquireAsync(connection);
+    try
+    {
+      await CategoryPredictionUnderLockAsync(connection);
+    }
+    finally
+    {
+      await IntegrationDbLock.ReleaseAsync(connection);
+    }
+  }
+
+  static async Task CategoryPredictionUnderLockAsync(SqlConnection connection)
+  {
     await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
     try
     {

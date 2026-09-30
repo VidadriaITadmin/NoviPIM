@@ -144,7 +144,7 @@ pišejo dnevnik in vrnejo izhodno kodo. Uporabnik jih lahko požene tudi ročno.
 | `Namesti-opravila.ps1` | registrira/odstrani tri načrtovane naloge Windows (požene človek) |
 | `Namesti-nocno-opravilo.ps1` | starejša samostojna registracija samo nočnega toka (presežena z `Namesti-opravila.ps1`) |
 | `Nocni-zajem.ps1` | predhodnik nočnega toka (samo SAOP zajem); presežen z `Nocno-vse.ps1` |
-| `run_tests.ps1` | edini merodajni testni zagon (build + vsi konzolni testni projekti + xUnit) |
+| `run_tests.ps1` | edini merodajni testni zagon (build + konzolni testni projekti + xUnit); `-Filter` velja tudi za xUnit: naloga, ki se dotika `pim.ProductFieldHistory` ali razveljavitve (`pim.UndoProductField`, `pim.UndoProductBatch`), mora imeti med testi `ChangeTracking` |
 
 ### 3.4 Orodja (`tools\`)
 
