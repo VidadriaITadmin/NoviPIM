@@ -62,11 +62,11 @@ Assert(PriceQuery.FromQuery(name => query.ToQueryString().Split('&').Select(part
 /* --- C6 (#31): paketna sprememba cen ------------------------------------------------------- */
 foreach (var contract in new[]
 {
-  "aria-label=\"Označi vse na tej strani\"",          // izbira strani
   "aria-label=\"Izberi izdelek @row.ItemId",            // kljukica na vrstici
-  "Označi vse, ki ustrezajo filtru",                     // vse po filtru (filter, ne seznam ključev)
-  "Izbranih <strong>",                                   // število izbranih je vedno vidno
-  "Workbook.PlanBulkAsync(change, AllMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
+  "<PimBulkBar Count=\"Selection.Count\"",              // #39: skupna vrstica izbire (izbira strani, vse po filtru, število)
+  "PimRowSelection<PriceBulkKey> Selection",             // #39: skupni model izbire, ključ org|šifra
+  "Selection.UpdateFilter(signature, Total)",            // sprememba filtra sprosti »vse po filtru«
+  "Workbook.PlanBulkAsync(change, allMatching ? Query : null", // vse po filtru bere strežnik po filtru strani
   "Predogled: cena prej in potem",                       // predogled prej/potem
   "Uvrstiti <strong>@preview.Rows.Count.ToString(\"N0\") cen</strong>", // potrditev pove število
   "source: \"BULK\"",                                   // gre po poti uvoza v vrsto za SAOP
@@ -76,6 +76,14 @@ foreach (var contract in new[]
   "new(\"Z DDV potem\", Numeric: true)",                  // predogled pokaže tudi ceno z DDV
 })
   Assert(markup.Contains(contract, StringComparison.Ordinal), "Paketna sprememba cen (#31) nima: " + contract);
+Assert(!markup.Contains("price-bulk-bar", StringComparison.Ordinal) && !File.ReadAllText(Path.Combine(pages, "Prices.razor.css")).Contains("price-bulk-bar", StringComparison.Ordinal),
+  "#39: lokalna vrstica izbire (price-bulk-bar) mora biti zamenjana s skupnim PimBulkBar, brez mrtvega CSS.");
+Assert(Regex.IsMatch(markup, @"void ToggleRow\([^)]*\)\s*\{[^}]*ResetBulkPreview\(\)", RegexOptions.Singleline)
+  && Regex.IsMatch(markup, @"void ClearSelection\(\)\s*\{[^}]*BulkOpen = false;[^}]*ResetBulkPreview\(\)", RegexOptions.Singleline),
+  "#39: vsaka sprememba izbire mora umakniti predogled; počiščena izbira zapre panel.");
+var bulkBar = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Shared", "PimBulkBar.razor"));
+foreach (var contract in new[] { "aria-label=\"Označi vse na tej strani\"", "Označi vse, ki ustrezajo filtru", "Izbranih <strong>" })
+  Assert(bulkBar.Contains(contract, StringComparison.Ordinal), "PimBulkBar nima: " + contract);
 Assert(!markup.Contains("canon.ProductPrice SET", StringComparison.OrdinalIgnoreCase), "Paketna sprememba ne sme pisati v canon.ProductPrice.");
 
 var percent = new PriceBulkChange("B2C", true, 5m, null);

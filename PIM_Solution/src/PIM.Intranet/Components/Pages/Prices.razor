@@ -120,40 +120,19 @@
     </section>
   }
 
-  @* #31: paketna sprememba cen. Izbira ima tri načine (PIM_DOBRE_PRAKSE §9.3): ta stran, vse po filtru
-     (filter, ne seznam ključev — nabor prebere strežnik) in nič. Začasno lokalno; ko je združena #10,
-     jo zamenja skupni PimBulkBar/PimRowSelection (naloga #39). Samo za SaopWrite — servis to preveri še enkrat. *@
+  @* #31/#39: paketna sprememba cen. Izbira ima tri načine (PIM_DOBRE_PRAKSE §9.3): ta stran, vse po filtru
+     (filter, ne seznam ključev — nabor prebere strežnik) in nič; model je skupni PimRowSelection, vrstica
+     skupni PimBulkBar. Samo za SaopWrite — servis to preveri še enkrat. *@
   @if (CanBulk)
   {
-    <div class="price-bulk-bar @(SelectedCount > 0 ? "has-selection" : null)" role="region" aria-label="Izbira cen in paketna sprememba">
-      <label class="price-bulk-page">
-        <input type="checkbox" aria-label="Označi vse na tej strani" checked="@PageSelected" disabled="@(Rows.Count == 0)" @onchange="PageChanged" />
-        <span>Označi vse na strani</span>
-      </label>
-      @if (SelectedCount > 0)
-      {
-        <span class="price-bulk-count" role="status" aria-live="polite">
-          Izbranih <strong>@SelectedCount.ToString("N0")</strong> izdelkov@(AllMatching ? " — vsi, ki ustrezajo filtru" : "")
-        </span>
-        @if (!AllMatching && Total > SelectedCount)
-        {
-          <button type="button" class="small-action" @onclick="SelectAllMatching">Izberi vse, ki ustrezajo filtru (@Total.ToString("N0"))</button>
-        }
-        <span class="price-bulk-sep" aria-hidden="true"></span>
-        <button type="button" class="primary-button small" aria-expanded="@BulkOpen.ToString().ToLowerInvariant()" aria-controls="price-bulk-panel" @onclick="OpenBulk">Spremeni ceno …</button>
-        <button type="button" class="link-button price-bulk-clear" @onclick="ClearSelection">Počisti izbiro</button>
-      }
-      else
-      {
-        @if (Total > 0)
-        {
-          <button type="button" class="small-action" @onclick="SelectAllMatching">Označi vse, ki ustrezajo filtru (@Total.ToString("N0"))</button>
-        }
-        <span class="price-bulk-hint">Označi izdelke in jim v izbranem ceniku spremeni ceno za odstotek ali na novo vrednost.</span>
-      }
-    </div>
+    <PimBulkBar Count="Selection.Count" AllMatching="Selection.AllMatching" MatchingTotal="Selection.MatchingTotal"
+                PageSelected="PageFullySelected" PageRowCount="Rows.Count"
+                OnPageChanged="SelectPage" OnSelectAllMatching="SelectAllMatching" OnClear="ClearSelection"
+                AriaLabel="Izbira cen in paketna sprememba" Hint="Označi izdelke in jim v izbranem ceniku spremeni ceno za odstotek ali na novo vrednost.">
+      <button type="button" class="primary-button small" aria-expanded="@BulkOpen.ToString().ToLowerInvariant()" aria-controls="price-bulk-panel" @onclick="OpenBulk">Spremeni ceno …</button>
+    </PimBulkBar>
 
-    @if (BulkOpen && SelectedCount > 0)
+    @if (BulkOpen && !Selection.IsEmpty)
     {
       <section id="price-bulk-panel" class="ui-card panel price-bulk-panel" role="group" aria-labelledby="price-bulk-title">
         <h2 id="price-bulk-title">Paketna sprememba cen — @SelectionLabel</h2>
@@ -278,12 +257,12 @@
           {
             var open = Expanded == row.ProductId;
             var key = SelectionKey(row);
-            <tr class="row-link @(open ? "open" : null) @(IsSelected(key) ? "selected" : null)" tabindex="0" @onclick="() => ToggleAsync(row)" @onkeydown="args => ToggleKeyAsync(args, row)"
+            <tr class="row-link @(open ? "open" : null) @(Selection.Contains(key) ? "selected" : null)" tabindex="0" @onclick="() => ToggleAsync(row)" @onkeydown="args => ToggleKeyAsync(args, row)"
                 aria-expanded="@open.ToString().ToLowerInvariant()" aria-label="Pokaži cenike izdelka @row.ItemId">
               @if (CanBulk)
               {
                 <td class="select-cell" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-                  <input type="checkbox" aria-label="Izberi izdelek @row.ItemId (@row.OrganizationName)" checked="@IsSelected(key)" @onchange="args => ToggleRow(row, args)" />
+                  <input type="checkbox" aria-label="Izberi izdelek @row.ItemId (@row.OrganizationName)" checked="@Selection.Contains(key)" @onchange="args => ToggleRow(row, args)" />
                 </td>
               }
               <td>
@@ -721,12 +700,15 @@ else
       Rows = result.Rows;
       Total = result.Total;
       Lines = result.Lines;
-      // Drug filter = druga izbira »vse po filtru«; posamezne kljukice ostanejo, predogled pa ne velja več.
+      // Drug filter = druga izbira »vse po filtru« (PimRowSelection jo sprosti); posamezne kljukice ostanejo,
+      // predogled pa ne velja več.
       var signature = Query.ToQueryString();
-      if (!string.Equals(signature, SelectionSignature, StringComparison.Ordinal))
+      var filterChanged = !string.Equals(signature, Selection.FilterSignature, StringComparison.Ordinal);
+      var wasAllMatching = Selection.AllMatching;
+      Selection.UpdateFilter(signature, Total);
+      if (filterChanged)
       {
-        if (AllMatching) { AllMatching = false; BulkOpen = false; }
-        SelectionSignature = signature;
+        if (wasAllMatching) BulkOpen = false;
         ResetBulkPreview();
       }
     }
@@ -890,9 +872,10 @@ else
 
   /* --- paketna sprememba (#31) --------------------------------------------------------------- */
 
-  bool CanBulk, AllMatching, BulkOpen, BulkConfirming;
-  string? SelectionSignature, BulkError, BulkErrorField;
-  readonly Dictionary<string, PriceBulkKey> Selected = new(StringComparer.OrdinalIgnoreCase);
+  bool CanBulk, BulkOpen, BulkConfirming;
+  string? BulkError, BulkErrorField;
+  // Izbira: ključ org|šifra (loči podjetja); »vse po filtru« je filter strani, ne seznam ključev.
+  readonly PimRowSelection<PriceBulkKey> Selection = new();
   string BulkList = "", BulkMode = "percent", BulkValue = "";
   DateTime? BulkFrom = DateTime.Today;
   PriceBulkChange? BulkChange;
@@ -902,56 +885,40 @@ else
 
   static string SelectionKey(PriceProductRow row) => $"{row.OrganizationId}|{row.ItemId}";
 
-  bool IsSelected(string key) => AllMatching || Selected.ContainsKey(key);
+  IEnumerable<KeyValuePair<string, PriceBulkKey>> PageRows =>
+    Rows.Select(row => new KeyValuePair<string, PriceBulkKey>(SelectionKey(row), new(row.OrganizationId, row.ItemId)));
 
-  /// <summary>Pri »vse po filtru« je to število zadetkov filtra (izdelkov), sicer število kljukic.</summary>
-  long SelectedCount => AllMatching ? Total : Selected.Count;
+  bool PageFullySelected => Selection.AllSelected(Rows.Select(SelectionKey));
 
-  bool PageSelected => Rows.Count > 0 && Rows.All(row => IsSelected(SelectionKey(row)));
-
-  string SelectionLabel => AllMatching
-    ? $"vseh {Total:N0} izdelkov, ki ustrezajo filtru"
-    : $"{Selected.Count:N0} izbranih izdelkov";
+  string SelectionLabel => Selection.AllMatching
+    ? $"vseh {Selection.Count:N0} izdelkov, ki ustrezajo filtru"
+    : $"{Selection.Count:N0} izbranih izdelkov";
 
   int BigChanges => BulkPreview?.Rows.Count(row => row.ChangePercent is { } percent && Math.Abs(percent) > 25) ?? 0;
 
+  // Vsaka sprememba izbire umakne predogled — ta ne sme veljati za drugo izbiro.
   void ToggleRow(PriceProductRow row, ChangeEventArgs args)
   {
-    var selected = args.Value is true;
-    var key = SelectionKey(row);
-    // Odkljukana vrstica pri »vse po filtru« ta način konča: ostane trenutna stran brez nje.
-    if (AllMatching && !selected)
-    {
-      AllMatching = false;
-      Selected.Clear();
-      foreach (var pageRow in Rows) Selected[SelectionKey(pageRow)] = new(pageRow.OrganizationId, pageRow.ItemId);
-    }
-    if (selected) Selected[key] = new(row.OrganizationId, row.ItemId);
-    else Selected.Remove(key);
+    Selection.Toggle(SelectionKey(row), new(row.OrganizationId, row.ItemId), args.Value is true, PageRows);
     ResetBulkPreview();
   }
 
-  void PageChanged(ChangeEventArgs args)
+  void SelectPage(bool selected)
   {
-    var selected = args.Value is true;
-    if (AllMatching && !selected) { ClearSelection(); return; }
-    foreach (var row in Rows)
-      if (selected) Selected[SelectionKey(row)] = new(row.OrganizationId, row.ItemId);
-      else Selected.Remove(SelectionKey(row));
+    Selection.SetPage(PageRows, selected);
+    if (Selection.IsEmpty) BulkOpen = false;
     ResetBulkPreview();
   }
 
   void SelectAllMatching()
   {
-    Selected.Clear();
-    AllMatching = Total > 0;
+    Selection.SelectAllMatching();
     ResetBulkPreview();
   }
 
   void ClearSelection()
   {
-    Selected.Clear();
-    AllMatching = false;
+    Selection.Clear();
     BulkOpen = false;
     ResetBulkPreview();
   }
@@ -994,10 +961,11 @@ else
     Busy = true;
     try
     {
-      var keys = AllMatching ? Array.Empty<PriceBulkKey>() : Selected.Values.ToArray();
-      BulkPreview = await Workbook.PlanBulkAsync(change, AllMatching ? Query : null, keys);
+      var allMatching = Selection.AllMatching;
+      var keys = allMatching ? Array.Empty<PriceBulkKey>() : Selection.Items.ToArray();
+      BulkPreview = await Workbook.PlanBulkAsync(change, allMatching ? Query : null, keys);
       BulkChange = change;
-      BulkPlannedForFilter = AllMatching;
+      BulkPlannedForFilter = allMatching;
     }
     catch (ArgumentException exception) { BulkError = exception.Message; BulkErrorField = exception.Message.StartsWith("Odstotek", StringComparison.Ordinal) || exception.Message.StartsWith("Nova", StringComparison.Ordinal) ? "value" : null; }
     catch (Exception exception) { BulkError = "Predogleda ni bilo mogoče pripraviti: " + exception.Message; }
@@ -1015,7 +983,7 @@ else
       var outcome = await Workbook.ApplyAsync(preview, actor, null, source: "BULK", title: title);
       var scope = BulkPlannedForFilter
         ? "Vse po filtru" + (Query.ToQueryString() is { Length: > 0 } filter ? ": " + Uri.UnescapeDataString(filter) : "")
-        : $"{Selected.Count:N0} izbranih izdelkov";
+        : $"{Selection.Count:N0} izbranih izdelkov";
       var batches = outcome.Batches.Where(batch => batch.BatchId is not null).Select(batch => batch.BatchId!.Value).ToArray();
       // Zgodovina (prej/potem) za povratek na /uvozi; če se ne zapiše, to povemo — serija v vrsti ostane.
       BulkHistoryId = await History.RecordAsync(ImportKinds.Prices, title, scope, actor, preview.Rows.Count, outcome.Queued, batches,
@@ -1030,8 +998,7 @@ else
         ActionError = "Zgodovina spremembe ni bila zapisana, zato je na /uvozi ne bo mogoče povrniti. Če je sprememba napačna, prekliči serijo na zavihku »V SAOP«.";
 
       // Predogled se umakne, da drugi klik iste spremembe ne uvrsti dvakrat.
-      Selected.Clear();
-      AllMatching = false;
+      Selection.Clear();
       BulkOpen = false;
       ResetBulkPreview();
       BulkValue = "";
