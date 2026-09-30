@@ -17,15 +17,12 @@
 <PageTitle>Umaknjeni s spleta</PageTitle>
 <PimPage Title="Umaknjeni s spleta"
          Subtitle="Kateri artikli so šli s spleta in zakaj, katere kljukice ne delujejo in zakaj — in kljukice nazaj v enem koraku." />
-<div class="page-actions section-gap">
-  <a href="splet">CSV za Magento</a>
-  <a href="varovalke">Varovalke</a>
-  <a href="splet/neskladja">Neskladja med podjetji</a>
-  <a href="kakovost/artikli?podjetje=@OrganizationId&stanje=BLOCKED_ERRORS">Artikli z blokirajočimi napakami</a>
-</div>
+@* #25: zavihki področja namesto vrste gumbov; Varovalke in blokirajoče napake sta tihi povezavi. *@
+<PimTabs Active="withdrawals" Tabs="WebTabs.Tabs" Label="Izhod na splet" />
 <p class="card-note">
   Artikel gre na spletišče, dokler je aktiven, ima kategorijo na tem spletišču in je veljaven za splet — kljukica sama ni dovolj.
   Ko artikel ne gre več, ga katalog.csv še @(Policy?.WithdrawalRowDays ?? 14) dni pošilja s praznimi »Spletne strani«, da ga Magento umakne.
+  Povezano: <a href="kakovost/artikli?podjetje=@OrganizationId&stanje=BLOCKED_ERRORS">artikli z blokirajočimi napakami</a> · <a href="varovalke">varovalke</a>.
 </p>
 
 <section class="ui-card toolbar section-gap" aria-label="Podjetje">

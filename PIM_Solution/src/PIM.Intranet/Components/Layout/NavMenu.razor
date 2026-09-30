@@ -38,8 +38,17 @@
 @code {
   IReadOnlyList<PIM.Intranet.Services.PimNavSection> Sections = [];
 
+  [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
   protected override async Task OnInitializedAsync()
   {
+    // #65: na strani 404 (ponovna izvedba) Blazor ne pocaka asinhronega dela te metode, zato
+    // Program.cs dovoljenja nalozi vnaprej. Ta veja ne caka na bazo in se izrise takoj.
+    if (HttpContext?.Items[PIM.Intranet.Services.PimNotFoundScope.NavPermissionsItem] is IReadOnlySet<string> preloaded)
+    {
+      Sections = PIM.Intranet.Services.PimNavigation.ForPermissions(preloaded);
+      return;
+    }
     var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
     try
     {

@@ -1,4 +1,4 @@
-using PIM.Automation;
+﻿using PIM.Automation;
 using PIM.Intranet.Components;
 using PIM.Intranet.Services;
 using PIM.Operations;
@@ -177,10 +177,46 @@ if (!app.Environment.IsDevelopment())
   app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
+// #65: neznan naslov je vracal 404 z 0 bajti (bela stran brez menija). Brskalnik zdaj dobi stran
+// "Strani ni (vec)" v postavitvi intraneta; koda ostane 404. Samo za GET zahteve brskalnika, ki
+// pricakujejo HTML: izvozi, prenosi, prijava in Blazorjevi viri ohranijo svoj kratek 404 brez strani
+// (pim-export.js in prenosi v ozadju ne smejo dobiti HTML-ja intraneta namesto datoteke).
+app.UseStatusCodePagesWithReExecute("/ni-najdeno", createScopeForStatusCodePages: true);
+app.Use(async (context, next) =>
+{
+  if (!PimNotFoundScope.WantsPage(context.Request.Method, context.Request.Path, context.Request.Headers.Accept.ToString())
+      && context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } statusPages)
+    statusPages.Enabled = false;
+  await next();
+});
+
 app.UseStaticFiles();
 app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// #65: pri ponovni izvedbi za stran 404 Blazor odda HTML, ne da bi pocakal asinhrone komponente
+// postavitve, zato je bil levi meni za ne-skrbnika prazen (dovoljenja bere iz sec.RolePermission).
+// Dovoljenja zato nalozimo tu, preden se stran izrise; NavMenu jih vzame iz HttpContext.Items.
+app.Use(async (context, next) =>
+{
+  if (context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>() is not null
+      && context.User.Identity?.IsAuthenticated == true)
+  {
+    try
+    {
+      context.Items[PimNotFoundScope.NavPermissionsItem] = await context.RequestServices
+        .GetRequiredService<RoleAccessService>().GetAllowedKeysAsync(context.User, context.RequestAborted);
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+      // Baza ni dosegljiva: meni ostane prazen (kot prej), stran 404 se vseeno izrise.
+      context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PIM.NotFound")
+        .LogWarning(ex, "Dovoljenj za meni na strani 404 ni bilo mogoce naloziti.");
+    }
+  }
+  await next();
+});
 app.UseRateLimiter();
 
 app.MapPost("/auth/prijava", async (

@@ -26,13 +26,13 @@ PIM iz objavljenih podatkov sam izdela par datotek za spletno trgovino Magento: 
 | Vloga | Kaj naredi v procesu |
 |---|---|
 | Komerciala | Pregleda vsebino datotek na `/splet`, prenese datoteko za Excel, potrdi zadržane artikle na `/varovalke`. |
-| Urednik kataloga | Skrbi, da artikli izpolnjujejo pogoje za splet (kljukica, kategorija, validacija); razloge vidi v »Sestava kataloga«. Potrdi zadržane artikle. |
+| Urednik kataloga | Skrbi, da artikli izpolnjujejo pogoje za splet (kljukica, kategorija, validacija); razloge vidi na `/splet` v tabeli »Kaj gre v katalog.csv in zakaj ostali artikli ne, po podjetjih«. Potrdi zadržane artikle. |
 | Skrbnik | Nastavi izhodno mapo (`EXPORT_ROOT`) in pravice nanjo, urnik posla, samodejni umik; ročno zažene izvoz. |
 | Avtomatika (PIM) | Posel `WEB_CATALOG_EXPORT` izdela par datotek, pred tem umakne neveljavne kljukice (če je vklopljeno), varovalka zadrži sumljive artikle, zapiše, kaj je šlo na splet. |
 
 ## 3. Kdaj se sproži
 
-- **Ročno:** skrbnik na `/sistem/posel/WEB_CATALOG_EXPORT` (povezava »Urnik in zagon: CSV za Magento« na `/splet`). Po potrditvi na `/varovalke` se zagon zahteva samodejno.
+- **Ročno:** skrbnik na `/splet` z gumbom **Izdelaj zdaj** (potrditev »Da, izdelaj«; ista zahteva kot na Nadzoru, sled `JOB_RUN_REQUEST`) ali na `/sistem/posel/WEB_CATALOG_EXPORT` (povezava »Urnik in zagon«). Ostale vloge gumba ne vidijo (»Samo za branje«; odločitev lastnika #26). Po potrditvi na `/varovalke` se zagon zahteva samodejno.
 - **Po urniku:** `WEB_CATALOG_EXPORT`, privzeti razmik 3600 s (vsako uro), meja trajanja 1800 s. ⚠️ Glej razdelek 10 (stran pričakuje 15 minut).
 - **Ob dogodku:** uspešna objava v PIM (`PRODUCT_PUBLICATION`, ta teče po uspešni validaciji) posel takoj postavi na vrsto. Brez uspešne objave je izvoz blokiran (odvisnost).
 
@@ -95,14 +95,14 @@ flowchart LR
 | 2 | Avtomatika | — | — | Najprej se uskladijo zadržki za »Pakirno naročanje« (302, `val.SyncPackageOrderHolds`, ena poizvedba na podjetje): artikel z oznako brez **objavljenega** Pakiranja 2 (> 1; to je vrednost, ki gre v »Pakirno količino«) dobi zadržek za splet, artikel, ki ga je medtem dobil, se sprosti. Zajem iz SAOP piše Pakiranje 2 v zajem (`canon`); na splet pride šele z objavo v PIM (`val.Promote`, po uspešni validaciji) — do takrat razlog zadržka pove »Pakiranje 2 je vpisano (X), čaka objavo« (306). Nato se osveži čakalna vrsta pregleda artiklov z oznako O (glej [Nadzor kataloga](nadzor-kataloga.md)). Če je za podjetje vklopljen samodejni umik, PIM artikle, ki na spletišče ne smejo več, ponovno validira in jim odkljuka spletišče z zapisanim razlogom. | `/splet/umaknjeni`, zavihek »Samodejni umik«. |
 | 3 | Avtomatika | — | — | Vrstice se sestavijo po izvoznem profilu `MAGENTO_PRODUCTS`: artikel je v datoteki, če je aktiven, ima kljukico svetila ali videlektro, kategorijo na tem spletišču, je objavljen v PIM, veljaven za splet, brez ročnega zadržka in ni izključen. Artikel, ki je bil na spletu in ne sme več, gre še 14 dni kot **odjavna vrstica** s prazno »Spletne strani«. Stranke: profil `MAGENTO_CUSTOMERS`. | — |
 | 4 | Avtomatika | — | — | **Varovalka** primerja nove vrstice z zadnjo objavo (cena ni število, ×10/×100, 0, prazna, skok nad 25 %, množičen umik …). Sumljive artikle izpusti iz datoteke, ostale objavi. Posel zaradi varovalke nikoli ne pade. | Na `/splet` pasica varovalke in čip »brez zadržanih artiklov: N« ob katalog.csv. |
-| 5 | Avtomatika | — | — | Obe datoteki se zapišeta ob strani in šele nato skupaj zamenjata; nastane oznaka `magento-export.complete`. Ob kakršnikoli napaki ostane prejšnji veljavni par. | `/splet` → »Dokončane datoteke za Magento«: čas, velikost in generacija. |
-| 6 | Avtomatika | — | — | Zapiše se, kaj je šlo na splet (osnova za odjavne vrstice in naslednjo primerjavo varovalke) in vrstica v zgodovini izdelave s kontrolno vsoto. | `/splet` → »Zgodovina izdelave in ročnih prenosov«: vrsta »Izdelana datoteka«. |
-| 7 | Komerciala / urednik | `/splet` | Klikneš **Osveži stanje**. Pogledaš »Izhodna mapa«, stolpec »Zadnji poskus in zadnji uspeh izdelave« in pasico varovalke. | Stran prebere datoteki v mapi in zgodovino tekov. | Zadnji poskus »Uspešno«; mapa »obstaja«, »dokončan par datotek: da«. |
+| 5 | Avtomatika | — | — | Obe datoteki se zapišeta ob strani in šele nato skupaj zamenjata; nastane oznaka `magento-export.complete`. Ob kakršnikoli napaki ostane prejšnji veljavni par. | `/splet` → tabela »Zadnji izdelani datoteki za Magento«: čas, vrstice, velikost. |
+| 6 | Avtomatika | — | — | Zapiše se, kaj je šlo na splet (osnova za odjavne vrstice in naslednjo primerjavo varovalke) in vrstica v zgodovini izdelave s kontrolno vsoto. | `/splet` → »Zgodovina izdelave« (zložljivo; ročni prenosi skriti, dokler ne označiš »Tudi ročni prenosi iz baze«): vrsta »Izdelana datoteka«. |
+| 7 | Komerciala / urednik | `/splet` (zavihek **Pregled**) | Klikneš **Osveži**. Prebereš stavek stanja (npr. »katalog.csv je bil uspešno izdelan danes ob 18:22, 2.894 vrstic«) in čipa obeh datotek. | Stran prebere datoteki v mapi, zgodovino tekov (število vrstic iz zadnje uspešne izdelave) in urnik posla. Rdeče samo ob napaki (zadnji poskus ni uspel, datoteke ni); oranžno, ko je datoteka starejša od meje svežine posla (`SlaSeconds`), varovalka zadrži artikle ali je izdelava izklopljena. Mapa, račun in pravice so pod »Tehnične podrobnosti« (odprte samo, ko so vzrok). | Zelen stavek; čipa »V redu«. |
 | 8 | Komerciala / urednik | `/splet` | Pri datoteki klikneš **Preglej vsebino**, vpišeš šifro, EAN ali naziv in klikneš **Poišči v datoteki**; po želji **Vsi stolpci**. | Prikaže se vsebina dejansko izdelane datoteke (ne trenutne baze), po 50 vrstic. | Artikel je v zadetkih; stolpec »Spletne strani« je izpolnjen (prazen = odjava). |
 | 9 | Komerciala | `/splet` | Klikneš **Prenesi izdelano datoteko** ali **Prenesi za Excel**. | Prenese se ista datoteka; različica za Excel ima pravilne šumnike in decimalke. | Datoteka se odpre v Excelu s pravilnimi stolpci. |
-| 10 | Urednik | `/splet` → »Sestava kataloga« | Pogledaš števila in tabelo »Zakaj artikel ni v katalog.csv«; klik na število odpre `/kakovost/artikli` s filtrom. | Izračun po istih pravilih kot izvoz, nad trenutnim stanjem baze. | »Vrstic v katalog.csv« se ujema s številom vrstic v datoteki (po naslednji izdelavi). |
+| 10 | Urednik | `/splet` → »Kaj gre na splet« | Pogledaš tabelo po podjetjih iz `out.CatalogSource` (IQ Lighting, Vidadria): vrstica »V katalog.csv (zdaj)« in razlogi; klik na število odpre `/kakovost/artikli?podjetje=N&stanje=…`. | Izračun `intranet.GetWebExportSummary` po podjetju, v ozadju, predpomnjen 3 minute (»Osveži« ga izračuna znova). | Vsota podjetij je večja od vrstic datoteke, ker je ista šifra v datoteki enkrat (29. 9.: IQ 2.682 + ViD 2.432, datoteka 2.894). |
 | 11 | Komerciala / urednik | `/varovalke` | Če je artikel zadržan, ga pregledaš in potrdiš (ali popraviš vzrok, npr. ceno v SAOP). | Potrditev velja 14 dni in zahteva nov zagon izvoza; popravljen artikel gre ven sam ob naslednjem izvozu. | Na `/splet` pasica ne kaže več čakanja; artikel je v datoteki. |
-| 12 | Skrbnik | `/sistem/posel/WEB_CATALOG_EXPORT` | Po potrebi zaženeš posel ročno. | Isti tek kot po urniku. | Nov zapis v zgodovini na `/splet`. |
+| 12 | Skrbnik | `/splet` ali `/sistem/posel/WEB_CATALOG_EXPORT` | Po potrebi klikneš **Izdelaj zdaj** → **Da, izdelaj**. | Zahteva gre gostitelju avtomatike (`MonitorService.RequestRunAsync`, samo ADMIN); isti tek kot po urniku. Če posel že teče, stran to pove. | Sporočilo »Zahteva za izdelavo je oddana …«, stavek »Zahteva za izdelavo čaka od …«; po nekaj minutah nov zapis v zgodovini. |
 
 ## 7. Pravila in varovalke
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ## 10. Odprta vprašanja in razlike
 
-- ⚠️ Stran `/splet` pravi, da cikel teče vsakih 15 minut, in po 30 minutah prižge čip »Starejša od 30 minut«. Posel `WEB_CATALOG_EXPORT` ima privzeti razmik 3600 s (migracija 242: 300 → 3600) in ga sproži objava; čip je zato lahko prižgan brez napake. Uskladiti mejo ali razmik.
+- ✅ (#25) Meja »stara datoteka« na `/splet` je zdaj `SlaSeconds` posla `WEB_CATALOG_EXPORT` (ista kot na Nadzoru; privzeto 7200 s), stavek o urniku pa bere razmik in naslednji zagon iz `ops.JobDefinition`.
 - ⚠️ Od 277 sta ločilo `;` in cene z decimalno vejico. Ali je uvoznik Magento že preklopljen, iz kode ni mogoče preveriti.
 - ⚠️ Če varovalka pade (napaka v bazi), gre datoteka ven brez preverjanja; ostane samo opozorilo v zvoncu.
 - ⚠️ Stranke v `stranke.csv` so samo iz podjetja 2. Dodatni popust P2, referent in baza kupcev ViD (279) so vodeni za Vidadrio (podjetje 3), a do spleta ne pridejo. Predlog združitve IQ + VID po šifri z lastništvom spletišča je odprt (ni odločeno).
