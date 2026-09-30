@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using PIM.Intranet.Services;
+using PIM.Operations;
 using PIM.Outbound;
 
 // Pogodbeni test strani /cene (265): cene in ceniki gredo iz PIM v SAOP.
@@ -106,6 +107,22 @@ Assert(PriceWorkbookService.NewNet(12.345m, new PriceBulkChange("B2C", false, 12
 Assert(PriceWorkbookService.BulkTitle(percent).Contains("B2C", StringComparison.Ordinal) && PriceWorkbookService.BulkTitle(percent).Contains("+5 %", StringComparison.Ordinal),
   "Opis serije mora povedati cenik in odstotek: " + PriceWorkbookService.BulkTitle(percent));
 
+// #62: Excel cen loči spletni naziv in naziv iz SAOP; gol »Naziv« iz starih datotek se pri uvozu prezre kot »samo za branje«.
+var priceHeaders = PriceWorkbookService.Columns.Select(column => column.Header).ToArray();
+Assert(priceHeaders.Contains("Spletni naziv (sl)") && priceHeaders.Contains("Naziv ERP (sl)"),
+  "Izvoz cen mora imeti ločena stolpca »Spletni naziv (sl)« in »Naziv ERP (sl)«.");
+Assert(!priceHeaders.Contains("Naziv"), "Izvoz cen ne sme imeti golega stolpca »Naziv« (ne pove, ali je spletni ali ERP).");
+Assert(PriceWorkbookService.Columns.Where(column => column.Header.Contains("naziv", StringComparison.OrdinalIgnoreCase) && column.Header != "Naziv cenika").All(column => !column.Editable),
+  "Nazivi v izvozu cen so samo za branje — uvoz cen jih ne sme zapisati.");
+var titleProbe = new PriceLine(1, "Org", 1, "X", "Spletni", null, "B2C", null, 1m, 22m, null, true, null, null, null, null, true) { WebTitle = null, ErpTitle = "ERP naziv" };
+using (var probe = new MemoryStream(PriceWorkbookService.Build([titleProbe])))
+{
+  var probeSheet = WorkbookTable.Read(probe, headerHints: ["Šifra artikla", "Cenik"]);
+  var webAt = probeSheet.Headers.ToList().IndexOf("Spletni naziv (sl)");
+  var erpAt = probeSheet.Headers.ToList().IndexOf("Naziv ERP (sl)");
+  Assert(webAt >= 0 && erpAt >= 0 && string.IsNullOrEmpty(probeSheet.Rows[0][webAt]) && probeSheet.Rows[0][erpAt] == "ERP naziv",
+    "Artikel brez spletnega naziva: »Spletni naziv (sl)« prazen, »Naziv ERP (sl)« = naziv iz SAOP (ne zamenjan s spletnim).");
+}
 Console.WriteLine("F10 prices UX contract PASS.");
 
 var connectionString = Environment.GetEnvironmentVariable("PIM_CONNECTION_STRING") ?? LocalConnectionString(root);

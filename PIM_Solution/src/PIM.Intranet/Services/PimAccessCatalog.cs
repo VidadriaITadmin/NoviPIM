@@ -178,7 +178,8 @@ public static class PimAccessCatalog
     if (path == "izdelki/odprodaja" || path == "izdelki/uvoz-odprodaje") return "view.products.clearance";
     if (path == "izdelki/kategorije" || (path.StartsWith("izdelki/", StringComparison.Ordinal) && path.EndsWith("/kategorije", StringComparison.Ordinal))) return "view.products.categories";
     if (path == "izdelki" || path.StartsWith("izdelki/", StringComparison.Ordinal)) return "view.products.list";
-    if (path == "mediji") return Media;
+    // 91: Napačni naslovi medijev spadajo pod isto pravico kot stran Mediji.
+    if (path == "mediji" || path == "mediji/napacni-naslovi") return Media;
 
     if (path == "kakovost")
     {
