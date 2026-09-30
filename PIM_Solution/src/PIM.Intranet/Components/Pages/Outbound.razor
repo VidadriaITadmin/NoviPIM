@@ -8,14 +8,16 @@
 @inject PIM.Intranet.Services.SaopOrganizationContext OrgContext
 @inject PIM.Intranet.Services.ProductWorkbookService Workbook
 @inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 <PageTitle>Izvozi</PageTitle>
 <div class="page-header"><div><h1>Izvozi</h1><p>Odhodna sporočila in dejansko stanje dostave. Odobritev poskusi takoj poslati v SAOP; brez nastavljenih poverilnic samo uvrsti v čakalno vrsto za worker.</p></div></div>
 <PimTabs Active="queue" Tabs="SaopTabs.Tabs" Label="Pogledi izhoda v SAOP" />
 <section class="ui-card toolbar" role="search" aria-labelledby="outbound-filter-title">
   <h2 id="outbound-filter-title" class="visually-hidden">Filtriranje izvozov</h2>
   <label class="visually-hidden" for="out-org">Podjetje</label><select id="out-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">@foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }</select>
-  <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči šifro artikla …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option value="@status">@status</option> }</select>
+  <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči šifro artikla …" @bind="Search" @bind:event="oninput" @bind:after="SearchChanged" />
+  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter" @bind:after="StatusChanged"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option value="@status">@status</option> }</select>
+  <button type="button" class="small-action" disabled="@(!HasFilters)" @onclick="ClearFilters">Počisti filtre</button>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
   <button type="button" class="small-action" disabled="@(Loading || SelectableFilteredCount == 0)" @onclick="SelectAllFiltered">Izberi vse filtrirane (@SelectableFilteredCount)</button>
   <button type="button" class="small-action" disabled="@Loading" @onclick="RefreshAsync">Osveži</button>
@@ -33,7 +35,7 @@
 <section class="ui-card data-card" aria-label="Artikli v odhodni vrsti">
 @if (Loading) { <div class="loading-state" role="status">Nalaganje izvozov …</div> }
 else if (Error is not null) { <div class="error-state" role="alert">@Error</div> }
-else if (FilteredArticles.Count == 0) { <div class="empty-state">Ni artiklov za izbrane filtre — vse, kar je bilo odobreno, poslano ali preklicano, je v Zgodovini.</div> }
+else if (FilteredArticles.Count == 0) { <div class="empty-state">@if (HasFilters) { <p>Noben artikel v vrsti ne ustreza iskanju ali statusu.</p><button type="button" class="small-action" @onclick="ClearFilters">Počisti filtre</button> } else { <p>V vrsti ni artiklov — vse, kar je bilo odobreno, poslano ali preklicano, je v Zgodovini.</p> }</div> }
 else {
   <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela artiklov v odhodni vrsti">
 <table class="data-table"><caption>En artikel je ena vrstica, ne glede na to, koliko njegovih polj je spremenjenih. Odobritev in preklic veljata za cel artikel.</caption><thead><tr><th scope="col"><input type="checkbox" aria-label="Izberi vse na strani" checked="@AllOnPageSelected" @onchange="e=>ToggleAllOnPage((bool)e.Value!)" /></th><th scope="col">Šifra</th><th scope="col">Operacija</th><th scope="col" class="numeric">Polja</th><th scope="col">Status</th><th scope="col">Zadnja sprememba</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var article in PageArticles) { <tr><td>@if (article.CanApprove || article.CanCancel) { <input type="checkbox" aria-label="Izberi @article.EntityKey" checked="@Selected.Contains((article.EntityType,article.EntityKey))" @onchange="e=>ToggleRow((article.EntityType,article.EntityKey),(bool)e.Value!)" /> }</td><td><strong>@article.EntityKey</strong></td><td>@article.Operation</td><td class="numeric">@article.FieldCount.ToString("N0")</td><td><span class="status-chip @Chip(article.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(article.Status)</span></td><td>@article.LastChangeUtc.ToPimLocal().ToString("g")</td><td>@if (article.HasDrift) { <span class="drift-flag">odklon</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (article.CanApprove) { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri artikel @article.EntityKey" @onclick="()=>Approve(article.EntityType,article.EntityKey)">Odobri</button> }@if (article.CanCancel) { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči artikel @article.EntityKey" @onclick="()=>Cancel(article.EntityType,article.EntityKey)">Prekliči</button> }@if (article.CanRetry) { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Pošlji znova artikel @article.EntityKey" @onclick="()=>RetryArticle(article)">Pošlji znova</button> }@if (article.Status is "Pending" or "Retry") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Pošlji zdaj @article.EntityKey" @onclick="()=>SendNow(article)">Pošlji zdaj</button> }@if (article.ErrorReason is not null) { <button type="button" class="small-action warn-action" aria-label="Poglej napako za @article.EntityKey" @onclick="()=>OpenError(article.EntityKey,article.ErrorReason!)">Poglej napako</button> }<button type="button" class="small-action" disabled="@ActionBusy" aria-label="Poglej XML za @article.EntityKey" @onclick="()=>OpenXmlAsync(article)">Poglej XML</button></div></td></tr> }</tbody></table>
@@ -45,13 +47,18 @@ else {
 @* Podrobnosti po polju: eno sporočilo na spremenjeno polje, tocno tako, kot je zapisano v
    out.OutboxMessage. Za vsakdanjo rabo je nepotrebno (artikel zgoraj je ze ena vrstica); ostane
    kot dodatna tabela za administratorja, ki bi sicer moral gledati naravnost v bazo. Privzeto
-   zaprto, ker podvaja isto vsebino kot zgornja tabela. *@
+   zaprto, ker podvaja isto vsebino kot zgornja tabela.
+   #54: sledi istemu iskanju in statusu kot zgornja tabela (sporočila filtriranih artiklov) in se
+   izriše šele ob odprtju — prej je bilo v DOM vedno vseh ~800 vrstic. *@
 @if (Rows is { Count: > 0 }) {
-  <details class="field-detail">
-    <summary>Podrobnosti po polju (za administratorja) — @Rows.Count sporočil</summary>
+  <details class="field-detail" open="@FieldDetailOpen">
+    <summary @onclick="ToggleFieldDetail" @onclick:preventDefault="true">Podrobnosti po polju (za administratorja) — @Sporocila(FieldRows.Count)@(HasFilters ? " za izbrane filtre" : "")</summary>
+    @if (FieldDetailOpen) {
+    @if (FieldRows.Count > FieldDetailLimit) { <p class="field-detail-note">Prikazanih je najnovejših @FieldDetailLimit.ToString("N0"). Za ostala zoži iskanje ali status.</p> }
     <div class="table-scroll" role="region" tabindex="0" aria-label="Tabela odhodnih sporočil po polju">
-<table class="data-table"><caption>Eno sporočilo na spremenjeno polje, kot je zapisano v out.OutboxMessage.</caption><thead><tr><th scope="col">Cilj</th><th scope="col">Operacija</th><th scope="col">Entiteta</th><th scope="col">Polja</th><th scope="col">Status</th><th scope="col" class="numeric">Poskusi</th><th scope="col">Naslednji poskus</th><th scope="col">Odziv</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var row in Rows.OrderByDescending(r=>r.CreatedUtc)) { <tr><td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(row.Status)</span></td><td class="numeric">@row.AttemptCount.ToString("N0")</td><td>@(row.NextAttemptUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@ResponseSummary(row)</td><td>@if (row.DriftDetail is not null) { <span class="drift-flag">@row.DriftDetail</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (row.Status=="PendingApproval") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri artikel @row.EntityType @row.EntityKey" @onclick="()=>Approve(row.EntityType,row.EntityKey)">Odobri</button> }@if (row.Status is "PendingApproval" or "Pending" or "Error" or "Retry") { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči artikel @row.EntityType @row.EntityKey" @onclick="()=>Cancel(row.EntityType,row.EntityKey)">Prekliči</button> }@if (row.Status is "Error" or "Dead") { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Pošlji znova sporočilo @row.EntityType @row.EntityKey" @onclick="()=>RetryMessage(row.OutboxMessageId)">Pošlji znova</button> }@if (!string.IsNullOrWhiteSpace(row.LastError)) { <button type="button" class="small-action warn-action" aria-label="Poglej napako za @row.EntityType @row.EntityKey" @onclick="()=>OpenErrorForRow(row)">Poglej napako</button> }</div></td></tr> }</tbody></table>
+<table class="data-table"><caption>Eno sporočilo na spremenjeno polje, kot je zapisano v out.OutboxMessage.</caption><thead><tr><th scope="col">Cilj</th><th scope="col">Operacija</th><th scope="col">Entiteta</th><th scope="col">Polja</th><th scope="col">Status</th><th scope="col" class="numeric">Poskusi</th><th scope="col">Naslednji poskus</th><th scope="col">Odziv</th><th scope="col">Odklon</th><th scope="col">Dejanja</th></tr></thead><tbody>@foreach (var row in FieldRows.Take(FieldDetailLimit)) { <tr><td>@row.TargetKind</td><td>@row.Operation</td><td>@row.EntityType / @row.EntityKey</td><td>@row.FieldSummary</td><td><span class="status-chip @Chip(row.Status)"><span class="visually-hidden">Status: </span>@StatusLabel(row.Status)</span></td><td class="numeric">@row.AttemptCount.ToString("N0")</td><td>@(row.NextAttemptUtc?.ToPimLocal().ToString("g") ?? "—")</td><td>@ResponseSummary(row)</td><td>@if (row.DriftDetail is not null) { <span class="drift-flag">@row.DriftDetail</span> } else { <text>—</text> }</td><td><div class="table-actions">@if (row.Status=="PendingApproval") { <button type="button" class="small-action good-action" disabled="@ActionBusy" aria-label="Odobri artikel @row.EntityType @row.EntityKey" @onclick="()=>Approve(row.EntityType,row.EntityKey)">Odobri</button> }@if (row.Status is "PendingApproval" or "Pending" or "Error" or "Retry") { <button type="button" class="small-action" disabled="@ActionBusy" aria-label="Prekliči artikel @row.EntityType @row.EntityKey" @onclick="()=>Cancel(row.EntityType,row.EntityKey)">Prekliči</button> }@if (row.Status is "Error" or "Dead") { <button type="button" class="small-action warn-action" disabled="@ActionBusy" aria-label="Pošlji znova sporočilo @row.EntityType @row.EntityKey" @onclick="()=>RetryMessage(row.OutboxMessageId)">Pošlji znova</button> }@if (!string.IsNullOrWhiteSpace(row.LastError)) { <button type="button" class="small-action warn-action" aria-label="Poglej napako za @row.EntityType @row.EntityKey" @onclick="()=>OpenErrorForRow(row)">Poglej napako</button> }</div></td></tr> }</tbody></table>
     </div>
+    }
   </details>
 }
 
@@ -135,10 +142,11 @@ else {
     .Select(group => new ArticleRow(group.Key.EntityType, group.Key.EntityKey, group.First().Operation, group.ToArray()))
     .ToArray();
   // Filter po slovenski oznaki: Error/Dead sta oba »Napaka«, Pending/Retry/Sending »V obdelavi«.
-  IReadOnlyList<string> ArticleStatuses => Articles.Select(a => StatusLabel(a.Status)).Distinct().Order().ToArray();
+  // Status iz povezave, ki ga v vrsti trenutno ni, ostane izbran (sicer bi izbirnik kazal »Vsi statusi«, tabela pa 0).
+  IReadOnlyList<string> ArticleStatuses => Articles.Select(a => StatusLabel(a.Status)).Distinct().Concat(StatusFilter == "" ? [] : [StatusFilter]).Distinct().Order().ToArray();
   IReadOnlyList<ArticleRow> FilteredArticles => Articles
     .Where(a => (StatusFilter == "" || StatusLabel(a.Status) == StatusFilter)
-      && (Search == "" || a.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase)))
+      && (Search == "" || PIM.Intranet.Services.PimText.Matches(a.EntityKey, Search)))
     .OrderByDescending(a => a.LastChangeUtc).ToList();
   IEnumerable<ArticleRow> PageArticles => FilteredArticles.Skip(CurrentPage*PageSize).Take(PageSize);
   int PageCount=>Math.Max(1,(int)Math.Ceiling(FilteredArticles.Count/(decimal)PageSize));
@@ -146,7 +154,57 @@ else {
   // Po zožitvi filtra je lahko izbrana stran izven obsega; izpiše se zadnja obstoječa, ne prazna.
   int CurrentPage => Math.Min(Page, PageCount - 1);
   void Previous()=>Page=Math.Max(0,CurrentPage-1);void Next()=>Page=Math.Min(PageCount-1,CurrentPage+1);
-  protected override async Task OnInitializedAsync(){try{Organizations=await Data.GetOrganizationsAsync();var org=await Data.GetCurrentOrganizationAsync();OrganizationId=OrgContext.OrganizationId??org?.OrganizationId??Organizations.FirstOrDefault()?.OrganizationId;if(OrganizationId is null){Error="Aktivna organizacija ni na voljo.";return;}OrgContext.OrganizationId=OrganizationId;await Reload();}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
+  protected override async Task OnInitializedAsync(){try{Organizations=await Data.GetOrganizationsAsync();var org=await Data.GetCurrentOrganizationAsync();OrganizationId=OrganizationFromUrl()??OrgContext.OrganizationId??org?.OrganizationId??Organizations.FirstOrDefault()?.OrganizationId;if(OrganizationId is null){Error="Aktivna organizacija ni na voljo.";return;}OrgContext.OrganizationId=OrganizationId;ApplyFiltersFromUrl();await Reload();if(RendererInfo.IsInteractive)SyncUrl(replace:true);}catch{Error="Izvozov trenutno ni mogoče naložiti.";}finally{Loading=false;}}
+
+  /* --- #54: podjetje, iskanje in status so v naslovu strani ------------------
+     ?podjetje=ID&isci=...&stanje=<slovenski naziv statusa>. Po F5 ostanejo, povezavo se da deliti,
+     Nazaj v brskalniku vrne prejšnje filtre (podjetje in status dodata korak v zgodovino, tipkanje v
+     iskanje ga samo zamenja). Podjetje iz naslova velja samo, če je med naloženimi (aktivnimi)
+     podjetji — ročno vpisan ID drugega ali neobstoječega podjetja pokaže privzeto podjetje. */
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "stanje")] public string? QStatus { get; set; }
+  static readonly string[] KnownStatusLabels = ["Čaka odobritev", "V obdelavi", "Napaka", "Poslano", "Preklicano", "Nadomeščeno"];
+  // Naslovi, ki jih je stran zapisala sama in se še niso vrnili prek OnParametersSetAsync. Med hitrim
+  // tipkanjem bi zapoznel povratek (»ab« pride nazaj, ko je v polju že »abc«) sicer povozil vnos.
+  readonly HashSet<string> OwnNavigations = [];
+  static string UrlKey(string? organization, string? search, string? status) => $"{organization}|{search}|{status}";
+  string CurrentKey => UrlKey(OrganizationId?.ToString(System.Globalization.CultureInfo.InvariantCulture), Search, StatusFilter);
+  string UrlStateKey => UrlKey(QOrganization ?? "", QSearch ?? "", QStatus ?? "");
+  bool HasFilters => Search != "" || StatusFilter != "";
+
+  int? OrganizationFromUrl() =>
+    int.TryParse(QOrganization, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id)
+    && Organizations.Any(o => o.OrganizationId == id) ? id : null;
+  void ApplyFiltersFromUrl()
+  {
+    Search = QSearch?.Trim() ?? "";
+    StatusFilter = QStatus is { } status && KnownStatusLabels.Contains(status, StringComparer.Ordinal) ? status : "";
+  }
+  protected override async Task OnParametersSetAsync()
+  {
+    if (Organizations.Count == 0 || OwnNavigations.Remove(UrlStateKey)) return;
+    // Nazaj/Naprej v brskalniku ali ročno spremenjen naslov: stanje strani sledi naslovu.
+    ApplyFiltersFromUrl();
+    Page = 0;
+    if (OrganizationFromUrl() is { } organizationId && organizationId != OrganizationId)
+      await OnOrganizationChangedAsync(new ChangeEventArgs { Value = organizationId.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+  }
+  void SyncUrl(bool replace)
+  {
+    if (OrganizationId is null) return;
+    if (OwnNavigations.Count == 0 && CurrentKey == UrlStateKey) return;
+    OwnNavigations.Add(CurrentKey);
+    Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+      ["podjetje"] = OrganizationId.Value,
+      ["isci"] = Search == "" ? null : Search,
+      ["stanje"] = StatusFilter == "" ? null : StatusFilter,
+    }), replace: replace);
+  }
+  void SearchChanged() { Page = 0; SyncUrl(replace: true); }
+  void StatusChanged() { Page = 0; SyncUrl(replace: false); }
+  void ClearFilters() { Search = ""; StatusFilter = ""; Page = 0; SyncUrl(replace: false); }
   // 301: samo nezaključena sporočila — zaključena stran itak ne prikaže (Terminal), vseh pa je lahko 50.000+.
   async Task Reload(){if(OrganizationId is not null)Rows=await Data.GetOutboundAsync(OrganizationId.Value,onlyActive:true);}
   async Task OnOrganizationChangedAsync(ChangeEventArgs args)
@@ -160,6 +218,7 @@ else {
     try { await Reload(); }
     catch { Error = "Izvozov trenutno ni mogoče naložiti."; }
     finally { Loading = false; }
+    SyncUrl(replace: false);
   }
   async Task RefreshAsync(){Error=null;try{await Reload();}catch{Error="Osvežitev ni uspela.";}}
   // Migracija 243: dosedanji tok iz SAOP nazaj ni nikoli klical out.VerifyEcho, zato je vsako
@@ -175,9 +234,9 @@ else {
       Message = (outcome.Checked, outcome.Waiting) switch
       {
         (0, 0) => "Ni sporočil v stanju Sent za preveriti.",
-        (0, > 0) => $"{outcome.Waiting} sporočil še čaka na naslednjo vhodno sinhronizacijo (SAOP_PRODUCTS) — poskusi znova čez nekaj časa.",
-        (> 0, 0) => $"Preverjenih {outcome.Checked} sporočil.",
-        _ => $"Preverjenih {outcome.Checked} sporočil, {outcome.Waiting} še čaka na vhodno sinhronizacijo.",
+        (0, > 0) => $"Na naslednjo vhodno sinhronizacijo (SAOP_PRODUCTS) še čaka: {Sporocila(outcome.Waiting)} — poskusi znova čez nekaj časa.",
+        (> 0, 0) => $"Preverjeno: {Sporocila(outcome.Checked)}.",
+        _ => $"Preverjeno: {Sporocila(outcome.Checked)}; na vhodno sinhronizacijo še čaka: {Sporocila(outcome.Waiting)}.",
       };
       await Reload();
     }
@@ -271,8 +330,8 @@ else {
     Selected.Clear();
     await Reload();
     Message = failed.Count == 0
-      ? $"{doneWord}: {ok} artiklov."
-      : $"{doneWord}: {ok} artiklov, ni uspelo za: {string.Join(", ", failed)}.";
+      ? $"{doneWord}: {Artikli(ok)}."
+      : $"{doneWord}: {Artikli(ok)}, ni uspelo za: {string.Join(", ", failed)}.";
     ActionBusy = false;
   }
   Task CancelSelected() => ActBulk((actor,article)=>Data.CancelItemAsync(OrganizationId!.Value,article.EntityType,article.EntityKey,actor), "Preklicano");
@@ -301,7 +360,7 @@ else {
     SafeguardVersion++;
     Selected.Clear();
     await Reload();
-    var approved = failed.Count == 0 ? $"Odobreno: {ok} artiklov." : $"Odobreno: {ok} artiklov, ni uspelo za: {string.Join(", ", failed)}.";
+    var approved = failed.Count == 0 ? $"Odobreno: {Artikli(ok)}." : $"Odobreno: {Artikli(ok)}, ni uspelo za: {string.Join(", ", failed)}.";
     Message = sendNotes.Count == 0 ? approved : $"{approved} {string.Join(" ", sendNotes)}";
     ActionBusy = false;
   }
@@ -333,7 +392,15 @@ else {
   void CloseError() => ErrorPreview = null;
 
   // Živo stanje seznama: bralcu zaslona se sporoči nalaganje, napaka ali dejansko število rezultatov.
-  string ResultSummary=>Loading?"Nalaganje …":Error is not null?"Rezultati niso na voljo":$"{FilteredArticles.Count} artiklov";
+  string ResultSummary=>Loading?"Nalaganje …":Error is not null?"Rezultati niso na voljo":Artikli(FilteredArticles.Count);
+  static string Artikli(int count) => PimFormat.Count(count, "artikel", "artikla", "artikli", "artiklov");
+  static string Sporocila(int count) => PimFormat.Count(count, "sporočilo", "sporočili", "sporočila", "sporočil");
+
+  /* --- podrobnosti po polju: isti filtri, izris šele ob odprtju -------------- */
+  bool FieldDetailOpen;
+  const int FieldDetailLimit = 300;
+  IReadOnlyList<PIM.Intranet.Services.OutboundRow> FieldRows => FilteredArticles.SelectMany(a => a.Messages).OrderByDescending(r => r.CreatedUtc).ToList();
+  void ToggleFieldDetail() => FieldDetailOpen = !FieldDetailOpen;
   // Odziv sestavljata koda in korelacijski ključ; kadar ju procedura ne vrne, ostane celica pošteno prazna.
   static string ResponseSummary(PIM.Intranet.Services.OutboundRow row){var parts=new[]{row.ResponseStatusCode?.ToString(System.Globalization.CultureInfo.InvariantCulture),row.ResponseCorrelationId}.Where(x=>!string.IsNullOrWhiteSpace(x)).ToArray();return parts.Length==0?"—":string.Join(" ",parts);}
   // Uporabnikova zahteva: navzven samo "Poslano" ali "Napaka", ne cel notranji seznam stanj —

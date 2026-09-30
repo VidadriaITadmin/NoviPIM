@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = "ADMIN")]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.AdminConsoleService Nadzor
+@inject ILogger<AdminActivity> Log
+@implements IDisposable
 
 @*
   Kdo je kaj spremenil.
@@ -88,18 +90,71 @@
     if (e.Key == "Enter") await NaloziAsync();
   }
 
+  // Vsako branje dobi svoj preklic. Če uporabnik hitro dvakrat pritisne Poišči (ali zamenja obdobje
+  // med branjem), se prejšnje branje prekliče in njegov rezultat ne more prepisati novejšega.
+  CancellationTokenSource? branje;
+
   async Task NaloziAsync()
   {
+    branje?.Cancel();
+    branje?.Dispose();
+    var moje = branje = new CancellationTokenSource();
+    var dni = Dni;
+    var iskanje = string.IsNullOrWhiteSpace(Iskanje) ? null : Iskanje.Trim();
     Loading = true;
     Error = null;
-    try { Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take); }
-    catch { Error = "Sledi trenutno ni mogoče prebrati."; }
-    finally { Loading = false; }
+    try
+    {
+      var vrstice = await Nadzor.GetActivityAsync(dni, null, iskanje, Take, moje.Token);
+      if (moje.IsCancellationRequested) return;
+      Rows = vrstice;
+      NalozenoDni = dni;
+      NalozenoIskanje = iskanje;
+    }
+    catch (Exception) when (moje.IsCancellationRequested)
+    {
+      // Preklicano, ker je že na poti novejše branje; to ni napaka.
+    }
+    catch (Exception ex) when (PIM.Intranet.Services.AdminConsoleService.IsLockTimeout(ex))
+    {
+      Log.LogWarning(ex, "Sled sprememb: baza je zasedena (dni {Dni}, iskanje {Iskanje}).", dni, iskanje);
+      Error = "Baza je ta trenutek zasedena z drugim delom (npr. uvozom). Poskusite znova čez nekaj sekund.";
+    }
+    catch (Exception ex)
+    {
+      // Napako zapišemo v dnevnik: brez tega se časovna omejitev baze in vse druge napake vidijo enako.
+      Log.LogError(ex, "Sled sprememb: branje ni uspelo (dni {Dni}, iskanje {Iskanje}).", dni, iskanje);
+      Error = "Sledi trenutno ni mogoče prebrati. Poskusite krajše obdobje ali ožje iskanje; napaka je zapisana v dnevnik.";
+    }
+    finally
+    {
+      if (ReferenceEquals(branje, moje)) Loading = false;
+    }
+  }
+
+  public void Dispose()
+  {
+    branje?.Cancel();
+    branje?.Dispose();
   }
 
   string Povzetek => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+    : $"{Rows.Count:N0} vrstic {ObdobjeOpis(NalozenoDni)}"
+      + (NalozenoIskanje is null ? "" : $" za »{NalozenoIskanje}«")
+      + (Rows.Count >= Take ? $" (prikazanih najnovejših {Take:N0})" : "");
+
+  // Povzetek pove, za katero obdobje in iskanje so vrstice, da je sprememba filtra vidna tudi,
+  // ko se najnovejše vrstice ne spremenijo (npr. 1 dan in 7 dni pri sveži sledi).
+  int NalozenoDni = 7;
+  string? NalozenoIskanje;
+
+  static string ObdobjeOpis(int dni) => dni switch
+  {
+    1 => "v zadnjem dnevu",
+    365 => "v zadnjem letu",
+    _ => $"v zadnjih {dni} dneh",
+  };
 
   static string Sprememba(ActivityRow row) => (row.OldValue, row.NewValue) switch
   {
