@@ -84,9 +84,14 @@ const POMOCNIK = String.raw`
   const glavno = () => document.querySelector('main') || document.body;
   const vDialogu = el => !!el.closest('dialog,[role=dialog],[aria-modal=true]');
   // Kontrolnik v urejevalnem delu (blizu gumba Shrani/Potrdi) ni filter; tega ne spreminjamo.
-  const vUrejanju = el => { let a = el.parentElement;
-    for (let i = 0; a && a !== document.body && i < 5; i++, a = a.parentElement)
+  // #130: prav tako ne polje obrazca za nalaganje datoteke (npr. »Podjetje za vrstice brez stolpca«
+  // na /izdelki/uvoz) — velja šele za naloženo datoteko, zato brez nje ne more spremeniti prikaza.
+  // Izrecno: data-ni-filter na kontrolniku ali predniku.
+  const vUrejanju = el => { if (el.closest('[data-ni-filter]')) return true; let a = el.parentElement;
+    for (let i = 0; a && a !== document.body && i < 5; i++, a = a.parentElement) {
+      if (a.querySelector('input[type=file]')) return true;
       if ([...a.querySelectorAll('button,input[type=submit]')].some(b => /(shrani|potrdi|uveljavi|posodobi)/.test(fold(b.innerText || b.value)))) return true;
+    }
     return false; };
   const opis = el => { const t = fold(el.innerText || el.value || el.getAttribute('aria-label') || el.title || '');
     return t.slice(0, 80) || fold(el.getAttribute('aria-label') || el.name || el.id || el.className || el.tagName); };
@@ -99,7 +104,9 @@ const POMOCNIK = String.raw`
       let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0;
       const vrstice = m.querySelectorAll('tbody tr').length;
       const st = (t.match(/(\d[\d.]*)\s+(izdelk|zadet|vrstic|artikl|strank|pravil|zapis|napak|kandidat|uvoz|tek|dogod|posl)/i) || [])[0] || null;
-      return { h, dolzina: t.length, vrstice, stevec: st, url: location.href,
+      // #130: prazen seznam (brez vrstic, s praznim stanjem ali števcem 0) — filtra ni mogoče preveriti.
+      const prazno = vrstice === 0 && ([...m.querySelectorAll('.empty-state')].some(vidno) || /^0\s/.test(st || ''));
+      return { h, dolzina: t.length, vrstice, stevec: st, prazno, url: location.href,
         dialog: !!document.querySelector('dialog[open],[role=dialog],[aria-modal=true]') }; },
     napake() { const out = [];
       const eu = document.getElementById('blazor-error-ui'); if (eu && vidno(eu)) out.push('Blazor napaka: ' + fold(eu.innerText).slice(0, 200));
@@ -247,6 +254,8 @@ async function preglej(cdp, pot, dnevnik) {
     const po = await odtis(cdp);
     const napake = await js(cdp, 'window.__k.napake()');
     if (napake.length) najdi('VISOKA', 'filter', `Izbira "${druga}" v "${p.opis}" sproži napako: ${napake[0]}`);
+    else if (enako(pred, po) && pred.prazno)
+      najdi('NIZKA', 'pokritost', `Spustni seznam "${p.opis}": seznam je prazen (ni podatkov), zato filtra ni bilo mogoče preveriti.`);
     else if (enako(pred, po)) najdi('SREDNJA', 'filter', `Spustni seznam "${p.opis}": izbira "${druga}" ne spremeni ničesar na strani.`);
     else if (!p.vForm && po.url === pred.url && /\?|=/.test(pred.url + po.url) === false && !pot.includes('{'))
       najdi('NIZKA', 'filter', `Filter "${p.opis}" ni zapisan v naslovu strani (povezave ni mogoče deliti, »nazaj« ga izgubi).`);
