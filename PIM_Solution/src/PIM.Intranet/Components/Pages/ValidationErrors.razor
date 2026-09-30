@@ -373,7 +373,7 @@
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{PageData?.TotalCount ?? 0:N0} izdelkov z odprto težavo";
+    : PimFormat.Count(PageData?.TotalCount ?? 0, "izdelek", "izdelka", "izdelki", "izdelkov") + " z odprto težavo";
 
   IEnumerable<QualityIssueRow> IssuesOf(long productId) => PageData is null ? []
     : PageData.Issues.Where(issue => issue.ProductId == productId).Take(VisibleIssuesPerProduct);
@@ -456,6 +456,9 @@
   {
     // Spletno mesto velja samo za nivo SPLET; ob menjavi nivoja ne sme ostati skrit filter.
     if (LayerDraft != "SPLET") WebSiteDraft = "";
+    // Profil, ki ga novi nivo (ali spletno mesto) nima med izbirami, bi ostal skrit filter v URL-ju in cipu.
+    if (!string.IsNullOrWhiteSpace(ProfileDraft) && Profiles.Count > 0
+      && !ProfileCodes.Contains(ProfileDraft, StringComparer.OrdinalIgnoreCase)) ProfileDraft = "";
     Navigation.NavigateTo(Href(
       search: SearchDraft.Trim(), profile: ProfileDraft, severity: SeverityDraft,
       blocks: BlocksDraft, field: FieldDraft, layer: LayerDraft, webSite: WebSiteDraft, page: 1,
