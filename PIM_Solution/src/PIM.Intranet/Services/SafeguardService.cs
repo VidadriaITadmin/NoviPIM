@@ -477,7 +477,7 @@ public sealed class SafeguardService(IConfiguration configuration, PimWriteGuard
     var rules = detail.Rules.ToDictionary(rule => rule.RuleCode, StringComparer.Ordinal);
     var columns = new WorkbookColumn[]
     {
-      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv", Width: 40),
+      new("Ugotovitev", Width: 34), new("Stanje", Width: 22), new("Šifra artikla", Width: 20), new("Naziv ERP (sl)", Width: 40),
       new("Polje", Width: 16), new("Prej", Width: 18), new("Zdaj", Width: 18), new("Sprememba", Width: 12),
       new("Spletišče", Width: 12), new("Razlog", Width: 60),
     };
