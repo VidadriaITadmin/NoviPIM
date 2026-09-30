@@ -368,19 +368,54 @@
         </select>
       </div>
     </div>
-    <div class="filter-actions">
-      <button type="button" class="primary-button" disabled="@(BulkBusy || Selection.IsEmpty)" @onclick="() => ApplyBulkAsync(false)">
-        Uporabi za izbrane (@Selection.Count.ToString("N0"))
-      </button>
-      <button type="button" class="ghost-button" disabled="@(BulkBusy || Page is null || Page.TotalCount == 0)" @onclick="() => ApplyBulkAsync(true)">
-        Uporabi za cel pogled (@((Page?.TotalCount ?? 0).ToString("N0")))
-      </button>
-      @if (BulkBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
-    </div>
-    <p class="muted">Pravilo za celo rabatno skupino, S kodo ali vse artikle naenkrat nastaviš na strani <a href="pravila-popustov?podrocje=spopusti">Komercialna pravila → S-popusti</a>; tu se S zapiše vsakemu izdelku posebej.</p>
+    @if (BulkPendingWhole is { } pendingWhole)
+    {
+      @* Potrditev pove, koliko in česa (CLAUDE.md §2); zapis šele po drugem kliku. *@
+      <p class="message-state warn-message" role="alert">@BulkConfirmText(pendingWhole)</p>
+      <div class="filter-actions">
+        <button type="button" class="primary-button" disabled="@BulkBusy" @onclick="ConfirmBulkAsync">Potrdi in zapiši</button>
+        <button type="button" class="ghost-button" disabled="@BulkBusy" @onclick="() => BulkPendingWhole = null">Prekliči</button>
+        @if (BulkBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+      </div>
+    }
+    else
+    {
+      <div class="filter-actions">
+        <button type="button" class="primary-button" disabled="@(BulkBusy || Selection.IsEmpty)" @onclick="() => AskBulk(false)">
+          Uporabi za izbrane (@Selection.Count.ToString("N0"))
+        </button>
+        <button type="button" class="ghost-button" disabled="@(BulkBusy || Page is null || Page.TotalCount == 0)" @onclick="() => AskBulk(true)">
+          Uporabi za cel pogled (@((Page?.TotalCount ?? 0).ToString("N0")))
+        </button>
+        @if (BulkBusy) { <span class="opening-spinner" aria-hidden="true"></span> }
+      </div>
+    }
+    <p class="muted">Pravilo za celo rabatno skupino, S kodo ali vse artikle naenkrat nastaviš na strani <a href="pravila-popustov?podrocje=spopusti">Komercialna pravila → S-popusti</a>; tu se S zapiše vsakemu izdelku posebej. Posebni S za tip ali stranko se zapiše kot en paket, ki ga lahko razveljaviš spodaj. Nič ne gre v SAOP; v katalog.csv gre ob naslednjem izvozu.</p>
     @if (BulkMessage is not null) { <p class="message-state success-message" role="status">@BulkMessage</p> }
+    @if (BulkError is not null) { <p class="message-state error-message" role="alert">@BulkError</p> }
     @foreach (var problem in BulkProblems.Take(20)) { <p class="message-state warn-message">@problem</p> }
     @if (BulkProblems.Count > 20) { <p class="hint">… in še @(BulkProblems.Count - 20) opozoril.</p> }
+    @if (BulkBatches.Count > 0)
+    {
+      <h3 class="bulk-batches-title">Moji zadnji paketi posebnega S</h3>
+      <ul class="bulk-batches" aria-label="Zadnji paketi posebnega S">
+        @foreach (var batch in BulkBatches)
+        {
+          <li>
+            <span>#@batch.BatchId · @batch.CreatedUtc.ToLocalTime().ToString("d. M. yyyy HH:mm") · @batch.OrganizationName · @batch.TargetLabel · @batch.ActionLabel · @PimFormat.Count(batch.ChangedCount, "izdelek", "izdelka", "izdelki", "izdelkov")</span>
+            @if (batch.UndoneUtc is { } undone)
+            {
+              <span class="muted"> · razveljavljeno @undone.ToLocalTime().ToString("d. M. HH:mm") (@batch.UndoneBy)</span>
+            }
+            else
+            {
+              <button type="button" class="small-action" disabled="@BulkBusy" aria-label="@($"Razveljavi paket {batch.BatchId}")"
+                      @onclick="() => UndoBulkBatchAsync(batch)">Razveljavi</button>
+            }
+          </li>
+        }
+      </ul>
+    }
   </section>
 }
 
@@ -593,7 +628,7 @@
   }
   @if (CanEditDiscounts)
   {
-    <button type="button" class="ghost-button" @onclick="() => BulkOpen = true">S-popust …</button>
+    <button type="button" class="ghost-button" @onclick="OpenBulkAsync">S-popust …</button>
   }
   <button type="button" class="ghost-button" disabled="@(ExportState is ExportRunStatus.Running or ExportRunStatus.Queued)" @onclick="StartExportAsync">Izvozi v Excel</button>
 </PimBulkBar>
@@ -734,6 +769,10 @@
   string BulkCode = "";
   string? BulkMessage;
   List<string> BulkProblems = [];
+  string? BulkError;
+  /// <summary>Čaka potrditev: true = cel pogled, false = izbrani; null = ni odprte potrditve.</summary>
+  bool? BulkPendingWhole;
+  IReadOnlyList<PackagingRuleBatch> BulkBatches = [];
   IReadOnlyList<CategoryTreeService.CategoryPickRow> CategoryOptions = [];
   string SortDraft = "ITEM";
 
@@ -1293,24 +1332,75 @@
   }
 
   /// <summary>
-  /// S-popust za izbrane ali za cel pogled. Privzeti S gre skozi en množični zapis na podjetje
-  /// (pim.SaveProductPackagingDiscountsBulk, z zgodovino); posebni S za tip ali stranko je pravilo
-  /// na izdelku (b2b.SavePackagingDiscountRule), prazna koda ga umakne.
+  /// S-popust za izbrane ali za cel pogled, oboje po potrditvi (koliko in česa). Privzeti S gre skozi
+  /// en množični zapis na podjetje (pim.SaveProductPackagingDiscountsBulk, z zgodovino); posebni S za
+  /// tip ali stranko prav tako en klic na podjetje (b2b.SavePackagingDiscountRulesBulk, 317): ena
+  /// transakcija, en paket z b2b.AuditLog prej/potem in razveljavitvijo. Prej je šel posebni S po
+  /// vrstici (do ~90.000 klicev, brez skupne sledi in brez poti nazaj).
   /// </summary>
+  async Task OpenBulkAsync()
+  {
+    BulkOpen = true;
+    await LoadBulkBatchesAsync();
+  }
+
+  async Task LoadBulkBatchesAsync()
+  {
+    try
+    {
+      var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name;
+      BulkBatches = string.IsNullOrEmpty(actor) ? [] : await Packaging.GetRuleBatchesAsync(actor, 5);
+    }
+    catch { BulkBatches = []; }
+  }
+
+  void AskBulk(bool wholeView)
+  {
+    BulkMessage = null; BulkError = null; BulkProblems = [];
+    if (BulkKind == "CUSTOMER" && string.IsNullOrWhiteSpace(BulkCustomer)) { BulkError = "Vpiši šifro stranke."; return; }
+    if (BulkKind == "TYPE" && string.IsNullOrWhiteSpace(BulkType)) { BulkError = "Izberi tip stranke."; return; }
+    BulkPendingWhole = wholeView;
+  }
+
+  string BulkConfirmText(bool wholeView)
+  {
+    var count = wholeView ? Page?.TotalCount ?? 0 : Selection.Count;
+    var products = PimFormat.Count(count, "izdelku", "izdelkih", "izdelkih", "izdelkih");
+    var target = BulkKind switch
+    {
+      "TYPE" => "za tip stranke " + (CustomerTypes.FirstOrDefault(type => type.CustomerTypeCode == BulkType)?.Name ?? BulkType),
+      "CUSTOMER" => "za stranko " + BulkCustomer.Trim(),
+      _ => "(privzeti S za vse stranke)",
+    };
+    return BulkCode.Length == 0
+      ? $"Odstraniti {(BulkKind == "DEFAULT" ? "privzeti S" : "posebni S")} {target} na {products}?"
+      : $"Nastaviti {(BulkKind == "DEFAULT" ? "privzeti" : "posebni")} {BulkCode} {target} na {products}?";
+  }
+
+  async Task ConfirmBulkAsync()
+  {
+    if (BulkPendingWhole is not { } wholeView) return;
+    await ApplyBulkAsync(wholeView);
+    BulkPendingWhole = null;
+  }
+
   async Task ApplyBulkAsync(bool wholeView)
   {
-    BulkBusy = true; BulkMessage = null; BulkProblems = [];
+    BulkBusy = true; BulkMessage = null; BulkError = null; BulkProblems = [];
     try
     {
       var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
-      List<(int OrganizationId, string ItemId)> targets;
-      targets = (await CollectTargetsAsync(wholeView, CancellationToken.None))
-        .Select(target => (target.OrganizationId, target.ItemId)).ToList();
+      BulkMessage = "Zbiram izdelke …";
+      StateHasChanged();
+      var targets = await CollectTargetsAsync(wholeView, CancellationToken.None);
+      BulkMessage = $"Zapisujem {targets.Count:N0} izdelkov …";
+      StateHasChanged();
 
       var code = BulkCode.Length == 0 ? null : BulkCode;
       var customerKey = BulkKind == "CUSTOMER" ? BulkCustomer.Trim() : null;
-      if (BulkKind == "CUSTOMER" && string.IsNullOrEmpty(customerKey)) { BulkProblems.Add("Vpiši šifro stranke."); return; }
-      var changed = 0;
+      if (BulkKind == "CUSTOMER" && string.IsNullOrEmpty(customerKey)) { BulkMessage = null; BulkError = "Vpiši šifro stranke."; return; }
+      int changed = 0, unchanged = 0;
+      var batches = new List<long>();
       foreach (var organization in targets.GroupBy(target => target.OrganizationId))
       {
         if (BulkKind == "DEFAULT")
@@ -1322,38 +1412,50 @@
           continue;
         }
 
-        var existing = code is not null
-          ? new Dictionary<string, PackagingRule>(StringComparer.OrdinalIgnoreCase)
-          : (await Packaging.GetRulesAsync(organization.Key))
-            .Where(rule => rule.ScopeKind == PackagingDiscountService.ScopeItem && rule.TargetKind == BulkKind && rule.ItemId is not null
-              && string.Equals(rule.TargetCode, BulkKind == "TYPE" ? BulkType : customerKey, StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(rule => rule.ItemId!, StringComparer.OrdinalIgnoreCase);
-        await using var connection = await Packaging.OpenAsync();
-        var done = 0;
-        var total = organization.Count();
-        foreach (var target in organization)
+        // En klic na podjetje: pravila so po podjetju, šifra stranke velja samo v svojem podjetju.
+        try
         {
-          try
-          {
-            if (code is not null)
-            {
-              await Packaging.SaveRuleAsync(organization.Key, new(BulkKind, BulkKind == "TYPE" ? BulkType : null, null, customerKey,
-                PackagingDiscountService.ScopeItem, target.ItemId, null, null, code), actor, connection: connection);
-              changed++;
-            }
-            else if (existing.TryGetValue(target.ItemId, out var rule))
-            {
-              await Packaging.RemoveRuleAsync(organization.Key, rule.RuleId, actor, connection: connection);
-              changed++;
-            }
-          }
-          catch (Microsoft.Data.SqlClient.SqlException failure) { BulkProblems.Add($"{target.ItemId}: {failure.Message}"); }
-          if (++done % 250 == 0) { BulkMessage = $"Zapisujem … {done:N0} od {total:N0}"; StateHasChanged(); }
+          var result = await Packaging.SaveRulesBulkAsync(organization.Key, BulkKind, BulkKind == "TYPE" ? BulkType : null, customerKey, code,
+            organization.Select(target => target.ItemId).ToList(), "Seznam izdelkov", "INTRANET");
+          changed += result.Changed;
+          unchanged += result.Unchanged;
+          if (result.BatchId is { } batchId) batches.Add(batchId);
+          var organizationName = organization.First().OrganizationName;
+          BulkProblems.AddRange(result.Skipped.Select(skip => $"{organizationName} · {skip.ItemId}: {skip.Reason}"));
+        }
+        catch (Microsoft.Data.SqlClient.SqlException failure) when (failure.Number is >= 50000)
+        {
+          // Napaka cilja (npr. stranke ni v tem podjetju) ustavi samo to podjetje, ne celega zapisa.
+          BulkProblems.Add($"{organization.First().OrganizationName}: {failure.Message}");
         }
       }
-      BulkMessage = $"S-popust zapisan: {changed:N0} sprememb na {targets.Count:N0} izdelkih. V katalog.csv gre ob naslednjem izvozu.";
+      BulkMessage = BulkKind == "DEFAULT"
+        ? $"S-popust zapisan: {changed:N0} sprememb na {targets.Count:N0} izdelkih. V katalog.csv gre ob naslednjem izvozu."
+        : $"Posebni S zapisan: spremenjenih {changed:N0}, že enakih {unchanged:N0}, preskočenih {BulkProblems.Count:N0} od {targets.Count:N0} izdelkov."
+          + (batches.Count > 0 ? $" Paket {string.Join(", ", batches.Select(id => "#" + id))} lahko razveljaviš spodaj." : "")
+          + " Nič ne gre v SAOP; v katalog.csv gre ob naslednjem izvozu.";
+      if (BulkKind != "DEFAULT") await LoadBulkBatchesAsync();
     }
-    catch (Exception failure) { BulkProblems.Add("Zapis ni uspel: " + failure.Message); }
+    catch (UnauthorizedAccessException failure) { BulkMessage = null; BulkError = "Samo za branje: " + failure.Message; }
+    catch (Exception failure) { BulkMessage = null; BulkError = "Zapis ni uspel: " + failure.Message; }
+    finally { BulkBusy = false; }
+  }
+
+  async Task UndoBulkBatchAsync(PackagingRuleBatch batch)
+  {
+    BulkBusy = true; BulkMessage = null; BulkError = null; BulkProblems = [];
+    try
+    {
+      var outcome = await Packaging.UndoRulesBatchAsync(batch.OrganizationId, batch.BatchId);
+      BulkProblems.AddRange(outcome.Skipped.Select(skip => $"{skip.ItemId}: {skip.Reason}"));
+      BulkMessage = $"Paket #{batch.BatchId} razveljavljen: vrnjenih {outcome.Undone:N0} izdelkov na prejšnje stanje"
+        + (outcome.Skipped.Count > 0 ? $", {outcome.Skipped.Count:N0} jih je bilo medtem spet spremenjenih in so ostali, kot so." : ".")
+        + " V katalog.csv gre ob naslednjem izvozu.";
+      await LoadBulkBatchesAsync();
+    }
+    catch (UnauthorizedAccessException failure) { BulkError = "Samo za branje: " + failure.Message; }
+    catch (Microsoft.Data.SqlClient.SqlException failure) when (failure.Number is >= 50000) { BulkError = failure.Message; }
+    catch (Exception failure) { BulkError = "Razveljavitev ni uspela: " + failure.Message; }
     finally { BulkBusy = false; }
   }
 

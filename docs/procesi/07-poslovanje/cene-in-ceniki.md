@@ -125,7 +125,7 @@ flowchart LR
 <summary>Za skrbnika in razvoj</summary>
 
 - **Strani:** `Prices.razor` (zavihki `cene`, `ceniki`, `saop`), `PriceImport.razor`; izvoz `/izvoz/cene.xlsx`.
-- **Paketna sprememba (#31):** `PriceWorkbookService.PlanBulkAsync` (predogled kot uvoz, `PriceImportPreview`) → `ApplyAsync(source: "BULK")` → `ImportHistoryService.RecordAsync(CENE)`. Izbira na strani je začasno lokalna; zamenja jo skupni `PimBulkBar` (naloga #39).
+- **Paketna sprememba (#31):** `PriceWorkbookService.PlanBulkAsync` (predogled kot uvoz, `PriceImportPreview`) → `ApplyAsync(source: "BULK")` → `ImportHistoryService.RecordAsync(CENE)`. Izbira na strani je skupni `PimRowSelection<PriceBulkKey>` (ključ org|šifra, »vse po filtru« = filter strani, ne seznam ključev) z vrstico `PimBulkBar` (#39).
 - **Storitve / delavci:** `PriceService`, `PriceWorkbookService`, `PriceSendJobs` (pošiljanje v ozadju iz intraneta), `ImportHistoryService`; zajem `PIM.KatalogWorker --endpoints GetPrices`.
 - **Tabele in pogledi:** `canon.ProductPrice`, `out.OutboundBatch`, `out.OutboxMessage`, `out.EnqueueSaopPriceChanges`, `out.EnqueueSaopPriceList`, `out.ApproveOutboundBatch`, `out.CancelOutboundBatch`, `out.ClaimSaopDocument`, `out.ExportPriceList` (B2B iz podjetja 3), `ops.ImportRun`.
 - **Migracije:** 083, 208, 210, 213, 265, 280.

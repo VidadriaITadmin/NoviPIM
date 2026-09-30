@@ -64,6 +64,28 @@ public sealed record PackagingScope(string ScopeKind, string? ItemId, string? It
 public sealed record PackagingBulkOutcome(int Changed, IReadOnlyList<(string ItemId, string Reason)> Skipped);
 
 /// <summary>
+/// Izid množičnega posebnega S v enem podjetju (migracija 317): številka paketa za razveljavitev
+/// (null, kadar ni bilo sprememb), spremenjeni, že enaki in preskočeni izdelki z razlogom.
+/// </summary>
+public sealed record PackagingRuleBulkOutcome(
+  int OrganizationId, long? BatchId, int Changed, int Unchanged, IReadOnlyList<(string ItemId, string Reason)> Skipped);
+
+/// <summary>Izid razveljavitve paketa: vrnjene vrstice in tiste, ki jih je kdo medtem spet spremenil.</summary>
+public sealed record PackagingUndoOutcome(int Undone, IReadOnlyList<(string ItemId, string Reason)> Skipped);
+
+/// <summary>Paket množičnega posebnega S (b2b.PackagingDiscountRuleBatch).</summary>
+public sealed record PackagingRuleBatch(
+  long BatchId, int OrganizationId, string? OrganizationName, string TargetKind, string? TargetCode, string? TargetName,
+  string? DiscountCode, int RequestedCount, int ChangedCount, int UnchangedCount, int SkippedCount,
+  DateTime CreatedUtc, string CreatedBy, DateTime? UndoneUtc, string? UndoneBy, int? UndoneCount)
+{
+  public string TargetLabel => TargetKind == PackagingDiscountService.TargetType
+    ? $"tip {TargetName ?? TargetCode}" : $"stranka {TargetName} ({TargetCode})";
+
+  public string ActionLabel => DiscountCode is null ? "umik posebnega S" : $"posebni {DiscountCode}";
+}
+
+/// <summary>
 /// S-popust na polno pakiranje (Magento_Pravila_Cene_Popusti_Postnine §4.4, §4.5, §4.8; migraciji 214 in 274).
 ///
 /// Trije sloji, en vir resnice:
@@ -75,7 +97,11 @@ public sealed record PackagingBulkOutcome(int Changed, IReadOnlyList<(string Ite
 /// Pravilo velja za en izdelek, rabatno skupino, vse izdelke z dano privzeto S kodo ali vse izdelke;
 /// zmaga najbolj specifično (izdelek, S koda, skupina, vsi), stranka pred svojim tipom.
 /// </summary>
-public sealed class PackagingDiscountService(IConfiguration configuration)
+/// <remarks>
+/// Varovalka <c>guard</c> je v intranetu vedno iz DI; brez nje (delovna lista, ki storitev zgradita
+/// sama) množični zapis in razveljavitev paketa nista dovoljena.
+/// </remarks>
+public sealed class PackagingDiscountService(IConfiguration configuration, PimWriteGuard? guard = null)
 {
   public const string TargetType = "TYPE";
   public const string TargetCustomer = "CUSTOMER";
@@ -288,6 +314,101 @@ public sealed class PackagingDiscountService(IConfiguration configuration)
       while (await reader.ReadAsync(cancellationToken))
         skipped.Add((PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "Reason")));
     return new(changed, skipped);
+  }
+
+  /// <summary>
+  /// Posebni S za tip stranke ali stranko več izdelkom naenkrat (seznam /izdelki, migracija 317):
+  /// en klic, ena transakcija in en paket z zgodovino (b2b.AuditLog prej/potem) na podjetje.
+  /// Prazna koda umakne posebni S tega cilja. Pravico preveri tu (BusinessWrite), ne samo gumb.
+  /// </summary>
+  public async Task<PackagingRuleBulkOutcome> SaveRulesBulkAsync(int organizationId, string targetKind,
+    string? customerTypeCode, string? customerKey, string? code, IReadOnlyCollection<string> itemIds, string? note, string source,
+    CancellationToken cancellationToken = default)
+  {
+    var actor = await RequireWriteAsync();
+    if (targetKind is not (TargetType or TargetCustomer))
+      throw new ArgumentException("Cilj posebnega S mora biti tip stranke ali stranka.", nameof(targetKind));
+    if (itemIds.Count == 0) return new(organizationId, null, 0, 0, []);
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("b2b.SavePackagingDiscountRulesBulk", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 600,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@TargetKind", SqlDbType.NVarChar, 10).Value = targetKind;
+    command.Parameters.Add("@CustomerTypeCode", SqlDbType.NVarChar, 60).Value = Db(targetKind == TargetType ? customerTypeCode : null);
+    command.Parameters.Add("@CustomerKey", SqlDbType.NVarChar, 100).Value = Db(targetKind == TargetCustomer ? customerKey : null);
+    command.Parameters.Add("@DiscountCode", SqlDbType.NVarChar, 10).Value = Db(code);
+    command.Parameters.Add("@ItemsJson", SqlDbType.NVarChar, -1).Value = JsonSerializer.Serialize(itemIds);
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    command.Parameters.Add("@Note", SqlDbType.NVarChar, 400).Value = Db(note);
+    command.Parameters.Add("@ChangeSource", SqlDbType.NVarChar, 40).Value = source;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    long? batchId = null;
+    int changed = 0, unchanged = 0;
+    if (await reader.ReadAsync(cancellationToken))
+    {
+      batchId = reader.IsDBNull(reader.GetOrdinal("BatchId")) ? null : reader.GetInt64(reader.GetOrdinal("BatchId"));
+      changed = PimDb.Int32(reader, "ChangedCount");
+      unchanged = PimDb.Int32(reader, "UnchangedCount");
+    }
+    return new(organizationId, batchId, changed, unchanged, await ReadSkippedAsync(reader, cancellationToken));
+  }
+
+  /// <summary>
+  /// Razveljavi paket množičnega posebnega S: prej ni bilo pravila = umik, prej druga koda = stara
+  /// koda nazaj, prej umaknjeno = pravilo spet velja. Vrstic, ki jih je kdo medtem spremenil, ne povozi.
+  /// </summary>
+  public async Task<PackagingUndoOutcome> UndoRulesBatchAsync(int organizationId, long batchId,
+    CancellationToken cancellationToken = default)
+  {
+    var actor = await RequireWriteAsync();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand("b2b.UndoPackagingDiscountRuleBatch", connection)
+    {
+      CommandType = CommandType.StoredProcedure,
+      CommandTimeout = 600,
+    };
+    command.Parameters.Add("@OrganizationId", SqlDbType.Int).Value = organizationId;
+    command.Parameters.Add("@BatchId", SqlDbType.BigInt).Value = batchId;
+    command.Parameters.Add("@Actor", SqlDbType.NVarChar, 200).Value = actor;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    var undone = await reader.ReadAsync(cancellationToken) ? PimDb.Int32(reader, "UndoneCount") : 0;
+    return new(undone, await ReadSkippedAsync(reader, cancellationToken));
+  }
+
+  /// <summary>Zadnji paketi množičnega posebnega S (vsi ali samo od <paramref name="createdBy"/>).</summary>
+  public Task<IReadOnlyList<PackagingRuleBatch>> GetRuleBatchesAsync(string? createdBy, int take = 10,
+    CancellationToken cancellationToken = default) =>
+    QueryAsync("intranet.GetPackagingDiscountRuleBatches", reader => new PackagingRuleBatch(
+        PimDb.Int64(reader, "BatchId"), PimDb.Int32(reader, "OrganizationId"), PimDb.Text(reader, "OrganizationName"),
+        PimDb.TextOrEmpty(reader, "TargetKind"), PimDb.Text(reader, "TargetCode"), PimDb.Text(reader, "TargetName"),
+        PimDb.Text(reader, "DiscountCode"), PimDb.Int32(reader, "RequestedCount"), PimDb.Int32(reader, "ChangedCount"),
+        PimDb.Int32(reader, "UnchangedCount"), PimDb.Int32(reader, "SkippedCount"),
+        PimDb.NullableDateTime(reader, "CreatedUtc") ?? DateTime.MinValue, PimDb.TextOrEmpty(reader, "CreatedBy"),
+        PimDb.NullableDateTime(reader, "UndoneUtc"), PimDb.Text(reader, "UndoneBy"),
+        reader.IsDBNull(reader.GetOrdinal("UndoneCount")) ? null : reader.GetInt32(reader.GetOrdinal("UndoneCount"))),
+      command =>
+      {
+        command.CommandType = CommandType.StoredProcedure;
+        command.Parameters.Add("@CreatedBy", SqlDbType.NVarChar, 200).Value = Db(createdBy);
+        command.Parameters.Add("@Take", SqlDbType.Int).Value = take;
+      }, cancellationToken);
+
+  async Task<string> RequireWriteAsync() => guard is null
+    ? throw new UnauthorizedAccessException("Samo za branje: množični zapis posebnega S tu ni dovoljen.")
+    : await guard.RequireAsync(PimPolicies.BusinessWrite);
+
+  static async Task<IReadOnlyList<(string ItemId, string Reason)>> ReadSkippedAsync(SqlDataReader reader, CancellationToken cancellationToken)
+  {
+    var skipped = new List<(string, string)>();
+    if (await reader.NextResultAsync(cancellationToken))
+      while (await reader.ReadAsync(cancellationToken))
+        skipped.Add((PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "Reason")));
+    return skipped;
   }
 
   /// <summary>Delovni list: privzeti S, PAK2 in posebni S na izdelku (tipi, stranke) po canon ProductId.</summary>
