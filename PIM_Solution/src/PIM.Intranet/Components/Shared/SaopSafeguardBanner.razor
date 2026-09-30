@@ -106,6 +106,8 @@
         + (remaining > 0 ? $" Spremembe drugih podjetij ({remaining:N0}) še čakajo potrditev spodaj." : "");
       await LoadAsync();
     }
+    // Naloga #117: zapora testnega intraneta ni vprašanje vloge — pokaži njeno pravo sporočilo.
+    catch (UnauthorizedAccessException exception) when (exception.Message == SafeguardService.TestIntranetMessage) { Error = exception.Message; }
     catch (UnauthorizedAccessException) { Error = "Tvoja vloga pošiljanja v SAOP ne dovoljuje."; }
     catch (Microsoft.Data.SqlClient.SqlException exception) { Error = $"Potrditev za {name} ni uspela: " + exception.Message; }
     finally { Busy = false; }
