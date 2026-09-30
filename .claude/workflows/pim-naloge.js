@@ -28,6 +28,7 @@ const tabla = (vloga, id) =>
   `Takoj na začetku in ob vsakem večjem koraku (vsaj vsakih 10 min) javi utrip: ` +
   `${KOORD} -Ukaz Utrip -Seja "${ime(vloga, id)}" -Vloga ${vloga} -Id ${id} -Besedilo "<kratko, kaj delaš zdaj>". ` +
   `Na koncu (uspeh ali ne) OBVEZNO: ${KOORD} -Ukaz Odjava -Seja "${ime(vloga, id)}" -Besedilo "<izid v enem stavku>". ` +
+  `Če se ustaviš, preden je naloga v pregledu (prekrivanje, napaka, čakanje na drugo nalogo), pred odjavo OBVEZNO ${KOORD} -Ukaz Sprosti -Id ${id}, sicer naloga ostane »v delu« brez agenta in blokira druge. ` +
   `Vsako čakanje v Bashu ima časovno mejo (največ 15 min). Lastnik ni programer: vprašanja zanj piši po domače.`
 
 const VPLIV = {

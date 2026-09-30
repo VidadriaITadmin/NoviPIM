@@ -114,6 +114,29 @@ try
   claimA = await store.ClaimAsync(A, DateTime.UtcNow.AddMinutes(1), owner, host, owner, null, force: false, CancellationToken.None);
   Check(claimA.Claimed && claimA.TriggeredBy == "Human", "Izklopljen posel z ročno zahtevo se prevzame kot Human.");
   await store.CompleteAsync(claimA.JobRunId!.Value, new(JobRunStatus.Succeeded, 0, 0, 0, 0, 0, "F11"), owner, CancellationToken.None);
+
+  // 7b. Naloga #69: oddano, še ne prevzeto zahtevo se da umakniti (ops.CancelJobRunRequest, 324).
+  await store.RequestRunAsync(A, "F11 skrbnik", CancellationToken.None);
+  var novTermin = DateTime.UtcNow.AddHours(3);
+  var (umaknjenaOd, umaknjenaOb) = await store.CancelRunRequestAsync(A, "F11 preklic", novTermin, CancellationToken.None);
+  a = await JobAsync(A);
+  Check(!a.IsRequested && a.RequestedBy is null && a.TriggerSource is null, "Umik počisti zahtevo za zagon.");
+  Check(a.NextDueUtc is { } termin && Math.Abs((termin - novTermin).TotalSeconds) < 1, $"Umik postavi naslednji redni termin, ne »zdaj« ({a.NextDueUtc}).");
+  Check(umaknjenaOd == "F11 skrbnik" && umaknjenaOb is not null, "Umik vrne, čigava zahteva je bila umaknjena (za sled).");
+  claimA = await store.ClaimAsync(A, DateTime.UtcNow.AddMinutes(1), owner, host, owner, null, force: false, CancellationToken.None);
+  Check(!claimA.Claimed, $"Umaknjene zahteve gostitelj ne prevzame ({claimA.Reason}).");
+  var brezZahteve = false;
+  try { await store.CancelRunRequestAsync(A, "F11 preklic", null, CancellationToken.None); }
+  catch (SqlException exception) when (exception.Number == 52389) { brezZahteve = true; }
+  Check(brezZahteve, "Umik brez oddane zahteve (npr. že prevzete) baza zavrne s 52389.");
+  await store.RequestRunAsync(A, "F11 skrbnik", CancellationToken.None);
+  claimA = await store.ClaimAsync(A, DateTime.UtcNow.AddMinutes(1), owner, host, owner, null, force: false, CancellationToken.None);
+  var zeTece = false;
+  try { await store.CancelRunRequestAsync(A, "F11 preklic", null, CancellationToken.None); }
+  catch (SqlException exception) when (exception.Number is 52388 or 52389) { zeTece = true; }
+  Check(claimA.Claimed && zeTece && (await JobAsync(A)).RunningJobRunId == claimA.JobRunId, "Umik zahteve pri poslu, ki že teče, je zavrnjen in teka ne spremeni.");
+  await store.CompleteAsync(claimA.JobRunId!.Value, new(JobRunStatus.Succeeded, 0, 0, 0, 0, 0, "F11"), owner, CancellationToken.None);
+
   var rejected = false;
   try { await store.SaveScheduleAsync(A, true, 30, null, null, "F11", CancellationToken.None); }
   catch (SqlException exception) when (exception.Number == 52371) { rejected = true; }

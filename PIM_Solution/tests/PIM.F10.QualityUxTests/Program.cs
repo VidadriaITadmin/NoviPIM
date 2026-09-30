@@ -247,6 +247,36 @@ foreach (var id in new[] { "quarantine-organization", "quarantine-source", "quar
 Assert(quarantine.Contains("izvoz/karantena.xlsx", StringComparison.Ordinal),
   "Karantena mora imeti izvoz v Excel, ki uposteva trenutne filtre.");
 
+// #112: izvoz napak je vzel samo prvo stran procedure (najvec 200 izdelkov) in v datoteki je bilo
+// "Izvozenih 200 od 9.044". Izvoz mora brati po straneh, dokler ne prebere vseh izdelkov filtra.
+Assert(qualityExport.Contains("PagedExportReader.ReadAllAsync", StringComparison.Ordinal)
+    && qualityExport.Contains("ProcedurePageSize", StringComparison.Ordinal),
+  "Izvoz napak mora brati intranet.GetQualityIssues po straneh (procedura vrne najvec 200 izdelkov na klic).");
+Assert(!qualityExport.Contains("Izvoženih {rows.Length", StringComparison.Ordinal),
+  "Opomba izvoza ne sme primerjati vrstic napak s stevilom izdelkov.");
+{
+  const int total = 9_044, procedureCap = 200;
+  var calls = 0;
+  Task<PIM.Intranet.Services.ExportPage<int, (int Product, int Issue)>> Fetch(int skip, int take, CancellationToken _)
+  {
+    calls++;
+    var ids = Enumerable.Range(skip + 1, Math.Max(0, Math.Min(Math.Min(take, procedureCap), total - skip))).ToArray();
+    var rows = ids.SelectMany(id => new[] { (id, 1), (id, 2) }).ToArray();
+    return Task.FromResult(new PIM.Intranet.Services.ExportPage<int, (int Product, int Issue)>(ids, rows, total));
+  }
+  var all = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(procedureCap, 1_048_000, Fetch, id => id, row => row.Product);
+  Assert(all.Items.Count == total && all.Items.Distinct().Count() == total, $"Izvoz mora prebrati vseh {total} izdelkov, prebral je {all.Items.Count}.");
+  Assert(all.Details.Count == total * 2 && !all.Truncated, "Izvoz mora prinesti vse napake vseh izdelkov.");
+  Assert(calls == (total + procedureCap - 1) / procedureCap, $"Pricakovanih {(total + procedureCap - 1) / procedureCap} klicev, bilo jih je {calls}.");
+
+  var capped = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(procedureCap, 1_000, Fetch, id => id, row => row.Product);
+  Assert(capped.Details.Count == 1_000 && capped.Truncated, "Na zgornji meji lista se izvoz ustavi in to javi.");
+
+  // Procedura sama skrajsa stran (vec zahtevano kot 200): zanka se ne sme ustaviti na krajsi strani.
+  var larger = await PIM.Intranet.Services.PagedExportReader.ReadAllAsync(500, 1_048_000, Fetch, id => id, row => row.Product);
+  Assert(larger.Items.Count == total, "Krajsa stran od zahtevane ne pomeni konca podatkov.");
+}
+
 Console.WriteLine("F10 quality UX contract PASS.");
 
 static string Read(string path)
