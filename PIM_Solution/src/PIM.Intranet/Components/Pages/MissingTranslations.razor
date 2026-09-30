@@ -2,6 +2,8 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject PIM.Intranet.Services.PipelineReadService Pipeline
+@inject PIM.Intranet.Services.AttributeMappingService Attributes
+@inject NavigationManager Navigation
 
 <PageTitle>Manjkajoči prevodi</PageTitle>
 <PimPage Title="Manjkajoči prevodi" Subtitle="Vrednosti iz vseh virov, za katere slovar lastnosti in jezika nima prevoda. Vrstica nastane med preslikavo, zato je seznam posledica dejanskega zajema, ne domneve. Slovar je skupen vsem podjetjem — prevod, ki ga vpišeš, velja povsod."
@@ -42,6 +44,54 @@
   </PimState>
 </section>
 
+@* #15 (lastnik 2026-09-29: »samodejni prevod vrednosti v vse jezike«). Samodejni prevod je obstoječa pretvorba
+   LOOKUP ob zajemu (slovar map.ValueLookup); tu je pregled, katere angleške vrednosti atributov bi slovar
+   prevedel in katere ne — tudi za italijanščino, ki je slovar še nima. Brez zunanjega prevajalnika. *@
+<section class="ui-card section-gap coverage-card" aria-labelledby="coverage-title">
+  <div class="coverage-head">
+    <h2 id="coverage-title">Kaj bi slovar prevedel</h2>
+    <p class="card-note">
+      Različne angleške vrednosti atributov pri izdelkih in ali ima <a href="pravila/slovar">slovar vrednosti</a> zanje prevod
+      (za vse atribute ali za ta atribut). Prevod iz slovarja se uporabi ob naslednjem zajemu ali ponovni obdelavi vira.
+      Katalog.csv zdaj izvaža vrednosti atributov samo v angleščini in slovenščini; nemški, hrvaški in italijanski prevodi se
+      hranijo v slovarju za kasnejšo odločitev.
+    </p>
+  </div>
+  <nav class="coverage-languages" aria-label="Jezik slovarja">
+    @foreach (var language in Coverage?.Languages ?? [])
+    {
+      <button type="button" class="coverage-language @(language.Language == CoverageLanguage ? "is-active" : null)"
+              aria-pressed="@(language.Language == CoverageLanguage ? "true" : "false")" @onclick="() => ChooseCoverageAsync(language.Language)">
+        <strong>@language.Language</strong>
+        <span>@language.Covered.ToString("N0") / @language.Total.ToString("N0") prevedenih</span>
+        <small>@(language.Missing == 0 ? "vse ima prevod" : $"{language.Missing:N0} manjka")</small>
+      </button>
+    }
+  </nav>
+  <PimState Loading="CoverageLoading" Error="@CoverageError" Empty="@(Coverage is not null && Coverage.Gaps.Count == 0)" EmptyText="@($"Slovar zna prevesti vse angleške vrednosti v {CoverageLanguage}.")" LoadingText="Preverjam slovar …">
+    @if (Coverage is not null)
+    {
+      <PimTable Caption="@($"Angleške vrednosti atributov brez prevoda v {Coverage.Language}, po številu izdelkov")" Columns="CoverageColumns">
+        <Rows>
+          @foreach (var gap in Coverage.Gaps.Take(CoverageTake))
+          {
+            <tr>
+              <td>@gap.AttributeCode</td>
+              <td>@gap.Value</td>
+              <td class="numeric">@gap.Products.ToString("N0")</td>
+              <td><a class="small-action translation-action" href="@CoverageHref(gap, Coverage.Language)">Dodaj prevod</a></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
+      @if (Coverage.Gaps.Count > CoverageTake)
+      {
+        <p class="card-note coverage-more">Prikazanih je prvih @CoverageTake od @Coverage.Gaps.Count.ToString("N0"). <button type="button" class="small-action" @onclick="() => CoverageTake += 200">Pokaži še 200</button></p>
+      }
+    }
+  </PimState>
+</section>
+
 @code {
   IReadOnlyList<PIM.Intranet.Services.MissingTranslationRow> Rows = [];
   IReadOnlyList<string> Languages = [];
@@ -55,6 +105,48 @@
   [
     new("Domena"), new("Jezik"), new("Vrednost iz vira"), new("Pojavitev", Numeric: true), new("Nazadnje"), new("Dejanje")
   ];
+
+  [SupplyParameterFromQuery(Name = "slovar")] public string? RequestedCoverageLanguage { get; set; }
+
+  PIM.Intranet.Services.AttributeMappingService.DictionaryCoverageReport? Coverage;
+  bool CoverageLoading = true;
+  string? CoverageError;
+  string CoverageLanguage = "IT";
+  int CoverageTake = 200;
+  static readonly IReadOnlyList<PimColumn> CoverageColumns =
+    [new("Atribut"), new("Angleška vrednost"), new("Izdelkov", Numeric: true), new("Dejanje")];
+
+  string? loadedCoverageLanguage;
+
+  protected override void OnParametersSet()
+  {
+    CoverageLanguage = PIM.Intranet.Services.AttributeMappingService.DictionaryLanguages
+      .FirstOrDefault(code => string.Equals(code, RequestedCoverageLanguage, StringComparison.OrdinalIgnoreCase)) ?? "IT";
+  }
+
+  /* Pregled slovarja se naloži po prvem izrisu, da seznam manjkajočih prevodov ne čaka nanj. */
+  protected override async Task OnAfterRenderAsync(bool firstRender)
+  {
+    if (loadedCoverageLanguage == CoverageLanguage) return;
+    loadedCoverageLanguage = CoverageLanguage;
+    CoverageTake = 200;
+    CoverageLoading = true;
+    CoverageError = null;
+    StateHasChanged();
+    try { Coverage = await Attributes.GetDictionaryCoverageAsync(CoverageLanguage); }
+    catch (Exception exception) { CoverageError = "Pregleda slovarja ni bilo mogoče naložiti: " + exception.Message; }
+    finally { CoverageLoading = false; StateHasChanged(); }
+  }
+
+  Task ChooseCoverageAsync(string language)
+  {
+    Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("slovar", language));
+    return Task.CompletedTask;
+  }
+
+  /* Domena * velja za vse atribute; za prevod, odvisen od atributa (spol barve), jo v slovarju zamenjaš. */
+  static string CoverageHref(PIM.Intranet.Services.AttributeMappingService.DictionaryGap gap, string language) =>
+    $"pravila/slovar?domena=*&vrednost={Uri.EscapeDataString(gap.Value)}&jezik={Uri.EscapeDataString(language)}";
 
   protected override async Task OnInitializedAsync()
   {

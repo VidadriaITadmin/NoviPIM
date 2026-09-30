@@ -85,7 +85,13 @@ else
         <span class="monitor-running">zahteva za zagon oddana@(job.RequestedBy is { Length: > 0 } kdo ? $" ({kdo})" : "")@(job.RequestedRunUtc is { } kdaj ? $" ob {PimTime.FormatTime(kdaj)}" : "")</span>
       }
     </div>
-    <p class="monitor-head-reason">@presoja.Reason</p>
+    @{ var (razlog, napoved) = RazlogInKdaj(presoja.Reason, posel.ForecastText, posel.Forecast?.Kind); }
+    <p class="monitor-head-reason">@razlog</p>
+    @if (napoved is not null)
+    {
+      @* Napoved razporejevalnika (JobQueue, naloga #12): kdaj bo zagon, koliko traja, naslednji redni zagon. *@
+      <p class="monitor-forecast" role="status" aria-live="polite"><strong>Kdaj:</strong> @napoved</p>
+    }
 
     <div class="table-actions">
       @* 1. En korak iz presoje (MonitorPolicy); zagon je spodaj, ker ima potrditveni korak. *@
@@ -159,8 +165,18 @@ else
           </div>
           <div>
             <dt>Naslednji zagon</dt>
-            <dd>@Naslednji(job)</dd>
-            <dd class="monitor-help">Kdaj ga gostitelj zažene naslednjič.</dd>
+            <dd>@Naslednji(posel)</dd>
+            <dd class="monitor-help">@(posel.Forecast?.Kind is JobWaitKind.Running ? "Posel teče; naslednji redni zagon šteje od konca teka." : "Kdaj ga gostitelj zažene naslednjič (ocena upošteva vrsto).")</dd>
+          </div>
+          <div>
+            <dt>Ocena trajanja</dt>
+            <dd>@Trajanje(posel)</dd>
+            <dd class="monitor-help">Iz uspešnih tekov zadnjih @JobQueue.EstimateDays dni; potrebni so vsaj @JobQueue.MinRunsForEstimate teki.</dd>
+          </div>
+          <div>
+            <dt>Razporejanje</dt>
+            <dd>@Razporejanje(job.JobKey)</dd>
+            <dd class="monitor-help">Največ @JobQueue.MaxConcurrentJobs posli hkrati, od tega en težak; ročni zagon ima prednost.</dd>
           </div>
           <div>
             <dt>Časovna meja</dt>
@@ -928,7 +944,7 @@ else
     finally { Busy = false; }
   }
 
-  Task PozeniAsync(global::PIM.Intranet.Services.MonitorJob posel)
+  async Task PozeniAsync(global::PIM.Intranet.Services.MonitorJob posel)
   {
     // Posel, ki kliče SAOP ali dobavitelja oziroma pošilja e-pošto, zahteva drugi klik (kot prej na Opravilih).
     if (posel.Job.Reach != "Internal" && !PotrjujeZagon)
@@ -936,12 +952,14 @@ else
       PotrjujeZagon = true;
       Message = null;
       Error = null;
-      return Task.CompletedTask;
+      return;
     }
     PotrjujeZagon = false;
-    return IzvediAsync(() => Nadzor.RequestRunAsync(posel.Job.JobKey, Uporabnik),
-      $"{posel.Job.Label}: zahteva za zagon je oddana; gostitelj jo prevzame ob naslednjem tiku (do 15 s). Stran se osvežuje sama.",
-      "Zahteve za zagon ni bilo mogoče oddati");
+    var uspeh = $"{posel.Job.Label}: zahteva za zagon je oddana; gostitelj jo prevzame ob naslednjem tiku (do 15 s). Stran se osvežuje sama.";
+    await IzvediAsync(() => Nadzor.RequestRunAsync(posel.Job.JobKey, Uporabnik), uspeh, "Zahteve za zagon ni bilo mogoče oddati");
+    // Takoj po kliku povej, kdaj bo zagon: napoved iz sveže prebrane vrste (naloga #12).
+    if (Message == uspeh && Podrobnosti?.Job.ForecastText is { Length: > 0 } napoved)
+      Message = $"{posel.Job.Label}: zahteva za zagon je oddana. {napoved}";
   }
 
   Task UstaviAsync(global::PIM.Intranet.Services.MonitorJob posel, long jobRunId) =>
@@ -1350,10 +1368,59 @@ else
     : posel.Job.Reach == "SendsEmail" ? "pošlje e-pošto"
     : "kliče SAOP ali dobavitelja";
 
-  static string Naslednji(JobDefinitionRow job) =>
-    !job.IsEnabled ? "— (izklopljen)"
-    : job.IsRequested ? "zdaj (ročna zahteva)"
-    : PimTime.Format(job.NextDueUtc, "ob naslednjem tiku gostitelja");
+  /// <summary>
+  /// Razlog pod »Stanje« in vrstica »Kdaj« brez ponavljanja (preverjalec #12, 3. krog): presoja zamude že vsebuje
+  /// napoved (»Termin je minil …, ker ga razporejevalnik namenoma zadrži. &lt;napoved&gt;«), zato jo iz razloga
+  /// umaknemo in pokažemo samo v »Kdaj«. Kadar je razlog enak napovedi, ostane samo razlog.
+  /// </summary>
+  internal static (string Razlog, string? Kdaj) RazlogInKdaj(string razlog, string? napoved, JobWaitKind? vrsta)
+  {
+    if (napoved is not { Length: > 0 } || vrsta == JobWaitKind.HostDown) return (razlog, null);
+    if (string.Equals(razlog.Trim(), napoved.Trim(), StringComparison.Ordinal)) return (razlog, null);
+    var mesto = razlog.IndexOf(napoved, StringComparison.Ordinal);
+    if (mesto < 0) return (razlog, napoved);
+    var ostanek = (razlog[..mesto] + razlog[(mesto + napoved.Length)..]).Trim();
+    return ostanek.Length == 0 ? (razlog, null) : (ostanek, napoved);
+  }
+
+  static string Naslednji(global::PIM.Intranet.Services.MonitorJob posel)
+  {
+    var job = posel.Job;
+    if (posel.Forecast is not { } napoved)
+      return !job.IsEnabled ? "— (izklopljen)"
+        : job.IsRequested ? "zdaj (ročna zahteva)"
+        : PimTime.Format(job.NextDueUtc, "ob naslednjem tiku gostitelja");
+    string Cas(DateTime utc) => MonitorService.ForecastTime(utc, DateTime.UtcNow);
+    return napoved.Kind switch
+    {
+      JobWaitKind.HostDown => job.NextDueUtc is { } termin && termin < DateTime.UtcNow
+        ? $"gostitelj ne teče (termin {PimTime.Format(termin)} je že minil)"
+        : "gostitelj ne teče",
+      JobWaitKind.Disabled => "— (izklopljen)",
+      JobWaitKind.Running => napoved.NextRegularUtc is { } potem ? $"teče; nato redno ob {Cas(potem)}" : "teče",
+      JobWaitKind.NotDue => napoved.NextRegularUtc is { } redno ? Cas(redno) : "ob naslednjem tiku gostitelja",
+      _ => JobQueue.ShortLabel(napoved, Cas) + (napoved.NextRegularUtc is { } naslednji ? $"; nato redno ob {Cas(naslednji)}" : ""),
+    };
+  }
+
+  static string Trajanje(global::PIM.Intranet.Services.MonitorJob posel) =>
+    posel.Forecast?.Stats is { } s && s.Runs >= JobQueue.MinRunsForEstimate
+      ? $"~{JobQueue.Span(TimeSpan.FromSeconds(s.AverageSeconds))} (povprečje {s.Runs} tekov, najdlje {JobQueue.Span(TimeSpan.FromSeconds(s.MaxSeconds))})"
+      : posel.Forecast?.Stats is { } malo
+        ? $"ocene še ni (samo {malo.Runs} {Teki(malo.Runs)} v {JobQueue.EstimateDays} dneh)"
+        : $"ocene še ni (ni uspešnih tekov v {JobQueue.EstimateDays} dneh)";
+
+  // Slovenska dvojina in množina: 1 tek, 2 teka, 3–4 teki, 5 tekov (101 tek, 102 teka …).
+  static string Teki(int n) => (n % 100) switch { 1 => "tek", 2 => "teka", 3 or 4 => "teki", _ => "tekov" };
+
+  static string Razporejanje(string jobKey)
+  {
+    var deli = new List<string>();
+    if (JobCatalog.UsesSaop(jobKey)) deli.Add($"kliče SAOP: po en posel naenkrat, {JobCatalog.SaopQuietSeconds / 60} min tišine vmes");
+    if (JobCatalog.IsHeavy(jobKey)) deli.Add($"težak posel: ne teče hkrati z drugim težkim (čaka največ {JobQueue.HeavyMaxWaitSeconds / 60} min)");
+    if (JobQueue.BypassesConcurrencyLimit(jobKey)) deli.Add("lahek sistemski posel: gre mimo meje hkratnih poslov");
+    return deli.Count == 0 ? "običajen posel" : string.Join("; ", deli);
+  }
 
   static string ImePodjetja(MonitorJobDetail d, int? organizationId)
   {

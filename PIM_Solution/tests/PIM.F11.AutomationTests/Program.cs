@@ -124,6 +124,14 @@ try
   var steps = await store.GetStepsAsync(runs.First(r => r.JobKey == A && r.Summary == "F11 uspeh").JobRunId);
   Check(steps.Count == 1 && steps[0].Status == JobStepStatus.Succeeded, "Korak zagona je zapisan.");
 
+  // Naloga #12: ocena trajanja iz uspešnih tekov (ena poizvedba za vse posle), osnova napovedi na Nadzoru.
+  var trajanja = await store.GetDurationStatsAsync(JobQueue.EstimateDays);
+  var uspesniA = await CountAsync($"SELECT COUNT(*) FROM ops.JobRun WHERE JobKey = N'{A}' AND EndedUtc IS NOT NULL AND Status IN (N'Succeeded', N'Warning')");
+  Check(trajanja.TryGetValue(A, out var trajanjeA) && trajanjeA.Runs == uspesniA && trajanjeA.AverageSeconds >= 0 && trajanjeA.MaxSeconds >= trajanjeA.AverageSeconds,
+    $"Ocena trajanja šteje samo uspešne končane teke ({uspesniA}).");
+  Check(!trajanja.ContainsKey(B) || trajanja[B].Runs == await CountAsync($"SELECT COUNT(*) FROM ops.JobRun WHERE JobKey = N'{B}' AND EndedUtc IS NOT NULL AND Status IN (N'Succeeded', N'Warning')"),
+    "Blokirani in padli teki ne štejejo v oceno trajanja.");
+
   // 8. Faze znotraj koraka (migracija 255, blok 2 prenove nadzora).
   //
   // Zakaj tu in ne v logičnih testih: prav vez med workerjem in bazo je tisto, česar doslej ni bilo.

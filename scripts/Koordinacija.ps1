@@ -178,6 +178,9 @@ function Test-Prekrivanje([string[]]$a, [string[]]$b) {
     if (-not $px -or -not $py) { continue }
     # Migracije niso zaklep področja: številke se rezervirajo z -Ukaz Migracija.
     if ($px -eq 'pim_solution/sql/migrations' -or $py -eq 'pim_solution/sql/migrations') { continue }
+    # Ustvarjen graf procesov in dnevnik baze (union merge) nista zaklep: konflikt reši Zdruzi.
+    $skupne = 'docs/procesi/pim-procesi.html', 'docs/database.md'
+    if ($skupne -contains $px -or $skupne -contains $py) { continue }
     if ($px -eq $py -or $px.StartsWith("$py/") -or $py.StartsWith("$px/")) { return "$x ↔ $y" }
   } }
   return $null
@@ -622,6 +625,8 @@ switch ($Ukaz) {
     $Koren = $potNaloge
     try {
       Set-Utrip "združujem #$Id v $GlavnaVeja" 'zdruzuje'
+      # Testni podatki, ki jih je prepisala starejša Kopija, niso delo naloge: vrni jih na stanje iz gita.
+      & git -C $potNaloge checkout -- PIM_Solution/fixtures 2>$null
       if (@(& git -C $potNaloge status --porcelain --untracked-files=no 2>$null).Count) { throw "Naloga #$Id ima nepotrjene spremembe v $potNaloge — najprej commit." }
       # 1) Veja naloge dobi vse, kar je medtem prišlo v integracijsko vejo, in se ponovno zgradi.
       $pred = & git -C $potNaloge rev-parse HEAD
@@ -630,6 +635,17 @@ switch ($Ukaz) {
       $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
       if ($izhodMerge -ne 0) {
         $konf = @(& git -C $potNaloge diff --name-only --diff-filter=U 2>$null)
+        # Graf procesov je ustvarjen iz docs/procesi/*.md: konflikt v njem se reši s ponovnim Graf, ne ročno.
+        if ($konf.Count -eq 1 -and $konf[0] -eq 'docs/procesi/PIM-procesi.html') {
+          $ErrorActionPreference = 'Continue'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $potNaloge 'scripts\Procesi.ps1') -Ukaz Graf 2>&1 | Out-Null
+          & git -C $potNaloge add -- docs/procesi/PIM-procesi.html 2>&1 | Out-Null
+          & git -C $potNaloge commit --no-edit 2>&1 | Write-Host
+          $izhodMerge = $LASTEXITCODE; $ErrorActionPreference = 'Stop'
+          if ($izhodMerge -eq 0) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "združevanje: konflikt v grafu procesov rešen s ponovnim Procesi.ps1 -Ukaz Graf"; Write-Naloga $n }; $konf = @() }
+        }
+      }
+      if ($izhodMerge -ne 0) {
         & git -C $potNaloge merge --abort 2>$null
         Use-Zaklep { $n = Get-Naloga $Id; $n.stanje = 'blokirana'; Add-Dnevnik $n "združevanje: konflikt z $GlavnaVeja v $($konf -join ', ') — razvijalec mora vejo posodobiti ročno"; Write-Naloga $n }
         throw "Konflikt z $GlavnaVeja ($($konf -join ', '))."
@@ -660,8 +676,11 @@ switch ($Ukaz) {
       $mapaKopij = Join-Path $Glavna '.claude\worktrees'
       if ($potNaloge -ne $Glavna -and $potNaloge.StartsWith($mapaKopij, [StringComparison]::OrdinalIgnoreCase) -and
           -not @(& git -C $potNaloge status --porcelain 2>$null).Count) {
-        & git -C $Glavna worktree remove $potNaloge 2>$null
-        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." }
+        # Pospravljanje ni del združitve: kopija je lahko v rabi (odprta mapa, tekoč proces) — takrat ostane.
+        $ErrorActionPreference = 'Continue'
+        & git -C $Glavna worktree remove $potNaloge 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Write-Host "Delovna kopija $potNaloge pospravljena." } else { Write-Host "Delovna kopija $potNaloge ostane (v rabi)." }
+        $ErrorActionPreference = 'Stop'
       }
       Write-Host "Naloga #$Id združena v $GlavnaVeja ($commit)." -ForegroundColor Green
     } finally { Remove-Item $zaklepZ -Force -ErrorAction SilentlyContinue }
@@ -690,7 +709,8 @@ switch ($Ukaz) {
     if (-not (Test-Path (Join-Path $pot '.git'))) { throw "Kopije $pot ni bilo mogoče ustvariti." }
     foreach ($podmapa in 'PIM_Solution/fixtures', 'PIM_Solution/pdf_datoteke') {
       $fixGlavna = Join-Path $Glavna $podmapa
-      if (Test-Path $fixGlavna) { Copy-Item $fixGlavna (Split-Path (Join-Path $pot $podmapa) -Parent) -Recurse -Force }
+      # Samo, če je v kopiji ni: fixtures so (od 4f73b7b) v gitu; prepis bi kopijo »umazal« (konci vrstic) in Zdruzi bi jo zavrnil.
+      if ((Test-Path $fixGlavna) -and -not (Test-Path (Join-Path $pot $podmapa))) { Copy-Item $fixGlavna (Split-Path (Join-Path $pot $podmapa) -Parent) -Recurse }
     }
     $potKopije = $pot  # Use-Zaklep ima svoj $pot (datoteka zaklepa)
     if ($Id) { Use-Zaklep { $n = Get-Naloga $Id; Add-Dnevnik $n "delovna kopija $potKopije (veja $veja iz $GlavnaVeja)"; Write-Naloga $n } }

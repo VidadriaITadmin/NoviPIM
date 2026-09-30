@@ -15,7 +15,7 @@ using PIM.XmlMapping;
 //   "203"        NW šifra, ki jo ločimo od naših s predpono
 //   " CLASS II"  isti dobavitelj piše isto stvar na več načinov
 //   "black"      prevod je odvisen od lastnosti (barva je ženskega spola)
-//   "galvanised steel"  prevod, ki velja povsod
+//   "F5 galvanised probe"  prevod, ki velja povsod (domena *)
 //   "sploh ni v slovarju"  manjkajoč prevod ni napaka, ampak delovni seznam
 
 const int organizationId = 2;
@@ -47,7 +47,7 @@ var payload = $"""
     <sym>203</sym>
     <cls> CLASS II</cls>
     <col>black</col>
-    <mat>galvanised steel</mat>
+    <mat>F5 galvanised probe</mat>
     <unk>{unknownValue}</unk>
   </product></feed>
   """;
@@ -74,7 +74,9 @@ try
   Equal("NW.203", await AttributeAsync(connection, "F5 Simbol"), "PREFIX ni pripel predpone.");
   Equal("II", await AttributeAsync(connection, "F5 Razred"), "TRIM + STRIPPREFIX nista poenotila \" CLASS II\".");
   Equal("črna", await AttributeAsync(connection, "F5 Barva SLO"), "LOOKUP ni uporabil prevoda za lastnost.");
-  Equal("cinkano jeklo", await AttributeAsync(connection, "F5 Material SLO"), "LOOKUP ni uporabil splošnega prevoda.");
+  // Splošni prevod (domena *) ima svojo testno vrednost: živi slovar ima od uvoza »Prevajalna tabela.xlsx«
+  // za »galvanised steel« že »Cinkano jeklo«, zato se test ne sme opirati na resnične vrstice slovarja (#15).
+  Equal("f5 cinkano jeklo", await AttributeAsync(connection, "F5 Material SLO"), "LOOKUP ni uporabil splošnega prevoda.");
   Equal(unknownValue, await AttributeAsync(connection, "F5 Neznano SLO"), "Manjkajoč prevod ni pustil vrednosti pri miru.");
 
   // Izvorna vrednost se ne izgubi: Value nosi pretvorjeno, RawValue izvorno.
@@ -91,7 +93,7 @@ try
 
   Equal(0, await ScalarAsync<int>(connection, """
     SELECT COUNT(*) FROM map.MissingTranslation
-    WHERE Domain LIKE N'F5 %' AND SourceValue IN (N'black', N'galvanised steel');
+    WHERE Domain LIKE N'F5 %' AND SourceValue IN (N'black', N'F5 galvanised probe');
     """), "Prevedena vrednost je pristala med manjkajočimi.");
 
   // Trditvi sta omejeni na domene tega testa. Odkar so vpisane resnicne preslikave
@@ -103,7 +105,7 @@ try
   // bilo opravljeno. Beleži se lahko samo izvirnik, in še ta le, kadar prevoda res ni.
   Equal(0, await ScalarAsync<int>(connection, """
     SELECT COUNT(*) FROM map.MissingTranslation
-    WHERE Domain LIKE N'F5 %' AND SourceValue IN (N'črna', N'cinkano jeklo');
+    WHERE Domain LIKE N'F5 %' AND SourceValue IN (N'črna', N'f5 cinkano jeklo');
     """), "Med manjkajočimi je pristal prevod, ne izvirnik.");
 
   // Ponovljen klic postopka nad istimi vrsticami ne sme pretvarjati drugic (NW.NW.203).
@@ -130,6 +132,38 @@ try
 finally
 {
   await CleanupAsync(connection);
+}
+
+// #15 (migracija 307): predlog lepega zapisa vrednosti. Samo predogled — zajem in izvoz ga ne kličeta,
+// zato se tu preveri pravilo samo in to, da ga map.ApplyValueTransforms in out.GetExportRows ne uporabljata.
+if (await ScalarAsync<int>(connection, "SELECT CASE WHEN OBJECT_ID(N'pim.PolishAttributeValue', N'FN') IS NULL THEN 0 ELSE 1 END;") == 1)
+{
+  foreach (var (attribute, input, expected) in new[]
+  {
+    ("Dolžina kabla", "do 30m", "do 30 m"),
+    ("Dolžina kabla", "do 30 m", "do 30 m"),
+    ("Dolžina kabla", "50m", "50 m"),
+    ("Dolžina kabla", "30 - 50m", "30-50 m"),
+    ("IP stopnja zaščite", "IP44", "IP44"),
+    ("Enota", "mm", "mm"),
+    ("Vrsta svetlobnega vira", "LED", "LED"),
+    ("Barva svetlobe", "toplo bela", "Toplo bela"),
+    ("SEKUNDARNAMERSKAENOTA", "kom", "kom"),
+    ("Napetost", "~220-30", "~220-230"),
+    ("CRI", "≥ 80", "≥80"),
+    ("Max moč sijalke", "2x5W", "2x5 W"),
+    ("Ikone", "3CCT,IP65", "3CCT, IP65"),
+    ("Širina", "1,5", "1.5"),
+  })
+    Equal(expected, await ScalarAsync<string>(connection, "SELECT pim.PolishAttributeValue(@Attribute, @Input);",
+      ("@Attribute", attribute), ("@Input", input)), $"Predlog zapisa za »{input}« ({attribute}).");
+
+  Equal(0, await ScalarAsync<int>(connection, """
+    SELECT COUNT(*) FROM sys.sql_modules
+    WHERE object_id IN (OBJECT_ID(N'map.ApplyValueTransforms'), OBJECT_ID(N'out.GetExportRows'), OBJECT_ID(N'val.Promote'))
+      AND definition LIKE N'%PolishAttributeValue%';
+    """), "Predlog zapisa (307) je samo predogled; zajem, validacija in izvoz ga ne smejo klicati, dokler ga lastnik ne potrdi.");
+  Console.WriteLine("F5 predlog zapisa (307): enote, razpon, vejica, velika začetnica, izjeme in ločenost od zajema/izvoza PASS.");
 }
 return 0;
 
@@ -186,7 +220,8 @@ async Task SeedRegistryAsync(SqlConnection sqlConnection)
     INNER JOIN @Mapping mapping ON mapping.Code=step.Code;
 
     INSERT map.ValueLookup(Domain,SourceValue,Language,TargetValue,Note)
-    VALUES(N'F5 Barva SLO',N'black',N'SL',N'črna',N'test 048');
+    VALUES(N'F5 Barva SLO',N'black',N'SL',N'črna',N'test 048'),
+          (N'*',N'F5 galvanised probe',N'SL',N'f5 cinkano jeklo',N'test 048');
     """, ("@SourceCode", sourceCode), ("@OrganizationId", organizationId), ("@EntityType", entityType));
 }
 
@@ -284,7 +319,8 @@ async Task CleanupAsync(SqlConnection sqlConnection)
 
 static SqlCommand Command(SqlConnection connection, string sql, params (string Name, object Value)[] parameters)
 {
-  var command = new SqlCommand(sql, connection) { CommandTimeout = 180 };
+  // 600 s: vrata tečejo po več hkrati na isti bazi; pri 180 s je čiščenje padlo na časovni meji (#15).
+  var command = new SqlCommand(sql, connection) { CommandTimeout = 600 };
   foreach (var parameter in parameters) command.Parameters.AddWithValue(parameter.Name, parameter.Value);
   return command;
 }
