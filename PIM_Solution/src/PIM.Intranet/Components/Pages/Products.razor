@@ -250,7 +250,7 @@
           <strong>Kateri stolpci gredo v datoteko</strong>
           <span>Ključ (podjetje, šifra, naziv) je v izvozu vedno. Izberi samo polja, ki jih res potrebuješ — manjša datoteka pomeni tudi hitrejši uvoz nazaj.</span>
         </div>
-        <button type="button" class="small-action" @onclick="CloseColumnPicker">Zapri</button>
+        <button type="button" class="small-action" data-pim-close @onclick="CloseColumnPicker">Zapri</button>
       </header>
 
       @if (!ColumnPickerLoading && ColumnPickerError is null && AvailableColumns.Count > 0)

@@ -385,6 +385,7 @@
       Note = null;
       await LoadAsync();
     }
+    catch (UnauthorizedAccessException exception) when (exception.Message == SafeguardService.TestIntranetMessage) { Error = exception.Message; }
     catch (UnauthorizedAccessException) { Error = "Tvoja vloga potrditve ne dovoljuje."; }
     catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number is 52703 or 52704)
     {

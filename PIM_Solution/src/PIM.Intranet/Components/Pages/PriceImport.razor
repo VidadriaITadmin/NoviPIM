@@ -7,6 +7,7 @@
 @inject HeavyWorkGate Gate
 @inject ImportHistoryService History
 @inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 
 <PageTitle>Uvoz cen</PageTitle>
 
@@ -29,12 +30,18 @@
   <div class="form-grid">
     <label class="form-field" for="import-organization">
       Podjetje za vrstice brez stolpca »Podjetje«
-      <select id="import-organization" class="filter-select" @bind="OrganizationText">
+      <select id="import-organization" class="filter-select" @bind="OrganizationText" @bind:after="OrganizationChanged" aria-describedby="import-organization-hint">
         <option value="">— iz stolpca v datoteki —</option>
         @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
       </select>
     </label>
   </div>
+  <p class="hint" id="import-organization-hint">
+    @* #107: izbira sama ne spremeni ničesar na strani — uporabi se ob branju datoteke. *@
+    Izbira podjetja se uporabi ob branju datoteke: vrstice brez stolpca »Podjetje« gredo v izbrano podjetje.
+    @(Organizations.FirstOrDefault(row => row.OrganizationId.ToString() == OrganizationText)?.Name is { } chosen ? $"Zdaj: {chosen}." : "Zdaj: vsaka vrstica mora imeti podjetje v stolpcu.")
+    Če podjetje zamenjaš po branju, datoteko izberi znova.
+  </p>
   <p class="hint">
     Naslovov stolpcev ne spreminjaj — po njih uvoz prepozna, kaj je kaj. Ključ vrstice je <strong>Podjetje + Cenik + Šifra artikla</strong>.
     <strong>Prazna celica pomeni, da se polja ne dotaknemo</strong>. Vrstica s cenikom, v katerem artikel še nima cene, je nova cena.
@@ -100,7 +107,7 @@
       <AuthorizeView Policy="@PimPolicies.SaopWrite">
         <div class="panel-actions">
           <button type="button" class="primary-button" disabled="@Busy" @onclick="ApplyAsync">
-            Uvrsti @Preview.Rows.Count.ToString("N0") cen v vrsto za SAOP (@string.Join(", ", Preview.Organizations))
+            Uvrsti @PimFormat.Count(Preview.Rows.Count, "ceno", "ceni", "cene", "cen") v vrsto za SAOP (@string.Join(", ", Preview.Organizations))
           </button>
         </div>
       </AuthorizeView>
@@ -117,7 +124,7 @@
       <p class="hint">Uvoz je zapisan v zgodovino kot <a href="@($"uvozi/{historyId}")">uvoz #@historyId</a> — tam ga lahko povrneš.</p>
     }
     <p role="status">
-      V vrsto za SAOP: <strong>@Outcome.Queued.ToString("N0")</strong> cen
+      V vrsto za SAOP: <strong>@PimFormat.Count(Outcome.Queued, "cena", "ceni", "cene", "cen")</strong>
       @if (Outcome.Duplicates > 0) { <text>· že čakalo v vrsti: @Outcome.Duplicates.ToString("N0") </text> }
       @if (Outcome.Unchanged > 0) { <text>· enakih kot v SAOP: @Outcome.Unchanged.ToString("N0") </text> }
       @if (Outcome.Rejected.Count > 0) { <text>· zavrnjenih: @Outcome.Rejected.Count.ToString("N0")</text> }
@@ -125,7 +132,7 @@
     <ul class="change-list">
       @foreach (var (organization, batchId, outcome) in Outcome.Batches.Where(batch => batch.BatchId is not null))
       {
-        <li>@organization — serija @batchId: @outcome.Queued.ToString("N0") cen čaka odobritev.</li>
+        <li>@organization — serija @batchId: @PimFormat.Count(outcome.Queued, "cena čaka", "ceni čakata", "cene čakajo", "cen čaka") odobritev.</li>
       }
     </ul>
     @foreach (var row in Outcome.Rejected.Take(50)) { <p class="message-state warn-message">@row.PriceList @row.ItemId: @row.Reason</p> }
@@ -151,6 +158,8 @@
 
   /// <summary>280: povratek uvoza (?povrni=N) — predogled s prejšnjimi cenami.</summary>
   [SupplyParameterFromQuery(Name = "povrni")] public long? UndoRunId { get; set; }
+  /// <summary>#113: podjetje za vrstice brez stolpca »Podjetje« je v naslovu (povezava ga ohrani).</summary>
+  [SupplyParameterFromQuery(Name = "podjetje")] public int? QueryOrganization { get; set; }
   ImportRunRow? UndoOf;
   IReadOnlyList<string> UndoSkipped = [];
   long? HistoryId;
@@ -159,7 +168,24 @@
   {
     try { Organizations = await Data.GetOrganizationsAsync(); }
     catch { Error = "Seznama podjetij trenutno ni mogoče naložiti."; }
+    if (QueryOrganization is { } requested && Organizations.Any(organization => organization.OrganizationId == requested))
+      OrganizationText = requested.ToString();
     if (UndoRunId is { } undoRunId) await PrepareUndoAsync(undoRunId);
+  }
+
+  /// <summary>
+  /// #113: izbrano podjetje v naslov. Že prebran predogled je bil narejen s prejšnjim podjetjem,
+  /// zato se umakne — datoteko je treba izbrati znova (sicer bi vrstice šle v napačno podjetje).
+  /// </summary>
+  void OrganizationChanged()
+  {
+    var uri = Navigation.GetUriWithQueryParameter("podjetje", OrganizationId);
+    if (!string.Equals(uri, Navigation.Uri, StringComparison.Ordinal)) Navigation.NavigateTo(uri, replace: true);
+    if (Preview is not null && UndoOf is null)
+    {
+      Preview = null;
+      Message = "Podjetje je spremenjeno. Izberi datoteko znova, da predogled upošteva novo podjetje.";
+    }
   }
 
   async Task PrepareUndoAsync(long importRunId)
@@ -236,7 +262,7 @@
         UndoOf is { } undone ? $"Povratek uvoza #{undone.ImportRunId}" : FileName ?? "Uvoz cen", null, actor,
         Preview.Rows.Count, Outcome.Queued, Outcome.Batches.Where(batch => batch.BatchId is not null).Select(batch => batch.BatchId!.Value),
         Outcome.Rejected.Select(row => $"{row.PriceList} {row.ItemId}: {row.Reason}"), UndoOf?.ImportRunId, ImportHistoryService.FromPrices(Preview));
-      Message = $"{Outcome.Queued:N0} cen čaka odobritev na zavihku »V SAOP«.";
+      Message = $"{PimFormat.Count(Outcome.Queued, "cena čaka", "ceni čakata", "cene čakajo", "cen čaka")} odobritev na zavihku »V SAOP«.";
       // Predogled se umakne, da druga oddaja istega gumba ne uvrsti datoteke dvakrat.
       Preview = null;
     }

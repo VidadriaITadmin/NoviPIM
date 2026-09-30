@@ -17,6 +17,12 @@
   Velja za konzolne IN xUnit projekte: -Filter F12 ne pozene PIM.ChangeTracking.Integration,
   -Filter ChangeTracking pa samo tega.
 
+.PARAMETER Tezki
+  Pozene tudi tezke dele testov nad bazo, ki so privzeto izklopljeni (#110). Zdaj je to DB del
+  PIM.F10.ProductWorkbookTests (krog izvoz -> uvoz), ki na razvojnem racunalniku (8 GB RAM) zna
+  zamrzniti SQL in pise v bazo. Brez stikala ga skripta preskoci z PIM_TEST_BREZ_BAZE=1.
+  Vrata table (Koordinacija.ps1 -Ukaz Preveri) stikala namenoma ne podajo.
+
 .PARAMETER Verbose_
   Ob napaki izpise cel izhod projekta, ne samo zadnjih vrstic.
 
@@ -27,6 +33,7 @@
 [CmdletBinding()]
 param(
   [string]$Filter = "",
+  [switch]$Tezki,
   [switch]$Verbose_
 )
 
@@ -91,7 +98,11 @@ $projekti = $projekti | Where-Object { $izkljuceni -notcontains $_.Name }
 
 if ($Filter) { $projekti = $projekti | Where-Object { $_.Name -like "*$Filter*" } }
 
+# Projekti s tezkim DB delom: brez -Tezki dobijo PIM_TEST_BREZ_BAZE=1 (samo za svoj podproces).
+$tezkiDbDel = @('PIM.F10.ProductWorkbookTests')
+
 $padli = @()
+$preskoceniDb = @()
 $preskoceni = @()
 $uspeli = @()
 
@@ -111,6 +122,11 @@ foreach ($p in $projekti) {
   Push-Location $p.FullName
   $tmpOut = [System.IO.Path]::GetTempFileName()
   $tmpErr = [System.IO.Path]::GetTempFileName()
+  # #110: tezki DB del privzeto izklopljen. Spremenljivko nastavimo samo za ta podproces
+  # (Start-Process podeduje okolje) in jo v finally vrnemo na prejsnjo vrednost.
+  $brezBaze = (-not $Tezki) -and ($tezkiDbDel -contains $p.Name)
+  $prejBrezBaze = $env:PIM_TEST_BREZ_BAZE
+  if ($brezBaze) { $env:PIM_TEST_BREZ_BAZE = "1" }
   try {
     $prej = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
@@ -123,6 +139,10 @@ foreach ($p in $projekti) {
     $izhod = (Get-Content $tmpOut -Raw -ErrorAction SilentlyContinue) + "`n" +
              (Get-Content $tmpErr -Raw -ErrorAction SilentlyContinue)
   } finally {
+    if ($brezBaze) {
+      if ($null -eq $prejBrezBaze) { Remove-Item Env:PIM_TEST_BREZ_BAZE -ErrorAction SilentlyContinue }
+      else { $env:PIM_TEST_BREZ_BAZE = $prejBrezBaze }
+    }
     Remove-Item $tmpOut, $tmpErr -Force -ErrorAction SilentlyContinue
     Pop-Location
   }
@@ -132,6 +152,12 @@ foreach ($p in $projekti) {
     Zapisi Red ("  FAIL  {0}  (izhod {1})" -f $p.Name, $koda)
     $vrstice = if ($Verbose_) { $izhod } else { ($izhod -split "`n" | Select-Object -Last 6) -join "`n" }
     Write-Host $vrstice
+  }
+  elseif ($brezBaze) {
+    # Pogodba je tekla in uspela; preskocen je samo DB del. Stejemo ga posebej (preskoceniDb),
+    # da izhod ne trdi, da je krog izvoz -> uvoz dokazan.
+    $preskoceniDb += $p.Name
+    Zapisi Yellow ("  PRESK DB del {0}  (pogodba OK; DB del z -Tezki)" -f $p.Name)
   }
   elseif ($izhod -match "presko") {
     $preskoceni += $p.Name
@@ -212,6 +238,12 @@ if ($preskoceni.Count -gt 0) {
   Zapisi Yellow ""
   Zapisi Yellow "Preskoceni projekti (niso dokaz, da kaj dela):"
   $preskoceni | ForEach-Object { Write-Host "  - $_" }
+}
+
+if ($preskoceniDb.Count -gt 0) {
+  Zapisi Yellow ""
+  Zapisi Yellow "Tezki DB del namenoma preskocen (PIM_TEST_BREZ_BAZE=1; za polni krog pozeni z -Tezki):"
+  $preskoceniDb | ForEach-Object { Write-Host "  - $_" }
 }
 
 if ($padli.Count -gt 0) {

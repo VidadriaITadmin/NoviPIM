@@ -152,7 +152,7 @@ public sealed class StockReadService(IConfiguration configuration)
     return new(rows, total);
   }
 
-  /// <summary>Najdaljši Naziv, preden Excel stolpec postane nepregleden.</summary>
+  /// <summary>Najdaljši naziv (spletni ali ERP), preden Excel stolpec postane nepregleden.</summary>
   const int NameMaxLength = 40;
 
   static string? Truncate(string? value) =>
@@ -186,9 +186,14 @@ public sealed class StockReadService(IConfiguration configuration)
     var truncated = rows.Count > MaxExportRows;
     if (truncated) rows = rows.Take(MaxExportRows).ToList();
 
+    // #99: dva ločena naziva kot pri cenah — ena poizvedba za vse ujemajoče artikle, ne na vrstico.
+    var titles = await ProductTitleLookup.ByProductIdAsync(
+      ConnectionString, rows.Where(row => row.MatchedProductId is not null).Select(row => row.MatchedProductId!.Value), cancellationToken);
+
     IReadOnlyList<WorkbookColumn> columns =
     [
-      new("Šifra artikla", Width: 18), new("EAN", Width: 16), new("Naziv (spletni, sicer ERP)", Width: NameMaxLength + 4),
+      new("Šifra artikla", Width: 18), new("EAN", Width: 16),
+      new(ProductTitleLookup.WebHeader, Width: NameMaxLength + 4), new(ProductTitleLookup.ErpHeader, Width: NameMaxLength + 4),
       new("Skladišče", Width: 24), new("SAOP količina", WorkbookCellKind.Number), new("SAOP razpoložljivo", WorkbookCellKind.Number),
       new("SAOP prihodna količina", WorkbookCellKind.Number), new("SAOP datum prihoda", Width: 18),
       new("Minimalna zaloga", WorkbookCellKind.Number), new("Maksimalna zaloga", WorkbookCellKind.Number),
@@ -200,7 +205,8 @@ public sealed class StockReadService(IConfiguration configuration)
 
     var cells = rows.Select(row => (IReadOnlyList<object?>)new object?[]
     {
-      row.ProductItemId ?? row.NormalizedItemId, row.Ean, Truncate(row.ProductName),
+      row.ProductItemId ?? row.NormalizedItemId, row.Ean,
+      Truncate(ProductTitleLookup.Find(titles, row.MatchedProductId).WebTitle), Truncate(ProductTitleLookup.Find(titles, row.MatchedProductId).ErpTitle),
       row.HasErp ? row.ErpWarehouse : null, row.HasErp ? row.ErpQuantity : null, row.HasErp ? row.ErpAvailable : null,
       row.HasErp ? row.ErpIncomingQuantity : null, row.HasErp ? row.ErpIncomingDate : null,
       row.MinimumStock, row.MaximumStock,

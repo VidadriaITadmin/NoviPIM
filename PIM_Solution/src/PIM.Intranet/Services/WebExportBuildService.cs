@@ -99,22 +99,23 @@ public sealed class WebExportBuildService(IConfiguration configuration)
     return (columns, delimiter);
   }
 
-  public static string FileName(string profileCode, DateTime utcNow)
+  /// <param name="localNow">Čas v naši uri (<see cref="PimTime.Local"/>), ne UTC — uporabnik ga primerja z uro na računalniku (#92).</param>
+  public static string FileName(string profileCode, DateTime localNow)
   {
     ArgumentException.ThrowIfNullOrWhiteSpace(profileCode);
     var safeProfile = new string(profileCode.Trim().Select(character => char.IsLetterOrDigit(character) || character is '-' or '_'
       ? character : '_').ToArray());
-    return $"PIM_splet_{safeProfile}_{utcNow:yyyyMMdd_HHmm}.csv";
+    return $"PIM_splet_{safeProfile}_{localNow:yyyyMMdd_HHmm}.csv";
   }
 
   /// <summary>
   /// Uveljavi predlagano ime prenesene datoteke (npr. »katalog.csv«, ki ga izbere stran /splet)
   /// namesto privzetega, casovno zigosanega imena. Ce predlog ni varen, se uporabi privzeto ime.
   /// </summary>
-  public static string SafeFileName(string requested, string profileCode, DateTime utcNow)
+  public static string SafeFileName(string requested, string profileCode, DateTime localNow)
   {
     var trimmed = requested.Trim();
-    if (trimmed.Length == 0) return FileName(profileCode, utcNow);
+    if (trimmed.Length == 0) return FileName(profileCode, localNow);
     var safe = new string(trimmed.Select(character => char.IsLetterOrDigit(character) || character is '-' or '_' or '.'
       ? character : '_').ToArray());
     return safe.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ? safe : safe + ".csv";

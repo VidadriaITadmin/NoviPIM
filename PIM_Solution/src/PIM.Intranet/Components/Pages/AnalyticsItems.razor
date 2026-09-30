@@ -193,6 +193,7 @@ else if (Selected.Count > 0)
   readonly Dictionary<long, AnalyticsItemRow> Selected = [];
   bool AllMatching;
   int OrganizationId;
+  string? OrganizationName;
   bool Loading = true;
   string? Error;
   string SearchText = "", SupplierText = "", AbcText = "", SortText = "prodaja";
@@ -219,6 +220,7 @@ else if (Selected.Count > 0)
       if (organization.OrganizationId != OrganizationId) { Selected.Clear(); Suppliers = []; }
       AllMatching = false; // nov filter = nova množica; izbira »vse po filtru« ne sme veljati za drug nabor
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
       Page = await Analytics.GetItemsAsync(OrganizationId, Filter);
       if (Suppliers.Count == 0)
         Suppliers = (await Analytics.GetSuppliersAsync(OrganizationId, null, "naziv", false, 0, 2000, true)).Rows;
@@ -245,9 +247,10 @@ else if (Selected.Count > 0)
   int ActiveTotal => Page?.SignalCounts.Where(p => p.Key != AnalyticsSignals.Inactive).Sum(p => p.Value) ?? 0;
   bool HasFilters => Filter.Search is not null || Filter.SupplierId is not null || Filter.Abc is not null || Filter.Signal is not null;
 
+  // 120: prazno stanje pove, za katero podjetje ni podatkov — preklop podjetja se tako vidi tudi, ko sta obe prazni.
   string EmptyText => HasFilters
-    ? "Za izbrane filtre ni artiklov. Počisti filtre ali izberi drug signal."
-    : "Analitika za to podjetje še ni preračunana ali pa ni artiklov z zalogo ali prodajo.";
+    ? $"V podjetju {OrganizationName} za izbrane filtre ni artiklov. Počisti filtre ali izberi drug signal."
+    : $"Za podjetje {OrganizationName} analitika še ni preračunana ali pa nobeden artikel nima zaloge ali prodaje. Stanje zajema iz SAOP je na zavihku Pregled.";
 
   string Caption => $"Artikli{(Filter.Signal is { } s ? " — " + AnalyticsSignals.Find(s).Label : "")}, stran {Filter.Skip / Filter.Take + 1}";
 

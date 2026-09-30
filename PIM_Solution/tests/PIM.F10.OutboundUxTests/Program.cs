@@ -222,6 +222,17 @@ foreach (Match dialog in dialogs)
 var shell = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "wwwroot", "js", "pim-shell.js"));
 foreach (var piece in new[] { "[role=\"dialog\"][aria-modal=\"true\"]", "'[data-pim-close]'", "event.key === 'Escape'", "event.key !== 'Tab'", "returnTo.focus()", "MutationObserver" })
   Assert(shell.Contains(piece, StringComparison.Ordinal), "pim-shell.js mora obravnavati pogovorna okna (Esc, zanka fokusa, vrnitev fokusa); manjka: " + piece);
+// #106: tudi okna drugih strani imajo gumb Zapri/Prekliči z data-pim-close (Esc zapre okno).
+foreach (var (file, expected) in new[] {
+  ("Pages/SaopHistory.razor", 1), ("Pages/Media.razor", 1), ("Pages/Products.razor", 1), ("Pages/ProductImport.razor", 1),
+  ("Pages/CatalogCategories.razor", 2), ("Shared/ImportGapsDialog.razor", 1) })
+{
+  var source = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", file));
+  var modal = Regex.Matches(source, "role=\"dialog\" aria-modal=\"true\"").Count;
+  var close = Regex.Matches(source, "<button type=\"button\"[^\\n]*?data-pim-close[^\\n]*?>(Zapri|Prekliči)</button>").Count;
+  Assert(modal == expected && close == expected,
+    file + ": vsako pogovorno okno (aria-modal) mora imeti natanko en gumb Zapri/Prekliči z data-pim-close (okna " + modal + ", gumbi " + close + ").");
+}
 // #84: podrobnosti po polju se ne sestavijo ob vsakem izrisu na novo.
 Assert(markup.Contains("fieldRowsCache", StringComparison.Ordinal) && markup.Contains("filteredCache", StringComparison.Ordinal),
   "Filtrirani artikli in sporočila po polju morajo biti predpomnjeni, ne sestavljeni ob vsakem izrisu.");

@@ -242,6 +242,8 @@ Assert(mediaPage.Contains("<option value=\"\">Vsa podjetja</option>", StringComp
   "Izbirnik podjetja mora ponuditi vsa podjetja.");
 Assert(!mediaPage.Contains("GetCurrentOrganizationAsync", StringComparison.Ordinal),
   "Obseg ne sme priti iz GetCurrentOrganizationAsync — ta vedno vrne prvo podjetje po sifri (DEMO).");
+// Pogodba je natancen niz: ce se SQL obsega v CatalogReadService.cs preoblikuje, je treba tu posodobiti trditev
+// (naloga #111: vrata #94 so tekla na veji, kjer je bila trditev se stara »@OrganizationId IS NULL OR« iz casa pred 264).
 // 264 je izraz obsega zapisala kot »@OrganizationId IS NULL AND ... IN (aktivna podjetja) OR = @OrganizationId«; pomen je isti.
 Assert(catalog.Contains("organization.IsActive = 1", StringComparison.Ordinal)
     && catalog.Contains("@OrganizationId IS NULL AND product.OrganizationId IN (SELECT aktivno.OrganizationId FROM dbo.OrganizationConfig aktivno WHERE aktivno.IsActive = 1)", StringComparison.Ordinal)
@@ -307,6 +309,43 @@ Assert(ProductFieldLabels.For("ProductMedia.DelujocaSlika").Contains("Delujoča"
     && QualityFieldPolicy.FixTarget("ProductMedia.DelujocaSlika").Href == "mediji/napacni-naslovi",
   "Napaka validacije »Delujoca slika« ima ime po domace in vodi na napacne naslove slik.");
 
+// ─── #119: napaka nalaganja v dnevnik, »Ponovi«, poizvedbe samo enkrat ──────
+// Stran se je pod obremenitvijo nalagala ~60 s (dve casovni meji po 30 s: predupodobitev in
+// interaktivno vezje) in pokazala napako, ki je prazen catch ni zapisal nikamor.
+Assert(page.Contains("@inject ILogger<Media> Log", StringComparison.Ordinal) && page.Contains("Log.LogError(failure, \"Mediji: seznam ni naložen", StringComparison.Ordinal),
+  "Napaka nalaganja medijev mora iti v dnevnik aplikacije z vzrokom.");
+Assert(!System.Text.RegularExpressions.Regex.IsMatch(page, @"catch\s*\{"),
+  "Media.razor ne sme imeti praznega catch — vzrok napake mora biti zapisan.");
+Assert(page.Contains("@onclick=\"RetryAsync\"", StringComparison.Ordinal) && page.Contains(">Ponovi</button>", StringComparison.Ordinal),
+  "Ob napaki mora imeti uporabnik gumb »Ponovi«.");
+Assert(page.Contains("new InteractiveServerRenderMode(prerender: false)", StringComparison.Ordinal),
+  "Brez predupodabljanja — sicer stran vse poizvedbe medijev pozene dvakrat.");
+Assert(page.Contains("includeCount: false", StringComparison.Ordinal) && page.Contains("TotalFromKindCounts", StringComparison.Ordinal),
+  "Skupno stevilo je vsota stevcev po vrsti, ne se ena poizvedba cez celotno podlago.");
+Assert(catalog.Contains("bool includeCount = true", StringComparison.Ordinal),
+  "Paketno urejanje (MaxRows) se vedno potrebuje skupno stevilo iz GetMediaAsync.");
+Assert(page.Contains("SlowLoadMilliseconds", StringComparison.Ordinal),
+  "Pocasno nalaganje mora pustiti opozorilo s casom v dnevniku.");
+
+// ─── #127: vsi filtri v naslovu strani ─────────────────────────────────────
+// Klikalnik (#109, #119): podjetje, razvrstitev, vloga, streznik, cas vnosa in stanje izdelka so bili
+// samo stanje komponente — povezave ni bilo mogoce deliti, »Nazaj« jih je izgubil.
+foreach (var name in new[] { "podjetje", "izdelek", "vrsta", "razvrstitev", "vloga", "streznik", "dodano", "aktivnost" })
+{
+  Assert(page.Contains("Name = \"" + name + "\"", StringComparison.Ordinal), "Filter »" + name + "« se mora brati iz naslova.");
+  Assert(page.Contains("[\"" + name + "\"] =", StringComparison.Ordinal), "Filter »" + name + "« se mora zapisati v naslov.");
+}
+Assert(page.Contains("Navigation.GetUriWithQueryParameters", StringComparison.Ordinal) && page.Contains("Navigation.NavigateTo(uri, replace: replace)", StringComparison.Ordinal),
+  "Naslov se uskladi prek GetUriWithQueryParameters.");
+Assert(page.Contains("protected override async Task OnParametersSetAsync()", StringComparison.Ordinal),
+  "»Nazaj« v brskalniku mora stran prebrati znova (OnParametersSetAsync).");
+Assert(page.Contains("OwnNavigations", StringComparison.Ordinal),
+  "Zapozneli povratek lastnega naslova med tipkanjem ne sme povoziti vnosa ali sprozit dvojnega nalaganja.");
+Assert(page.Contains("DropUnknownScopeFilters", StringComparison.Ordinal) && page.Contains("UrlNotice", StringComparison.Ordinal),
+  "Vloga ali streznik iz povezave, ki ju podjetje nima, se zavrze z obvestilom — ne tiho prazen seznam.");
+Assert(page.Contains("ApplyAsync(replaceUrl: true)", StringComparison.Ordinal),
+  "Tipkanje v iskanje ne sme polniti zgodovine brskalnika z vsako vmesno besedo.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 
@@ -317,7 +356,11 @@ static void Assert(bool condition, string message)
   Environment.Exit(1);
 }
 
-static string Read(string path) => File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+// Naloga #111: manjkajoca datoteka je bila prej tiho prazen niz, zato je padla vsebinska trditev
+// (npr. »Obseg medijev ...«) namesto jasne napake. Zdaj test pove, katere datoteke ni.
+static string Read(string path) => File.Exists(path)
+  ? File.ReadAllText(path)
+  : throw new FileNotFoundException("Datoteke, ki jo test preverja, ni: " + path, path);
 
 static string FindRoot()
 {
