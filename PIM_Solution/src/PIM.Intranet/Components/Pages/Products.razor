@@ -1,7 +1,13 @@
 @page "/izdelki"
 @attribute [Authorize]
-@rendermode InteractiveServer
+@* Naloga #74: brez predupodabljanja. Prej je predupodobljena stran pokazala zadetke, interaktivni krog pa
+   je seznam, fasete in drevo kategorij bral še enkrat; pod obremenjeno bazo je drugi krog padel in
+   uporabnik je izgubil že prikazane zadetke (in vtipkano besedilo v še neinteraktivnem iskalnem polju).
+   Prenos predupodobljenih podatkov (PersistentComponentState) ni varen: fasete (do 500) in drevo kategorij
+   presežejo omejitev sporočila SignalR (32 KB), glej #52. *@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @implements IDisposable
+@inject ILogger<Products> Log
 @using PIM.Operations
 @inject IntranetDataService Data
 @inject ProductWorkbenchService Workbench
@@ -638,7 +644,18 @@
   {
     <div class="opening-overlay" role="status" aria-live="assertive"><span class="opening-spinner" aria-hidden="true"></span><span>Odpiram kartico izdelka …</span></div>
   }
-  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)"
+  @if (FilterWarning is not null)
+  {
+    <p class="message-state warn-message" role="status">@FilterWarning</p>
+  }
+  @if (StaleWarning is not null && Page is not null)
+  {
+    <div class="message-state warn-message retry-note" role="alert">
+      <span>@StaleWarning</span>
+      <button type="button" class="ghost-button" @onclick="RetryAsync" disabled="@Loading">Ponovi</button>
+    </div>
+  }
+  <PimState Loading="@(Loading && !KeepRowsWhileLoading)" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)"
             EmptyText="Za izbrane filtre ni izdelkov." LoadingText="Nalaganje izdelkov …">
     @if (Page is not null)
     {
@@ -691,6 +708,12 @@
       <PimPager Skip="Skip" Take="Take" Total="Page.TotalCount" Label="Strani izdelkov" SkipChanged="GoToSkipAsync" />
     }
   </PimState>
+  @if (Error is not null && !Loading)
+  {
+    <div class="retry-row">
+      <button type="button" class="ghost-button" @onclick="RetryAsync">Ponovi</button>
+    </div>
+  }
 </section>
 
 <p class="muted source-note">
@@ -735,6 +758,18 @@
   IReadOnlyList<OrganizationContext> Organizations = [];
   bool Loading = true;
   string? Error;
+  // Filter, s katerim je bil prebran trenutni Page. Ob ponovnem branju istega filtra (Ponovi,
+  // osvežitev po zapisu) ostanejo zadetki vidni; ob drugem filtru ali podjetju se nikoli ne pokažejo
+  // zadetki prejšnjega, ker bi uporabnik videl podatke, ki ne ustrezajo izbiri.
+  ProductListFilter? PageFilter;
+  ProductListFilter? RequestedFilter;
+  // Opozorilo, da je prikazan zadnji uspešno prebrani seznam istega filtra, osvežitev pa ni uspela.
+  string? StaleWarning;
+  // Fasete ali drevo kategorij se niso naložili; seznam je vseeno prikazan.
+  string? FilterWarning;
+  // Hitro zaporedno filtriranje: rezultat starejšega branja ne sme povoziti novejšega.
+  int LoadVersion;
+  bool KeepRowsWhileLoading => Page is not null && PageFilter is not null && PageFilter == RequestedFilter;
 
   // Sentinel za "se nic ni naloženo": prazen niz pomeni vsa podjetja in je veljaven obseg,
   // zato ga ni mogoce uporabiti kot znak, da fasete se niso prebrane.
@@ -896,14 +931,14 @@
       ExportState = running.Status;
     }
     try { Organizations = await Data.GetOrganizationsAsync(); }
-    catch { Organizations = []; }
+    catch (Exception failure) { Organizations = []; Log.LogWarning(failure, "Seznam podjetij za /izdelki ni naložen"); }
     try
     {
       PackagingCodes = await Packaging.GetCatalogAsync();
       CustomerTypes = await Data.GetCustomerTypesAsync();
       BulkType = CustomerTypes.FirstOrDefault()?.CustomerTypeCode ?? "";
     }
-    catch { PackagingCodes = []; CustomerTypes = []; }
+    catch (Exception failure) { PackagingCodes = []; CustomerTypes = []; Log.LogWarning(failure, "Šifranti embalaže in tipov strank za /izdelki niso naloženi"); }
     var user = (await Authentication.GetAuthenticationStateAsync()).User;
     CanEditDiscounts = user.IsInRole("ADMIN") || user.IsInRole("CATALOG_EDITOR") || user.IsInRole("COMMERCIAL");
     // Paketno urejanje polj: politika CatalogWrite (Admin, CatalogEditor). Skrit gumb je samo videz —
@@ -934,49 +969,130 @@
     SortDraft = string.IsNullOrWhiteSpace(QuerySort) ? "ITEM"
       : string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase) ? QuerySort + ":desc" : QuerySort;
 
+    await LoadAsync();
+  }
+
+  ProductListFilter CurrentFilter() => new(
+    OrganizationScope, Skip, Take, QuerySearch, ActiveView,
+    QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
+    QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
+    "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
+    CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
+    QueryPackaging, QueryDiscountGroup, QuerySpecial);
+
+  Task RetryAsync() => LoadAsync();
+
+  /// <summary>
+  /// Najprej seznam (to uporabnik čaka), nato vrednosti filtrov. Vsak del ima svojo napako:
+  /// fasete ali drevo kategorij ne podreta seznama, napaka seznama pa ne izbriše zadetkov
+  /// istega filtra, ki so že na zaslonu. Vsaka napaka gre v dnevnik aplikacije z iskalnim nizom
+  /// in podjetjem, da se vzrok (časovna meja, blokada, drugo) vidi.
+  /// </summary>
+  async Task LoadAsync()
+  {
+    var version = ++LoadVersion;
+    var filter = CurrentFilter();
+    RequestedFilter = filter;
     Loading = true;
     Error = null;
+    StaleWarning = null;
+    if (PageFilter != filter) { Page = null; PageFilter = null; }
+
     try
     {
-      // Vrednosti spustnih seznamov so vezane samo na obseg podjetja, zato se preberejo znova
-      // sele ob njegovi spremembi, ne ob vsakem filtru.
-      var scope = OrganizationScope;
-      var scopeKey = scope?.ToString() ?? "";
-      if (LoadedScope != scopeKey)
-      {
-        LoadedScope = scopeKey;
-        // 500 je zgornja meja procedure; 100 je bilo premalo (Vidadria ima 124 dobaviteljev).
-        Facets = await Workbench.GetProductListFacetsAsync(scope, take: 500);
-      }
+      var page = await Workbench.GetProductListAsync(filter);
+      if (version != LoadVersion) return;
+      Page = page;
+      PageFilter = filter;
+      // Drug filter = druga izbira »vse po filtru«; stran (listanje) filtra ne spremeni.
+      Selection.UpdateFilter(Href(page: 1), page.TotalCount);
+    }
+    catch (Exception failure)
+    {
+      if (version != LoadVersion) return;
+      Log.LogError(failure, "Seznam izdelkov ni naložen ({Kind}). Iskanje={Search}, podjetje={Organization}, filter={Filter}",
+        FailureKind(failure), filter.Search, filter.OrganizationId?.ToString() ?? "vsa", filter);
+      var message = IsDatabaseBusy(failure)
+        ? "Baza je trenutno zasedena in seznam izdelkov se ni naložil pravočasno. Poskusi znova čez nekaj trenutkov."
+        : "Izdelkov trenutno ni mogoče naložiti. Napaka je zapisana v dnevnik aplikacije.";
+      if (Page is not null && PageFilter == filter)
+        StaleWarning = message + " Prikazani so zadnji prebrani zadetki.";
+      else
+        Error = message;
+    }
+    finally
+    {
+      if (version == LoadVersion) Loading = false;
+    }
 
-      // Drevesa kategorij se ne spreminjajo med filtriranjem; preberejo se enkrat na sejo strani.
-      if (CategoryOptions.Count == 0)
+    if (version != LoadVersion) return;
+    // Seznam je na zaslonu, preden se berejo vrednosti filtrov.
+    StateHasChanged();
+    await LoadFilterValuesAsync(filter.OrganizationId, version);
+  }
+
+  async Task LoadFilterValuesAsync(int? scope, int version)
+  {
+    var failed = false;
+    // Vrednosti spustnih seznamov so vezane samo na obseg podjetja, zato se preberejo znova
+    // sele ob njegovi spremembi, ne ob vsakem filtru.
+    var scopeKey = scope?.ToString() ?? "";
+    if (LoadedScope != scopeKey)
+    {
+      try
+      {
+        // 500 je zgornja meja procedure; 100 je bilo premalo (Vidadria ima 124 dobaviteljev).
+        var facets = await Workbench.GetProductListFacetsAsync(scope, take: 500);
+        if (version != LoadVersion) return;
+        Facets = facets;
+        LoadedScope = scopeKey;
+      }
+      catch (Exception failure)
+      {
+        failed = true;
+        Log.LogWarning(failure, "Vrednosti filtrov izdelkov niso naložene ({Kind}), podjetje={Organization}",
+          FailureKind(failure), scope?.ToString() ?? "vsa");
+      }
+    }
+
+    // Drevesa kategorij se ne spreminjajo med filtriranjem; preberejo se enkrat na sejo strani
+    // (ob napaki ostane seznam prazen in se prebere ob naslednjem filtru).
+    if (CategoryOptions.Count == 0)
+    {
+      try
       {
         var picked = new List<CategoryTreeService.CategoryPickRow>();
         foreach (var treeCode in await Categories.GetTreeCodesAsync())
           picked.AddRange(await Categories.GetCategoryPickerAsync(treeCode));
         CategoryOptions = picked;
       }
+      catch (Exception failure)
+      {
+        failed = true;
+        Log.LogWarning(failure, "Drevo kategorij za filter izdelkov ni naloženo ({Kind})", FailureKind(failure));
+      }
+    }
 
-      Page = await Workbench.GetProductListAsync(new ProductListFilter(
-        scope, Skip, Take, QuerySearch, ActiveView,
-        QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
-        QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
-        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
-        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
-        QueryPackaging, QueryDiscountGroup, QuerySpecial));
-      // Drug filter = druga izbira »vse po filtru«; stran (listanje) filtra ne spremeni.
-      Selection.UpdateFilter(Href(page: 1), Page.TotalCount);
-    }
-    catch
-    {
-      Error = "Izdelkov trenutno ni mogoče naložiti.";
-    }
-    finally
-    {
-      Loading = false;
-    }
+    if (version != LoadVersion) return;
+    FilterWarning = failed
+      ? "Nekaterih vrednosti filtrov (proizvajalci, dobavitelji, kategorije) trenutno ni mogoče naložiti. Seznam je prikazan; filtri se preberejo znova ob naslednji spremembi."
+      : null;
   }
+
+  // SQL napake, ki pomenijo zasedeno bazo, ne napako v podatkih: -2 časovna meja ukaza,
+  // 1205 izbran za žrtev zastoja (deadlock), 1222 časovna meja zaklepa. Poln bazen povezav
+  // vrže InvalidOperationException z besedo »pool«.
+  static bool IsDatabaseBusy(Exception failure) => failure switch
+  {
+    Microsoft.Data.SqlClient.SqlException sql => sql.Number is -2 or 1205 or 1222,
+    TimeoutException => true,
+    InvalidOperationException invalid => invalid.Message.Contains("pool", StringComparison.OrdinalIgnoreCase),
+    _ => failure.InnerException is not null && IsDatabaseBusy(failure.InnerException),
+  };
+
+  static string FailureKind(Exception failure) => failure is Microsoft.Data.SqlClient.SqlException sql
+    ? $"SqlException {sql.Number}{(IsDatabaseBusy(sql) ? ", baza zasedena" : "")}"
+    : failure.GetType().Name + (IsDatabaseBusy(failure) ? ", baza zasedena" : "");
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
@@ -1705,18 +1821,22 @@
   /// <summary>Seznam znova, da stolpca ERP/Splet in »Zadnja sprememba« pokažeta stanje po zapisu.</summary>
   async Task ReloadListAsync()
   {
+    var filter = CurrentFilter();
     try
     {
-      Page = await Workbench.GetProductListAsync(new ProductListFilter(
-        OrganizationScope, Skip, Take, QuerySearch, ActiveView,
-        QueryManufacturer, QuerySupplier, QueryGroup, QueryErp, QueryWeb,
-        QuerySort, string.Equals(QueryDirection, "desc", StringComparison.OrdinalIgnoreCase),
-        "sl", QueryDepartment, QueryActivity, QueryWebPublish, QueryCompleteness, QueryImage,
-        CategoryTreeOf(QueryCategory), CategoryCodeOf(QueryCategory),
-        QueryPackaging, QueryDiscountGroup, QuerySpecial));
+      Page = await Workbench.GetProductListAsync(filter);
+      PageFilter = filter;
+      StaleWarning = null;
       Selection.UpdateFilter(Href(page: 1), Page.TotalCount);
     }
-    catch { }
+    catch (Exception failure)
+    {
+      // Zapis je že uspel; ne uspe le osvežitev prikaza. Zadetki ostanejo, uporabnik pa izve,
+      // da stolpci morda še ne kažejo stanja po zapisu.
+      Log.LogWarning(failure, "Osvežitev seznama izdelkov po zapisu ni uspela ({Kind}). Iskanje={Search}, podjetje={Organization}",
+        FailureKind(failure), filter.Search, filter.OrganizationId?.ToString() ?? "vsa");
+      StaleWarning = "Seznama po zapisu ni bilo mogoče osvežiti; stolpci morda še ne kažejo novega stanja.";
+    }
   }
 
   static string ActivityLabel(string? value) => value switch
