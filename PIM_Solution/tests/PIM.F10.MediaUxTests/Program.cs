@@ -309,6 +309,24 @@ Assert(ProductFieldLabels.For("ProductMedia.DelujocaSlika").Contains("Delujoča"
     && QualityFieldPolicy.FixTarget("ProductMedia.DelujocaSlika").Href == "mediji/napacni-naslovi",
   "Napaka validacije »Delujoca slika« ima ime po domace in vodi na napacne naslove slik.");
 
+// ─── #119: napaka nalaganja v dnevnik, »Ponovi«, poizvedbe samo enkrat ──────
+// Stran se je pod obremenitvijo nalagala ~60 s (dve casovni meji po 30 s: predupodobitev in
+// interaktivno vezje) in pokazala napako, ki je prazen catch ni zapisal nikamor.
+Assert(page.Contains("@inject ILogger<Media> Log", StringComparison.Ordinal) && page.Contains("Log.LogError(failure, \"Mediji: seznam ni naložen", StringComparison.Ordinal),
+  "Napaka nalaganja medijev mora iti v dnevnik aplikacije z vzrokom.");
+Assert(!System.Text.RegularExpressions.Regex.IsMatch(page, @"catch\s*\{"),
+  "Media.razor ne sme imeti praznega catch — vzrok napake mora biti zapisan.");
+Assert(page.Contains("@onclick=\"RetryAsync\"", StringComparison.Ordinal) && page.Contains(">Ponovi</button>", StringComparison.Ordinal),
+  "Ob napaki mora imeti uporabnik gumb »Ponovi«.");
+Assert(page.Contains("new InteractiveServerRenderMode(prerender: false)", StringComparison.Ordinal),
+  "Brez predupodabljanja — sicer stran vse poizvedbe medijev pozene dvakrat.");
+Assert(page.Contains("includeCount: false", StringComparison.Ordinal) && page.Contains("TotalFromKindCounts", StringComparison.Ordinal),
+  "Skupno stevilo je vsota stevcev po vrsti, ne se ena poizvedba cez celotno podlago.");
+Assert(catalog.Contains("bool includeCount = true", StringComparison.Ordinal),
+  "Paketno urejanje (MaxRows) se vedno potrebuje skupno stevilo iz GetMediaAsync.");
+Assert(page.Contains("SlowLoadMilliseconds", StringComparison.Ordinal),
+  "Pocasno nalaganje mora pustiti opozorilo s casom v dnevniku.");
+
 Console.WriteLine("PIM.F10.MediaUxTests: vse trditve drzijo.");
 return 0;
 

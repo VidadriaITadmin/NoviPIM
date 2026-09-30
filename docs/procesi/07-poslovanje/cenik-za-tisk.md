@@ -13,7 +13,7 @@ migracije: [150]
 
 # Cenik za tisk (PDF iz kategorije ali izbranih artiklov)
 
-> **Področje:** Poslovanje · **Lastnik:** komerciala · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-24, iz kode
+> **Področje:** Poslovanje · **Lastnik:** komerciala · **Stanje:** ✅ deluje · **Preverjeno:** 2026-09-30, iz kode (#113, #107)
 
 ## 1. Namen
 
@@ -48,7 +48,7 @@ Komerciala pripravi digitalni cenik za kupca (kategorija ali seznam šifer, B2C 
 flowchart LR
   subgraph U["👤 Uporabnik"]
     A([Cenik za tisk]) --> B[Izbere podjetje, cenik, jezik in obseg]
-    B --> C[Klikne Pripravi cenik]
+    B --> C[Enter v kategoriji ali šifrah ali klik Pripravi cenik]
     D[Klikne Natisni ali PDF]
     E([PDF ali tiskan cenik])
   end
@@ -74,7 +74,7 @@ flowchart LR
 |---|---|---|---|---|---|
 | 1 | Komerciala | `/cene/tisk` | Izbereš podjetje, cenik (B2C maloprodaja / B2B veleprodaja), jezik in spletno mesto. | — | — |
 | 2 | Komerciala | `/cene/tisk` | Vpišeš pot kategorije (npr. »Notranja svetila > Viseča svetila«) **ali** šifre, ločene z vejico ali novo vrstico; po želji »samo objavljeni« in »s slikami«. | — | — |
-| 3 | Komerciala | `/cene/tisk` | Klikneš **Pripravi cenik**. | Cenik se sestavi po kategorijah: šifra, EAN, naziv, proizvajalec, cena brez DDV, DDV %, cena z DDV, zaloga. | Glava »… — cenik B2C/B2B«, datum in število artiklov. |
+| 3 | Komerciala | `/cene/tisk` | Pritisneš Enter v polju kategorije ali šifer (ali klikneš **Pripravi cenik** za cel cenik podjetja). Vsaka nadaljnja sprememba (podjetje, cenik, jezik, spletno mesto, obseg, »samo objavljeni«) cenik osveži sama. | Cenik se sestavi po kategorijah: šifra, EAN, naziv, proizvajalec, cena brez DDV, DDV %, cena z DDV, zaloga; največ 2000 artiklov (nad tem stran opozori, naj zožiš izbiro). Izbira se zapiše v naslov strani. | Glava »… — cenik B2C/B2B«, datum in število artiklov. |
 | 4 | Komerciala | `/cene/tisk` | Klikneš **Natisni / PDF** (ali Ctrl+P → Shrani kot PDF). | Brskalnik natisne samo cenik (orodna vrstica je skrita). | PDF v mapi Prenosi. |
 
 ## 7. Pravila in varovalke
@@ -82,6 +82,14 @@ flowchart LR
 - Cenik samo bere; nič ne zapiše.
 - Glava pravi »z DDV« za B2C in »brez DDV« za B2B.
 - Artikli brez cene v izbranem ceniku se ne pokažejo.
+- Vsa izbira je v naslovu strani (`podjetje`, `cenik`, `jezik`, `mesto`, `kategorija`, `sifre`, `vsi`, `slike`, `pripravi`):
+  povezavo lahko pošlješ sodelavcu in odpre isti cenik istega podjetja; »Nazaj« v brskalniku vrne prejšnjo izbiro.
+- Besedilni polji (kategorija, šifre) bereta bazo šele ob Enter ali izhodu iz polja, ne na vsak pritisk tipke.
+- Brez kategorije in šifer (cel cenik podjetja) se cenik pripravi samo na gumb.
+- Prazen cenik pove, zakaj je prazen (kategorija s poljem poti, šifre, podjetje, cenik, »samo objavljeni«) in kaj poskusiti (#107).
+- Če del vpisanih šifer ni v ceniku, stran našteje, katerih ni (ne obstajajo v podjetju, nimajo cene v ceniku ali niso objavljene).
+- Jezik vpliva samo na naziv: artikli brez prevoda v izbrani jezik ostanejo s slovenskim nazivom (stran to napiše).
+- Spletno mesto izbere pot kategorije na tem mestu; brez mesta velja prva kategorija artikla.
 
 ## 8. Ko gre kaj narobe
 
