@@ -12,7 +12,7 @@
       powershell -ExecutionPolicy Bypass -File scripts\Namesti-samotest.ps1
 
   Kaj naredi: ustvari (ali posodobi) nalogo "PIM samotest", ki ob dogovorjeni uri pozene
-  Nocni-samotest.ps1. Rezultat gre v bazo; skrbnik ga vidi na /sistem in /sistem/samotest.
+  Nocni-samotest.ps1. Rezultat gre v bazo (ops.SelfTestRun); padel samotest se na /sistem steje v zvonec.
 
   Zakaj ob 04:30 in ne ob 02:30: nocno opravilo (Namesti-nocno-opravilo.ps1) se zacne ob 02:30
   in sme teci do osem ur. Samotest, ki bi tekel med njim, bi meril sistem sredi dela — polovico
@@ -79,4 +79,4 @@ Register-ScheduledTask -TaskName $ImeNaloge -Action $akcija -Trigger $prozilec `
 Write-Output "Naloga '$ImeNaloge' je registrirana; zagon vsak dan ob $Ura."
 Write-Output "Ukaz: $($ukaz.Program) $($ukaz.Argumenti)"
 Write-Output 'Preveri z: Get-ScheduledTask -TaskName "PIM samotest" | Get-ScheduledTaskInfo'
-Write-Output 'Izid vidis na /sistem in /sistem/samotest.'
+Write-Output 'Izid je v ops.SelfTestRun in dnevniku; padel samotest se na /sistem steje v zvonec.'

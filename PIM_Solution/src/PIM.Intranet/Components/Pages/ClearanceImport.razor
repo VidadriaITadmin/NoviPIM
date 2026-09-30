@@ -352,7 +352,7 @@
   IEnumerable<ClearanceImportRow> PreviewRows => (Preview?.Rows ?? []).OrderBy(row =>
     row.ProductId is null ? 2 : row.Nacin is ClearanceStock.Premalo or ClearanceStock.Neznana ? 0 : 1).ThenBy(row => row.RowNumber);
   static string StockTitle(ClearanceStock stock) =>
-    $"Ob vpisu: {Num(stock.ZalogaObVpisu) ?? "ni podatka"}{(stock.ZalogaObVpisuUtc is { } at ? $" (zaloga z {at.ToLocalTime():d. M. yyyy HH:mm})" : "")}."
+    $"Ob vpisu: {Num(stock.ZalogaObVpisu) ?? "ni podatka"}{(stock.ZalogaObVpisuUtc is { } at ? $" (zaloga z {at.ToPimLocal():d. M. yyyy HH:mm})" : "")}."
     + (stock.ZalogaSveza ? " Zaloga je sveža in omeji količino na spletu." : " Zaloga ni sveža; velja vpisano minus naročila.");
   int SoldOut => ActiveRows.Count(row => row.Kolicina is not > 0 && row.Prodano > 0);
   int NotOnWeb => ActiveRows.Where(row => string.IsNullOrEmpty(row.SpletneStrani)).Select(row => row.ProductId).Distinct().Count();
