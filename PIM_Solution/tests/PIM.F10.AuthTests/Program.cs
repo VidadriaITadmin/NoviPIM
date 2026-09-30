@@ -457,6 +457,10 @@ foreach (var (path, expected) in new[]
   ("varovalke", "page.safeguards"),
   ("varovalke/42", "page.safeguards"),
   ("varovalke/42/excel", "page.safeguards"),
+  // 91: napačni naslovi medijev spadajo pod pravico strani Mediji (ne samo skrbnik).
+  ("mediji", PimAccessCatalog.Media),
+  ("mediji/napacni-naslovi", PimAccessCatalog.Media),
+  ("mediji/napacni-naslovi?stran=2", PimAccessCatalog.Media),
 })
   Assert(PimAccessCatalog.Resolve(path) == expected, $"Pot {path} mora zahtevati {expected}, zahteva pa {PimAccessCatalog.Resolve(path)}.");
 foreach (var removedPath in new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem/samotest" })
