@@ -75,7 +75,7 @@
               <span class="role-list-copy">
                 <strong>@role.Name</strong>
                 <small>@role.RoleCode</small>
-                <span>@role.UserCount @UserLabel(role.UserCount) · @role.PermissionCount dovoljenj</span>
+                <span>@role.UserCount @UserLabel(role.UserCount) · @role.PermissionCount @SlovenianPlural.Permissions(role.PermissionCount)</span>
               </span>
               @if (role.IsSystem) { <span class="system-badge">Sistemska</span> }
             </button>
@@ -97,7 +97,7 @@
                 <p><span class="code-value">@selected.RoleCode</span> · @selected.UserCount @UserLabel(selected.UserCount)</p>
               </div>
             </div>
-            <span class="access-total">@SelectedPermissions.Count / @PimAccessCatalog.All.Count dovoljenj</span>
+            <span class="access-total">@SelectedPermissions.Count / @PimAccessCatalog.All.Count @SlovenianPlural.Permissions(PimAccessCatalog.All.Count)</span>
           </header>
 
           <section class="role-meta" aria-labelledby="role-meta-title">
@@ -203,7 +203,7 @@
 
           <footer class="permission-footer">
             <div>
-              <strong>@ChangedPermissionCount sprememb</strong>
+              <strong>@ChangedPermissionCount @SlovenianPlural.Changes(ChangedPermissionCount)</strong>
               <span>Dovoljenja se uporabijo takoj po shranjevanju.</span>
             </div>
             <button type="button" class="primary-button" disabled="@(Busy || selected.RoleCode == PimRoles.Admin || ChangedPermissionCount == 0)"
@@ -440,5 +440,5 @@
     value?.Contains(search.Trim(), StringComparison.CurrentCultureIgnoreCase) == true;
   static string Initials(string name) =>
     string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
-  static string UserLabel(long count) => count == 1 ? "uporabnik" : count == 2 ? "uporabnika" : "uporabnikov";
+  static string UserLabel(long count) => SlovenianPlural.Users(count);
 }

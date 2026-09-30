@@ -1,0 +1,306 @@
+@page "/mediji/napacni-naslovi"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IConfiguration Configuration
+@inject ExportResultStore ExportFiles
+@inject HeavyWorkGate Gate
+@inject IJSRuntime Js
+@inject IntranetDataService Data
+@inject NavigationManager Navigation
+@using System.Globalization
+
+<PageTitle>Napačni naslovi slik</PageTitle>
+
+@* Naloga #9 (migracija 312): slike, katerih naslov se ni odprl. Izide piše samo posel MEDIA_URL_CHECK
+   (Sistem → posli, privzeto izklopljen); stran samo bere. Lastnik 2026-09-29 (#18): pokvarjena je slika šele po
+   dveh neuspehih v razmiku 24 ur — taka ne gre v katalog.csv, izdelek brez druge delujoče slike pa ni pripravljen
+   za splet. Filtri živijo v naslovu, listanje in razvrščanje sta v bazi, izvoz je natanko ta pogled (ExportResultStore). *@
+<PimPage Title="Napačni naslovi slik" Crumbs="Crumbs" Subtitle="@Subtitle">
+  <Actions>
+    <button type="button" class="secondary-button" disabled="@(Exporting || Page?.Total is null or 0)" @onclick="ExportAsync">
+      @(Exporting ? "Pripravljam Excel …" : $"Izvozi Excel ({(Page?.Total ?? 0).ToString("N0", Sl)})")
+    </button>
+  </Actions>
+</PimPage>
+
+@if (ExportMessage is not null)
+{
+  <p class="check-export @(ExportFailed ? "failed" : null)" role="@(ExportFailed ? "alert" : "status")">@ExportMessage</p>
+}
+
+<section class="ui-card check-summary" aria-label="Povzetek preverjanja">
+  <div class="check-stat">
+    <strong>@Number(Page?.Summary.Checked)</strong>
+    <span>od @Number(Page?.Summary.Addresses) naslovov preverjenih</span>
+  </div>
+  <div class="check-stat">
+    <strong>@(Page?.Summary.LastCheckedUtc is { } last ? PimTime.Format(last) : "še nikoli")</strong>
+    <span>zadnje preverjanje</span>
+  </div>
+  <a class="check-stat bad" href="@Href(Filter with { State = MediaCheckStates.Broken, Skip = 0 })">
+    <strong>@Number(Page?.Summary.ProductsWithoutWorkingImage)</strong>
+    <span>izdelkov brez delujoče slike (napaka za splet)</span>
+  </a>
+  <p class="check-note">
+    Naslove preverja posel <a href="sistem/posel/MEDIA_URL_CHECK">Preverjanje slik (URL)</a> — privzeto je izklopljen, vklopi ga skrbnik.
+    Slika šteje za pokvarjeno šele po dveh neuspehih v razmiku 24 ur; »strežnik ni odgovoril« ne šteje.
+    Naslov se popravi v viru (XML dobavitelja, uvoz) ali na kartici izdelka.
+  </p>
+</section>
+
+<nav class="pim-pills" aria-label="Stanje naslova">
+  <a class="pim-pill" href="@Href(Filter with { State = null, Skip = 0 })" aria-current="@((Filter.State is null).ToString().ToLowerInvariant())">
+    Vsi napačni <span class="count">@((Page?.AllCount ?? 0).ToString("N0", Sl))</span>
+  </a>
+  @foreach (var state in MediaCheckStates.All)
+  {
+    <a class="pim-pill" href="@Href(Filter with { State = state.Code, Skip = 0 })" title="@state.Effect"
+       aria-current="@((Filter.State == state.Code).ToString().ToLowerInvariant())">
+      <span class="dot @state.Tone" aria-hidden="true"></span>@state.Label
+      <span class="count">@((Page?.Count(state.Code) ?? 0).ToString("N0", Sl))</span>
+    </a>
+  }
+</nav>
+
+<section class="ui-card" role="search" aria-label="Iskanje in filtri napačnih naslovov">
+  <div class="pim-filterbar">
+    <label class="visually-hidden" for="check-search">Išči po šifri ali naslovu</label>
+    <input id="check-search" type="search" class="search-input" placeholder="Šifra ali del naslova … (Enter)" @bind="SearchText" @bind:after="ApplySearch" />
+
+    <label class="visually-hidden" for="check-organization">Podjetje</label>
+    <select id="check-organization" class="filter-select" @bind="OrganizationText" @bind:after="ApplyFilters">
+      <option value="">Vsa podjetja</option>
+      @foreach (var organization in Organizations)
+      {
+        <option value="@organization.OrganizationId.ToString(CultureInfo.InvariantCulture)">@organization.Name</option>
+      }
+    </select>
+
+    <label class="visually-hidden" for="check-host">Strežnik (dobavitelj)</label>
+    <select id="check-host" class="filter-select" @bind="HostText" @bind:after="ApplyFilters">
+      <option value="">Vsi strežniki</option>
+      @foreach (var (host, items) in Page?.Hosts ?? [])
+      {
+        if (host.Length > 0) { <option value="@host">@host (@items.ToString("N0", Sl))</option> }
+      }
+    </select>
+
+    <label class="visually-hidden" for="check-error">Napaka</label>
+    <select id="check-error" class="filter-select" @bind="ErrorText" @bind:after="ApplyFilters">
+      <option value="">Vse napake</option>
+      @foreach (var (errorCode, items) in Page?.Errors ?? [])
+      {
+        if (errorCode.Length > 0) { <option value="@errorCode">@MediaCheckErrors.Label(errorCode) (@items.ToString("N0", Sl))</option> }
+      }
+    </select>
+
+    <label class="visually-hidden" for="check-sort">Razvrsti</label>
+    <select id="check-sort" class="filter-select" @bind="SortText" @bind:after="ApplyFilters">
+      @foreach (var (sortCode, sortLabel) in Sorts) { <option value="@sortCode">@sortLabel</option> }
+    </select>
+    <button type="button" class="ghost-button" @onclick="ToggleDirection"
+            aria-label="Smer razvrščanja: @(MediaCheckQuery.IsDescending(Filter) ? "padajoče" : "naraščajoče")">
+      @(MediaCheckQuery.IsDescending(Filter) ? "Padajoče" : "Naraščajoče")
+    </button>
+
+    @if (HasFilters)
+    {
+      <button type="button" class="link-button" @onclick="ClearFilters">Počisti filtre</button>
+    }
+    <span class="result-count" role="status" aria-live="polite">@((Page?.Total ?? 0).ToString("N0", Sl)) @Plural(Page?.Total ?? 0)</span>
+  </div>
+</section>
+
+<section class="ui-card data-card" aria-label="Napačni naslovi slik">
+  <PimState Loading="Loading" Error="@Error" Empty="@(Page is not null && Page.Rows.Count == 0)" LoadingText="Berem izide preverjanja …" EmptyText="@EmptyText">
+    @if (Page is not null && Page.Rows.Count > 0)
+    {
+      <div class="table-scroll">
+        <table class="data-table pim-list-table">
+          <caption class="visually-hidden">@Caption</caption>
+          <thead>
+            <tr>
+              <th scope="col">Artikel</th>
+              <th scope="col">Slika</th>
+              <th scope="col">Stanje</th>
+              <th scope="col">Napaka</th>
+              <th scope="col" class="numeric">Neuspehov</th>
+              <th scope="col">Preverjeno</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach (var row in Page.Rows)
+            {
+              var state = MediaCheckStates.Find(row.State);
+              <tr>
+                <td>
+                  <a class="row-link" href="izdelki/@row.ProductId">@row.ItemId</a>
+                  <span class="sub">@(row.OrganizationName ?? $"podjetje {row.OrganizationId}")</span>
+                  @if (row.State == MediaCheckStates.Broken && !row.HasWorkingImage)
+                  {
+                    <span class="sub check-blocked">brez delujoče slike — napaka za splet</span>
+                  }
+                </td>
+                <td class="check-url">
+                  <span class="sub">@row.Role · #@row.SortOrder · @(row.Host ?? "neznan strežnik")</span>
+                  @if (MediaUrlPolicy.Normalize(row.Url).Href is string href)
+                  {
+                    <a href="@href" target="_blank" rel="noopener noreferrer" title="@row.Url">@Shorten(row.Url)</a>
+                  }
+                  else
+                  {
+                    <span title="@row.Url">@Shorten(row.Url)</span>
+                  }
+                </td>
+                <td><PimChip Text="@state.Label" Tone="@state.Tone" Prefix="Stanje: " /></td>
+                <td>
+                  @(row.ErrorText ?? MediaCheckErrors.Label(row.ErrorCode))
+                  @if (row.ContentType is { Length: > 0 } type) { <span class="sub">vrsta vsebine: @type</span> }
+                </td>
+                <td class="numeric">@row.FailureCount</td>
+                <td class="nowrap" title="@(row.FirstFailedUtc is { } first ? "Prvič neuspešno " + PimTime.Format(first) : null)">
+                  @(row.LastCheckedUtc is { } checkedUtc ? PimTime.Format(checkedUtc) : "—")
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <PimPager Skip="Filter.Skip" Take="Filter.Take" Total="Page.Total" Label="Strani napačnih naslovov" SkipChanged="GoToSkip" />
+    }
+  </PimState>
+</section>
+
+@code {
+  [SupplyParameterFromQuery(Name = "podjetje")] public string? QOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "stanje")] public string? QState { get; set; }
+  [SupplyParameterFromQuery(Name = "streznik")] public string? QHost { get; set; }
+  [SupplyParameterFromQuery(Name = "napaka")] public string? QError { get; set; }
+  [SupplyParameterFromQuery(Name = "razvrsti")] public string? QSort { get; set; }
+  [SupplyParameterFromQuery(Name = "smer")] public string? QDirection { get; set; }
+  [SupplyParameterFromQuery(Name = "stran")] public string? QPage { get; set; }
+
+  static readonly CultureInfo Sl = CultureInfo.GetCultureInfo("sl-SI");
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Mediji", "mediji"), new("Napačni naslovi slik")];
+  static readonly (string Code, string Label)[] Sorts = [("preverjeno", "Čas preverjanja"), ("sifra", "Šifra"), ("streznik", "Strežnik"), ("napaka", "Napaka")];
+
+  IReadOnlyList<OrganizationContext> Organizations = [];
+  MediaCheckFilter Filter = new();
+  MediaCheckPage? Page;
+  bool Loading = true;
+  string? Error;
+  bool Exporting;
+  bool ExportFailed;
+  string? ExportMessage;
+  // Storitev samo bere (intranet.GetMediaUrlChecks) in nima stanja; sestavi se tu, da stran ne potrebuje
+  // registracije v Program.cs.
+  MediaCheckReadService Checks => checks ??= new MediaCheckReadService(Configuration);
+  MediaCheckReadService? checks;
+  string SearchText = "", OrganizationText = "", HostText = "", ErrorText = "", SortText = "preverjeno";
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { Organizations = await Data.GetOrganizationsAsync(); } catch { Organizations = []; }
+  }
+
+  protected override async Task OnParametersSetAsync()
+  {
+    Filter = MediaCheckQuery.FromQuery(name => name switch
+    {
+      "podjetje" => QOrganization, "isci" => QSearch, "stanje" => QState, "streznik" => QHost, "napaka" => QError,
+      "razvrsti" => QSort, "smer" => QDirection, "stran" => QPage, _ => null,
+    });
+    SearchText = Filter.Search ?? "";
+    OrganizationText = Filter.OrganizationId?.ToString(CultureInfo.InvariantCulture) ?? "";
+    HostText = Filter.Host ?? "";
+    ErrorText = Filter.ErrorCode ?? "";
+    SortText = Filter.Sort ?? "preverjeno";
+
+    Loading = true;
+    Error = null;
+    try
+    {
+      Page = await Checks.GetAsync(Filter);
+    }
+    catch (Exception exception)
+    {
+      Page = null;
+      Error = $"Izidov preverjanja ni bilo mogoče naložiti: {exception.Message} Poskusi znova čez minuto; če se ponovi, preveri, ali je migracija 312 uveljavljena.";
+    }
+    finally
+    {
+      Loading = false;
+    }
+  }
+
+  string ScopeLabel => Filter.OrganizationId is int id
+    ? Organizations.FirstOrDefault(row => row.OrganizationId == id)?.Name ?? $"podjetje {id}"
+    : "vsa aktivna podjetja";
+
+  string Subtitle => $"Slike aktivnih izdelkov, ki se na svojem naslovu niso odprle — {ScopeLabel}.";
+
+  bool HasFilters => Filter.Search is not null || Filter.State is not null || Filter.Host is not null || Filter.ErrorCode is not null || Filter.OrganizationId is not null;
+
+  string EmptyText => Page?.Summary.Checked is null or 0
+    ? "Nobena slika še ni bila preverjena. Posel »Preverjanje slik (URL)« je privzeto izklopljen — vklopi ga skrbnik na strani Sistem."
+    : HasFilters
+      ? "Za izbrane filtre ni napačnih naslovov. Počisti filtre ali izberi drugo stanje."
+      : "Vse preverjene slike se odprejo.";
+
+  string Caption => $"Napačni naslovi slik — {ScopeLabel}{(Filter.State is { } s ? ", " + MediaCheckStates.Find(s).Label : "")}, stran {Filter.Skip / Filter.Take + 1}";
+
+  static string Plural(long n) => (n % 100) switch { 1 => "slika", 2 => "sliki", 3 or 4 => "slike", _ => "slik" };
+  static string Number(long? value) => value?.ToString("N0", Sl) ?? "—";
+  static string Shorten(string value) => value.Length <= 80 ? value : value[..40] + " … " + value[^34..];
+
+  static string Href(MediaCheckFilter filter) =>
+    "mediji/napacni-naslovi" + (MediaCheckQuery.ToQueryString(filter, filter.Skip / Math.Max(1, filter.Take) + 1) is { Length: > 0 } q ? "?" + q : "");
+
+  const string XlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  /// <summary>Izvoz je natanko ta pogled (filtri in razvrstitev), do meje zvezka; prenos gre prek /izvoz/prenos.</summary>
+  async Task ExportAsync()
+  {
+    if (Exporting || Page is null || Page.Total == 0) return;
+    Exporting = true;
+    ExportFailed = false;
+    ExportMessage = $"Pripravljam Excel ({Page.Total.ToString("N0", Sl)} {Plural(Page.Total)}) …";
+    var filter = Filter;
+    try
+    {
+      byte[] bytes;
+      using (await Gate.Exports.EnterAsync(CancellationToken.None))
+        bytes = await Checks.BuildWorkbookAsync(filter);
+      var fileName = $"PIM_napacni_naslovi_slik_{DateTime.UtcNow.ToPimLocal():yyyyMMdd_HHmm}.xlsx";
+      var download = ExportFiles.Put(bytes, fileName, XlsxType);
+      await Js.InvokeVoidAsync("pimDownloadFile", $"izvoz/prenos/{download}");
+      ExportMessage = $"Izvoženih {Math.Min(Page.Total, WorkbookWriter.MaxRows).ToString("N0", Sl)} vrstic v {fileName}. Če se prenos ni začel sam, ga najdeš v prenosih brskalnika.";
+    }
+    catch (Exception exception)
+    {
+      ExportFailed = true;
+      ExportMessage = $"Izvoz ni uspel: {exception.Message} Poskusi znova ali zoži filtre.";
+    }
+    finally
+    {
+      Exporting = false;
+    }
+  }
+
+  void Go(MediaCheckFilter filter) => Navigation.NavigateTo(Href(filter));
+  void ApplySearch() => Go(Filter with { Search = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(), Skip = 0 });
+  void ApplyFilters() => Go(Filter with
+  {
+    OrganizationId = int.TryParse(OrganizationText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : null,
+    // Strežniki in napake so seznam izbranega obsega; ob menjavi podjetja bi stara izbira tiho izpraznila rezultat.
+    Host = string.IsNullOrEmpty(HostText) ? null : HostText,
+    ErrorCode = string.IsNullOrEmpty(ErrorText) ? null : ErrorText,
+    Sort = SortText == "preverjeno" ? null : SortText,
+    Reverse = SortText == (Filter.Sort ?? "preverjeno") && Filter.Reverse,
+    Skip = 0,
+  });
+  void ToggleDirection() => Go(Filter with { Reverse = !Filter.Reverse, Skip = 0 });
+  void ClearFilters() => Go(new MediaCheckFilter());
+  void GoToSkip(int skip) => Go(Filter with { Skip = skip });
+}

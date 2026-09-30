@@ -2,7 +2,7 @@
    resnicen tudi takrat, kadar je nabor vecji od zaslona. *@
 <nav class="pagination" aria-label="@Label">
   <button type="button" disabled="@(Skip <= 0)" @onclick="PreviousAsync">Prejšnja</button>
-  <span class="page-position">Stran @Current od @PageCount · @Total.ToString("N0") zapisov</span>
+  <span class="page-position">Stran @Current od @PageCount · @PimFormat.Count(Total, "zapis", "zapisa", "zapisi", "zapisov")</span>
   <button type="button" disabled="@(Skip + Take >= Total)" @onclick="NextAsync">Naslednja</button>
 </nav>
 
