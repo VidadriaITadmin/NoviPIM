@@ -25,3 +25,44 @@ a.attribute-name:focus-visible { outline: 2px solid var(--pim-accent); outline-o
 .value-before { color: var(--pim-text-muted); }
 .value-after { color: var(--pim-text-strong); font-weight: 600; }
 .table-more { padding: .6rem 1rem .9rem; }
+
+/* Dnevnik poenotenj (#49, migracija 314). */
+.log-title { color: var(--pim-text-strong); font-size: .95rem; font-weight: 700; margin: 0; padding: .9rem 1rem .2rem; }
+.log-title + .card-note { margin: 0; padding: 0 1rem .7rem; }
+
+/* Združitev atributov (#48, migracija 319). */
+.check-cell { width: 2.25rem; }
+.check-cell input { accent-color: var(--pim-accent); height: 1rem; width: 1rem; }
+.check-cell input:focus-visible, .merge-radio input:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+tr.is-selected > td { background: var(--pim-info-bg); }
+.bulk-readonly { color: var(--pim-text-muted); font-size: .8rem; }
+.merge-result { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem .75rem; margin: 0 0 .75rem; }
+.merge-result > span { flex: 1 1 20rem; }
+
+.merge-panel { border-color: var(--pim-info-border); display: flex; flex-direction: column; gap: .75rem; margin: 0 0 1rem; padding: 1rem 1.1rem; }
+.merge-head { align-items: center; display: flex; gap: .75rem; justify-content: space-between; }
+.merge-head h2 { color: var(--pim-text-strong); font-size: 1rem; margin: 0; }
+.merge-panel .card-note { margin: 0; }
+.merge-pair { border: 1px solid var(--pim-border); border-radius: var(--pim-radius-sm); display: flex; flex-direction: column; gap: .6rem; margin: 0; min-width: 0; padding: .75rem .9rem; }
+.merge-pair legend { color: var(--pim-text-strong); font-size: .875rem; font-weight: 700; padding: 0 .3rem; }
+.merge-choice { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }
+.merge-label { color: var(--pim-text-soft); font-size: .75rem; font-weight: 600; text-transform: uppercase; }
+.merge-radio { align-items: center; color: var(--pim-text); cursor: pointer; display: inline-flex; font-size: .875rem; gap: .4rem; }
+.merge-radio input { accent-color: var(--pim-accent); }
+.merge-english { max-width: 26rem; }
+.merge-summary { color: var(--pim-text); font-size: .875rem; margin: 0; }
+.merge-table { border-collapse: collapse; font-size: .8rem; width: 100%; }
+.merge-table th, .merge-table td { border-bottom: 1px solid var(--pim-border-soft); padding: .3rem .5rem; text-align: left; }
+.merge-table th { color: var(--pim-text-soft); font-weight: 600; }
+.merge-table .numeric { font-variant-numeric: tabular-nums; text-align: right; }
+.merge-effects { color: var(--pim-text-soft); font-size: .8rem; line-height: 1.5; margin: 0; padding-left: 1.2rem; }
+.merge-conflicts > summary { color: var(--pim-warn-text); cursor: pointer; font-size: .8rem; font-weight: 600; }
+.merge-conflicts > summary:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.merge-progress { color: var(--pim-info-text); font-weight: 600; }
+.merge-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.merge-actions button:focus-visible, .merge-head button:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
+.revert-panel { background: var(--pim-warn-bg); border: 1px solid var(--pim-warn-border); border-radius: var(--pim-radius-sm); margin: 0 1rem .75rem; }
+.revert-panel p { margin: 0; }
+.danger-button { background: var(--pim-bad-text); border: 1px solid var(--pim-bad-text); border-radius: var(--pim-radius-sm); color: var(--pim-surface); cursor: pointer; font: inherit; font-size: .875rem; font-weight: 600; min-height: var(--pim-control-height); padding: .45rem .85rem; }
+.danger-button:disabled { cursor: default; opacity: .5; }
+.danger-button:focus-visible { outline: 2px solid var(--pim-accent); outline-offset: 2px; }
