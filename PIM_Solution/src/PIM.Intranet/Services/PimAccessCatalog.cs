@@ -253,6 +253,14 @@ public static class PimNotFoundScope
 {
   public const string Path = "ni-najdeno";
 
+  /// <summary>
+  /// Kljuc v HttpContext.Items z dovoljenji menija, ki jih Program.cs nalozi PRED izrisom strani 404.
+  /// Blazor pri ponovni izvedbi (UseStatusCodePagesWithReExecute) odda HTML, ne da bi pocakal
+  /// asinhrone komponente postavitve; NavMenu je zato za ne-skrbnika (poizvedba v sec.RolePermission)
+  /// ostal prazen. Z vnaprej nalozenimi dovoljenji se meni izrise sinhrono, enako kot na strani s kodo 200.
+  /// </summary>
+  public const string NavPermissionsItem = "pim.nav.permissions";
+
   static readonly string[] MachinePrefixes = ["/izvoz", "/auth", "/_blazor", "/_framework", "/_content", "/api"];
 
   public static bool WantsPage(string? method, string? path, string? accept)

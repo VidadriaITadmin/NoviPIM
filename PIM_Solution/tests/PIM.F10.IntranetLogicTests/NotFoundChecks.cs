@@ -43,6 +43,34 @@ static class NotFoundChecks
     Check(!PimNotFoundScope.WantsPage("GET", "/manjka.png", "text/html"), "Manjkajoca datoteka ni stran.");
     Check(!PimNotFoundScope.WantsPage("GET", "/_blazor/negotiate", "text/html"), "Blazorjevi viri ne dobijo strani.");
     Check(PimNotFoundScope.WantsPage("GET", "/izvozi/mnozicno-xyz", "text/html"), "/izvozi (strani) ni isto kot /izvoz (prenosi).");
+    // Preverjalec #65: ne-skrbnik (COMMERCIAL, CATALOG_EDITOR, VIEWER) je na strani 404 dobil prazen meni,
+    // ker Blazor pri ponovni izvedbi ne pocaka asinhronega NavMenu (poizvedba v sec.RolePermission).
+    // Program.cs mora dovoljenja naloziti pred izrisom, NavMenu pa jih vzeti brez await.
+    var navMenu = File.ReadAllText(Path.Combine(intranet, "Components", "Layout", "NavMenu.razor"));
+    var preload = program.IndexOf("PimNotFoundScope.NavPermissionsItem", StringComparison.Ordinal);
+    Check(preload > 0, "Program.cs mora za stran 404 vnaprej naloziti dovoljenja menija.");
+    Check(program.IndexOf("IStatusCodeReExecuteFeature", StringComparison.Ordinal) is var feature && feature > 0 && feature < preload,
+      "Vnaprejsnje nalaganje velja samo za ponovno izvedbo (stran 404), ne za vsako zahtevo.");
+    Check(program.IndexOf("app.UseAuthorization();", StringComparison.Ordinal) < preload,
+      "Dovoljenja se nalozijo sele po prijavi (UseAuthentication/UseAuthorization).");
+    Check(program.IndexOf("GetAllowedKeysAsync(context.User", StringComparison.Ordinal) > preload - 400,
+      "Vnaprej nalozena dovoljenja morajo priti iz istega vira kot meni (RoleAccessService).");
+    var sync = navMenu.IndexOf("PimNotFoundScope.NavPermissionsItem", StringComparison.Ordinal);
+    Check(sync > 0, "NavMenu mora uporabiti vnaprej nalozena dovoljenja.");
+    Check(sync < navMenu.IndexOf("await AuthenticationStateProvider", StringComparison.Ordinal),
+      "NavMenu mora vnaprej nalozena dovoljenja uporabiti pred prvim await, sicer je meni na 404 spet prazen.");
+
+    // Ne-skrbniski nabor dovoljenj (brez sistema in vlog) mora dati neprazen meni brez skrbniskih povezav.
+    var nonAdmin = PimAccessCatalog.Keys
+      .Where(key => !key.StartsWith(PimAccessCatalog.System, StringComparison.Ordinal) && !key.StartsWith(PimAccessCatalog.Administration, StringComparison.Ordinal))
+      .ToHashSet(StringComparer.Ordinal);
+    var sections = PimNavigation.ForPermissions(nonAdmin);
+    Check(sections.Sum(section => section.Items.Count) > 0, "Meni za ne-skrbnika ne sme biti prazen.");
+    Check(sections.SelectMany(section => section.Items).All(item => !item.Route.StartsWith("sistem", StringComparison.Ordinal)),
+      "Ne-skrbnik brez dovoljenja za sistem ne vidi povezav na sistem.");
+    Check(PimNavigation.ForPermissions(new HashSet<string>(StringComparer.Ordinal)).Sum(section => section.Items.Count) == 0,
+      "Brez dovoljenj meni ne kaze povezav (varovalka ostane).");
+
     Console.WriteLine("Stran ni najdeno (#65) PASS.");
   }
 

@@ -194,6 +194,29 @@ app.UseStaticFiles();
 app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// #65: pri ponovni izvedbi za stran 404 Blazor odda HTML, ne da bi pocakal asinhrone komponente
+// postavitve, zato je bil levi meni za ne-skrbnika prazen (dovoljenja bere iz sec.RolePermission).
+// Dovoljenja zato nalozimo tu, preden se stran izrise; NavMenu jih vzame iz HttpContext.Items.
+app.Use(async (context, next) =>
+{
+  if (context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>() is not null
+      && context.User.Identity?.IsAuthenticated == true)
+  {
+    try
+    {
+      context.Items[PimNotFoundScope.NavPermissionsItem] = await context.RequestServices
+        .GetRequiredService<RoleAccessService>().GetAllowedKeysAsync(context.User, context.RequestAborted);
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+      // Baza ni dosegljiva: meni ostane prazen (kot prej), stran 404 se vseeno izrise.
+      context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PIM.NotFound")
+        .LogWarning(ex, "Dovoljenj za meni na strani 404 ni bilo mogoce naloziti.");
+    }
+  }
+  await next();
+});
 app.UseRateLimiter();
 
 app.MapPost("/auth/prijava", async (

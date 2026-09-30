@@ -93,7 +93,7 @@ flowchart LR
 
 - Strani `/administracija*` in `/sistem*` so samo za vlogo ADMIN (`[Authorize(Roles = "ADMIN")]`).
 - Dostop do vsake strani preverja `PimAccessRouteView` po ključih iz `PimAccessCatalog` in `sec.RolePermission`; neznana nova stran je zaprta, dokler je ne dodamo v katalog. ADMIN ima vedno vse ključe.
-- Neznan ali odstranjen naslov (npr. star zaznamek) prijavljen uporabnik vidi kot stran »Strani ni (več)« (`/ni-najdeno`, #65) v postavitvi intraneta s povezavama na nadzorno ploščo in iskanje izdelkov; strežnik vrne kodo 404, preusmeritev ni. Neprijavljen gre najprej na `/prijava`. Izvozi, prenosi (`/izvoz/...`), prijava in datoteke ohranijo kratek 404 brez strani (`PimNotFoundScope`).
+- Neznan ali odstranjen naslov (npr. star zaznamek) prijavljen uporabnik vidi kot stran »Strani ni (več)« (`/ni-najdeno`, #65) v postavitvi intraneta s povezavama na nadzorno ploščo in iskanje izdelkov; strežnik vrne kodo 404, preusmeritev ni. Neprijavljen gre najprej na `/prijava`. Izvozi, prenosi (`/izvoz/...`), prijava in datoteke ohranijo kratek 404 brez strani (`PimNotFoundScope`). Levi meni je na strani 404 enak kot drugod po vlogi uporabnika: dovoljenja iz `sec.RolePermission` se naložijo pred izrisom (`PimNotFoundScope.NavPermissionsItem`), ker Blazor pri ponovni izvedbi ne počaka asinhronega menija.
 - Zapisovalne pravice (urejanje kataloga, SAOP, komerciala, alarmi, varovalke) so vezane na **sistemske vloge** ADMIN, CATALOG_EDITOR, COMMERCIAL (politike v `PimAuthorization.cs`), ne na dovoljenja strani.
 - En račun = ena aktivna seja (prevzem seje ob drugi prijavi).
 - **Gesel obstoječih uporabnikov nikoli ne spreminjaj brez njihove zahteve** (tudi ne avtomatizirano ali z orodji za razvoj); za dodatnega skrbnika ustvari nov račun.
