@@ -377,6 +377,39 @@ public sealed class GovernanceReadService(PimDb database, IConfiguration configu
     return new UnblockPlan(masks.Count, activeProducts, average, steps, Math.Max(0, order.Length - bits.Count));
   }
 
+  /// <summary>
+  /// Skupni stevili za glavo /kakovost, po podjetjih: aktivni izdelki in aktivni izdelki z vsaj
+  /// eno odprto zahtevo (enaka definicija kot ProductsWithIssue v GetUnblockPlanAsync: aktivna
+  /// vrstica val.ProductIssue z obstojeco zahtevo val.FieldRequirement).
+  ///
+  /// Zakaj ne GetUnblockPlanAsync (naloga #102): nacrt prenese vse pare (izdelek, polje) v
+  /// aplikacijo — na razvojni bazi 1,29 milijona vrstic in ~2 s streznika za vsa podjetja — stran
+  /// pa je iz njega uporabila samo ti dve stevili. To stetje je ena poizvedba za vsa podjetja
+  /// (izmerjeno 0,27 s) in vrne stiri vrstice.
+  /// </summary>
+  public async Task<IReadOnlyDictionary<int, (long ProductsWithIssue, long ActiveProducts)>> GetIssueTotalsByOrganizationAsync(
+    CancellationToken cancellationToken = default)
+  {
+    var rows = await database.QueryAsync("""
+      SELECT product.OrganizationId,
+             COUNT_BIG(*) AS ActiveProducts,
+             COUNT_BIG(issues.ProductId) AS ProductsWithIssue
+      FROM canon.Product product
+      LEFT JOIN (
+        SELECT DISTINCT issue.ProductId
+        FROM val.ProductIssue issue
+        INNER JOIN val.FieldRequirement requirement ON requirement.FieldRequirementId = issue.FieldRequirementId
+        WHERE issue.IsActive = 1
+      ) issues ON issues.ProductId = product.ProductId
+      WHERE product.IsActive = 1
+      GROUP BY product.OrganizationId;
+      """,
+      reader => (Organization: PimDb.Int32(reader, "OrganizationId"),
+                 WithIssue: PimDb.Int64(reader, "ProductsWithIssue"), Active: PimDb.Int64(reader, "ActiveProducts")),
+      cancellationToken: cancellationToken);
+    return rows.ToDictionary(row => row.Organization, row => (row.WithIssue, row.Active));
+  }
+
   public Task<IReadOnlyList<ValueDomainRow>> GetValueDomainsAsync(CancellationToken cancellationToken = default) =>
     database.QueryAsync("""
       SELECT Domain, COUNT_BIG(*) AS RowCountValue, SUM(CASE WHEN IsActive = 1 THEN 1 ELSE 0 END) AS ActiveCount

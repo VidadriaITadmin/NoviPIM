@@ -116,9 +116,29 @@ Assert(quality.Contains("Task.WhenAll(Organizations.Select", StringComparison.Or
   "Branja po podjetjih morajo teci vzporedno; zaporedna zanka je bila merjeno ozko grlo strani.");
 Assert(!Regex.IsMatch(quality, @"foreach \(var organization in Organizations\)\s*\{\s*var profiles = await"),
   "Zaporedna zanka po podjetjih se ne sme vrniti.");
-Assert(quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal)
-  && governanceService.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
-  "Stevila aktivnih izdelkov in izdelkov s tezavo morajo se vedno priti iz bralnega modela.");
+/* Naloga #102: glava rabi samo dve stevili. Nacrt odblokiranja je zanju prenesel vse pare
+   (izdelek, polje) — 1,29 milijona vrstic — in stran je pod obremenjeno bazo nalagala 86 s. */
+Assert(quality.Contains("GetIssueTotalsByOrganizationAsync", StringComparison.Ordinal)
+  && governanceService.Contains("GetIssueTotalsByOrganizationAsync", StringComparison.Ordinal),
+  "Stevila aktivnih izdelkov in izdelkov s tezavo morajo priti iz enega stetja v bazi.");
+Assert(!quality.Contains("GetUnblockPlanAsync", StringComparison.Ordinal),
+  "Nacrt odblokiranja prenese vse pare (izdelek, polje); za glavo /kakovost je predrag (#102).");
+Assert(Regex.IsMatch(governanceService, @"GetIssueTotalsByOrganizationAsync[\s\S]{0,1200}COUNT_BIG\(issues\.ProductId\)[\s\S]{0,400}GROUP BY product\.OrganizationId"),
+  "Stetje mora biti strezniško in zdruzeno po podjetju, ne prenos vrstic v aplikacijo.");
+Assert(quality.Contains("ProfilesLoaded", StringComparison.Ordinal),
+  "Profili se berejo samo na zavihku Profili, ne na zavihku Po kategorijah.");
+/* Naloga #102 (najdba preverjalca): gola /kakovost preusmeri na /kakovost/artikli, ki je 26-73 s cakala
+   na intranet.GetQualityProducts (SELECT * INTO #Rows iz val.ProductChannelReadiness za vse artikle). */
+Assert(qualityProducts.Contains("prerender: false", StringComparison.Ordinal),
+  "/kakovost/artikli ne sme brati pripravljenosti dvakrat (predupodabljanje + interaktivni izris).");
+var qualityProductsMigration = Read(Path.Combine(root, "sql", "migrations", "318_HitrejsaKakovostArtikli.sql"));
+Assert(qualityProductsMigration.Contains("CREATE OR ALTER PROCEDURE intranet.GetQualityProducts", StringComparison.Ordinal)
+  && !Regex.IsMatch(qualityProductsMigration, @"SELECT \* INTO #\w+ FROM val\.ProductChannelReadiness", RegexOptions.IgnoreCase),
+  "GetQualityProducts ne sme kopirati celega pogleda za vse artikle v zacasno tabelo.");
+Assert(Regex.IsMatch(qualityProductsMigration, @"#Page[\s\S]{0,600}val\.ProductChannelReadiness AS v WHERE v\.ProductId=page\.ProductId"),
+  "Polne vrstice pogleda se berejo samo za artikle na strani.");
+Assert(qualityProductsMigration.Contains("x.WebExportState=@State", StringComparison.Ordinal),
+  "Povezave s /splet (stanje=BLOCKED_ERRORS, NO_CATEGORY ...) morajo filtrirati po stanju katalog.csv.");
 
 
 /* ─── Gostota strani pravil (P2-16, pregled 2026-09-08) ───────────────────────
