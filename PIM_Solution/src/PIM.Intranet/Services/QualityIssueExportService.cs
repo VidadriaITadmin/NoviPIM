@@ -17,6 +17,9 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
   /// <summary>Fizična meja lista .xlsx, ne poslovna — glej WorkbookTable.MaxRows (2026-09-17).</summary>
   public const int MaxRows = WorkbookTable.MaxRows;
 
+  /// <summary>Največ izdelkov, ki jih intranet.GetQualityIssues vrne v enem klicu (migracija 177).</summary>
+  public const int ProcedurePageSize = 200;
+
   static readonly WorkbookColumn[] Columns =
   [
     new("Šifra artikla", Width: 18),
@@ -35,18 +38,34 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
   public async Task<byte[]> BuildAsync(
     QualityIssueFilter filter, string? layer, string? webSite, CancellationToken cancellationToken = default)
   {
-    var take = filter with { Skip = 0, Take = MaxRows };
-
     QualityIssuePage page;
+    var truncated = false;
     if (string.IsNullOrWhiteSpace(layer))
     {
-      page = await quality.GetIssuesAsync(take, cancellationToken);
+      // #112: intranet.GetQualityIssues vrne najvec ProcedurePageSize izdelkov na klic (177),
+      // zato izvoz bere po straneh, dokler ne prebere vseh izdelkov iz filtra.
+      var read = await PagedExportReader.ReadAllAsync(
+        ProcedurePageSize, MaxRows,
+        async (skip, size, token) =>
+        {
+          var part = await quality.GetIssuesAsync(filter with { Skip = skip, Take = size }, token);
+          return new ExportPage<QualityProductRow, QualityIssueRow>(part.Products, part.Issues, part.TotalCount);
+        },
+        product => product.ProductId, issue => issue.ProductId, cancellationToken);
+      page = new QualityIssuePage(read.Items, read.Details, read.TotalCount);
+      truncated = read.Truncated;
     }
     else
     {
+      // Pot z nivojem je vgrajen SQL brez meje strani: en klic prebere vse (do MaxRows izdelkov).
       var profiles = await governance.GetValidationProfilesAsync(filter.OrganizationId);
       var layerProfiles = ProfilesForLayer(profiles, layer, webSite).Select(profile => profile.ProfileCode).ToArray();
-      page = await quality.GetIssuesForProfilesAsync(take, layerProfiles, cancellationToken);
+      page = await quality.GetIssuesForProfilesAsync(filter with { Skip = 0, Take = MaxRows }, layerProfiles, cancellationToken);
+      if (page.Issues.Count > MaxRows)
+      {
+        page = page with { Issues = page.Issues.Take(MaxRows).ToArray() };
+        truncated = true;
+      }
     }
 
     var products = page.Products.ToDictionary(product => product.ProductId);
@@ -73,8 +92,11 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
     }).ToArray();
 
     var notes = new List<string> { "Rdeča vrstica: napaka (blokira). Bleda oranžna vrstica: opozorilo (ne blokira)." };
-    if (page.TotalCount > rows.Length)
-      notes.Add($"Izvoženih {rows.Length:N0} od {page.TotalCount:N0} vrstic pogleda; zgornja meja izvoza je {MaxRows:N0}.");
+    // TotalCount šteje IZDELKE (kot "9.044 izdelkov" na strani), vrstica v zvezku pa je ena napaka.
+    var exportedProducts = rows.Length == 0 ? 0 : page.Issues.Select(issue => issue.ProductId).Distinct().Count();
+    notes.Add($"Izdelkov v izvozu: {exportedProducts:N0} od {page.TotalCount:N0} po filtru; vrstic (napak): {rows.Length:N0}.");
+    if (truncated || page.Products.Count < page.TotalCount)
+      notes.Add($"Izvoz ni popoln: zgornja meja lista je {MaxRows:N0} vrstic. Zožite filter in izvozite po delih.");
 
     return WorkbookWriter.Write("Napake validacije", Columns, rows, notes);
   }
