@@ -49,13 +49,22 @@ public sealed class CatalogReadService(PimDb database)
   /// <summary>Vrednost filtra streznika za naslove brez streznika (relativne ali pokvarjene).</summary>
   public const string NoMediaHost = "-";
 
+  /// <param name="includeCount">
+  /// Brez skupnega stevila (#119): stran Mediji ga izracuna iz <see cref="GetMediaKindCountsAsync"/>,
+  /// ki isto podlago tako ali tako presteje po vrstah. Drugi COUNT bi celotno podlago (UNION ALL,
+  /// vrsta, streznik) racunal se enkrat in pod obremenitvijo podaljsal cakanje. Takrat je vrnjeno
+  /// stevilo 0.
+  /// </param>
   public Task<(IReadOnlyList<MediaRow> Rows, long TotalCount)> GetMediaAsync(
-    MediaFilter filter, int skip, int take, CancellationToken cancellationToken = default)
+    MediaFilter filter, int skip, int take, CancellationToken cancellationToken = default, bool includeCount = true)
   {
     var terms = SearchTerms(filter.Search);
     var source = MediaSource(terms);
     var query = MediaQuery(terms);
     var order = MediaOrderBy(filter.Sort);
+    var count = includeCount
+      ? $"{source}\n      SELECT COUNT_BIG(*) FROM medij WHERE (@Kind IS NULL OR Kind = @Kind) {Recompile};"
+      : "";
     // Naziv izdelka se prebere sele za vrstice na strani: za vse zapise bi bil to en OUTER APPLY
     // na vrstico, na zaslonu pa jih je najvec 50.
     return database.PageAsync($"""
@@ -82,8 +91,7 @@ public sealed class CatalogReadService(PimDb database)
       ORDER BY {order}
       {Recompile};
 
-      {source}
-      SELECT COUNT_BIG(*) FROM medij WHERE (@Kind IS NULL OR Kind = @Kind) {Recompile};
+      {count}
       """,
       reader => new MediaRow(
         PimDb.TextOrEmpty(reader, "Source"), PimDb.Int64(reader, "SourceId"), PimDb.Int64(reader, "ProductId"),

@@ -49,15 +49,100 @@
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
 </section>
 
+@* #34: paketna preslikava — izbrane poti (ali vse po filtru) naenkrat v isto kategorijo. Skupni gradnik
+   PimBulkBar + PimRowSelection; zapis je ena transakcija v servisu (vse ali nič) z vrstico zgodovine na pot. *@
+@if (CanWrite)
+{
+  <PimBulkBar Count="Selection.Count" AllMatching="Selection.AllMatching" MatchingTotal="Selection.MatchingTotal"
+              PageSelected="PageFullySelected" PageRowCount="Rows.Count"
+              OnPageChanged="SelectPage" OnSelectAllMatching="SelectAllMatching" OnClear="ClearSelection"
+              AriaLabel="Izbira poti in paketna preslikava" Hint="Označi poti, ki jih želiš preslikati v isto kategorijo.">
+    <button type="button" class="primary-button" disabled="@(Busy || BulkBusy)" @onclick="OpenBulkAsync">Preslikaj v kategorijo …</button>
+  </PimBulkBar>
+}
+else if (!Loading)
+{
+  <p class="message-state read-only-note" role="status">Samo za branje — preslikave kategorij spreminjajo uvrstitev izdelkov na spletu, zato jih urejata urednik kataloga in skrbnik.</p>
+}
+
+@if (CanWrite && BulkOpen)
+{
+  <section class="ui-card bulk-map section-gap" aria-labelledby="bulk-map-title">
+    <div class="bulk-map-head">
+      <h2 id="bulk-map-title">Paketna preslikava — @BulkScopeLabel</h2>
+      <button type="button" class="small-action" data-pim-close disabled="@BulkBusy" @onclick="CloseBulk">Zapri</button>
+    </div>
+
+    @if (BulkError is not null) { <p class="message-state error-message" role="alert">@BulkError</p> }
+
+    @if (BulkRows.Count > 0 && BulkTree is not null)
+    {
+      <p class="muted">
+        Drevo <strong>@BulkTree</strong> · @PathCount(BulkRows.Count) ·
+        @BulkRows.Sum(row => row.ProductCount).ToString("N0") izdelkov za njimi
+        @if (BulkAlreadyMapped > 0)
+        {
+          <text> · že preslikanih @BulkAlreadyMapped.ToString("N0") — dobijo novo kategorijo</text>
+        }
+      </p>
+
+      @if (!BulkConfirming)
+      {
+        <div class="form-grid">
+          <label class="form-field" for="bulk-category">
+            Ciljna kategorija
+            <PimPicker Id="bulk-category" Options="CategoryOptionsFor(BulkTree)" @bind-Value="BulkCategoryOrNull"
+                       Placeholder="Vpiši del imena ali poti kategorije …" EmptyText="V tem drevesu ni kategorij." />
+          </label>
+          <label class="form-field" for="bulk-note">
+            Opomba (neobvezno, gre v zgodovino vsake poti)
+            <input id="bulk-note" class="form-input" @bind="BulkNote" disabled="@BulkBusy" />
+          </label>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="primary-button" disabled="@(BulkBusy || string.IsNullOrWhiteSpace(BulkCategory))" @onclick="() => BulkConfirming = true">
+            Naprej: preslikaj @PathCount(BulkRows.Count)
+          </button>
+          <button type="button" class="small-action" disabled="@BulkBusy" @onclick="CloseBulk">Prekliči</button>
+        </div>
+      }
+      else
+      {
+        <div class="bulk-confirm" role="alertdialog" aria-labelledby="bulk-confirm-text">
+          <p id="bulk-confirm-text"><strong>Preslikati @PathCount(BulkRows.Count) v »@BulkCategoryLabel«?</strong></p>
+          <p class="muted">Vse ali nič: če baza zavrne eno pot, se ne zapiše nobena. Vsaka pot dobi svojo vrstico v zgodovini (kdo, kdaj, prejšnja kategorija). Izdelki dobijo novo uvrstitev ob naslednji preslikavi vira.</p>
+          <div class="page-actions">
+            <button type="button" class="primary-button" disabled="@BulkBusy" @onclick="SaveBulkAsync">
+              @(BulkBusy ? "Preslikujem …" : "Da, preslikaj " + PathCount(BulkRows.Count))
+            </button>
+            <button type="button" class="small-action" disabled="@BulkBusy" @onclick="() => BulkConfirming = false">Nazaj</button>
+          </div>
+        </div>
+      }
+    }
+    else if (BulkBusy)
+    {
+      <p class="muted" role="status">Zbiram izbrane poti …</p>
+    }
+  </section>
+}
+
 <section class="ui-card data-card section-gap" aria-label="Preslikave kategorij">
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)"
             EmptyText="Za te filtre ni nobene poti." LoadingText="Nalaganje preslikav …">
-    <PimTable Caption="Poti iz virov, razvrščene po številu izdelkov za njimi" Columns="Columns">
+    <PimTable Caption="Poti iz virov, razvrščene po številu izdelkov za njimi" Columns="@(CanWrite ? SelectColumns : Columns)">
       <Rows>
         @foreach (var row in Rows)
         {
           var key = RowKey(row);
-          <tr>
+          <tr class="@(CanWrite && Selection.Contains(key) ? "is-selected" : null)">
+            @if (CanWrite)
+            {
+              <td class="select-cell">
+                <input type="checkbox" aria-label="@($"Izberi pot {Describe(row)} ({row.SourceCode}, drevo {row.CategoryTreeCode})")"
+                       checked="@Selection.Contains(key)" @onchange="e => Toggle(row, e)" />
+              </td>
+            }
             <td><span class="code-value">@row.SourceCode</span></td>
             <td class="tree-path">
               @Describe(row)
@@ -117,9 +202,12 @@
               else
               {
                 <div>@(row.CategoryPath ?? "—")</div>
-                <button type="button" @onclick="() => BeginEditAsync(row)">
-                  @(row.State == "Nepreslikano" ? "Preslikaj" : "Uredi")
-                </button>
+                @if (CanWrite)
+                {
+                  <button type="button" @onclick="() => BeginEditAsync(row)">
+                    @(row.State == "Nepreslikano" ? "Preslikaj" : "Uredi")
+                  </button>
+                }
               }
             </td>
           </tr>
@@ -157,6 +245,7 @@
   [
     new("Vir"), new("Pot iz vira"), new("Izdelkov", Numeric: true), new("Stanje"), new("Naša kategorija")
   ];
+  static readonly IReadOnlyList<PimColumn> SelectColumns = [new("Izbira"), .. Columns];
 
   string ResultSummary => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
@@ -182,6 +271,7 @@
   {
     try
     {
+      CanWrite = await Mapping.CanWriteAsync();
       Sources = await Mapping.GetSourceCodesAsync();
       Trees = await Mapping.GetTreeCodesAsync();
     }
@@ -199,6 +289,7 @@
       var result = await Mapping.GetMappingsAsync(Source, Tree, State, Search, page, PageSize);
       Rows = result.Rows;
       Total = result.Total;
+      Selection.UpdateFilter(FilterSignature, Total);
     }
     catch (Exception exception) { Error = exception.Message; Rows = []; Total = 0; }
     finally { Loading = false; }
@@ -342,6 +433,115 @@
   }
 
   string? NoteOrNull() => string.IsNullOrWhiteSpace(Note) ? null : Note;
+
+  /* --- #34: izbira vrstic in paketna preslikava ------------------------------------------------ */
+
+  const int MaxBulk = PIM.Intranet.Services.CategoryMappingService.MaxBulkPaths;
+  bool CanWrite;
+  readonly PimRowSelection<PIM.Intranet.Services.CategoryMappingService.MappingRow> Selection = new();
+
+  string FilterSignature => $"{Source}|{Tree}|{State}|{Search}";
+  IEnumerable<KeyValuePair<string, PIM.Intranet.Services.CategoryMappingService.MappingRow>> PageRows =>
+    Rows.Select(row => new KeyValuePair<string, PIM.Intranet.Services.CategoryMappingService.MappingRow>(RowKey(row), row));
+  bool PageFullySelected => Selection.AllSelected(Rows.Select(RowKey));
+  void SelectPage(bool selected) => Selection.SetPage(PageRows, selected);
+  void SelectAllMatching() => Selection.SelectAllMatching();
+  void ClearSelection() => Selection.Clear();
+  void Toggle(PIM.Intranet.Services.CategoryMappingService.MappingRow row, ChangeEventArgs args) =>
+    Selection.Toggle(RowKey(row), row, args.Value is true, PageRows);
+
+  static string PathCount(long count) => PimFormat.Count(count, "pot", "poti", "poti", "poti");
+
+  bool BulkOpen;
+  bool BulkBusy;
+  bool BulkConfirming;
+  string? BulkError;
+  string? BulkTree;
+  string BulkCategory = "";
+  string BulkNote = "";
+  IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.MappingRow> BulkRows = [];
+
+  string? BulkCategoryOrNull { get => string.IsNullOrWhiteSpace(BulkCategory) ? null : BulkCategory; set { BulkCategory = value ?? ""; BulkConfirming = false; } }
+  int BulkAlreadyMapped => BulkRows.Count(row => row.CategoryCode is not null);
+  string BulkScopeLabel => Selection.AllMatching
+    ? $"vse poti, ki ustrezajo filtru ({Selection.Count:N0})"
+    : PimFormat.Count(Selection.Count, "izbrana pot", "izbrani poti", "izbrane poti", "izbranih poti");
+  string BulkCategoryLabel => BulkTree is not null
+    && NodesFor(BulkTree).FirstOrDefault(node => node.CategoryCode == BulkCategory) is { } node
+      ? node.CategoryPath ?? node.CategoryName
+      : BulkCategory;
+
+  /// <summary>Zbere izbrane poti: posamezne iz izbire, »vse po filtru« znova s strežnika (en klic, največ 500).
+  /// Poti morajo biti iz enega drevesa, ker kategorija velja samo v svojem drevesu.</summary>
+  async Task OpenBulkAsync()
+  {
+    BulkOpen = true;
+    BulkBusy = true;
+    BulkConfirming = false;
+    BulkError = null;
+    BulkRows = [];
+    BulkTree = null;
+    BulkCategory = "";
+    BulkNote = "";
+    Message = null;
+    try
+    {
+      IReadOnlyList<PIM.Intranet.Services.CategoryMappingService.MappingRow> rows;
+      if (Selection.AllMatching)
+      {
+        if (Selection.MatchingTotal > MaxBulk)
+          throw new InvalidOperationException($"Filtru ustreza {Selection.MatchingTotal:N0} poti; naenkrat jih lahko preslikaš največ {MaxBulk:N0}. Zoži filter (vir, drevo ali iskanje).");
+        rows = (await Mapping.GetMappingsAsync(Source, Tree, State, Search, 1, MaxBulk)).Rows;
+      }
+      else
+      {
+        rows = Selection.Items.ToList();
+        if (rows.Count > MaxBulk)
+          throw new InvalidOperationException($"Izbranih je {rows.Count:N0} poti; naenkrat jih lahko preslikaš največ {MaxBulk:N0}.");
+      }
+      if (rows.Count == 0) throw new InvalidOperationException("Ni izbrane nobene poti.");
+      var trees = rows.Select(row => row.CategoryTreeCode).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+      if (trees.Count > 1)
+        throw new InvalidOperationException($"Izbrane poti so iz več dreves ({string.Join(", ", trees)}). Kategorija velja samo v svojem drevesu — v filtru izberi drevo in označi znova.");
+      BulkTree = trees[0];
+      if (!NodeCache.ContainsKey(BulkTree)) NodeCache[BulkTree] = await Mapping.GetTreeNodesAsync(BulkTree, null);
+      BulkRows = rows;
+    }
+    catch (Exception exception) { BulkError = exception.Message; }
+    finally { BulkBusy = false; }
+  }
+
+  void CloseBulk()
+  {
+    BulkOpen = false;
+    BulkConfirming = false;
+    BulkError = null;
+    BulkRows = [];
+  }
+
+  async Task SaveBulkAsync()
+  {
+    if (BulkTree is null || BulkRows.Count == 0 || string.IsNullOrWhiteSpace(BulkCategory)) return;
+    BulkBusy = true;
+    BulkError = null;
+    Message = null;
+    try
+    {
+      var label = BulkCategoryLabel;
+      var products = BulkRows.Sum(row => row.ProductCount);
+      var outcome = await Mapping.SaveMappingsAsync(
+        BulkRows.Select(row => new PIM.Intranet.Services.CategoryMappingService.PathKey(row.SourceCode, row.CategoryTreeCode, row.SourcePathKey)).ToList(),
+        BulkTree, BulkCategory, await ActorAsync(), string.IsNullOrWhiteSpace(BulkNote) ? null : BulkNote);
+      Message = $"Preslikanih {PathCount(outcome.Total)} v »{label}«: novih {outcome.Created:N0}, spremenjenih {outcome.Updated:N0}, že takšnih {outcome.Unchanged:N0}. "
+        + $"Velja za {products:N0} izdelkov ob naslednji preslikavi vira.";
+      Selection.Clear();
+      CloseBulk();
+      await LoadAsync();
+    }
+    // Baza zavrne neobstoječo kategorijo (106003) ali kategorijo brez prevoda (106004) — takrat se ne zapiše nič.
+    catch (Exception exception) { BulkError = exception.Message + " Nobena pot ni bila spremenjena."; BulkConfirming = false; }
+    finally { BulkBusy = false; }
+  }
 
   async Task<string> ActorAsync()
   {
