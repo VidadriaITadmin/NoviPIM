@@ -8,7 +8,7 @@ pise: [splet.katalog-csv, splet.stranke-csv, pim.varovalke, pim.izdelek, obvesti
 strani: [/splet]
 posli: [WEB_CATALOG_EXPORT]
 koda: [PIM_Solution/workers/PIM.B2bWorker/*.cs, PIM_Solution/src/PIM.B2b/*.cs, PIM_Solution/src/PIM.Intranet/Components/Pages/Web.razor, PIM_Solution/src/PIM.Intranet/Services/MagentoArtifactService.cs, PIM_Solution/src/PIM.Intranet/Services/ExportDownloadEndpoint.cs, PIM_Solution/src/PIM.Intranet/Services/QualityReadService.cs, PIM_Solution/src/PIM.Automation/JobCatalog.cs]
-migracije: [142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279, 285, 291, 292, 293, 302, 306]
+migracije: [142, 146, 201, 202, 204, 208, 213, 216, 217, 234, 242, 251, 252, 253, 271, 274, 277, 279, 285, 291, 292, 293, 302, 306, 314, 316]
 ---
 
 # Katalog in stranke za splet (katalog.csv in stranke.csv)
@@ -110,7 +110,7 @@ flowchart LR
 - Artikel na splet samo, če je aktiven + kljukica spletišča + kategorija na tem spletišču + objavljen in veljaven za splet + brez zadržka + ni izključen. Kljukica sama ni dovolj.
 - »Spletne strani« vsebuje samo spletišča, kamor artikel res gre (`svetila`, `videlektro` ali `svetila|videlektro`). Prazno polje Magento razume kot umik.
 - Odjavna vrstica: artikel, ki je bil objavljen, ostane v datoteki s prazno »Spletne strani« še 14 dni (nastavljivo na `/splet/umaknjeni`); artikel, ki ni bil nikoli na spletu, v datoteko ne gre.
-- Atributi (291): gredo **vsi** atributi izdelka s stolpcem; nabor po kategoriji izloči samo atribut z ravnijo EXCLUDED. Vrednost gre skozi `pim.NormalizeAttributeValue` — Napetost vedno `~220-230` (izmenična) oz. `DC 24` (enosmerna), Frekvenca `50/60`, brez dvojnih presledkov, decimalna pika; izjeme v slovarju (`/pravila/slovar`, jezik ENOTNO).
+- Atributi (291): gredo **vsi** atributi izdelka s stolpcem; nabor po kategoriji izloči samo atribut z ravnijo EXCLUDED. Vrednost gre skozi `pim.PolishAttributeValue` (od 314, #49; ta najprej pokliče `pim.NormalizeAttributeValue` iz 291) — Napetost vedno `~220-230` (izmenična) oz. `DC 24` (enosmerna), Frekvenca `50/60`, brez dvojnih presledkov, decimalna pika; poleg tega presledek pred enoto (»10W« → »10 W«), za vejico v seznamu (»3CCT, IP65«), razpon brez presledkov (»30-50«) in velika začetnica pri čistem besedilu (»Bela«). Pri miru ostanejo polja za SAOP (Garancija), atributi »Enota …« in cilji slovarja; izjeme v slovarju (`/pravila/slovar`, jezik ENOTNO). Ročno vpisana vrednost v PIM ostane, kot je vpisana, v katalog.csv gre lepo zapisana.
 - Kategorije (291): v stolpce kategorij gre samo pot, ki obstaja v drevesu v jeziku spletišča (`canon.WebSiteCategoryPath`); ostanek stare preslikave ne pride v Magento.
 - Stranka gre v `stranke.csv`, če je aktivna in ima B2B profil; tip stranke ni pogoj (brez tipa gre s prazno Magento skupino).
 - Par se zamenja skupaj — nikoli nov katalog ob stari datoteki strank. Neuspešen tek pusti prejšnji veljavni par.

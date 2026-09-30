@@ -73,7 +73,8 @@ try
   Equal("0", await AttributeAsync(connection, "F5 Zatemnljivo"), "BOOL ni pretvoril \"Not-Dimmable\" v 0.");
   Equal("NW.203", await AttributeAsync(connection, "F5 Simbol"), "PREFIX ni pripel predpone.");
   Equal("II", await AttributeAsync(connection, "F5 Razred"), "TRIM + STRIPPREFIX nista poenotila \" CLASS II\".");
-  Equal("črna", await AttributeAsync(connection, "F5 Barva SLO"), "LOOKUP ni uporabil prevoda za lastnost.");
+  // Od 314 (#49) zajem vrednost še lepo zapiše: prevod »črna« dobi veliko začetnico (čisto besedilo).
+  Equal("Črna", await AttributeAsync(connection, "F5 Barva SLO"), "LOOKUP ni uporabil prevoda za lastnost (ali zajem ni lepo zapisal vrednosti).");
   // Splošni prevod (domena *) ima svojo testno vrednost: živi slovar ima od uvoza »Prevajalna tabela.xlsx«
   // za »galvanised steel« že »Cinkano jeklo«, zato se test ne sme opirati na resnične vrstice slovarja (#15).
   Equal("f5 cinkano jeklo", await AttributeAsync(connection, "F5 Material SLO"), "LOOKUP ni uporabil splošnega prevoda.");
@@ -134,8 +135,7 @@ finally
   await CleanupAsync(connection);
 }
 
-// #15 (migracija 307): predlog lepega zapisa vrednosti. Samo predogled — zajem in izvoz ga ne kličeta,
-// zato se tu preveri pravilo samo in to, da ga map.ApplyValueTransforms in out.GetExportRows ne uporabljata.
+// #15 (307) + #49 (314, 316): lep zapis vrednosti je vklopljen v zajem in katalog.csv.
 if (await ScalarAsync<int>(connection, "SELECT CASE WHEN OBJECT_ID(N'pim.PolishAttributeValue', N'FN') IS NULL THEN 0 ELSE 1 END;") == 1)
 {
   foreach (var (attribute, input, expected) in new[]
@@ -152,18 +152,86 @@ if (await ScalarAsync<int>(connection, "SELECT CASE WHEN OBJECT_ID(N'pim.PolishA
     ("Napetost", "~220-30", "~220-230"),
     ("CRI", "≥ 80", "≥80"),
     ("Max moč sijalke", "2x5W", "2x5 W"),
+    ("Max moč sijalke", "10W", "10 W"),
     ("Ikone", "3CCT,IP65", "3CCT, IP65"),
     ("Širina", "1,5", "1.5"),
+    // 314: vejica pred enoto — prej je drugi klic spet spremenil »…,6600mAh«.
+    ("Baterija", "Li-Ion,Battery 18650 3.7V,6600mAh", "Li-Ion, Battery 18650 3.7 V, 6600 mAh"),
+    ("Ikone", "TOUCH,DIMMABLE,5000K", "TOUCH, DIMMABLE, 5000 K"),
+    // 314: polje, ki gre v SAOP (out.SaopXmlField), ostane, kot ga vrne 291 — lastnik: nič SAOP.
+    ("Garancija", "OSRAM GU10,DIMM, 8.3W,3.000K,C", "OSRAM GU10,DIMM, 8.3W,3.000K,C"),
+    // 316: spremljevalni atributi enot niso besedilo.
+    ("Enota bruto teže (2)", "kgs", "kgs"),
   })
-    Equal(expected, await ScalarAsync<string>(connection, "SELECT pim.PolishAttributeValue(@Attribute, @Input);",
-      ("@Attribute", attribute), ("@Input", input)), $"Predlog zapisa za »{input}« ({attribute}).");
+  {
+    var once = await ScalarAsync<string>(connection, "SELECT pim.PolishAttributeValue(@Attribute, @Input);", ("@Attribute", attribute), ("@Input", input));
+    Equal(expected, once, $"Lep zapis za »{input}« ({attribute}).");
+    // Stabilnost: drugi klic ne sme spremeniti ničesar, sicer bi vsak zajem/izvoz spet spreminjal isto vrednost.
+    Equal(once, await ScalarAsync<string>(connection, "SELECT pim.PolishAttributeValue(@Attribute, @Input);", ("@Attribute", attribute), ("@Input", once)),
+      $"Lep zapis ni stabilen za »{once}« ({attribute}).");
+  }
 
+  // Zajem in izvoz kličeta lep zapis (314), starega klica 291 ni več; validacija ga ne kliče.
+  Equal(3, await ScalarAsync<int>(connection, """
+    SELECT CONVERT(int, (DATALENGTH(d.Transforms) - DATALENGTH(REPLACE(d.Transforms, N'pim.PolishAttributeValue(', N''))) / DATALENGTH(N'pim.PolishAttributeValue(')
+         + (DATALENGTH(d.Export) - DATALENGTH(REPLACE(d.Export, N'pim.PolishAttributeValue(', N''))) / DATALENGTH(N'pim.PolishAttributeValue('))
+    FROM (SELECT OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms')) AS Transforms, OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows')) AS Export) AS d;
+    """), "Zajem (2 klica) in izvoz katalog.csv (1 klic) morata klicati pim.PolishAttributeValue (314).");
   Equal(0, await ScalarAsync<int>(connection, """
     SELECT COUNT(*) FROM sys.sql_modules
-    WHERE object_id IN (OBJECT_ID(N'map.ApplyValueTransforms'), OBJECT_ID(N'out.GetExportRows'), OBJECT_ID(N'val.Promote'))
-      AND definition LIKE N'%PolishAttributeValue%';
-    """), "Predlog zapisa (307) je samo predogled; zajem, validacija in izvoz ga ne smejo klicati, dokler ga lastnik ne potrdi.");
-  Console.WriteLine("F5 predlog zapisa (307): enote, razpon, vejica, velika začetnica, izjeme in ločenost od zajema/izvoza PASS.");
+    WHERE object_id IN (OBJECT_ID(N'map.ApplyValueTransforms'), OBJECT_ID(N'out.GetExportRows'))
+      AND definition LIKE N'%NormalizeAttributeValue%';
+    """), "Zajem in izvoz ne smeta več klicati samo pravila 291 (dva zapisa iste vrednosti na spletu).");
+
+  // Izjema iz slovarja ENOTNO in povratek: vse v transakciji, ki se prekliče (slovar in podatki ostanejo).
+  await using (var transaction = (SqlTransaction)await connection.BeginTransactionAsync())
+  {
+    async Task<string> InTransactionAsync(string sql, params (string Name, object Value)[] parameters)
+    {
+      await using var command = new SqlCommand(sql, connection, transaction);
+      foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
+      return Convert.ToString(await command.ExecuteScalarAsync()) ?? "";
+    }
+
+    // »5000k« -> slovar »5000K« ne sme postati »5000 K«.
+    await InTransactionAsync("""
+      INSERT map.ValueLookup (Domain, SourceValue, Language, TargetValue, Note, IsActive)
+      VALUES (N'F5 Ikone lepi', N'5000k', N'ENOTNO', N'5000K', N'F5 #49: izjema', 1);
+      SELECT 1;
+      """);
+    Equal("5000K", await InTransactionAsync("SELECT pim.PolishAttributeValue(N'F5 Ikone lepi', N'5000k');"),
+      "Izjema iz slovarja ENOTNO mora obveljati tudi po lepem zapisu.");
+    Equal("5000 K", await InTransactionAsync("SELECT pim.PolishAttributeValue(N'F5 Ikone drugi', N'5000K');"),
+      "Brez izjeme dobi enota presledek.");
+
+    // Povratek vrne prvotno vrednost samo, kjer je vrednost še enaka zapisani »potem«.
+    var rowId = long.Parse(await InTransactionAsync(
+      "SELECT TOP (1) CONVERT(nvarchar(30), PimProductAttributeId) FROM pim.ProductAttribute WHERE Value IS NOT NULL ORDER BY PimProductAttributeId;"));
+    const string valueSql = "SELECT Value FROM pim.ProductAttribute WHERE PimProductAttributeId = @Id;";
+    var current = await InTransactionAsync(valueSql, ("@Id", rowId));
+    var tag = "F5 povratek " + Guid.NewGuid().ToString("N")[..8];
+    await InTransactionAsync("""
+      INSERT pim.AttributeValueNormalizationLog (TableName, RowId, OrganizationId, ItemID, AttributeCode, LanguageCode, OldValue, NewValue, ChangedBy)
+      SELECT N'pim.ProductAttribute', a.PimProductAttributeId, p.OrganizationId, p.ItemID, a.AttributeCode, a.LanguageCode, N'F5 prej', a.Value, @Tag
+      FROM pim.ProductAttribute a JOIN pim.Product p ON p.PimProductId = a.PimProductId WHERE a.PimProductAttributeId = @Id;
+      SELECT 1;
+      """, ("@Id", rowId), ("@Tag", tag));
+    const string revertSql = """
+      DECLARE @r TABLE (Candidates int, CanonReverted int, PimReverted int, Skipped int, DryRun bit);
+      INSERT @r EXEC pim.RevertAttributeValueNormalization @Tag, N'F5', @DryRun;
+      SELECT PimReverted FROM @r;
+      """;
+    Equal("1", await InTransactionAsync(revertSql, ("@Tag", tag), ("@DryRun", true)), "Suhi tek povratka mora najti eno vrstico.");
+    Equal(current, await InTransactionAsync(valueSql, ("@Id", rowId)), "Suhi tek povratka ne sme ničesar spremeniti.");
+    Equal("1", await InTransactionAsync(revertSql, ("@Tag", tag), ("@DryRun", false)), "Povratek mora vrniti eno vrstico.");
+    Equal("F5 prej", await InTransactionAsync(valueSql, ("@Id", rowId)), "Povratek ni vrnil prvotne vrednosti.");
+    Equal("1", await InTransactionAsync("SELECT COUNT(*) FROM pim.AttributeValueNormalizationLog WHERE ChangedBy = N'povratek ' + @Tag + N' (F5)';", ("@Tag", tag)),
+      "Povratek mora zapisati dnevnik.");
+    Equal("0", await InTransactionAsync(revertSql, ("@Tag", tag), ("@DryRun", false)),
+      "Drugi povratek ne sme spremeniti vrednosti, ki ni več enaka »potem«.");
+    await transaction.RollbackAsync();
+  }
+  Console.WriteLine("F5 lep zapis (307/314/316): primeri, stabilnost, SAOP polja, enote, izjeme ENOTNO, zajem+izvoz in povratek PASS.");
 }
 return 0;
 

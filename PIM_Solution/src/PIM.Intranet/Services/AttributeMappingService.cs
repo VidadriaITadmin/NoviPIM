@@ -453,9 +453,10 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
   public sealed record PolishPreview(IReadOnlyList<PolishPreviewRow> Changes, long DistinctValues, long ElapsedMs, DateTime ComputedUtc);
 
   /// <summary>
-  /// Predogled predloga lepega zapisa (pim.PolishAttributeValue, 307): kaj bi se spremenilo, če bi
-  /// lastnik pravilo vklopil. Funkcija se kliče enkrat na RAZLIČNO vrednost (ne na vrstico); podatki,
-  /// zajem in katalog.csv ostanejo nespremenjeni.
+  /// Lep zapis (pim.PolishAttributeValue, 307, vklopljen s 314 — lastnik 2026-09-29): kaj pravilo še
+  /// zapiše drugače. Po vklopu so to samo ročno vpisane vrednosti (kartica, delovni list), ki jih zajem
+  /// ne poenoti; katalog.csv jih zapiše lepo že ob izvozu. Funkcija se kliče enkrat na RAZLIČNO vrednost
+  /// (ne na vrstico); tu se nič ne zapiše.
   /// </summary>
   public async Task<PolishPreview> GetPolishPreviewAsync(bool refresh = false, CancellationToken cancellationToken = default)
   {
@@ -511,6 +512,76 @@ public sealed class AttributeMappingService(PimDb database, IConfiguration confi
     watch.Stop();
     return new PolishPreview(changes, distinctValues, watch.ElapsedMilliseconds, DateTime.UtcNow);
   }
+
+  /// <summary>Eno poenotenje vrednosti v dnevniku pim.AttributeValueNormalizationLog (291, 294, 314 …).</summary>
+  /// <param name="ChangedBy">Oznaka poenotenja (npr. »migracija 314« ali »povratek migracija 314 (kdo)«).</param>
+  public sealed record NormalizationRun(string ChangedBy, long Rows, long Products, int Organizations, DateTime FirstUtc, DateTime LastUtc);
+
+  /// <summary>
+  /// Pregled dnevnika poenotenj: kdo (migracija ali povratek), kdaj, koliko vrstic in izdelkov.
+  /// Ena združevalna poizvedba; dnevnik ima indeks po ChangedBy (314).
+  /// </summary>
+  public async Task<IReadOnlyList<NormalizationRun>> GetNormalizationRunsAsync(CancellationToken cancellationToken = default)
+  {
+    const string sql = """
+      SET NOCOUNT ON;
+      IF OBJECT_ID(N'pim.AttributeValueNormalizationLog', N'U') IS NULL RETURN;
+      SELECT ChangedBy, COUNT_BIG(*) AS Rows,
+             COUNT_BIG(DISTINCT CONCAT(OrganizationId, N'|', ItemID)) AS Products,
+             COUNT(DISTINCT OrganizationId) AS Organizations,
+             MIN(ChangedUtc) AS FirstUtc, MAX(ChangedUtc) AS LastUtc
+      FROM pim.AttributeValueNormalizationLog
+      GROUP BY ChangedBy
+      ORDER BY MAX(ChangedUtc) DESC;
+      """;
+    var runs = new List<NormalizationRun>();
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(sql, connection) { CommandTimeout = 60 };
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+      runs.Add(new NormalizationRun(PimDb.TextOrEmpty(reader, "ChangedBy"), PimDb.Int64(reader, "Rows"), PimDb.Int64(reader, "Products"),
+        PimDb.Int32(reader, "Organizations"), PimDb.DateTimeValue(reader, "FirstUtc"), PimDb.DateTimeValue(reader, "LastUtc")));
+    return runs;
+  }
+
+  /// <summary>
+  /// Vrstice enega poenotenja za izvoz (prej, potem, podjetje, šifra, kdaj). Samo branje; povratek naredi
+  /// skrbnik baze s pim.RevertAttributeValueNormalization (vrne le vrednosti, ki jih od takrat nihče ni spremenil).
+  /// </summary>
+  public async Task<string> GetNormalizationLogCsvAsync(string changedBy, CancellationToken cancellationToken = default)
+  {
+    const string sql = """
+      SET NOCOUNT ON;
+      SELECT entry.ChangedUtc, entry.ChangedBy, entry.TableName, organization.Name AS Organization, entry.ItemID,
+             entry.AttributeCode, entry.LanguageCode, entry.OldValue, entry.NewValue
+      FROM pim.AttributeValueNormalizationLog AS entry
+      LEFT JOIN dbo.OrganizationConfig AS organization ON organization.OrganizationId = entry.OrganizationId
+      WHERE entry.ChangedBy = @ChangedBy
+      ORDER BY entry.AttributeValueNormalizationLogId;
+      """;
+    var builder = new System.Text.StringBuilder();
+    builder.AppendLine("Kdaj;Poenotenje;Plast;Podjetje;Šifra;Atribut;Jezik;Prej;Potem");
+    await using var connection = new SqlConnection(ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await using var command = new SqlCommand(sql, connection) { CommandTimeout = 120 };
+    command.Parameters.Add("@ChangedBy", System.Data.SqlDbType.NVarChar, 200).Value = changedBy;
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+    while (await reader.ReadAsync(cancellationToken))
+    {
+      var layer = PimDb.TextOrEmpty(reader, "TableName") == "pim.ProductAttribute" ? "PIM" : "Vir (canon)";
+      builder.AppendLine(string.Join(';', new[]
+      {
+        PimDb.DateTimeValue(reader, "ChangedUtc").ToPimLocal().ToString("yyyy-MM-dd HH:mm"), PimDb.TextOrEmpty(reader, "ChangedBy"), layer,
+        PimDb.TextOrEmpty(reader, "Organization"), PimDb.TextOrEmpty(reader, "ItemID"), PimDb.TextOrEmpty(reader, "AttributeCode"),
+        PimDb.TextOrEmpty(reader, "LanguageCode"), PimDb.TextOrEmpty(reader, "OldValue"), PimDb.TextOrEmpty(reader, "NewValue")
+      }.Select(CsvCell)));
+    }
+    return builder.ToString();
+  }
+
+  static string CsvCell(string value) =>
+    value.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
 
   /// <summary>Jeziki, v katere slovar prevaja angleške vrednosti atributov. IT slovar pozna, izdelek
   /// pa vrednosti hrani samo v sl/en, zato katalog.csv italijanskih vrednosti (še) ne izvozi.</summary>

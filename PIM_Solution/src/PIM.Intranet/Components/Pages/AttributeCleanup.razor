@@ -8,10 +8,11 @@
 @* Naloga #15 (lastnik 2026-09-29): »kateri atributi pomenijo isto … seznam kandidatov za združitev, s
    številom artiklov in primeri vrednosti; lastnik odloči, kaj se združi« in »uvoz naj besedilo lepo
    uredi (enote, presledki, velike začetnice)«. Stran je SAMO PREGLED: nič se ne združi, izbriše ali
-   prepiše. Združevanje in vklop pravila zapisa sta ločeni nalogi po odločitvi lastnika. *@
+   prepiše. Združevanje je ločena naloga (#48). Pravilo zapisa je vklopljeno z migracijo 314 (#49, lastnik
+   2026-09-29 »Da«): zajem, katalog.csv in obstoječe vrednosti; tu je pregled ostanka in dnevnik poenotenj. *@
 
 <PageTitle>Čiščenje atributov</PageTitle>
-<PimPage Title="Čiščenje atributov" Subtitle="Predlogi, kateri atributi pomenijo isto, in predogled lepega zapisa vrednosti. Samo pregled — podatki, uvoz in katalog.csv se ne spremenijo." Crumbs="Crumbs">
+<PimPage Title="Čiščenje atributov" Subtitle="Predlogi, kateri atributi pomenijo isto, in lep zapis vrednosti (vklopljen za uvoz, katalog.csv in obstoječe vrednosti). Na tej strani se nič ne zapiše." Crumbs="Crumbs">
   <Actions>
     <a class="secondary-button" href="nastavitve/atributi">Register atributov</a>
   </Actions>
@@ -22,7 +23,7 @@
 <p class="message-state info-message cleanup-note" role="status">
   @if (View == ViewPolish)
   {
-    <span>Pravilo je pripravljeno, a <strong>ni vklopljeno</strong>: uvoz, izvoz katalog.csv in obstoječe vrednosti ostanejo, kot so. Če bi veljalo samo za nove uvoze, bi imel spletni filter dva zapisa iste vrednosti (»10W« in »10 W«). Vklop za vse naenkrat, z zgodovino prej/potem in povratkom, potrdi lastnik.</span>
+    <span>Pravilo je <strong>vklopljeno</strong> (30. 9. 2026): novi uvozi (XML, SAOP) in katalog.csv vrednosti zapišejo lepo, obstoječe vrednosti so poenotene, vsaka sprememba je v dnevniku spodaj (prej, potem, kdaj). Tabela kaže samo, kar je bilo od takrat vpisano ročno (kartica, delovni list): v katalog.csv gre že lepo zapisano, v PIM pa ostane, kot je vpisano. Polja, ki gredo v SAOP (npr. Garancija), in enote (»Enota …«) pravilo pusti pri miru.</span>
   }
   else
   {
@@ -52,10 +53,10 @@
 
   @if (Polish is not null)
   {
-    <section class="kpi-grid" aria-label="Obseg predloga">
+    <section class="kpi-grid" aria-label="Obseg lepega zapisa">
       <PimStat Label="Različnih vrednosti" Value="@Polish.DistinctValues.ToString("N0")" Note="pregledanih parov atribut–vrednost" />
-      <PimStat Label="Spremenil bi" Value="@Polish.Changes.Count.ToString("N0")" Note="različnih zapisov" />
-      <PimStat Label="Vrstic pri izdelkih" Value="@Polish.Changes.Sum(row => row.Rows).ToString("N0")" Note="bi dobilo nov zapis" />
+      <PimStat Label="Še ni lepo zapisano" Value="@Polish.Changes.Count.ToString("N0")" Note="različnih zapisov v PIM" />
+      <PimStat Label="Vrstic pri izdelkih" Value="@Polish.Changes.Sum(row => row.Rows).ToString("N0")" Note="katalog.csv jih zapiše lepo" />
       <PimStat Label="Izračunano" Value="@Polish.ComputedUtc.ToPimLocal().ToString("HH:mm")" Note="@($"v {Polish.ElapsedMs / 1000.0:N1} s; velja 10 min, »Osveži« na novo")" />
     </section>
   }
@@ -65,16 +66,17 @@
     <ul>
       <li>najprej obstoječe poenotenje (presledki, »≥ 80« → »≥80«, decimalna pika, napetost, frekvenca, slovar ENOTNO);</li>
       <li>razpon brez presledkov: »30 - 50« → »30-50«;</li>
-      <li>presledek med številom in enoto: »50m« → »50 m«, »do 30m« → »do 30 m«, »10W« → »10 W«; »IP44«, »E27«, »GU10« ostanejo;</li>
       <li>presledek za vejico v seznamu: »3CCT,IP65« → »3CCT, IP65«; decimalna »1,5« ostane število;</li>
-      <li>velika začetnica samo pri čistem besedilu: »toplo bela« → »Toplo bela«; »LED«, »mm«, šifre iz SAOP in povezave ostanejo.</li>
+      <li>presledek med številom in enoto: »50m« → »50 m«, »do 30m« → »do 30 m«, »10W« → »10 W«; »IP44«, »E27«, »GU10« ostanejo;</li>
+      <li>velika začetnica samo pri čistem besedilu: »toplo bela« → »Toplo bela«; »LED«, »mm«, šifre iz SAOP in povezave ostanejo;</li>
+      <li>pri miru pusti: napetost in frekvenco (imata svoje pravilo), polja, ki gredo v SAOP (Garancija), enote (»Enota …«) in vrednost, ki jo določa slovar ENOTNO.</li>
     </ul>
-    <p class="card-note">Izjeme (npr. tipkarske napake) dodaš v <a href="pravila/slovar">slovar vrednosti</a> z jezikom ENOTNO.</p>
+    <p class="card-note">Izjeme (npr. »5000K« naj ostane brez presledka) dodaš v <a href="pravila/slovar">slovar vrednosti</a> z jezikom ENOTNO: vrednost, ki je cilj slovarja, ostane, kot jo zapišeš, tudi v katalog.csv.</p>
   </details>
 
   <section class="ui-card data-card section-gap" aria-label="Predogled zapisa vrednosti">
-    <PimState Loading="PolishLoading" Error="@Error" Empty="@(FilteredPolish.Count == 0)" EmptyText="@(HasFilters ? "Za ta filter predlog ne spremeni ničesar. Počisti filtre." : "Predlog ne bi spremenil nobene vrednosti.")" LoadingText="Računam predogled za vse različne vrednosti (približno 10 s) …">
-      <PimTable Caption="Vrednosti, ki bi jih predlog zapisal drugače (prej in potem)" Columns="PolishColumns">
+    <PimState Loading="PolishLoading" Error="@Error" Empty="@(FilteredPolish.Count == 0)" EmptyText="@(HasFilters ? "Za ta filter ni vrednosti, ki bi jih pravilo zapisalo drugače. Počisti filtre." : "Vse vrednosti so lepo zapisane. Nove ročne vnose pravilo uredi ob izvozu katalog.csv.")" LoadingText="Pregledujem vse različne vrednosti (približno 10 s) …">
+      <PimTable Caption="Vrednosti v PIM, ki jih pravilo zapiše drugače (prej in potem; v katalog.csv gredo že lepo)" Columns="PolishColumns">
         <Rows>
           @foreach (var row in FilteredPolish.Take(PolishTake))
           {
@@ -92,6 +94,28 @@
       {
         <p class="card-note table-more">Prikazanih je prvih @PolishTake.ToString("N0") od @FilteredPolish.Count.ToString("N0"). Izvoz v Excel vsebuje vse. <button type="button" class="small-action" @onclick="() => PolishTake += 500">Pokaži še 500</button></p>
       }
+    </PimState>
+  </section>
+
+  <section class="ui-card data-card section-gap" aria-labelledby="normalization-log-title">
+    <h2 id="normalization-log-title" class="log-title">Dnevnik poenotenj</h2>
+    <p class="card-note">Vsaka sprememba obstoječih vrednosti je zapisana: podjetje, šifra, atribut, prej, potem in kdaj. Povratek (vrne samo vrednosti, ki jih od takrat nihče ni spremenil) naredi skrbnik baze s postopkom <code>pim.RevertAttributeValueNormalization</code>; tudi povratek se zapiše sem.</p>
+    <PimState Loading="RunsLoading" Error="@RunsError" Empty="@(Runs.Count == 0)" EmptyText="Dnevnik je prazen: poenotenje obstoječih vrednosti še ni teklo." LoadingText="Berem dnevnik …">
+      <PimTable Caption="Poenotenja vrednosti atributov (najnovejše najprej)" Columns="RunColumns">
+        <Rows>
+          @foreach (var run in Runs)
+          {
+            <tr>
+              <td>@RunLabel(run.ChangedBy)</td>
+              <td>@run.LastUtc.ToPimLocal().ToString("d. M. yyyy HH:mm")</td>
+              <td class="numeric">@run.Rows.ToString("N0")</td>
+              <td class="numeric">@run.Products.ToString("N0")</td>
+              <td class="numeric">@run.Organizations.ToString("N0")</td>
+              <td><button type="button" class="small-action" disabled="@(ExportingRun is not null)" aria-label="@($"Izvozi dnevnik {run.ChangedBy} v Excel")" @onclick="() => ExportRunAsync(run.ChangedBy)">@(ExportingRun == run.ChangedBy ? "Pripravljam …" : "Izvozi v Excel")</button></td>
+            </tr>
+          }
+        </Rows>
+      </PimTable>
     </PimState>
   </section>
 }
@@ -168,9 +192,14 @@ else
   ];
   static readonly IReadOnlyList<PimColumn> PolishColumns =
     [new("Atribut"), new("Prej"), new("Potem"), new("Vrstic", Numeric: true), new("Izdelkov", Numeric: true)];
+  static readonly IReadOnlyList<PimColumn> RunColumns =
+    [new("Poenotenje"), new("Kdaj"), new("Vrstic", Numeric: true), new("Izdelkov", Numeric: true), new("Podjetij", Numeric: true), new("Dnevnik")];
 
   PIM.Intranet.Services.AttributeMappingService.DuplicateReport? Report;
   PIM.Intranet.Services.AttributeMappingService.PolishPreview? Polish;
+  IReadOnlyList<PIM.Intranet.Services.AttributeMappingService.NormalizationRun> Runs = [];
+  bool RunsLoading = true;
+  string? RunsError, ExportingRun;
   bool DuplicateLoading = true, PolishLoading = true;
   string? Error;
   string View = ViewDuplicates;
@@ -181,7 +210,7 @@ else
   [
     new(ViewDuplicates, "Podvojeni atributi", "nastavitve/atributi/ciscenje", "Kandidati za združitev",
       Report is null ? null : Report.Candidates.Count.ToString("N0")),
-    new(ViewPolish, "Lep zapis vrednosti", "nastavitve/atributi/ciscenje?pogled=zapis", "Predogled prej in potem",
+    new(ViewPolish, "Lep zapis vrednosti", "nastavitve/atributi/ciscenje?pogled=zapis", "Ostanek in dnevnik",
       Polish is null ? null : Polish.Changes.Count.ToString("N0")),
   ];
 
@@ -201,7 +230,7 @@ else
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
     // Vsak pogled se samodejno naloži enkrat; po napaki ga uporabnik ponovi z »Osveži« (brez zanke).
-    if (View == ViewPolish && !polishAttempted) { polishAttempted = true; await LoadPolishAsync(false); }
+    if (View == ViewPolish && !polishAttempted) { polishAttempted = true; await LoadRunsAsync(); await LoadPolishAsync(false); }
     else if (View == ViewDuplicates && !duplicatesAttempted) { duplicatesAttempted = true; await LoadDuplicatesAsync(false); }
   }
 
@@ -226,6 +255,43 @@ else
     catch (Exception exception) { Error = "Predogleda zapisa ni bilo mogoče izračunati: " + exception.Message; }
     finally { PolishLoading = false; StateHasChanged(); }
   }
+
+  async Task LoadRunsAsync()
+  {
+    RunsLoading = true;
+    RunsError = null;
+    StateHasChanged();
+    try { Runs = await Attributes.GetNormalizationRunsAsync(); }
+    catch (Exception exception) { RunsError = "Dnevnika poenotenj ni bilo mogoče prebrati: " + exception.Message; }
+    finally { RunsLoading = false; StateHasChanged(); }
+  }
+
+  async Task ExportRunAsync(string changedBy)
+  {
+    ExportingRun = changedBy;
+    RunsError = null;
+    StateHasChanged();
+    try
+    {
+      var csv = await Attributes.GetNormalizationLogCsvAsync(changedBy);
+      var file = "dnevnik-poenotenja-" + new string(changedBy.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()) + ".csv";
+      await Js.InvokeVoidAsync("pimDownloadText", file, csv, "text/csv;charset=utf-8");
+    }
+    catch (Exception exception) { RunsError = "Dnevnika ni bilo mogoče izvoziti: " + exception.Message; }
+    finally { ExportingRun = null; StateHasChanged(); }
+  }
+
+  /// <summary>Oznaka poenotenja po domače; povratek ostane, kot je zapisan (vsebuje, kdo ga je naredil).</summary>
+  static string RunLabel(string changedBy) => changedBy switch
+  {
+    "migracija 291" => "Migracija 291: napetost, frekvenca, decimalke",
+    "migracija 294" => "Migracija 294: jezik atributov",
+    "migracija 295" => "Migracija 295: neprevedene vrednosti",
+    "migracija 301" => "Migracija 301: enota na atributu",
+    "migracija 314" => "Migracija 314: lep zapis (enote, vejice, velika začetnica)",
+    "migracija 316" => "Migracija 316: enote »Enota …« ostanejo",
+    _ => changedBy,
+  };
 
   Task RefreshDuplicatesAsync() => LoadDuplicatesAsync(true);
   Task RefreshPolishAsync() => LoadPolishAsync(true);

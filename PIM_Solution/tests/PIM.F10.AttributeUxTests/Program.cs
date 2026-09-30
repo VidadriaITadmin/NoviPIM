@@ -119,9 +119,9 @@ Assert(!Regex.IsMatch(attributeCss, @"\.translation-list \{[^}]*flex-direction: 
   "Stolpcni razpored prevodov se ne sme vrniti.");
 
 /* ─── Čiščenje atributov (naloga #15, migracija 307) ──────────────────────────
-   Lastnik 2026-09-29: pregled podvojenih atributov in lep zapis vrednosti. Nočna privzeta izbira:
-   samo pregled — nič se ne združi, ne izbriše in ne prepiše; pravilo zapisa ni vklopljeno v zajem
-   ali izvoz, ker bi sicer spletni filter imel dva zapisa iste vrednosti (»10W« in »10 W«). */
+   Lastnik 2026-09-29: pregled podvojenih atributov in lep zapis vrednosti. Stran je samo pregled —
+   nič se ne združi, ne izbriše in ne prepiše. Pravilo zapisa je z 314 (#49) vklopljeno v zajem, izvoz
+   in obstoječe vrednosti (vse naenkrat, z dnevnikom in povratkom). */
 var cleanup = Read(Path.Combine(pages, "AttributeCleanup.razor"));
 Assert(cleanup.Contains("@page \"/nastavitve/atributi/ciscenje\"", StringComparison.Ordinal),
   "Čiščenje atributov mora biti na poti nastavitve/atributi/ciscenje (dostop pokriva register atributov).");
@@ -174,6 +174,30 @@ Assert(migration307Sql.Contains("pim.PolishAttributeValue", StringComparison.Ord
     && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'))", StringComparison.Ordinal)
     && !migration307Sql.Contains("OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))", StringComparison.Ordinal),
   "307 samo doda predlog; zajema in izvoza ne spreminja, dokler lastnik ne potrdi.");
+
+// #49 (314, 316): vklop za vse naenkrat — obstoječe vrednosti z dnevnikom, zajem in izvoz, povratek.
+var migration314 = Path.Combine(migrations, "314_VklopLepegaZapisaVrednostiAtributov.sql");
+Assert(File.Exists(migration314), "Manjka migracija 314 z vklopom lepega zapisa.");
+var migration314Sql = File.ReadAllText(migration314);
+foreach (var required in new[]
+{
+  "OBJECT_DEFINITION(OBJECT_ID(N'map.ApplyValueTransforms'))", "OBJECT_DEFINITION(OBJECT_ID(N'out.GetExportRows'))",
+  "pim.AttributeValueNormalizationLog", "N'migracija 314'", "pim.RevertAttributeValueNormalization", "out.SaopXmlField",
+  "COLLATE DATABASE_DEFAULT", "BEGIN TRAN;", "COMMIT;"
+})
+  Assert(migration314Sql.Contains(required, StringComparison.Ordinal), "Migraciji 314 manjka: " + required);
+Assert(!migration314Sql.Contains("EXEC out.EnqueueSaop", StringComparison.Ordinal) && !migration314Sql.Contains("INSERT out.", StringComparison.Ordinal),
+  "Lep zapis ne sme ničesar postaviti v vrsto za SAOP (lastnik: nič SAOP).");
+Assert(File.Exists(Path.Combine(migrations, "316_LepZapisBrezEnotAtributov.sql")), "Manjka popravek 316 (enote »Enota …« ostanejo).");
+
+// Stran pove, da je pravilo vklopljeno, in pokaže dnevnik poenotenj z izvozom (prej/potem); nič ne zapiše.
+foreach (var required in new[] { "<strong>vklopljeno</strong>", "Dnevnik poenotenj", "GetNormalizationRunsAsync", "GetNormalizationLogCsvAsync", "RunColumns" })
+  Assert(cleanup.Contains(required, StringComparison.Ordinal), "Čiščenju atributov (lep zapis) manjka: " + required);
+Assert(!cleanup.Contains("ni vklopljeno", StringComparison.Ordinal), "Pasica ne sme več trditi, da pravilo ni vklopljeno.");
+Assert(!cleanup.Contains("RevertAttributeValueNormalizationAsync", StringComparison.Ordinal),
+  "Gumb za povratek potrebuje politiko v PimAuthorization in potrditev s številom vrstic; do takrat povratek naredi skrbnik baze.");
+Assert(service.Contains("GROUP BY ChangedBy", StringComparison.Ordinal),
+  "Dnevnik poenotenj mora biti ena združevalna poizvedba (ne vrstica po vrstica).");
 
 // Prevodi: pregled, kaj bi slovar prevedel, tudi za italijanščino.
 var translations = Read(Path.Combine(pages, "MissingTranslations.razor"));
