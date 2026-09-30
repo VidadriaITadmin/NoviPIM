@@ -94,6 +94,7 @@ PhaseLogChecks.Run();
 MonitorPolicyChecks.Run();
 JobQueueChecks.Run();
 TextOwnershipChecks.Run();
+NotFoundChecks.Run(FindSolutionRoot());
 Console.WriteLine("F10 intranet logic PASS.");
 
 /* ─── Kontrast palete po WCAG (P3-23, pregled 2026-09-08) ─────────────────────

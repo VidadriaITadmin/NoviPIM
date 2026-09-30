@@ -11,44 +11,53 @@ public sealed class ChangeTrackingIntegrationTests
   private readonly string _connectionString = LocalSettings.ConnectionString()
     ?? throw new InvalidOperationException("Povezava mora biti na voljo, kadar se integracijski primer izvede.");
 
+  // Poizvedbe po zgodovini so omejene na podjetje in artikel testa (indeks
+  // IX_PimProductFieldHistory_Product). Brez tega berejo vseh 2,7 mio vrstic in cakajo na vsako
+  // tujo odprto transakcijo, ki pise zgodovino (vrata drugih nalog, avtomatika) — #43.
   [RequiresPimConnectionFact]
   public async Task FieldUndo_restores_pim_owned_value_and_creates_history()
   {
-    await using var scope = await TestScope.OpenAsync(_connectionString);
-    var changeId = await scope.CreateTrackedFieldChangeAsync();
+    await TestScope.RunAsync(_connectionString, async scope =>
+    {
+      var changeId = await scope.CreateTrackedFieldChangeAsync();
 
-    await scope.ExecuteAsync("EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';",
-      ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
+      await scope.ExecuteAsync("EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';",
+        ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
 
-    Assert.False(await scope.ScalarAsync<bool>("SELECT WebPublish FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
-    Assert.Equal(1, await scope.ScalarAsync<int>("SELECT COUNT(*) FROM pim.ProductFieldHistory WHERE UndoOfChangeId=@ChangeId;", ("@ChangeId", changeId)));
-    Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+      Assert.False(await scope.ScalarAsync<bool>("SELECT WebPublish FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
+      Assert.Equal(1, await scope.ScalarAsync<int>("SELECT COUNT(*) FROM pim.ProductFieldHistory WHERE OrganizationId=@OrganizationId AND ProductId=@ProductId AND UndoOfChangeId=@ChangeId;", ("@OrganizationId", OrganizationId), ("@ProductId", scope.ProductId), ("@ChangeId", changeId)));
+      Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+    });
   }
 
   [RequiresPimConnectionFact]
   public async Task FieldUndo_rejects_redo_and_conflicting_current_value()
   {
-    await using var scope = await TestScope.OpenAsync(_connectionString);
-    var changeId = await scope.CreateTrackedFieldChangeAsync();
-    await scope.ExecuteAsync("EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
-    await scope.ExpectSqlErrorAsync(51222, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
+    await TestScope.RunAsync(_connectionString, async scope =>
+    {
+      var changeId = await scope.CreateTrackedFieldChangeAsync();
+      await scope.ExecuteAsync("EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
+      await scope.ExpectSqlErrorAsync(51222, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
 
-    var secondChangeId = await scope.CreateTrackedFieldChangeAsync();
-    await scope.ExecuteAsync("UPDATE canon.Product SET WebPublish=0 WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId));
-    await scope.ExpectSqlErrorAsync(51225, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", secondChangeId));
-    Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+      var secondChangeId = await scope.CreateTrackedFieldChangeAsync();
+      await scope.ExecuteAsync("UPDATE canon.Product SET WebPublish=0 WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId));
+      await scope.ExpectSqlErrorAsync(51225, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", secondChangeId));
+      Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+    });
   }
 
   [RequiresPimConnectionFact]
   public async Task BatchUndo_restores_all_supported_fields_in_one_undo_batch()
   {
-    await using var scope = await TestScope.OpenAsync(_connectionString);
-    var batchId = await scope.CreateTrackedProductChangeAsync(includeIsActive: true);
-    await scope.ExecuteAsync("EXEC pim.UndoProductBatch @OrganizationId,@ChangeBatchId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeBatchId", batchId));
+    await TestScope.RunAsync(_connectionString, async scope =>
+    {
+      var batchId = await scope.CreateTrackedProductChangeAsync(includeIsActive: true);
+      await scope.ExecuteAsync("EXEC pim.UndoProductBatch @OrganizationId,@ChangeBatchId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeBatchId", batchId));
 
-    Assert.False(await scope.ScalarAsync<bool>("SELECT WebPublish FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
-    Assert.False(await scope.ScalarAsync<bool>("SELECT IsActive FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
-    Assert.Equal(1, await scope.ScalarAsync<int>("SELECT COUNT(DISTINCT ChangeBatchId) FROM pim.ProductFieldHistory WHERE UndoOfChangeId IN (SELECT ChangeId FROM pim.ProductFieldHistory WHERE ChangeBatchId=@ChangeBatchId);", ("@ChangeBatchId", batchId)));
+      Assert.False(await scope.ScalarAsync<bool>("SELECT WebPublish FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
+      Assert.False(await scope.ScalarAsync<bool>("SELECT IsActive FROM canon.Product WHERE ProductId=@ProductId;", ("@ProductId", scope.ProductId)));
+      Assert.Equal(1, await scope.ScalarAsync<int>("SELECT COUNT(DISTINCT ChangeBatchId) FROM pim.ProductFieldHistory WHERE OrganizationId=@OrganizationId AND ProductId=@ProductId AND UndoOfChangeId IN (SELECT ChangeId FROM pim.ProductFieldHistory WHERE ChangeBatchId=@ChangeBatchId);", ("@OrganizationId", OrganizationId), ("@ProductId", scope.ProductId), ("@ChangeBatchId", batchId)));
+    });
   }
 
   [RequiresPimConnectionTheory]
@@ -56,19 +65,23 @@ public sealed class ChangeTrackingIntegrationTests
   [InlineData("SAOP")]
   public async Task FieldUndo_rejects_non_pim_owned_field(string owner)
   {
-    await using var scope = await TestScope.OpenAsync(_connectionString);
-    await scope.ExecuteAsync("UPDATE pim.FieldOwnership SET Owner=@Owner WHERE FieldKey=N'Product.WebPublish';", ("@Owner", owner));
-    var changeId = await scope.CreateTrackedFieldChangeAsync();
-    await scope.ExpectSqlErrorAsync(51223, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
+    await TestScope.RunAsync(_connectionString, async scope =>
+    {
+      await scope.ExecuteAsync("UPDATE pim.FieldOwnership SET Owner=@Owner WHERE FieldKey=N'Product.WebPublish';", ("@Owner", owner));
+      var changeId = await scope.CreateTrackedFieldChangeAsync();
+      await scope.ExpectSqlErrorAsync(51223, "EXEC pim.UndoProductField @OrganizationId,@ChangeId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeId", changeId));
+    });
   }
 
   [RequiresPimConnectionFact]
   public async Task BatchUndo_rejects_empty_batch()
   {
-    await using var scope = await TestScope.OpenAsync(_connectionString);
-    var batchId = await scope.ScalarAsync<long>("INSERT pim.ProductChangeBatch(BatchId,OrganizationId,ChangeSource,ChangedBy,ChangedAtUtc) VALUES(NEWID(),@OrganizationId,N'INTEGRATION_TEST',N'PIM.ChangeTracking.Integration',SYSUTCDATETIME()); SELECT CONVERT(bigint,SCOPE_IDENTITY());", ("@OrganizationId", OrganizationId));
-    await scope.ExpectSqlErrorAsync(51236, "EXEC pim.UndoProductBatch @OrganizationId,@ChangeBatchId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeBatchId", batchId));
-    Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+    await TestScope.RunAsync(_connectionString, async scope =>
+    {
+      var batchId = await scope.ScalarAsync<long>("INSERT pim.ProductChangeBatch(BatchId,OrganizationId,ChangeSource,ChangedBy,ChangedAtUtc) VALUES(NEWID(),@OrganizationId,N'INTEGRATION_TEST',N'PIM.ChangeTracking.Integration',SYSUTCDATETIME()); SELECT CONVERT(bigint,SCOPE_IDENTITY());", ("@OrganizationId", OrganizationId));
+      await scope.ExpectSqlErrorAsync(51236, "EXEC pim.UndoProductBatch @OrganizationId,@ChangeBatchId,N'PIM.ChangeTracking.Integration';", ("@OrganizationId", OrganizationId), ("@ChangeBatchId", batchId));
+      Assert.Equal(0, await scope.ScalarAsync<int>("SELECT COUNT(*) WHERE SESSION_CONTEXT(N'ChangeSource') IS NOT NULL OR SESSION_CONTEXT(N'ChangedBy') IS NOT NULL OR SESSION_CONTEXT(N'ChangeBatchId') IS NOT NULL;"));
+    });
   }
 
   /// <summary>
@@ -84,9 +97,15 @@ public sealed class ChangeTrackingIntegrationTests
   /// <c>CHANGE-TRACKING-*</c> v podjetju 2, priblizno stirje na vsak polni zagon paketa.
   /// Niso samo smet — sedijo med pravimi artikli IQLighting in kvarijo vsako stetje.
   ///
-  /// Zato si seja zapomni vsak artikel, ki ga je ustvarila, in ga ob koncu pobrise, ce je
-  /// preziveel; ob zacetku pa pobrise ostanke prejsnjih zagonov istega testa. Brise se
-  /// izkljucno to, kar je ustvaril ta test (AGENTS.md #4.1).
+  /// Zato <c>ExpectSqlErrorAsync</c> po pricakovani napaki takoj odpre novo transakcijo (#43), da
+  /// se nic ne potrdi samo od sebe. Za vsak primer si seja se vedno zapomni vsak artikel, ki ga je
+  /// ustvarila, in ga ob koncu pobrise, ce je preziveel; ob zacetku pa pobrise ostanke prejsnjih
+  /// zagonov istega testa. Brise se izkljucno to, kar je ustvaril ta test (AGENTS.md #4.1).
+  ///
+  /// Brisanje artikla je drago: tuji kljuc iz <c>pim.ProductFieldHistory</c> (2,7 mio vrstic) nima
+  /// indeksa, ki bi se zacel s ProductId, zato preverjanje prebere ves indeks in caka na vsako tujo
+  /// odprto transakcijo, ki pise zgodovino (vrata drugih nalog). Zato se brisanje izvede samo, ce
+  /// ostanki res obstajajo.
   /// </summary>
   private sealed class TestScope : IAsyncDisposable
   {
@@ -97,32 +116,80 @@ public sealed class ChangeTrackingIntegrationTests
 
     private TestScope(SqlConnection connection) => _connection = connection;
 
-    public static async Task<TestScope> OpenAsync(string connectionString)
+    private const int DeadlockVictim = 1205;
+    private const int CommandTimeout = -2;
+    private const int MaxAttempts = 3;
+
+    /// <summary>
+    /// Zastoj (1205) ali potek casa ukaza (-2) zaradi tuje odprte transakcije. Oboje je posledica
+    /// sočasnega dela na skupni razvojni bazi (vrata drugih nalog, avtomatika), ne napaka razveljavitve.
+    /// Potek casa je mozen, ker pim.UndoProductField isce po UndoOfChangeId brez indeksa (#43 opomba).
+    /// </summary>
+    private static bool IsContention(SqlException error) => error.Number is DeadlockVictim or CommandTimeout;
+
+    /// <summary>
+    /// Pozene telo testa v sveži seji in ga ob zastoju ali poteku casa ponovi v celoti — transakcija je po
+    /// zastoju ze povrnjena, zato ponovitev samo zadnjega ukaza ne bi imela smisla. Zastoj lahko
+    /// sprozi tudi avtomatika, ki pise v canon.Product, zato zaklep (<see cref="IntegrationDbLock"/>) sam ni dovolj.
+    /// </summary>
+    public static async Task RunAsync(string connectionString, Func<TestScope, Task> body)
+    {
+      for (var attempt = 1; ; attempt++)
+      {
+        try
+        {
+          await using var scope = await OpenAsync(connectionString);
+          await body(scope);
+          return;
+        }
+        catch (SqlException error) when (IsContention(error) && attempt < MaxAttempts)
+        {
+          await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt));
+        }
+      }
+    }
+
+    private static async Task<TestScope> OpenAsync(string connectionString)
     {
       var connection = new SqlConnection(connectionString);
       await connection.OpenAsync();
-
-      // Pred transakcijo, sicer bi bilo pospravljanje povrnjeno skupaj z vsem ostalim.
-      await using (var sweep = new SqlCommand(SweepSql, connection) { CommandTimeout = 120 })
+      try
       {
-        sweep.Parameters.AddWithValue("@OrganizationId", OrganizationId);
-        await sweep.ExecuteNonQueryAsync();
-      }
+        await IntegrationDbLock.AcquireAsync(connection);
 
-      await new SqlCommand("BEGIN TRANSACTION;", connection).ExecuteNonQueryAsync();
-      return new TestScope(connection);
+        // Pred transakcijo, sicer bi bilo pospravljanje povrnjeno skupaj z vsem ostalim.
+        await using (var sweep = new SqlCommand(SweepSql, connection) { CommandTimeout = 120 })
+        {
+          sweep.Parameters.AddWithValue("@OrganizationId", OrganizationId);
+          await sweep.ExecuteNonQueryAsync();
+        }
+
+        await using (var begin = new SqlCommand("BEGIN TRANSACTION;", connection))
+          await begin.ExecuteNonQueryAsync();
+        return new TestScope(connection);
+      }
+      catch
+      {
+        await IntegrationDbLock.ReleaseAsync(connection);
+        await connection.DisposeAsync();
+        throw;
+      }
     }
 
     /// <summary>Pobrise artikle tega testa in vse, kar visi na njih, po vrsti tujih kljucev.</summary>
     private const string SweepSql = """
       DECLARE @Mine TABLE(ProductId bigint PRIMARY KEY);
       INSERT @Mine(ProductId)
-      SELECT ProductId FROM canon.Product
+      -- READPAST: nezakljucene vrstice drugih testov (druga vrata) niso nase in jih ne cakamo.
+      -- Drug zagon tega projekta med nami ne more imeti odprte transakcije (IntegrationDbLock).
+      SELECT ProductId FROM canon.Product WITH (READPAST)
       WHERE OrganizationId = @OrganizationId AND ItemID LIKE N'CHANGE-TRACKING-%';
 
       DECLARE @Batches TABLE(ChangeBatchId bigint PRIMARY KEY);
       INSERT @Batches(ChangeBatchId)
-      SELECT DISTINCT ChangeBatchId FROM pim.ProductFieldHistory WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      SELECT DISTINCT ChangeBatchId FROM pim.ProductFieldHistory WHERE OrganizationId = @OrganizationId AND ProductId IN (SELECT ProductId FROM @Mine);
+
+      IF NOT EXISTS(SELECT 1 FROM @Mine) RETURN;
 
       DELETE FROM val.ProductIssue           WHERE ProductId IN (SELECT ProductId FROM @Mine);
       DELETE FROM val.ProductValidationState WHERE ProductId IN (SELECT ProductId FROM @Mine);
@@ -133,7 +200,7 @@ public sealed class ChangeTrackingIntegrationTests
       DELETE FROM canon.ProductCategory      WHERE ProductId IN (SELECT ProductId FROM @Mine);
       DELETE FROM canon.ProductAttribute     WHERE ProductId IN (SELECT ProductId FROM @Mine);
       DELETE FROM canon.ProductText          WHERE ProductId IN (SELECT ProductId FROM @Mine);
-      DELETE FROM pim.ProductFieldHistory    WHERE ProductId IN (SELECT ProductId FROM @Mine);
+      DELETE FROM pim.ProductFieldHistory    WHERE OrganizationId = @OrganizationId AND ProductId IN (SELECT ProductId FROM @Mine);
       DELETE FROM pim.ProductChangeBatch     WHERE ChangeBatchId IN (SELECT ChangeBatchId FROM @Batches)
         AND NOT EXISTS(SELECT 1 FROM pim.ProductFieldHistory history WHERE history.ChangeBatchId = pim.ProductChangeBatch.ChangeBatchId);
       DELETE FROM canon.Product              WHERE ProductId IN (SELECT ProductId FROM @Mine);
@@ -171,7 +238,11 @@ public sealed class ChangeTrackingIntegrationTests
     public async Task ExpectSqlErrorAsync(int number, string sql, params (string Name, object Value)[] values)
     {
       var error = await Assert.ThrowsAsync<SqlException>(() => ExecuteAsync(sql, values));
+      // Zastoj ali potek casa ni pricakovana napaka procedure: naj ga RunAsync ponovi, ne pa javi kot napacno stevilko.
+      if (IsContention(error)) throw error;
       Assert.Equal(number, error.Number);
+      // XACT_ABORT je transakcijo ze povrnil; brez nove bi se vse naslednje potrdilo samo od sebe.
+      await ExecuteAsync("IF XACT_STATE() = -1 ROLLBACK TRANSACTION; IF @@TRANCOUNT = 0 BEGIN TRANSACTION;");
     }
     private SqlCommand Command(string sql, params (string Name, object Value)[] values)
     {
@@ -199,7 +270,11 @@ public sealed class ChangeTrackingIntegrationTests
           await cleanup.ExecuteNonQueryAsync();
         }
       }
-      finally { await _connection.DisposeAsync(); }
+      finally
+      {
+        await IntegrationDbLock.ReleaseAsync(_connection);
+        await _connection.DisposeAsync();
+      }
     }
   }
 }

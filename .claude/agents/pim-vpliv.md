@@ -1,7 +1,7 @@
 ---
 name: pim-vpliv
 description: Analiza vpliva pred spremembo v PIM. Uporabi PRED vsako nalogo s table (scripts/Koordinacija.ps1), ki spreminja podatke, SQL, izvoze, validacijo, SAOP ali več strani. Vrne verigo odvisnosti (kdo še bere ta podatek, kaj gre v katalog.csv / SAOP / validacijo), tveganja, avtomatiko, ki lahko povozi zapis, in načrt preverjanja. Samo bere.
-model: opus
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

@@ -127,8 +127,8 @@ foreach (var handler in new[] { "ApproveSelected", "CancelSelected", "VerifyEcho
   foreach (Match button in buttons)
     Assert(Regex.IsMatch(button.Value, "disabled=\"@\\(?[^\"]*ActionBusy"), "Dejanje mora biti med izvajanjem onemogočeno: " + button.Value);
 }
-var rowActions = Regex.Matches(markup, "<button[^>]*@onclick=\"\\(\\)=>(Approve|Cancel|RetryArticle|RetryMessage|SendNow|OpenXmlAsync)\\([^>]*>");
-Assert(rowActions.Count == 8, "Vrstična dejanja obeh tabel morajo ostati: pet pri artiklu, tri pri sporočilu po polju.");
+var rowActions = Regex.Matches(markup, "<button[^>]*@onclick=\"\\(\\)=>(Approve|Cancel|RetryArticle|RetryMessage|SendNow|OpenXmlAsync|OpenError|OpenErrorForRow)\\([^>]*>");
+Assert(rowActions.Count == 10, "Vrstična dejanja obeh tabel morajo ostati: šest pri artiklu, štiri pri sporočilu po polju.");
 foreach (Match button in rowActions)
   Assert(Regex.IsMatch(button.Value, "aria-label=\"[^\"]*@\\w+\\.EntityKey"),
     "Ponovljeno vrstično dejanje mora imeti razločljiv aria-label s šifro artikla: " + button.Value);
@@ -188,8 +188,12 @@ foreach (var passive in new[] { "protected override async Task OnInitializedAsyn
 // 13. Varovalka: obstoječe filtriranje, statusi in pogoji dejanj ostanejo nedotaknjeni.
 foreach (var behavior in new[] { "@bind=\"Search\"", "@bind:event=\"oninput\"", "@bind=\"StatusFilter\"", "const int PageSize=10" })
   Assert(markup.Contains(behavior, StringComparison.Ordinal), "Obstoječe ravnanje s filtri je spremenjeno; manjka: " + behavior);
-Assert(Regex.IsMatch(markup, "Select\\(\\w+ ?=> ?\\w+\\.Status\\)\\.Distinct\\(\\)"),
+Assert(Regex.IsMatch(markup, @"Select\(\w+ ?=> ?(StatusLabel\()?\w+\.Status\)?\)\.Distinct\(\)"),
   "Seznam statusov mora ostati izpeljan iz naloženih vrstic, ne iz vpisanega seznama.");
+// #30: filter statusa kaže slovenske oznake (StatusLabel), ne surovih vrednosti kot »PendingApproval«.
+Assert(markup.Contains("Select(a => StatusLabel(a.Status)).Distinct()", StringComparison.Ordinal)
+  && markup.Contains("StatusLabel(a.Status) == StatusFilter", StringComparison.Ordinal),
+  "Filter statusa mora ponujati in primerjati slovenske oznake (StatusLabel), ne surovih statusov.");
 foreach (var condition in new[] { "row.Status==\"PendingApproval\"", "\"PendingApproval\" or \"Pending\" or \"Error\" or \"Retry\"", "row.Status is \"Error\" or \"Dead\"" })
   Assert(markup.Contains(condition, StringComparison.Ordinal), "Pogoj razpoložljivosti dejanja je spremenjen; manjka: " + condition);
 
