@@ -5,15 +5,22 @@
 @inject GovernanceReadService Governance
 @inject CatalogReadService Catalog
 @inject WebExportBuildService Export
+@inject NavigationManager Navigation
+@implements IDisposable
 
-<PageTitle>Pripravi spletni izvoz</PageTitle>
-<PimPage Title="Pripravi spletni izvoz"
-         Subtitle="Predogled trenutnih podatkov po stolpcih izbranega izvoznega profila — izdelki ali stranke."
+@* #25 (vključena #19): zavihki področja, filtri v naslovu (povezavo se da deliti, »nazaj« obdrži izbor),
+   sklanjano število vrstic, aria oznaka na »Samo objavljeni«. Predogled bere trenutne podatke enega podjetja
+   (podjetje kataloga); izdelani katalog.csv, sestavljen iz več podjetij, je na zavihku Pregled. *@
+
+<PageTitle>Predogled izvoza</PageTitle>
+<PimPage Title="Predogled trenutnih podatkov PIM"
+         Subtitle="@Subtitle"
          Crumbs="Crumbs" />
+<PimTabs Active="build" Tabs="WebTabs.Tabs" Label="Izhod na splet" />
 
 <section class="ui-card toolbar section-gap" role="search" aria-label="Filtri spletnega izvoza">
   <label class="field-control"><span>Izvozni profil</span>
-    <select @bind="SelectedProfileId">
+    <select class="filter-select" @bind="SelectedProfileId" @bind:after="ApplyAsync">
       <option value="0">Izberi profil</option>
       @foreach (var profile in Profiles)
       {
@@ -24,7 +31,7 @@
   @* Spletno mesto in objava sta filtra izdelkov. Pri strankah nimata pomena — spletno mesto
      bi izvoz izpraznilo, objava pa pomeni aktivnost stranke (202) in jo doloca profil sam. *@
   <label class="field-control"><span>Spletno mesto</span>
-    <select @bind="SelectedSite" disabled="@(!IsProductProfile)">
+    <select class="filter-select" @bind="SelectedSite" @bind:after="ApplyAsync" disabled="@(!IsProductProfile)">
       <option value="">Vsa spletna mesta</option>
       @foreach (var site in Sites)
       {
@@ -33,23 +40,29 @@
     </select>
   </label>
   <label class="field-control"><span>Iskanje</span>
-    <input class="search-input" type="search" placeholder="@(IsProductProfile ? "Šifra, EAN ali naziv …" : "Šifra ali naziv stranke …")" @bind="Search" @bind:event="oninput" />
+    <input class="search-input" type="search" placeholder="@(IsProductProfile ? "Šifra, EAN ali naziv …" : "Šifra ali naziv stranke …")" @bind="Search" @bind:event="oninput" @onkeydown="OnSearchKeyAsync" />
   </label>
   <label class="field-control checkbox-control">
-    <input type="checkbox" @bind="OnlyPublished" disabled="@(!IsProductProfile)" /> <span>Samo objavljeni</span>
+    <input type="checkbox" @bind="OnlyPublished" @bind:after="ApplyAsync" disabled="@(!IsProductProfile)" aria-label="Samo objavljeni izdelki" /> <span>Samo objavljeni</span>
   </label>
-  <button type="button" class="primary-button" disabled="@(Loading || SelectedProfileId == 0)" @onclick="ShowAsync">Prikaži</button>
+  <button type="button" class="primary-button" disabled="@(Loading || SelectedProfileId == 0)" @onclick="ApplyAsync">Prikaži</button>
+  @if (HasFilters) { <button type="button" class="secondary-button" disabled="@Loading" @onclick="ClearAsync">Počisti filtre</button> }
 </section>
 
-<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Nalaganje nastavitev izvoza …">
+<PimState Loading="Loading" Error="@Error" Empty="false" LoadingText="Pripravljam predogled …">
   @if (Preview is null)
   {
-    <div class="note-panel">Izberi profil in filtre, nato klikni »Prikaži«. Predogled pokaže največ 200 vrstic.</div>
+    <div class="note-panel">Izberi profil; spletno mesto in »Samo objavljeni« obveljata takoj, iskanje z Enter ali »Prikaži«. Predogled pokaže največ 200 vrstic; prenos CSV vsebuje vse.</div>
   }
   else
   {
+    <section class="ui-card section-gap preview-summary" aria-label="Prenos spletnega izvoza" role="status">
+      <p>@FilterSummary</p>
+      <div class="page-actions"><a href="@DownloadHref">Prenesi CSV</a></div>
+    </section>
+
     <section class="ui-card data-card section-gap" aria-label="Predogled spletnega izvoza">
-      <PimTable Caption="Prvih 200 vrstic spletnega izvoza" Columns="PreviewColumns">
+      <PimTable Caption="@PreviewCaption" Columns="PreviewColumns">
         <Rows>
           @foreach (var row in Preview.Rows)
           {
@@ -59,43 +72,60 @@
       </PimTable>
       @if (Preview.Rows.Count == 0)
       {
-        <div class="note-panel">Za izbrane filtre ni nobene vrstice.</div>
+        <div class="note-panel">Za izbrane filtre ni nobene vrstice. Izklopi »Samo objavljeni« ali izberi »Vsa spletna mesta«.</div>
       }
-    </section>
-
-    <section class="ui-card section-gap" aria-label="Prenos spletnega izvoza">
-      <p>@FilterSummary</p>
-      <div class="page-actions"><a href="@DownloadHref">Prenesi CSV</a></div>
     </section>
   }
 </PimState>
 
 @code {
-  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod na splet", "splet"), new("Pripravi izvoz")];
+  static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Izhod na splet", "splet"), new("Predogled izvoza")];
+  /// <summary>Podjetje kataloga (IQ Lighting); predogled po profilu bere njegove trenutne podatke.</summary>
+  const int CatalogOrganizationId = 2;
+
+  [SupplyParameterFromQuery(Name = "profil")] public int? QueryProfile { get; set; }
+  [SupplyParameterFromQuery(Name = "spletisce")] public string? QuerySite { get; set; }
+  [SupplyParameterFromQuery(Name = "isci")] public string? QuerySearch { get; set; }
+  [SupplyParameterFromQuery(Name = "objavljeni")] public bool? QueryOnlyPublished { get; set; }
+
   IReadOnlyList<ExportProfileRow> Profiles = [];
   IReadOnlyList<WebSiteRow> Sites = [];
   WebExportPage? Preview;
   int? OrganizationId;
+  string OrganizationName = "";
   int SelectedProfileId;
   string SelectedSite = "";
   string Search = "";
   bool OnlyPublished = true;
-  bool Loading = true;
+  bool Loading = true, Initialized;
   string? Error;
+  /// <summary>Ključ zadnje zahtevane poizvedbe (profil|spletisce|isci|objavljeni). Blazor ob NavigateTo pokliče
+  /// OnParametersSet dvakrat; brez ključa je šla ista težka poizvedba (12–22 s) v bazo dvakrat hkrati (#25).</summary>
+  string? ShownKey;
+  CancellationTokenSource? PreviewCancel;
 
+  string Subtitle => OrganizationName.Length == 0
+    ? "Kaj bi bilo v izvozu zdaj, po stolpcih izbranega profila — izdelki ali stranke."
+    : $"Kaj bi bilo v izvozu zdaj, po stolpcih izbranega profila. Podatki podjetja {OrganizationName}.";
   IReadOnlyList<PimColumn> PreviewColumns => Preview?.Columns.Select(column => new PimColumn(column)).ToArray() ?? [];
   ExportProfileRow? SelectedProfile => Profiles.SingleOrDefault(profile => profile.ExportProfileId == SelectedProfileId);
   bool IsProductProfile => SelectedProfile is null || SelectedProfile.ContentKind == "Izdelki";
   string EffectiveSite => IsProductProfile ? SelectedSite : "";
   bool EffectiveOnlyPublished => IsProductProfile ? OnlyPublished : SelectedProfile!.OnlyPublishedDefault;
+  bool HasFilters => SelectedSite.Length > 0 || Search.Trim().Length > 0 || !OnlyPublished;
+  string RowsText => PimFormat.Count(Preview?.TotalCount ?? 0, "vrstica", "vrstici", "vrstice", "vrstic");
+  /// <summary>Rodilnik za »od …«: od 1 vrstice, od 2 vrstic, od 5 vrstic.</summary>
+  string RowsGenitive => PimFormat.Count(Preview?.TotalCount ?? 0, "vrstice", "vrstic", "vrstic", "vrstic");
+  string PreviewCaption => Preview is null ? "Predogled" : $"Prvih {Math.Min(200, Preview.Rows.Count):N0} od {RowsGenitive} spletnega izvoza";
+  string SiteName => Sites.FirstOrDefault(site => site.WebSiteCode == SelectedSite)?.WebSiteName is { Length: > 0 } name ? name : SelectedSite;
   string FilterSummary => IsProductProfile
     ? $"Filter zajema {(OnlyPublished ? "samo objavljene" : "vse")} izdelke"
-      + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SelectedSite}")
+      + (SelectedSite.Length == 0 ? " na vseh spletnih mestih" : $" za spletno mesto {SiteName}")
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
-      + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic."
+      + $"; v datoteki bo {RowsText}."
     : $"Filter zajema {(EffectiveOnlyPublished ? "samo aktivne stranke" : "vse stranke")}"
       + (Search.Length == 0 ? "" : $" z iskanjem »{Search}«")
-      + $"; v datoteki bo {Preview?.TotalCount.ToString("N0") ?? "0"} vrstic.";
+      + $"; v datoteki bo {RowsText}.";
   string DownloadHref => "izvoz/splet-na-zahtevo?" + string.Join('&', new[]
   {
     $"podjetje={OrganizationId}", $"profil={SelectedProfileId}", $"koda={Uri.EscapeDataString(SelectedProfile?.ProfileCode ?? string.Empty)}",
@@ -107,9 +137,10 @@
   {
     try
     {
-      var organization = (await Data.GetOrganizationsAsync()).SingleOrDefault(value => value.OrganizationId == 2);
-      if (organization is null) { Error = "Aktivna organizacija ni na voljo."; return; }
+      var organization = (await Data.GetOrganizationsAsync()).SingleOrDefault(value => value.OrganizationId == CatalogOrganizationId);
+      if (organization is null) { Error = "Podjetje kataloga ni na voljo (neaktivno ali brez nastavitev)."; return; }
       OrganizationId = organization.OrganizationId;
+      OrganizationName = organization.Name;
       Sites = await Catalog.GetWebSitesAsync();
       // Do migracije 142 so bili tu samo produktni profili, ker jih je procedura edine
       // podpirala. Zdaj je merilo, ali zna out.GetExportRows za profil sestaviti vrstice —
@@ -120,22 +151,88 @@
           && !profile.ChannelCode.Contains("SAOP", StringComparison.OrdinalIgnoreCase)
           && !profile.ChannelCode.Contains("ERP", StringComparison.OrdinalIgnoreCase))
         .OrderBy(profile => profile.Name).ToArray();
-      SelectedProfileId = Profiles.FirstOrDefault()?.ExportProfileId ?? 0;
+      Initialized = true;
     }
-    catch { Error = "Nastavitev spletnega izvoza trenutno ni mogoče naložiti."; }
+    catch { Error = "Nastavitev spletnega izvoza trenutno ni mogoče naložiti. Osveži stran; če se ponavlja, obvesti skrbnika."; }
     finally { Loading = false; }
   }
+
+  /// <summary>Filtri živijo v naslovu: ob prvem odprtju, »nazaj« in deljeni povezavi se predogled pokaže sam.</summary>
+  protected override async Task OnParametersSetAsync()
+  {
+    if (!Initialized) return;
+    // Brez profila v naslovu je izbrano »Izberi profil« (0): filtri se zapišejo v naslov, predogleda pa ni.
+    SelectedProfileId = QueryProfile is { } id && Profiles.Any(profile => profile.ExportProfileId == id) ? id : 0;
+    SelectedSite = QuerySite ?? "";
+    Search = QuerySearch ?? "";
+    OnlyPublished = QueryOnlyPublished ?? true;
+    if (SelectedProfileId == 0) { CancelPreview(); ShownKey = null; Preview = null; Loading = false; return; }
+    // Med predupodabljanjem ne poizvedujemo: interaktivni krog bi isto poizvedbo takoj ponovil.
+    if (!RendererInfo.IsInteractive) { Loading = true; return; }
+    // Enak ključ (drugi klic OnParametersSet po NavigateTo, isti naslov) ne sproži nove poizvedbe.
+    if (CurrentKey == ShownKey) return;
+    await ShowAsync();
+  }
+
+  string CurrentKey => $"{SelectedProfileId}|{EffectiveSite}|{Search.Trim()}|{EffectiveOnlyPublished}";
+
+  string Href() => ("splet/izvoz?" + string.Join('&', new[]
+  {
+    SelectedProfileId == 0 ? null : $"profil={SelectedProfileId}",
+    SelectedSite.Length > 0 ? $"spletisce={Uri.EscapeDataString(SelectedSite)}" : null,
+    Search.Trim().Length > 0 ? $"isci={Uri.EscapeDataString(Search.Trim())}" : null,
+    OnlyPublished ? null : "objavljeni=false",
+  }.Where(part => part is not null))).TrimEnd('?');
+
+  Task ApplyAsync()
+  {
+    var target = Href();
+    // Isti naslov ne sproži OnParametersSet; takrat predogled osvežimo neposredno.
+    if (Navigation.ToBaseRelativePath(Navigation.Uri) == target) { ShownKey = null; return SelectedProfileId == 0 ? Task.CompletedTask : ShowAsync(); }
+    Navigation.NavigateTo(target);
+    return Task.CompletedTask;
+  }
+
+  Task ClearAsync()
+  {
+    SelectedSite = ""; Search = ""; OnlyPublished = true;
+    return ApplyAsync();
+  }
+
+  async Task OnSearchKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
 
   async Task ShowAsync()
   {
     if (OrganizationId is null || SelectedProfileId == 0) return;
+    var key = CurrentKey;
+    if (key == ShownKey) return;
+    ShownKey = key;
+    // Prejšnja (drugačna) poizvedba ni več potrebna — prekliči jo, da ne teče v bazi vzporedno.
+    CancelPreview();
+    var cancel = PreviewCancel = new CancellationTokenSource();
     Loading = true; Error = null;
     try
     {
-      Preview = await Export.PreviewAsync(OrganizationId.Value, SelectedProfileId,
-        EffectiveSite, EffectiveOnlyPublished, Search, skip: 0, take: 200);
+      var page = await Export.PreviewAsync(OrganizationId.Value, SelectedProfileId,
+        EffectiveSite, EffectiveOnlyPublished, Search, skip: 0, take: 200, cancellationToken: cancel.Token);
+      if (!cancel.IsCancellationRequested) Preview = page;
     }
-    catch { Error = "Predogleda trenutno ni mogoče pripraviti. Preveri profil in filtre."; }
-    finally { Loading = false; }
+    catch (Exception) when (cancel.IsCancellationRequested) { return; }
+    catch
+    {
+      ShownKey = null;
+      Error = "Predogleda trenutno ni mogoče pripraviti. Preveri profil in filtre ali poskusi znova.";
+    }
+    finally { if (ReferenceEquals(PreviewCancel, cancel)) Loading = false; }
   }
+
+  void CancelPreview()
+  {
+    if (PreviewCancel is null) return;
+    try { PreviewCancel.Cancel(); } catch (ObjectDisposedException) { }
+    PreviewCancel.Dispose();
+    PreviewCancel = null;
+  }
+
+  public void Dispose() => CancelPreview();
 }

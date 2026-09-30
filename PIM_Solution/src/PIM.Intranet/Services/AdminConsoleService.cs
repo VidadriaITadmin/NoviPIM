@@ -448,11 +448,6 @@ public sealed class AdminConsoleService(PimDb database, IConfiguration configura
         command.Parameters.AddWithValue("@Take", take);
       }, cancellationToken);
 
-  // ─── Zgodovina nočnega samotesta ──────────────────────────────────────────
-  public Task<IReadOnlyList<SelfTestRunRow>> GetSelfTestHistoryAsync(int take, CancellationToken cancellationToken = default) =>
-    database.QueryAsync("EXEC intranet.GetSelfTestHistory @Take = @Take;", ReadSelfTestRun,
-      command => command.Parameters.AddWithValue("@Take", take), cancellationToken);
-
   // ─── Zapisi ───────────────────────────────────────────────────────────────
 
   /// <summary>Označi vse odprte alarme kot videne za tega skrbnika; zvonček se s tem umiri.</summary>
@@ -559,7 +554,7 @@ public sealed class AdminConsoleService(PimDb database, IConfiguration configura
     NullableInt32(reader, "DurationMs"), PimDb.TextOrEmpty(reader, "TriggeredBy"),
     PimDb.Text(reader, "DetailRedacted"));
 
-  // GetSelfTestHistory ne vrača RunKey — enak zapis brani obe poti, zato se stolpec preveri.
+  // Stolpec RunKey se preveri, ker ga vsi viri samotesta (npr. intranet.GetSelfTestHistory) ne vračajo.
   static bool HasColumn(SqlDataReader reader, string name)
   {
     for (var index = 0; index < reader.FieldCount; index++)
