@@ -2488,3 +2488,27 @@ Seznam izdelkov (`/izdelki` → S-popust …) je posebni S za tip stranke ali st
 - DEV (IQ, 89.855 izdelkov, en klic): zapis 16 s, sprememba kode 12 s, umik 11 s, razveljavitev 14 s; 6.000 izdelkov ~1 s. Prej 90.000 klicev po vrstici.
 
 **Objekti:** tabeli `b2b.PackagingDiscountRuleBatch`, `b2b.PackagingDiscountRuleBatchItem`; procedure zgoraj. Obstoječe procedure nespremenjene. **Ročni korak:** ne. **SAOP:** nič. **Izvoz:** posebni S gre v `katalog.csv` ob naslednjem `WEB_CATALOG_EXPORT` kot doslej. **Povratek:** `DROP PROCEDURE` treh procedur, `DROP TABLE b2b.PackagingDiscountRuleBatchItem, b2b.PackagingDiscountRuleBatch` (pravila ostanejo, kot so).
+## Hitrejši predogled spletnega izvoza (migracija 315_HitrejsiPredogledIzvoza, 2026-09-30, naloga #80)
+
+Predogled `/splet/izvoz` (`intranet.GetWebExportRows` → `out.GetExportRows`, profil MAGENTO_PRODUCTS, 200 vrstic) je trajal 8–55 s. Meritev na DEV (`sys.dm_exec_query_stats`, `sys.dm_os_waiting_tasks`): strežnik ima `cost threshold for parallelism` = 5 in MAXDOP 10, zato so majhni stavki nad začasnimi tabelami tekli z 10 nitmi; porabili so 0,1–0,5 s CPU, čakali pa do 46 s (CXPACKET/CXCONSUMER, LATCH_EX NESTING_TRANSACTION_FULL), kadar je bil strežnik obremenjen. Poleg tega je osnovni `INSERT #Value` za 200 vrstic trikrat razvrstil vse cene `pim.ProductPrice`, štetje in stran pa sta filter (z iskanjem LIKE po besedilih) izvedla dvakrat.
+
+Popravek bere živo definicijo `out.GetExportRows` (kot 304/305), preveri vsa sidra (vsako natanko enkrat) in spremeni samo vejo PIM_PRODUCT in skupni rep:
+- filter izdelkov se izvede enkrat v `#Match80` (ROW_NUMBER po `product.ItemID`); `@TotalCount` in stran (`OFFSET/FETCH`) prideta iz nje. Migracija pred zamenjavo preveri, da sta bila filtra štetja in strani besedilno enaka;
+- cene (B2B, B2C, katerakoli) v osnovnem `INSERT #Value` se razvrščajo samo za izdelke strani (`PARTITION BY PimProductId`, izid enak);
+- `#ValidPath291` vsebuje samo poti, ki jih imajo izdelki strani (tabela se bere samo s temi potmi);
+- `OPTION (MAXDOP 1)` na `#SpecialAll274`, osnovnem `INSERT #Value`, `#Attribute`, `#UnitValue292` in `#GroupDiscount` (stranke).
+
+Isto proceduro uporablja nočni `katalog.csv` (`@Take = 0`). Primerjava izhoda pred/po na DEV (vse vrstice, vsi stolpci, `@TotalCount`) v 11 primerih — IQ (2) MAGENTO_PRODUCTS celoten in strani 0/400, iskanje »AZ.0722« in »led«, MAGENTO_STOCK_PRICES celoten, Vidadria (3) celoten in stran, Ediito (4) celoten, MAGENTO_CUSTOMERS za 2 in 3: **enako do bajta**. Čas 200 vrstic brez tuje obremenitve 3,7–5,5 s (prej 7–10 s, ob obremenitvi 45–55 s zaradi vzporednih načrtov).
+
+**Objekti:** `out.GetExportRows`. **Podatki:** nič. **Ročni korak:** ne. **SAOP:** nič. **Povratek:** definicija pred 315 ni shranjena v datoteki — povratek je `ALTER` z odstranitvijo sprememb z oznako `HitrejsiPredogled80` (vsebina izvoza je v obeh različicah enaka). **Opomba za PRD:** migracija zahteva, da so 142, 251, 274, 291, 292, 304 že uveljavljene (sidra); če sidro manjka, se ustavi brez sprememb.
+## Hitra pripravljenost artiklov na /kakovost/artikli (migracija 318_HitrejsaKakovostArtikli, 2026-09-30, naloga #102)
+
+Stran `/kakovost/artikli` (in gola `/kakovost`, ki preusmeri nanjo) se je odpirala 26-73 s. `intranet.GetQualityProducts` (264) je naredil `SELECT * INTO #Rows` iz pogleda `val.ProductChannelReadiness` za vse aktivne artikle (~160.000) — za vsakega naziv, števce napak, zadržke, kljukice spletišč s kategorijo in veljavnostjo profilov ter korelirano iskanje odjavnega okna 251 — in šele nato razvrstil in preštel. DEV: CPU 13-14 s na klic.
+
+- **`intranet.GetQualityProducts`** (CREATE OR ALTER, isti parametri, isti izhodni stolpci in vrstni red): po korakih v ozkih začasnih tabelah izračuna samo to, kar potrebujejo razvrstitev, filter stanja in števci — `#Org` (podjetja v obsegu enkrat), `#P` (artikli + iskanje po šifri/EAN/nazivu), `#Issue` (samo blokirajoče napake), `#Shop`/`#Sites` (~12.000 kljukic spletišč), `#Hold`, `#Withdrawal` (odjavno okno enkrat na podjetje), `#R` (stanje na artikel). Polne vrstice pogleda se preberejo samo za `@Take` artiklov na strani.
+- Pravila so ista kot v `val.ProductChannelReadiness` (242/251); pogled ostane nespremenjen (bere ga tudi kartica izdelka). **Ob spremembi pravil v pogledu popravi tudi to proceduro.**
+- Novo: neznano stanje se primerja s stanjem za katalog.csv (`WebExportState`), zato povezave s `/splet` in `/splet/umaknjeni` (`stanje=BLOCKED_ERRORS`, `NO_CATEGORY` …) vrnejo artikle namesto praznega seznama.
+- DEV (stara in nova definicija, 7 kombinacij filtrov — vsa podjetja, WEB_BLOCKED stran 2, PUBLISHED, IN_CSV za IQ, HOLD, iskanje, iskanje + NO_SITE): enaki števci in enake vrstice. Čas pod obremenitvijo drugih sej: vsa podjetja 1,8-3,6 s (prej 5-30 s), PUBLISHED 3,7 s (prej 47 s), iskanje 1,0 s (prej 7,4 s); CPU ~4 s (prej 13-14 s). Ob močno zasedenem strežniku (tempdb, CPU) še vedno do ~20 s.
+- Intranet (ni migracija): `/kakovost/artikli` brez predupodabljanja, zato se procedura ob odprtju strani izvede enkrat namesto dvakrat.
+
+**Objekti:** `intranet.GetQualityProducts`. **Podatki:** nič. **SAOP:** nič (samo branje). **Ročni korak:** ne. **Povratek:** ponovno izvedi definicijo procedure iz 264. **PRD:** lahko skupaj z intranetom.
