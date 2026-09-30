@@ -93,7 +93,12 @@
   {
     Loading = true;
     Error = null;
-    try { Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take); }
+    try
+    {
+      Rows = await Nadzor.GetActivityAsync(Dni, null, Iskanje, Take);
+      NalozenoDni = Dni;
+      NalozenoIskanje = string.IsNullOrWhiteSpace(Iskanje) ? null : Iskanje.Trim();
+    }
     catch (Exception ex)
     {
       // Napako zapišemo v dnevnik: brez tega se časovna omejitev baze in vse druge napake vidijo enako.
@@ -105,7 +110,21 @@
 
   string Povzetek => Loading ? "Nalaganje …"
     : Error is not null ? "Rezultati niso na voljo"
-    : $"{Rows.Count:N0} vrstic (največ {Take:N0})";
+    : $"{Rows.Count:N0} vrstic {ObdobjeOpis(NalozenoDni)}"
+      + (NalozenoIskanje is null ? "" : $" za »{NalozenoIskanje}«")
+      + (Rows.Count >= Take ? $" (prikazanih najnovejših {Take:N0})" : "");
+
+  // Povzetek pove, za katero obdobje in iskanje so vrstice, da je sprememba filtra vidna tudi,
+  // ko se najnovejše vrstice ne spremenijo (npr. 1 dan in 7 dni pri sveži sledi).
+  int NalozenoDni = 7;
+  string? NalozenoIskanje;
+
+  static string ObdobjeOpis(int dni) => dni switch
+  {
+    1 => "v zadnjem dnevu",
+    365 => "v zadnjem letu",
+    _ => $"v zadnjih {dni} dneh",
+  };
 
   static string Sprememba(ActivityRow row) => (row.OldValue, row.NewValue) switch
   {
