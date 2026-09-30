@@ -15,6 +15,15 @@
 .monitor-host-meta { color: var(--pim-text-muted); font-size: .82rem; margin-left: .35rem; }
 .monitor-host p { color: var(--pim-text-soft); font-size: .82rem; line-height: 1.55; margin: .4rem 0 0; }
 
+/* --- vrsta poslov (naloga #12): teče, čaka, naslednji po urniku ----------- */
+.monitor-queue { margin-top: 1rem; padding-bottom: .85rem; scroll-margin-top: 5rem; }
+.monitor-queue-cols { display: grid; gap: .75rem 1.25rem; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 1rem; }
+.monitor-queue-cols h3 { color: var(--pim-text-soft); font-size: .72rem; font-weight: 700; letter-spacing: .04em; margin: 0 0 .4rem; text-transform: uppercase; }
+.monitor-queue-list { display: grid; gap: .4rem; list-style: none; margin: 0; padding: 0; }
+.monitor-queue-list li { font-size: .85rem; line-height: 1.4; min-width: 0; }
+.monitor-queue-list a { font-weight: 600; }
+.monitor-queue-list .monitor-note { display: block; }
+
 /* --- povzetek ------------------------------------------------------------- */
 .monitor-summary a { color: inherit; font-weight: 650; }
 
@@ -47,6 +56,7 @@
 
 @media (max-width: 720px) {
   .monitor-section-head { flex-direction: column; }
+  .monitor-queue-cols { grid-template-columns: minmax(0, 1fr); }
   .monitor-job, .monitor-reason, .monitor-oneline { max-width: none; min-width: 0; }
   .monitor-oneline { white-space: normal; }
 }

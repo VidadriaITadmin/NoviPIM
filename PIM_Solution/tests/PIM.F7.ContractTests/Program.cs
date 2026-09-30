@@ -75,7 +75,10 @@ foreach (var procedure in new[] { "b2b.SaveCustomerWebProfile", "b2b.SaveCustome
   Contains(service, procedure, $"Intranetni servis ne kliče procedure {procedure}.");
 foreach (var page in new[] { customersPage, detailPage, rulesPage })
   Contains(page, "ADMIN,CATALOG_EDITOR,COMMERCIAL", "B2B stran nima eksplicitnih vlog Admin/Urednik kataloga/Komerciala.");
-Contains(detailPage, "samo za branje", "Plačnik in ceniki niso označeni samo za branje.");
+// 250: plačnik in ceniki so ročni prepis nad SAOP (ne več samo za branje); stran mora to razložiti.
+Contains(detailPage, "ročna vrednost prevlada nad SAOP", "Stran stranke ne razloži, da ročni prepis (plačnik, ceniki) prevlada nad SAOP.");
+foreach (var binding in new[] { "GeneralDraft.PayerCode", "GeneralDraft.PriceListCode", "GeneralDraft.DiscountPriceListCode" })
+  Contains(detailPage, binding, $"Stran stranke nima ročnega prepisa {binding}.");
 Contains(rulesPage, "OverrideFrom", "Override nima začetka veljavnosti.");
 Contains(rulesPage, "OverrideTo", "Override nima konca veljavnosti.");
 if ((customersPage + detailPage + rulesPage + service).Contains("pošlji v ERP", StringComparison.OrdinalIgnoreCase)) failures.Add("F7 ne sme vsebovati dejanja F8 za pošiljanje v ERP.");

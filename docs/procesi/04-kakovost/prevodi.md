@@ -3,11 +3,11 @@ id: prevodi
 naslov: Manjkajoči prevodi
 podrocje: 04-kakovost
 stanje: deluje
-bere: [pim.surovi-zajem, pim.pravila]
+bere: [pim.surovi-zajem, pim.pravila, pim.atributi]
 pise: [pim.pravila]
 strani: [/kakovost/prevodi]
 posli: []
-koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/MissingTranslations.razor, PIM_Solution/src/PIM.Intranet/Services/PipelineReadService.cs]
+koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/MissingTranslations.razor, PIM_Solution/src/PIM.Intranet/Services/PipelineReadService.cs, PIM_Solution/src/PIM.Intranet/Services/AttributeMappingService.cs]
 migracije: []
 ---
 
@@ -73,6 +73,7 @@ flowchart LR
 | 2 | Urednik | `/kakovost/prevodi` | V izbirniku izbereš jezik (ali »Vsi jeziki«). | Seznam se takoj osveži za ta jezik. | Števec »… vrstic (največ 300)«. |
 | 3 | Urednik | `/kakovost/prevodi` | Pri vrstici klikneš »Dodaj prevod«. | Odpre se `/pravila/slovar` z vnaprej izpolnjeno domeno, vrednostjo in jezikom. | Na slovarju vidiš izpolnjen obrazec. |
 | 4 | Urednik | `/pravila/slovar` | Vpišeš prevod in ga shraniš. | Vnos slovarja velja za vsa podjetja. | Ob naslednji preslikavi vrstica izgine s seznama. |
+| 4a | Urednik | `/kakovost/prevodi`, razdelek »Kaj bi slovar prevedel« | Izbereš jezik (SL, DE, HR, IT) in pri angleški vrednosti atributa klikneš »Dodaj prevod«. | Za vsako različno angleško vrednost atributa pri izdelkih se preveri, ali ima slovar prevod (domena * ali ime atributa). Samo pregled; prevod se vpiše v slovar. Rimske številke in števila (npr. Električni razred I/II/III) niso na seznamu, ker se ne prevajajo. | Število »prevedenih / vseh« za jezik se poveča. |
 | 5 | Avtomatika | — | — | Naslednji zajem ali ponovna obdelava vira uporabi nov prevod. | Na kartici izdelka je lastnost prevedena. |
 
 ## 7. Pravila in varovalke
@@ -80,6 +81,8 @@ flowchart LR
 - Slovar je **skupen vsem podjetjem**: prevod velja povsod.
 - Seznam je posledica dejanskega zajema, ne domneve: vrstica nastane šele, ko preslikava vrednost res sreča.
 - Stran je bralna; zapis gre prek slovarja (pravice po strani `/pravila/slovar`).
+- Samodejni prevod vrednosti je pretvorba LOOKUP ob zajemu (slovar); zunanjega prevajalnika ali AI ni (privzeto za noč #15, lastnik lahko spremeni).
+- Izdelek hrani vrednosti atributov samo v sl in en, katalog.csv jih izvaža kot ANG/SLO. Nemški, hrvaški in italijanski prevodi v slovarju zato (še) ne gredo na splet — odločitev lastnika.
 
 ## 8. Ko gre kaj narobe
 
@@ -105,7 +108,8 @@ flowchart LR
 ## 10. Odprta vprašanja in razlike
 
 - ⚠️ Prevod se ne uporabi za nazaj takoj; artikli dobijo prevedeno vrednost šele ob naslednji preslikavi vira.
-- ⚠️ Stran ne kaže, katerih artiklov se vrednost tiče, samo število pojavitev.
+- ⚠️ Stran ne kaže, katerih artiklov se vrednost tiče, samo število pojavitev (razdelek »Kaj bi slovar prevedel« kaže število izdelkov).
+- ❓ Odločitev lastnika (#15): ali naj katalog.csv dobi vrednosti atributov tudi v nemščini, hrvaščini in italijanščini (zdaj samo ANG/SLO).
 - Samodejnih (AI) prevodov slovarja v kodi ni; AI piše samo spletni naziv in opis na kartici (glej [AI spletna besedila](ai-spletna-besedila.md)).
 
 ## Povezani procesi

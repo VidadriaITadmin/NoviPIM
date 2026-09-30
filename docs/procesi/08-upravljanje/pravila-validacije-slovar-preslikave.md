@@ -8,7 +8,7 @@ pise: [pim.pravila, pim.validacija]
 strani: [/pravila, /pravila/validacija, /pravila/slovar, /pravila/preslikave]
 posli: [PRODUCT_VALIDATION, PRODUCT_PUBLICATION, SUPPLIER_CATALOG_IMPORT]
 koda: [PIM_Solution/src/PIM.Intranet/Components/Pages/Rules.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ValidationRules.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/ValueDictionary.razor, PIM_Solution/src/PIM.Intranet/Components/Pages/FieldMappings.razor, PIM_Solution/src/PIM.Intranet/Services/RulesWriteService.cs, PIM_Solution/src/PIM.Intranet/Services/GovernanceReadService.cs, PIM_Solution/src/PIM.Intranet/Services/QualityFieldPolicy.cs, PIM_Solution/src/PIM.Intranet/Services/ValidationLayer.cs, PIM_Solution/src/PIM.XmlMapping/SqlMappingPipeline.cs]
-migracije: [049, 133, 236, 249, 266, 268, 291]
+migracije: [049, 133, 236, 249, 266, 268, 291, 307]
 ---
 
 # Pravila validacije, slovar vrednosti in preslikave polj
@@ -96,7 +96,7 @@ flowchart LR
 - Zahteve se ne brišejo (odprte napake kažejo nanje), samo umaknejo.
 - Kategorijske zahteve urejaš prek nabora atributov; sprememba resnosti tu popravi tudi nabor (266).
 - Slovar je skupen za vsa podjetja; revizija z `OrganizationId` 0.
-- Jezik **ENOTNO** (291) ni prevod, ampak poenotenje zapisa iste vrednosti (domena = slovensko ime lastnosti). Uporabi ga `pim.NormalizeAttributeValue` ob vsakem zajemu (`map.ApplyValueTransforms`) in v katalog.csv; napetost, frekvenca, presledki in decimalna vejica so poenoteni že v pravilu, v slovar gredo samo izjeme.
+- Jezik **ENOTNO** (291) ni prevod, ampak poenotenje zapisa iste vrednosti (domena = slovensko ime lastnosti). Uporabi ga `pim.NormalizeAttributeValue` ob vsakem zajemu (`map.ApplyValueTransforms`) in v katalog.csv; napetost, frekvenca, presledki in decimalna vejica so poenoteni že v pravilu, v slovar gredo samo izjeme. Predlog lepšega zapisa (307, `pim.PolishAttributeValue`: enote, razpon, vejica, velika začetnica) uporablja isti slovar ENOTNO, a je zaenkrat samo predogled na `/nastavitve/atributi/ciscenje?pogled=zapis`.
 - Vse tri strani pišejo revizijo v `b2b.AuditLog`. Pisanje: ADMIN, CATALOG_EDITOR, COMMERCIAL (`BusinessWrite`).
 
 ## 8. Ko gre kaj narobe

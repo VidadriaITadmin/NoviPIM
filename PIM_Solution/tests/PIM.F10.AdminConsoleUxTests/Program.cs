@@ -63,7 +63,7 @@ Assert(!Read(Path.Combine(root, "PIM.sln")).Contains("PIM.F10.SystemIntegrations
 // Nobena stran, storitev ali skript v intranetu ne sme voditi na odstranjeno pot (prazna stran 404).
 // Iščemo naslov v narekovajih (href, niz v kodi, $"…"), ne omembe v komentarju. Velja tudi za postavitev
 // (povezava »Odpri vsa obvestila« v zvoncu vodi na /sistem).
-var odstranjenePoti = new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem?pogled=" };
+var odstranjenePoti = new[] { "sistem/opravila", "sistem/zagoni", "sistem/integracije", "system/integracije", "sistem/napake", "sistem/zmogljivost", "sistem/izvozi", "sistem/samotest", "sistem?pogled=" };
 foreach (var file in Directory.EnumerateFiles(Path.Combine(root, "src", "PIM.Intranet"), "*.*", SearchOption.AllDirectories))
 {
   if (!file.EndsWith(".razor", StringComparison.OrdinalIgnoreCase) && !file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
@@ -410,9 +410,10 @@ foreach (var (file, markup, route) in new[]
 }
 Assert(monitor.Contains("<PimTabs Active=\"nadzor\"", StringComparison.Ordinal) && monitor.Contains("NadzorTabs.Tabs", StringComparison.Ordinal),
   "Nadzor mora prikazati skupni zavihek NadzorTabs z aktivnim zavihkom »nadzor«.");
-foreach (var pogodba in new[] { "GetOverviewAsync", "RequestRunAsync", "sistem/posel/", "Vse teče", "sistem/samotest", "sistem/sled" })
+foreach (var pogodba in new[] { "GetOverviewAsync", "RequestRunAsync", "sistem/posel/", "Vse teče", "sistem/sled" })
   Assert(monitor.Contains(pogodba, StringComparison.Ordinal), "Nadzor nima pogodbe: " + pogodba);
-Assert(!monitor.Contains("SelfTestSteps", StringComparison.Ordinal), "Koraki samotesta ne smejo biti na Nadzoru; so na /sistem/samotest.");
+Assert(!monitor.Contains("SelfTestSteps", StringComparison.Ordinal) && !monitor.Contains("sistem/samotest", StringComparison.Ordinal),
+  "Samotesta ni na Nadzoru: ne korakov ne povezave (stran /sistem/samotest se briše, naloga #21).");
 foreach (var pogodba in new[] { "GetJobAsync", "PhaseCodes.Label" })
   Assert(monitorJob.Contains(pogodba, StringComparison.Ordinal), "Stran posla nima pogodbe: " + pogodba);
 Assert(monitorJob.Contains("ReadLog", StringComparison.Ordinal) || monitorJob.Contains("LogTail", StringComparison.Ordinal),
