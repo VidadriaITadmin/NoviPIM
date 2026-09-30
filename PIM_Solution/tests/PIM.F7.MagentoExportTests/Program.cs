@@ -174,10 +174,36 @@ await using (var takeLock = new SqlCommand("""
   if (lockResult == 1) Console.WriteLine("F7: pocakal na drug F7 test, ki je tekel hkrati.");
 }
 
+// Ostanki prekinjenega F7 (naloga #71): ce je bil prejsnji zagon ubit (cev, Ctrl+C, zaprto okno),
+// se finally ni izvedel in v bazi so ostale posajene vrstice - naslednji zagon je nato padel na
+// podvojenem kljucu (F7_CENIK 2627, F7-TEST-KUPEC 2601). Zaklep zgoraj zagotavlja, da drug F7 ne
+// tece, zato so vse vrstice z oznakami F7 ostanki: najprej po dnevniku posajenih identitet, nato
+// po oznakah (za zagone pred dnevnikom).
+{
+  var leftoverErrors = new List<string>();
+  var journaled = LoadF7Journal(connectionString);
+  if (journaled is not null)
+  {
+    leftoverErrors.AddRange(await CleanF7SeedsAsync(connectionString, journaled));
+    Console.WriteLine("F7: pospravljeni ostanki prekinjenega zagona po dnevniku posajenih vrstic.");
+  }
+  try
+  {
+    var swept = await SweepF7LeftoversAsync(connectionString);
+    if (swept > 0) Console.WriteLine($"F7: pospravljenih {swept} ostankov prekinjenih zagonov (oznake F7).");
+  }
+  catch (Exception ex) { leftoverErrors.Add("oznake F7: " + ex.Message); }
+  if (leftoverErrors.Count > 0)
+    throw new InvalidOperationException("F7: ostankov prejsnjega zagona ni bilo mogoce pospraviti: " + string.Join(" | ", leftoverErrors));
+  DeleteF7Journal(connectionString);
+}
+
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
-await CatalogLifecycleTests.RunAsync(connection);
-await PackageOrderHoldTests.RunAsync(connection);
+// Ta dva dela tecejo v svoji transakciji in jo razveljavita; zastoj (1205) s tujim zagonom zato
+// ne pusti nicesar in ju lahko ponovimo.
+await RetryOnDeadlockAsync(() => CatalogLifecycleTests.RunAsync(connection), "zivljenjski cikel kataloga");
+await RetryOnDeadlockAsync(() => PackageOrderHoldTests.RunAsync(connection), "pakirno narocanje");
 
 // ---------------------------------------------------------------------------
 // 5a. Register izvoznih stolpcev je resnica o obliki datoteke.
@@ -373,27 +399,6 @@ await using (var pick = new SqlCommand("""
   videlektroFlagSuspended = reader.GetInt32(3) == 1;
 }
 
-if (videlektroFlagSuspended)
-{
-  await using var suspend = new SqlCommand(
-    "UPDATE pim.ProductWebShop SET IsPublished = 0 WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection);
-  suspend.Parameters.AddWithValue("@Id", canonProductId);
-  await suspend.ExecuteNonQueryAsync();
-}
-
-// Zapomnimo si natanko tiste vrstice, ki jih vstavimo. Brisanje po (PimProductId, SortOrder)
-// bi lahko odstranilo tuje vrstice, ki bi slučajno imele isti SortOrder — AGENTS.md §4.1
-// dovoli testu brisati samo tisto, kar je ustvaril sam.
-var seededMediaIds = new List<long>();
-var seededPriceIds = new List<long>();
-var seededCanonicalPriceIds = new List<long>();
-var seededAttributeIds = new List<long>();
-var seededCategoryIds = new List<long>();
-var seededPriceListIds = new List<int>();
-long? seededCustomerId = null;
-var exportDirectory = Path.Combine(Path.GetTempPath(), "f7-magento-db-" + Guid.NewGuid().ToString("N"));
-var registryExportDirectory = Path.Combine(Path.GetTempPath(), "f7-cenik-" + Guid.NewGuid().ToString("N"));
-
 // Vsak izvoz (tudi namerno neuspel) zapise vrstico v out.ExportRun. To so najnovejse izdelave
 // podjetja 2, zato bi /splet po testu pokazal rdeco "Zadnja izdelava katalog.csv ni uspela"
 // (naloga #71). ExportRunLog zapise Actor iz PIM_ACTOR, zato test dobi svoj enkratni Actor in
@@ -403,6 +408,48 @@ var previousActor = Environment.GetEnvironmentVariable("PIM_ACTOR");
 var testActor = "f7-test-" + Guid.NewGuid().ToString("N");
 Environment.SetEnvironmentVariable("PIM_ACTOR", testActor);
 Exception? exportRunCleanupError = null;
+
+// Zapomnimo si natanko tiste vrstice, ki jih vstavimo. Brisanje po (PimProductId, SortOrder)
+// bi lahko odstranilo tuje vrstice, ki bi slučajno imele isti SortOrder — AGENTS.md §4.1
+// dovoli testu brisati samo tisto, kar je ustvaril sam. Seznam se po vsakem sajenju zapise tudi
+// v dnevnik v %TEMP% (naloga #71): ce je proces ubit in se finally ne izvede, naslednji zagon
+// po dnevniku pobrise natanko te vrstice.
+var seeds = new F7Seeds { Actor = testActor };
+var seededMediaIds = seeds.Media;
+var seededPriceIds = seeds.Prices;
+var seededCanonicalPriceIds = seeds.CanonicalPrices;
+var seededAttributeIds = seeds.Attributes;
+var seededCategoryIds = seeds.Categories;
+var seededPriceListIds = seeds.PriceLists;
+long? seededCustomerId = null;
+await SaveF7JournalAsync(connectionString, seeds);
+
+if (videlektroFlagSuspended)
+{
+  // Prejsnji ChangedBy/ChangedUtc gresta v dnevnik, oznaka F7 pa na vrstico: tako se kljukica
+  // vrne tudi po ubitem zagonu in sled ostane taka, kot je bila.
+  await using (var previous = new SqlCommand(
+    "SELECT ChangedBy, ChangedUtc FROM pim.ProductWebShop WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection))
+  {
+    previous.Parameters.AddWithValue("@Id", canonProductId);
+    await using var previousReader = await previous.ExecuteReaderAsync();
+    if (await previousReader.ReadAsync())
+    {
+      seeds.VidelektroChangedBy = previousReader.IsDBNull(0) ? null : previousReader.GetString(0);
+      seeds.VidelektroChangedUtc = previousReader.IsDBNull(1) ? null : previousReader.GetDateTime(1);
+    }
+  }
+  seeds.VidelektroProductId = canonProductId;
+  await SaveF7JournalAsync(connectionString, seeds);
+  await using var suspend = new SqlCommand(
+    "UPDATE pim.ProductWebShop SET IsPublished = 0, ChangedBy = @Marker WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection);
+  suspend.Parameters.AddWithValue("@Id", canonProductId);
+  suspend.Parameters.AddWithValue("@Marker", F7Seeds.VidelektroMarker);
+  await suspend.ExecuteNonQueryAsync();
+}
+
+var exportDirectory = Path.Combine(Path.GetTempPath(), "f7-magento-db-" + Guid.NewGuid().ToString("N"));
+var registryExportDirectory = Path.Combine(Path.GetTempPath(), "f7-cenik-" + Guid.NewGuid().ToString("N"));
 
 // try se zacne PRED prvim vstavljanjem. Ce bi se zacel sele po sajenju, bi neuspeh
 // vmesnega koraka (krsitev omejitve, manjkajoc privzeti prag) pustil testne vrstice
@@ -431,6 +478,7 @@ try
   }
 
   Equal(2, seededMediaIds.Count, "Test mora vstaviti natanko dva medija.");
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // Dve ceni B2C: tekoca in vnaprej pripravljena. Izvoz mora vzeti tekoco — brez omejitve
   // ValidFrom <= zdaj bi ORDER BY ValidFrom DESC izbral prihodnjo in bi se pojavila v
@@ -448,6 +496,7 @@ try
   }
 
   Equal(2, seededPriceIds.Count, "Test mora vstaviti natanko dve ceni.");
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // ---------------------------------------------------------------------------
   // Cenik za stolpca "Cena B2B" in "Cena B2C" pride iz out.ExportPriceList (083), ne iz
@@ -468,6 +517,7 @@ try
     seedRegistryPrice.Parameters.AddWithValue("@PimProductId", pimProductId);
     seededPriceIds.Add(Convert.ToInt64(await seedRegistryPrice.ExecuteScalarAsync()));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   await using (var seedRegistry = new SqlCommand("""
     INSERT out.ExportPriceList (OrganizationId, PriceFieldCode, PriceListCode, SortOrder, IsActive)
@@ -478,6 +528,7 @@ try
     seedRegistry.Parameters.AddWithValue("@OrgId", organizationId);
     seededPriceListIds.Add(Convert.ToInt32(await seedRegistry.ExecuteScalarAsync()));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // 204: current prices are read directly from canon, independently of promotion.
   foreach (var priceId in seededPriceIds)
@@ -492,6 +543,7 @@ try
     seedCanonical.Parameters.AddWithValue("@PriceId", priceId);
     seededCanonicalPriceIds.Add(Convert.ToInt64(await seedCanonical.ExecuteScalarAsync()));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // Od 291 gre v katalog samo pot, ki obstaja v drevesu v jeziku spletisca (canon.WebSiteCategoryPath);
   // izmisljena pot je ostanek in ne sme v izvoz. Zato: (a) prava kategorija svetila_si z istim
@@ -552,6 +604,7 @@ try
     await using var categoryReader = await seedCategory.ExecuteReaderAsync();
     while (await categoryReader.ReadAsync()) seededCategoryIds.Add(categoryReader.GetInt64(0));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // Atributni stolpci (54 naprej) se polnijo podatkovno: kanonicna koda atributa mora biti
   // enaka glavi iz predloge. Ta test dokaze, da mehanizem dela — v bazi taka konfiguracija
@@ -567,6 +620,7 @@ try
     await using var attributeReader = await seedAttribute.ExecuteReaderAsync();
     while (await attributeReader.ReadAsync()) seededAttributeIds.Add(attributeReader.GetInt64(0));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // Jezik v glavi: atribut ima jezik 'sl', glava v datoteki pa pripono SLO. Do migracije 124
   // je bil jezik del imena atributa; ko se je 124 uporabila, je izvoz nehal polniti 31
@@ -581,6 +635,7 @@ try
     await using var languageReader = await seedLanguageAttribute.ExecuteReaderAsync();
     while (await languageReader.ReadAsync()) seededAttributeIds.Add(languageReader.GetInt64(0));
   }
+  await SaveF7JournalAsync(connectionString, seeds);
 
   // ---------------------------------------------------------------------------
   // Testna stranka. Razvojna baza nima nobene stranke z WebEnabled=1, zato brez tega
@@ -602,6 +657,8 @@ try
     seedCustomer.Parameters.AddWithValue("@OrgId", organizationId);
     seedCustomer.Parameters.AddWithValue("@CustomerKey", customerKey);
     seededCustomerId = Convert.ToInt64(await seedCustomer.ExecuteScalarAsync());
+    seeds.CustomerId = seededCustomerId;
+    await SaveF7JournalAsync(connectionString, seeds);
   }
 
   await using (var seedProfile = new SqlCommand("""
@@ -961,105 +1018,26 @@ try
 }
 finally
 {
-  // Najprej izdelave tega testa (naloga #71), z lastno povezavo: glavna je lahko po padcu
-  // pokvarjena, ostalo ciscenje pa lahko vrze in tega ne bi vec dosegli. Brise samo
-  // Actor = testActor (enkraten GUID), nikoli tujih izvozov.
+  // Ciscenje (naloga #71): vsak korak na svoji povezavi, z mejo 120 s in ponovitvijo ob -2/1205, in
+  // neodvisno od drugih - ce en korak pade, se ostali se vedno izvedejo (prej je napaka pri enem
+  // DELETE pustila vse naslednje vrstice, npr. F7_CENIK). Glavna povezava je lahko po padcu
+  // pokvarjena, zato se ne uporablja. Brise samo identitete, ki jih je posadil ta zagon, in
+  // izdelave z Actor = testActor (enkraten GUID), nikoli tujih izvozov.
   Environment.SetEnvironmentVariable("PIM_ACTOR", previousActor);
-  try
+  seeds.CustomerId = seededCustomerId;
+  var cleanupErrors = await CleanF7SeedsAsync(connectionString, seeds);
+  if (cleanupErrors.Count == 0)
   {
-    // Baza je med socasnimi vrati obremenjena (vrata #71 so 30. 9. padla s SQL timeoutom -2),
-    // zato daljsa meja in ponovitev; vsak poskus ima svojo povezavo.
-    var removedRuns = await ExportRunSqlAsync(connectionString, "DELETE FROM out.ExportRun WHERE Actor = @Actor;", testActor, scalar: false);
-    Console.WriteLine($"F7: pobrisanih {removedRuns} testnih izdelav iz out.ExportRun (Actor {testActor}).");
+    try
+    {
+      var swept = await SweepF7LeftoversAsync(connectionString);
+      // Ne bi smelo biti nic: vse posajeno je v dnevniku. Ce je, je sajenje brez zapisa v dnevnik.
+      if (swept > 0) Console.Error.WriteLine($"F7: po ciscenju po dnevniku je ostalo se {swept} vrstic z oznakami F7 - pobrisane; sajenje brez dnevnika?");
+    }
+    catch (Exception ex) { cleanupErrors.Add("oznake F7: " + ex.Message); }
   }
-  catch (Exception ex)
-  {
-    exportRunCleanupError = ex;
-    Console.Error.WriteLine($"F7: testnih izdelav v out.ExportRun ni bilo mogoce pobrisati (Actor {testActor}): {ex.Message}");
-  }
-
-  if (videlektroFlagSuspended)
-  {
-    await using var restore = new SqlCommand(
-      "UPDATE pim.ProductWebShop SET IsPublished = 1 WHERE ProductId = @Id AND WebShopCode = N'videlektro';", connection);
-    restore.Parameters.AddWithValue("@Id", canonProductId);
-    await restore.ExecuteNonQueryAsync();
-  }
-
-  // Brisanje po vstavljenih identitetah, ne po (PimProductId, SortOrder).
-  if (seededMediaIds.Count > 0)
-  {
-    var parameterNames = seededMediaIds.Select((_, index) => "@Id" + index).ToArray();
-    await using var cleanup = new SqlCommand(
-      $"DELETE FROM pim.ProductMedia WHERE PimProductMediaId IN ({string.Join(",", parameterNames)});", connection);
-    for (var index = 0; index < seededMediaIds.Count; index++)
-      cleanup.Parameters.AddWithValue(parameterNames[index], seededMediaIds[index]);
-    await cleanup.ExecuteNonQueryAsync();
-  }
-
-  if (seededCategoryIds.Count > 0)
-  {
-    var categoryParameters = seededCategoryIds.Select((_, index) => "@Cat" + index).ToArray();
-    await using var cleanupCategories = new SqlCommand(
-      $"DELETE FROM pim.ProductCategory WHERE PimProductCategoryId IN ({string.Join(",", categoryParameters)});", connection);
-    for (var index = 0; index < seededCategoryIds.Count; index++)
-      cleanupCategories.Parameters.AddWithValue(categoryParameters[index], seededCategoryIds[index]);
-    await cleanupCategories.ExecuteNonQueryAsync();
-  }
-
-  if (seededAttributeIds.Count > 0)
-  {
-    var attributeParameters = seededAttributeIds.Select((_, index) => "@Attr" + index).ToArray();
-    await using var cleanupAttributes = new SqlCommand(
-      $"DELETE FROM pim.ProductAttribute WHERE PimProductAttributeId IN ({string.Join(",", attributeParameters)});", connection);
-    for (var index = 0; index < seededAttributeIds.Count; index++)
-      cleanupAttributes.Parameters.AddWithValue(attributeParameters[index], seededAttributeIds[index]);
-    await cleanupAttributes.ExecuteNonQueryAsync();
-  }
-
-  if (seededPriceIds.Count > 0)
-  {
-    var priceParameters = seededPriceIds.Select((_, index) => "@Price" + index).ToArray();
-    await using var cleanupPrices = new SqlCommand(
-      $"DELETE FROM pim.ProductPrice WHERE PimProductPriceId IN ({string.Join(",", priceParameters)});", connection);
-    for (var index = 0; index < seededPriceIds.Count; index++)
-      cleanupPrices.Parameters.AddWithValue(priceParameters[index], seededPriceIds[index]);
-    await cleanupPrices.ExecuteNonQueryAsync();
-  }
-
-  foreach (var priceId in seededCanonicalPriceIds)
-  {
-    await using var cleanup = new SqlCommand("DELETE canon.ProductPrice WHERE ProductPriceId=@Id;", connection);
-    cleanup.Parameters.AddWithValue("@Id", priceId);
-    await cleanup.ExecuteNonQueryAsync();
-  }
-
-  // Testna stranka in vse, kar visi na njej. Vse te vrstice je ustvaril ta test in nobena
-  // ne obstaja pred njim — CustomerId je identiteta, vrnjena ob vstavljanju. Pogojno, ker
-  // se sajenje lahko ustavi ze pri prvem koraku in stranka sploh ne nastane.
-  if (seededCustomerId is not null)
-  {
-    await using var cleanupCustomer = new SqlCommand("""
-      DELETE FROM b2b.GroupDiscount WHERE CustomerId = @CustomerId;
-      DELETE FROM pim.CustomerValueDiscountTier WHERE CustomerId = @CustomerId;
-      DELETE FROM pim.CustomerWebProfile WHERE CustomerId = @CustomerId;
-      DELETE FROM b2b.Customer WHERE CustomerId = @CustomerId;
-      """, connection);
-    cleanupCustomer.Parameters.AddWithValue("@CustomerId", seededCustomerId.Value);
-    await cleanupCustomer.ExecuteNonQueryAsync();
-  }
-
-  // Vrstice registra cenikov, ki jih je posadil ta test. Privzetih vrstic iz migracije 083
-  // se ne dotika — brise samo identitete, ki jih je sam dobil ob vstavljanju.
-  if (seededPriceListIds.Count > 0)
-  {
-    var priceListParameters = seededPriceListIds.Select((_, index) => "@Cenik" + index).ToArray();
-    await using var cleanupPriceLists = new SqlCommand(
-      $"DELETE FROM out.ExportPriceList WHERE ExportPriceListId IN ({string.Join(",", priceListParameters)});", connection);
-    for (var index = 0; index < seededPriceListIds.Count; index++)
-      cleanupPriceLists.Parameters.AddWithValue(priceListParameters[index], seededPriceListIds[index]);
-    await cleanupPriceLists.ExecuteNonQueryAsync();
-  }
+  if (cleanupErrors.Count == 0) DeleteF7Journal(connectionString);
+  else exportRunCleanupError = new InvalidOperationException(string.Join(" | ", cleanupErrors));
 
   if (Directory.Exists(exportDirectory)) Directory.Delete(exportDirectory, true);
   if (Directory.Exists(registryExportDirectory)) Directory.Delete(registryExportDirectory, true);
@@ -1067,7 +1045,7 @@ finally
 
 // Test je sicer uspel, a je pustil izdelave v skupni bazi: to je napaka (naloga #71).
 if (exportRunCleanupError is not null)
-  throw new InvalidOperationException("F7 je pustil testne izdelave v out.ExportRun.", exportRunCleanupError);
+  throw new InvalidOperationException("F7 ni pospravil vseh svojih vrstic (dnevnik ostane v %TEMP%, naslednji zagon jih pobrise).", exportRunCleanupError);
 
 // Dokaz: po ciscenju ni nobene vrstice tega testa.
 Equal(0, await ExportRunSqlAsync(connectionString, "SELECT COUNT(*) FROM out.ExportRun WHERE Actor = @Actor;", testActor, scalar: true),
@@ -1077,10 +1055,14 @@ Console.WriteLine("F7 Magento export: pogodba, shema, vloga glavne slike, LF/UTF
 return 0;
 
 /// <summary>
-/// Ciscenje in dokaz za out.ExportRun (naloga #71): vsak poskus na svoji povezavi, meja 120 s,
-/// do 3 poskusi ob SQL timeoutu (-2) ali zastoju (1205). Filter je vedno enkratni Actor testa.
+/// Dokaz za out.ExportRun (naloga #71): vsak poskus na svoji povezavi, meja 120 s, do 4 poskusi
+/// ob SQL timeoutu (-2) ali zastoju (1205). Filter je vedno enkratni Actor testa.
 /// </summary>
-static async Task<int> ExportRunSqlAsync(string connectionString, string sql, string actor, bool scalar)
+static Task<int> ExportRunSqlAsync(string connectionString, string sql, string actor, bool scalar) =>
+  F7SqlAsync(connectionString, sql, parameters => parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = actor, scalar);
+
+/// <summary>En ukaz na svoji povezavi, meja 120 s, do 4 poskusi ob -2 (timeout) ali 1205 (zastoj).</summary>
+static async Task<int> F7SqlAsync(string connectionString, string sql, Action<SqlParameterCollection>? bind, bool scalar)
 {
   for (var attempt = 1; ; attempt++)
   {
@@ -1089,16 +1071,206 @@ static async Task<int> ExportRunSqlAsync(string connectionString, string sql, st
       await using var runConnection = new SqlConnection(connectionString);
       await runConnection.OpenAsync();
       await using var command = new SqlCommand(sql, runConnection) { CommandTimeout = 120 };
-      command.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = actor;
+      bind?.Invoke(command.Parameters);
       return scalar ? Convert.ToInt32(await command.ExecuteScalarAsync()) : await command.ExecuteNonQueryAsync();
     }
-    catch (SqlException ex) when (attempt < 3 && (ex.Number == -2 || ex.Number == 1205))
+    catch (SqlException ex) when (attempt < 4 && (ex.Number == -2 || ex.Number == 1205))
     {
-      Console.Error.WriteLine($"F7: out.ExportRun poskus {attempt} ni uspel (SQL {ex.Number}), ponavljam.");
+      Console.Error.WriteLine($"F7: poskus {attempt} ni uspel (SQL {ex.Number}), ponavljam.");
       await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
     }
   }
 }
+
+/// <summary>
+/// Del testa, ki tece v svoji transakciji in jo na koncu razveljavi: ob zastoju (1205) s tujim
+/// zagonom ne ostane nic, zato ga ponovimo (do 3-krat). Po zastoju je transakcija ze razveljavljena
+/// in RollbackAsync v finally vrze "SqlTransaction has completed" - tudi to je znak zastoja.
+/// </summary>
+static async Task RetryOnDeadlockAsync(Func<Task> run, string what)
+{
+  for (var attempt = 1; ; attempt++)
+  {
+    try { await run(); return; }
+    catch (Exception ex) when (attempt < 3 && IsDeadlockOrZombie(ex))
+    {
+      Console.Error.WriteLine($"F7: {what} - zastoj s socasnim zagonom (poskus {attempt}), ponavljam.");
+      await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
+    }
+  }
+
+  static bool IsDeadlockOrZombie(Exception ex)
+  {
+    for (Exception? current = ex; current is not null; current = current.InnerException)
+    {
+      if (current is SqlException sql && (sql.Number == 1205 || sql.Number == -2)) return true;
+      if (current is InvalidOperationException && current.Message.Contains("SqlTransaction", StringComparison.Ordinal)) return true;
+    }
+    return false;
+  }
+}
+
+static string F7JournalPath(string connectionString)
+{
+  var builder = new SqlConnectionStringBuilder(connectionString);
+  var key = new string((builder.DataSource + "_" + builder.InitialCatalog).Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray());
+  return Path.Combine(Path.GetTempPath(), $"pim-f7-posajeno-{key}.json");
+}
+
+static async Task SaveF7JournalAsync(string connectionString, F7Seeds seeds) =>
+  await File.WriteAllTextAsync(F7JournalPath(connectionString), System.Text.Json.JsonSerializer.Serialize(seeds));
+
+static F7Seeds? LoadF7Journal(string connectionString)
+{
+  var path = F7JournalPath(connectionString);
+  if (!File.Exists(path)) return null;
+  try { return System.Text.Json.JsonSerializer.Deserialize<F7Seeds>(File.ReadAllText(path)); }
+  catch (System.Text.Json.JsonException) { return null; }
+}
+
+static void DeleteF7Journal(string connectionString)
+{
+  var path = F7JournalPath(connectionString);
+  if (File.Exists(path)) File.Delete(path);
+}
+
+/// <summary>
+/// Pobrise natanko vrstice iz seznama posajenih (naloga #71). Vsak korak je samostojen: napaka enega
+/// ne ustavi ostalih; vrne seznam napak (prazen = vse pospravljeno).
+/// </summary>
+static async Task<List<string>> CleanF7SeedsAsync(string connectionString, F7Seeds seeds)
+{
+  var errors = new List<string>();
+
+  async Task StepAsync(string what, string sql, Action<SqlParameterCollection>? bind = null)
+  {
+    try { await F7SqlAsync(connectionString, sql, bind, scalar: false); }
+    catch (Exception ex)
+    {
+      errors.Add($"{what}: {ex.Message}");
+      Console.Error.WriteLine($"F7: ciscenje '{what}' ni uspelo: {ex.Message}");
+    }
+  }
+
+  // Identitete so stevila iz baze (long/int), zato jih je varno vstaviti v IN (...).
+  static string Ids<T>(IEnumerable<T> ids) => string.Join(",", ids);
+
+  if (!string.IsNullOrEmpty(seeds.Actor))
+    await StepAsync("izdelave out.ExportRun", "DELETE FROM out.ExportRun WHERE Actor = @Actor;",
+      parameters => parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = seeds.Actor);
+  if (seeds.VidelektroProductId is long videlektroProductId)
+    await StepAsync("kljukica videlektro", """
+      UPDATE pim.ProductWebShop
+      SET IsPublished = 1, ChangedBy = COALESCE(@ChangedBy, ChangedBy), ChangedUtc = COALESCE(@ChangedUtc, ChangedUtc)
+      WHERE ProductId = @Id AND WebShopCode = N'videlektro' AND IsPublished = 0 AND ChangedBy = @Marker;
+      """, parameters =>
+      {
+        parameters.AddWithValue("@Id", videlektroProductId);
+        parameters.AddWithValue("@Marker", F7Seeds.VidelektroMarker);
+        parameters.Add("@ChangedBy", System.Data.SqlDbType.NVarChar, 200).Value = (object?)seeds.VidelektroChangedBy ?? DBNull.Value;
+        parameters.Add("@ChangedUtc", System.Data.SqlDbType.DateTime2).Value = (object?)seeds.VidelektroChangedUtc ?? DBNull.Value;
+      });
+  if (seeds.Media.Count > 0)
+    await StepAsync("mediji", $"DELETE FROM pim.ProductMedia WHERE PimProductMediaId IN ({Ids(seeds.Media)});");
+  if (seeds.Categories.Count > 0)
+    await StepAsync("kategorije", $"DELETE FROM pim.ProductCategory WHERE PimProductCategoryId IN ({Ids(seeds.Categories)});");
+  if (seeds.Attributes.Count > 0)
+    await StepAsync("atributi", $"DELETE FROM pim.ProductAttribute WHERE PimProductAttributeId IN ({Ids(seeds.Attributes)});");
+  if (seeds.Prices.Count > 0)
+    await StepAsync("cene pim", $"DELETE FROM pim.ProductPrice WHERE PimProductPriceId IN ({Ids(seeds.Prices)});");
+  if (seeds.CanonicalPrices.Count > 0)
+    await StepAsync("cene canon", $"DELETE FROM canon.ProductPrice WHERE ProductPriceId IN ({Ids(seeds.CanonicalPrices)});");
+  // Testna stranka in vse, kar visi na njej - v eni transakciji, da ne ostane na pol.
+  if (seeds.CustomerId is long customerId)
+    await StepAsync("testna stranka", """
+      SET XACT_ABORT ON;
+      BEGIN TRANSACTION;
+      DELETE FROM b2b.GroupDiscount WHERE CustomerId = @CustomerId;
+      DELETE FROM pim.CustomerValueDiscountTier WHERE CustomerId = @CustomerId;
+      DELETE FROM pim.CustomerWebProfile WHERE CustomerId = @CustomerId;
+      DELETE FROM b2b.Customer WHERE CustomerId = @CustomerId;
+      COMMIT;
+      """, parameters => parameters.AddWithValue("@CustomerId", customerId));
+  // Vrstice registra cenikov, ki jih je posadil ta test; privzetih iz migracije 083 se ne dotika.
+  if (seeds.PriceLists.Count > 0)
+    await StepAsync("register cenikov", $"DELETE FROM out.ExportPriceList WHERE ExportPriceListId IN ({Ids(seeds.PriceLists)});");
+
+  return errors;
+}
+
+/// <summary>
+/// Pospravi ostanke F7 po oznakah, ki jih ima samo ta test (naloga #71) - za zagone, ubite pred
+/// dnevnikom ali preden je dnevnik dobil identiteto. Klice se SAMO pod zaklepom F7 (sp_getapplock),
+/// ko drug F7 ne tece. Vrne stevilo pobrisanih/obnovljenih vrstic.
+/// </summary>
+static Task<int> SweepF7LeftoversAsync(string connectionString) => F7SqlAsync(connectionString, """
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+  BEGIN TRANSACTION;
+  DECLARE @Products TABLE (PimProductId bigint PRIMARY KEY);
+  INSERT @Products (PimProductId)
+    SELECT PimProductId FROM pim.ProductMedia WHERE Url IN (N'https://test.local/f7-primary.jpg', N'https://test.local/f7-gallery.jpg')
+    UNION SELECT PimProductId FROM pim.ProductPrice WHERE PriceList = N'F7_CENIK'
+    UNION SELECT PimProductId FROM pim.ProductCategory WHERE CategoryPath = N'F7 Svetila/Izmisljena pot';
+
+  -- Ceni B2C (111,11 tekoca in 999,99 cez 30 dni) sta posajeni v isti minuti kot F7_CENIK.
+  DELETE canonPrice
+  FROM canon.ProductPrice AS canonPrice
+  INNER JOIN canon.Product AS product ON product.ProductId = canonPrice.ProductId
+  INNER JOIN pim.Product AS promoted ON promoted.OrganizationId = product.OrganizationId AND promoted.ItemID = product.ItemID
+  INNER JOIN pim.ProductPrice AS marker ON marker.PimProductId = promoted.PimProductId AND marker.PriceList = N'F7_CENIK'
+  WHERE canonPrice.PriceList = N'B2C'
+    AND ((canonPrice.Net = 111.11 AND ABS(DATEDIFF(second, marker.ValidFrom, canonPrice.ValidFrom)) <= 60)
+      OR (canonPrice.Net = 999.99 AND ABS(DATEDIFF(second, DATEADD(day, 30, marker.ValidFrom), canonPrice.ValidFrom)) <= 60));
+  DECLARE @Count int = @@ROWCOUNT;
+  DELETE pimPrice
+  FROM pim.ProductPrice AS pimPrice
+  INNER JOIN pim.ProductPrice AS marker ON marker.PimProductId = pimPrice.PimProductId AND marker.PriceList = N'F7_CENIK'
+  WHERE pimPrice.PriceList = N'B2C'
+    AND ((pimPrice.Net = 111.11 AND ABS(DATEDIFF(second, marker.ValidFrom, pimPrice.ValidFrom)) <= 60)
+      OR (pimPrice.Net = 999.99 AND ABS(DATEDIFF(second, DATEADD(day, 30, marker.ValidFrom), pimPrice.ValidFrom)) <= 60));
+  SET @Count += @@ROWCOUNT;
+  DELETE FROM canon.ProductPrice WHERE PriceList = N'F7_CENIK'; SET @Count += @@ROWCOUNT;
+  DELETE FROM pim.ProductPrice WHERE PriceList = N'F7_CENIK'; SET @Count += @@ROWCOUNT;
+  DELETE FROM pim.ProductMedia WHERE Url IN (N'https://test.local/f7-primary.jpg', N'https://test.local/f7-gallery.jpg'); SET @Count += @@ROWCOUNT;
+
+  -- Atributa, ki ju test posadi; izbrani izdelek ju pred testom ni imel (pogoj izbire).
+  DELETE attribute
+  FROM pim.ProductAttribute AS attribute
+  INNER JOIN @Products AS own ON own.PimProductId = attribute.PimProductId
+  WHERE (attribute.AttributeCode = N'Grlo' AND attribute.LanguageCode IS NULL AND attribute.Value = N'E27')
+     OR (attribute.AttributeCode = N'Prevladujoč material' AND attribute.LanguageCode = N'sl' AND attribute.Value = N'Kovina');
+  SET @Count += @@ROWCOUNT;
+
+  -- Stiri poti kategorij so posajene z enim INSERT (zaporedne identitete); izmisljena je zadnja.
+  DELETE category
+  FROM pim.ProductCategory AS category
+  INNER JOIN pim.ProductCategory AS invented
+    ON invented.PimProductId = category.PimProductId AND invented.CategoryPath = N'F7 Svetila/Izmisljena pot'
+  WHERE category.PimProductCategoryId BETWEEN invented.PimProductCategoryId - 3 AND invented.PimProductCategoryId
+    AND category.WebSite IN (N'svetila_si', N'svetila_si_en', N'B2C');
+  SET @Count += @@ROWCOUNT;
+
+  DECLARE @Customers TABLE (CustomerId bigint PRIMARY KEY);
+  INSERT @Customers SELECT CustomerId FROM b2b.Customer WHERE OrganizationId = 2 AND CustomerKey = N'F7-TEST-KUPEC';
+  DELETE FROM b2b.GroupDiscount WHERE CustomerId IN (SELECT CustomerId FROM @Customers);
+  DELETE FROM pim.CustomerValueDiscountTier WHERE CustomerId IN (SELECT CustomerId FROM @Customers);
+  DELETE FROM pim.CustomerWebProfile WHERE CustomerId IN (SELECT CustomerId FROM @Customers);
+  DELETE FROM b2b.Customer WHERE CustomerId IN (SELECT CustomerId FROM @Customers); SET @Count += @@ROWCOUNT;
+
+  DELETE FROM out.ExportPriceList WHERE OrganizationId = 2 AND PriceListCode = N'F7_CENIK'; SET @Count += @@ROWCOUNT;
+  DELETE FROM out.ExportRun WHERE Actor LIKE N'f7-test-%'; SET @Count += @@ROWCOUNT;
+  DELETE FROM out.ExportColumn
+    WHERE ExportProfileId IN (SELECT ExportProfileId FROM out.ExportProfile WHERE ProfileCode = N'F7_KANAL_PROBE');
+  DELETE FROM out.ExportProfile WHERE ProfileCode = N'F7_KANAL_PROBE'; SET @Count += @@ROWCOUNT;
+
+  -- Kljukica videlektro, ki jo je test zacasno umaknil in je ni vrnil (prejsnji ChangedBy je izgubljen).
+  UPDATE pim.ProductWebShop SET IsPublished = 1, ChangedBy = N'F7 (obnovljeno po prekinjenem testu)'
+  WHERE WebShopCode = N'videlektro' AND IsPublished = 0 AND ChangedBy = N'F7-zacasno-umaknjeno';
+  SET @Count += @@ROWCOUNT;
+  COMMIT;
+  SELECT @Count;
+  """, bind: null, scalar: true);
 
 static void Equal<T>(T expected, T actual, string message) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: pričakovano {expected}, dejansko {actual}."); }
 
@@ -1138,4 +1310,23 @@ static List<string> SplitCsvLine(string line, char delimiter = ',')
 
   fields.Add(current.ToString());
   return fields;
+}
+
+/// <summary>Posajene vrstice enega zagona F7 (dnevnik v %TEMP%, naloga #71).</summary>
+sealed class F7Seeds
+{
+  /// <summary>Oznaka na pim.ProductWebShop, dokler je kljukica videlektro zacasno umaknjena.</summary>
+  public const string VidelektroMarker = "F7-zacasno-umaknjeno";
+
+  public string Actor { get; set; } = "";
+  public List<long> Media { get; set; } = new();
+  public List<long> Prices { get; set; } = new();
+  public List<long> CanonicalPrices { get; set; } = new();
+  public List<long> Attributes { get; set; } = new();
+  public List<long> Categories { get; set; } = new();
+  public List<int> PriceLists { get; set; } = new();
+  public long? CustomerId { get; set; }
+  public long? VidelektroProductId { get; set; }
+  public string? VidelektroChangedBy { get; set; }
+  public DateTime? VidelektroChangedUtc { get; set; }
 }
