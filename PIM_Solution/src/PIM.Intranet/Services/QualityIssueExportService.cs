@@ -21,7 +21,7 @@ public sealed class QualityIssueExportService(QualityReadService quality, Govern
   [
     new("Šifra artikla", Width: 18),
     new("EAN", Width: 16),
-    new("Naziv", Width: 46),
+    new("Naziv (spletni, sicer ERP)", Width: 46), // #62: vir je mešan (GetQualityIssues), zato naslov pove, kateri
     new("Nivo", Width: 16),
     new("Profil", Width: 16),
     new("Polje", Width: 24),
