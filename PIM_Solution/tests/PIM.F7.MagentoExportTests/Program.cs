@@ -155,6 +155,25 @@ const int organizationId = 2;
 const string primaryUrl = "https://test.local/f7-primary.jpg";
 const string galleryUrl = "https://test.local/f7-gallery.jpg";
 
+// Vrata vec nalog tecejo hkrati (vrataHkrati) in vsaka pozene F7 nad isto razvojno bazo. Dva F7
+// hkrati sadita isti F7_CENIK (UQ_ExportPriceList, 2627) in se blokirata (SQL timeout -2), zato
+// test najprej vzame izkljucni zaklep za celo sejo. Sprosti se, ko se povezava zapre - tudi ce
+// proces pade ali ga kdo ubije (naloga #71).
+await using var f7Lock = new SqlConnection(connectionString);
+await f7Lock.OpenAsync();
+await using (var takeLock = new SqlCommand("""
+  DECLARE @r int;
+  EXEC @r = sp_getapplock @Resource = N'PIM.F7.MagentoExportTests', @LockMode = N'Exclusive',
+                          @LockOwner = N'Session', @LockTimeout = 1500000;
+  SELECT @r;
+  """, f7Lock) { CommandTimeout = 1560 })
+{
+  var lockResult = Convert.ToInt32(await takeLock.ExecuteScalarAsync());
+  if (lockResult < 0)
+    throw new InvalidOperationException($"F7: drug F7 test ze 25 min drzi razvojno bazo (sp_getapplock {lockResult}).");
+  if (lockResult == 1) Console.WriteLine("F7: pocakal na drug F7 test, ki je tekel hkrati.");
+}
+
 await using var connection = new SqlConnection(connectionString);
 await connection.OpenAsync();
 await CatalogLifecycleTests.RunAsync(connection);
@@ -948,11 +967,9 @@ finally
   Environment.SetEnvironmentVariable("PIM_ACTOR", previousActor);
   try
   {
-    await using var runCleanupConnection = new SqlConnection(connectionString);
-    await runCleanupConnection.OpenAsync();
-    await using var cleanupRuns = new SqlCommand("DELETE FROM out.ExportRun WHERE Actor = @Actor;", runCleanupConnection);
-    cleanupRuns.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = testActor;
-    var removedRuns = await cleanupRuns.ExecuteNonQueryAsync();
+    // Baza je med socasnimi vrati obremenjena (vrata #71 so 30. 9. padla s SQL timeoutom -2),
+    // zato daljsa meja in ponovitev; vsak poskus ima svojo povezavo.
+    var removedRuns = await ExportRunSqlAsync(connectionString, "DELETE FROM out.ExportRun WHERE Actor = @Actor;", testActor, scalar: false);
     Console.WriteLine($"F7: pobrisanih {removedRuns} testnih izdelav iz out.ExportRun (Actor {testActor}).");
   }
   catch (Exception ex)
@@ -1053,14 +1070,35 @@ if (exportRunCleanupError is not null)
   throw new InvalidOperationException("F7 je pustil testne izdelave v out.ExportRun.", exportRunCleanupError);
 
 // Dokaz: po ciscenju ni nobene vrstice tega testa.
-await using (var leftover = new SqlCommand("SELECT COUNT(*) FROM out.ExportRun WHERE Actor = @Actor;", connection))
-{
-  leftover.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = testActor;
-  Equal(0, (int)(await leftover.ExecuteScalarAsync())!, "F7 ne sme pustiti svojih izdelav v out.ExportRun");
-}
+Equal(0, await ExportRunSqlAsync(connectionString, "SELECT COUNT(*) FROM out.ExportRun WHERE Actor = @Actor;", testActor, scalar: true),
+  "F7 ne sme pustiti svojih izdelav v out.ExportRun");
 
 Console.WriteLine("F7 Magento export: pogodba, shema, vloga glavne slike, LF/UTF8 brez BOM, escape in izvoz proti bazi PASS.");
 return 0;
+
+/// <summary>
+/// Ciscenje in dokaz za out.ExportRun (naloga #71): vsak poskus na svoji povezavi, meja 120 s,
+/// do 3 poskusi ob SQL timeoutu (-2) ali zastoju (1205). Filter je vedno enkratni Actor testa.
+/// </summary>
+static async Task<int> ExportRunSqlAsync(string connectionString, string sql, string actor, bool scalar)
+{
+  for (var attempt = 1; ; attempt++)
+  {
+    try
+    {
+      await using var runConnection = new SqlConnection(connectionString);
+      await runConnection.OpenAsync();
+      await using var command = new SqlCommand(sql, runConnection) { CommandTimeout = 120 };
+      command.Parameters.Add("@Actor", System.Data.SqlDbType.NVarChar, 200).Value = actor;
+      return scalar ? Convert.ToInt32(await command.ExecuteScalarAsync()) : await command.ExecuteNonQueryAsync();
+    }
+    catch (SqlException ex) when (attempt < 3 && (ex.Number == -2 || ex.Number == 1205))
+    {
+      Console.Error.WriteLine($"F7: out.ExportRun poskus {attempt} ni uspel (SQL {ex.Number}), ponavljam.");
+      await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
+    }
+  }
+}
 
 static void Equal<T>(T expected, T actual, string message) { if (!EqualityComparer<T>.Default.Equals(expected, actual)) throw new InvalidOperationException($"{message}: pričakovano {expected}, dejansko {actual}."); }
 
