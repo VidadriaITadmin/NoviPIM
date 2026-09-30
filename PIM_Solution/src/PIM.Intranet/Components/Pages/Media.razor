@@ -362,7 +362,7 @@
           <span>@selected.Role · #@selected.SortOrder · @selected.Kind@(string.IsNullOrWhiteSpace(selected.Title) ? "" : " · " + selected.Title)</span>
           <span>@selected.OrganizationName@(string.IsNullOrWhiteSpace(selected.ProductName) ? "" : " · " + selected.ProductName) · @AddedTitle(selected)</span>
         </div>
-        <button type="button" class="ghost-button" @onclick="Close">Zapri</button>
+        <button type="button" class="ghost-button" data-pim-close @onclick="Close">Zapri</button>
       </header>
       <div class="media-lightbox-body">
         @if (selected.Kind == MediaKindPolicy.ImageCode && selectedUrl.Href is not null && !Failed.Contains(selected.Key))
