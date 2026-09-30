@@ -161,11 +161,12 @@
   protected override async Task OnParametersSetAsync()
   {
     if (!Initialized) return;
-    SelectedProfileId = QueryProfile is { } id && Profiles.Any(profile => profile.ExportProfileId == id) ? id : Profiles.FirstOrDefault()?.ExportProfileId ?? 0;
+    // Brez profila v naslovu je izbrano »Izberi profil« (0): filtri se zapišejo v naslov, predogleda pa ni.
+    SelectedProfileId = QueryProfile is { } id && Profiles.Any(profile => profile.ExportProfileId == id) ? id : 0;
     SelectedSite = QuerySite ?? "";
     Search = QuerySearch ?? "";
     OnlyPublished = QueryOnlyPublished ?? true;
-    if (QueryProfile is null) { CancelPreview(); ShownKey = null; Preview = null; Loading = false; return; }
+    if (SelectedProfileId == 0) { CancelPreview(); ShownKey = null; Preview = null; Loading = false; return; }
     // Med predupodabljanjem ne poizvedujemo: interaktivni krog bi isto poizvedbo takoj ponovil.
     if (!RendererInfo.IsInteractive) { Loading = true; return; }
     // Enak ključ (drugi klic OnParametersSet po NavigateTo, isti naslov) ne sproži nove poizvedbe.
@@ -175,20 +176,19 @@
 
   string CurrentKey => $"{SelectedProfileId}|{EffectiveSite}|{Search.Trim()}|{EffectiveOnlyPublished}";
 
-  string Href() => "splet/izvoz?" + string.Join('&', new[]
+  string Href() => ("splet/izvoz?" + string.Join('&', new[]
   {
-    $"profil={SelectedProfileId}",
+    SelectedProfileId == 0 ? null : $"profil={SelectedProfileId}",
     SelectedSite.Length > 0 ? $"spletisce={Uri.EscapeDataString(SelectedSite)}" : null,
     Search.Trim().Length > 0 ? $"isci={Uri.EscapeDataString(Search.Trim())}" : null,
     OnlyPublished ? null : "objavljeni=false",
-  }.Where(part => part is not null));
+  }.Where(part => part is not null))).TrimEnd('?');
 
   Task ApplyAsync()
   {
-    if (SelectedProfileId == 0) return Task.CompletedTask;
     var target = Href();
     // Isti naslov ne sproži OnParametersSet; takrat predogled osvežimo neposredno.
-    if (Navigation.ToBaseRelativePath(Navigation.Uri) == target) { ShownKey = null; return ShowAsync(); }
+    if (Navigation.ToBaseRelativePath(Navigation.Uri) == target) { ShownKey = null; return SelectedProfileId == 0 ? Task.CompletedTask : ShowAsync(); }
     Navigation.NavigateTo(target);
     return Task.CompletedTask;
   }
