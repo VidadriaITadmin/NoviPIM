@@ -5,6 +5,7 @@
 @inject IntranetDataService Data
 @inject CatalogReadService Catalog
 @inject IJSRuntime Js
+@inject NavigationManager Navigation
 
 <PageTitle>Cenik za tisk</PageTitle>
 <div class="no-print">
@@ -12,38 +13,47 @@
 
   <section class="ui-card toolbar section-gap" role="search" aria-label="Izbira cenika">
     <label class="visually-hidden" for="sheet-organization">Podjetje</label>
-    <select id="sheet-organization" class="filter-select" @bind="OrganizationId">
+    <select id="sheet-organization" class="filter-select" @bind="OrganizationId" @bind:after="ChangedAsync">
       @foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }
     </select>
     <label class="visually-hidden" for="sheet-pricelist">Cenik</label>
-    <select id="sheet-pricelist" class="filter-select" @bind="PriceList">
+    <select id="sheet-pricelist" class="filter-select" @bind="PriceList" @bind:after="ChangedAsync">
       <option value="B2C">B2C (maloprodaja)</option>
       <option value="B2B">B2B (veleprodaja)</option>
     </select>
     <label class="visually-hidden" for="sheet-language">Jezik</label>
-    <select id="sheet-language" class="filter-select" @bind="Language">
-      <option value="sl">sl</option><option value="en">en</option><option value="de">de</option><option value="hr">hr</option><option value="it">it</option>
+    <select id="sheet-language" class="filter-select" @bind="Language" @bind:after="ChangedAsync">
+      @foreach (var language in Languages) { <option value="@language">@language</option> }
     </select>
     <label class="visually-hidden" for="sheet-site">Spletno mesto</label>
-    <select id="sheet-site" class="filter-select" @bind="WebSite">
+    <select id="sheet-site" class="filter-select" @bind="WebSite" @bind:after="ChangedAsync">
       <option value="">Vsa spletna mesta</option>
       @foreach (var site in Sites) { <option value="@site.WebSiteCode">@site.WebSiteName</option> }
     </select>
+    @* #113: besedilni polji se uveljavita ob »change« (Enter ali izhod iz polja), ne na vsak pritisk tipke. *@
     <label class="visually-hidden" for="sheet-category">Kategorija (pot)</label>
-    <input id="sheet-category" class="form-input" placeholder="Kategorija, npr. Notranja svetila > Viseča svetila" @bind="CategoryPath" />
+    <input id="sheet-category" class="form-input" placeholder="Kategorija, npr. Notranja svetila > Viseča svetila" @bind="CategoryPath" @bind:after="ChangedAsync" />
     <label class="visually-hidden" for="sheet-items">Šifre artiklov</label>
-    <input id="sheet-items" class="form-input" placeholder="Ali šifre, ločene z vejico ali novo vrstico" @bind="ItemIdsText" />
-    <label class="filter-check"><input type="checkbox" @bind="OnlyPublished" /> samo objavljeni</label>
-    <label class="filter-check"><input type="checkbox" @bind="ShowImages" /> s slikami</label>
-    <button type="button" class="filter-button" @onclick="LoadAsync">Pripravi cenik</button>
-    <button type="button" class="primary-button" disabled="@(Rows.Count == 0)" @onclick="PrintAsync">Natisni / PDF</button>
+    <input id="sheet-items" class="form-input" placeholder="Ali šifre, ločene z vejico ali novo vrstico" @bind="ItemIdsText" @bind:after="ChangedAsync" />
+    <label class="filter-check"><input type="checkbox" @bind="OnlyPublished" @bind:after="ChangedAsync" /> samo objavljeni</label>
+    <label class="filter-check"><input type="checkbox" @bind="ShowImages" @bind:after="ChangedAsync" /> s slikami</label>
+    <button type="button" class="filter-button" disabled="@Loading" @onclick="PrepareAsync">@(Loaded ? "Osveži cenik" : "Pripravi cenik")</button>
+    <button type="button" class="primary-button" disabled="@(Rows.Count == 0 || Loading)" @onclick="PrintAsync">Natisni / PDF</button>
   </section>
+  @if (!Loaded && !Loading && Error is null)
+  {
+    <p class="hint" role="status">Vpiši kategorijo ali šifre in pritisni Enter, cenik se pripravi sam. Za cel cenik podjetja klikni »Pripravi cenik«.</p>
+  }
+  @if (Loaded && Rows.Count >= MaxRows)
+  {
+    <p class="message-state warn-message" role="status">Prikazanih je prvih @MaxRows.ToString("N0") artiklov. Zoži izbiro s kategorijo ali šiframi.</p>
+  }
 </div>
 
 <section class="ui-card data-card price-sheet" aria-label="Cenik">
   <header class="sheet-head">
     <h2>@(Organizations.FirstOrDefault(organization => organization.OrganizationId == OrganizationId)?.Name) — cenik @PriceList</h2>
-    <span>@DateTime.Now.ToString("dd.MM.yyyy") · @Rows.Count.ToString("N0") artiklov · cene v EUR @(PriceList == "B2C" ? "z DDV" : "brez DDV")</span>
+    <span>@DateTime.Now.ToString("dd.MM.yyyy") · @PimFormat.Count(Rows.Count, "artikel", "artikla", "artikli", "artiklov") · cene v EUR @(PriceList == "B2C" ? "z DDV" : "brez DDV")</span>
   </header>
   <PimState Loading="Loading" Error="@Error" Empty="@(Loaded && Rows.Count == 0)" EmptyText="Za to izbiro ni artiklov s ceno." LoadingText="Priprava cenika …">
     @foreach (var group in Rows.GroupBy(row => row.CategoryPath ?? "Brez kategorije"))
@@ -72,6 +82,8 @@
 </section>
 
 @code {
+  const int MaxRows = 2000;
+  static readonly string[] Languages = ["sl", "en", "de", "hr", "it"];
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Cene in ceniki", "cene"), new("Cenik za tisk")];
   IReadOnlyList<OrganizationContext> Organizations = [];
   IReadOnlyList<WebSiteRow> Sites = [];
@@ -87,29 +99,124 @@
   bool Loading;
   bool Loaded;
   string? Error;
+  // #113: izbira, s katero je bil pripravljen prikazani cenik (ista izbira se ne bere znova).
+  string? LoadedState;
+  int loadVersion;
+  bool UrlRead;
+
+  // #113: vsa izbira je v naslovu — povezava odpre isti cenik, »Nazaj« v brskalniku vrne prejšnjo izbiro.
+  [SupplyParameterFromQuery(Name = "podjetje")] public int? QueryOrganization { get; set; }
+  [SupplyParameterFromQuery(Name = "cenik")] public string? QueryPriceList { get; set; }
+  [SupplyParameterFromQuery(Name = "jezik")] public string? QueryLanguage { get; set; }
+  [SupplyParameterFromQuery(Name = "mesto")] public string? QueryWebSite { get; set; }
+  [SupplyParameterFromQuery(Name = "kategorija")] public string? QueryCategory { get; set; }
+  [SupplyParameterFromQuery(Name = "sifre")] public string? QueryItems { get; set; }
+  [SupplyParameterFromQuery(Name = "vsi")] public string? QueryAll { get; set; }
+  [SupplyParameterFromQuery(Name = "slike")] public string? QueryImages { get; set; }
+  [SupplyParameterFromQuery(Name = "pripravi")] public string? QueryPrepare { get; set; }
+
+  /// <summary>Izbira, ki vpliva na vsebino cenika (»s slikami« spremeni samo prikaz).</summary>
+  string DataState => string.Join("|", OrganizationId, PriceList, Language, WebSite, CategoryPath.Trim(), ItemIdsText.Trim(), OnlyPublished);
+  bool HasScope => !string.IsNullOrWhiteSpace(CategoryPath) || !string.IsNullOrWhiteSpace(ItemIdsText);
+  bool WantsLoad => HasScope || QueryPrepare == "1";
 
   protected override async Task OnInitializedAsync()
   {
     try
     {
       Organizations = await Data.GetOrganizationsAsync();
-      OrganizationId = Organizations.FirstOrDefault(organization => organization.OrganizationId == 3)?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
       Sites = await Catalog.GetWebSitesAsync();
     }
     catch (Exception exception) { Error = exception.Message; }
+    ReadUrl();
+    // Predupodabljanje (brez povezave) cenika ne bere — sicer bi se naložil dvakrat.
+    if (!RendererInfo.IsInteractive) return;
+    UrlRead = true;
+    if (WantsLoad) await LoadAsync();
+  }
+
+  /// <summary>»Nazaj«/»Naprej« v brskalniku ali ročno spremenjen naslov: preberi izbiro in cenik pripravi znova.</summary>
+  protected override async Task OnParametersSetAsync()
+  {
+    if (!UrlRead) return;
+    var before = DataState + "|" + ShowImages;
+    ReadUrl();
+    if (DataState + "|" + ShowImages == before) return;
+    if (WantsLoad) { if (LoadedState != DataState) await LoadAsync(); }
+    else { Rows = []; Loaded = false; LoadedState = null; }
+  }
+
+  void ReadUrl()
+  {
+    OrganizationId = QueryOrganization is { } requested && Organizations.Any(organization => organization.OrganizationId == requested)
+      ? requested
+      : Organizations.FirstOrDefault(organization => organization.OrganizationId == 3)?.OrganizationId ?? Organizations.FirstOrDefault()?.OrganizationId ?? 0;
+    PriceList = QueryPriceList == "B2B" ? "B2B" : "B2C";
+    Language = QueryLanguage is { } language && Languages.Contains(language) ? language : "sl";
+    WebSite = QueryWebSite is { } site && Sites.Any(row => row.WebSiteCode == site) ? site : "";
+    CategoryPath = QueryCategory ?? "";
+    ItemIdsText = QueryItems ?? "";
+    OnlyPublished = QueryAll != "1";
+    ShowImages = QueryImages == "1";
+  }
+
+  /// <summary>#113: izbira v naslov (vzorec SyncUrl na /cene) — podjetje je vedno v njem, da deljena povezava ne pomeša podjetij.</summary>
+  void SyncUrl()
+  {
+    var uri = Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+      ["podjetje"] = OrganizationId == 0 ? null : OrganizationId,
+      ["cenik"] = PriceList == "B2C" ? null : PriceList,
+      ["jezik"] = Language == "sl" ? null : Language,
+      ["mesto"] = Blank(WebSite),
+      ["kategorija"] = Blank(CategoryPath),
+      ["sifre"] = Blank(ItemIdsText),
+      ["vsi"] = OnlyPublished ? null : "1",
+      ["slike"] = ShowImages ? "1" : null,
+      ["pripravi"] = Loaded && !HasScope ? "1" : null,
+    });
+    if (!string.Equals(uri, Navigation.Uri, StringComparison.Ordinal)) Navigation.NavigateTo(uri);
+  }
+
+  static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+  /// <summary>
+  /// #113: sprememba izbire se takoj zapiše v naslov. Z obsegom (kategorija ali šifre) ali že pripravljenim
+  /// cenikom se cenik osveži sam; brez obsega (cel cenik podjetja, do 2000 vrstic) počaka na gumb.
+  /// </summary>
+  async Task ChangedAsync()
+  {
+    if ((HasScope || Loaded) && LoadedState != DataState) await LoadAsync();
+    SyncUrl();
+  }
+
+  async Task PrepareAsync()
+  {
+    await LoadAsync();
+    SyncUrl();
   }
 
   async Task LoadAsync()
   {
+    var version = ++loadVersion;
+    var state = DataState;
     Loading = true; Error = null;
     try
     {
       var items = ItemIdsText.Split([',', ';', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-      Rows = await Sheet.GetSheetAsync(OrganizationId, PriceList, Language, WebSite, CategoryPath, items, OnlyPublished, 2000);
+      var rows = await Sheet.GetSheetAsync(OrganizationId, PriceList, Language, WebSite, CategoryPath.Trim(), items, OnlyPublished, MaxRows);
+      // Hitra zaporedna sprememba: velja samo zadnja poizvedba.
+      if (version != loadVersion) return;
+      Rows = rows;
       Loaded = true;
+      LoadedState = state;
     }
-    catch (Exception exception) { Error = exception.Message; Rows = []; }
-    finally { Loading = false; }
+    catch (Exception exception)
+    {
+      if (version != loadVersion) return;
+      Error = exception.Message; Rows = []; LoadedState = null;
+    }
+    finally { if (version == loadVersion) Loading = false; }
   }
 
   async Task PrintAsync()
