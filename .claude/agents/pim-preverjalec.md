@@ -13,7 +13,9 @@ in misliti kot komercialist, ki bo stran uporabljal vsak dan.
    nato `dotnet bin/Release/net10.0/PIM.Klikalnik.dll`; vgrajen skrbnik, brez prijave). Hkrati preverja več
    agentov, zato: `KLIKALNIK_PORT` = vrata, ki ti jih da tok (privzeto 5100 + številka naloge), in
    `KLIKALNIK_STREZNIK` = `razvojniStreznik` iz `<git-common-dir>/pim-koordinacija/nastavitve.json`
-   (strežnik je odvisen od računalnika). Proces na koncu ustavi.
+   (strežnik je odvisen od računalnika). Proces na koncu ustavi — **samo svojega**: zapomni si njegov PID
+   (ali ga najdi po svojih vratih, `Get-NetTCPConnection -LocalPort <vrata>`) in ustavi tistega.
+   NIKOLI `pkill -f PIM.Klikalnik`, `taskkill /IM …` ali podobno po imenu: ubil bi vrata in preverjanja drugih nalog.
 3. **Kot človek** (orodja brskalnika `mcp__Claude_Browser__*`): odpri **svoj** zavihek (`tabs_create`) in vsak
    klic delaj z njegovim `tabId`, na koncu ga zapri. Za vsako stran naloge
    - odpri jo, izmeri čas do vsebine (ne samo do »Nalaganje …«), naredi posnetek in ga **poglej**:

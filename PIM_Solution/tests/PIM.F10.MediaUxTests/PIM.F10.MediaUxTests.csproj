@@ -8,5 +8,8 @@
   <ItemGroup>
     <Compile Include="..\..\src\PIM.Intranet\Services\MediaKindPolicy.cs" Link="MediaKindPolicy.cs" />
     <Compile Include="..\..\src\PIM.Intranet\Services\MediaUrlPolicy.cs" Link="MediaUrlPolicy.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\MediaCheckQuery.cs" Link="MediaCheckQuery.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\ProductFieldLabels.cs" Link="ProductFieldLabels.cs" />
+    <Compile Include="..\..\src\PIM.Intranet\Services\QualityFieldPolicy.cs" Link="QualityFieldPolicy.cs" />
   </ItemGroup>
 </Project>
