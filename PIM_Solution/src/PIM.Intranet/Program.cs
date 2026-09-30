@@ -1,4 +1,4 @@
-using PIM.Automation;
+﻿using PIM.Automation;
 using PIM.Intranet.Components;
 using PIM.Intranet.Services;
 using PIM.Operations;
@@ -176,6 +176,19 @@ if (!app.Environment.IsDevelopment())
 {
   app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
+
+// #65: neznan naslov je vracal 404 z 0 bajti (bela stran brez menija). Brskalnik zdaj dobi stran
+// "Strani ni (vec)" v postavitvi intraneta; koda ostane 404. Samo za GET zahteve brskalnika, ki
+// pricakujejo HTML: izvozi, prenosi, prijava in Blazorjevi viri ohranijo svoj kratek 404 brez strani
+// (pim-export.js in prenosi v ozadju ne smejo dobiti HTML-ja intraneta namesto datoteke).
+app.UseStatusCodePagesWithReExecute("/ni-najdeno", createScopeForStatusCodePages: true);
+app.Use(async (context, next) =>
+{
+  if (!PimNotFoundScope.WantsPage(context.Request.Method, context.Request.Path, context.Request.Headers.Accept.ToString())
+      && context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } statusPages)
+    statusPages.Enabled = false;
+  await next();
+});
 
 app.UseStaticFiles();
 app.UseAntiforgery();

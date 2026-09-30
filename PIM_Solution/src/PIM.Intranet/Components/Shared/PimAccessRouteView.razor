@@ -41,7 +41,9 @@ else
     AccessError = null;
     var state = await Authentication.GetAuthenticationStateAsync();
     var path = Navigation.ToBaseRelativePath(Navigation.Uri);
-    var permissionKey = PimAccessCatalog.Resolve(path);
+    // #65: stran "Strani ni" je odprta vsem prijavljenim ne glede na naslov v brskalniku. Pri ponovni
+    // izvedbi 404 ali notranji navigaciji lahko naslov se kaze neznano pot, ki bi dobila "__unknown__".
+    var permissionKey = RouteData.PageType == typeof(Pages.NotFound) ? null : PimAccessCatalog.Resolve(path);
 
     // Prijava, stran napake in korenska preusmeritev so javne. Vse druge poti morajo biti
     // registrirane; neznana nova stran je privzeto zaprta, dokler je ne dodamo v katalog.
