@@ -90,6 +90,9 @@ const POMOCNIK = String.raw`
     return false; };
   const opis = el => { const t = fold(el.innerText || el.value || el.getAttribute('aria-label') || el.title || '');
     return t.slice(0, 80) || fold(el.getAttribute('aria-label') || el.name || el.id || el.className || el.tagName); };
+  // Vse oznake gumba skupaj (besedilo, aria-label, title): gumb je nevaren tudi, če nevarna beseda
+  // stoji samo v aria-label ali title (naloga #57).
+  const oznake = el => fold([el.innerText, el.value, el.getAttribute('aria-label'), el.title].filter(Boolean).join(' '));
   window.__k = {
     fold, vidno,
     odtis() { const m = glavno(); const t = m.innerText;
@@ -115,7 +118,7 @@ const POMOCNIK = String.raw`
           vForm: !!el.closest('form'), vUrejanju: vUrejanju(el), vGlavi: !!el.closest('thead'), vTabeli: !!el.closest('tbody'), readonly: el.readOnly,
           moznosti: el.tagName === 'SELECT' ? [...el.options].map(o => o.value) : null, vrednost: el.value }));
       const gumbi = [...m.querySelectorAll('button,[role=button],a.pim-btn,input[type=submit]')].filter(el => vidno(el) && !vDialogu(el))
-        .map(el => ({ id: oznaci(el), opis: opis(el), onemogocen: el.disabled || el.getAttribute('aria-disabled') === 'true',
+        .map(el => ({ id: oznaci(el), opis: opis(el), oznake: oznake(el), onemogocen: el.disabled || el.getAttribute('aria-disabled') === 'true',
           vGlavi: !!el.closest('thead'), vTabeli: !!el.closest('tbody'), tip: el.getAttribute('type') || '', href: el.getAttribute('href'),
           aktiven: el.getAttribute('aria-selected') === 'true' || el.getAttribute('aria-pressed') === 'true' || el.getAttribute('aria-current') != null || /(^|\s)(active|is-active|selected|aktiven)(\s|$)/.test(el.className) }));
       const povezave = [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href'))
@@ -173,6 +176,8 @@ const VARNO_IZJEME = /(pocisti|filtr|isci|poisci|prikazi|naprej|nazaj|prejsnj|na
 
 function varenGumb(g) {
   if (g.onemogocen || g.vTabeli) return false;
+  // Nevarna beseda v kateri koli oznaki (tudi samo v aria-label/title) gumb izloči (#57).
+  if (g.oznake && NEVARNO.test(g.oznake) && !VARNO_IZJEME.test(g.opis)) return false;
   if (g.tip === 'submit') return VARNO_IZJEME.test(g.opis);
   if (VARNO_IZJEME.test(g.opis)) return !/(shrani|izbris|poslj)/.test(g.opis);
   return !NEVARNO.test(g.opis);
