@@ -20,15 +20,14 @@
     <section class="ui-card data-card section-gap" aria-labelledby="run-summary-title">
       <div class="subsection-head">
         <h2 id="run-summary-title">@run.Title</h2>
-        @if (run.IsUndone) { <PimChip Text="@($"povrnjen z uvozom #{run.UndoneByImportRunId}")" Tone="warn" /> }
-        else if (run.IsUndo) { <PimChip Text="@($"povratek uvoza #{run.UndoOfImportRunId}")" /> }
-        else { <PimChip Text="uveljavljen" Tone="good" /> }
+        <PimChip Text="@Status.Text" Tone="@Status.Tone" />
       </div>
       <div class="kpi-grid">
         <PimStat Label="Vrstic" Value="@run.RowCount.ToString("N0")" Note="@ImportKinds.Label(run.Kind)" />
-        <PimStat Label="Spremenjenih celic" Value="@run.ChangeCount.ToString("N0")" Note="@($"v PIM: {PimCells:N0}, v SAOP: {SaopCells:N0}")" />
-        <PimStat Label="V vrsto za SAOP" Value="@(run.SaopCount > 0 ? run.SaopCount.ToString("N0") : "—")"
-                 Note="@(Queue is { } queue ? $"čaka {queue.Waiting:N0} · poslanih {queue.Sent:N0} · preklicanih {queue.Cancelled:N0}" : "brez SAOP")" />
+        <PimStat Label="Spremenjenih celic" Value="@run.ChangeCount.ToString("N0")"
+                 Note="@(ImportKinds.QueueOnly(run.Kind) ? $"{ImportKinds.QueueUnit(run.Kind, RowCountChanged)}, vse samo v vrsto za SAOP" : $"samo PIM: {PimCells:N0} · PIM + vrsta za SAOP: {SaopCells:N0}")" />
+        <PimStat Label="V vrsto za SAOP" Value="@(Queue is { Total: > 0 } queued ? ImportKinds.QueueUnit(run.Kind, queued.Total) : run.SaopCount > 0 ? run.SaopCount.ToString("N0") : "—")"
+                 Note="@QueueNote" />
       </div>
       <p class="muted">
         @run.AppliedUtc.ToPimLocal().ToString("g") · @run.Actor@(run.Organizations is { Length: > 0 } organizations ? $" · {organizations}" : "")
@@ -45,7 +44,14 @@
       }
     </section>
 
-    @if (!run.IsUndone)
+    @if (!run.IsUndone && !Status.UndoOffered)
+    {
+      <section class="ui-card panel section-gap run-undo" aria-labelledby="run-undo-title">
+        <h2 id="run-undo-title">Povratek ni potreben</h2>
+        <p role="status">@Status.Explanation</p>
+      </section>
+    }
+    else if (!run.IsUndone)
     {
       <section class="ui-card panel section-gap run-undo" aria-labelledby="run-undo-title">
         <h2 id="run-undo-title">Povrni ta uvoz</h2>
@@ -54,10 +60,11 @@
           spremenil kdo drug, ostane (pokaže se kot spor). Najprej se odpre predogled na strani uvoza; nič se ne zapiše, dokler ga ne potrdiš.
           @if (run.Kind != ImportKinds.Customers) { <text>Kar gre v SAOP, gre v vrsto za SAOP in čaka odobritev — nič ne odide samo.</text> }
         </p>
+        @if (Status.Explanation is { Length: > 0 } explanation) { <p class="message-state warn-message">@explanation</p> }
         @if (Queue is { Waiting: > 0 } waiting)
         {
           <p class="message-state warn-message">
-            @waiting.Waiting.ToString("N0") sporočil tega uvoza še čaka v vrsti za SAOP (niso poslana). Zanje je pravi povratek
+            V vrsti za SAOP še čaka (ni poslano): @ImportKinds.QueueUnit(run.Kind, waiting.Waiting). Zanje je pravi povratek
             <strong>preklic</strong> — v SAOP ne gre nič in ničesar ni treba vračati.
           </p>
           <AuthorizeView Policy="@PimPolicies.SaopWrite">
@@ -65,14 +72,14 @@
               @if (CancelArmed)
               {
                 <span class="run-arm" role="group" aria-label="Preklic čakajočih">
-                  Res prekličem @waiting.Waiting.ToString("N0") čakajočih sporočil?
+                  Res prekličem, kar še čaka (@ImportKinds.QueueUnit(run.Kind, waiting.Waiting))?
                   <button type="button" class="primary-button" disabled="@Busy" @onclick="CancelWaitingAsync">Da, prekliči</button>
                   <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CancelArmed = false">Ne</button>
                 </span>
               }
               else
               {
-                <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CancelArmed = true">Prekliči, kar še čaka v SAOP (@waiting.Waiting.ToString("N0"))</button>
+                <button type="button" class="secondary-button" disabled="@Busy" @onclick="() => CancelArmed = true">Prekliči, kar še čaka v SAOP (@ImportKinds.QueueUnit(run.Kind, waiting.Waiting))</button>
               }
             </Authorized>
           </AuthorizeView>
@@ -98,7 +105,7 @@
               <td>@(change.FieldLabel ?? change.FieldKey)</td>
               <td>@ImportHistoryService.Display(change, change.OldValue)</td>
               <td><strong>@ImportHistoryService.Display(change, change.NewValue)</strong></td>
-              <td>@(change.Target == "SAOP" ? "PIM + vrsta za SAOP" : "PIM")</td>
+              <td>@ImportKinds.Where(run.Kind, change.Target)</td>
             </tr>
           }
         </Rows>
@@ -131,6 +138,12 @@
 
   int PimCells => Detail?.Changes.Count(change => change.Target != "SAOP") ?? 0;
   int SaopCells => Detail?.Changes.Count(change => change.Target == "SAOP") ?? 0;
+  int RowCountChanged => Detail?.Changes.Select(change => (change.OrganizationId, change.RowKey)).Distinct().Count() ?? 0;
+
+  ImportRunStatus Status => Detail is null ? new("", null, false) : ImportKinds.StatusOf(Detail.Run, Queue);
+
+  string QueueNote => Detail is null || Queue is not { Total: > 0 } queue ? "brez SAOP"
+    : $"čaka {queue.Waiting:N0} · v SAOP {queue.Sent:N0} · preklicanih {queue.Cancelled:N0}" + (queue.Failed > 0 ? $" · neuspelih {queue.Failed:N0}" : "");
 
   IReadOnlyList<ImportChange> Visible => Detail is null ? []
     : string.IsNullOrWhiteSpace(Search) ? Detail.Changes
@@ -165,8 +178,10 @@
     try
     {
       var actor = (await Authentication.GetAuthenticationStateAsync()).User.Identity?.Name ?? "neznan";
+      var waiting = Queue?.Waiting ?? 0;
       var cancelled = await History.CancelWaitingAsync(ImportHistoryService.BatchIds(Detail.Run.OutboundBatchIds), actor);
-      Message = $"Preklicanih sporočil: {cancelled:N0}. V SAOP ne gre nič od tega.";
+      Message = cancelled == 0 ? "Ničesar ni bilo več za preklicati — vrsta je medtem že obdelala ta uvoz."
+        : $"Preklicano: {ImportKinds.QueueUnit(Detail.Run.Kind, waiting)}. V SAOP ne gre nič od tega.";
       await LoadAsync();
     }
     catch (UnauthorizedAccessException) { Error = "Tvoja vloga preklica v vrsti za SAOP ne dovoljuje."; }
