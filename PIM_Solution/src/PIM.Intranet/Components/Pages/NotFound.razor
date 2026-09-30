@@ -1,0 +1,46 @@
+@page "/ni-najdeno"
+@using Microsoft.AspNetCore.Diagnostics
+
+@* #65: neznana ali odstranjena pot je vracala 404 z 0 bajti in brskalnik je pokazal belo stran
+   brez menija. Program.cs sem pripelje vsako tako zahtevo brskalnika (UseStatusCodePagesWithReExecute),
+   Routes.razor pa jo uporabi kot NotFoundPage. Streznik ostane pri kodi 404, da klikalnik in testi
+   odstranjene strani se vedno prepoznajo. Brez preusmeritev na posamezne strani (odlocitev lastnika). *@
+
+<PageTitle>Strani ni</PageTitle>
+
+<PimPage Title="Strani ni (več)" Subtitle="Naslov, ki si ga odprl, v intranetu ne obstaja. Morda je bila stran preimenovana ali odstranjena." />
+
+<section class="ui-card not-found" role="status">
+  @if (!string.IsNullOrEmpty(RequestedPath))
+  {
+    <p class="not-found-path">
+      <span>Zahtevan naslov</span>
+      <code class="code-value">@RequestedPath</code>
+    </p>
+  }
+  <p>
+    Če si prišel prek starega zaznamka, ga po ogledu nove strani posodobi. Podatki se niso spremenili.
+    Stran poišči v meniju na levi ali začni na nadzorni plošči.
+  </p>
+
+  <div class="not-found-actions">
+    <a class="primary-button" href="nadzorna-plosca">Nadzorna plošča</a>
+    <a class="secondary-button" href="izdelki">Iskanje izdelkov</a>
+  </div>
+</section>
+
+@code {
+  [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+  string? RequestedPath;
+
+  protected override void OnInitialized()
+  {
+    var reExecute = HttpContext?.Features.Get<IStatusCodeReExecuteFeature>();
+    if (reExecute is null) return;
+    RequestedPath = reExecute.OriginalPath + reExecute.OriginalQueryString;
+    // Ponovna izvedba ohrani kodo 404; ce bi jo kdo vmes spremenil v 200, bi odstranjena stran
+    // za klikalnik izgledala kot ziva.
+    if (!HttpContext!.Response.HasStarted) HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+  }
+}

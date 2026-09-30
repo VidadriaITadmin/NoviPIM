@@ -150,7 +150,9 @@ public static class PimAccessCatalog
     var path = split[0].TrimEnd('/').ToLowerInvariant();
     var query = split.Length == 2 ? split[1].ToLowerInvariant() : "";
 
-    if (path is "" or "prijava" or "brez-dostopa" or "error") return null;
+    // "ni-najdeno" (#65) je skupna stran za neznane naslove: vidi jo vsak prijavljen uporabnik,
+    // sicer bi namesto "Strani ni" dobil "Ta stran ni vkljucena v tvojo vlogo".
+    if (path is "" or "prijava" or "brez-dostopa" or "error" or "ni-najdeno") return null;
     if (path == "nadzorna-plosca") return Dashboard;
     if (path == "varovalke" || path.StartsWith("varovalke/", StringComparison.Ordinal)) return Safeguards;
     if (path == "uvozi" || path.StartsWith("uvozi/", StringComparison.Ordinal)) return ImportHistory;
@@ -240,4 +242,39 @@ public static class PimAccessCatalog
 
   static PimPermissionDefinition View(string key, string name, string description, string route, string parentKey, bool isTab = false) =>
     new(key, name, description, route, "", parentKey, isTab);
+}
+
+/// <summary>
+/// #65: katere 404 zahteve dobijo stran "Strani ni (vec)". Samo GET brskalnika, ki pricakuje HTML;
+/// izvozi, prenosi, prijava, Blazorjevi viri in staticne datoteke ohranijo kratek 404 brez strani,
+/// da okno izvozov v ozadju in prenosi ne dobijo HTML-ja intraneta namesto datoteke.
+/// </summary>
+public static class PimNotFoundScope
+{
+  public const string Path = "ni-najdeno";
+
+  /// <summary>
+  /// Kljuc v HttpContext.Items z dovoljenji menija, ki jih Program.cs nalozi PRED izrisom strani 404.
+  /// Blazor pri ponovni izvedbi (UseStatusCodePagesWithReExecute) odda HTML, ne da bi pocakal
+  /// asinhrone komponente postavitve; NavMenu je zato za ne-skrbnika (poizvedba v sec.RolePermission)
+  /// ostal prazen. Z vnaprej nalozenimi dovoljenji se meni izrise sinhrono, enako kot na strani s kodo 200.
+  /// </summary>
+  public const string NavPermissionsItem = "pim.nav.permissions";
+
+  static readonly string[] MachinePrefixes = ["/izvoz", "/auth", "/_blazor", "/_framework", "/_content", "/api"];
+
+  public static bool WantsPage(string? method, string? path, string? accept)
+  {
+    if (!string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase)) return false;
+    var value = path ?? "";
+    foreach (var prefix in MachinePrefixes)
+      if (value.Equals(prefix, StringComparison.OrdinalIgnoreCase)
+          || value.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)
+          || value.StartsWith(prefix + ".", StringComparison.OrdinalIgnoreCase))
+        return false;
+    // Datoteka s koncnico (slika, .js, .css, .xlsx) ni stran.
+    var lastSegment = value[(value.LastIndexOf('/') + 1)..];
+    if (lastSegment.Contains('.')) return false;
+    return (accept ?? "").Contains("text/html", StringComparison.OrdinalIgnoreCase);
+  }
 }
