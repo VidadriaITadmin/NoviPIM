@@ -137,12 +137,8 @@ Assert(rules.Contains(".Where(Matches)", StringComparison.Ordinal),
 /* ─── Naloga #52: /pravila/validacija se nalaga enkrat in šteje v enem prehodu ───
    Predupodabljanje je bralo bazo, nato še interaktivni del (utrip »Nalaganje«); števci profilov
    so imeli dve podpoizvedbi na profil nad val.ProductValidationState. */
-Assert(rules.Contains("PersistentComponentState", StringComparison.Ordinal)
-    && rules.Contains("TryTakeFromJson", StringComparison.Ordinal)
-    && rules.Contains("PersistAsJson", StringComparison.Ordinal),
-  "Stran pravil mora predupodobljene podatke prenesti v interaktivni del, ne jih brati dvakrat.");
-Assert(Regex.IsMatch(rules, @"StateKey\(int organizationId\)\s*=>\s*\$""[^""]*\{organizationId\}"),
-  "Ključ shranjenega stanja mora vsebovati podjetje (izbira s piškotkom).");
+Assert(rules.Contains("@rendermode @(new InteractiveServerRenderMode(prerender: false))", StringComparison.Ordinal),
+  "Stran pravil se mora naložiti enkrat (brez predupodabljanja; prenos stanja preseže 32 KB SignalR).");
 var profilesMethod = governanceService[governanceService.IndexOf("GetValidationProfilesAsync(int organizationId", StringComparison.Ordinal)..];
 profilesMethod = profilesMethod[..profilesMethod.IndexOf("reader =>", StringComparison.Ordinal)];
 Assert(!Regex.IsMatch(profilesMethod, @"\(SELECT\s+COUNT_BIG", RegexOptions.IgnoreCase),
