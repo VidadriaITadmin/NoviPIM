@@ -295,9 +295,17 @@ Assert(Regex.IsMatch(appCss, @"\.table-scroll \{[^}]*overflow: auto", RegexOptio
 Assert(appCss.Contains(".table-scroll:focus-visible", StringComparison.Ordinal),
   "Drsno obmocje je dosegljivo s tipkovnico in mora imeti viden fokus.");
 
-var webPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "Web.razor"));
-Assert(Regex.IsMatch(webPage, @"<select class=""filter-select"" value=""@SelectedSite"""),
-  "Izbirnik spletnega mesta na /splet ne sme biti surov element brez razreda.");
+// #25: izbirnik spletnega mesta je od prenove na /splet/izvoz (predogled po profilu), /splet pa kaže izdelano datoteko.
+var webExportPage = File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", "WebExportBuild.razor"));
+Assert(Regex.IsMatch(webExportPage, @"<select class=""filter-select"" @bind=""SelectedSite"""),
+  "Izbirnik spletnega mesta na /splet/izvoz ne sme biti surov element brez razreda.");
+Assert(webExportPage.Contains("SupplyParameterFromQuery(Name = \"profil\")", StringComparison.Ordinal)
+    && webExportPage.Contains("aria-label=\"Samo objavljeni izdelki\"", StringComparison.Ordinal)
+    && webExportPage.Contains("PimFormat.Count(", StringComparison.Ordinal),
+  "/splet/izvoz: filtri v naslovu, aria oznaka na »Samo objavljeni« in sklanjano število vrstic (#19).");
+foreach (var page in new[] { "Web.razor", "WebExportBuild.razor", "WebWithdrawals.razor", "OrganizationMismatches.razor", "CatalogControl.razor" })
+  Assert(File.ReadAllText(Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages", page)).Contains("Tabs=\"WebTabs.Tabs\"", StringComparison.Ordinal),
+    "Strani izhoda na splet imajo iste zavihke (WebTabs): " + page);
 
 
 /* ─── Obseg podjetja je viden in resnicen (U1, P2-10) ─────────────────────────

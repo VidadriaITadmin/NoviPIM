@@ -30,7 +30,7 @@ Uporabnik vidi, kateri artikli so šli s spleta in zakaj, katere kljukice svetil
 
 ## 3. Kdaj se sproži
 
-- **Ročno:** uporabnik odpre `/splet/umaknjeni` (tudi iz zvonca, opozorilo »umaknjeni s spleta«, ali s povezave na `/splet`).
+- **Ročno:** uporabnik odpre `/splet/umaknjeni` (tudi iz zvonca, opozorilo »umaknjeni s spleta«, ali z zavihka **Umaknjeni s spleta** na straneh izhoda na splet).
 - **Po urniku:** samodejni umik pred vsakim izvozom `WEB_CATALOG_EXPORT` in ob urni validaciji — samo pri podjetju z vklopljenim samodejnim umikom (privzeto izklopljen).
 - **Ob dogodku:** artikel izgubi pogoj za splet (neaktiven, brez kategorije spletišča, blokirajoča napaka, npr. uvoz pobriše sliko).
 
