@@ -427,6 +427,24 @@ function Invoke-VrataNaMestu($n, [string]$log, [int]$mesto) {
   return @{ ok = $ok; povzetek = $povzetek; log = $log }
 }
 
+function Get-KlikalnikPovzetek($pregledane) {
+  # Povzetek poročila klikalnika za vrata. Počasne strani (najdbe vrste 'hitrost', nad 15 s) se štejejo
+  # posebej in izpišejo z imenom strani in časom; vrat ne zaprejo, ker je počasnost lahko od druge naloge
+  # (PRIVZETO ZA NOČ #64, odločitev lastnika v ločeni nalogi). Vrata zapre samo visoka najdba druge vrste.
+  $pregledane = @($pregledane | ForEach-Object { $_ } | Where-Object { $_ })
+  $najdbe = @($pregledane | ForEach-Object { @($_.najdbe) } | Where-Object { $_ })
+  $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
+  $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' -and $_.vrsta -ne 'hitrost' })
+  $pocasne = @($pregledane | Where-Object { @(@($_.najdbe) | Where-Object { $_ -and $_.vrsta -eq 'hitrost' }).Count -gt 0 } | ForEach-Object {
+    $ms = 0; if ($_.cas -and $_.cas.nalaganjeMs) { $ms = [double]$_.cas.nalaganjeMs }
+    $zelo = @(@($_.najdbe) | Where-Object { $_ -and $_.vrsta -eq 'hitrost' -and $_.resnost -eq 'VISOKA' }).Count -gt 0
+    "$($_.pot) $([Math]::Round($ms / 1000)) s$(if ($zelo) { ', zelo počasna' })"
+  })
+  $opis = "klikalnik: $($pregledane.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"
+  if ($pocasne.Count -gt 0) { $opis += ", počasnih $($pocasne.Count) ($($pocasne -join '; '))" }
+  return @{ ok = ($visoke.Count -eq 0); opis = $opis; visokih = $visoke.Count; srednjih = $srednje.Count; pocasnih = $pocasne.Count }
+}
+
 function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
   # Vsako mesto za vrata ima svoja vrata testnega intraneta, zato klikalnikov teče več hkrati.
   $mapaK = Join-Path $Koren 'PIM_Solution\tools\PIM.Klikalnik'
@@ -449,16 +467,15 @@ function Invoke-Klikalnik([string[]]$strani, [string]$log, [int]$vrata) {
     $k = Invoke-Korak 'klikalnik' 'node' @('klikalnik.mjs', "http://localhost:$vrata/", ($strani -join ',')) 30 $log $mapaK
     $json = Join-Path $izhodK 'klikalnik.json'
     if (Test-Path $json) {
-      $pregledane = @([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json)
+      # PS5: ConvertFrom-Json da seznam kot EN objekt; ForEach ga razgrne (sicer je Count vedno 1, tudi pri []).
+      $pregledane = @([IO.File]::ReadAllText($json, $Utf8) | ConvertFrom-Json | ForEach-Object { $_ })
       # Brez tega so vrata rekla OK, čeprav klikalnik ni odprl niti ene strani (ime strani ne ustreza @page).
       if ($pregledane.Count -eq 0) {
         return @{ ok = $false; opis = "klikalnik: pregledal 0 strani — nobena od '$($strani -join ', ')' ne ustreza @page v intranetu"; izhod = "$log.klikalnik.txt" }
       }
-      $najdbe = @($pregledane | ForEach-Object { $_.najdbe })
-      $visoke = @($najdbe | Where-Object { $_.resnost -eq 'VISOKA' -and $_.vrsta -ne 'hitrost' })
-      $srednje = @($najdbe | Where-Object { $_.resnost -eq 'SREDNJA' })
+      $pov = Get-KlikalnikPovzetek $pregledane
       Copy-Item (Join-Path $izhodK 'klikalnik.md') "$log.klikalnik.md" -Force
-      return @{ ok = ($visoke.Count -eq 0); opis = "klikalnik: $($pregledane.Count) strani, visokih $($visoke.Count), srednjih $($srednje.Count)"; izhod = "$log.klikalnik.md" }
+      return @{ ok = $pov.ok; opis = $pov.opis; izhod = "$log.klikalnik.md" }
     }
     return @{ ok = $false; opis = "klikalnik: ni poročila ($($k.opis))" }
   } finally {
