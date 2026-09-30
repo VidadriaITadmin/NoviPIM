@@ -4,6 +4,7 @@
 @inject GovernanceReadService Governance
 @inject RulesWriteService Rules
 @inject AuthenticationStateProvider Authentication
+@inject NavigationManager Navigation
 
 <PageTitle>Slovar vrednosti</PageTitle>
 <PimPage Title="Slovar vrednosti"
@@ -28,8 +29,8 @@
   </ol>
 </section>
 
-@if (Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
-@if (SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
+@if (MessageArea == "top" && Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+@if (MessageArea == "top" && SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
 
 @if (!Loading && Error is null)
 {
@@ -46,10 +47,10 @@
   <div class="compact-details-body">
     <div class="form-grid dictionary-create-grid">
       <label class="form-field">Domena
-        <input class="form-input" list="dictionary-domains" placeholder="* ali koda lastnosti" @bind="NewDomain" />
+        <input class="form-input" list="dictionary-domains" placeholder="* ali koda lastnosti" @bind="NewDomain" @bind:event="oninput" />
       </label>
       <label class="form-field">Vrednost iz vira
-        <input class="form-input" placeholder="npr. Black" @bind="NewSourceValue" />
+        <input class="form-input" placeholder="npr. Black" @bind="NewSourceValue" @bind:event="oninput" />
       </label>
       <label class="form-field">Jezik
         <select class="filter-select" @bind="NewLanguage">
@@ -60,13 +61,15 @@
         </select>
       </label>
       <label class="form-field">Ciljna vrednost
-        <input class="form-input" placeholder="npr. črna" @bind="NewTargetValue" />
+        <input class="form-input" placeholder="npr. črna" @bind="NewTargetValue" @bind:event="oninput" />
       </label>
       <label class="form-field dictionary-note">Opomba (neobvezno)
-        <input class="form-input" placeholder="Zakaj ali od kod je preslikava" @bind="NewNote" />
+        <input class="form-input" placeholder="Zakaj ali od kod je preslikava" @bind="NewNote" @bind:event="oninput" />
       </label>
       <div class="form-action">
-        <button type="button" class="primary-button" disabled="@(Busy || !CanSaveNew)" @onclick="AddAsync">Dodaj v slovar</button>
+        @* 60: gumb ni onemogočen glede na vsebino polj (strežnik lahko zamuja in klik bi se izgubil);
+           preverjanje je ob kliku v AddAsync. *@
+        <button type="button" class="primary-button" disabled="@Busy" @onclick="AddAsync">Dodaj v slovar</button>
       </div>
     </div>
     <datalist id="dictionary-domains">
@@ -102,6 +105,9 @@
 </section>
 
 <section class="ui-card data-card" aria-label="Slovar vrednosti">
+  @* 60: sporočilo po urejanju v tabeli je ob tabeli, kjer uporabnik je, ne na vrhu strani. *@
+  @if (MessageArea == "table" && Message is not null) { <p class="message-state success-message" role="status">@Message</p> }
+  @if (MessageArea == "table" && SaveError is not null) { <p class="message-state error-message" role="alert">@SaveError</p> }
   <PimState Loading="Loading" Error="@Error" Empty="@(Rows.Count == 0)" EmptyText="Za izbrane filtre ni vrednosti." LoadingText="Nalaganje slovarja …">
     <PimTable Caption="Preslikave izvornih vrednosti — klikni Uredi za spremembo" Columns="Columns">
       <Rows>
@@ -110,29 +116,29 @@
           var editing = EditingId == row.ValueLookupId;
           <tr class="@(editing ? "is-editing" : null)">
             <td>
-              @if (editing) { <input class="table-input" aria-label="Domena" list="dictionary-domains" @bind="EditDomain" /> }
+              @if (editing) { <input class="table-input" aria-label="Domena" list="dictionary-domains" @bind="EditDomain" @bind:event="oninput" /> }
               else { <span class="code-value">@row.Domain</span> }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Izvorna vrednost" @bind="EditSourceValue" /> }
+              @if (editing) { <input class="table-input" aria-label="Izvorna vrednost" @bind="EditSourceValue" @bind:event="oninput" /> }
               else { @row.SourceValue }
             </td>
             <td>
-              @if (editing) { <input class="table-input dictionary-language" aria-label="Jezik" maxlength="10" @bind="EditLanguage" /> }
+              @if (editing) { <input class="table-input dictionary-language" aria-label="Jezik" maxlength="10" @bind="EditLanguage" @bind:event="oninput" /> }
               else { @(row.Language ?? "—") }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Ciljna vrednost" @bind="EditTargetValue" /> }
+              @if (editing) { <input class="table-input" aria-label="Ciljna vrednost" @bind="EditTargetValue" @bind:event="oninput" /> }
               else { <strong>@row.TargetValue</strong> }
             </td>
             <td>
-              @if (editing) { <input class="table-input" aria-label="Opomba" @bind="EditNote" /> }
+              @if (editing) { <input class="table-input" aria-label="Opomba" @bind="EditNote" @bind:event="oninput" /> }
               else { <span class="muted">@(row.Note ?? "—")</span> }
             </td>
             <td>
               @if (editing)
               {
-                <label class="check-field"><input type="checkbox" @bind="EditActive" />Aktivna</label>
+                <label class="check-field"><input type="checkbox" aria-label="Vrstica je aktivna" @bind="EditActive" />Aktivna</label>
               }
               else { <PimChip Text="@(row.IsActive ? "Aktivna" : "Neaktivna")" Tone="@(row.IsActive ? "good" : null)" /> }
             </td>
@@ -140,7 +146,7 @@
               @if (editing)
               {
                 <div class="table-actions">
-                  <button type="button" class="small-action good-action" disabled="@(Busy || !CanSaveEdit)" @onclick="() => SaveEditAsync(row)">Shrani</button>
+                  <button type="button" class="small-action good-action" disabled="@Busy" @onclick="() => SaveEditAsync(row)">Shrani</button>
                   <button type="button" class="small-action" disabled="@Busy" @onclick="CancelEdit">Prekliči</button>
                 </div>
               }
@@ -174,6 +180,8 @@
   string? Error;
   string? Message;
   string? SaveError;
+  /* Kje se izpiše sporočilo: "top" (obrazec za dodajanje) ali "table" (urejanje vrstice). */
+  string MessageArea = "top";
 
   long? EditingId;
   string EditDomain = "", EditSourceValue = "", EditLanguage = "", EditTargetValue = "", EditNote = "";
@@ -184,6 +192,10 @@
   [SupplyParameterFromQuery(Name = "domena")] public string? RequestedDomain { get; set; }
   [SupplyParameterFromQuery(Name = "vrednost")] public string? RequestedSourceValue { get; set; }
   [SupplyParameterFromQuery(Name = "jezik")] public string? RequestedLanguage { get; set; }
+  /* 60: filtri seznama so v URL-ju (osvežitev in deljena povezava pokažeta isti nabor). */
+  [SupplyParameterFromQuery(Name = "isci")] public string? RequestedSearch { get; set; }
+  [SupplyParameterFromQuery(Name = "stanje")] public string? RequestedState { get; set; }
+  [SupplyParameterFromQuery(Name = "od")] public int? RequestedSkip { get; set; }
 
   static readonly IReadOnlyList<PimCrumb> Crumbs = [new("Pravila", "pravila"), new("Slovar vrednosti")];
   static readonly IReadOnlyList<PimColumn> Columns =
@@ -192,8 +204,12 @@
   protected override async Task OnInitializedAsync()
   {
     if (!string.IsNullOrWhiteSpace(RequestedDomain)) NewDomain = Domain = RequestedDomain.Trim();
+    PrefillNew = !string.IsNullOrWhiteSpace(RequestedSourceValue);
     if (!string.IsNullOrWhiteSpace(RequestedSourceValue)) NewSourceValue = Search = RequestedSourceValue.Trim();
     if (!string.IsNullOrWhiteSpace(RequestedLanguage)) NewLanguage = RequestedLanguage.Trim().ToUpperInvariant();
+    if (!string.IsNullOrWhiteSpace(RequestedSearch)) Search = RequestedSearch.Trim();
+    if (RequestedState is "ACTIVE" or "INACTIVE") State = RequestedState;
+    if (RequestedSkip is > 0) Skip = RequestedSkip.Value;
     await ReloadAllAsync();
   }
 
@@ -229,7 +245,10 @@
 
   async Task AddAsync()
   {
-    await SaveAsync(null, NewDomain, NewSourceValue, NewLanguage, NewTargetValue, NewNote, true, "Vrednost je dodana v slovar.");
+    MessageArea = "top";
+    if (!CanSaveNew) { Message = null; SaveError = MissingFieldsText(NewSourceValue, NewLanguage, NewTargetValue); return; }
+    await SaveAsync(null, NewDomain, NewSourceValue, NewLanguage, NewTargetValue, NewNote, true,
+      "Vrednost je dodana v slovar. " + NextStepText(NewLanguage, true));
     if (SaveError is null)
     {
       NewSourceValue = NewTargetValue = NewNote = "";
@@ -237,8 +256,23 @@
     }
   }
 
-  Task SaveEditAsync(ValueLookupRow row) => SaveAsync(row.ValueLookupId, EditDomain, EditSourceValue,
-    EditLanguage, EditTargetValue, EditNote, EditActive, "Vrstica slovarja je shranjena.");
+  Task SaveEditAsync(ValueLookupRow row)
+  {
+    MessageArea = "table";
+    if (!CanSaveEdit) { Message = null; SaveError = MissingFieldsText(EditSourceValue, EditLanguage, EditTargetValue); return Task.CompletedTask; }
+    return SaveAsync(row.ValueLookupId, EditDomain, EditSourceValue,
+      EditLanguage, EditTargetValue, EditNote, EditActive,
+      "Vrstica slovarja je shranjena. " + NextStepText(EditLanguage, EditActive));
+  }
+
+  static string MissingFieldsText(string source, string language, string target)
+  {
+    var missing = new List<string>();
+    if (source.Trim().Length == 0) missing.Add("vrednost iz vira");
+    if (language.Trim().Length == 0) missing.Add("jezik");
+    if (target.Trim().Length == 0) missing.Add("ciljno vrednost");
+    return "Ni shranjeno: vpiši še " + string.Join(", ", missing) + ".";
+  }
 
   async Task SaveAsync(long? id, string domain, string source, string language, string target, string? note, bool active, string message)
   {
@@ -259,12 +293,35 @@
     finally { Busy = false; }
   }
 
-  async Task ApplyAsync() { Skip = 0; EditingId = null; await LoadAsync(); }
+  /* 60: po shranjevanju povej, kdaj sistem vrstico uporabi. Prevod (SL, DE, …) se uporabi ob naslednjem zajemu
+     ali ponovni obdelavi vira (SqlMappingPipeline); ENOTNO pa velja tudi takoj v katalog.csv (out.GetExportRows kliče
+     pim.NormalizeAttributeValue). Vrednosti, ki so že v PIM, se ne prepišejo takoj. */
+  static string NextStepText(string language, bool active)
+  {
+    if (!active) return "Vrstica je neaktivna, zato je zajem in izvoz ne uporabljata več.";
+    return string.Equals(language?.Trim(), UnifyLanguage, StringComparison.OrdinalIgnoreCase)
+      ? "Poenotenje velja ob naslednji izdelavi katalog.csv in ob naslednjem zajemu; vrednosti, ki so že v PIM, se ne prepišejo."
+      : "Prevod se uporabi ob naslednjem zajemu ali ponovni obdelavi vira; vrednosti izdelkov, ki so že v PIM, se ne spremenijo takoj.";
+  }
+
+  async Task ApplyAsync() { Skip = 0; EditingId = null; SyncUrl(); await LoadAsync(); }
   async Task ClearFiltersAsync() { Domain = Search = State = ""; await ApplyAsync(); }
   async Task OnKeyAsync(KeyboardEventArgs args) { if (args.Key == "Enter") await ApplyAsync(); }
-  async Task OnSkipChangedAsync(int skip) { Skip = skip; await LoadAsync(); }
+  async Task OnSkipChangedAsync(int skip) { Skip = skip; SyncUrl(); await LoadAsync(); }
 
-  bool PrefillNew => !string.IsNullOrWhiteSpace(RequestedSourceValue);
+  /* 60: iskanje, domena, stanje in stran v URL; predizpolnitev (vrednost, jezik) iz manjkajočih prevodov se ob
+     prvem filtriranju odstrani, sicer bi osvežitev pokazala drug nabor. */
+  void SyncUrl() => Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+  {
+    ["domena"] = string.IsNullOrWhiteSpace(Domain) ? null : Domain,
+    ["isci"] = string.IsNullOrWhiteSpace(Search) ? null : Search.Trim(),
+    ["stanje"] = string.IsNullOrWhiteSpace(State) ? null : State,
+    ["od"] = Skip > 0 ? Skip : null,
+    ["vrednost"] = null,
+    ["jezik"] = null
+  }), replace: true);
+
+  bool PrefillNew;
   bool HasFilter => Domain.Length > 0 || Search.Trim().Length > 0 || State.Length > 0;
   bool CanSaveNew => NewSourceValue.Trim().Length > 0 && NewLanguage.Trim().Length > 0 && NewTargetValue.Trim().Length > 0;
   bool CanSaveEdit => EditSourceValue.Trim().Length > 0 && EditLanguage.Trim().Length > 0 && EditTargetValue.Trim().Length > 0;

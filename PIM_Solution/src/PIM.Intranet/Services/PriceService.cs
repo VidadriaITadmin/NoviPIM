@@ -50,6 +50,12 @@ public sealed record PriceLine(
   decimal? QueuedNet, decimal? QueuedVatRate, string? QueueStatus, string? QueueError, bool InSaop)
 {
   public decimal? Gross => Net is { } net && VatRate is { } vat ? Math.Round(net * (1 + vat / 100), 2) : null;
+
+  /// <summary>Spletni naziv v slovenščini (canon.ProductText WEB_TITLE, sl); null = artikel ga nima.</summary>
+  public string? WebTitle { get; init; }
+
+  /// <summary>Naziv iz SAOP v slovenščini (canon.ProductText TITLE_ERP, sl); null = artikel ga nima.</summary>
+  public string? ErpTitle { get; init; }
 }
 
 /// <summary>Cenik podjetja: iz šifranta SAOP ali nov, ki še čaka v vrsti.</summary>
@@ -242,7 +248,7 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
         SELECT open_price.PriceList FROM open_price INNER JOIN product
           ON open_price.OrganizationId = product.OrganizationId AND open_price.ItemID = product.ItemID
       )
-      SELECT product.OrganizationId, product.OrganizationName, product.ProductId, product.ItemID, Title = CONVERT(nvarchar(400), NULL), product.EAN,
+      SELECT product.OrganizationId, product.OrganizationName, product.ProductId, product.ItemID, Title = CONVERT(nvarchar(400), NULL), WebTitle = CONVERT(nvarchar(400), NULL), ErpTitle = CONVERT(nvarchar(400), NULL), product.EAN,
         lists.PriceList, PriceListName = codebook.Name,
         current_price.Net, current_price.VatRate, current_price.ValidFrom, IsActive = ISNULL(current_price.IsActive, CONVERT(bit, 1)),
         open_price.QueuedNet, open_price.QueuedVat, open_price.QueueStatus, open_price.QueueError,
@@ -290,7 +296,7 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
         INNER JOIN products ON products.ProductId = price.ProductId
         WHERE (@PriceList IS NULL OR price.PriceList = @PriceList)
       )
-      SELECT product.OrganizationId, OrganizationName = org.Name, product.ProductId, product.ItemID, Title = title.Value, product.EAN,
+      SELECT product.OrganizationId, OrganizationName = org.Name, product.ProductId, product.ItemID, title.Title, title.WebTitle, title.ErpTitle, product.EAN,
         current_price.PriceList, PriceListName = codebook.Name,
         current_price.Net, current_price.VatRate, current_price.ValidFrom, current_price.IsActive,
         open_price.QueuedNet, open_price.QueuedVat, open_price.QueueStatus, open_price.QueueError, InSaop = CONVERT(bit, 1)
@@ -303,11 +309,17 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
         AND codebook.CodebookCode = N'PRICELIST' AND codebook.EntryCode = current_price.PriceList
       OUTER APPLY
       (
-        SELECT TOP (1) textValue.Value
+        -- Ena poizvedba za oba naziva (#62): zaslon kaže spletni, sicer ERP naziv; Excel ju loči v dva stolpca.
+        SELECT
+          Title = COALESCE(
+            MAX(CASE WHEN textValue.TextType = N'WEB_TITLE' AND textValue.Lang = N'sl' THEN textValue.Value END),
+            MIN(CASE WHEN textValue.TextType = N'WEB_TITLE' THEN textValue.Value END),
+            MAX(CASE WHEN textValue.TextType = N'TITLE_ERP' AND textValue.Lang = N'sl' THEN textValue.Value END),
+            MIN(CASE WHEN textValue.TextType = N'TITLE_ERP' THEN textValue.Value END)),
+          WebTitle = MAX(CASE WHEN textValue.TextType = N'WEB_TITLE' AND textValue.Lang = N'sl' THEN textValue.Value END),
+          ErpTitle = MAX(CASE WHEN textValue.TextType = N'TITLE_ERP' AND textValue.Lang = N'sl' THEN textValue.Value END)
         FROM canon.ProductText textValue
         WHERE textValue.ProductId = product.ProductId AND textValue.TextType IN (N'WEB_TITLE', N'TITLE_ERP')
-        ORDER BY CASE WHEN textValue.TextType = N'WEB_TITLE' THEN 0 ELSE 1 END,
-          CASE WHEN textValue.Lang = N'sl' THEN 0 ELSE 1 END, textValue.Lang
       ) AS title
       WHERE current_price.ranked = 1
         AND (@Queue IS NULL OR (open_price.EntityKey IS NOT NULL AND open_price.QueueStatus <> N'Sent'))
@@ -338,7 +350,7 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
         WHERE product.OrganizationId = @OrganizationId
       )
       SELECT current_price.OrganizationId, OrganizationName = N'', current_price.ProductId, current_price.ItemID,
-        Title = CONVERT(nvarchar(400), NULL), current_price.EAN, current_price.PriceList, PriceListName = CONVERT(nvarchar(400), NULL),
+        Title = CONVERT(nvarchar(400), NULL), WebTitle = CONVERT(nvarchar(400), NULL), ErpTitle = CONVERT(nvarchar(400), NULL), current_price.EAN, current_price.PriceList, PriceListName = CONVERT(nvarchar(400), NULL),
         current_price.Net, current_price.VatRate, current_price.ValidFrom, current_price.IsActive,
         QueuedNet = CONVERT(decimal(19,4), NULL), QueuedVat = CONVERT(decimal(5,2), NULL), QueueStatus = CONVERT(nvarchar(30), NULL),
         QueueError = CONVERT(nvarchar(4000), NULL), InSaop = CONVERT(bit, 1)
@@ -693,7 +705,11 @@ public sealed class PriceService(IConfiguration configuration, PimWriteGuard gua
         PimDb.TextOrEmpty(reader, "PriceList"), PimDb.Text(reader, "PriceListName"),
         PimDb.NullableDecimal(reader, "Net"), PimDb.NullableDecimal(reader, "VatRate"), PimDb.NullableDateTime(reader, "ValidFrom"),
         PimDb.Bool(reader, "IsActive"), PimDb.NullableDecimal(reader, "QueuedNet"), PimDb.NullableDecimal(reader, "QueuedVat"),
-        PimDb.Text(reader, "QueueStatus"), PimDb.Text(reader, "QueueError"), PimDb.Bool(reader, "InSaop")));
+        PimDb.Text(reader, "QueueStatus"), PimDb.Text(reader, "QueueError"), PimDb.Bool(reader, "InSaop"))
+      {
+        WebTitle = PimDb.Text(reader, "WebTitle"),
+        ErpTitle = PimDb.Text(reader, "ErpTitle"),
+      });
     return rows;
   }
 
