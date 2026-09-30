@@ -184,13 +184,14 @@ public sealed class MonitorService(
 
   // ─── Dejanja ─────────────────────────────────────────────────────────────
 
-  /// <summary>Zahteva za zagon; prevzame jo gostitelj ob naslednjem tiku. Posel, ki teče, baza zavrne (52377).</summary>
-  public async Task RequestRunAsync(string jobKey, string actor, CancellationToken ct = default)
+  /// <summary>Zahteva za zagon; prevzame jo gostitelj ob naslednjem tiku. Posel, ki teče, baza zavrne (52377).
+  /// <paramref name="source"/> je del stavka v sledi, s predlogom (npr. »z Nadzora«, »s strani Splet«).</summary>
+  public async Task RequestRunAsync(string jobKey, string actor, string source = "z Nadzora", CancellationToken ct = default)
   {
     await RequireAdminAsync();
     var code = KnownJob(jobKey);
     await store.RequestRunAsync(jobKey, actor, ct);
-    await TraceAsync(actor, "JOB_RUN_REQUEST", "Opravilo", $"Zahteva za zagon posla {code.Label} z Nadzora.", jobKey, ct: ct);
+    await TraceAsync(actor, "JOB_RUN_REQUEST", "Opravilo", $"Zahteva za zagon posla {code.Label} {source}.", jobKey, ct: ct);
   }
 
   /// <summary>Zahteva za ustavitev teka; gostitelj jo izvede ob naslednjem utripu.</summary>
