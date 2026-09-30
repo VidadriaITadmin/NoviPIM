@@ -2442,3 +2442,13 @@ Preverjalec: kartica je kazala Pakiranje 2 iz zajema (`canon.ProductCommercial`,
 - DEV po migraciji: preverba razveljavitve 0 logičnih branj (prej 88.730), iskanje po `ProductId` 3 (prej 12.592).
 
 **Objekti:** indeksa na `pim.ProductFieldHistory`; procedure nespremenjene. **Ročni korak:** ne. **Povratek:** `DROP INDEX IX_PimProductFieldHistory_UndoOf ON pim.ProductFieldHistory; DROP INDEX IX_PimProductFieldHistory_ProductId ON pim.ProductFieldHistory;`
+## Pasica »spremembe za SAOP čakajo potrditev« brez čakanja (migraciji 309_HitraPasicaSaop in 311_HitriPogledZadrzanihSaop, 2026-09-30, naloga #46)
+
+Stran Izvozi (`/outbound`) se je odpirala 50-60 s, ker je pasica z zadržanimi spremembami za SAOP (`intranet.GetSaopHeldMessages`) tekla toliko časa; isto so čakale `/cene`, `/saop/artikli`, `/izvozi/mnozicno` in odobritev serije.
+
+- **311 — `ops.SaopHeldMessage`** (CREATE OR ALTER VIEW, ista definicija kot v 281 + en pogoj): pravilo SAOP_KLJUCNO išče prejšnjo vrednost polja v `pim.ProductFieldHistory` (~2,7 mio. vrstic) zdaj tudi po `OrganizationId`, zato SQL uporabi `IX_PimProductFieldHistory_Product (OrganizationId, ProductId)`. Prej 20 mio. branj in ~60 s ob vsakem branju pogleda. Zgodovina izdelka je vedno v podjetju izdelka (preverjeno na DEV: 0 izjem), izid je enak.
+- **309 — `intranet.GetSaopHeldMessages`** (CREATE OR ALTER, isti parametri in izhodi): naziv artikla se išče z dvema ločenima APPLY (najprej po šifri `UQ_CanonProduct_OrganizationItem`, nato po EAN `IX_CanonProduct_OrganizationEan`) namesto enega z `OR`.
+- DEV: `EXEC intranet.GetSaopHeldMessages` (vsa podjetja, 1.380 vrstic) prej 283 s (ob obremenjeni bazi), zdaj 1,1 s; za IQ (631 vrstic) 0,24 s. Izpis pred in po je enak do znaka.
+- Intranet (ni migracija): pasica bere seznam šele po prvem izrisu strani, meja branja 15 s.
+
+**Objekti:** `ops.SaopHeldMessage`, `intranet.GetSaopHeldMessages`. **Ročni korak:** ne. **SAOP:** nič (samo branje). **Povratek:** ponovno izvedi definiciji pogleda in procedure iz 281. **PRD:** lahko skupaj z intranetom.
