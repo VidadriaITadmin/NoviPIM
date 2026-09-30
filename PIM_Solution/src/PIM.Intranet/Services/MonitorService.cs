@@ -424,7 +424,23 @@ public sealed class MonitorService(
       throw new UnauthorizedAccessException("Za to dejanje je potrebna prijava.");
     if (!user.IsInRole(PimRoles.Admin))
       throw new UnauthorizedAccessException("Posle, postopke in avtomatiko podjetij ureja samo skrbnik (ADMIN).");
+    if (IsTestIntranetWithoutJobs(configuration))
+      throw new UnauthorizedAccessException(TestIntranetMessage);
   }
+
+  /// <summary>
+  /// Nastavitev, ki jo postavi samo testni intranet (PIM.Klikalnik/Program.cs), kjer je vsak obiskovalec
+  /// skrbnik »klikalnik«. Tam se posli ne smejo zagnati, izklopiti ali dobiti novega urnika (naloga #57:
+  /// 29. 9. je preizkus s testnega intraneta oddal zahtevo za izvoz kataloga). Pravi intranet je ne bere iz
+  /// appsettings, zato skrbnik na njem dela kot prej.
+  /// </summary>
+  public const string TestIntranetWithoutJobsKey = "Pim:TestniIntranet:BrezPoslov";
+
+  public const string TestIntranetMessage =
+    "Testni intranet: zagon in urejanje poslov sta izklopljena. Posle upravljaj na pravem intranetu.";
+
+  public static bool IsTestIntranetWithoutJobs(IConfiguration configuration) =>
+    string.Equals(configuration[TestIntranetWithoutJobsKey], "true", StringComparison.OrdinalIgnoreCase);
 
   /// <summary>Sled se zapiše samo ob uspešnem dejanju; če pade, dejanje ostane izvedeno (<see cref="MonitorTraceException"/>).</summary>
   async Task TraceAsync(

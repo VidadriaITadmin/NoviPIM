@@ -1,4 +1,6 @@
-﻿<Router AppAssembly="typeof(Program).Assembly">
+﻿@* #65: neznana pot je bila prazna bela stran. NotFoundPage pokrije NavigationManager.NotFound() in
+   notranjo navigacijo; zahteve brskalnika na neznan naslov pripelje sem Program.cs (UseStatusCodePagesWithReExecute). *@
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         @* Dovoljenja niso vec trdo zapisana v vlogah posamezne strani. PimAccessRouteView
            uporabi isti register kot meni in urejevalnik vlog ter vsebino izrise sele po

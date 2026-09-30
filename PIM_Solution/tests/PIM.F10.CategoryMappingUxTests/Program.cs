@@ -12,6 +12,8 @@ var pages = Path.Combine(root, "src", "PIM.Intranet", "Components", "Pages");
 var services = Path.Combine(root, "src", "PIM.Intranet", "Services");
 var mappingPage = Read(Path.Combine(pages, "MissingCategories.razor"));
 var productPage = Read(Path.Combine(pages, "ProductCategories.razor"));
+// Od 2026-09-28 je urejanje uvrstitve v skupnem gradniku (tudi na kartici izdelka); stran ga samo vgradi.
+var productEditor = Read(Path.Combine(pages, "ProductCard", "ProductCategoryEditor.razor"));
 var service = Read(Path.Combine(services, "CategoryMappingService.cs"));
 var program = Read(Path.Combine(root, "src", "PIM.Intranet", "Program.cs"));
 
@@ -24,6 +26,13 @@ foreach (var markup in new[] { mappingPage, productPage })
     "Zapisovalna stran mora zahtevati prijavo.");
   Assert(markup.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
     "Brez interaktivnega nacina gumbi ne delajo, stran pa izgleda delujoca.");
+}
+
+Assert(productPage.Contains("<ProductCategoryEditor", StringComparison.Ordinal),
+  "/izdelki/kategorije mora vgraditi skupni gradnik ProductCategoryEditor, sicer urejanje tiho izgine s strani.");
+
+foreach (var markup in new[] { mappingPage, productEditor })
+{
   Assert(markup.Contains("ActorAsync", StringComparison.Ordinal),
     "Vsaka sprememba mora imeti akterja iz prijave, ne privzete vrednosti v postopku.");
   Assert(markup.Contains("catch (Exception exception) { Error = exception.Message; }", StringComparison.Ordinal),
@@ -41,7 +50,13 @@ foreach (var forbidden in new[] { "canon.Category", "map.CategoryPathMap", "INSE
     "Stran ne sme sama pisati v bazo niti presojati drevesa: " + forbidden);
   Assert(!productPage.Contains(forbidden, StringComparison.Ordinal),
     "Stran ne sme sama pisati v bazo niti presojati drevesa: " + forbidden);
+  Assert(!productEditor.Contains(forbidden, StringComparison.Ordinal),
+    "Gradnik uvrstitve ne sme sam pisati v bazo niti presojati drevesa: " + forbidden);
 }
+
+// Varovanje je v servisu, ne v skrivanju gumbov: vsi zapisi uvrstitve zahtevajo CatalogWrite.
+Assert(service.Contains("guard.RequireAsync(PimPolicies.CatalogWrite)", StringComparison.Ordinal),
+  "CategoryMappingService mora zapise varovati s politiko CatalogWrite.");
 
 foreach (var procedure in new[]
 {
@@ -62,11 +77,11 @@ Assert(service.Contains("SkupajVrstic", StringComparison.Ordinal),
   "Skupno stevilo mora priti iz iste poizvedbe kot vrstice, sicer polozaj strani zaostaja.");
 
 // Prazen seznam kategorij je odlocitev, ne pomota - uporabnik mora to videti.
-Assert(productPage.Contains("namenoma brez kategorije", StringComparison.Ordinal),
+Assert(productEditor.Contains("namenoma brez kategorije", StringComparison.Ordinal),
   "Prazen seznam mora biti razlozen kot odlocitev, ne kot manjkajoc podatek.");
 Assert(productPage.Contains("ponovna preslikava", StringComparison.OrdinalIgnoreCase),
   "Stran mora povedati, da rocne uvrstitve ponovna preslikava ne povozi.");
-Assert(productPage.Contains("ClearProductCategoryOverrideAsync", StringComparison.Ordinal),
+Assert(productEditor.Contains("ClearProductCategoryOverrideAsync", StringComparison.Ordinal),
   "Vrnitev pod vir mora biti mozna, sicer je rocna uvrstitev enosmerna.");
 
 
@@ -77,8 +92,19 @@ var treeService = Read(Path.Combine(services, "CategoryTreeService.cs"));
 
 Assert(program.Contains("AddScoped<CategoryTreeService>", StringComparison.Ordinal),
   "CategoryTreeService mora biti registriran.");
-Assert(treePage.Contains("Roles = \"ADMIN,CATALOG_EDITOR\"", StringComparison.Ordinal),
+// Komerciala (COMMERCIAL) sme drevo gledati; vsak zapis v CategoryTreeService varuje politika CatalogWrite
+// (samo ADMIN in CATALOG_EDITOR). Skrivanje gumbov je samo videz, zato test drzi pravico v servisu.
+Assert(treePage.Contains("Roles = \"ADMIN,CATALOG_EDITOR,COMMERCIAL\"", StringComparison.Ordinal),
   "Urejanje imen spreminja katalog, zato ni dovolj samo prijava.");
+foreach (var writer in new[] { "SaveTranslationsAsync", "CreateCategoryAsync", "MoveCategoriesAsync", "DeleteCategoriesAsync" })
+{
+  var at = treeService.IndexOf(" " + writer + "(", StringComparison.Ordinal);
+  Assert(at >= 0, "CategoryTreeService mora imeti " + writer + ".");
+  var guardAt = treeService.IndexOf("guard.RequireAsync(PimPolicies.CatalogWrite)", at, StringComparison.Ordinal);
+  var nextMethod = treeService.IndexOf("public async", at + 1, StringComparison.Ordinal);
+  Assert(guardAt >= 0 && (nextMethod < 0 || guardAt < nextMethod),
+    writer + " mora zahtevati politiko CatalogWrite, ker drevo vidi tudi komerciala.");
+}
 Assert(treePage.Contains("@rendermode InteractiveServer", StringComparison.Ordinal),
   "Brez interaktivnega nacina zlaganje in urejanje ne delata.");
 Assert(treePage.Contains("ActorAsync", StringComparison.Ordinal),

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -32,6 +33,13 @@ using var factory = new WebApplicationFactory<PIM.Intranet.Services.ProductEditS
   {
     b.UseEnvironment("Development");
     b.UseSetting(WebHostDefaults.ServerUrlsKey, $"http://localhost:{port}");
+    // Testni intranet ne sme zaganjati, izklapljati ali urejati poslov (naloga #57): vsak obiskovalec je
+    // skrbnik »klikalnik«, zahteva za zagon pa bi jo gostitelj avtomatike izvedel zares (npr. izvoz kataloga).
+    // Zadnji vir nastavitev, da ga appsettings ali okolje ne moreta povoziti.
+    b.ConfigureAppConfiguration(c => c.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+      [PIM.Intranet.Services.MonitorService.TestIntranetWithoutJobsKey] = "true",
+    }));
     b.ConfigureTestServices(s =>
     {
       s.AddAuthentication().AddScheme<AuthenticationSchemeOptions, KlikalnikAuth>(KlikalnikAuth.Shema, _ => { });

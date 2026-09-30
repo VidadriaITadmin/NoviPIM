@@ -2,24 +2,30 @@
 @attribute [Authorize(Roles = "ADMIN,CATALOG_EDITOR")]
 @rendermode InteractiveServer
 @inject CatalogControlService Control
+@inject IntranetDataService Data
+@inject NavigationManager Navigation
 
 <PageTitle>Nadzor kataloga</PageTitle>
-<PimPage Title="Nadzor kataloga" Subtitle="Katalog podjetja 2, skupna lastna zaloga IQ + VID in ločena zaloga dobaviteljev." />
+<PimPage Title="Nadzor kataloga" Subtitle="@($"Katalog podjetja {OrganizationName}, skupna lastna zaloga IQ + VID in ločena zaloga dobaviteljev.")" />
+<PimTabs Active="catalog" Tabs="WebTabs.Tabs" Label="Izhod na splet" />
 <p>Artikel izbereš s kljukicama spletnih mest na <a href="izdelki">kartici artikla</a>.
     Za izvoz mora biti aktiven, imeti kategorijo in opravljeno spletno validacijo.
-    Izključitev spodaj vedno prepreči izvoz. <a href="splet/izvoz">Preveri dejanski CSV</a>.</p>
+    Izključitev spodaj vedno prepreči izvoz. <a href="splet">Preveri izdelani katalog.csv</a>.</p>
 <p>Pri oznakah X in O velja vneseni popust samo ob sveži pozitivni lastni zalogi.
     Ko lastna zaloga poide, gre v CSV popust 0; dobaviteljeva zaloga ostane ločena.
     Artikel O po porabi zaloge čaka na uredniški pregled.</p>
-<section class="ui-card toolbar section-gap">
-    <label>Šifra ali EAN <input @bind="Search" /></label>
-    <label><input type="checkbox" @bind="ReviewOnly" /> Samo čakalna vrsta O</label>
-    <button disabled="@Busy" @onclick="LoadAsync">Prikaži</button>
-    <button disabled="@Busy" @onclick="RefreshAsync">Osveži čakalno vrsto</button>
-</section>
+@* #88: obrazec, da Enter v polju sproži iskanje; iskanje in »Samo čakalna vrsta O« sta v naslovu. *@
+<form class="ui-card toolbar section-gap" @onsubmit="SubmitAsync" role="search" aria-label="Iskanje artiklov v nadzoru kataloga">
+    <label>Šifra ali EAN <input @bind="Search" name="iskanje" /></label>
+    <label><input type="checkbox" @bind="ReviewOnly" @bind:after="SubmitAsync" aria-label="Samo čakalna vrsta O" /> Samo čakalna vrsta O</label>
+    <button type="submit" class="primary-button" disabled="@Busy">Prikaži</button>
+    <button type="button" class="ghost-button" disabled="@Busy" @onclick="RefreshAsync">Osveži čakalno vrsto</button>
+</form>
 @if (Message is not null) { <p role="status">@Message</p> }
-@if (Error is not null) { <p role="alert">@Error</p> }
+@if (Error is not null && Loaded) { <p role="alert">@Error</p> }
 <section class="ui-card section-gap">
+<PimState Loading="@(Busy && !Loaded)" Error="@(Loaded ? null : Error)" Empty="@(Loaded && Rows.Count == 0)" EmptyText="@EmptyText">
+<p role="status">@RowsLabel</p>
 <table class="data-table">
     <caption>Največ 100 artiklov; iskanje po začetku šifre ali celotnem EAN</caption>
     <thead><tr><th>Artikel</th><th>ABC</th><th>Izbor / aktivnost</th><th>Validacija</th><th>Lastna zaloga</th><th>Dobavitelj</th><th>Rabatna skupina artikla / ERP</th><th>Odprodaja</th><th>Pregled</th></tr></thead>
@@ -32,6 +38,7 @@
         <td>@(row.ReviewPending ? "Potreben pregled" : "—")</td></tr>
     }</tbody>
 </table>
+</PimState>
 </section>
 @if (Selected is not null) {
     <section class="ui-card section-gap">
@@ -62,9 +69,37 @@
     CatalogControlRow? Selected;
     string Search = "", Resolution = "";
     string? Error, Message;
-    bool ReviewOnly = true, Excluded, Busy;
+    bool ReviewOnly = true, Excluded, Busy, Loaded;
     decimal Percent;
-    protected override Task OnInitializedAsync() => LoadAsync();
+    // Ime podjetja iz dbo.OrganizationConfig (stran je vezana na podjetje 2); brez zapisa pokaže šifro.
+    string OrganizationName = "s šifro 2";
+
+    /* #88: ?iskanje=...&vrsta=1|0. Manjkajoča »vrsta« pomeni kot doslej »samo čakalna vrsta O«,
+       zato se ob spremembi vedno zapiše izrecno (0 ali 1). Naslov je vir resnice: Nazaj in F5
+       obnovita iskanje, povezavo se da deliti. */
+    [SupplyParameterFromQuery(Name = "iskanje")] public string? QSearch { get; set; }
+    [SupplyParameterFromQuery(Name = "vrsta")] public string? QQueue { get; set; }
+    string? LoadedKey;
+    static string Key(string search, bool reviewOnly) => $"{search}|{(reviewOnly ? 1 : 0)}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var organization = (await Data.GetOrganizationsAsync()).FirstOrDefault(o => o.OrganizationId == OrganizationId);
+            if (organization is not null) OrganizationName = organization.Name;
+        }
+        catch { /* ime je samo napis; napako branja pokaže nalaganje seznama */ }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Search = (QSearch ?? "").Trim();
+        ReviewOnly = QQueue != "0";
+        if (LoadedKey == Key(Search, ReviewOnly)) return;
+        await LoadAsync();
+    }
+
     async Task RunAsync(Func<Task> work) {
         Busy = true; Error = null;
         try { await work(); } catch (Exception e) { Error = e.Message; }
@@ -73,9 +108,49 @@
     async Task ReadAsync() {
         Rows = await Control.ReadAsync(OrganizationId, Search, ReviewOnly);
         Unmapped = await Control.UnmappedAsync();
+        LoadedKey = Key(Search, ReviewOnly);
+        Loaded = true;
     }
     Task LoadAsync() => RunAsync(ReadAsync);
-    Task RefreshAsync() => RunAsync(async () => { await Control.RefreshAsync(OrganizationId); await ReadAsync(); });
+
+    // Enter v polju, gumb Prikaži in kljukica: nov naslov (vnos v zgodovino brskalnika); isto iskanje še enkrat samo osveži.
+    Task SubmitAsync()
+    {
+        Search = Search.Trim();
+        Message = null;
+        if (LoadedKey == Key(Search, ReviewOnly)) return LoadAsync();
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["iskanje"] = Search == "" ? null : Search,
+            ["vrsta"] = ReviewOnly ? "1" : "0",
+        }));
+        return Task.CompletedTask;
+    }
+
+    Task RefreshAsync() => RunAsync(async () => {
+        Message = null;
+        await Control.RefreshAsync(OrganizationId);
+        await ReadAsync();
+        var pending = Rows.Count(r => r.ReviewPending);
+        Message = ReviewOnly && Search == ""
+            ? (Rows.Count >= 100
+                ? "Čakalna vrsta je osvežena. Na pregled čaka najmanj 100 artiklov (prikazanih je prvih 100)."
+                : pending == 0
+                    ? "Čakalna vrsta je osvežena. Noben artikel ne čaka na pregled."
+                    : $"Čakalna vrsta je osvežena. Na pregled čaka {PimFormat.Count(pending, "artikel", "artikla", "artikli", "artiklov")}.")
+            : $"Čakalna vrsta je osvežena. Med prikazanimi artikli jih na pregled čaka {pending:N0}.";
+    });
+
+    string RowsLabel => Rows.Count >= 100
+        ? "Prikazanih je prvih 100 artiklov; zoži iskanje s šifro ali EAN."
+        : PimFormat.Count(Rows.Count, "artikel", "artikla", "artikli", "artiklov");
+    string EmptyText => (Search, ReviewOnly) switch
+    {
+        ("", true) => "Noben artikel ne čaka na pregled O. Odkljukaj »Samo čakalna vrsta O« za vse artikle ali klikni »Osveži čakalno vrsto«.",
+        ("", false) => "Podjetje nima artiklov v katalogu.",
+        (_, true) => $"Ni artikla s šifro ali EAN »{Search}« v čakalni vrsti O. Odkljukaj »Samo čakalna vrsta O« ali poskusi drugo šifro.",
+        _ => $"Ni artikla s šifro ali EAN »{Search}«. Preveri začetek šifre ali vpiši cel EAN.",
+    };
     void Select(CatalogControlRow row) { Selected = row; Excluded = row.Excluded; Percent = row.ClearancePercent; Resolution = ""; Message = null; }
     Task SaveAsync() => RunAsync(async () => {
         if (Selected is null) return;

@@ -53,3 +53,82 @@
     if (select.form) select.form.requestSubmit();
   });
 })();
+
+// #84: pogovorna okna (role="dialog" aria-modal="true"), ki jih izrise Blazor brez <dialog>.
+// Ob odprtju gre fokus v okno (na gumb z data-pim-close, sicer na prvi fokusabilni element),
+// Tab in Shift+Tab ostaneta v oknu, Escape klikne gumb data-pim-close (samo ce ga okno ima —
+// tako Esc nikoli ne sprozi dejanja, ki ni zapiranje), ob zaprtju pa se fokus vrne na gumb,
+// ki je okno odprl. Opazovalec je na dokumentu, zato prezivi izboljsano navigacijo Blazorja.
+(function () {
+  const DIALOG = '[role="dialog"][aria-modal="true"]';
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  const stack = []; // { dialog, returnTo }
+  let lastFocus = null;
+
+  function visible(el) { return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length); }
+  function focusables(dialog) { return Array.prototype.filter.call(dialog.querySelectorAll(FOCUSABLE), visible); }
+  function top() { return stack.length ? stack[stack.length - 1].dialog : null; }
+
+  // Zadnji fokus zunaj okna: gumb, ki je okno odprl (Safari ob kliku gumbu ne da fokusa, zato
+  // si zapomnimo tudi zadnji pritisnjeni gumb).
+  document.addEventListener('focusin', function (event) {
+    if (event.target instanceof Element && !event.target.closest(DIALOG)) lastFocus = event.target;
+  });
+  document.addEventListener('pointerdown', function (event) {
+    const button = event.target instanceof Element ? event.target.closest('button, a[href]') : null;
+    if (button && !button.closest(DIALOG)) lastFocus = button;
+  }, true);
+
+  function focusInto(dialog) {
+    if (dialog.contains(document.activeElement)) return;
+    const target = dialog.querySelector('[data-pim-close]') || focusables(dialog)[0];
+    if (target) { target.focus(); return; }
+    if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    dialog.focus();
+  }
+
+  function sync() {
+    // Zaprta okna (odstranjena iz DOM): vrni fokus, ce je ostal brez mesta.
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const entry = stack[i];
+      if (entry.dialog.isConnected) continue;
+      stack.splice(i, 1);
+      const active = document.activeElement;
+      const lost = !active || active === document.body || !active.isConnected;
+      if (lost && entry.returnTo && entry.returnTo.isConnected) entry.returnTo.focus();
+    }
+    // Nova okna.
+    document.querySelectorAll(DIALOG).forEach(function (dialog) {
+      if (stack.some(function (entry) { return entry.dialog === dialog; })) return;
+      stack.push({ dialog: dialog, returnTo: lastFocus && lastFocus.isConnected ? lastFocus : null });
+      focusInto(dialog);
+    });
+  }
+
+  function start() {
+    new MutationObserver(function (mutations) {
+      for (let i = 0; i < mutations.length; i++) {
+        if (mutations[i].addedNodes.length || mutations[i].removedNodes.length) { sync(); return; }
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    sync();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+
+  document.addEventListener('keydown', function (event) {
+    const dialog = top();
+    if (!dialog || !dialog.isConnected) return;
+    if (event.key === 'Escape') {
+      const close = dialog.querySelector('[data-pim-close]');
+      if (close) { event.preventDefault(); close.click(); }
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const items = focusables(dialog);
+    if (items.length === 0) { event.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const inside = dialog.contains(document.activeElement);
+    if (event.shiftKey && (document.activeElement === first || !inside)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || !inside)) { event.preventDefault(); first.focus(); }
+  });
+})();
