@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ImportHistoryService History
+@inject NavigationManager Navigation
 
 @* 280: vsi uveljavljeni uvozi izdelkov, cen in strank. Uporabnik 2026-09-24: »mišljeno je, da ko se spremenijo
    artikli, da se povrne — pri uvozih artiklov, cen, strank in SAOP«. Uvoz je tu ena vrstica (ne desetine serij
@@ -63,16 +64,17 @@
   bool Loading = true;
   string? LoadError;
 
-  protected override async Task OnInitializedAsync()
+  // Vrsta je v URL-ju (?vrsta=CENE): povezavo se da deliti, »nazaj« v brskalniku deluje.
+  protected override async Task OnParametersSetAsync()
   {
     Kind = Kinds.Any(item => item.Kind == KindQuery) ? KindQuery : null;
     await LoadAsync();
   }
 
-  async Task SelectAsync(string? kind)
+  Task SelectAsync(string? kind)
   {
-    Kind = kind;
-    await LoadAsync();
+    Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("vrsta", kind));
+    return Task.CompletedTask;
   }
 
   async Task LoadAsync()
