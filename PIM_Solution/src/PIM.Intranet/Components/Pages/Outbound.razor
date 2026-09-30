@@ -15,7 +15,7 @@
   <h2 id="outbound-filter-title" class="visually-hidden">Filtriranje izvozov</h2>
   <label class="visually-hidden" for="out-org">Podjetje</label><select id="out-org" class="filter-select" value="@OrganizationId" @onchange="OnOrganizationChangedAsync">@foreach (var organization in Organizations) { <option value="@organization.OrganizationId">@organization.Name</option> }</select>
   <label class="visually-hidden" for="out-search">Poišči izvoz</label><input id="out-search" type="search" class="search-input" placeholder="Poišči šifro artikla …" @bind="Search" @bind:event="oninput" />
-  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option>@status</option> }</select>
+  <label class="visually-hidden" for="out-status">Status</label><select id="out-status" class="filter-select" @bind="StatusFilter"><option value="">Vsi statusi</option>@foreach (var status in ArticleStatuses) { <option value="@status">@status</option> }</select>
   <span class="result-count" role="status" aria-live="polite">@ResultSummary</span>
   <button type="button" class="small-action" disabled="@(Loading || SelectableFilteredCount == 0)" @onclick="SelectAllFiltered">Izberi vse filtrirane (@SelectableFilteredCount)</button>
   <button type="button" class="small-action" disabled="@Loading" @onclick="RefreshAsync">Osveži</button>
@@ -134,9 +134,10 @@ else {
     .Where(group => group.Any(row => !Terminal.Contains(row.Status)))
     .Select(group => new ArticleRow(group.Key.EntityType, group.Key.EntityKey, group.First().Operation, group.ToArray()))
     .ToArray();
-  IReadOnlyList<string> ArticleStatuses => Articles.Select(a => a.Status).Distinct().Order().ToArray();
+  // Filter po slovenski oznaki: Error/Dead sta oba »Napaka«, Pending/Retry/Sending »V obdelavi«.
+  IReadOnlyList<string> ArticleStatuses => Articles.Select(a => StatusLabel(a.Status)).Distinct().Order().ToArray();
   IReadOnlyList<ArticleRow> FilteredArticles => Articles
-    .Where(a => (StatusFilter == "" || a.Status == StatusFilter)
+    .Where(a => (StatusFilter == "" || StatusLabel(a.Status) == StatusFilter)
       && (Search == "" || a.EntityKey.Contains(Search, StringComparison.OrdinalIgnoreCase)))
     .OrderByDescending(a => a.LastChangeUtc).ToList();
   IEnumerable<ArticleRow> PageArticles => FilteredArticles.Skip(CurrentPage*PageSize).Take(PageSize);
